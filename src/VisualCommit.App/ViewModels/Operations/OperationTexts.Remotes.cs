@@ -24,4 +24,14 @@ public static partial class OperationTexts
 
     /// <summary>The end of the sentence pull's integration step fails with for a setting it does not know (2.18).</summary>
     public const string SettingNotUnderstoodEnd = ", which this app does not understand.";
+
+    /// <summary>
+    /// "Pull failed"'s summary when <c>pull.ff=only</c> refused a pull of diverged branches
+    /// (docs/phase-6-design.md 4.8, D211): git's <c>git merge --ff-only …</c> said "Not possible to
+    /// fast-forward". <paramref name="upstream"/> as the menus name it (D114), echoing their
+    /// "Merge {up} into {b}" and "Rebase {b} onto {up}":
+    /// "main and origin/main have diverged, and pull.ff is set to only: merge origin/main into main or rebase main onto origin/main."
+    /// </summary>
+    public static string PullNotFastForward(string branch, string upstream) =>
+        $"{branch} and {upstream} have diverged, and pull.ff is set to only: merge {upstream} into {branch} or rebase {branch} onto {upstream}.";
 }

@@ -25,7 +25,7 @@ public sealed partial class Phase3ChecksA
 
         // Step 1: the toolbar with a clean ops repository; the pointer rests on Stash.
         Shot(app, "23a-toolbar-with-repository");
-        AssertToolbar(app, new Dictionary<string, string> { ["StashButton"] = PartA.NoChangesToStash }, NothingToUndo, NothingToRedo);
+        AssertToolbar(app, new Dictionary<string, string> { ["StashButton"] = PartA.NoChangesToStash }, NothingToUndo, NothingToRedo, MainTracksOriginMain);
         AssertStatus(app, "Ready");
         var tip = await app.RestPointerOnAsync(ToolbarButton(app, "StashButton"));
         Shot(app, "23b-stash-disabled-tooltip", keepPointer: true);
@@ -43,7 +43,7 @@ public sealed partial class Phase3ChecksA
         await WaitForStatusAsync(app, PartA.BranchCreatedMessage, calls, WriteTimeout);
         await app.WaitForIdleAsync();
         Shot(app, "23d-branch-created");
-        Assert.Contains(app.GitCalls(), call => call.CommandText == "git switch --create topic/new " + PartA.MainWorkSha);
+        Assert.Contains(app.GitCalls(), call => call.CommandText == "git switch --create topic/new --no-overwrite-ignore " + PartA.MainWorkSha);
         Assert.Equal("topic/new", await GitTextAsync(repo, "symbolic-ref", "--short", "HEAD"));
         Assert.Equal(PartA.MainWorkSha, await repo.HeadAsync());
         Assert.Equal("## topic/new", (await GitLinesAsync(repo, "status", "-sb"))[0]);
@@ -65,7 +65,8 @@ public sealed partial class Phase3ChecksA
                 ["StashButton"] = PartA.NoChangesToStash,
             },
             UndoCreationOfTopicNew,
-            NothingToRedo);
+            NothingToRedo,
+            TopicNewWithoutUpstream);
 
         // Step 3: changes made outside the app; Stash with the dialog.
         repo.WriteFile("README.md", PartA.ToolbarReadme).WriteFile("scratch.txt", PartA.Scratch);
@@ -73,7 +74,7 @@ public sealed partial class Phase3ChecksA
         await app.WaitForIdleAsync();
 
         // Changes outside the app leave the branch's creation undoable (7.4): `Undo creation of topic/new`.
-        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream }, UndoCreationOfTopicNew, NothingToRedo);
+        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream }, UndoCreationOfTopicNew, NothingToRedo, TopicNewWithoutUpstream);
         app.Click(ToolbarButton(app, "StashButton"));
         await AssertNameDialogAsync(app, new NameDialogExpected(
             "Stash changes", null, null, "Message (optional)", false, "Include untracked files", true, "Stash", true));
@@ -109,7 +110,8 @@ public sealed partial class Phase3ChecksA
                 ["StashButton"] = PartA.NoChangesToStash,
             },
             "Undo stash \"On topic/new: Toolbar stash\"",
-            NothingToRedo);
+            NothingToRedo,
+            TopicNewWithoutUpstream);
 
         // Step 4: Pop: the stash found by its id, popped; the files back.
         calls = app.GitCalls().Count;
@@ -130,8 +132,18 @@ public sealed partial class Phase3ChecksA
         AssertWorkingRingOnly(app, shot, 0, PaletteOf(app).Lane(0));
 
         // After the pop: `Undo pop of stash "{message}"` (7.6).
-        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream }, "Undo pop of stash \"On topic/new: Toolbar stash\"", NothingToRedo);
+        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream }, "Undo pop of stash \"On topic/new: Toolbar stash\"", NothingToRedo, TopicNewWithoutUpstream);
     }
+
+    /// <summary>Pull's and Push's enabled tooltips on main tracking origin/main (docs/phase-6-design.md 6.8, 16.1).</summary>
+    private static readonly Dictionary<string, string> MainTracksOriginMain = new()
+    {
+        ["PullButton"] = "Pull from origin/main (Ctrl+Shift+L)",
+        ["PushButton"] = "Push main to origin/main (Ctrl+Shift+K)",
+    };
+
+    /// <summary>Push's enabled tooltip on topic/new, which has no upstream (6.8, 16.1).</summary>
+    private static readonly Dictionary<string, string> TopicNewWithoutUpstream = new() { ["PushButton"] = "Push topic/new to a remote (Ctrl+Shift+K)" };
 
     /// <summary>Check 23, step 5: an unborn repository with a remote and an untracked file.</summary>
     [AvaloniaFact]
@@ -234,7 +246,7 @@ public sealed partial class Phase3ChecksA
             ["PushButton"] = PartA.LocTracksLocal,
             ["StashButton"] = PartA.NoChangesToStash,
             ["PopButton"] = PartA.NoStashes,
-        }, NothingToUndo, NothingToRedo);
+        }, NothingToUndo, NothingToRedo, new Dictionary<string, string> { ["PullButton"] = "Pull from main (Ctrl+Shift+L)" });
     }
 
     /// <summary>Check 23, step 9: a merge stopped by a conflict.</summary>
@@ -261,7 +273,8 @@ public sealed partial class Phase3ChecksA
                 ["StashButton"] = PartA.FinishMerge,
             },
             PartA.FinishMerge,
-            PartA.FinishMerge);
+            PartA.FinishMerge,
+            MainTracksOriginMain);
     }
 
     /// <summary>Check 24: the left panel's highlighted ref follows the graph's selection (D98; ops).</summary>

@@ -34,7 +34,7 @@ public class ShellDriverPhase5UndoTests
         var steps = new List<string>();
 
         // A step without a question: the click returns once its operation has ended.
-        Give(undo, enabled: true, "Undo commit \"Describe more\"", () => repository.Queue.RunAsync(new GitOperation("Undo commit \"Describe more\"", "Undoing…", OperationKind.Local, RefreshScope.Status, async _ =>
+        Give(undo, enabled: true, "Undo commit \"Describe more\" (Ctrl+Z)", () => repository.Queue.RunAsync(new GitOperation("Undo commit \"Describe more\"", "Undoing…", OperationKind.Local, RefreshScope.Status, async _ =>
         {
             await Task.Delay(200);
             steps.Add("undo");
@@ -55,7 +55,7 @@ public class ShellDriverPhase5UndoTests
         // A step that changes a remote asks first, after a git read (a tag's commit, 7.5): the
         // queue is idle all along, and the click returns with the question open.
         Give(undo, enabled: false, "Nothing to undo", () => Task.CompletedTask);
-        Give(redo, enabled: true, "Redo push of tag v1.0 to origin", async () =>
+        Give(redo, enabled: true, "Redo push of tag v1.0 to origin (Ctrl+Y)", async () =>
         {
             await repository.Repository.ResolveAsync("v1.0^{commit}");
             await Task.Delay(200);

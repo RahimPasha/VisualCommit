@@ -1,4 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
+             xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:local="using:VisualCommit.App.Views.Rebase"
@@ -134,6 +136,9 @@
                 Theme="{StaticResource VcActionButton}"
                 Content="Cancel"
                 Command="{Binding CancelCommand}"
+                ToolTip.Tip="{x:Static cmd:ShellToolTips.CancelList}"
+                AutomationProperties.HelpText="{x:Static cmd:ShellToolTips.CancelList}"
+                AutomationProperties.AcceleratorKey="{x:Static cmd:ShellToolTips.CancelListKey}"
                 AutomationProperties.AutomationId="RebaseCancelButton"
                 AutomationProperties.Name="Cancel" />
         <Button Name="RebaseStartButton"
@@ -159,7 +164,8 @@
         <ItemsControl Name="RowsList"
                       ItemsSource="{Binding Items}"
                       KeyboardNavigation.TabNavigation="Once"
-                      AutomationProperties.AutomationId="RebaseRows">
+                      AutomationProperties.AutomationId="RebaseRows"
+                      kr:KeyRegion.IsMain="True">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <VirtualizingStackPanel />

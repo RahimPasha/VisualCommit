@@ -62,16 +62,21 @@ public class ShellDriverTests
         var clock = Stopwatch.StartNew();
         using var holding = new ManualResetEventSlim();
 
-        // Another test's work holds the UI thread for 1.5 s.
+        // Another test's work holds the UI thread for 1.5 s. It too waits for its turn behind the
+        // tests that run side by side, as a fresh application does, and that wait counts against
+        // the test no more than the application's: under the default run's load it took over the
+        // 60 s this test once allowed it (2026-10-22, with phase 6's dashboard tests).
+        using var turnAhead = HangWatchdogAttribute.WaitingForTurn("the work ahead's turn on the headless UI thread");
         var ahead = session.Dispatch(
             () =>
             {
+                turnAhead.Dispose();
                 holding.Set();
                 Thread.Sleep(1500);
                 return Task.FromResult(0);
             },
             TestContext.Current.CancellationToken);
-        Assert.True(holding.Wait(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken), "The UI thread never ran the work ahead.");
+        holding.Wait(TestContext.Current.CancellationToken);
         var startedAt = TimeSpan.Zero;
         await FreshApplication.RunAsync(
             assembly,

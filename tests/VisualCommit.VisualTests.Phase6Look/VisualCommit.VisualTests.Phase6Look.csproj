@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The scripted walk-through of the visual test gate (docs/plan.md) for phase 6's part L: the
+       look, that is the sweep of every main screen in both themes, the light colours, the long
+       folder and the tab strip (checks L26 to L33 of docs/test-reports/phase-6.md; L34 is the
+       real window's alone). A project of its own beside VisualCommit.VisualTests.Phase6, which
+       holds parts W, K, S and G (docs/phase-6-design.md 17.3, the report's ruling 1): past 40
+       test methods the walk-through splits, and a test assembly runs its headless tests one at a
+       time on its one UI thread, so a second assembly, a second test process, runs part L beside
+       the other parts (D133, D151, D181, D230). It compiles that project's base class, support
+       and common expectations, so that every part checks with the same helpers, numbers and
+       texts, and saves its pictures in the same folder, artifacts/visual/phase-6/scripted/:
+       VisualRun empties it once per run of both projects, not once per process. Its test server
+       listens on port 47394 (AuthRemoteServer.Phase6LookVisualChecksPort), the other project's on
+       47393, since the two run side by side. The real-window pass compiles the Phase6Expectations
+       file from here too (its pattern ..\VisualCommit.VisualTests.Phase6*\Phase6Expectations*.cs). -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+  </ItemGroup>
+
+  <!-- Phase 6's base class, its support and its common expectations, from the walk-through of parts
+       W, K, S and G. The part files of that project are left out: each project holds its own parts. -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.VisualTests.Phase6\Phase6Checks.cs" Link="Phase6\Phase6Checks.cs" />
+    <Compile Include="..\VisualCommit.VisualTests.Phase6\Phase6Checks.Support.cs" Link="Phase6\Phase6Checks.Support.cs" />
+    <Compile Include="..\VisualCommit.VisualTests.Phase6\Phase6Expectations.Common.cs" Link="Phase6\Phase6Expectations.Common.cs" />
+  </ItemGroup>
+
+</Project>

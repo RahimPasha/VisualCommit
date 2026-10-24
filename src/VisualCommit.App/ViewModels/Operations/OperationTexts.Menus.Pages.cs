@@ -90,6 +90,9 @@ public static partial class OperationTexts
         /// <summary>12.4: a force push's backup whose remote cannot be mapped back.</summary>
         public const string RemoteOfBackupNotFound = "The remote this backup came from cannot be found";
 
+        /// <summary>A deleted remote branch's or tag's backup that more than one configured remote name starts (<see cref="OperationTexts.RemoteOfBackupAmbiguous"/>).</summary>
+        public static string RemoteOfBackupAmbiguous(string name, IReadOnlyList<string> remotes) => OperationTexts.RemoteOfBackupAmbiguous(name, remotes);
+
         /// <summary>12.4: a force push's backup whose lease cannot be read from the remote-tracking reflog.</summary>
         public const string ForcePushCommitNotFound = "The commit your force push left can no longer be found";
 
@@ -158,17 +161,9 @@ public static partial class OperationTexts
         {
             ArgumentNullException.ThrowIfNull(name);
             ArgumentNullException.ThrowIfNull(remotes);
-            var remote = remotes
-                .Where(candidate => name.StartsWith(candidate + "/", StringComparison.Ordinal))
-                .OrderByDescending(candidate => candidate.Length)
-                .FirstOrDefault();
-            if (remote is not null)
-            {
-                return (remote, name[(remote.Length + 1)..], true);
-            }
-
-            var slash = name.IndexOf('/', StringComparison.Ordinal);
-            return slash > 0 ? (name[..slash], name[(slash + 1)..], false) : (name, string.Empty, false);
+            var configured = RemoteBranchNames.LongestRemoteOf(name, remotes) is not null;
+            var remote = RemoteBranchNames.RemoteOf(name, remotes);
+            return remote.Length < name.Length ? (remote, name[(remote.Length + 1)..], configured) : (name, string.Empty, false);
         }
 
         /// <summary>A <c>-changes</c> snapshot of a mixed reset: the index alone, its paths not in its message (7.10).</summary>

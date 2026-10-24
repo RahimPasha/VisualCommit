@@ -8,7 +8,8 @@ namespace VisualCommit.App.ViewModels.Dialogs;
 /// <summary>
 /// The error dialog (<c>ErrorDialog</c>, docs/phase-3-design.md 1.6, 4f, C11, D95): the
 /// failure's summary (<c>ErrorSummary</c>), the repository (<c>ErrorRepository</c>, "In
-/// &lt;repo&gt;", always), git's own output in the code font (<c>ErrorOutput</c>), the command
+/// &lt;repo&gt;", always but for a write of git's global settings, which belongs to no repository,
+/// docs/phase-6-design.md 8.3), git's own output in the code font (<c>ErrorOutput</c>), the command
 /// that failed (<c>ErrorCommand</c>), and the buttons "Copy output" (<c>ErrorCopyButton</c>), an
 /// optional extra action (<c>ErrorExtraButton</c>: "Stash changes and check out", "Pull",
 /// "Fetch origin", "Remove lock files") and "Close" (<c>ConfirmButton</c>). A dialog without git
@@ -23,7 +24,7 @@ public sealed partial class ErrorDialogViewModel : DialogViewModel<bool>
 
     /// <param name="title">"Checkout blocked", "Push rejected", "Fetch origin cancelled", … (2.33).</param>
     /// <param name="summary">The one-line sentence that says what happened.</param>
-    /// <param name="repositoryName">The repository's name, shown as "In &lt;name&gt;".</param>
+    /// <param name="repositoryName">The repository's name, shown as "In &lt;name&gt;"; null hides the line (a global settings write, 8.3).</param>
     /// <param name="output">Git's cleaned output, or null for a dialog without it.</param>
     /// <param name="command">The failing git call's display text, or null.</param>
     /// <param name="extraAction">The extra button's label, or null for none.</param>
@@ -32,7 +33,7 @@ public sealed partial class ErrorDialogViewModel : DialogViewModel<bool>
     public ErrorDialogViewModel(
         string title,
         string summary,
-        string repositoryName,
+        string? repositoryName,
         string? output = null,
         string? command = null,
         string? extraAction = null,
@@ -41,7 +42,6 @@ public sealed partial class ErrorDialogViewModel : DialogViewModel<bool>
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(summary);
-        ArgumentNullException.ThrowIfNull(repositoryName);
         Title = title;
         Summary = summary;
         RepositoryName = repositoryName;
@@ -56,7 +56,7 @@ public sealed partial class ErrorDialogViewModel : DialogViewModel<bool>
     public static ErrorDialogViewModel ForFailure(
         string title,
         GitFailure failure,
-        string repositoryName,
+        string? repositoryName,
         string? extraAction = null,
         IClipboardService? clipboard = null,
         IAppLog? log = null)

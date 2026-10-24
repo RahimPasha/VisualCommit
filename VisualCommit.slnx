@@ -24,5 +24,7 @@
     <Project Path="tests/VisualCommit.VisualTests.Phase4/VisualCommit.VisualTests.Phase4.csproj" />
     <Project Path="tests/VisualCommit.VisualTests.Phase5/VisualCommit.VisualTests.Phase5.csproj" />
     <Project Path="tests/VisualCommit.VisualTests.Phase5Undo/VisualCommit.VisualTests.Phase5Undo.csproj" />
+    <Project Path="tests/VisualCommit.VisualTests.Phase6/VisualCommit.VisualTests.Phase6.csproj" />
+    <Project Path="tests/VisualCommit.VisualTests.Phase6Look/VisualCommit.VisualTests.Phase6Look.csproj" />
   </Folder>
 </Solution>

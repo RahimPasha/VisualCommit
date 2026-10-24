@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:diff="using:VisualCommit.App.Views.Diff"
@@ -143,6 +144,7 @@
     <Grid Name="FileHistoryBody">
       <Panel Name="FileHistoryListPart">
         <ListBox Name="FileHistoryList"
+                 kr:KeyRegion.IsMain="True"
                  Focusable="True"
                  Classes="pageList"
                  ItemsSource="{Binding Rows}"

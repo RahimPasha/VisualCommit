@@ -32,6 +32,7 @@
                 CornerRadius="0"
                 ToolTip.Tip="{Binding ActivityLog.ToggleToolTip}"
                 AutomationProperties.HelpText="{Binding ActivityLog.ToggleToolTip}"
+                AutomationProperties.AcceleratorKey="{Binding Keys.ActivityLog}"
                 AutomationProperties.AutomationId="ActivityLogToggle">
           <StackPanel Orientation="Horizontal" Spacing="5">
             <c:Icon Data="{StaticResource IconActivityLog}" Width="13" Height="13" />
@@ -42,7 +43,15 @@
 
       <StackPanel Orientation="Horizontal">
         <c:Icon Data="{StaticResource IconBranch}" Width="13" Height="13" Margin="10,0,5,0"
+                IsVisible="{Binding !ActiveTab.IsDashboard}"
                 Foreground="{DynamicResource VcTextSecondaryBrush}" />
+        <!-- On a dashboard tab the branch part is the workspace's name after its icon
+             (docs/phase-6-design.md 2.8). -->
+        <c:Icon Name="StatusWorkspaceIcon"
+                Data="{StaticResource IconWorkspace}" Width="13" Height="13" Margin="10,0,5,0"
+                IsVisible="{Binding ActiveTab.IsDashboard}"
+                Foreground="{DynamicResource VcTextSecondaryBrush}"
+                AutomationProperties.AutomationId="StatusWorkspaceIcon" />
         <TextBlock Name="CurrentBranch" Text="{Binding ActiveTab.BranchText}" FontSize="11.5" VerticalAlignment="Center"
                    AutomationProperties.AutomationId="CurrentBranch" />
         <TextBlock Name="OperationStatus"

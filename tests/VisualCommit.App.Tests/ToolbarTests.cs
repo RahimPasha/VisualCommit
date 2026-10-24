@@ -66,7 +66,9 @@ public class ToolbarTests
         using var viewModel = Open(repository);
         await viewModel.StartAsync();
         Assert.True(viewModel.Toolbar.CanStash);
-        Assert.Null(viewModel.Toolbar.StashToolTip);
+
+        // docs/phase-6-design.md 6.8: an enabled button says what it does with its key (D215).
+        Assert.Equal("Stash your changes (Ctrl+Shift+S)", viewModel.Toolbar.StashToolTip);
 
         repository.Status = WorkingTreeStatus.Clean;
         await viewModel.RefreshStatusAsync();
@@ -228,7 +230,7 @@ public class ToolbarTests
         await viewModel.RefreshAsync();
 
         Assert.True(viewModel.Toolbar.CanPull);
-        Assert.Null(viewModel.Toolbar.PullToolTip);
+        Assert.Equal("Pull from origin/published (Ctrl+Shift+L)", viewModel.Toolbar.PullToolTip);
     }
 
     [Fact]
@@ -301,18 +303,17 @@ public class ToolbarTests
         // each disabled with its reason 4; Search needs only the repository (11.2).
         var repository = new StateRepository(OpsRefs(), WorkingTreeStatus.Clean);
         using var viewModel = Open(repository);
-        Assert.Equal((ToolbarViewModel.SearchText, true), (viewModel.Toolbar.SearchToolTip, viewModel.Toolbar.CanSearch));
+        Assert.Equal(("Search commits (Ctrl+F)", true), (viewModel.Toolbar.SearchToolTip, viewModel.Toolbar.CanSearch));
 
         await viewModel.StartAsync();
 
         var toolbar = viewModel.Toolbar;
         Assert.Equal((false, "Nothing to undo", false, "Nothing to redo"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
-        Assert.Equal((ToolbarViewModel.SearchText, true), (toolbar.SearchToolTip, toolbar.CanSearch));
+        Assert.Equal(("Search commits (Ctrl+F)", true), (toolbar.SearchToolTip, toolbar.CanSearch));
         Assert.True(toolbar.SearchCommand.CanExecute(null));
 
-        // Ctrl+F, or Cmd+F where the platform's command modifier is Cmd (macOS).
-        Assert.Contains(ToolbarViewModel.SearchGestureText, new[] { "Ctrl+F", "Cmd+F" });
-        Assert.Equal($"Search commits ({ToolbarViewModel.SearchGestureText})", ToolbarViewModel.SearchText);
+        // Cmd+F where the key texts are macOS's (docs/phase-6-design.md 6.4), never from a test of the operating system.
+        Assert.Equal("Search commits (Cmd+F)", ToolbarViewModel.SearchTextFor(new VisualCommit.App.ViewModels.Commands.KeyTexts(VisualCommit.App.ViewModels.Commands.CommandKey.Cmd)));
     }
 
     [Fact]
@@ -325,14 +326,16 @@ public class ToolbarTests
         toolbar.UndoStates = () => new UndoAvailability(true, "Undo commit \"Describe the lines\"", false, "Nothing to redo");
 
         toolbar.UpdateUndoStates();
-        Assert.Equal((true, "Undo commit \"Describe the lines\"", false, "Nothing to redo"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
+
+        // docs/phase-6-design.md 6.8: an enabled Undo or Redo appends its key to what it would do.
+        Assert.Equal((true, "Undo commit \"Describe the lines\" (Ctrl+Z)", false, "Nothing to redo"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
         Assert.True(toolbar.UndoCommand.CanExecute(null));
         Assert.False(toolbar.RedoCommand.CanExecute(null));
         await toolbar.UndoCommand.ExecuteAsync(null);
 
         toolbar.UndoStates = () => new UndoAvailability(false, "Nothing to undo", true, "Redo commit \"Describe the lines\"");
         toolbar.UpdateUndoStates();
-        Assert.Equal((false, "Nothing to undo", true, "Redo commit \"Describe the lines\""), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
+        Assert.Equal((false, "Nothing to undo", true, "Redo commit \"Describe the lines\" (Ctrl+Y)"), (toolbar.CanUndo, toolbar.UndoToolTip, toolbar.CanRedo, toolbar.RedoToolTip));
         await toolbar.RedoCommand.ExecuteAsync(null);
 
         // A state given without a tooltip (not known yet) is its reason 4, never an enabled button without words.
@@ -371,7 +374,7 @@ public class ToolbarTests
         running.SetResult();
         await operation.WaitAsync(TestContext.Current.CancellationToken);
         await WaitForAsync(() => toolbar.CanUndo, "Undo after the operation");
-        Assert.Equal("Undo creation of hotfix", toolbar.UndoToolTip);
+        Assert.Equal("Undo creation of hotfix (Ctrl+Z)", toolbar.UndoToolTip);
         Assert.True(reads >= 2, $"The states were read {reads} times: at the start and after the end at least.");
     }
 
@@ -389,12 +392,12 @@ public class ToolbarTests
         await viewModel.ShowInteractiveRebaseAsync(request, new RebaseList(Older, Main, [new RebaseListEntry(Main, "Main work", "Test Author", "Main work\n")], 0));
 
         Assert.True(viewModel.IsInteractiveRebaseOpen);
-        Assert.Equal((false, "Close the interactive rebase first"), (toolbar.CanSearch, toolbar.SearchToolTip));
+        Assert.Equal((false, "Close the interactive rebase first", "Close the interactive rebase first"), (toolbar.CanSearch, toolbar.SearchToolTip, toolbar.SearchDisabledReason));
         Assert.False(toolbar.SearchCommand.CanExecute(null));
 
         viewModel.InteractiveRebase!.CancelCommand.Execute(null);
         await WaitForAsync(() => !viewModel.IsInteractiveRebaseOpen, "the list closed");
-        Assert.Equal((true, ToolbarViewModel.SearchText), (toolbar.CanSearch, toolbar.SearchToolTip));
+        Assert.Equal((true, "Search commits (Ctrl+F)", (string?)null), (toolbar.CanSearch, toolbar.SearchToolTip, toolbar.SearchDisabledReason));
     }
 
     [Fact]
@@ -436,11 +439,21 @@ public class ToolbarTests
         await app.WaitForAsync(() => repository.Graph.IsComplete && repository.Graph.Count > 0 && repository.Refs is not null, "the graph");
         app.Settle();
 
-        foreach (var id in new[] { "FetchButton", "PullButton", "PushButton", "BranchButton", "PopButton" })
+        // docs/phase-6-design.md 6.8 (D215): an enabled button says what it does with its key, and
+        // its help text is its tooltip.
+        foreach (var (id, tip) in new[]
+        {
+            ("FetchButton", "Fetch all remotes (Ctrl+Shift+F)"),
+            ("PullButton", "Pull from origin/main (Ctrl+Shift+L)"),
+            ("PushButton", "Push main to origin/main (Ctrl+Shift+K)"),
+            ("BranchButton", "Create a branch at HEAD (Ctrl+B)"),
+            ("PopButton", "Pop the newest stash (Ctrl+Shift+O)"),
+        })
         {
             var button = (Button)app.FindByAutomationId(id);
             Assert.True(button.IsEffectivelyEnabled, $"{id} is enabled.");
-            Assert.Null(ToolTip.GetTip(button));
+            Assert.Equal(tip, ToolTip.GetTip(button));
+            Assert.Equal(tip, AutomationProperties.GetHelpText(button));
             Assert.Equal(Brush(app, "VcTextPrimaryBrush"), ((ISolidColorBrush)button.Foreground!).Color);
         }
 
@@ -522,11 +535,23 @@ public class ToolbarTests
     private static void AssertReasons(ToolbarViewModel toolbar, string? fetch, string? pull, string? push, string? branch, string? stash, string? pop) =>
         AssertStates(toolbar, fetch, pull, push, branch, stash, pop, enabled: true);
 
+    /// <summary>
+    /// The buttons' reasons and states: each reason is its <c>XDisabledReason</c> (docs/phase-6-design.md
+    /// 6.8), null while enabled, and a disabled button's tooltip is its reason alone.
+    /// </summary>
     private static void AssertStates(ToolbarViewModel toolbar, string? fetch, string? pull, string? push, string? branch, string? stash, string? pop, bool enabled)
     {
         IEnumerable<string?> expected = [fetch, pull, push, branch, stash, pop];
-        IEnumerable<string?> actual = [toolbar.FetchToolTip, toolbar.PullToolTip, toolbar.PushToolTip, toolbar.BranchToolTip, toolbar.StashToolTip, toolbar.PopToolTip];
+        IEnumerable<string?> actual = [toolbar.FetchDisabledReason, toolbar.PullDisabledReason, toolbar.PushDisabledReason, toolbar.BranchDisabledReason, toolbar.StashDisabledReason, toolbar.PopDisabledReason];
         Assert.Equal(expected, actual);
+        foreach (var (reason, tip) in new[] { (fetch, toolbar.FetchToolTip), (pull, toolbar.PullToolTip), (push, toolbar.PushToolTip), (branch, toolbar.BranchToolTip), (stash, toolbar.StashToolTip), (pop, toolbar.PopToolTip) })
+        {
+            if (reason is not null || !enabled)
+            {
+                Assert.Equal(reason, tip);
+            }
+        }
+
         Assert.Equal(
             [enabled && fetch is null, enabled && pull is null, enabled && push is null, enabled && branch is null, enabled && stash is null, enabled && pop is null],
             [toolbar.FetchCommand.CanExecute(null), toolbar.PullCommand.CanExecute(null), toolbar.PushCommand.CanExecute(null), toolbar.BranchCommand.CanExecute(null), toolbar.StashCommand.CanExecute(null), toolbar.PopCommand.CanExecute(null)]);

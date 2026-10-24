@@ -29,11 +29,14 @@
         <ColumnDefinition Width="400" MinWidth="280" MaxWidth="720" />
       </Grid.ColumnDefinitions>
 
-      <!-- The three regions show the active tab (D45). -->
-      <shell:LeftPanelView Grid.Column="0" DataContext="{Binding ActiveTab.LeftPanel}" />
+      <!-- The three regions show the active tab (D45). A dashboard spans all three columns while
+           the side panels and splitters hide, their widths untouched (docs/phase-6-design.md 2.4). -->
+      <Panel Grid.Column="0" IsVisible="{Binding ActiveTab.ShowsLeftPanel}">
+        <shell:LeftPanelView DataContext="{Binding ActiveTab.LeftPanel}" />
+      </Panel>
       <!-- While the conflict resolver is open the graph area spans the right panel's column too,
            which keeps its width (docs/phase-4-design.md 11.2). -->
-      <shell:CommitGraphView Grid.Column="1" DataContext="{Binding ActiveTab}" Grid.ColumnSpan="{Binding GraphColumnSpan}" />
+      <shell:CommitGraphView Grid.Column="{Binding GraphColumn}" DataContext="{Binding ActiveTab}" Grid.ColumnSpan="{Binding GraphColumnSpan}" />
       <!-- The commit's details, or the stage panel while the working-changes row is selected. -->
       <Panel Grid.Column="2" IsVisible="{Binding ActiveTab.ShowsDetailsPanel}">
         <shell:RightPanelView DataContext="{Binding ActiveTab.Details}" />
@@ -52,6 +55,7 @@
                     ResizeDirection="Columns"
                     Background="Transparent"
                     ZIndex="1"
+                    IsVisible="{Binding ActiveTab.ShowsLeftPanel}"
                     AutomationProperties.AutomationId="LeftSplitter" />
       <GridSplitter Name="RightSplitter"
                     Grid.Column="2"

@@ -34,7 +34,7 @@ public sealed partial class Phase3ChecksA
         await WaitForDetailsAsync(app, "Fast-forward me");
         var shot = Shot(app, "06a-double-click-local-branch");
         Assert.Equal("feature/ff", await GitTextAsync(repo, "symbolic-ref", "--short", "HEAD"));
-        Assert.Contains(app.GitCalls(), call => call.CommandText == "git switch --no-guess feature/ff");
+        Assert.Contains(app.GitCalls(), call => call.CommandText == "git switch --no-guess --no-overwrite-ignore feature/ff");
         AssertBranch(app, "feature/ff");
         AssertStatus(app, "Checked out feature/ff");
         AssertRowSelected(app, PartA.FastForwardMeRow, shot);
@@ -108,7 +108,7 @@ public sealed partial class Phase3ChecksA
         await app.WaitForAsync(() => repository.OperationStatus.Text == PartA.TrackedMessage, $"\"{PartA.TrackedMessage}\"");
         await app.WaitForIdleAsync();
         Shot(app, "06e-remote-branch-tracked");
-        Assert.Contains(app.GitCalls(), call => call.CommandText == "git switch --create feature/alpha --track refs/remotes/origin/feature/alpha");
+        Assert.Contains(app.GitCalls(), call => call.CommandText == "git switch --create feature/alpha --track --no-overwrite-ignore refs/remotes/origin/feature/alpha");
         Assert.Equal("feature/alpha", await GitTextAsync(repo, "symbolic-ref", "--short", "HEAD"));
         Assert.Equal(PartA.AlphaTwoSha, await repo.HeadAsync());
         Assert.Equal("## feature/alpha...origin/feature/alpha", (await GitLinesAsync(repo, "status", "-sb"))[0]);

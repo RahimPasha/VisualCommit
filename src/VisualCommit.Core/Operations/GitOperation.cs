@@ -99,6 +99,13 @@ public sealed record GitOperation(
     public PromptMode? Prompts { get; init; }
 
     /// <summary>
+    /// The bulk run the operation belongs to (docs/phase-6-design.md 4.4): the queue passes it to
+    /// <see cref="IGitPromptBroker.Begin"/>, so that the run's prompts are answered as one group.
+    /// Null (the default) outside a run.
+    /// </summary>
+    public PromptGroup? PromptGroup { get; init; }
+
+    /// <summary>
     /// A local operation of more than one git call (stash, check out and re-apply; check out and
     /// merge; several cherry-picks): the "Finishing operations" dialog says that its remaining
     /// steps will not run when the user quits now (1.8).

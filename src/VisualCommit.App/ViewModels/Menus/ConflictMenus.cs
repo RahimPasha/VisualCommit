@@ -1,3 +1,5 @@
+using VisualCommit.App.ViewModels.Commands;
+
 namespace VisualCommit.App.ViewModels.Menus;
 
 /// <summary>What the conflict resolver's result menu acts on (docs/phase-4-design.md 11.12, 14.3).</summary>
@@ -46,14 +48,14 @@ public static class ConflictMenus
         return RepositoryMenus.Build(
             new MenuHeader($"{fileName} (result)"),
             [
-                new MenuItem("Undo", actions.Undo, state.CanUndo && editable, state.CanUndo ? null : NothingToUndo),
-                new MenuItem("Redo", actions.Redo, state.CanRedo && editable, state.CanRedo ? null : NothingToRedo),
+                new MenuItem("Undo", actions.Undo, state.CanUndo && editable, state.CanUndo ? null : NothingToUndo) { Command = AppCommand.TextUndo },
+                new MenuItem("Redo", actions.Redo, state.CanRedo && editable, state.CanRedo ? null : NothingToRedo) { Command = AppCommand.TextRedo },
             ],
             [
-                new MenuItem("Cut", actions.Cut, state.HasSelection && editable, state.HasSelection ? null : SelectTextFirst),
-                new MenuItem("Copy", actions.Copy, state.HasSelection, state.HasSelection ? null : SelectTextFirst),
-                new MenuItem("Paste", actions.Paste),
-                new MenuItem("Select all", actions.SelectAll),
+                new MenuItem("Cut", actions.Cut, state.HasSelection && editable, state.HasSelection ? null : SelectTextFirst) { Command = AppCommand.Cut },
+                new MenuItem("Copy", actions.Copy, state.HasSelection, state.HasSelection ? null : SelectTextFirst) { Command = AppCommand.Copy },
+                new MenuItem("Paste", actions.Paste) { Command = AppCommand.Paste },
+                new MenuItem("Select all", actions.SelectAll) { Command = AppCommand.SelectAll },
             ]);
     }
 
@@ -62,6 +64,6 @@ public static class ConflictMenus
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(copy);
-        return RepositoryMenus.Build(new MenuHeader(title), [new MenuItem("Copy", copy, hasSelection, hasSelection ? null : SelectTextFirst)]);
+        return RepositoryMenus.Build(new MenuHeader(title), [new MenuItem("Copy", copy, hasSelection, hasSelection ? null : SelectTextFirst) { Command = AppCommand.Copy }]);
     }
 }

@@ -266,10 +266,11 @@
       </Style>
     </ControlTheme>
 
-    <!-- A button that destroys work, after a question: the danger background, white text. -->
+    <!-- A button that destroys work, after a question: the danger background, its text in
+         VcDangerTextBrush (docs/phase-6-design.md 11.11). -->
     <ControlTheme x:Key="VcDangerButton" TargetType="Button" BasedOn="{StaticResource VcPrimaryButton}">
       <Setter Property="Background" Value="{DynamicResource VcDangerBrush}" />
-      <Setter Property="Foreground" Value="#FFFFFF" />
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerTextBrush}" />
     </ControlTheme>
 
     <!-- A check box 20 high: a box of 14 with rounded corners, the accent with a check mark when ticked. -->
@@ -310,6 +311,12 @@
       </Style>
       <Style Selector="^:disabled">
         <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+      </Style>
+      <!-- A disabled ticked box in the disabled colour, not the accent, so it does not look clickable
+           (the scan's "Already in this workspace" rows, docs/phase-6-design.md 1.9). -->
+      <Style Selector="^:disabled:checked /template/ Border#Box">
+        <Setter Property="Background" Value="{DynamicResource VcTextDisabledBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource VcTextDisabledBrush}" />
       </Style>
     </ControlTheme>
 

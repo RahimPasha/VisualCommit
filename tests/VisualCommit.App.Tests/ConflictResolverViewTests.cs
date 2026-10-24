@@ -569,25 +569,28 @@ public class ConflictResolverViewTests
         var left = host.BoundsOf(button).TopLeft;
         var point = left + new Point(3, 11);
 
-        // The first press of the double-click lands outside the resolver (the stage panel, in the
-        // app): here, the resolver is hidden while it is pressed. Then the resolver opens and the
-        // second press, within the double-click time and size, lands on its Use theirs.
-        host.View.IsVisible = false;
-        ResolverFixtures.Settle();
-        host.Host.Window.MouseDown(point, MouseButton.Left);
-        host.Host.Window.MouseUp(point, MouseButton.Left);
-        host.View.IsVisible = true;
+        // The resolver reopens, which starts the guard on the test's clock; the panes are laid out
+        // again for the reopened file: wait until the button is under the point.
         await host.Resolver.OpenAsync("notes.txt");
         ResolverFixtures.Settle();
         Assert.True(host.Resolver.IsInDoubleClickGuard);
-
-        // The panes are laid out again for the reopened file; wait until the button is under the point.
         Button? Hit() => (host.Host.Window.InputHitTest(point) as Visual)?.FindAncestorOfType<Button>(includeSelf: true);
         for (var tries = 0; tries < 200 && !ReferenceEquals(Hit(), host.View.ConflictPanes.BarButton(0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs)); tries++)
         {
             await Task.Delay(25, TestContext.Current.CancellationToken);
             ResolverFixtures.Settle();
         }
+
+        // The first press of the double-click lands outside the resolver (the stage panel, in the
+        // app): here, the resolver takes no input while it is pressed, laid out as it is. The
+        // second press, within the double-click time and size, lands on its Use theirs. The two
+        // presses follow each other at once: Avalonia counts the clicks on the real clock, which
+        // a wait for a layout between them could outlast on a loaded machine (CI's macOS, run
+        // 39837374552).
+        host.View.IsHitTestVisible = false;
+        host.Host.Window.MouseDown(point, MouseButton.Left);
+        host.Host.Window.MouseUp(point, MouseButton.Left);
+        host.View.IsHitTestVisible = true;
 
         Assert.Same(host.View.ConflictPanes.BarButton(0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs), Hit());
         Assert.True(host.Resolver.IsInDoubleClickGuard);

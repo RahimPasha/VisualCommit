@@ -277,7 +277,7 @@ public class HistoryOperationTests
 
         await Assert.ThrowsAsync<GitException>(() => repository.CherryPickAsync(alphaOne, cancellationToken: TestCancelled));
         await Assert.ThrowsAsync<GitException>(() => repository.RevertAsync(head, isMerge: false, cancellationToken: TestCancelled));
-        await Assert.ThrowsAsync<GitException>(() => repository.MergeAsync("refs/heads/feature/alpha", MergeMode.Default, cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<GitException>(() => repository.MergeAsync("refs/heads/feature/alpha", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled));
 
         Assert.Equal(head, await repo.HeadAsync());
         Assert.False(GitFileExists(repo, "CHERRY_PICK_HEAD"));
@@ -312,7 +312,7 @@ public class HistoryOperationTests
         using var repo = await Scenarios.OperationsAsync();
         var repository = await OpenAsync(repo);
         var mainWork = await RevAsync(repo, "refs/heads/main");
-        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Merged, await repository.MergeAsync("refs/heads/feature/alpha", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
         var merge = await repo.HeadAsync();
 
         Assert.Equal(ApplyResult.Applied, await repository.RevertAsync(merge, isMerge: true, cancellationToken: TestCancelled));

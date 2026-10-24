@@ -197,6 +197,86 @@ public class RebaseTodoTests
         Assert.Throws<ArgumentException>(() => RebaseTodo.SquashPlan(list, Branch, [A, A], "x\n"));
     }
 
+    // ---- Keep ignored files: where git starts and what it applies (docs/phase-6-design.md 9.7) ----
+
+    [Fact]
+    public void Plain_picks_are_all_leading_and_all_applied()
+    {
+        var plan = Plan(Step(A), Step(B), Step(C));
+
+        Assert.Equal($"pick {A}\npick {B}\npick {C}\n", RebaseTodo.Build(plan).Todo);
+        Assert.Equal([A, B, C], RebaseTodo.LeadingPicks(plan));
+        Assert.Equal([A, B, C], RebaseTodo.AppliedCommits(plan));
+    }
+
+    [Fact]
+    public void A_reword_first_starts_with_its_label_so_no_pick_leads()
+    {
+        // T6's shape: label vc-1 before the first pick, which stops git's skipping.
+        var plan = Plan(Step(A, RebaseAction.Reword, "New\n"), Step(B), Step(C));
+
+        Assert.StartsWith($"label vc-1\npick {A}\n", RebaseTodo.Build(plan).Todo, StringComparison.Ordinal);
+        Assert.Empty(RebaseTodo.LeadingPicks(plan));
+        Assert.Equal([A, B, C], RebaseTodo.AppliedCommits(plan));
+    }
+
+    [Fact]
+    public void A_reword_after_plain_picks_ends_the_leading_ones_before_its_label()
+    {
+        var plan = Plan(Step(A), Step(B), Step(C, RebaseAction.Reword, "New\n"));
+
+        Assert.Equal([A, B], RebaseTodo.LeadingPicks(plan));
+        Assert.Equal([A, B, C], RebaseTodo.AppliedCommits(plan));
+    }
+
+    [Fact]
+    public void A_drop_first_leaves_no_leading_pick_and_is_not_applied()
+    {
+        var plan = Plan(Step(A, RebaseAction.Drop), Step(B), Step(C));
+
+        Assert.Equal($"drop {A}\npick {B}\npick {C}\n", RebaseTodo.Build(plan).Todo);
+        Assert.Empty(RebaseTodo.LeadingPicks(plan));
+        Assert.Equal([B, C], RebaseTodo.AppliedCommits(plan));
+    }
+
+    [Fact]
+    public void A_pick_with_a_drop_after_it_is_the_last_leading_pick()
+    {
+        // The drop line ends the run: the next pick's parent is the dropped commit.
+        var plan = Plan(Step(A), Step(B, RebaseAction.Drop), Step(C), Step(D));
+
+        Assert.Equal($"pick {A}\ndrop {B}\npick {C}\npick {D}\n", RebaseTodo.Build(plan).Todo);
+        Assert.Equal([A], RebaseTodo.LeadingPicks(plan));
+        Assert.Equal([A, C, D], RebaseTodo.AppliedCommits(plan));
+    }
+
+    [Fact]
+    public void A_squash_group_applies_its_target_then_its_members_and_leads_with_nothing()
+    {
+        // A first, B squashed into it, D dropped inside the group, C a fixup, then E: the todo is
+        // label, pick A, fixup B, fixup C, the guard, drop D, pick E (as Build writes it above).
+        var plan = Plan(Step(A, RebaseAction.Pick, "Group\n"), Step(B, RebaseAction.Squash), Step(D, RebaseAction.Drop), Step(C, RebaseAction.Fixup), Step(E));
+
+        Assert.Empty(RebaseTodo.LeadingPicks(plan));
+        Assert.Equal([A, B, C, E], RebaseTodo.AppliedCommits(plan));
+
+        // A squash's plan (section 3) changes its first group's message: nothing leads either.
+        var squash = RebaseTodo.SquashPlan(new RebaseList(Onto, C, [Entry(A), Entry(B), Entry(C)], 0), Branch, [A, B], "Squashed\n");
+        Assert.Empty(RebaseTodo.LeadingPicks(squash));
+        Assert.Equal([A, B, C], RebaseTodo.AppliedCommits(squash));
+    }
+
+    [Fact]
+    public void The_leading_picks_stop_at_a_group_and_a_plan_that_cannot_be_written_is_refused()
+    {
+        var plan = Plan(Step(A), Step(B), Step(C, RebaseAction.Fixup), Step(D));
+
+        Assert.Equal([A], RebaseTodo.LeadingPicks(plan));
+        Assert.Equal([A, B, C, D], RebaseTodo.AppliedCommits(plan));
+        Assert.Throws<ArgumentException>(() => RebaseTodo.LeadingPicks(Plan(Step(A, RebaseAction.Squash))));
+        Assert.Throws<ArgumentException>(() => RebaseTodo.AppliedCommits(Plan()));
+    }
+
     private static RebaseStep Step(string sha, RebaseAction action = RebaseAction.Pick, string? message = null) => new(sha, action, message);
 
     private static RebasePlan Plan(params RebaseStep[] steps) => new(Onto, C, Branch, steps);

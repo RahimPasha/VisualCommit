@@ -1,8 +1,19 @@
+using Avalonia.Headless.XUnit;
+using Avalonia.Threading;
+using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Settings;
+using VisualCommit.Core;
 using VisualCommit.Core.Diff;
+using VisualCommit.Core.Settings;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Session;
+using VisualCommit.Git;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
 
@@ -291,6 +302,328 @@ public class RepositoryOperationsFilesTests
         app.AssertScriptFollowed();
     }
 
+    [Theory]
+    [InlineData("tool.MSC", true)]
+    [InlineData("script.wsh", true)]
+    [InlineData("run.py", false)]
+    [InlineData("setup.EXE", true)]
+    [InlineData("notes.txt", false)]
+    public void Open_files_question_is_the_floor_and_the_extra_extensions_case_ignored(string name, bool runs)
+    {
+        // docs/phase-6-design.md 12.8: the fixed list, then the user's and PATHEXT's extensions.
+        var extra = new HashSet<string>(RepositoryOperations.PathExtExtensions(ToolCatalogues.DefaultWindowsPathExtensions), StringComparer.Ordinal);
+
+        Assert.Equal(runs, RepositoryOperations.CanRunPrograms(name, null, extra));
+        Assert.True(RepositoryOperations.CanRunPrograms("run.PY", null, new HashSet<string> { ".py" }));
+        Assert.False(RepositoryOperations.CanRunPrograms("Makefile", null, new HashSet<string> { "." }));
+    }
+
+    [Fact]
+    public void The_fixed_list_is_12_8s_in_its_order_and_pathext_reads_lower_case_without_duplicates()
+    {
+        Assert.Equal(
+            ".exe .bat .cmd .com .ps1 .vbs .vbe .js .jse .wsf .hta .msi .scr .pif .cpl .lnk .url .reg .jar .app .command .sh .desktop",
+            string.Join(' ', RepositoryOperations.FixedRunnableExtensions));
+        Assert.Equal(
+            [".com", ".exe", ".bat", ".cmd", ".vbs", ".vbe", ".js", ".jse", ".wsf", ".wsh", ".msc"],
+            RepositoryOperations.PathExtExtensions(ToolCatalogues.DefaultWindowsPathExtensions));
+        Assert.Equal([".py", ".pyw"], RepositoryOperations.PathExtExtensions(".PY; PYW;;.py"));
+        Assert.Empty(RepositoryOperations.PathExtExtensions(null));
+    }
+
+    [Fact]
+    public async Task Open_file_asks_for_an_extension_the_user_added_and_on_windows_for_pathexts()
+    {
+        // 12.8: run.py opens at once, and with .py added in the settings asks on every platform;
+        // tool.msc asks on Windows through PATHEXT, which the session's catalogues hold (12.9:
+        // the harnesses' fixed one is Windows' default, none elsewhere).
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "run.py"), "print(1)\n", TestContext.Current.CancellationToken);
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "tool.msc"), "x\n", TestContext.Current.CancellationToken);
+        using var app = await FixedToolsTab.OpenAsync(repo);
+        var run = Path.Combine(app.Repository.Path, "run.py");
+        var tool = Path.Combine(app.Repository.Path, "tool.msc");
+
+        await app.Repository.Operations.OpenFileAsync("run.py");
+        Assert.Equal([run], app.Launcher.Opened);
+        Assert.Empty(app.Dialogs.Confirmations);
+
+        if (OperatingSystem.IsWindows())
+        {
+            app.Dialogs.Confirm(yes: false);
+            await app.Repository.Operations.OpenFileAsync("tool.msc");
+            Assert.Equal("Open tool.msc?", Assert.Single(app.Dialogs.Confirmations).Title);
+        }
+        else
+        {
+            await app.Repository.Operations.OpenFileAsync("tool.msc");
+            Assert.Contains(tool, app.Launcher.Opened);
+        }
+
+        var asked = app.Dialogs.Confirmations.Count;
+        app.Settings.Update(settings => settings with { ExtraRunnableExtensions = ".py .pl" });
+        app.Dialogs.Confirm(yes: false);
+        await app.Repository.Operations.OpenFileAsync("run.py");
+        Assert.Equal(asked + 1, app.Dialogs.Confirmations.Count);
+        Assert.Equal("Open run.py?", app.Dialogs.Confirmations[^1].Title);
+        Assert.Single(app.Launcher.Opened, path => path == run);
+        Assert.Empty(app.Dialogs.Problems);
+        Assert.Equal(0, app.Dialogs.Unused);
+    }
+
+    [Theory]
+    [InlineData("py,pl")]
+    [InlineData("py")]
+    [InlineData("PY; b/c")]
+    public async Task Open_file_reads_the_users_extensions_as_the_settings_screen_does_a_hand_edited_setting_included(string stored)
+    {
+        // 7.3, 12.8: one reading of the setting for the screen and for Open file: split at spaces,
+        // commas, semicolons and tabs, each entry given its dot, one that is no extension left out.
+        // Open file split at spaces alone and added no dot, so "py,pl" and "py" asked nothing.
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "run.py"), "print(1)\n", TestContext.Current.CancellationToken);
+        using var app = await FixedToolsTab.OpenAsync(repo);
+        app.Settings.Update(settings => settings with { ExtraRunnableExtensions = stored });
+        app.Dialogs.Confirm(yes: false);
+
+        await app.Repository.Operations.OpenFileAsync("run.py");
+
+        Assert.Equal("Open run.py?", Assert.Single(app.Dialogs.Confirmations).Title);
+        Assert.Empty(app.Launcher.Opened);
+        Assert.Contains(".py", RunnableExtensionText.Parse(stored));
+        Assert.Equal(0, app.Dialogs.Unused);
+    }
+
+    [Fact]
+    public void The_users_extensions_are_read_lower_case_with_their_dot_in_order_and_without_what_is_no_extension()
+    {
+        Assert.Equal([".py", ".pl"], RunnableExtensionText.Parse("py,pl"));
+        Assert.Equal([".py", ".pl"], RunnableExtensionText.Parse(" .PY;\tpl py "));
+        Assert.Equal([".py"], RunnableExtensionText.Parse("py b/c .abcdefghijklmnopq"));
+        Assert.Empty(RunnableExtensionText.Parse(null));
+        Assert.Equal("b/c", RunnableExtensionText.FirstInvalid("py b/c x?"));
+        Assert.Null(RunnableExtensionText.FirstInvalid("py,pl"));
+
+        // The screen stores what Open file reads: the same entries, the fixed list's left out.
+        Assert.Equal(".py .pl", GeneralSettingsViewModel.NormalizeExtensions("py,pl;.EXE"));
+    }
+
+    [Fact]
+    public async Task Without_the_sessions_catalogues_open_file_asks_by_its_lists_alone()
+    {
+        // 12.8, 12.9: PATHEXT comes from TabServices.Tools only, never from the test process's own.
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "tool.msc"), "x\n", TestContext.Current.CancellationToken);
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.OpenFileAsync("tool.msc");
+
+        Assert.Equal([Path.Combine(app.Repository.Path, "tool.msc")], app.Launcher.Opened);
+        Assert.Empty(app.Dialogs.Confirmations);
+    }
+
+    [Fact]
+    public async Task Open_in_editor_starts_the_chosen_editor_on_the_files_absolute_path_and_asks_nothing()
+    {
+        // 12.1, 12.4: never asking first, though Open file asks for an .exe; no operation, no undo
+        // entry; the log line names the command.
+        using var repo = await Scenarios.ChangesAsync();
+        await File.WriteAllTextAsync(Path.Combine(repo.Path, "setup.exe"), "MZ", TestContext.Current.CancellationToken);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var program = OperatingSystem.IsWindows() ? @"C:\Tools\Microsoft VS Code\Code.exe" : "/opt/tools/vscode/code";
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", program) });
+        var file = Path.Combine(app.Repository.Path, "setup.exe");
+
+        await app.Operations.OpenInEditorAsync("setup.exe");
+
+        var command = Assert.Single(app.Launcher.Edits);
+        Assert.Equal(program, command.FileName);
+        Assert.Equal([file], command.Arguments);
+        Assert.Equal(OperatingSystem.IsWindows() ? @"C:\Tools\Microsoft VS Code" : Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), command.WorkingDirectory);
+        Assert.Equal([EditorCommands.ElectronRunAsNode], command.RemovedVariables);
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Null(app.LastResult);
+        Assert.Contains(app.Log.Messages, message => message == $"Open in editor: {command.DisplayText}");
+
+        // Other's program and arguments as stored.
+        var other = OperatingSystem.IsWindows() ? @"D:\Tools\Ed.exe" : "/usr/local/bin/ed";
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting(KnownEditors.CustomId, other, "-l {line} {path}") });
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+        Assert.Equal(["-l", "1", Path.Combine(app.Repository.Path, "src", "helpers.py")], app.Launcher.Edits[^1].Arguments);
+    }
+
+    [AvaloniaFact]
+    public async Task Open_in_editor_checks_its_file_off_the_ui_thread()
+    {
+        // D59, 0.9: a file on a share that does not answer holds a file check for minutes; the
+        // check runs on the pool while the UI thread goes on (held on a gate here).
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var program = OperatingSystem.IsWindows() ? @"C:\Tools\Microsoft VS Code\Code.exe" : "/opt/tools/vscode/code";
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", program) });
+        using var gate = new ManualResetEventSlim();
+        var checking = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        app.Services.FileExists = path =>
+        {
+            checking.TrySetResult(Dispatcher.UIThread.CheckAccess());
+            gate.Wait(TimeSpan.FromSeconds(30));
+            return File.Exists(path);
+        };
+
+        var opening = app.Operations.OpenInEditorAsync("src/helpers.py");
+        var onUiThread = await checking.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.False(onUiThread);
+        Assert.False(opening.IsCompleted);
+        Assert.Empty(app.Launcher.Edits);
+        gate.Set();
+        await opening.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal([Path.Combine(app.Repository.Path, "src", "helpers.py")], Assert.Single(app.Launcher.Edits).Arguments);
+    }
+
+    [AvaloniaFact]
+    public async Task Open_file_checks_its_file_off_the_ui_thread()
+    {
+        // D59, 0.9, as Open in editor's: the check (and the read of the file's mode) runs on the
+        // pool while the UI thread goes on (held on a gate here); Open file opens it after.
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        using var gate = new ManualResetEventSlim();
+        var checking = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        app.Services.FileExists = path =>
+        {
+            checking.TrySetResult(Dispatcher.UIThread.CheckAccess());
+            gate.Wait(TimeSpan.FromSeconds(30));
+            return File.Exists(path);
+        };
+
+        var opening = app.Operations.OpenFileAsync("src/helpers.py");
+        var onUiThread = await checking.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.False(onUiThread);
+        Assert.False(opening.IsCompleted);
+        Assert.Empty(app.Launcher.Opened);
+        gate.Set();
+        await opening.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+        Assert.Equal([Path.Combine(app.Repository.Path, "src", "helpers.py")], app.Launcher.Opened);
+
+        // A file the check finds gone opens nothing.
+        app.Services.FileExists = _ => false;
+        await app.Operations.OpenFileAsync("src/helpers.py");
+        Assert.Single(app.Launcher.Opened);
+        Assert.Contains(app.Log.Messages, message => message.EndsWith("Open file: src/helpers.py is not in the working tree.", StringComparison.Ordinal));
+    }
+
+    [AvaloniaFact]
+    public async Task The_palettes_items_of_the_open_diff_read_no_disk_and_go_by_the_diffs_own_check()
+    {
+        // 5.5: the open diff's items are built at every opening of the palette and on Mod+Shift+H
+        // and Mod+Shift+B, on the UI thread; whether the file is in the working tree comes from the
+        // diff's read, checked on the pool, never from the disk then.
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var (onUiThread, onPool) = (0, 0);
+        app.Services.FileExists = path =>
+        {
+            if (Dispatcher.UIThread.CheckAccess())
+            {
+                Interlocked.Increment(ref onUiThread);
+            }
+            else
+            {
+                Interlocked.Increment(ref onPool);
+            }
+
+            return File.Exists(path);
+        };
+        var calculator = app.Operations.Status.Unstaged.Single(file => file.Path == "src/Calculator.cs");
+
+        app.Repository.OpenDiff(calculator, staged: false);
+        await DashboardTestSupport.WaitUntilAsync(() => app.Repository.Diff is { Body: not VisualCommit.App.ViewModels.Diff.DiffBody.Loading }, "the diff's read");
+
+        Assert.True(app.Repository.Diff!.ExistsInWorkingTree);
+        Assert.True(Volatile.Read(ref onPool) >= 1);
+        Assert.Equal(0, Volatile.Read(ref onUiThread));
+        for (var opening = 0; opening < 3; opening++)
+        {
+            var menu = app.Repository.DiffMenuForPalette(app.Repository.MenuContext);
+            Assert.NotNull(menu);
+            Assert.True(menu.Items.Single(item => item.Label == "Open file").IsEnabled);
+            Assert.True(menu.Items.Single(item => item.Label == "Blame").IsEnabled);
+        }
+
+        Assert.Equal(0, Volatile.Read(ref onUiThread));
+    }
+
+    [Fact]
+    public async Task An_editor_that_cannot_start_opens_could_not_open_the_editor_whose_button_opens_settings_on_tools()
+    {
+        // 12.7: the dialog without git output, the repository's name, "Open settings…".
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var program = OperatingSystem.IsWindows() ? @"C:\Tools\Microsoft VS Code\Code.exe" : "/opt/tools/vscode/code";
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", program) });
+        var opened = new List<SettingsSection>();
+        app.Services.OpenSettings = section =>
+        {
+            opened.Add(section);
+            return Task.CompletedTask;
+        };
+
+        app.Launcher.EditFailure = new System.ComponentModel.Win32Exception(5, "Access is denied.");
+        app.Dialogs.CloseError(clickExtra: true);
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(
+            ("Could not open the editor", "Visual Studio Code could not be started: Access is denied.", $"In {app.Repository.Name}", "Open settings…", false, false),
+            (error.Title, error.Summary, error.RepositoryText, error.ExtraAction, error.HasOutput, error.HasCommand));
+        Assert.Equal([SettingsSection.Tools], opened);
+
+        // A program that is gone (12.4's check) says so; Close opens nothing.
+        app.Launcher.EditFailure = new FileNotFoundException("gone", program);
+        app.Dialogs.CloseError();
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+        Assert.Equal($"Visual Studio Code is not at {program} any more: choose an editor in Settings.", app.Dialogs.Errors[^1].Summary);
+        Assert.Equal([SettingsSection.Tools], opened);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_hand_edited_cmd_editor_says_why_in_plain_words()
+    {
+        // 12.4, 12.7: the reason alone after "{Name} could not be started:", nothing started.
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting(KnownEditors.CustomId, @"C:\Tools\ed.cmd", "{path}") });
+        app.Dialogs.CloseError();
+
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+
+        var reason = OperatingSystem.IsWindows()
+            ? @"C:\Tools\ed.cmd is not an .exe or .com program."
+            : @"The editor's program C:\Tools\ed.cmd is not an absolute path.";
+        Assert.Equal($"ed.cmd could not be started: {reason}", Assert.Single(app.Dialogs.Errors).Summary);
+        Assert.Empty(app.Launcher.Edits);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Open_in_editor_does_nothing_without_an_editor_with_an_unknown_one_or_for_a_file_that_is_gone()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("emacs-of-the-future", @"C:\x.exe") });
+        await app.Operations.OpenInEditorAsync("src/helpers.py");
+        app.Settings.Update(settings => settings with { Editor = new EditorSetting("vscode", OperatingSystem.IsWindows() ? @"C:\x.exe" : "/x") });
+        await app.Operations.OpenInEditorAsync("docs/old-notes.txt");
+
+        Assert.Empty(app.Launcher.Edits);
+        Assert.Empty(app.Dialogs.Shown);
+    }
+
     [Fact]
     public async Task Open_file_and_show_in_folder_ask_the_launcher_for_the_working_trees_file()
     {
@@ -429,4 +762,71 @@ public class RepositoryOperationsFilesTests
 
     private static async Task<IReadOnlyList<string>> PorcelainAllAsync(TempRepo repo) =>
         (await repo.GitAsync("status", "--porcelain", "--untracked-files=all")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
+
+    /// <summary>
+    /// A repository's view model opened as <see cref="OperationsHarness"/> opens one, with the
+    /// session's tool catalogues fixed as the harnesses fix them (<see cref="ToolCatalogues.Fixed"/>,
+    /// 12.9), which the harness gives none.
+    /// </summary>
+    private sealed class FixedToolsTab : IDisposable
+    {
+        private FixedToolsTab(RepositoryViewModel repository, ScriptedDialogs dialogs, FakeFileLauncher launcher, MainWindowViewModelTests.FakeSettings settings)
+        {
+            Repository = repository;
+            Dialogs = dialogs;
+            Launcher = launcher;
+            Settings = settings;
+        }
+
+        public RepositoryViewModel Repository { get; }
+
+        public ScriptedDialogs Dialogs { get; }
+
+        public FakeFileLauncher Launcher { get; }
+
+        public MainWindowViewModelTests.FakeSettings Settings { get; }
+
+        public static async Task<FixedToolsTab> OpenAsync(TempRepo repo)
+        {
+            var gitPath = GitLocator.FindExecutable(GitSearchContext.FromSystem()) ?? throw new InvalidOperationException("The tests need git.");
+            var git = await GitRepository.OpenAsync(new GitRunner(gitPath, new GitCallLog()), repo.Path, TestContext.Current.CancellationToken);
+            var host = new DialogHostViewModel();
+            var launcher = new FakeFileLauncher();
+            var settings = new MainWindowViewModelTests.FakeSettings();
+            var dates = new DateDisplay(TimeZoneInfo.Utc);
+            var log = new RecordingLog();
+            var services = new TabServices(new NoRepositories(), new FakeFolderPicker(), settings, new MemorySession(), dates, log, dialogs: host, launcher: launcher, tools: ToolCatalogues.Fixed);
+            var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
+            var tab = new FixedToolsTab(repository, new ScriptedDialogs(host), launcher, settings);
+            await repository.StartAsync();
+            return tab;
+        }
+
+        public void Dispose()
+        {
+            Dialogs.Dispose();
+            Repository.Dispose();
+        }
+
+        private sealed class MemorySession : ISessionStore
+        {
+            public SessionState Current { get; private set; } = new();
+
+            public void Update(Func<SessionState, SessionState> change) => Current = change(Current);
+        }
+
+        private sealed class NoRepositories : IRepositoryProvider
+        {
+            public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+            public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+            public Task<IGitRepository> CloneAsync(
+                string url,
+                string destination,
+                IProgress<CloneProgress>? progress,
+                CancellationToken cancellationToken = default,
+                IReadOnlyDictionary<string, string?>? environment = null) => throw new NotSupportedException();
+        }
+    }
 }

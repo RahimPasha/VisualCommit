@@ -28,17 +28,21 @@ public static class ShellExpectations
     public const double RightPanelWidth = 400;
     public const double SizeTolerance = 2;
 
+    /// <summary>The toolbar's buttons left to right, with phase 6's Settings at the start of the right-hand group (docs/phase-6-design.md 7.2, 16.1, D197).</summary>
     public static readonly string[] ToolbarLabels =
-        ["Undo", "Redo", "Fetch", "Pull", "Push", "Branch", "Stash", "Pop", "Search", "Theme"];
+        ["Undo", "Redo", "Fetch", "Pull", "Push", "Branch", "Stash", "Pop", "Settings", "Search", "Theme"];
 
     public static readonly string[] LeftPanelSections =
         ["Local branches", "Remotes", "Pull requests", "Tags", "Stashes"];
 
-    /// <summary>The welcome page of a tab without a repository, in reading order (phase 1, D42).</summary>
+    /// <summary>
+    /// The welcome page of a tab without a repository, in reading order (phase 1, D42), with phase
+    /// 6's Workspaces section between Init and the recent list (docs/phase-6-design.md 13.1, 16.1).
+    /// </summary>
     public static readonly string[] WelcomeTexts =
     [
         "No repository open", "Open, clone or init a repository to see its history.",
-        "Open", "Clone", "Init", "Recent repositories", "No recent repositories",
+        "Open", "Clone", "Init", "Workspaces", "New workspace…", "No workspaces", "Recent repositories", "No recent repositories",
     ];
 
     /// <summary>The colours of one theme, from the report's colour table.</summary>
@@ -88,14 +92,14 @@ public static class ShellExpectations
         Assert.True(app.BoundsOf(addButton).X > app.BoundsOf(app.Find<Border>("RepoTab")).Right - 1);
         Assert.False(app.Find<Button>("CloseTabButton").IsEffectivelyVisible);
 
-        // Toolbar: the buttons in order, and only Theme enabled.
+        // Toolbar: the buttons in order, and only Settings and Theme enabled (phase 6's Settings is never disabled, 7.2).
         var buttons = toolbar.GetVisualDescendants().OfType<ToolbarButton>()
             .OrderBy(button => app.BoundsOf(button).X)
             .ToList();
         Assert.Equal(ToolbarLabels, buttons.Select(button => button.Label));
-        Assert.Equal(["Theme"], buttons.Where(button => button.IsEffectivelyEnabled).Select(button => button.Label));
-        Assert.True(app.BoundsOf(buttons[^1]).Right > width - 20, "Search and Theme sit at the right end of the toolbar.");
-        Assert.True(app.BoundsOf(buttons[7]).Right < app.BoundsOf(buttons[8]).X, "The left group ends before Search.");
+        Assert.Equal(["Settings", "Theme"], buttons.Where(button => button.IsEffectivelyEnabled).Select(button => button.Label));
+        Assert.True(app.BoundsOf(buttons[^1]).Right > width - 20, "Settings, Search and Theme sit at the right end of the toolbar.");
+        Assert.True(app.BoundsOf(buttons[7]).Right < app.BoundsOf(buttons[8]).X, "The left group ends before Settings.");
 
         // The Theme button shows the theme it switches to.
         var themeIcon = theme == AppTheme.Dark ? "IconSun" : "IconMoon";

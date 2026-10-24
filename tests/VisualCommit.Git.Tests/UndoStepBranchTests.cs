@@ -24,7 +24,7 @@ public class UndoStepBranchTests
         using var repo = await UndoRepoAsync();
         var repository = await WithWorkToCarryAsync(repo);
         var start = await PictureAsync(repo);
-        var branch = await RecordAsync(repository, UndoScope.Checkout("feature", "main"), () => repository.CheckoutBranchAsync("feature", cancellationToken: TestCancelled));
+        var branch = await RecordAsync(repository, UndoScope.Checkout("feature", "main"), () => repository.CheckoutBranchAsync("feature", keepIgnored: false, cancellationToken: TestCancelled));
         var onFeature = await PictureAsync(repo);
         branch = await UndoAsync(repository, branch);
         Assert.Equal(start, await PictureAsync(repo));
@@ -38,10 +38,10 @@ public class UndoStepBranchTests
     {
         using var repo = await UndoRepoAsync();
         var repository = await WithWorkToCarryAsync(repo);
-        await repository.CheckoutBranchAsync("feature", cancellationToken: TestCancelled);
+        await repository.CheckoutBranchAsync("feature", keepIgnored: false, cancellationToken: TestCancelled);
         var onFeature = await PictureAsync(repo);
 
-        var tag = await RecordAsync(repository, UndoScope.Checkout("v-old", "feature"), () => repository.CheckoutDetachedAsync("refs/tags/v-old", cancellationToken: TestCancelled));
+        var tag = await RecordAsync(repository, UndoScope.Checkout("v-old", "feature"), () => repository.CheckoutDetachedAsync("refs/tags/v-old", keepIgnored: false, cancellationToken: TestCancelled));
         var detached = await PictureAsync(repo);
         tag = await UndoAsync(repository, tag);
         Assert.Equal(onFeature, await PictureAsync(repo));
@@ -78,7 +78,7 @@ public class UndoStepBranchTests
         {
             var backup = await repository.SaveBackupRefsAsync(new BackupRequest("detached", [new BackupEntry(null, left)]), TestCancelled);
             UndoCapture.Backups(backup.Refs);
-            await repository.CheckoutBranchAsync("main", cancellationToken: TestCancelled);
+            await repository.CheckoutBranchAsync("main", keepIgnored: false, cancellationToken: TestCancelled);
         });
         var done = await PictureAsync(repo);
         Assert.Single(entry.Captured.Backups);
@@ -98,7 +98,7 @@ public class UndoStepBranchTests
         await repo.GitAsync("branch", "-D", "feature");
         var start = await PictureAsync(repo);
 
-        var entry = await RecordAsync(repository, UndoScope.Checkout("origin/feature", "main", "feature"), () => repository.CheckoutTrackingBranchAsync("feature", "refs/remotes/origin/feature", cancellationToken: TestCancelled));
+        var entry = await RecordAsync(repository, UndoScope.Checkout("origin/feature", "main", "feature"), () => repository.CheckoutTrackingBranchAsync("feature", "refs/remotes/origin/feature", keepIgnored: false, cancellationToken: TestCancelled));
         var done = await PictureAsync(repo);
         Assert.Contains(entry.After.Config, key => key.Key == "branch.feature.merge");
 
@@ -126,7 +126,7 @@ public class UndoStepBranchTests
         {
             var stash = await repository.StashAsync(message, includeUntracked: true, cancellationToken: TestCancelled);
             UndoCapture.Stash(stash, includedUntracked: true, message);
-            await repository.CheckoutDetachedAsync(target, cancellationToken: TestCancelled);
+            await repository.CheckoutDetachedAsync(target, keepIgnored: false, cancellationToken: TestCancelled);
         });
         var done = await PictureAsync(repo);
 
@@ -162,7 +162,7 @@ public class UndoStepBranchTests
         var entry = await RecordAsync(repository, UndoScope.StashAndCheckout("feature", "main"), async () =>
         {
             var stash = await repository.StashAsync("Stash before checking out feature", includeUntracked: false, cancellationToken: TestCancelled);
-            await repository.CheckoutBranchAsync("feature", cancellationToken: TestCancelled);
+            await repository.CheckoutBranchAsync("feature", keepIgnored: false, cancellationToken: TestCancelled);
             Assert.Equal(ApplyResult.Applied, await repository.ApplyStashAsync(stash!, StashApplyMode.PopKeepingIndex, cancellationToken: TestCancelled));
         });
         var done = await PictureAsync(repo);
@@ -181,7 +181,7 @@ public class UndoStepBranchTests
         var start = await PictureAsync(repo);
 
         // Created from a remote branch, which sets its upstream (branch.autoSetupMerge), without its checkout.
-        var created = await RecordAsync(repository, UndoScope.CreateBranch("tracked", "main"), () => repository.CreateBranchAsync("tracked", "refs/remotes/origin/feature", checkout: false, cancellationToken: TestCancelled));
+        var created = await RecordAsync(repository, UndoScope.CreateBranch("tracked", "main"), () => repository.CreateBranchAsync("tracked", "refs/remotes/origin/feature", checkout: false, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled));
         Assert.Contains(created.After.Config, key => key.Key == "branch.tracked.remote");
         var withTracked = await PictureAsync(repo);
         created = await UndoAsync(repository, created);
@@ -197,7 +197,7 @@ public class UndoStepBranchTests
         var (repository, _) = await OpenDatedAsync(repo);
         var start = await PictureAsync(repo);
 
-        var checkedOut = await RecordAsync(repository, UndoScope.CreateBranch("topic", "main"), () => repository.CreateBranchAsync("topic", "HEAD~1", checkout: true, cancellationToken: TestCancelled));
+        var checkedOut = await RecordAsync(repository, UndoScope.CreateBranch("topic", "main"), () => repository.CreateBranchAsync("topic", "HEAD~1", checkout: true, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled));
         var onTopic = await PictureAsync(repo);
         checkedOut = await UndoAsync(repository, checkedOut);
         Assert.Equal(start, await PictureAsync(repo));
@@ -351,7 +351,7 @@ public class UndoStepBranchTests
         // The pending entry's state before, completed by the commit that ends the merge (7.2).
         var scope = UndoScope.Merge("refs/heads/feature", "main");
         var before = await repository.ReadRefStatesAsync(scope, cancellationToken: TestCancelled);
-        Assert.Equal(MergeResult.Conflicts, await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled));
+        Assert.Equal(MergeResult.Conflicts, await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
         repo.WriteFile("src/c.txt", "c-resolved\n");
         await repository.StageAsync(["src/c.txt"], TestCancelled);
         await repository.CommitAsync("Merge feature", amend: false, TestCancelled);

@@ -7,6 +7,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Media;
 using Avalonia.Threading;
 using AvaloniaEdit.Rendering;
+using VisualCommit.App.Views;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Settings;
 
@@ -550,6 +551,9 @@ public sealed class DiffTextView : UserControl, IDiffPaneHost
 
         AutomationProperties.SetAutomationId(_left.Editor, sideBySide ? "DiffTextLeft" : "DiffText");
         AutomationProperties.SetName(_left.Editor, sideBySide ? "Old file" : "Diff text");
+
+        // F6's graph area gives the focus to the diff's text, its left half side by side (docs/phase-6-design.md 6.6).
+        KeyRegion.SetIsMain(_left.Editor, true);
         AutomationProperties.SetAutomationId(_right.Editor, "DiffTextRight");
         AutomationProperties.SetName(_right.Editor, "New file");
     }

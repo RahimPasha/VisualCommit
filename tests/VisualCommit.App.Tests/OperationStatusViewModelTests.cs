@@ -322,19 +322,225 @@ public class OperationStatusViewModelTests
         }
     });
 
+    [Fact]
+    public Task A_rows_compact_text_has_the_percentage_without_the_stage_and_its_tooltip_the_whole_text() => WithoutContext(async () =>
+    {
+        // docs/phase-6-design.md 2.6: a dashboard row shows the running text and git's
+        // percentage, the result in its tone, or nothing for Ready; never ssh's notice.
+        var notices = new PromptNotices();
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue, notices);
+        Assert.Equal((string.Empty, OperationStatusTone.Secondary, (string?)null), (status.CompactText, status.CompactTone, status.CompactToolTip));
+        var progressed = new TaskCompletionSource();
+        var finish = new TaskCompletionSource();
+
+        var fetch = queue.RunAsync(new GitOperation("Fetch", "Fetching from all remotes…", OperationKind.Network, RefreshScope.None, async context =>
+        {
+            context.Progress.Report(new OperationProgress("Counting objects", 45, "remote: Counting objects:  45% (5/11)"));
+            progressed.SetResult();
+            await finish.Task;
+            return OperationReport.Done("Fetched from all remotes");
+        }));
+        await progressed.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.Percent == 45);
+        Assert.Equal(
+            ("Fetching from all remotes… 45%", OperationStatusTone.Secondary, "Fetching from all remotes… Counting objects 45%"),
+            (status.CompactText, status.CompactTone, status.CompactToolTip));
+
+        // ssh's notice takes the status bar's text, never a row's.
+        using (notices.Show("Confirm user presence for key ED25519-SK SHA256:x"))
+        {
+            Assert.StartsWith("Confirm user presence", status.Text, StringComparison.Ordinal);
+            Assert.Equal("Fetching from all remotes… 45%", status.CompactText);
+        }
+
+        finish.SetResult();
+        await fetch.WaitAsync(Patience, TestCancelled);
+        Assert.Equal(("Fetched from all remotes", OperationStatusTone.Secondary, "Fetched from all remotes"), (status.CompactText, status.CompactTone, status.CompactToolTip));
+
+        await queue.RunAsync(new GitOperation("Pull", "Pulling origin/main into main…", OperationKind.Network, RefreshScope.None, _ =>
+            Task.FromResult(OperationReport.Conflicts("Pull stopped: 1 file has conflicts"))));
+        Assert.Equal(("Pull stopped: 1 file has conflicts", OperationStatusTone.Warning), (status.CompactText, status.CompactTone));
+
+        await queue.RunAsync(new GitOperation("Fetch", "Fetching from all remotes…", OperationKind.Network, RefreshScope.None, _ =>
+            throw new GitException("git fetch --progress origin", 128, "fatal: '../remotes/missing.git' does not appear to be a git repository")));
+        Assert.Equal(("Fetch failed", OperationStatusTone.Danger, "Fetch failed"), (status.CompactText, status.CompactTone, status.CompactToolTip));
+
+        // A stage-panel operation leaves Ready: the row shows nothing.
+        await queue.RunAsync(new GitOperation("Stage", "Staging…", OperationKind.Local, RefreshScope.None, _ => Task.FromResult(OperationReport.Done(string.Empty)))
+        {
+            Errors = ErrorDisplay.StagePanel,
+        });
+        Assert.Equal((string.Empty, (string?)null), (status.CompactText, status.CompactToolTip));
+    });
+
+    [Fact]
+    public Task A_rows_compact_text_waits_for_auto_fetch_without_a_tooltip() => WithoutContext(async () =>
+    {
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue);
+        var gate = new TaskCompletionSource();
+        Assert.True(queue.TryStartInBackground(new GitOperation("Auto-fetch", string.Empty, OperationKind.Network, RefreshScope.None, async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done(string.Empty);
+        })));
+        Assert.Equal(string.Empty, status.CompactText);
+
+        var push = queue.RunAsync(new GitOperation("Push main", "Pushing…", OperationKind.Network, RefreshScope.None, _ => Task.FromResult(OperationReport.Done("Pushed main to origin/main"))));
+        Assert.Equal((OperationStatusViewModel.WaitingForAutoFetchText, (string?)null), (status.CompactText, status.CompactToolTip));
+        gate.SetResult();
+        await push.WaitAsync(Patience, TestCancelled);
+    });
+
+    [Fact]
+    public Task The_running_title_and_whether_it_could_be_cancelled() => WithoutContext(async () =>
+    {
+        // docs/phase-6-design.md 2.7: a row's "Cancel {title}" shows for a network operation and
+        // the merge tool, enabled while CanCancel, and never for a checkout.
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue);
+        Assert.Equal(((string?)null, false), (status.RunningTitle, status.RunningIsCancellable));
+
+        // A pull in its fetch, then past its cancel window.
+        var fetching = new TaskCompletionSource();
+        var pastFetch = new TaskCompletionSource();
+        var finish = new TaskCompletionSource();
+        var pull = queue.RunAsync(new GitOperation("Pull", "Pulling origin/main into main…", OperationKind.Network, RefreshScope.None, async context =>
+        {
+            fetching.SetResult();
+            await pastFetch.Task;
+            context.EndCancelWindow();
+            await finish.Task;
+            return OperationReport.Done("main is already up to date");
+        }));
+        await fetching.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.CanCancel);
+        Assert.Equal(("Pull", true, true), (status.RunningTitle, status.RunningIsCancellable, status.CanCancel));
+        pastFetch.SetResult();
+        await WaitForAsync(() => !status.CanCancel);
+        Assert.Equal(("Pull", true, false), (status.RunningTitle, status.RunningIsCancellable, status.CanCancel));
+        finish.SetResult();
+        await pull.WaitAsync(Patience, TestCancelled);
+        Assert.Equal(((string?)null, false), (status.RunningTitle, status.RunningIsCancellable));
+
+        // The merge tool: a local operation that can be cancelled (D149), also once Cancel was asked.
+        var toolStarted = new TaskCompletionSource();
+        var tool = queue.RunAsync(new GitOperation("Merge tool for notes.txt", "Waiting for kdiff3 to close…", OperationKind.Local, RefreshScope.None, async context =>
+        {
+            toolStarted.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Resolved notes.txt");
+        })
+        {
+            CanBeCancelled = true,
+        });
+        await toolStarted.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.CanCancel);
+        Assert.Equal(("Merge tool for notes.txt", true), (status.RunningTitle, status.RunningIsCancellable));
+        status.CancelCommand.Execute(null);
+        Assert.False(status.CanCancel);
+        await tool.WaitAsync(Patience, TestCancelled);
+
+        // A checkout never could be cancelled.
+        var checkingOut = new TaskCompletionSource();
+        var done = new TaskCompletionSource();
+        var checkout = queue.RunAsync(new GitOperation("Check out main", "Checking out main…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            checkingOut.SetResult();
+            await done.Task;
+            return OperationReport.Done("Checked out main");
+        }));
+        await checkingOut.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.IsRunning);
+        Assert.Equal(("Check out main", false, false), (status.RunningTitle, status.RunningIsCancellable, status.CanCancel));
+        done.SetResult();
+        await checkout.WaitAsync(Patience, TestCancelled);
+
+        // A background operation is no operation of the user's.
+        var gate = new TaskCompletionSource();
+        Assert.True(queue.TryStartInBackground(new GitOperation("Auto-fetch", string.Empty, OperationKind.Network, RefreshScope.None, async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done(string.Empty);
+        })));
+        Assert.Equal(((string?)null, false), (status.RunningTitle, status.RunningIsCancellable));
+        gate.SetResult();
+        await queue.WhenIdleAsync().WaitAsync(Patience, TestCancelled);
+    });
+
+    [Fact]
+    public Task A_waiting_operation_the_queue_cancels_says_so_and_leaves_the_merge_tools_cancel_as_it_was() => WithoutContext(async () =>
+    {
+        // docs/phase-6-design.md 4.5: Cancel all cancels a tab's waiting Fetch merged with a row's;
+        // the tab's status bar says "Fetch cancelled", as the row does.
+        using var queue = NewQueue();
+        using var status = new OperationStatusViewModel(queue);
+        var gate = new TaskCompletionSource();
+        Assert.True(queue.TryStartInBackground(new GitOperation("Auto-fetch", string.Empty, OperationKind.Network, RefreshScope.None, async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done(string.Empty);
+        })
+        {
+            IsBackground = true,
+        }));
+        var fetch = new GitOperation("Fetch", "Fetching from all remotes…", OperationKind.Network, RefreshScope.None, _ => Task.FromResult(OperationReport.Done("Fetched from all remotes")));
+        var waiting = queue.RunAsync(fetch);
+        await WaitForAsync(() => status.Text == OperationStatusViewModel.WaitingForAutoFetchText);
+
+        queue.Cancel(fetch);
+
+        Assert.Equal(OperationOutcome.Cancelled, (await waiting.WaitAsync(Patience, TestCancelled)).Outcome);
+        await WaitForAsync(() => status.Text == "Fetch cancelled");
+        Assert.Equal(("Fetch cancelled", OperationStatusTone.Secondary), (status.CompactText, status.CompactTone));
+        Assert.Equal("Fetch cancelled", queue.LastResult?.Message);
+        gate.SetResult();
+        await queue.WhenIdleAsync().WaitAsync(Patience, TestCancelled);
+        Assert.Equal("Fetch cancelled", status.Text);
+
+        // While the merge tool runs, a waiting operation cancelled before it started leaves the
+        // tool's Cancel judged as it was.
+        var toolStarted = new TaskCompletionSource();
+        var tool = queue.RunAsync(new GitOperation("Merge tool for notes.txt", "Waiting for kdiff3 to close…", OperationKind.Local, RefreshScope.None, async context =>
+        {
+            toolStarted.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Resolved notes.txt");
+        })
+        {
+            CanBeCancelled = true,
+        });
+        await toolStarted.Task.WaitAsync(Patience, TestCancelled);
+        await WaitForAsync(() => status.CanCancel);
+        var stage = new GitOperation("Stage", "Staging…", OperationKind.Local, RefreshScope.None, _ => Task.FromResult(OperationReport.Done("Staged")));
+        var staged = queue.RunAsync(stage);
+        queue.Cancel(stage);
+        Assert.Equal(OperationOutcome.Cancelled, (await staged.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Equal(("Merge tool for notes.txt", true, true), (status.RunningTitle, status.RunningIsCancellable, status.CanCancel));
+        status.CancelCommand.Execute(null);
+        await tool.WaitAsync(Patience, TestCancelled);
+        Assert.Equal(((string?)null, false), (status.RunningTitle, status.RunningIsCancellable));
+    });
+
     /// <summary>Runs a test where no synchronization context is current, so the view model updates at once.</summary>
     private static Task WithoutContext(Func<Task> test) => Task.Run(test, TestCancelled);
 
     private static OperationQueue NewQueue() =>
         new("graph", Path.Combine(Path.GetTempPath(), "no-such-git-folder"), () => null, _ => Task.CompletedTask, null, null, NullAppLog.Instance);
 
+    /// <summary>Waits until <paramref name="condition"/> holds; fails after 30 s, as <c>DashboardTestSupport.WaitUntilAsync</c> does.</summary>
     private static async Task WaitForAsync(Func<bool> condition)
     {
-        for (var wait = 0; !condition() && wait < 500; wait++)
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        while (!condition())
         {
+            if (DateTime.UtcNow > deadline)
+            {
+                throw new TimeoutException("Timed out after 30 s waiting for the status.");
+            }
+
             await Task.Delay(10, TestCancelled);
         }
-
-        Assert.True(condition());
     }
 }

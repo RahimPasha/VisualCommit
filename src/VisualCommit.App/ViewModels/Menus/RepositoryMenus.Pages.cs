@@ -5,6 +5,7 @@
 // OperationTexts.Menus.Pages.cs; the order and separators of the pages' menus are decision BD8 of
 // docs/test-reports/phase-5.md.
 
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.Core.Diff;
@@ -175,9 +176,10 @@ public static partial class RepositoryMenus
     /// menus: of the stage lists' files (<paramref name="side"/> Unstaged or Staged), a commit's
     /// files and a diff's. Left out in the conflict resolver's header menu
     /// (<see cref="FileMenuTarget.InConflictResolver"/>) and for a nested repository; disabled for
-    /// a file in no commit yet and before the first commit.
+    /// a file in no commit yet and before the first commit. <paramref name="ofOpenDiff"/>: the open
+    /// diff's menu, whose two items run the keyed commands on its file (docs/phase-6-design.md 6.7).
     /// </summary>
-    private static IEnumerable<MenuItem?> FileHistoryItems(RepositoryMenuContext context, FileMenuTarget file, DiffSide side, IRepositoryActions actions)
+    private static IEnumerable<MenuItem?> FileHistoryItems(RepositoryMenuContext context, FileMenuTarget file, DiffSide side, IRepositoryActions actions, bool ofOpenDiff = false)
     {
         if (file.InConflictResolver || file.IsNestedRepository)
         {
@@ -192,8 +194,8 @@ public static partial class RepositoryMenus
 
         return
         [
-            Item(actions, FileHistory, () => history is null ? Task.CompletedTask : actions.ShowFileHistoryAsync(history), history is null ? reason : null),
-            Item(actions, Blame, () => blame is null ? Task.CompletedTask : actions.ShowBlameAsync(blame), blame is null ? reason : null),
+            Item(actions, FileHistory, () => history is null ? Task.CompletedTask : actions.ShowFileHistoryAsync(history), history is null ? reason : null, command: ofOpenDiff ? AppCommand.FileHistoryOfDiff : null),
+            Item(actions, Blame, () => blame is null ? Task.CompletedTask : actions.ShowBlameAsync(blame), blame is null ? reason : null, command: ofOpenDiff ? AppCommand.BlameOfDiff : null),
         ];
     }
 
@@ -253,7 +255,7 @@ public static partial class RepositoryMenus
     /// <summary>"Show reflog" and "Show backups" (5.1): in the working-changes row's, the empty graph area's and the Local branches section's menus, enabled in an unborn repository too (BD22).</summary>
     private static IEnumerable<MenuItem?> ReflogItems(RepositoryMenuContext context, IRepositoryActions actions) =>
     [
-        Item(actions, ShowReflog, () => actions.ShowReflogAsync(null)),
+        Item(actions, ShowReflog, () => actions.ShowReflogAsync(null), command: AppCommand.ShowReflog),
         Item(actions, ShowBackups, actions.ShowBackupsAsync),
     ];
 
@@ -293,7 +295,8 @@ public static partial class RepositoryMenus
                 return Restore(RestoreTheChanges);
             case "remote-branch" or "remote-tag":
                 var (remote, rest, configured) = SplitRemote(name, context.Remotes);
-                return Restore(PushBackTo(rest, remote), configured ? null : NoLongerExists(remote));
+                var fits = RemoteBranchNames.RemotesOf(name, context.Remotes);
+                return Restore(PushBackTo(rest, remote), !configured ? NoLongerExists(remote) : fits.Count > 1 ? RemoteOfBackupAmbiguous(name, fits) : null);
             case "force-push":
                 return ForcePushRestore(context, name, hasForcePushLease, Restore);
             default:
@@ -303,8 +306,9 @@ public static partial class RepositoryMenus
 
     /// <summary>
     /// A force push's backup (7.10): <c>refs/remotes/&lt;name&gt;</c> maps back to its remote and
-    /// branch through the local branch whose upstream it is, otherwise by the remote list's longest
-    /// matching name (the default fetch refspec); disabled when neither finds it, then when the
+    /// branch through the local branch whose upstream it is, otherwise through the remotes' fetch
+    /// lines (<see cref="RepoRefs.SourceOf(string)"/>, docs/phase-6-design.md 10.4 #12: a branch
+    /// one ref of a configured remote fills); disabled when neither finds it, then when the
     /// remote-tracking reflog no longer has the commit the force push left (its lease,
     /// <paramref name="hasLease"/> false). The restore reads the lease again inside its operation.
     /// </summary>
@@ -318,7 +322,13 @@ public static partial class RepositoryMenus
             return restore(PushBackTo(ShortName(remoteRef), upstreamRemote), leaseReason);
         }
 
-        var (remote, rest, configured) = SplitRemote(name, context.Remotes);
-        return restore(PushBackTo(rest, remote), configured ? leaseReason : RemoteOfBackupNotFound);
+        if (context.Refs.SourceOf("refs/remotes/" + name) is { IsBranch: true, Remote: { } mapped, Branch: { } branchName }
+            && context.Remotes.Contains(mapped, StringComparer.Ordinal))
+        {
+            return restore(PushBackTo(branchName, mapped), leaseReason);
+        }
+
+        var (remote, rest, _) = SplitRemote(name, context.Remotes);
+        return restore(PushBackTo(rest, remote), RemoteOfBackupNotFound);
     }
 }

@@ -477,7 +477,7 @@ public partial class Phase5RealWindowPass
         app.WaitForStageTitles("Unstaged files (1)", "Staged files (0)", StepTimeout);
         Assert.Equal(PartA.DescribeTheLinesSha, await RevParseAsync(repo, "refs/heads/main"));
         Assert.Equal(["## main...origin/main [ahead 1]", "?? scratch.txt"], await GitLinesAsync(repo, "status", "-sb"));
-        AssertUndoRedo(app, true, PartA.UndoCommit, false, PartA.NothingToRedo);
+        AssertUndoRedo(app, true, PartA.UndoCommitToolTip(commandIsMeta: false), false, PartA.NothingToRedo);
         var undoLine = AppLogFile.OperationEnded(name, PartA.UndoCommit);
 
         // Step 3: the summary typed key by key; its own undo takes it back one key per press, and a press with nothing left does nothing.
@@ -512,7 +512,7 @@ public partial class Phase5RealWindowPass
         app.WaitForStageTitles("Unstaged files (1)", "Staged files (1)", StepTimeout);
         app.WaitFor(() => BoxText(app, "CommitSummary") == PartA.CommitSummary, "the message back in the summary", StepTimeout);
         app.WaitForText("CommitButton", PartA.CommitOneFile, StepTimeout);
-        AssertUndoRedo(app, false, PartA.NothingToUndo, true, PartA.RedoCommit);
+        AssertUndoRedo(app, false, PartA.NothingToUndo, true, PartU.Redo.ToolTip(PartA.CommitText));
         Compare(app, PartA.A4UndoneByKey);
 
         // Step 5: Ctrl+Y redoes it, and takes the message back out of the summary.
@@ -525,7 +525,7 @@ public partial class Phase5RealWindowPass
         Assert.Equal([PartA.RedoReflog, PartA.UndoReflog, PartA.CommitReflog], await ReflogAsync(repo, "HEAD", 3));
         app.WaitForStageTitles("Unstaged files (1)", "Staged files (0)", StepTimeout);
         app.WaitFor(() => BoxText(app, "CommitSummary").Length == 0, "the summary empty again", StepTimeout);
-        AssertUndoRedo(app, true, PartA.UndoCommit, false, PartA.NothingToRedo);
+        AssertUndoRedo(app, true, PartA.UndoCommitToolTip(commandIsMeta: false), false, PartA.NothingToRedo);
         Compare(app, PartA.A4RedoneByKey);
 
         Assert.Equal(0, app.Close());
@@ -550,13 +550,16 @@ public partial class Phase5RealWindowPass
 
     /// <summary>
     /// The empty tab (A1 step 1, phase 0's shell): the welcome page's texts, the toolbar with only
-    /// Theme enabled and no help texts, the status bar's <c>No repository</c> and <c>Ready</c>, the
-    /// toggle disabled, no activity log.
+    /// Theme enabled and no help texts among phase 5's buttons (phase 6's Settings, enabled there
+    /// too, is not one of <see cref="PartA.ToolbarButtons"/>), the status bar's <c>No repository</c>
+    /// and <c>Ready</c>, the toggle disabled, no activity log.
     /// </summary>
     private static void AssertEmptyTab(RealApp app)
     {
         var texts = app.Texts();
-        Assert.All(PartA.WelcomeTexts.Where(text => text is not ("Open" or "Clone" or "Init")), text => Assert.Contains(text, texts));
+        // Texts inside buttons are not text elements to UI Automation: the buttons are named instead.
+        Assert.All(PartA.WelcomeTexts.Where(text => text is not ("Open" or "Clone" or "Init" or "New workspace…")), text => Assert.Contains(text, texts));
+        Assert.Equal("New workspace", app.Find("NewWorkspaceButton").Name);
         Assert.Equal(["Open", "Clone", "Init"], new[] { "OpenRepoButton", "CloneRepoButton", "InitRepoButton" }.Select(id => app.Find(id).Name));
         AssertToolbar(app, PartA.EmptyTabToolbar);
         AssertToggle(app, enabled: false, open: false);
@@ -760,7 +763,7 @@ public partial class Phase5RealWindowPass
     {
         Assert.Equal(0, app.CountLogLines(undoLine));
         Assert.Equal(PartA.DescribeTheLinesSha, await RevParseAsync(repo, "refs/heads/main"));
-        AssertUndoRedo(app, true, PartA.UndoCommit, false, PartA.NothingToRedo);
+        AssertUndoRedo(app, true, PartA.UndoCommitToolTip(commandIsMeta: false), false, PartA.NothingToRedo);
     }
 
     /// <summary>Git as H-A0u: main back at Read whole lines, src/Reader.cs staged, scratch.txt untracked, the commit kept, the undo in HEAD's and main's reflogs.</summary>

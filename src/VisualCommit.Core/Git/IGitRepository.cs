@@ -28,8 +28,26 @@ public interface IGitRepository
     /// </summary>
     string OpenedFolder => WorkingDirectory;
 
+    /// <summary>
+    /// Whether <see cref="OpenedFolder"/> is the working tree's top (docs/phase-6-design.md 1.2,
+    /// D204): true with no git call when <c>WorktreeKey.Comparer</c> finds it equal to
+    /// <see cref="WorkingDirectory"/>; otherwise one <c>git rev-parse --show-prefix</c> in it, a
+    /// read: an empty line is the top spelled another way, anything else a folder inside. A
+    /// workspace saves a folder only at its top. A failure throws <see cref="GitException"/>. The
+    /// default answers true (the fakes need no change).
+    /// </summary>
+    Task<bool> OpenedAtTopAsync(CancellationToken cancellationToken = default) => Task.FromResult(true);
+
     /// <summary>Reads HEAD, the branches with their upstreams and ahead/behind counts, the remote branches, the tags, the stashes and the remotes.</summary>
     Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Every remote's fetch lines as they are now, in one read (<c>git config --null --get-regexp
+    /// ^remote\.</c>, the refs read's own, docs/phase-6-design.md 10.2): what a push's guard reads
+    /// inside its operation (10.4), rather than the tab's last refs. The default answers null, not
+    /// read (the fakes, whose snapshots keep phase 5's assumption): the guard then has nothing to go by.
+    /// </summary>
+    Task<FetchRefspecs?> ReadFetchRefspecsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FetchRefspecs?>(null);
 
     /// <summary>
     /// Where HEAD is now, without the rest of the refs: the branch it is on (null while detached)
@@ -251,27 +269,30 @@ public interface IGitRepository
 
     // Branches and checkouts (2.1 to 2.10).
 
-    /// <summary>Checks out the local branch <paramref name="branch"/> (short name): <c>git switch --no-guess &lt;branch&gt;</c> (2.1).</summary>
-    Task CheckoutBranchAsync(string branch, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// Checks out the local branch <paramref name="branch"/> (short name): <c>git switch --no-guess
+    /// [--no-overwrite-ignore] &lt;branch&gt;</c> (2.1), with <paramref name="keepIgnored"/> refusing
+    /// where an ignored file is in the way (Keep ignored files, D193, docs/phase-6-design.md 9.11).
+    /// </summary>
+    Task CheckoutBranchAsync(string branch, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Creates the local branch <paramref name="branch"/> tracking the remote branch
     /// <paramref name="remoteBranchRef"/> (<c>refs/remotes/&lt;r&gt;/&lt;b&gt;</c>) and checks it out:
-    /// <c>git switch --create &lt;branch&gt; --track &lt;remoteBranchRef&gt;</c> (2.2).
+    /// <c>git switch --create &lt;branch&gt; --track [--no-overwrite-ignore] &lt;remoteBranchRef&gt;</c>
+    /// (2.2), with <paramref name="keepIgnored"/> as <see cref="CheckoutBranchAsync"/> has it.
     /// </summary>
-    Task CheckoutTrackingBranchAsync(string branch, string remoteBranchRef, NetworkOptions? options = null, CancellationToken cancellationToken = default);
-
-    /// <summary>Detaches HEAD at <paramref name="commit"/>: <c>git switch --detach &lt;sha&gt;</c> (2.3).</summary>
-    Task CheckoutDetachedAsync(string commit, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+    Task CheckoutTrackingBranchAsync(string branch, string remoteBranchRef, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Detaches HEAD at <paramref name="commit"/>, with <paramref name="noOverwriteIgnore"/>
-    /// refusing where an ignored file is in the way: <c>git switch --detach --no-overwrite-ignore
-    /// &lt;sha&gt;</c> (docs/phase-5-design.md 9.1, D179). Every checkout of a commit the current
-    /// branch reaches uses it: git would otherwise overwrite an ignored file that the commit
-    /// tracks, and the way back would delete it. A refusal changes nothing.
+    /// Detaches HEAD at <paramref name="commit"/>: <c>git switch --detach [--no-overwrite-ignore]
+    /// &lt;sha&gt;</c> (2.3), with <paramref name="keepIgnored"/> refusing where an ignored file is in
+    /// the way (docs/phase-5-design.md 9.1, D179; docs/phase-6-design.md 9.11). Every checkout of a
+    /// commit the current branch reaches (the automatic stash) passes true: git would otherwise
+    /// overwrite an ignored file that the commit tracks, and the way back would delete it. A
+    /// refusal changes nothing.
     /// </summary>
-    Task CheckoutDetachedAsync(string commit, bool noOverwriteIgnore, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+    Task CheckoutDetachedAsync(string commit, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Writes <paramref name="paths"/> of <paramref name="source"/> (a tree-ish: <c>&lt;stash&gt;^3</c>)
@@ -301,14 +322,52 @@ public interface IGitRepository
     /// </summary>
     Task<IReadOnlySet<string>> FindIgnoredAsync(IReadOnlyList<string> paths, CancellationToken cancellationToken = default);
 
+    // Keep ignored files (D193, D196, docs/phase-6-design.md 9.3 to 9.8): the ignored files an
+    // operation without git's own option would overwrite or delete, distinct, in byte order. Each
+    // is a read (GIT_OPTIONAL_LOCKS=0) that the operation makes inside itself before its first
+    // write; a read that fails is logged and the operation goes on to git.
+
+    /// <summary>
+    /// The ignored files in the way of merging <paramref name="source"/> into <paramref name="into"/>
+    /// (<c>HEAD</c>, or <c>refs/heads/&lt;A&gt;</c> before "Check out and merge"'s checkout): the
+    /// paths the source has and <paramref name="into"/> lacks that the merge writes (9.4).
+    /// </summary>
+    Task<IReadOnlyList<string>> FindIgnoredInTheWayOfMergeAsync(string into, string source, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The ignored files in the way of cherry-picking (or with <paramref name="revert"/> reverting)
+    /// <paramref name="commits"/> in the order git applies them (9.5); a merge reverted with
+    /// <c>-m 1</c> names its first parent as <paramref name="mergeParent"/>.
+    /// </summary>
+    Task<IReadOnlyList<string>> FindIgnoredInTheWayOfCommitsAsync(IReadOnlyList<string> commits, bool revert, string? mergeParent = null, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The ignored files in the way of rebasing <paramref name="tip"/> (<c>HEAD</c>, or a branch's
+    /// full ref before "Check out and rebase"'s checkout) onto <paramref name="onto"/> (9.6): what
+    /// git's first checkout of <paramref name="onto"/> and the commits it may replay write.
+    /// When the range holds a merge, also what the commits a <c>--rebase-merges</c> rebase resets
+    /// to (the side branches' original branch points) track: git may keep merges by
+    /// <c>rebase.rebaseMerges</c> (Git 2.42 and later) even in a plain <c>git rebase</c>.
+    /// </summary>
+    Task<IReadOnlyList<string>> FindIgnoredInTheWayOfRebaseAsync(string tip, string onto, CancellationToken cancellationToken = default);
+
+    /// <summary>The ignored files in the way of an interactive rebase or a squash by <paramref name="plan"/> (9.7), from where git starts it.</summary>
+    Task<IReadOnlyList<string>> FindIgnoredInTheWayOfRebaseAsync(RebasePlan plan, CancellationToken cancellationToken = default);
+
+    /// <summary>The ignored files in the way of applying or popping the stash <paramref name="stashCommit"/> (9.8), from its paths (<see cref="ReadStashPathsAsync"/>).</summary>
+    Task<IReadOnlyList<string>> FindIgnoredInTheWayOfStashAsync(string stashCommit, CancellationToken cancellationToken = default);
+
     /// <summary>
     /// Creates the branch <paramref name="name"/> at <paramref name="startPoint"/> (a full SHA,
     /// <c>refs/heads/…</c>, <c>refs/remotes/…</c> or <c>refs/tags/&lt;t&gt;^{commit}</c>):
-    /// <c>git branch &lt;name&gt; &lt;start&gt;</c>, or with <paramref name="checkout"/>
-    /// <c>git switch --create &lt;name&gt; &lt;start&gt;</c>. A remote branch as start becomes the
-    /// upstream, as git's <c>branch.autoSetupMerge</c> says (2.4).
+    /// <c>git branch [--no-track] &lt;name&gt; &lt;start&gt;</c>, or with <paramref name="checkout"/>
+    /// <c>git switch --create &lt;name&gt; [--no-track] [--no-overwrite-ignore] &lt;start&gt;</c>. A
+    /// remote branch as start becomes the upstream, as git's <c>branch.autoSetupMerge</c> says
+    /// (2.4), unless <paramref name="noTrack"/>: a start point fetched ambiguously, whose upstream
+    /// would be the wrong ref (D201, docs/phase-6-design.md 10.4, 9.11). <paramref name="keepIgnored"/>
+    /// is the checkout's, as <see cref="CheckoutBranchAsync"/> has it; without a checkout nothing is written.
     /// </summary>
-    Task CreateBranchAsync(string name, string startPoint, bool checkout, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+    Task CreateBranchAsync(string name, string startPoint, bool checkout, bool noTrack, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     /// <summary>Renames a local branch, the current one too; its upstream setting moves with it: <c>git branch --move &lt;branch&gt; &lt;newName&gt;</c> (2.5).</summary>
     Task RenameBranchAsync(string branch, string newName, CancellationToken cancellationToken = default);
@@ -328,12 +387,13 @@ public interface IGitRepository
     /// Merges <paramref name="reference"/> (the full name of a local or remote branch) into the
     /// current branch with the message git would write for its short name: the message from
     /// <c>git fmt-merge-msg</c>, then <c>git merge --no-edit --no-log -m &lt;message&gt;
-    /// [--no-ff | --ff-only] &lt;reference&gt;</c> (2.8 to 2.10, D94). Conflicts are returned,
-    /// not thrown: git failed and the status lists a conflicted file. A merge (or pick, or
-    /// revert) refused because the index already had conflicts is a failure, a
-    /// <see cref="GitException"/>, not a conflict of its own.
+    /// [--no-ff | --ff-only] [--no-overwrite-ignore] &lt;reference&gt;</c> (2.8 to 2.10, D94), with
+    /// <paramref name="keepIgnored"/> git's option (exact for a fast-forward,
+    /// docs/phase-6-design.md 9.4). Conflicts are returned, not thrown: git failed and the status
+    /// lists a conflicted file. A merge (or pick, or revert) refused because the index already had
+    /// conflicts is a failure, a <see cref="GitException"/>, not a conflict of its own.
     /// </summary>
-    Task<MergeResult> MergeAsync(string reference, MergeMode mode, NetworkOptions? options = null, CancellationToken cancellationToken = default);
+    Task<MergeResult> MergeAsync(string reference, MergeMode mode, bool keepIgnored, NetworkOptions? options = null, CancellationToken cancellationToken = default);
 
     // History (2.11 to 2.15).
 
@@ -548,17 +608,50 @@ public interface IGitRepository
     /// <see cref="IntegratePullAsync(GitRef, NetworkOptions?, CancellationToken)"/>;
     /// <see cref="PullIntegration.Rebase"/> is <c>git merge --ff-only &lt;head&gt;</c> when the
     /// branch has nothing of its own, otherwise <c>git rebase</c> without arguments (from the
-    /// upstream's fork point, as <c>git pull --rebase</c>), git's pull settings not read. Before
+    /// upstream's fork point, as <c>git pull --rebase</c>): of git's pull settings it reads
+    /// <c>pull.ff</c> alone and refuses a value <c>git pull --rebase</c> refuses (D231), and no rebase
+    /// setting. Before
     /// either rebases, <paramref name="beforeRebase"/> is called with the branch's old tip (the
     /// app saves 1.2's backup there). Both pulls classify a rebase with 1.4's rules: every stop is
-    /// <see cref="PullOutcome.Conflicts"/>.
+    /// <see cref="PullOutcome.Conflicts"/>. <paramref name="pullOptions"/> (docs/phase-6-design.md
+    /// 8.9, 9.10) gives the pull settings read before the fetch, which then decide instead of a
+    /// read of their own, and Keep ignored files, under which an ignored file in the integration's
+    /// way gives <see cref="PullOutcome.IgnoredFilesInTheWay"/> and nothing is integrated; null is
+    /// phase 4's pull.
     /// </summary>
     Task<PullResult> IntegratePullAsync(
         GitRef branch,
         PullIntegration integration,
         Func<string, Task>? beforeRebase,
         NetworkOptions? options = null,
+        PullIntegrationOptions? pullOptions = null,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Git's pull settings for <paramref name="branch"/> (short name) as Pull reads them, before its
+    /// fetch (docs/phase-6-design.md 8.9): <c>pull.ff</c>, then <c>branch.&lt;b&gt;.rebase</c> or,
+    /// unset, <c>pull.rebase</c>, booleans read as git reads them. A value Pull does not
+    /// understand fills <see cref="PullConfiguration.Problem"/> instead of throwing. A read.
+    /// </summary>
+    Task<PullConfiguration> ReadPullConfigurationAsync(string branch, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// <c>pull.ff</c> alone, as <c>git pull --rebase</c> reads it before it fetches
+    /// (docs/phase-6-design.md 8.9, D231): the rebase chosen for one pull reads no rebase setting.
+    /// A boolean or <c>only</c> fills <see cref="PullConfiguration.FastForward"/> (the rebase
+    /// setting none, no value); a value git refuses fills <see cref="PullConfiguration.Problem"/>
+    /// with <c>pull.ff</c> as its key. A read: <c>git config --get pull.ff</c>, and
+    /// <c>git config --type=bool --get pull.ff</c> for an uncommon value.
+    /// </summary>
+    Task<PullConfiguration> ReadPullFastForwardSettingAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Writes this repository's own settings (the settings screen's "This repository",
+    /// docs/phase-6-design.md 8.3): <c>git config --local --replace-all &lt;key&gt; &lt;value&gt;</c>, or
+    /// <c>--unset-all &lt;key&gt;</c> for a null value (exit 5 counting as done), one call per write,
+    /// in order, in the working tree; the first failure stops them and throws <see cref="GitException"/>.
+    /// </summary>
+    Task WriteConfigAsync(IReadOnlyList<GitConfigWrite> writes, CancellationToken cancellationToken = default);
 
     // Lists of picks and reverts, Continue and Skip (sections 4, 5, 8; work package WP2).
 
@@ -924,6 +1017,13 @@ public interface IRepositoryWatcher : IDisposable
     /// repository; the app refreshes once when its write ends (D71).
     /// </summary>
     IDisposable Pause();
+
+    /// <summary>
+    /// Whether no change the watcher has counted is waiting for its quiet period or being raised
+    /// (a change the system has not reported yet is not known). The harnesses wait for it, through
+    /// the view model, before they mark a check's next calls. True for a watcher that holds no burst.
+    /// </summary>
+    bool IsQuiet => true;
 }
 
 /// <summary>Where a burst of changes happened.</summary>

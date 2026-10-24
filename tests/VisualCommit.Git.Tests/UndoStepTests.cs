@@ -227,7 +227,7 @@ public class UndoStepTests
         repo.WriteFile("a.txt", "a-unstaged\n").WriteFile("scratch.txt", "scratch\n");
         var start = await PictureAsync(repo);
 
-        var entry = await RecordAsync(repository, UndoScope.Merge(source, current, fastForward), () => repository.MergeAsync(source, mode, cancellationToken: TestCancelled));
+        var entry = await RecordAsync(repository, UndoScope.Merge(source, current, fastForward), () => repository.MergeAsync(source, mode, keepIgnored: false, cancellationToken: TestCancelled));
         var done = await PictureAsync(repo);
 
         entry = await UndoAsync(repository, entry);
@@ -359,8 +359,8 @@ public class UndoStepTests
 
         var entry = await RecordAsync(repository, UndoScope.CheckoutAndMerge("behind", "refs/heads/feature", "main"), async () =>
         {
-            await repository.CheckoutBranchAsync("behind", cancellationToken: TestCancelled);
-            await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, cancellationToken: TestCancelled);
+            await repository.CheckoutBranchAsync("behind", keepIgnored: false, cancellationToken: TestCancelled);
+            await repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled);
         });
         var done = await PictureAsync(repo);
 
@@ -380,7 +380,7 @@ public class UndoStepTests
 
         var entry = await RecordAsync(repository, UndoScope.CheckoutAndRebase("feature", "main"), async () =>
         {
-            await repository.CheckoutBranchAsync("feature", cancellationToken: TestCancelled);
+            await repository.CheckoutBranchAsync("feature", keepIgnored: false, cancellationToken: TestCancelled);
             await repository.RebaseAsync("refs/heads/main", cancellationToken: TestCancelled);
         });
         var done = await PictureAsync(repo);

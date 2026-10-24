@@ -253,6 +253,22 @@ public sealed partial class RepositoryViewModel : IInteractiveRebaseHost
         }
     }
 
+    /// <summary>
+    /// A save of the settings screen wrote a git key (docs/phase-6-design.md 8.11): while files
+    /// conflict, <c>merge.tool</c> is read again, so that an open resolver enables "Merge tool…"
+    /// without being reopened (a global write fires no watcher). Nothing in summary mode, which has
+    /// no resolver or file menus (3.1: the promotion's full start reads it), nor once closed.
+    /// </summary>
+    private void OnGitSettingsChanged(object? sender, EventArgs e)
+    {
+        if (_disposed || IsSummary || Status.Conflicts.Count == 0)
+        {
+            return;
+        }
+
+        _ = ReadMergeToolAsync();
+    }
+
     private async Task ReadMergeToolAsync()
     {
         var read = ++_mergeToolReads;

@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using System.Text;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -37,6 +38,13 @@ public sealed class GitRunner : IGitRunner
     /// rebase's list of commits, which a user's <c>sequence.editor</c> would otherwise open even
     /// with <c>GIT_EDITOR</c> set (D102). Paths are taken literally, so a file named
     /// <c>[id].tsx</c> means that file and not <c>d.tsx</c> too (D74).
+    /// <para>
+    /// The variables that point git at another repository, index, object store or namespace than
+    /// the command's working directory names are removed (D233): an app started from a hook, a
+    /// <c>git</c> alias or a shell that set one of them would otherwise run every call against that
+    /// repository. A command's own environment comes after these and may set one again (a
+    /// snapshot's temporary <c>GIT_INDEX_FILE</c>).
+    /// </para>
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string?> DefaultEnvironment = new Dictionary<string, string?>
     {
@@ -47,6 +55,15 @@ public sealed class GitRunner : IGitRunner
         ["GIT_EDITOR"] = ":",
         ["GIT_SEQUENCE_EDITOR"] = ":",
         ["GIT_LITERAL_PATHSPECS"] = "1",
+        ["GIT_DIR"] = null,
+        ["GIT_WORK_TREE"] = null,
+        ["GIT_COMMON_DIR"] = null,
+        ["GIT_INDEX_FILE"] = null,
+        ["GIT_OBJECT_DIRECTORY"] = null,
+        ["GIT_ALTERNATE_OBJECT_DIRECTORIES"] = null,
+        ["GIT_NAMESPACE"] = null,
+        ["GIT_PREFIX"] = null,
+        ["GIT_IMPLICIT_WORK_TREE"] = null,
     };
 
     private readonly IGitCallLog? _callLog;
@@ -61,16 +78,37 @@ public sealed class GitRunner : IGitRunner
     /// its duration, docs/phase-5-design.md 2.3); the system clock by default. The record's own
     /// <see cref="GitCallRecord.StartedAt"/> and <see cref="GitCallRecord.Duration"/> stay the system's.
     /// </param>
-    public GitRunner(string executablePath, IGitCallLog? callLog = null, IAppLog? log = null, TimeProvider? recordClock = null)
+    /// <param name="environment">
+    /// The app session's own git environment (docs/phase-6-design.md 8.12, 17.2, D220): the
+    /// harnesses' <c>GIT_CONFIG_GLOBAL</c> and <c>XDG_CONFIG_HOME</c> in the session's data folder;
+    /// null for none, as the desktop app runs. Applied to every call, after
+    /// <see cref="DefaultEnvironment"/> and before the command's own; a null value removes the
+    /// variable, as in <see cref="GitCommand.Environment"/>.
+    /// </param>
+    public GitRunner(string executablePath, IGitCallLog? callLog = null, IAppLog? log = null, TimeProvider? recordClock = null, IReadOnlyDictionary<string, string?>? environment = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(executablePath);
         ExecutablePath = executablePath;
         _callLog = callLog;
         _log = log ?? NullAppLog.Instance;
         _recordClock = recordClock ?? TimeProvider.System;
+
+        // A copy: the session's environment cannot change under the runner's calls.
+        SessionEnvironment = new Dictionary<string, string?>(environment ?? new Dictionary<string, string?>());
     }
 
     public string ExecutablePath { get; }
+
+    /// <summary>A seam for the tests: called on the thread that stops a cancelled call's git, just before it does.</summary>
+    internal Action? StopObserver { get; init; }
+
+    /// <summary>
+    /// The session's git environment given to the constructor (empty for none), a copy, which the
+    /// runner applies to every call (docs/phase-6-design.md 8.12). Nothing in the app reads it back:
+    /// the session gives the same variables to the settings' <c>GitConfiguration</c> itself; the tests
+    /// read it.
+    /// </summary>
+    public IReadOnlyDictionary<string, string?> SessionEnvironment { get; }
 
     /// <remarks>
     /// The caller's thread only queues the call; all of it runs on the thread pool (D59). Run from
@@ -100,8 +138,17 @@ public sealed class GitRunner : IGitRunner
             throw new GitException(command.DisplayText, null, ex.Message, ex);
         }
 
+        if (command.BelowNormalPriority && OperatingSystem.IsWindows())
+        {
+            LowerPriority(process, command);
+        }
+
         using var job = OperatingSystem.IsWindows() ? WindowsJob.TryAttach(process) : null;
-        void Stop() => Kill(process, job);
+        void Stop()
+        {
+            StopObserver?.Invoke();
+            Kill(process, job);
+        }
 
         var output = new OutputCollector(command.OnOutputLine, keepAll: command.OnOutputLine is null, splitOnCarriageReturn: false);
         var error = new OutputCollector(command.OnErrorLine, keepAll: true, splitOnCarriageReturn: true);
@@ -113,13 +160,17 @@ public sealed class GitRunner : IGitRunner
         // Cancelling stops git, which ends the wait below. Should git not stop, the wait is given
         // up after StopTimeout: a call that was cancelled must return, whatever git does. A
         // cancel that comes after git has exited stops nothing (stopped stays false), so the call
-        // that finished keeps its result.
+        // that finished keeps its result. The stop itself is queued to the thread pool: the
+        // registration runs on the thread that cancels, often the UI thread, which cancels up to
+        // four calls at once (Cancel all), and a job's termination and a process tree's kill must
+        // not hold it (D59). Once the call has ended and let go of git, a stop that comes late finds
+        // nothing to stop (Kill never throws).
         var gaveUp = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stopped = false;
         using var stopOnCancel = cancellationToken.Register(() =>
         {
             Volatile.Write(ref stopped, !exit.IsCompleted);
-            Stop();
+            ThreadPool.UnsafeQueueUserWorkItem(static stop => stop(), (Action)Stop, preferLocal: false);
             _ = Task.Delay(StopTimeout, CancellationToken.None)
                 .ContinueWith(_ => gaveUp.TrySetResult(), TaskScheduler.Default);
         });
@@ -204,7 +255,9 @@ public sealed class GitRunner : IGitRunner
             startInfo.ArgumentList.Add(argument);
         }
 
-        foreach (var (name, value) in DefaultEnvironment.Concat(command.Environment))
+        // The runner's defaults, then the session's own variables (the harnesses' global git
+        // configuration, docs/phase-6-design.md 8.12, 17.2), then the command's.
+        foreach (var (name, value) in DefaultEnvironment.Concat(SessionEnvironment).Concat(command.Environment))
         {
             if (value is null)
             {
@@ -217,6 +270,101 @@ public sealed class GitRunner : IGitRunner
         }
 
         return startInfo;
+    }
+
+    /// <summary>
+    /// Puts a git process that has just started at below-normal priority, with what it has started
+    /// by then (<see cref="GitCommand.BelowNormalPriority"/>, docs/phase-6-design.md 8.10;
+    /// <see cref="LowerTreeBelowNormal"/>). A process that has exited already, or whose priority
+    /// cannot be set, runs on as it is: the call does not fail for it.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private void LowerPriority(Process process, GitCommand command)
+    {
+        try
+        {
+            LowerTreeBelowNormal(process);
+        }
+        catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
+        {
+            _log.Debug($"{command.DisplayText} keeps its priority: {ex.Message}");
+        }
+    }
+
+    /// <summary>How many snapshots of the processes <see cref="LowerTreeBelowNormal"/> takes at most.</summary>
+    private const int LoweringRounds = 5;
+
+    /// <summary>
+    /// Puts <paramref name="root"/> at below-normal priority, and every process it has started by
+    /// then, directly or not (Windows). Windows gives a new process its parent's class as it is
+    /// when the process is created, and Git for Windows' <c>cmd\git.exe</c>, the git most machines
+    /// find, is a launcher that starts the real git at once: under load that can come before the
+    /// launcher's class is set, and the real git and every shell it starts would then run at
+    /// normal priority. So the descendants are lowered too, from a snapshot of the machine's
+    /// processes (Toolhelp's, which names each one's parent), until a snapshot finds none left to
+    /// lower: a process that one of them started before it was lowered shows up in the next one.
+    /// At most <see cref="LoweringRounds"/> snapshots; what starts later gets the class from its
+    /// parent. A child that started before its parent is no descendant (the parent's id was
+    /// reused) and is left alone; one that ends meanwhile is skipped.
+    /// </summary>
+    /// <exception cref="InvalidOperationException"><paramref name="root"/> has exited.</exception>
+    /// <exception cref="Win32Exception">Windows refused to change <paramref name="root"/>'s class, or gave no snapshot.</exception>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    internal static void LowerTreeBelowNormal(Process root)
+    {
+        ArgumentNullException.ThrowIfNull(root);
+        root.PriorityClass = ProcessPriorityClass.BelowNormal;
+        var rootStart = root.StartTime;
+        for (var round = 0; round < LoweringRounds; round++)
+        {
+            var children = ProcessSnapshot.ChildrenByParent();
+            var lowered = false;
+            var visited = new HashSet<int> { root.Id };
+            var parents = new Queue<(int Id, DateTime Start)>();
+            parents.Enqueue((root.Id, rootStart));
+            while (parents.TryDequeue(out var parent))
+            {
+                if (!children.TryGetValue(parent.Id, out var ids))
+                {
+                    continue;
+                }
+
+                foreach (var id in ids)
+                {
+                    if (!visited.Add(id))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        using var child = Process.GetProcessById(id);
+                        var start = child.StartTime;
+                        if (start < parent.Start)
+                        {
+                            continue;
+                        }
+
+                        if (child.PriorityClass != ProcessPriorityClass.BelowNormal)
+                        {
+                            child.PriorityClass = ProcessPriorityClass.BelowNormal;
+                            lowered = true;
+                        }
+
+                        parents.Enqueue((id, start));
+                    }
+                    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException or Win32Exception)
+                    {
+                        // Ended meanwhile, or not this user's to change.
+                    }
+                }
+            }
+
+            if (!lowered)
+            {
+                return;
+            }
+        }
     }
 
     /// <summary>
@@ -328,8 +476,9 @@ public sealed class GitRunner : IGitRunner
 
     /// <summary>
     /// Stops git and everything it started (ssh, remote helpers, hooks), which would otherwise
-    /// keep running and keep the output pipes open. Never throws: it runs inside a cancellation
-    /// callback, where an exception would land on whoever cancelled.
+    /// keep running and keep the output pipes open. Never throws: it runs on the thread pool for a
+    /// cancel, where nobody would catch an exception, and may come after the call has disposed of
+    /// the process and the job.
     /// </summary>
     private static void Kill(Process process, WindowsJob? job)
     {
@@ -634,5 +783,77 @@ public sealed class GitRunner : IGitRunner
         }
 
         private void MarkProgress() => Interlocked.Exchange(ref _lastProgress, Stopwatch.GetTimestamp());
+    }
+
+    /// <summary>The machine's processes by their parents' ids, from Toolhelp's snapshot (Windows).</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static class ProcessSnapshot
+    {
+        private const uint SnapProcess = 0x00000002;
+
+        /// <summary>Each process id that is some process's parent, with the ids of its children.</summary>
+        /// <exception cref="Win32Exception">Windows gave no snapshot.</exception>
+        public static Dictionary<int, List<int>> ChildrenByParent()
+        {
+            var children = new Dictionary<int, List<int>>();
+            var snapshot = CreateToolhelp32Snapshot(SnapProcess, 0);
+            if (snapshot == IntPtr.Zero || snapshot == new IntPtr(-1))
+            {
+                throw new Win32Exception(Marshal.GetLastWin32Error());
+            }
+
+            try
+            {
+                var entry = new ProcessEntry { Size = (uint)Marshal.SizeOf<ProcessEntry>() };
+                for (var more = Process32FirstW(snapshot, ref entry); more; more = Process32NextW(snapshot, ref entry))
+                {
+                    var parent = (int)entry.ParentProcessId;
+                    if (!children.TryGetValue(parent, out var ids))
+                    {
+                        children[parent] = ids = [];
+                    }
+
+                    ids.Add((int)entry.ProcessId);
+                }
+            }
+            finally
+            {
+                CloseHandle(snapshot);
+            }
+
+            return children;
+        }
+
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        private struct ProcessEntry
+        {
+            public uint Size;
+            public uint Usage;
+            public uint ProcessId;
+            public IntPtr DefaultHeapId;
+            public uint ModuleId;
+            public uint Threads;
+            public uint ParentProcessId;
+            public int PriorityClassBase;
+            public uint Flags;
+
+            [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)]
+            public string ExeFile;
+        }
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint processId);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool Process32FirstW(IntPtr snapshot, ref ProcessEntry entry);
+
+        [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool Process32NextW(IntPtr snapshot, ref ProcessEntry entry);
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr handle);
     }
 }

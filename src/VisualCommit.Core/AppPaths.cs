@@ -14,6 +14,16 @@ public sealed record AppPaths(string DataDirectory)
     /// <summary>The open tabs, recent repositories, window and panel sizes (D46).</summary>
     public string SessionFile => Path.Combine(DataDirectory, "session.json");
 
+    /// <summary>The workspaces (D189, docs/phase-6-design.md 1.3): the app's own list, apart from the settings and the session.</summary>
+    public string WorkspacesFile => Path.Combine(DataDirectory, "workspaces.json");
+
+    /// <summary>
+    /// The merge tools git knows, as the last <c>git mergetool --tool-help</c> listed them, by git's
+    /// path and version (D202, docs/phase-6-design.md 8.10), so that the settings screen's
+    /// "Choose…" is ready at once.
+    /// </summary>
+    public string MergeToolsFile => Path.Combine(DataDirectory, "merge-tools.json");
+
     public string LogDirectory => Path.Combine(DataDirectory, "logs");
 
     /// <summary>

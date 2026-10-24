@@ -134,6 +134,49 @@ public class GitRunnerTests
     }
 
     [Fact]
+    public async Task The_sessions_environment_comes_after_the_runners_defaults_and_before_the_commands()
+    {
+        // docs/phase-6-design.md 8.12, 17.2: the defaults, then the session's, then the command's.
+        var session = new Dictionary<string, string?>
+        {
+            ["GIT_TERMINAL_PROMPT"] = "session",
+            ["VC_SESSION_ONLY"] = "session",
+            ["VC_BOTH"] = "session",
+            ["VC_REMOVED_BY_SESSION"] = null,
+        };
+        var runner = new GitRunner(GitPath, environment: session);
+        const string Echo = "echo ${GIT_TERMINAL_PROMPT-unset} ${VC_SESSION_ONLY-unset} ${VC_BOTH-unset} ${VC_REMOVED_BY_SESSION-unset} ${GIT_EDITOR-unset}";
+        var before = Environment.GetEnvironmentVariable("VC_REMOVED_BY_SESSION");
+        GitResult plain;
+        GitResult overridden;
+        try
+        {
+            // A variable of the process (and so of git's environment) that the session removes.
+            Environment.SetEnvironmentVariable("VC_REMOVED_BY_SESSION", "process");
+            plain = await runner.RunAsync(Script(Echo), TestCancelled);
+            overridden = await runner.RunAsync(
+                new GitCommand("-c", $"alias.script=!{Echo}", "script")
+                {
+                    Environment = new Dictionary<string, string?> { ["VC_BOTH"] = "command", ["VC_SESSION_ONLY"] = null },
+                },
+                TestCancelled);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("VC_REMOVED_BY_SESSION", before);
+        }
+
+        Assert.Equal("session session session unset :", plain.StandardOutput.Trim());
+        Assert.Equal("session unset command unset :", overridden.StandardOutput.Trim());
+        Assert.Equal("session", runner.SessionEnvironment["VC_SESSION_ONLY"]);
+        Assert.Empty(new GitRunner(GitPath).SessionEnvironment);
+
+        // The runner keeps its own copy: a change to the dictionary it was given reaches no call.
+        session["VC_SESSION_ONLY"] = "changed";
+        Assert.Equal("session", runner.SessionEnvironment["VC_SESSION_ONLY"]);
+    }
+
+    [Fact]
     public async Task Git_speaks_English_when_the_user_has_LANGUAGE_set_to_another_language()
     {
         // gettext puts LANGUAGE before LC_ALL; a German desktop sets it, and git inherits it from
@@ -267,6 +310,38 @@ public class GitRunnerTests
         Assert.Equal(GitCallOutcome.Cancelled, call.Outcome);
         Assert.Null(call.ExitCode);
         Assert.Contains("started", call.StandardOutput);
+    }
+
+    [Fact]
+    public async Task Cancelling_stops_git_on_the_thread_pool_never_on_the_thread_that_cancels()
+    {
+        // D59: the registration runs on the thread that cancels, often the UI thread, which
+        // cancels up to four calls at once (Cancel all); a job's termination and a process tree's
+        // kill must not hold it. The canceller stands for the UI thread: a thread of its own with a
+        // synchronization context, which the stop must not go through either.
+        var stoppedOn = new TaskCompletionSource<Thread>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new GitRunner(GitPath) { StopObserver = () => stoppedOn.TrySetResult(Thread.CurrentThread) };
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var run = runner.RunAsync(Script("echo started; sleep 30", onOutputLine: _ => started.TrySetResult()), cancellation.Token);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+
+        var context = new CountingContext();
+        var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var canceller = new Thread(() =>
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            cancellation.Cancel();
+            cancelled.SetResult();
+        });
+        canceller.Start();
+        await cancelled.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+
+        var stopThread = await stoppedOn.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => run);
+        Assert.NotSame(canceller, stopThread);
+        Assert.True(stopThread.IsThreadPoolThread, "The stop ran on a thread of its own, not the thread pool's.");
+        Assert.Equal(0, context.Posts);
     }
 
     [Fact]
@@ -636,4 +711,114 @@ public class GitRunnerTests
         public void Write(LogLevel level, string message, Exception? exception = null) =>
             Entries.Enqueue((level, message, exception));
     }
+
+    /// <summary>A synchronization context that counts what is posted or sent to it, and runs it on the thread pool.</summary>
+    private sealed class CountingContext : SynchronizationContext
+    {
+        private int _posts;
+
+        public int Posts => Volatile.Read(ref _posts);
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref _posts);
+            base.Post(d, state);
+        }
+
+        public override void Send(SendOrPostCallback d, object? state)
+        {
+            Interlocked.Increment(ref _posts);
+            base.Send(d, state);
+        }
+    }
+}
+
+/// <summary>
+/// The runner's tests that set git's own variables in the test process (D233), in a class of
+/// <c>GitRunnerTests.cs</c> whose collection runs alone: while a variable such as <c>GIT_DIR</c> is
+/// set, a git process another test starts without the runner would get it too.
+/// </summary>
+[Collection(GitRunnerInheritedVariablesTests.Alone)]
+public class GitRunnerInheritedVariablesTests
+{
+    /// <summary>The collection that runs with no other test of the assembly beside it.</summary>
+    public const string Alone = "Git runner inherited variables, alone";
+
+    private static readonly string GitPath =
+        GitLocator.FindExecutable(GitSearchContext.FromSystem())
+        ?? throw new InvalidOperationException("The tests need git, and no git executable was found.");
+
+    private static CancellationToken TestCancelled => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task Git_variables_the_app_inherits_reach_no_call_and_a_commands_own_still_does()
+    {
+        // D233: an app started from a hook, an alias or a shell that set one of these would run
+        // every call against another repository, index, object store or namespace. Each points at
+        // another repository here; the calls run in their own.
+        using var own = await TempRepo.CreateAsync("own");
+        using var other = await TempRepo.CreateAsync("other");
+        var otherGit = Path.Combine(other.Path, ".git");
+        var variables = new Dictionary<string, string>
+        {
+            ["GIT_DIR"] = otherGit,
+            ["GIT_WORK_TREE"] = other.Path,
+            ["GIT_COMMON_DIR"] = otherGit,
+            ["GIT_INDEX_FILE"] = Path.Combine(otherGit, "index"),
+            ["GIT_OBJECT_DIRECTORY"] = Path.Combine(otherGit, "objects"),
+            ["GIT_ALTERNATE_OBJECT_DIRECTORIES"] = Path.Combine(otherGit, "objects"),
+            ["GIT_NAMESPACE"] = "elsewhere",
+            ["GIT_PREFIX"] = "sub/",
+            ["GIT_IMPLICIT_WORK_TREE"] = "0",
+        };
+        var runner = new GitRunner(GitPath);
+        var where = new GitCommand("rev-parse", "--absolute-git-dir", "--show-toplevel", "--git-common-dir", "--git-path", "index", "--git-path", "objects") { WorkingDirectory = own.Path };
+
+        // What a shell alias sees: git sets GIT_PREFIX for one itself (empty at the top), none of the others.
+        const string Echo = "echo ${GIT_DIR-unset} ${GIT_WORK_TREE-unset} ${GIT_COMMON_DIR-unset} ${GIT_INDEX_FILE-unset} ${GIT_OBJECT_DIRECTORY-unset} ${GIT_ALTERNATE_OBJECT_DIRECTORIES-unset} ${GIT_NAMESPACE-unset} ${GIT_IMPLICIT_WORK_TREE-unset} [${GIT_PREFIX-unset}]";
+        var seen = new GitCommand("-c", $"alias.script=!{Echo}", "script") { WorkingDirectory = own.Path };
+        var withOwnIndex = new GitCommand("-c", "alias.script=!echo ${GIT_INDEX_FILE-unset}", "script")
+        {
+            WorkingDirectory = own.Path,
+            Environment = new Dictionary<string, string?> { ["GIT_INDEX_FILE"] = "own-index" },
+        };
+
+        var expected = await runner.RunAsync(where, TestCancelled);
+        Assert.True(expected.Succeeded, expected.StandardError);
+        var before = variables.Keys.ToDictionary(name => name, Environment.GetEnvironmentVariable);
+        GitResult paths;
+        GitResult variablesSeen;
+        GitResult ownIndex;
+        try
+        {
+            foreach (var (name, value) in variables)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+
+            paths = await runner.RunAsync(where, TestCancelled);
+            variablesSeen = await runner.RunAsync(seen, TestCancelled);
+            ownIndex = await runner.RunAsync(withOwnIndex, TestCancelled);
+        }
+        finally
+        {
+            foreach (var (name, value) in before)
+            {
+                Environment.SetEnvironmentVariable(name, value);
+            }
+        }
+
+        Assert.True(paths.Succeeded, paths.StandardError);
+        Assert.Equal(expected.StandardOutput, paths.StandardOutput);
+        Assert.Equal("unset unset unset unset unset unset unset unset []", variablesSeen.StandardOutput.Trim());
+
+        // A command's own environment comes after the runner's defaults (a snapshot's temporary index).
+        Assert.Equal("own-index", ownIndex.StandardOutput.Trim());
+    }
+}
+
+/// <summary>Runs <see cref="GitRunnerInheritedVariablesTests"/> with no other test beside it.</summary>
+[CollectionDefinition(GitRunnerInheritedVariablesTests.Alone, DisableParallelization = true)]
+public sealed class GitRunnerInheritedVariablesCollection
+{
 }

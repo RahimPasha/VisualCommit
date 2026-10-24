@@ -107,8 +107,8 @@ public sealed partial class Phase5ChecksB
         Assert.Equal(1, app.CountLogLines(AppLogFile.OperationEnded(NameOf(repo), operation.Title, OperationOutcome.Succeeded, operation.Status), mark));
         AssertStatus(app, operation.Status);
         var undo = app.UndoRedoState();
-        Assert.Equal((true, "Undo " + operation.UndoText), (undo.UndoEnabled, undo.UndoToolTip));
-        Assert.Equal("Undo " + operation.UndoText, AutomationProperties.GetHelpText((Control)app.FindByAutomationId(ShellDriver.UndoButtonId)));
+        Assert.Equal((true, $"Undo {operation.UndoText} (Ctrl+Z)"), (undo.UndoEnabled, undo.UndoToolTip));
+        Assert.Equal($"Undo {operation.UndoText} (Ctrl+Z)", AutomationProperties.GetHelpText((Control)app.FindByAutomationId(ShellDriver.UndoButtonId)));
     }
 
     // ---- The right panel ----------------------------------------------------------------------------

@@ -52,6 +52,9 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     private bool _tooManyPaths;
     private int _pauses;
 
+    /// <summary>Bursts taken off the wait whose raise has not ended yet (the ignore check, <see cref="Changed"/>'s handlers).</summary>
+    private int _raising;
+
     /// <param name="gitDirectory">The repository's git folder.</param>
     /// <param name="commonDirectory">The git folder with the refs and objects; for a linked worktree it differs from <paramref name="gitDirectory"/>.</param>
     /// <param name="log">Where failures to watch are reported.</param>
@@ -106,6 +109,24 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
     /// <summary>The git folders being watched: the git folder, and the common folder when it does not contain the git folder.</summary>
     public IReadOnlyList<string> Folders => _folders;
+
+    /// <summary>
+    /// Whether no change the watcher has counted is waiting: none waits for its quiet period, and
+    /// no burst is being raised (its ignore check or <see cref="Changed"/>'s handlers running). A
+    /// change the system has not reported yet is not known here: macOS reports a write a while
+    /// after it. The harnesses read it to wait for the refresh a change starts before they mark
+    /// the calls of a check's next step.
+    /// </summary>
+    public bool IsQuiet
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _firstChange is null && _raising == 0;
+            }
+        }
+    }
 
     /// <summary>
     /// Starts watching. A folder that cannot be watched (it is gone, or on Linux the system's
@@ -404,33 +425,46 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
             paths = [.. _changedPaths];
             tooMany = _tooManyPaths;
             ResetBurst();
+
+            // Counted before the burst leaves the wait, so that IsQuiet is never true in between.
+            _raising++;
         }
 
-        // One raise at a time: a handler that takes longer than the quiet period is not run
-        // again beside itself by the next burst.
-        lock (_raiseGate)
+        try
         {
-            if (_disposed)
+            // One raise at a time: a handler that takes longer than the quiet period is not run
+            // again beside itself by the next burst.
+            lock (_raiseGate)
             {
-                return;
-            }
-
-            try
-            {
-                if (workingTree && !gitFolder && !tooMany && paths.Count > 0 && AllIgnored(paths))
+                if (_disposed)
                 {
                     return;
                 }
 
-                Changed?.Invoke(this, new RepositoryChangedEventArgs(gitFolder, workingTree));
+                try
+                {
+                    if (workingTree && !gitFolder && !tooMany && paths.Count > 0 && AllIgnored(paths))
+                    {
+                        return;
+                    }
+
+                    Changed?.Invoke(this, new RepositoryChangedEventArgs(gitFolder, workingTree));
+                }
+                catch (OperationCanceledException) when (_disposed)
+                {
+                }
+                catch (Exception ex)
+                {
+                    // An exception here would end the process: this runs on a timer thread.
+                    _log.Error("A handler of the repository watcher's Changed event failed.", ex);
+                }
             }
-            catch (OperationCanceledException) when (_disposed)
+        }
+        finally
+        {
+            lock (_gate)
             {
-            }
-            catch (Exception ex)
-            {
-                // An exception here would end the process: this runs on a timer thread.
-                _log.Error("A handler of the repository watcher's Changed event failed.", ex);
+                _raising--;
             }
         }
     }

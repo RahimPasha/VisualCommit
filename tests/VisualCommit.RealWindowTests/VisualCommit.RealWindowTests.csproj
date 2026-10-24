@@ -5,10 +5,11 @@
 
        Windows-only and opt-in: this project is NOT in VisualCommit.slnx, so "dotnet build" and
        "dotnet test" at the repo root never touch it. It is run on its own, with the real-window
-       command in the Commands section of CLAUDE.md. It takes over the mouse for about 14 minutes
-       with phases 0 to 4 (14 min 4 s at phase 4's gate), more as phases add checks (phase 5's 18
-       launches were estimated at 9 to 12 minutes more before its gate), and needs an unlocked
-       desktop. -->
+       command in the Commands section of CLAUDE.md. It takes over the mouse for about 25 minutes
+       for phases 0 to 5 (24 min 57 s at phase 5's gate, 59 tests), and phase 6's eight methods
+       (nine launches) about 5 to 8 minutes more (docs/phase-6-design.md 17.6's estimate; the gate
+       measures it). It needs an unlocked desktop and Windows' high contrast off (phase 6's S15),
+       and never changes a setting of the desktop. -->
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
@@ -53,6 +54,13 @@
        and Phase5SupportTests.cs, are left out by their names, which the pattern does not match. -->
   <ItemGroup>
     <Compile Include="..\VisualCommit.VisualTests.Phase5*\Phase5Expectations*.cs" Link="Phase5\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <!-- Phase 6's expectations, likewise (docs/phase-6-design.md 17.3); their own tests,
+       Phase6ExpectationTests.<part>.cs and Phase6SupportTests.cs, are left out by their names,
+       which the pattern does not match. -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.VisualTests.Phase6*\Phase6Expectations*.cs" Link="Phase6\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

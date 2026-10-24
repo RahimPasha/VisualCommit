@@ -1,4 +1,8 @@
+using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using Xunit;
 
@@ -14,6 +18,28 @@ namespace VisualCommit.App.Tests;
 public class OperationTextsTests
 {
     private const string Sha = "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678";
+
+    [Fact]
+    public void Texts_that_two_places_show_have_one_source_each_with_the_words_the_reports_quote()
+    {
+        // The empty graph area's Pull and Push are what Mod+Shift+L and Mod+Shift+K find by label.
+        Assert.Equal(("Pull", "Push"), (OperationTexts.MenuTexts.ToolbarPull, OperationTexts.MenuTexts.ToolbarPush));
+
+        // Pull's title names a bulk row's cancel and failure.
+        Assert.Equal("Pull", OperationTexts.PullTitle);
+        Assert.Equal(OperationTexts.PullTitle, OperationTexts.Pull("origin/main", "main").Title);
+        Assert.Equal(("Fetch cancelled", "Pull cancelled"), (OperationTexts.BulkRowCancelled(BulkKind.Fetch), OperationTexts.BulkRowCancelled(BulkKind.Pull)));
+
+        // The dashboard's Fetch and Pull: the palette's label, and the button's with its key.
+        Assert.Equal(("Fetch every repository of Web", "Pull every repository of Web"), (OperationTexts.FetchEveryRepository("Web"), OperationTexts.PullEveryRepository("Web")));
+        var keys = new KeyTexts(CommandKey.Ctrl);
+        Assert.Equal(("Fetch every repository of Web (Ctrl+Shift+F)", "Pull every repository of Web (Ctrl+Shift+L)"), (OperationTexts.FetchEveryRepository("Web", keys), OperationTexts.PullEveryRepository("Web", keys)));
+
+        // The palette's commands, the folder dialog's title, git missing in the settings screen.
+        Assert.Equal(("Command palette", "Open settings…"), (CommandPaletteViewModel.PaletteTitle, OperationTexts.OpenSettingsButton));
+        Assert.Equal("Open a repository", WelcomeViewModel.OpenFolderTitle);
+        Assert.Equal("Git is not working on this computer.", GitAccess.GitNotWorking);
+    }
 
     [Fact]
     public void Each_row_of_the_table_has_its_title_running_text_error_title_and_summary()
@@ -360,6 +386,41 @@ public class OperationTextsTests
             "Git could not check out f39ea2d, and your changes could not be re-applied. They are kept in the stash \"Auto stash before checking out f39ea2d\".",
             OperationTexts.AutoStashKept("f39ea2d"));
         Assert.Equal("Nothing was checked out.", OperationTexts.NothingCheckedOut);
+    }
+
+    [Fact]
+    public void Keep_ignored_files_refusals_name_the_files_up_to_three_with_the_singular_for_one()
+    {
+        // docs/phase-6-design.md 9.15 (D113, D196): the app's own refusals, which have no git output.
+        Assert.Equal("1 ignored file is in the way of the merge: secret.env. Move it away first.", OperationTexts.IgnoredFilesInTheWayOf(["secret.env"], "merge"));
+        Assert.Equal(
+            "2 ignored files are in the way of the rebase: build/out.bin, secret.env. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOf(["build/out.bin", "secret.env"], "rebase"));
+        Assert.Equal(
+            "3 ignored files are in the way of the squash: a.bin, b.bin, c.bin. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOf(["a.bin", "b.bin", "c.bin"], "squash"));
+        Assert.Equal(
+            "4 ignored files are in the way of the cherry-pick: build/a.bin, build/b.bin, build/c.bin, …. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOf(["build/a.bin", "build/b.bin", "build/c.bin", "build/d.bin"], "cherry-pick"));
+        Assert.Equal(
+            "5 ignored files are in the way of the cherry-pick: build/a.bin, build/b.bin, build/c.bin, …. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOf(["build/a.bin", "build/b.bin", "build/c.bin", "build/d.bin", "build/e.bin"], "cherry-pick"));
+        Assert.Equal("1 ignored file is in the way of the revert: my file é.txt. Move it away first.", OperationTexts.IgnoredFilesInTheWayOf(["my file é.txt"], "revert"));
+
+        Assert.Equal("1 ignored file is in the way of applying the stash: secret.env. Move it away first.", OperationTexts.IgnoredFilesInTheWayOfStash(["secret.env"]));
+        Assert.Equal(
+            "2 ignored files are in the way of applying the stash: a.env, b.env. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOfStash(["a.env", "b.env"]));
+        Assert.Equal(
+            "3 ignored files are in the way of applying the stash: a.env, b.env, c.env. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOfStash(["a.env", "b.env", "c.env"]));
+        Assert.Equal(
+            "4 ignored files are in the way of applying the stash: a.env, b.env, c.env, …. Move them away first.",
+            OperationTexts.IgnoredFilesInTheWayOfStash(["a.env", "b.env", "c.env", "d.env"]));
+
+        // The checkouts keep D179's text with git's count (9.15).
+        Assert.Equal("1 ignored file is in the way: feature/alpha tracks a file of the same name. Move it away first.", OperationTexts.IgnoredFilesInTheWay(1, "feature/alpha"));
+        Assert.Equal("2 ignored files are in the way: feature/alpha tracks files of the same names. Move them away first.", OperationTexts.IgnoredFilesInTheWay(2, "feature/alpha"));
     }
 
     // The Abort question of 2.15 and section 5 is the banner's (ConflictBannerViewModel.AbortConfirmation,

@@ -154,16 +154,29 @@ public static partial class Phase5Expectations
             new ButtonState("ThemeSwitch", true, SwitchToLight),
         ];
 
+        /// <summary>
+        /// The command modifier's word (<c>Ctrl</c>, <c>Cmd</c>) before the rest of a key
+        /// (docs/phase-6-design.md 6.4): the enabled buttons' tooltips name their keys since phase 6
+        /// (6.8, 16.1; phase 6's report, "Changes to expected results").
+        /// </summary>
+        private static string Mod(bool commandIsMeta, string rest) => $"{(commandIsMeta ? "Cmd" : "Ctrl")}+{rest}";
+
+        /// <summary>"history"'s enabled Fetch, Pull, Push and Branch (main tracking origin/main), with their keys (phase 6, 6.8).</summary>
+        private static IEnumerable<ButtonState> EnabledRemoteButtons(bool commandIsMeta) =>
+        [
+            new("FetchButton", true, $"Fetch all remotes ({Mod(commandIsMeta, "Shift+F")})"),
+            new("PullButton", true, $"Pull from origin/main ({Mod(commandIsMeta, "Shift+L")})"),
+            new("PushButton", true, $"Push main to origin/main ({Mod(commandIsMeta, "Shift+K")})"),
+            new("BranchButton", true, $"Create a branch at HEAD ({Mod(commandIsMeta, "B")})"),
+        ];
+
         /// <summary>"history" open with nothing undone (A1 step 2): Undo and Redo with nothing to act on, Pop with no stash, Search enabled.</summary>
         public static IReadOnlyList<ButtonState> OpenToolbar(bool commandIsMeta) =>
         [
             new("UndoButton", false, NothingToUndo),
             new("RedoButton", false, NothingToRedo),
-            new("FetchButton", true, null),
-            new("PullButton", true, null),
-            new("PushButton", true, null),
-            new("BranchButton", true, null),
-            new("StashButton", true, null),
+            .. EnabledRemoteButtons(commandIsMeta),
+            new("StashButton", true, $"Stash your changes ({Mod(commandIsMeta, "Shift+S")})"),
             new("PopButton", false, NoStashes),
             new("SearchButton", true, SearchToolTip(commandIsMeta)),
             new("ThemeSwitch", true, SwitchToLight),
@@ -172,26 +185,26 @@ public static partial class Phase5Expectations
         /// <summary>"history" after A1's commit (A1 steps 4 and 7): Undo the commit, the tree clean, so Stash has nothing to stash.</summary>
         public static IReadOnlyList<ButtonState> CommittedToolbar(bool commandIsMeta) =>
         [
-            new("UndoButton", true, UndoCommit),
+            new("UndoButton", true, UndoCommitToolTip(commandIsMeta)),
             new("RedoButton", false, NothingToRedo),
-            new("FetchButton", true, null),
-            new("PullButton", true, null),
-            new("PushButton", true, null),
-            new("BranchButton", true, null),
+            .. EnabledRemoteButtons(commandIsMeta),
             new("StashButton", false, NoChangesToStash),
             new("PopButton", false, NoStashes),
             new("SearchButton", true, SearchToolTip(commandIsMeta)),
             new("ThemeSwitch", true, SwitchToLight),
         ];
 
+        /// <summary>Undo's tooltip after A1's commit: <see cref="UndoCommit"/> with its key since phase 6 (6.8).</summary>
+        public static string UndoCommitToolTip(bool commandIsMeta) => $"{UndoCommit} ({Mod(commandIsMeta, "Z")})";
+
         /// <summary>The Activity log toggle's label (1.2).</summary>
         public const string ActivityLogLabel = "Activity log";
 
-        /// <summary>The toggle's tooltip and help text while the panel is closed.</summary>
-        public const string ShowActivityLog = "Show every git command the app has run";
+        /// <summary>The toggle's tooltip and help text while the panel is closed, with its key since phase 6 (docs/phase-6-design.md 6.8).</summary>
+        public const string ShowActivityLog = "Show every git command the app has run (Ctrl+J)";
 
-        /// <summary>The toggle's tooltip and help text while the panel is open.</summary>
-        public const string HideActivityLog = "Hide the activity log";
+        /// <summary>The toggle's tooltip and help text while the panel is open, with its key since phase 6.</summary>
+        public const string HideActivityLog = "Hide the activity log (Ctrl+J)";
 
         /// <summary>The status bar's branch text on an empty tab.</summary>
         public const string NoRepository = "No repository";
@@ -206,11 +219,14 @@ public static partial class Phase5Expectations
 
         // ---- The empty tab (phase 0's shell, phase 1's welcome page). ----
 
-        /// <summary>The welcome page of a tab without a repository, in reading order.</summary>
+        /// <summary>
+        /// The welcome page of a tab without a repository, in reading order, with phase 6's
+        /// Workspaces section between Init and the recent list (docs/phase-6-design.md 13.1, 16.1).
+        /// </summary>
         public static IReadOnlyList<string> WelcomeTexts { get; } =
         [
             "No repository open", "Open, clone or init a repository to see its history.",
-            "Open", "Clone", "Init", "Recent repositories", "No recent repositories",
+            "Open", "Clone", "Init", "Workspaces", "New workspace…", "No workspaces", "Recent repositories", "No recent repositories",
         ];
 
         /// <summary>The left panel's sections, each with the count 0 on an empty tab.</summary>
@@ -430,7 +446,8 @@ public static partial class Phase5Expectations
 
         public const string CheckoutFailed = "Check out feature/kinds failed";
 
-        public const string CheckoutCommand = "git switch --no-guess feature/kinds";
+        /// <summary>With phase 6's <c>--no-overwrite-ignore</c> (Keep ignored files, docs/phase-6-design.md 9.11, 16.1).</summary>
+        public const string CheckoutCommand = "git switch --no-guess --no-overwrite-ignore feature/kinds";
 
         public const string CheckoutBlocked = "Checkout blocked";
 
@@ -457,7 +474,8 @@ public static partial class Phase5Expectations
 
         public const string MergeStopped = "Merge stopped: 1 file has conflicts";
 
-        public const string MergeCommand = "git merge --no-edit --no-log -m \"Merge branch 'feature/theirs'\" refs/heads/feature/theirs";
+        /// <summary>With phase 6's <c>--no-overwrite-ignore</c> just before the positional argument (docs/phase-6-design.md 9.4, 16.1).</summary>
+        public const string MergeCommand = "git merge --no-edit --no-log -m \"Merge branch 'feature/theirs'\" --no-overwrite-ignore refs/heads/feature/theirs";
 
         /// <summary>Git's lines on standard output (2.36 and 2.55 alike); the second classifies the stop.</summary>
         public static IReadOnlyList<string> MergeOutput { get; } =
@@ -579,9 +597,10 @@ public static partial class Phase5Expectations
 
         public const string SearchPlaceholder = "Message, author or SHA";
 
-        public const string PreviousMatch = "Previous match (Shift+Enter)";
+        // The match buttons name the command's shown key too since phase 6 (docs/phase-6-design.md 6.8, 16.1).
+        public const string PreviousMatch = "Previous match (Shift+Enter, Shift+F3)";
 
-        public const string NextMatch = "Next match (Enter)";
+        public const string NextMatch = "Next match (Enter, F3)";
 
         public const string CloseSearch = "Close the search (Esc)";
 

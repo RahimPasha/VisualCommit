@@ -7,6 +7,8 @@ namespace VisualCommit.App.ViewModels.Operations;
 /// refusal message of a checkout and of the operations that refuse for the same reason, with
 /// git's count (D153's sentence, the singular for one, D113), the ignored-files text, and the
 /// automatic stash's message, running text, result and failures. Built by work package WP4.
+/// Phase 6's Keep ignored files (D193, D196, docs/phase-6-design.md 9.15) adds the app's own
+/// refusals, which name the files; built by work package WP-IA.
 /// </summary>
 public static partial class OperationTexts
 {
@@ -55,6 +57,36 @@ public static partial class OperationTexts
         count == 1
             ? $"1 ignored file is in the way: {name} tracks a file of the same name. Move it away first."
             : string.Create(CultureInfo.InvariantCulture, $"{count} ignored files are in the way: {name} tracks files of the same names. Move them away first.");
+
+    /// <summary>
+    /// Keep ignored files (D196, docs/phase-6-design.md 9.15): an operation git has no option for,
+    /// refused by the app's own check before git, which names the files (no git output): "1 ignored
+    /// file is in the way of the merge: secret.env. Move it away first." / "5 ignored files are in
+    /// the way of the cherry-pick: build/a.bin, build/b.bin, build/c.bin, …. Move them away
+    /// first." <paramref name="operation"/> is "merge" (both kinds, a fast-forward, the drop's,
+    /// "Check out and merge"'s, the pull's merge or fast-forward), "rebase" (onto, "Check out and
+    /// rebase", interactive, the pull's), "squash", "cherry-pick" or "revert".
+    /// </summary>
+    public static string IgnoredFilesInTheWayOf(IReadOnlyList<string> files, string operation)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        return files.Count == 1
+            ? $"1 ignored file is in the way of the {operation}: {files[0]}. Move it away first."
+            : string.Create(CultureInfo.InvariantCulture, $"{files.Count} ignored files are in the way of the {operation}: {FirstNames(files)}. Move them away first.");
+    }
+
+    /// <summary>
+    /// 9.15: a stash's apply or pop refused by the app's own check before git (9.8): "1 ignored
+    /// file is in the way of applying the stash: secret.env. Move it away first." / "{N} ignored
+    /// files are in the way of applying the stash: {first names}. Move them away first."
+    /// </summary>
+    public static string IgnoredFilesInTheWayOfStash(IReadOnlyList<string> files)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        return files.Count == 1
+            ? $"1 ignored file is in the way of applying the stash: {files[0]}. Move it away first."
+            : string.Create(CultureInfo.InvariantCulture, $"{files.Count} ignored files are in the way of applying the stash: {FirstNames(files)}. Move them away first.");
+    }
 
     /// <summary>The automatic stash's message (9.2, D153 (2)): "Auto stash before checking out f39ea2d"; git lists it as "On main: …".</summary>
     public static string AutoStashMessage(string name) => $"Auto stash before checking out {name}";

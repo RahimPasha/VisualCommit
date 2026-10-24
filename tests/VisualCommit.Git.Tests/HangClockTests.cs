@@ -112,6 +112,32 @@ public class HangClockTests
     }
 
     [Fact]
+    public void A_wait_with_a_limit_of_its_own_is_held_to_it_and_holds_the_standstill_rule_back_meanwhile()
+    {
+        var clock = new HangClock(() => _now);
+        clock.Started("t", "Runs a slow program");
+        var wait = clock.Preparing("t", "git mergetool --tool-help", limit: TimeSpan.FromMinutes(10));
+
+        // Past the run's limit, with nothing else happening: the wait is within its own limit.
+        Advance(400);
+        Assert.Null(clock.Check(Limit));
+        Assert.Equal(TimeSpan.Zero, clock.CountedTime("t"));
+
+        // Past its own limit, it is caught and named.
+        Advance(201);
+        var message = clock.Check(Limit);
+        Assert.NotNull(message);
+        Assert.Contains("Waited for since 601 seconds: git mergetool --tool-help", message, StringComparison.Ordinal);
+
+        // Once it has ended, the run's rules are the run's again.
+        wait.Dispose();
+        Advance(10);
+        Assert.Null(clock.Check(Limit));
+        Advance(171);
+        Assert.NotNull(clock.Check(Limit));
+    }
+
+    [Fact]
     public void A_run_in_which_nothing_happens_stops_even_without_a_test()
     {
         var clock = new HangClock(() => _now);

@@ -245,14 +245,23 @@ public static partial class OperationTexts
 
         public static string PushToAndTrack(string branch, string remoteBranch) => $"Push {branch} to {remoteBranch} and track it";
 
-        /// <summary>4g: a remote whose fetch refspec is not the default; the branch's name there is not known.</summary>
-        public static string MapsBranchesDifferently(string remote, string branch) => $"{remote} maps its branches differently: use Push {branch}…";
+        // A drop onto a remote branch its remote fetches otherwise: R1 to R4 (docs/phase-6-design.md
+        // 10.5), in OperationTexts.Menus.Refspecs.cs.
 
         // Remotes (2.16, 2.23).
 
         public const string AddRemote = "Add remote…";
 
         public const string FetchAllRemotes = "Fetch all remotes";
+
+        /// <summary>
+        /// The empty graph area's "Pull" (4b): the toolbar's Pull. The palette's Pull and its key
+        /// (Mod+Shift+L) find the item by this label (docs/phase-6-design.md 5.4), so both use it.
+        /// </summary>
+        public const string ToolbarPull = "Pull";
+
+        /// <summary>The empty graph area's "Push" (4b): the toolbar's Push, which the palette's Push and its key (Mod+Shift+K) find by this label.</summary>
+        public const string ToolbarPush = "Push";
 
         public const string ManageRemotes = "Manage remotes…";
 

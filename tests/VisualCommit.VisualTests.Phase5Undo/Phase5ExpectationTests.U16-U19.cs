@@ -60,6 +60,8 @@ public class Phase5ExpectationTestsU16ToU19
         Assert.Equal("Undid commit \"Describe the reader and add Length\"", PartU.Undo.DoneText(PartU.CommitText));
         Assert.Equal("Redid reset of main to 8beca34 (soft)", PartU.Redo.DoneText(PartU.ResetText("soft")));
         Assert.Equal("VisualCommit: redo creation of keep", PartU.Redo.Message(PartU.CreateKeepText));
+        Assert.Equal("Undo commit \"Describe the reader and add Length\" (Ctrl+Z)", PartU.Undo.ToolTip(PartU.CommitText));
+        Assert.Equal("Redo restore of the discarded files (Ctrl+Y)", PartU.Redo.ToolTip(PartU.RestoreText));
 
         // The call log writes a command as a user would type it: the message is one argument.
         Assert.Equal(
@@ -72,7 +74,7 @@ public class Phase5ExpectationTestsU16ToU19
             $"git update-ref -m \"VisualCommit: undo pull into main\" refs/heads/main {PartU.LocalWorkSha} {PartU.LocalWorkRebasedSha}",
             PartU.KeepMoveRef(PartU.Undo.Message(PartU.PullText), "main", PartU.LocalWorkSha, PartU.LocalWorkRebasedSha));
         Assert.Equal($"git read-tree -m -u {PartU.FastForwardMeSha} {PartU.MainWorkSha}", PartU.ReadTree(PartU.FastForwardMeSha, PartU.MainWorkSha));
-        Assert.Equal("git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" refs/heads/feature/ff", PartU.MergeFfCall);
+        Assert.Equal("git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" --no-overwrite-ignore refs/heads/feature/ff", PartU.MergeFfCall);
         Assert.Equal($"update refs/heads/main {PartU.ReadWholeLinesSha} {PartU.U16CommitSha}", PartU.UpdateLine("refs/heads/main", PartU.ReadWholeLinesSha, PartU.U16CommitSha));
         Assert.Equal($"delete refs/heads/hotfix {PartU.MainWorkSha}", PartU.DeleteLine("refs/heads/hotfix", PartU.MainWorkSha));
         Assert.Equal($"create refs/heads/hotfix {PartU.MainWorkSha}", PartU.CreateLine("refs/heads/hotfix", PartU.MainWorkSha));

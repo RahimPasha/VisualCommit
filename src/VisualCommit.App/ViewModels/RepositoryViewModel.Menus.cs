@@ -62,6 +62,7 @@ public sealed partial class RepositoryViewModel
         TipsOnHead = BranchTipsOnHead(),
         MergeTool = _mergeTool,
         Filters = Filters,
+        HasEditor = IsEditorChosen(),
     };
 
     /// <summary>
@@ -275,22 +276,37 @@ public sealed partial class RepositoryViewModel
             return false;
         }
 
+        return OpenMenu(layer, DiffMenu(MenuContext, diff, hunk), position, openedBy);
+    }
+
+    /// <summary>
+    /// The diff view's menu (4b) on <paramref name="context"/>: its file's items, its selected
+    /// lines' when lines are selected, and the hunk <paramref name="hunk"/>'s when it is one of the
+    /// diff's. The right-click's menu and the palette's items of the open diff (docs/phase-6-design.md
+    /// 5.5, with no hunk) both come from here. Whether the file is in the working tree is
+    /// <paramref name="existsInWorkingTree"/> when given (the palette passes the diff's own,
+    /// <see cref="DiffViewModel.ExistsInWorkingTree"/>, so that its openings and Mod+Shift+H and
+    /// Mod+Shift+B read no disk), else the disk's now (a right-click).
+    /// </summary>
+    public MenuModel DiffMenu(RepositoryMenuContext context, DiffViewModel diff, int? hunk = null, bool? existsInWorkingTree = null)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(diff);
         var target = diff.Target;
         var file = new FileMenuTarget(
             new ChangedFile(target.Path, target.Kind, target.OldPath),
             target.IsUntracked,
-            ExistsInWorkingTree(target.Path),
+            existsInWorkingTree ?? ExistsInWorkingTree(target.Path),
             target.Side == DiffSide.Commit ? target.Commit : null)
         {
             CommitParent = target.Side == DiffSide.Commit ? target.Parent : null,
         };
         var hunkInDiff = hunk is { } index && diff.Diff is { } read && index >= 0 && index < read.Hunks.Count ? hunk : null;
-        var menu = RepositoryMenus.ForDiff(
-            MenuContext,
+        return RepositoryMenus.ForDiff(
+            context,
             new DiffMenuTarget(file, target.Side, diff.HasSelectedLines, hunkInDiff, diff.ActsOnLines),
             MenuActions,
             new DiffMenuActions(diff));
-        return OpenMenu(layer, menu, position, openedBy);
     }
 
     /// <summary>
@@ -329,10 +345,6 @@ public sealed partial class RepositoryViewModel
     /// (<see cref="DropFacts.TargetIsAncestorOfSource"/>, true when the read failed, so that git
     /// decides). Null when the tab closed meanwhile.
     /// </summary>
-    /// <remarks>
-    /// <see cref="DropFacts.RemoteMapsBranchesDifferently"/> is not read: the Git layer has no read
-    /// of a remote's fetch refspec yet, so a drop onto a remote branch always offers the push.
-    /// </remarks>
     public async Task<DropFacts?> ReadDropFactsAsync(string sourceRef, string targetRef)
     {
         ArgumentNullException.ThrowIfNull(sourceRef);
@@ -434,7 +446,11 @@ public sealed partial class RepositoryViewModel
         }
     }
 
-    /// <summary>Checks out a branch by a double-click, unless HEAD is on it already (as the menus leave out or disable the item).</summary>
+    /// <summary>
+    /// Checks out a branch by a double-click, unless HEAD is on it already, or on the local branch a
+    /// remote branch checks out into, or the remote branch has none because two remotes or none
+    /// fetch it (docs/phase-6-design.md 10.4 #10, 10.6): as the menus leave out or disable the item.
+    /// </summary>
     private void CheckOutByDoubleClick(string refName)
     {
         var context = MenuContext;
@@ -443,8 +459,8 @@ public sealed partial class RepositoryViewModel
             return;
         }
 
-        var local = branch.Kind == RefKind.RemoteBranch ? RepositoryMenuContext.LocalNameOf(branch) : branch.Name;
-        if (branch.IsHead || string.Equals(context.Head.BranchName, local, StringComparison.Ordinal))
+        var local = branch.Kind == RefKind.RemoteBranch ? context.Refs.LocalNameOf(branch) : branch.Name;
+        if (local is null || branch.IsHead || string.Equals(context.Head.BranchName, local, StringComparison.Ordinal))
         {
             return;
         }
@@ -503,10 +519,12 @@ public sealed partial class RepositoryViewModel
         return true;
     }
 
+    /// <summary>Whether <paramref name="path"/> is in the working tree now, read from the disk on the caller's thread (a right-click's menu; the palette's go by the diff's own check).</summary>
     private bool ExistsInWorkingTree(string path)
     {
         var full = System.IO.Path.Combine(Path, path.TrimEnd('/'));
-        return File.Exists(full) || Directory.Exists(full);
+        var fileExists = _services?.FileExists ?? File.Exists;
+        return fileExists(full) || Directory.Exists(full);
     }
 
     /// <summary>Lets a task run without waiting for it, logging a failure that got past its own handling.</summary>

@@ -34,6 +34,10 @@ public enum GitPromptKind
 /// <param name="Url">For <see cref="GitPromptKind.Username"/> and <see cref="GitPromptKind.Password"/>: the URL in the prompt; otherwise null.</param>
 /// <param name="User">For <see cref="GitPromptKind.Password"/>: the user name in the URL, when it has one.</param>
 /// <param name="KeyPath">For <see cref="GitPromptKind.Passphrase"/>: the key's path, when ssh names it.</param>
+/// <param name="Group">
+/// The bulk run whose prompts it belongs to (docs/phase-6-design.md 4.4), from its scope; null for
+/// an operation outside a run, whose prompt is answered on its own.
+/// </param>
 public sealed record GitPrompt(
     GitPromptKind Kind,
     string Text,
@@ -42,7 +46,8 @@ public sealed record GitPrompt(
     string RepositoryName,
     string? Url = null,
     string? User = null,
-    string? KeyPath = null);
+    string? KeyPath = null,
+    PromptGroup? Group = null);
 
 /// <summary>The user's answer to a prompt.</summary>
 /// <param name="Text">What git or ssh gets; null refuses the prompt (git then fails).</param>
@@ -84,7 +89,8 @@ public interface IGitPromptBroker
     /// <param name="repositoryName">The repository's name, for the dialog.</param>
     /// <param name="mode">How prompts are answered.</param>
     /// <param name="operationId">The operation's id, which becomes the scope's <see cref="PromptScope.Id"/>; null lets the broker make one (a clone).</param>
-    PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null);
+    /// <param name="group">The bulk run the operation belongs to (<see cref="GitOperation.PromptGroup"/>, docs/phase-6-design.md 4.4), which every prompt of the scope carries; null outside a run.</param>
+    PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null);
 }
 
 /// <summary>One open prompt scope (3.1): its id, the variables for git's environment and whether the user cancelled a prompt.</summary>
@@ -138,7 +144,8 @@ public sealed class NullGitPromptBroker : IGitPromptBroker
 
     public static NullGitPromptBroker Instance { get; } = new();
 
-    public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null) =>
+    /// <summary>Opens a scope without variables; <paramref name="group"/> is ignored, as no prompt reaches the app.</summary>
+    public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null) =>
         new EmptyScope(operationId ?? $"prompt-{Interlocked.Increment(ref _next)}");
 
     private sealed class EmptyScope(string id) : PromptScope(id, null);

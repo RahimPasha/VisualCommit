@@ -80,7 +80,9 @@ public sealed partial class RepositoryOperations
     /// <summary>
     /// "Apply stash" (2.25): <c>git stash apply stash@{n}</c>, the stash found again by its commit.
     /// Refused before git when local changes or existing files are in the stash's way (C12,
-    /// docs/phase-5-design.md 9.3): "1 conflict prevents applying the stash. …", git not run.
+    /// docs/phase-5-design.md 9.3): "1 conflict prevents applying the stash. …", git not run; then,
+    /// while Keep ignored files is on, when ignored files are where its changes write
+    /// (docs/phase-6-design.md 9.8): "1 ignored file is in the way of applying the stash: …".
     /// </summary>
     public Task ApplyStashAsync(string stash) => ApplyOrPopAsync(stash, pop: false);
 
@@ -253,6 +255,13 @@ public sealed partial class RepositoryOperations
                     if (await CountStashConflictsAsync(stash) is var conflicts and > 0)
                     {
                         return Refusal(text, OperationTexts.ConflictsPreventApplyingStash(conflicts));
+                    }
+
+                    // Keep ignored files (docs/phase-6-design.md 9.8), after D179's count: the
+                    // stash's tracked part, which git writes over an ignored file without a word.
+                    if (KeepIgnored && await RefuseIfIgnoredInTheWayAsync(text, operation: null, () => Git.FindIgnoredInTheWayOfStashAsync(stash)) is { } ignored)
+                    {
+                        return ignored;
                     }
 
                     // A pop saves a backup first, as a drop does (docs/phase-5-design.md 7.8, D171): the

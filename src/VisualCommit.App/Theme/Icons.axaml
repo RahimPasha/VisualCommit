@@ -49,4 +49,12 @@
   <StreamGeometry x:Key="IconEyeOff">M10.733 5.076 a10.744 10.744 0 0 1 11.205 6.575 a1 1 0 0 1 0 0.696 a10.747 10.747 0 0 1 -1.444 2.49 M14.084 14.158 a3 3 0 0 1 -4.242 -4.242 M17.479 17.499 a10.75 10.75 0 0 1 -15.417 -5.151 a1 1 0 0 1 0 -0.696 a10.75 10.75 0 0 1 4.446 -5.143 M2 2 l20 20</StreamGeometry>
   <StreamGeometry x:Key="IconSolo">M2 12 a10 10 0 1 0 20 0 a10 10 0 1 0 -20 0 M22 12 h-4 M6 12 H2 M12 6 V2 M12 22 v-4</StreamGeometry>
 
+  <!-- Phase 6 (docs/phase-6-design.md 15.4): a workspace and its dashboard ("layout-grid"), the
+       toolbar's Settings ("settings"), the dashboard's Refresh ("rotate-cw"; "refresh-cw" is
+       IconFetch) and its More menu ("ellipsis"). -->
+  <StreamGeometry x:Key="IconWorkspace">M4 3 h5 a1 1 0 0 1 1 1 v5 a1 1 0 0 1 -1 1 h-5 a1 1 0 0 1 -1 -1 v-5 a1 1 0 0 1 1 -1 z M15 3 h5 a1 1 0 0 1 1 1 v5 a1 1 0 0 1 -1 1 h-5 a1 1 0 0 1 -1 -1 v-5 a1 1 0 0 1 1 -1 z M15 14 h5 a1 1 0 0 1 1 1 v5 a1 1 0 0 1 -1 1 h-5 a1 1 0 0 1 -1 -1 v-5 a1 1 0 0 1 1 -1 z M4 14 h5 a1 1 0 0 1 1 1 v5 a1 1 0 0 1 -1 1 h-5 a1 1 0 0 1 -1 -1 v-5 a1 1 0 0 1 1 -1 z</StreamGeometry>
+  <StreamGeometry x:Key="IconSettings">M9.671 4.136 a2.34 2.34 0 0 1 4.659 0 a2.34 2.34 0 0 0 3.319 1.915 a2.34 2.34 0 0 1 2.33 4.033 a2.34 2.34 0 0 0 0 3.831 a2.34 2.34 0 0 1 -2.33 4.033 a2.34 2.34 0 0 0 -3.319 1.915 a2.34 2.34 0 0 1 -4.659 0 a2.34 2.34 0 0 0 -3.32 -1.915 a2.34 2.34 0 0 1 -2.33 -4.033 a2.34 2.34 0 0 0 0 -3.831 A2.34 2.34 0 0 1 6.35 6.051 a2.34 2.34 0 0 0 3.319 -1.915 M9 12 a3 3 0 1 0 6 0 a3 3 0 1 0 -6 0</StreamGeometry>
+  <StreamGeometry x:Key="IconRefresh">M21 12 a9 9 0 1 1 -9 -9 c2.52 0 4.93 1 6.74 2.74 L21 8 M21 3 v5 h-5</StreamGeometry>
+  <StreamGeometry x:Key="IconMore">M11 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M18 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0 M4 12 a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0</StreamGeometry>
+
 </ResourceDictionary>

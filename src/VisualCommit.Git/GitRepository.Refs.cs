@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -29,12 +30,15 @@ public sealed partial class GitRepository
 
     private const int StashFieldCount = 7;
 
+    /// <summary>The fetch lines already logged as skipped (<c>&lt;remote&gt;\n&lt;value&gt;</c>), so that each refs read does not log them again.</summary>
+    private readonly ConcurrentDictionary<string, byte> _skippedFetchLines = new(StringComparer.Ordinal);
+
     public async Task<RepoRefs> ReadRefsAsync(CancellationToken cancellationToken = default)
     {
         // Five reads that do not depend on one another, run together so that the snapshot is
         // taken in about the time of one.
         var refsTask = ReadOutputAsync(cancellationToken, "for-each-ref", "--format=" + RefFormat, "refs/heads", "refs/remotes", "refs/tags");
-        var remotesTask = ReadOutputAsync(cancellationToken, "remote");
+        var remotesTask = ReadRemoteKeysAsync(cancellationToken);
         var stashesTask = ReadOutputAsync(
             cancellationToken,
             "stash", "list", "--no-show-signature", "--no-color", "--encoding=UTF-8", "--format=" + StashFormat);
@@ -42,15 +46,79 @@ public sealed partial class GitRepository
         var headShaTask = ReadHeadShaAsync(cancellationToken);
         await Task.WhenAll((Task[])[refsTask, remotesTask, stashesTask, headRefTask, headShaTask]).ConfigureAwait(false);
 
-        var remotes = SplitLines(await remotesTask.ConfigureAwait(false));
-        remotes.Sort(StringComparer.Ordinal);
+        var (remotes, refspecs) = await remotesTask.ConfigureAwait(false);
         var headRef = await headRefTask.ConfigureAwait(false);
-        var refs = await ParseRefsAsync(await refsTask.ConfigureAwait(false), remotes, headRef, cancellationToken).ConfigureAwait(false);
+        var refs = await ParseRefsAsync(await refsTask.ConfigureAwait(false), remotes, refspecs, headRef, cancellationToken).ConfigureAwait(false);
         var stashes = ParseStashes(await stashesTask.ConfigureAwait(false));
 
         var branchName = headRef is null ? null : headRef.StartsWith(HeadsPrefix, StringComparison.Ordinal) ? headRef[HeadsPrefix.Length..] : headRef;
         var head = new HeadState(branchName, HeadCommit(refs, await headShaTask.ConfigureAwait(false)));
-        return new RepoRefs(head, refs, stashes, remotes);
+        return new RepoRefs(head, refs, stashes, remotes) { Refspecs = refspecs };
+    }
+
+    public async Task<FetchRefspecs?> ReadFetchRefspecsAsync(CancellationToken cancellationToken = default) =>
+        (await ReadRemoteKeysAsync(cancellationToken).ConfigureAwait(false)).Refspecs;
+
+    /// <summary>
+    /// The remotes and their fetch lines in one read, in place of <c>git remote</c>
+    /// (docs/phase-6-design.md 10.2): <c>git config --null --get-regexp ^remote\.</c>, without
+    /// <c>--local</c>, since git fetches with global lines too. Each entry is
+    /// <c>&lt;key&gt;\n&lt;value&gt;\0</c> in git's reading order, the section and the variable in
+    /// lower case and the remote's name (the subsection, between <c>remote.</c> and the key's last
+    /// dot) with its case and dots kept. The names are those <c>git remote</c> lists: every
+    /// subsection of a <c>remote.&lt;name&gt;.&lt;var&gt;</c> key, each once, sorted ordinally; a
+    /// key without one (<c>remote.pushdefault</c>) and a name starting with <c>/</c> (which git
+    /// skips with a warning) name none, and neither lists a legacy <c>.git/remotes</c> file.
+    /// The <c>.fetch</c> values are the lines. Every value the mapping leaves out but an empty one
+    /// is logged as skipped, once per repository object (10.1): a key without a value and a line
+    /// git refuses, with which git's own reads fail too (<c>for-each-ref</c>: <c>bad config
+    /// variable</c> or <c>invalid refspec</c>, 128, so this read's snapshot is never made and the
+    /// warning names the line), and a line git takes that names no source
+    /// (<c>:refs/remotes/origin/x</c>). An empty value, which git takes and which fetches into
+    /// <c>FETCH_HEAD</c> only, maps nothing and is not logged. Exit 1 is no remote and no line.
+    /// </summary>
+    private async Task<(List<string> Remotes, FetchRefspecs Refspecs)> ReadRemoteKeysAsync(CancellationToken cancellationToken)
+    {
+        const string Prefix = "remote.";
+        var command = Read("config", "--null", "--get-regexp", @"^remote\.");
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        var lines = new List<(string Remote, string Value)>();
+        if (result.ExitCode != 1)
+        {
+            foreach (var entry in result.EnsureSuccess(command).StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+            {
+                // A key without a value ("[remote "x"] fetch") has no line feed.
+                var newline = entry.IndexOf('\n', StringComparison.Ordinal);
+                var key = newline < 0 ? entry : entry[..newline];
+                var dot = key.LastIndexOf('.');
+                if (!key.StartsWith(Prefix, StringComparison.Ordinal) || dot <= Prefix.Length || key[Prefix.Length] == '/')
+                {
+                    continue;
+                }
+
+                var name = key[Prefix.Length..dot];
+                names.Add(name);
+                if (RemoteArguments.TrimSuffix(key[Prefix.Length..], ".fetch") is not null)
+                {
+                    // Logged: a key without a value, and a value the mapping cannot take (one git
+                    // refuses, or one without a source). Not an empty value, which git takes (it
+                    // fetches into FETCH_HEAD only) and which maps nothing.
+                    var value = newline < 0 ? string.Empty : entry[(newline + 1)..];
+                    if ((newline < 0 || (value.Length > 0 && FetchRefspec.Parse(name, value) is null))
+                        && _skippedFetchLines.TryAdd(name + "\n" + value, 0))
+                    {
+                        _log.Warning($"Skipped a fetch line of the remote {name} that git refuses or that names no source: {value}");
+                    }
+
+                    lines.Add((name, value));
+                }
+            }
+        }
+
+        var remotes = names.ToList();
+        remotes.Sort(StringComparer.Ordinal);
+        return (remotes, FetchRefspecs.Parse(lines));
     }
 
     /// <summary>
@@ -104,11 +172,12 @@ public sealed partial class GitRepository
         return sha.Length > 0 ? sha : null;
     }
 
-    private async Task<List<GitRef>> ParseRefsAsync(string output, IReadOnlyList<string> remotes, string? headRef, CancellationToken cancellationToken)
+    private async Task<List<GitRef>> ParseRefsAsync(
+        string output, IReadOnlyList<string> remotes, FetchRefspecs refspecs, string? headRef, CancellationToken cancellationToken)
     {
-        // Remote names may contain slashes ("team/origin"), so a remote branch's remote is the
-        // longest configured name that its name starts with.
-        var remotesLongestFirst = remotes.OrderByDescending(remote => remote.Length).ToList();
+        // A remote branch's remote is the one whose fetch lines fill it (10.3). When two remotes
+        // or none do, it is the longest configured name that its name starts with: remote names
+        // may contain slashes ("team/origin"); without one, its first part.
         var refs = new List<GitRef>();
         var nestedTags = new List<int>();
 
@@ -152,7 +221,10 @@ public sealed partial class GitRepository
                 }
 
                 var name = fullName[RemotesPrefix.Length..];
-                gitRef = new GitRef(fullName, name, RefKind.RemoteBranch, objectName, RemoteName: FindRemote(name, remotesLongestFirst));
+                var remote = refspecs.SourceOf(fullName) is { Kind: RemoteSourceKind.Mapped or RemoteSourceKind.AmbiguousRefs, Remote: { } mapped }
+                    ? mapped
+                    : RemoteBranchNames.RemoteOf(name, remotes);
+                gitRef = new GitRef(fullName, name, RefKind.RemoteBranch, objectName, RemoteName: remote);
             }
             else if (fullName.StartsWith(TagsPrefix, StringComparison.Ordinal))
             {
@@ -192,23 +264,6 @@ public sealed partial class GitRepository
         {
             refs[indexes[i]] = refs[indexes[i]] with { TargetSha = lines[i] };
         }
-    }
-
-    private static string FindRemote(string remoteBranchName, IReadOnlyList<string> remotesLongestFirst)
-    {
-        foreach (var remote in remotesLongestFirst)
-        {
-            if (remoteBranchName.Length > remote.Length
-                && remoteBranchName[remote.Length] == '/'
-                && remoteBranchName.StartsWith(remote, StringComparison.Ordinal))
-            {
-                return remote;
-            }
-        }
-
-        // A remote branch whose remote is no longer configured: its first part is the best guess.
-        var slash = remoteBranchName.IndexOf('/', StringComparison.Ordinal);
-        return slash > 0 ? remoteBranchName[..slash] : remoteBranchName;
     }
 
     /// <summary>

@@ -403,11 +403,11 @@ public sealed record ErrorDialogSnapshot(
 /// <summary>Records every text a status bar shows while it is not disposed (<see cref="ShellDriver.RecordStatusTexts"/>).</summary>
 public sealed class StatusTextRecorder : IDisposable
 {
-    private readonly OperationStatusViewModel _status;
+    private readonly IStatusBarOperation _status;
     private readonly Lock _gate = new();
     private readonly List<string> _texts = [];
 
-    internal StatusTextRecorder(OperationStatusViewModel status)
+    internal StatusTextRecorder(IStatusBarOperation status)
     {
         _status = status;
         _status.PropertyChanged += OnChanged;
@@ -429,7 +429,7 @@ public sealed class StatusTextRecorder : IDisposable
 
     private void OnChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName != nameof(OperationStatusViewModel.Text))
+        if (e.PropertyName != nameof(IStatusBarOperation.Text))
         {
             return;
         }

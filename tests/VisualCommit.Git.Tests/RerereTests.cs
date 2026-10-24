@@ -24,7 +24,7 @@ public class RerereTests
         await repo.GitAsync("reset", "--quiet", "--hard", mainTip);
         var repository = await OpenAsync(repo);
 
-        var result = await repository.MergeAsync("refs/heads/side", MergeMode.Default, cancellationToken: TestCancelled);
+        var result = await repository.MergeAsync("refs/heads/side", MergeMode.Default, keepIgnored: false, cancellationToken: TestCancelled);
 
         Assert.Equal(MergeResult.Conflicts, result);
         Assert.True(GitFileExists(repo, "MERGE_HEAD"));

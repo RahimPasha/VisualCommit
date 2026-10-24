@@ -50,10 +50,17 @@ public sealed partial class Phase3ChecksC
         // Step 2: open the folder, double-click addfile: untracked files are in the way.
         await OpenLocalFeatureFolderAsync(app);
         var mark = app.LogMark();
+        var addfileCalls = app.GitCalls().Count;
         app.DoubleClick(await app.RefRowAsync("Local branches", "feature", "addfile"));
         await WaitForOperationAsync(app, repo, "Check out feature/addfile", mark);
         await app.WaitForDialogAsync<ErrorDialogViewModel>();
         shot = Shot(app, "14b-untracked-in-the-way");
+
+        // Phase 6's Keep ignored files (docs/phase-6-design.md 9.11, 16.1): git's untracked block is
+        // asked about after the refusal, in the checkout's operation; nothing in it is ignored
+        // (exit 1), so the summary is unchanged.
+        var refused = AssertCalled(app, addfileCalls, "git switch --no-guess --no-overwrite-ignore feature/addfile");
+        Assert.Equal(1, app.GitCalls().Skip(addfileCalls).Single(call => call.CommandText == "git check-ignore --stdin -z" && call.OperationId == refused.OperationId).ExitCode);
         Assert.Equal(["feature", "  addfile", "  clash", "  other", "main"], SectionLines(app, "Local branches"));
         Assert.True(ItemRow(app, "Local branches", "feature", "addfile").IsSelected);
         AssertSelection(app, null, 0);
@@ -62,7 +69,7 @@ public sealed partial class Phase3ChecksC
             "Checkout blocked",
             PartC.TwoConflictsSummary,
             BlockedRepo,
-            "git switch --no-guess feature/addfile",
+            "git switch --no-guess --no-overwrite-ignore feature/addfile",
             ["Copy output", "Close"],
             PartC.T1,
             PartC.T1Key));
@@ -85,7 +92,7 @@ public sealed partial class Phase3ChecksC
             "Checkout blocked",
             PartC.OneConflictSummary,
             BlockedRepo,
-            "git switch --no-guess feature/other",
+            "git switch --no-guess --no-overwrite-ignore feature/other",
             ["Copy output", "Stash changes and check out", "Close"],
             PartC.T2,
             PartC.T2Key));
@@ -107,7 +114,7 @@ public sealed partial class Phase3ChecksC
         var pop = AssertCalled(app, calls, "git stash pop --index stash@{0}");
         Assert.Equal(0, pop.ExitCode);
         Assert.Matches(@"Dropped stash@\{0\} \([0-9a-f]{40}\)\s*$", pop.StandardOutput);
-        AssertCalledInOrder(app, calls, push.CommandText, "git switch --no-guess feature/other", pop.CommandText);
+        AssertCalledInOrder(app, calls, push.CommandText, "git switch --no-guess --no-overwrite-ignore feature/other", pop.CommandText);
         AssertBranch(app, "feature/other");
         AssertStatus(app, "Checked out feature/other and re-applied your changes");
         Assert.Empty(await StashListAsync(repo));
@@ -137,7 +144,7 @@ public sealed partial class Phase3ChecksC
             "Checkout blocked",
             PartC.OneConflictSummary,
             BlockedRepo,
-            "git switch --no-guess feature/clash",
+            "git switch --no-guess --no-overwrite-ignore feature/clash",
             ["Copy output", "Stash changes and check out", "Close"],
             PartC.T2,
             PartC.T2Key));
@@ -155,9 +162,9 @@ public sealed partial class Phase3ChecksC
             app,
             calls,
             "git stash push --message \"VisualCommit: before checking out feature/clash\"",
-            "git switch --no-guess feature/clash",
+            "git switch --no-guess --no-overwrite-ignore feature/clash",
             "git stash pop --index stash@{0}");
-        Assert.True(AssertCalled(app, calls, "git switch --no-guess feature/clash").Succeeded);
+        Assert.True(AssertCalled(app, calls, "git switch --no-guess --no-overwrite-ignore feature/clash").Succeeded);
         var conflictPop = AssertCalled(app, calls, "git stash pop --index stash@{0}");
         Assert.Equal(1, conflictPop.ExitCode);
         Assert.Contains("CONFLICT (content): Merge conflict in notes.txt", conflictPop.StandardOutput, StringComparison.Ordinal);

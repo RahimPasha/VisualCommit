@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using VisualCommit.Core;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Session;
 
@@ -64,13 +65,15 @@ public sealed class JsonSessionStore : ISessionStore
             var json = File.ReadAllText(_filePath);
             var state = JsonSerializer.Deserialize(json, SessionJsonContext.Default.SessionState) ?? new SessionState();
 
-            // Lists that a hand-edited file left out or set to null are read as empty, and a tab
-            // with a blank folder as an empty tab.
+            // Lists that a hand-edited file left out or set to null are read as empty. A blank
+            // folder or workspace id is none, so a tab with neither is an empty tab, and one with
+            // an id alone a workspace's dashboard (docs/phase-6-design.md 1.11); the restore
+            // ignores a folder beside an id.
             return state with
             {
                 Tabs = state.Tabs?
                     .Where(tab => tab is not null)
-                    .Select(tab => string.IsNullOrWhiteSpace(tab.RepositoryPath) ? new TabState(null) : tab)
+                    .Select(tab => tab with { RepositoryPath = NoneIfBlank(tab.RepositoryPath), WorkspaceId = NoneIfBlank(tab.WorkspaceId) })
                     .ToList() ?? [],
                 Recent = state.Recent?.Where(recent => recent is not null && !string.IsNullOrWhiteSpace(recent.Path)).ToList() ?? [],
 
@@ -97,16 +100,16 @@ public sealed class JsonSessionStore : ISessionStore
         }
     }
 
+    private static string? NoneIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value;
+
     private void Save(SessionState state)
     {
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(_filePath)!);
 
-            // Write beside the file and swap it in, so a crash mid-write cannot leave half a file.
-            var temporary = _filePath + ".tmp";
-            File.WriteAllText(temporary, JsonSerializer.Serialize(state, SessionJsonContext.Default.SessionState));
-            File.Move(temporary, _filePath, overwrite: true);
+            // Written beside the file, flushed, and swapped in, so a crash mid-write cannot leave half a file.
+            DurableFile.Replace(_filePath, JsonSerializer.Serialize(state, SessionJsonContext.Default.SessionState));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {

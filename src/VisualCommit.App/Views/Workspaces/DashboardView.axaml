@@ -1,0 +1,426 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:kr="using:VisualCommit.App.Views"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:ws="using:VisualCommit.App.Views.Workspaces"
+             xmlns:vm="using:VisualCommit.App.ViewModels.Workspaces"
+             xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
+             x:Class="VisualCommit.App.Views.Workspaces.DashboardView"
+             x:DataType="vm:DashboardViewModel"
+             AutomationProperties.AutomationId="Dashboard"
+             AutomationProperties.Name="{Binding Name}">
+
+  <!-- A workspace's dashboard (docs/phase-6-design.md 2.4 to 2.7): it spans the main area's three
+       columns. A header of 36 (the workspace, the run's part, the buttons); the failed save's
+       notice; then the column headings (28) over the list of rows (26 each), whose columns
+       DashboardColumns lays out for both; or, for a workspace without repositories, the empty
+       state (WD2). Colours are tokens only; the list's style is a copy of phase 5's pageList, so
+       that the reflog and backups pages stay as they are. -->
+  <UserControl.Styles>
+    <Style Selector="ListBox.dashboardList">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="ListBox.dashboardList ListBoxItem">
+      <Setter Property="Height" Value="26" />
+      <Setter Property="MinHeight" Value="26" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding Name}" x:DataType="vm:DashboardRowViewModel" />
+      <Setter Property="AutomationProperties.AutomationId" Value="DashboardRow" />
+    </Style>
+    <Style Selector="ListBox.dashboardList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcRowHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox.dashboardList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox.dashboardList ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+
+    <!-- A cell's text: cut with "…", in its tone (2.6). -->
+    <Style Selector=":is(TextBlock).cell">
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector=":is(TextBlock).cell.secondary">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+    <Style Selector=":is(TextBlock).cell.warning">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector=":is(TextBlock).cell.danger">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+    <Style Selector="ws|DashboardCell">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="c|Icon.aheadBehind">
+      <Setter Property="Width" Value="10" />
+      <Setter Property="Height" Value="10" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <Style Selector="TextBlock.count">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+    <!-- The row's Cancel and Details… (2.6): 11.5, 22 high, 6 after the text. -->
+    <Style Selector="Button.rowButton">
+      <Setter Property="Height" Value="22" />
+      <Setter Property="Margin" Value="6,0,0,0" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+      <Setter Property="FontSize" Value="11.5" />
+    </Style>
+    <Style Selector="TextBlock.headerWarning">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock.runText">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+    <Style Selector="TextBlock.runText.warning">
+      <Setter Property="Foreground" Value="{DynamicResource VcWarningBrush}" />
+    </Style>
+    <Style Selector="TextBlock.runText.danger">
+      <Setter Property="Foreground" Value="{DynamicResource VcDangerBrush}" />
+    </Style>
+  </UserControl.Styles>
+
+  <DockPanel Background="{DynamicResource VcWindowBackgroundBrush}">
+
+    <!-- The header (2.5): 36 high, the chrome's background and a 1-px line at its bottom, as the
+         reflog page's. -->
+    <Border Name="DashboardHeader"
+            DockPanel.Dock="Top"
+            Height="36"
+            Background="{DynamicResource VcChromeBackgroundBrush}"
+            BorderBrush="{DynamicResource VcBorderBrush}"
+            BorderThickness="0,0,0,1"
+            AutomationProperties.AutomationId="DashboardHeader">
+      <ws:DashboardHeaderPanel Name="DashboardHeaderLine" Margin="8,0" RunText="{Binding #DashboardBulkText}">
+        <c:Icon ws:DashboardHeaderPanel.Part="Icon"
+                Data="{StaticResource IconWorkspace}"
+                Width="14" Height="14"
+                VerticalAlignment="Center"
+                Foreground="{DynamicResource VcTextSecondaryBrush}" />
+        <c:TrimmedTextBlock Name="DashboardTitle"
+                            ws:DashboardHeaderPanel.Part="Title"
+                            Text="{Binding Name}"
+                            FontSize="13"
+                            FontWeight="SemiBold"
+                            TextTrimming="CharacterEllipsis"
+                            VerticalAlignment="Center"
+                            AutomationProperties.AutomationId="DashboardTitle" />
+        <TextBlock Name="DashboardCount"
+                   ws:DashboardHeaderPanel.Part="Count"
+                   Classes="secondary"
+                   Text="{Binding CountText}"
+                   VerticalAlignment="Center"
+                   AutomationProperties.AutomationId="DashboardCount" />
+
+        <!-- The run (2.5, 4.9): its text in its tone, the bar while it runs, Cancel all until clicked. -->
+        <DockPanel ws:DashboardHeaderPanel.Part="Run" VerticalAlignment="Center">
+          <Button Name="DashboardCancelAll"
+                  DockPanel.Dock="Right"
+                  Theme="{StaticResource VcFlatButton}"
+                  Height="24"
+                  IsVisible="{Binding Bulk.CanCancel}"
+                  Command="{Binding Bulk.CancelCommand}"
+                  ToolTip.Tip="{Binding Bulk.CancelToolTip}"
+                  AutomationProperties.AutomationId="DashboardCancelAll"
+                  AutomationProperties.Name="Cancel all">
+            <TextBlock Text="Cancel all" VerticalAlignment="Center" />
+          </Button>
+          <ProgressBar Name="DashboardBulkProgress"
+                       DockPanel.Dock="Right"
+                       IsVisible="{Binding Bulk.IsRunning}"
+                       Value="{Binding Bulk.Percent, FallbackValue=0, TargetNullValue=0}"
+                       Minimum="0" Maximum="100"
+                       Width="80" Height="4" MinWidth="0" MinHeight="4"
+                       Margin="8,0"
+                       VerticalAlignment="Center"
+                       CornerRadius="2"
+                       Foreground="{DynamicResource VcAccentBrush}"
+                       Background="{DynamicResource VcBorderBrush}"
+                       AutomationProperties.AutomationId="DashboardBulkProgress"
+                       AutomationProperties.Name="Progress" />
+          <c:TrimmedTextBlock Name="DashboardBulkText"
+                              Classes="runText"
+                              Classes.warning="{Binding Bulk.RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Warning}}"
+                              Classes.danger="{Binding Bulk.RunTone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static ops:OperationStatusTone.Danger}}"
+                              Text="{Binding Bulk.RunText}"
+                              IsVisible="{Binding ShowsBulkText}"
+                              TextTrimming="CharacterEllipsis"
+                              HorizontalAlignment="Right"
+                              VerticalAlignment="Center"
+                              AutomationProperties.AutomationId="DashboardBulkText" />
+        </DockPanel>
+
+        <!-- The buttons, 6 apart, DashboardMore at the right edge. -->
+        <StackPanel ws:DashboardHeaderPanel.Part="Buttons" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+          <Button Name="DashboardAddRepository"
+                  Theme="{StaticResource VcActionButton}"
+                  Padding="10,3"
+                  Command="{Binding AddRepositoryCommand}"
+                  ToolTip.Tip="{Binding AddRepositoryToolTip}"
+                  ToolTip.ShowOnDisabled="True"
+                  AutomationProperties.HelpText="{Binding AddRepositoryToolTip}"
+                  AutomationProperties.AutomationId="DashboardAddRepository"
+                  AutomationProperties.Name="Add repository">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <c:Icon Data="{StaticResource IconPlus}" Width="13" Height="13" />
+              <TextBlock Text="{x:Static vm:DashboardTexts.AddRepository}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Name="DashboardFetchAll"
+                  Theme="{StaticResource VcActionButton}"
+                  Padding="10,3"
+                  Command="{Binding Toolbar.FetchCommand}"
+                  ToolTip.Tip="{Binding Toolbar.FetchToolTip}"
+                  ToolTip.ShowOnDisabled="True"
+                  AutomationProperties.HelpText="{Binding Toolbar.FetchToolTip}"
+                  AutomationProperties.AcceleratorKey="{Binding Keys.Fetch}"
+                  AutomationProperties.AutomationId="DashboardFetchAll"
+                  AutomationProperties.Name="Fetch all">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <c:Icon Data="{StaticResource IconFetch}" Width="13" Height="13" />
+              <TextBlock Text="{x:Static vm:DashboardTexts.FetchAll}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Name="DashboardPullAll"
+                  Theme="{StaticResource VcActionButton}"
+                  Padding="10,3"
+                  Command="{Binding Toolbar.PullCommand}"
+                  ToolTip.Tip="{Binding Toolbar.PullToolTip}"
+                  ToolTip.ShowOnDisabled="True"
+                  AutomationProperties.HelpText="{Binding Toolbar.PullToolTip}"
+                  AutomationProperties.AcceleratorKey="{Binding Keys.Pull}"
+                  AutomationProperties.AutomationId="DashboardPullAll"
+                  AutomationProperties.Name="Pull all">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <c:Icon Data="{StaticResource IconPull}" Width="13" Height="13" />
+              <TextBlock Text="{x:Static vm:DashboardTexts.PullAll}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Name="DashboardRefresh"
+                  Theme="{StaticResource VcActionButton}"
+                  Padding="10,3"
+                  Command="{Binding RefreshCommand}"
+                  ToolTip.Tip="{Binding RefreshToolTip}"
+                  ToolTip.ShowOnDisabled="True"
+                  AutomationProperties.HelpText="{Binding RefreshToolTip}"
+                  AutomationProperties.AcceleratorKey="{Binding Keys.Refresh}"
+                  AutomationProperties.AutomationId="DashboardRefresh"
+                  AutomationProperties.Name="Refresh">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <c:Icon Data="{StaticResource IconRefresh}" Width="13" Height="13" />
+              <TextBlock Text="{x:Static vm:DashboardTexts.Refresh}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Name="DashboardMore"
+                  Theme="{StaticResource VcIconButton}"
+                  Width="28" Height="28" Padding="7"
+                  ToolTip.Tip="{x:Static vm:DashboardTexts.More}"
+                  ToolTip.ShowOnDisabled="True"
+                  AutomationProperties.AutomationId="DashboardMore"
+                  AutomationProperties.Name="{x:Static vm:DashboardTexts.More}">
+            <c:Icon Data="{StaticResource IconMore}" Width="14" Height="14" />
+          </Button>
+        </StackPanel>
+      </ws:DashboardHeaderPanel>
+    </Border>
+
+    <!-- A failed save (1.3, 2.5): below the header while the store's last save failed. -->
+    <c:TrimmedTextBlock Name="DashboardNotice"
+                        DockPanel.Dock="Top"
+                        Classes="headerWarning"
+                        Text="{Binding Notice}"
+                        IsVisible="{Binding Notice, Converter={x:Static ObjectConverters.IsNotNull}}"
+                        TextTrimming="CharacterEllipsis"
+                        Margin="8,4"
+                        AutomationProperties.AutomationId="DashboardNotice" />
+
+    <Panel>
+      <!-- The rows (2.6): the headings over the list, both laid out by DashboardColumns. -->
+      <Grid RowDefinitions="28,*" IsVisible="{Binding HasRows}">
+        <Border Name="DashboardColumnHeaders"
+                Grid.Row="0"
+                Background="{DynamicResource VcChromeBackgroundBrush}"
+                BorderBrush="{DynamicResource VcBorderBrush}"
+                BorderThickness="0,0,0,1"
+                AutomationProperties.AutomationId="DashboardColumnHeaders">
+          <ws:DashboardRowPanel>
+            <TextBlock ws:DashboardRowPanel.Column="Repository" Classes="heading" Text="{x:Static vm:DashboardTexts.RepositoryHeading}" />
+            <TextBlock ws:DashboardRowPanel.Column="Folder" Classes="heading" Text="{x:Static vm:DashboardTexts.FolderHeading}" />
+            <TextBlock ws:DashboardRowPanel.Column="Branch" Classes="heading" Text="{x:Static vm:DashboardTexts.BranchHeading}" />
+            <TextBlock ws:DashboardRowPanel.Column="AheadBehind" Classes="heading" Text="{x:Static vm:DashboardTexts.AheadBehindHeading}" />
+            <TextBlock ws:DashboardRowPanel.Column="Changes" Classes="heading" Text="{x:Static vm:DashboardTexts.ChangesHeading}" />
+            <TextBlock ws:DashboardRowPanel.Column="State" Classes="heading" Text="{x:Static vm:DashboardTexts.StateHeading}" />
+            <TextBlock ws:DashboardRowPanel.Column="Operation" Classes="heading" Text="{x:Static vm:DashboardTexts.OperationHeading}" />
+          </ws:DashboardRowPanel>
+        </Border>
+
+        <ListBox Name="DashboardList"
+                 Grid.Row="1"
+                 kr:KeyRegion.IsMain="True"
+                 Focusable="True"
+                 Classes="dashboardList"
+                 ItemsSource="{Binding Rows}"
+                 SelectedItem="{Binding SelectedRow}"
+                 SelectionMode="Single"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 AutomationProperties.AutomationId="DashboardList"
+                 AutomationProperties.Name="Repositories">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:DashboardRowViewModel">
+              <ws:DashboardRowPanel Background="Transparent">
+                <ws:DashboardCell ws:DashboardRowPanel.Column="Repository"
+                                  ToolTip.Tip="{Binding NameToolTip}"
+                                  AutomationProperties.AutomationId="DashboardRowName"
+                                  AutomationProperties.Name="{Binding Name}">
+                  <c:TrimmedTextBlock Classes="cell" Text="{Binding Name}" IsHitTestVisible="False" />
+                </ws:DashboardCell>
+                <c:TrimmedTextBlock ws:DashboardRowPanel.Column="Folder"
+                                    Classes="cell secondary"
+                                    HorizontalAlignment="Left"
+                                    Text="{Binding FolderText}"
+                                    AutomationProperties.AutomationId="DashboardRowFolder" />
+                <c:TrimmedTextBlock ws:DashboardRowPanel.Column="Branch"
+                                    Classes="cell"
+                                    HorizontalAlignment="Left"
+                                    Text="{Binding BranchText}"
+                                    AutomationProperties.AutomationId="DashboardRowBranch" />
+                <ws:DashboardCell ws:DashboardRowPanel.Column="AheadBehind"
+                                  ToolTip.Tip="{Binding AheadBehind.ToolTip}"
+                                  AutomationProperties.AutomationId="DashboardRowAheadBehind"
+                                  AutomationProperties.Name="{Binding AheadBehind.AutomationName}">
+                  <Panel IsHitTestVisible="False">
+                    <StackPanel Orientation="Horizontal" Spacing="6" IsVisible="{Binding AheadBehind.ShowsArrows}">
+                      <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding AheadBehind.ShowsAhead}">
+                        <c:Icon Classes="aheadBehind" Data="{StaticResource IconArrowUp}" />
+                        <TextBlock Name="DashboardRowAhead" Classes="cell secondary count" Text="{Binding AheadBehind.AheadText}" />
+                      </StackPanel>
+                      <StackPanel Orientation="Horizontal" Spacing="2" IsVisible="{Binding AheadBehind.ShowsBehind}">
+                        <c:Icon Classes="aheadBehind" Data="{StaticResource IconArrowDown}" />
+                        <TextBlock Name="DashboardRowBehind" Classes="cell secondary count" Text="{Binding AheadBehind.BehindText}" />
+                      </StackPanel>
+                    </StackPanel>
+                    <c:TrimmedTextBlock Name="DashboardRowAheadBehindText"
+                                        Classes="cell"
+                                        Classes.secondary="{Binding AheadBehind.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:DashboardTone.Secondary}}"
+                                        Classes.warning="{Binding AheadBehind.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:DashboardTone.Warning}}"
+                                        Text="{Binding AheadBehind.Text}"
+                                        IsVisible="{Binding !AheadBehind.ShowsArrows}" />
+                  </Panel>
+                </ws:DashboardCell>
+                <ws:DashboardCell ws:DashboardRowPanel.Column="Changes"
+                                  ToolTip.Tip="{Binding Changes.ToolTip}"
+                                  AutomationProperties.AutomationId="DashboardRowChanges"
+                                  AutomationProperties.Name="{Binding Changes.Text}">
+                  <c:TrimmedTextBlock Classes="cell"
+                                      Classes.secondary="{Binding Changes.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:DashboardTone.Secondary}}"
+                                      Classes.danger="{Binding Changes.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:DashboardTone.Danger}}"
+                                      Text="{Binding Changes.Text}"
+                                      IsHitTestVisible="False" />
+                </ws:DashboardCell>
+                <ws:DashboardCell ws:DashboardRowPanel.Column="State"
+                                  ToolTip.Tip="{Binding State.ToolTip}"
+                                  AutomationProperties.AutomationId="DashboardRowState"
+                                  AutomationProperties.Name="{Binding State.Text}">
+                  <c:TrimmedTextBlock Classes="cell"
+                                      Classes.secondary="{Binding State.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:DashboardTone.Secondary}}"
+                                      Classes.warning="{Binding State.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:DashboardTone.Warning}}"
+                                      Text="{Binding State.Text}"
+                                      IsHitTestVisible="False" />
+                </ws:DashboardCell>
+                <Grid ws:DashboardRowPanel.Column="Operation" ColumnDefinitions="*,Auto" HorizontalAlignment="Left">
+                  <ws:DashboardCell Grid.Column="0"
+                                    ToolTip.Tip="{Binding Operation.ToolTip}"
+                                    AutomationProperties.AutomationId="DashboardRowOperation"
+                                    AutomationProperties.Name="{Binding Operation.Text}">
+                    <c:TrimmedTextBlock Classes="cell"
+                                        Classes.secondary="{Binding Operation.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:DashboardTone.Secondary}}"
+                                        Classes.warning="{Binding Operation.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:DashboardTone.Warning}}"
+                                        Classes.danger="{Binding Operation.Tone, Converter={x:Static ObjectConverters.Equal}, ConverterParameter={x:Static vm:DashboardTone.Danger}}"
+                                        Text="{Binding Operation.Text}"
+                                        IsHitTestVisible="False" />
+                  </ws:DashboardCell>
+                  <Panel Grid.Column="1">
+                    <Button Name="DashboardRowCancel"
+                            Classes="rowButton"
+                            Theme="{StaticResource VcFlatButton}"
+                            IsVisible="{Binding ShowsCancel}"
+                            Command="{Binding CancelCommand}"
+                            ToolTip.Tip="{Binding CancelToolTip}"
+                            AutomationProperties.AutomationId="DashboardRowCancel"
+                            AutomationProperties.Name="Cancel">
+                      <TextBlock Text="Cancel" VerticalAlignment="Center" />
+                    </Button>
+                    <Button Name="DashboardRowDetails"
+                            Classes="rowButton"
+                            Theme="{StaticResource VcFlatButton}"
+                            IsVisible="{Binding ShowsDetails}"
+                            Command="{Binding ShowDetailsCommand}"
+                            AutomationProperties.AutomationId="DashboardRowDetails"
+                            AutomationProperties.Name="Details">
+                      <TextBlock Text="Details…" VerticalAlignment="Center" />
+                    </Button>
+                  </Panel>
+                </Grid>
+              </ws:DashboardRowPanel>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+
+      <!-- An empty workspace (2.5, WD2): centred below the header, as the welcome page's stack. -->
+      <StackPanel Name="DashboardEmpty"
+                  IsVisible="{Binding !HasRows}"
+                  MaxWidth="440"
+                  Spacing="8"
+                  HorizontalAlignment="Center"
+                  VerticalAlignment="Center"
+                  AutomationProperties.AutomationId="DashboardEmpty">
+        <TextBlock Classes="secondary"
+                   Text="{Binding EmptyText}"
+                   TextWrapping="Wrap"
+                   TextAlignment="Center"
+                   HorizontalAlignment="Center" />
+        <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+          <Button Name="DashboardEmptyAddRepository"
+                  Theme="{StaticResource VcActionButton}"
+                  Command="{Binding AddRepositoryCommand}"
+                  ToolTip.Tip="{Binding AddRepositoryToolTip}"
+                  ToolTip.ShowOnDisabled="True"
+                  AutomationProperties.AutomationId="DashboardEmptyAddRepository"
+                  AutomationProperties.Name="Add repository">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+              <c:Icon Data="{StaticResource IconPlus}" Width="13" Height="13" />
+              <TextBlock Text="{x:Static vm:DashboardTexts.AddRepository}" VerticalAlignment="Center" />
+            </StackPanel>
+          </Button>
+          <Button Name="DashboardEmptyAddOpenTabs"
+                  Theme="{StaticResource VcActionButton}"
+                  Command="{Binding AddOpenTabsCommand}"
+                  ToolTip.Tip="{Binding AddOpenTabsToolTip}"
+                  ToolTip.ShowOnDisabled="True"
+                  AutomationProperties.AutomationId="DashboardEmptyAddOpenTabs"
+                  AutomationProperties.Name="{x:Static vm:DashboardTexts.AddOpenTabs}">
+            <TextBlock Text="{x:Static vm:DashboardTexts.AddOpenTabs}" VerticalAlignment="Center" />
+          </Button>
+        </StackPanel>
+      </StackPanel>
+    </Panel>
+  </DockPanel>
+</UserControl>

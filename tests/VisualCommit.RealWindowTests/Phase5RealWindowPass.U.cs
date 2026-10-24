@@ -32,6 +32,12 @@ public partial class Phase5RealWindowPass
         var undoText = PartU.Undo.Title(PartU.CommitText);
         var redoText = PartU.Redo.Title(PartU.CommitText);
 
+        // The buttons' tooltips and help texts name their keys since phase 6 (docs/phase-6-design.md
+        // 6.8; phase 6's report, "Changes to expected results", U16): Undo's tooltip, u16a's, grows
+        // by " (Ctrl+Z)". The operations keep their titles.
+        var undoTip = PartU.Undo.ToolTip(PartU.CommitText);
+        var redoTip = PartU.Redo.ToolTip(PartU.CommitText);
+
         // Step 1: H0 with its working-changes row; nothing selected; T0.
         WaitForNothingSelected(app);
         AssertUndoRedo(app, false, PartA.NothingToUndo, false, PartA.NothingToRedo);
@@ -50,7 +56,7 @@ public partial class Phase5RealWindowPass
         commit.Wait(OperationOutcome.Succeeded);
         WaitForDetails(app, PartU.CommitSummary, PartU.U16CommitSha);
         WaitForStatus(app, PartU.Ready);
-        AssertUndoRedo(app, true, undoText, false, PartA.NothingToRedo);
+        AssertUndoRedo(app, true, undoTip, false, PartA.NothingToRedo);
         Assert.Equal(PartU.U16CommitSha, await RevParseAsync(repo, "refs/heads/main"));
         await AssertCommitAsync(repo, PartU.U16CommitSha, AppCommitTime, AppCommitTime, PartU.ReadWholeLinesSha);
         Assert.Equal(PartU.CommitMessage, (await GitTextAsync(repo, "log", "-1", "--format=%B", PartU.U16CommitSha)).TrimEnd('\n'));
@@ -59,8 +65,8 @@ public partial class Phase5RealWindowPass
         // Step 3: the pointer rests on Undo: its tooltip in the window's UI Automation tree, under the button.
         var undo = app.Find("UndoButton");
         var button = app.BoundsOf(undo);
-        var tip = app.RestPointerOn(undo, undoText);
-        AssertToolTipInside(app, tip, undoText);
+        var tip = app.RestPointerOn(undo, undoTip);
+        AssertToolTipInside(app, tip, undoTip);
         var place = app.ToolTipPlace(tip).Bounds;
         Assert.True(place.Top >= button.Bottom - 2, $"The tooltip at {place} is not under the Undo button at {button}.");
         Compare(app, "u16a-undo-tooltip", keepPointer: true);
@@ -73,7 +79,7 @@ public partial class Phase5RealWindowPass
         WaitForStatus(app, PartU.Undo.DoneText(PartU.CommitText));
         AssertNoDialog(app);
         WaitForNothingSelected(app);
-        AssertUndoRedo(app, false, PartA.NothingToUndo, true, redoText);
+        AssertUndoRedo(app, false, PartA.NothingToUndo, true, redoTip);
         Assert.Equal(PartU.ReadWholeLinesSha, await RevParseAsync(repo, "refs/heads/main"));
         Assert.Equal(["## main...origin/main", "M  src/Reader.cs"], await GitLinesAsync(repo, "status", "--porcelain=v1", "-b"));
         Assert.Equal([PartU.Undo.Message(PartU.CommitText)], await ReflogAsync(repo, "refs/heads/main", 1));
@@ -101,7 +107,7 @@ public partial class Phase5RealWindowPass
         WaitForStatus(app, PartU.Redo.DoneText(PartU.CommitText));
         AssertNoDialog(app);
         WaitForDetails(app, "Read whole lines", PartU.ReadWholeLinesSha);
-        AssertUndoRedo(app, true, undoText, false, PartA.NothingToRedo);
+        AssertUndoRedo(app, true, undoTip, false, PartA.NothingToRedo);
         Assert.Equal(PartU.U16CommitSha, await RevParseAsync(repo, "refs/heads/main"));
         Assert.Equal(["## main...origin/main [ahead 1]"], await GitLinesAsync(repo, "status", "-sb"));
         Assert.Equal([PartU.Redo.Message(PartU.CommitText)], await ReflogAsync(repo, "refs/heads/main", 1));

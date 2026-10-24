@@ -205,6 +205,9 @@ public interface IRepositoryActions
     /// <summary>"Open file": the working tree's version, in the system's application for it (2.32).</summary>
     Task OpenFileAsync(string path);
 
+    /// <summary>"Open in editor": the working tree's file in the chosen editor, never asking first (docs/phase-6-design.md 12.1).</summary>
+    Task OpenInEditorAsync(string path);
+
     /// <summary>"Show in folder": the file selected in the file manager, or the working tree's folder for null (2.32).</summary>
     Task ShowInFolderAsync(string? path);
 

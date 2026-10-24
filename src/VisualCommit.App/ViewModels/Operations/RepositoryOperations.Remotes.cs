@@ -3,7 +3,11 @@
 // fetches and pushes, and their texts in 2.33 (OperationTexts). Clone is not here (the welcome
 // page), nor auto-fetch (AutoFetchScheduler, WP9), whose title is 2.33's "Auto-fetch". Built by
 // WP7-remotes on the helpers of RepositoryOperations.Run.cs; its tests are in
-// tests/VisualCommit.App.Tests/RepositoryOperations{Fetch,Pull,Push,Remotes}Tests.cs.
+// tests/VisualCommit.App.Tests/RepositoryOperations{Fetch,Pull,Push,Remotes}Tests.cs. The toolbar's
+// Fetch all and Pull are in RepositoryOperations.FetchPull.cs (docs/phase-6-design.md 18). Phase 6
+// (WP-RA, docs/phase-6-design.md 10.4): a remote branch is split into its remote and the branch
+// there by the remotes' fetch lines, and a push that would stop every fetch of its remote is
+// refused before git.
 //
 // Every operation here that talks to a remote is a Network operation with PromptMode.Ask (3.3):
 // git's and ssh's prompts reach the app's dialogs, the status bar offers Cancel, and a cancel
@@ -32,21 +36,6 @@ public sealed partial class RepositoryOperations
 
     // 2.16: fetch.
 
-    public Task FetchAllAsync()
-    {
-        var text = OperationTexts.FetchAll;
-        return GuardAsync(text, () => RunAsync(
-            text,
-            OperationKind.Network,
-            RefreshScope.Refs,
-            async context =>
-            {
-                await Git.FetchAsync(null, NetworkOptions.From(context), noAutoMaintenance: false, context.CancellationToken);
-                return OperationReport.Done(OperationTexts.FetchedAll);
-            },
-            NetworkRun(UndoScope.None, "fetch:*", FetchAllFailureDisplay)));
-    }
-
     public Task FetchAsync(string remote)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(remote);
@@ -61,202 +50,6 @@ public sealed partial class RepositoryOperations
                 return OperationReport.Done(OperationTexts.Fetched(remote));
             },
             NetworkRun(UndoScope.None, "fetch:" + remote)));
-    }
-
-    /// <summary>
-    /// The remotes a fetch of all remotes could not fetch, in order, from the lines
-    /// <c>error: Could not fetch &lt;r&gt;</c> that <see cref="IGitRepository.FetchAsync"/> adds
-    /// to git's output for each (D109).
-    /// </summary>
-    public static IReadOnlyList<string> FailedRemotes(string gitOutput)
-    {
-        ArgumentNullException.ThrowIfNull(gitOutput);
-        return [.. gitOutput.Split('\n')
-            .Select(line => line.TrimEnd('\r'))
-            .Where(line => line.StartsWith(OperationTexts.CouldNotFetchPrefix, StringComparison.Ordinal))
-            .Select(line => line[OperationTexts.CouldNotFetchPrefix.Length..].Trim())
-            .Where(remote => remote.Length > 0)
-            .Distinct(StringComparer.Ordinal)];
-    }
-
-    /// <summary>"Fetch failed" naming every remote that failed (2.16): "Git could not fetch from origin and mirror."</summary>
-    private static FailureDisplay? FetchAllFailureDisplay(GitFailure failure)
-    {
-        var failed = FailedRemotes(failure.GitOutput);
-        return failed.Count == 0 ? null : new FailureDisplay(OperationTexts.FetchAll.ErrorTitle, OperationTexts.FetchFailed(failed));
-    }
-
-    // 2.18: pull.
-
-    public Task PullAsync()
-    {
-        if (CurrentBranch is not { UpstreamRef: not null } branch)
-        {
-            Log.Info($"{Repository.Name}: Pull: not started, HEAD is not on a branch with an upstream.");
-            return Task.CompletedTask;
-        }
-
-        var upstream = UpstreamText(branch) ?? ShortName(branch.UpstreamRef);
-        var text = OperationTexts.Pull(upstream, branch.Name);
-        return PullWithAsync(branch, upstream, text, PullIntegration.AsConfigured, "pull:" + branch.FullName);
-    }
-
-    /// <summary>
-    /// "Pull from {up} (rebase)" (docs/phase-4-design.md section 6, D147): phase 3's pull with its
-    /// integration forced to a rebase, as <c>git pull --rebase</c>; git's pull settings are not
-    /// read. Its dedupe key <c>pull:&lt;ref&gt;:rebase</c> never merges it with a plain Pull.
-    /// </summary>
-    public Task PullRebaseAsync()
-    {
-        if (CurrentBranch is not { UpstreamRef: not null } branch)
-        {
-            Log.Info($"{Repository.Name}: Pull (rebase): not started, HEAD is not on a branch with an upstream.");
-            return Task.CompletedTask;
-        }
-
-        var upstream = UpstreamText(branch) ?? ShortName(branch.UpstreamRef);
-        var text = OperationTexts.PullRebase(upstream, branch.Name);
-        return PullWithAsync(branch, upstream, text, PullIntegration.Rebase, $"pull:{branch.FullName}:rebase");
-    }
-
-    /// <summary>A pull as one operation (2.18, section 6): a network one, or a local one for a local upstream, which skips the fetch.</summary>
-    private Task PullWithAsync(GitRef branch, string upstream, OperationText text, PullIntegration integration, string dedupeKey) =>
-        GuardAsync(text, async () =>
-        {
-            var notice = new StopNotice();
-            await RunAsync(
-                text,
-                branch.HasLocalUpstream ? OperationKind.Local : OperationKind.Network,
-                RefreshScope.Refs,
-                context => PullStepsAsync(context, branch, upstream, text, integration, notice),
-                NetworkRun(UndoScope.Pull(branch.Name), dedupeKey, failure => PullRefusalDisplay(failure, text)));
-            await FinishAsync(notice, new SelectionAfter());
-        });
-
-    /// <summary>
-    /// C12's words for a pull that git refused because changes are in the way (docs/phase-5-design.md
-    /// 9.3), under "Pull failed". Its merge's or fast-forward's call (<c>git merge …</c>) is told as a
-    /// merge's, whatever block git printed ("1 conflict prevents the merge. …" for a changed file, an
-    /// untracked one or an untracked folder; "Your staged changes prevent the merge. …"); its
-    /// rebase's in phase 4's words ("Git rebases only a clean working tree: …"), a refused checkout
-    /// inside the rebase never as a merge's. Null for any other failure.
-    /// </summary>
-    private static FailureDisplay? PullRefusalDisplay(GitFailure failure, OperationText text) =>
-        failure.CommandText.StartsWith("git merge ", StringComparison.Ordinal) ? BlockedByChangesDisplay(failure, text, "merge")
-        : RebaseRefusalSummary(failure) is { } rebase ? new FailureDisplay(text.ErrorTitle, rebase)
-        : null;
-
-    /// <summary>
-    /// Pull's two steps (2.18, D84): the fetch of the upstream's remote, which can be cancelled
-    /// (skipped for a local upstream); the end of the cancel window, which stops here when the
-    /// user had cancelled, so nothing is integrated after Cancel; then the integration, never
-    /// cancelled: git pull's choice, or a rebase chosen for this pull (section 6). Every pull that
-    /// rebases saves 1.2's backup first, through the git layer's callback (D147), and a rebase
-    /// that stops is told by the rebase folder, with or without conflicted files. The message
-    /// counts what HEAD gained, read after the pull; commits git's fork point left out are
-    /// reported (warning).
-    /// </summary>
-    private async Task<OperationReport> PullStepsAsync(OperationContext context, GitRef branch, string upstream, OperationText text, PullIntegration integration, StopNotice notice)
-    {
-        // The pull may have waited in the queue: it pulls into the branch, from the upstream, that
-        // the user saw when they chose it, or into nothing (design 1.3).
-        if (await RefuseIfPullTargetMovedAsync(text, branch, upstream) is { } refusal)
-        {
-            return refusal;
-        }
-
-        var options = NetworkOptions.From(context);
-        if (!branch.HasLocalUpstream)
-        {
-            var remote = branch.UpstreamRemote ?? throw new InvalidOperationException($"{branch.Name}'s upstream names no remote.");
-            await Git.FetchAsync(remote, options, noAutoMaintenance: false, context.CancellationToken);
-        }
-
-        context.EndCancelWindow();
-
-        // Once more after the fetch, which can take long: a terminal may have moved HEAD meanwhile.
-        if (await RefuseIfHeadMovedAsync(text, new HeadState(branch.Name, branch.TargetSha), OperationTexts.NothingPulled, fresh: true) is { } moved)
-        {
-            return moved;
-        }
-
-        PullResult pulled;
-        try
-        {
-            pulled = await Git.IntegratePullAsync(
-                branch,
-                integration,
-                oldTip => SaveRebaseBackupAsync(branch.Name, oldTip),
-                options,
-                CancellationToken.None);
-        }
-        catch (GitException exception) when (exception.StandardError.TrimEnd().EndsWith(OperationTexts.SettingNotUnderstoodEnd, StringComparison.Ordinal))
-        {
-            // "pull.rebase is set to preserve, which this app does not understand." is the summary.
-            return Failed(text, FailureOf(exception, exception.StandardError.Trim()));
-        }
-
-        switch (pulled.Outcome)
-        {
-            case PullOutcome.UpToDate:
-                return OperationReport.Done(OperationTexts.PullUpToDate(branch.Name));
-            case PullOutcome.FastForward:
-                return OperationReport.Done(OperationTexts.PulledFastForward(pulled.CommitCount, branch.Name));
-            case PullOutcome.Merged:
-                return OperationReport.Done(OperationTexts.PulledMerged(upstream, branch.Name));
-            case PullOutcome.Rebased:
-                // Git's fork point left out commits the upstream once had (0.1): a success said in
-                // the warning colour (auto-fetch counts it as a fetch). Changes rebase.autoStash put
-                // back with conflicts make it 1.4's warning (the review's findings 12 and 19).
-                var rebased = pulled.LeftOutByForkPoint > 0
-                    ? OperationTexts.PulledRebasedLeftOut(branch.Name, upstream, pulled.LeftOutByForkPoint)
-                    : OperationTexts.PulledRebased(branch.Name, upstream);
-                return pulled.AutostashConflicted ? OperationReport.Conflicts(OperationTexts.WithAutostashConflicted(rebased))
-                    : pulled.LeftOutByForkPoint > 0 ? OperationReport.Warning(rebased)
-                    : OperationReport.Done(rebased);
-            case PullOutcome.Conflicts:
-                var conflicts = await CountConflictedFilesAsync();
-                var stopped = conflicts > 0 || (await Git.ReadStatusAsync()).InProgress.Kind != InProgressKind.Rebase
-                    ? OperationReport.Conflicts(OperationTexts.PullConflicts(conflicts))
-                    : await RebaseStopReportAsync(context, 0, notice); // A rebase stopped with no conflicted file (section 6, 1.4).
-
-                // Git's fork point left out commits the upstream once had, also when the rebase
-                // stopped (10.2, D147; the review's finding 20); the stop's own warning tone.
-                return pulled.LeftOutByForkPoint > 0
-                    ? stopped with { Message = OperationTexts.WithLeftOutByForkPoint(stopped.Message, upstream, pulled.LeftOutByForkPoint) }
-                    : stopped;
-            case PullOutcome.UpstreamGone:
-                return OperationReport.Done(OperationTexts.PullUpstreamGone(
-                    ShortName(branch.UpstreamRemoteRef ?? branch.UpstreamRef!), branch.UpstreamRemote ?? LocalRemote));
-            default:
-                throw new InvalidOperationException($"Unknown pull outcome {pulled.Outcome}.");
-        }
-    }
-
-    /// <summary>
-    /// A refusal when HEAD is no longer on <paramref name="branch"/>, or the branch's upstream is
-    /// no longer the one the pull was chosen with, read now; null when both are as they were.
-    /// </summary>
-    private async Task<OperationReport?> RefuseIfPullTargetMovedAsync(OperationText text, GitRef branch, string upstream)
-    {
-        var refs = await Git.ReadRefsAsync();
-        string summary;
-        if (!string.Equals(refs.Head.BranchName, branch.Name, StringComparison.Ordinal))
-        {
-            summary = OperationTexts.HeadMoved(new HeadState(branch.Name, branch.TargetSha), refs.Head, OperationTexts.NothingPulled);
-        }
-        else if (refs.Refs.FirstOrDefault(gitRef => gitRef.FullName == branch.FullName) is var now
-            && !string.Equals(now?.UpstreamRef, branch.UpstreamRef, StringComparison.Ordinal))
-        {
-            summary = OperationTexts.UpstreamChanged(branch.Name, upstream, now is { UpstreamRef: { } upstreamRef } ? UpstreamText(now) ?? ShortName(upstreamRef) : null);
-        }
-        else
-        {
-            return null;
-        }
-
-        Log.Info($"{Repository.Name}: {text.Title}: refused, {summary}");
-        return Failed(text, StoppedFailure(summary));
     }
 
     // 2.19: push.
@@ -297,22 +90,29 @@ public sealed partial class RepositoryOperations
         return PushThroughDialogAsync(branch);
     }
 
+    /// <summary>
+    /// A drop's push of <paramref name="branchRef"/> onto the remote branch
+    /// <paramref name="remoteBranchRef"/> (4g): to the branch on its remote that fills it, as the
+    /// remote's fetch lines map it back (docs/phase-6-design.md 10.4 #8): <c>refs/heads/&lt;A&gt;:refs/heads/&lt;y&gt;</c>
+    /// on <c>&lt;r&gt;</c>, named <c>{T}</c> in its texts; onto a renamed branch titled
+    /// <c>Push {A} to {T}</c> (GD24). Not started for a ref that is no such branch (a menu built
+    /// before the lines changed).
+    /// </summary>
     public Task PushBranchToAsync(string branchRef, string remoteBranchRef, bool setUpstream)
     {
         ArgumentNullException.ThrowIfNull(branchRef);
         ArgumentNullException.ThrowIfNull(remoteBranchRef);
-        if (FindRef(branchRef) is not { Kind: RefKind.LocalBranch } branch || SplitRemoteBranch(remoteBranchRef) is not { } split)
+        if (FindRef(branchRef) is not { Kind: RefKind.LocalBranch } branch || SplitRemoteBranch(remoteBranchRef) is not { Remote: { } remote, Branch: { } name } split)
         {
-            Log.Info($"{Repository.Name}: Push: not started, {branchRef} or {remoteBranchRef} is not known.");
+            Log.Info($"{Repository.Name}: Push: not started, {branchRef} or {remoteBranchRef} is not known, or is no branch of one remote.");
             return Task.CompletedTask;
         }
 
-        var (remote, name) = split;
-        var target = $"{remote}/{name}";
+        var target = FindRef(remoteBranchRef)?.Name ?? ShortName(remoteBranchRef);
+        var renamed = !split.IsIdentity(remoteBranchRef);
+        var text = renamed ? OperationTexts.PushToRemoteBranch(branch.Name, target) : OperationTexts.Push(branch.Name, target);
         var toUpstream = string.Equals(branch.UpstreamRef, remoteBranchRef, StringComparison.Ordinal);
-        return GuardAsync(
-            OperationTexts.Push(branch.Name, target),
-            () => PushToAsync(branch, remote, HeadsPrefix + name, target, setUpstream, toUpstream, dedupe: !setUpstream));
+        return GuardAsync(text, () => PushToAsync(branch, remote, HeadsPrefix + name, target, setUpstream, toUpstream, dedupe: !setUpstream, text));
     }
 
     /// <summary>
@@ -341,18 +141,27 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// One push of a local branch (2.19): "Push rejected" offers "Pull" when the current branch was
-    /// pushed to its upstream (<paramref name="toUpstream"/>), otherwise "Fetch &lt;r&gt;".
+    /// pushed to its upstream (<paramref name="toUpstream"/>), otherwise "Fetch &lt;r&gt;". Refused
+    /// before git when it would stop every fetch of <paramref name="remote"/>
+    /// (<see cref="RefuseIfPushStopsFetch"/>). <paramref name="text"/> is its texts when not
+    /// <see cref="OperationTexts.Push"/>'s (the drop's push onto a renamed remote branch, GD24).
     /// </summary>
-    private Task<OperationResult> PushToAsync(GitRef branch, string remote, string remoteRef, string target, bool setUpstream, bool toUpstream, bool dedupe)
+    private Task<OperationResult> PushToAsync(GitRef branch, string remote, string remoteRef, string target, bool setUpstream, bool toUpstream, bool dedupe, OperationText? text = null)
     {
         var request = new PushRequest(remote, branch.Name, remoteRef) { SetUpstream = setUpstream };
         var current = toUpstream && string.Equals(Refs?.Head.BranchName, branch.Name, StringComparison.Ordinal);
+        var texts = text ?? OperationTexts.Push(branch.Name, target);
         return RunAsync(
-            OperationTexts.Push(branch.Name, target),
+            texts,
             OperationKind.Network,
             RefreshScope.Refs,
             async context =>
             {
+                if ((RefuseIfNotABranch(texts, remote, remoteRef, target) ?? await RefuseIfPushStopsFetchAsync(texts, branch.Name, remote, remoteRef, target)) is { } refused)
+                {
+                    return refused;
+                }
+
                 UndoCapture.Push(remote, await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken));
                 return OperationReport.Done(OperationTexts.Pushed(branch.Name, target, setUpstream));
             },
@@ -363,28 +172,77 @@ public sealed partial class RepositoryOperations
     }
 
     /// <summary>
-    /// <c>refs/remotes/&lt;r&gt;/&lt;x&gt;</c> as its remote and the branch's name there: from the
-    /// refs as read, else by the longest configured remote whose name starts it; null when no
-    /// remote does.
+    /// A push or force push to its upstream when that is no branch on its remote (R4, docs/phase-6-design.md
+    /// 10.5; <see cref="ToolbarViewModel.UpstreamNotABranchReason"/>, which disables both): refused
+    /// inside the operation before git, for a toolbar or menu that showed an older state. Every
+    /// other push names a branch (<c>refs/heads/&lt;y&gt;</c>). Null when <paramref name="remoteRef"/>
+    /// is one.
     /// </summary>
-    private (string Remote, string Name)? SplitRemoteBranch(string remoteBranchRef)
-    {
-        if (FindRef(remoteBranchRef) is { Kind: RefKind.RemoteBranch, RemoteName: { } known } gitRef && gitRef.Name.StartsWith(known + "/", StringComparison.Ordinal))
-        {
-            return (known, gitRef.Name[(known.Length + 1)..]);
-        }
+    private OperationReport? RefuseIfNotABranch(OperationText text, string remote, string remoteRef, string target) =>
+        remoteRef.StartsWith(HeadsPrefix, StringComparison.Ordinal)
+            ? null
+            : Refused(text, OperationTexts.PushToNotABranch(target, remoteRef, remote));
 
-        if (!remoteBranchRef.StartsWith(RemotesPrefix, StringComparison.Ordinal))
+    /// <summary>
+    /// 10.4's guard, inside a push's operation before git, with the fetch lines read there (one
+    /// <c>git config --null --get-regexp ^remote\.</c>, <see cref="IGitRepository.ReadFetchRefspecsAsync"/>):
+    /// a push of <paramref name="branch"/> to <paramref name="remoteRef"/> on <paramref name="remote"/>
+    /// is refused when a remote-tracking ref the remote's lines fetch that ref into is fetched from
+    /// more than one ref of the remote (R2) and none of them is a branch the remote has already
+    /// (one ref fills it, and the refs hold it): the push would create the ref beside the one that
+    /// fills that tracking ref, and every later fetch of the remote would fail (0.5's P, C2). Both
+    /// are asked of <paramref name="remote"/>'s own lines (<see cref="FetchRefspecs.SourceOf(string, string)"/>):
+    /// another remote that also fills the tracking ref (a mirror line) makes it ambiguous between
+    /// remotes, which says nothing about this remote's own two sources. Only destinations under
+    /// <c>refs/remotes/</c> count: a mirror line also maps the ref to the local branch of its name
+    /// (10.1). The lines follow the fetch, not the push, rightly. Null when the push may run, and
+    /// when the lines were not read (a fake repository). Also the restores' and undo's pushes of a
+    /// branch (RepositoryOperations.Undo.cs).
+    /// </summary>
+    private async Task<OperationReport?> RefuseIfPushStopsFetchAsync(OperationText text, string branch, string remote, string remoteRef, string target)
+    {
+        if (await Git.ReadFetchRefspecsAsync() is not { } refspecs)
         {
             return null;
         }
 
-        var rest = remoteBranchRef[RemotesPrefix.Length..];
-        var remote = RemoteNames
-            .Where(name => rest.StartsWith(name + "/", StringComparison.Ordinal) && rest.Length > name.Length + 1)
-            .OrderByDescending(name => name.Length)
-            .FirstOrDefault();
-        return remote is null ? null : (remote, rest[(remote.Length + 1)..]);
+        var destinations = refspecs.DestinationsOf(remote, remoteRef)
+            .Where(destination => destination.StartsWith(RemotesPrefix, StringComparison.Ordinal))
+            .ToList();
+        var ambiguous = destinations.FirstOrDefault(destination => refspecs.SourceOf(destination, remote).Kind == RemoteSourceKind.AmbiguousRefs);
+        if (ambiguous is null
+            || destinations.Exists(destination => refspecs.SourceOf(destination, remote).Kind == RemoteSourceKind.Mapped && FindRef(destination) is not null))
+        {
+            return null;
+        }
+
+        return Refused(text, OperationTexts.PushWouldStopFetch(branch, target, ambiguous[RemotesPrefix.Length..], remote));
+    }
+
+    /// <summary>
+    /// Where <c>refs/remotes/&lt;…&gt;</c> is fetched from, as the remote's fetch lines map it back
+    /// (<see cref="RepoRefs.SourceOf(GitRef)"/>, docs/phase-6-design.md 10.4 #7): its remote and the
+    /// branch's name there (<see cref="RemoteSource.Remote"/>, <see cref="RemoteSource.Branch"/>);
+    /// null for a ref that one ref of one remote, a branch, does not fill (the operation logs "not
+    /// started": a menu built before the lines changed). A ref the refs do not hold is looked up
+    /// by its name, and its remote must be configured.
+    /// </summary>
+    private RemoteSource? SplitRemoteBranch(string remoteBranchRef)
+    {
+        if (Refs is not { } refs)
+        {
+            return null;
+        }
+
+        if (FindRef(remoteBranchRef) is { Kind: RefKind.RemoteBranch } gitRef)
+        {
+            return refs.SourceOf(gitRef) is { IsBranch: true } mapped ? mapped : null;
+        }
+
+        return refs.SourceOf(remoteBranchRef) is { IsBranch: true, Remote: { } configured } source
+            && RemoteNames.Contains(configured, StringComparer.Ordinal)
+            ? source
+            : null;
     }
 
     // 2.20: force push with lease.
@@ -402,6 +260,7 @@ public sealed partial class RepositoryOperations
         var upstream = UpstreamText(branch) ?? ShortName(upstreamRef);
         var text = OperationTexts.ForcePush(branch.Name, upstream);
         var request = new PushRequest(remote, branch.Name, remoteRef) { ForceWithLease = true };
+        OperationReport? refused = null;
         return GuardAsync(text, () => ConfirmAndRunAsync(
             OperationTexts.ConfirmForcePush(branch.Name, remote, ShortName(remoteRef)),
             text,
@@ -409,12 +268,24 @@ public sealed partial class RepositoryOperations
             RefreshScope.Refs,
             async _ =>
             {
+                // R4 and 10.4's guard before anything is written, the backup included.
+                refused = RefuseIfNotABranch(text, remote, remoteRef, upstream) ?? await RefuseIfPushStopsFetchAsync(text, branch.Name, remote, remoteRef, upstream);
+                if (refused is not null)
+                {
+                    return null;
+                }
+
                 // UpstreamRef's commit as it is just before the push (2.20).
                 var commit = await Git.ResolveAsync(upstreamRef);
                 return commit is null ? null : new BackupRequest("force-push", [new BackupEntry(ShortName(upstreamRef), commit)]);
             },
             async (context, _) =>
             {
+                if (refused is not null)
+                {
+                    return refused;
+                }
+
                 UndoCapture.Push(remote, await Git.PushAsync(request, NetworkOptions.From(context), context.CancellationToken));
                 return OperationReport.Done(OperationTexts.ForcePushed(branch.Name, upstream));
             },
@@ -432,7 +303,12 @@ public sealed partial class RepositoryOperations
         var text = OperationTexts.SetUpstream(name);
         return GuardAsync(text, async () =>
         {
-            var remoteBranches = Refs?.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch).ToList() ?? [];
+            // Only a branch one ref of one remote fills (docs/phase-6-design.md 10.4 #11): git
+            // refuses a ref two remotes or none fetch, and one fetched from two refs would track
+            // git's first candidate.
+            List<GitRef> remoteBranches = Refs is { } refs
+                ? [.. refs.Refs.Where(gitRef => gitRef.Kind == RefKind.RemoteBranch && refs.SourceOf(gitRef).IsBranch)]
+                : [];
             if (remoteBranches.Count == 0)
             {
                 Log.Info($"{Repository.Name}: {text.Title}: not started, there are no remote branches to track.");
@@ -493,13 +369,11 @@ public sealed partial class RepositoryOperations
     public Task DeleteRemoteBranchAsync(string remoteBranchRef)
     {
         ArgumentNullException.ThrowIfNull(remoteBranchRef);
-        if (SplitRemoteBranch(remoteBranchRef) is not { } split)
+        if (SplitRemoteBranch(remoteBranchRef) is not { Remote: { } remote, Branch: { } name })
         {
             Log.Info($"{Repository.Name}: Delete on a remote: not started, {remoteBranchRef} is not a remote branch.");
             return Task.CompletedTask;
         }
-
-        var (remote, name) = split;
 
         var text = OperationTexts.DeleteRemoteBranch(name, remote);
         string? expected = null;

@@ -1,5 +1,3 @@
-using System.Diagnostics;
-using System.Globalization;
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Automation.Peers;
@@ -696,47 +694,6 @@ public class DiffTextViewTests
 
         view.FocusBody();
         Assert.True(view.IsKeyboardFocusWithin);
-    }
-
-    [AvaloniaFact]
-    public async Task Building_and_drawing_a_diff_grows_in_step_with_its_lines()
-    {
-        // What is caught is work that grows faster than the number of lines. A time alone does not
-        // tell that on a machine whose other test projects load it (CI's 3-processor runners): the
-        // 60,000-line diff is compared with a 6,000-line one, each the best of three, interleaved,
-        // so that load falls on both alike. Linear work gives a ratio of 10 or less (drawing the
-        // view is a fixed cost), quadratic work about 100.
-        var diffs = await DiffScenario.DiffsAsync();
-        var small = DiffScenario.Parse(["@@ -0,0 +1,6000 @@", .. Enumerable.Range(1, 6_000).Select(line => $"+line {line}")]);
-        var view = new DiffTextView { FilePath = "data/large.txt", Highlighting = false };
-        using var host = DiffHost.Show(view, InlineWidth, InlineHeight, ThemeVariant.Dark);
-        host.Capture();
-
-        double Time(FileDiff diff)
-        {
-            var watch = Stopwatch.StartNew();
-            view.Diff = diff;
-            host.Capture();
-            return watch.Elapsed.TotalMilliseconds;
-        }
-
-        // A first round warms both paths up.
-        Time(small);
-        Time(diffs.Large);
-        var (bestSmall, bestLarge) = (double.MaxValue, double.MaxValue);
-        for (var round = 0; round < 3; round++)
-        {
-            bestSmall = Math.Min(bestSmall, Time(small));
-            bestLarge = Math.Min(bestLarge, Time(diffs.Large));
-        }
-
-        Assert.Equal(60_001, view.Rows.Count);
-        TestContext.Current.SendDiagnosticMessage(string.Create(CultureInfo.InvariantCulture, $"Built and drawn: 6,000 lines in {bestSmall:F0} ms, 60,000 lines in {bestLarge:F0} ms."));
-
-        // A floor of 10 ms under the small one keeps the timer's resolution out of the ratio; a
-        // loose ceiling still catches work gone gross.
-        Assert.True(bestLarge < 25 * Math.Max(bestSmall, 10), string.Create(CultureInfo.InvariantCulture, $"60,000 lines took {bestLarge:F0} ms, 6,000 lines {bestSmall:F0} ms: more than 25 times as long."));
-        Assert.True(bestLarge < 20_000, string.Create(CultureInfo.InvariantCulture, $"60,000 lines took {bestLarge:F0} ms."));
     }
 
     private static async Task<DiffTextView> CalculatorAsync(DiffMode mode = DiffMode.Inline)

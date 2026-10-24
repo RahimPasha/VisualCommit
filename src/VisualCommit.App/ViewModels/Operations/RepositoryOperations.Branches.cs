@@ -6,7 +6,11 @@
 // and rebase" left (1.3). Phase 5's C12 (WP4, docs/phase-5-design.md section 9) gives every
 // checkout here its refusals before git and 9.3's message, the checkout of a commit the branch
 // reaches its automatic stash, and merges, picks and reverts their refusal texts; those parts are
-// in RepositoryOperations.Protect.cs.
+// in RepositoryOperations.Protect.cs. The checkout of a remote branch is in
+// RepositoryOperations.RemoteBranches.cs (docs/phase-6-design.md 18). Phase 6's Keep ignored
+// files (WP-IA, docs/phase-6-design.md 9.4, 9.5, 9.11) gives every checkout and merge git's
+// --no-overwrite-ignore, catches each checkout's refusal inside its operation for D179's words,
+// and runs the app's own check before a merge, a pick or a revert, one or a list.
 
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
@@ -28,7 +32,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
     /// runs as phase 3's, refused before git while an operation is in progress or files conflict,
     /// or when HEAD moved while it waited onto a branch that reaches the commit or tag
     /// (<see cref="RefuseIfNowAutoStashTargetAsync"/>), and a refusal for changes in the way is
-    /// shown with 9.3's message.
+    /// shown with 9.3's message. While Keep ignored files is on (D193, docs/phase-6-design.md 9.11)
+    /// git gets <c>--no-overwrite-ignore</c>, and a refusal only for ignored files in the way says
+    /// so in D179's words (<see cref="CheckoutRefusalDisplayAsync"/>).
     /// </remarks>
     public Task CheckoutAsync(string target) => CheckoutAsync(target, checkExists: false);
 
@@ -84,6 +90,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         return gone;
                     }
 
+                    // A stale menu's remote branch that two remotes fetch or none (docs/phase-6-design.md 10.4 #10).
+                    if (RefuseUnfetchedRemoteBranch(text, target) is { } unfetched)
+                    {
+                        return unfetched;
+                    }
+
                     if (await RefuseCheckoutAsync(text) is { } blocked)
                     {
                         display = blocked.Display;
@@ -100,14 +112,31 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         return refusal;
                     }
 
-                    return OperationReport.Done(await plan.Run(NetworkOptions.From(context)));
+                    // Git's refusal is shown in its operation, where the ignored files in its way
+                    // can be read (docs/phase-6-design.md 9.11).
+                    var keepIgnored = KeepIgnored;
+                    try
+                    {
+                        return OperationReport.Done(await plan.Run(NetworkOptions.From(context)));
+                    }
+                    catch (GitException refused)
+                    {
+                        var failure = FailureOf(refused, text.FailureSummary);
+                        if (await CheckoutRefusalDisplayAsync(failure, target, plan.Name, offerStash: true, keepIgnored) is not { } shown)
+                        {
+                            throw;
+                        }
+
+                        // The detached commits were confirmed and backed up already: 2.31 does not ask again.
+                        display = shown is { Extra: { } extra } && backUpDetached
+                            ? shown with { Extra = extra with { Run = () => StashAndCheckoutAsync(target, detachedBackedUp: true) } }
+                            : shown;
+                        return Failed(text, failure with { Summary = display.Summary });
+                    }
                 },
                 new RunOptions
                 {
-                    DescribeFailure = failure => display ?? (CheckoutFailureDisplay(failure, target, offerStash: true) is { Extra: { } extra } shown && backUpDetached
-                        // The detached commits were confirmed and backed up already: 2.31 does not ask again.
-                        ? shown with { Extra = extra with { Run = () => StashAndCheckoutAsync(target, detachedBackedUp: true) } }
-                        : CheckoutFailureDisplay(failure, target, offerStash: true)),
+                    DescribeFailure = _ => display,
                     Undo = UndoScope.Checkout(plan.Name, Refs?.Head.BranchName, CreatedBranchOf(target)),
                 });
         });
@@ -141,6 +170,13 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 {
                     var options = NetworkOptions.From(context);
 
+                    // A stale menu's remote branch that two remotes fetch or none, before anything
+                    // is stashed (docs/phase-6-design.md 10.4 #10).
+                    if (RefuseUnfetchedRemoteBranch(text, target) is { } unfetched)
+                    {
+                        return unfetched;
+                    }
+
                     // After a blocked checkout that asked and saved the backup, nothing more to do.
                     if (!detachedBackedUp && await GuardDetachedHeadAsync(text, backUpDetached) is { } refusal)
                     {
@@ -149,23 +185,51 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                     // 1. The tracked changes only: the untracked files blocked nothing, and the
                     // checkout carries them along (D91).
+                    var keepIgnored = KeepIgnored;
                     var stash = await Git.StashAsync(OperationTexts.StashBeforeCheckout(name), includeUntracked: false, options);
                     UndoCapture.Stash(stash, includedUntracked: false, OperationTexts.StashBeforeCheckout(name));
                     if (stash is null)
                     {
-                        // Nothing is left to stash (the changes went meanwhile): a plain checkout.
-                        return OperationReport.Done(await plan.Run(options));
+                        // Nothing is left to stash (the changes went meanwhile): a plain checkout,
+                        // whose refusal is shown as every checkout's (docs/phase-6-design.md 9.11).
+                        try
+                        {
+                            return OperationReport.Done(await plan.Run(options));
+                        }
+                        catch (GitException refused)
+                        {
+                            var failure = FailureOf(refused, text.FailureSummary);
+                            if (await CheckoutRefusalDisplayAsync(failure, target, name, offerStash: false, keepIgnored) is not { } shown)
+                            {
+                                throw;
+                            }
+
+                            display = shown;
+                            return Failed(text, failure with { Summary = shown.Summary });
+                        }
                     }
 
-                    // 2. The checkout; when it fails, the changes go back at once.
+                    // 2. The checkout; when it fails, the changes go back at once. Only ignored files
+                    // can be in its way now (the untracked files blocked nothing): what was is read
+                    // before the stash comes back (docs/phase-6-design.md 9.11).
                     try
                     {
                         await plan.Run(options);
                     }
                     catch (GitException checkoutFailure)
                     {
-                        var summary = await PopBackAsync(stash, options) ? text.FailureSummary : OperationTexts.CheckoutFailedChangesKept(name);
-                        return Failed(text, FailureOf(checkoutFailure, summary));
+                        var ignored = keepIgnored ? await IgnoredBlockSummaryAsync(FailureOf(checkoutFailure, text.FailureSummary), name) : null;
+                        if (!await PopBackAsync(stash, options))
+                        {
+                            return Failed(text, FailureOf(checkoutFailure, OperationTexts.CheckoutFailedChangesKept(name)));
+                        }
+
+                        if (ignored is not null)
+                        {
+                            display = new FailureDisplay(OperationTexts.CheckoutBlockedTitle, ignored);
+                        }
+
+                        return Failed(text, FailureOf(checkoutFailure, ignored ?? text.FailureSummary));
                     }
 
                     // 3. The changes again, staged ones staged (--index, or without it when git refuses).
@@ -233,6 +297,16 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         return blocked.Report;
                     }
 
+                    // Keep ignored files (docs/phase-6-design.md 9.4, 9.9): the merge's check, into
+                    // the branch it checks out, before that checkout ("Merge failed").
+                    var keepIgnored = KeepIgnored;
+                    if (keepIgnored
+                        && await RefuseIfIgnoredInTheWayAsync(text, "merge", () => Git.FindIgnoredInTheWayOfMergeAsync(branchRef, sourceRef)) is { } ignored)
+                    {
+                        display = new FailureDisplay(mergeText.ErrorTitle, ignored.Failure!.Summary);
+                        return ignored;
+                    }
+
                     var options = NetworkOptions.From(context);
                     if (await GuardDetachedHeadAsync(text, backUpDetached) is { } detached)
                     {
@@ -241,10 +315,25 @@ public sealed partial class RepositoryOperations : IInProgressActions
 
                     // A failed checkout ends it with the checkout's dialog (2.33), without the stash
                     // button: the merge would then run on top of re-applied changes (4g).
-                    await Git.CheckoutBranchAsync(branch, options);
                     try
                     {
-                        return await MergeReportAsync(await Git.MergeAsync(sourceRef, MergeMode.Default, options), source, branch);
+                        await Git.CheckoutBranchAsync(branch, keepIgnored: keepIgnored, options);
+                    }
+                    catch (GitException checkoutFailure)
+                    {
+                        var failure = FailureOf(checkoutFailure, text.FailureSummary);
+                        if (await CheckoutRefusalDisplayAsync(failure, branchRef, branch, offerStash: false, keepIgnored) is not { } shown)
+                        {
+                            throw;
+                        }
+
+                        display = shown;
+                        return Failed(text, failure with { Summary = shown.Summary });
+                    }
+
+                    try
+                    {
+                        return await MergeReportAsync(await Git.MergeAsync(sourceRef, MergeMode.Default, keepIgnored: keepIgnored, options), source, branch);
                     }
                     catch (GitException mergeFailure)
                     {
@@ -331,7 +420,8 @@ public sealed partial class RepositoryOperations : IInProgressActions
             return;
         }
 
-        var (startPoint, context) = await DescribeStartAsync(start ?? head!.Sha!);
+        var startNamed = start ?? head!.Sha!;
+        var (startPoint, context) = await DescribeStartAsync(startNamed);
         var answer = await ShowDialogAsync(NewBranchDialog(context));
         if (answer is null)
         {
@@ -381,7 +471,28 @@ public sealed partial class RepositoryOperations : IInProgressActions
                         return refusal;
                     }
 
-                    await Git.CreateBranchAsync(name, startPoint, checkout, NetworkOptions.From(operation));
+                    // A start point fetched from two refs or by two remotes gets no upstream
+                    // (D201); false while the refspecs are not read (docs/phase-6-design.md 9.11).
+                    var noTrack = Refs?.SourceOf(startPoint) is { Kind: RemoteSourceKind.AmbiguousRemotes or RemoteSourceKind.AmbiguousRefs };
+                    var keepIgnored = KeepIgnored;
+                    try
+                    {
+                        await Git.CreateBranchAsync(name, startPoint, checkout, noTrack, keepIgnored: keepIgnored, NetworkOptions.From(operation));
+                    }
+                    catch (GitException refused) when (checkout)
+                    {
+                        // Its checkout's refusal, shown in the operation (docs/phase-6-design.md 9.11),
+                        // naming the start as the dialog names it.
+                        var failure = FailureOf(refused, text.FailureSummary);
+                        if (await CheckoutRefusalDisplayAsync(failure, startPoint, ShortName(startNamed), offerStash: false, keepIgnored) is not { } shown)
+                        {
+                            throw;
+                        }
+
+                        display = shown;
+                        return Failed(text, failure with { Summary = shown.Summary });
+                    }
+
                     FollowCreatedBranch(HeadsPrefix + name);
                     return OperationReport.Done(OperationTexts.CreatedBranch(name, checkout));
                 },
@@ -510,7 +621,15 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     return moved;
                 }
 
-                return await MergeReportAsync(await Git.MergeAsync(sourceRef, mode, NetworkOptions.From(context)), source, current);
+                // Keep ignored files (docs/phase-6-design.md 9.4): git's option is exact for a
+                // fast-forward only, and whether a merge fast-forwards is git's to find out.
+                var keepIgnored = KeepIgnored;
+                if (keepIgnored && await RefuseIfIgnoredInTheWayAsync(text, "merge", () => Git.FindIgnoredInTheWayOfMergeAsync("HEAD", sourceRef)) is { } ignored)
+                {
+                    return ignored;
+                }
+
+                return await MergeReportAsync(await Git.MergeAsync(sourceRef, mode, keepIgnored: keepIgnored, NetworkOptions.From(context)), source, current);
             },
             new RunOptions
             {
@@ -643,6 +762,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     return moved;
                 }
 
+                // Keep ignored files (docs/phase-6-design.md 9.5): git has no option for a pick.
+                if (KeepIgnored && await RefuseIfIgnoredInTheWayAsync(text, "cherry-pick", () => FindIgnoredInTheWayOfCommitsAsync([commit], revert: false)) is { } ignored)
+                {
+                    return ignored;
+                }
+
                 switch (await Git.CherryPickAsync(commit, NetworkOptions.From(context)))
                 {
                     case ApplyResult.Applied:
@@ -684,6 +809,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
             InProgressKind.CherryPick,
             seen,
             OperationTexts.NothingCherryPicked,
+            ordered,
             options => Git.CherryPickAsync(ordered, options),
             OperationTexts.CherryPickedSeveral(count, current),
             UndoScope.CherryPick(ordered, seen?.BranchName)));
@@ -710,10 +836,12 @@ public sealed partial class RepositoryOperations : IInProgressActions
         InProgressKind kind,
         HeadState? seen,
         string nothing,
+        IReadOnlyList<string> commits,
         Func<NetworkOptions, Task<SequenceResult>> apply,
         string done,
         UndoScope undo)
     {
+        var revert = kind == InProgressKind.Revert;
         var notice = new StopNotice();
         await RunAsync(
             text,
@@ -729,6 +857,13 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 if (await RefuseIfHeadMovedAsync(text, seen, nothing) is { } moved)
                 {
                     return moved;
+                }
+
+                // Keep ignored files (docs/phase-6-design.md 9.5): the list as git gets it.
+                if (KeepIgnored
+                    && await RefuseIfIgnoredInTheWayAsync(text, revert ? "revert" : "cherry-pick", () => FindIgnoredInTheWayOfCommitsAsync(commits, revert)) is { } ignored)
+                {
+                    return ignored;
                 }
 
                 var result = await apply(NetworkOptions.From(context));
@@ -778,7 +913,8 @@ public sealed partial class RepositoryOperations : IInProgressActions
         var text = OperationTexts.Revert(commit);
         return GuardAsync(text, async () =>
         {
-            var isMerge = await IsMergeAsync(commit);
+            var parents = await ParentsOfAsync(commit);
+            var isMerge = parents.Count > 1;
             await RunAsync(
                 text,
                 OperationKind.Local,
@@ -793,6 +929,14 @@ public sealed partial class RepositoryOperations : IInProgressActions
                     if (await RefuseIfHeadMovedAsync(text, seen, OperationTexts.NothingReverted) is { } moved)
                     {
                         return moved;
+                    }
+
+                    // Keep ignored files (docs/phase-6-design.md 9.5): a merge, reverted with -m 1,
+                    // by its change against its first parent.
+                    if (KeepIgnored
+                        && await RefuseIfIgnoredInTheWayAsync(text, "revert", () => FindIgnoredInTheWayOfCommitsAsync([commit], revert: true, isMerge ? parents[0] : null)) is { } ignored)
+                    {
+                        return ignored;
                     }
 
                     ApplyResult result;
@@ -856,6 +1000,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 InProgressKind.Revert,
                 seen,
                 OperationTexts.NothingReverted,
+                ordered,
                 options => Git.RevertAsync(ordered, options),
                 OperationTexts.RevertedSeveral(count),
                 UndoScope.Revert(ordered, seen?.BranchName));
@@ -929,15 +1074,16 @@ public sealed partial class RepositoryOperations : IInProgressActions
                 if (returnBranch is not null && ShortName(returnBranch) is var branch
                     && !string.Equals((await Git.ReadHeadAsync()).BranchName, branch, StringComparison.Ordinal))
                 {
+                    var keepIgnored = KeepIgnored;
                     try
                     {
-                        await Git.CheckoutBranchAsync(branch, options);
+                        await Git.CheckoutBranchAsync(branch, keepIgnored: keepIgnored, options);
                     }
                     catch (GitException checkoutFailure)
                     {
                         // The rebase is aborted; only the way back failed.
                         var failure = FailureOf(checkoutFailure, OperationTexts.CheckOut(branch).FailureSummary);
-                        display = CheckoutFailureDisplay(failure, returnBranch, offerStash: false)
+                        display = await CheckoutRefusalDisplayAsync(failure, returnBranch, branch, offerStash: false, keepIgnored)
                             ?? new FailureDisplay(OperationTexts.CheckOut(branch).ErrorTitle, failure.Summary);
                         return Failed(text, failure with { Summary = display.Summary });
                     }
@@ -964,7 +1110,7 @@ public sealed partial class RepositoryOperations : IInProgressActions
         {
             return new CheckoutPlan(name, async options =>
             {
-                await Git.CheckoutBranchAsync(name, options);
+                await Git.CheckoutBranchAsync(name, keepIgnored: KeepIgnored, options);
                 return OperationTexts.CheckedOut(name);
             });
         }
@@ -977,63 +1123,9 @@ public sealed partial class RepositoryOperations : IInProgressActions
         // A tag or a commit: HEAD is detached (2.3); git peels a tag to its commit.
         return new CheckoutPlan(name, async options =>
         {
-            await Git.CheckoutDetachedAsync(target, options);
+            await Git.CheckoutDetachedAsync(target, keepIgnored: KeepIgnored, options);
             return OperationTexts.DetachedAt(await Git.ResolveAsync("HEAD") ?? target);
         });
-    }
-
-    /// <summary>
-    /// 2.2 (D93): the local branch of the same name when it exists, checked out as it is; otherwise
-    /// a new one tracking the remote branch.
-    /// </summary>
-    private async Task<string> CheckoutRemoteBranchAsync(string remoteRef, NetworkOptions options)
-    {
-        var shown = ShortName(remoteRef);
-        var local = LocalNameOfRemoteBranch(remoteRef);
-        if (FindRef(HeadsPrefix + local) is { } existing)
-        {
-            await Git.CheckoutBranchAsync(local, options);
-            if (!string.Equals(existing.UpstreamRef, remoteRef, StringComparison.Ordinal))
-            {
-                return OperationTexts.CheckedOutTracking(local, UpstreamText(existing));
-            }
-
-            return existing.Behind > 0 ? OperationTexts.CheckedOutBehind(local, existing.Behind, shown) : OperationTexts.CheckedOut(local);
-        }
-
-        await Git.CheckoutTrackingBranchAsync(local, remoteRef, options);
-        FollowCreatedBranch(HeadsPrefix + local);
-        return OperationTexts.CreatedTrackingAndCheckedOut(local, shown);
-    }
-
-    /// <summary>
-    /// The local branch a checkout of <paramref name="target"/> may create (2.2), which the undo
-    /// history reads with its upstream keys (docs/phase-5-design.md 7.3): a remote branch's local
-    /// name, or null for any other target.
-    /// </summary>
-    private string? CreatedBranchOf(string target) =>
-        target.StartsWith(RemotesPrefix, StringComparison.Ordinal) ? LocalNameOfRemoteBranch(target) : null;
-
-    /// <summary>The local name a remote branch checks out into: the part after <c>&lt;r&gt;/</c>, the remote found by its ref or, for a ref not read yet, by the longest remote name it starts with.</summary>
-    private string LocalNameOfRemoteBranch(string remoteRef)
-    {
-        if (FindRef(remoteRef) is { } gitRef && RepositoryMenuContext.LocalNameOf(gitRef) is { } local)
-        {
-            return local;
-        }
-
-        var name = remoteRef[RemotesPrefix.Length..];
-        var remote = RemoteNames
-            .Where(candidate => name.StartsWith(candidate + "/", StringComparison.Ordinal))
-            .OrderByDescending(candidate => candidate.Length)
-            .FirstOrDefault();
-        if (remote is not null)
-        {
-            return name[(remote.Length + 1)..];
-        }
-
-        var slash = name.IndexOf('/', StringComparison.Ordinal);
-        return slash >= 0 ? name[(slash + 1)..] : name;
     }
 
     /// <summary>
@@ -1236,14 +1328,17 @@ public sealed partial class RepositoryOperations : IInProgressActions
         || failure.StandardError.Contains("nothing to commit", StringComparison.Ordinal);
 
     /// <summary>Whether <paramref name="sha"/> is a merge commit: from the graph, or read from git.</summary>
-    private async Task<bool> IsMergeAsync(string sha)
+    private async Task<bool> IsMergeAsync(string sha) => (await ParentsOfAsync(sha)).Count > 1;
+
+    /// <summary><paramref name="sha"/>'s parents, first parent first: from the graph, or read from git.</summary>
+    private async Task<IReadOnlyList<string>> ParentsOfAsync(string sha)
     {
         if (FindCommit(sha) is { } commit)
         {
-            return commit.Parents.Count > 1;
+            return commit.Parents;
         }
 
-        return (await Git.ReadCommitDetailsAsync(sha)).Parents.Count > 1;
+        return (await Git.ReadCommitDetailsAsync(sha)).Parents;
     }
 
     /// <summary>

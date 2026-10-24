@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -8,6 +9,7 @@ using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 using VisualCommit.Core.Undo;
+using VisualCommit.Core.Workspaces;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -29,7 +31,11 @@ public sealed class TabServices
         IClipboardService? clipboard = null,
         IGitCallLog? gitCalls = null,
         TimeProvider? recordClock = null,
-        UndoHistories? undoHistories = null)
+        UndoHistories? undoHistories = null,
+        IWorkspaceStore? workspaces = null,
+        IGitConfiguration? gitSettings = null,
+        ToolCatalogues? tools = null,
+        TimeProvider? readClock = null)
     {
         ArgumentNullException.ThrowIfNull(repositories);
         ArgumentNullException.ThrowIfNull(folders);
@@ -57,6 +63,15 @@ public sealed class TabServices
         // A filter of a repository whose folder is gone is dropped at start-up (docs/phase-5-design.md 8.4).
         GraphFilters = new GraphFilterStore(session, Clock);
         GraphFilters.DropMissingFolders();
+
+        // Phase 6 (docs/phase-6-design.md 1.3, 3.4, 4.3, 8.1, 12.9, 2.10).
+        Workspaces = workspaces ?? new InMemoryWorkspaceStore();
+        GitSettings = gitSettings;
+        Tools = tools;
+        ReadClock = readClock ?? Clock;
+        OpenRepositories = new OpenRepositories(this);
+        BulkSlots = new BulkSlots();
+        WorkspaceCommands = new WorkspaceCommands(this);
     }
 
     public IRepositoryProvider Repositories { get; }
@@ -105,8 +120,9 @@ public sealed class TabServices
     /// <summary>
     /// Whether a dialog that an operation of a repository opens names that repository ("In
     /// &lt;repo&gt;" under its title, docs/phase-3-design.md 4f): the window's one rule
-    /// (<see cref="MainWindowViewModel.NamesRepositoryInDialogs"/>, more than one tab has a
-    /// repository), which the window sets here when it is made. False without a window.
+    /// (<see cref="MainWindowViewModel.NamesRepositoryInDialogs"/>: a dashboard tab is open, or
+    /// more than one tab has a repository, docs/phase-6-design.md 3.8), which the window sets here
+    /// when it is made. False without a window.
     /// </summary>
     public Func<bool> NamesRepositoryInDialogs { get; set; } = static () => false;
 
@@ -128,6 +144,82 @@ public sealed class TabServices
 
     /// <summary>What each repository's graph hides and solos, kept in <see cref="Session"/> (docs/phase-5-design.md 8.4, D159).</summary>
     public GraphFilterStore GraphFilters { get; }
+
+    /// <summary>The user's workspaces (D189, docs/phase-6-design.md 1.3): the session's store, or one in memory for view-model tests.</summary>
+    public IWorkspaceStore Workspaces { get; }
+
+    /// <summary>
+    /// The workspaces as every welcome page lists them (13.1), shared as <see cref="RecentRepositories.Items"/>
+    /// is. Work package WP-W keeps it: rebuilt on <see cref="IWorkspaceStore.Changed"/>, sorted by name, then id.
+    /// </summary>
+    public ObservableCollection<WorkspaceItem> WorkspaceItems { get; } = [];
+
+    /// <summary>Every workspace flow (1.5 to 1.10), one per session: the welcome page, the dashboard and the palette run the same code.</summary>
+    public WorkspaceCommands WorkspaceCommands { get; }
+
+    /// <summary>The window, through which a workspace opens (1.3, 2.2); set by the window when it is made, null without one.</summary>
+    public IWorkspaceHost? WorkspaceHost { get; set; }
+
+    /// <summary>The session's repository view models by worktree: the tabs' and the dashboards' summary-mode ones (3.4).</summary>
+    public OpenRepositories OpenRepositories { get; }
+
+    /// <summary>The window's slots for the rows of bulk runs (4.3).</summary>
+    public BulkSlots BulkSlots { get; }
+
+    /// <summary>Git's own settings, read and written by the settings screen (8.1); null where there is none (view-model tests).</summary>
+    public IGitConfiguration? GitSettings { get; }
+
+    /// <summary>
+    /// What the machine has installed (12.9): <c>AppSession</c> always gives the session's
+    /// catalogues, the machine's own or, in the harnesses, <see cref="ToolCatalogues.Fixed"/>; null
+    /// only in view-model tests that make their services without one.
+    /// </summary>
+    public ToolCatalogues? Tools { get; }
+
+    /// <summary>
+    /// The clock of a dashboard's 10 s rule (2.10): <see cref="Clock"/> unless the harness gives one
+    /// (17.2), so that a check moves it without waiting while every other time of the session runs on.
+    /// </summary>
+    public TimeProvider ReadClock { get; }
+
+    /// <summary>
+    /// Whether a file exists on disk, called off the UI thread only (D59): Open in editor's check of
+    /// its file (docs/phase-6-design.md 12.1) and the open diff's check of its working-tree file,
+    /// which the diff's menu and the palette's items read (5.5). A file on a share that does not
+    /// answer holds such a check for minutes (0.9). The disk, unless a test holds it.
+    /// </summary>
+    public Func<string, bool> FileExists { get; set; } = File.Exists;
+
+    /// <summary>
+    /// Activates the tab that shows a folder's worktree, and answers whether there was one (5.10's
+    /// first step, which Open repository… and its key take): set by the window, so that the welcome
+    /// page's Open, whose tooltip names that key (D215), does what the key does; null without one.
+    /// </summary>
+    public Func<string, bool>? ActivateTabShowing { get; set; }
+
+    /// <summary>
+    /// Opens the settings screen on a section (7.2): set by the window, for the editor failure's
+    /// "Open settings…" (12.7); null without a window.
+    /// </summary>
+    public Func<SettingsSection, Task>? OpenSettings { get; set; }
+
+    /// <summary>
+    /// Raised on the UI thread after a Save of the settings screen wrote any git key (8.11): every
+    /// repository view model reads <c>merge.tool</c> again while it shows conflicts.
+    /// </summary>
+    public event EventHandler? GitSettingsChanged;
+
+    /// <summary>Raises <see cref="GitSettingsChanged"/> (the settings screen's Save, 8.11).</summary>
+    public void RaiseGitSettingsChanged() => GitSettingsChanged?.Invoke(this, EventArgs.Empty);
+}
+
+/// <summary>The sections of the settings screen (docs/phase-6-design.md 7.1, 7.2): where it opens.</summary>
+public enum SettingsSection
+{
+    General,
+    Git,
+    Tools,
+    KeyboardShortcuts,
 }
 
 /// <summary>A repository in the welcome page's recent list.</summary>

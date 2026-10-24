@@ -102,7 +102,7 @@ public sealed partial class Phase4ChecksC
         AssertGraph(app, PartC2.K1, PartC2.ConflictsLanes, PartC2.WorkingRow(PartC2.Working), showsDate: false);
         C14To17.AssertEmptyLists(app, unstagedEmpty: true, stagedEmpty: false);
         Assert.Equal(["M notes.txt"], C14To17.FileRows(app, "StagedFileList"));
-        C14To17.AssertCommitButton(app, PartC2.ContinueRebaseButton, enabled: true);
+        C14To17.AssertCommitButton(app, PartC2.ContinueRebaseButton, enabled: true, PartC2.ContinueRebaseButton + " (Ctrl+Enter)");
         await C14To17.AssertMessageAsync(app, PartC2.PickConflictingSummary, string.Empty);
 
         // Step 6: the banner's Continue: the staged file checked for markers (none: no question), then Continue the rebase.

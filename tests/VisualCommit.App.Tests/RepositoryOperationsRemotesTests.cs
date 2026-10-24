@@ -6,6 +6,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
@@ -358,6 +359,305 @@ public class RepositoryOperationsRemotesTests
         Assert.Equal("Pushed tag v1.0 to origin", ((TextBlock)app.FindByAutomationId("OperationStatus")).Text);
         Assert.Equal(await repo.RefTargetAsync("refs/tags/v1.0"), await RemoteHeadAsync(repo, "refs/tags/v1.0"));
         Assert.Null(await RemoteHeadAsync(repo, "refs/tags/v1.0", "mirror"));
+    }
+
+    // Fetch refspecs (docs/phase-6-design.md 10.4, 10.6, 10.9; D93 as amended, D201), on
+    // "refspecs" (RS0): origin fetches its branches and GitHub's pull requests into origin/pr/*,
+    // fork its branches into fork/up/*, upstream only pull requests into upstream/pr/*. The
+    // checkouts' commands are asserted with Keep ignored files off, so that they read the same
+    // with and without its option (9.11): the walk-through's G25 asserts them with it.
+
+    private const string Parser = "8394a5e2e769c4601161cbce8c239ff2aa246eb9";
+    private const string Topic = "de4a87cd5a84d5ed135863187487f81fe89d030c";
+
+    [Fact]
+    public async Task A_renamed_remote_branch_checks_out_into_its_name_on_the_remote_and_tracks_it()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.PushAsync("fork", setUpstream: false, "topic:refs/heads/feature");
+        await repo.GitAsync("fetch", "--quiet", "fork");
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
+
+        await app.Operations.CheckoutAsync("refs/remotes/fork/up/feature");
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal("Created feature tracking fork/up/feature and checked it out", app.StatusText);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git switch --create feature --track refs/remotes/fork/up/feature" && call.Succeeded);
+        Assert.Equal("refs/heads/feature", await HeadRefAsync(repo));
+        Assert.Equal(Topic, await repo.RefTargetAsync("refs/heads/feature"));
+        Assert.Equal(("fork", "refs/heads/feature"), (await ConfigAsync(repo, "branch.feature.remote"), await ConfigAsync(repo, "branch.feature.merge")));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/up/feature"));
+        Assert.Equal("fork/up/feature", ToolbarViewModel.UpstreamText(app.Operations.FindRef("refs/heads/feature")!));
+    }
+
+    [Fact]
+    public async Task A_renamed_remote_branch_fetched_after_the_refs_were_read_checks_out_into_its_name_on_the_remote_too()
+    {
+        // A ref the refs do not hold (a stale menu's, fetched since the snapshot): its local name by
+        // the fetch lines read with the refs, as for one they hold, not by phase 5's split of its
+        // name, which gave up/feature.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
+        await repo.PushAsync("fork", setUpstream: false, "topic:refs/heads/feature");
+        await repo.GitAsync("fetch", "--quiet", "fork");
+        Assert.Null(app.Operations.FindRef("refs/remotes/fork/up/feature"));
+
+        await app.Operations.CheckoutAsync("refs/remotes/fork/up/feature");
+
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal("Created feature tracking fork/up/feature and checked it out", app.StatusText);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git switch --create feature --track refs/remotes/fork/up/feature" && call.Succeeded);
+        Assert.Equal(("fork", "refs/heads/feature"), (await ConfigAsync(repo, "branch.feature.remote"), await ConfigAsync(repo, "branch.feature.merge")));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/up/feature"));
+    }
+
+    [Fact]
+    public async Task A_ref_that_is_no_branch_on_its_remote_checks_out_tracking_it_as_git_does()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
+
+        await app.Operations.CheckoutAsync("refs/remotes/upstream/pr/7");
+
+        // R4 keeps the checkout (10.4 #6): git tracks refs/pull/7/head on upstream (0.5's P2).
+        Assert.Equal("Created pr/7 tracking upstream/pr/7 and checked it out", app.StatusText);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git switch --create pr/7 --track refs/remotes/upstream/pr/7" && call.Succeeded);
+        Assert.Equal(("upstream", "refs/pull/7/head"), (await ConfigAsync(repo, "branch.pr/7.remote"), await ConfigAsync(repo, "branch.pr/7.merge")));
+        Assert.Equal("upstream/pr/7", ToolbarViewModel.UpstreamText(app.Operations.FindRef("refs/heads/pr/7")!));
+    }
+
+    [Fact]
+    public async Task A_ref_its_remote_fetches_from_two_refs_checks_out_into_a_branch_without_an_upstream_and_then_into_that_branch()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
+
+        await app.Operations.CheckoutAsync("refs/remotes/origin/pr/1");
+
+        // D201: git would track its first candidate, refs/heads/pr/1, whose push stops every fetch.
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.Equal("Created pr/1 at origin/pr/1 without an upstream: origin/pr/1 is fetched from more than one ref of origin", app.StatusText);
+        Assert.Equal(OperationStatusTone.Secondary, app.StatusTone);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git switch --create pr/1 --no-track refs/remotes/origin/pr/1" && call.Succeeded);
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.Contains(" --track ", StringComparison.Ordinal));
+        Assert.Equal("refs/heads/pr/1", await HeadRefAsync(repo));
+        Assert.Equal(Topic, await repo.RefTargetAsync("refs/heads/pr/1"));
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("config", "--get-regexp", @"^branch\.pr/1\.")).ExitCode);
+        Assert.Null(app.Operations.FindRef("refs/heads/pr/1")!.UpstreamRef);
+
+        // main again, then a double-click on origin/pr/1: its local branch exists and is checked out as it is (GD21).
+        await app.Operations.CheckoutAsync("refs/heads/main");
+        Assert.Equal("Checked out main", app.StatusText);
+        var mark = app.Calls.Snapshot().Count;
+        app.Repository.DoubleTapRefRow(LeftPanelRow(app, "ref:refs/remotes/origin/pr/1", "remote:origin:pr"));
+        await WaitUntilAsync(() => Ran(app, "Check out origin/pr/1") == 2, "the double-click's checkout");
+        await app.WaitForIdleAsync();
+
+        Assert.Equal("Checked out pr/1, which has no upstream", app.StatusText);
+        var calls = app.Calls.Snapshot().Skip(mark).ToList();
+        Assert.Contains(calls, call => call.CommandText == "git switch --no-guess pr/1" && call.Succeeded);
+        Assert.DoesNotContain(calls, call => call.CommandText.StartsWith("git switch --create", StringComparison.Ordinal));
+        Assert.Equal("refs/heads/pr/1", await HeadRefAsync(repo));
+        Assert.Equal(1, (await repo.GitAllowingFailureAsync("config", "--get-regexp", @"^branch\.pr/1\.")).ExitCode);
+    }
+
+    [Fact]
+    public async Task With_Keep_ignored_files_on_every_git_call_of_a_remote_branchs_checkout_keeps_them()
+    {
+        // 9.11 and 10.4 #10's "[--no-overwrite-ignore]": G25's TG5, TG6 and TG8, the setting at its default.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        Assert.True(app.Settings.Current.KeepIgnoredFiles);
+
+        await app.Operations.CheckoutAsync("refs/remotes/origin/pr/1");
+        await app.Operations.CheckoutAsync("refs/heads/main");
+        await app.Operations.CheckoutAsync("refs/remotes/origin/pr/1");
+        await app.Operations.CheckoutAsync("refs/remotes/upstream/pr/7");
+
+        Assert.Equal(
+            ["git switch --create pr/1 --no-track --no-overwrite-ignore refs/remotes/origin/pr/1", "git switch --no-guess --no-overwrite-ignore main", "git switch --no-guess --no-overwrite-ignore pr/1", "git switch --create pr/7 --track --no-overwrite-ignore refs/remotes/upstream/pr/7"],
+            app.Calls.Snapshot().Where(call => call.CommandText.StartsWith("git switch", StringComparison.Ordinal)).Select(call => call.CommandText));
+        Assert.Equal("Created pr/7 tracking upstream/pr/7 and checked it out", app.StatusText);
+        Assert.Empty(app.Dialogs.Shown);
+    }
+
+    [Fact]
+    public async Task A_ref_two_remotes_fetch_is_not_checked_out_by_a_double_click_or_a_stale_menu_and_leaves_no_branch()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await AddBackupFetchingIntoOriginAsync(repo, "feature/x");
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
+        var row = LeftPanelRow(app, "ref:refs/remotes/origin/feature/x", "remote:origin:feature");
+
+        // The double-click starts nothing (10.4 #10).
+        var real = app.Repository.MenuActions;
+        var (actions, recorder) = RecordingActions.Create();
+        app.Repository.MenuActions = actions;
+        app.Repository.DoubleTapRefRow(row);
+        Assert.Empty(recorder.Calls);
+        app.Repository.MenuActions = real;
+        app.Repository.DoubleTapRefRow(row);
+        await app.WaitForIdleAsync();
+
+        // A menu built before backup's line came: refused, git never runs, no branch left behind.
+        app.Dialogs.CloseError();
+        await app.Operations.CheckoutAsync("refs/remotes/origin/feature/x");
+
+        // 14.1, 14.4: "Checkout failed" with R1 alone, before git, no output and no command.
+        AssertRefusedBeforeGit(app, Assert.Single(app.Dialogs.Errors), "Check out origin/feature/x");
+        Assert.Equal(("Check out origin/feature/x failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git switch", StringComparison.Ordinal));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/feature/x"));
+        Assert.Equal("refs/heads/main", await HeadRefAsync(repo));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Stash_changes_and_check_out_a_ref_two_remotes_fetch_is_refused_before_anything_is_stashed()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await AddBackupFetchingIntoOriginAsync(repo, "feature/x");
+        repo.WriteFile("README.md", "# refspecs\nmy own edit\n");
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
+        var status = await PorcelainAsync(repo);
+        app.Dialogs.CloseError();
+
+        await app.Operations.StashAndCheckoutAsync("refs/remotes/origin/feature/x");
+
+        AssertRefusedBeforeGit(app, Assert.Single(app.Dialogs.Errors), "Check out origin/feature/x with your changes");
+        Assert.Equal(("Check out origin/feature/x with your changes failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        // The refs reads list the stashes (git stash list); nothing else of git stash runs.
+        Assert.DoesNotContain(
+            app.Calls.Snapshot(),
+            call => (call.CommandText.StartsWith("git stash ", StringComparison.Ordinal) && !call.CommandText.StartsWith("git stash list ", StringComparison.Ordinal))
+                || call.CommandText.StartsWith("git switch", StringComparison.Ordinal));
+        Assert.Empty(await repo.StashListAsync());
+        Assert.Equal(status, await PorcelainAsync(repo));
+        Assert.Equal("# refspecs\nmy own edit\n", Read(repo, "README.md"));
+        Assert.Null(await repo.RefTargetAsync("refs/heads/feature/x"));
+        Assert.Equal("refs/heads/main", await HeadRefAsync(repo));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Create_branch_here_from_a_ref_fetched_ambiguously_makes_the_branch_without_an_upstream()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await AddBackupFetchingIntoOriginAsync(repo, "main");
+
+        // What git does alone (0.5's implicit upstream): pr/1 tracks the wrong first candidate, and
+        // from origin/main, which two remotes fetch, it fails and leaves the branch behind.
+        await repo.GitAsync("branch", "--quiet", "implicit", "refs/remotes/origin/pr/1");
+        Assert.Equal("refs/heads/pr/1", await ConfigAsync(repo, "branch.implicit.merge"));
+        Assert.Equal(128, (await repo.GitAllowingFailureAsync("branch", "left", "refs/remotes/origin/main")).ExitCode);
+        Assert.Equal(Parser, await repo.RefTargetAsync("refs/heads/left"));
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
+        app.Dialogs.EnterName("review", option: false).EnterName("review-checked-out", option: true).EnterName("from-two-remotes", option: false);
+
+        // R2 (D201), without and with the checkout; then R1.
+        await app.Operations.CreateBranchAsync("refs/remotes/origin/pr/1");
+        await app.Operations.CreateBranchAsync("refs/remotes/origin/pr/1");
+        await app.Operations.CreateBranchAsync("refs/remotes/origin/main");
+
+        var calls = app.Calls.Snapshot();
+        Assert.Contains(calls, call => call.CommandText == "git branch --no-track review refs/remotes/origin/pr/1" && call.Succeeded);
+        Assert.Contains(calls, call => call.CommandText == "git switch --create review-checked-out --no-track refs/remotes/origin/pr/1" && call.Succeeded);
+        Assert.Contains(calls, call => call.CommandText == "git branch --no-track from-two-remotes refs/remotes/origin/main" && call.Succeeded);
+        foreach (var branch in new[] { "review", "review-checked-out", "from-two-remotes" })
+        {
+            Assert.Equal(1, (await repo.GitAllowingFailureAsync("config", "--get-regexp", $@"^branch\.{branch}\.")).ExitCode);
+        }
+
+        Assert.Equal((Topic, Topic, Parser), (await repo.RefTargetAsync("refs/heads/review"), await repo.RefTargetAsync("refs/heads/review-checked-out"), await repo.RefTargetAsync("refs/heads/from-two-remotes")));
+        Assert.Empty(app.Dialogs.Errors);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Set_upstream_lists_only_the_branches_one_ref_of_one_remote_fills()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+
+        // backup fetches its branches into origin/feature/*: origin/feature/x is fetched from two remotes (R1).
+        await repo.GitAsync("remote", "add", "backup", "../fork.git");
+        await repo.GitAsync("config", "remote.backup.fetch", "+refs/heads/*:refs/remotes/origin/feature/*");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        string[]? items = null;
+        app.Dialogs.Answer<PickDialogViewModel>(dialog =>
+        {
+            items = [.. dialog.Items];
+            dialog.Selected = "fork/up/main";
+            dialog.ConfirmCommand.Execute(null);
+        });
+
+        await app.Operations.SetUpstreamAsync("refs/heads/topic");
+
+        // Left out: origin/feature/x (R1), origin/pr/1 (R2), upstream/pr/7 (R4) (10.4 #11).
+        Assert.Equal(["fork/up/main", "origin/main"], Assert.IsType<string[]>(items));
+        Assert.Equal("topic now tracks fork/up/main", app.StatusText);
+        Assert.Equal(("fork", "refs/heads/main"), (await ConfigAsync(repo, "branch.topic.remote"), await ConfigAsync(repo, "branch.topic.merge")));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task The_conflict_sides_remote_branch_is_matched_by_its_name_on_the_remote()
+    {
+        // fork's main at topic's commit: under fork's renaming line its tracking ref is fork/up/main (10.4 #13).
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.PushAsync("fork", setUpstream: false, "+topic:refs/heads/main");
+        await repo.GitAsync("fetch", "--quiet", "fork");
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        Assert.Equal("fork/up/main", app.Operations.MergedRemoteBranch("main", Topic));
+        Assert.Equal("origin/main", app.Operations.MergedRemoteBranch("main", Parser));
+        Assert.Null(app.Operations.MergedRemoteBranch("up/main", Topic));
+    }
+
+    /// <summary>
+    /// The error dialog of a checkout of origin/feature/x that the app refused before git because
+    /// two remotes fetch it (10.4 #10, R1): "Checkout failed", R1 as its summary, no output, no
+    /// command, no extra button; the refusal logged as one, not as an unexpected error.
+    /// </summary>
+    private static void AssertRefusedBeforeGit(OperationsHarness app, ErrorDialogViewModel error, string title)
+    {
+        const string Reason = "origin/feature/x is fetched from origin and backup";
+        Assert.Equal(("Checkout failed", Reason), (error.Title, error.Summary));
+        Assert.Equal((null, null), (error.Output, error.Command));
+        Assert.False(error.HasExtraAction);
+        Assert.Contains(app.Log.Messages, message => message.Contains($": {title}: refused, {Reason}", StringComparison.Ordinal));
+        Assert.DoesNotContain(app.Log.Messages, message => message.Contains("unexpected error", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Opens the harness with Keep ignored files off, so that a checkout's command has no <c>--no-overwrite-ignore</c> (9.11).</summary>
+    private static async Task<OperationsHarness> OpenWithoutKeepingIgnoredFilesAsync(TempRepo repo)
+    {
+        var app = await OperationsHarness.OpenAsync(repo);
+        app.Settings.Update(settings => settings with { KeepIgnoredFiles = false });
+        return app;
+    }
+
+    /// <summary>
+    /// 0.5's H on "refspecs" for one branch: a remote backup whose line fetches its
+    /// <paramref name="branch"/> into origin's tracking ref of it, so that two remotes fetch that ref (R1).
+    /// </summary>
+    private static async Task AddBackupFetchingIntoOriginAsync(TempRepo repo, string branch)
+    {
+        await repo.GitAsync("remote", "add", "backup", "../origin.git");
+        await repo.GitAsync("config", "remote.backup.fetch", $"+refs/heads/{branch}:refs/remotes/origin/{branch}");
+    }
+
+    private static async Task<string> HeadRefAsync(TempRepo repo) => (await repo.GitAsync("symbolic-ref", "HEAD")).StandardOutput.Trim();
+
+    /// <summary>The left panel's row <paramref name="key"/>, its folder <paramref name="folder"/> opened first as a click opens it.</summary>
+    private static RefListRow LeftPanelRow(OperationsHarness app, string key, string folder)
+    {
+        var panel = app.Repository.LeftPanel;
+        if (panel.Rows.SingleOrDefault(row => row.Key == folder) is RefItemRow { IsOpen: false } closed)
+        {
+            panel.Activate(closed);
+        }
+
+        return panel.Rows.Single(row => row.Key == key);
     }
 
     /// <summary>The control <paramref name="automationId"/> of the dialog on top that stands for <paramref name="text"/> (a list item, a radio button).</summary>

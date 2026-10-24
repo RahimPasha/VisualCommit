@@ -1,9 +1,12 @@
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.Views;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
@@ -12,6 +15,7 @@ using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 using VisualCommit.Core.Undo;
+using VisualCommit.Core.Workspaces;
 using VisualCommit.Git;
 
 namespace VisualCommit.App;
@@ -26,6 +30,7 @@ public sealed class AppSession : IDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
     private readonly FileAppLog _log;
+    private readonly PlatformSystemTheme? _ownedSystemTheme;
     private bool _disposed;
     private bool _windowClosed;
 
@@ -34,6 +39,9 @@ public sealed class AppSession : IDisposable
         FileAppLog log,
         ISettingsStore settings,
         ISessionStore session,
+        IWorkspaceStore workspaces,
+        IThemeService themes,
+        PlatformSystemTheme? ownedSystemTheme,
         IGitCallLog gitCalls,
         TabServices services,
         MainWindowViewModel shell,
@@ -44,6 +52,9 @@ public sealed class AppSession : IDisposable
         Log = log;
         Settings = settings;
         SessionState = session;
+        Workspaces = workspaces;
+        Themes = themes;
+        _ownedSystemTheme = ownedSystemTheme;
         GitCalls = gitCalls;
         Services = services;
         Shell = shell;
@@ -60,6 +71,15 @@ public sealed class AppSession : IDisposable
 
     /// <summary>The open tabs, recent repositories, window placement and panel widths (D46).</summary>
     public ISessionStore SessionState { get; }
+
+    /// <summary>
+    /// The user's workspaces (D189, docs/phase-6-design.md 1.3), kept in <c>workspaces.json</c> by
+    /// <c>JsonWorkspaceStore</c>.
+    /// </summary>
+    public IWorkspaceStore Workspaces { get; }
+
+    /// <summary>The app's theme (D194, docs/phase-6-design.md 11.5): the user's choice and what the window shows.</summary>
+    public IThemeService Themes { get; }
 
     /// <summary>Every git call this session made.</summary>
     public IGitCallLog GitCalls { get; }
@@ -91,6 +111,17 @@ public sealed class AppSession : IDisposable
     /// and is their clean-up's "now" (docs/phase-5-design.md 2.3, D173); without them, the clocks
     /// the environment asks for (<see cref="AppClocks"/>: the system's, or the real-window pass's
     /// fixed ones). The headless harness gives fixed ones.
+    /// <para>
+    /// Phase 6 (docs/phase-6-design.md 17.2, 11.5, 12.9, 7.3, 2.10): <paramref name="gitEnvironment"/>
+    /// is the session's own git environment, which its one git runner applies (the harnesses' global
+    /// configuration in the data folder; none for the desktop app); <paramref name="systemTheme"/>
+    /// the operating system's mode (null: the platform's, which the session makes, owns and
+    /// disposes; the headless harness gives a fake); <paramref name="tools"/> what the machine has
+    /// installed (null: <see cref="ToolCatalogues.FromEnvironment"/>, and null again the machine's;
+    /// the harnesses give <see cref="ToolCatalogues.Fixed"/>); <paramref name="readEnvironment"/>
+    /// the environment reader auto-fetch's interval goes by (null: the process's);
+    /// <paramref name="readClock"/> the clock of a dashboard's 10 s rule (null: the session's clock).
+    /// </para>
     /// </summary>
     public static AppSession Start(
         AppPaths paths,
@@ -100,12 +131,22 @@ public sealed class AppSession : IDisposable
         IClipboardService? clipboard = null,
         IGitPromptHandler? promptHandler = null,
         TimeProvider? recordClock = null,
-        BackupClock? backupClock = null)
+        BackupClock? backupClock = null,
+        IReadOnlyDictionary<string, string?>? gitEnvironment = null,
+        ISystemTheme? systemTheme = null,
+        ToolCatalogues? tools = null,
+        Func<string, string?>? readEnvironment = null,
+        TimeProvider? readClock = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(application);
         recordClock ??= AppClocks.RecordClockFromEnvironment();
         backupClock ??= AppClocks.BackupClockFromEnvironment();
+        tools ??= ToolCatalogues.FromEnvironment();
+
+        // Every key text is in the platform's words (docs/phase-6-design.md 6.4), set before the
+        // window is made: Cmd where the command modifier is Meta (macOS), Ctrl otherwise.
+        KeyTexts.Current = new KeyTexts(ShortcutKeys.CommandKeyOf(ShortcutKeys.CommandModifierOf(application.PlatformSettings?.HotkeyConfiguration)));
 
         Directory.CreateDirectory(paths.DataDirectory);
         var log = new FileAppLog(paths.LogDirectory);
@@ -115,11 +156,29 @@ public sealed class AppSession : IDisposable
 
         var settings = new JsonSettingsStore(paths.SettingsFile, log);
 
-        // The theme is applied before the window exists, so the first frame already has it.
-        var themes = new ThemeService(application);
+        // The environment's auto-fetch interval wins over the setting (D85, docs/phase-6-design.md
+        // 7.3): said once, after the settings are loaded, read through the reader the scheduler gets.
+        readEnvironment ??= Environment.GetEnvironmentVariable;
+        if (int.TryParse(readEnvironment(AutoFetchScheduler.MinutesVariable), NumberStyles.Integer, CultureInfo.InvariantCulture, out var overriddenMinutes))
+        {
+            log.Info($"{AutoFetchScheduler.MinutesVariable}={overriddenMinutes} overrides the auto-fetch setting ({settings.Current.AutoFetchMinutes} minutes).");
+        }
+
+        // The theme is applied before the window exists, so the first frame already has it (11.5).
+        var ownedSystemTheme = systemTheme is null ? new PlatformSystemTheme(application.PlatformSettings) : null;
+        var themes = new ThemeService(application, systemTheme ?? ownedSystemTheme!, log);
         themes.Apply(settings.Current.Theme);
+        log.Info(settings.Current.Theme switch
+        {
+            AppTheme.Light => "Theme: Light.",
+            AppTheme.System => $"Theme: System (the system's theme is {(themes.IsDark ? "dark" : "light")}).",
+            _ => "Theme: Dark.",
+        });
 
         var session = new JsonSessionStore(paths.SessionFile, log);
+
+        // The workspaces (1.3, D189), after the session: workspaces.json beside it.
+        var workspaces = new JsonWorkspaceStore(paths.WorkspacesFile, log);
 
         // An operation's git calls are kept as long as its record (docs/phase-5-design.md 2.3).
         var operations = new OperationLog();
@@ -132,7 +191,7 @@ public sealed class AppSession : IDisposable
         {
             try
             {
-                var detection = await GitLocator.DetectAsync(gitCalls, log, recordClock, cancellationToken);
+                var detection = await GitLocator.DetectAsync(gitCalls, log, recordClock, gitEnvironment, cancellationToken);
                 gitFound.TrySetResult(detection);
                 return detection;
             }
@@ -156,8 +215,17 @@ public sealed class AppSession : IDisposable
         var dialogs = new DialogHostViewModel();
         var promptPresenter = new PromptDialogPresenter(dialogs, dialogs.Notices);
         var prompts = PromptDialogs.CreateBroker(promptHandler ?? new PromptDialogs(promptPresenter, log), log);
+
+        // Git's own settings (docs/phase-6-design.md 8.1): one instance over the session's runner,
+        // with the kept list of merge tools in the data folder (8.10); disposed with the session.
+        var gitAccess = new GitAccess(gitFound.Task);
+        var gitSettings = new GitConfiguration(gitAccess.GetRunnerAsync, paths.DataDirectory, paths.MergeToolsFile, gitEnvironment, log);
+
+        // What the machine has installed, unless the harnesses fixed it (12.9): its editors, the
+        // merge tools git knows (8.10) and PATHEXT, held in TabServices.Tools.
+        tools ??= EditorCatalog.MachineCatalogues(gitSettings, settings, log);
         var tabServices = new TabServices(
-            new GitRepositoryProvider(new GitAccess(gitFound.Task), log, backupClock),
+            new GitRepositoryProvider(gitAccess, log, backupClock),
             folderPicker ?? new StorageFolderPicker(() => mainWindow),
             settings,
             session,
@@ -170,15 +238,19 @@ public sealed class AppSession : IDisposable
             clipboard: clipboard ?? new ClipboardService(() => mainWindow),
             gitCalls: gitCalls,
             recordClock: recordClock,
-            undoHistories: new UndoHistories());
-        var shell = new MainWindowViewModel(settings, themes, DetectGitAsync, log, tabServices, session);
+            undoHistories: new UndoHistories(),
+            workspaces: workspaces,
+            gitSettings: gitSettings,
+            tools: tools,
+            readClock: readClock);
+        var shell = new MainWindowViewModel(settings, themes, DetectGitAsync, log, tabServices, session, readEnvironment);
 
         // A prompt dialog names its repository by the window's one rule, as every other dialog (4f).
         promptPresenter.ShowsRepositoryName = () => shell.NamesRepositoryInDialogs;
         mainWindow = new MainWindow { DataContext = shell };
         mainWindow.UseSession(session);
 
-        return new AppSession(paths, log, settings, session, gitCalls, tabServices, shell, mainWindow);
+        return new AppSession(paths, log, settings, session, workspaces, themes, ownedSystemTheme, gitCalls, tabServices, shell, mainWindow);
     }
 
     public static string AppVersion =>
@@ -206,6 +278,13 @@ public sealed class AppSession : IDisposable
         // Stops every tab's work and logs each graph's frame times (D50).
         Shell.CloseAll();
         (Services.Prompts as IDisposable)?.Dispose();
+
+        // Stops the merge tools' lookup (docs/phase-6-design.md 8.1, 8.10).
+        Services.GitSettings?.Dispose();
+
+        // The theme service stops following the system before the system's theme it owns goes (11.5).
+        (Themes as IDisposable)?.Dispose();
+        _ownedSystemTheme?.Dispose();
 
         Log.Info("VisualCommit closed.");
 

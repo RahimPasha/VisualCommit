@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
@@ -26,6 +27,18 @@ public interface IWorkingChangesHost
 
     /// <summary>Commits or amends with <paramref name="message"/> (D68).</summary>
     Task<string?> CommitAsync(string message, bool amend);
+
+    /// <summary>
+    /// Commits, or amends the commit <paramref name="amended"/> names (HEAD when "Amend previous
+    /// commit" was ticked, and the message it loaded is that commit's): an amend refuses inside its
+    /// operation, amending nothing, when HEAD is no longer there (D124: an operation checks what it
+    /// acts on when it runs). Null checks nothing. The default commits as
+    /// <see cref="CommitAsync(string, bool)"/>.
+    /// </summary>
+    Task<string?> CommitAsync(string message, bool amend, HeadState? amended) => CommitAsync(message, amend);
+
+    /// <summary>HEAD as the repository's refs were last read, or null before: what a ticked Amend amends.</summary>
+    HeadState? Head => null;
 
     /// <summary>HEAD's subject and body, for amending.</summary>
     Task<(string Subject, string Body)?> ReadHeadMessageAsync();
@@ -143,7 +156,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
 
     /// <summary>The commit's first line.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(SummaryCounter), nameof(IsSummaryOverLimit), nameof(CanCommit))]
+    [NotifyPropertyChangedFor(nameof(SummaryCounter), nameof(IsSummaryOverLimit), nameof(CanCommit), nameof(CommitToolTip))]
     [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
     public partial string Summary { get; set; } = string.Empty;
 
@@ -156,9 +169,12 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
 
     public bool IsSummaryOverLimit => Summary.Length > SummaryLimit;
 
+    /// <summary>HEAD when "Amend previous commit" was ticked, whose message it loaded: the commit the amend is for; null while unticked.</summary>
+    private HeadState? _amendedHead;
+
     /// <summary>The commit replaces HEAD's ("Amend previous commit").</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CommitButtonText), nameof(CanCommit), nameof(CommitToolTip))]
+    [NotifyPropertyChangedFor(nameof(CommitButtonText), nameof(CanCommit), nameof(CommitDisabledReason), nameof(CommitToolTip))]
     [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
     public partial bool IsAmend { get; set; }
 
@@ -174,7 +190,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     public partial string? AmendToolTip { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CommitButtonText), nameof(CanCommit))]
+    [NotifyPropertyChangedFor(nameof(CommitButtonText), nameof(CanCommit), nameof(CommitToolTip))]
     [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
     public partial bool IsCommitting { get; private set; }
 
@@ -205,14 +221,37 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         : !IsCommitting && !string.IsNullOrWhiteSpace(Summary) && (IsAmend || _status.Staged.Count > 0 || CanCommitMerge);
 
     /// <summary>
-    /// The commit button's tooltip, or null: while it continues the operation, Continue's reason
-    /// (5.3, 10.4); during a cherry-pick or revert that changes nothing, why the button stays
-    /// disabled (5.3).
+    /// Why the commit button is disabled, or null (docs/phase-6-design.md 6.8): while it continues
+    /// the operation, Continue's reason (5.3, 10.4); during a cherry-pick or revert that changes
+    /// nothing, why the button stays disabled (5.3); none for an empty summary or nothing staged.
+    /// The palette's commit entry reads it (5.4's row 6).
     /// </summary>
-    public string? CommitToolTip =>
+    public string? CommitDisabledReason =>
         ContinuesOperation ? ContinueReason
         : _status.InProgress is { Empty: true, Kind: InProgressKind.CherryPick or InProgressKind.Revert } empty && !IsAmend ? ConflictBannerViewModel.ChangesNothing(empty.Kind)
         : null;
+
+    /// <summary>
+    /// The commit button's tooltip and help text (6.8, D199): its reason while disabled, or none;
+    /// while enabled what it does with its key, <c>Commit 1 file (Ctrl+Enter)</c>,
+    /// <c>Continue rebase (Ctrl+Enter)</c> (the key works from the message boxes, 6.10).
+    /// </summary>
+    public string? CommitToolTip => CommitDisabledReason ?? (CanCommit ? KeyTexts.WithKey(CommitButtonText, AppCommand.Commit) : null);
+
+    /// <summary>
+    /// Whose words the commit button's key uses (6.4): <see cref="KeyTexts.Current"/>,
+    /// unless a test of another platform's texts sets its own.
+    /// </summary>
+    public KeyTexts KeyTexts
+    {
+        get;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            field = value;
+            OnPropertyChanged(nameof(CommitToolTip));
+        }
+    } = KeyTexts.Current;
 
     /// <summary>Why the banner's Continue is disabled for the state shown (5.1), or null.</summary>
     private string? ContinueReason => ConflictBannerViewModel.ContinueFor(_status.InProgress, _conflicts, _status.HasUnstagedTrackedChanges).DisabledReason;
@@ -264,6 +303,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         HasStaged = status.Staged.Count > 0;
         OnPropertyChanged(nameof(CommitButtonText));
         OnPropertyChanged(nameof(CanCommit));
+        OnPropertyChanged(nameof(CommitDisabledReason));
         OnPropertyChanged(nameof(CommitToolTip));
         CommitCommand.NotifyCanExecuteChanged();
         _messageFill = FollowOperationMessageAsync(status.InProgress);
@@ -455,7 +495,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
             }
 
             var message = JoinedMessage;
-            var error = await _host.CommitAsync(message, IsAmend);
+            var error = IsAmend ? await _host.CommitAsync(message, amend: true, _amendedHead) : await _host.CommitAsync(message, amend: false);
             if (error is not null)
             {
                 ErrorText = error;
@@ -505,9 +545,14 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         }
     }
 
-    /// <summary>Ticking "Amend previous commit" fills empty boxes with HEAD's message.</summary>
+    /// <summary>
+    /// Ticking "Amend previous commit" fills empty boxes with HEAD's message, and keeps which commit
+    /// that is: the amend is for it, and refuses if HEAD moved since (a pull, an operation of another
+    /// tab, a terminal), rather than amend another commit with this one's message.
+    /// </summary>
     async partial void OnIsAmendChanged(bool value)
     {
+        _amendedHead = value ? _host.Head : null;
         if (!value || Summary.Length > 0 || Description.Length > 0)
         {
             return;

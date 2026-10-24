@@ -794,6 +794,378 @@ public class OperationQueueTests
         await fetch.WaitAsync(Patience, TestCancelled);
     }
 
+    [Fact]
+    public async Task Cancel_of_a_waiting_operation_completes_it_cancelled_without_running_and_leaves_the_others()
+    {
+        // docs/phase-6-design.md 4.5: a bulk run's Cancel all cancels its own operations only.
+        using var queue = new TestQueue();
+        var gate = new TaskCompletionSource();
+        var changes = 0;
+        var running = queue.Queue.RunAsync(Local("Push main", async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done("Pushed main");
+        }));
+        var first = Network("Fetch", _ => throw new InvalidOperationException("Must not run."));
+        var waiting = queue.Queue.RunAsync(first);
+        var other = queue.Queue.RunAsync(Local("Stage", _ => Task.FromResult(OperationReport.Done("Staged"))));
+        queue.Queue.Changed += (_, _) => Interlocked.Increment(ref changes);
+        var finished = new List<(GitOperation Operation, OperationResult Result)>();
+        queue.Queue.Finished += (_, e) =>
+        {
+            lock (finished)
+            {
+                finished.Add((e.Operation, e.Result));
+            }
+        };
+
+        queue.Queue.Cancel(first);
+
+        var result = await waiting.WaitAsync(Patience, TestCancelled);
+        Assert.Equal((OperationOutcome.Cancelled, "Fetch cancelled"), (result.Outcome, result.Message));
+
+        // Unlike DropWaiting, the cancel is the last result and is told as Finished, before the
+        // task completes, so that the tab's status bar says it (docs/phase-6-design.md 4.5).
+        Assert.Same(result, queue.Queue.LastResult);
+        lock (finished)
+        {
+            var (operation, told) = Assert.Single(finished);
+            Assert.Same(first, operation);
+            Assert.Same(result, told);
+        }
+
+        Assert.Equal(1, queue.Queue.Waiting);
+        Assert.Equal("Stage", queue.Queue.FirstWaitingTitle);
+        Assert.Equal("Push main", queue.Queue.Current!.Title);
+        Assert.True(Volatile.Read(ref changes) >= 1);
+        gate.SetResult();
+        Assert.Equal(OperationOutcome.Succeeded, (await running.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Equal(OperationOutcome.Succeeded, (await other.WaitAsync(Patience, TestCancelled)).Outcome);
+    }
+
+    [Fact]
+    public async Task Cancel_of_the_operation_next_in_line_whose_start_is_posted_but_has_not_run_completes_it_cancelled_without_running()
+    {
+        // An operation ends: the next one is current and its start is posted to the UI thread, which
+        // runs a Cancel (Cancel all's click, a registration's callback) before that start. It has
+        // not started, so it ends as a waiting one does (docs/phase-6-design.md 4.5), and the one
+        // after it is next in line instead.
+        var context = new ManualContext();
+        var previous = SynchronizationContext.Current;
+        var operations = new OperationLog();
+        var started = new List<string>();
+        operations.Started += (_, start) => started.Add(start.Title);
+        var broker = new RecordingBroker();
+        var lockScans = 0;
+        var ran = new List<string>();
+        Task<OperationResult> discard;
+        Task<OperationResult> fetching;
+        Task<OperationResult> deleting;
+        Task<OperationResult> staging;
+        using var queue = new TestQueue(prompts: broker, operations: operations, findLockFiles: _ =>
+        {
+            Interlocked.Increment(ref lockScans);
+            return [];
+        });
+        try
+        {
+            SynchronizationContext.SetSynchronizationContext(context);
+            var gate = new TaskCompletionSource();
+            discard = queue.Queue.RunAsync(Local("Discard", async _ =>
+            {
+                await gate.Task;
+                return OperationReport.Done("Discarded");
+            }));
+            var fetch = Network("Fetch", _ =>
+            {
+                ran.Add("Fetch");
+                return Task.FromResult(OperationReport.Done("Fetched from all remotes"));
+            });
+            var delete = Local("Delete branch", _ =>
+            {
+                ran.Add("Delete branch");
+                return Task.FromResult(OperationReport.Done("Deleted"));
+            });
+            fetching = queue.Queue.RunAsync(fetch);
+            deleting = queue.Queue.RunAsync(delete);
+
+            // Discard ends: Fetch, a network operation, is next in line and its start is posted.
+            gate.SetResult();
+            while (queue.Queue.Current?.Title != "Fetch")
+            {
+                Assert.True(context.RunOne(), "The queue stopped before Fetch was next in line.");
+            }
+
+            queue.Queue.Cancel(fetch);
+
+            Assert.Equal("Delete branch", queue.Queue.Current?.Title);
+            Assert.Equal(0, queue.Queue.Waiting);
+
+            // Delete branch, a local operation (no token to cancel), is now next in line, its start
+            // posted in turn and not run either.
+            queue.Queue.Cancel(delete);
+
+            Assert.Null(queue.Queue.Current);
+            while (context.RunOne())
+            {
+            }
+
+            // The queue goes on: an operation queued now runs.
+            staging = queue.Queue.RunAsync(Local("Stage", _ =>
+            {
+                ran.Add("Stage");
+                return Task.FromResult(OperationReport.Done("Staged"));
+            }));
+            while (context.RunOne())
+            {
+            }
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(previous);
+        }
+
+        Assert.Equal(OperationOutcome.Succeeded, (await discard.WaitAsync(Patience, TestCancelled)).Outcome);
+        var fetched = await fetching.WaitAsync(Patience, TestCancelled);
+        var deleted = await deleting.WaitAsync(Patience, TestCancelled);
+        Assert.Equal((OperationOutcome.Cancelled, "Fetch cancelled"), (fetched.Outcome, fetched.Message));
+        Assert.Equal((OperationOutcome.Cancelled, "Delete branch cancelled"), (deleted.Outcome, deleted.Message));
+        Assert.Equal(OperationOutcome.Succeeded, (await staging.WaitAsync(Patience, TestCancelled)).Outcome);
+        await queue.Queue.WhenIdleAsync().WaitAsync(Patience, TestCancelled);
+
+        // Neither ran, nor got a start record, a prompt scope, a lock scan or a refresh.
+        Assert.Equal(["Stage"], ran);
+        Assert.Equal(["Discard", "Stage"], started);
+        Assert.Equal(["Discard", "Stage"], broker.Begun.Select(scope => scope.Title));
+        Assert.Equal(0, Volatile.Read(ref lockScans));
+        Assert.Equal([RefreshScope.Status, RefreshScope.Status], queue.Refreshes);
+        Assert.Equal(["Discard", "Stage"], operations.Snapshot().Select(record => record.Title));
+        Assert.Equal(2, queue.Log.Entries.Count(entry => entry.Message.EndsWith(": cancelled before it started.", StringComparison.Ordinal)));
+        Assert.Null(queue.Queue.Current);
+    }
+
+    [Fact]
+    public async Task Cancel_of_the_running_network_operation_in_its_cancel_window_cancels_it_and_scans_for_lock_files()
+    {
+        using var folder = new TempDirectory("locks");
+        var gitFolder = Directory.CreateDirectory(Path.Combine(folder.Path, ".git")).FullName;
+        Directory.CreateDirectory(Path.Combine(gitFolder, "refs", "remotes", "origin"));
+        using var queue = new TestQueue(gitDirectory: gitFolder);
+        var started = new TaskCompletionSource();
+        var left = Path.Combine(gitFolder, "refs", "remotes", "origin", "main.lock");
+        var fetch = Network("Fetch", async context =>
+        {
+            File.WriteAllText(left, string.Empty);
+            started.SetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Fetched from all remotes");
+        });
+        var task = queue.Queue.RunAsync(fetch);
+        var behind = queue.Queue.RunAsync(Local("Stage", _ => Task.FromResult(OperationReport.Done("Staged"))));
+        await started.Task.WaitAsync(Patience, TestCancelled);
+
+        queue.Queue.Cancel(fetch);
+        var result = await task.WaitAsync(Patience, TestCancelled);
+
+        Assert.Equal((OperationOutcome.Cancelled, "Fetch cancelled"), (result.Outcome, result.Message));
+        Assert.Equal([Path.GetFullPath(left)], result.StaleLockFiles);
+        Assert.Equal(OperationOutcome.Succeeded, (await behind.WaitAsync(Patience, TestCancelled)).Outcome);
+    }
+
+    [Fact]
+    public async Task Cancel_of_a_running_operation_past_its_cancel_window_or_of_a_local_one_lets_it_run_to_its_end()
+    {
+        // The delegates do not look at their token, so the result alone would not show a Cancel that
+        // cancelled it anyway: past its fetch that would stop git's merge midway (D81). So the
+        // token, the snapshot, Changed and the log are looked at too.
+        using var queue = new TestQueue();
+        var changes = 0;
+        var fetched = new TaskCompletionSource();
+        var integrate = new TaskCompletionSource();
+        var pullToken = new CancellationToken(canceled: true);
+        var pull = Network("Pull", async context =>
+        {
+            pullToken = context.CancellationToken;
+            context.EndCancelWindow();
+            fetched.SetResult();
+            await integrate.Task;
+            return OperationReport.Done("Pulled");
+        });
+        var pulling = queue.Queue.RunAsync(pull);
+        await fetched.Task.WaitAsync(Patience, TestCancelled);
+        Assert.False(queue.Queue.Current!.CanCancel);
+        queue.Queue.Changed += (_, _) => Interlocked.Increment(ref changes);
+
+        queue.Queue.Cancel(pull);
+
+        Assert.True(pullToken.CanBeCanceled);
+        Assert.False(pullToken.IsCancellationRequested);
+        Assert.False(queue.Queue.Current!.CanCancel);
+        Assert.Equal(0, Volatile.Read(ref changes));
+        integrate.SetResult();
+        Assert.Equal(OperationOutcome.Succeeded, (await pulling.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.False(pullToken.IsCancellationRequested);
+
+        var localGate = new TaskCompletionSource();
+        var localStarted = new TaskCompletionSource();
+        var merge = Local("Merge", async _ =>
+        {
+            localStarted.SetResult();
+            await localGate.Task;
+            return OperationReport.Done("Merged");
+        });
+        var merging = queue.Queue.RunAsync(merge);
+        await localStarted.Task.WaitAsync(Patience, TestCancelled);
+        Assert.False(queue.Queue.Current!.CanCancel);
+        var beforeCancel = Volatile.Read(ref changes);
+
+        queue.Queue.Cancel(merge);
+
+        Assert.Equal(beforeCancel, Volatile.Read(ref changes));
+        localGate.SetResult();
+        Assert.Equal(OperationOutcome.Succeeded, (await merging.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.DoesNotContain(queue.Log.Entries, entry => entry.Message.Contains("cancelling", StringComparison.Ordinal)
+            || entry.Message.Contains("cancelled before it started", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Cancel_of_an_operation_merged_into_a_waiting_one_cancels_the_shared_one_for_both_callers()
+    {
+        // A tab's waiting Fetch and a row's that D123's dedupe made one entry, in either order.
+        using var queue = new TestQueue();
+        var gate = new TaskCompletionSource();
+        var fetches = 0;
+        GitOperation Fetch() => Network("Fetch", _ =>
+        {
+            Interlocked.Increment(ref fetches);
+            return Task.FromResult(OperationReport.Done("Fetched from all remotes"));
+        }) with { DedupeKey = "fetch:*" };
+        var running = queue.Queue.RunAsync(Local("Push main", async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done("Pushed main");
+        }));
+        var tabs = Fetch();
+        var rows = Fetch();
+        var tabTask = queue.Queue.RunAsync(tabs);
+        var rowTask = queue.Queue.RunAsync(rows);
+        Assert.Same(tabTask, rowTask);
+
+        queue.Queue.Cancel(rows);
+
+        var result = await tabTask.WaitAsync(Patience, TestCancelled);
+        Assert.Equal((OperationOutcome.Cancelled, "Fetch cancelled"), (result.Outcome, result.Message));
+        Assert.Equal(0, queue.Queue.Waiting);
+        gate.SetResult();
+        await running.WaitAsync(Patience, TestCancelled);
+        Assert.Equal(0, fetches);
+    }
+
+    [Fact]
+    public async Task Cancel_of_a_merged_operation_once_the_shared_one_runs_cancels_it_in_its_cancel_window()
+    {
+        using var queue = new TestQueue();
+        var gate = new TaskCompletionSource();
+        var started = new TaskCompletionSource();
+        GitOperation Fetch() => Network("Fetch", async context =>
+        {
+            started.TrySetResult();
+            await Task.Delay(Timeout.Infinite, context.CancellationToken);
+            return OperationReport.Done("Fetched from all remotes");
+        }) with { DedupeKey = "fetch:*" };
+        var running = queue.Queue.RunAsync(Local("Commit", async _ =>
+        {
+            await gate.Task;
+            return OperationReport.Done("Committed");
+        }));
+        var first = Fetch();
+        var merged = Fetch();
+        var shared = queue.Queue.RunAsync(first);
+        Assert.Same(shared, queue.Queue.RunAsync(merged));
+        gate.SetResult();
+        await running.WaitAsync(Patience, TestCancelled);
+        await started.Task.WaitAsync(Patience, TestCancelled);
+
+        queue.Queue.Cancel(merged);
+
+        Assert.Equal(OperationOutcome.Cancelled, (await shared.WaitAsync(Patience, TestCancelled)).Outcome);
+    }
+
+    [Fact]
+    public async Task Cancel_of_a_background_operation_or_of_one_that_has_ended_does_nothing()
+    {
+        using var queue = new TestQueue();
+        var started = new TaskCompletionSource();
+        var release = new TaskCompletionSource();
+        CancellationToken backgroundToken = default;
+        var autoFetch = Network("Auto-fetch", async context =>
+        {
+            backgroundToken = context.CancellationToken;
+            started.SetResult();
+            await release.Task;
+            return OperationReport.Done("Fetched from all remotes");
+        });
+        var finished = new TaskCompletionSource<OperationResult>();
+        queue.Queue.Finished += (_, e) =>
+        {
+            if (e.Operation.IsBackground)
+            {
+                finished.TrySetResult(e.Result);
+            }
+        };
+        Assert.True(queue.Queue.TryStartInBackground(autoFetch));
+        await started.Task.WaitAsync(Patience, TestCancelled);
+
+        // A user's operation waits for it, so CancelCurrent would stop it (D85); Cancel does not,
+        // whether given the operation as started or flagged as the queue runs it.
+        var waiting = queue.Queue.RunAsync(Local("Stage", _ => Task.FromResult(OperationReport.Done("Staged"))));
+        queue.Queue.Cancel(autoFetch);
+        queue.Queue.Cancel(autoFetch with { IsBackground = true });
+        Assert.False(backgroundToken.IsCancellationRequested);
+        Assert.True(queue.Queue.Current!.CanCancel);
+        release.SetResult();
+        Assert.Equal(OperationOutcome.Succeeded, (await finished.Task.WaitAsync(Patience, TestCancelled)).Outcome);
+        Assert.Equal(OperationOutcome.Succeeded, (await waiting.WaitAsync(Patience, TestCancelled)).Outcome);
+
+        // Ended: the queue no longer holds it, and the next operation is not touched.
+        var ended = Network("Fetch", _ => Task.FromResult(OperationReport.Done("Fetched from all remotes")));
+        Assert.Equal(OperationOutcome.Succeeded, (await queue.Queue.RunAsync(ended).WaitAsync(Patience, TestCancelled)).Outcome);
+        var nextStarted = new TaskCompletionSource();
+        var nextGate = new TaskCompletionSource();
+        CancellationToken nextToken = default;
+        var next = queue.Queue.RunAsync(Network("Fetch", async context =>
+        {
+            nextToken = context.CancellationToken;
+            nextStarted.SetResult();
+            await nextGate.Task;
+            return OperationReport.Done("Fetched from all remotes");
+        }));
+        await nextStarted.Task.WaitAsync(Patience, TestCancelled);
+        queue.Queue.Cancel(ended);
+        Assert.True(nextToken.CanBeCanceled);
+        Assert.False(nextToken.IsCancellationRequested);
+        Assert.True(queue.Queue.Current!.CanCancel);
+        nextGate.SetResult();
+        Assert.Equal(OperationOutcome.Succeeded, (await next.WaitAsync(Patience, TestCancelled)).Outcome);
+    }
+
+    [Fact]
+    public async Task The_operations_prompt_group_reaches_the_brokers_Begin()
+    {
+        var broker = new RecordingBroker();
+        using var queue = new TestQueue(prompts: broker);
+        using var group = new PromptGroup();
+
+        await queue.Queue.RunAsync(Network("Fetch", _ => Task.FromResult(OperationReport.Done(string.Empty))) with { PromptGroup = group });
+        await queue.Queue.RunAsync(Network("Fetch", _ => Task.FromResult(OperationReport.Done(string.Empty))));
+
+        Assert.Equal([group, null], broker.Begun.Select(scope => scope.Group));
+        Assert.StartsWith("bulk-", group.Id, StringComparison.Ordinal);
+    }
+
+    private static GitOperation Network(string title, Func<OperationContext, Task<OperationReport>> run) =>
+        new(title, title + "…", OperationKind.Network, RefreshScope.Refs, run);
+
     private static GitOperation Local(string title, Func<OperationContext, Task<OperationReport>> run) =>
         new(title, title + "…", OperationKind.Local, RefreshScope.Status, run);
 
@@ -814,7 +1186,8 @@ public class OperationQueueTests
             Func<RefreshScope, Task>? refresh = null,
             IGitPromptBroker? prompts = null,
             IOperationLog? operations = null,
-            string? gitDirectory = null)
+            string? gitDirectory = null,
+            Func<DateTimeOffset, IReadOnlyList<string>>? findLockFiles = null)
         {
             Queue = new OperationQueue(
                 "graph",
@@ -832,7 +1205,8 @@ public class OperationQueueTests
                 },
                 prompts,
                 operations,
-                Log);
+                Log,
+                findLockFiles);
         }
 
         public OperationQueue Queue { get; }
@@ -858,9 +1232,9 @@ public class OperationQueueTests
     {
         public List<Scope> Begun { get; } = [];
 
-        public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null)
+        public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null)
         {
-            var scope = new Scope(operationId ?? "prompt", title, repositoryName, mode);
+            var scope = new Scope(operationId ?? "prompt", title, repositoryName, mode) { Group = group };
             lock (Begun)
             {
                 Begun.Add(scope);
@@ -877,6 +1251,9 @@ public class OperationQueueTests
             public string Repository { get; } = repository;
 
             public PromptMode Mode { get; } = mode;
+
+            /// <summary>The prompt group the queue passed (docs/phase-6-design.md 4.4), or null.</summary>
+            public PromptGroup? Group { get; init; }
 
             public void CancelByUser() => UserCancelled = true;
         }

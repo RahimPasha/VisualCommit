@@ -248,7 +248,7 @@ public class RepositoryOperationsRebaseTests
         Assert.Equal("feature/other", await repo.CurrentBranchAsync());
         Assert.Equal(MainMore, (await repo.GitAsync("rev-parse", "feature/other~1")).StandardOutput.Trim());
         Assert.Equal(TopicTwo, await repo.RefTargetAsync("refs/heads/feature/topic"));
-        AssertCalledInOrder(app, "git switch --no-guess feature/other", $"git rebase {MainMore}");
+        AssertCalledInOrder(app, "git switch --no-guess --no-overwrite-ignore feature/other", $"git rebase {MainMore}");
         var backup = Assert.Single(await repo.BackupRefsAsync());
         Assert.Matches($"^refs/visualcommit/backup/rebase-{BackupTime}/feature/other$", backup.Name);
         Assert.Equal(OtherOne, backup.Sha);
@@ -329,7 +329,7 @@ public class RepositoryOperationsRebaseTests
         Assert.Equal("feature/other", await repo.CurrentBranchAsync());
         Assert.Equal(MainMore, (await repo.GitAsync("rev-parse", "feature/other~1")).StandardOutput.Trim());
         Assert.Equal("# Changed here\n", Read(repo, "README.md"));
-        AssertCalledInOrder(app, "git config --type=bool --get rebase.autoStash", "git switch --no-guess feature/other", $"git rebase {MainMore}");
+        AssertCalledInOrder(app, "git config --type=bool --get rebase.autoStash", "git switch --no-guess --no-overwrite-ignore feature/other", $"git rebase {MainMore}");
     }
 
     [Fact]
@@ -359,7 +359,7 @@ public class RepositoryOperationsRebaseTests
         Assert.Equal("main", await repo.CurrentBranchAsync());
         Assert.Equal(main, await repo.HeadAsync());
         Assert.Equal(rebaseTip, await repo.RefTargetAsync("refs/heads/feature/rebase"));
-        AssertCalledInOrder(app, "git rebase --abort", "git switch --no-guess main");
+        AssertCalledInOrder(app, "git rebase --abort", "git switch --no-guess --no-overwrite-ignore main");
         var backups = (await repo.BackupRefsAsync()).Select(entry => entry.Name).ToList();
         Assert.Equal(3, backups.Count);
         Assert.Contains(backups, name => Regex.IsMatch(name, $"^refs/visualcommit/backup/rebase-{BackupTime}/feature/rebase$"));
@@ -436,7 +436,7 @@ public class RepositoryOperationsRebaseTests
         Assert.Equal("Rebased feature/other: 1 commit", app.StatusText);
         Assert.Equal("feature/other", await repo.CurrentBranchAsync());
         Assert.Equal("Other one, reworded\n\n#1 kept", (await repo.GitAsync("log", "-1", "--format=%B")).StandardOutput.TrimEnd());
-        AssertCalledInOrder(app, "git switch --no-guess feature/other");
+        AssertCalledInOrder(app, "git switch --no-guess --no-overwrite-ignore feature/other");
         Assert.Equal(OtherOne, Assert.Single(await repo.BackupRefsAsync()).Sha);
     }
 

@@ -50,8 +50,8 @@ public class ActivityLogViewTests
         // A tab without a repository: the toggle disabled, with its tooltip, not selected (1.2).
         var toggle = (Button)app.FindByAutomationId("ActivityLogToggle");
         Assert.False(toggle.IsEffectivelyEnabled);
-        Assert.Equal(ActivityLogViewModel.ShowText, ToolTip.GetTip(toggle));
-        Assert.Equal(ActivityLogViewModel.ShowText, AutomationProperties.GetHelpText(toggle));
+        Assert.Equal("Show every git command the app has run (Ctrl+J)", ToolTip.GetTip(toggle));
+        Assert.Equal("Show every git command the app has run (Ctrl+J)", AutomationProperties.GetHelpText(toggle));
         Assert.DoesNotContain("selected", toggle.Classes);
         Assert.Equal(Brush(app, "VcTextDisabledBrush"), ColorOf(toggle.Foreground));
 
@@ -82,8 +82,8 @@ public class ActivityLogViewTests
         Assert.Contains("selected", toggle.Classes);
         Assert.Equal(Brush(app, "VcControlBackgroundBrush"), ColorOf(toggle.Background));
         Assert.Equal(Brush(app, "VcTextPrimaryBrush"), ColorOf(toggle.Foreground));
-        Assert.Equal(ActivityLogViewModel.HideText, ToolTip.GetTip(toggle));
-        Assert.Equal(ActivityLogViewModel.HideText, AutomationProperties.GetHelpText(toggle));
+        Assert.Equal("Hide the activity log (Ctrl+J)", ToolTip.GetTip(toggle));
+        Assert.Equal("Hide the activity log (Ctrl+J)", AutomationProperties.GetHelpText(toggle));
         var line = app.Find<Border>("ActivityLogSplitterLine");
         AssertBounds(new Rect(260, 473, 440, 1), app.BoundsOf(line));
         Assert.Equal(Brush(app, "VcBorderBrush"), ColorOf(line.Background));
@@ -94,7 +94,7 @@ public class ActivityLogViewTests
         Assert.False(app.FindByAutomationId("ActivityLogSplitter").IsEffectivelyVisible);
         Assert.Equal(674, app.BoundsOf(graph).Bottom, 1);
         Assert.DoesNotContain("selected", toggle.Classes);
-        Assert.Equal(ActivityLogViewModel.ShowText, ToolTip.GetTip(toggle));
+        Assert.Equal("Show every git command the app has run (Ctrl+J)", ToolTip.GetTip(toggle));
         Assert.Equal(200, app.ActivityLogModel.PreferredHeight);
     }
 
@@ -111,7 +111,7 @@ public class ActivityLogViewTests
         AddOperation(app, key, "op-a1", "Clean up backups", OperationOutcome.Succeeded, "Removed 3 backups", notes: ["Removed backup reset-20251120T090001000Z (older than 30 days)"]);
         AddCall(app, repo.Path, "op-a1", "git update-ref --stdin", input: "delete refs/visualcommit/backup/reset-20251120T090001000Z da31c977\n");
         AddOperation(app, key, "op-a2", "Check out feature/kinds", OperationOutcome.Failed, "Check out feature/kinds failed", summary: "1 conflict prevents checkout. Commit, stash, or discard your changes first.");
-        AddCall(app, repo.Path, "op-a2", "git switch --no-guess feature/kinds", exitCode: 1, error: "error: Your local changes would be overwritten by checkout:\n\tother.txt\nAborting\n");
+        AddCall(app, repo.Path, "op-a2", "git switch --no-guess --no-overwrite-ignore feature/kinds", exitCode: 1, error: "error: Your local changes would be overwritten by checkout:\n\tother.txt\nAborting\n");
 
         var rows = app.ActivityLog().Rows;
         Assert.Equal(2, rows.Count);
@@ -167,7 +167,7 @@ public class ActivityLogViewTests
         rows = app.ActivityLog().Rows;
         var summary = rows.Single(row => row.Kind == ActivityLogRowKind.FailureSummary);
         Assert.Equal(("1 conflict prevents checkout. Commit, stash, or discard your changes first.", Brush(app, "VcDangerBrush")), (summary.Text, summary.TextColor));
-        var switchCall = rows.Single(row => row.Command == "git switch --no-guess feature/kinds");
+        var switchCall = rows.Single(row => row.Command == "git switch --no-guess --no-overwrite-ignore feature/kinds");
         Assert.Equal(("exit 1", Brush(app, "VcDangerBrush")), (switchCall.ExitText, switchCall.ExitColor));
         Assert.True(rows[^1].IsInView);
         app.PressKey(Key.Left);

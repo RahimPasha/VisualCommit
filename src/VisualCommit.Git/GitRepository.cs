@@ -50,6 +50,29 @@ public sealed partial class GitRepository : IGitRepository
     public string OpenedFolder { get; }
 
     /// <summary>
+    /// Whether <see cref="OpenedFolder"/> is the working tree's top (docs/phase-6-design.md 1.2,
+    /// D204): true with no git call when <see cref="WorktreeKey.Comparer"/> finds it equal to
+    /// <see cref="WorkingDirectory"/> (a short name is no other spelling: the opening's
+    /// <see cref="Path.GetFullPath(string)"/> has expanded it already); otherwise one
+    /// <c>git rev-parse --show-prefix</c> in it, a read. An empty line is the top spelled another
+    /// way (a junction, a symbolic link such as macOS's <c>/var</c>: git reports the physical
+    /// folder, 0.8), anything else (<c>inner2/</c>) a folder inside, such as one inside another
+    /// repository whose own <c>.git</c> is gone or empty. The opening call itself stays as it is.
+    /// </summary>
+    /// <exception cref="GitException">Git failed.</exception>
+    public async Task<bool> OpenedAtTopAsync(CancellationToken cancellationToken = default)
+    {
+        if (WorktreeKey.Comparer.Equals(OpenedFolder, WorkingDirectory))
+        {
+            return true;
+        }
+
+        var command = ReadCommand(OpenedFolder, "rev-parse", "--show-prefix");
+        var result = (await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
+        return result.StandardOutput.TrimEnd('\r', '\n').Length == 0;
+    }
+
+    /// <summary>
     /// Opens the repository whose working tree contains <paramref name="path"/>: its top-level
     /// folder or any folder inside it.
     /// </summary>
@@ -94,9 +117,13 @@ public sealed partial class GitRepository : IGitRepository
 
         if (!result.Succeeded)
         {
-            // The runner makes git's messages English, so this text can be relied on. Any other
-            // failure, such as "detected dubious ownership", is git's to explain.
-            if (result.StandardError.Contains("not a git repository", StringComparison.Ordinal))
+            // The runner makes git's messages English, so this text can be relied on. A .git file
+            // whose folder is gone (an orphaned worktree) is "not a git repository: <path>" up to
+            // Git 2.55 and "gitfile does not point to a valid repository: <path>" from 2.56. Any
+            // other failure, such as "detected dubious ownership" or "invalid gitfile format", is
+            // git's to explain.
+            if (result.StandardError.Contains("not a git repository", StringComparison.Ordinal)
+                || result.StandardError.Contains("gitfile does not point to a valid repository", StringComparison.Ordinal))
             {
                 throw new NotARepositoryException(path);
             }

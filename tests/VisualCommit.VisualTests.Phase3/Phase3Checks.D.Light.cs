@@ -103,7 +103,7 @@ public sealed partial class Phase3ChecksD
         await WaitForResultAsync(app, PartD.MergeStopped);
         shot = Shot(app, "27c-banner-light");
         AssertStatus(app, PartD.MergeStopped, OperationStatusTone.Warning);
-        Assert.Equal(Color.Parse("#B7791F"), palette.Warning);
+        Assert.Equal(Color.Parse("#895A17"), palette.Warning);
         await AssertNoDialogAsync(app);
         // Phase 4's Continue (disabled while the file conflicts) joins Abort beside the text, and
         // the banner keeps one line at 1920×1080 (phase 4's report, "Phase 3's banner").

@@ -411,6 +411,382 @@ public class RepositoryOperationsPushTests
         app.AssertScriptFollowed();
     }
 
+    // Fetch refspecs (docs/phase-6-design.md 10.4, 10.5, 10.9; D100, D222, GD24), on "refspecs"
+    // (RS0): fork fetches its branches into fork/up/*, origin its branches and GitHub's pull
+    // requests into origin/pr/*.
+
+    private const string Parser = "8394a5e2e769c4601161cbce8c239ff2aa246eb9";
+    private const string Topic = "de4a87cd5a84d5ed135863187487f81fe89d030c";
+
+    [Fact]
+    public async Task A_drops_push_onto_a_renamed_remote_branch_pushes_to_the_branchs_name_on_its_remote()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var texts = RecordStatusTexts(app);
+
+        await app.Operations.PushBranchToAsync("refs/heads/topic", "refs/remotes/fork/up/main", setUpstream: false);
+
+        // 10.4 #8: refs/heads/topic:refs/heads/main on fork, named fork/up/main, titled as the item (GD24).
+        AssertRanOnce(app, "Push topic to fork/up/main");
+        Assert.Contains("Pushing topic to fork/up/main…", texts);
+        Assert.Equal(("Pushed topic to fork/up/main", OperationStatusTone.Secondary), (app.StatusText, app.StatusTone));
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git push --progress fork refs/heads/topic:refs/heads/main" && call.Succeeded);
+        Assert.Equal(Topic, await RemoteHeadAsync(repo, "refs/heads/main", "fork"));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/up/main", "fork"));
+
+        // Git moves the renamed tracking ref through the fetch line (scenario facts 8, item 6).
+        Assert.Equal(Topic, await repo.RefTargetAsync("refs/remotes/fork/up/main"));
+        Assert.Null(await repo.RefTargetAsync("refs/remotes/fork/up/up/main"));
+        Assert.Empty(app.Dialogs.Shown);
+
+        // The title, the running text and the dedupe key; onto an identity-mapped branch the title stays "Push {b}".
+        var queue = new KeyRecordingQueue();
+        var operations = new RepositoryOperations(app.Repository, queue, app.Services, app.Log);
+        await operations.PushBranchToAsync("refs/heads/topic", "refs/remotes/fork/up/main", setUpstream: false);
+        await operations.PushBranchToAsync("refs/heads/topic", "refs/remotes/fork/up/main", setUpstream: true);
+        await operations.PushBranchToAsync("refs/heads/topic", "refs/remotes/origin/main", setUpstream: false);
+        Assert.Equal(
+            [
+                ("Push topic to fork/up/main", "Pushing topic to fork/up/main…", "push:refs/heads/topic->fork/refs/heads/main"),
+                ("Push topic to fork/up/main", "Pushing topic to fork/up/main…", null),
+                ("Push topic", "Pushing topic to origin/main…", "push:refs/heads/topic->origin/refs/heads/main"),
+            ],
+            queue.Operations.Select(operation => (operation.Title, operation.RunningText, operation.DedupeKey)));
+    }
+
+    [Fact]
+    public async Task A_drop_onto_a_ref_that_is_no_branch_of_one_remote_starts_no_push()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+
+        // A menu built before the lines changed reaches these (10.4 #7): R2 and R4.
+        await app.Operations.PushBranchToAsync("refs/heads/topic", "refs/remotes/origin/pr/1", setUpstream: false);
+        await app.Operations.PushBranchToAsync("refs/heads/topic", "refs/remotes/upstream/pr/7", setUpstream: true);
+        await app.Operations.DeleteRemoteBranchAsync("refs/remotes/origin/pr/1");
+        await app.Operations.DeleteRemoteBranchAsync("refs/remotes/upstream/pr/7");
+
+        Assert.Null(app.LastResult);
+        Assert.Empty(app.Dialogs.Shown);
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Equal(4, app.Log.Messages.Count(message => message.Contains(": not started, ", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    public async Task Deleting_a_renamed_remote_branch_deletes_its_branch_on_the_remote_with_the_mapped_lease_and_backup()
+    {
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var texts = RecordStatusTexts(app);
+        app.Dialogs.Confirm();
+
+        await app.Operations.DeleteRemoteBranchAsync("refs/remotes/fork/up/main");
+
+        // 10.4 #9: the branch's name on fork, the lease on fork's main at the tracking ref's commit.
+        var confirmation = Assert.Single(app.Dialogs.Confirmations);
+        Assert.Equal(
+            ("Delete main on fork?", "Delete the branch main on fork? Everyone who uses fork loses it.", "A backup is saved first, so this can be undone.", "Delete on fork", true),
+            (confirmation.Title, confirmation.Question, confirmation.Detail, confirmation.ConfirmText, confirmation.IsDestructive));
+        Assert.Contains("Deleting main on fork…", texts);
+        Assert.Equal("Deleted main on fork", app.StatusText);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == $"git push --progress --force-with-lease=refs/heads/main:{Parser} fork --delete refs/heads/main" && call.Succeeded);
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/main", "fork"));
+        Assert.Null(await repo.RefTargetAsync("refs/remotes/fork/up/main"));
+        var backup = Assert.Single(await repo.BackupRefsAsync());
+        Assert.Matches($"^refs/visualcommit/backup/remote-branch-{BackupTime}/fork/main$", backup.Name);
+        Assert.Equal(Parser, backup.Sha);
+
+        // "Push main back to fork…" brings it back, by the name the backup recorded.
+        var saved = (await app.Repository.Repository.ReadBackupsAsync(TestContext.Current.CancellationToken)).Single(entry => entry.Kind == "remote-branch");
+        app.Dialogs.Confirm();
+        await app.Operations.RestoreBackupAsync(saved);
+        Assert.Equal("Push main back to fork?", app.Dialogs.Confirmations[^1].Title);
+        Assert.Equal("Pushed main back to fork", app.StatusText);
+        Assert.Equal(Parser, await RemoteHeadAsync(repo, "refs/heads/main", "fork"));
+        Assert.Equal(Parser, await repo.RefTargetAsync("refs/remotes/fork/up/main"));
+
+        // Deleted again, then undone: the undo pushes main back to fork.
+        app.Dialogs.Confirm().Confirm();
+        await app.Operations.DeleteRemoteBranchAsync("refs/remotes/fork/up/main");
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/main", "fork"));
+        await app.Operations.UndoAsync();
+        Assert.Equal(Parser, await RemoteHeadAsync(repo, "refs/heads/main", "fork"));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/up/main", "fork"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_push_that_would_give_a_tracking_ref_a_second_source_is_refused_before_git()
+    {
+        // A branch made by phase 5's checkout, or by --track in a terminal, tracks refs/heads/pr/1
+        // on origin (0.5's P), whose push makes every later fetch of origin fail.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("branch", "--quiet", "--track", "pr/1", "refs/remotes/origin/pr/1");
+        Assert.Equal("refs/heads/pr/1", await ConfigAsync(repo, "branch.pr/1.merge"));
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.CloseError().Confirm().CloseError().Push(remote: "origin").CloseError();
+        const string Refused = "Pushing pr/1 to origin/pr/1 would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin.";
+
+        // Push to its upstream.
+        await app.Operations.PushBranchAsync("refs/heads/pr/1");
+        AssertRefused(app.Dialogs.Errors[^1], "Push failed");
+        Assert.Equal(("Push pr/1 failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+
+        // Force push: asked first, then refused before its backup.
+        await app.Operations.ForcePushAsync("refs/heads/pr/1");
+        Assert.Equal("Force push pr/1?", app.Dialogs.Confirmations[^1].Title);
+        AssertRefused(app.Dialogs.Errors[^1], "Force push failed");
+        Assert.Equal(("Force push pr/1 failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        Assert.Empty(await repo.BackupRefsAsync());
+
+        // The push dialog's push of the branch's own name to origin (G25 step 7).
+        await repo.GitAsync("branch", "--unset-upstream", "pr/1");
+        await app.Repository.RefreshAsync();
+        await app.Operations.PushBranchAsync("refs/heads/pr/1");
+        var dialog = Assert.IsType<PushDialogViewModel>(app.Dialogs.Shown.Single(shown => shown is PushDialogViewModel));
+        Assert.Equal(("Push pr/1", "pr/1", true), (dialog.Title, dialog.BranchName, dialog.SetUpstream));
+        AssertRefused(app.Dialogs.Errors[^1], "Push failed");
+
+        Assert.Equal(3, app.Dialogs.Errors.Count);
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        Assert.Equal(0, (await repo.GitAllowingFailureAsync("fetch", "--quiet", "origin")).ExitCode);
+        Assert.Contains(app.Log.Messages, message => message.Contains($": Push pr/1: refused, {Refused}", StringComparison.Ordinal));
+        app.AssertScriptFollowed();
+
+        static void AssertRefused(ErrorDialogViewModel error, string title)
+        {
+            Assert.Equal((title, Refused), (error.Title, error.Summary));
+            Assert.Equal((null, null), (error.Output, error.Command));
+            Assert.False(error.HasExtraAction);
+        }
+    }
+
+    [Fact]
+    public async Task Push_and_force_push_of_a_branch_whose_upstream_is_no_branch_are_disabled_and_refused_before_git()
+    {
+        // 0.5's P2: upstream has GitHub's pull-request line alone, and pr/7, checked out from
+        // upstream/pr/7, tracks refs/pull/7/head there. Push would run git push upstream
+        // refs/heads/pr/7:refs/pull/7/head, which a bare server takes (git's own push refuses).
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("switch", "--quiet", "--create", "pr/7", "--track", "refs/remotes/upstream/pr/7");
+        Assert.Equal(("upstream", "refs/pull/7/head"), (await ConfigAsync(repo, "branch.pr/7.remote"), await ConfigAsync(repo, "branch.pr/7.merge")));
+        using var app = await OperationsHarness.OpenAsync(repo);
+        const string Reason = "upstream/pr/7 is refs/pull/7/head on upstream, not a branch";
+
+        // The toolbar's Push and the branch's menu: disabled with R4, in the drop's words (10.5).
+        var toolbar = app.Repository.Toolbar;
+        Assert.Equal((false, Reason, Reason), (toolbar.CanPush, toolbar.PushDisabledReason, toolbar.PushToolTip));
+        var (actions, _) = RecordingActions.Create();
+        var items = ViewModels.Menus.RepositoryMenus.ForLocalBranch(app.Repository.MenuContext, "refs/heads/pr/7", actions).Items.OfType<ViewModels.Menus.MenuItem>().ToList();
+        Assert.Equal((false, Reason), items.Where(item => item.Label == "Push pr/7 to upstream/pr/7").Select(item => (item.IsEnabled, item.DisabledReason)).Single());
+        Assert.Equal((false, Reason), items.Where(item => item.Label == "Force push pr/7…").Select(item => (item.IsEnabled, item.DisabledReason)).Single());
+
+        // A toolbar or menu that showed an older state reaches the operations: refused inside both.
+        app.Dialogs.CloseError().Confirm().CloseError();
+        await app.Operations.PushCurrentBranchAsync();
+        await app.Operations.ForcePushAsync("refs/heads/pr/7");
+
+        Assert.Equal(
+            [("Push failed", Reason + "."), ("Force push failed", Reason + ".")],
+            app.Dialogs.Errors.Select(error => (error.Title, error.Summary)));
+        Assert.All(app.Dialogs.Errors, error => Assert.Equal((null, null, false), (error.Output, error.Command, error.HasExtraAction)));
+        Assert.Equal("Force push pr/7?", app.Dialogs.Confirmations[^1].Title);
+        Assert.Equal(("Force push pr/7 failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Empty(await repo.BackupRefsAsync());
+        Assert.Equal(Topic, await RemoteHeadAsync(repo, "refs/pull/7/head", "upstream"));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/7", "upstream"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_deleted_branchs_backup_that_two_remote_names_fit_is_not_pushed_back_to_either()
+    {
+        // Remotes team and team/fork (names may hold slashes, 0.5's T): a deletion of fork/main on
+        // team and one of main on team/fork both save team/fork/main, and the longest name would
+        // push to team/fork whichever it was. Git 2.55 and 2.56 refuse `git remote add team/fork`
+        // beside team ("is a subset of existing remote"), which 2.36 and 2.43 allow, so team/fork is
+        // written as the configuration an older git or a hand edit leaves.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("remote", "add", "team", "../team.git");
+        await repo.GitAsync("config", "remote.team/fork.url", "../team-fork.git");
+        await repo.GitAsync("config", "remote.team/fork.fetch", "+refs/heads/*:refs/remotes/team/fork/*");
+        await repo.GitAsync("update-ref", $"refs/visualcommit/backup/remote-branch-{DateTime.UtcNow:yyyyMMdd'T'HHmmssfff'Z'}/team/fork/main", Parser);
+        using var app = await OperationsHarness.OpenAsync(repo);
+        const string Reason = "The remote this backup came from cannot be told: team/fork/main fits team/fork and team";
+        var backup = (await app.Repository.Repository.ReadBackupsAsync(TestContext.Current.CancellationToken)).Single(entry => entry.Kind == "remote-branch");
+
+        var (actions, _) = RecordingActions.Create();
+        var restore = ViewModels.Menus.RepositoryMenus.ForBackup(app.Repository.MenuContext, backup, actions).Items.First();
+        Assert.Equal(("Push main back to team/fork…", false, Reason), (restore.Label, restore.IsEnabled, restore.DisabledReason));
+
+        app.Dialogs.CloseError();
+        await app.Operations.RestoreBackupAsync(backup);
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(Reason, error.Summary);
+        Assert.Empty(app.Dialogs.Confirmations);
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Pushing_a_branch_back_from_its_backup_or_by_undo_is_refused_when_it_would_stop_every_fetch_of_its_remote()
+    {
+        // 10.4's guard on the restores' and undo's pushes too. pr/1, a branch on origin, deleted
+        // while origin fetched its branches alone; then GitHub's pull-request line came back, and
+        // origin/pr/1 is filled from refs/pull/1/head: pr/1 brought back would stop every fetch of
+        // origin (0.5's P).
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("config", "--unset", "remote.origin.fetch", "pull");
+        await repo.PushAsync("origin", setUpstream: false, "topic:refs/heads/pr/1");
+        await repo.GitAsync("fetch", "--quiet", "origin");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Confirm();
+        await app.Operations.DeleteRemoteBranchAsync("refs/remotes/origin/pr/1");
+        Assert.Equal("Deleted pr/1 on origin", app.StatusText);
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*");
+        await repo.GitAsync("fetch", "--quiet", "origin");
+        await app.Repository.RefreshAsync();
+        const string Refused = "Pushing pr/1 to origin would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin.";
+        var pushes = app.Calls.Snapshot().Count(call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+
+        // "Push pr/1 back to origin…": asked, then refused before git.
+        var backup = (await app.Repository.Repository.ReadBackupsAsync(TestContext.Current.CancellationToken)).Single(entry => entry.Kind == "remote-branch");
+        app.Dialogs.Confirm().CloseError();
+        await app.Operations.RestoreBackupAsync(backup);
+        Assert.Equal("Push pr/1 back to origin?", app.Dialogs.Confirmations[^1].Title);
+        Assert.Equal(Refused, app.Dialogs.Errors[^1].Summary);
+
+        // Undo of the deletion: asked, then refused before its step.
+        app.Dialogs.Confirm().CloseError();
+        await app.Operations.UndoAsync();
+        Assert.Equal(Refused, app.Dialogs.Errors[^1].Summary);
+        Assert.Equal(2, app.Dialogs.Errors.Count);
+
+        Assert.Equal(pushes, app.Calls.Snapshot().Count(call => call.CommandText.StartsWith("git push", StringComparison.Ordinal)));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        Assert.Equal(0, (await repo.GitAllowingFailureAsync("fetch", "--quiet", "origin")).ExitCode);
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_push_that_would_stop_its_remotes_fetch_is_refused_also_when_another_remote_maps_the_ref_too()
+    {
+        // A mirror remote (+refs/*:refs/*) also fills refs/remotes/origin/pr/1, which makes it
+        // fetched by two remotes; that hides that origin alone fetches it from two refs, and the
+        // push of pr/1 to origin would still stop every fetch of origin (the guard asks origin's
+        // own lines, FetchRefspecs.SourceOf(ref, remote)).
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("branch", "--quiet", "--track", "pr/1", "refs/remotes/origin/pr/1");
+        await repo.GitAsync("remote", "add", "mirror", "../mirror.git");
+        await repo.GitAsync("config", "remote.mirror.fetch", "+refs/*:refs/*");
+        Assert.Equal("refs/heads/pr/1", await ConfigAsync(repo, "branch.pr/1.merge"));
+        using var app = await OperationsHarness.OpenAsync(repo);
+        Assert.Equal(RemoteSourceKind.AmbiguousRemotes, app.Repository.Refs!.SourceOf("refs/remotes/origin/pr/1").Kind);
+        app.Dialogs.CloseError();
+
+        await app.Operations.PushBranchAsync("refs/heads/pr/1");
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Push failed", "Pushing pr/1 to origin/pr/1 would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin."), (error.Title, error.Summary));
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task The_push_guard_reads_the_fetch_lines_inside_the_push_not_the_tabs_last_refs()
+    {
+        // GitHub's pull-request line added in a terminal after the tab read its refs (10.4: inside
+        // the operation, with the lines read): the snapshot has the default line alone, under
+        // which pr/1's push would run; the operation reads the lines again and refuses it.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("config", "--unset", "remote.origin.fetch", "pull");
+        await repo.GitAsync("branch", "--quiet", "--track", "pr/1", "refs/remotes/origin/pr/1");
+        Assert.Equal("refs/heads/pr/1", await ConfigAsync(repo, "branch.pr/1.merge"));
+        using var app = await OperationsHarness.OpenAsync(repo);
+        Assert.Equal(RemoteSourceKind.Mapped, app.Repository.Refs!.SourceOf("refs/remotes/origin/pr/1").Kind);
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", "+refs/pull/*/head:refs/remotes/origin/pr/*");
+        app.Dialogs.CloseError();
+        var mark = app.Calls.Snapshot().Count;
+
+        await app.Operations.PushBranchAsync("refs/heads/pr/1");
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Push failed", "Pushing pr/1 to origin/pr/1 would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin."), (error.Title, error.Summary));
+        var calls = app.Calls.Snapshot().Skip(mark).Where(call => call.OperationId is not null).Select(call => call.CommandText).ToList();
+        Assert.Contains(@"git config --null --get-regexp ^remote\.", calls);
+        Assert.DoesNotContain(calls, call => call.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task Of_two_lines_that_fetch_a_branch_its_push_runs_and_a_new_branch_they_would_share_is_refused()
+    {
+        // 0.5's C2 without the server's trunk: origin/trunk is fetched from refs/heads/main and,
+        // through the default line, from refs/heads/trunk once that exists.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", "refs/heads/main:refs/remotes/origin/trunk");
+        await repo.GitAsync("fetch", "--quiet", "origin");
+        var local = await repo.CommitFileAsync("more.txt", "more\n", "More work");
+        await repo.GitAsync("branch", "--quiet", "trunk");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Push(remote: "origin").CloseError();
+
+        // main exists on origin and fills origin/main alone: the push runs.
+        await app.Operations.PushCurrentBranchAsync();
+        Assert.Equal("Pushed main to origin/main", app.StatusText);
+        Assert.Equal(local, await RemoteHeadAsync(repo, "refs/heads/main"));
+
+        // A new trunk would fill origin/trunk beside main.
+        await app.Operations.PushBranchAsync("refs/heads/trunk");
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Push failed", "Pushing trunk to origin/trunk would stop every fetch of origin: origin/trunk is fetched from more than one ref of origin."), (error.Title, error.Summary));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/trunk"));
+        Assert.Single(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task A_force_pushs_backup_with_no_branch_tracking_it_is_pushed_back_to_the_branch_its_remote_fills_it_from()
+    {
+        // forked tracks fork/up/main (fork's main) and replaces it by a force push; then it is deleted.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("branch", "--quiet", "--track", "forked", "refs/remotes/fork/up/main");
+        await repo.CheckoutAsync("forked");
+        await repo.GitAsync("reset", "--quiet", "--hard", "HEAD~1");
+        var rewritten = await repo.CommitFileAsync("forked.txt", "forked\n", "Rewritten on fork");
+        await repo.CheckoutAsync("main");
+        using var app = await OperationsHarness.OpenAsync(repo);
+        app.Dialogs.Confirm();
+        await app.Operations.ForcePushAsync("refs/heads/forked");
+        Assert.Equal("Force-pushed forked to fork/up/main", app.StatusText);
+        Assert.Equal(rewritten, await RemoteHeadAsync(repo, "refs/heads/main", "fork"));
+        await repo.GitAsync("branch", "--quiet", "-D", "forked");
+        await app.Repository.RefreshAsync();
+
+        var backup = (await app.Repository.Repository.ReadBackupsAsync(TestContext.Current.CancellationToken)).Single(entry => entry.Kind == "force-push");
+        Assert.Equal("fork/up/main", backup.Main?.Name);
+
+        // 10.4 #12: by the fork's line, main on fork, not phase 5's up/main.
+        var (actions, _) = RecordingActions.Create();
+        Assert.Equal("Push main back to fork…", ViewModels.Menus.RepositoryMenus.ForBackup(app.Repository.MenuContext, backup, actions, hasForcePushLease: true).Items.First().Label);
+        app.Dialogs.Confirm();
+        await app.Operations.RestoreBackupAsync(backup);
+
+        Assert.Equal("Push main back to fork?", app.Dialogs.Confirmations[^1].Title);
+        Assert.Equal("Pushed main back to fork", app.StatusText);
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText.StartsWith($"git push --progress --force-with-lease=refs/heads/main:{rewritten} fork ", StringComparison.Ordinal) && call.Succeeded);
+        Assert.Equal(Parser, await RemoteHeadAsync(repo, "refs/heads/main", "fork"));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/up/main", "fork"));
+        app.AssertScriptFollowed();
+    }
+
     /// <summary>A queue that runs nothing: it records each operation, as given, and answers that it was cancelled.</summary>
     private sealed class KeyRecordingQueue : IOperationQueue
     {
@@ -453,6 +829,10 @@ public class RepositoryOperationsPushTests
         }
 
         public void DropWaiting()
+        {
+        }
+
+        public void Cancel(GitOperation operation)
         {
         }
 

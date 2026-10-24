@@ -70,7 +70,8 @@ public partial class Phase5RealWindowPass
     /// the working-changes row with staged, unstaged and untracked changes (<c>p25a-changes</c>); a
     /// real right-click on "Describe the app" and a real click on "Check out this commit": no
     /// question, the automatic stash, the detached HEAD (<c>p25b-auto-stashed</c>); then Undo's help
-    /// text <c>Undo checkout of f39ea2d</c> read through UI Automation and a real click on it: main
+    /// text <c>Undo checkout of f39ea2d (Ctrl+Z)</c> (its key since phase 6, docs/phase-6-design.md
+    /// 6.8) read through UI Automation and a real click on it: main
     /// checked out again, every change back with the index, the exact state as before the app
     /// started (<c>p25e-undone</c>, compared with part B's scripted picture of the same state).
     /// </summary>
@@ -105,7 +106,7 @@ public partial class Phase5RealWindowPass
         WaitForBranch(app, PartP.DetachedAt(PartP.DescribeSha));
         AssertNoDialog(app);
         WaitForDetails(app, "Describe the app", PartP.DescribeSha);
-        AssertUndoRedo(app, true, "Undo " + describeCheckout, false, PartA.NothingToRedo);
+        AssertUndoRedo(app, true, PartU.Undo.ToolTip(describeCheckout), false, PartA.NothingToRedo);
         app.WaitForButtonState("PopButton", enabled: true, helpText: null);
         app.WaitForButtonState("StashButton", enabled: false, helpText: null);
         Assert.Null(await GitAllowingFailureTextAsync(repo, "symbolic-ref", "-q", "HEAD"));
@@ -122,7 +123,7 @@ public partial class Phase5RealWindowPass
         Compare(app, "p25b-auto-stashed");
 
         // Part B's step 6: Undo's help text names the checkout; a real click on it.
-        app.WaitForButtonState("UndoButton", enabled: true, "Undo " + describeCheckout);
+        app.WaitForButtonState("UndoButton", enabled: true, PartU.Undo.ToolTip(describeCheckout));
         var undo = ExpectOperation(app, name, "Undo " + describeCheckout);
         app.ClickWithMouse(app.Find("UndoButton"));
         undo.Wait(OperationOutcome.Succeeded, "Undid " + describeCheckout);
@@ -130,7 +131,7 @@ public partial class Phase5RealWindowPass
         WaitForBranch(app, "main");
         AssertNoDialog(app);
         WaitForDetails(app, "Describe the app", PartP.DescribeSha);
-        AssertUndoRedo(app, false, PartA.NothingToUndo, true, "Redo " + describeCheckout);
+        AssertUndoRedo(app, false, PartA.NothingToUndo, true, PartU.Redo.ToolTip(describeCheckout));
         Assert.Equal("refs/heads/main", await GitTextAsync(repo, "symbolic-ref", "-q", "HEAD"));
         Assert.Equal(PartP.MainWorkSha, await repo.HeadAsync());
         Assert.Equal(PartP.P25Status, await GitLinesAsync(repo, "status", "--porcelain=v1", "--untracked-files=all", "--ignored"));

@@ -53,15 +53,15 @@ public class DashBranchNameTests
         var mainWork = await RevAsync(repo, "refs/heads/main");
         var alpha = await RevAsync(repo, "refs/heads/feature/alpha");
 
-        await repository.CreateBranchAsync("from-dash", "-x", checkout: false, cancellationToken: TestCancelled);
+        await repository.CreateBranchAsync("from-dash", "-x", checkout: false, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal(alpha, await repo.RefTargetAsync("refs/heads/from-dash"));
         Assert.Equal(mainWork, await repo.RefTargetAsync("refs/heads/main"));
 
-        await repository.CheckoutBranchAsync("-x", cancellationToken: TestCancelled);
+        await repository.CheckoutBranchAsync("-x", keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal("-x", await repo.CurrentBranchAsync());
 
         // Switch reads "-" as the branch checked out before, whatever comes first.
-        await Assert.ThrowsAsync<ArgumentException>(() => repository.CheckoutBranchAsync("-", cancellationToken: TestCancelled));
+        await Assert.ThrowsAsync<ArgumentException>(() => repository.CheckoutBranchAsync("-", keepIgnored: false, cancellationToken: TestCancelled));
         await Assert.ThrowsAsync<ArgumentException>(() => repository.ResetAsync("-x", ResetMode.Hard, cancellationToken: TestCancelled));
         Assert.Equal("-x", await repo.CurrentBranchAsync());
     }
@@ -73,8 +73,9 @@ public class DashBranchNameTests
         var calls = new GitCallLog();
         var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
 
-        await repository.CheckoutBranchAsync("feature/alpha", cancellationToken: TestCancelled);
+        // Keep ignored files' option (the app's default, docs/phase-6-design.md 9.11) just before the name.
+        await repository.CheckoutBranchAsync("feature/alpha", keepIgnored: true, cancellationToken: TestCancelled);
 
-        Assert.Contains(calls.Snapshot(), call => call.CommandText == "git switch --no-guess feature/alpha");
+        Assert.Contains(calls.Snapshot(), call => call.CommandText == "git switch --no-guess --no-overwrite-ignore feature/alpha");
     }
 }

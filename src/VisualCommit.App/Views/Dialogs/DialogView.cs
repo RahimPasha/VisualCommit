@@ -33,6 +33,10 @@ public class DialogView : UserControl
             }
         };
         AddHandler(KeyDownEvent, OnKeyDownForEnter, RoutingStrategies.Bubble);
+
+        // Mod+Enter in a box of several lines, taken on the way down: such a box types a line
+        // break for Enter with any modifier (docs/phase-6-design.md 6.10, 0.7).
+        AddHandler(KeyDownEvent, OnKeyDownForModEnter, RoutingStrategies.Tunnel);
     }
 
     /// <summary>The control that takes the focus when the dialog has no text box to type into; null for none.</summary>
@@ -44,12 +48,20 @@ public class DialogView : UserControl
     /// <summary>Whether the focused text box selects all it holds when the dialog opens (renaming).</summary>
     protected virtual bool SelectsAllOnOpening => false;
 
+    /// <summary>
+    /// Whether the dialog's first text box takes the focus when it opens (every dialog's, the
+    /// default); false gives it to <see cref="InitialFocus"/> instead: the settings screen's
+    /// section list (docs/phase-6-design.md 7.1).
+    /// </summary>
+    protected virtual bool FocusesTextBoxOnOpening => true;
+
     protected override AutomationPeer OnCreateAutomationPeer() => new DialogAutomationPeer(this);
 
     /// <summary>Moves the focus as the dialog does when it opens; also after its card changed (the Remotes dialog's form).</summary>
     protected void FocusOnOpening()
     {
-        var box = InitialTextBox is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } chosen
+        var box = !FocusesTextBoxOnOpening ? null
+            : InitialTextBox is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true } chosen
             ? chosen
             : this.GetVisualDescendants().OfType<TextBox>()
                 .FirstOrDefault(candidate => candidate is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, IsReadOnly: false });
@@ -86,6 +98,34 @@ public class DialogView : UserControl
             command.Execute(confirm.CommandParameter);
             e.Handled = true;
         }
+    }
+
+    /// <summary>
+    /// Mod+Enter (Ctrl+Enter; Cmd+Enter on macOS) in a text box of several lines (the message
+    /// dialog's <c>MessageDescription</c>) runs the confirm button as Enter does elsewhere
+    /// (docs/phase-6-design.md 6.10), handled either way; plain Enter there still types a line
+    /// break. The command modifier is the platform's, read at each press.
+    /// </summary>
+    private void OnKeyDownForModEnter(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled || e.Key != Key.Enter || e.Source is not TextBox { AcceptsReturn: true })
+        {
+            return;
+        }
+
+        var command = ShortcutKeys.CommandModifierOf(this.GetPlatformSettings()?.HotkeyConfiguration);
+        if (e.KeyModifiers != command)
+        {
+            return;
+        }
+
+        if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Command: { } confirm } button
+            && confirm.CanExecute(button.CommandParameter))
+        {
+            confirm.Execute(button.CommandParameter);
+        }
+
+        e.Handled = true;
     }
 
     /// <summary>A dialog's root as UI Automation sees it: a pane, a control element, named by the dialog's title.</summary>

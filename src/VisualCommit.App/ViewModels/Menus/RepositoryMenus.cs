@@ -11,6 +11,7 @@
 // activity log's rows; WP5). The builders here call the hooks of the first two where 13.1 puts
 // the items; a hook that gives nothing leaves its menu as it was.
 
+using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
@@ -139,7 +140,7 @@ public static partial class RepositoryMenus
             Header(header),
             [
                 Item(actions, ApplyStash, () => actions.ApplyStashAsync(stashSha)),
-                Item(actions, PopStash, () => actions.PopStashAsync(stashSha)),
+                Item(actions, PopStash, () => actions.PopStashAsync(stashSha), command: IsNewestStash(context, stashSha) ? AppCommand.Pop : null),
                 Item(actions, DropStash, () => actions.DropStashAsync(stashSha), isDestructive: true),
             ],
             [
@@ -161,13 +162,13 @@ public static partial class RepositoryMenus
         return Build(
             Header(WorkingChangesHeader),
             [
-                Item(actions, StageAll, actions.StageAllAsync, hasUnstaged ? null : NothingToStage),
-                Item(actions, UnstageAll, actions.UnstageAllAsync, hasStaged ? null : NothingStaged),
+                Item(actions, StageAll, actions.StageAllAsync, hasUnstaged ? null : NothingToStage, command: AppCommand.StageAll),
+                Item(actions, UnstageAll, actions.UnstageAllAsync, hasStaged ? null : NothingStaged, command: AppCommand.UnstageAll),
                 Item(actions, DiscardAllChanges, actions.DiscardAllAsync, hasUnstaged ? null : NothingToDiscard, isDestructive: true),
             ],
             [
                 StashItem(context, actions),
-                Item(actions, CreateBranchHere, () => actions.CreateBranchAsync(null), context.IsUnborn ? ToolbarViewModel.UnbornText : null),
+                Item(actions, CreateBranchHere, () => actions.CreateBranchAsync(null), context.IsUnborn ? ToolbarViewModel.UnbornText : null, command: AppCommand.CreateBranch),
             ],
             [
                 .. ReflogItems(context, actions),
@@ -204,7 +205,7 @@ public static partial class RepositoryMenus
         MenuItem? pullRebase = null;
         if (hasUpstream && isCurrent)
         {
-            pullOrFastForward = AsToolbar(Item(actions, PullFrom(upstream!), actions.PullAsync), context.Toolbar.Pull);
+            pullOrFastForward = AsToolbar(Item(actions, PullFrom(upstream!), actions.PullAsync, command: AppCommand.Pull), context.Toolbar.Pull);
 
             // docs/phase-4-design.md section 6: enabled exactly as the toolbar's Pull (D90).
             pullRebase = AsToolbar(Item(actions, PullFromRebase(upstream!), actions.PullRebaseAsync), context.Toolbar.Pull);
@@ -224,20 +225,25 @@ public static partial class RepositoryMenus
         MenuItem? forcePush = null;
         if (!branch.HasLocalUpstream)
         {
-            var pushReason = context.HasRemotes ? null : ToolbarViewModel.AddRemoteText;
-            push = Item(actions, hasRemoteUpstream ? PushTo(name, upstream!) : PushWithDialog(name), () => actions.PushBranchAsync(branchRef), pushReason);
+            // An upstream that is no branch on its remote (R4, docs/phase-6-design.md 10.5): git
+            // would push to that ref, a pull request's head.
+            var notABranch = ToolbarViewModel.UpstreamNotABranchReason(branch);
+            var pushReason = context.HasRemotes ? notABranch : ToolbarViewModel.AddRemoteText;
+            push = Item(actions, hasRemoteUpstream ? PushTo(name, upstream!) : PushWithDialog(name), () => actions.PushBranchAsync(branchRef), pushReason, command: isCurrent ? AppCommand.Push : null);
             if (hasRemoteUpstream)
             {
                 forcePush = Item(
                     actions,
                     ForcePushLabel(name),
                     () => actions.ForcePushAsync(branchRef),
-                    branch.UpstreamGone ? NoLongerExistsPushNormally(upstream!) : pushReason,
+                    branch.UpstreamGone && notABranch is null ? NoLongerExistsPushNormally(upstream!) : pushReason,
                     isDestructive: true);
             }
         }
 
-        var hasRemoteBranches = context.RemoteBranches.Any();
+        // Only a branch one ref of one remote fills can be tracked (docs/phase-6-design.md 10.4 #11):
+        // git refuses R1 and R3, and R2 would get git's first candidate.
+        var hasRemoteBranches = context.RemoteBranches.Any(remoteBranch => context.Refs.SourceOf(remoteBranch).IsBranch);
         var onto = new RebaseTarget(branch.TargetSha, name);
         return Build(
             Header(name),
@@ -276,7 +282,11 @@ public static partial class RepositoryMenus
     /// <summary>
     /// A remote branch, its row or its label (4b): header <c>&lt;r&gt;/&lt;b&gt;</c>; check out,
     /// merge (both) — create branch here…, create tag here… — delete on the remote… — copy branch
-    /// name. <paramref name="remoteBranchRef"/> is <c>refs/remotes/&lt;r&gt;/&lt;b&gt;</c>.
+    /// name. <paramref name="remoteBranchRef"/> is <c>refs/remotes/&lt;r&gt;/&lt;b&gt;</c>. How its
+    /// remote fetches it (<see cref="RepoRefs.SourceOf(GitRef)"/>, docs/phase-6-design.md 10.4 #6):
+    /// its checkout goes into its local name (10.6), disabled while HEAD is on it, and with R1 or
+    /// R3 when it has none; its deletion names the branch on the remote, disabled with R1 to R4
+    /// unless it is a branch that one ref of one remote fills.
     /// </summary>
     public static MenuModel ForRemoteBranch(RepositoryMenuContext context, string remoteBranchRef, IRepositoryActions actions)
     {
@@ -290,17 +300,24 @@ public static partial class RepositoryMenus
         }
 
         var name = branch.Name;
-        var local = RepositoryMenuContext.LocalNameOf(branch) ?? name;
-        var remote = branch.RemoteName ?? string.Empty;
+        var source = context.Refs.SourceOf(branch);
+        var local = context.Refs.LocalNameOf(branch);
         var current = context.CurrentName;
         var mergeReason = MergeReason(context);
-        var onLocal = string.Equals(context.Head.BranchName, local, StringComparison.Ordinal);
+        var checkoutReason = local is null ? RemoteSourceReason(source, name, needsBranch: false)
+            : string.Equals(context.Head.BranchName, local, StringComparison.Ordinal) ? AlreadyCheckedOut(local)
+            : null;
         var onto = new RebaseTarget(branch.TargetSha, name);
+
+        // The deletion names the branch on its remote; any other ref keeps phase 5's label.
+        var (deleted, remote) = source is { IsBranch: true, Branch: { } onRemote, Remote: { } mapped }
+            ? (onRemote, mapped)
+            : (RemoteBranchNames.WithoutRemote(branch.Name, branch.RemoteName), branch.RemoteName ?? string.Empty);
 
         return Build(
             Header(name),
             [
-                Item(actions, CheckOutName(name), () => actions.CheckoutAsync(remoteBranchRef), onLocal ? AlreadyCheckedOut(local) : null),
+                Item(actions, CheckOutName(name), () => actions.CheckoutAsync(remoteBranchRef), checkoutReason),
                 Item(actions, MergeInto(name, current), () => actions.MergeAsync(remoteBranchRef, MergeMode.Default), mergeReason),
                 Item(actions, MergeIntoWithCommit(name, current), () => actions.MergeAsync(remoteBranchRef, MergeMode.NoFastForward), mergeReason),
                 RebaseOntoItem(context, onto, actions),
@@ -311,7 +328,7 @@ public static partial class RepositoryMenus
                 Item(actions, CreateTagHere, () => actions.CreateTagAsync(remoteBranchRef)),
             ],
             [
-                Item(actions, DeleteOnRemoteLabel(local, remote), () => actions.DeleteRemoteBranchAsync(remoteBranchRef), isDestructive: true),
+                Item(actions, DeleteOnRemoteLabel(deleted, remote), () => actions.DeleteRemoteBranchAsync(remoteBranchRef), RemoteSourceReason(source, name, needsBranch: true), isDestructive: true),
             ],
             [
                 CompareItem(context, branch, actions),
@@ -409,7 +426,7 @@ public static partial class RepositoryMenus
             RefSection.LocalBranches => Build(
                 Header(LeftPanelViewModel.LocalBranchesTitle),
                 [
-                    Item(actions, CreateBranch, () => actions.CreateBranchAsync(null), unborn),
+                    Item(actions, CreateBranch, () => actions.CreateBranchAsync(null), unborn, command: AppCommand.CreateBranch),
                     .. ReflogItems(context, actions),
                     .. SectionFilterItems(context, actions),
                 ]),
@@ -417,7 +434,7 @@ public static partial class RepositoryMenus
                 Header(LeftPanelViewModel.RemotesTitle),
                 [
                     Item(actions, AddRemote, actions.ShowAddRemoteAsync),
-                    Item(actions, FetchAllRemotes, actions.FetchAllAsync, context.HasRemotes ? null : ToolbarViewModel.NoRemotesText),
+                    Item(actions, FetchAllRemotes, actions.FetchAllAsync, context.HasRemotes ? null : ToolbarViewModel.NoRemotesText, command: AppCommand.Fetch),
                     Item(actions, ManageRemotes, actions.ManageRemotesAsync),
                     .. SectionFilterItems(context, actions),
                 ]),
@@ -453,7 +470,7 @@ public static partial class RepositoryMenus
             ],
             IgnoreItems(file, actions),
             FileHistoryItems(context, file, DiffSide.Unstaged, actions),
-            FileItems(file, actions));
+            FileItems(file, context, actions));
     }
 
     /// <summary>
@@ -493,7 +510,7 @@ public static partial class RepositoryMenus
             Header(file.FileName),
             [Item(actions, Unstage, () => actions.UnstageFilesAsync([file.File]))],
             FileHistoryItems(context, file, DiffSide.Staged, actions),
-            FileItems(file, actions));
+            FileItems(file, context, actions));
     }
 
     /// <summary>A file in a commit's changed files (4b): header the file name; open file, show in folder, copy path.</summary>
@@ -502,7 +519,7 @@ public static partial class RepositoryMenus
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(file);
         ArgumentNullException.ThrowIfNull(actions);
-        return Build(Header(file.FileName), FileHistoryItems(context, file, DiffSide.Commit, actions), FileItems(file, actions));
+        return Build(Header(file.FileName), FileHistoryItems(context, file, DiffSide.Commit, actions), FileItems(file, context, actions));
     }
 
     /// <summary>
@@ -540,8 +557,8 @@ public static partial class RepositoryMenus
                         Item(actions, DiscardFile, () => actions.DiscardFilesAsync([file.File]), DiscardReason(file)),
                     ],
                     file.IsUntracked ? IgnoreItems(file, actions) : [],
-                    FileHistoryItems(context, file, diff.Side, actions),
-                    FileItems(file, actions));
+                    FileHistoryItems(context, file, diff.Side, actions, ofOpenDiff: true),
+                    FileItems(file, context, actions));
 
             case DiffSide.Staged:
                 return Build(
@@ -549,11 +566,11 @@ public static partial class RepositoryMenus
                     [selected ? Item(actions, UnstageSelectedLines, lines.UnstageLinesAsync) : null],
                     [hunk is { } unstageHunk ? Item(actions, UnstageHunk, () => lines.RunHunkActionAsync(unstageHunk, LineAction.Unstage)) : null],
                     [Item(actions, UnstageFile, () => actions.UnstageFilesAsync([file.File]))],
-                    FileHistoryItems(context, file, diff.Side, actions),
-                    FileItems(file, actions));
+                    FileHistoryItems(context, file, diff.Side, actions, ofOpenDiff: true),
+                    FileItems(file, context, actions));
 
             default:
-                return Build(header, FileHistoryItems(context, file, diff.Side, actions), FileItems(file, actions));
+                return Build(header, FileHistoryItems(context, file, diff.Side, actions, ofOpenDiff: true), FileItems(file, context, actions));
         }
     }
 
@@ -570,13 +587,13 @@ public static partial class RepositoryMenus
         return Build(
             Header(context.RepositoryName),
             [
-                AsToolbar(Item(actions, FetchAllRemotes, actions.FetchAllAsync), toolbar.Fetch),
-                AsToolbar(Item(actions, ToolbarPull, actions.PullAsync), toolbar.Pull),
-                AsToolbar(Item(actions, ToolbarPush, actions.PushCurrentBranchAsync), toolbar.Push),
+                AsToolbar(Item(actions, FetchAllRemotes, actions.FetchAllAsync, command: AppCommand.Fetch), toolbar.Fetch),
+                AsToolbar(Item(actions, ToolbarPull, actions.PullAsync, command: AppCommand.Pull), toolbar.Pull),
+                AsToolbar(Item(actions, ToolbarPush, actions.PushCurrentBranchAsync, command: AppCommand.Push), toolbar.Push),
             ],
             [
-                AsToolbar(Item(actions, CreateBranch, () => actions.CreateBranchAsync(null)), toolbar.Branch),
-                AsToolbar(Item(actions, StashChanges, actions.StashAsync), toolbar.Stash),
+                AsToolbar(Item(actions, CreateBranch, () => actions.CreateBranchAsync(null), command: AppCommand.CreateBranch), toolbar.Branch),
+                AsToolbar(Item(actions, StashChanges, actions.StashAsync, command: AppCommand.Stash), toolbar.Stash),
             ],
             [
                 .. ReflogItems(context, actions),
@@ -607,14 +624,15 @@ public static partial class RepositoryMenus
 
         if (targetRef.StartsWith("refs/remotes/", StringComparison.Ordinal))
         {
-            var mapped = context.Drop is { RemoteMapsBranchesDifferently: true }
-                ? MapsBranchesDifferently(targetBranch?.RemoteName ?? target, source)
-                : null;
+            // The pushes go to the branch on the remote that fills the target (docs/phase-6-design.md
+            // 10.4 #5): disabled with R1 to R4 unless one ref of one remote, a branch, fills it.
+            var fetched = targetBranch is not null ? context.Refs.SourceOf(targetBranch) : context.Refs.SourceOf(targetRef);
+            var reason = RemoteSourceReason(fetched, target, needsBranch: true);
             return Build(
                 header,
                 [
-                    Item(actions, PushTo(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: false), mapped),
-                    Item(actions, PushToAndTrack(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: true), mapped),
+                    Item(actions, PushTo(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: false), reason),
+                    Item(actions, PushToAndTrack(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: true), reason),
                 ],
                 rebaseItems,
                 [DropCompareItem(context, sourceRef, targetRef, actions)]);
@@ -824,20 +842,15 @@ public static partial class RepositoryMenus
     /// <paramref name="disabledReason"/> is null, otherwise disabled with that reason as its
     /// tooltip. The action's task is not awaited (the menu has closed); a failure that gets past
     /// the operation's own handling is logged to <see cref="IRepositoryActions.Log"/>.
+    /// <paramref name="command"/> is the keyed command it runs on the same object (6.7), or null.
     /// </summary>
-    public static MenuItem Item(IRepositoryActions actions, string label, Func<Task> action, string? disabledReason = null, bool isDestructive = false)
+    public static MenuItem Item(IRepositoryActions actions, string label, Func<Task> action, string? disabledReason = null, bool isDestructive = false, AppCommand? command = null)
     {
         ArgumentNullException.ThrowIfNull(actions);
         ArgumentNullException.ThrowIfNull(label);
         ArgumentNullException.ThrowIfNull(action);
-        return new MenuItem(label, () => Start(actions, label, action), disabledReason is null, disabledReason, isDestructive);
+        return new MenuItem(label, () => Start(actions, label, action), disabledReason is null, disabledReason, isDestructive) { Command = command };
     }
-
-    /// <summary>The empty graph area's "Pull" (4b): the toolbar's Pull.</summary>
-    private const string ToolbarPull = "Pull";
-
-    /// <summary>The empty graph area's "Push" (4b): the toolbar's Push.</summary>
-    private const string ToolbarPush = "Push";
 
     private static MenuHeader Header(string text, string? toolTip = null) => new(text, toolTip);
 
@@ -866,9 +879,13 @@ public static partial class RepositoryMenus
     private static string? MergeReason(RepositoryMenuContext context) =>
         context.IsDetached ? CheckOutABranchToMergeInto : InProgressReason(context);
 
-    /// <summary>"Stash changes…", enabled as the toolbar's Stash (2.24, D119).</summary>
+    /// <summary>"Stash changes…", enabled as the toolbar's Stash (2.24, D119), with its key (6.7).</summary>
     private static MenuItem StashItem(RepositoryMenuContext context, IRepositoryActions actions) =>
-        Item(actions, StashChanges, actions.StashAsync, ToolbarViewModel.StashReason(context.Head, context.Status));
+        Item(actions, StashChanges, actions.StashAsync, ToolbarViewModel.StashReason(context.Head, context.Status), command: AppCommand.Stash);
+
+    /// <summary>Whether <paramref name="stashSha"/> is <c>stash@{0}</c>, whose Pop is the toolbar's (6.7).</summary>
+    private static bool IsNewestStash(RepositoryMenuContext context, string stashSha) =>
+        context.FindStash(stashSha) is { Index: 0 };
 
     /// <summary>An item enabled as a toolbar button is (4b's empty graph area): disabled with the button's reason, or without one before the refs are read.</summary>
     private static MenuItem AsToolbar(MenuItem item, ToolbarAvailability availability) =>
@@ -890,10 +907,14 @@ public static partial class RepositoryMenus
         ];
     }
 
-    /// <summary>Open file, show in folder, copy path (2.32).</summary>
-    private static MenuItem[] FileItems(FileMenuTarget file, IRepositoryActions actions) =>
+    /// <summary>
+    /// Open file, show in folder, copy path (2.32); with an editor chosen, Open in editor after
+    /// Open file (docs/phase-6-design.md 12.1, <see cref="RepositoryMenuContext.HasEditor"/>), never asking.
+    /// </summary>
+    private static MenuItem?[] FileItems(FileMenuTarget file, RepositoryMenuContext context, IRepositoryActions actions) =>
     [
         Item(actions, OpenFile, () => actions.OpenFileAsync(file.Path), file.ExistsInWorkingTree ? null : NotInWorkingTree),
+        !context.HasEditor ? null : Item(actions, OpenInEditor, () => actions.OpenInEditorAsync(file.Path), file.ExistsInWorkingTree ? null : NotInWorkingTree),
         Item(actions, ShowInFolder, () => actions.ShowInFolderAsync(file.Path)),
         Item(actions, CopyPath, () => actions.CopyPathAsync(file.Path)),
     ];

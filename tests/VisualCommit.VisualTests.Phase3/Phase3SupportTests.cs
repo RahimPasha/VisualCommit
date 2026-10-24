@@ -72,7 +72,7 @@ public sealed class Phase3SupportTests : Phase3Checks
         Assert.Contains("waiting for \"Stashed the changes\"", ex.Message, StringComparison.Ordinal);
         Assert.Contains("The status bar showed \"Checked out feature/ff\" (running: False, 0 waiting)", ex.Message, StringComparison.Ordinal);
         var since = app.GitCalls().Skip(calls).ToList();
-        Assert.Contains(since, call => call.CommandText == "git switch --no-guess feature/ff");
+        Assert.Contains(since, call => call.CommandText == "git switch --no-guess --no-overwrite-ignore feature/ff");
         Assert.Contains($"{since.Count} git calls since the step, the last: ", ex.Message, StringComparison.Ordinal);
         Assert.EndsWith($"{since[^1].CommandText} ({since[^1].Duration.TotalMilliseconds:0} ms, Completed)", ex.Message, StringComparison.Ordinal);
     }

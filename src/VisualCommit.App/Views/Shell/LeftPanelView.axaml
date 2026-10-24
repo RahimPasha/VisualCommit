@@ -1,11 +1,13 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
              xmlns:shell="using:VisualCommit.App.Views.Shell"
              x:Class="VisualCommit.App.Views.Shell.LeftPanelView"
              x:DataType="vm:LeftPanelViewModel"
-             AutomationProperties.AutomationId="LeftPanel">
+             AutomationProperties.AutomationId="LeftPanel"
+             kr:KeyRegion.Role="Left">
 
   <!-- The left panel of the active tab: the filter box, then one virtualised list of section
        headers, remotes, folders and refs, as "Left panel, with a repository open" in
@@ -80,6 +82,7 @@
     <DockPanel>
 
       <TextBox Name="FilterBox"
+               kr:KeyRegion.IsMain="True"
                DockPanel.Dock="Top"
                Margin="8,8,8,6"
                PlaceholderText="Filter"
@@ -88,6 +91,7 @@
                AutomationProperties.Name="Filter" />
 
       <ItemsControl Name="RefList"
+                    kr:KeyRegion.IsMain="True"
                     ItemsSource="{Binding Rows}"
                     AutomationProperties.AutomationId="RefList"
                     AutomationProperties.Name="Branches, remotes, tags and stashes">

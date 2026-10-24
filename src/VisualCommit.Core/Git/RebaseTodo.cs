@@ -147,6 +147,63 @@ public static class RebaseTodo
     }
 
     /// <summary>
+    /// The picks at the start of the todo <see cref="Build"/> writes that git may skip, checking
+    /// out the last one it skips instead of the plan's base (docs/phase-6-design.md 9.7, Keep
+    /// ignored files): git skips a leading <c>pick</c> while the commit's only parent is where it
+    /// stands (0.4's T5), and a <c>label</c> line stops it (T6). So these are the targets of the
+    /// first groups written as a plain <c>pick</c> line, oldest first, up to the first group that
+    /// is not one (a group that changes a message, written after its <c>label</c>, or a group of
+    /// drops only); a pick followed by drops is the last of them, since the next pick's parent is
+    /// the dropped commit. Whether git skips them is read from their parents (the git layer's
+    /// <c>FindIgnoredInTheWayOfRebaseAsync</c>).
+    /// </summary>
+    /// <exception cref="ArgumentException">The plan cannot be written (see <see cref="Build"/>).</exception>
+    public static IReadOnlyList<string> LeadingPicks(RebasePlan plan)
+    {
+        var picks = new List<string>();
+        foreach (var group in Groups(plan))
+        {
+            if (!group.HasTarget || group.ChangesMessage)
+            {
+                break;
+            }
+
+            picks.Add(group.Target.Sha);
+            if (group.Dropped.Count > 0)
+            {
+                // The drop line ends the run (docs/phase-6-design.md 9.7).
+                break;
+            }
+        }
+
+        return picks;
+    }
+
+    /// <summary>
+    /// Every <c>pick</c> or <c>fixup</c> line's commit of the todo <see cref="Build"/> writes, in
+    /// todo order (docs/phase-6-design.md 9.7): the changes the rebase applies. A group's target
+    /// comes before its members (squash members too, written as <c>fixup</c>); drops are left out.
+    /// <see cref="LeadingPicks"/> are its first entries.
+    /// </summary>
+    /// <exception cref="ArgumentException">The plan cannot be written (see <see cref="Build"/>).</exception>
+    public static IReadOnlyList<string> AppliedCommits(RebasePlan plan)
+    {
+        var applied = new List<string>();
+        foreach (var group in Groups(plan))
+        {
+            if (!group.HasTarget)
+            {
+                continue;
+            }
+
+            applied.Add(group.Target.Sha);
+            applied.AddRange(group.Members.Select(member => member.Sha));
+        }
+
+        return applied;
+    }
+
+    /// <summary>
     /// The plan of "Squash {N} commits" (docs/phase-4-design.md section 3): <paramref name="list"/>
     /// is the "from here" list read from the oldest squashed commit's parent
     /// (<c>ReadRebaseListAsync(parent, branchRef, fromCommit: true)</c>); the oldest

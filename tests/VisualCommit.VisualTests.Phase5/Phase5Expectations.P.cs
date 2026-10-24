@@ -419,14 +419,17 @@ public static partial class Phase5Expectations
 
         // ---- The git commands (as the call log renders them). ----
 
-        public const string SwitchOtherCommand = "git switch --no-guess other";
+        // Phase 6's Keep ignored files (D193, docs/phase-6-design.md 9.4, 9.11, 16.1): every checkout
+        // and merge passes --no-overwrite-ignore just before its positional argument.
 
-        public const string CreateTopicCommand = "git switch --create topic " + OtherFilesSha;
+        public const string SwitchOtherCommand = "git switch --no-guess --no-overwrite-ignore other";
 
-        public const string SwitchMainCommand = "git switch --no-guess main";
+        public const string CreateTopicCommand = "git switch --create topic --no-overwrite-ignore " + OtherFilesSha;
 
-        /// <summary>A detached checkout as phase 3 runs it (9.1's second row): <c>git switch --detach &lt;sha&gt;</c>.</summary>
-        public static string DetachCommand(string sha) => "git switch --detach " + sha;
+        public const string SwitchMainCommand = "git switch --no-guess --no-overwrite-ignore main";
+
+        /// <summary>A detached checkout as phase 3 runs it (9.1's second row), with phase 6's option (D193): <c>git switch --detach --no-overwrite-ignore &lt;sha&gt;</c>.</summary>
+        public static string DetachCommand(string sha) => "git switch --detach --no-overwrite-ignore " + sha;
 
         /// <summary>The automatic stash's checkout (9.1's first row, D179): <c>git switch --detach --no-overwrite-ignore &lt;sha&gt;</c>.</summary>
         public static string DetachNoOverwriteIgnoreCommand(string sha) => "git switch --detach --no-overwrite-ignore " + sha;
@@ -446,7 +449,7 @@ public static partial class Phase5Expectations
         /// <summary>9.3's ignored-files classification (without <c>GIT_LITERAL_PATHSPECS</c>, D74).</summary>
         public const string CheckIgnoreCommand = "git check-ignore --stdin -z";
 
-        public const string MergeOtherCommand = "git merge --no-edit --no-log -m \"Merge branch 'other'\" refs/heads/other";
+        public const string MergeOtherCommand = "git merge --no-edit --no-log -m \"Merge branch 'other'\" --no-overwrite-ignore refs/heads/other";
 
         public const string CherryPickOtherEditsCommand = "git cherry-pick " + OtherEditsSha;
 

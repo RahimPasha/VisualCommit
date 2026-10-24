@@ -144,7 +144,7 @@ public sealed partial class Phase4ChecksC
         C14To17.AssertEmptyLists(app, unstagedEmpty: true, stagedEmpty: false);
         Assert.Equal(["M image.png", "M new.txt"], C14To17.FileRows(app, "StagedFileList"));
         await C14To17.AssertMessageAsync(app, PartC2.MergeKindsSummary, string.Empty);
-        C14To17.AssertCommitButton(app, PartC2.Commit2Files, enabled: true);
+        C14To17.AssertCommitButton(app, PartC2.Commit2Files, enabled: true, PartC2.Commit2Files + " (Ctrl+Enter)");
         Assert.False(app.Find<Control>("RestoreBar").IsEffectivelyVisible, "The stage panel offers the card's snapshot in its restore bar.");
         Assert.Equal(["M  image.png", "M  new.txt"], await C14To17.PorcelainAsync(repo));
         Assert.Empty(await C14To17.UnmergedAsync(repo));

@@ -17,7 +17,10 @@ namespace VisualCommit.App.ViewModels;
 
 /// <summary>
 /// The view model of the main window: the repo tabs, the theme switch and what the status bar
-/// shows. The window's regions show the active tab.
+/// shows. The window's regions show the active tab. Phase 6's parts each live in a file of their
+/// own (docs/phase-6-design.md 18): the session's tabs (<c>.Session.cs</c>), the workspaces and
+/// their dashboards (<c>.Workspaces.cs</c>), the keys and the palette (<c>.Commands.cs</c>), the
+/// settings screen (<c>.Settings.cs</c>) and the theme (<c>.Theme.cs</c>).
 /// </summary>
 public partial class MainWindowViewModel : ObservableObject
 {
@@ -44,7 +47,8 @@ public partial class MainWindowViewModel : ObservableObject
         Func<CancellationToken, Task<GitDetection>> detectGit,
         IAppLog? log = null,
         TabServices? tabServices = null,
-        ISessionStore? session = null)
+        ISessionStore? session = null,
+        Func<string, string?>? readEnvironment = null)
     {
         _settings = settings;
         _themes = themes;
@@ -56,38 +60,32 @@ public partial class MainWindowViewModel : ObservableObject
 
         // Every dialog of a repository's operations follows the window's one rule (4f).
         _tabServices.NamesRepositoryInDialogs = () => NamesRepositoryInDialogs;
-        Theme = themes.Current;
+
+        // A workspace opens through the window (docs/phase-6-design.md 1.3, 2.2).
+        _tabServices.WorkspaceHost = this;
+
+        // The welcome page's Open takes Open repository…'s first step too (5.10, D215).
+        _tabServices.ActivateTabShowing = ActivateTabShowing;
+
+        // The theme shown follows the service: the user's choice, or the system's mode (11.6).
+        FollowThemeService();
+
+        // The editor failure's "Open settings…" opens the settings screen through the window (12.7).
+        WireSettings();
 
         // A menu that waited for a read opens only over its own tab, and never over a dialog (4a).
+        // On a dashboard the log line names the workspace (docs/phase-6-design.md 2.7).
         Menu = new MenuLayerViewModel(
             _log,
-            () => ActiveTab?.Repository?.Name,
+            () => ActiveTab?.Repository?.Name ?? ActiveTab?.Dashboard?.Name,
             owner => ReferenceEquals(ActiveTab?.Repository, owner) && !Dialogs.IsOpen);
+
+        // The dashboards' rows open their repositories through the window (docs/phase-6-design.md 2.3).
+        WatchDashboards();
 
         // The tabs of the last session are there from the first frame, under their folder names;
         // InitializeAsync opens them once git has been found.
-        var saved = _session.Current;
-        foreach (var tab in saved.Tabs)
-        {
-            AddTab();
-        }
-
-        if (Tabs.Count == 0)
-        {
-            AddTab();
-        }
-
-        for (var i = 0; i < saved.Tabs.Count; i++)
-        {
-            if (saved.Tabs[i].RepositoryPath is { } path && !string.IsNullOrWhiteSpace(path))
-            {
-                Tabs[i].ShowPending(path);
-            }
-        }
-
-        _restoring = true;
-        Activate(Tabs[saved.ActiveTab >= 0 && saved.ActiveTab < Tabs.Count ? saved.ActiveTab : 0]);
-        _restoring = false;
+        RestoreTabs(_session.Current);
         UpdateCanClose();
 
         // The activity log reads the session's records from its start, whether its panel is open
@@ -96,12 +94,17 @@ public partial class MainWindowViewModel : ObservableObject
         ActivityLog.Follow(this);
 
         // Auto-fetch looks at the active tab's repository (docs/phase-3-design.md 6.1, D85).
+        // Its interval's environment variable is read through the session's reader (docs/phase-6-design.md 7.3).
         AutoFetch = new AutoFetchScheduler(
             () => ActiveTab.Repository,
             () => Dialogs.IsOpen,
             settings,
             _tabServices.Clock,
-            _log);
+            _log)
+        {
+            ReadEnvironment = readEnvironment ?? Environment.GetEnvironmentVariable,
+            CommonFolderBusy = repository => _tabServices.BulkSlots.IsCommonFolderBusy(repository, _tabServices.OpenRepositories),
+        };
         AutoFetch.Start();
     }
 
@@ -114,11 +117,13 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// The one rule of docs/phase-3-design.md 4f: a dialog that an operation of a repository opens
     /// (a confirmation, the name, choice, pick, push, reset, stash, tag and remotes dialogs, git's
-    /// and ssh's prompts) names that repository, "In &lt;repo&gt;" under its title, while more than
-    /// one tab has a repository. The error dialog names it always. Every tab's operations and the
-    /// prompt dialogs read it when a dialog opens (<see cref="TabServices.NamesRepositoryInDialogs"/>).
+    /// and ssh's prompts) names that repository, "In &lt;repo&gt;" under its title, while a
+    /// dashboard tab is open (docs/phase-6-design.md 3.8: a bulk run's sign-in says which row
+    /// asks) or more than one tab has a repository. The error dialog names it always. Every tab's
+    /// operations and the prompt dialogs read it when a dialog opens
+    /// (<see cref="TabServices.NamesRepositoryInDialogs"/>).
     /// </summary>
-    public bool NamesRepositoryInDialogs => Tabs.Count(tab => tab.Repository is not null) > 1;
+    public bool NamesRepositoryInDialogs => AnyDashboardOpen || Tabs.Count(tab => tab.Repository is not null) > 1;
 
     /// <summary>Fetches the active tab's repository in the background (6.1, D85).</summary>
     public AutoFetchScheduler AutoFetch { get; }
@@ -128,16 +133,6 @@ public partial class MainWindowViewModel : ObservableObject
     /// the status bar's toggle, for the active tab's worktree. Its being open is the window's.
     /// </summary>
     public ActivityLogViewModel ActivityLog { get; }
-
-    /// <summary>The theme the app is showing.</summary>
-    [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsDarkTheme))]
-    [NotifyPropertyChangedFor(nameof(ThemeSwitchToolTip))]
-    public partial AppTheme Theme { get; private set; }
-
-    public bool IsDarkTheme => Theme == AppTheme.Dark;
-
-    public string ThemeSwitchToolTip => IsDarkTheme ? "Switch to the light theme" : "Switch to the dark theme";
 
     /// <summary>What was found when the app looked for git. Null until the search has finished.</summary>
     [ObservableProperty]
@@ -178,24 +173,20 @@ public partial class MainWindowViewModel : ObservableObject
             GitStatusText = "Git is not working";
         }
 
+        // A restored active dashboard reads its rows beside the restored tabs' openings
+        // (docs/phase-6-design.md 2.10).
         var opening = Tabs
             .Where(tab => tab.PendingPath is not null)
             .Select(tab => tab.OpenAsync(tab.PendingPath!, remember: false))
-            .ToList();
-        await Task.WhenAll(opening);
+            .ToList<Task>();
+
+        // The merge tools git knows are looked up once start-up has settled: when the first
+        // restored tab's load ends, or at once without one (docs/phase-6-design.md 8.10).
+        _ = LookUpMergeToolsAfterAsync(opening);
+        await Task.WhenAll(opening.Append(ReadActiveDashboardAtStartAsync()));
 
         // A restored tab that could not be opened is a "New tab" now; a lone one has no close button.
         UpdateCanClose();
-    }
-
-    [RelayCommand]
-    private void ToggleTheme()
-    {
-        var next = IsDarkTheme ? AppTheme.Light : AppTheme.Dark;
-        _themes.Apply(next);
-        Theme = next;
-        _settings.Update(settings => settings with { Theme = next });
-        _log.Info($"Theme changed to {next}.");
     }
 
     /// <summary>Opens a new, empty tab after the last one and shows it.</summary>
@@ -249,12 +240,14 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>
-    /// Stops the work of every tab. The session keeps the tabs for the next start. A clone that
-    /// is still running is cancelled, and its half-written folder removed, before this returns
-    /// (at most a few seconds), since the process may end right after.
+    /// Stops the work of every tab and of every open dialog, which is cancelled first
+    /// (<see cref="DialogHostViewModel.CancelAll"/>). The session keeps the tabs for the next
+    /// start. A clone that is still running is cancelled, and its half-written folder removed,
+    /// before this returns (at most a few seconds), since the process may end right after.
     /// </summary>
     public void CloseAll()
     {
+        Dialogs.CancelAll();
         AutoFetch.Dispose();
         ActivityLog.Dispose();
         var clones = Tabs.Select(tab => tab.Welcome.RunningClone).OfType<Task>().ToArray();
@@ -262,6 +255,10 @@ public partial class MainWindowViewModel : ObservableObject
         {
             tab.Dispose();
         }
+
+        // The dashboards released their summaries above (D81's rules); what is left goes now
+        // (docs/phase-6-design.md 3.7).
+        _tabServices.OpenRepositories.DisposeAll();
 
         if (clones.Length > 0)
         {
@@ -279,10 +276,12 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>
     /// The window is closing (docs/phase-3-design.md 1.8): returns true when it may close now.
     /// While a repository runs an operation the user started, the close waits (also for the local
-    /// operation of a tab closed meanwhile, which goes on to its end): what waits is
-    /// dropped, "Finishing operations" lists what runs, and <paramref name="closeWindow"/> is
-    /// called when they have ended, or when the user chooses "Quit now". A background auto-fetch
-    /// does not hold the window. Once the close is confirmed, every later call returns true.
+    /// operation of a tab closed meanwhile, which goes on to its end), and so does it while the
+    /// settings screen's global git writes run, which no queue holds (docs/phase-6-design.md 7.8
+    /// step 4): what waits is dropped, "Finishing operations" lists what runs, and
+    /// <paramref name="closeWindow"/> is called when they have ended, or when the user chooses
+    /// "Quit now". A background auto-fetch does not hold the window. Once the close is confirmed,
+    /// every later call returns true.
     /// <para>
     /// What a close does follows the dialog's own state, not when its answer is acted on (a
     /// continuation that runs later on the UI thread): while the dialog is open, or after "Quit
@@ -298,14 +297,14 @@ public partial class MainWindowViewModel : ObservableObject
             return true;
         }
 
-        var running = Tabs
-            .Select(tab => tab.Repository)
-            .OfType<RepositoryViewModel>()
-            .Concat(_closedButRunning)
+        // The dashboards' view models too (docs/phase-6-design.md 3.7).
+        var listed = RepositoriesToFinish().ToList();
+        var running = listed
             .Select(repository => (Repository: repository, Current: repository.Queue.Current))
             .Where(entry => entry.Current is { IsBackground: false })
             .ToList();
-        if (running.Count == 0)
+        var saving = SettingsSaves();
+        if (running.Count == 0 && saving.Count == 0)
         {
             _closeConfirmed = true;
             return true;
@@ -313,12 +312,16 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (_finishing is not { } finishing || (finishing.IsClosed && !QuitNowChosen(finishing)))
         {
-            foreach (var tab in Tabs)
+            // Bulk runs and settings saves start no more rows or writes first (4.12, 7.8), then the
+            // queues drop what waits.
+            StopBulkRunsStarting();
+            saving.ForEach(save => save.StopStarting());
+            foreach (var repository in listed)
             {
-                tab.Repository?.Queue.DropWaiting();
+                repository.Queue.DropWaiting();
             }
 
-            _ = FinishThenCloseAsync(running.Select(entry => entry.Repository).ToList(), closeWindow);
+            _ = FinishThenCloseAsync(running.Select(entry => entry.Repository).ToList(), saving, closeWindow);
         }
 
         return false;
@@ -345,25 +348,34 @@ public partial class MainWindowViewModel : ObservableObject
     private static bool QuitNowChosen(FinishingDialogViewModel dialog) =>
         dialog.Result.IsCompletedSuccessfully && dialog.Result.Result;
 
+    /// <summary>The open settings screens whose global git writes run now (7.8 step 4), which the window's close waits for.</summary>
+    private List<SettingsDialogViewModel> SettingsSaves() =>
+        [.. Dialogs.Open.OfType<SettingsDialogViewModel>().Where(dialog => dialog.GlobalWrites is { IsCompleted: false })];
+
     /// <summary>
-    /// Shows "Finishing operations" and closes the window when the operations have ended or the
-    /// user chooses "Quit now". <see cref="_finishing"/> keeps the dialog afterwards, also after
-    /// "Keep open": <see cref="TryClose"/> goes by its state.
+    /// Shows "Finishing operations" and closes the window when the operations and the settings
+    /// screens' global writes have ended, or the user chooses "Quit now". <see cref="_finishing"/>
+    /// keeps the dialog afterwards, also after "Keep open": <see cref="TryClose"/> goes by its state.
     /// </summary>
-    private async Task FinishThenCloseAsync(IReadOnlyList<RepositoryViewModel> repositories, Action closeWindow)
+    private async Task FinishThenCloseAsync(IReadOnlyList<RepositoryViewModel> repositories, IReadOnlyList<SettingsDialogViewModel> saves, Action closeWindow)
     {
+        var writes = saves
+            .Select(save => (Writes: save.GlobalWrites, Several: save.GlobalWriteCount > 1))
+            .Where(save => save.Writes is { IsCompleted: false })
+            .ToList();
         var items = repositories
             .Select(repository => (Repository: repository, Current: repository.Queue.Current))
             .Where(entry => entry.Current is { IsBackground: false })
             .Select(entry => new FinishingItem(
                 $"{entry.Current!.Title} — {entry.Repository.Name}",
                 entry.Current.Kind == OperationKind.Local && entry.Current.HasSeveralSteps))
+            .Concat(writes.Select(save => new FinishingItem(OperationTexts.SettingsTexts.FinishingGlobalWrites, save.Several)))
             .ToList();
         var dialog = new FinishingDialogViewModel(items);
         _finishing = dialog;
         try
         {
-            var idle = Task.WhenAll(repositories.Select(repository => repository.Queue.WhenIdleAsync()));
+            var idle = Task.WhenAll(repositories.Select(repository => repository.Queue.WhenIdleAsync()).Concat(writes.Select(save => save.Writes!)));
             var answer = Dialogs.ShowAsync(dialog);
             var first = await Task.WhenAny(idle, answer);
             if (first == idle)
@@ -409,6 +421,8 @@ public partial class MainWindowViewModel : ObservableObject
         ActiveTab = tab;
         if (!_restoring)
         {
+            // A dashboard reads its rows when it becomes the active tab (docs/phase-6-design.md 2.10).
+            tab.Dashboard?.OnBecameActive();
             SaveTabs();
         }
     }
@@ -423,13 +437,13 @@ public partial class MainWindowViewModel : ObservableObject
     {
         foreach (var tab in Tabs)
         {
-            tab.CanClose = Tabs.Count > 1 || tab.HasRepository || tab.PendingPath is not null;
+            tab.CanClose = Tabs.Count > 1 || tab.HasRepository || tab.PendingPath is not null || tab.IsDashboard;
         }
     }
 
     private void SaveTabs()
     {
-        var tabs = Tabs.Select(tab => new TabState(tab.SavedPath)).ToList();
+        var tabs = SavedTabStates();
         var active = Math.Max(0, Tabs.IndexOf(ActiveTab));
         _session.Update(state => state with { Tabs = tabs, ActiveTab = active });
     }

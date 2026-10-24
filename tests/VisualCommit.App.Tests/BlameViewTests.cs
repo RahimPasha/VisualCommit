@@ -1,4 +1,6 @@
+using Avalonia;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
@@ -7,6 +9,7 @@ using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.App.Views.Pages;
 using VisualCommit.Core.Git;
+using VisualCommit.Testing;
 using Xunit;
 using static VisualCommit.App.Tests.PageFakes;
 
@@ -121,6 +124,56 @@ public class BlameViewTests
         editor.Show(large, "src/Large.cs", highlighting: false);
         Assert.False(editor.IsTokenizing);
         Assert.False(editor.IsHighlighted);
+    }
+
+    /// <summary>
+    /// The theme switched while the blame shows (docs/phase-6-design.md 11.15, the live switches
+    /// r06 found untested): the text and the gutter take the other theme's colours at once, the
+    /// gutter's <c>Not committed yet</c> in that theme's warning colour (light <c>#895A17</c>, 11.10).
+    /// A file not committed yet: every line is one run, so the gutter's only text is that one.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Switching_the_theme_recolours_the_text_and_the_gutters_Not_committed_yet()
+    {
+        var uncommitted = new BlameCommit(Zero, "Not Committed Yet", "not.committed.yet", Minute(9), "Version of src/Notes.cs from src/Notes.cs", "src/Notes.cs", null, null, IsBoundary: false);
+        var repository = new PageFakeRepository
+        {
+            Blame = (_, _) => new BlameResult([new("namespace History;", uncommitted), new(string.Empty, uncommitted), new("public sealed class Notes", uncommitted)]),
+        };
+        using var page = new BlameViewModel(new RecordingPageHost(repository), new BlameRequest("src/Notes.cs", null));
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        var text = view.GetVisualDescendants().OfType<BlameTextEditor>().Single(control => control.Name == "BlameText");
+        var gutter = view.GetVisualDescendants().OfType<BlameGutter>().Single(control => control.Name == "BlameGutter");
+        await page.LoadAsync();
+        DiffHost.Settle();
+        Assert.Equal([BlameGutter.NotCommittedYetText], gutter.TextsOf(0).Select(part => part.Text));
+
+        // The light warning replaced #B7791F (11.10); the dark one is unchanged.
+        foreach (var (variant, colors, warning, replaced) in new[]
+        {
+            (ThemeVariant.Dark, DiffColors.Dark, Color.Parse("#E0A23B"), (Color?)null),
+            (ThemeVariant.Light, DiffColors.Light, Color.Parse("#895A17"), Color.Parse("#B7791F")),
+            (ThemeVariant.Dark, DiffColors.Dark, Color.Parse("#E0A23B"), null),
+        })
+        {
+            host.Window.RequestedThemeVariant = variant;
+            var shot = host.Capture();
+            TestPictures.Save(host, $"blame-switched-{(variant == ThemeVariant.Dark ? "dark" : "light")}");
+            var name = variant == ThemeVariant.Dark ? "dark" : "light";
+
+            DiffColors.AssertBrush(colors.TextPrimary, text.Foreground, $"the text's colour, {name}");
+            DiffColors.AssertBrush(colors.Background, text.Background, $"the text's background, {name}");
+            var textArea = new Rect(host.ToWindow(text, default), text.Bounds.Size);
+            Assert.Equal(colors.Background, shot.PixelAt(new Point(textArea.Right - 30, textArea.Bottom - 30)));
+
+            // The gutter: run 0 on the panel's background (right of its text, in the first line),
+            // its only text's ink in the warning colour (TextInk's rule).
+            var panel = name == "dark" ? Color.Parse("#1A1D24") : Color.Parse("#F5F6F8");
+            var area = new Rect(host.ToWindow(gutter, default), gutter.Bounds.Size);
+            Assert.Equal(panel, shot.PixelAt(new Point(area.Right - 4, area.Y + 4)));
+            Assert.Empty(TextInk.Problems(shot, area.Deflate(1), warning, panel, replaced, $"Not committed yet, {name}"));
+        }
     }
 
     /// <summary><paramref name="count"/> lines of C#.</summary>

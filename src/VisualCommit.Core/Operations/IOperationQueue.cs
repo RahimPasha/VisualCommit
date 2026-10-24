@@ -52,6 +52,17 @@ public interface IOperationQueue : IDisposable
     /// </summary>
     void DropWaiting();
 
+    /// <summary>
+    /// Cancels <paramref name="operation"/> alone, whatever else the queue holds
+    /// (docs/phase-6-design.md 4.5): a waiting one completes as <see cref="OperationOutcome.Cancelled"/>
+    /// without running; a running one is cancelled while <see cref="OperationSnapshot.CanCancel"/>,
+    /// otherwise it runs to its end (D81); one merged into a waiting operation by its dedupe key
+    /// cancels that operation; a background operation, or one the queue no longer holds, is left
+    /// alone. A bulk run's Cancel all uses it, never <see cref="CancelCurrent"/> or
+    /// <see cref="DropWaiting"/>, which would stop a tab's own operations too.
+    /// </summary>
+    void Cancel(GitOperation operation);
+
     /// <summary>Raised on any thread when <see cref="Current"/>, <see cref="Waiting"/>, <see cref="LastResult"/> or the running operation's progress changes; listeners move to their own thread.</summary>
     event EventHandler? Changed;
 

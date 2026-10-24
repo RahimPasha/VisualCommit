@@ -198,9 +198,9 @@ public sealed class Phase5ExpectationTestsP
     [Fact]
     public void The_commands_and_titles_name_the_scenarios_commits()
     {
-        Assert.Equal("git switch --create topic 19a90447e124bf3a74124a5673df655601c53d5b", PartP.CreateTopicCommand);
+        Assert.Equal("git switch --create topic --no-overwrite-ignore 19a90447e124bf3a74124a5673df655601c53d5b", PartP.CreateTopicCommand);
         Assert.Equal("git switch --detach --no-overwrite-ignore f39ea2d9addec45f926151cd2267cb57ea0b16aa", PartP.DetachNoOverwriteIgnoreCommand(PartP.DescribeSha));
-        Assert.Equal("git switch --detach 41f8398f95fa73a5614e32760cc511673aa6a80d", PartP.DetachCommand(PartP.MainWorkSha));
+        Assert.Equal("git switch --detach --no-overwrite-ignore 41f8398f95fa73a5614e32760cc511673aa6a80d", PartP.DetachCommand(PartP.MainWorkSha));
         Assert.Equal("git stash push --include-untracked --message \"Auto stash before checking out f39ea2d\"", PartP.AutoStashCommand("f39ea2d"));
         Assert.Equal("git cherry-pick 4f5e8215c9321acae3a2ea386bda05107915f2da", PartP.CherryPickOtherEditsCommand);
         Assert.Equal("git revert --no-edit f39ea2d9addec45f926151cd2267cb57ea0b16aa", PartP.RevertDescribeCommand);

@@ -22,23 +22,44 @@ public class ProtectedChangesTests
 
     // ---- A refusal changes nothing (0.7) ---------------------------------------------------------
 
-    [Fact]
-    public async Task A_refused_checkout_of_each_form_throws_gits_refusal_and_changes_nothing()
+    // One case per form, each on a scenario of its own: the five in one test took 12 s alone and ran
+    // past the hang watchdog's 180 s under the gate's default run.
+    [Theory]
+    [InlineData("switch --no-guess <b>")]
+    [InlineData("switch --detach <sha>")]
+    [InlineData("switch --detach <sha> --no-overwrite-ignore")]
+    [InlineData("switch --create <b> <sha>")]
+    [InlineData("switch --create <b> --track <remote>")]
+    public async Task A_refused_checkout_of_each_form_throws_gits_refusal_and_changes_nothing(string form)
     {
-        // switch --no-guess <b>, switch --detach <sha> with and without --no-overwrite-ignore,
-        // switch --create <b> <sha> (no branch is made) and switch --create <b> --track <remote>.
-        await AssertRefusedAsync(repository => repository.CheckoutBranchAsync("other", cancellationToken: TestCancelled));
-        await AssertRefusedAsync(async repository => await repository.CheckoutDetachedAsync(await OtherEditsAsync(repository), cancellationToken: TestCancelled));
-        await AssertRefusedAsync(async repository => await repository.CheckoutDetachedAsync(await OtherEditsAsync(repository), noOverwriteIgnore: true, cancellationToken: TestCancelled));
-        await AssertRefusedAsync(async repository => await repository.CreateBranchAsync("topic", await OtherEditsAsync(repository), checkout: true, cancellationToken: TestCancelled));
-        await AssertRefusedAsync(
-            repository => repository.CheckoutTrackingBranchAsync("tracked", "refs/remotes/mirror/other", cancellationToken: TestCancelled),
-            async repo =>
-            {
-                // A remote whose branch is other, fetched before the change is made.
-                await repo.GitAsync("remote", "add", "mirror", repo.Path);
-                await repo.GitAsync("fetch", "--quiet", "mirror");
-            });
+        // switch --create <b> <sha> makes no branch.
+        switch (form)
+        {
+            case "switch --no-guess <b>":
+                await AssertRefusedAsync(repository => repository.CheckoutBranchAsync("other", keepIgnored: false, cancellationToken: TestCancelled));
+                break;
+            case "switch --detach <sha>":
+                await AssertRefusedAsync(async repository => await repository.CheckoutDetachedAsync(await OtherEditsAsync(repository), keepIgnored: false, cancellationToken: TestCancelled));
+                break;
+            case "switch --detach <sha> --no-overwrite-ignore":
+                await AssertRefusedAsync(async repository => await repository.CheckoutDetachedAsync(await OtherEditsAsync(repository), keepIgnored: true, cancellationToken: TestCancelled));
+                break;
+            case "switch --create <b> <sha>":
+                await AssertRefusedAsync(async repository => await repository.CreateBranchAsync("topic", await OtherEditsAsync(repository), checkout: true, noTrack: false, keepIgnored: false, cancellationToken: TestCancelled));
+                break;
+            case "switch --create <b> --track <remote>":
+                await AssertRefusedAsync(
+                    repository => repository.CheckoutTrackingBranchAsync("tracked", "refs/remotes/mirror/other", keepIgnored: false, cancellationToken: TestCancelled),
+                    async repo =>
+                    {
+                        // A remote whose branch is other, fetched before the change is made.
+                        await repo.GitAsync("remote", "add", "mirror", repo.Path);
+                        await repo.GitAsync("fetch", "--quiet", "mirror");
+                    });
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(form), form, "No such form.");
+        }
     }
 
     // ---- The automatic stash (9.2) ---------------------------------------------------------------
@@ -57,7 +78,7 @@ public class ProtectedChangesTests
         // Steps 3 and 4: the stash with the untracked files, without GIT_LITERAL_PATHSPECS (D108),
         // then the checkout that refuses rather than overwrite an ignored file.
         var stash = await repository.StashAsync(AutoStashMessage, includeUntracked: true, cancellationToken: TestCancelled);
-        await repository.CheckoutDetachedAsync(target, noOverwriteIgnore: true, cancellationToken: TestCancelled);
+        await repository.CheckoutDetachedAsync(target, keepIgnored: true, cancellationToken: TestCancelled);
 
         // The report's P1: the stash 256077f on main's tip (D72's dates make it the same in every run).
         Assert.Equal("256077fbd990adad7fe00df31789590d7370aff0", stash);
@@ -73,7 +94,7 @@ public class ProtectedChangesTests
         Assert.Equal(["checkout: moving from main to " + target, "reset: moving to HEAD", .. reflog], reflogNow);
 
         // The way back (D166's undo runs the same): main, then the stash popped with its index.
-        await repository.CheckoutBranchAsync("main", cancellationToken: TestCancelled);
+        await repository.CheckoutBranchAsync("main", keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal(ApplyResult.Applied, await repository.ApplyStashAsync(stash!, StashApplyMode.PopKeepingIndex, cancellationToken: TestCancelled));
 
         Assert.Equal(before, await repo.ExactStateAsync());
@@ -102,10 +123,10 @@ public class ProtectedChangesTests
         var stash = await repository.StashAsync(AutoStashMessage, includeUntracked: true, cancellationToken: TestCancelled);
         Assert.False(File.Exists(Path.Combine(repo.Path, "work", "file.txt")));
         AssertFoldersKept("after the stash");
-        await repository.CheckoutDetachedAsync(target, noOverwriteIgnore: true, cancellationToken: TestCancelled);
+        await repository.CheckoutDetachedAsync(target, keepIgnored: true, cancellationToken: TestCancelled);
         AssertFoldersKept("after the checkout");
 
-        await repository.CheckoutBranchAsync("main", cancellationToken: TestCancelled);
+        await repository.CheckoutBranchAsync("main", keepIgnored: false, cancellationToken: TestCancelled);
         Assert.Equal(ApplyResult.Applied, await repository.ApplyStashAsync(stash!, StashApplyMode.PopKeepingIndex, cancellationToken: TestCancelled));
         AssertFoldersKept("after the way back");
         Assert.Equal(before, await repo.ExactStateAsync());
@@ -170,7 +191,7 @@ public class ProtectedChangesTests
         var before = await repo.ExactStateAsync();
         var reflog = await HeadReflogAsync(repo);
 
-        var refused = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutDetachedAsync(guide, noOverwriteIgnore: true, cancellationToken: TestCancelled));
+        var refused = await Assert.ThrowsAsync<GitException>(() => repository.CheckoutDetachedAsync(guide, keepIgnored: true, cancellationToken: TestCancelled));
 
         // TP6: the untracked block naming the ignored file; nothing changed, the file intact.
         Assert.Equal(1, refused.ExitCode);

@@ -155,4 +155,9 @@ public sealed partial class ChangedFileRow : ObservableObject
     /// (section 5), <see cref="ToolTip"/> for any other.
     /// </summary>
     public string RowToolTip => File?.Kind == FileChangeKind.Conflicted ? ConflictToolTip : ToolTip;
+
+    /// <summary>Whether <paramref name="other"/>, a row of a later rebuild, shows exactly what this row shows, so the list can keep this row.</summary>
+    public bool ShowsSameAs(ChangedFileRow other) =>
+        other.Key == Key && other.Name == Name && other.Depth == Depth && other.File == File && other.Folder == Folder
+        && other.IsUnchanged == IsUnchanged && other.IsOpen == IsOpen && other.IsSelected == IsSelected;
 }

@@ -1,4 +1,6 @@
+using System.Globalization;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Workspaces;
 
 namespace VisualCommit.App.ViewModels.Dialogs;
 
@@ -86,6 +88,52 @@ public static class DialogText
             ? $"A remote named {otherCase} exists in another case."
             : null;
     }
+
+    /// <summary>A workspace name of more than <see cref="Workspace.MaxNameLength"/> characters (docs/phase-6-design.md 1.6).</summary>
+    public const string WorkspaceNameTooLong = "This is not a valid workspace name: it has more than 100 characters.";
+
+    /// <summary>A workspace name with a line break, a tab or another control character (1.6).</summary>
+    public const string WorkspaceNameHasControlCharacter = "This is not a valid workspace name: it has a line break or another control character.";
+
+    /// <summary>
+    /// What the name box of a workspace says about <paramref name="name"/> (docs/phase-6-design.md
+    /// 1.6), or null when it is a valid name. The trimmed name is checked in this order: empty
+    /// "Enter a name."; longer than <see cref="Workspace.MaxNameLength"/> characters (as a reader
+    /// counts them: text elements, so an emoji is one); a control character (a line break, a tab)
+    /// or a Unicode line or paragraph separator (U+2028, U+2029); another workspace has it, ignoring case on every platform (a name is no path):
+    /// "A workspace named &lt;existing&gt; exists.", in the other's spelling.
+    /// </summary>
+    /// <param name="name">The name as typed.</param>
+    /// <param name="existing">The other workspaces' names (on a rename, the workspace itself left out).</param>
+    public static string? WorkspaceNameError(string name, IEnumerable<string> existing)
+    {
+        ArgumentNullException.ThrowIfNull(name);
+        ArgumentNullException.ThrowIfNull(existing);
+        var trimmed = name.Trim();
+        if (trimmed.Length == 0)
+        {
+            return EnterName;
+        }
+
+        if (new StringInfo(trimmed).LengthInTextElements > Workspace.MaxNameLength)
+        {
+            return WorkspaceNameTooLong;
+        }
+
+        if (trimmed.Any(IsLineBreakOrControl))
+        {
+            return WorkspaceNameHasControlCharacter;
+        }
+
+        return existing.FirstOrDefault(other => string.Equals(other.Trim(), trimmed, StringComparison.OrdinalIgnoreCase)) is { } clash
+            ? $"A workspace named {clash} exists."
+            : null;
+    }
+
+    /// <summary>A control character (Cc: line feed, tab, …) or a Unicode line or paragraph separator (U+2028, U+2029), which also break a line.</summary>
+    private static bool IsLineBreakOrControl(char character) =>
+        char.IsControl(character)
+        || char.GetUnicodeCategory(character) is UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator;
 
     private static string? NameError(string kind, string name, Func<string, string?> problemOf, IEnumerable<string> existing, bool ignoreCase)
     {

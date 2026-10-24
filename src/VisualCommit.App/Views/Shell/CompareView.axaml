@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels.Shell"
@@ -217,6 +218,7 @@
 
         <!-- The changed files: rows 24 high, flat or as a tree, as the details panel's. -->
         <ItemsControl Name="CompareFileList"
+                      kr:KeyRegion.IsMain="True"
                       ItemsSource="{Binding Files}"
                       IsVisible="{Binding HasFiles}"
                       AutomationProperties.AutomationId="CompareFileList"

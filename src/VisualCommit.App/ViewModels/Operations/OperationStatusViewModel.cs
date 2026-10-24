@@ -32,7 +32,7 @@ public enum OperationStatusTone
 /// the waiting count go on as before. It follows the queue's events on the synchronization
 /// context it was created on.
 /// </summary>
-public sealed partial class OperationStatusViewModel : ObservableObject, IDisposable
+public sealed partial class OperationStatusViewModel : ObservableObject, IStatusBarOperation, IDisposable
 {
     /// <summary>What an idle repository, or a tab without one, shows.</summary>
     public const string ReadyText = "Ready";
@@ -53,6 +53,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
     private string _resultText = ReadyText;
     private OperationStatusTone _resultTone = OperationStatusTone.Secondary;
     private string? _resultToolTip;
+    private bool _mergeToolRuns;
     private bool _disposed;
 
     /// <param name="queue">The repository's queue; null for a tab without a repository, which shows "Ready" (or a notice) for good.</param>
@@ -123,6 +124,40 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
     /// <summary>"1 waiting".</summary>
     public string WaitingText => string.Create(CultureInfo.InvariantCulture, $"{Waiting} waiting");
 
+    /// <summary>
+    /// A dashboard row's Operation cell (docs/phase-6-design.md 2.6): the running text with git's
+    /// percentage but without its stage (<c>Fetching from all remotes… 45%</c>), the last result, or
+    /// <c>Waiting for auto-fetch…</c>; empty for "Ready". Never ssh's window-wide notice, which would
+    /// show in every row at once; the status bar keeps it.
+    /// </summary>
+    [ObservableProperty]
+    public partial string CompactText { get; private set; } = string.Empty;
+
+    /// <summary><see cref="CompactText"/>'s colour: the status bar's tone of the same text.</summary>
+    [ObservableProperty]
+    public partial OperationStatusTone CompactTone { get; private set; }
+
+    /// <summary>
+    /// <see cref="CompactText"/>'s tooltip (2.6): the status bar's whole text, its stage included
+    /// (<c>Fetching from all remotes… Counting objects 45%</c>), or its tooltip where it has one of
+    /// its own (git's first line after a failed auto-fetch); null while the text is empty.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? CompactToolTip { get; private set; }
+
+    /// <summary>The title of the operation of the user that runs (a row's <c>Cancel {title}</c>, 2.7); null while none runs.</summary>
+    [ObservableProperty]
+    public partial string? RunningTitle { get; private set; }
+
+    /// <summary>
+    /// The operation of the user that runs could be cancelled (2.7): a network operation, or a local
+    /// one that can be (<see cref="GitOperation.CanBeCancelled"/>, the merge tool), whether or not its
+    /// cancel window is still open; <see cref="CanCancel"/> says whether it can be now. False while
+    /// none runs, and for every other local operation, which never could be.
+    /// </summary>
+    [ObservableProperty]
+    public partial bool RunningIsCancellable { get; private set; }
+
     public void Dispose()
     {
         if (_disposed)
@@ -147,6 +182,8 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
     [RelayCommand(CanExecute = nameof(CanCancel))]
     private void Cancel() => _queue?.CancelCurrent();
 
+    System.Windows.Input.ICommand IStatusBarOperation.CancelCommand => CancelCommand;
+
     private void OnQueueChanged(object? sender, EventArgs e) => OnUiThread(Update);
 
     private void OnNoticesChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -162,6 +199,19 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
         var (operation, result) = (e.Operation, e.Result);
         OnUiThread(() =>
         {
+            // The merge tool's run is over: the next local operation is judged afresh. An operation
+            // the queue cancelled before it started (docs/phase-6-design.md 4.5) ends while the
+            // merge tool still runs, the queue's current one as shown, which keeps its judgement
+            // (also once Cancel was asked, when it can no longer be cancelled).
+            var current = _queue?.Current;
+            var toolStillRuns = _mergeToolRuns
+                && current is { Kind: OperationKind.Local, IsBackground: false }
+                && string.Equals(current.Title, RunningTitle, StringComparison.Ordinal);
+            if (!operation.IsBackground && !toolStillRuns)
+            {
+                _mergeToolRuns = false;
+            }
+
             ShowResult(operation, result);
             Update();
         });
@@ -209,6 +259,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
 
         if (_queue is null)
         {
+            ShowRunning(null);
             Show(ReadyText, OperationStatusTone.Secondary, null, running: false, percent: null);
             return;
         }
@@ -217,6 +268,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
         Waiting = _queue.Waiting;
         CanCancel = current?.CanCancel ?? false;
         CancelToolTip = current is { CanCancel: true, Kind: OperationKind.Local } ? StopGitAndMergeToolText : StopGitText;
+        ShowRunning(current);
         if (current is { IsBackground: false })
         {
             // The message of the last operation goes as soon as the next one starts.
@@ -228,16 +280,19 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
             }
 
             var text = current.RunningText;
+            var compact = current.RunningText;
             if (current.Progress is { } progress)
             {
                 text += " " + progress.Stage;
                 if (progress.Percent is { } percent)
                 {
-                    text += string.Create(CultureInfo.InvariantCulture, $" {percent}%");
+                    var shown = string.Create(CultureInfo.InvariantCulture, $" {percent}%");
+                    text += shown;
+                    compact += shown;
                 }
             }
 
-            Show(text, OperationStatusTone.Secondary, null, running: true, percent: current.Progress?.Percent);
+            Show(text, OperationStatusTone.Secondary, null, running: true, percent: current.Progress?.Percent, compact);
             return;
         }
 
@@ -250,8 +305,40 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IDispos
         Show(_resultText, _resultTone, _resultToolTip, running: false, percent: null);
     }
 
-    private void Show(string text, OperationStatusTone tone, string? toolTip, bool running, int? percent)
+    /// <summary>
+    /// <see cref="RunningTitle"/> and <see cref="RunningIsCancellable"/> of the queue's running
+    /// operation (2.7). A local operation can be cancelled only while the merge tool runs, whose
+    /// cancel window never ends (D149), so one seen cancellable stays so until it finishes, also
+    /// once Cancel was asked for.
+    /// </summary>
+    private void ShowRunning(OperationSnapshot? current)
     {
+        if (current is not { IsBackground: false })
+        {
+            RunningTitle = null;
+            RunningIsCancellable = false;
+            return;
+        }
+
+        if (current is { Kind: OperationKind.Local, CanCancel: true })
+        {
+            _mergeToolRuns = true;
+        }
+
+        RunningTitle = current.Title;
+        RunningIsCancellable = current.Kind == OperationKind.Network || _mergeToolRuns;
+    }
+
+    private void Show(string text, OperationStatusTone tone, string? toolTip, bool running, int? percent, string? compactText = null)
+    {
+        // A row's compact text (2.6): the text as built, without git's stage and never ssh's
+        // notice; empty for "Ready". "Waiting for auto-fetch…" has no tooltip of its own there.
+        var ready = compactText is null && string.Equals(text, ReadyText, StringComparison.Ordinal);
+        var waiting = string.Equals(text, WaitingForAutoFetchText, StringComparison.Ordinal);
+        CompactText = ready ? string.Empty : compactText ?? text;
+        CompactTone = ready ? OperationStatusTone.Secondary : tone;
+        CompactToolTip = ready || waiting ? null : toolTip ?? text;
+
         // ssh's notice (3.2) waits for the user, so it is what the text says until its scope ends.
         if (_notices?.Text is { } notice)
         {

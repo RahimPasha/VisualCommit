@@ -3,9 +3,13 @@
 // refusals a checkout makes before git (9.3's first table), the refusal message of every checkout
 // path and of the merges, picks and reverts that git refuses for the same reason (9.3), and the
 // check a stash's apply or pop makes before git (9.3's last row). The checkout paths themselves are
-// in RepositoryOperations.Branches.cs, the pull's in RepositoryOperations.Remotes.cs, the stash's
+// in RepositoryOperations.Branches.cs, the pull's in RepositoryOperations.FetchPull.cs, the stash's
 // in RepositoryOperations.StashTags.cs. Built by work package WP4; its tests are
-// tests/VisualCommit.App.Tests/RepositoryOperationsProtectTests.cs.
+// tests/VisualCommit.App.Tests/RepositoryOperationsProtectTests.cs. Phase 6's Keep ignored files
+// (D193, D196, D221; docs/phase-6-design.md section 9, work package WP-IA): the setting, the
+// checkouts' refusal display with D179's words, and the app's own check before git of the
+// operations git has no exact option for; its tests are
+// tests/VisualCommit.App.Tests/RepositoryOperationsKeepIgnoredTests.cs.
 
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
@@ -16,6 +20,20 @@ namespace VisualCommit.App.ViewModels.Operations;
 
 public sealed partial class RepositoryOperations
 {
+    /// <summary>
+    /// Keep ignored files (D193, D196, docs/phase-6-design.md 9.1): every checkout, merge, rebase,
+    /// cherry-pick, revert and stash apply or pop refuses to overwrite or delete an ignored file,
+    /// read inside each operation when it runs (as <c>StashIncludeUntracked</c> is read), so a
+    /// queued operation takes the value at its start (D124); on without settings (view-model
+    /// tests) and by default. Every app call of the checkouts, <c>CreateBranchAsync</c> and
+    /// <c>MergeAsync</c> passes it (git's <c>--no-overwrite-ignore</c>), and the operations git has
+    /// no option for run the app's own check before git while it is on
+    /// (<see cref="RefuseIfIgnoredInTheWayAsync"/>). Off turns off only D193's extension (D221):
+    /// the automatic stash's checkout passes true whatever it says and asks <c>check-ignore</c>
+    /// after a refusal (D179), and undo and redo keep D169's guards.
+    /// </summary>
+    private bool KeepIgnored => Services?.Settings.Current.KeepIgnoredFiles ?? true;
+
     // ---- 9.1: which checkouts stash first -----------------------------------------------------------
 
     /// <summary>
@@ -26,8 +44,9 @@ public sealed partial class RepositoryOperations
     /// between HEAD and a loaded ancestor); otherwise <c>git merge-base --is-ancestor</c>. Either
     /// operation decides again when HEAD moved meanwhile (<see cref="RefuseIfAutoStashTargetMovedAsync"/>,
     /// <see cref="RefuseIfNowAutoStashTargetAsync"/>). Null for every other checkout, which git
-    /// runs as before: HEAD's own commit too (D179, the report's PD7), a detached or unborn HEAD,
-    /// and a commit the branch does not reach.
+    /// runs as before, with <c>--no-overwrite-ignore</c> while Keep ignored files is on (D193,
+    /// docs/phase-6-design.md 9.11): HEAD's own commit too (D179, the report's PD7), a detached or
+    /// unborn HEAD, and a commit the branch does not reach.
     /// </summary>
     private async Task<AutoStashTarget?> AutoStashTargetAsync(string target, HeadState? seen)
     {
@@ -128,13 +147,13 @@ public sealed partial class RepositoryOperations
                 context.SetRunningText(text.RunningText);
                 try
                 {
-                    await Git.CheckoutDetachedAsync(target.Commit, noOverwriteIgnore: true, options);
+                    await Git.CheckoutDetachedAsync(target.Commit, keepIgnored: true, options);
                 }
                 catch (GitException refused)
                 {
                     // 5. What was in the way, read before the stash comes back; then the stash back.
                     var failure = FailureOf(refused, text.FailureSummary);
-                    var blocked = await AutoStashRefusalDisplayAsync(failure, name);
+                    var blocked = await CheckoutRefusalDisplayAsync(failure, target.Commit, name, offerStash: false, keptIgnored: true);
                     if (stash is not null && !await PopBackAsync(stash, options))
                     {
                         display = new FailureDisplay(text.ErrorTitle, OperationTexts.AutoStashKept(name));
@@ -258,39 +277,133 @@ public sealed partial class RepositoryOperations
     }
 
     /// <summary>
-    /// 9.2 step 5's dialog for a checkout refused after the automatic stash (or on a clean tree):
-    /// "Checkout blocked" without "Stash changes and check out" (9.3). After the stash only
-    /// ignored files (or a submodule) can be in the way, so when every path git named is ignored
-    /// (<see cref="IGitRepository.FindIgnoredAsync"/>, a folder by its files) the ignored-files
-    /// text names the target; otherwise D153's sentence with git's count. Null for a failure that
-    /// is no refusal for changes in the way.
+    /// The dialog of a checkout git refused (docs/phase-6-design.md 9.11; phase 5's 9.2 step 5 and
+    /// 9.3), for every checkout path, which catches git's refusal inside its operation: phase 5's
+    /// <see cref="CheckoutFailureDisplay"/> first ("Checkout blocked" with D153's sentence and
+    /// git's count, "Stash changes and check out" for tracked changes when
+    /// <paramref name="offerStash"/>). Git's refusal for an ignored file under
+    /// <c>--no-overwrite-ignore</c> is its untracked-files block, which its words cannot tell from
+    /// an untracked file's; so for an untracked or folder block with paths, when the checkout passed
+    /// the option (<paramref name="keptIgnored"/>: Keep ignored files was on, or the automatic
+    /// stash's checkout, which always does), the paths are asked about
+    /// (<see cref="IgnoredBlockSummaryAsync"/>): when every one is ignored, D179's text names
+    /// <paramref name="name"/> with git's count (a folder once) and the dialog offers nothing (a
+    /// stash keeps no ignored file: D91, phase 5's PD8). Null for a failure that is no refusal for
+    /// something in the way (2.33's default).
     /// </summary>
-    private async Task<FailureDisplay?> AutoStashRefusalDisplayAsync(GitFailure failure, string name)
+    /// <param name="failure">Git's refusal.</param>
+    /// <param name="target">What is checked out, as <see cref="CheckoutAsync(string)"/> names it: what the extra button checks out.</param>
+    /// <param name="name">The target as D179's text names it: the branch, the remote branch, the tag, the short SHA, or the start point as the name dialog named it.</param>
+    /// <param name="offerStash">Offer "Stash changes and check out" for tracked changes in the way.</param>
+    /// <param name="keptIgnored">The checkout passed <c>--no-overwrite-ignore</c>.</param>
+    private async Task<FailureDisplay?> CheckoutRefusalDisplayAsync(GitFailure failure, string target, string name, bool offerStash, bool keptIgnored)
     {
-        if (CheckoutFailureDisplay(failure, name, offerStash: false) is not { } blocked)
+        if (CheckoutFailureDisplay(failure, target, offerStash) is not { } blocked)
         {
             return null;
         }
 
+        return keptIgnored && await IgnoredBlockSummaryAsync(failure, name) is { } ignored
+            ? new FailureDisplay(OperationTexts.CheckoutBlockedTitle, ignored)
+            : blocked;
+    }
+
+    /// <summary>
+    /// D179's text for a checkout git refused only because ignored files are in the way: for an
+    /// untracked or folder block with paths, one <c>git check-ignore --stdin -z</c> of the paths git
+    /// named (<see cref="IGitRepository.FindIgnoredAsync"/>, a folder by its files); when every one
+    /// is ignored, "1 ignored file is in the way: {name} tracks a file of the same name. Move it
+    /// away first." with git's count. Null for any other refusal, and when the read fails (logged:
+    /// phase 5's message then stands).
+    /// </summary>
+    private async Task<string?> IgnoredBlockSummaryAsync(GitFailure failure, string name)
+    {
         var paths = failure.BlockedPaths;
-        if (failure.Kind is GitFailureKind.CheckoutBlockedByUntrackedFiles or GitFailureKind.CheckoutBlockedByUntrackedFolder && paths.Count > 0)
+        if (failure.Kind is not (GitFailureKind.CheckoutBlockedByUntrackedFiles or GitFailureKind.CheckoutBlockedByUntrackedFolder) || paths.Count == 0)
         {
-            try
+            return null;
+        }
+
+        try
+        {
+            var ignored = await Git.FindIgnoredAsync(paths);
+            return paths.All(ignored.Contains) ? OperationTexts.IgnoredFilesInTheWay(paths.Count, name) : null;
+        }
+        catch (GitException ex)
+        {
+            Log.Warning($"{Repository.Name}: the ignored files in the checkout's way could not be read.", ex);
+            return null;
+        }
+    }
+
+    // ---- Keep ignored files: the app's own check before git (docs/phase-6-design.md 9.3 to 9.9) ------
+
+    /// <summary>
+    /// 9.9: the app's own check of an operation git has no option for (or none that is exact: a
+    /// merge), made inside the operation while Keep ignored files is on, after its own refusals
+    /// before git and before its first write (backups, the undo capture, git). <paramref name="read"/>
+    /// is one of the git layer's five reads (9.4 to 9.8), which lists the ignored files the
+    /// operation would overwrite or delete; when it lists any, the operation is refused with
+    /// 9.15's text naming them (<paramref name="operation"/>: "merge", "rebase", "squash",
+    /// "cherry-pick", "revert"; null for a stash's apply or pop), its own error title and no git
+    /// output, and nothing is written or recorded. Null when nothing is in the way, and when the
+    /// read fails (a bad revision, on which git fails too, or git not starting): logged, and the
+    /// operation goes on to git (9.3), as D179's count does.
+    /// </summary>
+    private async Task<OperationReport?> RefuseIfIgnoredInTheWayAsync(OperationText text, string? operation, Func<Task<IReadOnlyList<string>>> read)
+    {
+        IReadOnlyList<string> ignored;
+        try
+        {
+            ignored = await read();
+        }
+        catch (GitException ex)
+        {
+            Log.Warning($"{Repository.Name}: {text.Title}: the ignored files in its way could not be read; git runs it as it would.", ex);
+            return null;
+        }
+
+        if (ignored.Count == 0)
+        {
+            return null;
+        }
+
+        return Refused(text, operation is null ? OperationTexts.IgnoredFilesInTheWayOfStash(ignored) : OperationTexts.IgnoredFilesInTheWayOf(ignored, operation));
+    }
+
+    /// <summary>
+    /// <paramref name="commits"/> as full SHAs, which the git layer's reads of 9.5 need (its
+    /// <c>--stdin</c> resolves no name, 0.4): the graph's commits are full already; another name is
+    /// resolved (<c>&lt;name&gt;^{commit}</c>). Null when one names no commit (git then fails as
+    /// it would).
+    /// </summary>
+    private async Task<IReadOnlyList<string>?> FullShasAsync(IReadOnlyList<string> commits)
+    {
+        var full = new List<string>(commits.Count);
+        foreach (var commit in commits)
+        {
+            if (IsFullSha(commit))
             {
-                var ignored = await Git.FindIgnoredAsync(paths);
-                if (paths.All(ignored.Contains))
-                {
-                    return blocked with { Summary = OperationTexts.IgnoredFilesInTheWay(paths.Count, name) };
-                }
+                full.Add(commit);
             }
-            catch (GitException ex)
+            else if (await Git.ResolveAsync(commit + "^{commit}") is { } sha)
             {
-                Log.Warning($"{Repository.Name}: the ignored files in the checkout's way could not be read.", ex);
+                full.Add(sha);
+            }
+            else
+            {
+                return null;
             }
         }
 
-        return blocked;
+        return full;
     }
+
+    /// <summary>9.5's read for <paramref name="commits"/> in the order git applies them (picks oldest first, reverts newest first), with a merge reverted with <c>-m 1</c> named by its first parent (<paramref name="mergeParent"/>).</summary>
+    private async Task<IReadOnlyList<string>> FindIgnoredInTheWayOfCommitsAsync(IReadOnlyList<string> commits, bool revert, string? mergeParent = null) =>
+        await FullShasAsync(commits) is { } full
+            ? await Git.FindIgnoredInTheWayOfCommitsAsync(full, revert, mergeParent is null ? null : (await FullShasAsync([mergeParent]))?[0])
+            : [];
 
     // ---- 9.3: the refusal message -------------------------------------------------------------------
 

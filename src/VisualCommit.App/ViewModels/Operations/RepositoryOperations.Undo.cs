@@ -333,6 +333,13 @@ public sealed partial class RepositoryOperations
                 throw new OperationCanceledException();
             }
 
+            // 10.4's guard for each branch the step pushes back to a remote (an undone deletion, a
+            // redone push), before anything is written.
+            if (await RefuseIfStepStopsFetchAsync(text, step) is { } stopsFetch)
+            {
+                return stopsFetch;
+            }
+
             // The commit an undo leaves staged, whose message the stage panel gets back (7.5).
             message = entry.Kind is UndoKind.Commit or UndoKind.Amend ? await ReadMessageAsync(entry.After.Head.Sha) : null;
             var result = await Git.RunUndoStepAsync(step, NetworkOptions.From(context), context.CancellationToken);
@@ -353,6 +360,25 @@ public sealed partial class RepositoryOperations
 
         await AfterStepAsync(step, message, context.CancellationToken);
         return OperationReport.Done(OperationTexts.Stepped(step.Direction, entry.Text));
+    }
+
+    /// <summary>
+    /// <see cref="RefuseIfPushStopsFetchAsync"/> for each branch a step writes on a remote
+    /// (<see cref="UndoEffect.RemoteRef"/> with a value to write, under <c>refs/heads/</c>): an undo
+    /// that pushes back a deleted branch, a redo that pushes one again. Null when the step may run.
+    /// </summary>
+    private async Task<OperationReport?> RefuseIfStepStopsFetchAsync(OperationText text, UndoStep step)
+    {
+        foreach (var remote in step.Effects.OfType<UndoEffect.RemoteRef>())
+        {
+            if (remote is { To: not null } && remote.Ref.StartsWith(HeadsPrefix, StringComparison.Ordinal)
+                && await RefuseIfPushStopsFetchAsync(text, ShortName(remote.Ref), remote.Remote, remote.Ref, remote.Remote) is { } refused)
+            {
+                return refused;
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1056,17 +1082,26 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// "Push {b} back to {r}…" of a deleted remote branch or tag (7.10): the remote and the name
-    /// split by the remote list's longest matching name, as the deletion did; 7.5's question; a push
+    /// split by the one configured remote name the backup's name starts with, as the deletion
+    /// joined them; refused when none does, and when more than one does (remote names may hold
+    /// slashes, 0.5: <c>team/fork/main</c> is <c>fork/main</c> on <c>team</c> as much as
+    /// <c>main</c> on <c>team/fork</c>, and the backup does not say which); 7.5's question; a push
     /// whose lease says the ref must not exist.
     /// </summary>
     private Task PushBackAsync(string name, BackupRefInfo backup, bool isTag)
     {
-        var remote = RemoteNames.Where(candidate => name.StartsWith(candidate + "/", StringComparison.Ordinal)).MaxBy(candidate => candidate.Length);
-        var rest = remote is null ? name : name[(remote.Length + 1)..];
+        var remotes = RemoteBranchNames.RemotesOf(name, RemoteNames);
+        var remote = remotes.FirstOrDefault();
+        var rest = RemoteBranchNames.WithoutRemote(name, remote);
         var text = OperationTexts.PushBack(rest, remote ?? name);
         if (remote is null)
         {
             return GuardAsync(text, () => ShowRefusalAsync(text, OperationTexts.RemoteNoLongerExists(name.Split('/')[0])));
+        }
+
+        if (remotes.Count > 1)
+        {
+            return GuardAsync(text, () => ShowRefusalAsync(text, OperationTexts.RemoteOfBackupAmbiguous(name, remotes)));
         }
 
         var remoteRef = (isTag ? TagsPrefix : HeadsPrefix) + rest;
@@ -1075,25 +1110,26 @@ public sealed partial class RepositoryOperations
 
     /// <summary>
     /// "Push {b} back to {r}…" of a force push's backup (7.10): <c>refs/remotes/&lt;name&gt;</c> maps
-    /// back to its remote and branch through the local branch whose upstream it is, otherwise by the
-    /// remote list's longest matching name (the default fetch refspec); the lease is the commit the
-    /// force push left, read from the remote-tracking reflog.
+    /// back to its remote and branch through the local branch whose upstream it is, otherwise through
+    /// the remotes' fetch lines (<see cref="RepoRefs.SourceOf(string)"/>, docs/phase-6-design.md
+    /// 10.4 #12: a branch one ref of a configured remote fills); the lease is the commit the force
+    /// push left, read from the remote-tracking reflog.
     /// </summary>
     private Task PushForcePushBackAsync(string name, BackupRefInfo backup)
     {
         var tracking = Refs?.Refs.FirstOrDefault(gitRef => gitRef.Kind == RefKind.LocalBranch
             && string.Equals(gitRef.UpstreamRef, RemotesPrefix + name, StringComparison.Ordinal)
             && gitRef is { UpstreamRemote: not null, UpstreamRemoteRef: not null });
-        string? remote;
-        string? remoteRef;
+        string? remote = null;
+        string? remoteRef = null;
         if (tracking is { UpstreamRemote: { } upstreamRemote, UpstreamRemoteRef: { } upstreamRef })
         {
             (remote, remoteRef) = (upstreamRemote, upstreamRef);
         }
-        else
+        else if (Refs?.SourceOf(RemotesPrefix + name) is { IsBranch: true, Remote: { } mapped, RemoteRef: { } mappedRef }
+            && RemoteNames.Contains(mapped, StringComparer.Ordinal))
         {
-            remote = RemoteNames.Where(candidate => name.StartsWith(candidate + "/", StringComparison.Ordinal)).MaxBy(candidate => candidate.Length);
-            remoteRef = remote is null ? null : HeadsPrefix + name[(remote.Length + 1)..];
+            (remote, remoteRef) = (mapped, mappedRef);
         }
 
         var branch = remoteRef is null ? name : ShortName(remoteRef);
@@ -1142,6 +1178,13 @@ public sealed partial class RepositoryOperations
             RefreshScope.Refs,
             async context =>
             {
+                // 10.4's guard, as for every push of a branch: brought back beside the ref that
+                // fills its tracking ref now, it would stop every fetch of the remote.
+                if (!isTag && await RefuseIfPushStopsFetchAsync(text, name, remote, remoteRef, remote) is { } stopsFetch)
+                {
+                    return stopsFetch;
+                }
+
                 var entryText = isTag ? UndoTexts.PushTagBack(name, remote) : UndoTexts.PushBack(name, remote);
                 var refusal = await RunEffectsAsync(context, isTag ? UndoKind.PushTag : UndoKind.Push, entryText, [new UndoEffect.RemoteRef(remote, remoteRef, lease, backup.Target)]);
                 if (refusal is not null)

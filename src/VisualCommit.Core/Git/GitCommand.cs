@@ -27,6 +27,14 @@ public sealed class GitCommand
     public bool RecordsStandardInput { get; init; }
 
     /// <summary>
+    /// On Windows the git process runs at below-normal priority, set right after it starts (the
+    /// processes it starts inherit it): the merge tools' lookup, <c>git mergetool --tool-help</c>,
+    /// which runs in the background for 20 to 60 s and must not slow the first repository's reads
+    /// (docs/phase-6-design.md 8.10, D202, Q1). Ignored elsewhere.
+    /// </summary>
+    public bool BelowNormalPriority { get; init; }
+
+    /// <summary>
     /// How <see cref="StandardInput"/> and standard output are turned into bytes and back. Null
     /// means UTF-8. <see cref="Latin1"/> carries every byte as one character, for content that need
     /// not be UTF-8: diffs, patches and file contents (D66). Standard error is always UTF-8.

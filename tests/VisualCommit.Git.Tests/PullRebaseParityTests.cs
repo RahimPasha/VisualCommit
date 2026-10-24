@@ -79,7 +79,7 @@ public class PullRebaseParityTests
     }
 }
 
-/// <summary><see cref="PullRebaseParityTests"/> for git's pull settings, which the chosen rebase does not read (an invalid value included), and the configured pull's callback.</summary>
+/// <summary><see cref="PullRebaseParityTests"/> for git's pull settings, of which the chosen rebase reads only <c>pull.ff</c> to refuse a value <c>git pull --rebase</c> refuses (D231; those cases are in <c>PullConfigurationIntegrationTests</c>), and the configured pull's callback.</summary>
 public class PullRebaseSettingsParityTests
 {
     public static TheoryData<string, PullState> Cases => new()

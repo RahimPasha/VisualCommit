@@ -2,6 +2,8 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
@@ -10,7 +12,8 @@ namespace VisualCommit.App.ViewModels;
 
 /// <summary>
 /// The welcome page of a tab without a repository (D42): Open, Clone and Init, the clone form
-/// with its progress, and the recent repositories.
+/// with its progress, the workspaces (docs/phase-6-design.md 13.1, D188) and the recent
+/// repositories.
 /// </summary>
 public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
 {
@@ -26,12 +29,40 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         _tab = tab;
         _services = services;
         Recent.CollectionChanged += OnRecentChanged;
+        Workspaces.CollectionChanged += OnWorkspacesChanged;
+        _services.Workspaces.Changed += OnWorkspaceStoreChanged;
     }
 
     /// <summary>The recent repositories, newest first. Shared by every tab.</summary>
     public ObservableCollection<RecentRepositoryItem> Recent => _services.Recent.Items;
 
     public bool HasRecent => Recent.Count > 0;
+
+    /// <summary>The workspaces, by name (13.1). Shared by every tab, as <see cref="Recent"/> is.</summary>
+    public ObservableCollection<WorkspaceItem> Workspaces => _services.WorkspaceItems;
+
+    /// <summary>The list shows; <c>No workspaces</c> shows while it is empty.</summary>
+    public bool HasWorkspaces => Workspaces.Count > 0;
+
+    /// <summary>What the page says about <c>workspaces.json</c> (1.3): a file set aside, one that could not be read, a newer version's, a failed save; or null.</summary>
+    public string? WorkspacesNotice => _services.Workspaces.Notice;
+
+    public bool HasWorkspacesNotice => !string.IsNullOrEmpty(WorkspacesNotice);
+
+    /// <summary>The notice is a failed save's, in the warning tone (13.1); the others are secondary.</summary>
+    public bool IsWorkspacesNoticeWarning => HasWorkspacesNotice && _services.Workspaces.SaveFailed;
+
+    /// <summary>Workspaces can be created, renamed and deleted (the store is not read-only, 1.5).</summary>
+    public bool CanEditWorkspaces => WorkspacesEditReason is null;
+
+    /// <summary>Why they cannot: the store's read-only reason, or null.</summary>
+    public string? WorkspacesEditReason => _services.WorkspaceCommands.EditReason;
+
+    /// <summary><c>NewWorkspaceButton</c>'s tooltip and help text: what it does, or the read-only reason while disabled.</summary>
+    public string NewWorkspaceToolTip => WorkspacesEditReason ?? WorkspaceTexts.NewWorkspaceToolTip;
+
+    /// <summary>A workspace item's menu (13.1): <c>Open</c>, <c>Rename workspace…</c>, <c>Delete workspace…</c>.</summary>
+    public MenuModel MenuFor(WorkspaceItem item) => WorkspaceMenus.ForWelcomeItem(item, _services.WorkspaceCommands, _tab);
 
     /// <summary>Why the last Open, Init or Clone failed, in git's words where git said it; or null.</summary>
     [ObservableProperty]
@@ -81,8 +112,15 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private async Task OpenAsync()
     {
-        var path = await _services.Folders.PickFolderAsync("Open a repository");
+        var path = await _services.Folders.PickFolderAsync(OpenFolderTitle);
         if (path is null)
+        {
+            return;
+        }
+
+        // As Open repository… and its key (5.10, D215: the button's tooltip names that key): the tab
+        // that already shows the folder is activated, and nothing opens it again.
+        if (_services.ActivateTabShowing?.Invoke(path) == true)
         {
             return;
         }
@@ -91,15 +129,32 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         await _tab.OpenAsync(path);
     }
 
+    /// <summary>The folder dialog's title of Open (D42), which the palette's and the key's Open ask with too (docs/phase-6-design.md 5.10).</summary>
+    public const string OpenFolderTitle = "Open a repository";
+
+    /// <summary>The folder dialog's title of Init (D42), which the palette's and the key's Init ask with too (docs/phase-6-design.md 5.10).</summary>
+    public const string InitFolderTitle = "Choose a folder for the new repository";
+
     [RelayCommand]
     private async Task InitAsync()
     {
-        var path = await _services.Folders.PickFolderAsync("Choose a folder for the new repository");
+        var path = await _services.Folders.PickFolderAsync(InitFolderTitle);
         if (path is null)
         {
             return;
         }
 
+        await InitAtAsync(path);
+    }
+
+    /// <summary>
+    /// Makes a repository in <paramref name="path"/> and shows it in this page's tab: Init after
+    /// its folder dialog, which the palette's and the key's Init call with their own dialog's answer
+    /// (docs/phase-6-design.md 5.10). A failure shows under the buttons.
+    /// </summary>
+    public async Task InitAtAsync(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
         ErrorText = null;
         try
         {
@@ -123,6 +178,20 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
 
         ErrorText = null;
         await _tab.OpenAsync(item.Path);
+    }
+
+    /// <summary><c>New workspace…</c> (1.6): the name dialog, then the workspace's dashboard takes this page's tab (2.2).</summary>
+    [RelayCommand(CanExecute = nameof(CanEditWorkspaces))]
+    private Task NewWorkspaceAsync() => _services.WorkspaceCommands.CreateAsync(_tab);
+
+    /// <summary>A click, Enter or Space on a workspace item opens it from this page's tab (D188, 2.2).</summary>
+    [RelayCommand]
+    private void OpenWorkspace(WorkspaceItem? item)
+    {
+        if (item is not null)
+        {
+            _services.WorkspaceCommands.Open(item.Id, _tab);
+        }
     }
 
     [RelayCommand]
@@ -224,6 +293,8 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     public void Dispose()
     {
         Recent.CollectionChanged -= OnRecentChanged;
+        Workspaces.CollectionChanged -= OnWorkspacesChanged;
+        _services.Workspaces.Changed -= OnWorkspaceStoreChanged;
         _clone?.Cancel();
     }
 
@@ -256,4 +327,14 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     }
 
     private void OnRecentChanged(object? sender, NotifyCollectionChangedEventArgs e) => OnPropertyChanged(nameof(HasRecent));
+
+    private void OnWorkspacesChanged(object? sender, NotifyCollectionChangedEventArgs e) => OnPropertyChanged(nameof(HasWorkspaces));
+
+    /// <summary>A change of the store can set or clear its notice (a failed save, then one that succeeded, 1.3).</summary>
+    private void OnWorkspaceStoreChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(WorkspacesNotice));
+        OnPropertyChanged(nameof(HasWorkspacesNotice));
+        OnPropertyChanged(nameof(IsWorkspacesNoticeWarning));
+    }
 }

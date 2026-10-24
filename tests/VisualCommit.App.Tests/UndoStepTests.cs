@@ -105,7 +105,7 @@ public class UndoStepTests
 
         // "Merge feature/ff into main" is git's merge as configured, which fast-forwards here (phase 3's
         // 2.8): not --ff-only, which the drop's "Fast-forward main to feature/ff" runs (U19 step 1).
-        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" refs/heads/feature/ff");
+        Assert.Contains(app.Calls.Snapshot(), call => call.CommandText == "git merge --no-edit --no-log -m \"Merge branch 'feature/ff'\" --no-overwrite-ignore refs/heads/feature/ff");
         Assert.Equal("merge of feature/ff into main", Assert.Single(app.Repository.UndoHistory.Entries).Text);
         repo.WriteFile("docs/ff.txt", "mine\n");
         await app.Repository.RefreshAsync();
@@ -314,7 +314,7 @@ public class UndoStepTests
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         using var app = await OperationsHarness.OpenWrappedAsync(repo, inner => RepositoryOperationsProtectTests.Intercepting.Wrap(inner, new()
         {
-            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(gate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (NetworkOptions?)args[3], (CancellationToken)args[4]!)),
+            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(gate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (bool)args[3]!, (bool)args[4]!, (NetworkOptions?)args[5], (CancellationToken)args[6]!)),
         }));
         var history = app.Repository.UndoHistory;
         app.Dialogs.Confirm();
@@ -383,7 +383,7 @@ public class UndoStepTests
         }), undoHistories: histories);
         using var b = await OperationsHarness.OpenAsync(repo, null, inner => RepositoryOperationsProtectTests.Intercepting.Wrap(inner, new()
         {
-            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(branchGate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (NetworkOptions?)args[3], (CancellationToken)args[4]!)),
+            [nameof(IGitRepository.CreateBranchAsync)] = args => HeldAsync(branchGate.Task, () => inner.CreateBranchAsync((string)args[0]!, (string)args[1]!, (bool)args[2]!, (bool)args[3]!, (bool)args[4]!, (NetworkOptions?)args[5], (CancellationToken)args[6]!)),
         }), undoHistories: histories);
         var history = a.Repository.UndoHistory;
         Assert.Same(history, b.Repository.UndoHistory);

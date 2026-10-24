@@ -72,11 +72,11 @@ public sealed partial class GitRepository
 
     /// <summary>
     /// Pull's second step (2.18, D84) as git is configured: the same as
-    /// <see cref="IntegratePullAsync(GitRef, PullIntegration, Func{string, Task}?, NetworkOptions?, CancellationToken)"/>
+    /// <see cref="IntegratePullAsync(GitRef, PullIntegration, Func{string, Task}?, NetworkOptions?, PullIntegrationOptions?, CancellationToken)"/>
     /// with <see cref="PullIntegration.AsConfigured"/> and no callback.
     /// </summary>
     public Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
-        IntegratePullAsync(branch, PullIntegration.AsConfigured, null, options, cancellationToken);
+        IntegratePullAsync(branch, PullIntegration.AsConfigured, null, options, cancellationToken: cancellationToken);
 
     /// <summary>
     /// Pull's second step (2.18, D84; docs/phase-4-design.md section 6, D147): what <c>git pull</c>
@@ -94,10 +94,12 @@ public sealed partial class GitRepository
     /// <item>Otherwise <c>git merge --no-edit [--ff | --no-ff] &lt;head&gt;</c>, also when nothing is
     /// set (D78), where Git 2.33.1 and later would refuse diverged branches.</item>
     /// </list>
-    /// <see cref="PullIntegration.Rebase"/> ("Pull from {up} (rebase)") reads none of these
-    /// settings, as <c>git pull --rebase</c> ignores them (an invalid value included): the
-    /// fast-forward when the branch has nothing of its own, otherwise <c>git rebase</c> without
-    /// arguments.
+    /// <see cref="PullIntegration.Rebase"/> ("Pull from {up} (rebase)") follows none of these
+    /// settings, as <c>git pull --rebase</c> ignores them (a rebase setting is not even read, an
+    /// invalid one included; <c>pull.ff = only</c> gives way): the fast-forward when the branch has
+    /// nothing of its own, otherwise <c>git rebase</c> without arguments. It reads <c>pull.ff</c>
+    /// all the same and refuses a value git would refuse, as <c>git pull --rebase</c> does before it
+    /// fetches.
     /// <para>
     /// Before either pull rebases, <paramref name="beforeRebase"/> is called with the branch's old
     /// tip (the app saves the rebase's backup there, 1.2); not before a fast-forward or a merge.
@@ -113,18 +115,31 @@ public sealed partial class GitRepository
     /// A value of <c>pull.ff</c> or of a rebase setting that git would refuse (<c>preserve</c>,
     /// removed in Git 2.34, or a typo) throws <see cref="GitException"/> with the sentence
     /// "&lt;key&gt; is set to &lt;value&gt;, which this app does not understand." as its standard
-    /// error, before anything changes. A merge's conflicts are returned, not thrown: git failed
+    /// error, before anything changes; for <see cref="PullIntegration.Rebase"/> only a value of
+    /// <c>pull.ff</c> does, as <c>git pull --rebase</c> reads <c>pull.ff</c> and no rebase setting. A
+    /// merge's conflicts are returned, not thrown: git failed
     /// and the index then has conflicted files (it had none before). When the fetch marked nothing for
     /// merge, because the upstream was deleted on its remote (<c>FETCH_HEAD</c> has only
     /// <c>not-for-merge</c> lines, while the remote branch stays without a prune, D99), nothing runs
     /// and <see cref="PullOutcome.UpstreamGone"/> is returned: git pull fails there with "no such
     /// ref was fetched", and a merge of <c>FETCH_HEAD</c> would only say "Already up to date".
+    /// <para>
+    /// <paramref name="pullOptions"/> (docs/phase-6-design.md 8.9, 9.10): with
+    /// <see cref="PullIntegration.AsConfigured"/>, its <see cref="PullIntegrationOptions.Configuration"/>,
+    /// read before the fetch, decides instead of a read here (<see cref="ReadPullConfigurationAsync"/>,
+    /// whose <see cref="PullConfiguration.Problem"/> throws <see cref="PullConfiguration.NotUnderstood"/>
+    /// either way), so a terminal's change during the fetch is not seen, as with git pull; with
+    /// <see cref="PullIntegration.Rebase"/> only its problem with <c>pull.ff</c> counts (thrown), and
+    /// nothing is read here. Keep ignored files' check runs once
+    /// the integration is chosen, before anything is written (<see cref="KeepIgnoredInPullAsync"/>).
+    /// </para>
     /// </summary>
     public async Task<PullResult> IntegratePullAsync(
         GitRef branch,
         PullIntegration integration,
         Func<string, Task>? beforeRebase,
         NetworkOptions? options = null,
+        PullIntegrationOptions? pullOptions = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(branch);
@@ -134,18 +149,42 @@ public sealed partial class GitRepository
         }
 
         options ??= NetworkOptions.None;
-        PullFastForward ff;
-        PullRebase rebase;
+        PullFastForwardSetting ff;
+        PullRebaseSetting rebase;
         switch (integration)
         {
             case PullIntegration.AsConfigured:
-                ff = await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false);
-                rebase = await ReadPullRebaseAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+                // The settings Pull read before its fetch (8.9), or, given none, read here as phase 4's pull did.
+                var configuration = pullOptions?.Configuration
+                    ?? await ReadPullConfigurationAsync(branch.Name, cancellationToken).ConfigureAwait(false);
+                if (configuration.Problem is not null)
+                {
+                    throw configuration.NotUnderstood();
+                }
+
+                ff = configuration.FastForward;
+                rebase = configuration.Rebase;
                 break;
             case PullIntegration.Rebase:
-                // git pull --rebase reads neither pull.ff nor a rebase setting (an invalid one included).
-                ff = PullFastForward.Unset;
-                rebase = PullRebase.Rebase;
+                // git pull --rebase reads no rebase setting (an invalid one included), but pull.ff,
+                // which it reads whenever no --ff option is given, and refuses an invalid value before
+                // it fetches (fatal: invalid value for 'pull.ff', 2.36 and 2.55); pull.ff = only and
+                // false give way to the rebase. So the configuration given counts only for a pull.ff
+                // problem, and without one only pull.ff is read.
+                if (pullOptions?.Configuration is { } given)
+                {
+                    if (given.ProblemKey == PullConfigKeys.FastForward)
+                    {
+                        throw given.NotUnderstood();
+                    }
+                }
+                else if ((await ReadPullFastForwardAsync(cancellationToken).ConfigureAwait(false)).Refused is { } refused)
+                {
+                    throw refused.NotUnderstood();
+                }
+
+                ff = PullFastForwardSetting.Unset;
+                rebase = PullRebaseSetting.Rebase;
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(integration), integration, "Unknown pull integration.");
@@ -163,11 +202,11 @@ public sealed partial class GitRepository
 
         string[] arguments;
         var rebased = false;
-        if (ff == PullFastForward.Only)
+        if (ff == PullFastForwardSetting.Only)
         {
             arguments = ["merge", "--ff-only", head];
         }
-        else if (rebase != PullRebase.None)
+        else if (rebase != PullRebaseSetting.None)
         {
             // git pull fast-forwards a branch that has nothing of its own instead of rebasing it.
             if (before is null || await PullCanFastForwardAsync(before, head, cancellationToken).ConfigureAwait(false))
@@ -176,18 +215,18 @@ public sealed partial class GitRepository
             }
             else
             {
-                arguments = rebase == PullRebase.Merges ? ["rebase", "--rebase-merges"] : ["rebase"];
+                arguments = rebase == PullRebaseSetting.Merges ? ["rebase", "--rebase-merges"] : ["rebase"];
                 rebased = true;
             }
         }
         else
         {
             var merge = new List<string> { "merge", "--no-edit" };
-            if (ff == PullFastForward.Always)
+            if (ff == PullFastForwardSetting.Always)
             {
                 merge.Add("--ff");
             }
-            else if (ff == PullFastForward.Never)
+            else if (ff == PullFastForwardSetting.Never)
             {
                 merge.Add("--no-ff");
             }
@@ -201,6 +240,14 @@ public sealed partial class GitRepository
             arguments = [.. merge];
         }
 
+        // Keep ignored files (9.10): nothing is integrated while an ignored file is in the way.
+        var keep = await KeepIgnoredInPullAsync(branch, head, before, arguments, rebased, pullOptions, cancellationToken).ConfigureAwait(false);
+        if (keep.Ignored.Count > 0)
+        {
+            return new PullResult(PullOutcome.IgnoredFilesInTheWay, 0) { IgnoredFiles = keep.Ignored, WouldRebase = rebased };
+        }
+
+        arguments = keep.Arguments;
         if (rebased)
         {
             return await PullRebaseAsync(branch.UpstreamRef, before!, arguments, beforeRebase, options, cancellationToken).ConfigureAwait(false);
@@ -529,101 +576,6 @@ public sealed partial class GitRepository
         return [.. remotes.Where(remote => !skipped.Contains(remote))];
     }
 
-    /// <summary>What <c>pull.ff</c> asks of a pull's merge.</summary>
-    private enum PullFastForward
-    {
-        Unset,
-        Always,
-        Never,
-        Only,
-    }
-
-    /// <summary>What a pull's rebase setting asks for.</summary>
-    private enum PullRebase
-    {
-        None,
-        Rebase,
-        Merges,
-    }
-
-    /// <summary><c>pull.ff</c> as git pull reads it: a boolean (<c>--ff</c> or <c>--no-ff</c>), or <c>only</c>.</summary>
-    private async Task<PullFastForward> ReadPullFastForwardAsync(CancellationToken cancellationToken)
-    {
-        const string Key = "pull.ff";
-        if (await ReadPullSettingAsync(Key, cancellationToken).ConfigureAwait(false) is not { } value)
-        {
-            return PullFastForward.Unset;
-        }
-
-        if (await ReadPullBoolAsync(Key, value, cancellationToken).ConfigureAwait(false) is { } flag)
-        {
-            return flag ? PullFastForward.Always : PullFastForward.Never;
-        }
-
-        return value == "only" ? PullFastForward.Only : throw RemoteArguments.NotUnderstood(Key, value);
-    }
-
-    /// <summary>
-    /// <c>branch.&lt;b&gt;.rebase</c>, or when it is unset <c>pull.rebase</c>, as git pull reads it:
-    /// a boolean, <c>merges</c> (<c>m</c>) or <c>interactive</c> (<c>i</c>).
-    /// </summary>
-    private async Task<PullRebase> ReadPullRebaseAsync(string branch, CancellationToken cancellationToken)
-    {
-        var key = $"branch.{branch}.rebase";
-        var value = await ReadPullSettingAsync(key, cancellationToken).ConfigureAwait(false);
-        if (value is null)
-        {
-            key = "pull.rebase";
-            value = await ReadPullSettingAsync(key, cancellationToken).ConfigureAwait(false);
-        }
-
-        if (value is null)
-        {
-            return PullRebase.None;
-        }
-
-        if (await ReadPullBoolAsync(key, value, cancellationToken).ConfigureAwait(false) is { } flag)
-        {
-            return flag ? PullRebase.Rebase : PullRebase.None;
-        }
-
-        return value switch
-        {
-            "merges" or "m" => PullRebase.Merges,
-            "interactive" or "i" => PullRebase.Rebase,
-            _ => throw RemoteArguments.NotUnderstood(key, value),
-        };
-    }
-
-    /// <summary>A setting's value (<c>git config --get</c>, the last one wins), or null when it is not set.</summary>
-    private async Task<string?> ReadPullSettingAsync(string key, CancellationToken cancellationToken)
-    {
-        var command = Read("config", "--get", key);
-        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
-        return result.ExitCode == 1 ? null : result.EnsureSuccess(command).StandardOutput.TrimEnd('\r', '\n');
-    }
-
-    /// <summary>
-    /// <paramref name="value"/> of <paramref name="key"/> read as git reads a boolean, or null
-    /// when it is not one. The common words are read here; anything else is asked of git
-    /// (<c>git config --type=bool</c>), which knows its own rules: a key without a value is true,
-    /// a number is a boolean, and so is <c>m</c>, which Git 2.36 reads as the number 0 with the
-    /// unit "mega" before it would read it as <c>merges</c> (git pull then merges).
-    /// </summary>
-    private async Task<bool?> ReadPullBoolAsync(string key, string value, CancellationToken cancellationToken)
-    {
-        switch (value.ToLowerInvariant())
-        {
-            case "true" or "yes" or "on":
-                return true;
-            case "false" or "no" or "off":
-                return false;
-        }
-
-        var result = await _runner.RunAsync(Read("config", "--type=bool", "--get", key), cancellationToken).ConfigureAwait(false);
-        return result.Succeeded ? result.StandardOutput.Trim() == "true" : null;
-    }
-
     /// <summary>
     /// The message <c>git fmt-merge-msg</c> writes for merging the local upstream
     /// <paramref name="upstreamRef"/>, as git pull, which fetches it from <c>.</c>, would write it;
@@ -885,8 +837,13 @@ public sealed partial class GitRepository
             }
         }
 
-        public static GitException NotUnderstood(string key, string value) =>
-            new($"git config --get {key}", 0, $"{key} is set to {value}, which this app does not understand.");
+        /// <summary>
+        /// Pull's sentence for a value of <paramref name="key"/> it does not understand, which
+        /// <see cref="PullConfiguration.Problem"/> holds; <see cref="PullConfiguration.NotUnderstood"/>
+        /// turns it into the failure (<c>git config --get &lt;key&gt;</c>, exit 0, the sentence).
+        /// </summary>
+        public static string NotUnderstood(string key, string value) =>
+            $"{key} is set to {value}, which this app does not understand.";
 
         public static string? TrimSuffix(string text, string suffix) =>
             text.EndsWith(suffix, StringComparison.Ordinal) ? text[..^suffix.Length] : null;

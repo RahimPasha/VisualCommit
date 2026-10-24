@@ -10,12 +10,14 @@ public static class GitLocator
     /// Finds git, asks it for its version and returns a runner for it when it is usable.
     /// Never throws for a missing or broken git; the result says what was found. The runner records
     /// its calls in <paramref name="callLog"/> with the times of <paramref name="recordClock"/>
-    /// (<see cref="GitRunner"/>).
+    /// (<see cref="GitRunner"/>) and runs them with the session's git environment
+    /// <paramref name="environment"/> (docs/phase-6-design.md 17.2; null for none).
     /// </summary>
     public static async Task<GitDetection> DetectAsync(
         IGitCallLog? callLog = null,
         IAppLog? log = null,
         TimeProvider? recordClock = null,
+        IReadOnlyDictionary<string, string?>? environment = null,
         CancellationToken cancellationToken = default)
     {
         log ??= NullAppLog.Instance;
@@ -27,7 +29,7 @@ public static class GitLocator
             return new GitDetection(GitAvailability.NotFound, null, null, null);
         }
 
-        var runner = new GitRunner(path, callLog, log, recordClock);
+        var runner = new GitRunner(path, callLog, log, recordClock, environment);
         GitResult result;
         try
         {
