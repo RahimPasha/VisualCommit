@@ -364,12 +364,9 @@ public sealed partial class RealApp : IDisposable
             $"the folder dialog \"{title}\"",
             timeout);
 
-        var box = dialog!.FindFirstDescendant(condition => condition.ByAutomationId("1152"))?.AsTextBox()
-            ?? throw new InvalidOperationException("The folder dialog has no folder box (automation id 1152).");
+        var box = DialogControl(dialog!, "1152", "the folder dialog's folder box", timeout).AsTextBox();
         box.Text = folder;
-        var confirm = dialog.FindFirstDescendant(condition => condition.ByAutomationId("1").And(condition.ByControlType(FlaUI.Core.Definitions.ControlType.Button)))?.AsButton()
-            ?? throw new InvalidOperationException("The folder dialog has no confirm button (automation id 1).");
-        confirm.Invoke();
+        DialogButton(dialog!, "the folder dialog's confirm button", timeout).Invoke();
         WaitFor(() => !Window.ModalWindows.Any(window => window.Title == title), "the folder dialog to close", timeout);
         WaitUntilIdle();
     }
@@ -398,16 +395,36 @@ public sealed partial class RealApp : IDisposable
             timeout);
 
         // The box is an edit inside the file name combo box (1148), or the combo box itself.
-        var name = dialog!.FindFirstDescendant(condition => condition.ByAutomationId("1148"))
-            ?? throw new InvalidOperationException("The file dialog has no file name box (automation id 1148).");
+        var name = DialogControl(dialog!, "1148", "the file dialog's file name box", timeout);
         var box = name.FindFirstDescendant(condition => condition.ByControlType(FlaUI.Core.Definitions.ControlType.Edit))?.AsTextBox()
             ?? name.AsTextBox();
         box.Text = file;
-        var confirm = dialog.FindFirstDescendant(condition => condition.ByAutomationId("1").And(condition.ByControlType(FlaUI.Core.Definitions.ControlType.Button)))?.AsButton()
-            ?? throw new InvalidOperationException("The file dialog has no Open button (automation id 1).");
-        confirm.Invoke();
+        DialogButton(dialog!, "the file dialog's Open button", timeout).Invoke();
         WaitFor(() => !Window.ModalWindows.Any(window => window.Title == title), "the file dialog to close", timeout);
         WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// The control <paramref name="automationId"/> of a platform dialog, waited for: the dialog's
+    /// window shows before all its controls exist (the phase 6 gate's second real-window pass found
+    /// S14's Open dialog without its Open button yet).
+    /// </summary>
+    private AutomationElement DialogControl(Window dialog, string automationId, string what, TimeSpan timeout)
+    {
+        AutomationElement? control = null;
+        WaitFor(() => (control = dialog.FindFirstDescendant(condition => condition.ByAutomationId(automationId))) is not null, $"{what} (automation id {automationId})", timeout);
+        return control!;
+    }
+
+    /// <summary>A platform dialog's confirm button, automation id 1, waited for as <see cref="DialogControl"/> waits.</summary>
+    private Button DialogButton(Window dialog, string what, TimeSpan timeout)
+    {
+        Button? button = null;
+        WaitFor(
+            () => (button = dialog.FindFirstDescendant(condition => condition.ByAutomationId("1").And(condition.ByControlType(FlaUI.Core.Definitions.ControlType.Button)))?.AsButton()) is not null,
+            $"{what} (automation id 1)",
+            timeout);
+        return button!;
     }
 
     /// <summary>The names of all text elements in the window.</summary>
