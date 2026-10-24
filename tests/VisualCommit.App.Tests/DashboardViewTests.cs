@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
@@ -208,6 +209,60 @@ public class DashboardViewTests
         app.DoubleClick(Cell(docs, "DashboardRowName"));
         await app.WaitForRepositoryAsync(Patience);
         Assert.Equal("docs", app.Session.Shell.ActiveTab.Title);
+    }
+
+    [AvaloniaFact]
+    public async Task No_row_keeps_the_hover_of_a_row_that_opened_its_tab_under_the_pointer_when_the_dashboard_comes_back()
+    {
+        using var copy = await Scenarios.WorkspaceAsync();
+        using var data = new TempDirectory("data");
+        using var app = await StartAsync(copy, data, 1100, 700);
+        var hover = Brush(app.Window, "VcRowHoverBrush");
+
+        // W8's steps 2 to 5 (the gate's w8d, w8f): a row opened with the pointer on it, by a
+        // double-click (the pointer captured by the row) or by Enter, the pointer moved to the
+        // neutral point on the repository's tab, then the Web tab clicked and the pointer at the
+        // neutral point again. The list's containers were recycled while the dashboard was hidden
+        // and are handed to other rows when it shows again: none may come back hovered.
+        await app.OpenRowAsync("web-app");
+        await app.WaitForRepositoryAsync(Patience);
+        app.MoveToNeutral();
+        app.Click(app.TabStrip().Tabs[0].Bounds.Center);
+        app.MoveToNeutral();
+        AssertNoRowHovered(app, hover, "after web-app opened by a double-click");
+
+        app.Click(app.DashboardRowPoint("docs"));
+        app.PressKey(Key.Enter);
+        await app.WaitForRepositoryAsync(Patience);
+        app.MoveToNeutral();
+        app.Click(app.TabStrip().Tabs[0].Bounds.Center);
+        app.MoveToNeutral();
+        AssertNoRowHovered(app, hover, "after docs opened by Enter");
+
+        await app.OpenRowAsync("mobile");
+        await app.WaitForRepositoryAsync(Patience);
+        app.MoveToNeutral();
+        app.Click(app.TabStrip().Tabs[0].Bounds.Center);
+        app.MoveToNeutral();
+        AssertNoRowHovered(app, hover, "after mobile opened by a double-click");
+
+        // The pointer on a row still hovers that row, and only it.
+        app.MoveMouse(app.DashboardRowPoint("billing"));
+        Assert.Equal(["billing"], HoveredRows(app));
+        Assert.Equal(hover, Color(RowPresenter(app.DashboardRowControl("billing")).Background));
+        app.MoveToNeutral();
+        AssertNoRowHovered(app, hover, "with the pointer back at the neutral point");
+
+        // A row the pointer rests over when the dashboard comes back by a key, not by the pointer,
+        // is hovered once the next frame is drawn, and only it.
+        var api = app.DashboardRowPoint("api");
+        app.Session.Shell.ActivateTabCommand.Execute(app.Session.Shell.Tabs[1]);
+        await app.WaitForRepositoryAsync(Patience);
+        app.MoveMouse(api);
+        app.Session.Shell.ActivateTabCommand.Execute(app.Session.Shell.Tabs[0]);
+        app.Settle();
+        _ = app.Capture();
+        Assert.Equal(["api"], HoveredRows(app));
     }
 
     [AvaloniaFact]
@@ -575,6 +630,30 @@ public class DashboardViewTests
         host.Settle();
         return host;
     }
+
+    /// <summary>The rows of the active dashboard whose containers are hovered (<c>:pointerover</c>), in the list's order.</summary>
+    private static List<string> HoveredRows(ShellDriver app)
+    {
+        app.Settle();
+        return [.. app.Find<ListBox>("DashboardList").GetVisualDescendants().OfType<ListBoxItem>()
+            .Where(item => item.IsEffectivelyVisible && item.IsPointerOver)
+            .Select(item => (item.DataContext as DashboardRowViewModel)?.Name ?? "(no row)")];
+    }
+
+    /// <summary>No row is hovered or drawn in the hover colour (the pointer rests where no row is).</summary>
+    private static void AssertNoRowHovered(ShellDriver app, Color hover, string when)
+    {
+        Assert.True(HoveredRows(app) is [], $"Rows hovered {when}: {string.Join(", ", HoveredRows(app))}.");
+        var drawn = app.Find<ListBox>("DashboardList").GetVisualDescendants().OfType<ListBoxItem>()
+            .Where(item => item.IsEffectivelyVisible && Color(RowPresenter(item).Background) == hover)
+            .Select(item => (item.DataContext as DashboardRowViewModel)?.Name)
+            .ToList();
+        Assert.True(drawn.Count == 0, $"Rows drawn in the hover colour {when}: {string.Join(", ", drawn)}.");
+    }
+
+    /// <summary>The row container's own presenter, which the list's style paints (hover, selection).</summary>
+    private static ContentPresenter RowPresenter(ListBoxItem item) =>
+        item.GetVisualDescendants().OfType<ContentPresenter>().First(presenter => presenter.Name == "PART_ContentPresenter");
 
     private static Control Cell(Visual row, string automationId) =>
         row.GetVisualDescendants().OfType<Control>().First(control => AutomationProperties.GetAutomationId(control) == automationId);
