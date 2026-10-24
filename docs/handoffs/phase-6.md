@@ -2,17 +2,14 @@
 
 Written at the end of phase 6 for the session that runs phase 7. That session has not seen any
 of this phase's conversation. How the app is built is in [architecture.md](../architecture.md),
-why in [decisions.md](../decisions.md) (D187 to D236 are this phase's: D187 to D202 the owner's
-answers, D203 to D230 the design's, D231 to D236 the build's and the review's); the phase's design,
-kept as history, is [phase-6-design.md](../phase-6-design.md), whose "As built" notes and the lead's
-rulings say what the build and the review before the gate settled, and whose section 16.2 says what
-moved to phase 8 and the backlog. The report, [test-reports/phase-6.md](../test-reports/phase-6.md),
-holds the 34 checks, its own decisions (WD, KD, SD, GD and LD, which the design took in) and the
-lead's rulings on its open points. This file says what was proven, what to copy, and what to watch
-out for.
-
-Markers of the form [GATE-TBD: …] stand for what the gate, running while this was written, decides,
-and [LEAD-TBD: …] for what the repo does not record; the closing steps replace them.
+why in [decisions.md](../decisions.md) (D187 to D237 are this phase's: D187 to D202 the owner's
+answers, D203 to D230 the design's, D231 to D236 the build's and the review's, D237 the gate's); the
+phase's design, kept as history, is [phase-6-design.md](../phase-6-design.md), whose "As built" notes
+and the lead's rulings say what the build and the review before the gate settled, and whose section
+16.2 says what moved to phase 8 and the backlog. The report,
+[test-reports/phase-6.md](../test-reports/phase-6.md), holds the 34 checks, its own decisions (WD, KD,
+SD, GD and LD, which the design took in) and the lead's rulings on its open points. This file says
+what was proven, what to copy, and what to watch out for.
 
 ## Result
 
@@ -54,11 +51,43 @@ The plan's "Done when":
 - **Every main action reachable from the keyboard** (R7). K12's two methods press 34 of the 35 rows
   of design 6.1's table, each in a state reached by keys alone; K10 presses the 35th, Ctrl+Shift+P,
   and runs the palette by the keyboard alone; K13 the resolver's and a dashboard's keys.
-- **The visual gate passes.** [GATE-TBD: passed or not, on which commit, and any check that failed
-  or could not run.]
+- **The visual gate passes.** It passed on `b561b7c` (2026-10-24), in its fourth round: both passes
+  ran in full on that commit, every test of both passed and every picture was inspected. Nothing
+  failed or could not run but the real window at 1920×1080, which this screen cannot hold, as the
+  plan allows.
 
-[GATE-TBD: what the gate found, each fault with the commit that fixed it, as the report's "Found by
-the gate" lists them; or that it found nothing.]
+The gate ran in four rounds (the report's "Run") and found, in this order (its "Found by the gate"):
+
+1. **The default run's load**: nine test processes side by side, with a git call 10 to 15 times as
+   long as alone. In the two runs before round 1 the hang watchdog stopped `VisualCommit.Git.Tests`,
+   first on five refused checkouts in one test (one case per form since `a937ca6`), then on the
+   reflog scenario's shared template, while phase 3's check 23 waited 30 s for a pop: D237
+   (`774464d`) holds shared preparations to 10 minutes of their own and makes the walk-throughs'
+   default and write waits 60 s.
+2. **W3 on CI's Windows runner** (run 40011779192): the runner's temporary folder brings
+   `design-system`'s Folder cell to its 632 px, where the scenario's random name tips it either way;
+   W3 asserts a cell cut exactly when its folder is wider (WD29, `a937ca6`).
+3. **Three faults of the app** in round 1's inspection, each fixed with a test: after a refused Save
+   the wrong box's text was drawn selected (`s16b`, `s18a`; `d8fd9fb`, `SettingsDialogViewTests`); a
+   disabled ticked checkbox was drawn like an enabled one, so the scan's "Already in this workspace"
+   rows did not look disabled (`w1e`, `l30c`; `d8fd9fb`); dashboard rows were drawn hovered with the
+   pointer at the neutral point, because Avalonia 12.1.3 hands a recycled container's
+   `IsPointerOver` to another row (`w8d`, `w8f`, `w8g`, `w8h`; `efb5b46`, merged in `59b2316`,
+   `DashboardViewTests`).
+4. **The real-window pass's platform dialog**: rounds 2 and 3 failed S14 alone, 66 of 67. Windows'
+   Open dialog was found by its title before its Open button existed (`639db4a` waits for a dialog's
+   controls), and then the search for that button walked the system folder's whole file list first,
+   the folder the dialog opens in again since round 1 chose `notepad.exe` there; Enter in the file
+   name box confirms the path now (`b561b7c`).
+5. **CI on `b561b7c`** (run 40059391404): the container with the SDK from Ubuntu's packages failed
+   `ShellDriverTests.Wheel_reaches_the_control_under_the_mouse_with_the_sign_of_a_real_wheel` once, a
+   hit test before the window's first frame, and passed on the job's second attempt (Known issues).
+
+Besides, round 1's inspection corrected the report's lists of changed earlier pictures and a few of
+its texts (`d0635ec`; what it ruled acceptable is the report's entry of 2026-10-23 under "Changed in
+this report after its first commit"), moved the text boxes' placeholder contrast to phase 8's
+accessibility pass, for the owner to confirm, and the activity log's red `exit 1` of a normal answer
+to the backlog; round 4's inspection accepted `s16b`'s caret (Known issues).
 
 Nothing in the "Delivers" list was moved to a later phase. The follow-ups the design found (design
 16.2) are in plan.md: to phase 8, a broken `~/.gitconfig`'s own message (design 8.5), a palette
@@ -85,35 +114,72 @@ data folder the last save of `workspaces.json` wins, as for `settings.json` and 
 
 ## State of the repo
 
-Branch `phase/6-multi-repo`, built from 2026-10-18 to [GATE-TBD: the date the gate passed] on the
-Windows machine from `master` at `acdac12` (phase 5's merge `c299939` and its status commits): 349
-commits on top of it up to `da54d8b`, the last code commit before the gate (2026-10-23).
-[GATE-TBD: the gate's commit, and the number of commits up to it.] The merge commits name each work
-package (`git log --oneline --merges phase/6-multi-repo ^master`): WP-S `80fc877`, WP1 `31f525b`, WP2
-`5b8b7a8`, WP3 `3146d8d`, WP4 `1d99be3`, WP-T `e7144ec`, WP-W `0da0eec`, WP-D `125e792`, WP-IA
-`cc3aed3`, WP-RA `0c91d01`, WP-B `e974c35`, WP-SET `eae7edc`, WP-K `73ac284`, WP-V's parts G
-`da4a956`, W `48df7af`, S `5d0a442`, K `e0f3c4a` and L `fb4aa59`, WP-R `55b5de0`, and the review's
-fixers C `15b00c8`, B `1dfdd6d`, A `d6a634d` and D `da54d8b`; architecture.md as built is merged in
-`174ec4e`.
+Branch `phase/6-multi-repo`, built from 2026-10-18 to 2026-10-24 on the Windows machine from
+`master` at `acdac12` (phase 5's merge `c299939` and its status commits): 349 commits on top of it
+up to `da54d8b`, the last code commit before the gate (2026-10-23). The visual test gate passed on
+`b561b7c`, the gate's commit and the last commit that changes anything other than docs
+(2026-10-24): 376 commits on top of `acdac12` up to it, 114 of them on its first-parent line. Both
+passes ran with the branch at `45cc63f`, whose commits after `b561b7c` change docs only. The merge
+commits name each work package (`git log --oneline --merges phase/6-multi-repo ^master`): WP-S
+`80fc877`, WP1 `31f525b`, WP2 `5b8b7a8`, WP3 `3146d8d`, WP4 `1d99be3`, WP-T `e7144ec`, WP-W
+`0da0eec`, WP-D `125e792`, WP-IA `cc3aed3`, WP-RA `0c91d01`, WP-B `e974c35`, WP-SET `eae7edc`, WP-K
+`73ac284`, WP-V's parts G `da4a956`, W `48df7af`, S `5d0a442`, K `e0f3c4a` and L `fb4aa59`, WP-R
+`55b5de0`, and the review's fixers C `15b00c8`, B `1dfdd6d`, A `d6a634d` and D `da54d8b`;
+architecture.md as built is merged in `174ec4e`.
 
-- `dotnet test`: [GATE-TBD: passed of total, the time and the hours in UTC, and when each of the
-  nine projects ended]. For comparison: phase 5's gate 3,233 tests in 43 min 22 s; the baseline on
-  `acdac12` at the phase's start 3,233 in 37 min 29 s (the laptop idle); after WP-S, rested, 3,299
-  in 43 min 33 s; design 17.6 estimated 49 to 54 minutes rested for the whole phase.
+- `dotnet test`: 5,037 of 5,037 passed in 56 min 25 s (2026-10-24, 03:52 to 04:48 UTC, the machine's
+  clock UTC-7, after a 10-minute rest). The nine projects, side by side, ended after:
+  `VisualCommit.VisualTests.Phase6Look` 7 min 30 s, `VisualCommit.VisualTests` 15 min 14 s,
+  `.Phase4` 19 min 56 s, `.Phase5` 22 min 45 s, `.Phase6` 30 min 36 s, `.Phase5Undo` 35 min 20 s,
+  `.Phase3` 39 min 22 s, `VisualCommit.Git.Tests` 47 min 28 s and `VisualCommit.App.Tests` 55 min
+  14 s. The earlier rounds passed in 55 min 14 s (5,034 tests, `774464d`), 44 min 34 s (`59b2316`)
+  and 53 min 13 s (`639db4a`); the fixes after round 1 added three tests. For comparison: phase 5's
+  gate 3,233 tests in 43 min 22 s; the baseline on `acdac12` at the phase's start 3,233 in 37 min
+  29 s (the laptop idle); after WP-S, rested, 3,299 in 43 min 33 s; design 17.6 estimated 49 to 54
+  minutes rested for the whole phase.
 - The real-window pass, 67 tests (the 63 methods of phases 0 to 6 and the 4
-  `Phase3ExpectationsTests` that its link compiles): [GATE-TBD: passed of 67, the time and the
-  attempts; Q1 in ms within the pass, and alone if measured; the graph's frame times]. Phase 5's
-  gate: 59 of 59 in 24 min 57 s, Q1 1,826 ms; design 17.6 estimated 30 to 33 minutes.
-- Pictures: `docs/test-reports/phase-6-pictures.sha256` lists [GATE-TBD: the number of pictures the
-  gate inspected: scripted (phase 6's 198 and phases 0 to 5's 774), real-window captures (phase 6's
-  26 and phases 0 to 5's 155) and difference pictures]. [GATE-TBD: how the inspection ran (its
-  batches and inspectors), what it found, and where its verdicts are kept outside the repo.]
-- CI: [GATE-TBD: the run of the gate's commit with its link, each job's result and test count, and
-  the Test steps' times against D232's 55 minutes]. The last runs before the gate: 39997105336 on
-  `1dfdd6d` (four jobs green, Windows' Test step 24 min 0 s; macOS failed S19 alone, its Test step
-  28 min 52 s), 40004153661 on `57d5c7b` (fixer A's `git remote add team/fork` test failed on Git 2.55
-  and 2.56, and macOS's S19 again; fixed in `6fe269c` and `da54d8b`) and 40009544956 on `6fe269c`,
-  cancelled by the next push.
+  `Phase3ExpectationsTests` that its link compiles): 67 of 67 passed in 27 min 39 s (28 min 23 s
+  with its build; 04:59 to 05:27 UTC, after a 10-minute rest), at its first attempt on this commit;
+  Q1 1,805 ms within the pass (round 1's pass: 1,264 ms), the graph's 459 frames 0.6 ms at the 95th
+  percentile and 4.3 ms at the longest. The earlier rounds: 67 of 67 in 25 min 29 s on `774464d`,
+  66 of 67 on `59b2316` and on `639db4a` (S14 alone, above). The largest difference of a capture
+  from its scripted twin is 2.35 percent (phase 5's `a2f-log-closed-page-kept`; phase 6's largest
+  0.91, `s15-system-start`; the limit is 3). Phase 5's gate: 59 of 59 in 24 min 57 s, Q1 1,826 ms;
+  design 17.6 estimated 30 to 33 minutes.
+- Pictures: `docs/test-reports/phase-6-pictures.sha256` lists the 1,329 files the gate inspected,
+  round 4's: 972 scripted pictures (phase 6's 198 and phases 0 to 5's 774: phase 0 14, 1 43, 2 66, 3
+  265, 4 122, 5 264), 181 real-window captures (phase 6's 26 and phases 0 to 5's 155; 3 of them with
+  the window frame) and 176 difference pictures (phase 6's 25). Round 1's 1,329 files (`774464d`)
+  were judged in full by thirteen Opus inspectors in batches: phase 6's scripted pictures in five
+  (parts W, K and G, S, L26 to L30, L31 to L33) and its 51 real-window files against the report; the
+  774 earlier scripted pictures in six, against their references, their difference pictures, design
+  16.1 and the report's "Changes to expected results"; the 306 earlier real-window files against
+  their scripted twins and their references. A fourteenth opened 48 of CI's pictures (the report's
+  "Other platforms"). They found the three faults of the app above and the report's wrong lists and
+  texts; every other picture passed or varies by nature. Round 4's 66 files whose bytes differ from
+  round 1's (28 of phase 6, 38 of earlier phases) were inspected in full by two more, with round 2's
+  copies to tell a fix from what varies by nature: they show the three fixes, otherwise only
+  variance by nature (a temporary folder's name, a caret, an indeterminate progress bar, a few
+  anti-aliased pixels, phase 0's framed capture with its title bar drawn inactive), and one accepted
+  finding, `s16b`'s caret (Known issues). The other 1,263 files are byte-identical to round 1's and
+  keep its verdicts. The verdicts and the lead's rulings are kept outside the repo in
+  `D:/Projects/Personal/gate6-inspection/` (`verdicts/`, `findings-log.md`; round 1's list of hashes
+  `run1-774464d-pictures.sha256`, round 2's pictures `run2-artifacts/`, the comparison with the
+  references `compare/`), the references in `D:/Projects/Personal/gate6-reference/`.
+- CI: run [40059391404](https://github.com/RahimPasha/VisualCommit/actions/runs/40059391404) on
+  `b561b7c`: all five jobs succeeded, the container with the SDK from Ubuntu's packages on its
+  second attempt (its first failed the wheel test, item 5 above); Windows ran 5,037 tests and the
+  others 5,034 (three are Windows' own). The Test steps, against D232's 55 minutes (the jobs' times
+  in brackets, against 65): `windows-latest` 24 min 37 s (26 min 47 s, its "Build the real-window
+  pass" step green), `macos-latest` 23 min 33 s (25 min 22 s), `ubuntu-latest` 4 min 21 s (5 min
+  50 s), the containers 5 min 50 s (7 min 45 s) and 4 min 56 s (7 min 16 s). The earlier rounds'
+  commits had runs 40027897278 (`774464d`, Windows' Test step 35 min 0 s), 40044430603 (`b7da110`,
+  the code of `59b2316`) and 40051904024 (`639db4a`), all five jobs green; run 40019921605 on
+  `a937ca6`, before round 1, had macOS's Test step at 43 min 12 s, near D232's 44. The last runs
+  before the gate: 39997105336 on `1dfdd6d` (four jobs green, Windows' Test step 24 min 0 s; macOS
+  failed S19 alone, its Test step 28 min 52 s), 40004153661 on `57d5c7b` (fixer A's `git remote add
+  team/fork` test failed on Git 2.55 and 2.56, and macOS's S19 again; fixed in `6fe269c` and
+  `da54d8b`) and 40009544956 on `6fe269c`, cancelled by the next push.
 
 Before the gate, status step 22: an independent review of the code, whose findings four Opus fixers
 fixed with tests, each merged with its notes in the design and the report: C `15b00c8` (the settings
@@ -129,9 +195,9 @@ duplicate, design 1.2), the rest went to the fixers by area: 14 to C, 18 to B, 1
 The design's notes "As built at status step 22's review" record every behaviour the
 fixes changed.
 
-[GATE-TBD: the phase's state: "Awaiting acceptance" with the gate's commit, or "Blocked" and why.]
-Only the real window at 1920×1080 cannot run on this screen, as the plan allows: W3, S14's second
-method and every 1920×1080 step are scripted only.
+The phase is "Awaiting acceptance", with `b561b7c` as its gate commit; the commits after it change
+only docs. Only the real window at 1920×1080 cannot run on this screen, as the plan allows: W3,
+S14's second method and every 1920×1080 step are scripted only.
 
 ## Environment
 
@@ -143,7 +209,7 @@ method and every 1920×1080 step are scripted only.
 | Packages | Unchanged since phase 2: Avalonia 12.1.3, Avalonia.AvaloniaEdit 12.0.0, TextMateSharp and TextMateSharp.Grammars 2.0.4, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, D24), FlaUI.UIA3 5.0.0; phase 6 added none. New Lucide icons: layout-grid, settings, rotate-cw and ellipsis; the three that derive from Feather (settings, rotate-cw, and ellipsis from more-horizontal) are added to `THIRD-PARTY-NOTICES.md` |
 | New projects | `tests/VisualCommit.VisualTests.Phase6` (parts W, K, S and G, 38 test methods) and `tests/VisualCommit.VisualTests.Phase6Look` (part L, 9), D230: nine test processes in the default run |
 | Tools | `scripts/compare-pictures.py` needs Python with Pillow and NumPy |
-| Screenshots | Scripted: scaling 1. Real window: [GATE-TBD: the scaling and work area the gate's `run.txt` records; 200% and 1500×952 logical pixels on this machine] |
+| Screenshots | Scripted: scaling 1. Real window: 200% and a work area of 1500×952 logical pixels, as `run.txt` records them |
 
 ## Build, run and test
 
@@ -164,7 +230,9 @@ python scripts/compare-pictures.py <reference folder> artifacts/visual <output f
 dotnet test --project tests/VisualCommit.RealWindowTests -c Release
 ```
 
-- The default run: [GATE-TBD: its time at the gate and each project's end]. During the build, runs
+- The default run: 56 min 25 s on the gate's commit, rested (5,037 tests; each project's end under
+  "State of the repo" and in CLAUDE.md), and 44 min 34 s to 56 min 25 s over the gate's four rounds;
+  under its load a git call takes 10 to 15 times as long as alone (D237). During the build, runs
   made with two builders beside them took 60 min 48 s (4,341 tests, `125e792`) and 68 min 59 s
   (4,689, `eae7edc`): that is the load, not the code. Rest the laptop and run nothing beside a run
   that is to be measured.
@@ -203,17 +271,20 @@ off, and reference pictures for phases 0 to 5 (design 17.7):
    reads, a few anti-aliased pixels) and `u23f` differs by a change of the machine since 2026-10-16.
    Pictures with the focus in a text box (`f10b` to `f10f` too) can catch the caret either way.
    Phase 7's gate makes its own references on `master` once phase 6 is merged.
-3. Rest the laptop, then `dotnet test` at the repo root: [GATE-TBD: minutes]. It writes
+3. Rest the laptop, then `dotnet test` at the repo root: about 55 minutes (56 min 25 s at phase 6's
+   gate). It writes
    `artifacts/visual/phase-{0,1,2,3,4,5,6}/scripted/`, emptying each first.
 4. Rest the laptop well, **tell the owner**, check that the desktop is unlocked and Windows' high
    contrast is off (D224: S15 fails while it is on, and the pass never changes the desktop's
    theme), and run `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (never
-   `--no-build`): [GATE-TBD: minutes] for phases 0 to 6. Phase 6's part is
+   `--no-build`): about 28 minutes for phases 0 to 6 (27 min 39 s at phase 6's gate, 28 min 23 s with
+   its build). Phase 6's part is
    `Phase6RealWindowPass.cs` (the run `Phase6Run`, the order `Phase6Order`) with `.W.cs`, `.K.cs`,
    `.S.cs` and `.L.cs`, and `RealApp.Phase6.cs`, `.Phase6.Dashboard.cs`, `.Phase6.Palette.cs` and
    `.Phase6.Settings.cs`: 8 methods (W1, W2, W4, W9, K10, S14, S15, L34), 9 launches (W9 restarts
    for real) and 26 captures, all at 1100×700. W1 chooses the copy's root in Windows' folder dialog;
-   S14 picks `notepad.exe` in Windows' file dialog and cancels; S15 starts with System and compares
+   S14 picks `notepad.exe` in Windows' file dialog (its path typed in the file name box and
+   confirmed with Enter, `b561b7c`) and cancels; S15 starts with System and compares
    with the scripted twin of the owner's mode, under names of its own; L34 launches with Theme Light.
    Q1 is phase 1's `Checks_8_and_9_the_100k_commit_repo_and_Q1`; run alone with `--filter-method`,
    it empties phase 1's `real-window/` folder, so the whole pass runs again afterwards.
@@ -226,8 +297,11 @@ off, and reference pictures for phases 0 to 5 (design 17.7):
    The inspectors' batches (17.7 step 4): phase 6's pictures in full by part (W, K, S, G, and L in
    two); its real-window captures with their twins; the earlier scripted pictures (phases 0 to 2, 3
    in two, 4, 5 in two) against reference, difference picture and 16.1; the earlier real-window
-   captures; CI's macOS and Linux light pictures of the sweep, whose fonts differ. [GATE-TBD: how
-   the gate ran its inspection, if it differed.]
+   captures; CI's macOS and Linux light pictures of the sweep, whose fonts differ. Phase 6's gate
+   ran them so, by thirteen inspectors, but with parts K and G in one batch (phase 6's scripted
+   pictures in five), and a fourteenth opened 48 of CI's pictures; round 4, the round that counts,
+   inspected in full only the 66 files whose bytes differ from round 1's, with round 2's copies to
+   tell a fix from what varies by nature (State of the repo).
 6. After a fix, run both passes again on the new commit and compare the new list with the last
    run's: only the pictures whose bytes changed need inspecting again.
 7. At acceptance, by hand: with System chosen, switch Windows' app mode while the app runs (the
@@ -313,7 +387,7 @@ Rules worth keeping (phases 3 to 5's still hold):
 
 ## Deviations from the plan
 
-Phase 6's decisions are D187 to D236. The owner's answers (D187 to D194 at the start, D195 to D202
+Phase 6's decisions are D187 to D237. The owner's answers (D187 to D194 at the start, D195 to D202
 after the design's reviews) are the plan as the phase settled it, and plan.md and requirements.md
 carry them (`890408b`, `290353b`). What departs from or adds to the plan, and the earlier decisions
 it amends:
@@ -338,6 +412,7 @@ it amends:
 | "Pull from {up} (rebase)" reads `pull.ff` before its fetch and refuses a value `git pull --rebase` refuses | D231 (amends D147) |
 | CI's Test step 55 minutes and the three platforms' jobs 65 | D232 (amends D184) |
 | From the review before the gate: git calls drop the repository-selecting variables; the session's end cancels every open dialog; a ticked Amend remembers its HEAD; the app's files are flushed before their rename | D233 to D236 |
+| From the gate: the default run's waits fit nine test projects side by side (a shared preparation held to 10 minutes of its own, the headless driver's default wait and phases 2's and 3's write waits 60 s, a test holding several scenarios' work split) | D237 |
 
 ## Known issues
 
@@ -371,9 +446,11 @@ it amends:
 | Linux without a desktop portal: System means Light; the macOS theme observer and the macOS and Linux editor install paths are unproven | Phase 8 by hand | D223, design 11.9, 12.2 |
 | Every text box's placeholder (the `Filter` boxes since phase 1, the palette's in `l31c`, the settings screen's) is drawn in `VcTextSecondaryBrush` at Fluent's watermark opacity, 0.5: `#616773` on `#272C36` dark (about 2.5:1), `#ADB2B8` on `#FFFFFF` light (about 2.1:1, lighter than the disabled colour). Found at the gate's inspection; not changed, as it would change nearly every picture with a text box | Accessibility; moved to phase 8's accessibility pass, for the owner to confirm (Waiting on the owner) | plan.md phase 8; the report's part L "Colours" convention and L31 |
 | The activity log draws a read whose exit 1 is git's normal answer as a failure: phase 5's rule in `ActivityLogRows` draws every exit code other than 0 in the danger colour, which since phase 6 includes the refs read's `git config --null --get-regexp ^remote\.` in a repository without a remote (phase 5's `a2d-show-reads`), as for `git symbolic-ref -q HEAD` on a detached HEAD and a `git config --get` of an unset key | Cosmetic, with "Show reads" on; in plan.md's backlog | `ViewModels/Panels/ActivityLogRows.cs`; design 10.2 |
-| The run time: [GATE-TBD: the default run's and the real-window pass's times at the gate]; during the build CI's Windows Test step reached 29 min 0 s (run 39893475197) and macOS's passed 32 minutes (run 39943973579, before D232's 55) | Every full run, the gate and CI | plan risks 8, 12, 18; D232, D134 |
-| Q1: [GATE-TBD: Q1 within the gate's pass, and how much remains below 2,000 ms] | A hot laptop fails a gate by itself | plan risk 10 |
-| The comment at the top of `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj` gives phase 6's part as design 17.6's estimate, "about 5 to 8 minutes more" | A stale comment, unless the gate updated it: [GATE-TBD: updated or not] | fix with phase 7's first code commit |
+| In a centred text box Avalonia 12.1.3 draws the caret where the end of the text would lie if it were left-aligned: `s16b` shows the auto-fetch minutes box's caret at x 712, inside `61`, while the box's caret is at its end (`SettingsDialogViewTests`). The minutes box is the app's only centred text box. Found at round 4's inspection and accepted | Cosmetic, while that box has the focus | `AutoFetchMinutesBox` in `Views/Dialogs/SettingsDialogView.axaml`; the report's "Run" |
+| `ShellDriverTests.Wheel_reaches_the_control_under_the_mouse_with_the_sign_of_a_real_wheel` hit-tests before the window's first frame and can find no control on a slow machine: it failed once in the container with the SDK from Ubuntu's packages on the gate's commit (run 40059391404) and passed on the job's second attempt | A flaky test: a red CI job until it is run again | `tests/VisualCommit.App.Tests/ShellDriverTests.cs`; fix in phase 7 by waiting for the hit test; the report's "Found by the gate" item 5 |
+| The run time: the default run 56 min 25 s at the gate (5,037 tests in nine projects, rested; 44 min 34 s to 56 min 25 s over its four rounds), the real-window pass 27 min 39 s (67 tests). CI's Test steps on the gate's commit: Windows 24 min 37 s, macOS 23 min 33 s. During the build and the gate Windows' reached 35 min 0 s (run 40027897278, on `774464d`) and macOS's 43 min 12 s (run 40019921605, on `a937ca6`), within a minute of the 44 at which the lead raises D232's 55; before D232, macOS's had passed 32 minutes (run 39943973579) | Every full run, the gate and CI | plan risks 8, 12, 18; D232, D237, D134 |
+| Q1 measured 1,805 ms within the gate's counted pass (round 4, `b561b7c`) and 1,264 ms within round 1's (`774464d`), each after a 10-minute rest; between them the laptop ran three more default runs and passes, so the spread is the machine's warmth, and phase 6 adds nothing to Q1's path (design 10.2) | A hot laptop fails a gate by itself; within the counted pass 195 ms remained below the 2,000 ms limit | plan risk 10 |
+| The comment at the top of `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj` gives the pass of phases 0 to 5 as about 25 minutes and phase 6's part as design 17.6's estimate, "about 5 to 8 minutes more"; the pass of phases 0 to 6 took 27 min 39 s at the gate. The gate did not update it: changing the file after the gate's commit would have changed more than docs | A stale comment | fix with phase 7's first code commit |
 | `scripts/time-scripted-check.sh` takes phase 6 when no phase is given, and sends a phase above 6 to `tests/VisualCommit.VisualTests.Phase<N>` | Right for phase 7 once its project exists; the default changes with it | `scripts/time-scripted-check.sh` |
 | Phase 5's other known issues are not known to be fixed: its handoff's table, but for the seven local fetch and pull failures (explained as plan risk 28), the csproj's stale comment and the timing script, which phase 6's step 4 fixed; and phase 4's and earlier ones | As there | [phase 5's handoff](phase-5.md) |
 
@@ -419,6 +496,25 @@ it amends:
 - **Load from builders beside a run** stretched it (60 min 48 s and 68 min 59 s against 43 min 33 s
   rested) and pushed `ShellDriverTests`' fresh-application case past its 60 s (`8c7401b` made its wait
   a turn off the watchdog). Measure only on a rested, otherwise idle laptop.
+- **The default run's own load at the gate.** Nine test projects side by side made a git call 10 to
+  15 times as long as alone, and the two default runs before round 1 failed on that alone (the hang
+  watchdog on a test of five scenarios and on a shared template, phase 3's check 23 on its 30 s
+  wait) until D237 (`774464d`) fitted the waits. A round of both passes with their rests takes about
+  1¾ hours (round 4: 03:42 to 05:27 UTC), and each failed round cost one.
+- **Windows' Open dialog keeps its last folder between runs.** Round 1's S14 chose `notepad.exe` in
+  the system folder, so the dialog opened there in the later passes, and its long file list broke
+  the harness's lookup of the Open button twice: round 2 found the dialog by its title before the
+  button existed (`639db4a` waits for a dialog's controls), round 3's search for the button walked
+  the whole list past 30 s (`b561b7c` confirms with Enter in the file name box, as a user does). A
+  platform dialog's state outlives the app's data folder; drive it by its file name box.
+- **Running one scripted check alone empties its phase's picture folder**, as a whole run does:
+  round 1's phase 6 pictures were lost that way, and round 4's inspection told a fix from variance
+  with round 2's copies (`D:/Projects/Personal/gate6-inspection/run2-artifacts/`). Copy a round's
+  `artifacts/visual/` out of the repo before rerunning anything when a later comparison needs it.
+- **Keep the first round's list of hashes outside the repo**
+  (`D:/Projects/Personal/gate6-inspection/run1-774464d-pictures.sha256`): the repo's
+  `phase-6-pictures.sha256` is rewritten for the round that counts, and that first list is what let
+  round 4 inspect only the 66 of 1,329 files whose bytes changed.
 - **Disk.** A built worktree took about 6.4 GB on D:, and at most three were built at once; D: had
   20 GB free at the phase's start and 18.7 GB on 2026-10-23, C: 15.7 GB at the start. Remove a
   merged worktree at once and stop its fsmonitor daemon (plan risk 27).
@@ -478,14 +574,16 @@ Do first:
 2. Check that no worktree, `wip/*` or `worktree-*` branch or fsmonitor daemon is left (`git worktree
    list`, `git branch --list "wip/*" "worktree-*"`, the daemons as in "Running the visual gate"), and
    that C: and D: have room for the worktrees planned.
-3. With the first code commit: `scripts/time-scripted-check.sh`'s default phase 7, and the
-   real-window csproj's comment on the pass's length if the gate left design 17.6's estimate there.
+3. With the first code commit: `scripts/time-scripted-check.sh`'s default phase 7, the real-window
+   csproj's comment on the pass's length, which the gate left at design 17.6's estimate (the pass of
+   phases 0 to 6 took 27 min 39 s), and `ShellDriverTests`' wheel test waiting for the hit test
+   (Known issues).
 4. Write phase 7's checks into `docs/test-reports/phase-7.md` before the UI, deriving every git state
    with real git 2.36 (and 2.55 or 2.56 where words or exit codes may differ), and decide which steps
    the real window repeats. A check cannot sign in to GitHub, Azure DevOps or GitLab from the default
    run or CI: decide early how the providers are stood in for (plan risks 4 and 5). Estimate what the
-   checks add to the default run ([GATE-TBD: minutes at phase 6's gate]) and to the real-window pass
-   ([GATE-TBD: minutes]) before writing them, and share app starts where scenarios allow.
+   checks add to the default run (56 minutes at phase 6's gate) and to the real-window pass (28)
+   before writing them, and share app starts where scenarios allow.
 5. Give phase 7's walk-through a project of its own, as phases 4 to 6 did (D151, D181, D230): its
    csproj, `AssemblyInfo.cs` and support copied from phase 6's, its line in `VisualCommit.slnx` (CI
    picks up every test project of the solution), a `Phase7Expectations*.cs` link in the real-window
@@ -505,10 +603,11 @@ before the design):
 
 Risks to watch:
 
-- The run time (plan risks 8, 12 and 18): [GATE-TBD: the default run's and the real-window pass's
-  minutes at phase 6's gate]; during the build CI's Windows Test step took 16 to 29 minutes and
-  macOS's 16 to over 32, against 55 now. The lead raises the limit when the Windows or macOS Test
-  step passes 44 minutes and records it as a decision (D232, D186's rule).
+- The run time (plan risks 8, 12 and 18): 56 minutes for the default run and 28 for the real-window
+  pass at phase 6's gate (56 min 25 s and 27 min 39 s); during the build and the gate CI's Windows
+  Test step took 16 to 35 minutes and macOS's 16 to 43 (43 min 12 s in run 40019921605), against 55
+  now. The lead raises the limit when the Windows or macOS Test step passes 44 minutes and records it
+  as a decision (D232, D186's rule).
 - Q1 on a warm laptop (plan risk 10).
 - Git keeps changing between versions, and CI's gits are 2.43 to 2.56 (plan risk 26).
 - The askpass helper and OpenSSH's `SSH_ASKPASS_REQUIRE` (plan risks 14, 15) and auto-fetch over ssh
@@ -519,8 +618,8 @@ Risks to watch:
 
 ## Waiting on the owner
 
-- **Acceptance of phase 6**: [GATE-TBD: the state and the gate's commit; "Awaiting acceptance" or
-  "Blocked" and why].
+- **Acceptance of phase 6**: the phase is "Awaiting acceptance"; the whole gate passed on
+  `b561b7c`, its gate commit, and the commits after it change only docs.
 - **At acceptance, to confirm or answer**:
   - design 17.5's reading of "ten repos can be checked and updated from one screen" (Result above:
     W2 reads the ten rows on one screen, one Fetch all and one Pull all each decide every row);
@@ -534,7 +633,8 @@ Risks to watch:
   design's own, D203 to D230 (after six reviews); D231 (the rebase chosen for one pull reads
   `pull.ff`); D232 (CI's limits 55 and 65 minutes); D233 (git calls drop `GIT_DIR` and the other
   repository-selecting variables); D234 (the session's end cancels every open dialog); D235 (a ticked
-  Amend refuses when HEAD moved); D236 (the app's files flushed before their rename); and the lead's
+  Amend refuses when HEAD moved); D236 (the app's files flushed before their rename); D237 (the
+  default run's waits fitted to nine projects side by side, from the gate); and the lead's
   rulings recorded in the design and the report: part L in a project of its own with its server on
   47394, GD24's drop-push title, GD15's upstream named by its tracking ref and a palette entry
   without a key showing no key column (`k10e`) (the report's rulings of 2026-10-19 and 2026-10-22);
@@ -549,5 +649,5 @@ Risks to watch:
 - **For phase 7**: test accounts or tokens for GitHub, Azure DevOps and GitLab (plan risk 4), and
   app registrations if the providers' own sign-in is chosen (risk 5).
 - **When the project is over**: whether a CI run of 30 minutes or more is reasonable (D134, D152,
-  D184, D232). [GATE-TBD: the Windows Test step's time on the gate's commit]; the default run on the
-  laptop [GATE-TBD: its time at the gate].
+  D184, D232). CI's Windows Test step took 24 min 37 s on the gate's commit (the job 26 min 47 s), and
+  35 min 0 s in round 1's run; the default run on the laptop took 56 min 25 s at the gate.
