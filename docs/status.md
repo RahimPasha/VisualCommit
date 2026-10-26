@@ -168,9 +168,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner to say "Start phase 7". Its first steps, the order to take them in, and the open
-points to put to the owner before its design are in the [phase 6 handoff](handoffs/phase-6.md) under
-"For the next phase".
+Before phase 7, the owner asked on 2026-10-26 for a review of why phase 6 cost so much time, tokens
+and disk space, and for the agreed improvements to be made first: the brief, with what was measured,
+is [before-phase-7-review.md](before-phase-7-review.md). After it, wait for the owner to say "Start
+phase 7". Its first steps, the order to take them in, and the open points to put to the owner before
+its design are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase".
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
