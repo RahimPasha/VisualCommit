@@ -49,6 +49,14 @@ of `3f34c87`'s second parent (`git show phase/6-multi-repo:docs/status.md`).
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+The run for phase 6's merge on `master` is
+[40073425553](https://github.com/RahimPasha/VisualCommit/actions/runs/40073425553), for `3a58bf0`
+(the merge commit `3f34c87` and the commit that set phase 6 to "Done"): all five jobs succeeded,
+Windows with 5,037 tests and the others with 5,034: `windows-latest` (34 min 22 s; its Test step 31
+min 49 s of 55), `macos-latest` (27 min 9 s; Test step 25 min 20 s), `ubuntu-latest` (6 min 58 s;
+Test step 5 min 7 s) and the two "bare ubuntu container" jobs (7 min 45 s and 5 min 54 s; Test steps
+5 min 42 s and 4 min 23 s).
+
 The run for phase 6's gate commit `b561b7c` is
 [40059391404](https://github.com/RahimPasha/VisualCommit/actions/runs/40059391404): all five jobs
 succeeded, Windows with 5,037 tests and the others with 5,034 (three tests are Windows' own):
