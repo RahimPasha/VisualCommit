@@ -170,7 +170,9 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 Before phase 7, the owner asked on 2026-10-26 for a review of why phase 6 cost so much time, tokens
 and disk space, and for the agreed improvements to be made first: the brief, with what was measured,
-is [before-phase-7-review.md](before-phase-7-review.md). After it, wait for the owner to say "Start
+is [before-phase-7-review.md](before-phase-7-review.md). The review's findings and ranked proposals
+are in [review-before-phase-7.md](review-before-phase-7.md) (2026-10-26); they wait for the owner's
+answers, each recorded as a decision (D239 on), and the agreed changes are then made on `master`. After it, wait for the owner to say "Start
 phase 7". Its first steps, the order to take them in, and the open points to put to the owner before
 its design are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase".
 
