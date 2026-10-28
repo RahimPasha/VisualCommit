@@ -182,7 +182,9 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner to say "Start phase 7a". Phase 7 is split into 7a, "Hosting foundation and
+Wait for the owner to reboot the laptop and say "Start phase 7a". Before its start steps, that
+session runs the default run once on the rested laptop (`bash scripts/heavy-run.sh`): every run
+there since phase 6's gate failed on the hang watchdog (Notes; Waiting on the owner). Phase 7 is split into 7a, "Hosting foundation and
 GitHub", and 7b, "Azure DevOps and GitLab" (D241; `plan.md`). The first steps of 7a, the order to
 take them in, and the open points to put to the owner before its design (plan risks 4 and 5 among
 them) are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the
@@ -275,6 +277,23 @@ every commit.
   `--max-parallel-test-modules`) is the measurement for it. `dotnet test` itself exits with 127
   when a test process is stopped (tried with `VISUALCOMMIT_TEST_HANG_SECONDS=5`, plain and through
   the script), so a 127 from `scripts/heavy-run.sh` is that, not the script.
+- **The review's S10, measured, did not help** (2026-10-28, on `71e174e`, after 10 minutes' rest:
+  `bash scripts/heavy-run.sh --max-parallel-test-modules 5`, S10's first half only, without
+  `VisualCommit.Git.Tests` at 4 threads): 72 min 22 s, longer than the 66 min 47 s with nine
+  projects at once, and the watchdog stopped `VisualCommit.VisualTests.Phase6` again in G23's pull
+  check, 1,170 s into the run, after its 180 s. Its step times (`artifacts/visual/phase-6/timings/`)
+  were 40 s to step 10's picture and 115 s more for steps 11 to 13, four pulls of about 29 s each:
+  slow throughout, not stuck in one call. The other eight projects passed, 5,005 tests, and ended
+  after: phases 0 to 2's 6 min 56 s, part L's 9 min 13 s, phase 4's 26 min 47 s, phase 5's 34 min
+  43 s, phase 5's undo walk-through 40 min 18 s, `VisualCommit.Git.Tests` 60 min 27 s, phase 3's
+  60 min 44 s and `VisualCommit.App.Tests` 71 min 1 s. A cap on projects side by side is
+  therefore not adopted. All three default runs made on the laptop since phase 6's gate failed on
+  the watchdog (2026-10-26 on git 2.36, and these two), so the cause is more likely the machine
+  than git or the number of projects: right after this run, with no test running, `WUDFHost`
+  (PID 10968, running since the boot of 2026-10-14) held 11,190 MB private, up from 9,569 MB on
+  2026-10-26 (the review's N4), 32.4 of 35.9 GB was committed and 2.3 of 15.9 GB of memory was
+  free. C: had 29.3 GB free and D: 27.2 GB. Until a default run passes on the laptop again, phase
+  7a's gate cannot pass there; the owner's reboot comes first (Waiting on the owner).
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.
@@ -335,7 +354,19 @@ every commit.
   file watcher's events), which `plan.md`'s 7a section names but does not include; and the
   proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4, N4,
   S11 and T8/P12's trial of a lower effort level. The review's section 5, step 11 (one default
-  run re-measured on a quiet laptop) was made on 2026-10-28 and failed on load (Notes).
+  run re-measured on a quiet laptop) was made on 2026-10-28 and failed on load, and so did S10's
+  run with at most 5 projects at once (Notes).
+- **A reboot of the laptop before phase 7a** (the review's N4, asked 2026-10-28): every default
+  run there since phase 6's gate has failed on the hang watchdog, and `WUDFHost`'s leak (11.2 GB,
+  growing) is the likeliest cause (Notes). After the reboot, a session runs the default run once
+  (`bash scripts/heavy-run.sh`, rested) before "Start phase 7a". If it still fails in G23, the
+  choice is the owner's: split the check (D237's rule) or raise a test's own limit of 180 s (D35,
+  D132, D237).
+- **Git Credential Manager since git 2.56** (2026-10-28): the new install's system configuration
+  sets `credential.helper=manager`, and a `git push` from Claude Code waited on its sign-in window.
+  The pushes of 2026-10-28 used `gh`'s login for that command only
+  (`git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push ...`); no git
+  configuration was changed. Signing in to it once, or choosing another helper, is the owner's.
 - **Phase 5's acceptance**: given on 2026-10-17; merged into `master` (`c299939`). The decisions
   made during the phase without the owner, which the owner may want to look at: D182 (tooltips take
   no input), D183 (the report's rulings), D184 and D186 (CI's time limits, 40 and 50 minutes, raised
