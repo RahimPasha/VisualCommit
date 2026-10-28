@@ -1,0 +1,36 @@
+<Project>
+  <!-- The build trim (D239). Every project that uses Avalonia.Skia (the app and every test
+       project) gets SkiaSharp's and HarfBuzzSharp's native libraries from NuGet's runtimes
+       packages, for 21 platforms: 558 MB in each output folder, 304 MB of it native debug
+       symbols. Nothing here debugs native code, and a local build runs only on the machine that
+       made it, so a build copies neither the symbols nor, on Windows, other platforms'
+       libraries. Each switch below, set to true (-p:<name>=true, or the environment), undoes one
+       part. -->
+  <PropertyGroup>
+    <!-- true copies the packages' native .pdb files again. -->
+    <VisualCommitNativeSymbols Condition="'$(VisualCommitNativeSymbols)' == ''">false</VisualCommitNativeSymbols>
+    <!-- true copies every platform's native libraries again, not only this machine's. A portable
+         publish needs it: phase 8 must set it. -->
+    <VisualCommitAllRuntimes Condition="'$(VisualCommitAllRuntimes)' == ''">false</VisualCommitAllRuntimes>
+  </PropertyGroup>
+
+  <!-- Runs after NuGet's assets are resolved and before they are copied or written into the
+       .deps.json, so that the output folder and its .deps.json agree. -->
+  <Target Name="VisualCommitTrimNativeAssets" AfterTargets="ResolvePackageAssets">
+    <!-- On every platform: no native .pdb files, neither from a portable build's runtimes/<rid>/
+         folders (RuntimeTargetsCopyLocalItems) nor from a RID-specific build, such as
+         dotnet publish -r (NativeCopyLocalItems). -->
+    <ItemGroup Condition="'$(VisualCommitNativeSymbols)' != 'true'">
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)" Condition="'%(RuntimeTargetsCopyLocalItems.Extension)' == '.pdb'" />
+      <NativeCopyLocalItems Remove="@(NativeCopyLocalItems)" Condition="'%(NativeCopyLocalItems.Extension)' == '.pdb'" />
+    </ItemGroup>
+    <!-- On Windows, in a build without a RuntimeIdentifier: only runtimes/<this machine's RID>
+         (win-x64 on an x64 laptop), runtimes/win and runtimes/any, the whole chain the .NET host
+         looks in on Windows. macOS and Linux keep every platform's libraries, and a RID-specific
+         build has no runtimes/ folder to trim. -->
+    <ItemGroup Condition="'$(VisualCommitAllRuntimes)' != 'true' and '$(RuntimeIdentifier)' == '' and $([MSBuild]::IsOSPlatform('Windows'))">
+      <RuntimeTargetsCopyLocalItems Remove="@(RuntimeTargetsCopyLocalItems)"
+                                    Condition="'%(RuntimeTargetsCopyLocalItems.RuntimeIdentifier)' != '$(NETCoreSdkPortableRuntimeIdentifier)' and '%(RuntimeTargetsCopyLocalItems.RuntimeIdentifier)' != 'win' and '%(RuntimeTargetsCopyLocalItems.RuntimeIdentifier)' != 'any'" />
+    </ItemGroup>
+  </Target>
+</Project>
