@@ -61,8 +61,18 @@ Start:
   other author as before; the session only where no keychain can be reached; the review's W1, S8
   and R8 in the first package. After the design's research, before its drafting, the same day:
   D255 to D263, recorded in step 3.)
-- [ ] 2. Baseline: the default run on `master` (`5fe9148`) as inherited, after the owner's reboot,
-  through `bash scripts/heavy-run.sh`, before anything changes.
+- [x] 2. Baseline: the default run on `master` (`5fe9148`) as inherited, after the owner's reboot,
+  through `bash scripts/heavy-run.sh`, before anything changes. (2026-10-28, 13:54 to 14:54, the
+  laptop quiet: 5,001 of 5,001 tests that ran passed in 58 min 13 s, exit 127: the watchdog
+  stopped `VisualCommit.VisualTests.Phase6` 1,028 s into the run in G23's part B,
+  `Check_G23_pull_refused_inside_the_integration`, after its 180 s (pictures at 28.8 s, 119.7 s
+  and 160.9 s), so that project's other tests did not run; the fourth such failure on git 2.56,
+  the first on a quiet laptop after the reboot. The owner chose to split the check (D264, step 4).
+  The projects ended after: part L's walk-through 11 min 15 s, phases 0 to 2's 15 min 0 s, phase
+  6's 17 min 11 s (stopped), phase 4's 29 min 5 s, phase 5's 32 min 18 s, phase 5's undo
+  walk-through 49 min 50 s, phase 3's 50 min 9 s, `VisualCommit.Git.Tests` 50 min 11 s and
+  `VisualCommit.App.Tests` 58 min 12 s. The first attempt, from 12:01, was disturbed by the
+  session's own research (Notes). Week: share not read; the owner: enough left before the reset.)
 - [ ] 3. Design in `docs/phase-7a-design.md` (D243: about 150 to 200 KB, its decisions only in
   `decisions.md`): GitHub's API facts as the fake must serve them, the keychains of Windows, macOS
   and Linux, git 2.56's credential facts (with 2.43 and 2.55 from CI where they differ, D248), the
@@ -75,7 +85,8 @@ Start:
 - [ ] 4. First package (plan.md's "From phase 6" and D254): `ShellDriverTests`' wheel test waits
   for the hit test; the real-window csproj's comment gives the pass of phases 0 to 6 as 27 min
   39 s; W1's failure under load looked at and fixed; S8's git-call counts as upper bounds taken
-  with the watcher quiet; R8's test switch that delays the watcher's events.
+  with the watcher quiet; R8's test switch that delays the watcher's events; G23's part B split
+  (D264).
 - [ ] 5. Harness: phase 7a's walk-through project, the local fake of GitHub's API (its port
   amending D97, as D150, D229 and D238 did), the keychain's fake in both harnesses so that no run
   touches the owner's keychain, the timing script and CLAUDE.md's Commands, the real-window
@@ -260,11 +271,9 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 2: the baseline default run on `5fe9148`, repeated on the quiet laptop from 13:54 on
-2026-10-28 through `bash scripts/heavy-run.sh` (the first, from 12:01, was disturbed by the
-session's own research; Notes). Record its result and each project's end in step 2; if G23 fails
-again, put the choice to the owner (Waiting on the owner). Then step 3: draft the design from the
-research notes and `lead-rulings.md` (Notes), with D249 to D263. The
+Step 3: draft the design, `docs/phase-7a-design.md`, from the research notes and
+`lead-rulings.md` (Notes), with D249 to D264: its shared contracts first, then one section per work
+package written as that builder's brief (D242), then its review. The
 first steps of 7a, and the order to take them in, are in the [phase 6
 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -462,9 +471,8 @@ every commit.
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,
   N4, S11 and T8/P12's trial of a lower effort level. The review's section 5, step 11 (one default
   run re-measured on a quiet laptop) was made on 2026-10-28 and failed on load, and so did S10's
-  run with at most 5 projects at once (Notes); phase 7a's baseline, after the reboot, is the next
-  such measurement. If it still fails in G23, the choice is the owner's: split the check (D237's
-  rule) or raise a test's own limit of 180 s (D35, D132, D237).
+  run with at most 5 projects at once (Notes); phase 7a's baseline, after the reboot, failed in G23
+  alone (step 2), and the owner chose to split the check (D264).
 - **Git Credential Manager since git 2.56** (2026-10-28): the new install's system configuration
   sets `credential.helper=manager`, and a `git push` from Claude Code waited on its sign-in window.
   The pushes of 2026-10-28 used `gh`'s login for that command only
