@@ -88,7 +88,7 @@ Every object has a context menu. Every common action takes two clicks at most.
 | O1 | Interactive rebase (drag to reorder, squash, fixup, reword, drop) | Included |
 | O2 | Undo / redo of git actions, many steps back within a session (D154) | Included |
 | O3 | Multi-repo dashboard: status of all repos at a glance, bulk fetch/pull | Included |
-| O4 | Hosting integration (GitHub, Azure DevOps, GitLab): clone from account, view and create pull requests | Included |
+| O4 | Hosting integration (GitHub, Azure DevOps, GitLab): clone from account, view and create pull requests. Sign-in with a personal access token (D249); a repository's pull requests listed in the left panel (D251); author avatars from GitHub only, other authors as before (D252) | Included |
 | O5 | Command palette (Ctrl+Shift+P, D191) and keyboard shortcuts, a fixed set (D192) | Included |
 | O6 | Compare any two commits or branches | Included |
 | O7 | Search inside changes (find the commit that added or removed a piece of text) | Included |
@@ -128,7 +128,7 @@ commits) must still open and work normally.
 |---|---|
 | R1 | Installers and auto-update on all three platforms |
 | R2 | Code signing (Windows) and notarisation (macOS) |
-| R3 | Hosting tokens stored in the OS keychain, never in plain files |
+| R3 | Hosting tokens stored in the OS keychain, never in plain files; where no keychain can be reached, kept for the session only (D253) |
 | R4 | First-run check for Git, with guidance when it is missing or too old |
 | R5 | Original name, icons and visual design; no GitKraken branding or assets, and no "Git" in the product name (Git trademark policy) |
 | R6 | MIT licence file and third-party notices |

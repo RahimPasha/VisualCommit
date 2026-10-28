@@ -16,7 +16,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 4. Rebase and conflict resolution | Done | `phase/4-rebase-conflicts` | [phase-4](handoffs/phase-4.md) | [phase-4](test-reports/phase-4.md) |
 | 5. History, traceability and undo | Done | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
 | 6. Multi-repo and productivity | Done | `phase/6-multi-repo` | [phase-6](handoffs/phase-6.md) | [phase-6](test-reports/phase-6.md) |
-| 7a. Hosting foundation and GitHub | Not started | `phase/7a-hosting-github` | | |
+| 7a. Hosting foundation and GitHub | In progress | `phase/7a-hosting-github` | | |
 | 7b. Azure DevOps and GitLab | Not started | `phase/7b-hosting-azure-gitlab` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
 
@@ -26,12 +26,13 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-None in progress. Phase 6 was accepted by the owner on 2026-10-24 and merged into `master` (merge
+Phase 7a, "Hosting foundation and GitHub", is in progress on `phase/7a-hosting-github`, started on
+2026-10-28 from `master` at `5fe9148`. Phase 6 was accepted by the owner on 2026-10-24 and merged into `master` (merge
 commit `3f34c87`); its gate ran on `b561b7c`. Phase 5 was accepted on 2026-10-17 (merge commit
 `c299939`), phase 4 on 2026-10-12 (merge commit `ce5f337`), phase 3 on 2026-10-11 (merge commit
 `8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit
-`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). The next phase to start is phase
-7a: phase 7 was split into 7a and 7b on 2026-10-28 (D241).
+`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). Phase 7 was split into 7a and 7b on
+2026-10-28 (D241).
 
 Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
 that both passes of the gate ran on (or, by D246, the real-window pass's commit when it changes
@@ -40,15 +41,91 @@ nothing but docs changed after it.
 
 ### Progress
 
-Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
-"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
-steps from `CLAUDE.md` and a step for reading the CI run of the gate's commit. Each item is ticked
-in the commit that completes it, and each tick, like the start of each stage, records the share
-of the plan's weekly allowance used at that point, as `/usage` or the status line's seven-day
-percentage shows it (D241): a phase or a stage starts only when the share left covers it
-(`plan.md`, "Workflow"). Number the steps plainly; do not label them C1, C2 and so on,
-which are requirement numbers. Phase 6's checklist, with a note on each step, is in this file as
-of `3f34c87`'s second parent (`git show phase/6-multi-repo:docs/status.md`).
+Each item is ticked in the commit that completes it, and each tick, like the start of each stage,
+records the share of the plan's weekly allowance used at that point (D241). The numbers are plain
+step numbers, not requirement numbers. The design (step 3) splits the Core, Git-layer and App
+steps into work packages and says how they map onto the steps below.
+
+The week: the plan's allowance resets on Thursdays at 2:00. The session cannot read `/usage`; on
+2026-10-28, at the phase's start, the owner said that what is left of the week will not run out
+before the reset of 2026-10-29.
+
+Start:
+
+- [x] 1. Phase branch created, phase set to "In progress", this checklist; the owner's answers to
+  the open points of phase 6's handoff and plan risks 4 and 5 recorded (D249 to D254) and carried
+  into `plan.md` and `requirements.md`. (2026-10-28: sign-in with a personal access token, no
+  device flow; a local fake of GitHub's API in the default run and CI, and an opt-in command
+  against real GitHub with the owner's fine-grained token for a sandbox repository; the
+  pull-request list in the left panel's section with a menu; avatars from GitHub only, every
+  other author as before; the session only where no keychain can be reached; the review's W1, S8
+  and R8 in the first package.)
+- [ ] 2. Baseline: the default run on `master` (`5fe9148`) as inherited, after the owner's reboot,
+  through `bash scripts/heavy-run.sh`, before anything changes.
+- [ ] 3. Design in `docs/phase-7a-design.md` (D243: about 150 to 200 KB, its decisions only in
+  `decisions.md`): GitHub's API facts as the fake must serve them, the keychains of Windows, macOS
+  and Linux, git 2.56's credential facts (with 2.43 and 2.55 from CI where they differ, D248), the
+  texts, the layouts, the tests and harness (the fake, the keychain's seam, the opt-in live
+  command), how the code and the harness name phase 7a, an estimate of what the phase adds to the
+  default run (about 55 minutes) and to the real-window pass (28), and the work packages, each
+  section a builder's brief of at most about 25 KB (D242). Its review: 3 or 4 lenses, git safety
+  and tests/gate among them, a verifier only for each blocker and major; questions of taste to
+  the owner; its decisions recorded.
+- [ ] 4. First package (plan.md's "From phase 6" and D254): `ShellDriverTests`' wheel test waits
+  for the hit test; the real-window csproj's comment gives the pass of phases 0 to 6 as 27 min
+  39 s; W1's failure under load looked at and fixed; S8's git-call counts as upper bounds taken
+  with the watcher quiet; R8's test switch that delays the watcher's events.
+- [ ] 5. Harness: phase 7a's walk-through project, the local fake of GitHub's API (its port
+  amending D97, as D150, D229 and D238 did), the keychain's fake in both harnesses so that no run
+  touches the owner's keychain, the timing script and CLAUDE.md's Commands, the real-window
+  project's link to the phase's expectations.
+
+Core and Git layer:
+
+- [ ] 6. The provider model that 7b builds Azure DevOps and GitLab on: hosts, accounts, a GitHub
+  remote recognised from its URL. Tests.
+- [ ] 7. Tokens in the OS keychain on Windows, macOS and Linux behind a seam (R3), and in memory
+  for the session where none can be reached (D253). Tests.
+- [ ] 8. GitHub's API: a token checked at sign-in, the account's repositories, a repository's pull
+  requests, creating one, avatars; all against the fake. Tests.
+- [ ] 9. The token reaching git (plan.md's "From phase 3": git's credential helpers first, then the
+  askpass helper and `AskPassBroker`; auto-fetch never prompts), a bulk run's prompt group and
+  accounts ("From phase 6"), and the push guard's refusals of `pr/*` and two-namespace pushes
+  ("From phase 6"), each as the design decides. Tests.
+
+App:
+
+- [ ] 10. Sign-in dialog and the accounts in the settings screen (D249, D253).
+- [ ] 11. Browse and clone the repositories of a GitHub account.
+- [ ] 12. The left panel's "Pull requests" section with its menu (D251), the badge on branches,
+  open in browser.
+- [ ] 13. "Create pull request" in the branch menus (`ForLocalBranch`, `ForRemoteBranch`) and the
+  drop menu (`ForDrop`), and its form.
+- [ ] 14. Author avatars from GitHub (D252).
+
+Checks, live trial and review:
+
+- [ ] 15. Each part's visual checks written into `docs/test-reports/phase-7a.md` just before its
+  package is built (D244), by one writer and one reviewer, each marked for the real-window pass or
+  not, committed before the UI they test.
+- [ ] 16. The opt-in live command against real GitHub (D250), run with the owner's token on the
+  sandbox repository.
+- [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
+  tests.
+
+Closing (`CLAUDE.md`, "Closing a phase"):
+
+- [ ] 18. The visual test gate: the scripted walk-through's pictures on this machine, then the new
+  real-window checks twice on their own with the owner told and present (D246); `dotnet test` and
+  the real-window pass on one commit; every picture inspected, in batches of at most about 150
+  (D247); `docs/test-reports/phase-7a.md` completed.
+- [ ] 19. `docs/architecture.md` describes what is built.
+- [ ] 20. `docs/plan.md`: what 7a did not deliver moved to the phase that owns it; risks updated.
+- [ ] 21. `docs/handoffs/phase-7a.md` written from the template.
+- [ ] 22. Cold-read check by a fresh agent; every gap fixed.
+- [ ] 23. The CI run of the gate's commit read, with each job's result.
+- [ ] 24. `docs/status.md`: links, the CI run, the "Gate commit", and "Awaiting acceptance" only if
+  the whole gate passed; the owner told what passed and what needs a decision.
 
 ### CI
 
@@ -182,24 +259,31 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner to reboot the laptop and say "Start phase 7a". Before its start steps, that
-session runs the default run once on the rested laptop (`bash scripts/heavy-run.sh`): every run
-there since phase 6's gate failed on the hang watchdog (Notes; Waiting on the owner). Phase 7 is split into 7a, "Hosting foundation and
-GitHub", and 7b, "Azure DevOps and GitLab" (D241; `plan.md`). The first steps of 7a, the order to
-take them in, and the open points to put to the owner before its design (plan risks 4 and 5 among
-them) are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the
-note at its start: D241 to D248 change how phases are built (`plan.md`'s "Workflow" and "Visual
-test gate", `CLAUDE.md`). They come from the review of phase 6's cost that the owner asked for on
-2026-10-26, [review-before-phase-7.md](review-before-phase-7.md), kept as history; its proposals
-that no decision names are still proposals, some of them to try during phase 7a (its section 5).
+Step 2: the baseline default run on `5fe9148`, started at 12:01 on 2026-10-28 through
+`bash scripts/heavy-run.sh` (the laptop rebooted at 11:36, its load down to about 13% when the run
+started). Record its result and each project's end in step 2, then start step 3, the design. The
+first steps of 7a, and the order to take them in, are in the [phase 6
+handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
+D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
+They come from the review of phase 6's cost that the owner asked for on 2026-10-26,
+[review-before-phase-7.md](review-before-phase-7.md), kept as history; its proposals that no
+decision names are still proposals.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
 
 ### Notes for whoever resumes
 
-- Nothing is in flight. `master` holds everything; the working tree was clean, and no worktree,
-  `wip/*` or `worktree-*` branch was left, when phase 6 was merged (`3f34c87`). The gate's
+- **Phase 7a started on 2026-10-28** from `master` at `5fe9148`, after the owner's reboot of
+  11:36 that day (`WUDFHost`'s instances held 2 to 12 MB afterwards). At the start no worktree, no
+  `wip/*` or `worktree-*` branch and only the main tree's fsmonitor daemon existed; C: had 36.1 GB
+  free and D: 27.2 GB.
+- **D240's connectors switch does not work**: this session, started after the reboot with
+  `ENABLE_CLAUDEAI_MCP_SERVERS=false` in `.claude/settings.local.json`'s `env`, still listed the
+  claude.ai connectors (Gmail, Google Calendar, Figma, Claude Docs and others) among its tools
+  (Waiting on the owner).
+- When phase 6 was merged (`3f34c87`), the working tree was clean and no worktree, `wip/*` or
+  `worktree-*` branch was left. The gate's
   reference pictures, inspection verdicts and the lead's rulings lie outside the repository in
   `D:/Projects/Personal/gate6-reference/` and `D:/Projects/Personal/gate6-inspection/`; phase 7a's
   gate makes its own references on `master` if it changes earlier pictures in many places (phase 6's
@@ -327,8 +411,8 @@ every commit.
 
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D249 on, since D239 to D248 went to the review before
-  phase 7): design 17.5's reading of "ten repos can be checked and
+  owner"; each answer becomes a decision, D255 on, since D239 to D248 went to the review before
+  phase 7 and D249 to D254 to phase 7a's start): design 17.5's reading of "ten repos can be checked and
   updated from one screen" (one dashboard of the ten, one Fetch all and one Pull all deciding every
   row); the report's by-hand System step (switch Windows' app mode while the app runs with System
   chosen, D224); and the move of the text boxes' placeholder contrast (Fluent's watermark opacity,
@@ -341,27 +425,28 @@ every commit.
   screen's global writes); D235 (Amend refuses when HEAD moved); D236 (the app's own files flushed
   before their rename); D237 (the default run's waits fit nine projects side by side); D238 (part
   L's own test server port); and the lead's rulings recorded in the design and the report.
-- **For phase 7a, before its design** (plan risks 4 and 5, D241): a test account or token for each
-  of GitHub, Azure DevOps and GitLab (GitHub's for 7a, the others for 7b), and whether public
-  sign-in needs app registrations or personal access tokens are enough.
+- **Answered at the start of phase 7a** on 2026-10-28, before its design (D249 to D254): plan
+  risks 4 and 5 for GitHub (a personal access token; a local fake of GitHub's API, and an opt-in
+  command against real GitHub), where the pull-request list lives, avatars, a Linux desktop
+  without a keychain, and the review's question 11 with its S8 and R8 (all three in the first
+  package). Azure DevOps' and GitLab's accounts and sign-in are asked before 7b's design.
+- **For phase 7a's live command (D250), before step 16**: a fine-grained token that the owner
+  creates for one sandbox repository on the owner's account, with the rights the design names,
+  set in the environment variable the design names. It is never written to the repository.
+- **D240's connectors switch** (Notes): `ENABLE_CLAUDEAI_MCP_SERVERS=false` in
+  `.claude/settings.local.json` did not keep the claude.ai connectors out of this session. Turning
+  them off another way (the variable set in Windows' user environment before VS Code starts, or
+  the connectors switched off on claude.ai) is the owner's.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D249 on): its questions 1 (how the plan's limits count tokens),
-  10 (CI split into shards, S5, which reopens D134 and D232), 11 (`Phase6ChecksW`'s check W1,
-  which failed once under load on 2026-10-26 and was not run again: before phase 7a or in its
-  first package) and 12 (the machine: a reboot for `WUDFHost`, the page file, the space on C:, and
-  how long to keep transcripts, D8); its suggestions for 7a's first package, S8 (git-call budgets
-  as upper bounds taken with the watcher quiet) and R8 (proposal 36, a test switch that delays the
-  file watcher's events), which `plan.md`'s 7a section names but does not include; and the
-  proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4, N4,
-  S11 and T8/P12's trial of a lower effort level. The review's section 5, step 11 (one default
+  each answer becomes a decision, D255 on): its questions 1 (how the plan's limits count tokens),
+  10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
+  the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
+  the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,
+  N4, S11 and T8/P12's trial of a lower effort level. The review's section 5, step 11 (one default
   run re-measured on a quiet laptop) was made on 2026-10-28 and failed on load, and so did S10's
-  run with at most 5 projects at once (Notes).
-- **A reboot of the laptop before phase 7a** (the review's N4, asked 2026-10-28): every default
-  run there since phase 6's gate has failed on the hang watchdog, and `WUDFHost`'s leak (11.2 GB,
-  growing) is the likeliest cause (Notes). After the reboot, a session runs the default run once
-  (`bash scripts/heavy-run.sh`, rested) before "Start phase 7a". If it still fails in G23, the
-  choice is the owner's: split the check (D237's rule) or raise a test's own limit of 180 s (D35,
-  D132, D237).
+  run with at most 5 projects at once (Notes); phase 7a's baseline, after the reboot, is the next
+  such measurement. If it still fails in G23, the choice is the owner's: split the check (D237's
+  rule) or raise a test's own limit of 180 s (D35, D132, D237).
 - **Git Credential Manager since git 2.56** (2026-10-28): the new install's system configuration
   sets `credential.helper=manager`, and a `git push` from Claude Code waited on its sign-in window.
   The pushes of 2026-10-28 used `gh`'s login for that command only
