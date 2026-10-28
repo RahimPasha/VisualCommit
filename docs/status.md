@@ -59,7 +59,8 @@ Start:
   against real GitHub with the owner's fine-grained token for a sandbox repository; the
   pull-request list in the left panel's section with a menu; avatars from GitHub only, every
   other author as before; the session only where no keychain can be reached; the review's W1, S8
-  and R8 in the first package.)
+  and R8 in the first package. After the design's research, before its drafting, the same day:
+  D255 to D263, recorded in step 3.)
 - [ ] 2. Baseline: the default run on `master` (`5fe9148`) as inherited, after the owner's reboot,
   through `bash scripts/heavy-run.sh`, before anything changes.
 - [ ] 3. Design in `docs/phase-7a-design.md` (D243: about 150 to 200 KB, its decisions only in
@@ -259,9 +260,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 2: the baseline default run on `5fe9148`, started at 12:01 on 2026-10-28 through
-`bash scripts/heavy-run.sh` (the laptop rebooted at 11:36, its load down to about 13% when the run
-started). Record its result and each project's end in step 2, then start step 3, the design. The
+Step 2: the baseline default run on `5fe9148`, repeated on the quiet laptop from 13:54 on
+2026-10-28 through `bash scripts/heavy-run.sh` (the first, from 12:01, was disturbed by the
+session's own research; Notes). Record its result and each project's end in step 2; if G23 fails
+again, put the choice to the owner (Waiting on the owner). Then step 3: draft the design from the
+research notes and `lead-rulings.md` (Notes), with D249 to D263. The
 first steps of 7a, and the order to take them in, are in the [phase 6
 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -282,6 +285,21 @@ every commit.
   `ENABLE_CLAUDEAI_MCP_SERVERS=false` in `.claude/settings.local.json`'s `env`, still listed the
   claude.ai connectors (Gmail, Google Calendar, Figma, Claude Docs and others) among its tools
   (Waiting on the owner).
+- **The design's inputs lie outside the repository**, in `D:/Projects/Personal/phase7a-work/`:
+  seven research notes (`research/r1` to `r7`, 2026-10-28: the credential and network code, the UI
+  surfaces, the harness and gate, the first package's items, GitHub's API, the keychains, git
+  2.56's credentials), and `lead-rulings.md`, the lead's 31 rulings on their questions, which the
+  designer follows beside D249 to D263. A cloud session cannot see them; the design, once written,
+  carries everything that matters.
+- **The first baseline run was disturbed by the session's own research** (2026-10-28, `5fe9148`,
+  12:01 to 13:10, 1 h 6 min 58 s): seven research agents ran git experiments and local servers
+  beside it for its first 50 minutes. 4,915 of the 4,917 tests that ran passed; the watchdog
+  stopped phase 3's walk-through at 602 s (`Check_18b`, waiting for the sync scenario's
+  template), phase 4's at 805 s (`Check_C13`, after `Check_B7` timed out waiting for the
+  interactive rebase's log line) and phase 6's at 1,321 s (G23, as in every run since phase 6's
+  gate), and phase 5's `Check_A2` timed out waiting 120 s for the merge tool. It is no baseline;
+  the run was repeated on the quiet laptop from 13:54 (step 2). Lesson: no agent that runs
+  processes works beside a heavy run, not even "light" git experiments.
 - When phase 6 was merged (`3f34c87`), the working tree was clean and no worktree, `wip/*` or
   `worktree-*` branch was left. The gate's
   reference pictures, inspection verdicts and the lead's rulings lie outside the repository in

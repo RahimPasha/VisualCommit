@@ -502,17 +502,22 @@ review's note on T11/P9 in [review-before-phase-7.md](review-before-phase-7.md))
 builds the provider model and GitHub on it, and takes every item carried into phase 7; phase 7b
 adds Azure DevOps and GitLab. Plan risks 4 and 5 (test accounts, app registrations) were decided
 with the owner on 2026-10-28, before this phase's design (D249, D250); the owner's other answers
-of that day, before the design, are D251 to D254.
+of that day, before the design, are D251 to D254, and those given after the design's research,
+still before its drafting, D255 to D263: github.com only (D258), one account at a time (D263),
+signed in and out in the settings screen's new Accounts section (D256), no request to GitHub while
+none is signed in (D257), and the app's own git calls to github.com taking the account's token in
+place of the user's credential helpers (D255, an exception to Q5).
 
 Delivers:
 - The provider model that phase 7b builds Azure DevOps and GitLab on.
-- Sign-in to GitHub with a personal access token (D249; no app registration, no device flow); tokens in the OS keychain on Windows, macOS and Linux (R3), and for the session only where no keychain can be reached (D253).
-- Browse and clone repos from a GitHub account.
+- Sign-in to GitHub (github.com, one account at a time; D258, D263) with a personal access token (D249; no app registration, no device flow), in the settings screen's Accounts section (D256); tokens in the OS keychain on Windows, macOS and Linux (R3), and for the session only where no keychain can be reached (D253); the macOS and Linux stores tested on CI against throw-away keychains (D259).
+- The account's token used by the app's own git calls to github.com over HTTPS, through the app's own credential helper in place of the user's helpers for that host, while the account's "Use for git over HTTPS" switch is on (D255).
+- Browse and clone repos from a GitHub account (the clone form's "From GitHub…" while an account is signed in, D261).
 - Pull-request list per repo, in the left panel's "Pull requests" section with a menu (open in browser, check out, copy link; D251); create a pull request from the branch menus and from the menu of a branch dropped onto a branch; pull-request badge on branches; open in browser.
 - Author avatars, from GitHub only; other authors and repositories look as before (D252).
 - An opt-in command, Windows-only and never in the default run or CI, that signs in, clones, lists pull requests and creates one on real GitHub with the owner's fine-grained token for a sandbox repository, read from an environment variable (D250).
 - From phase 3 (D77, D92): "Create pull request" in the branch menus (`RepositoryMenus.ForLocalBranch`, `ForRemoteBranch`) and in the menu of a branch dropped onto a branch (`ForDrop`), and a menu for the left panel's "Pull requests" section, which has none.
-- From phase 3: a provider's token reaches git in one of the two ways git asks for credentials: the credential helpers configured for it, asked first (Git Credential Manager included, Q5), or the app's own prompt path, the askpass helper and `AskPassBroker` (D82), which today answers through the credentials dialog. Auto-fetch never prompts (D79, D82), so where git cannot get the token without a prompt, auto-fetch fails with only "Auto-fetch failed" in the status bar (D85).
+- From phase 3: a provider's token reaches git in one of the two ways git asks for credentials: the credential helpers configured for it, asked first (Git Credential Manager included, Q5), or the app's own prompt path, the askpass helper and `AskPassBroker` (D82), which today answers through the credentials dialog. Auto-fetch never prompts (D79, D82), so where git cannot get the token without a prompt, auto-fetch fails with only "Auto-fetch failed" in the status bar (D85). Settled on 2026-10-28 by D255: for github.com with a signed-in account, the app's own helper in place of the user's helpers.
 - From phase 6 (design 10.8 #8, 10.4): the push guard (`RefuseIfPushStopsFetchAsync` in `RepositoryOperations.Remotes.cs`) refuses some pushes that would not stop the fetch: a new branch such as `pr/fix-typo` under GitHub's `+refs/pull/*/head:refs/remotes/origin/pr/*` line, and any new branch under two pattern lines of one remote that rename into two namespaces. Kept on purpose in phase 6 (a terminal push still works); a pull request's branch is pushed through these paths, so phase 7a decides whether the guard lets such pushes through.
 - From phase 6 (design 4.4): a bulk run's prompt group (Core's `Operations/PromptGroup.cs`, the App's `Services/PromptDialogs.cs`) reuses an answer by its prompt text across the run's repositories (a Cancel included) until the run ends; git's text names the URL and the user, but two repositories of one host signed in as different users through one prompt text get the first answer. Accounts per provider make that likelier: phase 7a decides whether the group keeps answers per account.
 - From phase 6 (its gate, run 40059391404): `ShellDriverTests.Wheel_reaches_the_control_under_the_mouse_with_the_sign_of_a_real_wheel` (`tests/VisualCommit.App.Tests/ShellDriverTests.cs`) hit-tests before the window's first frame and can find no control on a slow machine; it failed once in the container with the SDK from Ubuntu's packages. It waits for the hit test to find the control.
@@ -572,6 +577,10 @@ Done when: a new user on each platform can install, open a repo and receive an u
 
 O10 submodules, O11 worktrees, O12 Git LFS, O13 built-in terminal, O14 built-in file editor,
 O15 AI commit messages, O16 profiles, O17 commit signing, O18 patches.
+
+Left out of phase 7a by the owner's answers of 2026-10-28: GitHub Enterprise Server and GHE.com
+(D258); several GitHub accounts at once (D263); GitHub's device flow, which needs a registered
+OAuth app (D249); pull requests and avatars of a public repository without signing in (D257).
 
 Left out of phase 4 on purpose (design 14.4, D143, D148): an interactive rebase that includes the
 root commit (`--root`); syntax colours in the resolver's editable result; a splitter between the
