@@ -271,9 +271,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3: draft the design, `docs/phase-7a-design.md`, from the research notes and
-`lead-rulings.md` (Notes), with D249 to D264: its shared contracts first, then one section per work
-package written as that builder's brief (D242), then its review. The
+Step 3: review the design's draft, `docs/phase-7a-design.md` (Notes): 3 or 4 lenses, git safety
+and tests/gate among them, a verifier only for each blocker and major (D243); apply the findings,
+ask the owner the questions of taste and the open points its section 15 leaves to the owner, and
+record the answers. The
 first steps of 7a, and the order to take them in, are in the [phase 6
 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -300,6 +301,13 @@ every commit.
   2.56's credentials), and `lead-rulings.md`, the lead's 31 rulings on their questions, which the
   designer follows beside D249 to D263. A cloud session cannot see them; the design, once written,
   carries everything that matters.
+- **The design's draft** (2026-10-28, 14:57 to 16:42): an architect wrote the scope and the
+  contracts, seven drafters one or two briefs each (the drafts in `phase7a-work/design/`, 384 KB),
+  and a consolidator assembled `docs/phase-7a-design.md` (297 KB) and numbered its decisions D265
+  to D328, which `decisions.md` holds as proposed; the review may change them. 9 Opus agents, 3.66M
+  tokens, 918 tool calls; none built or ran tests. It is about half as large again as D243's 150 to
+  200 KB: thirteen work packages, each brief self-contained (sections 0 and 1 together 50 KB, every
+  brief 13 to 26 KB), so a builder still reads about 70 KB. Its section 15 lists the open points.
 - **The first baseline run was disturbed by the session's own research** (2026-10-28, `5fe9148`,
   12:01 to 13:10, 1 h 6 min 58 s): seven research agents ran git experiments and local servers
   beside it for its first 50 minutes. 4,915 of the 4,917 tests that ran passed; the watchdog
