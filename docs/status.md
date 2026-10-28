@@ -55,6 +55,14 @@ of `3f34c87`'s second parent (`git show phase/6-multi-repo:docs/status.md`).
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+The run for the review's changes on `master` (the build trim `32b238c`, the heavy-run lock
+`d56591b` and the docs `abf6ca5`) is
+[40679200453](https://github.com/RahimPasha/VisualCommit/actions/runs/40679200453), for `abf6ca5`:
+all five jobs succeeded, the first CI run of D239's trim: `windows-latest` (35 min 32 s; its Test
+step 32 min 40 s of 55, and "Build the real-window pass" green in 21 s), `macos-latest` (26 min
+14 s; Test step 24 min 53 s), `ubuntu-latest` (6 min 47 s; Test step 4 min 57 s) and the two "bare
+ubuntu container" jobs (7 min 10 s and 7 min 34 s; Test steps 5 min 22 s and 5 min 26 s).
+
 The run for phase 6's merge on `master` is
 [40073425553](https://github.com/RahimPasha/VisualCommit/actions/runs/40073425553), for `3a58bf0`
 (the merge commit `3f34c87` and the commit that set phase 6 to "Done"): all five jobs succeeded,
@@ -251,6 +259,22 @@ every commit.
   through `scripts/heavy-run.sh`, one at a time (D245), and a session's start makes one only when
   the machine changed or the tree holds code that is not pushed: git 2.56 and the trimmed build
   are new since phase 6's gate, so phase 7a's baseline run is such a run.
+- **The first default run with git 2.56 and the trimmed build failed on load** (2026-10-28, on
+  `abf6ca5`, through `bash scripts/heavy-run.sh`, after about 1.75 hours of builds and test runs
+  that applied the review, so not rested): 66 min 47 s, against 56 min 25 s at phase 6's gate. The
+  hang watchdog stopped `VisualCommit.VisualTests.Phase6` 1,232 s into it, in
+  `Phase6ChecksG.Check_G23_pull_refused_inside_the_integration`, which had run its 180 s; the
+  project's other 31 tests did not run. The other eight projects passed, 5,006 tests, and ended
+  after: part L's walk-through 12 min 44 s, phases 0 to 2's 15 min 48 s, phase 4's 30 min 27 s,
+  phase 5's 33 min 50 s, phase 5's undo walk-through 54 min 54 s, phase 3's 55 min 52 s,
+  `VisualCommit.Git.Tests` 56 min 0 s and `VisualCommit.App.Tests` 66 min 44 s. G23 did not hang:
+  its app log shows every git call taking 0.8 to 2.5 s (a `git rev-parse` takes about 80 ms alone
+  with 2.56, measured from Git Bash), and G23 alone passes in 40 s. The review's run of
+  2026-10-26, on git 2.36, failed the same way in `VisualCommit.App.Tests`, so the load of nine
+  projects side by side, not git 2.56, is the likely cause; the review's S10 (a cap of
+  `--max-parallel-test-modules`) is the measurement for it. `dotnet test` itself exits with 127
+  when a test process is stopped (tried with `VISUALCOMMIT_TEST_HANG_SECONDS=5`, plain and through
+  the script), so a 127 from `scripts/heavy-run.sh` is that, not the script.
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.
@@ -311,7 +335,7 @@ every commit.
   file watcher's events), which `plan.md`'s 7a section names but does not include; and the
   proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4, N4,
   S11 and T8/P12's trial of a lower effort level. The review's section 5, step 11 (one default
-  run re-measured on a quiet laptop as the "before" number) has not been made.
+  run re-measured on a quiet laptop) was made on 2026-10-28 and failed on load (Notes).
 - **Phase 5's acceptance**: given on 2026-10-17; merged into `master` (`c299939`). The decisions
   made during the phase without the owner, which the owner may want to look at: D182 (tooltips take
   no input), D183 (the report's rulings), D184 and D186 (CI's time limits, 40 and 50 minutes, raised
