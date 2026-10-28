@@ -62,10 +62,10 @@ it are not built yet, and "As built" says which are. The reasons behind the main
 
 ## Solution layout
 
-`VisualCommit.slnx`, `Directory.Build.props`, `Directory.Packages.props` and `global.json` sit at
-the repo root. App projects are under `src/`, test projects under `tests/`. A project is created
-in the phase that first needs it. Package versions are pinned centrally in
-`Directory.Packages.props`.
+`VisualCommit.slnx`, `Directory.Build.props`, `Directory.Build.targets`, `Directory.Packages.props`
+and `global.json` sit at the repo root. App projects are under `src/`, test projects under
+`tests/`. A project is created in the phase that first needs it. Package versions are pinned
+centrally in `Directory.Packages.props`.
 
 | Project | Contents | State |
 |---|---|---|
@@ -73,7 +73,7 @@ in the phase that first needs it. Package versions are pinned centrally in
 | `src/VisualCommit.Git` | Git runner, git locator, call log; reading a repository and writing to it (`GitRepository`: status, diffs, stage, unstage, patches, snapshots, discard, commit; phase 3's branches, history, in-progress state, backups, remotes and the network, stash, tags, ignore; phase 4's rebases, lists of picks and reverts, Continue and Skip, conflicts and the merge tool, the backups' clean-up; phase 5's file history, blame, reflog, backups list, compare, search, the filtered graph, C12's checkout and stash members, and the undo history's reads and steps; phase 6's `OpenedAtTopAsync`, the refs read's fetch lines, the reads of Keep ignored files, the pull's settings and the repository's own configuration writes), cloning, the repository watcher, the progress parser, the blame parser; since phase 6 `GitConfiguration` (git's own settings as the settings screen reads and writes them, and the merge-tool lookup) and `GitMergeTools`; `Prompts/`: the askpass broker, its locator and the prompt classifier | Built |
 | `src/VisualCommit.AskPass` | The askpass helper `visualcommit-askpass` (D82): a small framework-dependent console program with no project references, run by git and ssh; its pipe protocol (`AskPassProtocol`) is shared with the broker. `VisualCommit.Git` references it, so its app host lands next to the app and in every test project's output | Built |
 | `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (the commit graph, the diff text, the conflict panes and result, the blame's text and gutter, the context menu's item, the masked text box), the code font; settings and session stores, log file, folder dialog, file launcher, clipboard, prompt dialogs; the operations of every repository (`RepositoryOperations`), menus, dialogs, toolbar, status bar, conflict banner, auto-fetch; the interactive rebase's list, the conflict resolver, the message dialog; phase 5's undo and redo, the activity log, the graph area's pages (file history, blame, reflog and backups), the search bar, the comparison, hide and solo, C12's automatic stash and refusals; phase 6's workspaces (the welcome page's section, the dashboard tab, summary mode and the registry `OpenRepositories`), the bulk fetch and pull, the command palette and the keys (`ViewModels/Commands`, `Views/KeyRouter`), the settings screen (`ViewModels/Settings`), Open in editor, the workspace store, the System theme, the tab strip's overflow. Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
-| `src/VisualCommit.Hosting` | GitHub, Azure DevOps and GitLab clients; token store | Phase 7 |
+| `src/VisualCommit.Hosting` | GitHub, Azure DevOps and GitLab clients; token store | Phase 7a (the provider model, GitHub, the token store), 7b (Azure DevOps, GitLab; D241) |
 | `tests/VisualCommit.Testing` | Shared test helpers: temporary-repo builder, scenario repos, the 100k-commit repo, the credential test server, fakes (file launcher, clipboard, prompt handler, ssh), a clock tests move by hand (`ManualTimeProvider`), the hang watchdog, helpers that drive the app in headless mode, the window layout both harnesses share; since phase 6 the workspace "Web" of ten repositories (`TempWorkspace`, built by `LeanRepositories`), the fetch hold (`FetchHold`), the system's theme as a fake (`FakeSystemTheme`), the contrast and ink readers (`Contrast`, `TextInk`). Not a test project | Built |
 | `tests/VisualCommit.Git.Tests` | Tests of Core and Git against real git and temporary repos, the askpass helper and the test server included; since phase 6 the workspace model and the folder scan, the fetch lines against git, git's own settings, Keep ignored files' reads | Built |
 | `tests/VisualCommit.App.Tests` | Settings, session, log, data-folder and view-model tests, the operations against real git through scenarios (since phase 5 the undo history's recording, steps and restores, and C12), and headless UI tests of behaviour (menus, dialogs, drag, selection, toolbar, status bar, banner, and since phase 5 the activity log, the pages, the search bar, the comparison, the window's keys; since phase 6 the workspaces, the dashboard, summary mode, the bulk runs, the palette, the keys, the settings screen, the editor and the theme) | Built |
@@ -89,6 +89,24 @@ in the phase that first needs it. Package versions are pinned centrally in
 All projects target `net10.0`, except `VisualCommit.RealWindowTests` (`net10.0-windows`).
 `Directory.Build.props` turns on nullable reference types, implicit usings and warnings as errors
 for every project.
+
+`Directory.Build.targets` trims the platform-specific assets that packages bring under
+`runtimes/` to the app and every test project, above all the native libraries of SkiaSharp and
+HarfBuzzSharp, which Avalonia.Skia brings, for 21 platforms (D239); the part for Windows applies to
+every package's (Avalonia's ANGLE, Avalonia.Native's and Onigwrap's too).
+Its target `VisualCommitTrimNativeAssets` runs after `ResolvePackageAssets`, before anything is
+copied or written into the `.deps.json`, so the output folder and its `.deps.json` agree. On every
+platform it removes the packages' native `.pdb` files (from `RuntimeTargetsCopyLocalItems` and, for
+a build with a `RuntimeIdentifier`, `NativeCopyLocalItems`); on Windows, in a build without a
+`RuntimeIdentifier`, it keeps only `runtimes/$(NETCoreSdkPortableRuntimeIdentifier)` (`win-x64` on
+the laptop), `runtimes/win` and `runtimes/any`. Two switches, false by default and set with
+`-p:<name>=true` or as environment variables, undo one part each: `VisualCommitNativeSymbols`
+copies the `.pdb` files again, and `VisualCommitAllRuntimes` every platform's libraries, which a
+portable `dotnet publish` needs (phase 8). A test project's `bin/Debug` is about 49 MB with it,
+about 589 without (2026-10-28), and its `runtimes/` holds only `win-x64/native`
+(`libSkiaSharp.dll`, `libHarfBuzzSharp.dll`, `av_libglesv2.dll`, `libonigwrap.dll`); the
+real-window project keeps `runtimes/win` for FlaUI's `System.Management.dll`. On macOS and Linux
+only the `.pdb` part applies, so their builds, CI's included, keep every platform's libraries.
 
 ## As built (after phase 6)
 
@@ -664,10 +682,11 @@ configuration write.
 | The repository's settings (`.Config.cs`, design 8.3) | `WriteConfigAsync(writes)`: per write `config --local --replace-all <key> <value>`, or `--unset-all <key>` for a null value (exit 5, an absent key, counting as done), in the working tree, in order; the first failure (a held `.git/config.lock`: exit 255) stops them and throws |
 | Keep ignored files (`.KeepIgnored.cs`, `.Branches.cs`, D193, D196, D221) | The five reads `FindIgnoredInTheWayOfMergeAsync(into, source)`, `FindIgnoredInTheWayOfCommitsAsync(commits, revert, mergeParent)`, `FindIgnoredInTheWayOfRebaseAsync(tip, onto)`, `FindIgnoredInTheWayOfRebaseAsync(plan)` and `FindIgnoredInTheWayOfStashAsync(stash)`, and the required `keepIgnored` of `CheckoutBranchAsync`, `CheckoutTrackingBranchAsync`, `CheckoutDetachedAsync` (one overload in place of phase 5's two), `CreateBranchAsync` and `MergeAsync`, which put `--no-overwrite-ignore` just before the positional arguments; `CreateBranchAsync` also takes a required `noTrack` (`git branch --no-track` or `switch --create <b> --no-track`, D201). See "The ignored-files guard" |
 
-**Git versions** that the code handles. The development machine runs Git 2.36; CI runs Git
-2.56.0.windows.2 (Windows, since 2026-10-15), 2.56.0 (macOS), 2.55.0 (`ubuntu-latest`) and 2.43.0
-(the two containers); Git 2.55 is also on the development machine, inside Visual Studio (phase
-5's research used it). Phase 4 found Git 2.55's differences: at a conflict stop
+**Git versions** that the code handles. The development machine runs Git 2.56.0.windows.4 since
+2026-10-28 (D248); it ran 2.36.0.windows.1 before, on which phases 3 to 6 derived their facts. CI
+runs Git 2.56.0.windows.2 (Windows, since 2026-10-15), 2.56.0 (macOS), 2.55.0 (`ubuntu-latest`)
+and 2.43.0 (the two containers); Git 2.55 is also on the development machine, inside Visual Studio
+(phase 5's research used it). Phase 4 found Git 2.55's differences: at a conflict stop
 `rebase-merge/message` ends with a `# Conflicts:` block, left out of the message the stage panel
 fills; `done` and `git-rebase-todo` write each subject as a comment (`pick <sha> # Subject`), and
 the app reads only the command and the SHA; an autostash that conflicts is told in other words, so
@@ -3361,7 +3380,7 @@ region is a `UserControl` in `Views/Shell`.
 |---|---|---|---|---|
 | Repo tabs | `RepoTabsView` | 36 high | `RepoTabs` | Real: one tab per repository (`RepoTab` buttons named by title, `CloseTabButton`), and "+" (`AddRepoButton`, since phase 6 named "Open a new tab") for a new tab. Since phase 6 a dashboard's tab first (`DashboardTab`, `TabIcon` `IconWorkspace`, `ItemStatus` `Workspace`), and the tabs laid out by `RepoTabStripPanel` (D228): they keep 120 to 220 while they and "+" fit, then the widest shrink first down to 80, then they scroll with the active tab whole in view and "+" at the right end (a wheel notch 80, no arrow buttons) |
 | Toolbar | `ToolbarView` | 52 high | `Toolbar` | `FetchButton`, `PullButton`, `PushButton`, `BranchButton`, `StashButton`, `PopButton` are real (see "Toolbar, status bar, conflict banner and auto-fetch"); since phase 5 `UndoButton`, `RedoButton` and `SearchButton` too, with their tooltips as automation help text; since phase 6 `SettingsButton` at the start of the right group, every button's tooltip as help text and its key as `AcceleratorKey`. `ThemeSwitch` works |
-| Left panel | `LeftPanelView` | 260 wide by default; 180 to 520; hidden on a dashboard tab | `LeftPanel` | Real: `FilterBox` and the list `RefList` (`Section`, `RefItem`), with menus, double-clicks and branch drags, and since phase 5 the marks of hidden and soloed branches (`RefHiddenToggle`, `RefSoloToggle`); "Pull requests" stays empty until phase 7 |
+| Left panel | `LeftPanelView` | 260 wide by default; 180 to 520; hidden on a dashboard tab | `LeftPanel` | Real: `FilterBox` and the list `RefList` (`Section`, `RefItem`), with menus, double-clicks and branch drags, and since phase 5 the marks of hidden and soloed branches (`RefHiddenToggle`, `RefSoloToggle`); "Pull requests" stays empty until phase 7a |
 | Commit graph | `CommitGraphView` | The rest; at least 320; while the resolver is open, the right panel's column too; on a dashboard tab all three columns | `CommitGraph` | Real: `WelcomeView` (`OpenRepoButton`, `CloneRepoButton`, `InitRepoButton`, the clone form, since phase 6 the Workspaces section `WorkspacesHeading`, `NewWorkspaceButton`, `WorkspaceList`, `WorkspaceItem`, `NoWorkspacesText`, `WorkspacesNotice`), since phase 6 `DashboardView` (`Dashboard` and its parts, see "The dashboard tab") and `TabWaitingText`, `RepositoryGraphView` (`GraphRows`, `GraphScrollBar`, and since phase 5 the search bar `SearchBar` with `SearchModeButton`, `SearchBox`, `SearchCount`, `SearchProgress`, `SearchPrevious`, `SearchNext`, `SearchClose`, and `GraphReloading`), or in its place `InteractiveRebaseView` (`InteractiveRebaseView`, `RebaseRow`, …), `DiffView` (`DiffView`, `DiffText`, see "Diff view"), `ConflictResolverView` (`ConflictResolver`, `ConflictOurs`, `ConflictTheirs`, `ConflictResult`, …, see "The graph area") or a page of phase 5 (`FileHistory`, `Blame`, `Reflog` and their parts); above any of them, while one shows, `ConflictBanner` (`BannerText`, `BannerContinueButton`, `BannerSkipButton`, `BannerAbortButton`); under them, while the window has it open, the activity log (`ActivityLogSplitter`, `ActivityLog` with `ActivityLogHeader`, `ActivityLogShowReads`, `ActivityLogClose`, `ActivityLogList`, `ActivityLogOperation`, `ActivityLogCall`, `ActivityLogOutput`) |
 | Right panel | `RightPanelView` or `WorkingChangesView` | 400 wide by default; 280 to 720; hidden while the resolver is open and on a dashboard tab | `RightPanel` or `StagePanel` | Real: commit details (`DetailsSubject`, `ParentLink`, `FlatFilesButton`, `TreeFilesButton`, `ChangedFilesTitle`, `FileList` with `ChangedFile` rows, and since phase 5 `AllFilesButton`), `CompareView` while two commits are selected or branches are compared (`Compare`, `CompareFrom`, `CompareTo`, `CompareSwap`, `CompareClose`, `CompareAllDifferences`, `CompareCounts`, `CompareFileList`), `MultiSelectionView` while three or more are selected, or the placeholder; while the working-changes row is selected, the stage panel (`UnstagedFileList` and `StagedFileList` with `StageFileRow` rows and their `RowStageButton`, `RowDiscardButton`, `RowUnstageButton`; `CommitSummary`, `CommitDescription`, `AmendCheckBox`, `CommitButton`, which reads "Continue …" during a list or a rebase, `RestoreBar`) |
 | Status bar | `StatusBarView` | 26 high | `StatusBar` | `CurrentBranch`, `GitStatus`, `OperationStatus`, `OperationProgress`, `OperationCancelButton` and `OperationWaiting` are real, and since phase 5 `ActivityLogToggle`; since phase 6 `StatusWorkspaceIcon` before the workspace's name on a dashboard tab |
@@ -3691,7 +3710,11 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   first on `PATH` the tests against `AuthRemoteServer` fail: it is a trimmed distribution without
   `git http-backend`, which the server runs, and since phase 6 the server says so when it starts
   (plan risk 28); every CI job passes them, `ubuntu-latest`'s Git 2.55 included. Phase 6 checked Git
-  2.56 behaviours locally with MinGit 2.56.0.windows.2 first on `PATH`.
+  2.56 behaviours locally with MinGit 2.56.0.windows.2 first on `PATH`. Since 2026-10-28 the
+  development machine itself runs Git 2.56 (D248), so no machine runs 2.36: the word-for-word
+  assertions that `IsReportGitAsync()` keeps for 2.36 run nowhere, and the classifying parts run on
+  every git; a design's git facts are taken on 2.56, with 2.43 and 2.55 from CI where versions
+  differ.
 - xunit runs the tests of one class (or of one `[Collection]`) one after another and different
   ones side by side, so big test classes are split by subject: `ScenarioTests` and
   `Phase3ScenarioTests`, the pull parity classes by group of settings, and
@@ -3859,7 +3882,10 @@ about 4 minutes in each container. On phase 6's gate commit (run 40059391404) it
 on Windows, 23 min 33 s on macOS, 4 min 21 s on `ubuntu-latest`, and 5 min 50 s and 4 min 56 s in
 the containers; macOS's had reached 43 min 12 s in run 40019921605 (on `a937ca6`, before the
 gate's first round), near the 44 at which the limit is raised. A test project added to the solution is picked up with no
-change to the workflow.
+change to the workflow. The build trim (`Directory.Build.targets`, D239, "Solution layout") applies
+in full on the Windows job, whose Release build and real-window build copy only win-x64's, `win`'s
+and `any`'s native libraries; the macOS, Linux and container jobs lose only the packages' native
+`.pdb` files and keep every platform's libraries.
 
 Two more jobs, both named "bare ubuntu container", start from an empty `ubuntu:24.04`
 container, run `scripts/setup-linux.sh` in it twice (the second run has to find everything in
@@ -3874,9 +3900,9 @@ allowlist: a CI runner's network is open. The first way exists for that reason, 
 default allowlist names Ubuntu's package servers but not the server Microsoft's installer
 downloads from.
 
-CI's gits are newer than the development machine's 2.36: since 2026-10-15 Windows runs
-2.56.0.windows.2, macOS 2.56.0, `ubuntu-latest` 2.55.0 and the two containers 2.43.0 (Ubuntu
-24.04's). Tests must work on all of them; CI is the only check on 2.43 and 2.56.
+CI's gits: since 2026-10-15 Windows runs 2.56.0.windows.2, macOS 2.56.0, `ubuntu-latest` 2.55.0
+and the two containers 2.43.0 (Ubuntu 24.04's). The development machine runs 2.56.0.windows.4
+since 2026-10-28 (D248; 2.36 before). Tests must work on all of them; CI is the only check on 2.43.
 
 ### Package versions
 

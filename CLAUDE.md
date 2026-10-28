@@ -51,8 +51,17 @@ machine".
 3. Read `docs/plan.md`: the Workflow, Visual test gate and "Risks and open decisions" sections, and the section for the current phase.
 4. Read `docs/architecture.md`, `docs/decisions.md`, and the parts of `docs/requirements.md` the phase covers.
 5. Read the previous phase's handoff, `docs/handoffs/phase-<N-1>.md`. None exists until Phase 0 is closed.
-6. If code exists, build it and run the default tests to see the state you inherited, before
-   changing anything. If they fail, fix or report that first. On a Linux machine where
+   Phase 7 is split in two (D241): the phases run 6, 7a, 7b, 8. Wherever this file counts phases
+   (the previous phase, N-1, N+1), the phase before 7a is 6, the one before 7b is 7a and the one
+   before 8 is 7b, and the docs write `7a` and `7b` for N (`docs/handoffs/phase-7a.md`,
+   `docs/test-reports/phase-7a.md`, "Start phase 7a", "Phase 7a accepted"); how the code and the
+   test harness name them is for 7a's design (the phase 6 handoff, "For the next phase").
+6. If code exists, see the state you inherited before changing anything: build it, run the test
+   classes of the areas the latest commits changed, and read the result of CI's last run on the
+   branch (a push that changes only docs starts none, so it is the run of the last commit that
+   changed anything else, which `docs/status.md`'s CI section names; Commands). Run the whole
+   default run (on the Windows machine `bash scripts/heavy-run.sh`) only when the machine has
+   changed (git, the .NET SDK, a Windows update) or the tree holds code that is not pushed (D245). If anything fails, fix or report that first. On a Linux machine where
    `dotnet --version` does not print 10.x, run `bash scripts/setup-linux.sh` first.
 7. If the working tree has uncommitted changes, read the Notes in `docs/status.md` and the diff,
    then finish or commit them before starting anything new. Do not discard work you do not understand.
@@ -71,7 +80,9 @@ Then, to **start a phase**:
    commit. Commit.
 4. Write the phase's visual checks into `docs/test-reports/phase-N.md` from the template, each
    with concrete steps and a concrete expected result, and each marked with whether it is
-   repeated in the real window. Commit this before building the UI the checks test.
+   repeated in the real window. Commit this before building the UI the checks test. Since D244
+   each part's checks are written and committed just before its package is built, still before
+   its UI (`docs/plan.md`'s Visual test gate, step 1).
 
 To **resume a phase**: continue from "Next step" in `docs/status.md`.
 
@@ -81,7 +92,7 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built (a phase's `docs/status.md` does not hold it: take it from `docs/status.md` on `master` before the merge, as phase 4's acceptance wrote it: `git show 50cf35c:docs/status.md`; phase 5's acceptance added a sentence that points at the phase's own checklist in the merge's second parent, and that is the current form: `git show acdac12:docs/status.md`); the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
+| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built (a phase's `docs/status.md` does not hold it: take it from `docs/status.md` on `master` before the merge, as phase 4's acceptance wrote it: `git show 50cf35c:docs/status.md`; phase 5's acceptance added a sentence that points at the phase's own checklist in the merge's second parent, `git show acdac12:docs/status.md`, and D241 added the weekly share of the plan's allowance on 2026-10-28; the current form is always the one on `master` before the merge, `git show HEAD^1:docs/status.md` once the merge is made); the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
 
 ## Rules
 
@@ -120,8 +131,10 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
   then changes anything other than docs on it sets the state back in the same commit: to "In
   progress" on the Windows machine, where the gate is then run again, and to "Blocked" anywhere
   else. The same commit unticks the gate and the closing steps in the Progress checklist and
-  rewrites "Next step" (both passes of the gate again on one commit on the Windows machine,
-  then closing step 6 with the new "Gate commit") and, when "Blocked", "Waiting on the owner".
+  rewrites "Next step" (both passes of the gate again on one commit on the Windows machine, or
+  the real-window pass alone when the change is only to `tests/VisualCommit.RealWindowTests`, as
+  `docs/plan.md`'s Visual test gate allows (D246); then closing step 6 with the new "Gate
+  commit") and, when "Blocked", "Waiting on the owner".
 - Expected results for visual checks are written before the UI exists. Changing one afterwards
   needs a reason recorded in the test report.
 - CI runs on GitHub when a branch is pushed. After pushing, read the result with `gh run list`
@@ -146,7 +159,12 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 
 ## Closing a phase
 
-1. Run the visual test gate and complete `docs/test-reports/phase-N.md`.
+1. Run the visual test gate and complete `docs/test-reports/phase-N.md`. Before its first
+   counted round (a round whose passes stand as the gate if they pass), once the phase's scripted
+   walk-through has saved its pictures on that machine (the real-window checks compare their
+   captures with them and fail without them), run the new phase's real-window checks twice on
+   their own, with the owner told and present (D246; `docs/plan.md`'s Visual test gate, step 4).
+   The two runs are made once, not again before the rounds that follow a fix.
 2. Update `docs/architecture.md` so it describes what is actually built.
 3. Update `docs/plan.md`: move anything this phase did not deliver into the phase that now owns it, and update the risks.
 4. Write `docs/handoffs/phase-N.md` from `docs/handoffs/TEMPLATE.md`.
@@ -156,11 +174,16 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
    it how to build, run and test the app and how it would begin the next phase. Fix every gap it
    hits in the docs. Commit.
 6. Update `docs/status.md`: links to the handoff and report, the last CI run of the branch with
-   its result in each job, the "Gate commit" (the commit both passes of the gate ran on), and
-   anything waiting on the owner.
+   its result in each job, the "Gate commit" (the commit both passes of the gate ran on, or, by
+   D246, the real-window pass's commit when it changes only `tests/VisualCommit.RealWindowTests`
+   after the commit the default run ran on), and anything waiting on the owner.
    Set the phase to "Awaiting acceptance" only if the whole gate passed: a session on the
    Windows machine has run `dotnet test` and the real-window pass on the last commit that
-   changed anything other than docs, and has inspected the pictures of both. The only part that
+   changed anything other than docs (or, by D246, the real-window pass on it and `dotnet test`
+   on the last commit the default run ran on, when both conditions of `docs/plan.md`'s Visual
+   test gate, step 6, hold: the `git diff --stat` between the two that leaves out
+   `tests/VisualCommit.RealWindowTests` and the docs prints nothing, and the phase's list of
+   pictures shows the scripted pictures unchanged), and has inspected the pictures of both. The only part that
    may be missing is one the plan itself makes conditional, such as the 1920×1080 real window on
    a screen too small for it. If a check failed or any other part of the gate could not run, set
    the phase to "Blocked" and say why and who can unblock it. Commit.
@@ -234,11 +257,16 @@ the phase. Otherwise:
   the Windows machine; start a session there and say "Continue". Under "Next step" write what
   that session has to do:
   1. set the phase to "In progress";
-  2. run `dotnet test` and the real-window pass on one commit, fix what fails and run both
-     again, and inspect every picture of both passes. The real-window code, with the harness
+  2. run the phase's scripted walk-through, so that its pictures exist on that machine, and then
+     the new phase's real-window checks twice on their own, with the owner told and present
+     (closing step 1); then run `dotnet test` and the real-window pass on one commit, fix what
+     fails and run both again (the real-window pass alone when a fix changes only
+     `tests/VisualCommit.RealWindowTests`, as `docs/plan.md`'s Visual test gate, step 6, allows,
+     D246), and inspect every picture of both passes. The real-window code, with the harness
      items that `docs/status.md` marks "written, not run", has only been compiled until then;
   3. judge the phase's "Done when" items that are judged on the Windows machine, named one by
-     one; if that changes anything other than docs, do step 2 again on the new commit;
+     one; if that changes anything other than docs, do step 2 again on the new commit, without
+     the two runs of the real-window checks on their own, which are made once;
   4. finish the report with its own results, and bring the handoff, `docs/architecture.md` and
      `docs/plan.md` up to date with what the Windows run changed and measured;
   5. closing steps 5 to 7. The cold-read check is left to that session on purpose: it reads the
@@ -262,11 +290,13 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Run the app (needs a desktop) | `dotnet run --project src/VisualCommit.App` |
 | Default tests: unit, integration, headless UI and the scripted visual walk-through | `dotnet test` |
 | One test project | `dotnet test --project tests/VisualCommit.Git.Tests` |
+| A heavy run under the lock, one at a time on the laptop (D245): a whole project or the whole default run | `bash scripts/heavy-run.sh` followed by `dotnet test`'s own arguments, which it runs at the repo root from any folder of the repo, for example `bash scripts/heavy-run.sh --project tests/VisualCommit.Git.Tests --filter-class "*HangClockTests"` or `bash scripts/heavy-run.sh --project tests/VisualCommit.Git.Tests`; with no arguments it is the whole default run (run so far only with a stand-in `dotnet`). `VISUALCOMMIT_HEAVY_RUN_WAIT_SECONDS=12 bash scripts/heavy-run.sh …` gives up after 12 seconds of waiting with exit code 75 (`0`: at once) |
+| Who holds the heavy-run lock, and stopping that run (Git Bash) | `cat "$(cygpath -u "$TMP")/VisualCommit.Tests/heavy-run.lock/holder"`; then `kill -TERM <pid>` (or `-INT`, `-HUP`), with the file's `pid=` (not its `windows_pid=`), stops that run's `dotnet test` and frees the lock |
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
 | One phase's scripted checks | `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase1Checks"` for phase 1 (`"*Phase2Checks"` for phase 2); phases 3 and 4 have a project each: `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (one part of it: `--filter-class "*Phase3ChecksD"`), `dotnet test --project tests/VisualCommit.VisualTests.Phase4`; phase 5 has two: `dotnet test --project tests/VisualCommit.VisualTests.Phase5` (parts A, B, F and P) and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (part U, the undo checks); phase 6 has two: `dotnet test --project tests/VisualCommit.VisualTests.Phase6` (parts W, K, S and G; one part of it: `--filter-class "*Phase6ChecksW"`) and `dotnet test --project tests/VisualCommit.VisualTests.Phase6Look` (part L, the look: one check `--filter-method "*Check_L27*"`). To run one of phase 1's checks alone, name its class: `--filter-method "*Phase1Checks.Check_13*"` (phase 2 has a `Check_13` too) |
 | Scripted visual walk-through only | `dotnet test --project tests/VisualCommit.VisualTests` (phases 0 to 2), then `dotnet test --project tests/VisualCommit.VisualTests.Phase3` (phase 3), `dotnet test --project tests/VisualCommit.VisualTests.Phase4` (phase 4), `dotnet test --project tests/VisualCommit.VisualTests.Phase5` and `dotnet test --project tests/VisualCommit.VisualTests.Phase5Undo` (phase 5), `dotnet test --project tests/VisualCommit.VisualTests.Phase6` and `dotnet test --project tests/VisualCommit.VisualTests.Phase6Look` (phase 6; both save into phase 6's one folder, so run them one after the other: one `dotnet test` at the root empties the folder once for all its projects, two separate commands at once would each empty it) |
 | Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 6 when left out, which runs `VisualCommit.VisualTests.Phase6`, or `VisualCommit.VisualTests.Phase6Look` when the filter names part L, such as `"*Check_L27*"`; for phase 5, given as `5`, it runs `VisualCommit.VisualTests.Phase5Undo` when the filter names part U, such as `"*Check_U16*"`, and `VisualCommit.VisualTests.Phase5` otherwise) |
-| Real-window pass (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` |
+| Real-window pass (Windows only) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`: the pass is a whole-project run, so on the laptop it runs under the heavy-run lock (D245) and no other heavy run starts beside it; without the lock it is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (the script has not run the pass yet) |
 | One real-window check alone (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*<test name>*"`, for example `--filter-method "*Check_S14*"` (run so at phase 6's gate for S14) |
 | Compare pictures with reference pictures (a gate's inspection; needs Python with Pillow and NumPy) | `python scripts/compare-pictures.py <reference folder> artifacts/visual <output folder>`: a difference picture per changed picture and `summary.md`, grouped by the window regions the changes lie in |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
@@ -302,6 +332,29 @@ What to know about them:
   Windows or macOS Test step passes 44 minutes, four fifths of it (D232, D186's rule). Phase 1's checks load and clone a 100k-commit repo,
   built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
+- During a phase, builders and fixers run only the test classes they touch, with plain
+  `dotnet test`. Whole-project runs and the run at the root are the lead's, one at a time on the
+  laptop through `scripts/heavy-run.sh` (D245); the full default run runs at the gate, and when the
+  lead merges a wave. The script's lock is the folder `heavy-run.lock` in the tests' temporary root
+  (`VisualCommit.Tests` in `%TMP%` on Windows, `$TMPDIR` or `/tmp` elsewhere); a second run waits,
+  says once who holds the lock and looks again every 10 seconds, and takes over a lock whose
+  script and `dotnet test` have both ended. Its exit code is `dotnet test`'s, 75 when it gave up
+  waiting. Stop a run from Git Bash with `kill` (Commands): Claude Code's TaskStop ended only the
+  top shell of a background command on the laptop, and a run started with `&` from a shell
+  without job control ignores SIGINT. A run ended outright keeps the lock until its `dotnet test`
+  ends. CI does not use the script; it has not run on Linux or macOS yet.
+- The build trims the platform-specific files that packages bring under `runtimes/`, above all
+  SkiaSharp's and HarfBuzzSharp's native libraries for 21 platforms (`Directory.Build.targets`,
+  D239): it copies no native `.pdb` file (all of them are those two packages'), and on Windows, in
+  a build without a `RuntimeIdentifier`, only the build machine's platform, from every package
+  (`runtimes/win-x64`, with `win` and `any`; ANGLE's other Windows builds, Avalonia.Native's macOS
+  library and Onigwrap's other platforms' builds go too). A test project's `bin/Debug` is about 49 MB instead of about
+  589, and the main tree's `bin` and `obj` 0.64 GB instead of 6.96 GB for the same 40 folders
+  (2026-10-28; the other 8, 2.27 GB of Release and Debug outputs nothing local runs, were removed
+  and not built again). `-p:VisualCommitNativeSymbols=true`
+  copies the `.pdb` files again and `-p:VisualCommitAllRuntimes=true` every platform's libraries
+  (either also as an environment variable); a portable `dotnet publish` needs the second (phase
+  8). Builds on macOS and Linux keep every platform's libraries.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
   Every run that takes screenshots, `dotnet test` at the root included, empties that folder
   first and writes it again. `docs/test-reports/phase-N-pictures.sha256` lists the pictures that
@@ -312,7 +365,11 @@ What to know about them:
   differ, and a picture new since the list is not named at all. A gate writes its list right
   after its two passes, before anything else runs, with
   `find artifacts/visual -name '*.png' | sort | xargs sha256sum > docs/test-reports/phase-N-pictures.sha256`,
-  and commits it once the inspection has passed.
+  and commits it once the inspection has passed. A round that runs only the real-window pass
+  (D246; `docs/plan.md`'s Visual test gate, step 6) first checks the list written after the round
+  before: every scripted picture in it must still be the same file
+  (`tr -d '\r' < docs/test-reports/phase-N-pictures.sha256 | grep '/scripted/' | sha256sum -c --quiet`
+  prints nothing); it writes the list again after that pass.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
   app on the desktop and moves the real mouse for about 28 minutes (phases 0 to 6; 27 min 39 s at phase 6's gate): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop,
@@ -351,7 +408,10 @@ What to know about them:
 Prerequisites on any machine: .NET 10 SDK, Git 2.30 or newer (the app's minimum; the tests need
 2.32 or newer, which can leave out the user's git configuration), and a way to read CI results: the
 GitHub CLI (`gh`), signed in, or `curl`. `scripts/setup-linux.sh` installs what a Linux machine
-lacks.
+lacks. The Windows development machine runs Git 2.56.0.windows.4 since 2026-10-28, first on
+`PATH` (`C:/Program Files/Git/ucrt64/bin/git.exe` in Git Bash, `C:\Program Files\Git\cmd\git.exe`
+from PowerShell, the same version), where it ran 2.36 before; CI runs 2.43 to 2.56,
+so no machine runs 2.36 any more (D248).
 
 ## Docs map
 
@@ -368,5 +428,5 @@ lacks.
 | `docs/phase-3-design.md` | Phase 3's design, kept as history; phase 3's decisions (D77 to D133), report and handoff cite its sections as "design N.N" |
 | `docs/phase-4-design.md` | Phase 4's design, kept as history; phase 4's decisions (D139 to D152), report, handoff, status and plan outcome cite its sections as "design N.N"; its sections 14.1 to 14.5 say what the build and the review settled |
 | `docs/phase-5-design.md` | Phase 5's design, kept as history; phase 5's decisions (D153 to D186), report, handoff, status and plan cite its sections as "design N.N"; its sections 15.8 and 15.9 say what the report, the build, the reviews and the gate settled |
-| `docs/before-phase-7-review.md` | For the session before phase 7: the owner's request to review phase 6's cost in time, tokens and disk, what was measured, what to investigate and deliver; deleted when the review is done |
 | `docs/phase-6-design.md` | Phase 6's design, kept as history; phase 6's decisions (the design's D203 to D230), report, handoff, status and plan cite its sections as "design N.N"; its "As built" notes and the lead's rulings say what the build and the review settled (what the gate found is in the report's "Found by the gate" and the handoff); its section 16.2 holds the plan's changes, section 18 the work packages |
+| `docs/review-before-phase-7.md` | The review of phase 6's cost in time, tokens and disk (2026-10-26), kept as history: what was measured, the causes and the ranked proposals; D239 to D248 cite its sections and proposal ids, and a proposal that no decision names is still only a proposal |

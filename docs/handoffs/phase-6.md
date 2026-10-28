@@ -430,7 +430,7 @@ it amends:
 | The push dialog's "Set as upstream" to a branch the remote's lines do not fetch: git writes the keys and says so, while the app shows no upstream | Low | design 10.8 #5 |
 | A `remote-branch-…` backup phase 5 saved before a deletion refused under a renaming refspec carries the tracking name; its "Push … back" would create that wrong name on the remote, until the clean-up removes the backup (30 days or more than 50 backups, D139; longer while an undo entry needs it, D171) | Low, and it ages out | design 10.8 #6 |
 | A mirror fetch line `+refs/*:refs/*` on a remote beside origin's default line makes every origin tracking ref fetched by two remotes (R1): their checkout, the drop's pushes and the deletion are disabled, and "Set upstream…" leaves them out | Low | design 10.8 #7 |
-| The push guard refuses some pushes that would not stop the fetch (a new branch `pr/fix-typo` under GitHub's pull-request line; any new branch under two pattern lines of one remote that rename into two namespaces); kept on purpose, a terminal push still works | Low; phase 7's pull-request work meets it | design 10.8 #8, 10.4 |
+| The push guard refuses some pushes that would not stop the fetch (a new branch `pr/fix-typo` under GitHub's pull-request line; any new branch under two pattern lines of one remote that rename into two namespaces); kept on purpose, a terminal push still works | Low; phase 7a's pull-request work meets it | design 10.8 #8, 10.4 |
 | With a mirror line before a renaming line, git names a branch's upstream `main` and the app `origin/main` (GD15's fallback) | Cosmetic | design 10.8 #9 |
 | A fetch line that writes into `refs/heads/` (`git remote add --mirror=fetch`) overwrites local branches on every fetch, Fetch all and auto-fetch included, as `git fetch` does, and no backup keeps a local commit it drops. `FetchRefspecs.DestinationsOf` finds such lines; nothing skips or backs them up yet | Medium where such a line exists: work can be lost as on the command line. In plan.md's backlog ("Left out of phase 6") | design 10.8 #10 |
 | Fork-point gaps of the ignored-files check: in fork-point mode git also rewrites a branch that contains its upstream when the upstream was moved back since, where the check's reads say "up to date" for a linear branch, so an ignored file the old upstream tracks can be overwritten as git would; and git's own range can reset to other commits than the check's boundaries | Low; plan risk 31 | design 9.6 |
@@ -439,7 +439,7 @@ it amends:
 | Nothing is checked again on Continue, Skip or Abort: an ignored file made during a stop at a path a later pick writes, commits added at an `edit` stop, a Skip (a reset to HEAD) and an Abort (the original branch's files written back) are not covered | Low | design 9.14 |
 | Between the app's `check-ignore` and git's write lies one process start (40 to 300 ms on the laptop): a file another program makes there then is overwritten as git would (but in a fast-forward, which git's option refuses), and one removed then makes a refusal for nothing | Low; plan risk 31 | design 9.12 |
 | Git 2.30 to 2.33's rules for ignored files were not tried | For phase 8's supported versions | design 0.4, plan risk 31 |
-| A run's prompt group reuses an answer by its prompt text across the run's repositories (a Cancel included) until the run ends: git's text names the URL and the user, so the same text asks for the same credential, but two repositories of one host signed in as different users through one prompt text would get the first answer | Low; phase 7's accounts make it likelier | design 4.4 |
+| A run's prompt group reuses an answer by its prompt text across the run's repositories (a Cancel included) until the run ends: git's text names the URL and the user, so the same text asks for the same credential, but two repositories of one host signed in as different users through one prompt text would get the first answer | Low; phase 7a's accounts make it likelier | design 4.4 |
 | A Fetch, Pull or Push the user starts in a tab, or a row's own, while another worktree of the repository (or a second tab on the same worktree) fetches, is not kept apart: one ends "Fetch failed" with git's lines; nothing is left behind and the next fetch works | Low | design 0.2, 4.3, plan risk 33 |
 | Under the owner's `core.fsmonitor=true` every repository a dashboard reads starts a git fsmonitor daemon; accepted (Q5) | They pile up on the development machine; stop them before a gate | design 0.1, 2.10, D207 |
 | Under `GIT_OPTIONAL_LOCKS=0` (D47) a stale index makes every status read hash the touched files again (3.1 s per read in a 20,000-file tree), for the dashboard and the tabs alike | When users report slow reads | design 0.1, plan risk 29 |
@@ -451,11 +451,11 @@ it amends:
 | Every text box's placeholder (the `Filter` boxes since phase 1, the palette's in `l31c`, the settings screen's) is drawn in `VcTextSecondaryBrush` at Fluent's watermark opacity, 0.5: `#616773` on `#272C36` dark (about 2.5:1), `#ADB2B8` on `#FFFFFF` light (about 2.1:1, lighter than the disabled colour). Found at the gate's inspection; not changed, as it would change nearly every picture with a text box | Accessibility; moved to phase 8's accessibility pass, for the owner to confirm (Waiting on the owner) | plan.md phase 8; the report's part L "Colours" convention and L31 |
 | The activity log draws a read whose exit 1 is git's normal answer as a failure: phase 5's rule in `ActivityLogRows` draws every exit code other than 0 in the danger colour, which since phase 6 includes the refs read's `git config --null --get-regexp ^remote\.` in a repository without a remote (phase 5's `a2d-show-reads`), as for `git symbolic-ref -q HEAD` on a detached HEAD and a `git config --get` of an unset key | Cosmetic, with "Show reads" on; in plan.md's backlog | `ViewModels/Panels/ActivityLogRows.cs`; design 10.2 |
 | In a centred text box Avalonia 12.1.3 draws the caret where the end of the text would lie if it were left-aligned: `s16b` shows the auto-fetch minutes box's caret at x 712, inside `61`, while the box's caret is at its end (`SettingsDialogViewTests`). The minutes box is the app's only centred text box. Found at round 4's inspection and accepted | Cosmetic, while that box has the focus | `AutoFetchMinutesBox` in `Views/Dialogs/SettingsDialogView.axaml`; the report's "Run" |
-| `ShellDriverTests.Wheel_reaches_the_control_under_the_mouse_with_the_sign_of_a_real_wheel` hit-tests before the window's first frame and can find no control on a slow machine: it failed once in the container with the SDK from Ubuntu's packages on the gate's commit (run 40059391404) and passed on the job's second attempt | A flaky test: a red CI job until it is run again | `tests/VisualCommit.App.Tests/ShellDriverTests.cs`; fix in phase 7 by waiting for the hit test; the report's "Found by the gate" item 5 |
+| `ShellDriverTests.Wheel_reaches_the_control_under_the_mouse_with_the_sign_of_a_real_wheel` hit-tests before the window's first frame and can find no control on a slow machine: it failed once in the container with the SDK from Ubuntu's packages on the gate's commit (run 40059391404) and passed on the job's second attempt | A flaky test: a red CI job until it is run again | `tests/VisualCommit.App.Tests/ShellDriverTests.cs`; fix in phase 7a by waiting for the hit test; the report's "Found by the gate" item 5 |
 | The run time: the default run 56 min 25 s at the gate (5,037 tests in nine projects, rested; 44 min 34 s to 56 min 25 s over its four rounds), the real-window pass 27 min 39 s (67 tests). CI's Test steps on the gate's commit: Windows 24 min 37 s, macOS 23 min 33 s. During the build and the gate Windows' reached 35 min 0 s (run 40027897278, on `774464d`) and macOS's 43 min 12 s (run 40019921605, on `a937ca6`), within a minute of the 44 at which the lead raises D232's 55; before D232, macOS's had passed 32 minutes (run 39943973579) | Every full run, the gate and CI | plan risks 8, 12, 18; D232, D237, D134 |
 | Q1 measured 1,805 ms within the gate's counted pass (round 4, `b561b7c`) and 1,264 ms within round 1's (`774464d`), each after a 10-minute rest; between them the laptop ran three more default runs and passes, so the spread is the machine's warmth, and phase 6 adds nothing to Q1's path (design 10.2) | A hot laptop fails a gate by itself; within the counted pass 195 ms remained below the 2,000 ms limit | plan risk 10 |
-| The comment at the top of `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj` gives the pass of phases 0 to 5 as about 25 minutes and phase 6's part as design 17.6's estimate, "about 5 to 8 minutes more"; the pass of phases 0 to 6 took 27 min 39 s at the gate. The gate did not update it: changing the file after the gate's commit would have changed more than docs | A stale comment | fix with phase 7's first code commit |
-| `scripts/time-scripted-check.sh` takes phase 6 when no phase is given, and sends a phase above 6 to `tests/VisualCommit.VisualTests.Phase<N>` | Right for phase 7 once its project exists; the default changes with it | `scripts/time-scripted-check.sh` |
+| The comment at the top of `tests/VisualCommit.RealWindowTests/VisualCommit.RealWindowTests.csproj` gives the pass of phases 0 to 5 as about 25 minutes and phase 6's part as design 17.6's estimate, "about 5 to 8 minutes more"; the pass of phases 0 to 6 took 27 min 39 s at the gate. The gate did not update it: changing the file after the gate's commit would have changed more than docs | A stale comment | fix with phase 7a's first code commit |
+| `scripts/time-scripted-check.sh` takes phase 6 when no phase is given, and sends a phase above 6 to `tests/VisualCommit.VisualTests.Phase<N>` | For phase 7a once its project exists: 7a's design names that project (phase 7 was split, D241), and the default changes with it | `scripts/time-scripted-check.sh` |
 | Phase 5's other known issues are not known to be fixed: its handoff's table, but for the seven local fetch and pull failures (explained as plan risk 28), the csproj's stale comment and the timing script, which phase 6's step 4 fixed; and phase 4's and earlier ones | As there | [phase 5's handoff](phase-5.md) |
 
 ## Things that cost time
@@ -537,6 +537,18 @@ it amends:
   with the repository's path ("Visual Git") can be refused as unverifiable, so run them one by one.
 
 ## For the next phase
+
+Read this section with the changes of 2026-10-28, made after it on `master`. Phase 7 was split
+into 7a, "Hosting foundation and GitHub", and 7b, "Azure DevOps and GitLab" (D241, `plan.md`):
+read "phase 7" below as 7a, which takes every item carried into phase 7, and decide plan risks 4
+and 5 with the owner before 7a's design. D242 to D247 change how the phase is built (briefs and
+bounded agents, a shorter design with a lighter review, checks written per part, test classes
+during the build with whole-project runs through `scripts/heavy-run.sh`, the real-window rounds,
+inspectors' batches; `plan.md`'s "Workflow" and "Visual test gate"). The development machine's git
+is 2.56.0.windows.4 (D248): where this section says git 2.36, read 2.56. Git 2.56 and the trimmed
+build (D239) are new since this gate, so the baseline run of step 3 below is a full run that D245
+allows. How 7a names what carries a phase's number (`phase-7a`, `Phase7a`, the timing script's
+default in step 6) is for its design.
 
 Reuse:
 
@@ -645,7 +657,7 @@ Risks to watch:
     opacity, about 2.5:1 dark and 2.1:1 light, and the lead left it at the gate's inspection, as raising
     it would change nearly every picture with a text box.
 
-  When the owner answers, the session records each answer as a decision (D239 on). When the owner
+  When the owner answers, the session records each answer as a decision (D249 on; D239 to D248 went to the review before phase 7). When the owner
   confirms the placeholders' move to phase 8, it removes "for the owner to confirm" from plan.md
   (phase 8's item and phase 6's "Outcome"); if the owner says no, it moves the item out of phase 8
   into phase 7, as work to do there.

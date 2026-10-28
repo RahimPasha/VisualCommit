@@ -1,5 +1,8 @@
 # Review before phase 7: why phase 6 cost so much, and what to change
 
+> Applied on 2026-10-28: D1 and D2 as D239; T3, N1, D7 and D6 as D240; T11/P9 and T1/P10 as D241; T2/P1, T9 and T8/P12's models as D242; P2/T5 and P4 as D243; T6/P3 as D244; S2/N2 and S1 as D245; N3 and R3 as D246; T7/P11's smaller batches, without triage, as D247; and question 8 (the laptop's git, now 2.56) as D248.
+> Every other proposal here is still only a proposal. This file is kept as history; its brief, `docs/before-phase-7-review.md`, was deleted (it is in `be63d89`).
+
 Findings for the owner, written on 2026-10-26 on `master` at `be63d89`, after phase 6's acceptance
 and before "Start phase 7". The brief was `docs/before-phase-7-review.md`; this file answers its
 "What to deliver", item 1. Nothing has been changed yet. Each proposal waits for the owner's answer,

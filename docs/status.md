@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-24
+Last updated: 2026-10-28
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -16,7 +16,8 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 4. Rebase and conflict resolution | Done | `phase/4-rebase-conflicts` | [phase-4](handoffs/phase-4.md) | [phase-4](test-reports/phase-4.md) |
 | 5. History, traceability and undo | Done | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
 | 6. Multi-repo and productivity | Done | `phase/6-multi-repo` | [phase-6](handoffs/phase-6.md) | [phase-6](test-reports/phase-6.md) |
-| 7. Hosting | Not started | `phase/7-hosting` | | |
+| 7a. Hosting foundation and GitHub | Not started | `phase/7a-hosting-github` | | |
+| 7b. Azure DevOps and GitLab | Not started | `phase/7b-hosting-azure-gitlab` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
 
 States: Not started, In progress, Blocked (cannot continue or close without the owner, or without
@@ -29,18 +30,23 @@ None in progress. Phase 6 was accepted by the owner on 2026-10-24 and merged int
 commit `3f34c87`); its gate ran on `b561b7c`. Phase 5 was accepted on 2026-10-17 (merge commit
 `c299939`), phase 4 on 2026-10-12 (merge commit `ce5f337`), phase 3 on 2026-10-11 (merge commit
 `8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit
-`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). The next phase to start is phase 7.
+`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). The next phase to start is phase
+7a: phase 7 was split into 7a and 7b on 2026-10-28 (D241).
 
 Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
-that both passes of the gate ran on; "Phase N accepted" checks that nothing but docs changed
-after it.
+that both passes of the gate ran on (or, by D246, the real-window pass's commit when it changes
+only `tests/VisualCommit.RealWindowTests` after the commit the default run ran on); "Phase N accepted" checks that
+nothing but docs changed after it.
 
 ### Progress
 
 Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
 "Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
 steps from `CLAUDE.md` and a step for reading the CI run of the gate's commit. Each item is ticked
-in the commit that completes it. Number the steps plainly; do not label them C1, C2 and so on,
+in the commit that completes it, and each tick, like the start of each stage, records the share
+of the plan's weekly allowance used at that point, as `/usage` or the status line's seven-day
+percentage shows it (D241): a phase or a stage starts only when the share left covers it
+(`plan.md`, "Workflow"). Number the steps plainly; do not label them C1, C2 and so on,
 which are requirement numbers. Phase 6's checklist, with a note on each step, is in this file as
 of `3f34c87`'s second parent (`git show phase/6-multi-repo:docs/status.md`).
 
@@ -65,7 +71,7 @@ pass" green), `macos-latest` (25 min 22 s; Test step 23 min 33 s), `ubuntu-lates
 step 4 min 21 s) and the two "bare ubuntu container" jobs (7 min 16 s and 7 min 45 s; Test steps 4 min
 56 s and 5 min 50 s). The container with the SDK from Ubuntu's packages passed on its second attempt:
 its first failed `ShellDriverTests.Wheel_reaches_the_control_under_the_mouse_with_the_sign_of_a_real_wheel`
-(a hit test before the window's first frame on the slow container; for phase 7), as phase 4's flaky
+(a hit test before the window's first frame on the slow container; for phase 7a), as phase 4's flaky
 test did on `master`. The commits after it change docs only, which start no run. The gate's earlier
 rounds had runs 40027897278 (`774464d`), 40044430603 (`b7da110`) and 40051904024 (`639db4a`), all five
 jobs green; macOS's Test step reached 43 min 12 s in run 40019921605 on `a937ca6`, near D232's 44.
@@ -168,13 +174,14 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Before phase 7, the owner asked on 2026-10-26 for a review of why phase 6 cost so much time, tokens
-and disk space, and for the agreed improvements to be made first: the brief, with what was measured,
-is [before-phase-7-review.md](before-phase-7-review.md). The review's findings and ranked proposals
-are in [review-before-phase-7.md](review-before-phase-7.md) (2026-10-26); they wait for the owner's
-answers, each recorded as a decision (D239 on), and the agreed changes are then made on `master`. After it, wait for the owner to say "Start
-phase 7". Its first steps, the order to take them in, and the open points to put to the owner before
-its design are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase".
+Wait for the owner to say "Start phase 7a". Phase 7 is split into 7a, "Hosting foundation and
+GitHub", and 7b, "Azure DevOps and GitLab" (D241; `plan.md`). The first steps of 7a, the order to
+take them in, and the open points to put to the owner before its design (plan risks 4 and 5 among
+them) are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the
+note at its start: D241 to D248 change how phases are built (`plan.md`'s "Workflow" and "Visual
+test gate", `CLAUDE.md`). They come from the review of phase 6's cost that the owner asked for on
+2026-10-26, [review-before-phase-7.md](review-before-phase-7.md), kept as history; its proposals
+that no decision names are still proposals, some of them to try during phase 7a (its section 5).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -184,19 +191,43 @@ every commit.
 - Nothing is in flight. `master` holds everything; the working tree was clean, and no worktree,
   `wip/*` or `worktree-*` branch was left, when phase 6 was merged (`3f34c87`). The gate's
   reference pictures, inspection verdicts and the lead's rulings lie outside the repository in
-  `D:/Projects/Personal/gate6-reference/` and `D:/Projects/Personal/gate6-inspection/`; phase 7's
+  `D:/Projects/Personal/gate6-reference/` and `D:/Projects/Personal/gate6-inspection/`; phase 7a's
   gate makes its own references on `master` if it changes earlier pictures in many places (phase 6's
   handoff, "Running the visual gate").
-- **CI's gits differ from the development machine's.** Since 2026-10-15 the jobs run Windows
-  2.56.0.windows.2 (2.55.0 before), macOS 2.56.0 (Homebrew), `ubuntu-latest` 2.55.0 and the two
-  containers 2.43.0. On 2.56 a `git stash pop` refused by local changes exits 128, not 1: phase 3's
-  check 15b accepts both (`281dd69`), as phase 5's report records under "Changes to expected
-  results" (phase 3's report says "exit 1" in 15b's step 2 and in T5). Only 2.36 and 2.55 are on
-  the development machine; CI is the only check on 2.43 and 2.56 (plan risk 26), unless a session
-  downloads MinGit 2.56 for a check by hand (phase 6's handoff, "Things that cost time").
+- **The review before phase 7 was applied on 2026-10-28** (D239 to D248, on `master`): the build
+  trim (`Directory.Build.targets`, D239), the owner's Claude Code settings and a one-time clean-up
+  of disk (D240), the split of phase 7 and the weekly allowance (D241), the rules for agents, the
+  design, the checks, the test runs with the heavy-run lock (`scripts/heavy-run.sh`), the
+  real-window rounds and the inspection (D242 to D247; `plan.md`'s "Workflow" and "Visual test
+  gate", `CLAUDE.md`), and the development machine's git 2.56 (D248). The review's other proposals
+  stay proposals. D240's connectors switch is still to be checked, and not known to work until it
+  is: the next session's `/mcp` list should show no claude.ai connectors (the sub-agents of the
+  session that set it, started after `.claude/settings.local.json` was written, still had their
+  tools, Gmail, Figma and Calendar among them). The brief, `before-phase-7-review.md`, was deleted (it is in
+  `be63d89`).
+- **The build output is trimmed** (D239): on 2026-10-28, after a clean rebuild of the main tree
+  (`dotnet build` at the root and the real-window project's Release build), the 40 `bin` and `obj`
+  folders under `src/` and `tests/` that were built again took 0.64 GB instead of 6.96 GB (the
+  other 8, 2.27 GB of outputs nothing local runs, were removed and not built again), a test
+  project's `bin/Debug` about 49 MB instead of about 589, and D: had 27.2 GB free. The trim takes
+  every package's files for other platforms on Windows, not only SkiaSharp's and HarfBuzzSharp's. The real-window pass has not run on the trimmed
+  build yet; CI's Windows job first builds and tests it on the push of `master` that adds the file
+  (its run is under CI). If either shows trouble with the part that keeps only the machine's
+  platform, the `.pdb` part alone is the fallback (D239).
+- **The development machine's git is 2.56.0.windows.4 since 2026-10-28** (D248; the owner updated
+  it from 2.36.0.windows.1), first on `PATH` (`C:/Program Files/Git/ucrt64/bin/git.exe` in Git
+  Bash, `C:\Program Files\Git\cmd\git.exe` from PowerShell, the same version). CI's jobs
+  run Windows 2.56.0.windows.2 (since 2026-10-15; 2.55.0 before), macOS 2.56.0 (Homebrew),
+  `ubuntu-latest` 2.55.0 and the two containers 2.43.0, so no machine runs 2.36 any more and the
+  checks that assert git's own words only on 2.36 assert them on none (plan risk 26). On 2.56 a
+  `git stash pop` refused by local changes exits 128, not 1: phase 3's check 15b accepts both
+  (`281dd69`), as phase 5's report records under "Changes to expected results" (phase 3's report
+  says "exit 1" in 15b's step 2 and in T5). CI is the only check on 2.43, and on 2.55's HTTP paths
+  (the 2.55 below is trimmed). The status bar now shows `Git 2.56.0`, so earlier pictures that show
+  it differ in that box from the lists of pictures of phases 1 to 6's gates.
 - **Git 2.55 (CI's version) is on the development machine**, inside Visual Studio:
   `C:/Program Files/Microsoft Visual Studio/2022/Community/Common7/IDE/CommonExtensions/Microsoft/TeamFoundation/Team Explorer/Git/mingw64/bin/git.exe`.
-  Put that `mingw64/bin` first on `PATH` (otherwise its child processes fall back to the 2.36 on
+  Put that `mingw64/bin` first on `PATH` (otherwise its child processes fall back to the 2.56 on
   `PATH`). Phase 5's research used it to check what 2.55 writes differently, which phase 4 could only
   learn from CI runs. With it first on `PATH`, 6 of the 49 tests of `VisualCommit.App.Tests`'
   fetch, pull, push and remotes classes, those against the credential test server, fail locally
@@ -206,7 +237,8 @@ every commit.
   (git-ignored); the phase 3, 4, 5 and 6 handoffs' "Things that cost time" say what to watch
   for: a worktree starts from `master` and its agent must create its branch from the phase
   branch first; merged worktrees must be removed at once (a built worktree took about 6.4 GB in
-  phase 6, plan risk 27); a global `core.fsmonitor=true` leaves a git daemon per worktree running
+  phase 6, and the review measured 0.658 GB with D239's trim; plan risk 27); a global
+  `core.fsmonitor=true` leaves a git daemon per worktree running
   (phase 4's handoff says how to list and stop them before a gate).
 - The default run takes about 55 minutes on the development laptop (56 min 25 s at phase 6's gate,
   rested, 5,037 tests in nine projects; 43 min 22 s at phase 5's, 3,233 tests in seven). On CI at
@@ -215,12 +247,16 @@ every commit.
   `ubuntu-latest`'s 5 min 50 s (Test step 4 min 21 s) and the containers' 7 min 45 s and 7 min 16 s.
   The real-window pass takes about 28 minutes (27 min 39 s for phases 0 to 6 at phase 6's gate),
   after a rest (a hot laptop fails Q1). See phase 6's handoff, "Running the visual gate", for how
-  to run both and what to stop first.
+  to run both and what to stop first. On the laptop the default run and whole-project runs go
+  through `scripts/heavy-run.sh`, one at a time (D245), and a session's start makes one only when
+  the machine changed or the tree holds code that is not pushed: git 2.56 and the trimmed build
+  are new since phase 6's gate, so phase 7a's baseline run is such a run.
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.
 - On the Windows development machine only: Windows 11 on an Intel Core i7-8650U laptop, .NET SDK
-  10.0.303, Git 2.36.0.windows.1, `gh` signed in as RahimPasha. Its screen is 3000×2000 at 200%
+  10.0.303, Git 2.56.0.windows.4 (since 2026-10-28, D248; 2.36.0.windows.1 before), `gh` signed in
+  as RahimPasha. Its screen is 3000×2000 at 200%
   scaling: 1500×1000 logical pixels, of which 1500×952 is the work area. A 1920×1080 window does
   not fit, so the real-window pass can only use sizes up to 1400×900 there. The laptop is slower
   when hot: let it rest a few minutes before the gate's `dotnet test` and again before the
@@ -232,7 +268,8 @@ every commit.
 - Packages: Avalonia 12.1.3, Avalonia.AvaloniaEdit 12.0.0, TextMateSharp and
   TextMateSharp.Grammars 2.0.4, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, see D24),
   FlaUI.UIA3 5.0.0. Phases 3, 4, 5 and 6 added no packages.
-- Git 2.55 on CI writes its own files and messages differently from 2.36 here; phase 4's
+- Git 2.55 on CI writes its own files and messages differently from 2.36, the development
+  machine's git until 2026-10-28; phase 4's
   handoff, "Rules worth keeping", lists what it found and how the checks compare git's files,
   phase 5's adds the exit codes and side effects that differ between versions, and phase 6's
   "Things that cost time" what 2.55 and 2.56 did to its tests.
@@ -247,7 +284,8 @@ every commit.
 
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D239 on): design 17.5's reading of "ten repos can be checked and
+  owner"; each answer becomes a decision, D249 on, since D239 to D248 went to the review before
+  phase 7): design 17.5's reading of "ten repos can be checked and
   updated from one screen" (one dashboard of the ten, one Fetch all and one Pull all deciding every
   row); the report's by-hand System step (switch Windows' app mode while the app runs with System
   chosen, D224); and the move of the text boxes' placeholder contrast (Fluent's watermark opacity,
@@ -260,8 +298,20 @@ every commit.
   screen's global writes); D235 (Amend refuses when HEAD moved); D236 (the app's own files flushed
   before their rename); D237 (the default run's waits fit nine projects side by side); D238 (part
   L's own test server port); and the lead's rulings recorded in the design and the report.
-- **For phase 7** (plan risks 4 and 5): a test account or token for each of GitHub, Azure DevOps and
-  GitLab, and whether public sign-in needs app registrations or personal access tokens are enough.
+- **For phase 7a, before its design** (plan risks 4 and 5, D241): a test account or token for each
+  of GitHub, Azure DevOps and GitLab (GitHub's for 7a, the others for 7b), and whether public
+  sign-in needs app registrations or personal access tokens are enough.
+- **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
+  each answer becomes a decision, D249 on): its questions 1 (how the plan's limits count tokens),
+  10 (CI split into shards, S5, which reopens D134 and D232), 11 (`Phase6ChecksW`'s check W1,
+  which failed once under load on 2026-10-26 and was not run again: before phase 7a or in its
+  first package) and 12 (the machine: a reboot for `WUDFHost`, the page file, the space on C:, and
+  how long to keep transcripts, D8); its suggestions for 7a's first package, S8 (git-call budgets
+  as upper bounds taken with the watcher quiet) and R8 (proposal 36, a test switch that delays the
+  file watcher's events), which `plan.md`'s 7a section names but does not include; and the
+  proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4, N4,
+  S11 and T8/P12's trial of a lower effort level. The review's section 5, step 11 (one default
+  run re-measured on a quiet laptop as the "before" number) has not been made.
 - **Phase 5's acceptance**: given on 2026-10-17; merged into `master` (`c299939`). The decisions
   made during the phase without the owner, which the owner may want to look at: D182 (tooltips take
   no input), D183 (the report's rulings), D184 and D186 (CI's time limits, 40 and 50 minutes, raised

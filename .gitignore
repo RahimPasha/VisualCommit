@@ -24,3 +24,5 @@ Thumbs.db
 
 # Git worktrees that Claude Code creates for parallel agents.
 .claude/worktrees/
+# Claude Code settings of this machine only (D240)
+.claude/settings.local.json

@@ -1,14 +1,19 @@
 # Phase N visual test report — <phase name>
 
-The Check, Steps and Expected columns are written at the start of the phase, before the UI they
-test is built. The result columns are filled in when the gate runs.
+The Check, Steps and Expected columns are written before the UI they test is built: since D244
+each part's checks are written and committed just before its work package is built. The result
+columns are filled in when the gate runs.
 
 ## Run
 
 Filled in when the gate runs, for each of its two passes: date, app commit, the machine (its
 operating system and version), the display scaling of the real-window pass, the screenshot
 folders, and how many pictures were inspected. The gate's two passes are run on one commit by a
-session on the Windows machine.
+session on the Windows machine, except that a commit changing only
+`tests/VisualCommit.RealWindowTests` re-runs only the real-window pass, and the default run of the
+last commit it ran on stands for its own (D246; `docs/plan.md`'s Visual test gate, step 6). Each
+round lists the commit of each pass. The two runs of the new phase's real-window checks on their
+own before the first counted round are listed too, marked "before the gate".
 
 If a cloud session ran the scripted pass earlier, its run is listed here too, marked "cloud
 session, before the gate", and its results stand in the Scripted column until the Windows

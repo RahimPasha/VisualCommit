@@ -86,9 +86,13 @@ scripted pass, the updates to the architecture and the plan, and a first version
 
 To finish the phase, open a session on the Windows machine and say "Continue". Expect a working
 session, not a formality: the real-window test code has only been compiled until then. That
-session runs both passes of the gate on one commit, fixes what the real window shows, inspects
-the pictures of both, completes the report and the handoff, runs the cold-read check and sets
-the phase to "Awaiting acceptance". Then you accept it as usual, by saying "Phase N accepted".
+session first runs the phase's scripted walk-through and then the new phase's real-window checks
+twice on their own, which take over the mouse, so it tells you and needs you present (D246).
+Then it runs both passes of the gate on one commit (only the real-window pass again when a fix
+changes nothing but `tests/VisualCommit.RealWindowTests`), fixes what the real window shows,
+inspects the pictures of both, completes the report and the handoff, runs the cold-read check and
+sets the phase to "Awaiting acceptance". Then you accept it as usual, by saying "Phase N
+accepted".
 
 Two things to leave alone:
 
@@ -135,3 +139,6 @@ needed, on the branch it is working on:
   keep the default list and add `*.blob.core.windows.net`.
 - How long the set-up takes there, and whether the optional environment script above works as
   written.
+- That `scripts/heavy-run.sh` (D245) works there: it has run only in Git Bash on the Windows
+  machine, never on Linux, so its lock and its way of stopping a run (a process group there) are
+  untried.
