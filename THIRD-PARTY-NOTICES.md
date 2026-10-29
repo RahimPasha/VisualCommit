@@ -2,8 +2,8 @@
 
 VisualCommit includes work by others. This file lists what is copied into the repository's own
 source. The libraries the app is built on (Avalonia, the Inter typeface, CommunityToolkit.Mvvm,
-AvaloniaEdit, TextMateSharp with the grammars and themes of TextMateSharp.Grammars, and their
-dependencies, such as Onigwrap and Oniguruma) are fetched as packages and keep their own
+AvaloniaEdit, TextMateSharp with the grammars and themes of TextMateSharp.Grammars,
+Tmds.DBus.Protocol, and their dependencies, such as Onigwrap and Oniguruma) are fetched as packages and keep their own
 licences; the grammars and themes come from Visual Studio Code and keep theirs. A complete list
 for the installed app is added with the public release (phase 8, requirement R6).
 

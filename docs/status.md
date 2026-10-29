@@ -281,23 +281,22 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 4's own commits of the lead are made, in the main checkout, as the design's 0.4 orders them:
-L1 at `f1dc80e` (the real-window csproj's comment, ruling 30, and the wheel test's wait through
-`ShellDriver.WaitForControlAtAsync`, ruling 31) and WP0, section 1's contracts and stubs (its list
-in 1.10), at `d3cd314`, `3d1b2c9` and `9a2c342`, with the review's findings on them fixed in
-`8bfdd6b` (`VISUALCOMMIT_GITHUB_URL`'s warning without the value, `FileLauncher.ThrowIfNotWebAddress`
-shared with `FakeFileLauncher`, an `OperationQueueTests` case for the bindings and
-`RefusedAccount`); pushed, and CI's run on them is green in all five jobs (CI). Wave 1 is being
-built (since 2026-10-29, 09:30): WP-F, WP-K and WP-C in worktrees under
-`D:/Projects/Personal/vc-wt/p7a-<key>` on branches `wip/p7a-<key>` (`wpf`, `wpk`, `wpc`), each
-builder given its section of the design as its brief and WP0's notes
-(`D:/Projects/Personal/phase7a-work/wp0-notes.md`); WP-G after WP-F's merge and WP1 after WP-C's,
-each package reviewed by an agent that did not build it and merged with `--no-ff` one at a time.
-A session that finds this unfinished looks at those branches first: a branch already merged into
-`phase/7a-hosting-github` is done; one not merged is resumed in its worktree from its last commit.
-At the end of the wave the lead runs the full default run under `scripts/heavy-run.sh`, compares its
-pictures with the baseline's (`D:/Projects/Personal/phase7a-work/baseline-pictures/`, from step 2's
-run at `cea102c`), pushes and reads CI. Step 4 is ticked at WP1's merge. The
+Wave 1 is merged into `phase/7a-hosting-github` (2026-10-29, 09:30 to 13:05): WP-K at `2582e53`,
+WP-F at `c562ff4`, WP-C at `afb91a7`, WP-G at `1d6b688` and WP1 at `a4a388e`, each built in its
+worktree (`D:/Projects/Personal/vc-wt/p7a-<key>`, branch `wip/p7a-<key>`), reviewed by an agent
+that did not build it, its findings fixed, and merged with `--no-ff` one at a time; WP1's merge ran
+the lagged list (design 0.4) for the first time, every class passing. The lead's follow-ups are at
+`8b02805` (CI's keychain steps, the containers' `IPC_LOCK`, `FailNext` refusing avatar and page
+routes), pushed; the as-built notes and the lead's rulings are the design's section 16, and
+CLAUDE.md, D270, plan.md's risk 34 and THIRD-PARTY-NOTICES.md follow them. Next: read CI's run on
+`8b02805`, whose keychain steps are the first run of any real store (D333 if Windows refuses; the
+Secret Service command goes into CLAUDE.md once the containers' step has passed), and run the full
+default run under `bash scripts/heavy-run.sh` with no agent running; compare its pictures with the
+baseline's (`D:/Projects/Personal/phase7a-work/baseline-pictures/`, from step 2's run at `cea102c`;
+`w1e` and `g23i` vary by nature, design 16.9). Both green: tick steps 4, 5, 8 and 9, and 7 once
+CI's keychain steps pass (6 waits for WP-S), remove wave 1's worktrees and branches, and start
+wave 2 with WP-S (design 0.4); each of parts A, B, P, V and N gets its checks in
+`docs/test-reports/phase-7a.md` just before its package (D244). The
 first steps of 7a, and the order to take them in, are in the [phase 6
 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -481,6 +480,12 @@ every commit.
   the dashes and backticks in this file once. In the Bash tool, a long heredoc that holds
   apostrophes fails and turns `\n` in a string into a line break, and `sed -i` drops a CRLF
   file's carriage returns; write such a script to a file first.
+- **Wave 1** (2026-10-29): one workflow of 22 agents (builders, reviewers, fixers, merge agents)
+  ran 3 h 35 min and used about 4.9 million tokens of sub-agents. WP-K's and WP-C's first builders
+  stopped unfinished and a second builder finished from their last commits. The reviews found 36
+  items (one blocker, WP-G's paged list after ETags; two majors), all fixed or ruled on (design
+  16). WP1's picture references are in `D:/Projects/Personal/vc-wt/p7a-wp1-reference` and may go
+  with the worktrees.
 - When a cloud session has worked on a phase, say so here. If it had to use a branch of its own,
   that name stands in the Branch column of the Phases table in place of the phase's.
 

@@ -231,7 +231,7 @@ prove nothing. In Git Bash, one at a time:
 ```
 export VISUALCOMMIT_WATCHER_LAG_MS=1500
 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests --filter-class "*Phase2Checks"
-bash scripts/heavy-run.sh --project tests/VisualCommit.App.Tests --filter-class "*StageListRefreshTests" --filter-class "*RepositoryOperationsProtectTests" --filter-class "*CompareViewTests" --filter-class "*SearchBarTests" --filter-class "*UndoStepTests" --filter-class "*RepositoryOperationsFetchTests" --filter-class "*GitCallBudgetTests"
+bash scripts/heavy-run.sh --project tests/VisualCommit.App.Tests --filter-class "*StageListRefreshTests" --filter-class "*RepositoryOperationsProtectTests" --filter-class "*CompareViewTests" --filter-class "*SearchBarTests" --filter-class "*UndoStepTests" --filter-class "*RepositoryOperationsFetchTests" --filter-class "*GitCallBudgetTests" --filter-class "*GitRepositoryProviderTests"
 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase6 --filter-method "*Phase6ChecksS.*" --filter-method "*Check_K10_*" --filter-method "*Check_K13_*" --filter-method "*Check_W1_*" --filter-method "*Check_W8_*"
 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7a     # once it exists
 bash scripts/heavy-run.sh --project tests/VisualCommit.Hosting.Tests --filter-class "*RepositoryHostingWiringTests" --filter-class "*SignInEntryTests" --filter-class "*WelcomeCloneFromGitHubTests" --filter-class "*PaletteCloneFromGitHubTests" --filter-class "*PullRequestOperationsTests" --filter-class "*CreatePullRequestOperationTests"     # D334's six, once the first exists
@@ -4433,3 +4433,75 @@ sizes, which the lead accepted, in `docs/status.md`.
 4. **The owner's sandbox, token and variables** (14.6): the owner's three steps, before the live
    command's run with the token (status step 16). The lead asks for them when WP-LIVE starts at the
    latest, so that its builder does not wait.
+
+## 16. As built: wave 1
+
+What wave 1's build and reviews (2026-10-29) changed or settled against the sections above, with
+the lead's rulings on what the builders handed over. The report and the handoff cite these as
+"design 16.N"; a section above that differs from them is read with them.
+
+1. **0.4, the lagged list.** Its `VisualCommit.App.Tests` command also names
+   `--filter-class "*GitRepositoryProviderTests"`, so that every lagged run checks the lag's Info
+   line (WP1's review, finding 5). Its first run was at WP1's merge (`a4a388e`), with plain
+   `dotnet test` and the variable in front: every class passed.
+2. **2.3, `FailNext`.** It refuses avatar and page routes as it refuses git's
+   (`NotSupportedException`): the router answers them before it takes a fault, so a fault on one
+   never applied (WP-G's review, finding 7; the lead's ruling, `8b02805`). `AvatarCacheTests`' moved
+   cases use a scripted handler.
+3. **2.2 and 2.5, the fake in process and the host's auth.** `ShellDriver.Start` and `StartWithTabs`
+   refuse an in-process fake given as `gitHub:`; it goes in
+   `hosting: new HostingOptions(fake.Endpoints, fake.CreateHandler)`. In process the scenario's
+   clones keep port 47395's URLs, which are not the fake's endpoints (`Local(1)`), so the app
+   recognises neither remote and git reaches nothing: a test that needs either serves with `port: 0`
+   (WP-F's review, finding 1). A header the host cannot read (an unknown token, another scheme, an
+   empty user name, bad base64) gets 401 on every path it does not claim, a missing repository's
+   included; claimed routes are answered before auth whatever the header. The data folder's
+   tripwire fails on a file it cannot read (held without read sharing) after about 0.4 s instead of
+   passing it, so a check that runs it while the app holds a file stops the app first.
+   `Phase7aChecks.Support.cs` has no error-dialog assertion yet: the first of parts B and N, or the
+   refused token's path, adds a 7a one, without phase 6's helpers for git 2.36's output.
+4. **3.7, the vault.** Each key's keeps and forgets reach the store in the order they were called,
+   and a store read waits for the key's last one; `ForgetAsync`'s token stops only the caller's
+   wait, and the delete still runs. A refused key is logged through `TokenEntryNames.ForLog`
+   (`{host}/{account}`, with control, separator and format characters and `\` as `\uXXXX`). The
+   unknown value's warning reads "VISUALCOMMIT_KEYCHAIN is neither memory nor unavailable: tokens
+   are kept in memory." and never repeats the value (D269 unchanged).
+5. **3.9, `SecretServiceStoreTests`' bounds.** Each step is bounded at 30 s, not `Connect` plus 2 s;
+   the silent bus also has a lower bound (`Connect` less 50 ms); the probe without an address and
+   the cancel case have no time bound (WP-K's review, finding 1). `WindowsCredentialStoreTests.
+   Off_Windows_every_call_finds_no_keychain` skips on Windows: four skipped tests in a Windows
+   default run, three on macOS and Linux (D270 amended).
+6. **3.10, the containers.** CI's bare containers run with `--cap-add=IPC_LOCK` (the lead, `8b02805`):
+   Ubuntu's gnome-keyring gives its daemon that file capability when `setcap` is installed, and a
+   container without it in its bounding set cannot start the daemon (WP-K's builder; to be seen on
+   CI). THIRD-PARTY-NOTICES.md names Tmds.DBus.Protocol among the packages; plan.md's risk 34 is
+   ruling 20's.
+7. **4.7 and 4.8.** The password kept after a user name is kept under the account git's next prompt
+   carries: the Username prompt's account when the typed user is empty, the login, or
+   `x-access-token`; none for another user (`AskPassBroker.IsAccountUser` is the one rule for the
+   broker and the prompt group). `AccountCredentialTests`' Deny fetch is bounded at 30 s, not 10.
+   The `CredentialBindingSelectTests` row follows D278: beside alice's `/o/r`, `/o/r` is dropped and
+   `/o/r/sub` kept; beside alice's `/o/r/sub`, both are dropped; `/o/rx` is kept. The process's
+   `GIT_CONFIG_COUNT` is tested through an internal constructor that takes the process's variables,
+   accepted in place of a child process. The dashboard row's rules read is cancelled by
+   `options.Cancellation` only, not by the view model's lifetime: a tab closed during the read is
+   caught by the `IsClosed` check after it, and no lifetime token is exposed (the lead's ruling).
+   `AppSession.Start` already gives `CreateBroker` the hosting session, `gitEnvironment` and the
+   `gitVersion` function; WP-S's merge only swaps in `HostingSession`.
+8. **5.2 and 5.4.** `RepositoryWatcher` counts held and delivered events (internal, moved only
+   under a lag), so the dispose test can fail; its lag is 2 s. `OperationsHarness.
+   WaitForOpeningCleanUpReadAsync()` comes before the quiet mark in the tests whose mark could race
+   the opening's backups read (`A_bulk_runs_part_cancelled_before_its_call_queues_nothing`,
+   `UndoStepTests`, `GitCallBudgetTests`' harness case); `OpenAsync` itself does not wait (the lead's
+   ruling: a test that marks right after opening waits for the read itself).
+9. **5.7, the pictures.** `w1e-scan-checklist` shows a temporary folder's random name, and
+   `g23i-pull-not-fast-forward` takes one of two forms in 7 pixels of the toolbar's Branch icon
+   (x 315 to 319, y 49 to 52, at most 6 of 255) from run to run on the same code, split or not.
+   Both vary by nature; every other `w1*`, `w2*`, `w9*`, `g23g` and `g23h` picture is byte-identical.
+10. **6.2 and 6.3.** A kept answer holds `Link`, `X-GitHub-SSO` and `X-OAuth-Scopes` beside its ETag
+    and body, and a 304 takes them where it lacks them, so a repeated paged list still pages on and
+    keeps "more exist". A cancellation that is neither the caller's nor the 30 s limit's is no
+    answer (`Network`, "Could not reach GitHub."). A bare 429 (no `Retry-After`, no
+    `X-RateLimit-Remaining: 0`) is `RateLimited` at now plus 60 s, not `Malformed`; the fake's form
+    and github.com's `http` form accept a user part, a password included, which is never kept and
+    never bound (WP-C binds https only). The lead keeps both readings (WP-G's review, finding 5).
