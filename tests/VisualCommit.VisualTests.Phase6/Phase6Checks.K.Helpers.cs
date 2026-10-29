@@ -111,12 +111,13 @@ public sealed partial class Phase6ChecksK
         }
     }
 
-    /// <summary>Asserts that git was not called since <paramref name="sequence"/> at all.</summary>
-    private static void AssertNoCall(ShellDriver app, long sequence, string what)
-    {
-        var calls = app.CallsSince(sequence);
-        Assert.True(calls.Count == 0, $"{what}: git was called:\n" + string.Join('\n', calls.Select(call => call.CommandText)));
-    }
+    /// <summary>
+    /// Asserts that git was not called since <paramref name="sequence"/> but for whole refreshes,
+    /// read once every watcher is quiet (S8, docs/phase-7a-design.md 5.3): a refresh the watcher
+    /// started for a write reported late is set aside only whole.
+    /// </summary>
+    private static async Task AssertNoCallAsync(ShellDriver app, long sequence, string what) =>
+        GitCallBudget.AssertOnlyWholeRefreshes(await app.QuietCallsSinceAsync(sequence), what);
 
     /// <summary>The operation log's records since <paramref name="count"/> records.</summary>
     private static List<VisualCommit.Core.Operations.OperationRecord> OperationsSince(ShellDriver app, int count) =>
@@ -321,16 +322,22 @@ public sealed partial class Phase6ChecksK
         return viewer.Offset.Y;
     }
 
-    /// <summary>Waits until the palette's opening's worktree read is in the call log (5.5), then asserts it is the only call since <paramref name="sequence"/> and no write (K10 step 2).</summary>
+    /// <summary>
+    /// Waits until the palette's opening's worktree read is in the call log (5.5), then, once every
+    /// watcher is quiet, asserts it is the only call since <paramref name="sequence"/> outside every
+    /// operation, besides whole refreshes (S8), and no write (K10 step 2).
+    /// </summary>
     private static async Task AssertOnlyTheWorktreeReadAsync(ShellDriver app, long sequence)
     {
         await app.WaitForAsync(() => app.CallsSince(sequence).Any(call => call.CommandText == PartK.WorktreeList), "the palette's worktree read (git worktree list --porcelain) in the call log");
         await app.Session.Shell.PaletteWorktreeRead;
         app.Settle();
-        var calls = app.CallsSince(sequence);
+        var calls = await app.QuietCallsSinceAsync(sequence);
+        static bool IsWorktreeRead(GitCallRecord call) => call.CommandText == PartK.WorktreeList && call.OperationId is null;
         Assert.True(
-            calls.Count == 1 && calls[0].CommandText == PartK.WorktreeList && calls[0].OperationId is null,
-            "Since the palette's key git ran more than its worktree read:\n" + string.Join('\n', calls.Select(call => call.CommandText)));
+            calls.Count(IsWorktreeRead) == 1,
+            "Since the palette's key git did not run its worktree read once:\n" + string.Join('\n', calls.Select(call => call.CommandText)));
+        GitCallBudget.AssertOnlyWholeRefreshes([.. calls.Where(call => !IsWorktreeRead(call))], "Besides its worktree read, the palette's key");
     }
 
     // ---- Menus with their keys (6.7). ----

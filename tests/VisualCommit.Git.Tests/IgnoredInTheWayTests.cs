@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text;
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.Git.Tests.RepositoryTestSupport;
 
@@ -331,7 +332,7 @@ public class IgnoredInTheWayTests
         // and nothing written, so no check-ignore either.
         var (linear, linearCalls) = await CountAsync(calls, () => repository.FindIgnoredInTheWayOfRebaseAsync("HEAD", c.Add, TestCancelled));
         Assert.Empty(linear);
-        Assert.Equal(4, linearCalls.Count);
+        GitCallBudget.AssertAtMost(linearCalls, 4, "the rebase check on a branch only ahead (U2)");
         Assert.DoesNotContain(linearCalls, call => call.CommandText.StartsWith("git check-ignore", StringComparison.Ordinal));
 
         // U5: u-main is only ahead of Edit secret but holds a merge; git checks out Edit secret

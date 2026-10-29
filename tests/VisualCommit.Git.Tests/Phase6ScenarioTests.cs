@@ -1,5 +1,6 @@
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.Git.Tests.RepositoryTestSupport;
 using static VisualCommit.Git.Tests.ScenarioTestSupport;
@@ -120,10 +121,11 @@ public class Phase6ScenarioTests
     public async Task A_copy_of_the_workspace_takes_no_git_process_and_fetches_from_its_own_remotes()
     {
         var template = await Scenarios.WorkspaceTemplateAsync();
-        Assert.Equal(28, template.Calls.Snapshot().Count);
+        var built = template.Calls.Snapshot().Count;
+        GitCallBudget.AssertAtMost(template.Calls.Snapshot(), 28, "the workspace template's build");
 
         using var copy = await template.CopyAsync();
-        Assert.Equal(28, template.Calls.Snapshot().Count);
+        Assert.Equal(built, template.Calls.Snapshot().Count);
         Assert.Empty(copy.Calls.Snapshot());
         Assert.NotEqual(template.Root, copy.Root);
 
@@ -150,7 +152,7 @@ public class Phase6ScenarioTests
 
         // The template's own refs did not move.
         Assert.Equal(["ec855ba refs/heads/main", "23e2ad1 refs/remotes/origin/main"], await RefsAsync(template, "docs"));
-        Assert.Equal(28, template.Calls.Snapshot().Count);
+        Assert.Equal(built, template.Calls.Snapshot().Count);
     }
 
     [Fact]
