@@ -63,6 +63,7 @@ apt_install() {
 #   libfontconfig1 and a font   the headless UI tests render with Skia, which loads fontconfig
 #   locales, en_US.UTF-8        the app starts git with LC_ALL=en_US.UTF-8 (decision D30);
 #                               git answers in English without it too, so this one is optional
+#   dbus, gnome-keyring         the Secret Service store's tests run under a private bus (D259)
 
 # The lists are read into variables first: with "pipefail", piping a long list into "grep -q"
 # can report a failure although the text was found. On Debian a normal user's PATH has no
@@ -76,6 +77,8 @@ packages=()
 command -v git >/dev/null 2>&1 || packages+=(git)
 command -v curl >/dev/null 2>&1 || packages+=(curl)
 command -v ssh-keygen >/dev/null 2>&1 || packages+=(openssh-client)
+command -v dbus-run-session >/dev/null 2>&1 || packages+=(dbus)
+command -v gnome-keyring-daemon >/dev/null 2>&1 || packages+=(gnome-keyring)
 [ -e /etc/ssl/certs/ca-certificates.crt ] || packages+=(ca-certificates)
 has_library 'libfontconfig\.so\.1' || packages+=(libfontconfig1 fonts-dejavu-core)
 need_icu=false
