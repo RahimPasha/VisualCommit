@@ -147,6 +147,20 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for wave 1 (its five merges and the lead's follow-ups `8b02805`) is
+[40878208671](https://github.com/RahimPasha/VisualCommit/actions/runs/40878208671), for `8b02805`:
+four jobs succeeded and `macos-latest` failed. `windows-latest` (35 min 24 s; its Test step 32 min
+34 s of 55, 5,547 of 5,551 tests passed and 4 skipped; "Build the real-window pass" green),
+`ubuntu-latest` (6 min 7 s; Test step 4 min 40 s) and the two "bare ubuntu container" jobs (7 min
+42 s and 8 min 1 s; Test steps 5 min 39 s and 5 min 40 s, 5,545 of 5,548 passed, 3 skipped).
+`macos-latest` (34 min 42 s; Test step 32 min 25 s) failed one test of 5,548:
+`RefusedTokenDisplayTests.A_bulk_rows_kept_dialog_on_a_row_without_a_tab_says_the_same`, whose
+row's kept dialog said "Git could not fetch from origin." without "Open settings…" instead of the
+refusal (Notes, "Wave 1"). The keychain steps, the first run of any real store (WP-K 3.10), all
+passed with their one test run, not skipped: Windows' Credential Manager in 2 s (no error 1312,
+so D333's fallback is not needed), the macOS keychain in 3 s, and the Secret Service in both
+containers in 2 s and 1 s, under `dbus-run-session` with gnome-keyring and `--cap-add=IPC_LOCK`.
+
 Phase 7a's first run with code, for L1 and WP0 (`f1dc80e` to `8bfdd6b`), is
 [40848974456](https://github.com/RahimPasha/VisualCommit/actions/runs/40848974456), for `37fb9e0`:
 all five jobs succeeded: `windows-latest` (24 min 48 s; its Test step 22 min 4 s of 55, and "Build
