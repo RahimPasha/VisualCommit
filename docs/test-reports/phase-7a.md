@@ -17,9 +17,14 @@ while WP-A was being built and before WP-B started, from the design's sections 0
 and 17, decisions D255, D261, D276, D299 to D302, D331 and D338, phase 1's clone checks 13 and 14, and
 the harness, the fake and the scenario as wave 1 and WP-S built them (`5613450`). No part B UI existed,
 nor WP-A's dialog: every text is design 9.2's, 1.7's or an earlier package's, every place design 9.3's or
-9.4's or the clone form's as phase 1 drew it. "What the checks share" holds what every part relies on,
-then each part's conventions, test methods and texts; "Checks" is the table of A1 to A11 (design 8.7's
-numbering) and B1 to B9 (design 9.7's list, numbered here in its order); "Changes to expected results"
+9.4's or the clone form's as phase 1 drew it. Part P was added on 2026-10-29, while WP-B was being built and
+before WP-P started, from the design's sections 0, 1, 2.6, 7.8, 10, 13.4 P, 13.5, 16 and 17, decisions D251,
+D257, D303 to D308, D321, D322 and D338, phase 1's and phase 3's left panel and menus, and the harness, the
+fake and the scenario as wave 1 and WP-S built them (`c25326e`). No part P UI existed: every text is design
+10.2's, 10.3's, 1.7's or an earlier package's, every place 10.3's or the left panel's as phase 1 drew it.
+"What the checks share" holds what every part relies on, then each part's conventions, test methods and
+texts; "Checks" is the table of A1 to A11 (design 8.7's numbering), B1 to B9 (design 9.7's list, numbered
+here in its order) and P1 to P15 (design 10.7's list, numbered here in its order); "Changes to expected results"
 lists the earlier pictures and tests each part changes on purpose; "Open points and the lead's rulings"
 lists where the design is silent or its sections disagree, with the reading this report takes. Tokens
 are written here only by their constant names, never by value.
@@ -53,8 +58,8 @@ What every part of phase 7a relies on; each part's conventions add to these.
   of texts, picture names, positions and tolerances, written from this report and not from the App's
   texts; the real-window pass links them) and their tests in `Phase7aExpectationTests.<part>.cs`.
   Shared helpers live in `Phase7aChecks.Support.cs` only. Check names are the part's letter and its
-  number in its section of the design (A1 to A11, design 8.7; B1 to B9, design 9.7's list in its order,
-  which this report numbers); test methods are `Check_<id>…_<what>`.
+  number in its section of the design (A1 to A11, design 8.7; B1 to B9 and P1 to P15, design 9.7's and
+  10.7's lists in their order, which this report numbers); test methods are `Check_<id>…_<what>`.
 - **One test method per app start** (phase 3's rule, `FreshApplication`), each on a fresh copy of the
   scenario and a fresh data folder; a restart on one data folder is a plain `[Fact]` with one
   `FreshApplication.RunAsync` half per start (D32), the one `FakeTokenStore` handed to every start
@@ -98,6 +103,9 @@ What every part of phase 7a relies on; each part's conventions add to these.
 - **Pictures of an opened GitHub repository while signed in** are taken only after D322's two Debug
   lines: WP-S's `{repo}: listed {n} open pull requests of {owner/name}` (`AppLogFile.PullRequestsListed`)
   and, from WP-V's merge, WP-V's `{repo}: showing GitHub avatars for {n} authors` (`AvatarsShown`).
+  WP-S writes its line only when a list is applied (`RepositoryHosting.Finish`), so a picture of the
+  loading or failed state, which holds no list, waits for that state instead (part P's conventions;
+  open point 34).
 - **Git calls** are counted only through `GitCallBudget` (ruling 28); `CallsSince`, `AssertCalled` and
   `AssertCalledInOrder` take a `long` mark from `ShellDriver.QuietCallMarkAsync()` and prove presence and
   order only (2.8). Signed out, no part adds a git call to an earlier count: the URL-rewrites read
@@ -139,7 +147,9 @@ What every part of phase 7a relies on; each part's conventions add to these.
   is built only by code both projects compile (`VisualCommit.Testing`, the linked expectations, a part's
   `Part<X>.PrepareAsync`), never by `FakeFileLauncher`, `FakeClipboard`, `FakeTokenStore`'s hooks or a
   held request, and it is taken signed in with `OctoToken`. Part A's R pictures are on one empty tab;
-  part B's one, `b03a-listed`, in the state the palette's path reaches (part B's conventions).
+  part B's one, `b03a-listed`, in the state the palette's path reaches (part B's conventions); part P's
+  two, `p06a-rows` and `p11c-section-menu`, on one tab on `hello` signed in through the Accounts screen as
+  the real window does, after D322's lines (part P's conventions).
 - **The real window** (design 13; D319, D320, D33). One method and one launch per part, at 1100×700,
   dark, in the order A, B, N, G, P; each launch signs in by typing `OctoToken` into the real "Add GitHub
   account" dialog; the app gets `VISUALCOMMIT_GITHUB_URL=http://127.0.0.1:<port>/` and
@@ -161,7 +171,7 @@ What every part of phase 7a relies on; each part's conventions add to these.
 ### Scenario facts ("hosting", design 2.6; as `Scenarios.Phase7a.cs` builds it)
 
 What part A uses, which later parts share; each later part's own facts are in its own section (part
-B's in "Scenario facts part B uses").
+B's in "Scenario facts part B uses", part P's in "Scenario facts part P uses").
 
 - **The fake** serves the copy's `github/` at `http://127.0.0.1:47395/` (`GitHubEndpoints.Local(47395)`:
   web base `http://127.0.0.1:47395/`, API `http://127.0.0.1:47395/api/v3/`, `Host` `127.0.0.1:47395`, which
@@ -478,16 +488,139 @@ minute alone (the heaviest git work is method 2's clone of `octo/hello`, seven c
   `Cloning {url}: git's configuration could not be read; the clone goes without the account's token.`,
   never expected; WP-S's `hello: listed 4 open pull requests of octo/hello` (D322).
 
+### Part P: pull requests in the left panel
+
+Part P covers the left panel's "Pull requests" section (design 10.3; D251, D303, D304, D308): without a
+GitHub remote (today's placeholder), signed out, loading, failed (D338), none, with rows and with more
+than 300; the panel's filter; a click on a pull request; a branch row's `#n`; the section's and a pull
+request's menus (10.4; D307); "Open pull request #n" and "Create pull request…" in branch and drop menus
+(D306); the checkout of a same-repository and of a fork's pull request (10.5; D305); copy link and open
+in browser: checks P1 to P15, numbered here in the order of design 10.7's list. It uses WP-A's dialog
+(the section's sign-in row runs the window's entry, 8.5) and WP-S's `RepositoryHosting` as built (7.8,
+17 item 1). Its R pictures are P6's `p06a-rows` and P11's `p11c-section-menu` (the shared R steps);
+the real window also reads P11's pull request menu and repeats P15's open in browser with the
+default browser, comparing no capture there (13.4 P, 13.5; D321).
+
+#### Conventions of part P
+
+- **Code** (10.7): `Phase7aChecks.P.cs` (`Phase7aChecksP`, one method per app start, below), `.P.Menus.cs`,
+  `.P.Checkout.cs` and `.P.Helpers.cs` (the builder's to name: a snapshot of the section, the header's
+  chevron and count and each row's kind, automation id, name, number, title, author, draft, tooltip and
+  selection; a row's control by number or message kind; a wait for `PullRequestsListed` since a mark; a
+  branch row's `RefPullRequest`; a drag of a branch row onto another, as `Phase3Checks.Support.cs` makes
+  it); `Phase7aExpectations.P.cs` (nested `PartP`: 10.2's texts, the rows of `hello` and `tool`, the
+  menus' lines, the addresses, the added pull requests' data, the picture names and the R pictures,
+  written from this report); `Phase7aExpectationTests.P.cs` (part P's `OperationTexts` and `MenuTexts`
+  equal `PartP`'s; the picture names unique and matching the rule).
+- **Names in the checks** are part A's and B's, and: "the section" is the active tab's "Pull requests"
+  section (`LeftPanel.Rows` from the `RefSectionRow` `Pull requests` to the next header); its "rows" its
+  `PullRequestRow`s (`PullRequestItem`, named `#{n} {title}`, called by their number: `#1`), its "message
+  row" its `PullRequestMessageRow` (`PullRequestMessage`, named by its text); "`hello`'s hosting" is part
+  A's (`State`: `PullRequests`, `Repository`, `List`, `Failure`, `ByRef`); a branch row's "`#n`" its
+  `RefPullRequest`.
+- **Waiting for a list** (D322): a step that expects a list waits for its tab's `PullRequestsListed` line
+  with its count since the step's mark, then for the watchers to be quiet. WP-S writes that line only
+  when it applies a list (`RepositoryHosting.Finish`), so a step that expects a state without one (P2
+  step 1, P3 step 7, P4 step 5; `p02a`, `p03a`, `p11b`, `p04a`, `p04b`) waits instead for the tab's view
+  model's `HostingState.PullRequests` in that state, then the section's message row, then the quiet
+  watchers (open point 34): the hosting's own `State` changes before the post whose handler
+  (`RepositoryViewModel.OnHostingChanged`) updates the section. From WP-V's merge a picture of
+  a signed-in tab also waits for its tab's `AvatarsShown` once since the start (open point 29), and no
+  "exactly" of a row counts the avatars' requests (routes `commits:` and `avatar:`, 7.9).
+- **The section** (10.3): without a GitHub remote phase 1's placeholder (closed, `0`, no toggle, no menu).
+  With one, the header toggles and is open at the opening; its count is the rows' matches (`0` beside a
+  message row); rows and message rows are 26 high at depth 1 (`Indent` 24 as a branch row's, the 18-wide
+  chevron room, 12 free at the right); a row shows `PullRequestNumber` `#n` (secondary), `PullRequestTitle` (cut with "…"),
+  at the right end `PullRequestAuthor` (secondary, at most 90 wide) and, left of it on a draft only,
+  `PullRequestDraft` `Draft` (secondary; open point 25); a message row its text (secondary, cut with "…").
+  Pull requests come newest first, as the fake lists them (number descending). A branch row's `#n` is
+  secondary, at the row's right before its counts and toggles; the name is cut first (D308).
+- **Menus** are phase 3's (4a, D105, D114): a right-click at the centre of a header or a row opens the
+  menu with its top-left 2 right of and below the pointer (moved to lie 4 inside the window), the first
+  enabled item highlighted, 8 + 24 + 26 × items + 9 × separators high ±2 (`AssertMenuShape`); asking for
+  a menu selects nothing and asks GitHub nothing.
+- **Signing in.** P2 and P4 sign in through the section's row, method 2 through the Accounts screen as
+  the real window does (open point 30), methods 3 and 4 through the session (`SignInAsync`).
+- **No token on screen**, as part A's, for `OctoToken`, `OctoClassicToken` and `AdaToken`.
+- **Every method ends**, after closing the app, with the tripwire for those three tokens over the data
+  folder, the copy's `hello/` and `tool/` and, in method 1, the `ops` copy, with the session's call log;
+  the fake's `Errors` and `RefusedRequests` empty; no API request answered 400 or 415; from WP-V's merge
+  no `avatar:` request with a token; `Launcher.Requests` exactly the launches its steps name.
+
+#### Scenario facts part P uses (2.6, as `Scenarios.Phase7a.cs` builds it)
+
+- **`hello/`**: local `main` (HEAD, tracking `origin/main`), `feature/login` (tracking
+  `origin/feature/login`, in the folder `feature`), `local-work` (no upstream); `origin`'s `main`,
+  `docs/readme`, `feature/login`, `feature/a-very-long-branch-name-that-the-graph-must-cut` ("the long
+  branch") and `topic/no-pr`, and `refs/remotes/origin/HEAD`; no tag, no stash. At the opening only the
+  sections and `origin` are open.
+- **Its list**, octo/hello's open pull requests: #5 `Fix a typo in the greeting` (ada; head `fix-typo` of
+  `ada/hello`, label `ada:fix-typo`), #3 `Shorten long labels` (octo, the long branch), #2 `Update the
+  readme` (octo, a draft, `docs/readme`), #1 `Add the login form` (ada, `feature/login`); #4 is closed.
+  Base `main`; `html_url` `http://127.0.0.1:47395/octo/hello/pull/<n>`. `ByRef`: `refs/heads/feature/login`
+  and `refs/remotes/origin/feature/login` → #1, `refs/remotes/origin/docs/readme` → #2, the long branch's
+  remote ref → #3. #5's head, `refs/pull/5/head` of the copy's `github/octo/hello.git` (ada's 12:11
+  commit), is no ref of `hello/` and no row of its graph; the template's build left its object
+  unreachable in `hello/.git`, so no check asserts that P13's fetch transferred it.
+- **`tool/`**: `origin` octo/tool (a fork of acme/tool), `upstream` acme/tool; `main` (HEAD), `fix-typo`
+  tracking `origin/fix-typo`. It lists acme/tool's: #8 `An old idea` (ada, `idea` of the deleted
+  `gone/tool`), #7 `Fix a typo in the readme` (octo, `fix-typo` of octo/tool).
+- **`ops`** (method 1): a copy of phase 3's scenario (`Scenarios.OperationsAsync()`, `03e`'s), whose
+  `origin` is a folder beside it: no GitHub remote (open point 21).
+
+#### Test methods and app starts (part P)
+
+Four methods, four app starts, each from `ServeAsync()` and a fresh data folder; each stays well under a
+minute alone (the heaviest: P7's 297 pull requests, one `update-ref` at the fake and three pages; P13's
+fetch and two checkouts).
+
+| # | Test method | Checks | Start and what is set before it | Window, theme | Pictures |
+|---|---|---|---|---|---|
+| 1 | `Check_P2_P11_P4_P3_P1_signed_out_failed_loading_and_not_github` | P2, P11, P4, P3, P1 | tabs `hello` and `ops` (`StartWithTabs(data, [served.Hello.Path, ops.Path], activeTab: 0, gitHub: served.GitHub)`), `ops` made before the app; a new store, signed out | 1100×700, dark | `p02a`, `p11a`, `p04a`, `p04b`, `p03a`, `p11b`, `p01a` |
+| 2 | `Check_P6_P11_P14_P15_P9_P10_P8_P12_rows_menus_and_selection` | P6, P11, P14, P15, P9, P10, P8, P12 | one tab on `hello` (`OpenAsync(data, served, signIn: false)`); signed in through the Accounts screen | 1100×700, dark | `p06a`, `p11c`, `p11d`, `p09a`, `p09b`, `p10a`, `p08a`, `p08b`, `p12a`, `p12b` |
+| 3 | `Check_P13_P6_checkout_and_a_forks_tab` | P13, P6 | tabs `hello` and `tool` (`StartWithTabs(data, [served.Hello.Path, served.Tool.Path], activeTab: 0, gitHub: …)`); signed in through the session once `hello` has loaded | 1100×700, dark | `p13a`, `p06b` |
+| 4 | `Check_P7_P5_more_than_300_and_none` | P7, P5 | one tab on `hello`, signed in through the session (`OpenAsync(data, served)`) | 1100×700, dark | `p07a`, `p05a` |
+
+#### Texts these checks rely on (part P)
+
+- **Design 10.2's texts**, word for word (`OperationTexts`; menu labels and reasons in `MenuTexts`):
+  `SignInToSeePullRequests` `Sign in to GitHub to see pull requests…`; `LoadingPullRequests` `Loading pull
+  requests…`; `NoOpenPullRequests` `No open pull requests`; `MorePullRequests` `More than 300 open pull
+  requests`; `PullRequestHeader(n, title)` `#{n} {title}`; `OpenInBrowser` `Open in browser`; `CopyLink`
+  `Copy link`; check out `MenuTexts.CheckOutName(head)`, `Check out feature/login`, `Check out
+  ada:fix-typo`; `RefreshPullRequests` `Refresh pull requests`; `OpenPullRequestsInBrowser` `Open pull
+  requests in browser`; `HostingTexts.SignInToGitHubItem` `Sign in to GitHub…`; `CreatePullRequest`
+  `Create pull request…`; `OpenPullRequest(n)` `Open pull request #{n}`; `PullRequestsLoading` `Pull
+  requests are loading`; `PullRequestOfBranch(n, title)` `Pull request #{n}: {title}`;
+  `FetchPullRequest(n, remote)` `Fetch pull request #{n}` (running `Fetching pull request #{n} from
+  {remote}…`); `FetchedPullRequest(n, branch)` `Fetched #{n} into {branch}`. No check shows
+  `AddRemoteFor` or `FetchHeadChanged` (10.6's classes do).
+- **10.3's**: `Draft`; a row's tooltip `#{n} {title}`, a line break, `{author} · {head label} → {base
+  ref}` and, for a draft, ` · Draft` (open point 26), so #5's `#5 Fix a typo in the greeting` and `ada ·
+  ada:fix-typo → main`, #3's second line `octo · feature/a-very-long-branch-name-that-the-graph-must-cut →
+  main`, #2's `octo · docs/readme → main · Draft`, #1's `ada · feature/login → main`; the failed row's
+  tooltip its text, a line break, the failure's `Detail`; the `More` row's `Open pull requests in browser`.
+- **`HostingTexts.Describe`** for `Forbidden` (1.7): `GitHub answered: Resource not accessible by personal
+  access token.`
+- **Earlier texts**: the title `Pull requests` (`LeftPanelViewModel.PullRequestsTitle`);
+  `MenuTexts.AlreadyCheckedOut` `{b} is already checked out`; `OperationTexts.CheckedOut` `Checked out
+  {b}`; the branch and drop menus' other lines as phases 3 to 6 give them (the rows quote them whole).
+- **Log lines**: `hello: listed {n} open pull requests of octo/hello`, `tool: listed 2 open pull requests
+  of acme/tool` (D322); a failed list's Warnings, WP-G's `GitHub: GET /api/v3/repos/octo/hello/pulls
+  failed: {status} (request {id}).` and WP-S's `GitHub: listing the pull requests of octo/hello failed:
+  {Kind}, {Message} (request {id})`.
+
 ## Checks
 
 Result values: Pass, Fail, Not run (with the reason in Notes). Each check is named by its part's letter
 and its number: A and its number in design 8.7, B and its place in design 9.7's list (B1 to B9, numbered
-here); its scenario, theme and window size end its "Check" column; its methods and starts are in its
-part's table above. "R" in Notes marks the steps the real-window pass repeats (design 13.4 A and B), "n/a"
-says why a check is not repeated. "Screenshots" lists the planned pictures, the scripted run's and then the
-real window's. Every step's "requests" are those the fake recorded since the step's mark; every "calls" are
-the store's `Calls` since its mark; "git calls" are the call log's, since a quiet mark (part A's "Names in
-the checks", which part B's add to). In part A's rows and methods table, "part A" and "part B" of A5
+here), P and its place in design 10.7's list (P1 to P15, numbered here); its scenario, theme and window
+size end its "Check" column; its methods and starts are in its part's table above. "R" in Notes marks the
+steps the real-window pass repeats (design 13.4 A, B and P, and 13.5), "n/a" says why a check is not
+repeated. "Screenshots" lists the planned pictures, the scripted run's and then the real window's. Every
+step's "requests" are those the fake recorded since the step's mark; every "calls" are the store's `Calls`
+since its mark; "git calls" are the call log's, since a quiet mark (part A's "Names in the checks", which
+parts B and P add to). In part A's rows and methods table, "part A" and "part B" of A5
 and A10 name the two halves of those checks (A5 at 1100×700 and at 1920×1080; A10's starts after a
 session-only sign-in and after one with the keychain), not the report's parts A and B.
 
@@ -513,26 +646,41 @@ session-only sign-in and after one with the keychain), not the report's parts A 
 | B7 | The palette's "Clone from GitHub…" signed out (design 9.5, 8.5, 9.2; D299, D300, D261): listed right after "Clone repository…", without a key; "Add GitHub account" first, over the welcome page, the form not yet open; after the sign-in the form and the browser on the same empty tab, and no settings screen; "hosting", one empty tab, signed out, dark, 1100×700 | **Method 2**: 1. `ServeAsync()`; `using var clones = new TempDirectory("clones")` before the app. `ShellDriver.Start(data, gitHub: served.GitHub)` (one empty tab, a new store); wait for the welcome page. Mark the requests and the calls. 2. `PressPalette()`; with the box empty read the palette's shown entries (`Palette.Shown`, not only the realised rows). `TypeInPalette("Clone from GitHub")`; read `PaletteSnapshot()`. Screenshot (`b07a-palette-command`). 3. Press Enter; wait for `SignInDialog` with the focus in `SignInToken`. Screenshot (`b07b-sign-in-first`). 4. `TypeToken(OctoToken)`; `ConfirmSignInAsync()`. | **After step 2:** with the box empty the palette's commands hold `Clone repository…`, `Clone from GitHub…`, `Init repository…` one after another, `Clone from GitHub…` enabled, with no detail and no key; after the typing one row, `Clone from GitHub…`, highlighted, enabled, no key; the card as phase 6's (`paletteCard`: 600 wide at the top centre, x 250 to 850, from y 96, 84 high with one row). Requests none; calls none.<br>**After step 3:** the palette closed; `SignInDialog` `Add GitHub account` as part A's conventions ("The dialog") and A2's step 3 give it (the help, the link, `Token`, the box empty with the focus, no `SignInNoKeychain`, `Cancel` enabled, `Sign in` disabled), over the empty tab's welcome page, which shows its `Open`, `Clone` and `Init` buttons, not the form (it opens after the sign-in, 9.5); one tab; no settings screen (the entry is the window's, 8.5); calls `probe`; requests none.<br>**After step 4:** the dialog closed; requests since the mark begin with exactly one `GET api/v3/user`, `TokenPresent`, 200, `Login` `octo`; calls `probe`, `save github:127.0.0.1:47395:octo`; the session's `Account` `SignedIn`, `Keychain`, `None`; `accounts.json` one record, `tokenState` `keychain`, `useForGit` true; still one tab (the form and the browser over it, which open after the sign-in, are B3's step 5's, which waits for them); no settings screen at any time. | | | `b07a-palette-command`, `b07b-sign-in-first`; real window: none (its steps 1 and 2 compare nothing) | **R** (13.4 B steps 1 and 2): a real Ctrl+Shift+P, `TypeInPalette("Clone from GitHub", …)`, the highlighted row `Clone from GitHub…`, Enter; `WaitForSignInDialog`, then `TypeTokenAndConfirm` (the box's value "" and its name `Token`); Settings stays closed, so B3's wait for the browser is the sign-in's proof. Varies by nature: the palette box's caret (`b07a`), the token box's caret (`b07b`); the status bar's git box. |
 | B8 | A cancelled sign-in changes nothing (design 9.5, 8.5; D300): from a repository tab, "Clone from GitHub…" signed out, then the dialog's Cancel, leaves no account, no new tab and no form; signed in from there, the form opens on a new tab at the end with the browser over it, and Esc on the browser leaves the form open; "hosting", one tab on `hello`, signed out, dark, 1100×700 | **Method 4** (`Check_B8_cancelled_sign_in_and_a_new_tab`): 1. `ServeAsync()`. `StartWithTabs(data, [served.Hello.Path], activeTab: 0, gitHub: served.GitHub)`; `WaitForRepositoryAsync()`; `WaitForWatchersQuietAsync()`. Mark the requests and the calls. 2. `PressPalette()`; `TypeInPalette("Clone from GitHub")`; read `PaletteSnapshot()`; press Enter; wait for `SignInDialog`. 3. Click the dialog's `Cancel`. 4. Mark the requests, the calls and the log. `PressPalette()`; `TypeInPalette("Clone from GitHub")`; press Enter; wait for `SignInDialog`; `TypeToken(OctoToken)`; press Enter; wait for the browser and until its load has ended; wait for `hello: listed 4 open pull requests of octo/hello` in the log since the mark (from WP-V's merge also `AvatarsShown("hello")`, D322) and for the watchers to be quiet (`WaitForWatchersQuietAsync()`); then until the fake has recorded the `user/repos` request and `GET api/v3/repos/octo/hello/pulls` (part B's "Names in the checks"). 5. Press Esc. | **After step 1:** one tab, `hello`; the session's `Account` null; requests none (D257).<br>**After step 2:** before Enter, the palette's first row `Clone from GitHub…`, highlighted; then `SignInDialog` over `hello`'s window; calls `probe`; requests none.<br>**After step 3:** the dialog closed and no dialog open; the session's `Account` null; no `accounts.json`; the tabs exactly one, `hello`, active and showing `hello` (no new tab, no welcome page, no form; D300); requests none; calls since step 1's mark exactly `probe`.<br>**After step 4:** requests since the mark: first `GET api/v3/user`, `TokenPresent`, 200, `Login` `octo`; then, in an order not asserted, exactly one `GET api/v3/user/repos` (200) and `hello`'s refresh, `GET api/v3/repos/octo/hello` and `GET api/v3/repos/octo/hello/pulls` (200; from WP-V's merge the avatars' requests too); none answered 401; calls exactly `save github:127.0.0.1:47395:octo` (the start's one probe was step 2's). Two tabs: `hello`, then a new tab at the end, active and empty (5.10's `TabForOpening`, where "Clone repository…" opens its form), its form open with its three boxes empty and `From GitHub…` visible, the browser over it with `PartB.Rows` in order and the filter focused and empty; `hello`'s tab still on the copy's `hello/`.<br>**After step 5:** the browser closed; the new tab's form still open (D300), its boxes empty; still two tabs, the new one active; no request since step 4's; calls none since. | | n/a | none | n/a: 13.4 B has no such step, and a cancelled dialog adds no screen to the real window. No picture (open point 16): the cancel is tested from `hello`'s tab, where `TabForOpening` would have opened a new tab, and a picture there shows an opened GitHub repository (0.4, 9.7); after the sign-in the new tab shows what `b03a` shows but for the tab strip. `PaletteCloneFromGitHubTests` (9.6) covers the window's entry answering false and true on an empty active tab, with a stub. |
 | B9 | The 1,000 cap and single sign-on's line (design 9.4, 9.2, 6.3; D301, ruling 14): ten pages read, the first 1,000 repositories in GitHub's order, the list at its largest with a scroll bar, and under it `Only the 1,000 most recently updated repositories are listed.` and `Some organisations' repositories are hidden until the token is authorised for single sign-on.`; "hosting" with 1,001 more repositories of octo, one empty tab, signed in, dark, 1100×700 | **Method 3**: 1. `ServeAsync()`; `served.GitHub.AddListedRepositories("octo", 1001)`. `ShellDriver.Start(data, gitHub: served.GitHub)` (one empty tab, a new store); `SignInAsync(OctoToken)`. Click `CloneRepoButton`; wait until `CloneUrlBox` has the focus and `CloneFromGitHubButton` shows. 2. Mark the requests. `GitHub.FailNext("user/repos", FakeGitHubFault.SsoPartialResults)`. Click `CloneFromGitHubButton`; wait for the browser, until its load has ended and until the fake has recorded ten `user/repos` requests. Screenshot (`b09a-cap-and-sso`). 3. Press Esc. | **After step 2:** requests since the mark exactly ten `GET api/v3/user/repos`, each `TokenPresent`, 200, `Login` `octo`: the first with the query `per_page=100&sort=updated`, then pages 2 to 10 as the `Link` headers name them (`page=2` to `page=10`, the other parameters kept); no eleventh (the provider stops at ten pages, 6.3). The rows: 1,000 (`Rows.Count`), the first four `PartB.Rows`, then `octo/listed-0001`, `octo/listed-0002`, … `octo/listed-0996` in that order, these without a detail; the list 232 high inside its border, scrolled to its top, showing 8 whole rows (`octo/hello` to `octo/listed-0004`) and a vertical scroll bar, no horizontal one; below it `CloneFromGitHubMore` `Only the 1,000 most recently updated repositories are listed.` and under it `CloneFromGitHubSso` `Some organisations' repositories are hidden until the token is authorised for single sign-on.`, both `settingsNote` (`#9BA3B0`, 11.5) and whole, wrapping where they need; no status or error line; none selected, `Choose` disabled; the card still 460 wide at x 320 to 780, centred vertically. No text cut.<br>**After step 3:** the browser closed; the form open, its boxes empty, `From GitHub…` visible. | | n/a | `b09a-cap-and-sso` | n/a: needs `AddListedRepositories` and a fault (0.5); the real window lists only the scenario. Pictured, as 9.7 allows (open point 14); the texts are also `CloneFromGitHubDialogViewModelTests`' and the paging `FakeGitHubTests`' (2.9). Varies by nature: the filter's caret; the status bar's git box. |
+| P1 | The section without a GitHub remote, signed in (design 0.2, 10.3, 0.7; D251, D307): a repository whose remotes GitHub does not have keeps phase 1's placeholder exactly, closed with `0`, no toggle and no menu (`03e`'s state), no pull-request item in its branch menus (D306), and no request names it; "hosting" served beside phase 3's `ops`, tabs `hello` and `ops`, signed in, dark, 1100×700 | **Method 1**, after P3: 10. Mark the requests and the log. Click the tab `ops`; `WaitForRepositoryAsync()`; `WaitForWatchersQuietAsync()`. 11. Mark the log; right-click the header `Pull requests` at its centre; `AssertNoMenuAsync` with that mark. Screenshot (`p01a-not-github`). Click the header. 12. Mark the requests. Right-click `Local branches` › `main`; read; Esc. | **After step 10:** `ops`' hosting `State.PullRequests` `NotGitHub`, `Remotes` and `Bindings` empty; the section is phase 1's placeholder: the header `Pull requests` with the chevron right and `0`, no row under it (`Tags` next); no `PullRequestItem`, `PullRequestMessage` or visible `RefPullRequest` in the panel; the session still `SignedIn`; requests since the mark none.<br>**After step 11:** no menu opened (phase 3's check 3 step 5: no menu in the layer or the window, no `Context menu opened` line since the mark); in the picture the left panel as `03e-no-menu` shows `ops`' (the tab strip here `hello`, `ops`); the click then left the section closed with `0` (10.3: no toggle); requests none.<br>**After step 12:** `ops`' `main` menu (header `main`, the current branch's) holds no `Create pull request…` and no line starting `Open pull request #` (D306: without a GitHub remote `context.Hosting` is null, signed in or not); requests none; after Esc no menu. | | n/a | `p01a-not-github` | n/a: 13.4 P is on `hello`. The repository is open point 21's reading. Step 12 takes no picture; the menus' exact lines without hosting are `RepositoryMenusHostingTests`'. Varies by nature: the status bar's git box (D248). |
+| P2 | Signed out (design 10.2, 10.3, 8.5; D257, D303, D281): `hello`'s section open with `0` and one clickable row `Sign in to GitHub to see pull requests…`; no request and no URL-rewrites read; the row opens "Add GitHub account" over `hello`'s window; "hosting", tabs `hello` and `ops`, signed out, dark, 1100×700 | **Method 1** (`Check_P2_P11_P4_P3_P1_signed_out_failed_loading_and_not_github`): 1. `ServeAsync()`; `using var ops = await Scenarios.OperationsAsync()`. `StartWithTabs(data, [served.Hello.Path, ops.Path], activeTab: 0, gitHub: served.GitHub)` (a new store); `WaitForRepositoryAsync()`; wait for `hello`'s view model's `HostingState.PullRequests` `SignedOut`, then for the section's message row (part P's conventions); `WaitForWatchersQuietAsync()`. Screenshot (`p02a-signed-out`). 4. (after P11's steps 2 and 3) Mark the requests and the calls. Click the message row; wait for `SignInDialog` with the focus in `SignInToken`. | **After step 1:** the session's `Account` null; requests since the start none (D257); the call log holds no `git config --null --get-regexp ^url\.` (D281). `hello`'s hosting: `SignedOut`, `Repository` octo/hello, `List` null, `ByRef` and `Bindings` empty. The section: the chevron down, `0`; one `PullRequestMessage` `Sign in to GitHub to see pull requests…` (secondary; cut with "…" at the default 260, where its 39 characters (about 6 px each) are wider than the row's room of about 205 px from x 42; its tooltip its whole text, open point 22, not asserted; where it is cut is inspected); no `PullRequestItem`; no `#n` on a branch row; the other sections as with GitHub off; no text cut but by an ellipsis.<br>**After step 4:** `SignInDialog` `Add GitHub account` as part A's conventions give it, over `hello`'s window (the window's entry, 8.5; no settings screen), its box empty with the focus; calls `probe`; requests none; the section unchanged. | | n/a | `p02a-signed-out` | n/a: 13.4 P signs in before its first capture. A9's pictures show this state from WP-P's merge ("Changes to expected results", part P). Varies by nature: the git box. |
+| P3 | Loading (design 10.3, 10.2, 7.8, 17 item 1; D303): a refresh after a failure shows `Loading pull requests…` with `0` while GitHub's answer is held; the answer then fills the section; "hosting", tabs `hello` and `ops`, signed in, dark, 1100×700 | **Method 1**, after P4: 7. Mark the requests and the log. `GitHub.HoldNext("pulls:octo/hello")`. Right-click the section's header; click `Refresh pull requests`; wait for the hold's `Arrived`, for `hello`'s view model's `HostingState.PullRequests` `Loading`, then for the section's message row `Loading pull requests…` and for the watchers to be quiet (part P's conventions: no `listed` line comes while the answer is held). Screenshot (`p03a-loading`). 8. (P11.) 9. Dispose the hold; wait for `hello: listed 4 open pull requests of octo/hello` since step 7's mark and for the watchers to be quiet. | **After step 7:** one `GET api/v3/repos/octo/hello/pulls` waits at the fake, so requests since the mark none (A3's answer is kept per candidate, 7.8: no `repo:octo/hello`); `State` `Loading`, `List` and `Failure` null (the run cleared P4's failure, 17 item 1); the section: `0` and one `PullRequestMessage` `Loading pull requests…`; no `PullRequestItem`; no `#n` on a branch row.<br>**After step 9:** requests since step 7's mark exactly one `GET api/v3/repos/octo/hello/pulls`, query `state=open&per_page=100`, `TokenPresent`, 200; `State` `Loaded`; the section `4` with part P's four rows in order, no message row. | | n/a | `p03a-loading` | n/a: a held request (0.5). Varies by nature: the git box. From WP-V's merge the graph's Author column shows avatars here (A3 answered, 7.9; open point 29). |
+| P4 | An error in `HostingTexts.Describe`'s words (design 10.3, 1.7, 7.6, 7.8; D338, D303, ruling 15): signed in from the section's row, GitHub refuses the list with 403; the section `0` and `GitHub answered: Resource not accessible by personal access token.`, its tooltip that text and `pull_requests=read`; the account stays signed in; "hosting", tabs `hello` and `ops`, dark, 1100×700 | **Method 1**, after P2: 5. `GitHub.FailNext("pulls:octo/hello", FakeGitHubFault.Forbidden)`. `TypeToken(OctoToken)`; press Enter; wait until the dialog has closed, for `hello`'s view model's `HostingState.PullRequests` `Failed`, then for the section's message row and for the watchers to be quiet (part P's conventions: a failure writes no `listed` line). Screenshot (`p04a-failed`). 6. Rest the pointer on the message row's text until its tooltip shows. Screenshot (`p04b-failed-tooltip`, the pointer kept). | **After step 5:** requests since step 4's mark, in order: `GET api/v3/user` 200, `Login` `octo`; `GET api/v3/repos/octo/hello` (`repo:octo/hello`) 200; `GET api/v3/repos/octo/hello/pulls`, query `state=open&per_page=100`, 403; each `TokenPresent`; nothing else (from WP-V's merge the avatars' too). Calls `probe`, `save github:127.0.0.1:47395:octo`. The session's `Account` `SignedIn`, `Keychain`, `None` (only a 401 marks it, 7.6); `accounts.json` `tokenState` `keychain`. `hello`'s hosting: `Failed`, `Failure` `Forbidden` with `Message` `Resource not accessible by personal access token` and `Detail` `pull_requests=read`, `List` null, `ByRef` empty, `Bindings` the scenario facts' one binding. The section: `0`; one `PullRequestMessage` `GitHub answered: Resource not accessible by personal access token.` (cut with "…"); no `PullRequestItem`. The log since step 4's mark: once each WP-G's Warning `GitHub: GET /api/v3/repos/octo/hello/pulls failed: 403 (request {id}).` and WP-S's Warning `GitHub: listing the pull requests of octo/hello failed: Forbidden, Resource not accessible by personal access token (request {id})`, `{id}` the refused request's; no `hello: listed` line; no dialog.<br>**After step 6:** the tooltip's two lines `GitHub answered: Resource not accessible by personal access token.` and `pull_requests=read`. | | n/a | `p04a-failed`, `p04b-failed-tooltip` | n/a: a fault (`FailNext`, 0.5). Which failure is open point 24; a failure after a list, open point 23. Varies by nature: the git box. WP-V: avatars (open point 29). |
+| P5 | No open pull requests (design 10.2, 10.3, 7.8; D303, D289): every open pull request of octo/hello closed on the fake, "Refresh pull requests" lists none: `No open pull requests`, `0`, no `#n` left on a branch row; "hosting", one tab on `hello`, signed in, dark, 1100×700 | **Method 4**, after P7: 6. Set `State = "closed"` on each open pull request of `GitHub.PullRequests("octo/hello")`. Mark the requests and the log. Right-click the section's header; click `Refresh pull requests`; wait for `hello: listed 0 open pull requests of octo/hello` since the mark and for the watchers to be quiet. Scroll the panel's list to its top. Screenshot (`p05a-none`). | **After step 6:** requests since the mark exactly one `GET api/v3/repos/octo/hello/pulls` (query `state=open&per_page=100`), `TokenPresent`, 200; no `repo:octo/hello`. `hello`'s hosting `Loaded`, `List` empty with `MoreExist` false, `ByRef` empty. The section: the chevron down, `0`, one `PullRequestMessage` `No open pull requests`, no `PullRequestItem`; no branch row's `RefPullRequest` shows (`PullRequestText` empty on every `RefItemRow`); no scroll bar. | | n/a | `p05a-none` | n/a: 13.4 P repeats the rows and the menu only. Closing them on the fake is 10.7's way. Varies by nature: the git box. WP-V: the graph's badges go with the list (open point 29). |
+| P6 | Rows with a draft and a fork (design 10.2, 10.3, 0.2, 7.8; D251, D303, D322; R): signed in as the real window does, `hello`'s section lists octo/hello's four open pull requests newest first with `#n`, title and author, #2 marked `Draft`, #5 from the fork `ada/hello`; `tool`, a fork, lists its parent's; "hosting", one tab on `hello`; tabs `hello` and `tool`; dark, 1100×700 | **Method 2** (`Check_P6_P11_P14_P15_P9_P10_P8_P12_rows_menus_and_selection`): 1. `ServeAsync()`. `OpenAsync(data, served, signIn: false)`. Mark the requests and the log. `OpenAccountsAsync()`; `OpenSignInDialogAsync()`; `TypeToken(OctoToken)`; press Enter; wait until signed in; press Esc. Wait for `hello: listed 4 open pull requests of octo/hello` since the mark and for the watchers to be quiet. Screenshot (`p06a-rows`).<br>**Method 3**, after P13's step 3: 4. Click the tab `tool`; `WaitForRepositoryAsync()`; wait for `tool: listed 2 open pull requests of acme/tool` since the start and for the watchers to be quiet. Screenshot (`p06b-fork-lists-parent`). 5. Right-click `#7`; read the menu; Esc. Right-click `#8`; read; Esc. | **After step 1:** requests since the mark: `GET api/v3/user` 200; then `GET api/v3/repos/octo/hello` and `GET api/v3/repos/octo/hello/pulls` (query `state=open&per_page=100`), exactly one each, `TokenPresent`, 200, `Login` `octo` (from WP-V's merge the avatars' too); none 401. The screen closed, still signed in (D256). `hello`'s hosting `Loaded`: `List` #5, #3, #2, #1, `MoreExist` false; `ByRef` as part P's scenario facts give it. The section: the chevron down, `4`; four `PullRequestItem` rows in order, named `#5 Fix a typo in the greeting` (author `ada`), `#3 Shorten long labels` (`octo`), `#2 Update the readme` (`Draft`, `octo`), `#1 Add the login form` (`ada`), `PullRequestDraft` shown in #2's only; tooltips as part P's texts give them; none selected; no message row; each row whole in the panel; no text cut but by an ellipsis; no token on screen. The graph: no pull-request badge in any branch label and no avatar in the Author column until WP-V's merge (open point 29).<br>**After step 4:** over the method, exactly one request of route `repo:octo/tool` (`GET api/v3/repos/octo/tool`, its answer naming `parent` acme/tool) and one of `pulls:acme/tool`, each `TokenPresent`, 200; none of `pulls:octo/tool`. `tool`'s hosting: `Remotes` `origin` octo/tool and `upstream` acme/tool, `Repository` acme/tool (the parent, 0.2), `List` #8, #7; `ByRef` exactly `refs/heads/fix-typo` and `refs/remotes/origin/fix-typo` → #7 (#8's deleted fork maps nothing). The section `2`: `#8 An old idea` (`ada`), `#7 Fix a typo in the readme` (`octo`), no `Draft`; the local `fix-typo` row's `RefPullRequest` `#7`.<br>**After step 5:** #7's menu: header `#7 Fix a typo in the readme`; `Open in browser` (highlighted); `Check out fix-typo` (10.5 plan 1: its head on `origin`, the user's fork); —; `Copy link`. #8's: header `#8 An old idea`; `Open in browser` (highlighted); `Check out idea` (a deleted fork, from `upstream`, 10.5); —; `Copy link`. | | | `p06a-rows`, `p06b-fork-lists-parent`; real window: `p06a-rows` | **R** (13.4 P step 1): launch on `hello`; `SignInThroughSettings`; `WaitForHostingSettled`; `PullRequestRowNames()` equals the four names above in order, `PullRequestDraft` shown in #2's row only; compared with `p06a-rows`. Its state owes nothing to a hook: the twin signs in through the screen too (open point 30). `p06b` is scripted only; #8's tooltip is not asserted (open point 27). Which titles are cut at 260 is inspected (10.3: about 110 to 150 px). Varies by nature: the git box. WP-V: badges and avatars in the graph of both pictures (open point 29). |
+| P7 | More than 300 (design 10.2, 10.3, 6.3, 7.8; ruling 14, D303): 297 more open pull requests on octo/hello; a refresh reads three pages and lists 300 newest first, then `More than 300 open pull requests`, which opens the list in the browser; "hosting", one tab on `hello`, signed in, dark, 1100×700 | **Method 4** (`Check_P7_P5_more_than_300_and_none`): 1. `ServeAsync()`. `OpenAsync(data, served)`; wait for `hello: listed 4 open pull requests of octo/hello` and for the watchers to be quiet. 2. `GitHub.AddPullRequest("octo", "hello", $"More work {n}", "octo", "topic/no-pr", "main")` for n 6 to 302, in order (the fake numbers them #6 to #302; open point 28). Mark the requests and the log. Right-click the section's header; click `Refresh pull requests`; wait for `hello: listed 300 open pull requests of octo/hello` since the mark and for the watchers to be quiet. 3. Scroll the panel's list to its end. Screenshot (`p07a-more-than-300`). 4. Rest the pointer on the message row until its tooltip shows. 5. Click the message row. | **After step 2:** requests since the mark exactly three `GET api/v3/repos/octo/hello/pulls`, `TokenPresent`, 200: the first with the query `state=open&per_page=100`, then pages 2 and 3 as the `Link` headers name them (`page=2`, `page=3`, the other parameters kept); no fourth (6.3); no `repo:octo/hello`. `GitHub.Errors` empty. `hello`'s hosting `Loaded`: `List` 300 with `MoreExist` true, #302 down to #6, then #5, #3, #2 (#1, the 301st, not listed); `ByRef`: `refs/remotes/origin/topic/no-pr` → #6 (the lowest number on one key, 7.8), docs/readme's → #2, the long branch's → #3, nothing for `feature/login`. The section: `300`; 300 `PullRequestItem` rows, then one `PullRequestMessage` `More than 300 open pull requests`.<br>**After step 3:** a vertical scroll bar; from the bottom up `Stashes` `0`, `Tags` `0`, `More than 300 open pull requests`, `#2 Update the readme` (`Draft`, `octo`), `#3 Shorten long labels`, `#5 Fix a typo in the greeting`, then `#6 More work 6`, `#7 More work 7`, …; no text cut but by an ellipsis.<br>**After step 4:** the tooltip `Open pull requests in browser`.<br>**After step 5:** `Launcher.Requests` one `OpenUrl` `http://127.0.0.1:47395/octo/hello/pulls` (`OpenPullRequestsInBrowserAsync`, 10.5); no request since step 2's; nothing selected. | | n/a | `p07a-more-than-300` | n/a: the 297 pull requests are the check's own and the click goes to the fake launcher (0.5); 13.4 P lists the scenario only. Varies by nature: the git box. WP-V: open point 29. |
+| P8 | The filter (design 10.3; D303): the panel's filter keeps a pull request whose `#n`, title, author or head label holds its text, ignoring case, beside the branches it keeps; the section's count is its matches; "hosting", one tab on `hello`, signed in, dark, 1100×700 | **Method 2**, after P10: 10. Click `FilterBox`; `app.Type("ADA")`. Screenshot (`p08a-filter-author`). 11. Press Ctrl+A; `app.Type("login")`. Screenshot (`p08b-filter-login`). 12. Press Ctrl+A; `app.Type("#2")`. 13. Press Ctrl+A, then Backspace. | **After step 10:** `Local branches` `0` and `Remotes` `0` (headers only); `Pull requests` `2`: `#5 Fix a typo in the greeting` (author and head label) and `#1 Add the login form` (author); `Tags` `0`, `Stashes` `0`.<br>**After step 11:** `Local branches` `1`: `feature` › `login` with `#1`; `Remotes` `1`: `origin` › `feature` › `login` with `#1`; `Pull requests` `1`: `#1 Add the login form` (title and head label); the others `0`.<br>**After step 12:** `Pull requests` `1`: `#2 Update the readme`; every other section `0`.<br>**After step 13:** the filter empty with its placeholder; the panel as before step 10 (P10's folders open, the section open with four rows). Requests none since step 10. | | n/a | `p08a-filter-author`, `p08b-filter-login` | n/a: 13.4 P. The other fields and `1` alone are `PullRequestSectionTests`' (10.6). Varies by nature: the filter's caret; the git box. |
+| P9 | A click on a pull request (design 10.3; D304, D98, FD19): #1's row selected and the graph's one selection its head, `feature/login`'s commit; #5, whose head is no row of `hello`'s graph, selects nothing; "hosting", one tab on `hello`, signed in, dark, 1100×700 | **Method 2**, after P15: 7. Click `#1`'s row. Screenshot (`p09a-head-selected`). 8. Click `#5`'s row. Screenshot (`p09b-nothing-selected`). | **After step 7:** `#1` in the `selected` look, no other row of the panel selected; the graph's selection exactly `feature/login`'s commit (`git rev-parse refs/heads/feature/login` in `hello/`, "Add the login form" by Ada Lovelace), its row highlighted and in view; the details panel shows it; requests none.<br>**After step 8:** no row of the panel selected; the graph's selection empty, no row highlighted, the working row not selected; the details panel's placeholder (`SelectNothing`, FD19's rule); requests none. | | n/a | `p09a-head-selected`, `p09b-nothing-selected` | n/a: 13.4 P. The key across refreshes and `SyncSelection` are `PullRequestSectionTests`'. Varies by nature: the git box. WP-V: open point 29. |
+| P10 | A branch row's `#n` (design 10.3; D308, ruling 12): `#1` on `feature/login` and `origin/feature/login`, `#3` on the long branch, whose name is cut first, the tooltip `Pull request #1: Add the login form`; none on a branch without an open pull request; the section closes and keeps its count; "hosting", one tab on `hello`, signed in, dark, 1100×700 | **Method 2**, after P9: 9. Click the header `Pull requests`. Click `Local branches` › `feature` and `Remotes` › `origin` › `feature`. Rest the pointer on the local `login` row's `#1` until its tooltip shows. Screenshot (`p10a-branch-rows`, the pointer kept). Click the header `Pull requests`. | **After step 9:** after the first click the section closed: the chevron right, still `4`, no row under it. Then: `Local branches` › `feature` › `login` with `RefPullRequest` `#1` (secondary) at the row's right end, the name left of it; `Remotes` › `origin` › `feature` › `a-very-long-branch-name-that-the-graph-must-cut` cut with "…" and `#3` whole; › `login` `#1`; on `local-work`, `main` (accent) and `origin` › `main` and on the folders `RefPullRequest` collapsed (no room); the tooltip `Pull request #1: Add the login form`. After the second click the section open again with its four rows. | | n/a | `p10a-branch-rows` | n/a: 13.4 P (part G's real window shows the graph's badge). Varies by nature: the git box. WP-V: open point 29. |
+| P11 | The section's menu and a pull request's (design 10.4, 10.2, 10.5; D307, D114, D257; R): signed out `Sign in to GitHub…` and `Open pull requests in browser`, the latter asking GitHub nothing; loading, `Refresh pull requests` disabled with `Pull requests are loading`; loaded, both enabled; a pull request's `Open in browser`, `Check out {head}`, `Copy link`; "hosting", tabs `hello` and `ops`; one tab on `hello`; dark, 1100×700 | **Method 1**, after P2's step 1: 2. Mark the requests and the log. Right-click the header `Pull requests` at its centre. Screenshot (`p11a-section-menu-signed-out`). 3. Click `Open pull requests in browser`. After P3's step 7: 8. Right-click the header; rest the pointer on `Refresh pull requests` until its tooltip shows. Screenshot (`p11b-section-menu-loading`). Press Esc.<br>**Method 2**, after P6: 2. Mark the requests. Right-click the header at its centre. Screenshot (`p11c-section-menu`, the pointer kept). Press Esc. 3. Right-click `#1`'s row. Screenshot (`p11d-pull-request-menu`). (Step 4 is P14's.) 5. Right-click `#5`; read; Esc. Right-click `#2`; read; Esc. | **After step 2 (method 1):** header `Pull requests`; `Sign in to GitHub…` (highlighted); `Open pull requests in browser`; 84 high ±2 at the pointer plus (2, 2); the section neither closed nor opened.<br>**After step 3:** `Launcher.Requests` exactly one `OpenUrl` `http://127.0.0.1:47395/octo/hello/pulls`; requests none (D257); still signed out.<br>**After step 8:** header `Pull requests`; `Refresh pull requests` (disabled: "Pull requests are loading"), its tooltip shown; `Open pull requests in browser` (highlighted).<br>**After step 2 (method 2):** header `Pull requests`; `Refresh pull requests` (highlighted); `Open pull requests in browser`; 84 high ±2 at the pointer plus (2, 2); requests none.<br>**After step 3:** header `#1 Add the login form`; `Open in browser` (highlighted); `Check out feature/login`; —; `Copy link`; 119 high ±2; `#1` not selected, the graph's selection unchanged (D114).<br>**After step 5:** #5's: header `#5 Fix a typo in the greeting`; `Open in browser` (highlighted); `Check out ada:fix-typo` (the base remote `origin`, 10.5 step 2); —; `Copy link`. #2's: header `#2 Update the readme`; `Open in browser` (highlighted); `Check out docs/readme` (its head on `origin`, no local branch yet); —; `Copy link`. Requests none. | | | `p11a-section-menu-signed-out`, `p11b-section-menu-loading`, `p11c-section-menu`, `p11d-pull-request-menu`; real window: `p11c-section-menu` | **R** (13.4 P steps 2 and 3): a real right-click at the centre of `RefRow(LeftPanelViewModel.PullRequestsTitle)`; `AssertMenu` with method 2's step 2 lines; compared with `p11c-section-menu` with `keepPointer`; Esc; a real right-click on `PullRequestRow("#1 Add the login form")`: the labels of step 3, no capture; then P15's click. `p11a`, `p11b`, `p11d` are scripted only. The palette's pull request items are `RepositoryMenusHostingTests`'. Varies by nature: the git box. |
+| P12 | "Open pull request #n" and "Create pull request…" in branch and drop menus (design 10.4, 0.2; D306, D313): `Open pull request #1` last in `feature/login`'s push group, `Create pull request…` in `local-work`'s; `Open pull request #2` and `Create pull request…` in a group after `origin/docs/readme`'s and `origin/topic/no-pr`'s delete groups; a drop's group between rebase and compare; `Open pull request #1` opens #1's page; "hosting", one tab on `hello`, signed in, dark, 1100×700 | **Method 2**, after P8: 14. Right-click `Local branches` › `feature` › `login`. Screenshot (`p12a-branch-menu-open`). Click `Open pull request #1`. 15. Right-click `Local branches` › `local-work`; read; Esc. 16. Click `Remotes` › `origin` › `docs`; right-click its `readme`; read; Esc. Click `Remotes` › `origin` › `topic`; right-click its `no-pr`; read; Esc. 17. Drag `Local branches` › `feature` › `login` onto `Local branches` › `main` (press, move held until the drag starts, release over the row); wait for the drop menu. Screenshot (`p12b-drop-menu-open`). Press Esc. 18. Drag `local-work` onto `Remotes` › `origin` › `main`; read; Esc. | **After step 14:** header `feature/login`; `Check out feature/login` (highlighted); `Merge feature/login into main`; `Merge feature/login into main (create a merge commit)`; `Rebase main onto feature/login`; `Interactive rebase of main onto feature/login…`; `Fast-forward feature/login to origin/feature/login` (disabled: "feature/login is up to date with origin/feature/login"); —; `Push feature/login to origin/feature/login`; `Force push feature/login…` (danger); `Open pull request #1`; —; `Create branch here…`; `Create tag here…`; `Rename feature/login…`; `Delete feature/login…` (danger); —; `Change upstream…`; `Stop tracking origin/feature/login`; —; `Compare feature/login with main`; `Show reflog of feature/login`; `Hide feature/login`; `Solo feature/login`; —; `Copy branch name`: 20 items and 5 separators, 597 high ±2, inside the window. After the click `Launcher.Requests` gains `OpenUrl` `http://127.0.0.1:47395/octo/hello/pull/1` (`OpenPullRequestAsync`, 10.5); requests none.<br>**After step 15:** header `local-work`; `Check out local-work` (highlighted); `Merge local-work into main`; `Merge local-work into main (create a merge commit)`; `Rebase main onto local-work`; `Interactive rebase of main onto local-work…`; —; `Push local-work…`; `Create pull request…`; —; `Create branch here…`; `Create tag here…`; `Rename local-work…`; `Delete local-work…` (danger); —; `Set upstream…`; —; `Compare local-work with main`; `Show reflog of local-work`; `Hide local-work`; `Solo local-work`; —; `Copy branch name`: 519 high ±2.<br>**After step 16:** header `origin/docs/readme`; `Check out origin/docs/readme` (highlighted); `Merge origin/docs/readme into main`; `Merge origin/docs/readme into main (create a merge commit)`; `Rebase main onto origin/docs/readme`; `Interactive rebase of main onto origin/docs/readme…`; —; `Create branch here…`; `Create tag here…`; —; `Delete docs/readme on origin…` (danger); —; `Open pull request #2`; —; `Compare origin/docs/readme with main`; `Hide origin/docs/readme`; `Solo origin/docs/readme`; —; `Copy branch name`: 415 high ±2. Then `origin/topic/no-pr`'s: header `origin/topic/no-pr`; the same lines with `origin/topic/no-pr` for `origin/docs/readme` and `Delete topic/no-pr on origin…` (danger), and `Create pull request…` in place of `Open pull request #2` (its only pull request, #4, is closed); 415 high ±2.<br>**After step 17:** header `feature/login → main`; `Merge feature/login into main` (highlighted); `Merge feature/login into main (create a merge commit)`; `Fast-forward main to feature/login`; —; `Check out feature/login and rebase it onto main` (disabled: "feature/login is up to date with main"); `Check out feature/login and rebase it onto main interactively…`; —; `Open pull request #1`; —; `Compare feature/login with main`: 241 high ±2.<br>**After step 18:** header `local-work → origin/main`; `Push local-work to origin/main` (highlighted); `Push local-work to origin/main and track it`; —; `Check out local-work and rebase it onto origin/main` (disabled: "local-work is up to date with origin/main"); `Check out local-work and rebase it onto origin/main interactively…`; —; `Create pull request…`; —; `Compare local-work with origin/main`: 215 high ±2. After each Esc no menu; no ref, file or request changed by steps 15 to 18. | | n/a | `p12a-branch-menu-open`, `p12b-drop-menu-open` | n/a: 13.4 P. Without a GitHub remote the items are left out (P1 step 12, signed in; `RepositoryMenusHostingTests`; every earlier menu check runs with GitHub off). `Create pull request…` is WP-N's action, clicked in part N. Varies by nature: the git box. |
+| P13 | Checking out a pull request (design 10.5, 0.2; D305, D304, D255, D193; 10.8): a double-click on #1 checks out `feature/login` (its head on `origin`) without a fetch; "Check out ada:fix-typo" fetches `refs/pull/5/head` into `FETCH_HEAD` only, through the app's helper, makes `fix-typo` without upstream at its SHA and checks it out; never a `refs/pull` fetch line or a `refs/remotes/<r>/pr/<n>` ref; each item then disabled; "hosting", tabs `hello` and `tool`, signed in, dark, 1100×700 | **Method 3** (`Check_P13_P6_checkout_and_a_forks_tab`): 1. `ServeAsync()`. `StartWithTabs(data, [served.Hello.Path, served.Tool.Path], activeTab: 0, gitHub: served.GitHub)`; `WaitForRepositoryAsync()`; `SignInAsync(OctoToken)`; wait for `hello: listed 4 open pull requests of octo/hello` and for the watchers to be quiet. In `hello/`, through `GitRunner` with `TempRepo.IsolatedEnvironment`, read `git config --local --list`. 2. Mark the requests and the log; take a quiet call mark. Double-click `#1`'s row; wait for the checkout's end and for the watchers to be quiet. Right-click `#1`; read; Esc. 3. Mark the requests, the git requests and the log; take a quiet call mark. Right-click `#5`; click `Check out ada:fix-typo`; wait for both operations' ends, for `hello: listed 4 open pull requests of octo/hello` since the mark and for the watchers to be quiet. Screenshot (`p13a-checked-out-fork`). Right-click `#5`; read; Esc. (Steps 4 and 5 are P6's.) 6. Close the app. In `hello/`, as in step 1: `git symbolic-ref HEAD`; `git rev-parse HEAD`; `git for-each-ref --format=%(refname)`; `git config --get-all remote.origin.fetch`; `git config --get-regexp ^branch\.fix-typo\.`; `git config --local --list`; `git status --porcelain`; and read `.git/FETCH_HEAD`. | **After step 2:** one operation, phase 3's checkout of `origin/feature/login` (D305), ending Succeeded; the status bar `Checked out feature/login`; git calls since the quiet mark hold `git switch --no-guess --no-overwrite-ignore feature/login` (D193) and no `git fetch` or `git branch`; requests none (a local operation refreshes no list, 7.10); HEAD on `feature/login`; #1's menu `Check out feature/login` (disabled: "feature/login is already checked out").<br>**After step 3:** two operations, Succeeded in this order: `Fetch pull request #5` (report `Fetched #5 into fix-typo`), then the checkout of `fix-typo`; the status bar `Checked out fix-typo`; no dialog at any time. Git calls since the quiet mark, in order: `git fetch --progress --no-tags --refmap= --write-fetch-head origin refs/pull/5/head`; `git branch --no-track fix-typo <sha>`, `<sha>` the full SHA of `refs/pull/5/head` in the copy's `github/octo/hello.git`; `git switch --no-guess --no-overwrite-ignore fix-typo`; no other `git fetch`, no `rev-parse` of `FETCH_HEAD` (10.5), no `git config` that writes. Git requests on `octo/hello` since the mark: at least one with `GivenUserName` `x-access-token` answered 200 (D255); none with another user name; none with credentials answered 401. API requests since the mark: exactly one `GET api/v3/repos/octo/hello/pulls` (the refresh after a network operation, 7.10), query `state=open&per_page=100`, `TokenPresent`, `Conditional` true and answered 304 (octo/hello's list unchanged since step 1's read, whose ETag the client keeps and sends, design 16 item 10, as in A8 step 6); none answered 401. The graph's top row "Fix a typo in the greeting" (Ada Lovelace) with `fix-typo`, HEAD; the local row `fix-typo` (accent) without `#n` (no upstream, 7.8, D313); the section still `4`; #5's menu `Check out ada:fix-typo` (disabled: "fix-typo is already checked out").<br>**After step 6:** HEAD `refs/heads/fix-typo` at `<sha>`; `for-each-ref` exactly the refs of part P's scenario facts and `refs/heads/fix-typo`: nothing under `refs/pull/`, no `refs/remotes/origin/pr/` (10.8); `remote.origin.fetch` exactly `+refs/heads/*:refs/remotes/origin/*`; `--get-regexp ^branch\.fix-typo\.` exits 1 and prints nothing; `--local --list` byte for byte step 1's; `FETCH_HEAD` one line: `<sha>`, a tab, an empty field, a tab, then text starting `'refs/pull/5/head' of ` (the URL not compared, 10.5); the working tree clean. | | n/a | `p13a-checked-out-fork` | n/a: 13.4 P checks nothing out. The first git request without credentials gets 401 (2.2). #1's operation title is open point 32. `fetch.prune`, `tagOpt`, a rewritten `FETCH_HEAD`, a taken name and a reused branch are 10.6's classes'. Varies by nature: the git box. WP-V: open point 29. |
+| P14 | Copy link (design 10.4, 10.5; D251): #1's `Copy link` puts #1's page address on the clipboard and asks GitHub nothing; "hosting", one tab on `hello`, signed in, dark, 1100×700 | **Method 2**, after P11's step 3: 4. Click `Copy link`. | **After step 4:** the menu closed; `FakeClipboard.Text` `http://127.0.0.1:47395/octo/hello/pull/1` (`html_url`, `WithPort`); requests none; `Launcher.Requests` unchanged; no operation; nothing selected. | | n/a | none | n/a: the real window never clicks a "Copy …" item (13.2). |
+| P15 | Open in browser (design 10.4, 10.5, 13.5; D251, D321; R): #1's `Open in browser` hands #1's page to the launcher and asks GitHub nothing; in the real process the default browser opens once on the fake's page; "hosting", one tab on `hello`, signed in, dark, 1100×700 | **Method 2**, after P11's step 5: 6. Mark the requests and the log. Right-click `#1`; click `Open in browser`. | **After step 6:** `Launcher.Requests` exactly one `OpenUrl` `http://127.0.0.1:47395/octo/hello/pull/1`; requests since the mark none (the fake launcher fetches no page); no operation; no Warning in the log since the mark. The section's and the `More` row's `…/octo/hello/pulls` are P11's and P7's, the branch menu's item P12's. | | | none; real window: none | **R** (13.4 P step 4, 13.5; D321): with `OpensTheBrowser` true, mark the fake and the log; a real click on #1's `Open in browser`; within `NetworkTimeout` at least one request of route `page:octo/hello`, path `octo/hello/pull/1`, 200, `TokenPresent` false (a browser may fetch a page more than once); no `[WRN]` line since the mark; a real click at the neutral point takes the activation back; run.txt `P: the browser opened http://127.0.0.1:<port>/octo/hello/pull/1; its tab is left open.`; then `AssertCleanEnd`. The owner closes the tab; where the step cannot run, D321's `false` with the owner's word moves it to the checks by hand at acceptance. |
 
 ## What proves each Delivers item
 
-`plan.md`'s phase 7a "Delivers", against parts A and B; "later parts" are P, N and G, written before
+`plan.md`'s phase 7a "Delivers", against parts A, B and P; "later parts" are N and G, written before
 their packages, or the work packages' own classes (design 0.1).
 
-| Delivers item | Part A | Part B | Elsewhere |
-|---|---|---|---|
-| The provider model for 7b | — | — | later parts; WP-G's and WP-S's classes |
-| Sign-in to GitHub with a token in Settings, Accounts; keychain, else the session; one account (D249, D253, D256, D258, D263; R3) | A1 to A11 (the keychain through `FakeTokenStore`); the real window repeats A1, A2 and A5 | B7, B8: the sign-in the palette's "Clone from GitHub…" asks for first, and a cancelled one (D300); the real window repeats B7's | the real stores: WP-K's classes on CI (D259, D333) |
-| The account's token on the app's git calls to github.com (D255) | A9 (the fetch's credentials from the app's helper as `x-access-token`, git's refusal), A11 (the switch) | B6: a clone through the app's helper as `x-access-token`, no credentials dialog, no credential written; the real window repeats it in the real process | WP-C's classes; `WelcomeCloneFromGitHubTests` (a typed URL, another user's URL, D331's rule) |
-| Browse and clone (D261) | — | B1 to B9; the real window repeats B3, B6 and B7 | `CloneFromGitHubDialogViewModelTests`, `CloneFromGitHubDialogViewTests`, `WelcomeCloneFromGitHubTests`, `PaletteCloneFromGitHubTests`, `HostingTextsDescribeTests` (9.6) |
-| Pull-request list and menu, create, badge, open in browser (D251) | — | — | later parts (P, N, G) |
-| Avatars from GitHub only (D252) | A8 in part: a sign-out leaves no `avatars/` (D291) | — | later parts (G) |
-| The opt-in live command (D250) | — | — | WP-LIVE |
-| From phase 3: "Create pull request" in the branch, remote-branch and drop menus; the section's menu | — | — | later parts (P, N) |
-| From phase 3: a provider's token reaches git | A9 | B6 | WP-C's classes |
-| From phase 6: the push guard; the prompt group per account | — | — | WP-C's classes |
-| From phase 6: the wheel test; the real-window csproj's comment | — | — | L1 (`ShellDriverTests`; the file) |
-| From the review: W1, S8, R8; G23's split | — | — | WP1 |
+| Delivers item | Part A | Part B | Part P | Elsewhere |
+|---|---|---|---|---|
+| The provider model for 7b | — | — | P6 (recognition, and the listed repository a fork's parent through A3 and A4, 0.2), P1 (a remote GitHub does not have) | later parts; WP-G's and WP-S's classes |
+| Sign-in to GitHub with a token in Settings, Accounts; keychain, else the session; one account (D249, D253, D256, D258, D263; R3) | A1 to A11 (the keychain through `FakeTokenStore`); the real window repeats A1, A2 and A5 | B7, B8: the sign-in the palette's "Clone from GitHub…" asks for first, and a cancelled one (D300); the real window repeats B7's | P2, P4: the section's sign-in row and the window's entry (8.5); P11 shows "Sign in to GitHub…" in the section's signed-out menu, not clicked (every sign-in item ends in that entry, 8.5) | the real stores: WP-K's classes on CI (D259, D333); the section menu's sign-in item and its action: `RepositoryMenusHostingTests` (the linked `RecordingActions`, 10.6) |
+| The account's token on the app's git calls to github.com (D255) | A9 (the fetch's credentials from the app's helper as `x-access-token`, git's refusal), A11 (the switch) | B6: a clone through the app's helper as `x-access-token`, no credentials dialog, no credential written; the real window repeats it in the real process | P13: #5's fetch of `refs/pull/5/head` through the app's helper as `x-access-token` | WP-C's classes; `WelcomeCloneFromGitHubTests` (a typed URL, another user's URL, D331's rule) |
+| Browse and clone (D261) | — | B1 to B9; the real window repeats B3, B6 and B7 | — | `CloneFromGitHubDialogViewModelTests`, `CloneFromGitHubDialogViewTests`, `WelcomeCloneFromGitHubTests`, `PaletteCloneFromGitHubTests`, `HostingTextsDescribeTests` (9.6) |
+| Pull-request list and menu, create, badge, open in browser (D251) | — | — | P1 to P15: the section's states and rows, the filter, a click, the branch rows' `#n`, the menus, checkout, copy link, open in browser; the real window repeats P6, P11 and P15 (the default browser, D321) | create and the graph's badge: later parts (N, G); `PullRequestSectionTests`, `PullRequestCheckoutTests`, `RepositoryMenusHostingTests`, `LeftPanelPullRequestsViewTests`, `PullRequestOperationsTests`, `GitRepositoryPullRequestsTests`, `PullRequestFetchHeadTests` (10.6) |
+| Avatars from GitHub only (D252) | A8 in part: a sign-out leaves no `avatars/` (D291) | — | — | later parts (G) |
+| The opt-in live command (D250) | — | — | — | WP-LIVE |
+| From phase 3: "Create pull request" in the branch, remote-branch and drop menus; the section's menu | — | — | P11 (the section's menu, D307), P12 (`Open pull request #n` and `Create pull request…` in branch menus, `feature/login`'s and `local-work`'s, remote-branch menus, `origin/docs/readme`'s and `origin/topic/no-pr`'s, and drop menus, D306); P1 (none without a GitHub remote) | the form: later parts (N) |
+| From phase 3: a provider's token reaches git | A9 | B6 | P13 | WP-C's classes |
+| From phase 6: the push guard; the prompt group per account | — | — | — | WP-C's classes |
+| From phase 6: the wheel test; the real-window csproj's comment | — | — | — | L1 (`ShellDriverTests`; the file) |
+| From the review: W1, S8, R8; G23's split | — | — | — | WP1 |
 
 ## Changes to expected results
 
@@ -617,6 +765,34 @@ Part B changes no earlier picture on purpose, and one earlier test's list:
   difference as WP-B's defect; that reading waits for the lead's ruling (open point 19), and until it,
   9.3's sentence binds.
 
+### Part P: part A's check 9 and the left panel (design 0.4, 0.7, 8.7, 10.8)
+
+Part P changes the pictures of one earlier check on purpose, and no earlier test:
+
+- **A9's pictures** (`a09a-needs-sign-in-api`, `a09b-git-refused`, `a09c-needs-sign-in-git`). From WP-P's
+  merge the left panel of `hello`'s window behind their backdrops (in `a09a` and `a09c` the part left of
+  the settings card) shows WP-P's section in place of the placeholder: the header `Pull requests` with
+  the chevron down and `0`, and under it one row `Sign in to GitHub to see pull requests…` (10.2; cut
+  with "…" at 260, as in P2), so
+  the `Tags` and `Stashes` headers lie 26 lower; no branch row shows a `#n`. In each of the three the
+  account needs sign-in, which `RepositoryHosting` shows as `SignedOut` with no list (7.8); A9 takes no
+  picture while signed in (its step 4's rows are pictured by P6's `p06a-rows`). Nothing else in them
+  changes, and A9 asserts nothing in that region. Reason: D251 and D303: a repository with a GitHub
+  remote shows the section's states, and A9's `hello` has one. The lead runs A9 again at WP-P's merge
+  and inspects its three pictures (10.8, 0.4; open point 31), and again at WP-V's (11.6), where they do
+  not change further: needing sign-in, the graph shows no badge or avatar (D257).
+- **Everything else stays** (10.8, 0.7). A repository without a GitHub remote, and every start with
+  GitHub off (both harnesses' default, rulings 23 and 24), keeps the placeholder (`03e-no-menu`, which
+  10.6 runs unchanged), every branch, remote-branch and drop menu (10.4's hooks give nothing without
+  hosting), the palette (`RepositoryItems` adds pull requests only for a listed repository) and the
+  branch rows (`RefPullRequest` collapsed takes no room, D308), so no earlier phase's picture changes;
+  part A's other pictures are of empty tabs and part B takes none of an opened GitHub repository (9.7).
+  No earlier test changes: 10.6's builder runs `LeftPanelViewModelTests`, `PanelViewTests`,
+  `RepositoryMenusTests`, `RepositoryMenusKeyTests`, `PaletteEntriesTests` and
+  `RepositoryOperationsCheckoutTests` unchanged. The comparison at WP-P's merge is as ruling 19 set it at
+  WP-B's: by region against the last full run's pictures, the git box, A9's region above and what varies
+  by nature set aside.
+
 ### Stays as it is
 
 Every other earlier picture and expectation: both harnesses start with GitHub off and the keychain in
@@ -624,7 +800,7 @@ memory (rulings 23, 24), so the welcome page and its clone form (no "From GitHub
 (no Accounts or sign-in entry and no "Clone from GitHub…", D299), the left panel's "Pull requests"
 placeholder and every menu stay as they are, and no earlier count of git calls moves (signed out, a
 clone reads no configuration, 9.3). Pictures that show the status bar's git box differ from
-`phase-6-pictures.sha256` for D248 whatever parts A and B do; they are compared by region with
+`phase-6-pictures.sha256` for D248 whatever parts A, B and P do; they are compared by region with
 `master`'s references made with the same git.
 
 ### Changed in this report after its first commit
@@ -658,7 +834,7 @@ the class or, refused with error 1312, its removal from the job (D259, D333; des
 
 ## macOS checklist for the owner
 
-To try by hand on a Mac (CI runs parts A and B headless with the fake keychain and the fake of GitHub,
+To try by hand on a Mac (CI runs parts A, B and P headless with the fake keychain and the fake of GitHub,
 and the real store's class against a throw-away keychain; these are what only a person on a Mac sees):
 
 1. **Sign in** (D249, D295): Cmd+, , "Accounts" (last in the list), "Sign in…". "Create a token on GitHub"
@@ -682,6 +858,12 @@ and the real store's class against a throw-away keychain; these are what only a 
    private one, a parent folder, then Clone: it clones with no credentials dialog and no keychain prompt
    (the app's helper runs through macOS's `/bin/sh`); `git config --local --get-regexp credential` in the
    clone prints nothing, and Keychain Access holds no new `github.com` internet password.
+6. **Pull requests** (part P; D251, D305): in a clone of a github.com repository with open pull
+   requests, signed in, the left panel's "Pull requests" lists them newest first with number, title and
+   author, a draft marked "Draft". Right-click one: "Open in browser" opens the default browser once, on
+   its page; "Check out …" of a pull request from a fork fetches it with no credentials dialog and makes
+   a local branch without upstream, and `git config --get-all remote.origin.fetch` still prints only
+   `+refs/heads/*:refs/remotes/origin/*`.
 
 ## Open points and the lead's rulings
 
@@ -837,3 +1019,106 @@ Part B's points (11 on) were written on 2026-10-29, before WP-B starts; each wai
     The lead's ruling is asked. **Ruling:** accepted: D244's limit of about 30 KB binds what every part shares ("Conventions of
     every part" and "Scenario facts"); each part's own section holds only what its rows do not say,
     at about 10 KB. Part A's section stays as written; parts P, N and G keep to it.
+
+Part P's points (21 on) were written on 2026-10-29, while WP-B was being built and before WP-P starts;
+each waits for the lead's ruling.
+
+21. **A repository without a GitHub remote (part P: P1; design 10.7, 0.2).** 10.7 shows "the section
+    unchanged without a GitHub remote (`03e`'s state)", but both repositories of "hosting" have GitHub
+    remotes. The report's reading: method 1 opens a copy of phase 3's "ops" (`Scenarios.OperationsAsync()`,
+    the repository `03e` shows, its `origin` a folder) in a second tab, signed in, so that P1 proves what
+    `03e`, taken with GitHub off, cannot: a sign-in leaves such a repository's section, menu and requests
+    as they were. Its template is built once in the 7a project's process. The other way, a plain
+    `TempRepo` with one commit, would show the same section but not `03e`'s panel. **Ruling:** accepted.
+22. **The message rows' tooltips (part P: P2, P3, P5; design 10.3).** 10.3 gives the failed row's
+    tooltip and the `More` row's, not the sign-in, loading and none rows', whose texts may be cut at 260.
+    The report's reading: each is its own text, as a branch row's name tooltip is; no check asserts or
+    pictures them. **Ruling:** accepted.
+23. **A failure after a list (part P: P4; design 10.3, 7.8, 17 item 1; D303).** 10.3's failed state shows
+    "the kept list's matches … then the kept rows", but `RepositoryHosting` as built answers a failed
+    refresh with `Failed` and `List` null (7.8: "`Failed` with the failure and no list"; `Finish` keeps
+    the answer's list, null), so no state holds a list with a failure. The report's reading: the section
+    shows the state, so after a failed refresh the rows go and the failed row stands alone with `0`. P4
+    pictures a failure on the first read, the same either way; no check depends on the reading. The lead
+    rules whether WP-P keeps the last rows itself (D303's "a refresh keeps the rows it had") or follows
+    the state, and 10.3 or 7.8 is amended to match. **Ruling:** 10.3 and D303 bind the section: when a failure follows a list of the same
+    repository with the same account, WP-P keeps the rows it last showed, under the failed row (the
+    kept list's matches, then the kept rows); a sign-out or another account clears them. 7.8 stays
+    as built (the hosting reports the failure without a list); WP-P keeps the rows itself, and a
+    `PullRequestSectionTests` case proves it. P4 stays a first read's failure.
+24. **Which failure is pictured (part P: P4; design 10.7, 1.7).** 10.7 names "failed, in
+    `HostingTexts.Describe`'s words" without a kind. The report pictures `Forbidden` on the list
+    (`FailNext("pulls:octo/hello", Forbidden)`): the kind shown in GitHub's words (ruling 15), the one
+    whose failed row has a second tooltip line (`Detail`, `X-Accepted-GitHub-Permissions`), and a real
+    case (a fine-grained token without Pull requests access); part B pictured `ServerError`. The other
+    kinds are `HostingTextsDescribeTests`' and `PullRequestSectionTests`'. **Ruling:** accepted.
+25. **The draft's text and place (part P: P6, P7; design 10.3, 10.2).** `Draft` is not in 10.2's table;
+    10.3's template shows the text `Draft` (and the tooltip ` · Draft`). It docks `PullRequestAuthor`, then
+    `PullRequestDraft`, to the right, so `Draft` lies left of the author, with no margin given between
+    them. The report reads the text `Draft` and that order, asserts both whole on #2 only, and leaves
+    the gap to the builder, inspected. **Ruling:** accepted.
+26. **A row's tooltip (part P: P6; design 10.3).** 10.3 writes the tooltip as `#1 Add the login form`,
+    "then" `{author} · {head label} → {base ref}`, "then" ` · Draft`. The report reads the first "then" as
+    a line break (as the failed row's "on a second line") and the second as the same line:
+    `#2 Update the readme`, line break, `octo · docs/readme → main · Draft`. **Ruling:** accepted.
+27. **A deleted fork's head label (part P: P6's `tool`; design 10.3, 10.5).** 10.3 gives the head label
+    of a same-repository head (`feature/login`) and a fork's (`ada:fix-typo`), not of #8's, whose fork
+    `gone/tool` is gone (`HeadRepository` null). P6 asserts #8's name, author and menu (`Check out idea`,
+    10.5) but not its tooltip; the filter is not tried on it. **Ruling:** accepted.
+28. **The 297 added pull requests (part P: P7; design 10.7, 2.3).** 10.7 adds them "by `AddPullRequest`
+    on octo/hello in the check" without data. The report names them `More work {n}`, author octo, head
+    `topic/no-pr` (a branch of octo/hello whose only pull request, #4, is closed), base `main`, added in
+    order so the fake numbers them #6 to #302. So `origin/topic/no-pr` gets `#6` (the lowest number on
+    one key, 7.8) and `feature/login` loses `#1` (#1 is the 301st). Test data, not app texts; the lead may
+    name others, and P7's expected results follow. **Ruling:** accepted.
+29. **WP-V's merge and part P's pictures (part P; design 11.6, 0.4, D322).** 11.6 runs part A's check 9
+    again, not part P's checks, but every picture of part P except `p01a` (no GitHub remote), `p02a` and
+    `p11a` (signed out, D257) shows a signed-in GitHub repository's graph, which WP-V changes: badges on
+    the labels of branches with an open pull request (11.2) and avatars in the Author column and the
+    details panel (11.3), in `p03a` and `p04a` too, since avatars wait only for A3's answer (7.9). The report's
+    reading: the lead runs part P's checks again at WP-V's merge and inspects those regions; from then on
+    each signed-in picture waits for its tab's `AvatarsShown` once since the start, a refresh's picture
+    for the refresh's own `PullRequestsListed` line. WP-V's builder confirms that its line comes in the
+    loading and failed states too, else the four pictures of those states (`p03a`, `p11b`, `p04a`,
+    `p04b`) wait for the avatars' state instead; WP-S's line never comes in them (open point 34). **Ruling:** accepted: the lead runs part P's checks again at WP-V's merge and inspects the badges'
+    and avatars' regions; WP-V's builder says whether its line comes in the loading and failed
+    states, and part P's waits follow.
+30. **The R twin's sign-in (part P: P6, P11; design 13.4 P, 0.5).** 13.4 P signs in through Settings
+    (`SignInThroughSettings`: the screen, the dialog, the token, Esc). Method 2 signs in the same way,
+    not through the session (which methods 3 and 4 use for states their steps only start from), so that
+    `p06a` and `p11c` are taken in the state the real window reaches, the focus after the screen closes
+    included, and owe nothing to a hook (0.5). **Ruling:** accepted.
+31. **A9's `a09b` from WP-P's merge (part P; design 10.8).** A9's step 5 waits for the account and
+    `accounts.json` before `a09b`; WP-P's section follows the account through two posts on the UI thread
+    (the session's `AccountChanged`, then the hosting's `Changed`), which the capture's settling runs, so
+    `a09b` shows the sign-in row. Should the lead's run at the merge show the four rows there, A9's step 5
+    gains a wait for `hello`'s `HostingState.PullRequests` `SignedOut` (a wait, no expected result
+    changed), recorded under "Changed in this report after its first commit". **Ruling:** accepted.
+32. **#1's checkout's operation (part P: P13; design 10.5; D305).** 10.5 runs the existing
+    `CheckoutAsync(remoteRef)` for a head on a remote, so the operation is phase 3's checkout of
+    `origin/feature/login` (its activity row and running text name `origin/feature/login`) while the
+    menu's item reads `Check out feature/login`; the report goes by 10.5 and asserts the status bar's
+    `Checked out feature/login`. **Ruling:** accepted.
+33. **Steps beyond 10.7's list (part P)**, with texts and places the design gives: the signed-out and
+    loading section menus (10.4) and the signed-out `Open pull requests in browser` asking nothing (D257);
+    P2's click on the sign-in row (8.5); P3's refresh after a failure (17 item 1); P6's `tool`, a fork
+    listing its parent's pull requests with #7's and #8's checkout labels (0.2, 10.5); P7's `More` row
+    click; P10's section closing with its count; P12's remote-branch menus and a drop onto a remote
+    branch; P1's branch menu signed in without a GitHub remote (D306); P13's double-click (D304), the
+    items disabled once checked out, `fix-typo` without `#n` (D313) and the `FETCH_HEAD` line. **Ruling:** accepted.
+34. **D322 and the states without a list (part P: P3, P4, P11; D322, design 7.8, 17 item 1).** D322
+    takes a picture of an opened GitHub repository while signed in only after WP-S's `{repo}: listed …`
+    line, but `RepositoryHosting.Finish` writes that line only when it applies a list: never in the
+    failed state, and for a held list only once the answer is let go and applied, which ends the
+    loading state. So `p03a` and `p11b`
+    (loading) and `p04a` and `p04b` (failed) cannot follow it, and a builder who waited for it there
+    would wait for a line that never comes. The report's reading: D322 binds the pictures of a list,
+    which are the states the real window repeats (its reason is the R twins; these four are scripted
+    only, a held request and a fault, 0.5); a picture of a state without a list waits for the tab's
+    view model's `HostingState.PullRequests` in that state, the section's message row and the watchers
+    being quiet (part P's conventions), and the shared convention says so. The lead rules on this
+    reading of D322, and whether D322's text is amended to match; open point 29 asks the same of WP-V's
+    `AvatarsShown` in these states. **Ruling:** accepted as the lead's reading of D322, whose text stays as recorded: its two lines are
+    written only when a list (or the avatars) is applied, so it binds the pictures of a state with a
+    list, which are the ones the real window repeats; a picture of the loading or failed state waits
+    for that state as part P's conventions say. Design 17 records the reading.

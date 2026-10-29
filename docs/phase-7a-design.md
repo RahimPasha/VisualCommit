@@ -4613,3 +4613,12 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
      A1's quiet mark on the slow runner. `StartEmptyAsync` now waits for `WaitUntilReadyAsync`, as
      phase 6's start helpers do; a later part that starts an empty tab and counts git calls does the
      same.
+3. **Part P's checks, the lead's rulings that bind WP-P and WP-V** (the report's open points 23, 29
+   and 34). When a failed refresh follows a list of the same repository with the same account, WP-P's
+   section keeps the rows it last showed under the failed row (10.3, D303); 7.8 stays as built, the
+   hosting reporting the failure without a list, and WP-P keeps the rows itself, with a
+   `PullRequestSectionTests` case. D322's two Debug lines come only when a list or the avatars are
+   applied, so D322 binds the pictures of a state with a list, the ones the real window repeats; a
+   picture of the loading or failed state waits for that state (the view model's
+   `HostingState.PullRequests`, the section's message row, quiet watchers). Part P's checks run again at
+   WP-V's merge, and WP-V's builder says whether its avatars' line comes in those states.
