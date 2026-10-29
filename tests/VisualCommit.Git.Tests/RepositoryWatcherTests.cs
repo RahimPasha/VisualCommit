@@ -226,7 +226,10 @@ public class RepositoryWatcherTests
     [Fact]
     public async Task A_lagged_watcher_disposed_with_events_held_drops_them()
     {
-        var lag = TimeSpan.FromSeconds(1);
+        // The watcher's own counts tell what was held and what was delivered: Changed alone could
+        // not fail, since a delivery after Dispose would count nothing. The lag leaves a slow
+        // machine room between the write's event being held and the Dispose.
+        var lag = TimeSpan.FromSeconds(2);
         using var folder = new TempDirectory("watch");
         var log = new ListLog();
         var watcher = new RepositoryWatcher(folder.Path, folder.Path, log, quietPeriod: Quiet, eventLag: lag);
@@ -234,9 +237,18 @@ public class RepositoryWatcherTests
         watcher.Start();
 
         File.WriteAllText(folder.Combine("held"), "x");
+        var waited = Stopwatch.StartNew();
+        while (watcher.HeldEvents == 0)
+        {
+            Assert.True(waited.Elapsed < Timeout, "The write's event was never held.");
+            await Task.Delay(15, TestCancelled);
+        }
+
         watcher.Dispose();
+        Assert.True(watcher.DeliveredEvents == 0, $"A held event was delivered before the watcher was disposed, {waited.Elapsed.TotalMilliseconds:F0} ms after the write (the lag is {lag.TotalMilliseconds} ms).");
 
         await Task.Delay(lag + Settle, TestCancelled);
+        Assert.True(watcher.DeliveredEvents == 0, $"{watcher.DeliveredEvents} of the {watcher.HeldEvents} held events were delivered after the watcher was disposed.");
         Assert.Equal(0, changed.Count);
         Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Error);
     }

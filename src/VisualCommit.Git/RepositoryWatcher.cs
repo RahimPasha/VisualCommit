@@ -55,6 +55,8 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
     /// <summary>The events held for <see cref="_eventLag"/>, in arrival order; null without a lag.</summary>
     private readonly Channel<HeldEvent>? _held;
+    private int _heldEvents;
+    private int _deliveredEvents;
     private bool _started;
     private volatile bool _disposed;
 
@@ -134,6 +136,15 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     /// has arrived before it moves the clock.
     /// </summary>
     internal Action<string?>? EventCounted { get; set; }
+
+    /// <summary>For tests of the lag (R8): how many events have been held so far; zero without a lag.</summary>
+    internal int HeldEvents => Volatile.Read(ref _heldEvents);
+
+    /// <summary>
+    /// For tests of the lag (R8): how many held events have been delivered so far, each counted just
+    /// before its handler runs, whether the handler then counts it or not.
+    /// </summary>
+    internal int DeliveredEvents => Volatile.Read(ref _deliveredEvents);
 
     /// <summary>The git folders being watched: the git folder, and the common folder when it does not contain the git folder.</summary>
     public IReadOnlyList<string> Folders => _folders;
@@ -340,8 +351,13 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     }
 
     /// <summary>Holds an event for the lag: <paramref name="deliver"/> runs once it has passed. Once disposed, nothing is held.</summary>
-    private void Hold(Action deliver) =>
-        _held!.Writer.TryWrite(new HeldEvent(Stopwatch.GetTimestamp() + (long)(_eventLag.TotalSeconds * Stopwatch.Frequency), deliver));
+    private void Hold(Action deliver)
+    {
+        if (_held!.Writer.TryWrite(new HeldEvent(Stopwatch.GetTimestamp() + (long)(_eventLag.TotalSeconds * Stopwatch.Frequency), deliver)))
+        {
+            Interlocked.Increment(ref _heldEvents);
+        }
+    }
 
     /// <summary>
     /// The held events' one consumer, on the thread pool: each in arrival order once its lag has
@@ -368,6 +384,7 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
                         return;
                     }
 
+                    Interlocked.Increment(ref _deliveredEvents);
                     try
                     {
                         held.Deliver();
