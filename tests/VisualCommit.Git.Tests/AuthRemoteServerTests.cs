@@ -416,6 +416,230 @@ public class AuthRemoteServerTests
         Assert.Equal(47392, AuthRemoteServer.Phase1VisualChecksPort);
         Assert.Equal(47393, AuthRemoteServer.Phase6VisualChecksPort);
         Assert.Equal(47394, AuthRemoteServer.Phase6LookVisualChecksPort);
+        Assert.Equal(47395, AuthRemoteServer.Phase7aVisualChecksPort);
+    }
+
+    // ---- A host (docs/phase-7a-design.md 2.2, D266) --------------------------------------------------
+
+    [Fact]
+    public async Task A_host_serves_two_levels_registered_after_the_start_with_or_without_git_in_the_path()
+    {
+        using var host = await HostFolderAsync();
+        await using var server = await AuthRemoteServer.StartForHostAsync(host.Folder, host.Options);
+        Assert.True(server.ServesFolder);
+        Assert.Empty(server.ServedRepositories);
+
+        // Registered after the start; a folder that is no bare repository, or a name of one level, is refused.
+        server.Serve("octo/hello");
+        server.Serve("acme/tool.git");
+        Assert.Equal(["acme/tool", "octo/hello"], server.ServedRepositories);
+        Assert.Throws<ArgumentException>(() => server.Serve("octo/missing"));
+        Assert.Throws<ArgumentException>(() => server.Serve("hello"));
+        Assert.Throws<ArgumentException>(() => server.Serve("octo/he llo"));
+        Assert.Equal($"http://127.0.0.1:{server.Port}/octo/hello.git", server.UrlOf("octo/hello"));
+
+        // Token mode: any user name with a known token signs in as the token's login.
+        var withGit = WithCredentials(server.UrlOf("octo/hello"), "x-access-token", OctoToken);
+        var withoutGit = WithCredentials($"http://127.0.0.1:{server.Port}/octo/hello", "x-access-token", OctoToken);
+        await GitOkAsync(host.Repo, "clone", "--quiet", withGit, host.Repo.SiblingPath("with-git"));
+        await GitOkAsync(host.Repo, "clone", "--quiet", withoutGit, host.Repo.SiblingPath("without-git"));
+
+        Assert.Equal(["Second", "First"], Lines(await GitInAsync(host.Repo, host.Repo.SiblingPath("with-git"), "log", "--format=%s")));
+        Assert.Equal(["Second", "First"], Lines(await GitInAsync(host.Repo, host.Repo.SiblingPath("without-git"), "log", "--format=%s")));
+        var signedIn = server.Requests.Where(request => request.Status == 200).ToList();
+        Assert.Contains(signedIn, request => request.Path == "/octo/hello/git-upload-pack");
+        Assert.Contains(signedIn, request => request.Path == "/octo/hello.git/git-upload-pack");
+        Assert.All(signedIn, request => Assert.Equal(("octo", "x-access-token"), (request.UserName, request.GivenUserName)));
+
+        // A server that is not a host's registers nothing by name.
+        await using var plain = await AuthRemoteServer.StartAsync();
+        Assert.Throws<InvalidOperationException>(() => plain.Serve("octo/hello"));
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_claimed_path_is_answered_before_auth_and_an_unclaimed_one_is_still_404()
+    {
+        using var host = await HostFolderAsync();
+        await using var server = await AuthRemoteServer.StartForHostAsync(host.Folder, host.Options);
+        server.Serve("octo/hello");
+        using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false });
+
+        using var claimed = await client.GetAsync(new Uri($"http://127.0.0.1:{server.Port}/api/v3/ping?x=1"), TestCancelled);
+        Assert.Equal(HttpStatusCode.OK, claimed.StatusCode);
+        Assert.Equal("pong GET /api/v3/ping x=1 " + $"127.0.0.1:{server.Port}", await claimed.Content.ReadAsStringAsync(TestCancelled));
+        Assert.Equal(["text/plain"], claimed.Content.Headers.GetValues("Content-Type"));
+        Assert.Equal("yes", Assert.Single(claimed.Headers.GetValues("X-Fake")));
+
+        using var posted = await client.PostAsync(new Uri($"http://127.0.0.1:{server.Port}/api/v3/ping"), new StringContent("{\"a\":1}"), TestCancelled);
+        Assert.Equal("pong POST /api/v3/ping  " + $"127.0.0.1:{server.Port}" + " {\"a\":1}", await posted.Content.ReadAsStringAsync(TestCancelled));
+
+        // A dropped answer closes the connection without a word (the client may try again first).
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.PostAsync(new Uri($"http://127.0.0.1:{server.Port}/api/v3/drop"), new StringContent("{}"), TestCancelled));
+
+        foreach (var path in new[] { "/api/v3/other", "/octo/missing.git/info/refs", "/octo", "/" })
+        {
+            using var unclaimed = await client.GetAsync(new Uri($"http://127.0.0.1:{server.Port}{path}"), TestCancelled);
+            Assert.Equal(HttpStatusCode.NotFound, unclaimed.StatusCode);
+        }
+
+        var requests = server.Requests;
+        Assert.Equal([200, 200], requests.Where(request => request.Path == "/api/v3/ping").Select(request => request.Status));
+        Assert.All(requests.Where(request => request.Path == "/api/v3/drop"), request => Assert.Equal(("POST", 201), (request.Method, request.Status)));
+        Assert.Contains(requests, request => request.Path == "/api/v3/drop");
+        Assert.Equal(4, requests.Count(request => request.Status == 404));
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_public_repository_is_read_without_credentials_and_its_push_is_refused()
+    {
+        using var host = await HostFolderAsync();
+        await using var server = await AuthRemoteServer.StartForHostAsync(host.Folder, host.Options);
+        server.Serve("acme/tool");
+        var clone = host.Repo.SiblingPath("anonymous");
+
+        await GitOkAsync(host.Repo, "clone", "--quiet", server.UrlOf("acme/tool"), clone);
+
+        Assert.Equal(["Second", "First"], Lines(await GitInAsync(host.Repo, clone, "log", "--format=%s")));
+        Assert.All(server.Requests, request => Assert.Equal((200, (string?)null), (request.Status, request.UserName)));
+
+        // Without credentials a push is asked for them, and git has nobody to ask.
+        var push = await GitAsync(host.Repo, ["-C", clone, "push", "origin", "HEAD:refs/heads/topic"]);
+        Assert.False(push.Succeeded);
+        Assert.Contains("could not read Username", push.StandardError, StringComparison.Ordinal);
+        Assert.Contains(server.Requests, request => request.Query == "service=git-receive-pack" && request.Status == 401);
+
+        // A wrong header is refused even for a public read. (Git sends the URL's credentials only
+        // after a 401, so a public read through git never shows them; a client that sends them
+        // first is refused.)
+        using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false });
+        foreach (var header in new[] { "Basic " + Convert.ToBase64String("x-access-token:ghp_FAKE-nobody-9"u8), "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(":" + AdaToken)), "Bearer " + AdaToken })
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Get, new Uri(server.UrlOf("acme/tool") + "/info/refs?service=git-upload-pack"));
+            message.Headers.TryAddWithoutValidation("Authorization", header);
+            using var refused = await client.SendAsync(message, TestCancelled);
+            Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+        }
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_private_repository_asks_for_a_token_and_a_login_that_may_not_push_gets_403()
+    {
+        using var host = await HostFolderAsync();
+        await using var server = await AuthRemoteServer.StartForHostAsync(host.Folder, host.Options);
+        server.Serve("octo/hello");
+
+        var anonymous = await GitAsync(host.Repo, ["ls-remote", server.UrlOf("octo/hello")]);
+        Assert.False(anonymous.Succeeded);
+        Assert.Contains("could not read Username", anonymous.StandardError, StringComparison.Ordinal);
+        using (var client = new HttpClient(new SocketsHttpHandler { UseProxy = false }))
+        {
+            using var response = await client.GetAsync(new Uri(server.UrlOf("octo/hello") + "/info/refs?service=git-upload-pack"), TestCancelled);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            var challenge = Assert.Single(response.Headers.WwwAuthenticate);
+            Assert.Equal(("Basic", "realm=\"GitHub\""), (challenge.Scheme, challenge.Parameter));
+        }
+
+        // Ada may read but not push; octo may push.
+        var clone = host.Repo.SiblingPath("ada");
+        await GitOkAsync(host.Repo, "clone", "--quiet", WithCredentials(server.UrlOf("octo/hello"), "x-access-token", AdaToken), clone);
+        var refused = await GitAsync(host.Repo, ["-C", clone, "push", "origin", "HEAD:refs/heads/topic"]);
+        Assert.False(refused.Succeeded);
+        Assert.Contains(server.Requests, request => request.Status == 403 && request.UserName == "ada" && request.Query == "service=git-receive-pack");
+        Assert.False((await GitAsync(host.Repo, ["-C", Path.Combine(host.Folder, "octo", "hello.git"), "rev-parse", "--verify", "--quiet", "refs/heads/topic"])).Succeeded);
+
+        await GitOkAsync(host.Repo, "-C", clone, "push", "--quiet", WithCredentials(server.UrlOf("octo/hello"), "x-access-token", OctoToken), "HEAD:refs/heads/topic");
+        Assert.Equal(
+            await GitInAsync(host.Repo, clone, "rev-parse", "HEAD"),
+            await GitInAsync(host.Repo, Path.Combine(host.Folder, "octo", "hello.git"), "rev-parse", "refs/heads/topic"));
+        Assert.Contains(server.Requests, request => request.Status == 200 && request.UserName == "octo" && request.Path == "/octo/hello.git/git-receive-pack");
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_hosts_request_is_held_by_owner_and_name()
+    {
+        using var host = await HostFolderAsync();
+        await using var server = await AuthRemoteServer.StartForHostAsync(host.Folder, host.Options);
+        server.Serve("octo/hello");
+        server.Serve("acme/tool");
+
+        var arrived = server.HoldNextRequest("octo/hello");
+        Assert.Same(arrived, server.HoldNextRequest("octo/hello.git"));
+        var listing = GitAsync(host.Repo, ["ls-remote", WithCredentials(server.UrlOf("octo/hello"), "x-access-token", OctoToken)]);
+        await arrived.WaitAsync(StepTimeout, TestCancelled);
+
+        // The other repository is served meanwhile.
+        var tool = await GitAsync(host.Repo, ["ls-remote", server.UrlOf("acme/tool")]).WaitAsync(StepTimeout, TestCancelled);
+        Assert.True(tool.Succeeded, tool.StandardError);
+        Assert.DoesNotContain(server.Requests, request => request.Path.StartsWith("/octo/", StringComparison.Ordinal));
+        Assert.False(listing.IsCompleted, "octo/hello's request was answered while it was held.");
+
+        server.ReleaseRequest("octo/hello");
+        var result = await listing.WaitAsync(StepTimeout, TestCancelled);
+        Assert.True(result.Succeeded, result.StandardError);
+        Assert.Contains("\trefs/heads/main", result.StandardOutput, StringComparison.Ordinal);
+        Assert.Empty(server.Errors);
+    }
+
+    private const string OctoToken = "github_pat_FAKE-octo-1";
+    private const string AdaToken = "github_pat_FAKE-ada-3";
+
+    /// <summary>
+    /// A host's folder (2.2): <c>octo/hello.git</c> (private, octo pushes) and <c>acme/tool.git</c>
+    /// (public, ada pushes), each a bare clone of a repository of two commits, and the options of a
+    /// host that knows octo's and ada's tokens and claims <c>/api/v3/ping</c> and <c>/api/v3/drop</c>.
+    /// </summary>
+    private static async Task<HostFolder> HostFolderAsync()
+    {
+        var repo = await TempRepo.CreateAsync("host");
+        try
+        {
+            await repo.CommitFileAsync("README.md", "first\n", "First");
+            await repo.CommitFileAsync("README.md", "second\n", "Second");
+            var folder = repo.SiblingPath("github");
+            foreach (var name in new[] { "octo/hello", "acme/tool" })
+            {
+                await repo.GitAsync("clone", "--quiet", "--bare", "--no-hardlinks", repo.Path, Path.Combine(folder, name + ".git"));
+            }
+
+            var options = new AuthRemoteHostOptions(
+                new PingRoutes(),
+                token => token switch { OctoToken => "octo", AdaToken => "ada", _ => null },
+                repository => repository == "acme/tool",
+                (repository, login) => (repository, login) is ("octo/hello", "octo") or ("acme/tool", "ada"));
+            return new HostFolder(repo, folder, options);
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
+    }
+
+    private sealed record HostFolder(TempRepo Repo, string Folder, AuthRemoteHostOptions Options) : IDisposable
+    {
+        public void Dispose() => Repo.Dispose();
+    }
+
+    /// <summary>Routes that answer <c>/api/v3/ping</c> with what they were asked, and drop <c>/api/v3/drop</c>'s answer.</summary>
+    private sealed class PingRoutes : IAuthRemoteRoutes
+    {
+        public bool Claims(string method, string path) => path is "/api/v3/ping" or "/api/v3/drop";
+
+        public Task<AuthRemoteResponse> ServeAsync(AuthRemoteRouteRequest request, CancellationToken cancellationToken)
+        {
+            var body = Encoding.UTF8.GetString(request.Body);
+            var text = $"pong {request.Method} {request.Path} {request.Query} {request.Host}" + (body.Length > 0 ? " " + body : string.Empty);
+            return Task.FromResult(new AuthRemoteResponse(
+                request.Path == "/api/v3/drop" ? 201 : 200,
+                "OK",
+                [KeyValuePair.Create("Content-Type", "text/plain"), KeyValuePair.Create("X-Fake", "yes")],
+                Encoding.UTF8.GetBytes(text),
+                Drop: request.Path == "/api/v3/drop"));
+        }
     }
 
     // ---- A folder of repositories (docs/phase-6-design.md 17.2) ----------------------------------
