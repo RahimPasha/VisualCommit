@@ -123,4 +123,22 @@ public sealed class HostingOptionsTests
         using var second = create();
         Assert.NotSame(first, second);
     }
+
+    [Fact]
+    public async Task A1_on_github_com_goes_to_exactly_its_api_with_the_four_headers()
+    {
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.OK,
+            "{\"login\":\"Octo\",\"id\":1001,\"name\":null,\"avatar_url\":\"https://avatars.githubusercontent.com/u/1001?v=4\"}"));
+        using var provider = new GitHub.GitHubProvider(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), TimeProvider.System);
+
+        var account = await provider.CheckTokenAsync("github_pat_FAKE-octo-1", TestContext.Current.CancellationToken);
+
+        var sent = Assert.Single(recorder.Sent);
+        Assert.Equal(("GET", "https://api.github.com/user"), (sent.Method, sent.Url.AbsoluteUri));
+        Assert.Equal(
+            new[] { "Accept: application/vnd.github+json", "Authorization: Bearer github_pat_FAKE-octo-1", "User-Agent: VisualCommit/0.1.0", "X-GitHub-Api-Version: 2026-03-10" },
+            sent.Headers.Select(header => $"{header.Key}: {header.Value}").Order(StringComparer.Ordinal));
+        Assert.Equal(("github:github.com:octo", "Octo", (string?)null, "https://avatars.githubusercontent.com/u/1001?v=4"),
+            (account.Value!.Key.Id, account.Value.Login, account.Value.Name, account.Value.AvatarUrl!.AbsoluteUri));
+    }
 }
