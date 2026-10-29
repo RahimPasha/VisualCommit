@@ -44,9 +44,11 @@ public sealed class MacKeychainStore(
 
     public bool KeepsTokensAcrossRestarts => true;
 
-    public async Task<TokenStoreProbe> ProbeAsync(CancellationToken ct)
+    // On the thread pool, as Windows' and Linux' probes are: it looks for files first (Q2).
+    public Task<TokenStoreProbe> ProbeAsync(CancellationToken ct) => Task.Run(() => ProbeCoreAsync(ct), ct);
+
+    private async Task<TokenStoreProbe> ProbeCoreAsync(CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
         if (!FileExists(SecurityPath))
         {
             log.Warning($"{Name}: {SecurityPath} was not found.");

@@ -57,6 +57,7 @@ public sealed class TokenStoresTests
         Assert.Equal(new TokenStoreProbe(false, TokenStoreReasons.NoKeychain), await store.ProbeAsync(_ct));
         Assert.Equal(new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.NoKeychain), await store.SaveAsync(Octocat, "ghp_FAKE-octocat-1", _ct));
         Assert.Equal(TokenStoreOutcome.NotFound, (await store.ReadAsync(Octocat, _ct)).Outcome);
+        Assert.All(_log.Lines, line => Assert.DoesNotContain("FAKE", line.Message, StringComparison.Ordinal));
     }
 
     [Theory]
