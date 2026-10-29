@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Threading.Channels;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -16,6 +18,11 @@ namespace VisualCommit.Git;
 /// maximum delay, so a long operation still shows progress. A lost event (the system's buffer
 /// overflowed) counts as a change in both. While the app writes, it pauses the watcher
 /// (<see cref="Pause"/>) and refreshes once itself.
+/// </para>
+/// <para>
+/// A test switch can hold every event for a lag before the watcher looks at it (R8, D262): then
+/// the pause, the folder check and the counting happen at delivery, late, as macOS reports a
+/// write a while after it.
 /// </para>
 /// </summary>
 public sealed class RepositoryWatcher : IRepositoryWatcher
@@ -39,6 +46,15 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     private readonly List<FileSystemWatcher> _watchers = [];
     private readonly HashSet<string> _changedPaths = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _lifetime = new();
+
+    /// <summary><see cref="_lifetime"/>'s token, taken at construction: the held events' consumer still reads it once the source is disposed.</summary>
+    private readonly CancellationToken _lifetimeToken;
+
+    /// <summary>How long each event is held before it is looked at; zero: none.</summary>
+    private readonly TimeSpan _eventLag;
+
+    /// <summary>The events held for <see cref="_eventLag"/>, in arrival order; null without a lag.</summary>
+    private readonly Channel<HeldEvent>? _held;
     private bool _started;
     private volatile bool _disposed;
 
@@ -70,6 +86,11 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     /// <see cref="Changed"/>. Null: the system's, whose timer raises it on the thread pool. A test
     /// passes a clock it moves by hand, so that a slow machine cannot split a burst.
     /// </param>
+    /// <param name="eventLag">
+    /// How long every file-system event is held before the watcher looks at it, on the system's
+    /// clock, never on <paramref name="time"/> (R8, D262: <c>GitRepository.WatcherLag</c>). Null
+    /// or not positive: none, and the events are handled as they come.
+    /// </param>
     public RepositoryWatcher(
         string gitDirectory,
         string commonDirectory,
@@ -78,7 +99,8 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
         TimeSpan? maximumDelay = null,
         string? workingDirectory = null,
         Func<IReadOnlyList<string>, CancellationToken, Task<bool>>? allIgnored = null,
-        TimeProvider? time = null)
+        TimeProvider? time = null,
+        TimeSpan? eventLag = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(gitDirectory);
         ArgumentException.ThrowIfNullOrWhiteSpace(commonDirectory);
@@ -93,6 +115,12 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
         _quietPeriod = TimeSpan.FromMilliseconds(quietMilliseconds);
         _maximumDelay = TimeSpan.FromMilliseconds(Math.Max(quietMilliseconds, (long)(maximumDelay ?? DefaultMaximumDelay).TotalMilliseconds));
         _timer = _time.CreateTimer(OnTimer, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
+        _lifetimeToken = _lifetime.Token;
+        if (eventLag is { } lag && lag > TimeSpan.Zero)
+        {
+            _eventLag = lag;
+            _held = Channel.CreateUnbounded<HeldEvent>(new UnboundedChannelOptions { SingleReader = true });
+        }
     }
 
     public event EventHandler<RepositoryChangedEventArgs>? Changed;
@@ -144,6 +172,10 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
             }
 
             _started = true;
+            if (_held is not null)
+            {
+                _ = Task.Run(() => DeliverHeldAsync(_held.Reader, _lifetimeToken));
+            }
         }
 
         var watchers = new List<FileSystemWatcher>();
@@ -207,6 +239,7 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
             _watchers.Clear();
             _timer.Dispose();
+            _held?.Writer.TryComplete();
         }
 
         _lifetime.Cancel();
@@ -279,11 +312,23 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
                 NotifyFilter = NotifyFilters.FileName | NotifyFilters.DirectoryName | NotifyFilters.LastWrite,
                 InternalBufferSize = 64 * 1024,
             };
-            watcher.Created += onEvent;
-            watcher.Changed += onEvent;
-            watcher.Deleted += onEvent;
-            watcher.Renamed += (sender, e) => onEvent(sender, e);
-            watcher.Error += OnError;
+            if (_held is null)
+            {
+                watcher.Created += onEvent;
+                watcher.Changed += onEvent;
+                watcher.Deleted += onEvent;
+                watcher.Renamed += (sender, e) => onEvent(sender, e);
+                watcher.Error += OnError;
+            }
+            else
+            {
+                watcher.Created += (sender, e) => Hold(() => onEvent(sender, e));
+                watcher.Changed += (sender, e) => Hold(() => onEvent(sender, e));
+                watcher.Deleted += (sender, e) => Hold(() => onEvent(sender, e));
+                watcher.Renamed += (sender, e) => Hold(() => onEvent(sender, e));
+                watcher.Error += (sender, e) => Hold(() => OnError(sender, e));
+            }
+
             watcher.EnableRaisingEvents = true;
             watchers.Add(watcher);
         }
@@ -291,6 +336,52 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
         {
             watcher?.Dispose();
             _log.Warning($"Cannot watch {folder} for changes; changes made outside the app will not show until the repository is refreshed.", ex);
+        }
+    }
+
+    /// <summary>Holds an event for the lag: <paramref name="deliver"/> runs once it has passed. Once disposed, nothing is held.</summary>
+    private void Hold(Action deliver) =>
+        _held!.Writer.TryWrite(new HeldEvent(Stopwatch.GetTimestamp() + (long)(_eventLag.TotalSeconds * Stopwatch.Frequency), deliver));
+
+    /// <summary>
+    /// The held events' one consumer, on the thread pool: each in arrival order once its lag has
+    /// passed. It stops when the watcher is disposed and drops what it holds.
+    /// </summary>
+    private async Task DeliverHeldAsync(ChannelReader<HeldEvent> reader, CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (await reader.WaitToReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                while (reader.TryRead(out var held))
+                {
+                    // A delay may end a little early; it is waited again until the event is due.
+                    var left = Stopwatch.GetElapsedTime(Stopwatch.GetTimestamp(), held.Due);
+                    while (left > TimeSpan.Zero)
+                    {
+                        await Task.Delay(TimeSpan.FromMilliseconds(Math.Ceiling(left.TotalMilliseconds)), cancellationToken).ConfigureAwait(false);
+                        left = Stopwatch.GetElapsedTime(Stopwatch.GetTimestamp(), held.Due);
+                    }
+
+                    if (_disposed)
+                    {
+                        return;
+                    }
+
+                    try
+                    {
+                        held.Deliver();
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Error("A held event of the repository watcher failed.", ex);
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Disposed: what is still held is dropped.
         }
     }
 
@@ -487,6 +578,9 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
             return false;
         }
     }
+
+    /// <summary>An event held for the lag: when it is due (a <see cref="Stopwatch.GetTimestamp"/>) and the handler it goes to.</summary>
+    private readonly record struct HeldEvent(long Due, Action Deliver);
 
     private sealed class Resume(RepositoryWatcher watcher) : IDisposable
     {

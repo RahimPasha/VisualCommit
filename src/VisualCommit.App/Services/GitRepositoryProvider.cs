@@ -1,3 +1,4 @@
+using System.Globalization;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Git;
@@ -23,6 +24,12 @@ public sealed class GitRepositoryProvider : IRepositoryProvider
         _git = git;
         _log = log ?? NullAppLog.Instance;
         _backupClock = backupClock ?? BackupClock.System;
+        // R8's test switch (D262), said once per session: the session makes one provider.
+        if (GitRepository.WatcherLag > TimeSpan.Zero)
+        {
+            var lag = ((long)GitRepository.WatcherLag.TotalMilliseconds).ToString(CultureInfo.InvariantCulture);
+            _log.Info($"{GitRepository.WatcherLagVariable}={lag}: every repository watcher holds each file-system event for {lag} ms before it counts it (a test switch, D262).");
+        }
     }
 
     /// <remarks>
