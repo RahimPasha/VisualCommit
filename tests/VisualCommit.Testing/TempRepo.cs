@@ -497,6 +497,24 @@ public sealed class TempRepo : IDisposable
     public Task<string> CommitFileAsync(string relativePath, string content, string message) =>
         WriteFile(relativePath, content).CommitAsync(message);
 
+    /// <summary>
+    /// Writes one file and commits it as <see cref="CommitFileAsync"/> does, with
+    /// <paramref name="authorName"/> and <paramref name="authorEmail"/> as its author (the
+    /// committer stays <see cref="AuthorName"/>): commits by people a hosting service knows
+    /// (docs/phase-7a-design.md 2.5, 2.6). The clock advances. Returns the new commit's SHA.
+    /// </summary>
+    public async Task<string> CommitFileAsAsync(string relativePath, string content, string message, string authorName, string authorEmail)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(authorName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(authorEmail);
+        WriteFile(relativePath, content);
+        await GitAsync("add", "--all");
+        var author = new Dictionary<string, string?> { ["GIT_AUTHOR_NAME"] = authorName, ["GIT_AUTHOR_EMAIL"] = authorEmail };
+        var sha = CommittedSha(await GitWithEnvironmentAsync(author, CommitArguments("--allow-empty", "--message", message)));
+        _clock.Advance();
+        return sha;
+    }
+
     public Task CreateBranchAsync(string name, string startPoint = "HEAD") => GitAsync("branch", name, startPoint);
 
     public Task CheckoutAsync(string name) => GitAsync("checkout", "--quiet", name);
