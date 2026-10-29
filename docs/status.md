@@ -99,18 +99,21 @@ Start:
 
 Core and Git layer:
 
-- [ ] 6. The provider model that 7b builds Azure DevOps and GitLab on: hosts, accounts, a GitHub
-  remote recognised from its URL. Tests.
+- [x] 6. The provider model that 7b builds Azure DevOps and GitLab on: hosts, accounts, a GitHub
+  remote recognised from its URL. Tests. (Done 2026-10-29: WP0, WP-G at `1d6b688` and WP-S at
+  `7bea4fb`; CI green on `5613450`.)
 - [x] 7. Tokens in the OS keychain on Windows, macOS and Linux behind a seam (R3), and in memory
   for the session where none can be reached (D253). Tests. (Done 2026-10-29: WP-K merged at `2582e53`;
   each real store's test passed on CI's run on `8b02805`, the first run of any.)
 - [x] 8. GitHub's API: a token checked at sign-in, the account's repositories, a repository's pull
   requests, creating one, avatars; all against the fake. Tests. (Done 2026-10-29: WP-G merged at
   `1d6b688`.)
-- [ ] 9. The token reaching git (plan.md's "From phase 3": git's credential helpers first, then the
+- [x] 9. The token reaching git (plan.md's "From phase 3": git's credential helpers first, then the
   askpass helper and `AskPassBroker`; auto-fetch never prompts), a bulk run's prompt group and
   accounts ("From phase 6"), and the push guard's refusals of `pr/*` and two-namespace pushes
-  ("From phase 6"), each as the design decides. Tests.
+  ("From phase 6"), each as the design decides. Tests. (Done 2026-10-29: WP-C at `afb91a7`, WP-S's
+  bindings at `7bea4fb`, the prompt channel's fix for macOS and Linux at `9d48d0b`; CI green on
+  `5613450`.)
 
 App:
 
@@ -150,6 +153,17 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
+
+Phase 7a's run for the prompt channel's fix and WP-S (`9d48d0b`, `7bea4fb`, the wiring `04952c8`) is
+[40916152337](https://github.com/RahimPasha/VisualCommit/actions/runs/40916152337), for `5613450`:
+all five jobs succeeded: `windows-latest` (25 min 16 s; its Test step 23 min 5 s of 55, 5,603 of
+5,607 passed and 4 skipped), `macos-latest` (27 min 17 s; Test step 25 min 17 s), `ubuntu-latest`
+(7 min 2 s; Test step 5 min 17 s) and the two "bare ubuntu container" jobs (7 min 5 s and 5 min
+41 s; Test steps 4 min 58 s and 3 min 49 s), each with 5,601 of 5,604 passed and 3 skipped; every
+keychain step passed with its one test. The run before it,
+[40910893877](https://github.com/RahimPasha/VisualCommit/actions/runs/40910893877) for `6fc2d28`
+(the held test alone), failed on purpose on macOS and the three Linux jobs with exactly
+`AskPassChannelTests`' three tests (Notes); its Windows job was cancelled by the next push.
 
 Phase 7a's run for wave 1 (its five merges and the lead's follow-ups `8b02805`) is
 [40878208671](https://github.com/RahimPasha/VisualCommit/actions/runs/40878208671), for `8b02805`:
@@ -313,12 +327,13 @@ its pictures differ from the baseline's only where they vary by nature (Notes); 
 and 8 are ticked and wave 1's worktrees are gone. The channel's race is proved on CI's Linux and
 macOS jobs and fixed at `9d48d0b` (Notes; design 16 item 11). WP-S is merged at `7bea4fb` (built,
 reviewed by an agent that did not build it, its one major and seven minor findings fixed, one
-ruled on; design 17 item 1), with 7.11's wiring at `04952c8`. Next: 7.14's runs through
-`bash scripts/heavy-run.sh`, one at a time with no agent running (`VisualCommit.Hosting.Tests`
-whole, `Phase6ChecksS`, the lagged list of design 0.4 with its Hosting.Tests line now in force),
-and CI's run of the push of `04952c8` and the docs after it: all five jobs green. Then tick steps
-6 and 9, and start WP-A (design 8; part A's checks are in `docs/test-reports/phase-7a.md`,
-written, reviewed and ruled on). Each of parts B, P, V and N
+ruled on; design 17 item 1), with 7.11's wiring at `04952c8`; 7.14's runs passed (Hosting.Tests
+whole 375 of 379 with the 4 skips, `Phase6ChecksS` 13 of 13 with its counts unmoved, and the lagged
+list's five commands: 25, 66, 21, 6 and 6 tests, all passing) and CI's run on `5613450` is green on
+all five jobs; steps 6 and 9 are ticked. Next: WP-A is being built, reviewed and fixed on
+`wip/p7a-accounts` (task `wbg1qoeul`) and part B's checks are being written and reviewed (task
+`whcr3p9av`); then the lead merges WP-A with 8.9's runs and inspects part A's pictures, rules on
+part B's open points and commits them, and starts WP-B. Each of parts B, P, V and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
