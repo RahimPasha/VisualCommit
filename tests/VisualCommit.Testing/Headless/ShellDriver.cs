@@ -415,7 +415,7 @@ public sealed partial class ShellDriver : IDisposable
     /// 500 ms, and only then.
     /// </para>
     /// </summary>
-    /// <exception cref="InvalidOperationException">Its presses were not counted 1 and 2: the window saw no double-click. The message gives the counts and how long before the first of them the press before it came.</exception>
+    /// <exception cref="InvalidOperationException">Its presses were not counted 1 and 2, so the app did not get a plain double-click. The message gives the counts and how long before the first of them the press before it came.</exception>
     public void DoubleClick(Point position)
     {
         Window.MouseMove(position);
@@ -499,7 +499,7 @@ public sealed partial class ShellDriver : IDisposable
         };
         return string.Create(
             CultureInfo.InvariantCulture,
-            $"The double-click at ({position.X:0.##}, {position.Y:0.##}) was not one: its presses were counted [{counts}], not [1, 2]. Its first press came {earlier}.");
+            $"The double-click at ({position.X:0.##}, {position.Y:0.##}) was not counted as one: its presses were counted [{counts}], not [1, 2]. Its first press came {earlier}.");
     }
 
     /// <summary>Types text into whatever has the keyboard focus, as key presses would.</summary>
