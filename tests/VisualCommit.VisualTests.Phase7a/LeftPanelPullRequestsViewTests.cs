@@ -21,8 +21,9 @@ namespace VisualCommit.VisualTests.Phase7a;
 /// (docs/phase-7a-design.md 10.3, 10.6; D303, D308), headless, the panel alone in a window of its
 /// size at 1100×700: the templates' automation ids and parts, 26-high rows, the <c>#n</c>
 /// collapsed without a pull request and the name's width unchanged then, the disabled message
-/// rows' tooltip. The clicks that reach the repository (the sign-in row, a double-click) are
-/// <c>PullRequestPanelClickTests</c>' in a whole window.
+/// rows' tooltip, a click's selection and no drag source on the section's rows. The clicks that
+/// reach the repository (the sign-in row, a double-click) are checked in a whole window by
+/// <see cref="In_the_window_the_sign_in_row_signs_in_and_a_double_click_checks_out"/>.
 /// </summary>
 public sealed class LeftPanelPullRequestsViewTests
 {
@@ -142,10 +143,28 @@ public sealed class LeftPanelPullRequestsViewTests
         var window = host.Window;
         var one = WithAutomationId(window, "PullRequestItem").Single(item => AutomationProperties.GetName(item) == "#1 Add the login form");
 
+        // No RefDrag.Source on a pull request's row (10.3): a press and move there starts no drag.
+        Assert.All(WithAutomationId(window, "PullRequestItem"), item => Assert.Null(RefDrag.GetSource(item)));
+
         Click(window, one);
 
         Assert.Equal([One.HeadSha], activated);
         Assert.Contains("selected", one.Classes);
+
+        // The sign-in row, enabled, has no drag source either, and its click selects nothing.
+        var signedOut = Panel(SignedOut());
+        var signedOutActivated = new List<string>();
+        signedOut.RefActivated += (_, sha) => signedOutActivated.Add(sha);
+        using var signedOutHost = Show(signedOut);
+        var message = Assert.Single(WithAutomationId(signedOutHost.Window, "PullRequestMessage"));
+        Assert.True(message.IsEffectivelyEnabled);
+        Assert.Null(RefDrag.GetSource(message));
+
+        Click(signedOutHost.Window, message);
+
+        Assert.Empty(signedOutActivated);
+        Assert.DoesNotContain(signedOut.Rows, row => row is RefItemRow { IsSelected: true } or PullRequestRow { IsSelected: true });
+        Assert.DoesNotContain("selected", message.Classes);
     }
 
     [AvaloniaFact]

@@ -131,13 +131,20 @@ public sealed class PullRequestOperationsTests
         var launched = app.Launcher.Requests.Where(request => request.Kind == FileLaunchKind.OpenUrl).Select(request => request.FullPath).ToList();
         Assert.Equal([one.HtmlUrl.AbsoluteUri, new Uri(served.GitHub.Endpoints.WebBase, "octo/hello/pulls").AbsoluteUri], launched);
         Assert.Equal(one.HtmlUrl.AbsoluteUri, app.Clipboard.Texts[^1]);
-        Assert.Equal(requests, served.GitHub.Requests.Count);
+        Assert.Empty(ApiSince(served, requests));
 
         await repository.Operations.RefreshPullRequestsAsync();
 
-        Assert.Contains(served.GitHub.Requests.Skip(requests), request => request.Route == "pulls:octo/hello");
+        Assert.Contains(ApiSince(served, requests), request => request.Route == "pulls:octo/hello");
         await EndAsync(app, data, served);
     }
+
+    /// <summary>
+    /// The API requests since <paramref name="mark"/>, leaving out the avatars' (routes <c>commits:</c>
+    /// and <c>avatar:</c>, 7.9), which run after a list and may land after a mark (D237).
+    /// </summary>
+    private static List<FakeGitHubRequest> ApiSince(ServedHosting served, int mark) =>
+        [.. served.GitHub.Requests.Skip(mark).Where(request => request.Route is not { } route || !(route.StartsWith("commits:", StringComparison.Ordinal) || route.StartsWith("avatar:", StringComparison.Ordinal)))];
 
     [AvaloniaFact]
     public async Task Signed_out_nothing_is_asked_of_GitHub()

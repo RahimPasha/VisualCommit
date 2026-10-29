@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Session;
 using VisualCommit.Hosting;
 
@@ -44,12 +45,13 @@ public partial class LeftPanelViewModel : ObservableObject
     private RepositoryGraphFilter? _filters;
 
     /// <summary>
-    /// The last list the section showed, and of which repository: a failed or loading refresh of
-    /// that repository keeps its rows (docs/phase-7a-design.md 10.3, D303; design 17 item 3), while
-    /// the hosting's state holds no list then (7.8). Signed out, without a GitHub remote or for
-    /// another repository it goes.
+    /// The last list the section showed, of which repository and listed with which account: a
+    /// failed or loading refresh of that repository with that account keeps its rows
+    /// (docs/phase-7a-design.md 10.3, D303; design 17 item 3, ruling 23), while the hosting's state
+    /// holds no list then (7.8). Signed out, without a GitHub remote, for another repository or with
+    /// another account it goes.
     /// </summary>
-    private (HostedRepository Repository, PullRequestList List)? _keptList;
+    private (HostedRepository Repository, AccountKey? Account, PullRequestList List)? _keptList;
 
     public LeftPanelViewModel()
     {
@@ -108,9 +110,16 @@ public partial class LeftPanelViewModel : ObservableObject
     /// Shows the repository's hosting (docs/phase-7a-design.md 10.3; D303, D308): the "Pull
     /// requests" section's rows and the branch rows' <c>#n</c>. A clicked pull request no longer
     /// listed is no longer selected. A failure or a refresh of the repository whose list the section
-    /// showed keeps that list's rows (design 17 item 3).
+    /// showed keeps that list's rows (design 17 item 3), unless <paramref name="account"/>, the
+    /// session's signed-in account, is not the one it was listed with (ruling 23).
     /// </summary>
-    public void UpdatePullRequests(RepositoryHostingState state)
+    /// <remarks>
+    /// When one signed-in account replaces another, the hosting keeps the list it holds until the
+    /// new account's answer (7.8, D263), so the same list object arrives again with the new account:
+    /// it stays tagged with the account that listed it, and a failure of the new account's first
+    /// list then shows no rows.
+    /// </remarks>
+    public void UpdatePullRequests(RepositoryHostingState state, AccountKey? account = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         HostingState = state;
@@ -120,9 +129,12 @@ public partial class LeftPanelViewModel : ObservableObject
         }
         else if (state.List is { } list)
         {
-            _keptList = (state.Repository, list);
+            if (_keptList is not { } held || !ReferenceEquals(held.List, list) || !held.Repository.Equals(state.Repository))
+            {
+                _keptList = (state.Repository, account, list);
+            }
         }
-        else if (_keptList is { } kept && !kept.Repository.Equals(state.Repository))
+        else if (_keptList is { } kept && (!kept.Repository.Equals(state.Repository) || !Equals(kept.Account, account)))
         {
             _keptList = null;
         }

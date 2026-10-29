@@ -1,5 +1,6 @@
 using System.Globalization;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting;
 using Xunit;
 using static VisualCommit.VisualTests.Phase7a.PullRequestTestData;
@@ -297,6 +298,45 @@ public sealed class PullRequestSectionTests
         other.UpdatePullRequests(RepositoryHostingState.NotGitHub);
         other.UpdatePullRequests(Failed(Forbidden));
         Assert.Empty(PullRequests(other));
+    }
+
+    [Fact]
+    public void Loading_with_the_state_s_list_shows_its_rows_and_no_loading_row()
+    {
+        // 10.3's "Loading, List kept": the state itself holds the list while a refresh runs.
+        var panel = Panel(Loading(HelloList));
+
+        Assert.Equal(["v Pull requests 4", "  #5 Fix a typo in the greeting", "  #3 Shorten long labels", "  #2 Update the readme", "  #1 Add the login form", "v Tags 0"], SectionLines(panel));
+        Assert.Empty(Messages(panel));
+        panel.FilterText = "ada";
+        Assert.Equal("2", Header(panel).CountText);
+    }
+
+    [Fact]
+    public void Another_account_s_failure_does_not_keep_the_rows()
+    {
+        var octo = new AccountKey(HostingProvider.GitHub, "127.0.0.1:47395", "octo");
+        var ada = new AccountKey(HostingProvider.GitHub, "127.0.0.1:47395", "ada");
+        var panel = new LeftPanelViewModel();
+        panel.Update(HelloRefs());
+        panel.UpdatePullRequests(Loaded(), octo);
+
+        // The same account's failure keeps the rows (17 item 3).
+        panel.UpdatePullRequests(Failed(Forbidden), octo);
+        Assert.Equal(4, PullRequests(panel).Count);
+
+        // ada replaces octo: the hosting shows octo's list until ada's answer (7.8, D263), which
+        // fails; octo's rows go (ruling 23).
+        panel.UpdatePullRequests(Loaded(), octo);
+        panel.UpdatePullRequests(Loaded(), ada);
+        Assert.Equal(4, PullRequests(panel).Count);
+        panel.UpdatePullRequests(Failed(Forbidden), ada);
+        Assert.Equal(["v Pull requests 0", "  [Failed] GitHub answered: Resource not accessible by personal access token.", "v Tags 0"], SectionLines(panel));
+
+        // ada's own list is kept for ada's next failure.
+        panel.UpdatePullRequests(Loaded(new PullRequestList([.. HelloList.PullRequests], false)), ada);
+        panel.UpdatePullRequests(Failed(Forbidden), ada);
+        Assert.Equal(4, PullRequests(panel).Count);
     }
 
     [Fact]

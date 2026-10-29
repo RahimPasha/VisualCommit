@@ -142,42 +142,51 @@ public sealed class RepositoryMenusHostingTests
     public void A_drop_s_menus_have_the_item_between_rebase_and_compare()
     {
         var (actions, recorder) = RecordingActions.Create();
+        string[] loginOntoMain =
+        [
+            "feature/login → main", "Merge feature/login into main", "Merge feature/login into main (create a merge commit)", "Fast-forward main to feature/login", "—",
+            "Check out feature/login and rebase it onto main", "Check out feature/login and rebase it onto main interactively…", "—",
+            "Open pull request #1", "—",
+            "Compare feature/login with main",
+        ];
+        string[] localWorkOntoOriginMain =
+        [
+            "local-work → origin/main", "Push local-work to origin/main", "Push local-work to origin/main and track it", "—",
+            "Check out local-work and rebase it onto origin/main", "Check out local-work and rebase it onto origin/main interactively…", "—",
+            "Create pull request…", "—",
+            "Compare local-work with origin/main",
+        ];
+        string[] localWorkOntoLogin =
+        [
+            "local-work → feature/login", "Fast-forward feature/login to local-work", "Check out feature/login and merge local-work into it", "—",
+            "Check out local-work and rebase it onto feature/login", "Check out local-work and rebase it onto feature/login interactively…", "—",
+            "Create pull request…", "—",
+            "Compare local-work with feature/login",
+        ];
 
-        Assert.Equal(
-            [
-                "feature/login → main", "Merge feature/login into main", "Merge feature/login into main (create a merge commit)", "Fast-forward main to feature/login", "—",
-                "Check out feature/login and rebase it onto main", "Check out feature/login and rebase it onto main interactively…", "—",
-                "Open pull request #1", "—",
-                "Compare feature/login with main",
-            ],
-            Lines(RepositoryMenus.ForDrop(Context(Loaded()), "refs/heads/feature/login", "refs/heads/main", actions)).Select(StripReason));
+        Assert.Equal(loginOntoMain, Lines(RepositoryMenus.ForDrop(Context(Loaded()), "refs/heads/feature/login", "refs/heads/main", actions)));
         var ontoRemote = RepositoryMenus.ForDrop(Context(Loaded()), "refs/heads/local-work", "refs/remotes/origin/main", actions);
-        Assert.Equal(
-            [
-                "local-work → origin/main", "Push local-work to origin/main", "Push local-work to origin/main and track it", "—",
-                "Check out local-work and rebase it onto origin/main", "Check out local-work and rebase it onto origin/main interactively…", "—",
-                "Create pull request…", "—",
-                "Compare local-work with origin/main",
-            ],
-            Lines(ontoRemote).Select(StripReason));
+        Assert.Equal(localWorkOntoOriginMain, Lines(ontoRemote));
         ontoRemote.Items.Single(item => item.Label == "Create pull request…").Invoke();
         Assert.Equal(("CreatePullRequestAsync", "refs/heads/local-work", (object?)"refs/remotes/origin/main"), (recorder.Calls[^1].Method, recorder.Calls[^1].Arguments[0], recorder.Calls[^1].Arguments[1]));
 
         // Onto another local branch that tracks one of the same name: the item too.
-        Assert.Contains("Create pull request…", Lines(RepositoryMenus.ForDrop(Context(Loaded()), "refs/heads/local-work", "refs/heads/feature/login", actions)));
+        Assert.Equal(localWorkOntoLogin, Lines(RepositoryMenus.ForDrop(Context(Loaded()), "refs/heads/local-work", "refs/heads/feature/login", actions)));
 
         // Onto a local branch whose upstream has another name, or one without upstream: none.
         var renamed = HelloRefs() with { Refs = [.. HelloRefs().Refs.Where(r => r.Name != "feature/login"), Local("feature/login", 'e', "origin/main")] };
         Assert.DoesNotContain("Create pull request…", Lines(RepositoryMenus.ForDrop(Context(Loaded(), renamed), "refs/heads/local-work", "refs/heads/feature/login", actions)));
         Assert.DoesNotContain("Create pull request…", Lines(RepositoryMenus.ForDrop(Context(Loaded()), "refs/heads/main", "refs/heads/local-work", actions)));
 
-        // Without hosting, every drop's menu as before.
-        foreach (var (source, target) in new[] { ("refs/heads/feature/login", "refs/heads/main"), ("refs/heads/local-work", "refs/remotes/origin/main"), ("refs/heads/local-work", "refs/heads/feature/login") })
+        // Without hosting, every drop's menu as before: the same lines without the item's group.
+        foreach (var (source, target, with) in new[]
         {
-            var with = Lines(RepositoryMenus.ForDrop(Context(Loaded()), source, target, actions));
-            var without = Lines(RepositoryMenus.ForDrop(Context(null), source, target, actions));
-            Assert.DoesNotContain(without, line => line.Contains("pull request", StringComparison.Ordinal));
-            Assert.Equal(with.Count - 2, without.Count);
+            ("refs/heads/feature/login", "refs/heads/main", loginOntoMain),
+            ("refs/heads/local-work", "refs/remotes/origin/main", localWorkOntoOriginMain),
+            ("refs/heads/local-work", "refs/heads/feature/login", localWorkOntoLogin),
+        })
+        {
+            Assert.Equal([.. with[..^3], with[^1]], Lines(RepositoryMenus.ForDrop(Context(null), source, target, actions)));
         }
     }
 
@@ -214,9 +223,6 @@ public sealed class RepositoryMenusHostingTests
     }
 
     private static List<string> Lines(MenuModel menu) => RepositoryMenusTestLines.Of(menu);
-
-    /// <summary>A disabled item's line without its reason: what the drop read decides, which these contexts lack.</summary>
-    private static string StripReason(string line) => line.IndexOf(" (disabled", StringComparison.Ordinal) is var at and >= 0 ? line[..at] : line;
 
     /// <summary>A menu's lines as the report writes them (as <c>RepositoryMenusTests.Lines</c>).</summary>
     private static class RepositoryMenusTestLines
