@@ -392,10 +392,6 @@ public sealed partial class Phase6ChecksW : Phase6Checks
     private static IReadOnlyList<GitCallRecord> CallsIn(ShellDriver app, TempWorkspace copy, long sequence, string name) =>
         app.CallsSince(sequence, folder => SameFolder(copy, copy.PathOf(name), folder));
 
-    /// <summary>The calls since <paramref name="sequence"/> in any of the copy's ten folders.</summary>
-    private static IReadOnlyList<GitCallRecord> CallsInWorkspace(ShellDriver app, TempWorkspace copy, long sequence) =>
-        app.CallsSince(sequence, folder => copy.Names.Any(name => SameFolder(copy, copy.PathOf(name), folder)));
-
     /// <summary>Whether a call is one of the reads a row or a tab makes (part W's "Only reads"): no operation id, and one of <see cref="PartW.ReadForms"/>.</summary>
     private static bool IsRead(GitCallRecord call) =>
         call.OperationId is null && PartW.ReadForms.Any(form => call.CommandText == form || call.CommandText.StartsWith(form.EndsWith(' ') || form.EndsWith('=') ? form : form + " ", StringComparison.Ordinal));
