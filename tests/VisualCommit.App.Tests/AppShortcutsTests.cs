@@ -261,12 +261,13 @@ public class AppShortcutsTests
         // D199: each reached through the palette and its menu or button. Discard all changes… is a
         // working-changes menu item without a key (6.7), so no command of this enum; the theme's
         // three; Choose an editor… (D226) and the dashboard's workspace edits are palette entries
-        // of no command of this enum (PaletteEntriesTests).
+        // of no command of this enum (PaletteEntriesTests). D299 amends the list: Clone from GitHub…
+        // is a palette command without a key (docs/phase-7a-design.md 9.5).
         AppCommand[] withoutKey =
         [
             AppCommand.ShowKeyboardShortcuts, AppCommand.NewWorkspace, AppCommand.ShowBackups, AppCommand.CreateTagAtHead, AppCommand.AddRemote,
             AppCommand.ManageRemotes, AppCommand.ShowAllHiddenBranches, AppCommand.StopSoloing, AppCommand.UseDarkTheme, AppCommand.UseLightTheme,
-            AppCommand.FollowSystemTheme,
+            AppCommand.FollowSystemTheme, AppCommand.CloneFromGitHub,
         ];
         var keyed = AppShortcuts.Bindings.Select(binding => binding.Command).ToHashSet();
         Assert.Equal(withoutKey.Order(), Enum.GetValues<AppCommand>().Where(command => !keyed.Contains(command)).Order());

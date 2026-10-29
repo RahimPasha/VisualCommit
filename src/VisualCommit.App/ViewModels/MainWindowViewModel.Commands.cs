@@ -3,6 +3,7 @@ using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Workspaces;
+using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -179,6 +180,26 @@ public partial class MainWindowViewModel
 
     /// <summary><c>Clone repository…</c> and its key (5.10): the active tab when it is empty, else a new tab at the end, shows the clone form with the focus in its URL box.</summary>
     public void CloneRepository() => TabForOpening().Welcome.OpenCloneFormCommand.Execute(null);
+
+    /// <summary>
+    /// The palette's <c>Clone from GitHub…</c> (docs/phase-7a-design.md 9.5; D299, D300): unless an
+    /// account is signed in, the window's sign-in entry first (8.5), and a cancelled or failed sign-in
+    /// stops there, with no tab and no form; then, as <see cref="CloneRepository"/>, the active tab
+    /// when it is empty, else a new tab at the end, shows the clone form with the repository browser
+    /// over it. Cancelling the browser leaves the form open.
+    /// </summary>
+    public async Task CloneFromGitHubAsync()
+    {
+        if (_tabServices.Hosting.Account is not { State: AccountState.SignedIn }
+            && (_tabServices.SignInToGitHub is not { } signIn || !await signIn()))
+        {
+            return;
+        }
+
+        var welcome = TabForOpening().Welcome;
+        welcome.OpenCloneFormCommand.Execute(null);
+        await welcome.BrowseGitHubCommand.ExecuteAsync(null);
+    }
 
     /// <summary>
     /// <c>Init repository…</c> and its key (5.10): the folder dialog <c>Choose a folder for the new

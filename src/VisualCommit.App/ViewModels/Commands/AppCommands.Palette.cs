@@ -80,6 +80,7 @@ public sealed partial class AppCommands
         Add(AppCommand.GoToNextDashboard, listed: _shell.Tabs.Any(other => other.IsDashboard));
         Add(AppCommand.OpenRepository);
         Add(AppCommand.CloneRepository);
+        Add(AppCommand.CloneFromGitHub);
         Add(AppCommand.InitRepository);
         Add(AppCommand.NewWorkspace);
         Add(AppCommand.ToggleActivityLog);

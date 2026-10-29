@@ -164,6 +164,12 @@ public sealed partial class AppCommands
             case AppCommand.CloneRepository:
                 return Always("Clone repository…", shell.CloneRepository);
 
+            case AppCommand.CloneFromGitHub:
+                // Listed while GitHub is not off (D299); signed out it signs in first (9.5, D300).
+                return new(
+                    new(!shell.Services.Hosting.IsOff, true, OperationTexts.CloneTexts.PaletteCommand, null, null),
+                    () => Start(shell.CloneFromGitHubAsync(), OperationTexts.CloneTexts.PaletteCommand));
+
             case AppCommand.InitRepository:
                 return Always("Init repository…", () => Start(shell.InitRepositoryAsync(), "Init repository…"));
 
