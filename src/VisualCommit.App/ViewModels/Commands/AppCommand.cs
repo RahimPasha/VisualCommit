@@ -54,6 +54,10 @@ public enum AppCommand
     UseLightTheme,
     FollowSystemTheme,
 
+    // Phase 7a's keyless palette command (docs/phase-7a-design.md 9.5, D299): after the theme's,
+    // so that no value before it moves.
+    CloneFromGitHub,
+
     // Keys only drawn and listed (KeyPass.View): their views handle them.
     ContextMenu,
     TextUndo,

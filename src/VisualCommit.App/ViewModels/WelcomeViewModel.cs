@@ -2,18 +2,21 @@ using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
+using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels;
 
 /// <summary>
 /// The welcome page of a tab without a repository (D42): Open, Clone and Init, the clone form
 /// with its progress, the workspaces (docs/phase-6-design.md 13.1, D188) and the recent
-/// repositories.
+/// repositories. Since phase 7a the form's "From GitHub…" opens the repository browser while an
+/// account is signed in (docs/phase-7a-design.md 9.3, D261, D302).
 /// </summary>
 public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
 {
@@ -31,6 +34,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         Recent.CollectionChanged += OnRecentChanged;
         Workspaces.CollectionChanged += OnWorkspacesChanged;
         _services.Workspaces.Changed += OnWorkspaceStoreChanged;
+        _services.Hosting.AccountChanged += OnAccountChanged;
     }
 
     /// <summary>The recent repositories, newest first. Shared by every tab.</summary>
@@ -90,10 +94,16 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     /// <summary>A clone is running: the fields are disabled and the progress shows.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditClone))]
-    [NotifyCanExecuteChangedFor(nameof(StartCloneCommand), nameof(CloseCloneFormCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StartCloneCommand), nameof(CloseCloneFormCommand), nameof(BrowseGitHubCommand))]
     public partial bool IsCloning { get; private set; }
 
     public bool CanEditClone => !IsCloning;
+
+    /// <summary>
+    /// "From GitHub…" shows at the URL row's end only while an account is signed in (D261); "needs
+    /// sign-in" hides it too (D302). Collapsed, it takes no room, so the form is laid out as before.
+    /// </summary>
+    public bool ShowsGitHubButton => _services.Hosting.Account is { State: AccountState.SignedIn };
 
     /// <summary>The current stage's percentage, 0 to 100.</summary>
     [ObservableProperty]
@@ -103,8 +113,13 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string CloneProgressText { get; private set; } = string.Empty;
 
-    /// <summary>The clone that is running, or null: the app waits for it to clean up when it closes.</summary>
-    public Task? RunningClone => _cloneTask is { IsCompleted: false } running ? running : null;
+    /// <summary>
+    /// The clone that is running, or null: the app waits for it to clean up when it closes, and the
+    /// tab is not empty meanwhile. From Clone's press on: while git's configuration is read before git
+    /// starts (9.3) a completed task stands in, so that nothing opens in the tab then and the close
+    /// has nothing to wait for (the tab's <see cref="Dispose"/> cancels the read).
+    /// </summary>
+    public Task? RunningClone => _cloneTask is { IsCompleted: false } running ? running : IsCloning ? Task.CompletedTask : null;
 
     /// <summary>Shows a failure under the buttons.</summary>
     public void ShowError(string message) => ErrorText = message;
@@ -218,6 +233,26 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         }
     }
 
+    /// <summary>
+    /// "From GitHub…" (9.3): the repository browser over the form, its load started before it shows
+    /// (as <c>WorkspaceCommands</c>' search is); a chosen repository's plain clone URL fills the URL
+    /// box (and so the folder name, unless the user typed one), unless a clone started meanwhile.
+    /// The user then presses Clone as for a typed URL.
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanEditClone))]
+    private async Task BrowseGitHubAsync()
+    {
+        var hosting = _services.Hosting;
+        var dialog = new CloneFromGitHubDialogViewModel(hosting.ListRepositoriesAsync, _services.Log, () => hosting.Account?.Account.Login);
+        _ = dialog.Start();
+        var url = await _services.DialogHost.ShowAsync(dialog);
+        if (url is not null && !IsCloning)
+        {
+            ErrorText = null;
+            CloneUrl = url;
+        }
+    }
+
     [RelayCommand(CanExecute = nameof(CanEditClone))]
     private async Task StartCloneAsync()
     {
@@ -249,10 +284,13 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         });
 
         // Git's and ssh's prompts for the clone come to the app's dialogs (phase 3 design 3.3); a
-        // clone runs outside any operation queue, so it opens its own prompt scope.
-        var prompts = _services.Prompts.Begin("Clone", name, PromptMode.Ask, bindings: _services.Hosting.BindingsForClone(url));
+        // clone runs outside any operation queue, so it opens its own prompt scope. A GitHub URL is
+        // bound to the signed-in account after the user's insteadOf rules (9.3, D331).
+        PromptScope? prompts = null;
         try
         {
+            var bindings = await BindingsForCloneAsync(url, _clone.Token);
+            prompts = _services.Prompts.Begin("Clone", name, PromptMode.Ask, bindings: bindings);
             var cloning = _services.Repositories.CloneAsync(url, System.IO.Path.Combine(parent, name), progress, _clone.Token, prompts.Environment);
             _cloneTask = cloning;
             var repository = await cloning;
@@ -264,7 +302,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         {
             ErrorText = "Clone cancelled.";
         }
-        catch (GitException) when (prompts.UserCancelled)
+        catch (GitException) when (prompts?.UserCancelled == true)
         {
             // The user cancelled a prompt, which made git fail: that is a cancel, not an error.
             ErrorText = "Clone cancelled.";
@@ -280,7 +318,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         }
         finally
         {
-            prompts.Dispose();
+            prompts?.Dispose();
             IsCloning = false;
             _clone.Dispose();
             _clone = null;
@@ -290,11 +328,46 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void CancelClone() => _clone?.Cancel();
 
+    /// <summary>
+    /// The bindings of the clone of <paramref name="url"/> (9.3, D331): none unless the account binds
+    /// the URL as typed; else the user's <c>insteadOf</c> rules are read once with the outside read in
+    /// the data folder (local and worktree entries dropped: <c>git clone</c> applies none of a
+    /// repository around its folder) and the URL git will use is bound. A rule that rewrites it to
+    /// another user leaves it unbound (D82's order). No configuration service, or a failed read, binds
+    /// nothing and is logged once. Signed out nothing is read, so no earlier count of git calls moves.
+    /// </summary>
+    private async Task<IReadOnlyList<CredentialBinding>> BindingsForCloneAsync(string url, CancellationToken cancellationToken)
+    {
+        var hosting = _services.Hosting;
+        if (hosting.BindingsForClone(url).Count == 0)
+        {
+            return [];
+        }
+
+        try
+        {
+            var settings = _services.GitSettings ?? throw new InvalidOperationException("No git configuration service.");
+            var read = await settings.ReadAsync(null, cancellationToken);
+            var rules = UrlRewrites.Parse(read.Values
+                .Where(value => value.Scope is not (GitConfigScope.Local or GitConfigScope.Worktree) && value.Value is not null)
+                .Select(value => (value.Key, value.Value!)));
+            return rules.Apply([new RemoteUrl("origin", url, false)]) is [{ Fetch: [var effective, ..] }]
+                ? hosting.BindingsForClone(effective)
+                : [];
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _services.Log.Warning($"Cloning {GitCommand.HideCredentials(url)}: git's configuration could not be read; the clone goes without the account's token.", ex);
+            return [];
+        }
+    }
+
     public void Dispose()
     {
         Recent.CollectionChanged -= OnRecentChanged;
         Workspaces.CollectionChanged -= OnWorkspacesChanged;
         _services.Workspaces.Changed -= OnWorkspaceStoreChanged;
+        _services.Hosting.AccountChanged -= OnAccountChanged;
         _clone?.Cancel();
     }
 
@@ -329,6 +402,9 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     private void OnRecentChanged(object? sender, NotifyCollectionChangedEventArgs e) => OnPropertyChanged(nameof(HasRecent));
 
     private void OnWorkspacesChanged(object? sender, NotifyCollectionChangedEventArgs e) => OnPropertyChanged(nameof(HasWorkspaces));
+
+    /// <summary>A sign-in, a sign-out or a refusal shows or hides "From GitHub…" (D261, D302); raised on the UI thread.</summary>
+    private void OnAccountChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(ShowsGitHubButton));
 
     /// <summary>A change of the store can set or clear its notice (a failed save, then one that succeeded, 1.3).</summary>
     private void OnWorkspaceStoreChanged(object? sender, EventArgs e)

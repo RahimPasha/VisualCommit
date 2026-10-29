@@ -20,6 +20,9 @@ public static partial class Scenarios
 
     public const string AdaEmail = "ada@example.com";
 
+    /// <summary>octo/tool's description, the scenario's only one (the report's open point 11; part B's browser).</summary>
+    public const string ToolDescription = "Small command-line tools.";
+
     /// <summary>The long branch whose label the graph must cut (part G).</summary>
     public const string LongBranch = "feature/a-very-long-branch-name-that-the-graph-must-cut";
 
@@ -115,7 +118,9 @@ public static partial class Scenarios
             var acmeTool = await fake.AddRepositoryAsync("acme", "tool", ct: ct).ConfigureAwait(false);
             acmeTool.UpdatedAt = time.AddHours(-1);
             acmeTool.AddPusher("ada");
-            (await fake.AddRepositoryAsync("octo", "tool", forkOf: "acme/tool", ct: ct).ConfigureAwait(false)).UpdatedAt = time.AddHours(-1);
+            // The one described repository (the report's open point 11): the browser's detail joins
+            // its flag and its description, "Fork · Small command-line tools." (design 9.4).
+            (await fake.AddRepositoryAsync("octo", "tool", forkOf: "acme/tool", description: ToolDescription, ct: ct).ConfigureAwait(false)).UpdatedAt = time.AddHours(-1);
             (await fake.AddRepositoryAsync("octo", "notes", isPrivate: true, ct: ct).ConfigureAwait(false)).UpdatedAt = time.AddDays(-1);
             var website = await fake.AddRepositoryAsync("octo", "website", ct: ct).ConfigureAwait(false);
             website.UpdatedAt = time.AddDays(-30);
