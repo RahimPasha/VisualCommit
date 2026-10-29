@@ -90,8 +90,8 @@ internal sealed class HostingSessionSetup : IAsyncDisposable
         }
     }
 
-    /// <summary>Another session over the same data folder, store and fake: the app's next start.</summary>
-    public HostingSession NewSession(ITokenStore? tokens = null, HostingOptions? off = null)
+    /// <summary>Another session over the same data folder, store and fake: the app's next start; <see cref="Log"/> unless given.</summary>
+    public HostingSession NewSession(ITokenStore? tokens = null, HostingOptions? off = null, IAppLog? log = null)
     {
         var options = off ?? new HostingOptions(Fake.Endpoints, () =>
         {
@@ -109,7 +109,7 @@ internal sealed class HostingSessionSetup : IAsyncDisposable
 
             return recorder;
         });
-        var session = new HostingSession(Paths, options, tokens ?? Tokens, Log, Thread.Post, Clock);
+        var session = new HostingSession(Paths, options, tokens ?? Tokens, log ?? Log, Thread.Post, Clock);
         lock (_gate)
         {
             _sessions.Add(session);

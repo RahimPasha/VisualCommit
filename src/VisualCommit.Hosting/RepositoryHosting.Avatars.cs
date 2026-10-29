@@ -54,6 +54,8 @@ public sealed partial class RepositoryHosting
             return;
         }
 
+        // Null when the session started nothing (signed out meanwhile, or closed): the next set then
+        // starts a run of its own instead of folding into none.
         var generation = _avatarGeneration;
         _avatarRun = _session.RunAvatarWork(async ct =>
         {

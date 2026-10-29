@@ -1,4 +1,5 @@
 using VisualCommit.Core.Hosting;
+using VisualCommit.Core.Logging;
 using VisualCommit.Hosting.Tests.Tokens;
 using VisualCommit.Hosting.Tokens;
 using VisualCommit.Testing;
@@ -12,7 +13,8 @@ namespace VisualCommit.Hosting.Tests;
 /// rulings 18, 19): one <c>GET /user</c> with the token only in <c>Authorization</c>; no keychain;
 /// a failed save; a refused token and a network failure changing nothing; a cancellation before
 /// GitHub's answer and after it; another login replacing the account; the switch carried; signing
-/// out with and without a kept entry; sign-in and sign-out one at a time.
+/// out with and without a kept entry; sign-in and sign-out one at a time; the switch and the
+/// sign-out writing off the caller's thread; a sign-out completing when the session closes.
 /// </summary>
 public sealed class HostingSessionSignInTests
 {
@@ -233,5 +235,73 @@ public sealed class HostingSessionSignInTests
         Assert.Same(AuthorAvatars.None, hosting.Avatars);
     }
 
+    [Fact]
+    public async Task The_switch_and_a_sign_out_without_a_keychain_write_off_the_callers_thread()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        setup.FakeTokens.Available = false;
+        var log = new ThreadLog();
+        var session = setup.NewSession(log: log);
+        await session.StartAsync(Cancelled);
+        Assert.Null((await session.SignInAsync(setup.OctoToken, Cancelled)).Failure);
+        var caller = await setup.Thread.RunAsync(() => Environment.CurrentManagedThreadId);
+
+        // The UI thread at Settings' Save and at the dashboard's "Sign out": the vault answers at
+        // once without a keychain, so only the session itself keeps the writes off it.
+        await setup.Thread.RunAsync(() => session.SetUseForGit(false));
+        await session.Switching.WaitAsync(Cancelled);
+        Assert.Null(await setup.Thread.RunAsync(() => session.SignOutAsync(Cancelled)));
+
+        Assert.Empty(Load(setup).Accounts);
+        Assert.NotEqual(caller, log.ThreadOf("GitHub account octo on 127.0.0.1:1: not used for git over HTTPS."));
+        Assert.NotEqual(caller, log.ThreadOf("GitHub account octo on 127.0.0.1:1: signed out."));
+    }
+
+    [Fact]
+    public async Task A_sign_out_begun_completes_when_the_session_closes_meanwhile()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await RepositoryHostingAvatarsTests.OpenHelloAsync(setup);
+        await RepositoryHostingAvatarsTests.ShowAsync(setup, hosting, Scenarios.OctoEmail);
+        Assert.True(Directory.Exists(setup.Paths.AvatarsDirectory));
+
+        Task<string?> signOut;
+        using (var storeHold = setup.FakeTokens.HoldNext())
+        {
+            signOut = setup.Session.SignOutAsync(Cancelled);
+            await storeHold.Arrived.WaitAsync(Cancelled);
+            setup.Session.Dispose();
+        }
+
+        Assert.Null(await signOut.WaitAsync(Cancelled));
+        Assert.Equal(["probe", "save github:127.0.0.1:1:octo", "delete github:127.0.0.1:1:octo"], setup.FakeTokens.Calls);
+        Assert.Empty(Load(setup).Accounts);
+        Assert.False(Directory.Exists(setup.Paths.AvatarsDirectory));
+    }
+
     internal static AccountsFile Load(HostingSessionSetup setup) => new JsonAccountStore(setup.Paths.AccountsFile, new ListLog()).Load();
+
+    /// <summary>A log that keeps the thread each line was written on.</summary>
+    private sealed class ThreadLog : IAppLog
+    {
+        private readonly List<(string Message, int Thread)> _lines = [];
+
+        /// <summary>The thread of the one line <paramref name="message"/>.</summary>
+        public int ThreadOf(string message)
+        {
+            lock (_lines)
+            {
+                return _lines.Single(line => line.Message == message).Thread;
+            }
+        }
+
+        public void Write(LogLevel level, string message, Exception? exception = null)
+        {
+            lock (_lines)
+            {
+                _lines.Add((message, Environment.CurrentManagedThreadId));
+            }
+        }
+    }
 }

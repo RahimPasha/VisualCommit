@@ -126,6 +126,30 @@ public sealed class HostingSession : IHostingSession
         }
     }
 
+    /// <summary>The last check of git's refusal, null before the first, for the tests.</summary>
+    internal Task? RefusalCheck
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _refusalCheck;
+            }
+        }
+    }
+
+    /// <summary>How many repositories' hostings are told of the account's changes, for the tests.</summary>
+    internal int HostingCount
+    {
+        get
+        {
+            lock (_lock)
+            {
+                return _hostings.Count;
+            }
+        }
+    }
+
     /// <summary>
     /// Reads <c>accounts.json</c> and, for a record whose token is in the keychain, the keychain once
     /// (7.4, ruling 6, D287); makes no request to GitHub. Without a record for this host no store is
@@ -229,53 +253,30 @@ public sealed class HostingSession : IHostingSession
 
     /// <summary>
     /// Signs out (7.5, D291): the keychain's entry forgotten (null, or why it was kept), the record
-    /// removed even when the entry was kept, the account cleared. <paramref name="ct"/> stops the
-    /// waits before the gate only.
+    /// removed even when the entry was kept, the account cleared. Runs on the thread pool, never on
+    /// the caller's thread (the vault answers at once without a keychain). <paramref name="ct"/>
+    /// stops the waits before the gate only: once begun, the sign-out completes, the session's
+    /// closing included.
     /// </summary>
-    public async Task<string?> SignOutAsync(CancellationToken ct)
-    {
-        if (_provider is null || _vault is null)
-        {
-            return null;
-        }
+    public Task<string?> SignOutAsync(CancellationToken ct) =>
+        _provider is null || _vault is null ? Task.FromResult<string?>(null) : Task.Run(() => SignOutCoreAsync(ct), CancellationToken.None);
 
-        await _started.Task.WaitAsync(ct).ConfigureAwait(false);
-        await _gate.WaitAsync(ct).ConfigureAwait(false);
-        try
-        {
-            if (Volatile.Read(ref _slot) is not { } slot)
-            {
-                return null;
-            }
-
-            var reason = await _vault.ForgetAsync(TokenKey.Of(slot.Key), _lifetime.Token).ConfigureAwait(false);
-            _file = _file.WithoutGitHub(Host);
-            _accounts.Save(_file);
-            Volatile.Write(ref _slot, null);
-            _log.Info(reason is null
-                ? $"GitHub account {slot.Status.Account.Login} on {Host}: signed out."
-                : $"GitHub account {slot.Status.Account.Login} on {Host}: signed out; the keychain kept its entry: {reason}.");
-            PostAccountChanged();
-            await ForgetAvatarsAsync().ConfigureAwait(false);
-            return reason;
-        }
-        finally
-        {
-            _gate.Release();
-        }
-    }
-
-    /// <summary>"Use for git over HTTPS" at the settings screen's Save (D216): the record written and the events posted, off the caller's thread.</summary>
+    /// <summary>
+    /// "Use for git over HTTPS" at the settings screen's Save (D216): on the thread pool after the
+    /// change before it, the value compared under the gate (no slot or the same value: nothing);
+    /// the record written and the events posted.
+    /// </summary>
     public void SetUseForGit(bool useForGit)
     {
-        if (_provider is null || Volatile.Read(ref _slot) is not { } slot || slot.Status.Account.UseForGit == useForGit)
+        if (_provider is null || _disposed)
         {
             return;
         }
 
         lock (_lock)
         {
-            _switching = SwitchAfterAsync(_switching, useForGit);
+            var earlier = _switching;
+            _switching = Task.Run(() => SwitchAfterAsync(earlier, useForGit), CancellationToken.None);
         }
     }
 
@@ -428,14 +429,17 @@ public sealed class HostingSession : IHostingSession
     /// <summary>
     /// Runs a tab's avatar work (7.9) on the thread pool under the tab's lifetime and the session's
     /// avatar work, which a sign-out cancels and waits for before it deletes <c>avatars/</c> (D291).
+    /// Null, and nothing runs, once the session is disposed or the account is not signed in.
     /// </summary>
-    internal Task RunAvatarWork(Func<CancellationToken, Task> work, CancellationToken hostingLifetime)
+    internal Task? RunAvatarWork(Func<CancellationToken, Task> work, CancellationToken hostingLifetime)
     {
         lock (_lock)
         {
-            if (_disposed)
+            // A sign-out clears the slot before it takes the runs under this lock: a run that comes
+            // in after them finds the slot cleared, one that came before is among them (D291).
+            if (_disposed || Volatile.Read(ref _slot) is not { IsSignedIn: true })
             {
-                return Task.CompletedTask;
+                return null;
             }
 
             var linked = CancellationTokenSource.CreateLinkedTokenSource(hostingLifetime, _avatarWork.Token);
@@ -588,6 +592,37 @@ public sealed class HostingSession : IHostingSession
     }
 
     private AvatarCache NewAvatarCache(HostingOptions options) => new(_paths.AvatarsDirectory, options.CreateHandler, Clock, _log);
+
+    private async Task<string?> SignOutCoreAsync(CancellationToken ct)
+    {
+        await _started.Task.WaitAsync(ct).ConfigureAwait(false);
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            if (Volatile.Read(ref _slot) is not { } slot)
+            {
+                return null;
+            }
+
+            // Not cut off by the session's closing: a record without its token would need signing
+            // in at the next start, and avatars/ would stay (D291). The vault's delete is bounded
+            // by the store's own limits.
+            var reason = await _vault!.ForgetAsync(TokenKey.Of(slot.Key), CancellationToken.None).ConfigureAwait(false);
+            _file = _file.WithoutGitHub(Host);
+            _accounts.Save(_file);
+            Volatile.Write(ref _slot, null);
+            _log.Info(reason is null
+                ? $"GitHub account {slot.Status.Account.Login} on {Host}: signed out."
+                : $"GitHub account {slot.Status.Account.Login} on {Host}: signed out; the keychain kept its entry: {reason}.");
+            PostAccountChanged();
+            await ForgetAvatarsAsync().ConfigureAwait(false);
+            return reason;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 
     // Under _gate, at a sign-out (7.5, D291): the avatar work cancelled and awaited, the maps
     // dropped from memory, a fresh cache, and avatars/ deleted whole; a file that stays gets one

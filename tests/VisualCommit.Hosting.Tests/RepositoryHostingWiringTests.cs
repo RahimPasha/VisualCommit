@@ -19,7 +19,8 @@ namespace VisualCommit.Hosting.Tests;
 /// The hosting in a repository's view model (docs/phase-7a-design.md 7.10, 7.13; D281, D289,
 /// D290, D332), with real git against a fake of GitHub on port 0 and <see cref="TabServices"/> built
 /// by hand with a <see cref="HostingSession"/>: no URL-rewrites read signed out; one per refresh
-/// signed in, its rules in the bindings; a sign-in with the tab open starting the read; a succeeded
+/// signed in, its rules in the bindings; a sign-in with the tab open starting the read, also for a
+/// remote that is GitHub's only through the user's <c>insteadOf</c>; a succeeded
 /// network operation refreshing the pull requests, a local or a failed one not; a dashboard row's
 /// view model without a hosting until promoted; the Debug line once per applied list; and
 /// <see cref="RepositoryViewModel.IsWatcherQuiet"/> waiting for a held read.
@@ -78,6 +79,25 @@ public sealed class RepositoryHostingWiringTests
     }
 
     [AvaloniaFact]
+    public async Task A_sign_in_with_the_tab_open_reads_the_rules_of_a_remote_github_only_through_them()
+    {
+        await using var wiring = await Wiring.StartAsync();
+        await wiring.Served.Hello.GitAsync("config", $"url.{wiring.Fake.Endpoints.WebBase}.insteadOf", "gh:");
+        await wiring.Served.Hello.GitAsync("remote", "set-url", "origin", "gh:octo/hello.git");
+        using var viewModel = await wiring.OpenAsync();
+        Assert.Same(RepositoryHostingState.NotGitHub, viewModel.HostingState);
+        Assert.Equal(0, wiring.RulesReads());
+
+        // Nothing but the wish for the rules changes at the sign-in; that alone starts their read.
+        await wiring.SignInAsync();
+
+        await WaitForAsync(() => viewModel.HostingState.PullRequests == PullRequestsState.Loaded && viewModel.IsWatcherQuiet, "the list through the rule");
+        Assert.Equal(1, wiring.RulesReads());
+        Assert.Equal("octo/hello", viewModel.HostingState.Repository!.FullName);
+        Assert.Equal([new CredentialBinding(Scenarios.HostingUrl("octo/hello", wiring.Fake.Port), HostingKey(wiring))], viewModel.Hosting.Bindings);
+    }
+
+    [AvaloniaFact]
     public async Task A_succeeded_network_operation_refreshes_the_pull_requests_and_a_local_or_failed_one_does_not()
     {
         await using var wiring = await Wiring.StartAsync();
@@ -94,6 +114,10 @@ public sealed class RepositoryHostingWiringTests
 
         await viewModel.Queue.RunAsync(Operation(OperationKind.Network, fail: false));
         await WaitForAsync(() => wiring.Lists() == lists + 1, "the refresh after the fetch");
+
+        // A late refresh of the local or the failed operation would come on top.
+        await Settle();
+        Assert.Equal(lists + 1, wiring.Lists());
     }
 
     [AvaloniaFact]

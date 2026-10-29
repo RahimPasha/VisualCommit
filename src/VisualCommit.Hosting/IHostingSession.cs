@@ -188,7 +188,7 @@ public interface IRepositoryHosting : IDisposable
     /// <summary>Signed in and not off: the tab reads <see cref="UrlRewrites"/> with its refs.</summary>
     bool WantsUrlRewrites { get; }
 
-    /// <summary><see cref="State"/>, <see cref="Bindings"/> or <see cref="Avatars"/> changed.</summary>
+    /// <summary><see cref="State"/>, <see cref="Bindings"/>, <see cref="Avatars"/> or <see cref="WantsUrlRewrites"/> changed.</summary>
     event EventHandler? Changed;
 
     /// <summary>On the UI thread, after each refs read.</summary>

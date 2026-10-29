@@ -12,7 +12,7 @@ namespace VisualCommit.Hosting;
 /// delegate); network work runs off it under the hosting's lifetime, which <see cref="Dispose"/>
 /// ends. <see cref="State"/>, <see cref="Bindings"/> and <see cref="Avatars"/> are swapped whole and
 /// may be read from any thread; <see cref="Changed"/> comes through the post delegate, only when one
-/// of them differs.
+/// of them or <see cref="WantsUrlRewrites"/> differs.
 /// </summary>
 public sealed partial class RepositoryHosting : IRepositoryHosting
 {
@@ -44,6 +44,9 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     private RepositoryHostingState _state = RepositoryHostingState.NotGitHub;
     private IReadOnlyList<CredentialBinding> _bindings = [];
     private AuthorAvatars _avatars = AuthorAvatars.None;
+
+    // On the UI thread: WantsUrlRewrites as last raised.
+    private bool _wantsRewrites;
     private volatile bool _disposed;
 
     internal RepositoryHosting(HostingSession session, string workingDirectory)
@@ -52,6 +55,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         _name = Path.GetFileName(Path.TrimEndingDirectorySeparator(workingDirectory));
         _lifetimeSource = CancellationTokenSource.CreateLinkedTokenSource(session.Lifetime);
         _lifetime = _lifetimeSource.Token;
+        _wantsRewrites = WantsUrlRewrites;
     }
 
     public RepositoryHostingState State => Volatile.Read(ref _state);
@@ -217,13 +221,20 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     }
 
     // On the UI thread: the state and the bindings as the fields say, with the avatars given;
-    // Changed posted when any of them differs.
+    // Changed posted when any of them differs, or WantsUrlRewrites: a sign-in that changes nothing
+    // else (a remote GitHub's only through the user's insteadOf) still starts the tab's rules read.
     private void Apply(AuthorAvatars? avatars = null)
     {
         var slot = _session.Slot;
         var state = StateOf(slot);
         var bindings = HostingRules.Bindings(slot?.Status, slot?.IsSignedIn == true, _rulesKnown, _effective, _session.Endpoints.WebBase);
         var changed = false;
+        if (WantsUrlRewrites != _wantsRewrites)
+        {
+            _wantsRewrites = !_wantsRewrites;
+            changed = true;
+        }
+
         if (!SameState(_state, state))
         {
             Volatile.Write(ref _state, state);
@@ -302,7 +313,9 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             }
             catch (Exception ex)
             {
+                // Shown as the run's failure, so that the section does not stay loading.
                 _session.Log.Warning($"{_name}: the pull requests could not be read: {ex.Message}");
+                result = HostingResult<PullRequestList>.Fail(new HostingFailure(HostingFailureKind.Network, ex.Message));
             }
 
             _session.Post(() => Finish(candidate, listed, result, done));

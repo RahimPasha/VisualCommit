@@ -10,8 +10,9 @@ namespace VisualCommit.Hosting.Tests;
 /// One repository's hosting (docs/phase-7a-design.md 7.8, 7.13; D251, D289, D290, D293): its
 /// states, signed out without a request; a fork's parent listed; a changed candidate; refreshes
 /// during a run folded into one more; no <c>Changed</c> for an unchanged answer; a sign-out
-/// clearing it; <c>Dispose</c> ending its work; a created pull request on top of the listed base's
-/// list only; its bindings, those of the session's dashboard row for the same URLs and rules.
+/// clearing it; A4's 401 signing it out; <c>Dispose</c> ending its work; a created pull request on
+/// top of the listed base's list only; its bindings, those of the session's dashboard row for the
+/// same URLs and rules.
 /// </summary>
 public sealed class RepositoryHostingTests
 {
@@ -51,9 +52,15 @@ public sealed class RepositoryHostingTests
         await setup.Thread.RunAsync(() => hosting.RefreshPullRequestsAsync(Cancelled));
         Assert.Equal((PullRequestsState.Failed, HostingFailureKind.ServerError, (PullRequestList?)null), (hosting.State.PullRequests, hosting.State.Failure!.Kind, hosting.State.List));
 
-        var refresh = setup.Thread.RunAsync(() => hosting.RefreshPullRequestsAsync(Cancelled));
-        Assert.Equal(PullRequestsState.Loading, (await setup.Thread.RunAsync(() => hosting.State)).PullRequests);
-        await refresh;
+        Task refresh;
+        using (var hold = setup.Fake.HoldNext("pulls:octo/hello"))
+        {
+            refresh = setup.Thread.RunAsync(() => hosting.RefreshPullRequestsAsync(Cancelled));
+            await hold.Arrived.WaitAsync(Cancelled);
+            Assert.Equal(PullRequestsState.Loading, (await setup.Thread.RunAsync(() => hosting.State)).PullRequests);
+        }
+
+        await refresh.WaitAsync(Cancelled);
         Assert.Equal(PullRequestsState.Loaded, hosting.State.PullRequests);
         Assert.True(changed.Count >= 4);
     }
@@ -76,8 +83,12 @@ public sealed class RepositoryHostingTests
                 new GitRef("refs/remotes/origin/fix-typo", "origin/fix-typo", RefKind.RemoteBranch, "abc", RemoteName: "origin"),
             ],
         };
-        await setup.Thread.RunAsync(() => hosting.Update(tool, UrlRewrites.None));
-        Assert.Equal((PullRequestsState.Loading, "octo/tool"), (hosting.State.PullRequests, hosting.State.Repository!.FullName));
+        var loading = await setup.Thread.RunAsync(() =>
+        {
+            hosting.Update(tool, UrlRewrites.None);
+            return hosting.State;
+        });
+        Assert.Equal((PullRequestsState.Loading, "octo/tool"), (loading.PullRequests, loading.Repository!.FullName));
         await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "acme/tool's list");
 
         Assert.Equal("acme/tool", hosting.State.Repository!.FullName);
@@ -150,6 +161,7 @@ public sealed class RepositoryHostingTests
             await hold.Arrived.WaitAsync(Cancelled);
             await setup.Thread.IdleAsync();
             var raised = changed.Count;
+            Assert.Equal(1, setup.Session.HostingCount);
 
             await setup.Thread.RunAsync(hosting.Dispose);
             await refresh.WaitAsync(Cancelled);
@@ -159,10 +171,31 @@ public sealed class RepositoryHostingTests
             Assert.Equal(PullRequestsState.Loading, hosting.State.PullRequests);
         }
 
-        // Told of the account no more.
-        await setup.Session.SignOutAsync(Cancelled);
+        // Told of the account no more: the session holds it no more.
+        Assert.Equal(0, setup.Session.HostingCount);
+    }
+
+    [Fact]
+    public async Task A4s_401_signs_the_tab_out_without_a_failure_and_marks_the_account_refused()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await OpenAsync(setup, out _);
+        await setup.Thread.RunAsync(() => hosting.Update(HelloRefs(), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "the list");
+        Assert.Single(hosting.Bindings);
+
+        setup.Fake.Revoke(setup.OctoToken);
+        await setup.Thread.RunAsync(() => hosting.RefreshPullRequestsAsync(Cancelled));
         await setup.Thread.IdleAsync();
-        Assert.Equal(PullRequestsState.Loading, hosting.State.PullRequests);
+
+        var state = hosting.State;
+        Assert.Equal((PullRequestsState.SignedOut, (PullRequestList?)null, (HostingFailure?)null, 0, 0), (state.PullRequests, state.List, state.Failure, state.ByRef.Count, hosting.Bindings.Count));
+        Assert.False(hosting.WantsUrlRewrites);
+        var account = setup.Session.Account!;
+        Assert.Equal((AccountState.NeedsSignIn, AccountNoteKind.Refused), (account.State, account.NoteKind));
+        Assert.Equal(AccountTokenStates.Refused, Assert.Single(HostingSessionSignInTests.Load(setup).Accounts).TokenState);
+        Assert.Equal([200, 401], setup.Fake.Requests.Where(request => request.Route == "pulls:octo/hello").Select(request => request.Status));
     }
 
     [Fact]

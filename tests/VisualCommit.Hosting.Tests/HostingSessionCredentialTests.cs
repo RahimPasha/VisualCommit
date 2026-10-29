@@ -94,10 +94,11 @@ public sealed class HostingSessionCredentialTests
         Assert.Equal(AccountState.SignedIn, setup.Session.Account!.State);
         Assert.Equal((written, file), (File.GetLastWriteTimeUtc(setup.Paths.AccountsFile), File.ReadAllText(setup.Paths.AccountsFile)));
 
-        // Another account's erase is ignored without a request.
+        // Another account's erase is ignored: no check starts, so no request.
         var requests = setup.UserRequests;
+        var check = setup.Session.RefusalCheck;
         setup.Session.Refused(new AccountKey(HostingProvider.GitHub, octo.Host, "ada"));
-        Assert.Equal(requests, setup.UserRequests);
+        Assert.Same(check, setup.Session.RefusalCheck);
 
         // Revoked: GET /user answers 401 and the account needs signing in, its source git.
         setup.Fake.Revoke(setup.OctoToken);
@@ -106,6 +107,7 @@ public sealed class HostingSessionCredentialTests
         Assert.Equal(AccountNoteKind.Refused, setup.Session.Account!.NoteKind);
         Assert.Equal(AccountTokenStates.Refused, Load(setup).TokenState);
         Assert.Contains("GitHub account octo on 127.0.0.1:1: GitHub refused the token (git); it needs signing in again.", setup.Warnings);
+        Assert.Equal(requests + 1, setup.UserRequests);
     }
 
     [Fact]
