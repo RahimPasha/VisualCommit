@@ -70,6 +70,7 @@ public sealed class GitHubRecognitionTests
     [InlineData("https://github.com:/octo/hello")]
     [InlineData("https://@github.com/octo/hello")]
     [InlineData("http://github.com:443/octo/hello")]
+    [InlineData("http://octo:secret@github.com/octo/hello")]
     [InlineData("ssh://ssh.github.com/octo/hello")]
     [InlineData("ssh://git@ssh.github.com:22/octo/hello")]
     [InlineData("ssh://git:secret@github.com/octo/hello")]
@@ -93,7 +94,6 @@ public sealed class GitHubRecognitionTests
     [InlineData("http://127.0.0.1:47395/octo/hello.git", "octo", "hello")]
     [InlineData("http://127.0.0.1:47395/octo/hello", "octo", "hello")]
     [InlineData("http://127.0.0.1:47395/acme/tool.git/", "acme", "tool")]
-    [InlineData("http://octo@127.0.0.1:47395/octo/hello.git", "octo", "hello")]
     [InlineData("HTTP://127.0.0.1:47395/octo/hello", "octo", "hello")]
     public void The_fake_is_recognised_by_its_exact_scheme_host_and_port(string url, string owner, string name)
     {
@@ -114,6 +114,8 @@ public sealed class GitHubRecognitionTests
     [InlineData("http://127.0.0.1:47395/octo")]
     [InlineData("http://127.0.0.1:47395/octo/hello/pulls")]
     [InlineData("http://127.0.0.1:47395/octo/hello?x=1")]
+    [InlineData("http://octo@127.0.0.1:47395/octo/hello.git")]
+    [InlineData("http://octo:secret@127.0.0.1:47395/octo/hello.git")]
     [InlineData("http://127.0.0.1:47395/api/v3/user")]
     [InlineData("ssh://git@127.0.0.1:47395/octo/hello.git")]
     [InlineData("git@127.0.0.1:octo/hello.git")]

@@ -16,11 +16,11 @@ internal static partial class GitHubUrls
     /// The repository <paramref name="url"/> names on <paramref name="endpoints"/>, or null. On
     /// github.com (<see cref="GitHubEndpoints.GitHubCom"/>), the host <c>github.com</c> or
     /// <c>www.github.com</c> in <c>https://[user[:pw]@]host[:443]/o/r</c>,
-    /// <c>http://[user[:pw]@]host[:80]/o/r</c>, <c>ssh://[user@]host[:22]/o/r</c>,
+    /// <c>http://[user@]host[:80]/o/r</c>, <c>ssh://[user@]host[:22]/o/r</c>,
     /// <c>ssh://[user@]ssh.github.com:443/o/r</c>, scp-like <c>user@host:o/r</c> and
     /// <c>git://host/o/r</c>; on any other endpoints (the fake, <see cref="GitHubEndpoints.Local"/>)
     /// only <see cref="GitHubEndpoints.WebBase"/>'s scheme, host and port,
-    /// <c>http://[user[:pw]@]127.0.0.1:&lt;port&gt;/o/r</c>. The path is exactly two segments, then
+    /// <c>http://127.0.0.1:&lt;port&gt;/o/r</c>, with no user part. The path is exactly two segments, then
     /// an optional <c>.git</c> (once) and <c>/</c>, with no query, fragment or percent escape. The
     /// owner and name are kept as written; the user part never is.
     /// </summary>
@@ -87,7 +87,7 @@ internal static partial class GitHubUrls
         return scheme switch
         {
             "https" when isWeb && port is null or 443 => path,
-            "http" when isWeb && port is null or 80 => path,
+            "http" when isWeb && port is null or 80 && !HasPassword(user) => path,
             "ssh" when isWeb && port is null or 22 && !HasPassword(user) => path,
             "ssh" when IsHost(host, "ssh.github.com") && port == 443 && !HasPassword(user) => path,
             "git" when isWeb && port is null && user is null => path,
@@ -95,7 +95,7 @@ internal static partial class GitHubUrls
         };
     }
 
-    /// <summary>The path of the fake's URL: its web address's scheme, host and port exactly (ruling 23), or null.</summary>
+    /// <summary>The path of the fake's URL: its web address's scheme, host and port exactly (ruling 23) and no user part, or null.</summary>
     private static string? LocalPath(Uri webBase, string url)
     {
         if (Parts(url) is not { } parts)
@@ -103,14 +103,15 @@ internal static partial class GitHubUrls
             return null;
         }
 
-        var (scheme, _, host, port, path) = parts;
+        var (scheme, user, host, port, path) = parts;
         var defaultPort = scheme switch
         {
             "http" => 80,
             "https" => 443,
             _ => -1,
         };
-        return string.Equals(scheme, webBase.Scheme, StringComparison.Ordinal)
+        return user is null
+            && string.Equals(scheme, webBase.Scheme, StringComparison.Ordinal)
             && string.Equals(host, webBase.IdnHost, StringComparison.OrdinalIgnoreCase)
             && (port ?? defaultPort) == webBase.Port
             ? path
