@@ -114,4 +114,20 @@ public class VisualRunTests
         var fields = stat[(stat.LastIndexOf(')') + 2)..].Split(' ');
         Assert.Equal($"{self.Id} {fields[19]}", VisualRun.KeyOf(self));
     }
+
+    /// <summary>
+    /// Since phase 7a a phase is named as the docs write it (docs/phase-7a-design.md 0.3, 2.7):
+    /// "7a" gets <c>artifacts/visual/phase-7a/scripted</c>, and the <c>int</c> forms of phases 0 to 6
+    /// name the folders they named before.
+    /// </summary>
+    [Fact]
+    public void A_phase_named_by_a_string_gets_its_folder_and_the_int_forms_name_the_same_ones()
+    {
+        var folder = VisualRun.FolderFor("7a");
+        Assert.EndsWith(Path.Combine("artifacts", "visual", "phase-7a", "scripted"), folder, StringComparison.Ordinal);
+        Assert.Equal(VisualRun.FolderFor("6"), VisualRun.FolderFor(6));
+        Assert.EndsWith(Path.Combine("artifacts", "visual", "phase-6", "scripted"), VisualRun.FolderFor(6), StringComparison.Ordinal);
+        Assert.Equal(Path.GetDirectoryName(Path.GetDirectoryName(folder)), Path.GetDirectoryName(Path.GetDirectoryName(VisualRun.FolderFor(0))));
+        Assert.Throws<ArgumentException>(() => VisualRun.FolderFor(" "));
+    }
 }

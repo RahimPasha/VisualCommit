@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO.Compression;
 using System.Net;
@@ -34,6 +35,15 @@ namespace VisualCommit.Testing;
 /// (<see cref="HoldNextFetchPack(string, int)"/>, <see cref="Release(string)"/>) and a gate on a
 /// repository's next request of any kind (<see cref="HoldNextRequest"/>).
 /// </para>
+/// <para>
+/// Since phase 7a (docs/phase-7a-design.md 2.2, D266) a server can stand in for a git host
+/// (<see cref="StartForHostAsync"/>): repositories in two levels, <c>&lt;owner&gt;/&lt;name&gt;.git</c>,
+/// registered after the start (<see cref="Serve"/>) and named with or without <c>.git</c> in the
+/// path; Basic auth with any user name and a token the host knows; anonymous reads of public
+/// repositories; pushes only by a repository's pushers; and a hook ahead of auth that serves
+/// the paths its routes claim (<see cref="IAuthRemoteRoutes"/>: the fake of GitHub's API, avatars
+/// and web pages). The other starts and their behaviour are as before.
+/// </para>
 /// </summary>
 public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 {
@@ -64,6 +74,14 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// </summary>
     public const int Phase6LookVisualChecksPort = 47394;
 
+    /// <summary>
+    /// The port of phase 7a's fake of GitHub in <c>VisualCommit.VisualTests.Phase7a</c> and its
+    /// real-window twin (docs/phase-7a-design.md 2.2, D265), whose URLs the pictures show; 47396 is
+    /// reserved for a second 7a walk-through project. Every other test uses port 0 or the
+    /// in-process handler.
+    /// </summary>
+    public const int Phase7aVisualChecksPort = 47395;
+
     /// <summary>The folder name of the served repository, and the last part of <see cref="Url"/>.</summary>
     public const string RepositoryName = "remote.git";
 
@@ -81,8 +99,15 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>The folder that holds the served repositories: <c>GIT_PROJECT_ROOT</c> of <c>http-backend</c>. <see cref="_root"/> unless the server serves a repository in place or a folder.</summary>
     private readonly string _projectRoot;
 
-    /// <summary>The served repositories' folder names (<c>remote.git</c>, <c>docs.git</c>), by their names without a final <c>.git</c> (<c>remote</c>, <c>docs</c>).</summary>
-    private readonly IReadOnlyDictionary<string, string> _served;
+    /// <summary>
+    /// The served repositories' folder names (<c>remote.git</c>, <c>docs.git</c>), by their names
+    /// without a final <c>.git</c> (<c>remote</c>, <c>docs</c>); a host's in two levels
+    /// (<c>octo/hello</c>: <c>octo/hello.git</c>), added to after the start (<see cref="Serve"/>).
+    /// </summary>
+    private readonly ConcurrentDictionary<string, string> _served;
+
+    /// <summary>A host's options (<see cref="StartForHostAsync"/>); null for the other servers.</summary>
+    private readonly AuthRemoteHostOptions? _host;
 
     /// <summary>The folder name of the one repository a server of one repository serves; null for a folder server.</summary>
     private readonly string? _single;
@@ -109,8 +134,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     private volatile bool _requireAuth = true;
     private int _disposed;
 
-    private AuthRemoteServer(TempDirectory root, TcpListener listener, bool portWasTaken, string projectRoot, IReadOnlyList<string> servedFolders, bool folderServer)
+    private AuthRemoteServer(TempDirectory root, TcpListener listener, bool portWasTaken, string projectRoot, IReadOnlyList<string> servedFolders, bool folderServer, AuthRemoteHostOptions? host = null)
     {
+        _host = host;
         _root = root;
         _listener = listener;
         PortWasTaken = portWasTaken;
@@ -118,7 +144,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         _runner = new GitRunner(TempRepo.GitPath);
         _environment = TempRepo.IsolatedEnvironment(root.Combine("home"));
         _projectRoot = projectRoot;
-        _served = servedFolders.ToDictionary(NameOf, folder => folder, StringComparer.Ordinal);
+        _served = new ConcurrentDictionary<string, string>(servedFolders.Select(folder => KeyValuePair.Create(NameOf(folder), folder)), StringComparer.Ordinal);
         _single = folderServer ? null : servedFolders.Single();
     }
 
@@ -329,6 +355,107 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             throw;
         }
     }
+
+    /// <summary>
+    /// Starts a server that stands in for a git host (docs/phase-7a-design.md 2.2, D266): the bare
+    /// repositories <c>&lt;folder&gt;/&lt;owner&gt;/&lt;name&gt;.git</c> that <see cref="Serve"/>
+    /// registers, at <c>/&lt;owner&gt;/&lt;name&gt;.git/...</c> or <c>/&lt;owner&gt;/&lt;name&gt;/...</c>
+    /// (<c>http-backend</c> tries <c>&lt;path&gt;.git</c> itself), with <c>GIT_PROJECT_ROOT</c> the
+    /// folder. <see cref="RequireAuth"/> and <see cref="Credentials"/> play no part:
+    /// <list type="bullet">
+    /// <item>A path the routes claim (<see cref="IAuthRemoteRoutes.Claims"/>) is answered by them,
+    /// before any auth, and recorded with its status.</item>
+    /// <item>Basic auth with any non-empty user name and a password that
+    /// <see cref="AuthRemoteHostOptions.LoginOfToken"/> knows signs in as that login
+    /// (<c>REMOTE_USER</c>); the request records the login and the user name given
+    /// (<see cref="AuthRemoteRequest.GivenUserName"/>), never the password. A refusal is a 401 with
+    /// <c>Basic realm="&lt;Realm&gt;"</c>.</item>
+    /// <item>Upload-pack of a public repository (<see cref="AuthRemoteHostOptions.IsPublic"/>)
+    /// without an <c>Authorization</c> header is served as <c>anonymous</c>, as GitHub does; a wrong
+    /// header gets 401, and a private repository always needs a token.</item>
+    /// <item>Receive-pack needs a login that <see cref="AuthRemoteHostOptions.MayPush"/> lets push,
+    /// else 403 <c>Permission to octo/hello.git denied to ada.</c></item>
+    /// </list>
+    /// The server itself changes and deletes nothing in the folder. On <paramref name="port"/>, or
+    /// one the system picks when it is 0; with <paramref name="fallBackToFreePort"/> a taken port
+    /// gives way to a free one, as for <see cref="StartAsync"/>.
+    /// </summary>
+    public static async Task<AuthRemoteServer> StartForHostAsync(string folder, AuthRemoteHostOptions options, int port = 0, bool fallBackToFreePort = false)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        ArgumentNullException.ThrowIfNull(options);
+        ArgumentOutOfRangeException.ThrowIfNegative(port);
+        await HttpBackendCheck.Value.ConfigureAwait(false);
+        var full = Path.TrimEndingDirectorySeparator(Path.GetFullPath(folder));
+        if (!Directory.Exists(full))
+        {
+            throw new DirectoryNotFoundException($"No folder of repositories to serve at {full}.");
+        }
+
+        var root = new TempDirectory("auth-server");
+        TcpListener? listener = null;
+        try
+        {
+            var portWasTaken = false;
+            try
+            {
+                listener = Listen(port);
+            }
+            catch (SocketException) when (fallBackToFreePort && port != 0)
+            {
+                portWasTaken = true;
+                listener = Listen(0);
+            }
+
+            var server = new AuthRemoteServer(root, listener, portWasTaken, full, [], folderServer: true, options);
+            server._acceptLoop = Task.Run(server.AcceptLoopAsync);
+            return server;
+        }
+        catch
+        {
+            listener?.Stop();
+            listener?.Dispose();
+            root.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Registers the bare repository <c>&lt;folder&gt;/&lt;owner&gt;/&lt;name&gt;.git</c> of a host
+    /// (<see cref="StartForHostAsync"/>), named <paramref name="ownerAndName"/> (<c>octo/hello</c>),
+    /// at once, also while the server runs. It runs no git: the folder must exist with a
+    /// <c>HEAD</c> and an <c>objects</c> folder, and each of the two segments may hold only letters,
+    /// digits, '.', '-' and '_'. Registering it again changes nothing.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The server is not a host's.</exception>
+    /// <exception cref="ArgumentException">The name is not two such segments, or the folder is no bare repository.</exception>
+    public void Serve(string ownerAndName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerAndName);
+        if (_host is null)
+        {
+            throw new InvalidOperationException("Only a host's server (StartForHostAsync) serves repositories registered by name.");
+        }
+
+        var name = ownerAndName.EndsWith(".git", StringComparison.Ordinal) ? ownerAndName[..^4] : ownerAndName;
+        var segments = name.Split('/');
+        if (segments.Length != 2 || !segments.All(IsPlainSegment))
+        {
+            throw new ArgumentException($"A host's repository is named <owner>/<name>, each of letters, digits, '.', '-' and '_': '{ownerAndName}'.", nameof(ownerAndName));
+        }
+
+        var full = Path.Combine(_projectRoot, segments[0], segments[1] + ".git");
+        if (!File.Exists(Path.Combine(full, "HEAD")) || !Directory.Exists(Path.Combine(full, "objects")))
+        {
+            throw new ArgumentException($"{full} is not a bare repository: it has no HEAD and objects folder.", nameof(ownerAndName));
+        }
+
+        _served.TryAdd(name, name + ".git");
+    }
+
+    /// <summary>Whether a path segment needs no escaping in a URL and names no folder above (<c>.</c>, <c>..</c>).</summary>
+    private static bool IsPlainSegment(string segment) =>
+        segment.Length > 0 && segment is not ("." or "..") && segment.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
 
     /// <summary>A served repository's name: its folder's name without a final <c>.git</c>.</summary>
     private static string NameOf(string folder) =>
@@ -700,19 +827,40 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         var stopping = _stopping.Token;
         var (path, query) = SplitTarget(head.Target);
 
+        // A host's routes (the fake of GitHub's API, avatars and pages) are decided from the
+        // request line alone; their requests are no repository's, so no gate holds them.
+        var claimed = _host is not null && _host.Routes.Claims(head.Method, path);
+
         // A gate on this repository's next request (HoldNextRequest) holds it here, before
         // anything is decided about it. The time to send the rest of the request starts again
         // once it goes on, on a timer of its own: the connection's may have run out meanwhile,
         // and a cancelled timer cannot be started again.
-        using var afterGate = await PassGateAsync(path, stopping).ConfigureAwait(false);
+        using var afterGate = claimed ? null : await PassGateAsync(path, stopping).ConfigureAwait(false);
         var readCancelled = afterGate?.Token ?? connectionRead;
-        var user = AuthenticatedUser(head);
-        var authorized = user is not null || !RequireAuth;
+        if (claimed)
+        {
+            await ServeRouteAsync(stream, reader, head, path, query, readCancelled, stopping).ConfigureAwait(false);
+            return;
+        }
+
+        string? user;
+        string? givenUserName = null;
+        bool authorized;
+        string? pushRefusal = null;
+        if (_host is null)
+        {
+            user = AuthenticatedUser(head);
+            authorized = user is not null || !RequireAuth;
+        }
+        else
+        {
+            (user, givenUserName, authorized, pushRefusal) = HostAccess(head, path, query);
+        }
 
         // A client that waits for "100 Continue" sends no body to a refused request.
         var expectsContinue = string.Equals(head.Header("Expect"), "100-continue", StringComparison.OrdinalIgnoreCase);
         byte[] body = [];
-        if (authorized || !expectsContinue)
+        if (authorized && pushRefusal is null || !expectsContinue)
         {
             if (expectsContinue)
             {
@@ -725,12 +873,19 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         var protocol = head.Header("Git-Protocol");
         var compressed = IsGzip(head.Header("Content-Encoding"));
         var command = V2Command(protocol, body, compressed);
-        var request = new AuthRemoteRequest(head.Method, path, query, protocol, command, user, 0, Held: false, head.IsChunked, compressed);
+        var request = new AuthRemoteRequest(head.Method, path, query, protocol, command, user, 0, Held: false, head.IsChunked, compressed, givenUserName);
+
+        if (pushRefusal is not null)
+        {
+            Record(request with { Status = 403 });
+            await WriteSimpleAsync(stream, 403, "Forbidden", string.Empty, pushRefusal + "\n", stopping).ConfigureAwait(false);
+            return;
+        }
 
         if (!authorized)
         {
             Record(request with { Status = 401 });
-            await WriteSimpleAsync(stream, 401, "Unauthorized", $"WWW-Authenticate: Basic realm=\"{Realm}\"\r\n", "Authentication required.\n", stopping).ConfigureAwait(false);
+            await WriteSimpleAsync(stream, 401, "Unauthorized", $"WWW-Authenticate: Basic realm=\"{_host?.Realm ?? Realm}\"\r\n", "Authentication required.\n", stopping).ConfigureAwait(false);
             return;
         }
 
@@ -739,6 +894,15 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             Record(request with { Status = 404 });
             await WriteSimpleAsync(stream, 404, "Not Found", string.Empty, "Not found.\n", stopping).ConfigureAwait(false);
             return;
+        }
+
+        // A host may bring its refs up to date before git lists them (docs/phase-7a-design.md 2.3:
+        // the fake of GitHub's refs/pull/<n>/head, D267).
+        if (_host?.BeforeRefsAsync is { } beforeRefs
+            && RepositoryOf(path) is { } listed
+            && (path.EndsWith("/info/refs", StringComparison.Ordinal) || command == "ls-refs"))
+        {
+            await beforeRefs(NameOf(listed), stopping).ConfigureAwait(false);
         }
 
         var cgi = await RunBackendAsync(head, path, query, user, body, stopping).ConfigureAwait(false);
@@ -810,6 +974,117 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         // The client may have given up meanwhile (a cancelled fetch): then this write fails,
         // which ends the connection quietly.
         await stream.WriteAsync(sent.AsMemory(holdAt), stopping).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Answers a request a host's routes claimed (<see cref="StartForHostAsync"/>): <c>100 Continue</c>
+    /// when asked, the body read, the routes' answer written with <c>Content-Length</c> and
+    /// <c>Connection: close</c>, and the request recorded with its status. An answer with
+    /// <see cref="AuthRemoteResponse.Drop"/> closes the connection without a word.
+    /// </summary>
+    private async Task ServeRouteAsync(NetworkStream stream, RequestReader reader, RequestHead head, string path, string query, CancellationToken readCancelled, CancellationToken stopping)
+    {
+        if (string.Equals(head.Header("Expect"), "100-continue", StringComparison.OrdinalIgnoreCase))
+        {
+            await stream.WriteAsync("HTTP/1.1 100 Continue\r\n\r\n"u8.ToArray(), stopping).ConfigureAwait(false);
+        }
+
+        var body = await reader.ReadBodyAsync(head, readCancelled).ConfigureAwait(false);
+        var host = head.Header("Host") ?? string.Create(CultureInfo.InvariantCulture, $"127.0.0.1:{Port}");
+        var response = await _host!.Routes.ServeAsync(new AuthRemoteRouteRequest(head.Method, host, path, query, head.Headers, body), stopping).ConfigureAwait(false);
+        Record(new AuthRemoteRequest(head.Method, path, query, null, null, null, response.Status, Held: false, head.IsChunked, Compressed: false));
+        if (response.Drop)
+        {
+            return;
+        }
+
+        var responseHead = new StringBuilder()
+            .Append(CultureInfo.InvariantCulture, $"HTTP/1.1 {response.Status} {response.Reason}\r\n");
+        foreach (var (name, value) in response.Headers)
+        {
+            if (!name.Equals("Content-Length", StringComparison.OrdinalIgnoreCase) && !name.Equals("Connection", StringComparison.OrdinalIgnoreCase))
+            {
+                responseHead.Append(name).Append(": ").Append(value).Append("\r\n");
+            }
+        }
+
+        responseHead
+            .Append(CultureInfo.InvariantCulture, $"Content-Length: {response.Body.Length}\r\n")
+            .Append("Connection: close\r\n\r\n");
+        await stream.WriteAsync(Encoding.UTF8.GetBytes(responseHead.ToString()), stopping).ConfigureAwait(false);
+        await stream.WriteAsync(response.Body, stopping).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Who a git request to a host signs in as, and whether it may go on (<see cref="StartForHostAsync"/>):
+    /// Basic with any non-empty user name and a known token, the token's login; no header, anonymous
+    /// for an upload-pack of a public repository; else refused (401). A receive-pack also needs a
+    /// login that may push: a refusal's text when it has none. A header that cannot be read, or whose
+    /// token is unknown, gets 401 on every path, as on the plain server and on GitHub; a path in no
+    /// served repository goes on to its 404 only without a header or with a known token.
+    /// </summary>
+    private (string? Login, string? GivenUserName, bool Authorized, string? PushRefusal) HostAccess(RequestHead head, string path, string query)
+    {
+        var host = _host!;
+        var folder = RepositoryOf(path);
+        var repository = folder is null ? null : NameOf(folder);
+        var authorization = head.Header("Authorization");
+        string? login = null;
+        string? given = null;
+        if (authorization is not null)
+        {
+            if (BasicCredentials(authorization) is not ({ Length: > 0 } userName, var password) || host.LoginOfToken(password) is not { } known)
+            {
+                return (null, null, false, null);
+            }
+
+            (login, given) = (known, userName);
+        }
+
+        var receivePack = path.EndsWith("/git-receive-pack", StringComparison.Ordinal)
+            || query.Split('&').Contains("service=git-receive-pack", StringComparer.Ordinal);
+        // A path in no served repository goes on to its 404, signed in or anonymous (a header that
+        // could not be read was refused above).
+        if (repository is null)
+        {
+            return (login, given, true, null);
+        }
+
+        if (login is null)
+        {
+            var anonymousRead = !receivePack && host.IsPublic(repository);
+            return (null, null, anonymousRead, null);
+        }
+
+        if (receivePack && !host.MayPush(repository, login))
+        {
+            return (login, given, false, $"Permission to {repository}.git denied to {login}.");
+        }
+
+        return (login, given, true, null);
+    }
+
+    /// <summary>The user name and password of a <c>Basic</c> header; null when it is another scheme or cannot be read.</summary>
+    private static (string UserName, string Password)? BasicCredentials(string authorization)
+    {
+        const string Basic = "Basic ";
+        if (!authorization.StartsWith(Basic, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        string decoded;
+        try
+        {
+            decoded = Encoding.UTF8.GetString(Convert.FromBase64String(authorization[Basic.Length..].Trim()));
+        }
+        catch (FormatException)
+        {
+            return null;
+        }
+
+        var colon = decoded.IndexOf(':', StringComparison.Ordinal);
+        return colon < 0 ? null : (decoded[..colon], decoded[(colon + 1)..]);
     }
 
     /// <summary>The hold that waits for the next pack response of the repository <paramref name="path"/> lies in, made active; null when there is none.</summary>
@@ -945,12 +1220,31 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     private bool IsInRepository(string path) => RepositoryOf(path) is not null;
 
-    /// <summary>The folder name of the served repository a request's path lies in (<c>/docs.git/info/refs</c>: <c>docs.git</c>); null for a path outside every one, or with <c>..</c> in it.</summary>
+    /// <summary>
+    /// The folder name of the served repository a request's path lies in (<c>/docs.git/info/refs</c>:
+    /// <c>docs.git</c>); null for a path outside every one, or with <c>..</c> in it. A host's are two
+    /// levels, named with or without <c>.git</c>: <c>/octo/hello.git/info/refs</c> and
+    /// <c>/octo/hello/info/refs</c> both lie in <c>octo/hello.git</c>.
+    /// </summary>
     private string? RepositoryOf(string path)
     {
         if (path.Contains("..", StringComparison.Ordinal) || !path.StartsWith('/'))
         {
             return null;
+        }
+
+        if (_host is not null)
+        {
+            var owner = path.IndexOf('/', 1);
+            var after = owner < 0 ? -1 : path.IndexOf('/', owner + 1);
+            if (after < 0)
+            {
+                return null;
+            }
+
+            var name = path[1..after];
+            name = name.EndsWith(".git", StringComparison.Ordinal) ? name[..^4] : name;
+            return _served.TryGetValue(name, out var hosted) ? hosted : null;
         }
 
         var end = path.IndexOf('/', 1);
@@ -1304,6 +1598,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             Header("Transfer-Encoding") is { } encoding && encoding.Contains("chunked", StringComparison.OrdinalIgnoreCase);
 
         public string? Header(string name) => headers.TryGetValue(name, out var value) ? value : null;
+
+        /// <summary>Every header, by its name in any case.</summary>
+        public IReadOnlyDictionary<string, string> Headers => headers;
     }
 
     /// <summary>Reads one HTTP/1.1 request from a connection, through a buffer of its own.</summary>
@@ -1463,6 +1760,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 /// <param name="Held">Whether the response was held (<see cref="AuthRemoteServer.HoldNextFetchPack"/>).</param>
 /// <param name="Chunked">Whether the body came chunked.</param>
 /// <param name="Compressed">Whether the body came compressed with gzip.</param>
+/// <param name="GivenUserName">A host's (<see cref="AuthRemoteServer.StartForHostAsync"/>): the user name a signed-in request gave with its token (<c>x-access-token</c>); never the token.</param>
 public sealed record AuthRemoteRequest(
     string Method,
     string Path,
@@ -1473,4 +1771,51 @@ public sealed record AuthRemoteRequest(
     int Status,
     bool Held,
     bool Chunked,
-    bool Compressed);
+    bool Compressed,
+    string? GivenUserName = null);
+
+/// <summary>
+/// The paths a host's server (<see cref="AuthRemoteServer.StartForHostAsync"/>) answers itself,
+/// ahead of git and of any auth (docs/phase-7a-design.md 2.2): the fake of GitHub's API, its
+/// avatars and its web pages.
+/// </summary>
+public interface IAuthRemoteRoutes
+{
+    /// <summary>Whether the routes answer this request, decided from the request line alone.</summary>
+    bool Claims(string method, string path);
+
+    /// <summary>The answer to a claimed request.</summary>
+    Task<AuthRemoteResponse> ServeAsync(AuthRemoteRouteRequest request, CancellationToken cancellationToken);
+}
+
+/// <summary>A request a host's routes claimed.</summary>
+/// <param name="Method">The method, such as <c>GET</c>.</param>
+/// <param name="Host">The <c>Host</c> header: <c>127.0.0.1:&lt;port&gt;</c>.</param>
+/// <param name="Path">The path without the query, such as <c>/api/v3/user</c>.</param>
+/// <param name="Query">The query without <c>?</c>; empty when none.</param>
+/// <param name="Headers">The headers, by their names in any case.</param>
+/// <param name="Body">The body; empty when none.</param>
+public sealed record AuthRemoteRouteRequest(string Method, string Host, string Path, string Query, IReadOnlyDictionary<string, string> Headers, byte[] Body);
+
+/// <summary>A host's routes' answer, sent with <c>Content-Length</c> and <c>Connection: close</c>.</summary>
+/// <param name="Status">The status code.</param>
+/// <param name="Reason">The reason phrase, such as <c>OK</c>.</param>
+/// <param name="Headers">The headers besides <c>Content-Length</c> and <c>Connection</c>.</param>
+/// <param name="Body">The body; empty for none.</param>
+/// <param name="Drop">Whether the connection is closed without an answer instead: a request that was served but whose answer was lost.</param>
+public sealed record AuthRemoteResponse(int Status, string Reason, IReadOnlyList<KeyValuePair<string, string>> Headers, byte[] Body, bool Drop = false);
+
+/// <summary>What a host's server (<see cref="AuthRemoteServer.StartForHostAsync"/>) asks of the host it stands in for.</summary>
+/// <param name="Routes">The paths answered ahead of git and auth.</param>
+/// <param name="LoginOfToken">A Basic password's login; null for a token that is unknown or revoked.</param>
+/// <param name="IsPublic">Whether a repository (<c>octo/hello</c>) may be read anonymously.</param>
+/// <param name="MayPush">Whether a login may push to a repository: (<c>octo/hello</c>, <c>ada</c>).</param>
+/// <param name="Realm">The realm of a 401's <c>WWW-Authenticate</c> header.</param>
+/// <param name="BeforeRefsAsync">Called with a repository's name (<c>octo/hello</c>) before git lists its refs (<c>info/refs</c>, a protocol v2 <c>ls-refs</c>), after auth; null for none.</param>
+public sealed record AuthRemoteHostOptions(
+    IAuthRemoteRoutes Routes,
+    Func<string, string?> LoginOfToken,
+    Func<string, bool> IsPublic,
+    Func<string, string, bool> MayPush,
+    string Realm = "GitHub",
+    Func<string, CancellationToken, Task>? BeforeRefsAsync = null);
