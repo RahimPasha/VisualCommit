@@ -446,8 +446,8 @@ every commit.
 
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D255 on, since D239 to D248 went to the review before
-  phase 7 and D249 to D254 to phase 7a's start): design 17.5's reading of "ten repos can be checked and
+  owner"; each answer becomes a decision, D329 on, since D239 to D248 went to the review before
+  phase 7, D249 to D264 to phase 7a's start and D265 to D328 to its design): design 17.5's reading of "ten repos can be checked and
   updated from one screen" (one dashboard of the ten, one Fetch all and one Pull all deciding every
   row); the report's by-hand System step (switch Windows' app mode while the app runs with System
   chosen, D224); and the move of the text boxes' placeholder contrast (Fluent's watermark opacity,
@@ -465,6 +465,11 @@ every commit.
   command against real GitHub), where the pull-request list lives, avatars, a Linux desktop
   without a keychain, and the review's question 11 with its S8 and R8 (all three in the first
   package). Azure DevOps' and GitLab's accounts and sign-in are asked before 7b's design.
+- **Answered during phase 7a's design review** on 2026-10-29, to be written into the design's
+  decisions when the review's findings are applied: the real-window pass may open the default
+  browser once, on the fake's page (D321); the status bar's button after a create reads "Open in
+  browser" (D317); no palette command signs in to GitHub in 7a; the sign-out confirmation uses the
+  primary button (D296).
 - **For phase 7a's live command (D250), before step 16**: a fine-grained token that the owner
   creates for one sandbox repository on the owner's account, with the rights the design names,
   set in the environment variable the design names. It is never written to the repository.
@@ -473,7 +478,7 @@ every commit.
   them off another way (the variable set in Windows' user environment before VS Code starts, or
   the connectors switched off on claude.ai) is the owner's.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D255 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D329 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,
