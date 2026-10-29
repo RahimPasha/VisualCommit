@@ -4505,3 +4505,28 @@ the lead's rulings on what the builders handed over. The report and the handoff 
     `X-RateLimit-Remaining: 0`) is `RateLimited` at now plus 60 s, not `Malformed`; the fake's form
     and github.com's `http` form accept a user part, a password included, which is never kept and
     never bound (WP-C binds https only). The lead keeps both readings (WP-G's review, finding 5).
+11. **4.6, the prompt channel on macOS and Linux** (found by CI's run on `8b02805`, fixed at
+    `9d48d0b`). .NET backs every `NamedPipeServerStream` of one name with one listening Unix socket,
+    counted per live instance, and unlinks and closes it with the last instance (dotnet/runtime's
+    `NamedPipeServerStream.Unix.cs`, `SharedServer.Dispose`); a connection queued on it is then
+    dropped. `AskPassBroker.ListenAsync` kept one waiting instance and made the next only after
+    `_ = ServeAsync(pipe)` returned, and an answer without UI (4.6's `get` and `erase`) runs to its
+    end inline, the instance disposed, so a helper queued meanwhile got no answer and exited 0: on
+    macOS a bulk run's lost `erase` gave "Git could not fetch from origin." without "Open
+    settings…"; a lost `get` gives git's fallback prompt. On macOS and Linux the broker now holds a
+    keeper instance while it listens, which never waits for a connection and goes when listening
+    ends, and every instance there passes `MaxConnections + 1`; Windows, where each instance is its
+    own kernel object, is unchanged. `AfterAccept` (internal, null in the app) holds the loop between
+    an accept and its serve: `AskPassChannelTests` (a `get`, an `erase` and a prompt queued behind a
+    credential answer) failed on CI's three Linux jobs before the keeper (run 40910893877, merge
+    `6fc2d28`: "Connection reset by peer" for the queued client) and passes with it. Diagnostics: a
+    Warning when no instance is left while the broker listens on macOS or Linux, Debug lines for
+    `ServeAsync`'s exits, for an `erase` that marks nothing and for the bound-URL counts (`Begin`,
+    and `RepositoryOperations` after the URL rules read), none with a token, hash or URL path;
+    `CredentialDashboard.Describe` prints a failing credential dashboard test's rows, git calls, the
+    server's requests, the stub's counts, the log and git's trace of the helper's runs, every token
+    masked. Found by four investigators and a judge; built, reviewed and fixed by agents that did not
+    review their own work.
+12. **0.7, part A's earlier pictures.** The list of settings pictures that change when Accounts joins
+    the screen is short by `s20b-merge-tool-pick` (the screen under the Pick dialog); the report's
+    "Changes to expected results" lists it (31 scripted pictures).
