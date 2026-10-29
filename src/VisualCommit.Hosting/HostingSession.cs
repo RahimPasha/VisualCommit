@@ -290,10 +290,22 @@ public sealed class HostingSession : IHostingSession
     public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(CancellationToken ct) =>
         CallAsync("listing the account's repositories", (provider, token, linked) => provider.ListRepositoriesAsync(token, linked), ct);
 
+    /// <summary>A new hosting for the tab of <paramref name="workingDirectory"/>, live until its <c>Dispose</c>; off, <see cref="NullRepositoryHosting.Instance"/>.</summary>
     public IRepositoryHosting ForRepository(string workingDirectory)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
-        return NullRepositoryHosting.Instance;
+        if (_provider is null)
+        {
+            return NullRepositoryHosting.Instance;
+        }
+
+        var hosting = new RepositoryHosting(this, workingDirectory);
+        lock (_lock)
+        {
+            _hostings.Add(hosting);
+        }
+
+        return hosting;
     }
 
     /// <summary>
@@ -389,6 +401,15 @@ public sealed class HostingSession : IHostingSession
         }
 
         return result;
+    }
+
+    /// <summary>A hosting's <c>Dispose</c>: it is told of the account no more.</summary>
+    internal void Remove(RepositoryHosting hosting)
+    {
+        lock (_lock)
+        {
+            _hostings.Remove(hosting);
+        }
     }
 
     /// <summary>Runs <paramref name="action"/> on the UI thread through the post delegate, unless the session is disposed by then.</summary>
