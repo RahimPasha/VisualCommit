@@ -183,6 +183,10 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             Assert.Equal(stored, app.Tokens.Calls.Count);
             Assert.Equal(Light.Panel, (CardNamed(app, "SettingsCard").Background as ISolidColorBrush)?.Color);
             Assert.Equal(Light.TextSecondary, ColourOf((TextBlock)app.FindByAutomationId("AccountsIntro")));
+            var useForGit = (CheckBox)app.FindByAutomationId("AccountUseForGit");
+            Assert.True(useForGit.IsChecked);
+            var tick = useForGit.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "Box");
+            Assert.Equal(Light.Accent, (tick.Background as ISolidColorBrush)?.Color);
             AssertFrame(app, full: true);
             AssertSignedInSection(app, PartA.InKeychain, full: true);
             ShotA(app, PartA.A05SignedInFullLight);
@@ -440,6 +444,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             Assert.DoesNotContain(view.GetVisualDescendants().OfType<Control>(), control => AutomationProperties.GetAutomationId(control) is "ConfirmDetail" or "DialogRepository" && control.IsEffectivelyVisible);
             Assert.Equal([PartA.Cancel, PartA.SignOutConfirm], ButtonsOf(app, view));
             Assert.False(question.IsDestructive);
+            AssertPrimaryLook((Button)app.FindByAutomationId(view, "ConfirmButton"));
             Assert.Equal(AccountState.SignedIn, app.Session.Services.Hosting.Account?.State);
             Assert.Empty(StoreCallsSince(app, stored));
             Assert.Empty(RequestsSince(served, requests));
@@ -493,7 +498,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             app.Tokens.FailNextDelete(TokenStoreReasons.Locked);
             await app.SignOutAsync(confirm: true);
             await app.WaitForAsync(() => FocusedId(app) == "AccountsSignInButton", "the focus on Sign in…");
-            AssertOneUserRequest(RequestsSince(served, requests), 200);
+            AssertOneUserRequest(RequestsSince(served, requests), 200, againInThisSession: true);
             Assert.Equal([$"save {PartA.OctoKey(port)}", $"delete {PartA.OctoKey(port)}"], StoreCallsSince(app, stored));
             snapshot = app.AccountsSnapshot();
             Assert.Equal(PartA.SignedOut, snapshot.Field("AccountsSignedOut")?.Text);
@@ -552,6 +557,12 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             Assert.NotEmpty(refusedReads);
             Assert.All(refusedReads, request => Assert.True(request.TokenPresent && request.Status == 401, $"{request.Method} {request.Path}: {request.Status}, token {request.TokenPresent}"));
             Assert.Equal(("GET", "/api/v3/repos/octo/hello", "repo:octo/hello"), (refusedReads[0].Method, refusedReads[0].Path, refusedReads[0].Route));
+
+            // None made after the account was marked: the refresh stops at the repository read's 401
+            // (7.8 step 1), so it never goes on to the list, and nothing more arrives through steps 3
+            // and 4 up to the next mark (no request without the account's token, 7.6).
+            Assert.DoesNotContain(refusedReads, request => request.Path == "/api/v3/repos/octo/hello/pulls");
+            var afterMarked = served.GitHub.Requests.Count;
             AssertNeedsSignIn(app.Session.Services.Hosting, AccountNoteKind.Refused);
             AssertRecord(data, served, useForGit: true, "refused");
             Assert.Empty(StoreCallsSince(app, stored));
@@ -564,10 +575,12 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             var screen = await app.OpenAccountsAsync();
             AssertNeedsSignInSection(app, PartA.Refused);
             ShotA(app, PartA.A09NeedsSignInApi);
+            Assert.Equal(afterMarked, served.GitHub.Requests.Count);
 
             // Step 4: signed in again with the classic token.
             var logMark = app.LogMark();
             requests = served.GitHub.Requests.Count;
+            Assert.Equal(afterMarked, requests);
             stored = app.Tokens.Calls.Count;
             var dialog = await app.OpenSignInDialogAsync();
             app.TypeToken(OctoClassicToken);
@@ -601,16 +614,20 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             await WaitForRecordAsync(app, data, useForGit: true, "refused");
             await app.WaitForIdleAsync();
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is CredentialsViewModel or PromptDialogViewModel);
-            AssertGitRefusedDialog(app, errorDialog, port);
+            AssertErrorDialog(
+                app,
+                errorDialog,
+                PartA.FetchFailedTitle,
+                PartA.GitRefusedOcto,
+                Hello,
+                PartA.AuthenticationFailed(port),
+                PartA.CouldNotFetchOrigin,
+                PartA.FetchCommand,
+                ["Copy output", PartA.OpenSettingsButton, PartA.Close]);
             var gitSince = served.GitHub.GitRequests.Skip(gitRequests).Where(request => request.Path.Contains("/octo/hello", StringComparison.Ordinal)).ToList();
             Assert.NotEmpty(gitSince);
             Assert.All(gitSince, request => Assert.Equal(401, request.Status));
-            // The report expects a request with GivenUserName x-access-token. The fake records the
-            // user name only for a token it knows (AuthRemoteServer.HostAccess drops it with a refused
-            // one), so the app's answer shows as git's retry after the challenge: an anonymous request
-            // and at least one more, with no prompt and WP-C's summary, which only the app's helper's
-            // erase gives (handed to the lead).
-            Assert.True(gitSince.Count >= 2, $"git made {gitSince.Count} request(s) to octo/hello: it did not retry with the account's credentials.");
+            Assert.Contains(gitSince, request => request.GivenUserName == "x-access-token");
             Assert.All(gitSince, request => Assert.True(request.GivenUserName is null or "x-access-token", $"git gave the user name {request.GivenUserName}."));
             AssertOneUserRequest(RequestsSince(served, requests), 401);
             AssertNeedsSignIn(app.Session.Services.Hosting, AccountNoteKind.Refused);
@@ -1005,21 +1022,43 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
         Assert.Equal([PartA.Cancel, PartA.SignIn], ButtonsOf(app, view));
         Assert.True(CancelOf(app).IsEffectivelyEnabled);
         Assert.False(ConfirmOf(app).IsEffectivelyEnabled);
+        AssertPrimaryLook(ConfirmOf(app));
         Assert.True(app.BoundsOf(ConfirmOf(app)).Right > app.BoundsOf(CancelOf(app)).Right && app.BoundsOf(ConfirmOf(app)).Right >= card.Right - 22, "The buttons are not right-aligned.");
     }
 
-    /// <summary>WP-C's dialog for git's refusal (4.7; A9 step 5), 7a's first error-dialog assertion.</summary>
-    private static void AssertGitRefusedDialog(ShellDriver app, ErrorDialogViewModel dialog, int port)
+    /// <summary>A button drawn in the primary look (<c>VcPrimaryButton</c>), not the danger one (D296).</summary>
+    private static void AssertPrimaryLook(Button button)
+    {
+        Assert.Same(Application.Current!.FindResource("VcPrimaryButton"), button.Theme);
+        Assert.DoesNotContain("danger", button.Classes);
+    }
+
+    /// <summary>
+    /// The error dialog on top (7a's first error-dialog assertion, design 16.3; A9 step 5): its title,
+    /// summary and "In …" line; git's cleaned output holding <paramref name="keyLine"/> and ending with
+    /// <paramref name="lastLine"/>; the command; the buttons left to right. Part A's own until the
+    /// lead moves it to <c>Phase7aChecks.Support.cs</c> for parts B and N (it names nothing of part A).
+    /// </summary>
+    private static void AssertErrorDialog(
+        ShellDriver app,
+        ErrorDialogViewModel dialog,
+        string title,
+        string summary,
+        string repository,
+        string keyLine,
+        string lastLine,
+        string command,
+        string[] buttons)
     {
         var view = app.TopDialogView!;
-        Assert.Equal(PartA.FetchFailedTitle, ((TextBlock)app.FindByAutomationId(view, "ErrorTitle")).Text);
-        Assert.Equal(PartA.GitRefusedOcto, ((TextBlock)app.FindByAutomationId(view, "ErrorSummary")).Text);
-        Assert.Equal("In " + Hello, ((TextBlock)app.FindByAutomationId(view, "ErrorRepository")).Text);
+        Assert.Equal(title, ((TextBlock)app.FindByAutomationId(view, "ErrorTitle")).Text);
+        Assert.Equal(summary, ((TextBlock)app.FindByAutomationId(view, "ErrorSummary")).Text);
+        Assert.Equal("In " + repository, ((TextBlock)app.FindByAutomationId(view, "ErrorRepository")).Text);
         var output = dialog.Output ?? string.Empty;
-        Assert.Contains(PartA.AuthenticationFailed(port), output, StringComparison.Ordinal);
-        Assert.EndsWith(PartA.CouldNotFetchOrigin, output.TrimEnd(), StringComparison.Ordinal);
-        Assert.Equal(PartA.FetchCommand, dialog.Command);
-        Assert.Equal(["Copy output", PartA.OpenSettingsButton, PartA.Close], ButtonsOf(app, view));
+        Assert.Contains(keyLine, output, StringComparison.Ordinal);
+        Assert.EndsWith(lastLine, output.TrimEnd(), StringComparison.Ordinal);
+        Assert.Equal(command, dialog.Command);
+        Assert.Equal(buttons, ButtonsOf(app, view));
     }
 
     /// <summary>The scenario facts' one binding of hello: its URL and octo's account (D278).</summary>

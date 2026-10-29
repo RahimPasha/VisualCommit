@@ -106,22 +106,34 @@ public sealed partial class Phase7aChecksA
     private static List<string> StoreCallsSince(ShellDriver app, int mark) => [.. app.Tokens.Calls.Skip(mark)];
 
     /// <summary>Asserts that <paramref name="requests"/> is exactly one <c>GET api/v3/user</c> with a token, answered <paramref name="status"/>.</summary>
-    private static void AssertOneUserRequest(IReadOnlyList<FakeGitHubRequest> requests, int status, string? login = OctoLogin)
+    private static void AssertOneUserRequest(IReadOnlyList<FakeGitHubRequest> requests, int status, string? login = OctoLogin, bool againInThisSession = false)
     {
         var request = Assert.Single(requests);
-        AssertUserRequest(request, status, login);
+        AssertUserRequest(request, status, login, againInThisSession);
     }
 
-    private static void AssertUserRequest(FakeGitHubRequest request, int status, string? login = OctoLogin)
+    /// <summary>
+    /// Asserts that <paramref name="request"/> is <c>GET api/v3/user</c> with a token, answered
+    /// <paramref name="status"/>. With <paramref name="againInThisSession"/> (A8 step 6 only) the
+    /// same token is checked a second time in one app session: WP-G's kept answer makes the request
+    /// conditional, and the fake's 304 stands for GitHub's 200 (design 6.2, 16.10).
+    /// </summary>
+    private static void AssertUserRequest(FakeGitHubRequest request, int status, string? login = OctoLogin, bool againInThisSession = false)
     {
         Assert.Equal(("GET", "/api/v3/user", "user"), (request.Method, request.Path, request.Route));
         Assert.True(request.TokenPresent, "The sign-in's request carried no token.");
+        if (againInThisSession)
+        {
+            Assert.Equal(200, status);
+            Assert.True(
+                request is { Status: 304, Conditional: true },
+                $"GET /api/v3/user was answered {request.Status} (conditional: {request.Conditional}), expected a conditional 304.");
+        }
+        else
+        {
+            Assert.Equal(status, request.Status);
+        }
 
-        // A later check of a token GitHub answered before is conditional (WP-G's kept answer and its
-        // ETag, design 6.2, 16.10): the fake's 304 is GitHub's 200 for it.
-        Assert.True(
-            request.Status == status || (status == 200 && request.Status == 304 && request.Conditional),
-            $"GET /api/v3/user was answered {request.Status} (conditional: {request.Conditional}), expected {status}.");
         if (status == 200)
         {
             Assert.Equal(login, request.Login);
