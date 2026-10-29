@@ -141,7 +141,7 @@ public sealed class PromptDialogs : IGitPromptHandler
                 return PromptAnswer.Refused;
             }
 
-            if (Recall(state, prompt.Text) is { } kept)
+            if (Recall(state, group, prompt) is { } kept)
             {
                 Log.Debug($"{prompt.RepositoryName}: {prompt.Title}: a {prompt.Kind} prompt was answered with what its run was told before.");
                 return kept.Cancelled ? PromptAnswer.Cancelled : PromptAnswer.Of(kept.Text!);
@@ -164,7 +164,7 @@ public sealed class PromptDialogs : IGitPromptHandler
 
             if (answer.Cancelled)
             {
-                KeepInGroup(state, prompt, answer);
+                KeepInGroup(state, group, prompt, answer);
                 return PromptAnswer.Cancelled;
             }
 
@@ -173,7 +173,7 @@ public sealed class PromptDialogs : IGitPromptHandler
                 return PromptAnswer.Refused;
             }
 
-            KeepInGroup(state, prompt, answer);
+            KeepInGroup(state, group, prompt, answer);
             return PromptAnswer.Of(answer.Text);
         }
         finally
@@ -259,38 +259,48 @@ public sealed class PromptDialogs : IGitPromptHandler
         }
     }
 
-    private Kept? Recall(GroupState state, string text)
+    /// <summary>
+    /// A kept answer of the group for <paramref name="prompt"/>'s account and text (ruling 9,
+    /// docs/phase-7a-design.md 4.7): one text under two accounts is two answers. Answers kept before
+    /// the group's last <see cref="PromptGroup.ForgetAnswers"/> are dropped, as are expired ones.
+    /// </summary>
+    private Kept? Recall(GroupState state, PromptGroup group, GitPrompt prompt)
     {
         var now = _clock.GetUtcNow();
+        var version = group.AnswersVersion;
         lock (_gate)
         {
-            foreach (var key in state.Kept.Where(entry => entry.Value.Until <= now).Select(entry => entry.Key).ToList())
+            foreach (var key in state.Kept.Where(entry => entry.Value.Until <= now || entry.Value.Version < version).Select(entry => entry.Key).ToList())
             {
                 state.Kept.Remove(key);
             }
 
-            return state.Kept.TryGetValue(text, out var kept) ? kept : null;
+            return state.Kept.TryGetValue(KeyOf(prompt, prompt.Text), out var kept) ? kept : null;
         }
     }
 
-    private void KeepInGroup(GroupState state, GitPrompt prompt, PromptDialogAnswer answer)
+    private void KeepInGroup(GroupState state, PromptGroup group, GitPrompt prompt, PromptDialogAnswer answer)
     {
         var until = _clock.GetUtcNow() + KeepAnswersFor;
+        var version = group.AnswersVersion;
         lock (_gate)
         {
             if (answer.Cancelled)
             {
-                state.Kept[prompt.Text] = new Kept(null, until, Cancelled: true);
+                state.Kept[KeyOf(prompt, prompt.Text)] = new Kept(null, until, Cancelled: true, version);
                 return;
             }
 
-            state.Kept[prompt.Text] = new Kept(answer.Text!, until);
+            state.Kept[KeyOf(prompt, prompt.Text)] = new Kept(answer.Text!, until, Version: version);
             if (prompt.Kind == GitPromptKind.Username && prompt.Url is { } url && answer.Password is { } password)
             {
-                state.Kept[GitPromptClassifier.PasswordPromptAfter(url, answer.Text!)] = new Kept(password, until);
+                state.Kept[KeyOf(prompt, GitPromptClassifier.PasswordPromptAfter(url, answer.Text!))] = new Kept(password, until, Version: version);
             }
         }
     }
+
+    /// <summary>A group's key: the prompt's account (<see cref="GitPrompt.Account"/>, empty for none) and a prompt text.</summary>
+    private static (string Account, string Text) KeyOf(GitPrompt prompt, string text) => (prompt.Account?.Id ?? string.Empty, text);
 
     private string? Recall(GitPrompt prompt)
     {
@@ -333,14 +343,15 @@ public sealed class PromptDialogs : IGitPromptHandler
     }
 
     /// <summary>An answer kept for <see cref="KeepAnswersFor"/>: a text, or for a prompt group also the user's Cancel (null text).</summary>
-    private sealed record Kept(string? Text, DateTimeOffset Until, bool Cancelled = false);
+    /// <param name="Version">The group's <see cref="PromptGroup.AnswersVersion"/> when it was kept; 0 outside a group.</param>
+    private sealed record Kept(string? Text, DateTimeOffset Until, bool Cancelled = false, int Version = 0);
 
-    /// <summary>A prompt group's turn (one prompt of a group at a time) and its kept answers by prompt text, under <see cref="_gate"/>.</summary>
+    /// <summary>A prompt group's turn (one prompt of a group at a time) and its kept answers by account and prompt text, under <see cref="_gate"/>.</summary>
     private sealed class GroupState
     {
         public SemaphoreSlim Turn { get; } = new(1, 1);
 
-        public Dictionary<string, Kept> Kept { get; } = new(StringComparer.Ordinal);
+        public Dictionary<(string Account, string Text), Kept> Kept { get; } = [];
     }
 }
 
