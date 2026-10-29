@@ -8,7 +8,8 @@ namespace VisualCommit.Testing.Headless;
 /// <summary>
 /// Where the pointer rests, for phase 3's checks (docs/test-reports/phase-3.md, "Resting the
 /// pointer" and "The pointer before a capture"): the neutral point both harnesses move to before a
-/// capture, and resting the pointer on a control or a menu item until its tooltip is open.
+/// capture, and resting the pointer on a control or a menu item until its tooltip is open. Also
+/// the control under a point once the window has drawn it, for a test that hit-tests on its own.
 /// </summary>
 public sealed partial class ShellDriver
 {
@@ -57,6 +58,25 @@ public sealed partial class ShellDriver
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Waits until a hit test at <paramref name="position"/> finds a control, polled within
+    /// <paramref name="timeout"/> (<see cref="DefaultWaitTimeout"/> when null), never for a fixed
+    /// time, and returns it: the control that input at that point of the window reaches. Hit
+    /// testing reads what the renderer last drew, and before the window's first frame it finds
+    /// nothing; <see cref="WaitUntilReadyAsync"/> renders no frame, and on a slow machine none has
+    /// come by then (the wheel test failed so in a bare Ubuntu container).
+    /// </summary>
+    /// <exception cref="TimeoutException">No control was at the position in time.</exception>
+    public async Task<Control> WaitForControlAtAsync(Point position, TimeSpan? timeout = null)
+    {
+        Control? found = null;
+        await WaitForAsync(
+            () => (found = Window.InputHitTest(position) as Control) is not null,
+            $"a control at {position}: the window's first frame",
+            timeout);
+        return found!;
     }
 
     /// <summary>

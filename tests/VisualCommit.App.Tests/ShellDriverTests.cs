@@ -126,9 +126,10 @@ public class ShellDriverTests
         await app.WaitUntilReadyAsync();
 
         // Whatever control is at this spot of the window: the test is about the driver, not
-        // about one of the app's views.
+        // about one of the app's views. The hit test finds it once the window's first frame is
+        // drawn, which WaitUntilReadyAsync does not wait for.
         var position = new Point(550, 400);
-        var target = Assert.IsAssignableFrom<Control>(app.Window.InputHitTest(position));
+        var target = await app.WaitForControlAtAsync(position);
         var events = new List<(Vector Delta, Point Position)>();
         target.AddHandler(
             InputElement.PointerWheelChangedEvent,
