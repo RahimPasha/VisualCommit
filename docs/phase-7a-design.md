@@ -4666,3 +4666,43 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
    At WP-V's merge, besides 11.6's runs, the lead runs part P's checks and part A's check 9 again
    (item 3) and part B's B6 and B8, whose `AvatarsShown` and avatar waits WP-V codes in
    `Phase7aChecks.A.cs`, `.B.cs` and part P's files.
+7. **WP-P, merged at `1958755`** (10.7's five commits, part P's code, and the review's fixes `190c199`
+   and `7535264`: one blocker, four major, three minor). The builder's readings, which the lead keeps:
+   - The panel's state keeps WP0's name `HostingState`. Message rows that take no click are disabled
+     buttons, which keep their look and, through `ToolTip.ShowOnDisabled`, their tooltip (P4 step 6).
+   - Ruling 23: the panel keeps the last list it showed (`_keptList`), tagged with the account that
+     listed it: `UpdatePullRequests(state, AccountKey?)`, the one line WP-P changed in WP-S's
+     `RepositoryViewModel.Hosting.cs`, passes the session's account. A sign-out, a repository without
+     a GitHub remote, another repository or another account's failure drops it; a loading state
+     without a list shows the kept rows and no loading row. `ForPullRequest` takes the row's own pull
+     request, so a kept row's menu is whole while the hosting holds no list.
+   - Checkout (10.5): the plan maps a head on a remote to that remote's `refs/heads/<head ref>` and
+     compares local names ignoring case; a branch is reused only when its exact name points at the
+     head. "Fetch pull request #n" is a network operation and the checkout follows as its own;
+     `FETCH_HEAD` is read from the worktree's own git folder, off the UI thread. A deleted fork's head
+     label is its ref alone (#8 `idea`); the tooltip leaves out the author when GitHub gave none. The
+     palette lists every listed pull request's three items, all 300 when the list is full.
+   - Where part P's code checks less than the report says (no expected result changed): the graph
+     row's highlight in P9 is asserted through the view model and judged in `p09a` and `p09b`; P2
+     step 4's dialog by its title, focus and empty box (part B's `AssertSignInDialog` holds the card);
+     P13's "no `git config` that writes" as no `git config` call without `--get` or `--list`; P7's
+     bottom rows' order on the view model; P6's "signed in" through `WaitForAccountAsync(SignedIn)`;
+     P12's drag as press, two held moves and release. Every part P picture goes through `ShotP`: no
+     token's constant on screen before it, `AssertNoClippedText` after it (a cut text passes only
+     when it or one of its three nearest ancestors carries the whole text as tooltip).
+   - Ruling 31's extra wait is not needed: `a09b` shows the section's sign-in row.
+   - Design 15 point 3 (a fork's `refs/pull/<n>/head` into `FETCH_HEAD` on git 2.43 and 2.55) is
+     settled by CI's run on the merge; on 2.56 `GitRepositoryPullRequestsTests` and P13 prove it.
+8. **Part N's checks, the lead's rulings that bind WP-N and WP-R** (the report's open points 45 to
+   61). 12.4 is amended (59): while the create's cancel window is open (12.5 step 1, the push), the
+   form's `Cancel` stays enabled and cancels the operation through the queue, the form staying open
+   with `Cancelled` on its error line; once the window ends (12.5 step 2, before the POST, D315) it is
+   disabled again, and Esc stays ignored while creating. The status bar's Cancel lies under the form's
+   backdrop (D69), so without this no control the user can reach would cancel the push. 12.7's
+   "creating (all disabled …)" case changes with it. `CreatePullRequestOperationTests` also asserts
+   D314's undo entry after a create that pushed and none after one that did not (54), and adds three
+   cases on `tool/`: the head's place by `HostingRemoteOrder` (D313), a fork's parent's default branch
+   as the default base, and an `owner:branch` base (D318) (61). A remote-branch head's text is the
+   ref's name, `origin/topic/no-pr` (48). 12.5 step 4 keeps its own refresh, so two `listed` lines
+   follow a create, and 13.4 N step 4 waits for both before its compare (51). At WP-N's merge the
+   status-bar pictures are compared with the last full run's, as ruling 19 (60).
