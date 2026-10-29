@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Avalonia;
+using Avalonia.Threading;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
@@ -138,9 +139,8 @@ public sealed class AppSession : IDisposable
     /// <para>
     /// Phase 7a (docs/phase-7a-design.md 1.7, 7.11): <paramref name="hosting"/> says where GitHub
     /// is and <paramref name="tokens"/> where tokens are kept (null: each from the process's
-    /// environment, never through <paramref name="readEnvironment"/>). The session's hosting is
-    /// still <see cref="NullHostingSession"/> (GitHub off), which takes neither; the hosting
-    /// session that uses them comes with its package (7.11).
+    /// environment, never through <paramref name="readEnvironment"/>); the session's
+    /// <see cref="HostingSession"/> takes both.
     /// </para>
     /// </summary>
     public static AppSession Start(
@@ -237,8 +237,15 @@ public sealed class AppSession : IDisposable
         var dialogs = new DialogHostViewModel();
         var promptPresenter = new PromptDialogPresenter(dialogs, dialogs.Notices);
 
-        // The hosting (docs/phase-7a-design.md 1.7): GitHub off until the hosting session exists.
-        IHostingSession hostingSession = NullHostingSession.Instance;
+        // The hosting session (docs/phase-7a-design.md 1.7, 7.11): where GitHub is and where tokens
+        // are kept come from the process's environment unless the harness gives them.
+        var hostingSession = new HostingSession(
+            paths,
+            hosting ?? HostingOptions.FromEnvironment(Environment.GetEnvironmentVariable, log),
+            tokens ?? TokenStores.FromEnvironment(Environment.GetEnvironmentVariable, log),
+            log,
+            action => Dispatcher.UIThread.Post(action),
+            TimeProvider.System);
         var prompts = PromptDialogs.CreateBroker(
             promptHandler ?? new PromptDialogs(promptPresenter, log),
             log,

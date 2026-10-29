@@ -13,7 +13,8 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// What <see cref="AppSession.Start"/> wires that no view model sees (docs/phase-6-design.md 18,
 /// the lead's): the workspaces kept in <c>workspaces.json</c> beside the session (D189, 1.3), the
-/// theme's start-up line and its service's end (11.5), and the auto-fetch variable's start-up line (7.3).
+/// theme's start-up line and its service's end (11.5), the auto-fetch variable's start-up line (7.3),
+/// and the hosting session with its two start-up lines (docs/phase-7a-design.md 7.11).
 /// </summary>
 public class AppSessionTests
 {
@@ -102,6 +103,24 @@ public class AppSessionTests
         StartSession(data.Path, readEnvironment: null).Dispose();
 
         Assert.EndsWith("] VISUALCOMMIT_AUTO_FETCH_MINUTES=0 overrides the auto-fetch setting (5 minutes).", Assert.Single(AutoFetchLines(data.Path)), StringComparison.Ordinal);
+    }
+
+    [AvaloniaFact]
+    public void In_the_tests_environment_the_session_has_GitHub_off_and_its_tokens_in_memory()
+    {
+        // docs/phase-7a-design.md 7.11: with neither given, both come from the process's
+        // environment, which the test processes set to no GitHub and tokens in memory (1.8).
+        using var data = new TempDirectory("data");
+
+        using (var session = StartSession(data.Path, readEnvironment: null))
+        {
+            Assert.IsType<VisualCommit.Hosting.HostingSession>(session.Services.Hosting);
+            Assert.False(session.Services.Hosting.BindsGit);
+        }
+
+        var lines = AppLogFile.ReadLines(data.Path).ToList();
+        Assert.EndsWith("] GitHub: off.", Assert.Single(lines, entry => entry.Contains("] GitHub: ", StringComparison.Ordinal)), StringComparison.Ordinal);
+        Assert.EndsWith("] Token store: memory.", Assert.Single(lines, entry => entry.Contains("] Token store: ", StringComparison.Ordinal)), StringComparison.Ordinal);
     }
 
     /// <summary>A session as <see cref="ShellDriver.Start"/> makes one, with <paramref name="readEnvironment"/> as its environment reader.</summary>
