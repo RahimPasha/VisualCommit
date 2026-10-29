@@ -34,14 +34,6 @@ public sealed partial class Phase7aChecksB
 
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
-    /// <summary>One empty tab with the fake as GitHub (<c>gitHub:</c>) and a new store, the pointer at rest.</summary>
-    private static ShellDriver StartEmpty(TempDirectory data, ServedHosting served)
-    {
-        var app = ShellDriver.Start(data.Path, gitHub: served.GitHub);
-        app.MoveToNeutral();
-        return app;
-    }
-
     /// <summary>
     /// A picture of part B: before it, no visible text, automation value or name in the window holds
     /// a token; after it, no text is cut (part B's conventions).

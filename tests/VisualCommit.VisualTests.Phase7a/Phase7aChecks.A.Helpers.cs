@@ -21,28 +21,6 @@ public sealed partial class Phase7aChecksA
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
     /// <summary>
-    /// One empty tab with the fake as GitHub (<c>gitHub:</c>) and <paramref name="tokens"/> or a new
-    /// store, once the start-up work has ended (finding git, whose <c>git --version</c> would
-    /// otherwise land after a step's call mark on a slow machine, as on CI's Windows job).
-    /// </summary>
-    private static async Task<ShellDriver> StartEmptyAsync(TempDirectory data, ServedHosting served, FakeTokenStore? tokens = null, int width = 1100, int height = 700)
-    {
-        var app = ShellDriver.Start(data.Path, width, height, gitHub: served.GitHub, tokens: tokens);
-        try
-        {
-            await app.WaitUntilReadyAsync();
-        }
-        catch
-        {
-            app.Dispose();
-            throw;
-        }
-
-        app.MoveToNeutral();
-        return app;
-    }
-
-    /// <summary>
     /// A picture of part A: before it, no visible text, automation value or name in the window holds
     /// any of part A's tokens; after it, no text is cut (part A's conventions, "No token on screen").
     /// </summary>

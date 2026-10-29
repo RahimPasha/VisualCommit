@@ -31,7 +31,7 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
         await using var served = await ServeAsync();
         using var data = new TempDirectory("phase7a b1");
         var port = served.GitHub.Port;
-        var app = StartEmpty(data, served);
+        var app = await StartEmptyAsync(data, served);
         FakeGitHubHold? hold = null;
         try
         {
@@ -138,7 +138,7 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
         using var data = new TempDirectory("phase7a b3");
         using var clones = new TempDirectory("clones");
         var port = served.GitHub.Port;
-        var app = StartEmpty(data, served);
+        var app = await StartEmptyAsync(data, served);
         string clone;
         try
         {
@@ -332,7 +332,7 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
         served.GitHub.AddListedRepositories(OctoLogin, PartB.ListedAdded);
         using var data = new TempDirectory("phase7a b5");
         var port = served.GitHub.Port;
-        var app = StartEmpty(data, served);
+        var app = await StartEmptyAsync(data, served);
         try
         {
             // B9 step 1.

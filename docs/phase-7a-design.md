@@ -4622,3 +4622,25 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
    picture of the loading or failed state waits for that state (the view model's
    `HostingState.PullRequests`, the section's message row, quiet watchers). Part P's checks run again at
    WP-V's merge, and WP-V's builder says whether its avatars' line comes in those states.
+4. **WP-B, merged at `b361388`** (9.7's four commits, ruling 11's scenario `15c10bc`, part B's code, and
+   the review's fixes `ba08068`: one major, three minor). The builder's readings, which the lead keeps:
+   - The browser's view model takes a third, optional parameter, `Func<string?>? login`, read when a
+     failure is applied, so the refused text names the account (the report's ruling 13); after the
+     API's 401 the account needs sign-in but keeps its login.
+   - "From GitHub…" is drawn disabled while its browser is open: its command is an `AsyncRelayCommand`,
+     which refuses a second run while the first runs.
+   - A row's description has its runs of white space and line ends made one space; one that is only
+     white space is none. The list's warning leaves out "(request …)" when the failure has no id; a
+     result with neither list nor failure shows the unexpected text and logs an Error.
+   - 9.3's read before a bound clone runs under the clone's own cancellation (cancelling then gives
+     "Clone cancelled."); while it runs the tab is not empty (`RunningClone` is a completed task once
+     `IsCloning`), so no opening takes that tab (the review's minor finding).
+   - Paths the checks compare with git's (`RepositoryViewModel.Path`, the recent list) use git's own
+     spelling of the folder (`rev-parse --show-toplevel`), since macOS's temporary folder is behind the
+     `/private/var` link (the review's major finding).
+   - Outside 9.1's list: `Scenarios.Phase7a.cs` (`ToolDescription`) and `Phase7aScenarioTests`, by ruling
+     11. `HostingTexts.Describe.cs` passes to the lead; its fixed sentences are public consts.
+   - The lead at the merge moved the empty tab's start to `Phase7aChecks.Support.cs`
+     (`StartEmptyAsync`, waiting for the start-up work, item 2), for parts A and B and those to come;
+     part B's sign-in dialog assertion (`AssertSignInDialog`) repeats most of part A's private one and
+     may become one shared helper when a third part needs it.

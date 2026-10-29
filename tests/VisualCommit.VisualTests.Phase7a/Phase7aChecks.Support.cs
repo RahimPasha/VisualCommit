@@ -47,6 +47,29 @@ public abstract partial class Phase7aChecks
     protected const string Phase = Phase7aExpectations.Phase;
 
     /// <summary>
+    /// One empty tab with the fake as GitHub (<c>gitHub:</c>) and <paramref name="tokens"/> or a new
+    /// store, the pointer at rest, once the start-up work has ended (finding git, whose
+    /// <c>git --version</c> would otherwise land after a step's call mark on a slow machine, as on
+    /// CI's Windows job on <c>c25326e</c>). Every part's empty-tab start goes through it.
+    /// </summary>
+    protected static async Task<ShellDriver> StartEmptyAsync(TempDirectory data, ServedHosting served, FakeTokenStore? tokens = null, int width = 1100, int height = 700)
+    {
+        var app = ShellDriver.Start(data.Path, width, height, gitHub: served.GitHub, tokens: tokens);
+        try
+        {
+            await app.WaitUntilReadyAsync();
+        }
+        catch
+        {
+            app.Dispose();
+            throw;
+        }
+
+        app.MoveToNeutral();
+        return app;
+    }
+
+    /// <summary>
     /// A copy of the scenario "hosting" served by the fake of GitHub on <see cref="Phase7aExpectations.ServerPort"/>,
     /// 47395, or a free port when it is taken (D265; the clones' URLs then rewritten). Disposing it
     /// stops the fake and deletes the copy.
