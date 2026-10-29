@@ -115,6 +115,8 @@ public class RepositoryOperationsFetchTests
         using var repo = await Scenarios.RemoteSyncAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
         using var group = new PromptGroup();
+        // The opening's clean-up reads the backups outside every operation after the first load; the mark waits for it.
+        await app.WaitForOpeningCleanUpReadAsync();
         var mark = await app.QuietCallMarkAsync();
 
         var result = await app.Operations.FetchAllAsync(new BulkPart(new CancellationToken(canceled: true), group, _ => Assert.Fail("Nothing to keep.")));

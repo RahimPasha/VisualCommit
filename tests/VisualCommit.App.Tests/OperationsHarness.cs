@@ -179,6 +179,31 @@ internal sealed class OperationsHarness : IDisposable
         }
     }
 
+    /// <summary>
+    /// Waits until the opening's clean-up has read the backups it might remove (docs/phase-4-design.md
+    /// 9 (b)): <see cref="ShellDriver.OpeningCleanUpRead"/> recorded outside every operation, or the
+    /// line saying that the read failed. <see cref="RepositoryViewModel.StartAsync"/> starts that read
+    /// once the first load is done and does not await it, and
+    /// <see cref="RepositoryViewModel.IsWatcherQuiet"/> does not cover it, so a step that marks its
+    /// calls right after the opening waits for it first: a read still running never straddles a mark
+    /// (S8, docs/phase-7a-design.md 5.3). Polled every 15 ms, at most <see cref="ShellDriver.DefaultWaitTimeout"/>.
+    /// </summary>
+    /// <exception cref="TimeoutException">Neither came in time.</exception>
+    public async Task WaitForOpeningCleanUpReadAsync()
+    {
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!Calls.Snapshot().Any(call => call.OperationId is null && call.CommandText == ShellDriver.OpeningCleanUpRead)
+            && !Log.Messages.Any(message => message.EndsWith(": the backups to clean up could not be read; they stay.", StringComparison.Ordinal)))
+        {
+            if (waited.Elapsed > ShellDriver.DefaultWaitTimeout)
+            {
+                throw new TimeoutException($"Timed out after {ShellDriver.DefaultWaitTimeout.TotalSeconds:F0} s waiting for the opening's clean-up to read the backups.");
+            }
+
+            await Task.Delay(15, TestContext.Current.CancellationToken);
+        }
+    }
+
     /// <summary>The mark of a step's git calls, the highest <see cref="GitCallRecord.Sequence"/> so far (0 for none), taken once the watcher is quiet (S8, <see cref="GitCallBudget"/>).</summary>
     public async Task<long> QuietCallMarkAsync()
     {

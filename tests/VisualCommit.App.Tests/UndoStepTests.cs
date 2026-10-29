@@ -37,8 +37,10 @@ public class UndoStepTests
         Assert.Equal("Pushed topic to origin/topic, and set it as upstream", app.StatusText);
         Assert.Equal("push of topic to origin", Assert.Single(history.Entries).Text);
 
-        // Cancelled: nothing starts (13.2).
+        // Cancelled: nothing starts (13.2). The opening's clean-up's read of the backups runs outside
+        // every operation and no awaited step waits for it; the mark waits for it.
         app.Dialogs.Confirm(yes: false);
+        await app.WaitForOpeningCleanUpReadAsync();
         var mark = await app.QuietCallMarkAsync();
         await app.Operations.UndoAsync();
         var question = app.Dialogs.Confirmations[^1];

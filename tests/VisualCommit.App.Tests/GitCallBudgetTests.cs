@@ -110,7 +110,8 @@ public class GitCallBudgetTests
     /// The harness's quiet mark and read (5.3's rule 5): a write of git config outside the app
     /// starts the watcher's refresh, which awaits its status read last; read with the watcher
     /// quiet again, the calls are whole refreshes. The opening's clean-up reads its backups
-    /// outside every operation once the first load is done; the mark waits for that read too, as
+    /// outside every operation once the first load is done; the mark waits for that read too
+    /// (<see cref="OperationsHarness.WaitForOpeningCleanUpReadAsync"/>), as
     /// <see cref="ShellDriver.WaitForTabOpenedAsync"/> does.
     /// </summary>
     [Fact]
@@ -118,7 +119,7 @@ public class GitCallBudgetTests
     {
         using var repo = await Scenarios.OperationsAsync();
         using var harness = await OperationsHarness.OpenAsync(repo);
-        await WaitForCallAsync(harness, 0, call => call.CommandText == ShellDriver.OpeningCleanUpRead, "the opening's clean-up's read of the backups");
+        await harness.WaitForOpeningCleanUpReadAsync();
 
         var mark = await harness.QuietCallMarkAsync();
         await harness.Repo.ConfigAsync("pull.ff", "true");
