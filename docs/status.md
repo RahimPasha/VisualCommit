@@ -154,6 +154,14 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for WP-A's merge (`42b6be2`, the lead's follow-ups `c25326e`) is
+[40925952120](https://github.com/RahimPasha/VisualCommit/actions/runs/40925952120), for `c25326e`:
+four jobs succeeded (`macos-latest` 37 min 58 s, `ubuntu-latest` 5 min 38 s, the containers 6 min
+8 s and 5 min 55 s) and `windows-latest` (34 min 7 s) failed one test of 5,663:
+`Phase7aChecksA.Check_A1_A2_A5_signed_out_dialog_and_signed_in`, whose git calls after A1's quiet
+mark began with git's detection (`git --version`): part A's start did not wait for the app's
+start-up work (design 17 item 2); fixed by the lead on the phase branch.
+
 Phase 7a's run for the prompt channel's fix and WP-S (`9d48d0b`, `7bea4fb`, the wiring `04952c8`) is
 [40916152337](https://github.com/RahimPasha/VisualCommit/actions/runs/40916152337), for `5613450`:
 all five jobs succeeded: `windows-latest` (25 min 16 s; its Test step 23 min 5 s of 55, 5,603 of

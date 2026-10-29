@@ -41,7 +41,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
         await using var served = await ServeAsync();
         using var data = new TempDirectory("phase7a a1");
         var port = served.GitHub.Port;
-        var app = StartEmpty(data, served);
+        var app = await StartEmptyAsync(data, served);
         try
         {
             // A1 step 1: off no more, nobody signed in, nothing asked (D257).
@@ -142,7 +142,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
     {
         await using var served = await ServeAsync();
         using var data = new TempDirectory("phase7a a5");
-        var app = StartEmpty(data, served, width: 1920, height: 1080);
+        var app = await StartEmptyAsync(data, served, width: 1920, height: 1080);
         try
         {
             // Step 8.
@@ -206,7 +206,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
         await using var served = await ServeAsync();
         using var data = new TempDirectory("phase7a a3");
         var port = served.GitHub.Port;
-        var app = StartEmpty(data, served);
+        var app = await StartEmptyAsync(data, served);
         FakeGitHubHold? hold = null;
         try
         {
@@ -346,7 +346,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             assembly,
             async () =>
             {
-                var app = StartEmpty(data, served, tokens);
+                var app = await StartEmptyAsync(data, served, tokens);
                 apps.Add(app);
                 try
                 {
@@ -391,7 +391,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             assembly,
             async () =>
             {
-                var app = StartEmpty(data, served, tokens);
+                var app = await StartEmptyAsync(data, served, tokens);
                 apps.Add(app);
                 try
                 {
@@ -424,7 +424,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
         await using var served = await ServeAsync();
         using var data = new TempDirectory("phase7a a8");
         var port = served.GitHub.Port;
-        var app = StartEmpty(data, served);
+        var app = await StartEmptyAsync(data, served);
         FakeTokenStoreHold? hold = null;
         try
         {
@@ -536,7 +536,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
         await using var served = await ServeAsync();
         using var data = new TempDirectory("phase7a a9");
         var port = served.GitHub.Port;
-        var app = StartEmpty(data, served);
+        var app = await StartEmptyAsync(data, served);
         try
         {
             // Step 1.
@@ -670,7 +670,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             assembly,
             async () =>
             {
-                var app = StartEmpty(data, served, tokens);
+                var app = await StartEmptyAsync(data, served, tokens);
                 apps.Add(app);
                 try
                 {
@@ -695,7 +695,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             assembly,
             async () =>
             {
-                var app = StartEmpty(data, served, tokens);
+                var app = await StartEmptyAsync(data, served, tokens);
                 apps.Add(app);
                 try
                 {
@@ -726,7 +726,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             assembly,
             async () =>
             {
-                var app = StartEmpty(data, served, tokens);
+                var app = await StartEmptyAsync(data, served, tokens);
                 apps.Add(app);
                 try
                 {

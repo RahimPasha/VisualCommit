@@ -4608,3 +4608,8 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
    - The report's A8 step 6 expects a conditional `GET api/v3/user` answered `304` (the report's
      "Changed in this report after its first commit"); a few looks are asserted through their
      resources (`VcPrimaryButton`, not `danger`; the light theme's colours), not by pixel.
+   - Found by CI's Windows job on `c25326e` (run 40925952120): part A's empty-tab start did not wait
+     for the app's start-up work, so git's detection (`git --version`, `InitializeAsync`) landed after
+     A1's quiet mark on the slow runner. `StartEmptyAsync` now waits for `WaitUntilReadyAsync`, as
+     phase 6's start helpers do; a later part that starts an empty tab and counts git calls does the
+     same.
