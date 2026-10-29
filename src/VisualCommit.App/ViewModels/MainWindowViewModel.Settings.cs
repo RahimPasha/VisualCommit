@@ -68,7 +68,10 @@ public partial class MainWindowViewModel
                     _tabServices.Folders,
                     Dialogs,
                     _tabServices.RaiseGitSettingsChanged,
-                    _log),
+                    _log)
+                {
+                    Hosting = _tabServices.Hosting,
+                },
                 section);
             await Dialogs.ShowAsync(dialog);
         }

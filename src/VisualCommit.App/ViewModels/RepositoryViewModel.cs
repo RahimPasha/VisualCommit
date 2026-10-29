@@ -102,6 +102,24 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         Stopwatch? sinceOpening = null,
         IDialogService? dialogs = null,
         TabServices? services = null)
+        : this(repository, settings, dates, log, sinceOpening, dialogs, services, summary: false)
+    {
+    }
+
+    /// <summary>
+    /// The view model, in summary mode when <paramref name="summary"/> (<see cref="ForSummary"/>):
+    /// <see cref="IsSummary"/> is set before the hosting's set-up, so that a dashboard row makes no
+    /// repository hosting (docs/phase-7a-design.md 1.7).
+    /// </summary>
+    private RepositoryViewModel(
+        IGitRepository repository,
+        ISettingsStore settings,
+        DateDisplay dates,
+        IAppLog? log,
+        Stopwatch? sinceOpening,
+        IDialogService? dialogs,
+        TabServices? services,
+        bool summary)
     {
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(settings);
@@ -155,6 +173,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         {
             services.GitSettingsChanged += OnGitSettingsChanged;
         }
+
+        // The repository's hosting (docs/phase-7a-design.md 1.7): none for a dashboard row.
+        IsSummary = summary;
+        SetUpHosting();
     }
 
     /// <summary>
@@ -168,10 +190,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     {
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(services);
-        return new RepositoryViewModel(repository, services.Settings, services.Dates, services.Log, null, services.Dialogs, services)
-        {
-            IsSummary = true,
-        };
+        return new RepositoryViewModel(repository, services.Settings, services.Dates, services.Log, null, services.Dialogs, services, summary: true);
     }
 
     /// <summary>The view model is in summary mode (3.1): true from <see cref="ForSummary"/> until <see cref="Promote"/>.</summary>
@@ -232,6 +251,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             _statusRefreshing = null;
             _statusAgain = false;
         }
+
+        // A tab's hosting in place of a dashboard row's none (docs/phase-7a-design.md 1.7, 7.10).
+        PromoteHosting();
     }
 
     /// <summary>
@@ -311,16 +333,18 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
     /// <summary>
     /// Whether nothing the watcher saw is still on its way to the screen (D52): no change waits for
     /// the watcher's quiet period or is being raised (<see cref="IRepositoryWatcher.IsQuiet"/>), none
-    /// waits for the UI thread, and no refresh or status read runs, whoever asked for it. A change
-    /// the system has not reported yet is not known: macOS reports a write a while after it, so its
-    /// refresh can still start later. The harnesses wait for it before they mark the git calls of a
-    /// check's next step, so that a refresh's calls never straddle the mark.
+    /// waits for the UI thread, and no refresh or status read runs, whoever asked for it, nor a
+    /// URL-rewrites read the hosting started. A change the system has not reported yet is not known:
+    /// macOS reports a write a while after it, so its refresh can still start later. The harnesses
+    /// wait for it before they mark the git calls of a check's next step, so that a refresh's calls
+    /// never straddle the mark.
     /// </summary>
     public bool IsWatcherQuiet =>
         (_watcher?.IsQuiet ?? true)
         && Volatile.Read(ref _changesPosted) == 0
         && Volatile.Read(ref _refreshing) is not { IsCompleted: false }
-        && Volatile.Read(ref _statusRefreshing) is not { IsCompleted: false };
+        && Volatile.Read(ref _statusRefreshing) is not { IsCompleted: false }
+        && IsHostingQuiet;
 
     /// <summary>What the status bar shows of the operations (4e).</summary>
     public OperationStatusViewModel OperationStatus { get; }
@@ -976,6 +1000,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         // Nothing waits for a first read that will never come (a dashboard row, a bulk run).
         CompleteFirstRead();
         _watcher?.Dispose();
+        DisposeHosting();
         Diff?.Dispose();
         Page?.Dispose();
         _resolver?.Dispose();
@@ -1723,6 +1748,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         Refs = refs;
         InteractiveRebase?.ObserveRefs(refs);
         Page?.OnRefsRead(refs);
+        ApplyHosting(refs);
     }
 
     private void SwapGraph(CommitGraphData data)

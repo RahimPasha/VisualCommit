@@ -1,4 +1,5 @@
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Git.Prompts;
@@ -82,12 +83,20 @@ public sealed class PromptDialogs : IGitPromptHandler
     /// The app session's prompt broker, answering through <paramref name="handler"/>: the askpass
     /// broker, whose helper is found next to <c>VisualCommit.Git</c>. Called once by
     /// <c>AppSession.Start</c>, which disposes the broker at the end of the session.
+    /// <paramref name="credentials"/>, <paramref name="sessionEnvironment"/> and
+    /// <paramref name="gitVersion"/> go to the broker for the hosting account's bound URLs (D255,
+    /// docs/phase-7a-design.md 1.3, 1.7).
     /// </summary>
-    public static IGitPromptBroker CreateBroker(IGitPromptHandler handler, IAppLog log)
+    public static IGitPromptBroker CreateBroker(
+        IGitPromptHandler handler,
+        IAppLog log,
+        IGitCredentialSource? credentials = null,
+        IReadOnlyDictionary<string, string?>? sessionEnvironment = null,
+        Func<GitVersion?>? gitVersion = null)
     {
         ArgumentNullException.ThrowIfNull(handler);
         ArgumentNullException.ThrowIfNull(log);
-        return new AskPassBroker(handler, log);
+        return new AskPassBroker(handler, log, credentials: credentials, sessionEnvironment: sessionEnvironment, gitVersion: gitVersion);
     }
 
     /// <summary>

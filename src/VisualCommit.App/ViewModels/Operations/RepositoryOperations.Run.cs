@@ -381,6 +381,7 @@ public sealed partial class RepositoryOperations
             Prompts = options.Prompts,
             CanBeCancelled = options.CanBeCancelled,
             PromptGroup = options.PromptGroup,
+            CredentialBindings = Repository.Hosting.Bindings,
         };
         // A second call with the dedupe key of a waiting or running operation gets that
         // operation's task (1.2): only the first caller shows its result, so a failure opens one

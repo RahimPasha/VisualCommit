@@ -17,6 +17,8 @@ using VisualCommit.Core.Settings;
 using VisualCommit.Core.Undo;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Git;
+using VisualCommit.Hosting;
+using VisualCommit.Hosting.Tokens;
 
 namespace VisualCommit.App;
 
@@ -61,6 +63,11 @@ public sealed class AppSession : IDisposable
         MainWindow = mainWindow;
         mainWindow.Closed += (_, _) => _windowClosed = true;
         Initialization = shell.InitializeAsync(_lifetime.Token);
+
+        // The hosting session reads its account and token once, off the UI thread (ruling 6,
+        // docs/phase-7a-design.md 1.7); the window exists by now.
+        var lifetime = _lifetime.Token;
+        HostingStarted = Task.Run(() => services.Hosting.StartAsync(lifetime), CancellationToken.None);
     }
 
     public AppPaths Paths { get; }
@@ -100,6 +107,12 @@ public sealed class AppSession : IDisposable
     public Task Initialization { get; }
 
     /// <summary>
+    /// The hosting session's start (<see cref="IHostingSession.StartAsync"/>, docs/phase-7a-design.md
+    /// 1.7), run on the thread pool once the window exists: its account and token read.
+    /// </summary>
+    public Task HostingStarted { get; }
+
+    /// <summary>
     /// Starts the app on <paramref name="paths"/>: loads the settings and the session, applies
     /// the saved theme and creates the main window with the tabs of the last session. Must be
     /// called on the UI thread. <paramref name="folderPicker"/> replaces the platform's folder
@@ -122,6 +135,13 @@ public sealed class AppSession : IDisposable
     /// the environment reader auto-fetch's interval goes by (null: the process's);
     /// <paramref name="readClock"/> the clock of a dashboard's 10 s rule (null: the session's clock).
     /// </para>
+    /// <para>
+    /// Phase 7a (docs/phase-7a-design.md 1.7, 7.11): <paramref name="hosting"/> says where GitHub
+    /// is and <paramref name="tokens"/> where tokens are kept (null: each from the process's
+    /// environment, never through <paramref name="readEnvironment"/>). The session's hosting is
+    /// still <see cref="NullHostingSession"/> (GitHub off), which takes neither; the hosting
+    /// session that uses them comes with its package (7.11).
+    /// </para>
     /// </summary>
     public static AppSession Start(
         AppPaths paths,
@@ -136,7 +156,9 @@ public sealed class AppSession : IDisposable
         ISystemTheme? systemTheme = null,
         ToolCatalogues? tools = null,
         Func<string, string?>? readEnvironment = null,
-        TimeProvider? readClock = null)
+        TimeProvider? readClock = null,
+        HostingOptions? hosting = null,
+        ITokenStore? tokens = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(application);
@@ -214,7 +236,15 @@ public sealed class AppSession : IDisposable
         MainWindow? mainWindow = null;
         var dialogs = new DialogHostViewModel();
         var promptPresenter = new PromptDialogPresenter(dialogs, dialogs.Notices);
-        var prompts = PromptDialogs.CreateBroker(promptHandler ?? new PromptDialogs(promptPresenter, log), log);
+
+        // The hosting (docs/phase-7a-design.md 1.7): GitHub off until the hosting session exists.
+        IHostingSession hostingSession = NullHostingSession.Instance;
+        var prompts = PromptDialogs.CreateBroker(
+            promptHandler ?? new PromptDialogs(promptPresenter, log),
+            log,
+            hostingSession,
+            gitEnvironment,
+            gitVersion: () => gitFound.Task.IsCompletedSuccessfully ? gitFound.Task.Result.Version : null);
 
         // Git's own settings (docs/phase-6-design.md 8.1): one instance over the session's runner,
         // with the kept list of merge tools in the data folder (8.10); disposed with the session.
@@ -242,7 +272,8 @@ public sealed class AppSession : IDisposable
             workspaces: workspaces,
             gitSettings: gitSettings,
             tools: tools,
-            readClock: readClock);
+            readClock: readClock,
+            hosting: hostingSession);
         var shell = new MainWindowViewModel(settings, themes, DetectGitAsync, log, tabServices, session, readEnvironment);
 
         // A prompt dialog names its repository by the window's one rule, as every other dialog (4f).
@@ -277,6 +308,7 @@ public sealed class AppSession : IDisposable
 
         // Stops every tab's work and logs each graph's frame times (D50).
         Shell.CloseAll();
+        Services.Hosting.Dispose();
         (Services.Prompts as IDisposable)?.Dispose();
 
         // Stops the merge tools' lookup (docs/phase-6-design.md 8.1, 8.10).

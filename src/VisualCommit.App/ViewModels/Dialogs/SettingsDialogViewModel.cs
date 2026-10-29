@@ -10,6 +10,7 @@ using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Settings;
+using VisualCommit.Hosting;
 using Texts = VisualCommit.App.ViewModels.Operations.OperationTexts.SettingsTexts;
 
 namespace VisualCommit.App.ViewModels.Dialogs;
@@ -50,6 +51,9 @@ public sealed record SettingsScreenServices(
 
     /// <summary>Whether a file exists (a merge tool's path, 8.10), called off the UI thread only; null for the disk.</summary>
     public Func<string, bool>? FileExists { get; init; }
+
+    /// <summary>The session's hosting, for the Accounts section (docs/phase-7a-design.md 1.7, D256); null without one.</summary>
+    public IHostingSession? Hosting { get; init; }
 }
 
 /// <summary>

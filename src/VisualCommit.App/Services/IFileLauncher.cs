@@ -20,6 +20,13 @@ public interface IFileLauncher
     /// exception when it cannot start (12.7).
     /// </summary>
     Task OpenInEditorAsync(LaunchCommand command, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Opens <paramref name="url"/> in the default browser (docs/phase-7a-design.md 1.7): an
+    /// <c>http</c> or <c>https</c> address only, through the platform's launcher on the UI thread;
+    /// a warning is logged when the system could not open it.
+    /// </summary>
+    Task OpenUrlAsync(Uri url, CancellationToken cancellationToken = default);
 }
 
 /// <summary>Puts text on the clipboard (docs/phase-3-design.md 2.32). The scripted walk-through replaces it with a fake.</summary>

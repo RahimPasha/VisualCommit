@@ -68,6 +68,12 @@ public sealed class FakeFileLauncher : IFileLauncher
     public Task RevealAsync(string fullPath, CancellationToken cancellationToken = default) =>
         Record(new FileLaunch(FileLaunchKind.Reveal, fullPath));
 
+    public Task OpenUrlAsync(Uri url, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        return Record(new FileLaunch(FileLaunchKind.OpenUrl, url.AbsoluteUri));
+    }
+
     public Task OpenInEditorAsync(LaunchCommand command, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(command);
@@ -105,10 +111,13 @@ public enum FileLaunchKind
 
     /// <summary>Start the chosen editor on a file (docs/phase-6-design.md 12.4).</summary>
     Edit,
+
+    /// <summary>Open a web address in the default browser (docs/phase-7a-design.md 1.7); its <see cref="FileLaunch.FullPath"/> is the address.</summary>
+    OpenUrl,
 }
 
 /// <summary>One request the app made of the file launcher.</summary>
 /// <param name="Kind">Open, show in the file manager, or start the editor.</param>
-/// <param name="FullPath">The full path the app passed, as it passed it; for <see cref="FileLaunchKind.Edit"/> the editor's program.</param>
+/// <param name="FullPath">The full path the app passed, as it passed it; for <see cref="FileLaunchKind.Edit"/> the editor's program; for <see cref="FileLaunchKind.OpenUrl"/> the address.</param>
 /// <param name="Command">For <see cref="FileLaunchKind.Edit"/>, the command the app built; null otherwise.</param>
 public sealed record FileLaunch(FileLaunchKind Kind, string FullPath, LaunchCommand? Command = null);

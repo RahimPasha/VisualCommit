@@ -56,6 +56,38 @@ public sealed class FileLauncher : IFileLauncher
         }
     }
 
+    /// <summary>
+    /// Opens a web address in the default browser through Avalonia's launcher
+    /// (<c>TopLevel.Launcher.LaunchUriAsync</c>), on the UI thread (docs/phase-7a-design.md 1.7).
+    /// Only <c>http</c> and <c>https</c>: any other scheme throws <see cref="ArgumentException"/>.
+    /// </summary>
+    public async Task OpenUrlAsync(Uri url, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        if (!url.IsAbsoluteUri || (url.Scheme != Uri.UriSchemeHttp && url.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException("Only an http or https address can be opened in the browser.", nameof(url));
+        }
+
+        if (!Dispatcher.UIThread.CheckAccess())
+        {
+            await Dispatcher.UIThread.InvokeAsync(() => OpenUrlAsync(url, cancellationToken)).ConfigureAwait(false);
+            return;
+        }
+
+        if (TopLevel() is not { } topLevel)
+        {
+            Log.Warning($"Could not open {url.AbsoluteUri}: there is no window.");
+            return;
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!await topLevel.Launcher.LaunchUriAsync(url))
+        {
+            Log.Warning($"The system could not open {url.AbsoluteUri} in the browser.");
+        }
+    }
+
     public Task RevealAsync(string fullPath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(fullPath);

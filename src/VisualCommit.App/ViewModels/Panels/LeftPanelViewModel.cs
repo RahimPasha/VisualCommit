@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Session;
+using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels.Panels;
 
@@ -84,6 +85,22 @@ public partial class LeftPanelViewModel : ObservableObject
 
     /// <summary>The graph shown changed: a hidden branch's row asks again whether its commit is a row (8.3).</summary>
     public void RefreshMarks() => Rebuild();
+
+    /// <summary>
+    /// The repository's hosting as last applied (docs/phase-7a-design.md 1.7, 10): what the "Pull
+    /// requests" section and the branch rows' pull requests will show.
+    /// </summary>
+    public RepositoryHostingState HostingState { get; private set; } = RepositoryHostingState.NotGitHub;
+
+    /// <summary>
+    /// Keeps the repository's hosting state (<see cref="HostingState"/>). The "Pull requests"
+    /// section keeps its placeholder: no row changes yet (WP-P builds its rows, docs/phase-7a-design.md 10).
+    /// </summary>
+    public void UpdatePullRequests(RepositoryHostingState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        HostingState = state;
+    }
 
     /// <summary>
     /// Shows <paramref name="refs"/>. Keeps the filter and which folders and sections the user

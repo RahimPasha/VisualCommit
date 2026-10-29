@@ -13,6 +13,7 @@ using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -63,6 +64,7 @@ public sealed partial class RepositoryViewModel
         MergeTool = _mergeTool,
         Filters = Filters,
         HasEditor = IsEditorChosen(),
+        Hosting = HostingState.PullRequests == PullRequestsState.NotGitHub ? null : HostingState,
     };
 
     /// <summary>

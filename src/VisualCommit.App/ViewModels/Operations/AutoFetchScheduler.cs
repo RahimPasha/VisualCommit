@@ -157,7 +157,7 @@ public sealed class AutoFetchScheduler : IDisposable
             return;
         }
 
-        if (repository.Queue.TryStartInBackground(CreateOperation(repository.Repository)))
+        if (repository.Queue.TryStartInBackground(CreateOperation(repository.Repository, repository.Hosting.Bindings)))
         {
             // A failing remote is tried again one interval later, not at every tick.
             tracked.LastFetch = now;
@@ -179,8 +179,10 @@ public sealed class AutoFetchScheduler : IDisposable
     /// The auto-fetch (2.17): 2.16's fetch of every remote, each call with
     /// <c>--no-auto-maintenance</c> (D109) and <see cref="NetworkTimeout"/>, as a background
     /// network operation that denies every prompt and refreshes the refs afterwards.
+    /// <paramref name="bindings"/> are the tab's URLs whose credentials come from the hosting
+    /// account (docs/phase-7a-design.md 1.7, 4.7); not used yet: WP-C gives them to the operation.
     /// </summary>
-    public static GitOperation CreateOperation(IGitRepository repository)
+    public static GitOperation CreateOperation(IGitRepository repository, IReadOnlyList<CredentialBinding>? bindings = null)
     {
         ArgumentNullException.ThrowIfNull(repository);
         return new GitOperation(

@@ -250,7 +250,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
 
         // Git's and ssh's prompts for the clone come to the app's dialogs (phase 3 design 3.3); a
         // clone runs outside any operation queue, so it opens its own prompt scope.
-        var prompts = _services.Prompts.Begin("Clone", name, PromptMode.Ask);
+        var prompts = _services.Prompts.Begin("Clone", name, PromptMode.Ask, bindings: _services.Hosting.BindingsForClone(url));
         try
         {
             var cloning = _services.Repositories.CloneAsync(url, System.IO.Path.Combine(parent, name), progress, _clone.Token, prompts.Environment);
