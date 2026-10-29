@@ -316,9 +316,12 @@ and 8 are ticked and wave 1's worktrees are gone. Next: the channel's fix on `wi
 must fail on that test (if they pass, the cause is not proved: read the diagnostics before going
 on); then merge the branch's rest (the keeper and the diagnostics), run the classes it touched and
 the lagged list's App.Tests line, push, and read CI, all five jobs green; write the cause and the
-fix into the design's section 16 (WP-C). Then start wave 2 with WP-S (design 0.4); each of parts
-A, B, P, V and N gets its checks in `docs/test-reports/phase-7a.md` just before its package
-(D244). The first steps of 7a, and the order to take them in, are in the [phase 6
+fix into the design's section 16 (WP-C). Wave 2 has begun beside it: WP-S is being built, reviewed
+and fixed on `wip/p7a-session` (worktree `D:/Projects/Personal/vc-wt/p7a-session`, task `wq199tu3m`),
+for the lead to merge with 7.11's wiring and 7.14's runs, checking the report's ruling 3 (no
+keychain gives a null `SaveFailedReason`); part A's checks are in `docs/test-reports/phase-7a.md`,
+written, reviewed and ruled on, so WP-A can start after WP-S's merge. Each of parts B, P, V and N
+gets its checks there just before its package (D244). The first steps of 7a, and the order to take them in, are in the [phase 6
 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
 They come from the review of phase 6's cost that the owner asked for on 2026-10-26,
