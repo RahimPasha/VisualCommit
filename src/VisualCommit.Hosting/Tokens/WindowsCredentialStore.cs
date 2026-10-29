@@ -39,7 +39,7 @@ public sealed class WindowsCredentialStore(IAppLog log, string application = Tok
 
         if (!Fits(token))
         {
-            log.Warning($"{Name}: the token for {key.Host}/{key.Account} is longer than {MaxTokenLength} characters.");
+            log.Warning($"{Name}: the token for {TokenEntryNames.ForLog(key)} is longer than {MaxTokenLength} characters.");
             return Task.FromResult(new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.TooLong));
         }
 
@@ -81,7 +81,7 @@ public sealed class WindowsCredentialStore(IAppLog log, string application = Tok
             return names;
         }
 
-        log.Warning($"{Name}: a part of the key {key} cannot name an entry; no call was made.");
+        log.Warning($"{Name}: a part of the key {TokenEntryNames.ForLog(key)} cannot name an entry; no call was made.");
         return null;
     }
 

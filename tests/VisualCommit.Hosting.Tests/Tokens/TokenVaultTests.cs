@@ -6,8 +6,8 @@ namespace VisualCommit.Hosting.Tests.Tokens;
 
 /// <summary>
 /// <see cref="TokenVault"/> (docs/phase-7a-design.md 3.7, D272) over a scripted store whose calls
-/// can be held: where a token is kept, how often the store is probed and read, and what a cancel
-/// stops.
+/// can be held: where a token is kept, how often the store is probed and read, in which order a
+/// key's keeps, forgets and reads reach the store, and what a cancel stops.
 /// </summary>
 public sealed class TokenVaultTests
 {
@@ -281,6 +281,98 @@ public sealed class TokenVaultTests
             (LogLevel.Warning, "The keychain kept the entry VisualCommit:github:github.com:octocat: the keychain stayed locked. Remove it by hand."),
             _log.Lines);
         Assert.Equal(TokenStoreOutcome.Done, (await vault.ReadAsync(Octocat, _ct)).Outcome);
+        AssertNoTokenInTheLog();
+    }
+
+    [Fact]
+    public async Task A_read_while_a_forget_deletes_waits_for_the_delete_and_brings_nothing_back()
+    {
+        _store.Put(Octocat, Token);
+        _store.HoldDelete = new TaskCompletionSource();
+        var vault = new TokenVault(_store, _log);
+
+        var forgetting = vault.ForgetAsync(Octocat, _ct);
+        await WaitUntilAsync(() => _store.CountOf("delete") == 1);
+        var reading = vault.ReadAsync(Octocat, _ct);
+        Assert.Equal(0, _store.CountOf("read"));
+        _store.HoldDelete.SetResult();
+
+        Assert.Null(await forgetting);
+        Assert.Equal(TokenStoreOutcome.NotFound, (await reading).Outcome);
+        Assert.Equal(TokenStoreOutcome.NotFound, (await vault.ReadAsync(Octocat, _ct)).Outcome);
+        Assert.Equal(["probe", "delete", "read"], _store.Calls.Select(c => c.Call));
+    }
+
+    [Fact]
+    public async Task A_forget_called_while_a_keep_saves_deletes_after_the_save()
+    {
+        _store.HoldSave = new TaskCompletionSource();
+        var vault = new TokenVault(_store, _log);
+
+        var keeping = vault.KeepAsync(Octocat, Token, _ct);
+        await WaitUntilAsync(() => _store.CountOf("save") == 1);
+        var forgetting = vault.ForgetAsync(Octocat, _ct);
+        Assert.Equal(0, _store.CountOf("delete"));
+        _store.HoldSave.SetResult();
+
+        Assert.Equal((TokenPlace.Keychain, (string?)null), await keeping);
+        Assert.Null(await forgetting);
+        Assert.Equal(["probe", "save", "delete"], _store.Calls.Select(c => c.Call));
+        Assert.Equal(TokenStoreOutcome.NotFound, (await vault.ReadAsync(Octocat, _ct)).Outcome);
+    }
+
+    [Fact]
+    public async Task A_keep_called_while_a_forget_deletes_saves_after_the_delete()
+    {
+        _store.Put(Octocat, OlderToken);
+        _store.HoldDelete = new TaskCompletionSource();
+        var vault = new TokenVault(_store, _log);
+
+        var forgetting = vault.ForgetAsync(Octocat, _ct);
+        await WaitUntilAsync(() => _store.CountOf("delete") == 1);
+        var keeping = vault.KeepAsync(Octocat, Token, _ct);
+        Assert.Equal(0, _store.CountOf("save"));
+        _store.HoldDelete.SetResult();
+
+        Assert.Null(await forgetting);
+        Assert.Equal((TokenPlace.Keychain, (string?)null), await keeping);
+        Assert.Equal(["probe", "delete", "save"], _store.Calls.Select(c => c.Call));
+        Assert.Equal(Token, (await vault.ReadAsync(Octocat, _ct)).Token);
+        Assert.Equal(Token, (await new TokenVault(_store, _log).ReadAsync(Octocat, _ct)).Token);
+    }
+
+    [Fact]
+    public async Task A_cancelled_wait_for_a_forget_leaves_the_delete_to_finish()
+    {
+        _store.Put(Octocat, Token);
+        _store.HoldDelete = new TaskCompletionSource();
+        var vault = new TokenVault(_store, _log);
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(_ct);
+
+        var forgetting = vault.ForgetAsync(Octocat, cancel.Token);
+        await WaitUntilAsync(() => _store.CountOf("delete") == 1);
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => forgetting);
+        _store.HoldDelete.SetResult();
+
+        Assert.Equal(TokenStoreOutcome.NotFound, (await vault.ReadAsync(Octocat, _ct)).Outcome);
+        Assert.False(_store.Calls.Single(c => c.Call == "delete").Stoppable);
+    }
+
+    [Fact]
+    public async Task A_key_with_a_line_feed_is_logged_with_it_escaped()
+    {
+        var key = new TokenKey("github", "github.com", "octo\ncat");
+        _store.SaveAnswer = new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.Refused);
+        _store.DeleteAnswer = new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.Refused);
+        var vault = new TokenVault(_store, _log);
+
+        await vault.KeepAsync(key, Token, _ct);
+        await vault.ForgetAsync(key, _ct);
+
+        Assert.Contains((LogLevel.Info, "Token for github.com/octo\\u000acat kept for this session: the keychain refused it."), _log.Lines);
+        Assert.Contains((LogLevel.Warning, "The keychain kept the entry github.com/octo\\u000acat: the keychain refused it. Remove it by hand."), _log.Lines);
+        Assert.All(_log.Lines, line => Assert.False(line.Message.Any(char.IsControl), line.Message));
         AssertNoTokenInTheLog();
     }
 

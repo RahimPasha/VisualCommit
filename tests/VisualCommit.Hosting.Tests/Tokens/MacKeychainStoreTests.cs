@@ -245,7 +245,9 @@ public sealed class MacKeychainStoreTests
         Assert.Equal(TokenStoreReasons.Refused, (await quoted.ReadAsync(Octocat, _ct)).Reason);
         Assert.Equal(TokenStoreReasons.Refused, (await quoted.DeleteAsync(Octocat, _ct)).Reason);
         Assert.Equal(TokenStoreReasons.Refused, (await Store().SaveAsync(badKey, Token, _ct)).Reason);
+        Assert.Equal(TokenStoreReasons.Refused, (await Store().ReadAsync(new TokenKey("github", "github.com", "octo\ncat"), _ct)).Reason);
         Assert.Empty(_runner.Calls);
+        Assert.All(_log.Lines, line => Assert.False(line.Message.Any(char.IsControl), line.Message));
     }
 
     [Fact]

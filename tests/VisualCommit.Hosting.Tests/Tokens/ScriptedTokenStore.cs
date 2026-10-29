@@ -35,6 +35,8 @@ internal sealed class ScriptedTokenStore : ITokenStore
 
     public TaskCompletionSource? HoldRead { get; set; }
 
+    public TaskCompletionSource? HoldDelete { get; set; }
+
     public IReadOnlyList<(string Call, TokenKey? Key, bool Stoppable)> Calls
     {
         get
@@ -98,17 +100,18 @@ internal sealed class ScriptedTokenStore : ITokenStore
         }
     }
 
-    public Task<TokenStoreResult> DeleteAsync(TokenKey key, CancellationToken ct)
+    public async Task<TokenStoreResult> DeleteAsync(TokenKey key, CancellationToken ct)
     {
         Record("delete", key, ct);
+        await WaitAsync(HoldDelete);
         if (DeleteAnswer is { } answer)
         {
-            return Task.FromResult(answer);
+            return answer;
         }
 
         lock (_lock)
         {
-            return Task.FromResult(new TokenStoreResult(_entries.Remove(key) ? TokenStoreOutcome.Done : TokenStoreOutcome.NotFound));
+            return new TokenStoreResult(_entries.Remove(key) ? TokenStoreOutcome.Done : TokenStoreOutcome.NotFound);
         }
     }
 

@@ -64,16 +64,19 @@ public sealed class WindowsCredentialStoreTests
         AssertNoTokenInTheLog(token);
     }
 
-    [Fact]
-    public async Task A_key_that_cannot_name_an_entry_is_refused_before_any_call()
+    [Theory]
+    [InlineData("octo cat")]
+    [InlineData("octo\ncat")]
+    public async Task A_key_that_cannot_name_an_entry_is_refused_before_any_call(string account)
     {
         // The key's check comes before the thread pool and advapi32, as the length check does.
         var store = new WindowsCredentialStore(_log, TestApplication());
-        var key = new TokenKey("github", "github.com", "octo cat");
+        var key = new TokenKey("github", "github.com", account);
 
         Assert.Equal(TokenStoreReasons.Refused, (await store.SaveAsync(key, "ghp_FAKE-octocat-1", _ct)).Reason);
         Assert.Equal(TokenStoreReasons.Refused, (await store.ReadAsync(key, _ct)).Reason);
         Assert.Equal(TokenStoreReasons.Refused, (await store.DeleteAsync(key, _ct)).Reason);
+        Assert.All(_log.Lines, line => Assert.False(line.Message.Any(char.IsControl), line.Message));
         AssertNoTokenInTheLog("ghp_FAKE-octocat-1");
     }
 

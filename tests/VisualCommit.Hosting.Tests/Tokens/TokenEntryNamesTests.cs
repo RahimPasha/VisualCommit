@@ -123,6 +123,16 @@ public sealed class TokenEntryNamesTests
     }
 
     [Fact]
+    public void The_log_names_a_key_by_host_and_account_with_control_characters_escaped()
+    {
+        Assert.Equal("github.com/octocat", TokenEntryNames.ForLog(Octocat));
+        Assert.Equal("127.0.0.1:47395/octo cat", TokenEntryNames.ForLog(new TokenKey("github", "127.0.0.1:47395", "octo cat")));
+        Assert.Equal(
+            "github.com\\u000d\\u000a/octo\\u000acat\\u2028\\u202e\\u005c\\u0000 x",
+            TokenEntryNames.ForLog(new TokenKey("github", "github.com\r\n", "octo\ncat\u2028\u202e\\\0 x")));
+    }
+
+    [Fact]
     public void An_application_part_that_cannot_be_named_is_refused()
     {
         Assert.False(TokenEntryNames.TryFor(Octocat, string.Empty, out _));

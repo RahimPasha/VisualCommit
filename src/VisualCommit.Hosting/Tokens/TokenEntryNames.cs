@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
+using System.Text;
 
 namespace VisualCommit.Hosting.Tokens;
 
@@ -102,4 +104,44 @@ public sealed class TokenEntryNames
     internal static bool Accepts(string part) =>
         !string.IsNullOrEmpty(part)
         && !part.Any(c => char.IsControl(c) || char.IsWhiteSpace(c) || c is '\'' or '\\');
+
+    /// <summary>
+    /// How the log names <paramref name="key"/>: <c>{host}/{account}</c> (design 3.2). A key that
+    /// <see cref="TryFor"/> refuses may hold a line feed or another control character, which would
+    /// break the log's line or forge another: such a character, a line or paragraph separator, a
+    /// format character and <c>\</c> are written as <c>\uXXXX</c>.
+    /// </summary>
+    internal static string ForLog(TokenKey key)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        return $"{Escaped(key.Host)}/{Escaped(key.Account)}";
+    }
+
+    private static string Escaped(string part)
+    {
+        if (!part.Any(NeedsEscape))
+        {
+            return part;
+        }
+
+        var text = new StringBuilder(part.Length + 16);
+        foreach (var c in part)
+        {
+            if (NeedsEscape(c))
+            {
+                text.Append(CultureInfo.InvariantCulture, $"\\u{(int)c:x4}");
+            }
+            else
+            {
+                text.Append(c);
+            }
+        }
+
+        return text.ToString();
+    }
+
+    private static bool NeedsEscape(char c) =>
+        char.IsControl(c)
+        || c == '\\'
+        || char.GetUnicodeCategory(c) is UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator or UnicodeCategory.Format;
 }

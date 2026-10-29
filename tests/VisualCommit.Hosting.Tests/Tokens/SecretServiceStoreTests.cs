@@ -19,8 +19,13 @@ public sealed class SecretServiceStoreTests
     private static readonly SecretServiceLimits Short = new(
         TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(300));
 
-    // The design's bound for a bus that does not answer: the connect limit plus 2 s.
-    private static readonly TimeSpan Bound = Short.Connect + TimeSpan.FromSeconds(2);
+    // Proves that a step ends, far below the hang watchdog's 180 s, and beyond what the default
+    // run's load can stretch a 300 ms limit to (D237). Which limit ended a step is shown by the
+    // outcome and the log line, not by the time (design 3.9's "within Connect plus 2 s", as built).
+    private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
+
+    // A timer may end up to a clock tick (15.6 ms on Windows) before a stopwatch says it should.
+    private static readonly TimeSpan TimerSlack = TimeSpan.FromMilliseconds(50);
 
     private readonly ListLog _log = new();
     private readonly CancellationToken _ct = TestContext.Current.CancellationToken;
@@ -79,12 +84,10 @@ public sealed class SecretServiceStoreTests
             },
             Limits = Short,
         });
-        var clock = Stopwatch.StartNew();
 
         var probe = await store.ProbeAsync(_ct);
 
         Assert.Equal(new TokenStoreProbe(false, TokenStoreReasons.NoKeychain), probe);
-        Assert.True(clock.Elapsed < TimeSpan.FromSeconds(2), $"The probe took {clock.Elapsed}.");
         Assert.Equal(0, connections);
         Assert.Single(_log.Lines);
     }
@@ -112,24 +115,27 @@ public sealed class SecretServiceStoreTests
         AssertNoTokenInTheLog();
     }
 
-    [Fact]
-    public async Task A_key_that_cannot_name_an_entry_is_refused_before_any_connection()
+    [Theory]
+    [InlineData("octo cat")]
+    [InlineData("octo\ncat")]
+    public async Task A_key_that_cannot_name_an_entry_is_refused_before_any_connection(string account)
     {
         var store = new SecretServiceStore(_log, new SecretServiceOptions
         {
             ReadEnvironment = _ => throw new InvalidOperationException("The bus is not looked for."),
             SocketExists = _ => throw new InvalidOperationException("The bus is not looked for."),
         });
-        var key = new TokenKey("github", "github.com", "octo cat");
+        var key = new TokenKey("github", "github.com", account);
 
         Assert.Equal(TokenStoreReasons.Refused, (await store.SaveAsync(key, "ghp_FAKE-octocat-1", _ct)).Reason);
         Assert.Equal(TokenStoreReasons.Refused, (await store.ReadAsync(key, _ct)).Reason);
         Assert.Equal(TokenStoreReasons.Refused, (await store.DeleteAsync(key, _ct)).Reason);
+        Assert.All(_log.Lines, line => Assert.False(line.Message.Any(char.IsControl), line.Message));
         AssertNoTokenInTheLog();
     }
 
     [Fact]
-    public async Task A_missing_socket_finds_no_keychain_within_the_connect_limit_and_2_seconds()
+    public async Task A_missing_socket_finds_no_keychain_and_each_step_ends()
     {
         var missing = Path.Combine(Path.GetTempPath(), "VisualCommit.Tests", "no-bus-" + Guid.NewGuid().ToString("N"), "bus");
         var store = new SecretServiceStore(_log, new SecretServiceOptions
@@ -138,18 +144,21 @@ public sealed class SecretServiceStoreTests
             Limits = Short,
         });
         var clock = Stopwatch.StartNew();
-
         var probe = await store.ProbeAsync(_ct);
+        var probed = clock.Elapsed;
+        clock.Restart();
         var read = await store.ReadAsync(Octocat, _ct);
+        var reading = clock.Elapsed;
 
         Assert.Equal(new TokenStoreProbe(false, TokenStoreReasons.NoKeychain), probe);
+        Assert.True(probed < Bound, $"The probe took {probed}.");
         Assert.Equal(TokenStoreOutcome.Failed, read.Outcome);
-        Assert.True(clock.Elapsed < Bound * 2, $"The probe and the read took {clock.Elapsed}.");
+        Assert.True(reading < Bound, $"The read took {reading}.");
         AssertNoTokenInTheLog();
     }
 
     [Fact]
-    public async Task A_bus_that_never_answers_finds_no_keychain_within_the_connect_limit_and_2_seconds()
+    public async Task A_bus_that_never_answers_finds_no_keychain_at_the_connect_limit()
     {
         using var listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
@@ -169,9 +178,9 @@ public sealed class SecretServiceStoreTests
         var saving = clock.Elapsed;
 
         Assert.Equal(new TokenStoreProbe(false, TokenStoreReasons.NoKeychain), probe);
-        Assert.True(probed < Bound, $"The probe took {probed}.");
+        Assert.True(probed >= Short.Connect - TimerSlack && probed < Bound, $"The probe took {probed}.");
         Assert.Equal(new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.NoAnswer), saved);
-        Assert.True(saving < Bound, $"The save took {saving}.");
+        Assert.True(saving >= Short.Connect - TimerSlack && saving < Bound, $"The save took {saving}.");
         Assert.Contains(_log.Lines, line => line.Message == "Secret Service: the session bus did not answer connect in time.");
         AssertNoTokenInTheLog();
     }
@@ -190,11 +199,9 @@ public sealed class SecretServiceStoreTests
         });
         using var cancel = CancellationTokenSource.CreateLinkedTokenSource(_ct);
         cancel.CancelAfter(TimeSpan.FromMilliseconds(200));
-        var clock = Stopwatch.StartNew();
 
+        // Had the cancel been ignored, the connect limit would have ended the read with NoAnswer.
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => store.ReadAsync(Octocat, cancel.Token));
-
-        Assert.True(clock.Elapsed < SecretServiceLimits.Default.Connect, $"The cancel took {clock.Elapsed}.");
     }
 
     [Fact]

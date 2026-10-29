@@ -91,7 +91,7 @@ public sealed class SecretServiceStore(IAppLog log, SecretServiceOptions? option
             return names;
         }
 
-        log.Warning($"{Name}: a part of the key {key} cannot name an entry; no call was made.");
+        log.Warning($"{Name}: a part of the key {TokenEntryNames.ForLog(key)} cannot name an entry; no call was made.");
         return null;
     }
 
