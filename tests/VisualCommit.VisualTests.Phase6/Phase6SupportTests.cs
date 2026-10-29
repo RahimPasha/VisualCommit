@@ -177,13 +177,13 @@ public sealed class Phase6SupportTests : Phase6Checks
         var mark = await app.QuietCallMarkAsync();
         await repository.RefreshAsync();
         var asked = await app.QuietCallsSinceAsync(mark);
-        Assert.True(asked.Count == GitCallBudget.RefreshForms.Count && GitCallBudget.NotWholeRefreshes(asked) is null, "A refresh is not one whole refresh:\n  " + string.Join("\n  ", asked.Select(call => call.CommandText)));
+        Assert.True(asked.Count == GitCallBudget.RefreshForms.Count(form => !form.Optional) && GitCallBudget.NotWholeRefreshes(asked) is null, "A refresh is not one whole refresh:\n  " + string.Join("\n  ", asked.Select(call => call.CommandText)));
 
         mark = await app.QuietCallMarkAsync();
         await repo.ConfigAsync("pull.ff", "true");
         await app.WaitForAsync(() => app.CallsSince(mark).Any(call => call.CommandText.StartsWith("git status --porcelain=v2 ", StringComparison.Ordinal)), "the watcher's refresh after the write");
         var refreshed = await app.QuietCallsSinceAsync(mark);
-        Assert.True(refreshed.Count >= GitCallBudget.RefreshForms.Count && GitCallBudget.NotWholeRefreshes(refreshed) is null, "The watcher's refresh is not whole refreshes:\n  " + string.Join("\n  ", refreshed.Select(call => call.CommandText)));
+        Assert.True(refreshed.Count >= GitCallBudget.RefreshForms.Count(form => !form.Optional) && GitCallBudget.NotWholeRefreshes(refreshed) is null, "The watcher's refresh is not whole refreshes:\n  " + string.Join("\n  ", refreshed.Select(call => call.CommandText)));
     }
 
     /// <summary>

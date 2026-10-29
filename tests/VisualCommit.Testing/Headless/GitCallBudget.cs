@@ -21,8 +21,10 @@ public static class GitCallBudget
 {
     /// <summary>
     /// The forms of a refresh's calls outside every operation: the refs read's five (docs/phase-6-design.md
-    /// 10.2) and the status read, as the watcher's refresh after a write to the git folder makes them.
-    /// Part S's six (moved from <c>Phase6Checks.S.Helpers.cs</c>), none optional.
+    /// 10.2) and the status read, as the watcher's refresh after a write to the git folder makes them
+    /// (part S's six, moved from <c>Phase6Checks.S.Helpers.cs</c>), and the URL rewrites' read a tab
+    /// makes after each refs read while a GitHub account is signed in (docs/phase-7a-design.md 7.10),
+    /// optional (D281): signed out, as in every check before phase 7a, it is never made.
     /// </summary>
     public static IReadOnlyList<RefreshForm> RefreshForms { get; } =
     [
@@ -32,6 +34,7 @@ public static class GitCallBudget
         new("git symbolic-ref -q HEAD", text => text == "git symbolic-ref -q HEAD"),
         new("git rev-parse -q --verify HEAD", text => text == "git rev-parse -q --verify HEAD"),
         new("git status --porcelain=v2 -z --untracked-files=all --renames", text => text == "git status --porcelain=v2 -z --untracked-files=all --renames"),
+        new("git config --null --get-regexp ^url\\.", text => text == "git config --null --get-regexp ^url\\.", Optional: true),
     ];
 
     /// <summary>
