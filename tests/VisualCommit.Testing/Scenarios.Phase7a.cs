@@ -83,9 +83,10 @@ public static partial class Scenarios
     /// (octo, closed), #5 "Fix a typo in the greeting" (ada, from ada/hello); acme/tool's #7 "Fix a
     /// typo in the readme" (octo, from octo/tool) and #8 "An old idea" (ada, from the deleted
     /// gone/tool); octo's and ada's e-mails linked. Only when the fake is on a port other than
-    /// 47395 do the clones' remotes get its URLs (<c>git remote set-url</c>, D265).
+    /// 47395 do the clones' remotes get its URLs (<c>git remote set-url</c>, D265). With
+    /// <paramref name="ownsCopy"/> disposing the result deletes <paramref name="hello"/>'s copy too.
     /// </summary>
-    public static async Task<ServedHosting> ServeHostingAsync(TempRepo hello, int port = AuthRemoteServer.Phase7aVisualChecksPort, bool inProcess = false, CancellationToken ct = default)
+    public static async Task<ServedHosting> ServeHostingAsync(TempRepo hello, int port = AuthRemoteServer.Phase7aVisualChecksPort, bool inProcess = false, CancellationToken ct = default, bool ownsCopy = false)
     {
         ArgumentNullException.ThrowIfNull(hello);
         var root = hello.SiblingPath(HostingFolder);
@@ -129,7 +130,7 @@ public static partial class Scenarios
                 await tool.GitAsync("remote", "set-url", "upstream", HostingUrl("acme/tool", fake.Port)).ConfigureAwait(false);
             }
 
-            return new ServedHosting(fake, hello, tool, octoToken, octoClassicToken, adaToken);
+            return new ServedHosting(fake, hello, tool, octoToken, octoClassicToken, adaToken, ownsCopy);
         }
         catch
         {
@@ -228,9 +229,10 @@ public static partial class Scenarios
 
 /// <summary>
 /// A served copy of "hosting" (<see cref="Scenarios.ServeHostingAsync"/>): the fake of GitHub,
-/// the two clones and the scenario's tokens. Disposing it stops the fake; the copy is the caller's.
+/// the two clones and the scenario's tokens. Disposing it stops the fake; the copy is the caller's
+/// unless it was handed over (<c>ownsCopy</c>).
 /// </summary>
-public sealed class ServedHosting(FakeGitHub gitHub, TempRepo hello, TempRepo tool, string octoToken, string octoClassicToken, string adaToken) : IAsyncDisposable
+public sealed class ServedHosting(FakeGitHub gitHub, TempRepo hello, TempRepo tool, string octoToken, string octoClassicToken, string adaToken, bool ownsCopy = false) : IAsyncDisposable
 {
     public FakeGitHub GitHub { get; } = gitHub;
 
@@ -249,7 +251,14 @@ public sealed class ServedHosting(FakeGitHub gitHub, TempRepo hello, TempRepo to
     /// <summary>ada's fine-grained token, <c>github_pat_FAKE-ada-3</c>.</summary>
     public string AdaToken { get; } = adaToken;
 
-    public ValueTask DisposeAsync() => GitHub.DisposeAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await GitHub.DisposeAsync().ConfigureAwait(false);
+        if (ownsCopy)
+        {
+            Hello.Dispose();
+        }
+    }
 
     public override string ToString() => $"ServedHosting({GitHub.Endpoints.WebBase})";
 }

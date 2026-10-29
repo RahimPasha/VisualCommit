@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The scripted walk-through of the visual test gate (docs/plan.md) for phase 7a: its parts A
+       (accounts and sign-in), B (browse and clone), P (pull requests), G (the graph's badge and
+       avatars) and N (a new pull request), one class per part, each written just before its package
+       (D244), with their expected values (docs/phase-7a-design.md 0.5, 2.8). It drives the whole app
+       in Avalonia's headless mode against the fake of GitHub on port 47395 and saves a screenshot
+       after every step under artifacts/visual/phase-7a/ (VisualRun, in VisualCommit.Testing). A
+       project of its own, as phases 3 to 6's are: a test assembly has one headless UI thread, and a
+       second assembly is a second test process that "dotnet test" runs beside the others. It links
+       App.Tests' recorders, so that 7a's menu tests live outside App.Tests (design 0.6). The
+       real-window pass compiles the Phase7aExpectations files. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Hosting\VisualCommit.Hosting.csproj" />
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+  </ItemGroup>
+
+  <!-- App.Tests' recording actions and log, internal there and here (design 2.8). -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.App.Tests\RecordingActions.cs" Link="AppTests\%(Filename)%(Extension)" />
+    <Compile Include="..\VisualCommit.App.Tests\RecordingLog.cs" Link="AppTests\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>
