@@ -8,7 +8,8 @@ namespace VisualCommit.App.Tests;
 /// beside the default line, <c>+refs/pull/*/head:refs/remotes/origin/pr/*</c> makes
 /// <c>origin/pr/fix-typo</c> look fetched from two refs, but on GitHub
 /// <c>refs/pull/fix-typo/head</c> cannot exist, so <c>pr/fix-typo</c> is pushed; <c>pr/1</c> keeps
-/// phase 6's refusal, and so does <c>pr/fix-typo</c> on a remote not recognised.
+/// phase 6's refusal, and so does <c>pr/fix-typo</c> on a remote not recognised; the two-namespace
+/// refusal, whose candidates are branches, stays on GitHub too.
 /// </summary>
 public class PushGuardGitHubTests
 {
@@ -63,6 +64,31 @@ public class PushGuardGitHubTests
             ("Push failed", "Pushing pr/1 to origin/pr/1 would stop every fetch of origin: origin/pr/1 is fetched from more than one ref of origin."),
             (app.Dialogs.Errors[^1].Title, app.Dialogs.Errors[^1].Summary));
         Assert.Null(await RemoteHeadAsync(repo, "refs/heads/pr/1"));
+        app.AssertScriptFollowed();
+    }
+
+    [Fact]
+    public async Task On_github_a_new_branch_that_two_lines_would_fetch_into_one_ref_is_still_refused()
+    {
+        // The two-namespace refusal (0.2): origin/trunk is fetched from refs/heads/main and, through
+        // the default line, from refs/heads/trunk once that exists. Both candidates are branches,
+        // which ruling 8 never leaves out, so recognising origin changes nothing.
+        using var repo = await Scenarios.RenamingRefspecAsync();
+        await repo.GitAsync("config", "--add", "remote.origin.fetch", "refs/heads/main:refs/remotes/origin/trunk");
+        await repo.GitAsync("fetch", "--quiet", "origin");
+        await repo.GitAsync("branch", "--quiet", "trunk");
+        var stub = await RecognisingOriginAsync(repo);
+        using var app = await OperationsHarness.OpenAsync(repo, prompts: null, hosting: stub);
+        app.Dialogs.Push(remote: "origin").CloseError();
+
+        await app.Operations.PushBranchAsync("refs/heads/trunk");
+        await app.WaitForIdleAsync();
+
+        Assert.Equal(
+            ("Push failed", "Pushing trunk to origin/trunk would stop every fetch of origin: origin/trunk is fetched from more than one ref of origin."),
+            (app.Dialogs.Errors[^1].Title, app.Dialogs.Errors[^1].Summary));
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Null(await RemoteHeadAsync(repo, "refs/heads/trunk"));
         app.AssertScriptFollowed();
     }
 
