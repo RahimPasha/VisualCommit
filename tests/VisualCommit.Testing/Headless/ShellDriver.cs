@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App;
@@ -43,6 +44,16 @@ public sealed partial class ShellDriver : IDisposable
     /// </summary>
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(15);
 
+    /// <summary>
+    /// The last press in the window, by anyone: where it was, in window coordinates, and its
+    /// input-clock stamp (<see cref="RecordPress"/>). <see cref="DoubleClick(Point)"/> waits out
+    /// the double-tap time after it when it lay at the double-click's spot.
+    /// </summary>
+    private (Point Position, ulong Timestamp)? _lastPress;
+
+    /// <summary>The click counts and stamps of <see cref="DoubleClick(Point)"/>'s own presses while it presses; null otherwise.</summary>
+    private List<(int ClickCount, ulong Timestamp)>? _doubleClickPresses;
+
     private ShellDriver(
         AppSession session,
         FakeFolderPicker folders,
@@ -68,6 +79,10 @@ public sealed partial class ShellDriver : IDisposable
 
         // Check 31 waits for the window to close by itself (ShellDriver.Checks.cs).
         session.MainWindow.Closed += (_, _) => IsWindowClosed = true;
+
+        // Every press, handled or not, before any of the window's controls sees it: DoubleClick
+        // needs the last one's spot and stamp, and the counts of its own.
+        session.MainWindow.AddHandler(InputElement.PointerPressedEvent, RecordPress, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     /// <summary>The app instance under test.</summary>
@@ -388,20 +403,103 @@ public sealed partial class ShellDriver : IDisposable
     /// The clock stands still for the presses (<see cref="HeadlessInputClock"/>), as a user's
     /// double-click carries the times of the presses however busy the app is; the app handles
     /// them as before.
+    /// <para>
+    /// Avalonia also counts a press on from the last one, whatever control either went to, when it
+    /// lies within the double-tap size (4 by 4 pixels) around it and the double-tap time after it.
+    /// So a double-click right after a click at its spot came as that click's second and third
+    /// press, and no double-click: LeftPanelPullRequestsViewTests' on pull request #5, which had
+    /// taken the clicked sign-in row's place, on machines fast enough to get there within 500 ms.
+    /// After a press at its spot (any press in the window, <see cref="RecordPress"/>) the
+    /// double-click first waits, running the dispatcher's jobs, until the clock stands more than
+    /// the double-tap time past that press, as a user pauses before a double-click: at most about
+    /// 500 ms, and only then.
+    /// </para>
     /// </summary>
+    /// <exception cref="InvalidOperationException">Its presses were not counted 1 and 2: the window saw no double-click. The message gives the counts and how long before the first of them the press before it came.</exception>
     public void DoubleClick(Point position)
     {
         Window.MouseMove(position);
-        using (HeadlessInputClock.Pause(Window))
+        var before = _lastPress;
+        WaitOutDoubleTapTime(before, position);
+        var presses = new List<(int ClickCount, ulong Timestamp)>(2);
+        _doubleClickPresses = presses;
+        try
         {
-            for (var click = 0; click < 2; click++)
+            using (HeadlessInputClock.Pause(Window))
             {
-                Window.MouseDown(position, MouseButton.Left);
-                Window.MouseUp(position, MouseButton.Left);
+                for (var click = 0; click < 2; click++)
+                {
+                    Window.MouseDown(position, MouseButton.Left);
+                    Window.MouseUp(position, MouseButton.Left);
+                }
             }
+        }
+        finally
+        {
+            _doubleClickPresses = null;
         }
 
         Settle();
+        if (presses is not [(1, _), (2, _)])
+        {
+            throw new InvalidOperationException(LostDoubleClick(position, presses, before));
+        }
+    }
+
+    /// <summary>
+    /// Waits until the window's input clock stands more than the platform's double-tap time past
+    /// <paramref name="last"/>, when that press lay within the double-tap size around it of
+    /// <paramref name="position"/>: the rectangle and the comparison with which Avalonia's mouse
+    /// counts a press on from the last one. Returns at once otherwise.
+    /// </summary>
+    private void WaitOutDoubleTapTime((Point Position, ulong Timestamp)? last, Point position)
+    {
+        if (last is not { } press)
+        {
+            return;
+        }
+
+        var settings = Window.GetPlatformSettings()
+            ?? throw new InvalidOperationException("The window has no platform settings, so the double-tap size and time are unknown.");
+        var size = settings.GetDoubleTapSize(PointerType.Mouse);
+        var around = new Rect(press.Position, default(Size)).Inflate(new Thickness(size.Width / 2, size.Height / 2));
+        if (!around.Contains(position))
+        {
+            return;
+        }
+
+        var time = settings.GetDoubleTapTime(PointerType.Mouse).TotalMilliseconds;
+        while (HeadlessInputClock.Read(Window) - press.Timestamp <= time)
+        {
+            Settle();
+            Thread.Sleep(PollInterval);
+        }
+    }
+
+    /// <summary>Keeps the spot and stamp of every press in the window, and the click count of <see cref="DoubleClick(Point)"/>'s own.</summary>
+    private void RecordPress(object? sender, PointerPressedEventArgs e)
+    {
+        _lastPress = (e.GetPosition(Window), e.Timestamp);
+        _doubleClickPresses?.Add((e.ClickCount, e.Timestamp));
+    }
+
+    private static string LostDoubleClick(
+        Point position,
+        List<(int ClickCount, ulong Timestamp)> presses,
+        (Point Position, ulong Timestamp)? before)
+    {
+        var counts = string.Join(", ", presses.Select(press => press.ClickCount));
+        var earlier = (before, presses) switch
+        {
+            ({ } last, [var first, ..]) => string.Create(
+                CultureInfo.InvariantCulture,
+                $"{(long)first.Timestamp - (long)last.Timestamp} ms after the press before it, at ({last.Position.X:0.##}, {last.Position.Y:0.##})"),
+            (null, [_, ..]) => "with no press in the window before it",
+            _ => "nowhere: no press reached a control",
+        };
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"The double-click at ({position.X:0.##}, {position.Y:0.##}) was not one: its presses were counted [{counts}], not [1, 2]. Its first press came {earlier}.");
     }
 
     /// <summary>Types text into whatever has the keyboard focus, as key presses would.</summary>

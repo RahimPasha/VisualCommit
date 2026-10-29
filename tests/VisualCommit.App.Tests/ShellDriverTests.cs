@@ -185,6 +185,42 @@ public class ShellDriverTests
         }
     }
 
+    /// <summary>
+    /// A double-click right after a click at its spot is a double-click of its own: Avalonia
+    /// counts a press on from the last one when it lies within the double-tap size and time of it,
+    /// whatever was pressed, so without a pause its presses were the click's second and third (a
+    /// triple click here). LeftPanelPullRequestsViewTests' double-click on a pull request that had
+    /// taken the clicked sign-in row's place came so on fast machines and checked nothing out.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_double_click_right_after_a_click_at_its_spot_is_not_counted_on_from_the_click()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var filter = app.Find<TextBox>("FilterBox");
+        app.Click(filter);
+        app.Type("feature login");
+        var area = app.BoundsOf(filter);
+        var spot = new Point(area.X + 24, area.Center.Y);
+        var clickCounts = new List<int>();
+        app.Window.AddHandler(InputElement.PointerPressedEvent, RecordPress, RoutingStrategies.Tunnel, handledEventsToo: true);
+        try
+        {
+            app.Click(spot);
+            app.DoubleClick(spot);
+        }
+        finally
+        {
+            app.Window.RemoveHandler(InputElement.PointerPressedEvent, RecordPress);
+        }
+
+        Assert.Equal([1, 1, 2], clickCounts);
+        Assert.Equal("feature", filter.SelectedText);
+
+        void RecordPress(object? sender, PointerPressedEventArgs e) => clickCounts.Add(e.ClickCount);
+    }
+
     [AvaloniaFact]
     public async Task StartWithTabs_writes_a_session_file_with_those_tabs_before_the_app_starts()
     {
