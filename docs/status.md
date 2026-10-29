@@ -158,6 +158,14 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for WP-P's merge (`1958755`) is
+[40965836423](https://github.com/RahimPasha/VisualCommit/actions/runs/40965836423): all five jobs
+failed one and the same test, `LeftPanelPullRequestsViewTests.In_the_window_the_sign_in_row_signs_in_and_a_double_click_checks_out`
+("Timed out after 60 s waiting for the double-click's action"); every other test passed
+(`windows-latest` 29 min 46 s, 5,786 of 5,787; `macos-latest` 34 min 54 s, 5,783 of 5,784; the
+three Linux jobs 7 min 22 s, 8 min 12 s and 6 min 56 s, 5,783 of 5,784 each, with 3 or 4 skipped).
+The cause is the headless harness, not the product (Notes); the fix is being built.
+
 Phase 7a's run for WP-B's merge (`b361388`, the lead's follow-ups `e40ddc8`) is
 [40939757597](https://github.com/RahimPasha/VisualCommit/actions/runs/40939757597), for `e40ddc8`:
 all five jobs succeeded: `windows-latest` (23 min 26 s; its Test step 21 min 22 s of 55, 5,710 of
@@ -365,9 +373,13 @@ passes alone, and the lagged list passed; its earlier pictures differ from wave 
 Accounts slot and where they vary by nature, and CI's run on `e40ddc8` is green on all five jobs
 (Notes). Part B's ten pictures are inspected and pass (design 17 item 5); steps 10 and 11 are
 ticked. Part G's checks are written, reviewed and ruled on (rulings 35 to 44; design 17 item 6).
-Next: WP-P is being built in `D:/Projects/Personal/vc-wt/p7a-pull-requests`
-(`wip/p7a-pull-requests`), and part N's checks are being written beside it for WP-N, which follows
-WP-V (design 12.1). At WP-P's merge, 10.8's runs, part A's check 9 again and ruling 31; then WP-V. Each of parts B, P, G and N
+WP-P is merged at `1958755` (design 17 item 7): 10.8's classes, part P's checks and part A's check 9
+pass, and their 24 pictures are inspected and pass; part N's checks are written, reviewed and ruled on
+(rulings 45 to 61; design 17 item 8). CI's run on `1958755` failed one test on all five jobs, a
+double-click the headless harness turned into a triple click (Notes). Next: the harness's fix (being
+built on `wip/p7a-dblclick`, then reviewed), merged and pushed, CI read; then the lagged list on it
+under `bash scripts/heavy-run.sh` with no agent running; then tick step 12's left-panel half and
+start WP-V (part G's checks are committed). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -590,6 +602,17 @@ every commit.
   among them; a caret 11; anti-aliased edges and the indeterminate bar 7), each of which also
   changed between earlier runs or was looked at by the lead. Part A's 24 pictures are the same files
   as at WP-A's merge.
+- **WP-P's merge: a double-click the harness turned into a triple click** (CI's run on `1958755`).
+  The test clicks the sign-in row, signs in from code, and pull request #5's row then takes that row's
+  place at the same point; when the double-click comes 500 ms or less after that click by the window's
+  input clock, Avalonia 12.1.3's `MouseDevice` counts its presses 2 and 3 (it resets the count only
+  after 500 ms or outside a 4×4 rect, whichever element was pressed) and `Gestures` raises no
+  `DoubleTapped`, since press 2's element is not the remembered one. Fast CI machines always fell under
+  500 ms; the laptop mostly not (it failed warm in Release in 2 of 18 runs alone). Found by four
+  investigators and a judge (task `wt75y84uy`), reproduced on Windows with logged click counts. A user
+  cannot reach it. The fix: `ShellDriver.DoubleClick` waits out the double-tap time after a press at
+  the same spot and fails at once when its presses are not counted 1 and 2, with a regression test in
+  `ShellDriverTests` (being built on `wip/p7a-dblclick`).
 - **macOS's failed refusal test is a product race on macOS and Linux** (CI's run on `8b02805`): .NET
   backs every pipe instance of one name with one listening Unix socket and closes it with the
   last instance (dotnet/runtime's `NamedPipeServerStream.Unix.cs`, `SharedServer.Dispose`, read by
