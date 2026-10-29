@@ -85,24 +85,28 @@ Start:
   lenses with 20 agents, 36 findings fixed by 9; its decisions D265 to D338; the owner answered
   eight questions, the lead ruled on the rest (Notes). About 345 KB, over D243's mark, accepted by
   the lead (Notes). Week: share not read; the owner: enough left before the reset.)
-- [ ] 4. First package (plan.md's "From phase 6" and D254): `ShellDriverTests`' wheel test waits
+- [x] 4. First package (plan.md's "From phase 6" and D254): `ShellDriverTests`' wheel test waits
   for the hit test; the real-window csproj's comment gives the pass of phases 0 to 6 as 27 min
   39 s; W1's failure under load looked at and fixed; S8's git-call counts as upper bounds taken
   with the watcher quiet; R8's test switch that delays the watcher's events; G23's part B split
-  (D264).
-- [ ] 5. Harness: phase 7a's walk-through project, the local fake of GitHub's API (its port
+  (D264). (Done 2026-10-29: L1 at `f1dc80e`, WP1 merged at `a4a388e`; the lagged list's first run
+  passed at that merge, and the whole default run on `069c5c7` passed: 5,547 of 5,551, 4 skipped.)
+- [x] 5. Harness: phase 7a's walk-through project, the local fake of GitHub's API (its port
   amending D97, as D150, D229 and D238 did), the keychain's fake in both harnesses so that no run
   touches the owner's keychain, the timing script and CLAUDE.md's Commands, the real-window
-  project's link to the phase's expectations.
+  project's link to the phase's expectations. (Done 2026-10-29: WP-F merged at `c562ff4`; CLAUDE.md's
+  7a commands at `069c5c7`.)
 
 Core and Git layer:
 
 - [ ] 6. The provider model that 7b builds Azure DevOps and GitLab on: hosts, accounts, a GitHub
   remote recognised from its URL. Tests.
-- [ ] 7. Tokens in the OS keychain on Windows, macOS and Linux behind a seam (R3), and in memory
-  for the session where none can be reached (D253). Tests.
-- [ ] 8. GitHub's API: a token checked at sign-in, the account's repositories, a repository's pull
-  requests, creating one, avatars; all against the fake. Tests.
+- [x] 7. Tokens in the OS keychain on Windows, macOS and Linux behind a seam (R3), and in memory
+  for the session where none can be reached (D253). Tests. (Done 2026-10-29: WP-K merged at `2582e53`;
+  each real store's test passed on CI's run on `8b02805`, the first run of any.)
+- [x] 8. GitHub's API: a token checked at sign-in, the account's repositories, a repository's pull
+  requests, creating one, avatars; all against the fake. Tests. (Done 2026-10-29: WP-G merged at
+  `1d6b688`.)
 - [ ] 9. The token reaching git (plan.md's "From phase 3": git's credential helpers first, then the
   askpass helper and `AskPassBroker`; auto-fetch never prompts), a bulk run's prompt group and
   accounts ("From phase 6"), and the push guard's refusals of `pr/*` and two-namespace pushes
@@ -302,16 +306,19 @@ that did not build it, its findings fixed, and merged with `--no-ff` one at a ti
 the lagged list (design 0.4) for the first time, every class passing. The lead's follow-ups are at
 `8b02805` (CI's keychain steps, the containers' `IPC_LOCK`, `FailNext` refusing avatar and page
 routes), pushed; the as-built notes and the lead's rulings are the design's section 16, and
-CLAUDE.md, D270, plan.md's risk 34 and THIRD-PARTY-NOTICES.md follow them. Next: read CI's run on
-`8b02805`, whose keychain steps are the first run of any real store (D333 if Windows refuses; the
-Secret Service command goes into CLAUDE.md once the containers' step has passed), and run the full
-default run under `bash scripts/heavy-run.sh` with no agent running; compare its pictures with the
-baseline's (`D:/Projects/Personal/phase7a-work/baseline-pictures/`, from step 2's run at `cea102c`;
-`w1e` and `g23i` vary by nature, design 16.9). Both green: tick steps 4, 5, 8 and 9, and 7 once
-CI's keychain steps pass (6 waits for WP-S), remove wave 1's worktrees and branches, and start
-wave 2 with WP-S (design 0.4); each of parts A, B, P, V and N gets its checks in
-`docs/test-reports/phase-7a.md` just before its package (D244). The
-first steps of 7a, and the order to take them in, are in the [phase 6
+CLAUDE.md, D270, plan.md's risk 34 and THIRD-PARTY-NOTICES.md follow them. CI's run on `8b02805`
+(under CI) passed on four jobs, every real keychain's test included, and failed one test on
+macOS, a race in the prompt channel on macOS and Linux (Notes); the whole default run passed and
+its pictures differ from the baseline's only where they vary by nature (Notes); steps 4, 5, 7
+and 8 are ticked and wave 1's worktrees are gone. Next: the channel's fix on `wip/p7a-channel`
+(built, reviewed and fixed by a workflow, task `wdwqwf4u7`): merge its first commit, the held test
+`AskPassChannelTests` alone, with `--no-ff` and push it, and read CI's Linux and macOS jobs, which
+must fail on that test (if they pass, the cause is not proved: read the diagnostics before going
+on); then merge the branch's rest (the keeper and the diagnostics), run the classes it touched and
+the lagged list's App.Tests line, push, and read CI, all five jobs green; write the cause and the
+fix into the design's section 16 (WP-C). Then start wave 2 with WP-S (design 0.4); each of parts
+A, B, P, V and N gets its checks in `docs/test-reports/phase-7a.md` just before its package
+(D244). The first steps of 7a, and the order to take them in, are in the [phase 6
 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
 They come from the review of phase 6's cost that the owner asked for on 2026-10-26,
@@ -498,8 +505,32 @@ every commit.
   ran 3 h 35 min and used about 4.9 million tokens of sub-agents. WP-K's and WP-C's first builders
   stopped unfinished and a second builder finished from their last commits. The reviews found 36
   items (one blocker, WP-G's paged list after ETags; two majors), all fixed or ruled on (design
-  16). WP1's picture references are in `D:/Projects/Personal/vc-wt/p7a-wp1-reference` and may go
-  with the worktrees.
+  16). The worktrees, their branches and WP1's picture references are removed.
+- **Wave 1's whole run and pictures** (2026-10-29, `069c5c7`, through `bash scripts/heavy-run.sh`,
+  nothing else running): 5,547 of 5,551 passed and 4 skipped (the three real stores and
+  `WindowsCredentialStoreTests`' Off-Windows test, D270) in 1 h 3 min 26 s; the projects ended
+  after: phase 7a's walk-through 26 s, `VisualCommit.Hosting.Tests` 4 min 29 s, part L's 11 min
+  59 s, phases 0 to 2's 16 min 15 s, phase 4's 25 min 20 s, phase 5's 29 min 9 s, phase 6's 44 min
+  25 s, `VisualCommit.Git.Tests` 52 min 8 s, phase 3's 53 min 33 s, phase 5's undo walk-through
+  53 min 48 s and `VisualCommit.App.Tests` 1 h 3 min 24 s. Its pictures, kept in
+  `D:/Projects/Personal/phase7a-work/wave1-run-pictures/` as wave 2's reference, against the
+  baseline's (step 2): 1,217 the same, 38 changed, 74 new (phase 6's whose walk-through the
+  baseline's G23 had stopped). Four inspectors judged all 38, and the 74 against phase 6's gate run:
+  every change varies by nature: a temporary folder's name (14), a caret (11), anti-aliased edges
+  and icons and the indeterminate bar (12), `a2d`'s number of reads, and against phase 6's gate
+  git 2.56's version in the status bar and its nine `advice.diverging` lines in `s19b` and `w7b`.
+  None comes from wave 1's code (it changed no view, style or icon). Their verdicts are in the
+  workflow's output (task `wtdlbm9d2`).
+- **macOS's failed refusal test is a product race on macOS and Linux** (CI's run on `8b02805`): .NET
+  backs every pipe instance of one name with one listening Unix socket and closes it with the
+  last instance (dotnet/runtime's `NamedPipeServerStream.Unix.cs`, `SharedServer.Dispose`, read by
+  the lead); `AskPassBroker.ListenAsync` keeps one waiting instance and serves an answer without UI
+  (WP-C's credential `get` and `erase`) to its end before it makes the next, so a second helper
+  queued on the socket is dropped silently: a lost `erase` gives the generic dialog, a lost `get`
+  git's fallback prompt. Found by four investigators and a judge (task `wtdlbm9d2`); the fix, a
+  keeper instance on macOS and Linux with a held test and diagnostics, is being built on
+  `wip/p7a-channel` (worktree `D:/Projects/Personal/vc-wt/p7a-channel`): its first commit, the
+  held test alone, goes to CI first, where the Linux and macOS jobs must fail on it, then the fix.
 - When a cloud session has worked on a phase, say so here. If it had to use a branch of its own,
   that name stands in the Branch column of the Phases table in place of the phase's.
 
