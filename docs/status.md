@@ -338,10 +338,18 @@ reviewed by an agent that did not build it, its one major and seven minor findin
 ruled on; design 17 item 1), with 7.11's wiring at `04952c8`; 7.14's runs passed (Hosting.Tests
 whole 375 of 379 with the 4 skips, `Phase6ChecksS` 13 of 13 with its counts unmoved, and the lagged
 list's five commands: 25, 66, 21, 6 and 6 tests, all passing) and CI's run on `5613450` is green on
-all five jobs; steps 6 and 9 are ticked. Next: WP-A is being built, reviewed and fixed on
-`wip/p7a-accounts` (task `wbg1qoeul`) and part B's checks are being written and reviewed (task
-`whcr3p9av`); then the lead merges WP-A with 8.9's runs and inspects part A's pictures, rules on
-part B's open points and commits them, and starts WP-B. Each of parts B, P, V and N
+all five jobs; steps 6 and 9 are ticked. WP-A is merged at `42b6be2` (design 17 item 2): 8.9's runs
+passed, part A's 24 pictures and the 31 settings pictures it changes were inspected and pass (the
+settings pictures differ from wave 1's run only in the Accounts button's slot), and CI's Windows job
+on `c25326e` found a start that did not wait for finding git, fixed at `2a90e05`. Parts B and P's
+checks are written, reviewed and ruled on (rulings 11 to 34). WP-B is merged at `b361388` with the
+lead's follow-ups at `e40ddc8` (design 17 item 4: one waiting empty-tab start for every part). Next:
+the whole default run on `e40ddc8` and the lagged list, under `bash scripts/heavy-run.sh` with no
+agent running (its pictures kept in `D:/Projects/Personal/phase7a-work/wpb-run-pictures/`); then
+the region comparison of ruling 19 against wave 1's run (every earlier picture; allowed: WP-A's 31
+settings pictures, the git box and what varies by nature), the inspection of part B's pictures, CI's
+run on `e40ddc8`; then tick steps 10 and 11 and start WP-P (part P's checks are committed), with part
+N's checks written beside it. Each of parts B, P, V and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
