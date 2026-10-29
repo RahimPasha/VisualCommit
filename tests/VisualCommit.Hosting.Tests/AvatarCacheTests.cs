@@ -125,6 +125,21 @@ public sealed class AvatarCacheTests
         Assert.Equal(octo, await third.FileOfAsync(setup.Avatar(1001), Cancelled));
         Assert.Single(recorder.Sent);
         Assert.Equal("The avatars' index could not be read: the avatars are fetched again.", Assert.Single(setup.Log.Lines).Message);
+
+        // An index that parses but holds a null entry, a null file or a key that is not an id: those
+        // are left out with the same warning, and the next save writes the index without them.
+        await File.WriteAllTextAsync(
+            setup.Folder.Combine("avatars", "index.json"),
+            "{\"users\":{\"1001\":{\"file\":\"1001.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"},\"1003\":null,\"1004\":{\"file\":null,\"fetchedAt\":\"2026-01-02T09:00:00Z\"},\"01\":{\"file\":\"1.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"}}}",
+            Cancelled);
+        using var fourth = new AvatarCache(setup.Folder.Combine("avatars"), () => recorder, setup.Clock, setup.Log);
+        Assert.Equal(octo, await fourth.FileOfAsync(setup.Avatar(1001), Cancelled));
+        Assert.Equal(ada, await fourth.FileOfAsync(setup.Avatar(1003), Cancelled));
+        Assert.Equal(2, recorder.Sent.Count);
+        Assert.Equal(new[] { "The avatars' index could not be read: the avatars are fetched again.", "The avatars' index could not be read: the avatars are fetched again." }, setup.Log.Lines.Select(line => line.Message));
+        Assert.Equal(
+            "{\"users\":{\"1001\":{\"file\":\"1001.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"},\"1003\":{\"file\":\"1003.jpg\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"}}}",
+            await File.ReadAllTextAsync(setup.Folder.Combine("avatars", "index.json"), Cancelled));
     }
 
     [Fact]
@@ -190,6 +205,35 @@ public sealed class AvatarCacheTests
         Assert.NotNull(await setup.Cache.FileOfAsync(setup.Avatar(1001), Cancelled));
     }
 
+    [Fact]
+    public async Task A_download_cancelled_once_its_bytes_arrived_writes_neither_the_image_nor_the_index()
+    {
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(Cancelled);
+        var recorder = new RecordingHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StreamContent(new CancellingAtItsEnd(Png, cancel)) });
+        var log = new ListLog();
+        using var folder = new TempDirectory("avatars");
+        using var cache = new AvatarCache(folder.Combine("avatars"), () => recorder, new ManualTimeProvider(AppClocks.HarnessTime), log);
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => cache.FileOfAsync(new AuthorAvatar(1001, "octo", new Uri("http://127.0.0.1:1/avatars/u/1001?v=4")), cancel.Token));
+
+        Assert.Single(recorder.Sent);
+        Assert.False(Directory.Exists(folder.Combine("avatars")));
+        Assert.Empty(log.Lines);
+    }
+
+    [Fact]
+    public async Task A_cancellation_neither_the_callers_nor_the_time_limits_is_no_answer()
+    {
+        var recorder = new RecordingHttpHandler(_ => throw new TaskCanceledException("The operation was canceled.", new TimeoutException("A connection could not be made within 10 seconds.")));
+        var log = new ListLog();
+        using var folder = new TempDirectory("avatars");
+        using var cache = new AvatarCache(folder.Combine("avatars"), () => recorder, new ManualTimeProvider(AppClocks.HarnessTime), log);
+
+        Assert.Null(await cache.FileOfAsync(new AuthorAvatar(1001, "octo", new Uri("http://127.0.0.1:1/avatars/u/1001?v=4")), Cancelled));
+
+        Assert.Equal("The avatar of user 1001 could not be fetched.", Assert.Single(log.Lines).Message);
+    }
+
     [Theory]
     [InlineData("https://evil.example/u/1001", "https://evil.example:443")]
     [InlineData("http://127.0.0.1:2/avatars/u/1001", "http://127.0.0.1:2")]
@@ -237,6 +281,28 @@ public sealed class AvatarCacheTests
         }
 
         return response;
+    }
+
+    /// <summary>A body that cancels <paramref name="cancel"/> as its last read finds its end: the download's bytes arrive, then its call is cancelled.</summary>
+    private sealed class CancellingAtItsEnd(byte[] bytes, CancellationTokenSource cancel) : MemoryStream(bytes)
+    {
+        public override int Read(byte[] buffer, int offset, int count) => Ended(base.Read(buffer, offset, count));
+
+        public override int Read(Span<byte> buffer) => Ended(base.Read(buffer));
+
+        public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) => ValueTask.FromResult(Ended(base.Read(buffer.Span)));
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) => Task.FromResult(Ended(base.Read(buffer, offset, count)));
+
+        private int Ended(int read)
+        {
+            if (read == 0)
+            {
+                cancel.Cancel();
+            }
+
+            return read;
+        }
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition)

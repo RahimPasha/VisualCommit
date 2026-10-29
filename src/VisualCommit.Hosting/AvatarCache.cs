@@ -199,13 +199,15 @@ public sealed class AvatarCache : IDisposable
                 {
                     throw;
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (limit.IsCancellationRequested)
                 {
                     _log.Warning($"The avatar of user {id} did not arrive within 30 seconds.");
                     return null;
                 }
-                catch (Exception ex) when (ex is HttpRequestException or IOException)
+                catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
                 {
+                    // A cancellation that is neither the caller's nor the 30 s (the handler's connect
+                    // time-out, a cache disposed mid-download) is no answer.
                     _log.Warning($"The avatar of user {id} could not be fetched.", ex);
                     return null;
                 }
@@ -221,7 +223,9 @@ public sealed class AvatarCache : IDisposable
     /// Writes the image as <c>&lt;id&gt;.png</c> or <c>.jpg</c> beside its temporary file, flushed,
     /// then moved over it (as <see cref="DurableFile.Replace"/>), removes the other type's image,
     /// and records the fetch in the index. Its path, or null with a warning when the disk refused.
-    /// Nothing is written once <paramref name="ct"/> is cancelled.
+    /// Nothing is written once <paramref name="ct"/> is cancelled: the last check comes after the
+    /// temporary file is flushed (which is then deleted), and past it the image, the other type's
+    /// removal and the index are written together.
     /// </summary>
     private string? Save(long userId, byte[] bytes, CancellationToken ct)
     {
@@ -229,22 +233,22 @@ public sealed class AvatarCache : IDisposable
             ? (Name(userId, ".png"), Name(userId, ".jpg"))
             : (Name(userId, ".jpg"), Name(userId, ".png"));
         var path = Path.Combine(_directory, name);
+        var temporary = DurableFile.TemporaryOf(path);
         try
         {
             ct.ThrowIfCancellationRequested();
             Directory.CreateDirectory(_directory);
-            var temporary = DurableFile.TemporaryOf(path);
             using (var stream = new FileStream(temporary, FileMode.Create, FileAccess.Write, FileShare.Read))
             {
                 stream.Write(bytes);
                 stream.Flush(flushToDisk: true);
             }
 
-            File.Move(temporary, path, overwrite: true);
-            File.Delete(Path.Combine(_directory, other));
             lock (_indexGate)
             {
                 ct.ThrowIfCancellationRequested();
+                File.Move(temporary, path, overwrite: true);
+                File.Delete(Path.Combine(_directory, other));
                 var index = IndexLocked();
                 index[Key(userId)] = new AvatarIndexEntryJson { File = name, FetchedAt = _clock.GetUtcNow().UtcDateTime };
                 foreach (var gone in index.Where(pair => !File.Exists(Path.Combine(_directory, pair.Value.File))).Select(pair => pair.Key).ToList())
@@ -258,14 +262,37 @@ public sealed class AvatarCache : IDisposable
 
             return path;
         }
+        catch (OperationCanceledException)
+        {
+            DeleteTemporary(temporary);
+            throw;
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             _log.Warning($"The avatar of user {userId} could not be saved.", ex);
+            DeleteTemporary(temporary);
             return null;
         }
     }
 
-    /// <summary>The index, read from the disk once; empty when it is missing or unreadable (each image is then fetched again).</summary>
+    /// <summary>Removes the temporary image of a cancelled or failed save; when that fails too, the next save writes over it.</summary>
+    private static void DeleteTemporary(string temporary)
+    {
+        try
+        {
+            File.Delete(temporary);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // The next save of this image creates it anew.
+        }
+    }
+
+    /// <summary>
+    /// The index, read from the disk once; empty when it is missing or unreadable (each image is then
+    /// fetched again). An entry that is null, or whose key is not a user's id or whose file is not
+    /// that user's image, is left out with the same warning.
+    /// </summary>
     private Dictionary<string, AvatarIndexEntryJson> IndexLocked()
     {
         if (_index is not null)
@@ -277,7 +304,12 @@ public sealed class AvatarCache : IDisposable
         try
         {
             var read = File.Exists(path) ? JsonSerializer.Deserialize(File.ReadAllBytes(path), AvatarIndexJsonContext.Default.AvatarIndexJson) : null;
-            _index = read?.Users is { } users ? new Dictionary<string, AvatarIndexEntryJson>(users, StringComparer.Ordinal) : new(StringComparer.Ordinal);
+            var users = read?.Users ?? new Dictionary<string, AvatarIndexEntryJson>();
+            _index = new Dictionary<string, AvatarIndexEntryJson>(users.Where(pair => IsEntry(pair.Key, pair.Value)), StringComparer.Ordinal);
+            if (_index.Count < users.Count)
+            {
+                _log.Warning("The avatars' index could not be read: the avatars are fetched again.");
+            }
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
@@ -291,6 +323,13 @@ public sealed class AvatarCache : IDisposable
     private static string Key(long userId) => userId.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
     private static string Name(long userId, string extension) => Key(userId) + extension;
+
+    /// <summary>Whether an index entry read from the disk is one this cache writes: a user's id, and that user's image.</summary>
+    private static bool IsEntry(string key, AvatarIndexEntryJson? entry) =>
+        entry is not null
+        && long.TryParse(key, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var userId)
+        && Key(userId) == key
+        && IsFileOf(userId, entry.File);
 
     /// <summary>Whether the index's file name is this user's image, so that no name it holds reaches outside the folder.</summary>
     private static bool IsFileOf(long userId, string? file) => file == Name(userId, ".png") || file == Name(userId, ".jpg");
