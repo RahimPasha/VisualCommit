@@ -28,6 +28,7 @@ public sealed class HostingSession : IHostingSession
     private static readonly HostingFailure TurnedOff = new(HostingFailureKind.Validation, "GitHub is turned off.");
 
     private readonly AppPaths _paths;
+    private readonly HostingOptions _options;
     private readonly IAppLog _log;
     private readonly Action<Action> _post;
     private readonly GitHubProvider? _provider;
@@ -45,7 +46,12 @@ public sealed class HostingSession : IHostingSession
     private AccountsFile _file = AccountsFile.Empty;
     private AccountSlot? _slot;
 
+    private readonly AuthorMapStore? _authorMaps;
+    private AvatarCache? _avatarCache;
+
     // Under _lock.
+    private readonly HashSet<Task> _avatarRuns = [];
+    private CancellationTokenSource _avatarWork = new();
     private Task? _refusalCheck;
     private Task _switching = Task.CompletedTask;
     private int _startCalled;
@@ -60,6 +66,7 @@ public sealed class HostingSession : IHostingSession
         ArgumentNullException.ThrowIfNull(post);
         ArgumentNullException.ThrowIfNull(clock);
         _paths = paths;
+        _options = options;
         _log = log;
         _post = post;
         Clock = clock;
@@ -68,6 +75,8 @@ public sealed class HostingSession : IHostingSession
         {
             _provider = new GitHubProvider(endpoints, options.CreateHandler, log, clock);
             _vault = new TokenVault(tokens, log);
+            _avatarCache = NewAvatarCache(options);
+            _authorMaps = new AuthorMapStore(Path.Combine(paths.AvatarsDirectory, "authors"), clock, log);
             log.Info($"GitHub: {endpoints.Host}.");
         }
         else
@@ -98,6 +107,12 @@ public sealed class HostingSession : IHostingSession
 
     /// <summary>The session's lifetime: cancelled at <see cref="Dispose"/>.</summary>
     internal CancellationToken Lifetime => _lifetime.Token;
+
+    /// <summary>The avatars' images (6.4); a new one after each sign-out.</summary>
+    internal AvatarCache AvatarCache => Volatile.Read(ref _avatarCache) ?? throw new InvalidOperationException("GitHub is off.");
+
+    /// <summary>The e-mail maps and the lookups' budget (7.9).</summary>
+    internal AuthorMapStore AuthorMaps => _authorMaps ?? throw new InvalidOperationException("GitHub is off.");
 
     /// <summary>The last "Use for git over HTTPS" change's write, for the tests.</summary>
     internal Task Switching
@@ -241,6 +256,7 @@ public sealed class HostingSession : IHostingSession
                 ? $"GitHub account {slot.Status.Account.Login} on {Host}: signed out."
                 : $"GitHub account {slot.Status.Account.Login} on {Host}: signed out; the keychain kept its entry: {reason}.");
             PostAccountChanged();
+            await ForgetAvatarsAsync().ConfigureAwait(false);
             return reason;
         }
         finally
@@ -369,7 +385,13 @@ public sealed class HostingSession : IHostingSession
 
         _disposed = true;
         _lifetime.Cancel();
+        lock (_lock)
+        {
+            _avatarWork.Cancel();
+        }
+
         _provider?.Dispose();
+        _avatarCache?.Dispose();
     }
 
     /// <summary>
@@ -401,6 +423,39 @@ public sealed class HostingSession : IHostingSession
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Runs a tab's avatar work (7.9) on the thread pool under the tab's lifetime and the session's
+    /// avatar work, which a sign-out cancels and waits for before it deletes <c>avatars/</c> (D291).
+    /// </summary>
+    internal Task RunAvatarWork(Func<CancellationToken, Task> work, CancellationToken hostingLifetime)
+    {
+        lock (_lock)
+        {
+            if (_disposed)
+            {
+                return Task.CompletedTask;
+            }
+
+            var linked = CancellationTokenSource.CreateLinkedTokenSource(hostingLifetime, _avatarWork.Token);
+            var run = Task.Run(() => work(linked.Token), CancellationToken.None);
+            _avatarRuns.Add(run);
+            _ = run.ContinueWith(
+                ended =>
+                {
+                    lock (_lock)
+                    {
+                        _avatarRuns.Remove(ended);
+                    }
+
+                    linked.Dispose();
+                },
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+            return run;
+        }
     }
 
     /// <summary>A hosting's <c>Dispose</c>: it is told of the account no more.</summary>
@@ -529,6 +584,65 @@ public sealed class HostingSession : IHostingSession
         lock (_lock)
         {
             return [.. _hostings];
+        }
+    }
+
+    private AvatarCache NewAvatarCache(HostingOptions options) => new(_paths.AvatarsDirectory, options.CreateHandler, Clock, _log);
+
+    // Under _gate, at a sign-out (7.5, D291): the avatar work cancelled and awaited, the maps
+    // dropped from memory, a fresh cache, and avatars/ deleted whole; a file that stays gets one
+    // warning and the rest still goes.
+    private async Task ForgetAvatarsAsync()
+    {
+        Task[] runs;
+        CancellationTokenSource ended;
+        lock (_lock)
+        {
+            ended = _avatarWork;
+            _avatarWork = new CancellationTokenSource();
+            runs = [.. _avatarRuns];
+        }
+
+        await ended.CancelAsync().ConfigureAwait(false);
+        try
+        {
+            await Task.WhenAll(runs).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Each run logs its own failure; a cancelled one ended as asked.
+        }
+
+        _authorMaps!.Forget();
+        Interlocked.Exchange(ref _avatarCache, _disposed ? null : NewAvatarCache(_options))?.Dispose();
+        var directory = _paths.AvatarsDirectory;
+        if (!Directory.Exists(directory))
+        {
+            return;
+        }
+
+        foreach (var file in Directory.EnumerateFiles(directory, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true }))
+        {
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _log.Warning($"{file} could not be deleted at the sign-out: {ex.Message}");
+            }
+        }
+
+        foreach (var folder in Directory.EnumerateDirectories(directory, "*", SearchOption.AllDirectories).OrderByDescending(path => path.Length).Append(directory))
+        {
+            try
+            {
+                Directory.Delete(folder);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // A folder that still holds a file that stays; that file was named above.
+            }
         }
     }
 

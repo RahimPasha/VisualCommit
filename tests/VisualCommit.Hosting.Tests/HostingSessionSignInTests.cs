@@ -1,6 +1,7 @@
 using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting.Tests.Tokens;
 using VisualCommit.Hosting.Tokens;
+using VisualCommit.Testing;
 using VisualCommit.Testing.Hosting;
 using Xunit;
 
@@ -198,6 +199,38 @@ public sealed class HostingSessionSignInTests
         Assert.Null(setup.Session.Account);
         Assert.Equal(["probe", "save github:127.0.0.1:1:octo", "delete github:127.0.0.1:1:octo"], setup.FakeTokens.Calls);
         Assert.Empty(Load(setup).Accounts);
+    }
+
+    [Fact]
+    public async Task A_sign_out_deletes_the_images_the_index_and_the_maps_also_with_an_image_held()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await RepositoryHostingAvatarsTests.OpenHelloAsync(setup);
+        await RepositoryHostingAvatarsTests.ShowAsync(setup, hosting, Scenarios.OctoEmail);
+        Assert.True(File.Exists(Path.Combine(setup.Paths.AvatarsDirectory, AvatarCache.IndexFileName)));
+        Assert.True(File.Exists(Path.Combine(setup.Paths.AvatarsDirectory, "authors", "github_127.0.0.1_1_octo_hello.json")));
+        Assert.True(File.Exists(Path.Combine(setup.Paths.AvatarsDirectory, "1001.png")));
+
+        using (var hold = setup.Fake.HoldNext("avatar:1003"))
+        {
+            var run = await setup.Thread.RunAsync<Task>(() =>
+            {
+                hosting.ShowAvatarsFor([Scenarios.OctoEmail, Scenarios.AdaEmail]);
+                return hosting.AvatarRun;
+            });
+            await hold.Arrived.WaitAsync(Cancelled);
+
+            Assert.Null(await setup.Session.SignOutAsync(Cancelled));
+
+            Assert.True(run.IsCompleted);
+            Assert.False(Directory.Exists(setup.Paths.AvatarsDirectory));
+        }
+
+        await setup.Thread.IdleAsync();
+        await Task.Delay(200, Cancelled);
+        Assert.False(Directory.Exists(setup.Paths.AvatarsDirectory));
+        Assert.Same(AuthorAvatars.None, hosting.Avatars);
     }
 
     internal static AccountsFile Load(HostingSessionSetup setup) => new JsonAccountStore(setup.Paths.AccountsFile, new ListLog()).Load();
