@@ -9,11 +9,20 @@ namespace VisualCommit.AskPass;
 /// process, prints the answer and a line end on standard output and exits 0. It exits 1, printing
 /// nothing, when the prompt is refused or cancelled, when it runs in a deny scope, and when the
 /// app cannot be reached; git or ssh then fails as it would without an answer.
+/// <para>
+/// With <c>--vc-credential</c> first it is git's credential helper for a bound URL instead
+/// (<see cref="CredentialMode"/>, docs/phase-7a-design.md 4.5), which always exits 0.
+/// </para>
 /// </summary>
 internal static class Program
 {
     private static async Task<int> Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == AskPassProtocol.CredentialArgument)
+        {
+            return await CredentialMode.RunAsync(args.Length > 1 ? args[1] : null).ConfigureAwait(false);
+        }
+
         try
         {
             return await RunAsync(args).ConfigureAwait(false);

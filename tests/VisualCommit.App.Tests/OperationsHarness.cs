@@ -9,6 +9,7 @@ using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Undo;
 using VisualCommit.Git;
+using VisualCommit.Hosting;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -126,8 +127,10 @@ internal sealed class OperationsHarness : IDisposable
     /// <see cref="Dialogs"/> to answer; a <see cref="ScriptedPromptHandler"/> answers without any.
     /// Null gives no broker, as <see cref="OpenAsync(TempRepo)"/>. Added by WP7-remotes.
     /// <paramref name="undoHistories"/> are the app session's undo histories, new ones when null.
+    /// <paramref name="hosting"/> is the tabs' hosting session (docs/phase-7a-design.md 4.1), also
+    /// the broker's credential source; null: none, as before.
     /// </summary>
-    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null, UndoHistories? undoHistories = null)
+    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null, UndoHistories? undoHistories = null, IHostingSession? hosting = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
         var calls = new GitCallLog();
@@ -139,8 +142,8 @@ internal sealed class OperationsHarness : IDisposable
         var launcher = new FakeFileLauncher();
         var settings = new MainWindowViewModelTests.FakeSettings();
         var dates = new DateDisplay(TimeZoneInfo.Utc);
-        var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log);
-        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, session ?? new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls, undoHistories: undoHistories);
+        var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log, credentials: hosting);
+        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, session ?? new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls, undoHistories: undoHistories, hosting: hosting);
         var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
         var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher, calls) { _broker = broker as IDisposable };
         await repository.StartAsync();

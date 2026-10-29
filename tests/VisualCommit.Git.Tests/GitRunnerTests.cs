@@ -661,6 +661,44 @@ public class GitRunnerTests
         Assert.Equal(GitCallRecord.MaxOutputLength + GitCallRecord.TruncationMarker.Length, recorded.Length);
     }
 
+    [Theory]
+    [InlineData(
+        "url.https://oauth2:T1@a.example.insteadof\nhttps://a.example\0url.https://oauth2:T2@b.example.insteadof\nhttps://b.example\0",
+        "url.https://***@a.example.insteadof\nhttps://a.example\0url.https://***@b.example.insteadof\nhttps://b.example\0",
+        "url.https://a.example.insteadof\nhttps://a.example\0url.https://b.example.insteadof\nhttps://b.example\0")]
+    [InlineData(
+        "url.ssh://git@c.example/.insteadof\nssh://git@c.example\0url.https://oauth2:T1@d.example.insteadof\nhttps://d.example\0",
+        "url.ssh://***@c.example/.insteadof\nssh://***@c.example\0url.https://***@d.example.insteadof\nhttps://d.example\0",
+        "url.ssh://c.example/.insteadof\nssh://c.example\0url.https://d.example.insteadof\nhttps://d.example\0")]
+    public void Config_null_output_ends_each_authority_at_the_NUL_between_entries(string output, string hidden, string removed)
+    {
+        // docs/phase-7a-design.md 4.2: after a value without a trailing slash the search for the
+        // user information ran through the \0 into the next key and left its token in clear.
+        Assert.Equal(hidden, GitCommand.HideCredentials(output));
+        Assert.Equal(removed, GitCommand.RemoveCredentials(output));
+        Assert.True(GitCommand.EndsAuthority('\0'));
+        Assert.True(GitCommand.EndsAuthority('\u0001'));
+        Assert.False(GitCommand.EndsAuthority('@'));
+    }
+
+    [Fact]
+    public async Task A_record_cut_just_after_a_host_that_a_control_character_ends_keeps_the_host()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        const string Url = "https://example.com\u0001";
+        var filler = new string('x', GitCallRecord.MaxOutputLength - Url.Length - 3) + "\n";
+        var content = filler + Url + "tail\n" + string.Concat(Enumerable.Repeat("more output\n", 200));
+        await repo.CommitFileAsync("big.txt", content, "Add a big file");
+        var calls = new GitCallLog();
+        var runner = new GitRunner(GitPath, calls);
+
+        await runner.RunAsync(new GitCommand("show", "HEAD:big.txt") { WorkingDirectory = repo.Path, Environment = repo.Environment }, TestCancelled);
+
+        var recorded = Assert.Single(calls.Snapshot()).StandardOutput;
+        Assert.StartsWith(filler + Url, recorded, StringComparison.Ordinal);
+        Assert.Equal(GitCallRecord.MaxOutputLength + GitCallRecord.TruncationMarker.Length, recorded.Length);
+    }
+
     [Fact]
     public async Task Calls_can_run_at_the_same_time()
     {
