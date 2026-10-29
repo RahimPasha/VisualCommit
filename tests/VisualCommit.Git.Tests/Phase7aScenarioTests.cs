@@ -144,6 +144,15 @@ public class Phase7aScenarioTests
 
         using var repositories = await JsonAsync(client, "user/repos?sort=updated");
         Assert.Equal(["octo/hello", "octo/tool", "octo/notes", "octo/website"], repositories.RootElement.EnumerateArray().Select(repository => repository.GetProperty("full_name").GetString()));
+
+        // octo/tool alone is described (the report's open point 11), in words without "private".
+        Assert.Equal(
+            [null, "Small command-line tools.", null, null],
+            repositories.RootElement.EnumerateArray().Select(repository => repository.GetProperty("description").GetString()));
+        Assert.Equal("Small command-line tools.", Scenarios.ToolDescription);
+        Assert.DoesNotContain("private", Scenarios.ToolDescription, StringComparison.OrdinalIgnoreCase);
+        using var tool = await JsonAsync(client, "repos/octo/tool");
+        Assert.Equal("Small command-line tools.", tool.RootElement.GetProperty("description").GetString());
         Assert.Empty(served.GitHub.Errors);
     }
 
