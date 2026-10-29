@@ -274,12 +274,4 @@ public sealed partial class Phase7aChecksA
             Assert.False(snapshot.Shows(id), $"{id} shows.");
         }
     }
-
-    /// <summary>The visible buttons of a dialog's view, left to right, as their texts.</summary>
-    private static List<string> ButtonsOf(ShellDriver app, Visual view) =>
-        [.. view.GetVisualDescendants().OfType<Button>()
-            .Where(button => button.IsEffectivelyVisible && button.Bounds.Height > 0
-                && AutomationProperties.GetAutomationId(button) is "CancelButton" or "ConfirmButton" or "ErrorCopyButton" or "ErrorExtraButton")
-            .OrderBy(button => app.BoundsOf(button).X)
-            .Select(button => AutomationProperties.GetName(button) ?? button.Content as string ?? string.Empty)];
 }

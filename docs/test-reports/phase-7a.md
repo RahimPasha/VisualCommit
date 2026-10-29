@@ -632,6 +632,12 @@ clone reads no configuration, 9.3). Pictures that show the status bar's git box 
 A method split when the checks first run, a mark for the real-window pass changed after it was written,
 or an expected result changed for a reason the build or the gate finds, goes here with its reason.
 
+- **A8 step 6, the second sign-in's `GET api/v3/user`** (2026-10-29, WP-A's build, the lead's record):
+  the same token signs in again in one app session, so WP-G's client sends it conditionally with the
+  ETag it kept from the first answer (design 6.2, 16 item 10), and the fake answers `304`, not `200`.
+  The check expects a conditional request answered `304` at this step only; every other step that
+  expects `200` asserts exactly that.
+
 ## Found by the gate
 
 Faults the gate found, and the commit that fixed each.

@@ -1033,34 +1033,6 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
         Assert.DoesNotContain("danger", button.Classes);
     }
 
-    /// <summary>
-    /// The error dialog on top (7a's first error-dialog assertion, design 16.3; A9 step 5): its title,
-    /// summary and "In …" line; git's cleaned output holding <paramref name="keyLine"/> and ending with
-    /// <paramref name="lastLine"/>; the command; the buttons left to right. Part A's own until the
-    /// lead moves it to <c>Phase7aChecks.Support.cs</c> for parts B and N (it names nothing of part A).
-    /// </summary>
-    private static void AssertErrorDialog(
-        ShellDriver app,
-        ErrorDialogViewModel dialog,
-        string title,
-        string summary,
-        string repository,
-        string keyLine,
-        string lastLine,
-        string command,
-        string[] buttons)
-    {
-        var view = app.TopDialogView!;
-        Assert.Equal(title, ((TextBlock)app.FindByAutomationId(view, "ErrorTitle")).Text);
-        Assert.Equal(summary, ((TextBlock)app.FindByAutomationId(view, "ErrorSummary")).Text);
-        Assert.Equal("In " + repository, ((TextBlock)app.FindByAutomationId(view, "ErrorRepository")).Text);
-        var output = dialog.Output ?? string.Empty;
-        Assert.Contains(keyLine, output, StringComparison.Ordinal);
-        Assert.EndsWith(lastLine, output.TrimEnd(), StringComparison.Ordinal);
-        Assert.Equal(command, dialog.Command);
-        Assert.Equal(buttons, ButtonsOf(app, view));
-    }
-
     /// <summary>The scenario facts' one binding of hello: its URL and octo's account (D278).</summary>
     private static void AssertHelloBinding(RepositoryViewModel hello, int port)
     {

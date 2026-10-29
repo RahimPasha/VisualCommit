@@ -2,8 +2,8 @@
 // names: Shot and its picture and timing helpers, the menu, dialog, status, clipped-text and tooltip
 // assertions, the call assertions (a long mark, presence and order only), and the picture pattern
 // of design 0.3. Shared helpers live here only; a part's own go in its part files. Phase 6's error
-// dialog's assertion (AssertErrorDialogAsync, ExpectedErrorDialog) is not copied: the first part that
-// needs one adds a 7a version here, without phase 6's helpers for git 2.36's output.
+// dialog's assertion (AssertErrorDialogAsync, ExpectedErrorDialog) is not copied: 7a's own,
+// AssertErrorDialog, came with part A (A9) and has no helper for git 2.36's output.
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
@@ -400,6 +400,41 @@ public abstract partial class Phase7aChecks
 
     private static string FileNameOf(string text) =>
         string.Concat(text.Select(character => char.IsLetterOrDigit(character) || character is '.' or '_' or '-' ? character : '_'));
+
+    /// <summary>
+    /// The error dialog on top (7a's first error-dialog assertion, design 16.3; A9 step 5): its title,
+    /// summary and "In …" line; git's cleaned output holding <paramref name="keyLine"/> and ending with
+    /// <paramref name="lastLine"/>; the command; the buttons left to right (<see cref="ButtonsOf"/>).
+    /// </summary>
+    protected static void AssertErrorDialog(
+        ShellDriver app,
+        ErrorDialogViewModel dialog,
+        string title,
+        string summary,
+        string repository,
+        string keyLine,
+        string lastLine,
+        string command,
+        string[] buttons)
+    {
+        var view = app.TopDialogView!;
+        Assert.Equal(title, ((TextBlock)app.FindByAutomationId(view, "ErrorTitle")).Text);
+        Assert.Equal(summary, ((TextBlock)app.FindByAutomationId(view, "ErrorSummary")).Text);
+        Assert.Equal("In " + repository, ((TextBlock)app.FindByAutomationId(view, "ErrorRepository")).Text);
+        var output = dialog.Output ?? string.Empty;
+        Assert.Contains(keyLine, output, StringComparison.Ordinal);
+        Assert.EndsWith(lastLine, output.TrimEnd(), StringComparison.Ordinal);
+        Assert.Equal(command, dialog.Command);
+        Assert.Equal(buttons, ButtonsOf(app, view));
+    }
+
+    /// <summary>The visible buttons of a dialog's view, left to right, as their texts.</summary>
+    protected static List<string> ButtonsOf(ShellDriver app, Visual view) =>
+        [.. view.GetVisualDescendants().OfType<Button>()
+            .Where(button => button.IsEffectivelyVisible && button.Bounds.Height > 0
+                && AutomationProperties.GetAutomationId(button) is "CancelButton" or "ConfirmButton" or "ErrorCopyButton" or "ErrorExtraButton")
+            .OrderBy(button => app.BoundsOf(button).X)
+            .Select(button => AutomationProperties.GetName(button) ?? button.Content as string ?? string.Empty)];
 
     /// <summary>
     /// A picture's name (design 0.3): the check (its part's letter, as the report numbers phase 7a's

@@ -4582,3 +4582,29 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
      {message} (request {id})".
    - For WP-V: `RepositoryHosting.ShowAvatarsFor` works once the hosting has a candidate, after an
      `Update` with a GitHub remote: call it after the refs are applied.
+2. **WP-A, merged at `42b6be2`** (8.9's five commits and the review's fixes `476a96d`, `381a066`,
+   `ecfa9df`; six minor findings, no blocker or major). The builder's readings, which the lead keeps:
+   - 8.3: `SettingsAccounts` sits in a `Panel` that carries `IsVisible`, as General does, since an
+     `IsVisible` binding on the `StackPanel` whose `DataContext` is `Accounts` would bind against it.
+     The switch resets only when `AccountChanged` brings another account (another key, or none); a
+     change of the same account, a refusal included, keeps the user's toggle. Two states the session
+     never makes have a text: needs sign-in with no note kind shows the refused text, signed in for
+     the session with none the no-keychain text. After the entry or a sign-out returns, the section
+     reads the session's `Account` at once (it is set before the task ends; `AccountChanged` comes
+     later through the post). A sign-out that throws is logged and read as having no reason.
+   - 8.4: the dialog exposes `Opened` (the keychain question at its opening) for the driver; after a
+     refusal the box gets the focus with its text selected, after a failed save "Close" does (Enter
+     closes). Any exception from `SignInAsync` but the dialog's own cancellation, and a result with
+     neither status nor failure, show "Could not reach GitHub." (`AccountTexts.SignInUnreachable`, word
+     for word `GitHubClient.NetworkText`, which is internal; D284) and go to the log only.
+   - The link is a `Button` with its own theme, `SignInLinkButton` (`ParentLinkButton`'s look without
+     its right margin), underlined on pointer-over and focus.
+   - Outside 8.1's list, with the lead's leave: `FakeTokenStore.FailNextDelete` and its test (the
+     report's ruling 1); `AuthRemoteServer.HostAccess` keeps the user name of a readable Basic header
+     whose token it does not know (`(null, userName, false, null)`), so a refused request records
+     `GivenUserName` (2.2, 4.4; A9 step 5 asserts `x-access-token`), with its `AuthRemoteServerTests`
+     case. The lead moved `AssertErrorDialog` and `ButtonsOf` to `Phase7aChecks.Support.cs` at the
+     merge, for parts B and N.
+   - The report's A8 step 6 expects a conditional `GET api/v3/user` answered `304` (the report's
+     "Changed in this report after its first commit"); a few looks are asserted through their
+     resources (`VcPrimaryButton`, not `danger`; the light theme's colours), not by pixel.
