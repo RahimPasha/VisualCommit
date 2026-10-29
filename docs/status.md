@@ -364,9 +364,10 @@ whole default run on `e40ddc8` failed only phase 1's 100k-commit layout timing u
 passes alone, and the lagged list passed; its earlier pictures differ from wave 1's run only in the
 Accounts slot and where they vary by nature, and CI's run on `e40ddc8` is green on all five jobs
 (Notes). Part B's ten pictures are inspected and pass (design 17 item 5); steps 10 and 11 are
-ticked. Next: WP-P is being built in `D:/Projects/Personal/vc-wt/p7a-pull-requests` (`wip/p7a-pull-requests`), and part
-G's checks are being written beside it for WP-V, which follows WP-P (design 10.8); part N's follow
-for WP-N. At WP-P's merge, 10.8's runs, part A's check 9 again and ruling 31. Each of parts B, P, G and N
+ticked. Part G's checks are written, reviewed and ruled on (rulings 35 to 44; design 17 item 6).
+Next: WP-P is being built in `D:/Projects/Personal/vc-wt/p7a-pull-requests`
+(`wip/p7a-pull-requests`), and part N's checks are being written beside it for WP-N, which follows
+WP-V (design 12.1). At WP-P's merge, 10.8's runs, part A's check 9 again and ruling 31; then WP-V. Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
