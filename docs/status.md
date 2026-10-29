@@ -73,7 +73,7 @@ Start:
   walk-through 49 min 50 s, phase 3's 50 min 9 s, `VisualCommit.Git.Tests` 50 min 11 s and
   `VisualCommit.App.Tests` 58 min 12 s. The first attempt, from 12:01, was disturbed by the
   session's own research (Notes). Week: share not read; the owner: enough left before the reset.)
-- [ ] 3. Design in `docs/phase-7a-design.md` (D243: about 150 to 200 KB, its decisions only in
+- [x] 3. Design in `docs/phase-7a-design.md` (D243: about 150 to 200 KB, its decisions only in
   `decisions.md`): GitHub's API facts as the fake must serve them, the keychains of Windows, macOS
   and Linux, git 2.56's credential facts (with 2.43 and 2.55 from CI where they differ, D248), the
   texts, the layouts, the tests and harness (the fake, the keychain's seam, the opt-in live
@@ -81,7 +81,10 @@ Start:
   default run (about 55 minutes) and to the real-window pass (28), and the work packages, each
   section a builder's brief of at most about 25 KB (D242). Its review: 3 or 4 lenses, git safety
   and tests/gate among them, a verifier only for each blocker and major; questions of taste to
-  the owner; its decisions recorded.
+  the owner; its decisions recorded. (Done 2026-10-29: drafted by 9 agents, reviewed by four
+  lenses with 20 agents, 36 findings fixed by 9; its decisions D265 to D338; the owner answered
+  eight questions, the lead ruled on the rest (Notes). About 345 KB, over D243's mark, accepted by
+  the lead (Notes). Week: share not read; the owner: enough left before the reset.)
 - [ ] 4. First package (plan.md's "From phase 6" and D254): `ShellDriverTests`' wheel test waits
   for the hit test; the real-window csproj's comment gives the pass of phases 0 to 6 as 27 min
   39 s; W1's failure under load looked at and fixed; S8's git-call counts as upper bounds taken
@@ -271,10 +274,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3: review the design's draft, `docs/phase-7a-design.md` (Notes): 3 or 4 lenses, git safety
-and tests/gate among them, a verifier only for each blocker and major (D243); apply the findings,
-ask the owner the questions of taste and the open points its section 15 leaves to the owner, and
-record the answers. The
+Step 4 begins with the lead's own commits, in the main checkout, as the design's 0.4 orders them:
+L1 (the real-window csproj's comment, ruling 30, and the wheel test's wait through
+`ShellDriver.WaitForControlAtAsync`, ruling 31; 0.4 is its brief), then WP0, section 1's contracts
+and stubs (its list in 1.10), with no change of behaviour or pictures; build and run the test
+classes they touch. Then wave 1 in worktrees (`wip/p7a-<name>`, at most three at once): WP-F, WP-K
+and WP-C, each builder given its section of the design as its brief; WP1 after WP-C's merge, WP-G
+after WP-F's. Step 4 is ticked at WP1's merge. The
 first steps of 7a, and the order to take them in, are in the [phase 6
 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -313,7 +319,20 @@ every commit.
   with the code), 46 findings merged into 36 (F1 to F36: 1 blocker, 8 majors, 27 minors, none
   refuted), each blocker and major verified (20 Opus agents, 3.20M tokens). The findings lie in
   `D:/Projects/Personal/phase7a-work/review/findings.md`, outside the repository; the design and
-  decisions carry their fixes. Seven fixers apply them in turn, then a checker reads the diff.
+  decisions carry their fixes. Seven fixers applied them in turn (six batches of findings, one of
+  the lead's rulings and the owner's answers), a checker read the diff and found 13 gaps, and one
+  more fixer closed them (9 Opus agents, 2.10M tokens); the new decisions are D329 to D338.
+- **The lead's rulings on the design, 2026-10-29**, besides the owner's answers: accounts.json and
+  7a's other JSON files in camelCase (D336); one `HostingTexts.Describe` for GitHub's failures
+  (D338); CI's Windows job compiles the live project and never runs it (D337, amends ruling 26);
+  Windows' real store tried on CI and taken off the job's list if refused (D333); ruling 3
+  withdrawn (D277, the owner's answer to F1); D330 accepted (git's `erase` marks the account only
+  after `GET /user` answers 401), with a text of its own for a refusal from git; D334 and D335
+  confirmed. **The design's size is accepted at about 345 KB**, against D243's 150 to 200: it has
+  thirteen work packages, each brief self-contained, and the review's fixes added 40 KB; a builder
+  reads sections 0 and 1 (about 59 KB) and its own (13 to 28 KB), about 85 KB, far below what
+  phase 6's builders read before their first edit (306k to 557k tokens). Section 1 (about 33 KB)
+  and section 2 (about 28) are over D242's 25 KB per brief.
 - **The first baseline run was disturbed by the session's own research** (2026-10-28, `5fe9148`,
   12:01 to 13:10, 1 h 6 min 58 s): seven research agents ran git experiments and local servers
   beside it for its first 50 minutes. 4,915 of the 4,917 tests that ran passed; the watchdog
