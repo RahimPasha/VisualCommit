@@ -307,7 +307,7 @@ internal sealed partial class GitHubClient : IDisposable
                         return new Exchange(status, kept.Body, headers, current, response.ReasonPhrase, null);
                     }
 
-                    if (method == HttpMethod.Get && status is >= 200 and < 300 && headers.GetValueOrDefault("ETag") is { Length: > 0 } etag)
+                    if (method == HttpMethod.Get && status == 200 && headers.GetValueOrDefault("ETag") is { Length: > 0 } etag)
                     {
                         Keep(fingerprint, current, new KeptAnswer(etag, body));
                     }
