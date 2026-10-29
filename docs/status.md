@@ -308,6 +308,12 @@ every commit.
   tokens, 918 tool calls; none built or ran tests. It is about half as large again as D243's 150 to
   200 KB: thirteen work packages, each brief self-contained (sections 0 and 1 together 50 KB, every
   brief 13 to 26 KB), so a builder still reads about 70 KB. Its section 15 lists the open points.
+- **The design's review** (2026-10-28 to 29, at `6fc5b2b`): four lenses (git safety and
+  credentials; the token's security and privacy; tests, gate, harness and CI; conformance and fit
+  with the code), 46 findings merged into 36 (F1 to F36: 1 blocker, 8 majors, 27 minors, none
+  refuted), each blocker and major verified (20 Opus agents, 3.20M tokens). The findings lie in
+  `D:/Projects/Personal/phase7a-work/review/findings.md`, outside the repository; the design and
+  decisions carry their fixes. Seven fixers apply them in turn, then a checker reads the diff.
 - **The first baseline run was disturbed by the session's own research** (2026-10-28, `5fe9148`,
   12:01 to 13:10, 1 h 6 min 58 s): seven research agents ran git experiments and local servers
   beside it for its first 50 minutes. 4,915 of the 4,917 tests that ran passed; the watchdog
@@ -469,7 +475,13 @@ every commit.
   decisions when the review's findings are applied: the real-window pass may open the default
   browser once, on the fake's page (D321); the status bar's button after a create reads "Open in
   browser" (D317); no palette command signs in to GitHub in 7a; the sign-out confirmation uses the
-  primary button (D296).
+  primary button (D296). On the review's findings (`phase7a-work/review/findings.md`): F1, on git
+  older than 2.31 the account is not used for git at all (ruling 3's fallback would have let git
+  store the token in the user's own helpers); F2, Create pushes a branch under its own name and
+  leaves an upstream of another name as it is; F15, avatar lookups send GitHub only the addresses of
+  commits reachable from the GitHub remote's branches, and sign-out deletes the avatars folder; F21,
+  a commit after the counted round that changes only the live project re-runs only the live command
+  (extends D246), and the live command also runs once before the counted round.
 - **For phase 7a's live command (D250), before step 16**: a fine-grained token that the owner
   creates for one sandbox repository on the owner's account, with the rights the design names,
   set in the environment variable the design names. It is never written to the repository.
