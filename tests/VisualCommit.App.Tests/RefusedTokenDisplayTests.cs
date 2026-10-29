@@ -1,4 +1,5 @@
 using System.Net;
+using Avalonia.Headless.XUnit;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Operations;
@@ -15,7 +16,8 @@ namespace VisualCommit.App.Tests;
 /// The error dialog of an operation whose credentials GitHub refused through the app's helper
 /// (docs/phase-7a-design.md 4.7, ruling 4, D276, D330): <see cref="OperationTexts.GitCredentialsRefused"/>
 /// word for word with the login's own case, never <see cref="OperationTexts.TokenRefused"/>, and
-/// "Open settings…" on Accounts; no credentials dialog.
+/// "Open settings…" on Accounts; no credentials dialog; a bulk row's kept dialog on a row without
+/// a tab the same.
 /// </summary>
 public class RefusedTokenDisplayTests
 {
@@ -78,5 +80,37 @@ public class RefusedTokenDisplayTests
 
         Assert.Equal(OperationTexts.GitCredentialsRefused("octocat"), Assert.Single(app.Dialogs.Errors).Summary);
         app.AssertScriptFollowed();
+    }
+
+    [AvaloniaFact]
+    public async Task A_bulk_rows_kept_dialog_on_a_row_without_a_tab_says_the_same()
+    {
+        // Fetch all on rows without a tab (D332), with a token the server no longer takes: each
+        // row's dialog is kept for later (D195) and is the same refusal, with "Open settings…".
+        await using var setup = await CredentialDashboard.StartAsync(bindsGit: true, token: "github_pat_FAKE-octocat-0");
+        var opened = new List<SettingsSection>();
+        setup.Services.OpenSettings = section =>
+        {
+            opened.Add(section);
+            return Task.CompletedTask;
+        };
+        var dashboard = setup.Dashboard;
+        dashboard.OnBecameActive();
+
+        await dashboard.Bulk.FetchAllAsync().WaitAsync(TimeSpan.FromSeconds(90));
+
+        Assert.Equal(2, dashboard.Bulk.Current!.Failed);
+        foreach (var row in dashboard.Rows)
+        {
+            Assert.True(row.Repository is { IsSummary: true });
+            var display = row.KeptDialog?.Display;
+            Assert.Equal(("Fetch failed", OperationTexts.GitCredentialsRefused("octocat"), OperationTexts.OpenSettingsButton), (display?.Title, display?.Summary, display?.Extra?.Label));
+            await display!.Extra!.Run();
+        }
+
+        Assert.Equal([SettingsSection.Accounts, SettingsSection.Accounts], opened);
+        Assert.Equal([setup.Stub.Key, setup.Stub.Key], setup.Stub.Credentials.Refusals);
+        Assert.Empty(setup.Handler.Prompts);
+        Assert.Null(setup.Services.DialogHost.Current);
     }
 }
