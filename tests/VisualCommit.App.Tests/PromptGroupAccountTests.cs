@@ -48,7 +48,9 @@ public class PromptGroupAccountTests
         group.ForgetAnswers();
 
         Assert.Equal(PromptAnswer.Of("a2"), await dialogs.AnswerAsync(Username(group, "op-3", Octocat), token));
-        var password = new GitPrompt(GitPromptKind.Password, "Password for 'https://a2@github.com': ", "op-3", "Fetch", "repo", Group: group, Account: Octocat);
+
+        // a2 is not octocat: the broker gives git's password prompt for a2 no account.
+        var password = Password(group, "op-3", "a2", null);
         Assert.Equal(PromptAnswer.Of("pw2"), await dialogs.AnswerAsync(password, token));
         Assert.Equal(2, presenter.Shown);
 
@@ -57,11 +59,41 @@ public class PromptGroupAccountTests
         Assert.Equal(3, presenter.Shown);
     }
 
+    [Theory]
+    [InlineData("octocat", true)]
+    [InlineData("OctoCat", true)]
+    [InlineData(AskPassProtocol.CredentialUserName, true)]
+    [InlineData("alice", false)]
+    public async Task The_password_typed_with_a_user_name_is_kept_under_the_account_its_prompt_will_carry(string user, bool accounts)
+    {
+        using var group = new PromptGroup();
+        var presenter = new CountingPresenter(user: user);
+        var dialogs = new PromptDialogs(presenter);
+        var token = TestContext.Current.CancellationToken;
+
+        Assert.Equal(PromptAnswer.Of(user), await dialogs.AnswerAsync(Username(group, "op-1", Octocat), token));
+
+        // What the broker sends next (AskPassBroker.IsAccountUser): the account for its own user, none for another.
+        var carried = accounts ? Octocat : null;
+        Assert.Equal(PromptAnswer.Of("pw1"), await dialogs.AnswerAsync(Password(group, "op-1", user, carried), token));
+        Assert.Equal(1, presenter.Shown);
+
+        // The same text under the other key is another answer.
+        Assert.Equal(PromptAnswer.Of("pw2"), await dialogs.AnswerAsync(Password(group, "op-2", user, accounts ? null : Octocat), token));
+        Assert.Equal(2, presenter.Shown);
+    }
+
+    private static GitPrompt Password(PromptGroup group, string scope, string user, AccountKey? account) =>
+        new(GitPromptKind.Password, $"Password for 'https://{user}@github.com': ", scope, "Fetch", "repo", Group: group, Account: account);
+
     private static GitPrompt Username(PromptGroup group, string scope, AccountKey? account) =>
         new(GitPromptKind.Username, "Username for 'https://github.com': ", scope, "Fetch", "repo", Url: "https://github.com", Group: group, Account: account);
 
-    /// <summary>Answers the n-th dialog with <c>a&lt;n&gt;</c> and the password <c>pw&lt;n&gt;</c>, the first with Cancel when asked to.</summary>
-    private sealed class CountingPresenter(bool cancelFirst = false) : IPromptDialogPresenter
+    /// <summary>
+    /// Answers the n-th dialog with <c>a&lt;n&gt;</c> (or <paramref name="user"/>) and the password
+    /// <c>pw&lt;n&gt;</c>, the first with Cancel when asked to.
+    /// </summary>
+    private sealed class CountingPresenter(bool cancelFirst = false, string? user = null) : IPromptDialogPresenter
     {
         private int _shown;
 
@@ -72,7 +104,7 @@ public class PromptGroupAccountTests
             var n = Interlocked.Increment(ref _shown);
             return Task.FromResult(cancelFirst && n == 1
                 ? new PromptDialogAnswer(null, null, Cancelled: true)
-                : new PromptDialogAnswer(prompt.Kind == GitPromptKind.Password ? $"pw{n}" : $"a{n}", $"pw{n}"));
+                : new PromptDialogAnswer(prompt.Kind == GitPromptKind.Password ? $"pw{n}" : user ?? $"a{n}", $"pw{n}"));
         }
     }
 }

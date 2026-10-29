@@ -85,8 +85,26 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         IGitCredentialSource? credentials = null,
         IReadOnlyDictionary<string, string?>? sessionEnvironment = null,
         Func<GitVersion?>? gitVersion = null)
+        : this(handler, log, helperPath, credentials, sessionEnvironment, gitVersion, Environment.GetEnvironmentVariable)
+    {
+    }
+
+    /// <summary>
+    /// Starts listening, with <paramref name="processEnvironment"/> reading the process's variables:
+    /// the tests' stand-in for the process's own <c>GIT_CONFIG_COUNT</c>, which set in the test
+    /// process would reach every git call beside them.
+    /// </summary>
+    internal AskPassBroker(
+        IGitPromptHandler handler,
+        IAppLog? log,
+        string? helperPath,
+        IGitCredentialSource? credentials,
+        IReadOnlyDictionary<string, string?>? sessionEnvironment,
+        Func<GitVersion?>? gitVersion,
+        Func<string, string?> processEnvironment)
     {
         ArgumentNullException.ThrowIfNull(handler);
+        ArgumentNullException.ThrowIfNull(processEnvironment);
         _handler = handler;
         _log = log ?? NullAppLog.Instance;
         _credentials = credentials ?? NullGitCredentialSource.Instance;
@@ -96,7 +114,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         // What git already gets: the session's value when the session names the variable (null
         // removes it), else the process's. The session's environment is applied after the process's.
         string? Inherited(string name) =>
-            sessionEnvironment is not null && sessionEnvironment.TryGetValue(name, out var value) ? value : Environment.GetEnvironmentVariable(name);
+            sessionEnvironment is not null && sessionEnvironment.TryGetValue(name, out var value) ? value : processEnvironment(name);
         var count = Inherited(ConfigCountVariable);
         if (string.IsNullOrEmpty(count))
         {
@@ -445,6 +463,19 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             ? (uri.Scheme + "://" + (uri.IsDefaultPort ? uri.Host : uri.Host + ":" + uri.Port.ToString(CultureInfo.InvariantCulture))).ToLowerInvariant()
             : null;
 
+    /// <summary>
+    /// Whether a user name in git's credential request or prompt is <paramref name="account"/>'s:
+    /// none, the account's login in any case, or <c>x-access-token</c> (4.6). A prompt that names
+    /// another user carries no account (<see cref="GitPrompt.Account"/>).
+    /// </summary>
+    public static bool IsAccountUser(string? user, AccountKey account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        return string.IsNullOrEmpty(user)
+            || string.Equals(user, account.Login, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(user, AskPassProtocol.CredentialUserName, StringComparison.Ordinal);
+    }
+
     private void Remove(Scope scope) => _scopes.TryRemove(new KeyValuePair<string, Scope>(scope.Id, scope));
 
     private sealed class Scope : PromptScope
@@ -656,11 +687,6 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
 
             return IsDisposed ? null : answer.Text;
         }
-
-        private static bool IsAccountUser(string? user, AccountKey account) =>
-            string.IsNullOrEmpty(user)
-            || string.Equals(user, account.Login, StringComparison.OrdinalIgnoreCase)
-            || string.Equals(user, AskPassProtocol.CredentialUserName, StringComparison.Ordinal);
 
         /// <summary>The account of the binding a user name or password prompt names, or null.</summary>
         private AccountKey? AccountOf(GitPromptClassification classification)

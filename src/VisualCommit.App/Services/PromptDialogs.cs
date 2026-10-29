@@ -1,5 +1,6 @@
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Git.Prompts;
@@ -294,13 +295,18 @@ public sealed class PromptDialogs : IGitPromptHandler
             state.Kept[KeyOf(prompt, prompt.Text)] = new Kept(answer.Text!, until, Version: version);
             if (prompt.Kind == GitPromptKind.Username && prompt.Url is { } url && answer.Password is { } password)
             {
-                state.Kept[KeyOf(prompt, GitPromptClassifier.PasswordPromptAfter(url, answer.Text!))] = new Kept(password, until, Version: version);
+                // Under the account git's password prompt will carry, which the broker gives only
+                // when the user typed is the account's (AskPassBroker.IsAccountUser).
+                var account = prompt.Account is { } named && AskPassBroker.IsAccountUser(answer.Text, named) ? named : null;
+                state.Kept[KeyOf(account, GitPromptClassifier.PasswordPromptAfter(url, answer.Text!))] = new Kept(password, until, Version: version);
             }
         }
     }
 
     /// <summary>A group's key: the prompt's account (<see cref="GitPrompt.Account"/>, empty for none) and a prompt text.</summary>
-    private static (string Account, string Text) KeyOf(GitPrompt prompt, string text) => (prompt.Account?.Id ?? string.Empty, text);
+    private static (string Account, string Text) KeyOf(GitPrompt prompt, string text) => KeyOf(prompt.Account, text);
+
+    private static (string Account, string Text) KeyOf(AccountKey? account, string text) => (account?.Id ?? string.Empty, text);
 
     private string? Recall(GitPrompt prompt)
     {

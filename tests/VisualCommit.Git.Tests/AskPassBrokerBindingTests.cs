@@ -17,8 +17,9 @@ namespace VisualCommit.Git.Tests;
 /// </summary>
 /// <remarks>
 /// The process's own <c>GIT_CONFIG_COUNT</c> is not set here: the test process runs git beside
-/// these tests, and the variable would reach every call. A session environment that names the
-/// variable stands for it, as the broker reads the session's before the process's.
+/// these tests, and the variable would reach every call. The broker's internal constructor reads
+/// the process's variables through a function, which stands for them, and a session environment
+/// that names the variable is read before them.
 /// </remarks>
 public class AskPassBrokerBindingTests
 {
@@ -63,6 +64,45 @@ public class AskPassBrokerBindingTests
         Assert.Equal(string.Empty, scope.Environment[$"GIT_CONFIG_VALUE_{first}"]);
         Assert.StartsWith("!'", scope.Environment[$"GIT_CONFIG_VALUE_{first + 1}"], StringComparison.Ordinal);
         Assert.False(scope.Environment.ContainsKey($"GIT_CONFIG_KEY_{first + 2}"));
+    }
+
+    [Theory]
+    [InlineData(null, "2", 2)]
+    [InlineData(null, "", 0)]
+    [InlineData("1", "2", 1)]
+    [InlineData("", "2", 0)]
+    [InlineData("unset", "2", 0)]
+    public void The_pairs_come_after_the_processs_count_unless_the_session_names_the_variable(string? session, string? process, int first)
+    {
+        // "unset": the session names the variable with null, which removes it for git.
+        var sessionEnvironment = session is null ? null : new Dictionary<string, string?> { ["GIT_CONFIG_COUNT"] = session == "unset" ? null : session };
+        using var broker = Broker(session: sessionEnvironment, process: name => name == "GIT_CONFIG_COUNT" ? process : null);
+        using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo]);
+
+        Assert.Equal((first + 2).ToString(System.Globalization.CultureInfo.InvariantCulture), scope.Environment["GIT_CONFIG_COUNT"]);
+        Assert.Equal("credential.https://github.com/o/r.git.helper", scope.Environment[$"GIT_CONFIG_KEY_{first}"]);
+        Assert.False(scope.Environment.ContainsKey($"GIT_CONFIG_KEY_{first + 2}"));
+    }
+
+    [Fact]
+    public void An_invalid_count_of_the_process_gives_no_pair_and_one_warning()
+    {
+        var log = new ListLog();
+        using var broker = Broker(process: name => name == "GIT_CONFIG_COUNT" ? "abc" : null, log: log);
+
+        AssertToday(broker, PromptMode.Ask);
+        Assert.Single(log.Entries, entry => entry == (LogLevel.Warning, "GIT_CONFIG_COUNT is not a number git accepts; GitHub's token is not given to git."));
+    }
+
+    [Fact]
+    public void The_processs_command_line_configuration_is_left_out_of_a_bound_scope()
+    {
+        var log = new ListLog();
+        using var broker = Broker(process: name => name == "GIT_CONFIG_PARAMETERS" ? "'core.quotepath'='false'" : null, log: log);
+        using var bound = broker.Begin("Fetch from origin", "repo", PromptMode.Ask, "op-1", bindings: [Repo]);
+
+        Assert.Null(bound.Environment["GIT_CONFIG_PARAMETERS"]);
+        Assert.Single(log.Entries, entry => entry == (LogLevel.Debug, "repo: Fetch from origin: the inherited command-line git configuration is left out of calls bound to the account."));
     }
 
     [Theory]
@@ -236,12 +276,14 @@ public class AskPassBrokerBindingTests
             log.Entries.Count(entry => entry == (LogLevel.Debug, "repo: Fetch from origin: the inherited command-line git configuration is left out of calls bound to the account.")));
     }
 
+    /// <summary>A broker whose process environment is <paramref name="process"/>, none by default.</summary>
     private static AskPassBroker Broker(
         RecordingCredentialSource? source = null,
         IReadOnlyDictionary<string, string?>? session = null,
         Func<GitVersion?>? version = null,
-        IAppLog? log = null) =>
-        new(new RecordingPromptHandler(), log, credentials: source ?? new RecordingCredentialSource("t"), sessionEnvironment: session, gitVersion: version);
+        IAppLog? log = null,
+        Func<string, string?>? process = null) =>
+        new(new RecordingPromptHandler(), log, null, source ?? new RecordingCredentialSource("t"), session, version, process ?? (_ => null));
 
     /// <summary>A scope that is offered bindings but may not use them has exactly the variables of one offered none.</summary>
     private static void AssertToday(AskPassBroker broker, PromptMode mode)

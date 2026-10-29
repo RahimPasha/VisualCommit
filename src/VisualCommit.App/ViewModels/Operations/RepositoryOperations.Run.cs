@@ -355,7 +355,7 @@ public sealed partial class RepositoryOperations
             {
                 if (ex is GitException)
                 {
-                    Log.Warning($"{Repository.Name}: {text.Title}: the URL rules could not be read, so the account is not used for git: {ex.Message}");
+                    Log.Warning($"{Repository.Name}: {text.Title}: the URL rules could not be read, so the account is not used for git: {GitCommand.HideCredentials(ex.Message)}");
                 }
 
                 bindings = [];

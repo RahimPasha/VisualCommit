@@ -36,7 +36,7 @@ public class AccountCredentialTests
         Assert.Empty(setup.Handler.Prompts);
         Assert.Equal([setup.Account], setup.Source.Gets);
         Assert.Contains(setup.Server.Requests, request => request.Status == 200 && request.UserName == "x-access-token");
-        setup.AssertUserStoreHasNoToken();
+        Assert.False(File.Exists(setup.UserStore));
     }
 
     [Fact]
@@ -51,7 +51,7 @@ public class AccountCredentialTests
         Assert.True(push.Succeeded, push.StandardError);
         Assert.Empty(setup.Handler.Prompts);
         Assert.Contains(setup.Server.Requests, request => request.Status == 200 && request.UserName == "x-access-token" && request.Path == "/remote.git/git-receive-pack");
-        setup.AssertUserStoreHasNoToken();
+        Assert.False(File.Exists(setup.UserStore));
     }
 
     [Fact]
@@ -71,7 +71,7 @@ public class AccountCredentialTests
         Assert.DoesNotContain("credential", cloned, StringComparison.OrdinalIgnoreCase);
         Assert.Contains($"remote.origin.url={setup.Server.Url}", cloned, StringComparison.Ordinal);
         Assert.DoesNotContain(Token, File.ReadAllText(Path.Combine(target, ".git", "config")), StringComparison.Ordinal);
-        setup.AssertUserStoreHasNoToken();
+        Assert.False(File.Exists(setup.UserStore));
     }
 
     [Fact]
@@ -100,7 +100,7 @@ public class AccountCredentialTests
         Assert.Single(setup.Source.Gets);
         Assert.Empty(setup.Handler.Prompts);
         Assert.Single(setup.Source.Refusals);
-        setup.AssertUserStoreHasNoToken();
+        Assert.False(File.Exists(setup.UserStore));
     }
 
     [Fact]
@@ -140,10 +140,14 @@ public class AccountCredentialTests
         var failed = await GitAsync(setup.Repo, unbound.Environment, ["fetch", "origin"]);
         stopwatch.Stop();
 
+        // At once: the deny scope's helper refuses git's prompt, which git does not ask again and
+        // no dialog sees; 30 s, as AuthenticatedRemoteTests allows, under the default run's load (D237).
         Assert.False(failed.Succeeded);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(10), $"The fetch took {stopwatch.Elapsed}.");
+        Assert.Contains("could not read Username", failed.StandardError, StringComparison.Ordinal);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(30), $"The fetch took {stopwatch.Elapsed}.");
         Assert.Empty(setup.Handler.Prompts);
-        setup.AssertUserStoreHasNoToken();
+        Assert.Single(setup.Source.Gets);
+        Assert.False(File.Exists(setup.UserStore));
     }
 
     [Fact]
@@ -273,7 +277,7 @@ public class AccountCredentialTests
         Assert.Equal(GitFailureKind.AuthenticationFailed, GitFailureClassifier.Classify(fetch.StandardError, fetch.StandardOutput, fetch.ExitCode));
         Assert.Equal([setup.Account], setup.Source.Refusals);
         Assert.Empty(setup.Handler.Prompts);
-        setup.AssertUserStoreHasNoToken();
+        Assert.False(File.Exists(setup.UserStore));
     }
 
     /// <summary><paramref name="first"/>'s variables, then <paramref name="then"/>'s on top: the session's environment, then the scope's.</summary>
@@ -328,6 +332,7 @@ public class AccountCredentialTests
             return setup;
         }
 
+        /// <summary>The user's helper's file, which git may write alice's line to, holds neither the token nor its user name.</summary>
         public void AssertUserStoreHasNoToken()
         {
             if (File.Exists(UserStore))
