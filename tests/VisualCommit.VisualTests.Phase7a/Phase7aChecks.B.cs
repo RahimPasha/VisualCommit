@@ -179,8 +179,13 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
             app.Settle();
             Assert.False(app.IsPaletteOpen);
             var signIn = app.SignInDialogView();
-            Assert.Equal(HostingAddAccountTitle, ((TextBlock)app.FindByAutomationId(signIn, "DialogTitle")).Text);
-            Assert.Equal(string.Empty, ((TextBox)app.FindByAutomationId(signIn, "SignInToken")).Text ?? string.Empty);
+            Assert.Equal(PartA.DialogTitle, ((TextBlock)app.FindByAutomationId(signIn, "DialogTitle")).Text);
+            Assert.Equal(PartA.Help, ((TextBlock)app.FindByAutomationId(signIn, "SignInHelp")).Text);
+            Assert.Equal(PartA.TokenLink, app.FindByAutomationId(signIn, "SignInTokenLink").GetVisualDescendants().OfType<TextBlock>().Single().Text);
+            Assert.Contains(signIn.GetVisualDescendants().OfType<TextBlock>(), block => block.Text == PartA.TokenLabel && block.IsEffectivelyVisible);
+            var tokenBox = (TextBox)app.FindByAutomationId(signIn, "SignInToken");
+            Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(tokenBox));
+            Assert.Equal(string.Empty, tokenBox.Text ?? string.Empty);
             Assert.False(app.FindByAutomationId(signIn, "SignInNoKeychain").IsEffectivelyVisible);
             Assert.True(app.FindByAutomationId(signIn, "CancelButton").IsEffectivelyEnabled);
             Assert.False(app.FindByAutomationId(signIn, "ConfirmButton").IsEffectivelyEnabled);
@@ -558,9 +563,6 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
 
         AssertCleanEnd(app, data, served);
     }
-
-    /// <summary>"Add GitHub account" (design 1.7's <c>HostingTexts.AddAccountTitle</c>, part A's texts).</summary>
-    private const string HostingAddAccountTitle = "Add GitHub account";
 
     private static bool SameFolder(string? a, string? b) =>
         a is not null && b is not null
