@@ -147,6 +147,13 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's first run with code, for L1 and WP0 (`f1dc80e` to `8bfdd6b`), is
+[40848974456](https://github.com/RahimPasha/VisualCommit/actions/runs/40848974456), for `37fb9e0`:
+all five jobs succeeded: `windows-latest` (24 min 48 s; its Test step 22 min 4 s of 55, and "Build
+the real-window pass" green), `macos-latest` (25 min 11 s; Test step 23 min 10 s), `ubuntu-latest`
+(5 min 54 s; Test step 4 min 24 s) and the two "bare ubuntu container" jobs (6 min 23 s and 5 min
+39 s; Test steps 4 min 31 s and 4 min 13 s).
+
 The run for the review's changes on `master` (the build trim `32b238c`, the heavy-run lock
 `d56591b` and the docs `abf6ca5`) is
 [40679200453](https://github.com/RahimPasha/VisualCommit/actions/runs/40679200453), for `abf6ca5`:
@@ -280,12 +287,17 @@ L1 at `f1dc80e` (the real-window csproj's comment, ruling 30, and the wheel test
 in 1.10), at `d3cd314`, `3d1b2c9` and `9a2c342`, with the review's findings on them fixed in
 `8bfdd6b` (`VISUALCOMMIT_GITHUB_URL`'s warning without the value, `FileLauncher.ThrowIfNotWebAddress`
 shared with `FakeFileLauncher`, an `OperationQueueTests` case for the bindings and
-`RefusedAccount`). None of them is pushed yet. Next: push the branch in one push, so that one CI run
-covers the code up to `8bfdd6b` (only CI's Windows job compiles the real-window project), then read
-that run and record it, with each job's result, in the CI section. Then wave 1 in worktrees
-(`wip/p7a-<name>`, at most three at once): WP-F, WP-K and WP-C, each builder given its section of
-the design as its brief; WP1 after WP-C's merge, WP-G after WP-F's. Step 4 is ticked at WP1's
-merge. The
+`RefusedAccount`); pushed, and CI's run on them is green in all five jobs (CI). Wave 1 is being
+built (since 2026-10-29, 09:30): WP-F, WP-K and WP-C in worktrees under
+`D:/Projects/Personal/vc-wt/p7a-<key>` on branches `wip/p7a-<key>` (`wpf`, `wpk`, `wpc`), each
+builder given its section of the design as its brief and WP0's notes
+(`D:/Projects/Personal/phase7a-work/wp0-notes.md`); WP-G after WP-F's merge and WP1 after WP-C's,
+each package reviewed by an agent that did not build it and merged with `--no-ff` one at a time.
+A session that finds this unfinished looks at those branches first: a branch already merged into
+`phase/7a-hosting-github` is done; one not merged is resumed in its worktree from its last commit.
+At the end of the wave the lead runs the full default run under `scripts/heavy-run.sh`, compares its
+pictures with the baseline's (`D:/Projects/Personal/phase7a-work/baseline-pictures/`, from step 2's
+run at `cea102c`), pushes and reads CI. Step 4 is ticked at WP1's merge. The
 first steps of 7a, and the order to take them in, are in the [phase 6
 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
