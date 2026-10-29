@@ -103,6 +103,20 @@ public static class AppLogFile
             RegexOptions.CultureInvariant);
     }
 
+    /// <summary>
+    /// The Debug line a repository's hosting logs on the UI thread once a list of open pull requests
+    /// is applied (docs/phase-7a-design.md 1.9, 7.8, D322):
+    /// <c>&lt;repo&gt;: listed &lt;n&gt; open pull requests of &lt;owner/name&gt;</c>, the count in
+    /// the group <c>count</c> and the repository listed in <c>repository</c>.
+    /// </summary>
+    public static Regex PullRequestsListed(string repository)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repository);
+        return new Regex(
+            string.Create(CultureInfo.InvariantCulture, $@"\] {Regex.Escape(repository)}: listed (?<count>\d+) open pull requests of (?<repository>[^/\s]+/[^/\s]+)$"),
+            RegexOptions.CultureInvariant);
+    }
+
     /// <summary>A line that holds <paramref name="text"/> as written, anywhere in it.</summary>
     public static Regex Containing(string text)
     {

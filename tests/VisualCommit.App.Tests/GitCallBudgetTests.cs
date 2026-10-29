@@ -43,12 +43,22 @@ public class GitCallBudgetTests
         Assert.Contains("(in op-3) is no refresh's call", GitCallBudget.NotWholeRefreshes([.. Refresh[..5], Call(Refresh[5].CommandText, "op-3")]), StringComparison.Ordinal);
     }
 
-    /// <summary>An optional form (D281) passes counted 0 times or as often as the others, and fails counted 1 time in 2 refreshes or alone.</summary>
+    /// <summary>
+    /// An optional form (D281) passes counted 0 times or as often as the others, and fails counted
+    /// 1 time in 2 refreshes or alone: the URL rewrites' read, which <see cref="GitCallBudget.RefreshForms"/>
+    /// holds since WP-S (docs/phase-7a-design.md 7.10), and a form of the test's own.
+    /// </summary>
     [Fact]
     public void An_optional_form_is_whole_counted_never_or_as_often_as_the_others()
     {
-        const string rewritesRead = "git config --null --get-regexp ^url\\.";
-        RefreshForm[] forms = [.. GitCallBudget.RefreshForms, new(rewritesRead, text => text == rewritesRead, Optional: true)];
+        var read = Call("git config --null --get-regexp ^url\\.");
+        Assert.Single(GitCallBudget.RefreshForms, form => form.Optional && form.Matches(read.CommandText));
+        Assert.Null(GitCallBudget.NotWholeRefreshes([.. Refresh, read, .. Refresh, read]));
+        Assert.Contains("not whole refreshes", GitCallBudget.NotWholeRefreshes([.. Refresh, read, .. Refresh]), StringComparison.Ordinal);
+        GitCallBudget.AssertOnlyWholeRefreshes([.. Refresh, read], "a signed-in refresh");
+
+        const string rewritesRead = "git rev-parse --show-toplevel";
+        RefreshForm[] forms = [.. GitCallBudget.RefreshForms.Where(form => !form.Optional), new(rewritesRead, text => text == rewritesRead, Optional: true)];
         var rewrites = Call(rewritesRead);
 
         Assert.Null(GitCallBudget.NotWholeRefreshes(Refresh, forms));
@@ -126,7 +136,7 @@ public class GitCallBudgetTests
         await WaitForCallAsync(harness, mark, call => call.CommandText == StatusRead, "a status read after the write to .git/config");
 
         var calls = await harness.QuietCallsSinceAsync(mark);
-        Assert.True(calls.Count >= GitCallBudget.RefreshForms.Count, "The watcher's refresh made fewer calls than a refresh's forms:\n  " + string.Join("\n  ", calls.Select(call => call.CommandText)));
+        Assert.True(calls.Count >= GitCallBudget.RefreshForms.Count(form => !form.Optional), "The watcher's refresh made fewer calls than a refresh's forms:\n  " + string.Join("\n  ", calls.Select(call => call.CommandText)));
         GitCallBudget.AssertOnlyWholeRefreshes(calls, "the watcher's refresh after a write to .git/config");
     }
 
