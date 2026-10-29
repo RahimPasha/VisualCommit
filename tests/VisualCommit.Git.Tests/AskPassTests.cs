@@ -475,13 +475,16 @@ public class AskPassTests
     }
 
     [Fact]
-    public async Task The_socket_stays_between_connections_and_goes_with_the_broker()
+    public async Task The_socket_goes_with_the_broker()
     {
-        // On macOS and Linux the keeper holds the socket while the broker listens, also after an
-        // answer without UI whose instance was disposed before the next was made (AskPassChannelTests),
-        // and lets it go with the broker: no socket file is left in the temporary folder.
+        // On macOS and Linux the keeper lets the socket go with the broker: no socket file is left
+        // in the temporary folder. That it holds the socket between two connections is
+        // AskPassChannelTests' to prove: here the loop binds the socket again long before the
+        // helper has exited, so the file is there after a served connection with or without the
+        // keeper, which only shows that there was a file to go. The process's own
+        // GIT_CONFIG_COUNT is left out, as in AskPassChannelTests.
         var log = new ListLog();
-        var broker = new AskPassBroker(new RecordingPromptHandler(), log, credentials: new RecordingCredentialSource("github_pat_FAKE-octocat-1"));
+        var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource("github_pat_FAKE-octocat-1"), null, null, _ => null);
         var socket = broker.SocketPath;
         try
         {
@@ -491,7 +494,7 @@ public class AskPassTests
             Assert.Equal("username=x-access-token\npassword=github_pat_FAKE-octocat-1\n", result.StandardOutput);
             if (socket is not null)
             {
-                Assert.True(File.Exists(socket), $"The socket {socket} was gone after a served connection.");
+                Assert.True(File.Exists(socket), $"No socket at {socket} while the broker listened.");
             }
         }
         finally

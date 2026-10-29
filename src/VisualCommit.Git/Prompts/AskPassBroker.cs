@@ -475,27 +475,38 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
                     _log.Debug($"The prompt channel's helper sent no request within {RequestTimeout.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s.");
                     return;
                 }
+                catch (IOException ex)
+                {
+                    // Its git was stopped.
+                    _log.Debug($"The prompt channel's helper went away before its request: {ex.Message}");
+                    return;
+                }
             }
 
-            string? answer = null;
             if (line is null)
             {
-                _log.Debug("The prompt channel's helper closed its end without a request.");
-            }
-            else
-            {
-                answer = AskPassProtocol.ParseCredentialRequest(line) is { } credential
-                    ? await AnswerCredentialAsync(credential).ConfigureAwait(false)
-                    : await AnswerAsync(AskPassProtocol.ParseRequest(line), pipe).ConfigureAwait(false);
+                // No answer is written: a helper that closed could not read it, and the helper
+                // takes the pipe's end as it takes a null answer.
+                _log.Debug("The prompt channel's helper sent no request: it closed its end, or its line was too long.");
+                return;
             }
 
-            await pipe.WriteAsync(AskPassProtocol.FormatAnswer(answer), _lifetime.Token).ConfigureAwait(false);
-            await pipe.FlushAsync(_lifetime.Token).ConfigureAwait(false);
-        }
-        catch (IOException ex)
-        {
-            // Its git was stopped, or it gave up waiting.
-            _log.Debug($"The prompt channel's helper went away before its answer: {ex.Message}");
+            var answer = AskPassProtocol.ParseCredentialRequest(line) is { } credential
+                ? await AnswerCredentialAsync(credential).ConfigureAwait(false)
+                : await AnswerAsync(AskPassProtocol.ParseRequest(line), pipe).ConfigureAwait(false);
+
+            // Only the pipe's own read and write blame the helper: an IOException from the
+            // credential source is that source's failure, logged below as any other.
+            try
+            {
+                await pipe.WriteAsync(AskPassProtocol.FormatAnswer(answer), _lifetime.Token).ConfigureAwait(false);
+                await pipe.FlushAsync(_lifetime.Token).ConfigureAwait(false);
+            }
+            catch (IOException ex)
+            {
+                // Its git was stopped, or it gave up waiting.
+                _log.Debug($"The prompt channel's helper went away before its answer: {ex.Message}");
+            }
         }
         catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
         {
