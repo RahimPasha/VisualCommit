@@ -38,6 +38,13 @@ public class DashboardCredentialTests
         await (kind == BulkKind.Fetch ? dashboard.Bulk.FetchAllAsync() : dashboard.Bulk.PullAllAsync()).WaitAsync(Patience);
 
         var run = dashboard.Bulk.Current!;
+
+        // Two gets at once, as in the refused token's bulk test: should one be lost, the whole session.
+        if (run.Succeeded != 2 || setup.Stub.Credentials.Gets.Count != 2)
+        {
+            Assert.Fail(setup.Describe(dashboard));
+        }
+
         Assert.Equal((2, 0, 0), (run.Succeeded, run.Failed, run.Skipped));
         Assert.All(dashboard.Rows, row => Assert.True(row.Repository is { IsSummary: true }));
         Assert.Equal(2, setup.UrlRulesReads);
