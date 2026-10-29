@@ -7,7 +7,7 @@ namespace VisualCommit.Hosting.Tests;
 
 /// <summary>
 /// The harness's keychain (docs/phase-7a-design.md 2.5): its probe, saves, reads and deletes,
-/// the failures and holds a check sets, the calls it records without a token, and one instance
+/// the failures (a save's, a delete's) and holds a check sets, the calls it records without a token, and one instance
 /// across two "starts", the scripted restart.
 /// </summary>
 public sealed class FakeTokenStoreTests
@@ -41,6 +41,21 @@ public sealed class FakeTokenStoreTests
             store.Calls);
         Assert.DoesNotContain(store.Calls, call => call.Contains(Token, StringComparison.Ordinal));
         Assert.DoesNotContain(Token, store.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_delete_set_to_fail_keeps_the_token_once_and_the_next_delete_is_normal()
+    {
+        var store = new FakeTokenStore();
+        await store.SaveAsync(Octo, Token, Cancelled);
+
+        store.FailNextDelete(TokenStoreReasons.Locked);
+        Assert.Equal(new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.Locked), await store.DeleteAsync(Octo, Cancelled));
+        Assert.True(store.Holds(Octo));
+        Assert.Equal("delete github:127.0.0.1:47395:octo", store.Calls[^1]);
+
+        Assert.Equal(new TokenStoreResult(TokenStoreOutcome.Done), await store.DeleteAsync(Octo, Cancelled));
+        Assert.False(store.Holds(Octo));
     }
 
     [Fact]
