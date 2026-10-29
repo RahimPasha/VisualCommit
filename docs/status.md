@@ -117,8 +117,12 @@ Core and Git layer:
 
 App:
 
-- [ ] 10. Sign-in dialog and the accounts in the settings screen (D249, D253).
-- [ ] 11. Browse and clone the repositories of a GitHub account.
+- [x] 10. Sign-in dialog and the accounts in the settings screen (D249, D253). (Done 2026-10-29:
+  WP-A merged at `42b6be2`; part A's 24 pictures and the 31 settings pictures it changes inspected;
+  CI green on `e40ddc8`.)
+- [x] 11. Browse and clone the repositories of a GitHub account. (Done 2026-10-29: WP-B merged at
+  `b361388`, the lead's follow-ups `e40ddc8`; part B's ten pictures inspected (design 17 item 5); the
+  whole run's earlier pictures unchanged but for what varies by nature; CI green on `e40ddc8`.)
 - [ ] 12. The left panel's "Pull requests" section with its menu (D251), the badge on branches,
   open in browser.
 - [ ] 13. "Create pull request" in the branch menus (`ForLocalBranch`, `ForRemoteBranch`) and the
@@ -359,8 +363,8 @@ lead's follow-ups at `e40ddc8` (design 17 item 4: one waiting empty-tab start fo
 whole default run on `e40ddc8` failed only phase 1's 100k-commit layout timing under load, which
 passes alone, and the lagged list passed; its earlier pictures differ from wave 1's run only in the
 Accounts slot and where they vary by nature, and CI's run on `e40ddc8` is green on all five jobs
-(Notes). Next: the inspection of part B's ten pictures (running), then tick steps 10 and 11; WP-P is
-being built in `D:/Projects/Personal/vc-wt/p7a-pull-requests` (`wip/p7a-pull-requests`), and part
+(Notes). Part B's ten pictures are inspected and pass (design 17 item 5); steps 10 and 11 are
+ticked. Next: WP-P is being built in `D:/Projects/Personal/vc-wt/p7a-pull-requests` (`wip/p7a-pull-requests`), and part
 G's checks are being written beside it for WP-V, which follows WP-P (design 10.8); part N's follow
 for WP-N. At WP-P's merge, 10.8's runs, part A's check 9 again and ruling 31. Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take

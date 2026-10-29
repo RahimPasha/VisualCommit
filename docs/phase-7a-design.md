@@ -4644,3 +4644,12 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
      (`StartEmptyAsync`, waiting for the start-up work, item 2), for parts A and B and those to come;
      part B's sign-in dialog assertion (`AssertSignInDialog`) repeats most of part A's private one and
      may become one shared helper when a third part needs it.
+5. **WP-B's merge run and part B's pictures** (the whole default run on `e40ddc8`; status Notes). Part
+   B's ten pictures were inspected by four agents against rows B1 to B9 and pass. What the pictures
+   cannot show: the URL row of the form behind the browser lies under the card, so `b05a` and `b05b`
+   are the same outside it and "From GitHub…" gone after the API's refusal is only `AssertForm`'s; and
+   in `b07b` the welcome page's three buttons lie under the sign-in dialog, asserted by the check. One
+   observation for phase 8's keyboard-accessibility pass (closing step 20 moves it into plan.md):
+   after "Choose" closes the browser, no control of the form has the keyboard focus (`b06a`), so a
+   keyboard user must Tab into the parent folder's box; D104 gives the focus back only to a dialog
+   below, and the report does not assert where it goes (B6).
