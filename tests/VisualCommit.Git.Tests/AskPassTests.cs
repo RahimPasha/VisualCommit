@@ -3,6 +3,8 @@ using System.Security.Principal;
 using System.Text.RegularExpressions;
 using VisualCommit.AskPass;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
+using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Git.Prompts;
 using VisualCommit.Testing;
@@ -470,6 +472,51 @@ public class AskPassTests
         }
 
         Assert.True(File.Exists(socket), $"No socket at {socket}.");
+    }
+
+    [Fact]
+    public async Task The_socket_goes_with_the_broker()
+    {
+        // On macOS and Linux the keeper lets the socket go with the broker: no socket file is left
+        // in the temporary folder. That it holds the socket between two connections is
+        // AskPassChannelTests' to prove: here the loop binds the socket again long before the
+        // helper has exited, so the file is there after a served connection with or without the
+        // keeper, which only shows that there was a file to go. The process's own
+        // GIT_CONFIG_COUNT is left out, as in AskPassChannelTests.
+        var log = new ListLog();
+        var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource("github_pat_FAKE-octocat-1"), null, null, _ => null);
+        var socket = broker.SocketPath;
+        try
+        {
+            using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-socket", bindings: [new CredentialBinding("https://github.com/o/r.git", new AccountKey(HostingProvider.GitHub, "github.com", "octocat"))]);
+            var result = await AskPassRunner.RunCredentialAsync("get", CredentialRequest("https", "github.com"), scope.Environment, cancellationToken: RepositoryTestSupport.TestCancelled);
+
+            Assert.Equal("username=x-access-token\npassword=github_pat_FAKE-octocat-1\n", result.StandardOutput);
+            if (socket is not null)
+            {
+                Assert.True(File.Exists(socket), $"No socket at {socket} while the broker listened.");
+            }
+        }
+        finally
+        {
+            broker.Dispose();
+        }
+
+        Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Warning);
+        if (socket is null)
+        {
+            Assert.True(OperatingSystem.IsWindows());
+            return;
+        }
+
+        // A connection still being served when the broker stops keeps the socket until it ends.
+        var deadline = DateTime.UtcNow + StepTimeout;
+        while (File.Exists(socket) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(50, RepositoryTestSupport.TestCancelled);
+        }
+
+        Assert.False(File.Exists(socket), $"The socket {socket} outlived the broker.");
     }
 
     [Fact]

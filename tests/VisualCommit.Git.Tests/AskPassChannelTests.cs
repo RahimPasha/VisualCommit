@@ -31,6 +31,10 @@ public class AskPassChannelTests
 
     private static readonly AccountKey Octocat = new(HostingProvider.GitHub, "github.com", "octocat");
 
+    /// <summary>The broker's warning when no instance is left while it listens, which the keeper prevents on macOS and Linux.</summary>
+    private static readonly (LogLevel, string) ClosedBetweenConnections =
+        (LogLevel.Warning, "The prompt channel closed its socket between two connections; a helper connecting then would go unanswered.");
+
     [Theory]
     [InlineData("get")]
     [InlineData("erase")]
@@ -67,6 +71,8 @@ public class AskPassChannelTests
             Assert.Equal((Octocat, Octocat), (api.RefusedAccount, docs.RefusedAccount));
             Assert.Equal([Octocat, Octocat], source.Refusals);
         }
+
+        Assert.DoesNotContain(ClosedBetweenConnections, log.Entries);
     }
 
     [Fact]
@@ -85,6 +91,7 @@ public class AskPassChannelTests
 
         AssertAnswered(("the first client (api's get)", "answer: " + Token, first), ("the second client (web's prompt), queued behind it", "answer: alice", second));
         Assert.Equal(GitPromptKind.Username, Assert.Single(handler.Prompts).Kind);
+        Assert.DoesNotContain(ClosedBetweenConnections, log.Entries);
     }
 
     /// <summary>A broker with bindings in use: the helper next to the tests, a credential source, no inherited <c>GIT_CONFIG_COUNT</c>.</summary>

@@ -361,6 +361,8 @@ public sealed partial class RepositoryOperations
                 bindings = [];
             }
 
+            // Not "after": the tests count "<title>: ... after" lines as the queue's ends of operations.
+            Log.Debug($"{Repository.Name}: {text.Title}: {bindings.Count} URLs bound to the account once the URL rules were read.");
             if (IsClosed)
             {
                 Log.Info($"{Repository.Name}: {text.Title}: not started, the tab is closed.");

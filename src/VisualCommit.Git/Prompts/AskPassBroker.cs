@@ -33,9 +33,11 @@ namespace VisualCommit.Git.Prompts;
 public sealed class AskPassBroker : IGitPromptBroker, IDisposable
 {
     /// <summary>
-    /// How many helpers can be connected at once, also the pipe's instance count; one more waits
-    /// for a free instance, and gives up after the helper's 5 seconds
-    /// (<see cref="AskPassProtocol.ConnectTimeout"/>), failing its git as if refused. A connection
+    /// How many helpers can be connected at once, also the pipe's instance count on Windows; one
+    /// more waits there for a free instance, and gives up after the helper's 5 seconds
+    /// (<see cref="AskPassProtocol.ConnectTimeout"/>), failing its git as if refused. On macOS and
+    /// Linux it connects at once and waits in the socket's queue until an instance is free; the
+    /// socket has one instance more, the keeper (<see cref="ListenAsync"/>). A connection
     /// holds its instance until its prompt is answered, so 16 (docs/phase-6-design.md 4.4, D210):
     /// a bulk run's 4 git processes can each wait for their prompt group's turn, with room beside
     /// them for every tab's own prompt and a clone's. With 4, a tab's prompt beside a run's four
@@ -70,6 +72,12 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     private readonly Task _listening;
     private long _lastScope;
     private int _disposed;
+
+    /// <summary>The pipe's instances made and not yet disposed, the keeper included.</summary>
+    private int _liveInstances;
+
+    /// <summary>1 once the listening loop has ended.</summary>
+    private int _listenEnded;
 
     /// <summary>Starts listening.</summary>
     /// <param name="handler">Answers the prompts (the app's dialogs).</param>
@@ -189,6 +197,11 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
         var id = operationId ?? "prompt-" + Interlocked.Increment(ref _lastScope).ToString(CultureInfo.InvariantCulture);
         var used = UsedBindings(mode, bindings);
+        if (bindings is { Count: > 0 })
+        {
+            _log.Debug($"{repositoryName}: {title}: {used.Count} of {bindings.Count} URLs bound to the account ({mode}).");
+        }
+
         if (used.Count > 0 && _inheritsParameters)
         {
             _log.Debug($"{repositoryName}: {title}: the inherited command-line git configuration is left out of calls bound to the account.");
@@ -312,74 +325,137 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     private async Task ListenAsync()
     {
         var token = _lifetime.Token;
-        while (!token.IsCancellationRequested)
+
+        // On macOS and Linux .NET makes every instance of the pipe share one listening Unix
+        // socket, which it closes, its file removed, with the last instance (SharedServer in
+        // NamedPipeServerStream.Unix.cs): a helper that had connected and waited in the socket's
+        // queue is dropped then, and exits as if the app knew nothing. An answer without UI (git's
+        // credential get and erase, 4.6) can run to its end inside the call to ServeAsync below,
+        // its instance disposed before the next one is made. The keeper is one instance more that
+        // never waits for a connection (only a waiting instance accepts), so that the socket lives
+        // as long as the broker listens. None on Windows, where every instance is a pipe of its
+        // own from the start, which a helper could connect to and nobody would serve.
+        NamedPipeServerStream? keeper = null;
+        if (!OperatingSystem.IsWindows())
         {
             try
             {
-                await _connections.WaitAsync(token).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                return;
-            }
-
-            NamedPipeServerStream? pipe = null;
-            try
-            {
-                pipe = CreatePipe();
-                await pipe.WaitForConnectionAsync(token).ConfigureAwait(false);
-                if (AfterAccept is { } hook)
-                {
-                    await hook().ConfigureAwait(false);
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                pipe?.Dispose();
-                _connections.Release();
-                return;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // A client that is not the current user, or one that left at once: listen again.
-                pipe?.Dispose();
-                _connections.Release();
-                _log.Debug($"The prompt channel refused a connection: {ex.Message}");
-                continue;
+                keeper = CreatePipe();
             }
             catch (Exception ex)
             {
-                pipe?.Dispose();
-                _connections.Release();
                 _log.Error("The prompt channel stopped listening.", ex);
                 return;
             }
+        }
 
-            _ = ServeAsync(pipe);
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                try
+                {
+                    await _connections.WaitAsync(token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
+
+                NamedPipeServerStream? pipe = null;
+                try
+                {
+                    pipe = CreatePipe();
+                    await pipe.WaitForConnectionAsync(token).ConfigureAwait(false);
+                    if (AfterAccept is { } hook)
+                    {
+                        await hook().ConfigureAwait(false);
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    DisposeInstance(pipe);
+                    _connections.Release();
+                    return;
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    // A client that is not the current user, or one that left at once: listen again.
+                    DisposeInstance(pipe);
+                    _connections.Release();
+                    _log.Debug($"The prompt channel refused a connection: {ex.Message}");
+                    continue;
+                }
+                catch (Exception ex)
+                {
+                    DisposeInstance(pipe);
+                    _connections.Release();
+                    _log.Error("The prompt channel stopped listening.", ex);
+                    return;
+                }
+
+                _ = ServeAsync(pipe);
+            }
+        }
+        finally
+        {
+            // The socket and its file go with the broker.
+            Volatile.Write(ref _listenEnded, 1);
+            DisposeInstance(keeper);
         }
     }
 
     /// <summary>
     /// One instance of the pipe, which only the current user can open (3.4). On Windows it belongs
     /// to the user of the app's access token, not to the token's default owner
-    /// (<see cref="WindowsPipeUser"/>); on macOS and Linux .NET checks the socket's user.
+    /// (<see cref="WindowsPipeUser"/>); on macOS and Linux .NET checks the socket's user. There
+    /// every instance, the keeper's included, names the same limit, one more than
+    /// <see cref="MaxConnections"/>: .NET refuses an instance whose limit the instances alive
+    /// already reach.
     /// </summary>
-    private NamedPipeServerStream CreatePipe() => OperatingSystem.IsWindows()
-        ? NamedPipeServerStreamAcl.Create(
-            PipeName,
-            PipeDirection.InOut,
-            MaxConnections,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous,
-            inBufferSize: 0,
-            outBufferSize: 0,
-            WindowsPipeUser.ServerSecurity())
-        : new NamedPipeServerStream(
-            PipeName,
-            PipeDirection.InOut,
-            MaxConnections,
-            PipeTransmissionMode.Byte,
-            PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+    private NamedPipeServerStream CreatePipe()
+    {
+        var pipe = OperatingSystem.IsWindows()
+            ? NamedPipeServerStreamAcl.Create(
+                PipeName,
+                PipeDirection.InOut,
+                MaxConnections,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous,
+                inBufferSize: 0,
+                outBufferSize: 0,
+                WindowsPipeUser.ServerSecurity())
+            : new NamedPipeServerStream(
+                PipeName,
+                PipeDirection.InOut,
+                MaxConnections + 1,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+        Interlocked.Increment(ref _liveInstances);
+        return pipe;
+    }
+
+    /// <summary>
+    /// Disposes an instance made by <see cref="CreatePipe"/>, if any, and counts it gone. On macOS
+    /// and Linux none left while the broker listens means that the socket closed between two
+    /// connections, which the keeper is there to prevent: a warning.
+    /// </summary>
+    private void DisposeInstance(NamedPipeServerStream? pipe)
+    {
+        if (pipe is null)
+        {
+            return;
+        }
+
+        pipe.Dispose();
+        if (Interlocked.Decrement(ref _liveInstances) == 0
+            && !OperatingSystem.IsWindows()
+            && Volatile.Read(ref _listenEnded) == 0
+            && !_lifetime.IsCancellationRequested)
+        {
+            _log.Warning("The prompt channel closed its socket between two connections; a helper connecting then would go unanswered.");
+        }
+    }
 
     /// <summary>One connection: one request, one answer (3.1).</summary>
     private async Task ServeAsync(NamedPipeServerStream pipe)
@@ -390,23 +466,51 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             using (var reading = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token))
             {
                 reading.CancelAfter(RequestTimeout);
-                line = await AskPassProtocol.ReadLineAsync(pipe, reading.Token).ConfigureAwait(false);
+                try
+                {
+                    line = await AskPassProtocol.ReadLineAsync(pipe, reading.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (!_lifetime.IsCancellationRequested)
+                {
+                    _log.Debug($"The prompt channel's helper sent no request within {RequestTimeout.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s.");
+                    return;
+                }
+                catch (IOException ex)
+                {
+                    // Its git was stopped.
+                    _log.Debug($"The prompt channel's helper went away before its request: {ex.Message}");
+                    return;
+                }
             }
 
-            string? answer = null;
-            if (line is not null)
+            if (line is null)
             {
-                answer = AskPassProtocol.ParseCredentialRequest(line) is { } credential
-                    ? await AnswerCredentialAsync(credential).ConfigureAwait(false)
-                    : await AnswerAsync(AskPassProtocol.ParseRequest(line), pipe).ConfigureAwait(false);
+                // No answer is written: a helper that closed could not read it, and the helper
+                // takes the pipe's end as it takes a null answer.
+                _log.Debug("The prompt channel's helper sent no request: it closed its end, or its line was too long.");
+                return;
             }
 
-            await pipe.WriteAsync(AskPassProtocol.FormatAnswer(answer), _lifetime.Token).ConfigureAwait(false);
-            await pipe.FlushAsync(_lifetime.Token).ConfigureAwait(false);
+            var answer = AskPassProtocol.ParseCredentialRequest(line) is { } credential
+                ? await AnswerCredentialAsync(credential).ConfigureAwait(false)
+                : await AnswerAsync(AskPassProtocol.ParseRequest(line), pipe).ConfigureAwait(false);
+
+            // Only the pipe's own read and write blame the helper: an IOException from the
+            // credential source is that source's failure, logged below as any other.
+            try
+            {
+                await pipe.WriteAsync(AskPassProtocol.FormatAnswer(answer), _lifetime.Token).ConfigureAwait(false);
+                await pipe.FlushAsync(_lifetime.Token).ConfigureAwait(false);
+            }
+            catch (IOException ex)
+            {
+                // Its git was stopped, or it gave up waiting.
+                _log.Debug($"The prompt channel's helper went away before its answer: {ex.Message}");
+            }
         }
-        catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
+        catch (Exception ex) when (ex is OperationCanceledException or ObjectDisposedException)
         {
-            // The helper went away (git was stopped), took too long to ask, or the session ended.
+            // The session ended.
         }
         catch (Exception ex)
         {
@@ -414,7 +518,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         }
         finally
         {
-            await pipe.DisposeAsync().ConfigureAwait(false);
+            DisposeInstance(pipe);
             _connections.Release();
         }
     }
@@ -550,17 +654,25 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
 
             if (request.Action == "erase")
             {
-                bool marked;
+                // Why nothing is marked, or null when the account is marked refused now.
+                string? unmarked;
                 lock (_refused)
                 {
-                    marked = request.SecretHash is { } hash && _handedOut.Contains(hash) && _refused.Add(account);
+                    unmarked = request.SecretHash is not { } hash ? "no password"
+                        : !_handedOut.Contains(hash) ? "a token this scope did not hand out"
+                        : !_refused.Add(account) ? "the account was already refused in this scope"
+                        : null;
                 }
 
-                if (marked)
+                if (unmarked is null)
                 {
                     RefusedAccount = account;
                     _owner._credentials.Refused(account);
                     log.Info($"{RepositoryName}: {Title}: {request.Host} refused the account's token.");
+                }
+                else
+                {
+                    log.Debug($"{what}: nothing marked ({unmarked}).");
                 }
 
                 return null;
