@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-28
+Last updated: 2026-10-29
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -274,13 +274,18 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 4 begins with the lead's own commits, in the main checkout, as the design's 0.4 orders them:
-L1 (the real-window csproj's comment, ruling 30, and the wheel test's wait through
-`ShellDriver.WaitForControlAtAsync`, ruling 31; 0.4 is its brief), then WP0, section 1's contracts
-and stubs (its list in 1.10), with no change of behaviour or pictures; build and run the test
-classes they touch. Then wave 1 in worktrees (`wip/p7a-<name>`, at most three at once): WP-F, WP-K
-and WP-C, each builder given its section of the design as its brief; WP1 after WP-C's merge, WP-G
-after WP-F's. Step 4 is ticked at WP1's merge. The
+Step 4's own commits of the lead are made, in the main checkout, as the design's 0.4 orders them:
+L1 at `f1dc80e` (the real-window csproj's comment, ruling 30, and the wheel test's wait through
+`ShellDriver.WaitForControlAtAsync`, ruling 31) and WP0, section 1's contracts and stubs (its list
+in 1.10), at `d3cd314`, `3d1b2c9` and `9a2c342`, with the review's findings on them fixed in
+`8bfdd6b` (`VISUALCOMMIT_GITHUB_URL`'s warning without the value, `FileLauncher.ThrowIfNotWebAddress`
+shared with `FakeFileLauncher`, an `OperationQueueTests` case for the bindings and
+`RefusedAccount`). None of them is pushed yet. Next: push the branch in one push, so that one CI run
+covers the code up to `8bfdd6b` (only CI's Windows job compiles the real-window project), then read
+that run and record it, with each job's result, in the CI section. Then wave 1 in worktrees
+(`wip/p7a-<name>`, at most three at once): WP-F, WP-K and WP-C, each builder given its section of
+the design as its brief; WP1 after WP-C's merge, WP-G after WP-F's. Step 4 is ticked at WP1's
+merge. The
 first steps of 7a, and the order to take them in, are in the [phase 6
 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
