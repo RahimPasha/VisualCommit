@@ -310,14 +310,15 @@ CLAUDE.md, D270, plan.md's risk 34 and THIRD-PARTY-NOTICES.md follow them. CI's 
 (under CI) passed on four jobs, every real keychain's test included, and failed one test on
 macOS, a race in the prompt channel on macOS and Linux (Notes); the whole default run passed and
 its pictures differ from the baseline's only where they vary by nature (Notes); steps 4, 5, 7
-and 8 are ticked and wave 1's worktrees are gone. The channel's race is proved on CI's Linux jobs
-and fixed at `9d48d0b` (Notes; design 16 item 11). Next: once CI's macOS job of run 40910893877
-(the held test alone, `6fc2d28`) has ended, record whether it failed on the held test too, push
-`9d48d0b` and the docs after it, and read that run: all five jobs green. Wave 2 has begun beside
-it: WP-S is being built, reviewed and fixed on `wip/p7a-session` (worktree `D:/Projects/Personal/vc-wt/p7a-session`, task `wq199tu3m`),
-for the lead to merge with 7.11's wiring and 7.14's runs, checking the report's ruling 3 (no
-keychain gives a null `SaveFailedReason`); part A's checks are in `docs/test-reports/phase-7a.md`,
-written, reviewed and ruled on, so WP-A can start after WP-S's merge. Each of parts B, P, V and N
+and 8 are ticked and wave 1's worktrees are gone. The channel's race is proved on CI's Linux and
+macOS jobs and fixed at `9d48d0b` (Notes; design 16 item 11). WP-S is merged at `7bea4fb` (built,
+reviewed by an agent that did not build it, its one major and seven minor findings fixed, one
+ruled on; design 17 item 1), with 7.11's wiring at `04952c8`. Next: 7.14's runs through
+`bash scripts/heavy-run.sh`, one at a time with no agent running (`VisualCommit.Hosting.Tests`
+whole, `Phase6ChecksS`, the lagged list of design 0.4 with its Hosting.Tests line now in force),
+and CI's run of the push of `04952c8` and the docs after it: all five jobs green. Then tick steps
+6 and 9, and start WP-A (design 8; part A's checks are in `docs/test-reports/phase-7a.md`,
+written, reviewed and ruled on). Each of parts B, P, V and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -532,8 +533,9 @@ every commit.
   `AskPassChannelTests` and a failure report for the credential dashboard's tests; design 16 item
   11) was built on `wip/p7a-channel`, reviewed by an agent that did not build it (two minor findings,
   fixed) and merged in two steps: the held test alone at `6fc2d28`, whose CI run 40910893877 failed
-  on all three Linux jobs with exactly its three tests (the queued client: "Connection reset by
-  peer"; the other 5,545 passed), which proves the cause, and the fix at `9d48d0b` (the 105 tests of
+  on all three Linux jobs and on macOS with exactly its three tests (the queued client: "Connection
+  reset by peer" on Linux, an end without a line on macOS; the other 5,545 passed), which proves
+  the cause, and the fix at `9d48d0b` (the 105 tests of
   the eight classes it touched pass on Windows). The channel's builder was stopped by an API
   safeguard's false positive ("reasoning_extraction") after its work was committed; its report was
   read from its transcript, and later prompts ask for an explanation of a mechanism, not reasoning.

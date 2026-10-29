@@ -28,6 +28,8 @@ A builder reads section 0, section 1 and its own section, and nothing else.
 - 13 WP-R: the real-window pass
 - 14 WP-LIVE: the opt-in live command
 - 15 Open points
+- 16 As built: wave 1
+- 17 As built: wave 2
 
 ## 0. Scope, packages and parts
 
@@ -4518,8 +4520,9 @@ the lead's rulings on what the builders handed over. The report and the handoff 
     ends, and every instance there passes `MaxConnections + 1`; Windows, where each instance is its
     own kernel object, is unchanged. `AfterAccept` (internal, null in the app) holds the loop between
     an accept and its serve: `AskPassChannelTests` (a `get`, an `erase` and a prompt queued behind a
-    credential answer) failed on CI's three Linux jobs before the keeper (run 40910893877, merge
-    `6fc2d28`: "Connection reset by peer" for the queued client) and passes with it. Diagnostics: a
+    credential answer) failed on CI's three Linux jobs and on macOS before the keeper (run
+    40910893877, merge `6fc2d28`: the queued client got "Connection reset by peer" on Linux and an
+    end without a line on macOS; nothing else failed) and passes with it. Diagnostics: a
     Warning when no instance is left while the broker listens on macOS or Linux, Debug lines for
     `ServeAsync`'s exits, for an `erase` that marks nothing and for the bound-URL counts (`Begin`,
     and `RepositoryOperations` after the URL rules read), none with a token, hash or URL path;
@@ -4530,3 +4533,52 @@ the lead's rulings on what the builders handed over. The report and the handoff 
 12. **0.7, part A's earlier pictures.** The list of settings pictures that change when Accounts joins
     the screen is short by `s20b-merge-tool-pick` (the screen under the Pick dialog); the report's
     "Changes to expected results" lists it (31 scripted pictures).
+
+## 17. As built: wave 2
+
+What wave 2's builds and reviews changed or settled against the sections above, package by package,
+with the lead's rulings. The report and the handoff cite these as "design 17.N".
+
+1. **WP-S, merged at `7bea4fb`** (six commits as 7.14 lists them and the review's fixes, `978ea87`;
+   the lead's 7.11 wiring at `04952c8`). The builder's readings, which the lead keeps:
+   - 7.5 step 6: "`Session` without a reason" is the vault's `TokenStoreReasons.NoKeychain`, which
+     gives `NoteKind.NoKeychain` with no note and a null `SaveFailedReason`; any other reason is
+     `SaveFailed` with it as note and as `SaveFailedReason` (the report's part A, ruling 3).
+   - 7.5 step 4: `UseForGit` comes from the previous record whoever signs in.
+   - 7.5's sign-out and the switch run on the thread pool, never on the caller's thread (the review's
+     one major finding). A sign-out honours its token only until it holds the gate; from then on
+     neither that token nor the session's lifetime stops it (the vault's forget waits with
+     `CancellationToken.None`, bounded by the store's own limits), so neither a dialog's Cancel nor
+     the app closing leaves half a sign-out. `SignInAsync`'s second half runs where the provider's
+     answer completes: on the thread pool with a real network; a test handler that answers
+     synchronously would run the vault's save and the file write on the caller's thread.
+   - 7.6: a 401 marks the account refused only while the same key and the same token are signed in;
+     a stale call's 401 never marks a newer token.
+   - 7.8: a refresh shows `Loading` over a failure but keeps a held list until its answer; a run's
+     unexpected exception is a `Network` failure with the exception's message, never a section left
+     loading; `Changed` is also raised when `WantsUrlRewrites` changes (`IHostingSession.cs`'s comment
+     says so), so a sign-in with the tab open starts the rules read for a remote that only an
+     `insteadOf` rule makes GitHub's. `HostingRules.Remotes` (7.8 step 2's recognition) is a fourth
+     function beside the three 7.1 names.
+   - 7.9: images are fetched only for the e-mails of the set; a failed run applies nothing; a sign-out
+     disposes the `AvatarCache` and makes a new one (its index would point at deleted files); an
+     avatar run starts only while signed in. The 20 lookups count the e-mails passed into the one
+     `ReadAuthorsAsync`, as 7.9 step 3 says, those the commits page then answers included: a few
+     lookups may wait for the next app session. The review proposed counting only lookups made; the
+     lead keeps 7.9's one call.
+   - 7.10: one rules read per refresh: the `Changed` handler starts one only when none is running.
+   - `AccountRecord.UseForGit` has a setter, not `init`: the source-generated reader sets a missing
+     `init` member to its default, which would turn the switch off.
+   - Outside 7.1's file list: `RefreshForms` has seven forms with the optional one, so
+     `Phase6SupportTests` (two counts) and `GitCallBudgetTests` count the required forms only; the
+     lead accepts the edit.
+   - Internal seams for the tests: `HostingSession.Switching` (the switch's write; a `ShellDriver`
+     test waits for `AccountChanged` instead), `RefusalCheck`, `HostingCount`; `HostingSessionSetup`
+     (in `VisualCommit.Hosting.Tests`) with a `NetworkDown` switch that fails requests before the fake.
+   - New log lines: "GitHub: no account on {host}." at a start without a record; at a sign-in
+     "GitHub account {login} on {host}: signed in; the token is kept in the keychain." or "… kept for
+     this session: {reason}."; Warnings "GitHub account {login} on {host}: GitHub refused the token
+     (git | the API, request {id}); it needs signing in again." and "GitHub: {what} failed: {kind},
+     {message} (request {id})".
+   - For WP-V: `RepositoryHosting.ShowAvatarsFor` works once the hosting has a candidate, after an
+     `Update` with a GitHub remote: call it after the refs are applied.
