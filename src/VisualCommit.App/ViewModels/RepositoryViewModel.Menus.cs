@@ -7,6 +7,7 @@
 
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Graph;
+using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
@@ -229,6 +230,8 @@ public sealed partial class RepositoryViewModel
                 OpenMenu(layer, RepositoryMenus.ForTag(MenuContext, LeftPanelViewModel.RefNameOf(row)!, actions), position, openedBy),
             RefRowTarget.Stash when row is RefItemRow { TargetSha: { } stash } =>
                 OpenMenu(layer, RepositoryMenus.ForStash(MenuContext, stash, actions), position, openedBy),
+            RefRowTarget.PullRequest when row is PullRequestRow pullRequest =>
+                OpenMenu(layer, RepositoryMenus.ForPullRequest(MenuContext, pullRequest.Number, actions, pullRequest.PullRequest), position, openedBy),
             _ => false,
         };
     }
@@ -407,7 +410,8 @@ public sealed partial class RepositoryViewModel
     /// <summary>
     /// A double-click on a left-panel row (4c): a local branch checks out (nothing more on the
     /// current one), a remote branch checks out into a tracking branch (nothing while HEAD is on
-    /// the local branch it would check out), a stash applies; any other row does nothing more than
+    /// the local branch it would check out), a stash applies, a pull request checks out as its
+    /// menu's item does (docs/phase-7a-design.md 10.4, D304); any other row does nothing more than
     /// its click.
     /// </summary>
     public void DoubleTapRefRow(RefListRow row)
@@ -425,6 +429,12 @@ public sealed partial class RepositoryViewModel
                 break;
             case RefRowTarget.Stash when row is RefItemRow { TargetSha: { } stash }:
                 Start(MenuActions.ApplyStashAsync(stash), "applying the stash");
+                break;
+            case RefRowTarget.PullRequest when row is PullRequestRow pullRequest
+                && HostingState.PullRequests != PullRequestsState.NotGitHub
+                && PullRequestCheckout.Plan(HostingState, Refs, pullRequest.PullRequest).DisabledReason is null:
+                // Its checkout (D304, 10.5), as the menu's item, unless the item would be disabled.
+                Start(MenuActions.CheckOutPullRequestAsync(pullRequest.PullRequest), "checking out a pull request");
                 break;
         }
     }

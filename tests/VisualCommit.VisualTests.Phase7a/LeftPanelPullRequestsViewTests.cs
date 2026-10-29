@@ -148,6 +148,46 @@ public sealed class LeftPanelPullRequestsViewTests
         Assert.Contains("selected", one.Classes);
     }
 
+    [AvaloniaFact]
+    public async Task In_the_window_the_sign_in_row_signs_in_and_a_double_click_checks_out()
+    {
+        var copy = await VisualCommit.Testing.Scenarios.HostingAsync();
+        await using var served = await VisualCommit.Testing.Scenarios.ServeHostingAsync(copy, port: 0, ct: TestContext.Current.CancellationToken, ownsCopy: true);
+        using var data = new VisualCommit.Testing.TempDirectory("pull request clicks");
+        using var app = ShellDriver.StartWithTabs(data.Path, [served.Hello.Path], gitHub: served.GitHub);
+        var repository = await app.WaitForRepositoryAsync();
+        var (actions, recorder) = VisualCommit.App.Tests.RecordingActions.Create();
+        repository.MenuActions = actions;
+        await app.WaitForAsync(() => repository.LeftPanel.Rows.OfType<PullRequestMessageRow>().Any(row => row.Kind == PullRequestMessageKind.SignIn), "the sign-in row");
+
+        app.Click(await RowAsync(app, row => row is PullRequestMessageRow));
+
+        Assert.Equal(["SignInToGitHubAsync"], recorder.Calls.Select(call => call.Method));
+
+        await app.SignInAsync(served.OctoToken, TestContext.Current.CancellationToken);
+        await app.WaitForAsync(() => repository.HostingState.List is not null, "the list");
+        app.DoubleClick(await RowAsync(app, row => row is PullRequestRow { Number: 5 }));
+        await app.WaitForAsync(() => recorder.Calls.Count == 2, "the double-click's action");
+
+        Assert.Equal(("CheckOutPullRequestAsync", 5), (recorder.Calls[1].Method, ((PullRequest)recorder.Calls[1].Arguments[0]!).Number));
+        app.Dispose();
+        VisualCommit.Testing.Hosting.TokenTripwire.AssertAbsent(served.OctoToken, [data.Path], null);
+    }
+
+    private static async Task<Control> RowAsync(ShellDriver app, Func<RefListRow, bool> which)
+    {
+        Control? found = null;
+        await app.WaitForAsync(
+            () =>
+            {
+                found = app.Find<ItemsControl>("RefList").GetVisualDescendants().OfType<Button>()
+                    .FirstOrDefault(button => button.DataContext is RefListRow row && which(row) && AutomationProperties.GetAutomationId(button) is "PullRequestItem" or "PullRequestMessage");
+                return found is not null;
+            },
+            "the row");
+        return found!;
+    }
+
     private static LeftPanelViewModel Panel(RepositoryHostingState state)
     {
         var panel = new LeftPanelViewModel();
