@@ -896,6 +896,15 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             return;
         }
 
+        // A host may bring its refs up to date before git lists them (docs/phase-7a-design.md 2.3:
+        // the fake of GitHub's refs/pull/<n>/head, D267).
+        if (_host?.BeforeRefsAsync is { } beforeRefs
+            && RepositoryOf(path) is { } listed
+            && (path.EndsWith("/info/refs", StringComparison.Ordinal) || command == "ls-refs"))
+        {
+            await beforeRefs(NameOf(listed), stopping).ConfigureAwait(false);
+        }
+
         var cgi = await RunBackendAsync(head, path, query, user, body, stopping).ConfigureAwait(false);
         var response = ParseCgi(cgi.Output);
         if (response is null)
@@ -1800,9 +1809,11 @@ public sealed record AuthRemoteResponse(int Status, string Reason, IReadOnlyList
 /// <param name="IsPublic">Whether a repository (<c>octo/hello</c>) may be read anonymously.</param>
 /// <param name="MayPush">Whether a login may push to a repository: (<c>octo/hello</c>, <c>ada</c>).</param>
 /// <param name="Realm">The realm of a 401's <c>WWW-Authenticate</c> header.</param>
+/// <param name="BeforeRefsAsync">Called with a repository's name (<c>octo/hello</c>) before git lists its refs (<c>info/refs</c>, a protocol v2 <c>ls-refs</c>), after auth; null for none.</param>
 public sealed record AuthRemoteHostOptions(
     IAuthRemoteRoutes Routes,
     Func<string, string?> LoginOfToken,
     Func<string, bool> IsPublic,
     Func<string, string, bool> MayPush,
-    string Realm = "GitHub");
+    string Realm = "GitHub",
+    Func<string, CancellationToken, Task>? BeforeRefsAsync = null);
