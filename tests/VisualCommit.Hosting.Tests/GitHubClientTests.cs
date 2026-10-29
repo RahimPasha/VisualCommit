@@ -1,0 +1,500 @@
+using System.Net;
+using VisualCommit.Core;
+using VisualCommit.Core.Logging;
+using VisualCommit.Hosting.GitHub;
+using VisualCommit.Testing;
+using VisualCommit.Testing.Hosting;
+using Xunit;
+
+namespace VisualCommit.Hosting.Tests;
+
+/// <summary>
+/// GitHub's API client (docs/phase-7a-design.md 6.2, 6.5; D284, D285): its headers and the token
+/// only to the API, redirects by hand on the API's address only, pages, kept ETags, the
+/// classification of every failure, the 30 s, cancellation, one request at a time, and log lines
+/// that hold no query, token or e-mail. Against the fake of GitHub in process, and a script where
+/// the fake cannot answer as asked.
+/// </summary>
+public sealed class GitHubClientTests
+{
+    private static readonly Uri Script = new("https://api.github.com/");
+
+    private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
+
+    [Fact]
+    public async Task Every_request_carries_githubs_headers_and_the_token_goes_only_to_the_api()
+    {
+        await using var setup = Setup.Start();
+
+        var user = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+        var repository = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("repos/octo/listed-0001"), null, GitHubJsonContext.Default.GitHubRepositoryJson, Cancelled);
+        var list = await setup.Client.GetPagesAsync(setup.Octo, setup.Api("user/repos?per_page=100&sort=updated"), GitHubJsonContext.Default.ListGitHubRepositoryJson, 10, Cancelled);
+
+        Assert.Equal(("octo", 1001L), (user.Value!.Login, user.Value.Id));
+        Assert.Equal("listed-0001", repository.Value!.Name);
+        Assert.Equal(25, list.Value!.Count);
+        Assert.Equal("VisualCommit/0.1.0", GitHubClient.UserAgent);
+        Assert.Equal(3, setup.Recorder.Sent.Count);
+        Assert.All(setup.Recorder.Sent, sent =>
+        {
+            Assert.Equal(GitHubApi.MediaType, sent.Header("Accept"));
+            Assert.Equal(GitHubApi.Version, sent.Header("X-GitHub-Api-Version"));
+            Assert.Equal("VisualCommit/0.1.0", sent.Header("User-Agent"));
+            Assert.Equal("Bearer " + setup.Octo, sent.Header("Authorization"));
+        });
+
+        // Another host, or another port or scheme of the API's host, gets no token.
+        foreach (var elsewhere in new[] { "http://127.0.0.2:1/api/v3/user", "http://127.0.0.1:2/api/v3/user", "https://127.0.0.1:1/api/v3/user" })
+        {
+            var refused = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, new Uri(elsewhere), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+            Assert.Equal((HostingFailureKind.BadCredentials, "Requires authentication"), (refused.Failure!.Kind, refused.Failure.Message));
+            Assert.Null(setup.Recorder.Sent[^1].Header("Authorization"));
+        }
+    }
+
+    [Fact]
+    public async Task A_body_is_json_in_utf_8_and_a_redirected_post_is_repeated_with_its_method_body_and_token()
+    {
+        var recorder = new RecordingHttpHandler(request => request.RequestUri!.AbsolutePath == "/repos/octo/hello/pulls"
+            ? RecordingHttpHandler.Json(HttpStatusCode.TemporaryRedirect, "{}", ("Location", "/repositories/3001/pulls"))
+            : RecordingHttpHandler.Json(HttpStatusCode.Created, "{\"login\":\"octo\",\"id\":1001}"));
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), new ManualTimeProvider());
+        var body = new GitHubNewPullRequestJson { Title = "Add the login form", Body = "Ready.", Head = "feature/login", Base = "main" };
+
+        var reply = await client.SendAsync(HttpMethod.Post, "github_pat_FAKE-octo-1", new Uri(Script, "repos/octo/hello/pulls"), body, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.True(reply.Succeeded);
+        Assert.Equal(201, reply.Status);
+        Assert.Equal(
+            new[] { "POST https://api.github.com/repos/octo/hello/pulls", "POST https://api.github.com/repositories/3001/pulls" },
+            recorder.Sent.Select(sent => $"{sent.Method} {sent.Url.AbsoluteUri}"));
+        Assert.All(recorder.Sent, sent =>
+        {
+            Assert.Equal("application/json; charset=utf-8", sent.Header("Content-Type"));
+            Assert.Equal("{\"title\":\"Add the login form\",\"body\":\"Ready.\",\"head\":\"feature/login\",\"base\":\"main\",\"draft\":false}", sent.Body);
+            Assert.Equal("Bearer github_pat_FAKE-octo-1", sent.Header("Authorization"));
+        });
+    }
+
+    [Fact]
+    public async Task A_redirect_to_another_scheme_host_or_port_is_malformed_and_nothing_is_sent_there()
+    {
+        await using var setup = Setup.Start();
+        string[] elsewhere = ["https://elsewhere.example/api/v3/user", "https://127.0.0.1:1/api/v3/user", "http://127.0.0.1:2/api/v3/user"];
+
+        foreach (var target in elsewhere)
+        {
+            setup.Fake.FailNext("user", FakeGitHubFault.MovedTo(new Uri(target)));
+            var get = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+            Assert.Equal((HostingFailureKind.Malformed, "GitHub's answer could not be read."), (get.Failure!.Kind, get.Failure.Message));
+        }
+
+        setup.Fake.FailNext("create:octo/listed-0001", FakeGitHubFault.MovedTo(new Uri("https://elsewhere.example/api/v3/repos/octo/listed-0001/pulls")));
+        var body = new GitHubNewPullRequestJson { Title = "A title", Body = "A body", Head = "topic", Base = "main" };
+        var post = await setup.Client.SendAsync(HttpMethod.Post, setup.Octo, setup.Api("repos/octo/listed-0001/pulls"), body, GitHubJsonContext.Default.GitHubPullRequestJson, Cancelled);
+        Assert.Equal(HostingFailureKind.Malformed, post.Failure!.Kind);
+
+        Assert.All(setup.Recorder.Sent, sent => Assert.Equal("127.0.0.1:1", sent.Url.Authority));
+        Assert.Equal(4, setup.Recorder.Sent.Count);
+        Assert.Equal(
+            new[]
+            {
+                "GitHub: GET /api/v3/user failed: redirected to https://elsewhere.example:443",
+                "GitHub: GET /api/v3/user failed: redirected to https://127.0.0.1:1",
+                "GitHub: GET /api/v3/user failed: redirected to http://127.0.0.1:2",
+                "GitHub: POST /api/v3/repos/octo/listed-0001/pulls failed: redirected to https://elsewhere.example:443",
+            },
+            setup.Log.Lines.Select(line => line.Message[..line.Message.IndexOf(" (request ", StringComparison.Ordinal)]));
+        Assert.All(setup.Log.Lines, line => Assert.Equal(LogLevel.Warning, line.Level));
+    }
+
+    [Fact]
+    public async Task A_moved_repository_is_followed_with_the_token_on_the_api()
+    {
+        await using var setup = Setup.Start();
+        setup.Fake.FailNext("repo:octo/listed-0001", FakeGitHubFault.Moved);
+
+        var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("repos/octo/listed-0001"), null, GitHubJsonContext.Default.GitHubRepositoryJson, Cancelled);
+
+        Assert.Equal(("listed-0001", "octo", 200), (reply.Value!.Name, reply.Value.Owner.Login, reply.Status));
+        Assert.Equal(
+            new[] { "/api/v3/repos/octo/listed-0001 301", "/api/v3/repositories/3001 200" },
+            setup.Fake.Requests.Select(request => $"{request.Path} {request.Status}"));
+        Assert.All(setup.Fake.Requests, request => Assert.True(request.TokenPresent));
+        Assert.Empty(setup.Log.Lines);
+    }
+
+    [Theory]
+    [InlineData(3, true)]
+    [InlineData(4, false)]
+    public async Task Three_redirects_are_followed_and_a_fourth_is_malformed(int redirects, bool succeeds)
+    {
+        var recorder = new RecordingHttpHandler(request =>
+        {
+            var hop = int.Parse(request.RequestUri!.Segments[^1], System.Globalization.CultureInfo.InvariantCulture);
+            return hop < redirects
+                ? RecordingHttpHandler.Json(HttpStatusCode.MovedPermanently, "{}", ("Location", FormattableString.Invariant($"/hop/{hop + 1}")))
+                : RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"login\":\"octo\",\"id\":1001}");
+        });
+        var log = new ListLog();
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "hop/0"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal(succeeds, reply.Succeeded);
+        Assert.Equal(4, recorder.Sent.Count);
+        if (!succeeds)
+        {
+            Assert.Equal(HostingFailureKind.Malformed, reply.Failure!.Kind);
+            Assert.Equal("GitHub: GET /hop/3 failed: 301, a fourth redirect.", Assert.Single(log.Lines).Message);
+        }
+    }
+
+    [Fact]
+    public async Task A_redirect_without_a_location_is_malformed()
+    {
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.Found, "{}"));
+        var log = new ListLog();
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal(HostingFailureKind.Malformed, reply.Failure!.Kind);
+        Assert.Equal("GitHub: GET /user failed: 302 without Location.", Assert.Single(log.Lines).Message);
+    }
+
+    [Theory]
+    [InlineData(10, 20, true)]
+    [InlineData(3, 6, true)]
+    [InlineData(13, 25, false)]
+    public async Task Pages_follow_next_up_to_the_cap(int maxPages, int count, bool moreExist)
+    {
+        await using var setup = Setup.Start();
+        setup.Fake.MaxPerPage = 2;
+
+        var reply = await setup.Client.GetPagesAsync(setup.Octo, setup.Api("user/repos?per_page=100&sort=updated"), GitHubJsonContext.Default.ListGitHubRepositoryJson, maxPages, Cancelled);
+
+        Assert.True(reply.Succeeded);
+        Assert.Equal((count, moreExist), (reply.Value!.Count, reply.MoreExist));
+        Assert.Equal(Enumerable.Range(1, count).Select(n => FormattableString.Invariant($"listed-{n:D4}")), reply.Value.Select(repository => repository.Name));
+        Assert.Equal(Math.Min(maxPages, 13), setup.Fake.Requests.Count);
+        Assert.Equal("per_page=100&sort=updated&page=2", setup.Fake.Requests[1].Query);
+    }
+
+    [Theory]
+    [InlineData("http://elsewhere.example/api/v3/user/repos?page=2", "http://elsewhere.example:80")]
+    [InlineData("https://api.github.com:8443/user/repos?page=2", "https://api.github.com:8443")]
+    public async Task A_next_page_on_another_host_is_malformed_and_not_asked_for(string next, string origin)
+    {
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.OK, "[{\"name\":\"hello\",\"owner\":{\"login\":\"octo\"}}]", ("Link", $"<{next}>; rel=\"next\", <{next}>; rel=\"last\"")));
+        var log = new ListLog();
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+
+        var reply = await client.GetPagesAsync("github_pat_FAKE-octo-1", new Uri(Script, "user/repos?per_page=100"), GitHubJsonContext.Default.ListGitHubRepositoryJson, 10, Cancelled);
+
+        Assert.Equal(HostingFailureKind.Malformed, reply.Failure!.Kind);
+        Assert.Single(recorder.Sent);
+        Assert.Equal($"GitHub: GET /user/repos failed: Link to {origin}.", Assert.Single(log.Lines).Message);
+    }
+
+    [Fact]
+    public async Task A_next_page_outside_the_apis_path_is_malformed()
+    {
+        await using var setup = Setup.Start();
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.OK, "[]", ("Link", "<http://127.0.0.1:1/other/user/repos?page=2>; rel=\"next\"")));
+        using var client = new GitHubClient(setup.Fake.Endpoints, () => recorder, setup.Log, new ManualTimeProvider());
+
+        var reply = await client.GetPagesAsync(setup.Octo, setup.Api("user/repos"), GitHubJsonContext.Default.ListGitHubRepositoryJson, 10, Cancelled);
+
+        Assert.Equal(HostingFailureKind.Malformed, reply.Failure!.Kind);
+        Assert.Single(recorder.Sent);
+    }
+
+    [Fact]
+    public async Task A_second_identical_call_is_conditional_and_gets_the_kept_value_and_another_tokens_is_not()
+    {
+        await using var setup = Setup.Start();
+        var url = setup.Api("repos/octo/listed-0002");
+
+        var first = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, url, null, GitHubJsonContext.Default.GitHubRepositoryJson, Cancelled);
+        var second = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, url, null, GitHubJsonContext.Default.GitHubRepositoryJson, Cancelled);
+        var others = await setup.Client.SendAsync(HttpMethod.Get, setup.Ada, url, null, GitHubJsonContext.Default.GitHubRepositoryJson, Cancelled);
+
+        Assert.Equal((200, 304, 200), (first.Status, second.Status, others.Status));
+        Assert.Equal((first.Value!.Name, first.Value.UpdatedAt), (second.Value!.Name, second.Value.UpdatedAt));
+        Assert.Equal(new[] { false, true, false }, setup.Fake.Requests.Select(request => request.Conditional));
+        Assert.Equal(new[] { 200, 304, 200 }, setup.Fake.Requests.Select(request => request.Status));
+        Assert.Equal(new[] { false, true, false }, setup.Recorder.Sent.Select(sent => sent.Header("If-None-Match") is not null));
+    }
+
+    [Fact]
+    public async Task Each_fault_is_classified_with_its_message_detail_retry_time_and_request()
+    {
+        await using var setup = Setup.Start();
+        var now = AppClocks.HarnessTime;
+        (FakeGitHubFault Fault, HostingFailureKind Kind, string Message, string? Detail, DateTimeOffset? RetryAt)[] cases =
+        [
+            (FakeGitHubFault.BadCredentials, HostingFailureKind.BadCredentials, "Bad credentials", null, null),
+            (FakeGitHubFault.PrimaryRateLimit, HostingFailureKind.RateLimited, "API rate limit exceeded for user ID 1001.", null, now.AddHours(1)),
+            (FakeGitHubFault.SecondaryRateLimit, HostingFailureKind.RateLimited, "You have exceeded a secondary rate limit. Please wait a few minutes before you try again.", null, now.AddSeconds(60)),
+            (FakeGitHubFault.SsoRequired, HostingFailureKind.SsoRequired, "Resource protected by organization SAML enforcement.", "http://127.0.0.1:1/orgs/acme/sso?authorization_request=FAKE", null),
+            (FakeGitHubFault.Forbidden, HostingFailureKind.Forbidden, "Resource not accessible by personal access token", "metadata=read", null),
+            (FakeGitHubFault.NotFound, HostingFailureKind.NotFound, "Not Found", null, null),
+            (FakeGitHubFault.ApiVersionGone, HostingFailureKind.ApiVersion, "API version 2026-03-10 is no longer supported.", null, null),
+            (FakeGitHubFault.ServerError, HostingFailureKind.ServerError, "Server Error", null, null),
+            (FakeGitHubFault.BadGateway, HostingFailureKind.ServerError, "GitHub had a problem: HTTP 502.", null, null),
+            (FakeGitHubFault.Malformed, HostingFailureKind.Malformed, "GitHub's answer could not be read.", null, null),
+            (FakeGitHubFault.CreatedThenDropped, HostingFailureKind.Network, "Could not reach GitHub.", null, null),
+        ];
+
+        foreach (var (fault, kind, message, detail, retryAt) in cases)
+        {
+            setup.Fake.FailNext("user", fault);
+            var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user?x=1"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+            var failure = reply.Failure;
+            Assert.NotNull(failure);
+            Assert.Equal((kind, message, detail, retryAt), (failure.Kind, failure.Message, failure.Detail, failure.RetryAt));
+            Assert.Equal("http://127.0.0.1:1/api/v3/user", failure.Url!.AbsoluteUri);
+            if (kind == HostingFailureKind.Network)
+            {
+                Assert.Null(failure.RequestId);
+            }
+            else
+            {
+                Assert.Matches("^FAKE-[0-9]{4}$", failure.RequestId);
+            }
+
+            Assert.True((await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled)).Succeeded, $"user after {fault}");
+        }
+
+        Assert.Equal(cases.Length, setup.Log.Lines.Count);
+        Assert.Equal("GitHub: GET /api/v3/user failed: Network.", setup.Log.Lines[^1].Message);
+    }
+
+    [Theory]
+    [InlineData(429, null, "{\"message\":\"Too many\"}", HostingFailureKind.RateLimited, 60)]
+    [InlineData(403, "120", "{\"message\":\"Slow down\"}", HostingFailureKind.RateLimited, 120)]
+    [InlineData(403, null, "{\"message\":\"You have exceeded a Secondary Rate Limit.\"}", HostingFailureKind.RateLimited, 60)]
+    [InlineData(400, null, "{\"message\":\"Unsupported 'X-GitHub-Api-Version' header: x.\"}", HostingFailureKind.ApiVersion, null)]
+    [InlineData(400, null, "{\"message\":\"Problems parsing JSON\"}", HostingFailureKind.Malformed, null)]
+    [InlineData(415, null, "{\"message\":\"Unsupported 'Accept' header.\"}", HostingFailureKind.Malformed, null)]
+    [InlineData(418, null, "{}", HostingFailureKind.Malformed, null)]
+    [InlineData(503, null, "<html>busy</html>", HostingFailureKind.ServerError, null)]
+    [InlineData(401, null, "<html>no</html>", HostingFailureKind.BadCredentials, null)]
+    public async Task Other_answers_are_classified_by_the_table(int status, string? retryAfter, string body, HostingFailureKind kind, int? retrySeconds)
+    {
+        var clock = new ManualTimeProvider(AppClocks.HarnessTime);
+        var recorder = new RecordingHttpHandler(_ => retryAfter is null
+            ? RecordingHttpHandler.Json((HttpStatusCode)status, body)
+            : RecordingHttpHandler.Json((HttpStatusCode)status, body, ("Retry-After", retryAfter)));
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), clock);
+
+        var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal(kind, reply.Failure!.Kind);
+        Assert.Equal(retrySeconds is null ? null : AppClocks.HarnessTime.AddSeconds(retrySeconds.Value), reply.Failure.RetryAt);
+        var expected = kind switch
+        {
+            HostingFailureKind.Malformed => "GitHub's answer could not be read.",
+            HostingFailureKind.ServerError => "GitHub had a problem: HTTP 503.",
+            HostingFailureKind.BadCredentials => "Unauthorized",
+            _ => null,
+        };
+        if (expected is not null)
+        {
+            Assert.Equal(expected, reply.Failure.Message);
+        }
+    }
+
+    [Theory]
+    [InlineData("{\"resource\":\"PullRequest\",\"field\":\"title\",\"code\":\"missing_field\"}", "title is missing")]
+    [InlineData("{\"resource\":\"PullRequest\",\"field\":\"title\",\"code\":\"missing\"}", "title is missing")]
+    [InlineData("{\"resource\":\"PullRequest\",\"field\":\"base\",\"code\":\"invalid\"}", "base is invalid")]
+    [InlineData("{\"resource\":\"PullRequest\",\"field\":\"head\",\"code\":\"already_exists\"}", "head already exists")]
+    [InlineData("{\"resource\":\"PullRequest\",\"code\":\"custom\",\"message\":\"No commits between main and topic\"}", "No commits between main and topic")]
+    [InlineData("{\"resource\":\"PullRequest\",\"field\":\"head\",\"code\":\"unprocessable\"}", "Validation Failed")]
+    [InlineData(null, "Validation Failed")]
+    public async Task A_422s_detail_is_the_first_errors_message_or_its_field_and_code(string? error, string detail)
+    {
+        var body = error is null ? "{\"message\":\"Validation Failed\"}" : $"{{\"message\":\"Validation Failed\",\"errors\":[{error}]}}";
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.UnprocessableContent, body));
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Post, "github_pat_FAKE-octo-1", new Uri(Script, "repos/octo/hello/pulls"), new GitHubNewPullRequestJson { Title = "t", Body = "b", Head = "h", Base = "main" }, GitHubJsonContext.Default.GitHubPullRequestJson, Cancelled);
+
+        Assert.Equal((HostingFailureKind.Validation, "Validation Failed", detail), (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Detail));
+    }
+
+    [Fact]
+    public async Task A_missing_version_header_is_an_api_version_failure()
+    {
+        await using var setup = Setup.Start(edit: request => request.Headers.Remove("X-GitHub-Api-Version"));
+
+        var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal((HostingFailureKind.ApiVersion, "Unsupported 'X-GitHub-Api-Version' header: ."), (reply.Failure!.Kind, reply.Failure.Message));
+    }
+
+    [Fact]
+    public async Task No_answer_is_a_network_failure_with_the_exception_in_the_log_only()
+    {
+        var recorder = new RecordingHttpHandler(_ => throw new HttpRequestException("No such host is known. (api.github.com:443)"));
+        var log = new ListLog();
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal((HostingFailureKind.Network, "Could not reach GitHub.", 0), (reply.Failure!.Kind, reply.Failure.Message, reply.Status));
+        Assert.Equal("GitHub: GET /user failed: Network.", Assert.Single(log.Lines).Message);
+    }
+
+    [Fact]
+    public async Task An_answer_over_10_mb_is_malformed()
+    {
+        var recorder = new RecordingHttpHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[GitHubClient.MaxBodyBytes + 1]) });
+        var log = new ListLog();
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal(HostingFailureKind.Malformed, reply.Failure!.Kind);
+        Assert.Equal("GitHub: GET /user failed: an answer over 10 MB.", Assert.Single(log.Lines).Message);
+    }
+
+    [Fact]
+    public async Task A_409_is_passed_as_its_status_without_a_failure()
+    {
+        await using var setup = Setup.Start();
+
+        var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("repos/octo/listed-0001/commits?per_page=100"), null, GitHubJsonContext.Default.ListGitHubCommitItemJson, Cancelled);
+
+        Assert.Equal((true, 409), (reply.Succeeded, reply.Status));
+        Assert.Null(reply.Value);
+        Assert.Empty(setup.Log.Lines);
+    }
+
+    [Fact]
+    public async Task A_held_request_runs_out_of_its_time_with_the_fixed_text()
+    {
+        await using var setup = Setup.Start(timeout: TimeSpan.FromSeconds(1));
+        using var hold = setup.Fake.HoldNext("user");
+
+        var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled).WaitAsync(TimeSpan.FromSeconds(60), Cancelled);
+
+        Assert.Equal((HostingFailureKind.Network, "GitHub did not answer within 30 seconds."), (reply.Failure!.Kind, reply.Failure.Message));
+        Assert.Equal("GitHub: GET /api/v3/user failed: time-out.", Assert.Single(setup.Log.Lines).Message);
+    }
+
+    [Fact]
+    public async Task Cancelling_a_held_call_throws()
+    {
+        await using var setup = Setup.Start();
+        using var hold = setup.Fake.HoldNext("user");
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(Cancelled);
+
+        var call = setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, cancel.Token);
+        await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(60), Cancelled);
+        await cancel.CancelAsync();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call.WaitAsync(TimeSpan.FromSeconds(60), Cancelled));
+        Assert.Empty(setup.Log.Lines);
+    }
+
+    [Fact]
+    public async Task A_second_call_waits_while_the_first_is_held_and_its_own_cancellation_ends_the_wait()
+    {
+        await using var setup = Setup.Start();
+        var hold = setup.Fake.HoldNext("user");
+
+        var first = setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+        await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(60), Cancelled);
+        var second = setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("repos/octo/listed-0001"), null, GitHubJsonContext.Default.GitHubRepositoryJson, Cancelled);
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(Cancelled);
+        var third = setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("repos/octo/listed-0002"), null, GitHubJsonContext.Default.GitHubRepositoryJson, cancel.Token);
+        await Task.Delay(TimeSpan.FromMilliseconds(300), Cancelled);
+
+        Assert.False(second.IsCompleted);
+        Assert.Single(setup.Recorder.Sent);
+        await cancel.CancelAsync();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => third.WaitAsync(TimeSpan.FromSeconds(60), Cancelled));
+        Assert.Single(setup.Recorder.Sent);
+
+        hold.Dispose();
+        Assert.True((await first.WaitAsync(TimeSpan.FromSeconds(60), Cancelled)).Succeeded);
+        Assert.True((await second.WaitAsync(TimeSpan.FromSeconds(60), Cancelled)).Succeeded);
+        Assert.Equal(new[] { "/api/v3/user", "/api/v3/repos/octo/listed-0001" }, setup.Recorder.Sent.Select(sent => sent.Url.AbsolutePath));
+    }
+
+    [Fact]
+    public async Task A_log_line_holds_no_query_token_or_e_mail()
+    {
+        await using var setup = Setup.Start();
+        setup.Fake.FailNext("commits:octo/listed-0001", FakeGitHubFault.NotFound);
+
+        var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("repos/octo/listed-0001/commits?author=ada%40example.com&per_page=1"), null, GitHubJsonContext.Default.ListGitHubCommitItemJson, Cancelled);
+
+        Assert.Equal(HostingFailureKind.NotFound, reply.Failure!.Kind);
+        Assert.Equal("http://127.0.0.1:1/api/v3/repos/octo/listed-0001/commits", reply.Failure.Url!.AbsoluteUri);
+        var line = Assert.Single(setup.Log.Lines);
+        Assert.Matches(@"^GitHub: GET /api/v3/repos/octo/listed-0001/commits failed: 404 \(request FAKE-[0-9]{4}\)\.$", line.Message);
+        foreach (var secret in new[] { setup.Octo, "ada", "example.com", "%40", "?", "author", "per_page" })
+        {
+            Assert.DoesNotContain(secret, line.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>The fake in process with octo (1001) and ada (1003), a token each, and 25 listed repositories of octo; a client over a recording handler.</summary>
+    private sealed class Setup : IAsyncDisposable
+    {
+        private readonly TempDirectory _folder;
+
+        private Setup(TempDirectory folder, FakeGitHub fake, RecordingHttpHandler recorder, ListLog log, GitHubClient client, string octo, string ada)
+        {
+            _folder = folder;
+            Fake = fake;
+            Recorder = recorder;
+            Log = log;
+            Client = client;
+            Octo = octo;
+            Ada = ada;
+        }
+
+        public FakeGitHub Fake { get; }
+
+        public RecordingHttpHandler Recorder { get; }
+
+        public ListLog Log { get; }
+
+        public GitHubClient Client { get; }
+
+        public string Octo { get; }
+
+        public string Ada { get; }
+
+        public static Setup Start(TimeSpan? timeout = null, Action<HttpRequestMessage>? edit = null)
+        {
+            var folder = new TempDirectory("github-client");
+            var fake = FakeGitHub.InProcess(folder.Combine("github"));
+            fake.AddUser("octo", 1001, "Octo Cat");
+            fake.AddUser("ada", 1003, "Ada Lovelace");
+            var octo = fake.AddToken("octo");
+            var ada = fake.AddToken("ada");
+            fake.AddListedRepositories("octo", 25);
+            var recorder = new RecordingHttpHandler(fake.CreateHandler(), edit);
+            var log = new ListLog();
+            var client = new GitHubClient(fake.Endpoints, () => recorder, log, new ManualTimeProvider(AppClocks.HarnessTime), timeout);
+            return new Setup(folder, fake, recorder, log, client, octo, ada);
+        }
+
+        public Uri Api(string relative) => new(Fake.Endpoints.ApiBase, relative);
+
+        public async ValueTask DisposeAsync()
+        {
+            Client.Dispose();
+            Assert.Empty(Fake.Errors);
+            await Fake.DisposeAsync();
+            _folder.Dispose();
+        }
+    }
+}
