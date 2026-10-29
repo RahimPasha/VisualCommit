@@ -30,7 +30,8 @@ internal sealed record GitHubReply<T>(T? Value, HostingFailure? Failure, int Sta
 /// GitHub's REST API over one <see cref="HttpClient"/> (docs/phase-7a-design.md 6.2, D285):
 /// GitHub's headers on every request and the token only to the API's own scheme, host and port;
 /// redirects repeated by hand on the API's address only; <c>Link</c> pages followed on it only; one
-/// request at a time; ETags kept in memory per token fingerprint and URL; every answer that is not
+/// request at a time; ETags kept in memory per token fingerprint and URL, with the body and the
+/// headers read from an answer; every answer that is not
 /// a value classified into a <see cref="HostingFailure"/>, with one warning that names neither a
 /// header, a body, a query nor a token. Every request has 30 s once sent and the caller's
 /// cancellation, which throws <see cref="OperationCanceledException"/>.
@@ -59,6 +60,13 @@ internal sealed partial class GitHubClient : IDisposable
     private const int MaxKeptAnswers = 512;
 
     private static readonly TimeSpan SecondaryRetry = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// The headers the client reads from an answer beside its body, kept with its ETag: a 304 need
+    /// not repeat them (RFC 9110 15.4.5), and without the kept <c>Link</c> a repeated list would stop
+    /// at its first page.
+    /// </summary>
+    private static readonly string[] KeptHeaderNames = ["Link", "X-GitHub-SSO", "X-OAuth-Scopes"];
 
     private readonly GitHubEndpoints _endpoints;
     private readonly HttpClient _http;
@@ -304,12 +312,18 @@ internal sealed partial class GitHubClient : IDisposable
 
                     if (status == 304 && kept is not null)
                     {
+                        // The 304's own headers over the kept ones, as an HTTP cache does.
+                        foreach (var (name, value) in kept.Headers)
+                        {
+                            headers.TryAdd(name, value);
+                        }
+
                         return new Exchange(status, kept.Body, headers, current, response.ReasonPhrase, null);
                     }
 
                     if (method == HttpMethod.Get && status == 200 && headers.GetValueOrDefault("ETag") is { Length: > 0 } etag)
                     {
-                        Keep(fingerprint, current, new KeptAnswer(etag, body));
+                        Keep(fingerprint, current, new KeptAnswer(etag, body, KeptHeadersOf(headers)));
                     }
 
                     return new Exchange(status, body, headers, current, response.ReasonPhrase, null);
@@ -318,13 +332,15 @@ internal sealed partial class GitHubClient : IDisposable
                 {
                     throw;
                 }
-                catch (OperationCanceledException)
+                catch (OperationCanceledException) when (limit.IsCancellationRequested)
                 {
                     Warn(method.Method, current, "time-out", null);
                     return Unanswered(current, TimeoutText);
                 }
-                catch (Exception ex) when (ex is HttpRequestException or IOException)
+                catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
                 {
+                    // A cancellation that is neither the caller's nor the 30 s (the handler's connect
+                    // time-out, a client disposed mid-request) is no answer.
                     Warn(method.Method, current, "Network", null, ex);
                     return Unanswered(current, NetworkText);
                 }
@@ -391,7 +407,7 @@ internal sealed partial class GitHubClient : IDisposable
             return Fail(HostingFailureKind.RateLimited, message ?? fallback, retryAt: reset);
         }
 
-        if (limited && (Header("Retry-After") is not null || message?.Contains("secondary rate limit", StringComparison.OrdinalIgnoreCase) == true || status == 429))
+        if (limited && (Header("Retry-After") is not null || message?.Contains("secondary rate limit", StringComparison.OrdinalIgnoreCase) == true))
         {
             return Fail(HostingFailureKind.RateLimited, message ?? fallback, retryAt: RetryAfter(Header("Retry-After")));
         }
@@ -529,6 +545,21 @@ internal sealed partial class GitHubClient : IDisposable
         _log.Warning($"GitHub: {method} {url.AbsolutePath} failed: {statusOrKind}{request}.", exception);
     }
 
+    /// <summary>Those of <paramref name="headers"/> that <see cref="KeptHeaderNames"/> names.</summary>
+    private static Dictionary<string, string> KeptHeadersOf(Dictionary<string, string> headers)
+    {
+        var kept = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in KeptHeaderNames)
+        {
+            if (headers.TryGetValue(name, out var value))
+            {
+                kept[name] = value;
+            }
+        }
+
+        return kept;
+    }
+
     /// <summary>A token's SHA-256, by which kept answers are found: never the token itself.</summary>
     private static string Fingerprint(string token) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
 
@@ -559,8 +590,8 @@ internal sealed partial class GitHubClient : IDisposable
         }
     }
 
-    /// <summary>The last 200 answer of a URL for one token: its ETag and body, in memory only.</summary>
-    private sealed record KeptAnswer(string ETag, byte[] Body);
+    /// <summary>The last 200 answer of a URL for one token: its ETag, body and the headers of <see cref="KeptHeaderNames"/>, in memory only.</summary>
+    private sealed record KeptAnswer(string ETag, byte[] Body, IReadOnlyDictionary<string, string> Headers);
 
     /// <summary>What came back: the status, body and headers of the address that answered, or the failure that stopped it early.</summary>
     private sealed record Exchange(int Status, byte[] Body, IReadOnlyDictionary<string, string> Headers, Uri Url, string? Reason, HostingFailure? Failure);

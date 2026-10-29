@@ -11,7 +11,8 @@ namespace VisualCommit.Hosting.Tests;
 /// <summary>
 /// GitHub as a hosting service (docs/phase-7a-design.md 6.3, 6.5): A1 to A6 against a copy of
 /// "hosting" served in process (a fork, a draft, a deleted fork, a closed pull request), A5's
-/// bodies and refusals, A6's map and its caps, and avatars on another host dropped.
+/// bodies and refusals, A6's map and its caps, and avatars on another host dropped. Every request
+/// the provider sends, on every route, carries GitHub's four headers (checked as each test ends).
 /// </summary>
 public sealed class GitHubProviderTests
 {
@@ -138,7 +139,7 @@ public sealed class GitHubProviderTests
     }
 
     [Fact]
-    public async Task A4_stops_at_three_pages_and_says_more_exist()
+    public async Task A4_stops_at_three_pages_and_says_more_exist_also_when_asked_again()
     {
         await using var setup = await Setup.StartAsync();
         foreach (var title in new[] { "Six", "Seven", "Eight", "Nine" })
@@ -153,6 +154,14 @@ public sealed class GitHubProviderTests
         Assert.Equal((6, true), (list.Value!.PullRequests.Count, list.Value.MoreExist));
         Assert.Equal(new[] { 9, 8, 7, 6, 5, 3 }, list.Value.PullRequests.Select(pull => pull.Number));
         Assert.Equal(3, setup.Fake.Requests.Count);
+
+        // As the session asks again after each operation (7.8): every page 304, the same rows, still more.
+        var again = await setup.Provider.ListPullRequestsAsync(setup.Served.OctoToken, Repository("octo", "hello"), Cancelled);
+
+        Assert.Equal(list.Value.PullRequests, again.Value!.PullRequests);
+        Assert.True(again.Value.MoreExist);
+        Assert.Equal(6, setup.Fake.Requests.Count);
+        Assert.All(setup.Fake.Requests.Skip(3), request => Assert.Equal((true, 304), (request.Conditional, request.Status)));
     }
 
     [Fact]
@@ -339,10 +348,11 @@ public sealed class GitHubProviderTests
     /// <summary>A copy of "hosting" served in process, and a provider over its handler (on its endpoints unless given).</summary>
     private sealed class Setup : IAsyncDisposable
     {
-        private Setup(ServedHosting served, GitHubProvider provider, ListLog log)
+        private Setup(ServedHosting served, GitHubProvider provider, RecordingHttpHandler recorder, ListLog log)
         {
             Served = served;
             Provider = provider;
+            Recorder = recorder;
             Log = log;
         }
 
@@ -351,6 +361,8 @@ public sealed class GitHubProviderTests
         public FakeGitHub Fake => Served.GitHub;
 
         public GitHubProvider Provider { get; }
+
+        public RecordingHttpHandler Recorder { get; }
 
         public ListLog Log { get; }
 
@@ -369,13 +381,23 @@ public sealed class GitHubProviderTests
             }
 
             var log = new ListLog();
-            return new Setup(served, new GitHubProvider(endpoints ?? served.GitHub.Endpoints, served.GitHub.CreateHandler, log, new ManualTimeProvider(AppClocks.HarnessTime)), log);
+            var recorder = new RecordingHttpHandler(served.GitHub.CreateHandler());
+            return new Setup(served, new GitHubProvider(endpoints ?? served.GitHub.Endpoints, () => recorder, log, new ManualTimeProvider(AppClocks.HarnessTime)), recorder, log);
         }
 
         public async ValueTask DisposeAsync()
         {
             Provider.Dispose();
             Assert.Empty(Fake.Errors);
+            Assert.Equal(Fake.Requests.Count, Recorder.Sent.Count);
+            Assert.All(Recorder.Sent, sent =>
+            {
+                Assert.Equal(GitHubApi.MediaType, sent.Header("Accept"));
+                Assert.Equal(GitHubApi.Version, sent.Header("X-GitHub-Api-Version"));
+                Assert.Equal(GitHubClient.UserAgent, sent.Header("User-Agent"));
+                Assert.StartsWith("Bearer ", sent.Header("Authorization"), StringComparison.Ordinal);
+                Assert.Equal(sent.Method == "POST" ? "application/json; charset=utf-8" : null, sent.Header("Content-Type"));
+            });
             Assert.All(Fake.Requests, request => Assert.DoesNotContain("_FAKE-", request.ToString(), StringComparison.Ordinal));
             await Served.DisposeAsync();
         }

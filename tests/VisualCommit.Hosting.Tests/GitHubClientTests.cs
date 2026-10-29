@@ -228,6 +228,31 @@ public sealed class GitHubClientTests
     }
 
     [Fact]
+    public async Task A_repeated_list_is_conditional_on_every_page_and_keeps_its_pages_more_and_single_sign_on()
+    {
+        await using var setup = Setup.Start();
+        setup.Fake.MaxPerPage = 2;
+        setup.Fake.FailNext("user/repos", FakeGitHubFault.SsoPartialResults);
+        var url = setup.Api("user/repos?per_page=100&sort=updated");
+
+        var first = await setup.Client.GetPagesAsync(setup.Octo, url, GitHubJsonContext.Default.ListGitHubRepositoryJson, 10, Cancelled);
+        var second = await setup.Client.GetPagesAsync(setup.Octo, url, GitHubJsonContext.Default.ListGitHubRepositoryJson, 10, Cancelled);
+
+        // The fake's 304 carries neither Link nor X-GitHub-SSO: the kept ones page on and say so.
+        Assert.Equal((20, true, 200), (first.Value!.Count, first.MoreExist, first.Status));
+        Assert.Equal(first.Value.Select(repository => repository.Name), second.Value!.Select(repository => repository.Name));
+        Assert.Equal((true, 304, first.OAuthScopes), (second.MoreExist, second.Status, second.OAuthScopes));
+        Assert.StartsWith("partial-results", first.Sso, StringComparison.Ordinal);
+        Assert.Equal(first.Sso, second.Sso);
+        var requests = setup.Fake.Requests;
+        Assert.Equal(20, requests.Count);
+        Assert.All(requests.Take(10), request => Assert.Equal((false, 200), (request.Conditional, request.Status)));
+        Assert.All(requests.Skip(10), request => Assert.Equal((true, 304), (request.Conditional, request.Status)));
+        Assert.Equal(requests.Take(10).Select(request => request.Query), requests.Skip(10).Select(request => request.Query));
+        Assert.Empty(setup.Log.Lines);
+    }
+
+    [Fact]
     public async Task Each_fault_is_classified_with_its_message_detail_retry_time_and_request()
     {
         await using var setup = Setup.Start();
@@ -273,7 +298,8 @@ public sealed class GitHubClientTests
     }
 
     [Theory]
-    [InlineData(429, null, "{\"message\":\"Too many\"}", HostingFailureKind.RateLimited, 60)]
+    [InlineData(429, "30", "{\"message\":\"Too many\"}", HostingFailureKind.RateLimited, 30)]
+    [InlineData(429, null, "{\"message\":\"Too many\"}", HostingFailureKind.Malformed, null)]
     [InlineData(403, "120", "{\"message\":\"Slow down\"}", HostingFailureKind.RateLimited, 120)]
     [InlineData(403, null, "{\"message\":\"You have exceeded a Secondary Rate Limit.\"}", HostingFailureKind.RateLimited, 60)]
     [InlineData(400, null, "{\"message\":\"Unsupported 'X-GitHub-Api-Version' header: x.\"}", HostingFailureKind.ApiVersion, null)]
@@ -347,6 +373,22 @@ public sealed class GitHubClientTests
 
         Assert.Equal((HostingFailureKind.Network, "Could not reach GitHub.", 0), (reply.Failure!.Kind, reply.Failure.Message, reply.Status));
         Assert.Equal("GitHub: GET /user failed: Network.", Assert.Single(log.Lines).Message);
+    }
+
+    [Fact]
+    public async Task A_cancellation_neither_the_callers_nor_the_time_limits_is_no_answer_with_its_exception_in_the_log()
+    {
+        // As the handler's 10 s connect time-out throws it: a TaskCanceledException around a TimeoutException.
+        var recorder = new RecordingHttpHandler(_ => throw new TaskCanceledException("The operation was canceled.", new TimeoutException("A connection could not be made within 10 seconds.")));
+        var log = new ExceptionLog();
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal((HostingFailureKind.Network, "Could not reach GitHub.", 0), (reply.Failure!.Kind, reply.Failure.Message, reply.Status));
+        var (message, exception) = Assert.Single(log.Lines);
+        Assert.Equal("GitHub: GET /user failed: Network.", message);
+        Assert.IsAssignableFrom<OperationCanceledException>(exception);
     }
 
     [Fact]
@@ -441,6 +483,31 @@ public sealed class GitHubClientTests
         foreach (var secret in new[] { setup.Octo, "ada", "example.com", "%40", "?", "author", "per_page" })
         {
             Assert.DoesNotContain(secret, line.Message, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>A log that keeps each line's message with its exception.</summary>
+    private sealed class ExceptionLog : IAppLog
+    {
+        private readonly List<(string Message, Exception? Exception)> _lines = [];
+
+        public IReadOnlyList<(string Message, Exception? Exception)> Lines
+        {
+            get
+            {
+                lock (_lines)
+                {
+                    return [.. _lines];
+                }
+            }
+        }
+
+        public void Write(LogLevel level, string message, Exception? exception = null)
+        {
+            lock (_lines)
+            {
+                _lines.Add((message, exception));
+            }
         }
     }
 
