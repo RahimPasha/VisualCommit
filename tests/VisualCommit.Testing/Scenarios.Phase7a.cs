@@ -85,6 +85,15 @@ public static partial class Scenarios
     /// gone/tool); octo's and ada's e-mails linked. Only when the fake is on a port other than
     /// 47395 do the clones' remotes get its URLs (<c>git remote set-url</c>, D265). With
     /// <paramref name="ownsCopy"/> disposing the result deletes <paramref name="hello"/>'s copy too.
+    /// <para>
+    /// In process the clones' remotes stay at <c>http://127.0.0.1:47395/…</c> while the fake's
+    /// endpoints are <c>Local(1)</c> (<see cref="FakeGitHub.InProcessPort"/>): the app, which knows
+    /// the fake by scheme, host and port, recognises neither clone's remotes as GitHub, and git
+    /// reaches nothing. Such a copy serves only calls to the fake's routes by handler (give the
+    /// session <c>hosting: new HostingOptions(fake.Endpoints, fake.CreateHandler)</c>, never
+    /// <c>ShellDriver.Start(gitHub: …)</c>, which refuses it). A test that needs the remotes
+    /// recognised, or git to reach the fake, serves on a port: <c>port: 0</c>.
+    /// </para>
     /// </summary>
     public static async Task<ServedHosting> ServeHostingAsync(TempRepo hello, int port = AuthRemoteServer.Phase7aVisualChecksPort, bool inProcess = false, CancellationToken ct = default, bool ownsCopy = false)
     {

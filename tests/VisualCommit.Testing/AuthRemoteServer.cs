@@ -1019,8 +1019,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// Who a git request to a host signs in as, and whether it may go on (<see cref="StartForHostAsync"/>):
     /// Basic with any non-empty user name and a known token, the token's login; no header, anonymous
     /// for an upload-pack of a public repository; else refused (401). A receive-pack also needs a
-    /// login that may push: a refusal's text when it has none. A path in no served repository goes
-    /// on to its 404 whatever it carries.
+    /// login that may push: a refusal's text when it has none. A header that cannot be read, or whose
+    /// token is unknown, gets 401 on every path, as on the plain server and on GitHub; a path in no
+    /// served repository goes on to its 404 only without a header or with a known token.
     /// </summary>
     private (string? Login, string? GivenUserName, bool Authorized, string? PushRefusal) HostAccess(RequestHead head, string path, string query)
     {
@@ -1042,7 +1043,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
         var receivePack = path.EndsWith("/git-receive-pack", StringComparison.Ordinal)
             || query.Split('&').Contains("service=git-receive-pack", StringComparer.Ordinal);
-        // A path in no served repository goes on to its 404, signed in or not.
+        // A path in no served repository goes on to its 404, signed in or anonymous (a header that
+        // could not be read was refused above).
         if (repository is null)
         {
             return (login, given, true, null);

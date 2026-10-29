@@ -126,7 +126,7 @@ public sealed partial class ShellDriver : IDisposable
     /// <see cref="DefaultWaitTimeout"/>, and rethrows what that start threw.
     /// </para>
     /// </summary>
-    /// <exception cref="ArgumentException">Both <paramref name="gitHub"/> and <paramref name="hosting"/> are given.</exception>
+    /// <exception cref="ArgumentException">Both <paramref name="gitHub"/> and <paramref name="hosting"/> are given, or <paramref name="gitHub"/> is in process (<see cref="FakeGitHub.InProcess"/>: it goes in <paramref name="hosting"/>).</exception>
     public static ShellDriver Start(
         string dataDirectory,
         int? width = 1100,
@@ -143,6 +143,8 @@ public sealed partial class ShellDriver : IDisposable
         {
             throw new ArgumentException("Give the fake of GitHub (gitHub) or the hosting options (hosting), not both.", nameof(hosting));
         }
+
+        RefuseInProcess(gitHub, nameof(gitHub));
 
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
@@ -226,6 +228,8 @@ public sealed partial class ShellDriver : IDisposable
         {
             throw new ArgumentException("Give the fake of GitHub (gitHub) or the hosting options (hosting), not both.", nameof(hosting));
         }
+
+        RefuseInProcess(gitHub, nameof(gitHub));
 
         WriteSession(
             dataDirectory,

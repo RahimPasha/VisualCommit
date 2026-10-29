@@ -191,6 +191,16 @@ public sealed class FakeGitHubTests
         await AssertInvalidAsync(fake, token, """{"title":"T","head":"ada:fix-typo","base":"main"}""", """{"resource":"PullRequest","code":"custom","message":"A pull request already exists for ada:fix-typo."}""");
         await AssertInvalidAsync(fake, token, """{"title":"T","head":"main","base":"main"}""", """{"resource":"PullRequest","code":"custom","message":"No commits between main and main"}""");
 
+        // A body that breaks two rules gets the earlier one's refusal: no title before a bad base,
+        // a bad head or an open one; a bad base before a bad head. (A bad head can be neither open
+        // nor counted, so it meets no later rule; the open one before nothing ahead is below.)
+        var title = """{"resource":"PullRequest","field":"title","code":"missing_field"}""";
+        await AssertInvalidAsync(fake, token, """{"head":"topic/no-pr","base":"nope"}""", title);
+        await AssertInvalidAsync(fake, token, """{"head":"nope","base":"main"}""", title);
+        await AssertInvalidAsync(fake, token, """{"head":"feature/login","base":"main"}""", title);
+        await AssertInvalidAsync(fake, token, """{"title":"T","head":"nope","base":"nope"}""", """{"resource":"PullRequest","field":"base","code":"invalid"}""");
+        await AssertInvalidAsync(fake, token, """{"title":"T","head":"bob:fix-typo","base":"nope"}""", """{"resource":"PullRequest","field":"base","code":"invalid"}""");
+
         // A fine-grained token whose login cannot push to the base is refused first.
         var forbidden = await SendAsync(fake, HttpMethod.Post, "repos/acme/tool/pulls", token, """{"title":"T","head":"octo:fix-typo","base":"main"}""");
         Assert.Equal((HttpStatusCode.Forbidden, "Resource not accessible by personal access token", "pull_requests=write"), (forbidden.Status, forbidden.Text("message"), forbidden.Header("X-Accepted-GitHub-Permissions")));
@@ -207,6 +217,12 @@ public sealed class FakeGitHubTests
         Assert.Equal(fake.Endpoints.ApiBase.AbsoluteUri + "repos/octo/hello/pulls/6", made.Header("Location"));
         Assert.Equal(await RevParseAsync(scenario.Hello, "origin/topic/no-pr"), await RefAsync(scenario.Hello, bare, "refs/pull/6/head"));
         Assert.Equal(new[] { 6, 5, 3, 2, 1 }, Numbers(await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/pulls", token)));
+
+        // An open one with nothing ahead (main into main) is refused as open, before the count.
+        fake.AddPullRequest("octo", "hello", "Main into main", "octo", "main", "main", number: 7);
+        await AssertInvalidAsync(fake, token, """{"title":"T","head":"main","base":"main"}""", """{"resource":"PullRequest","code":"custom","message":"A pull request already exists for octo:main."}""");
+        Assert.Null(await RefAsync(scenario.Hello, bare, "refs/pull/8/head"));
+
         Assert.Equal("create:octo/hello", fake.Requests.Single(request => request.Status == 201).Route);
         Assert.Empty(fake.Errors);
     }

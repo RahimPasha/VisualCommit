@@ -458,7 +458,7 @@ public class AuthRemoteServerTests
     }
 
     [Fact]
-    public async Task A_claimed_path_is_answered_before_auth_and_an_unclaimed_one_is_still_404()
+    public async Task A_claimed_path_is_answered_before_auth_and_an_unclaimed_one_goes_to_auth_then_404()
     {
         using var host = await HostFolderAsync();
         await using var server = await AuthRemoteServer.StartForHostAsync(host.Folder, host.Options);
@@ -474,20 +474,43 @@ public class AuthRemoteServerTests
         using var posted = await client.PostAsync(new Uri($"http://127.0.0.1:{server.Port}/api/v3/ping"), new StringContent("{\"a\":1}"), TestCancelled);
         Assert.Equal("pong POST /api/v3/ping  " + $"127.0.0.1:{server.Port}" + " {\"a\":1}", await posted.Content.ReadAsStringAsync(TestCancelled));
 
+        // The hook runs ahead of auth: a header git's auth would refuse (a token nobody has, or a
+        // scheme it does not read) still reaches the claimed route.
+        foreach (var header in new[] { BadBasicHeader, "Bearer " + OctoToken })
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Get, new Uri($"http://127.0.0.1:{server.Port}/api/v3/ping"));
+            message.Headers.TryAddWithoutValidation("Authorization", header);
+            using var answered = await client.SendAsync(message, TestCancelled);
+            Assert.Equal(HttpStatusCode.OK, answered.StatusCode);
+            Assert.Equal("pong GET /api/v3/ping  " + $"127.0.0.1:{server.Port}", await answered.Content.ReadAsStringAsync(TestCancelled));
+        }
+
         // A dropped answer closes the connection without a word (the client may try again first).
         await Assert.ThrowsAsync<HttpRequestException>(() => client.PostAsync(new Uri($"http://127.0.0.1:{server.Port}/api/v3/drop"), new StringContent("{}"), TestCancelled));
 
+        // Without a header an unclaimed path in no served repository gets its 404.
         foreach (var path in new[] { "/api/v3/other", "/octo/missing.git/info/refs", "/octo", "/" })
         {
             using var unclaimed = await client.GetAsync(new Uri($"http://127.0.0.1:{server.Port}{path}"), TestCancelled);
             Assert.Equal(HttpStatusCode.NotFound, unclaimed.StatusCode);
         }
 
+        // With a header auth cannot read, every unclaimed path gets 401 before any 404, as on the
+        // plain server: a served private repository's and one in no served repository alike.
+        foreach (var path in new[] { "/octo/hello.git/info/refs?service=git-upload-pack", "/octo/missing.git/info/refs?service=git-upload-pack" })
+        {
+            using var message = new HttpRequestMessage(HttpMethod.Get, new Uri($"http://127.0.0.1:{server.Port}{path}"));
+            message.Headers.TryAddWithoutValidation("Authorization", BadBasicHeader);
+            using var refused = await client.SendAsync(message, TestCancelled);
+            Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
+        }
+
         var requests = server.Requests;
-        Assert.Equal([200, 200], requests.Where(request => request.Path == "/api/v3/ping").Select(request => request.Status));
+        Assert.Equal([200, 200, 200, 200], requests.Where(request => request.Path == "/api/v3/ping").Select(request => request.Status));
         Assert.All(requests.Where(request => request.Path == "/api/v3/drop"), request => Assert.Equal(("POST", 201), (request.Method, request.Status)));
         Assert.Contains(requests, request => request.Path == "/api/v3/drop");
         Assert.Equal(4, requests.Count(request => request.Status == 404));
+        Assert.Equal(["/octo/hello.git/info/refs", "/octo/missing.git/info/refs"], requests.Where(request => request.Status == 401).Select(request => request.Path));
         Assert.Empty(server.Errors);
     }
 
@@ -586,6 +609,9 @@ public class AuthRemoteServerTests
 
     private const string OctoToken = "github_pat_FAKE-octo-1";
     private const string AdaToken = "github_pat_FAKE-ada-3";
+
+    /// <summary>Basic with a token the host does not know.</summary>
+    private static readonly string BadBasicHeader = "Basic " + Convert.ToBase64String("x-access-token:ghp_FAKE-nobody-9"u8);
 
     /// <summary>
     /// A host's folder (2.2): <c>octo/hello.git</c> (private, octo pushes) and <c>acme/tool.git</c>

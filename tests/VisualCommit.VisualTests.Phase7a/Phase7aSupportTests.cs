@@ -22,14 +22,26 @@ public sealed class Phase7aSupportTests : Phase7aChecks
 {
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
+    /// <summary>The variables 1.8 removes from every test process, named here rather than read from the list under test.</summary>
+    private static readonly string[] TokenVariables =
+    [
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_ENTERPRISE_TOKEN",
+        "GITHUB_ENTERPRISE_TOKEN",
+        "GH_HOST",
+        "VISUALCOMMIT_LIVE_GITHUB_TOKEN",
+        "VISUALCOMMIT_LIVE_GITHUB_REPO",
+    ];
+
     [Fact]
     public void The_process_starts_with_GitHub_off_tokens_in_memory_and_no_token_variable()
     {
         Assert.Equal("none", Environment.GetEnvironmentVariable(HostingOptions.GitHubVariable));
         Assert.Equal("memory", Environment.GetEnvironmentVariable(VisualCommit.Hosting.Tokens.TokenStores.Variable));
-        Assert.Contains("VISUALCOMMIT_LIVE_GITHUB_TOKEN", GitIsolation.HostingTokenVariables);
-        Assert.Contains("VISUALCOMMIT_LIVE_GITHUB_REPO", GitIsolation.HostingTokenVariables);
-        Assert.All(GitIsolation.HostingTokenVariables, variable => Assert.Null(Environment.GetEnvironmentVariable(variable)));
+        Assert.All(TokenVariables, variable => Assert.Contains(variable, GitIsolation.HostingTokenVariables));
+        Assert.All(TokenVariables, variable => Assert.Contains(new KeyValuePair<string, string?>(variable, null), GitIsolation.MachineIndependence));
+        Assert.All(TokenVariables, variable => Assert.Null(Environment.GetEnvironmentVariable(variable)));
     }
 
     [AvaloniaFact]
@@ -83,14 +95,37 @@ public sealed class Phase7aSupportTests : Phase7aChecks
     }
 
     [AvaloniaFact]
-    public async Task A_fake_and_hosting_options_together_are_refused()
+    public async Task A_fake_and_hosting_options_together_and_an_in_process_fake_as_gitHub_are_refused()
     {
         using var data = new TempDirectory("phase7a support");
         using var root = new TempDirectory("phase7a fake");
         await using var fake = FakeGitHub.InProcess(root.Path);
 
-        Assert.Throws<ArgumentException>(() => ShellDriver.Start(data.Path, gitHub: fake, hosting: HostingOptions.Off));
-        Assert.Throws<ArgumentException>(() => ShellDriver.StartWithTabs(data.Path, [null], gitHub: fake, hosting: HostingOptions.Off));
+        Assert.Equal("hosting", Assert.Throws<ArgumentException>(() => ShellDriver.Start(data.Path, gitHub: fake, hosting: HostingOptions.Off)).ParamName);
+        Assert.Equal("hosting", Assert.Throws<ArgumentException>(() => ShellDriver.StartWithTabs(data.Path, [null], gitHub: fake, hosting: HostingOptions.Off)).ParamName);
+
+        // A fake without a server has Local(1) for endpoints, which the default handler cannot
+        // reach: it goes in the hosting options with its own handler.
+        var inProcess = Assert.Throws<ArgumentException>(() => ShellDriver.Start(data.Path, gitHub: fake));
+        Assert.Equal("gitHub", inProcess.ParamName);
+        Assert.Contains("hosting: new HostingOptions(fake.Endpoints, fake.CreateHandler)", inProcess.Message, StringComparison.Ordinal);
+        Assert.Equal("gitHub", Assert.Throws<ArgumentException>(() => ShellDriver.StartWithTabs(data.Path, [null], gitHub: fake)).ParamName);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(data.Path));
+
+        fake.AddUser(OctoLogin, OctoId, OctoName);
+        var token = fake.AddToken(OctoLogin);
+        using var app = ShellDriver.Start(data.Path, hosting: new HostingOptions(fake.Endpoints, fake.CreateHandler));
+        Assert.Equal(fake.Endpoints, app.Hosting.GitHub);
+        using var client = new HttpClient(app.Hosting.CreateHandler());
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri(fake.Endpoints.ApiBase, "user"));
+        request.Headers.UserAgent.ParseAdd("VisualCommit-tests");
+        request.Headers.Accept.ParseAdd(GitHubApi.MediaType);
+        request.Headers.Add("X-GitHub-Api-Version", GitHubApi.Version);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var user = await client.SendAsync(request, Cancelled);
+        Assert.Equal(HttpStatusCode.OK, user.StatusCode);
+        Assert.Equal(("user", "octo"), (fake.Requests[^1].Route, fake.Requests[^1].Login));
+        Assert.Empty(fake.Errors);
     }
 
     [Fact]
@@ -120,6 +155,32 @@ public sealed class Phase7aSupportTests : Phase7aChecks
             Assert.DoesNotContain(Token, found.Message, StringComparison.Ordinal);
             File.Delete(file);
         }
+
+        // A file another process holds open for writing is read too.
+        var written = Path.Combine(repo.Path, ".git", "held.log");
+        using (var writer = new FileStream(written, FileMode.Create, FileAccess.Write, FileShare.ReadWrite))
+        {
+            writer.Write([.. "before "u8, .. Encoding.UTF8.GetBytes(Token)]);
+            writer.Flush();
+            var held = Assert.Throws<TokenTripwireException>(() => TokenTripwire.AssertAbsent(Token, [repo.Path], null));
+            Assert.Contains("held.log (UTF-8)", held.Message, StringComparison.Ordinal);
+        }
+
+        File.Delete(written);
+
+        // One that nothing may read fails as not read, named, and never passes as clean.
+        var locked = Path.Combine(repo.Path, ".git", "locked.bin");
+        File.WriteAllText(locked, "clean");
+        using (new FileStream(locked, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        {
+            var unread = Assert.Throws<TokenTripwireException>(() => TokenTripwire.AssertAbsent(Token, [repo.Path], null));
+            Assert.Contains("Files not read", unread.Message, StringComparison.Ordinal);
+            Assert.Contains("locked.bin (IOException: ", unread.Message, StringComparison.Ordinal);
+            Assert.DoesNotContain("was found", unread.Message, StringComparison.Ordinal);
+        }
+
+        File.Delete(locked);
+        TokenTripwire.AssertAbsent(Token, [repo.Path], null);
 
         // A call whose command line holds the token.
         await repo.GitAllowingFailureAsync("rev-parse", "--verify", "--quiet", Token);

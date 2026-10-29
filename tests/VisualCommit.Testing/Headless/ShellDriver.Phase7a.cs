@@ -29,14 +29,28 @@ public sealed partial class ShellDriver
     /// Signs in with <paramref name="token"/> through the session (<see cref="IHostingSession.SignInAsync"/>),
     /// with no dialog, then lets the layout settle. Anything but a signed-in account throws with the
     /// failure's kind and message, never the token. Until the hosting session exists (WP-S's
-    /// merge) the session is <see cref="NullHostingSession"/>, so it throws.
+    /// merge) the session is <see cref="NullHostingSession"/>, so it throws. The sign-in is waited on
+    /// for at most <see cref="DefaultWaitTimeout"/>, so a held route or a stuck save fails with a
+    /// message rather than at the hang watchdog; <paramref name="cancellationToken"/> (the test's)
+    /// goes to the session and ends the wait.
     /// </summary>
     /// <exception cref="InvalidOperationException">The account is not signed in afterwards.</exception>
-    public async Task SignInAsync(string token)
+    /// <exception cref="TimeoutException">The sign-in had not ended after <see cref="DefaultWaitTimeout"/>.</exception>
+    public async Task SignInAsync(string token, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrEmpty(token);
         Dispatcher.UIThread.VerifyAccess();
-        var result = await Session.Services.Hosting.SignInAsync(token, CancellationToken.None);
+        var signIn = Session.Services.Hosting.SignInAsync(token, cancellationToken);
+        SignInResult result;
+        try
+        {
+            result = await signIn.WaitAsync(DefaultWaitTimeout, cancellationToken);
+        }
+        catch (TimeoutException) when (!signIn.IsCompleted)
+        {
+            throw new TimeoutException($"Timed out after {DefaultWaitTimeout.TotalSeconds:F0} s waiting for the sign-in to GitHub.");
+        }
+
         if (result.Status is not { State: AccountState.SignedIn })
         {
             throw new InvalidOperationException(result.Failure is { } failure
@@ -45,6 +59,22 @@ public sealed partial class ShellDriver
         }
 
         Settle();
+    }
+
+    /// <summary>
+    /// Refuses a fake without a server (<see cref="FakeGitHub.InProcess"/>) as <c>gitHub</c>: its
+    /// endpoints are <c>Local(1)</c>, which the default handler would try to reach and fail on. Such
+    /// a fake goes in <c>hosting: new HostingOptions(fake.Endpoints, fake.CreateHandler)</c>.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="gitHub"/> is in process.</exception>
+    private static void RefuseInProcess(FakeGitHub? gitHub, string parameterName)
+    {
+        if (gitHub is { Port: FakeGitHub.InProcessPort })
+        {
+            throw new ArgumentException(
+                "An in-process fake of GitHub has no server to reach: give it as hosting: new HostingOptions(fake.Endpoints, fake.CreateHandler), not as gitHub.",
+                parameterName);
+        }
     }
 
     /// <summary>
@@ -70,9 +100,10 @@ public sealed partial class ShellDriver
     /// <summary>
     /// Runs the UI thread's jobs, 15 ms apart, until the hosting session's start has ended: its
     /// posts need the UI thread, so the start is never waited on by blocking. Rethrows what the
-    /// start threw.
+    /// start threw; a cancelled start is a failure too.
     /// </summary>
     /// <exception cref="TimeoutException">The start had not ended after <see cref="DefaultWaitTimeout"/>.</exception>
+    /// <exception cref="OperationCanceledException">The start was cancelled.</exception>
     private void PumpUntilHostingStarted()
     {
         var started = Session.HostingStarted;
@@ -88,9 +119,7 @@ public sealed partial class ShellDriver
             Thread.Sleep(PollInterval);
         }
 
-        if (started.IsFaulted)
-        {
-            System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(started.Exception!.GetBaseException()).Throw();
-        }
+        // Completed: throws what a faulted start threw, and a cancelled one's cancellation.
+        started.GetAwaiter().GetResult();
     }
 }

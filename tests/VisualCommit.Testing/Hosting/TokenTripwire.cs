@@ -16,15 +16,19 @@ public static class TokenTripwire
     /// <c>x-access-token:&lt;token&gt;</c> (git's Basic header) and base64 of the token's UTF-8
     /// (the macOS store's form, 3.5), and each record of <paramref name="calls"/> (its command,
     /// output and error) for the text forms. A find fails naming the file or the command and the
-    /// form, never the token.
+    /// form, never the token. A file is read sharing read, write and delete, so one another process
+    /// holds open for writing is read too; one that still cannot be read after
+    /// <see cref="ReadAttempts"/> tries, 100 ms apart, fails as unreadable, since it may hold the
+    /// token. A file deleted before it is read holds nothing any more and is passed.
     /// </summary>
-    /// <exception cref="TokenTripwireException">The token was found.</exception>
+    /// <exception cref="TokenTripwireException">The token was found, or a file could not be read.</exception>
     public static void AssertAbsent(string token, IEnumerable<string> folders, IGitCallLog? calls)
     {
         ArgumentException.ThrowIfNullOrEmpty(token);
         ArgumentNullException.ThrowIfNull(folders);
         var forms = FormsOf(token);
         var finds = new List<string>();
+        var unreadable = new List<string>();
         foreach (var folder in folders)
         {
             if (!Directory.Exists(folder))
@@ -34,14 +38,10 @@ public static class TokenTripwire
 
             foreach (var file in Directory.EnumerateFiles(folder, "*", new EnumerationOptions { RecurseSubdirectories = true, AttributesToSkip = 0, IgnoreInaccessible = true }))
             {
-                byte[] bytes;
-                try
+                var (bytes, failure) = Read(file);
+                if (failure is not null)
                 {
-                    bytes = File.ReadAllBytes(file);
-                }
-                catch (IOException)
-                {
-                    // A file another process holds open (a lock file) is not read.
+                    unreadable.Add($"{file} ({failure})");
                     continue;
                 }
 
@@ -69,9 +69,45 @@ public static class TokenTripwire
             }
         }
 
-        if (finds.Count > 0)
+        if (finds.Count > 0 || unreadable.Count > 0)
         {
-            throw new TokenTripwireException($"The token was found in {finds.Count} places:\n" + string.Join('\n', finds));
+            var found = finds.Count > 0 ? $"The token was found in {finds.Count} places:\n" + string.Join('\n', finds) : null;
+            var unread = unreadable.Count > 0 ? "Files not read, so the token's absence is not proved there:\n" + string.Join('\n', unreadable) : null;
+            throw new TokenTripwireException(string.Join('\n', new[] { found, unread }.OfType<string>()));
+        }
+    }
+
+    /// <summary>How many times a file is tried before it fails as unreadable.</summary>
+    public const int ReadAttempts = 5;
+
+    /// <summary>
+    /// A file's bytes, read sharing read, write and delete; empty when it was deleted first. Else,
+    /// after <see cref="ReadAttempts"/> tries, the last failure's type and message.
+    /// </summary>
+    private static (byte[] Bytes, string? Failure) Read(string file)
+    {
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+                using var memory = new MemoryStream();
+                stream.CopyTo(memory);
+                return (memory.ToArray(), null);
+            }
+            catch (Exception exception) when (exception is FileNotFoundException or DirectoryNotFoundException)
+            {
+                return ([], null);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                if (attempt == ReadAttempts)
+                {
+                    return ([], $"{exception.GetType().Name}: {exception.Message}");
+                }
+            }
+
+            Thread.Sleep(100);
         }
     }
 
@@ -102,5 +138,5 @@ public static class TokenTripwire
     }
 }
 
-/// <summary>A token was found where it must never be (<see cref="TokenTripwire.AssertAbsent"/>). Its message never holds the token.</summary>
+/// <summary>A token was found where it must never be, or a file could not be read to prove it absent (<see cref="TokenTripwire.AssertAbsent"/>). Its message never holds the token.</summary>
 public sealed class TokenTripwireException(string message) : Exception(message);

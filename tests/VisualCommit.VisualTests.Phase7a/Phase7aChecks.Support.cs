@@ -1,7 +1,9 @@
-// Phase 7a's support (docs/phase-7a-design.md 2.8): copied from Phase7aChecks.Support.cs with 7a's
+// Phase 7a's support (docs/phase-7a-design.md 2.8): copied from Phase6Checks.Support.cs with 7a's
 // names: Shot and its picture and timing helpers, the menu, dialog, status, clipped-text and tooltip
 // assertions, the call assertions (a long mark, presence and order only), and the picture pattern
-// of design 0.3. Shared helpers live here only; a part's own go in its part files.
+// of design 0.3. Shared helpers live here only; a part's own go in its part files. Phase 6's error
+// dialog's assertion (AssertErrorDialogAsync, ExpectedErrorDialog) is not copied: the first part that
+// needs one adds a 7a version here, without phase 6's helpers for git 2.36's output.
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text.Json;
@@ -97,7 +99,7 @@ public abstract partial class Phase7aChecks
             await app.WaitForRepositoryAsync();
             if (signIn)
             {
-                await app.SignInAsync(served.OctoToken);
+                await app.SignInAsync(served.OctoToken, TestContext.Current.CancellationToken);
                 await app.WaitForWatchersQuietAsync();
             }
 

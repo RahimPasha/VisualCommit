@@ -40,7 +40,7 @@ public class Phase7aScenarioTests
                 "2026-01-01T12:01:00+0000 Ada Lovelace <ada@example.com> Add the greeting",
                 "2026-01-01T12:00:00+0000 Octo Cat <octo@example.com> Initial commit",
             ],
-            Lines(await Out(hello, "log", "--format=%ad %an <%ae> %s", "--date=format:%Y-%m-%dT%H:%M:%S%z", "local-work")));
+            Lines(await Out(hello, "log", "--format=%ad %an <%ae> %s", DateFormat, "local-work")));
         Assert.Equal("Ada Lovelace Add the login form", await Out(hello, "log", "-1", "--format=%an %s", "origin/feature/login"));
         Assert.Equal("Octo Cat Update the readme", await Out(hello, "log", "-1", "--format=%an %s", "origin/docs/readme"));
         Assert.Equal("Octo Cat Shorten long labels", await Out(hello, "log", "-1", "--format=%an %s", $"origin/{Scenarios.LongBranch}"));
@@ -65,21 +65,40 @@ public class Phase7aScenarioTests
         var github = hello.SiblingPath(Scenarios.HostingFolder);
         Assert.Equal(["acme/tool.git", "ada/hello.git", "octo/hello.git", "octo/notes.git", "octo/tool.git", "octo/website.git"],
             Directory.EnumerateDirectories(github).SelectMany(owner => Directory.EnumerateDirectories(owner).Select(name => Path.GetFileName(owner) + "/" + Path.GetFileName(name))).Order(StringComparer.Ordinal));
+        // Every tip with its author's date, in time order: a minute apart, as 2.6's table has them.
         Assert.Equal(
             [
-                "Ada Lovelace Add the login form refs/heads/feature/login refs/pull/1/head",
-                "Ada Lovelace Fix a typo in the greeting refs/pull/5/head",
-                "Octo Cat Shorten long labels refs/heads/" + Scenarios.LongBranch + " refs/pull/3/head",
-                "Octo Cat Update the readme refs/heads/docs/readme refs/pull/2/head",
-                "Test Author Add the docs folder refs/heads/main",
-                "Test Author Try an idea refs/heads/topic/no-pr refs/pull/4/head",
+                "2026-01-01T12:02:00+0000 Test Author Add the docs folder refs/heads/main",
+                "2026-01-01T12:03:00+0000 Ada Lovelace Add the login form refs/heads/feature/login refs/pull/1/head",
+                "2026-01-01T12:04:00+0000 Octo Cat Update the readme refs/heads/docs/readme refs/pull/2/head",
+                "2026-01-01T12:05:00+0000 Octo Cat Shorten long labels refs/heads/" + Scenarios.LongBranch + " refs/pull/3/head",
+                "2026-01-01T12:06:00+0000 Test Author Try an idea refs/heads/topic/no-pr refs/pull/4/head",
+                "2026-01-01T12:11:00+0000 Ada Lovelace Fix a typo in the greeting refs/pull/5/head",
             ],
             await TipsAsync(hello, Path.Combine(github, "octo", "hello.git")));
-        Assert.Contains("Ada Lovelace Fix a typo in the greeting refs/heads/fix-typo", await TipsAsync(hello, Path.Combine(github, "ada", "hello.git")));
         Assert.Equal(
-            ["Ada Lovelace An old idea refs/pull/8/head", "Ada Lovelace Initial commit refs/heads/main", "Octo Cat Fix a typo in the readme refs/pull/7/head"],
+            [
+                "2026-01-01T12:02:00+0000 Test Author Add the docs folder refs/heads/main",
+                "2026-01-01T12:03:00+0000 Ada Lovelace Add the login form refs/heads/feature/login",
+                "2026-01-01T12:04:00+0000 Octo Cat Update the readme refs/heads/docs/readme",
+                "2026-01-01T12:05:00+0000 Octo Cat Shorten long labels refs/heads/" + Scenarios.LongBranch,
+                "2026-01-01T12:06:00+0000 Test Author Try an idea refs/heads/topic/no-pr",
+                "2026-01-01T12:11:00+0000 Ada Lovelace Fix a typo in the greeting refs/heads/fix-typo",
+            ],
+            await TipsAsync(hello, Path.Combine(github, "ada", "hello.git")));
+        Assert.Equal(
+            [
+                "2026-01-01T12:07:00+0000 Ada Lovelace Initial commit refs/heads/main",
+                "2026-01-01T12:08:00+0000 Octo Cat Fix a typo in the readme refs/pull/7/head",
+                "2026-01-01T12:09:00+0000 Ada Lovelace An old idea refs/pull/8/head",
+            ],
             await TipsAsync(hello, Path.Combine(github, "acme", "tool.git")));
-        Assert.Equal(["Ada Lovelace Initial commit refs/heads/main", "Octo Cat Fix a typo in the readme refs/heads/fix-typo"], await TipsAsync(hello, Path.Combine(github, "octo", "tool.git")));
+        Assert.Equal(
+            [
+                "2026-01-01T12:07:00+0000 Ada Lovelace Initial commit refs/heads/main",
+                "2026-01-01T12:08:00+0000 Octo Cat Fix a typo in the readme refs/heads/fix-typo",
+            ],
+            await TipsAsync(hello, Path.Combine(github, "octo", "tool.git")));
         Assert.Empty(await TipsAsync(hello, Path.Combine(github, "octo", "notes.git")));
         Assert.Equal("ref: refs/heads/main", File.ReadAllText(Path.Combine(github, "octo", "website.git", "HEAD")).Trim());
     }
@@ -139,7 +158,7 @@ public class Phase7aScenarioTests
         return await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync(TestCancelled), cancellationToken: TestCancelled);
     }
 
-    /// <summary>Each commit a bare repository's refs point at, as "author subject ref ref…", sorted.</summary>
+    /// <summary>Each commit a bare repository's refs point at, as "author-date author subject ref ref…", sorted (so by time).</summary>
     private static async Task<IReadOnlyList<string>> TipsAsync(TempRepo repo, string bare)
     {
         var command = new GitCommand("for-each-ref", "--format=%(objectname) %(refname)") { WorkingDirectory = bare, Environment = repo.Environment };
@@ -147,13 +166,16 @@ public class Phase7aScenarioTests
         var tips = new List<string>();
         foreach (var group in refs.Select(line => line.Split(' ', 2)).GroupBy(parts => parts[0]))
         {
-            var log = new GitCommand("log", "-1", "--format=%an %s", group.Key) { WorkingDirectory = bare, Environment = repo.Environment };
+            var log = new GitCommand("log", "-1", "--format=%ad %an %s", DateFormat, group.Key) { WorkingDirectory = bare, Environment = repo.Environment };
             var subject = (await repo.Runner.RunAsync(log, TestCancelled)).EnsureSuccess(log).StandardOutput.Trim();
             tips.Add(subject + " " + string.Join(' ', group.Select(parts => parts[1]).Order(StringComparer.Ordinal)));
         }
 
         return [.. tips.Order(StringComparer.Ordinal)];
     }
+
+    /// <summary>An author date as the commit has it, to the second with its zone.</summary>
+    private const string DateFormat = "--date=format:%Y-%m-%dT%H:%M:%S%z";
 
     private static async Task<string> Out(TempRepo repo, params string[] arguments) => (await repo.GitAsync(arguments)).StandardOutput.Trim();
 
