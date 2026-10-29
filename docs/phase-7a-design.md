@@ -4653,3 +4653,16 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
    after "Choose" closes the browser, no control of the form has the keyboard focus (`b06a`), so a
    keyboard user must Tab into the parent folder's box; D104 gives the focus back only to a dialog
    below, and the report does not assert where it goes (B6).
+6. **Part G's checks, the lead's rulings that bind WP-V** (the report's open points 35 to 44). At
+   1100×700 the graph's Author column never shows (phase 1's widths, D49), so the real window's `g01a`
+   shows the badges and the details panel's image, and the graph's images are pictured scripted only,
+   at 1920×1080 (35). `AvatarsApplied` and its line `{repo}: showing GitHub avatars for {n} authors`
+   come with the column shown or hidden, `{n}` the authors whose image the control decoded, with a
+   `GraphAvatarTests` case for the hidden column (42); the line is the active tab's, as the window's
+   one graph shows it, so B8 step 4 waits for the avatars' requests and `hello`'s `Avatars` instead
+   (43); `CaptureForPicture` in `Phase7aChecks.Support.cs` also waits while the active tab's
+   `Details.AuthorAvatarFile` is set and `DetailsAuthorAvatar` is not shown (44, outside 11.1's list);
+   WP-V's builder says in its handoff that its line is not written when a run applies nothing (39).
+   At WP-V's merge, besides 11.6's runs, the lead runs part P's checks and part A's check 9 again
+   (item 3) and part B's B6 and B8, whose `AvatarsShown` and avatar waits WP-V codes in
+   `Phase7aChecks.A.cs`, `.B.cs` and part P's files.
