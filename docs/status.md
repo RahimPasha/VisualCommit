@@ -154,6 +154,18 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for WP-B's merge (`b361388`, the lead's follow-ups `e40ddc8`) is
+[40939757597](https://github.com/RahimPasha/VisualCommit/actions/runs/40939757597), for `e40ddc8`:
+all five jobs succeeded: `windows-latest` (23 min 26 s; its Test step 21 min 22 s of 55, 5,710 of
+5,714 passed and 4 skipped; its keychain step green), `macos-latest` (33 min 25 s; Test step 31 min
+10 s, 5,708 of 5,711 passed and 3 skipped; its keychain step green), `ubuntu-latest` (5 min 50 s;
+Test step 4 min 26 s) and the two "bare ubuntu container" jobs (7 min 50 s and 6 min 8 s; Test steps
+5 min 44 s and 4 min 10 s; their Secret Service steps green), each Linux job 5,708 of 5,711 passed
+and 3 skipped. The run before it,
+[40936332833](https://github.com/RahimPasha/VisualCommit/actions/runs/40936332833) for `2a90e05`
+(part A's start), passed on the three Linux jobs; its Windows and macOS jobs were cancelled by the
+push of `e40ddc8`, not failed.
+
 Phase 7a's run for WP-A's merge (`42b6be2`, the lead's follow-ups `c25326e`) is
 [40925952120](https://github.com/RahimPasha/VisualCommit/actions/runs/40925952120), for `c25326e`:
 four jobs succeeded (`macos-latest` 37 min 58 s, `ubuntu-latest` 5 min 38 s, the containers 6 min
@@ -343,13 +355,14 @@ passed, part A's 24 pictures and the 31 settings pictures it changes were inspec
 settings pictures differ from wave 1's run only in the Accounts button's slot), and CI's Windows job
 on `c25326e` found a start that did not wait for finding git, fixed at `2a90e05`. Parts B and P's
 checks are written, reviewed and ruled on (rulings 11 to 34). WP-B is merged at `b361388` with the
-lead's follow-ups at `e40ddc8` (design 17 item 4: one waiting empty-tab start for every part). Next:
-the whole default run on `e40ddc8` and the lagged list, under `bash scripts/heavy-run.sh` with no
-agent running (its pictures kept in `D:/Projects/Personal/phase7a-work/wpb-run-pictures/`); then
-the region comparison of ruling 19 against wave 1's run (every earlier picture; allowed: WP-A's 31
-settings pictures, the git box and what varies by nature), the inspection of part B's pictures, CI's
-run on `e40ddc8`; then tick steps 10 and 11 and start WP-P (part P's checks are committed), with part
-N's checks written beside it. Each of parts B, P, V and N
+lead's follow-ups at `e40ddc8` (design 17 item 4: one waiting empty-tab start for every part). The
+whole default run on `e40ddc8` failed only phase 1's 100k-commit layout timing under load, which
+passes alone, and the lagged list passed; its earlier pictures differ from wave 1's run only in the
+Accounts slot and where they vary by nature, and CI's run on `e40ddc8` is green on all five jobs
+(Notes). Next: the inspection of part B's ten pictures (running), then tick steps 10 and 11; WP-P is
+being built in `D:/Projects/Personal/vc-wt/p7a-pull-requests` (`wip/p7a-pull-requests`), and part
+G's checks are being written beside it for WP-V, which follows WP-P (design 10.8); part N's follow
+for WP-N. At WP-P's merge, 10.8's runs, part A's check 9 again and ruling 31. Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -553,6 +566,25 @@ every commit.
   git 2.56's version in the status bar and its nine `advice.diverging` lines in `s19b` and `w7b`.
   None comes from wave 1's code (it changed no view, style or icon). Their verdicts are in the
   workflow's output (task `wtdlbm9d2`).
+- **WP-B's whole run and pictures** (2026-10-29, `e40ddc8`, through `bash scripts/heavy-run.sh`, no
+  agent running): 5,709 of 5,714 passed, 4 skipped and 1 failed, in 1 h 15 min 28 s, 12 minutes
+  longer than wave 1's. The failure is `GraphLayoutTests.A_100k_commit_history_with_a_merge_every_50_commits_lays_out_in_under_2_seconds`,
+  phase 1's in-memory layout of 100k commits (no git), which took 2,620 ms against its 2 s; run
+  alone three times right after, it passed each time (the whole test, with building the history,
+  in 1.6 to 2.9 s). It measures the processor under the run's load (eleven projects side by side),
+  its first failure; it is watched at the next whole runs and dealt with at the gate if it fails
+  again (plan.md's risk 12). The projects ended after: phase 7a's walk-through 9 min 31 s,
+  part L's 11 min 11 s, `VisualCommit.Hosting.Tests` 11 min 13 s, phases 0 to 2's 23 min 9 s,
+  phase 4's 29 min 1 s, phase 5's 32 min 46 s, phase 6's 48 min 35 s, phase 5's undo walk-through
+  50 min 37 s, phase 3's 56 min 3 s, `VisualCommit.Git.Tests` 1 h 0 min 30 s and
+  `VisualCommit.App.Tests` 1 h 15 min 27 s. The lagged list's five commands passed (25, 66, 21, 95
+  and 23 tests). Its pictures, kept in `D:/Projects/Personal/phase7a-work/wpb-run-pictures/`,
+  against wave 1's run (ruling 19): 1,264 the same, 34 new (parts A and B), 65 changed: the 31
+  settings pictures of the Accounts slot, the same files as at WP-A's merge, and 34 that vary by
+  nature (a temporary folder's name 16, `k10e` and the push refusals' paths in `16j` and `u21v`
+  among them; a caret 11; anti-aliased edges and the indeterminate bar 7), each of which also
+  changed between earlier runs or was looked at by the lead. Part A's 24 pictures are the same files
+  as at WP-A's merge.
 - **macOS's failed refusal test is a product race on macOS and Linux** (CI's run on `8b02805`): .NET
   backs every pipe instance of one name with one listening Unix socket and closes it with the
   last instance (dotnet/runtime's `NamedPipeServerStream.Unix.cs`, `SharedServer.Dispose`, read by
