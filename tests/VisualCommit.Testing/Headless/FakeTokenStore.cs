@@ -5,8 +5,8 @@ namespace VisualCommit.Testing.Headless;
 /// <summary>
 /// The test harness's keychain (docs/phase-7a-design.md 2.5): tokens in memory that, unlike the
 /// app's memory store, count as kept across restarts, so that one instance handed to two app
-/// starts is the scripted restart. A check sets it unavailable, makes one save fail, holds the next
-/// call or takes a token away behind the app's back. <see cref="Calls"/> names each call and its
+/// starts is the scripted restart. A check sets it unavailable, makes one save or one delete fail,
+/// holds the next call or takes a token away behind the app's back. <see cref="Calls"/> names each call and its
 /// key, never a token. Safe from any thread.
 /// </summary>
 public sealed class FakeTokenStore : ITokenStore
@@ -19,6 +19,7 @@ public sealed class FakeTokenStore : ITokenStore
     private readonly List<string> _calls = [];
     private volatile bool _available = true;
     private string? _nextSaveFailure;
+    private string? _nextDeleteFailure;
     private FakeTokenStoreHold? _hold;
 
     public string Name => "fake";
@@ -51,6 +52,20 @@ public sealed class FakeTokenStore : ITokenStore
         lock (_gate)
         {
             _nextSaveFailure = reason;
+        }
+    }
+
+    /// <summary>
+    /// Makes the next delete fail once with <paramref name="reason"/> (the report's ruling 1 for A8):
+    /// it is recorded and waits at a hold like any call, keeps the token and answers
+    /// <see cref="TokenStoreOutcome.Failed"/>; the delete after it is normal.
+    /// </summary>
+    public void FailNextDelete(string reason)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+        lock (_gate)
+        {
+            _nextDeleteFailure = reason;
         }
     }
 
@@ -134,6 +149,12 @@ public sealed class FakeTokenStore : ITokenStore
         await ArriveAsync("delete " + key, ct).ConfigureAwait(false);
         lock (_gate)
         {
+            if (_nextDeleteFailure is { } reason)
+            {
+                _nextDeleteFailure = null;
+                return new TokenStoreResult(TokenStoreOutcome.Failed, reason);
+            }
+
             return new TokenStoreResult(_tokens.Remove(key) ? TokenStoreOutcome.Done : TokenStoreOutcome.NotFound);
         }
     }

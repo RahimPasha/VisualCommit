@@ -544,6 +544,11 @@ public class AuthRemoteServerTests
             using var refused = await client.SendAsync(message, TestCancelled);
             Assert.Equal(HttpStatusCode.Unauthorized, refused.StatusCode);
         }
+
+        // An unknown token's request keeps the user name it gave; the unreadable ones give none.
+        Assert.Equal(
+            [(401, null, "x-access-token"), (401, null, null), (401, null, null)],
+            server.Requests.TakeLast(3).Select(request => (request.Status, request.UserName, request.GivenUserName)));
         Assert.Empty(server.Errors);
     }
 

@@ -177,8 +177,14 @@ public class SettingsDialogViewTests
         app.PressKey(Key.Down);
         app.PressKey(Key.Down);
         app.PressKey(Key.Down);
-        Assert.Equal("SettingsNavShortcuts", Focused(app));
+        Assert.Equal("SettingsNavAccounts", Focused(app));
+
+        // Accounts is the last button (docs/phase-7a-design.md 8.6): Down stays there.
+        app.PressKey(Key.Down);
+        Assert.Equal("SettingsNavAccounts", Focused(app));
         app.PressKey(Key.Up);
+        app.PressKey(Key.Up);
+        Assert.Equal("SettingsNavTools", Focused(app));
         app.PressKey(Key.Enter);
         app.Settle();
 

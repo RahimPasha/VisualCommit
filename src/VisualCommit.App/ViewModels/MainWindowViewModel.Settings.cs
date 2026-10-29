@@ -71,6 +71,8 @@ public partial class MainWindowViewModel
                     _log)
                 {
                     Hosting = _tabServices.Hosting,
+                    SignIn = SignInToGitHubAsync,
+                    GitVersion = Git?.Version,
                 },
                 section);
             await Dialogs.ShowAsync(dialog);

@@ -369,7 +369,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <see cref="AuthRemoteHostOptions.LoginOfToken"/> knows signs in as that login
     /// (<c>REMOTE_USER</c>); the request records the login and the user name given
     /// (<see cref="AuthRemoteRequest.GivenUserName"/>), never the password. A refusal is a 401 with
-    /// <c>Basic realm="&lt;Realm&gt;"</c>.</item>
+    /// <c>Basic realm="&lt;Realm&gt;"</c>; one whose token is unknown still records the user name
+    /// given.</item>
     /// <item>Upload-pack of a public repository (<see cref="AuthRemoteHostOptions.IsPublic"/>)
     /// without an <c>Authorization</c> header is served as <c>anonymous</c>, as GitHub does; a wrong
     /// header gets 401, and a private repository always needs a token.</item>
@@ -1021,7 +1022,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// for an upload-pack of a public repository; else refused (401). A receive-pack also needs a
     /// login that may push: a refusal's text when it has none. A header that cannot be read, or whose
     /// token is unknown, gets 401 on every path, as on the plain server and on GitHub; a path in no
-    /// served repository goes on to its 404 only without a header or with a known token.
+    /// served repository goes on to its 404 only without a header or with a known token. A readable
+    /// header keeps its user name, also when its token is refused.
     /// </summary>
     private (string? Login, string? GivenUserName, bool Authorized, string? PushRefusal) HostAccess(RequestHead head, string path, string query)
     {
@@ -1033,9 +1035,16 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         string? given = null;
         if (authorization is not null)
         {
-            if (BasicCredentials(authorization) is not ({ Length: > 0 } userName, var password) || host.LoginOfToken(password) is not { } known)
+            if (BasicCredentials(authorization) is not ({ Length: > 0 } userName, var password))
             {
                 return (null, null, false, null);
+            }
+
+            // A token the host does not know (a revoked one) is refused, and the request still
+            // records the user name given with it: whose answer git sent shows so (D255).
+            if (host.LoginOfToken(password) is not { } known)
+            {
+                return (null, userName, false, null);
             }
 
             (login, given) = (known, userName);
@@ -1760,7 +1769,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 /// <param name="Held">Whether the response was held (<see cref="AuthRemoteServer.HoldNextFetchPack"/>).</param>
 /// <param name="Chunked">Whether the body came chunked.</param>
 /// <param name="Compressed">Whether the body came compressed with gzip.</param>
-/// <param name="GivenUserName">A host's (<see cref="AuthRemoteServer.StartForHostAsync"/>): the user name a signed-in request gave with its token (<c>x-access-token</c>); never the token.</param>
+/// <param name="GivenUserName">A host's (<see cref="AuthRemoteServer.StartForHostAsync"/>): the user name a request gave with its token (<c>x-access-token</c>), signed in or refused for an unknown token; never the token.</param>
 public sealed record AuthRemoteRequest(
     string Method,
     string Path,
