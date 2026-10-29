@@ -65,6 +65,13 @@ public static partial class OperationTexts
         /// <summary>A token with a character outside printable ASCII, refused before any request (D298).</summary>
         public const string SignInNotAToken = "The token can contain only letters, digits and punctuation, without spaces or line breaks.";
 
+        /// <summary>
+        /// The dialog's error when the check failed in a way the session did not word, such as its own
+        /// end: word for word WP-G's fixed text for a request that got no answer (D284), which its
+        /// internal client keeps.
+        /// </summary>
+        public const string SignInUnreachable = "Could not reach GitHub.";
+
         public const string Cancel = "Cancel";
         public const string SignIn = "Sign in";
 

@@ -22,6 +22,9 @@ namespace VisualCommit.App.ViewModels.Dialogs;
 /// </summary>
 public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatus?>
 {
+    /// <summary>A check that ended without GitHub's answer, for a reason the session did not word (D284).</summary>
+    private static readonly HostingFailure Unreachable = new(HostingFailureKind.Network, Texts.SignInUnreachable);
+
     private readonly IHostingSession _hosting;
     private readonly IFileLauncher? _launcher;
     private readonly IAppLog _log;
@@ -134,8 +137,10 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
         }
         catch (Exception ex)
         {
+            // Anything else, the session's own end among it, gets WP-G's fixed text (D284); the
+            // exception's words go to the log only.
             _log.Warning("Signing in to GitHub failed.", ex);
-            result = new SignInResult(null, new HostingFailure(HostingFailureKind.Network, ex.Message), null);
+            result = new SignInResult(null, Unreachable, null);
         }
         finally
         {
@@ -150,7 +155,7 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
 
         if (result.Status is not { } status)
         {
-            ErrorText = Texts.SignInFailed(result.Failure ?? new HostingFailure(HostingFailureKind.Network, string.Empty));
+            ErrorText = Texts.SignInFailed(result.Failure ?? Unreachable);
             FocusRequested?.Invoke(this, "SignInToken");
             return;
         }

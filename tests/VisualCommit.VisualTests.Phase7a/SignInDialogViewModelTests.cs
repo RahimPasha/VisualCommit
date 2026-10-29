@@ -196,6 +196,35 @@ public sealed class SignInDialogViewModelTests
     }
 
     [Fact]
+    public async Task A_check_ended_by_the_session_shows_the_fixed_network_text_not_the_exception_s_words()
+    {
+        await using var setup = await Setup.StartAsync();
+        var dialog = setup.Dialog();
+        var focus = new List<string>();
+        dialog.FocusRequested += (_, id) => focus.Add(id);
+        await dialog.Opened;
+        using var hold = setup.Fake.HoldNext("user");
+
+        dialog.Token = setup.Served.OctoToken;
+        var checking = dialog.ConfirmCommand.ExecuteAsync(null);
+        await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+
+        // The session's end cancels the check through its own lifetime, not the dialog's Cancel: an
+        // OperationCanceledException the dialog did not ask for.
+        setup.Session.Dispose();
+        await checking.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+
+        Assert.Equal("Could not reach GitHub.", dialog.ErrorText);
+        Assert.False(dialog.IsChecking);
+        Assert.True(dialog.IsBoxEnabled);
+        Assert.False(dialog.IsClosed);
+        Assert.Equal(["SignInToken"], focus);
+        var warning = Assert.Single(setup.Log.Entries, entry => entry.Message == "Signing in to GitHub failed.");
+        Assert.IsAssignableFrom<OperationCanceledException>(warning.Exception);
+        Assert.Null(setup.Session.Account);
+    }
+
+    [Fact]
     public async Task The_link_opens_GitHub_s_page_for_a_new_token()
     {
         await using var setup = await Setup.StartAsync();
