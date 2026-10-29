@@ -1,4 +1,7 @@
+using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
+using VisualCommit.App.ViewModels.Hosting;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Session;
 using VisualCommit.Hosting;
@@ -39,6 +42,14 @@ public partial class LeftPanelViewModel : ObservableObject
 
     /// <summary>What the graph hides and solos (docs/phase-5-design.md 8.3), which the rows mark; null while nothing is.</summary>
     private RepositoryGraphFilter? _filters;
+
+    /// <summary>
+    /// The last list the section showed, and of which repository: a failed or loading refresh of
+    /// that repository keeps its rows (docs/phase-7a-design.md 10.3, D303; design 17 item 3), while
+    /// the hosting's state holds no list then (7.8). Signed out, without a GitHub remote or for
+    /// another repository it goes.
+    /// </summary>
+    private (HostedRepository Repository, PullRequestList List)? _keptList;
 
     public LeftPanelViewModel()
     {
@@ -88,18 +99,40 @@ public partial class LeftPanelViewModel : ObservableObject
 
     /// <summary>
     /// The repository's hosting as last applied (docs/phase-7a-design.md 1.7, 10): what the "Pull
-    /// requests" section and the branch rows' pull requests will show.
+    /// requests" section and the branch rows' pull requests show. <see cref="RepositoryHostingState.NotGitHub"/>
+    /// until the first <see cref="UpdatePullRequests"/>, so a panel without hosting is phase 1's.
     /// </summary>
     public RepositoryHostingState HostingState { get; private set; } = RepositoryHostingState.NotGitHub;
 
     /// <summary>
-    /// Keeps the repository's hosting state (<see cref="HostingState"/>). The "Pull requests"
-    /// section keeps its placeholder: no row changes yet (WP-P builds its rows, docs/phase-7a-design.md 10).
+    /// Shows the repository's hosting (docs/phase-7a-design.md 10.3; D303, D308): the "Pull
+    /// requests" section's rows and the branch rows' <c>#n</c>. A clicked pull request no longer
+    /// listed is no longer selected. A failure or a refresh of the repository whose list the section
+    /// showed keeps that list's rows (design 17 item 3).
     /// </summary>
     public void UpdatePullRequests(RepositoryHostingState state)
     {
         ArgumentNullException.ThrowIfNull(state);
         HostingState = state;
+        if (state.PullRequests is PullRequestsState.NotGitHub or PullRequestsState.SignedOut || state.Repository is null)
+        {
+            _keptList = null;
+        }
+        else if (state.List is { } list)
+        {
+            _keptList = (state.Repository, list);
+        }
+        else if (_keptList is { } kept && !kept.Repository.Equals(state.Repository))
+        {
+            _keptList = null;
+        }
+
+        if (_selectedKey is not null && _selectedKey.StartsWith(PullRequestRow.KeyPrefix, StringComparison.Ordinal) && PullRequestTargetOf(_selectedKey) is null)
+        {
+            _selectedKey = null;
+        }
+
+        Rebuild();
     }
 
     /// <summary>
@@ -110,7 +143,7 @@ public partial class LeftPanelViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(refs);
         _refs = refs;
-        if (_selectedKey is not null && !ItemKeys(refs).Contains(_selectedKey))
+        if (_selectedKey is not null && !ItemKeys(refs).Contains(_selectedKey) && PullRequestTargetOf(_selectedKey) is null)
         {
             // The ref the user clicked is gone (deleted, or a stash dropped).
             _selectedKey = null;
@@ -160,24 +193,29 @@ public partial class LeftPanelViewModel : ObservableObject
                 {
                     // A branch the filter leaves out whose commit is no row: nothing is selected
                     // and no row is highlighted (8.3, FD19).
-                    _selectedKey = null;
-                    foreach (var other in Rows.OfType<RefItemRow>())
-                    {
-                        other.IsSelected = false;
-                    }
-
-                    NothingActivated?.Invoke(this, EventArgs.Empty);
+                    ActivateNothing();
                     return;
                 }
 
-                _selectedKey = item.Key;
-                foreach (var other in Rows.OfType<RefItemRow>())
-                {
-                    other.IsSelected = other.Key == _selectedKey;
-                }
-
+                MarkSelected(item.Key);
                 OnRefActivated(sha);
                 break;
+
+            case PullRequestRow pullRequest:
+                // Its head commit (D304); one that is no row of the graph, such as a fork's head not
+                // fetched, selects nothing (FD19's rule).
+                if (IsInGraph?.Invoke(pullRequest.TargetSha) == false)
+                {
+                    ActivateNothing();
+                    return;
+                }
+
+                MarkSelected(pullRequest.Key);
+                OnRefActivated(pullRequest.TargetSha);
+                break;
+
+            // A message row does nothing here: the view hands a click on the sign-in or the "more"
+            // row to the repository (RepositoryViewModel.ActivatePullRequestMessage, 10.3).
         }
     }
 
@@ -200,20 +238,52 @@ public partial class LeftPanelViewModel : ObservableObject
             return;
         }
 
-        _selectedKey = null;
-        foreach (var row in Rows.OfType<RefItemRow>())
-        {
-            row.IsSelected = false;
-        }
+        MarkSelected(null);
     }
 
     /// <summary>Raises <see cref="RefActivated"/>.</summary>
     protected void OnRefActivated(string sha) => RefActivated?.Invoke(this, sha);
 
-    /// <summary>The commit the ref or stash of <paramref name="key"/> points to, or null when it is gone.</summary>
-    private static string? TargetOf(RepoRefs refs, string key) =>
+    /// <summary>
+    /// The commit the ref, stash or pull request of <paramref name="key"/> points to (a pull
+    /// request's head, D304), or null when it is gone.
+    /// </summary>
+    private string? TargetOf(RepoRefs refs, string key) =>
         refs.Refs.FirstOrDefault(gitRef => RefKey(gitRef) == key)?.TargetSha
-        ?? refs.Stashes.FirstOrDefault(stash => StashKey(stash) == key)?.Sha;
+        ?? refs.Stashes.FirstOrDefault(stash => StashKey(stash) == key)?.Sha
+        ?? PullRequestTargetOf(key);
+
+    /// <summary>The head commit of the listed pull request whose row has <paramref name="key"/>, or null.</summary>
+    private string? PullRequestTargetOf(string key) =>
+        ShownList?.PullRequests.FirstOrDefault(pullRequest => PullRequestRow.KeyOf(pullRequest.Number) == key)?.HeadSha;
+
+    /// <summary>
+    /// <paramref name="key"/>'s row becomes the one selected and every other row is unmarked; null
+    /// selects none. The panel's selection is one key over branches, tags, stashes and pull requests.
+    /// </summary>
+    private void MarkSelected(string? key)
+    {
+        _selectedKey = key;
+        foreach (var row in Rows)
+        {
+            switch (row)
+            {
+                case RefItemRow item:
+                    item.IsSelected = key is not null && item.Key == key;
+                    break;
+                case PullRequestRow pullRequest:
+                    pullRequest.IsSelected = key is not null && pullRequest.Key == key;
+                    break;
+            }
+        }
+    }
+
+    /// <summary>A click that selects nothing (8.3, FD19): no row is marked and the graph's selection is emptied.</summary>
+    private void ActivateNothing()
+    {
+        MarkSelected(null);
+        NothingActivated?.Invoke(this, EventArgs.Empty);
+    }
 
     partial void OnFilterTextChanged(string value)
     {
@@ -226,6 +296,24 @@ public partial class LeftPanelViewModel : ObservableObject
     private bool IsFiltering => Filter.Length > 0;
 
     private bool Matches(string name) => name.Contains(Filter, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>A pull request matches when its <c>#n</c>, title, author or head label holds the filter, ignoring case (10.3).</summary>
+    private bool Matches(PullRequest pullRequest) =>
+        Matches("#" + pullRequest.Number.ToString(CultureInfo.InvariantCulture))
+        || Matches(pullRequest.Title)
+        || (pullRequest.Author is { } author && Matches(author))
+        || Matches(PullRequestRow.HeadLabelOf(pullRequest));
+
+    /// <summary>
+    /// The list the section shows: the state's, or while a refresh of the same repository runs or
+    /// after it failed, the one it showed last (<see cref="_keptList"/>); null when there is none.
+    /// </summary>
+    private PullRequestList? ShownList => HostingState.PullRequests switch
+    {
+        PullRequestsState.Loaded => HostingState.List,
+        PullRequestsState.Loading or PullRequestsState.Failed => HostingState.List ?? _keptList?.List,
+        _ => null,
+    };
 
     private void Rebuild()
     {
@@ -281,8 +369,9 @@ public partial class LeftPanelViewModel : ObservableObject
             }
         }
 
-        // Pull requests: closed and empty until phase 7.
-        rows.Add(new RefSectionRow(RefSection.PullRequests, PullRequestsTitle, 0, isOpen: false, canToggle: false, Activate));
+        // Pull requests: without a GitHub remote phase 1's placeholder, closed and empty (D251);
+        // with one its states and rows (docs/phase-7a-design.md 10.3).
+        AddPullRequests(rows);
 
         // Tags.
         var tags = refs.Refs.Where(r => r.Kind == RefKind.Tag && Matches(r.Name)).ToList();
@@ -304,6 +393,63 @@ public partial class LeftPanelViewModel : ObservableObject
 
         Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt));
     }
+
+    /// <summary>
+    /// The "Pull requests" section (10.3, D303): the placeholder without a GitHub remote; else a
+    /// header whose count is the matching pull requests', and while open the state's message row
+    /// (signed out, loading without rows, a failure, none open) and the matching rows, newest first
+    /// as GitHub lists them, then "more" when the list stopped at 300. Message rows show while
+    /// filtering too.
+    /// </summary>
+    private void AddPullRequests(List<RefListRow> rows)
+    {
+        var state = HostingState;
+        if (state.PullRequests == PullRequestsState.NotGitHub)
+        {
+            rows.Add(new RefSectionRow(RefSection.PullRequests, PullRequestsTitle, 0, isOpen: false, canToggle: false, Activate));
+            return;
+        }
+
+        var list = ShownList;
+        var matching = list?.PullRequests.Where(Matches).ToList() ?? [];
+        if (!AddSection(rows, RefSection.PullRequests, PullRequestsTitle, matching.Count))
+        {
+            return;
+        }
+
+        switch (state.PullRequests)
+        {
+            case PullRequestsState.SignedOut:
+                rows.Add(Message(PullRequestMessageKind.SignIn, OperationTexts.SignInToSeePullRequests));
+                return;
+            case PullRequestsState.Loading when list is null:
+                rows.Add(Message(PullRequestMessageKind.Loading, OperationTexts.LoadingPullRequests));
+                return;
+            case PullRequestsState.Failed:
+                // HostingTexts.Describe's words as they are (D338): the state holds no login, and a
+                // 401 ends signed out (7.8); the tooltip adds GitHub's Detail on a second line.
+                var failure = state.Failure is { } failed ? HostingTexts.Describe(failed, null) : string.Empty;
+                var toolTip = state.Failure?.Detail is { Length: > 0 } detail ? failure + "\n" + detail : failure;
+                rows.Add(Message(PullRequestMessageKind.Failed, failure, toolTip));
+                break;
+            case PullRequestsState.Loaded when list is { PullRequests.Count: 0 }:
+                rows.Add(Message(PullRequestMessageKind.None, OperationTexts.NoOpenPullRequests));
+                return;
+        }
+
+        foreach (var pullRequest in matching)
+        {
+            rows.Add(new PullRequestRow(pullRequest, Activate) { IsSelected = PullRequestRow.KeyOf(pullRequest.Number) == _selectedKey });
+        }
+
+        if (list?.MoreExist == true)
+        {
+            rows.Add(Message(PullRequestMessageKind.More, OperationTexts.MorePullRequests, OperationTexts.MenuTexts.OpenPullRequestsInBrowser));
+        }
+    }
+
+    private PullRequestMessageRow Message(PullRequestMessageKind kind, string text, string? toolTip = null) =>
+        new(kind, text, toolTip ?? text, Activate);
 
     /// <summary>Adds a section header and returns whether the section is open.</summary>
     private bool AddSection(List<RefListRow> rows, RefSection section, string title, int count)
@@ -367,7 +513,8 @@ public partial class LeftPanelViewModel : ObservableObject
             rows.Add(Selected(new RefItemRow(
                 leaf.Kind, leaf.Key, name, leaf.FullName, depth, Activate,
                 targetSha: leaf.Sha, isHead: leaf.IsHead, ahead: leaf.Ahead, behind: leaf.Behind,
-                marks: MarksOf(leaf), showHidden: OnHiddenToggleClicked, stopSoloing: OnSoloToggleClicked)));
+                marks: MarksOf(leaf), showHidden: OnHiddenToggleClicked, stopSoloing: OnSoloToggleClicked,
+                pullRequest: PullRequestOf(leaf))));
         }
     }
 
@@ -410,6 +557,18 @@ public partial class LeftPanelViewModel : ObservableObject
         var notInGraph = hidden && IsInGraph?.Invoke(leaf.Sha) == false ? $"{leaf.FullName} is hidden in the graph" : null;
         return new RefRowMarks(hidden, soloed, IsDimmed: (hidden || leftOut) && !leaf.IsHead, notInGraph);
     }
+
+    /// <summary>
+    /// The open pull request of a local or remote branch's row (D308): its full name in the
+    /// hosting's <see cref="RepositoryHostingState.ByRef"/> (a local branch through an upstream of
+    /// the same name, 7.8); none without a GitHub remote.
+    /// </summary>
+    private (int Number, string Title)? PullRequestOf(LeafRow leaf) =>
+        leaf.Kind is RefItemKind.LocalBranch or RefItemKind.RemoteBranch
+        && leaf.Key.StartsWith(RefKeyPrefix, StringComparison.Ordinal)
+        && HostingState.ByRef.TryGetValue(leaf.Key[RefKeyPrefix.Length..], out var pullRequest)
+            ? (pullRequest.Number, pullRequest.Title)
+            : null;
 
     private void OnHiddenToggleClicked(RefItemRow row) => HiddenToggleClicked?.Invoke(this, row);
 
