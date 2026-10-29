@@ -158,7 +158,7 @@ public sealed partial class RepositoryViewModel
         // Summary mode shows no left panel (3.1).
         if (!IsSummary)
         {
-            LeftPanel.UpdatePullRequests(HostingState);
+            LeftPanel.UpdatePullRequests(HostingState, _services?.Hosting.Account?.Account.Key);
         }
 
         // Signed out the rewrites are forgotten; a sign-in while the tab is open starts their read.

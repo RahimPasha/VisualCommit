@@ -52,6 +52,18 @@ internal sealed class HostingSessionStub : IHostingSession
         }
     }
 
+    /// <summary>The repositories' hostings made so far, in order (WP-P: a test sets one's <see cref="StubRepositoryHosting.State"/>).</summary>
+    public IReadOnlyList<StubRepositoryHosting> Hostings
+    {
+        get
+        {
+            lock (_hostings)
+            {
+                return [.. _hostings];
+            }
+        }
+    }
+
     /// <summary>How often <see cref="BindingsFor"/> was asked.</summary>
     public int BindingsForCalls => Volatile.Read(ref _bindingsForCalls);
 
@@ -128,10 +140,25 @@ internal sealed class HostingSessionStub : IHostingSession
     {
     }
 
-    /// <summary>A repository's hosting with settable bindings and nothing else: not GitHub's in the left panel, no avatars.</summary>
+    /// <summary>
+    /// A repository's hosting with settable bindings and state (WP-P, docs/phase-7a-design.md 10.6:
+    /// a set state raises <see cref="Changed"/> at once, on the setter's thread) and nothing else:
+    /// not GitHub's in the left panel until a test sets a state, no avatars.
+    /// </summary>
     internal sealed class StubRepositoryHosting : IRepositoryHosting
     {
-        public RepositoryHostingState State => RepositoryHostingState.NotGitHub;
+        private RepositoryHostingState _state = RepositoryHostingState.NotGitHub;
+        private EventHandler? _changed;
+
+        public RepositoryHostingState State
+        {
+            get => _state;
+            set
+            {
+                _state = value;
+                _changed?.Invoke(this, EventArgs.Empty);
+            }
+        }
 
         public IReadOnlyList<CredentialBinding> Bindings { get; set; } = [];
 
@@ -141,8 +168,8 @@ internal sealed class HostingSessionStub : IHostingSession
 
         public event EventHandler? Changed
         {
-            add { }
-            remove { }
+            add => _changed += value;
+            remove => _changed -= value;
         }
 
         public void Update(RepoRefs refs, UrlRewrites rewrites)

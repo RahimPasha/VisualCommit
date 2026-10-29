@@ -3,10 +3,16 @@ namespace VisualCommit.App.ViewModels.Panels;
 /// <summary>What a left-panel row stands for when a menu or a double-click acts on it (docs/phase-3-design.md 4b, 4c).</summary>
 public enum RefRowTarget
 {
-    /// <summary>Nothing a menu or a double-click acts on: a folder, the "Pull requests" header.</summary>
+    /// <summary>
+    /// Nothing a menu or a double-click acts on: a folder, the "Pull requests" placeholder of a
+    /// repository without a GitHub remote, a pull-request message row.
+    /// </summary>
     None,
 
-    /// <summary>A section header with a menu of its own (4b): Local branches, Remotes, Tags, Stashes.</summary>
+    /// <summary>
+    /// A section header with a menu of its own (4b): Local branches, Remotes, Tags, Stashes, and
+    /// "Pull requests" with a GitHub remote (docs/phase-7a-design.md 10.4).
+    /// </summary>
     Section,
 
     Remote,
@@ -14,6 +20,9 @@ public enum RefRowTarget
     RemoteBranch,
     Tag,
     Stash,
+
+    /// <summary>An open pull request's row (docs/phase-7a-design.md 10.3, 10.4).</summary>
+    PullRequest,
 }
 
 /// <summary>
@@ -31,13 +40,14 @@ public partial class LeftPanelViewModel
         ArgumentNullException.ThrowIfNull(row);
         return row switch
         {
-            RefSectionRow { Section: RefSection.PullRequests } => RefRowTarget.None,
+            RefSectionRow { Section: RefSection.PullRequests, CanToggle: false } => RefRowTarget.None,
             RefSectionRow { CanToggle: true } => RefRowTarget.Section,
             RefItemRow { Kind: RefItemKind.Remote } => RefRowTarget.Remote,
             RefItemRow { Kind: RefItemKind.LocalBranch } item when RefNameOf(item) is not null => RefRowTarget.LocalBranch,
             RefItemRow { Kind: RefItemKind.RemoteBranch } item when RefNameOf(item) is not null => RefRowTarget.RemoteBranch,
             RefItemRow { Kind: RefItemKind.Tag } item when RefNameOf(item) is not null => RefRowTarget.Tag,
             RefItemRow { Kind: RefItemKind.Stash, TargetSha: not null } => RefRowTarget.Stash,
+            PullRequestRow => RefRowTarget.PullRequest,
             _ => RefRowTarget.None,
         };
     }

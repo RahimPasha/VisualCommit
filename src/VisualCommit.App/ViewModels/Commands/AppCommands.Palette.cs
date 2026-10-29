@@ -214,6 +214,13 @@ public sealed partial class AppCommands
             AddMenu(RepositoryMenus.ForRemote(context, remote, actions));
         }
 
+        // The listed pull requests' menus (docs/phase-7a-design.md 10.4), their header as detail
+        // (D212); none without a GitHub remote or a list.
+        foreach (var pullRequest in context.Hosting?.List?.PullRequests ?? [])
+        {
+            AddMenu(RepositoryMenus.ForPullRequest(context, pullRequest.Number, actions));
+        }
+
         switch (context.SelectedCommits)
         {
             case [var commit] when commit.IsStash:
