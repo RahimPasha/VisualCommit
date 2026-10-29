@@ -436,6 +436,7 @@ public sealed class BulkRun
             {
                 PromptGroup.ForgetAnswers();
             }
+
             row.State = BulkRowState.Ended;
             if (repository.Queue.Current is { IsBackground: false })
             {
