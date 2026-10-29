@@ -178,17 +178,7 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
             await app.WaitForAsync(() => app.FocusedAutomationId() == "SignInToken", "the focus in the token box");
             app.Settle();
             Assert.False(app.IsPaletteOpen);
-            var signIn = app.SignInDialogView();
-            Assert.Equal(PartA.DialogTitle, ((TextBlock)app.FindByAutomationId(signIn, "DialogTitle")).Text);
-            Assert.Equal(PartA.Help, ((TextBlock)app.FindByAutomationId(signIn, "SignInHelp")).Text);
-            Assert.Equal(PartA.TokenLink, app.FindByAutomationId(signIn, "SignInTokenLink").GetVisualDescendants().OfType<TextBlock>().Single().Text);
-            Assert.Contains(signIn.GetVisualDescendants().OfType<TextBlock>(), block => block.Text == PartA.TokenLabel && block.IsEffectivelyVisible);
-            var tokenBox = (TextBox)app.FindByAutomationId(signIn, "SignInToken");
-            Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(tokenBox));
-            Assert.Equal(string.Empty, tokenBox.Text ?? string.Empty);
-            Assert.False(app.FindByAutomationId(signIn, "SignInNoKeychain").IsEffectivelyVisible);
-            Assert.True(app.FindByAutomationId(signIn, "CancelButton").IsEffectivelyEnabled);
-            Assert.False(app.FindByAutomationId(signIn, "ConfirmButton").IsEffectivelyEnabled);
+            AssertSignInDialog(app, dialog);
             Assert.Same(tab, Assert.Single(app.Session.Shell.Tabs));
             Assert.False(tab.Welcome.IsCloneFormOpen);
             Assert.Equal(["OpenRepoButton", "CloneRepoButton", "InitRepoButton"], new[] { "OpenRepoButton", "CloneRepoButton", "InitRepoButton" }.Where(id => app.Find<Button>(id).IsEffectivelyVisible));
@@ -290,10 +280,11 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
             Assert.Empty(StoreCallsSince(app, stored));
 
             clone = Path.Combine(clones.Path, PartB.HelloFolder);
+            var cloneTopLevel = await TopLevelAsync(served, clone);
             Assert.Same(tab, Assert.Single(app.Session.Shell.Tabs));
-            Assert.True(SameFolder(repository.Path, clone), $"The tab shows {repository.Path}.");
+            Assert.True(SameFolder(repository.Path, cloneTopLevel), $"The tab shows {repository.Path}, git names {cloneTopLevel}.");
             Assert.False(tab.Welcome.IsCloneFormOpen);
-            Assert.Contains(app.Session.Services.Recent.Items, item => SameFolder(item.Path, clone));
+            Assert.Contains(app.Session.Services.Recent.Items, item => SameFolder(item.Path, cloneTopLevel));
             var binding = Assert.Single(repository.Hosting.Bindings);
             Assert.Equal((PartB.HelloCloneUrl(port), PartB.OctoAccountId(port)), (binding.Url, binding.Account.Id));
             Assert.Equal((AccountState.SignedIn, TokenPlace.Keychain, AccountNoteKind.None), (session.Account?.State, session.Account?.Place, session.Account?.NoteKind));
@@ -539,7 +530,7 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
             Assert.Same(newTab, app.Session.Shell.ActiveTab);
             Assert.True(newTab.IsEmpty);
             Assert.Same(hello, helloTab.Repository);
-            Assert.True(SameFolder(hello.Path, served.Hello.Path));
+            Assert.True(SameFolder(hello.Path, await TopLevelAsync(served, served.Hello.Path)), $"The first tab shows {hello.Path}.");
             AssertForm(app, button: true);
             AssertBrowser(app, string.Empty, chooseEnabled: false);
             AssertRows(app, PartB.Rows);
@@ -564,6 +555,12 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
         AssertCleanEnd(app, data, served);
     }
 
+    /// <summary>
+    /// Whether two spellings of a folder are the same text once full and without a trailing separator.
+    /// It follows no link: a folder the app took from git (a tab's, the recent list's) is compared
+    /// with <see cref="TopLevelAsync"/>'s spelling, a call log's working directory with the folder as
+    /// the app passed it.
+    /// </summary>
     private static bool SameFolder(string? a, string? b) =>
         a is not null && b is not null
         && string.Equals(Path.GetFullPath(a).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), Path.GetFullPath(b).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), OperatingSystem.IsLinux() ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase);

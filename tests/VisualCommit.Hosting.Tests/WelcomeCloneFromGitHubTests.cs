@@ -1,8 +1,12 @@
+using System.Diagnostics;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.Views.Dialogs;
+using VisualCommit.Core;
+using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using VisualCommit.Testing.Hosting;
@@ -17,7 +21,8 @@ namespace VisualCommit.Hosting.Tests;
 /// and the folder name and keeps a typed name; a clone of the private octo/hello through the app's
 /// helper without a dialog and without a credential in the clone; another user's URL, and a global
 /// rule that rewrites to one, open git's credentials dialog as before; signed out, no configuration
-/// read. The fake of GitHub serves on a free port (design 16.3), so that git reaches it.
+/// read; the tab not empty while that read is held. The fake of GitHub serves on a free port (design
+/// 16.3), so that git reaches it; the held read's test serves it in process and runs no git.
 /// </summary>
 public sealed class WelcomeCloneFromGitHubTests
 {
@@ -140,7 +145,7 @@ public sealed class WelcomeCloneFromGitHubTests
             var repository = await app.WaitForRepositoryAsync();
             await app.WaitForWatchersQuietAsync();
 
-            Assert.Equal(Path.Combine(clones.Path, "hello"), repository.Path);
+            Assert.Equal(await TopLevelAsync(served, Path.Combine(clones.Path, "hello")), repository.Path);
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, dialog => dialog is PromptDialogViewModel);
             var calls = app.GitCalls().Where(call => call.Sequence > mark).Select(call => call.CommandText).ToList();
             var read = calls.IndexOf(ConfigRead);
@@ -242,6 +247,47 @@ public sealed class WelcomeCloneFromGitHubTests
         End(app, data, served, clones.Path);
     }
 
+    /// <summary>
+    /// While a bound clone reads git's configuration, before git starts, the tab is not empty, so that
+    /// nothing else opens in it (the palette's Open, Clone and Init, a workspace from its welcome
+    /// page), and a close has nothing to wait for; cancelled, the tab is empty again.
+    /// </summary>
+    [Fact]
+    public async Task A_tab_whose_clone_reads_git_s_configuration_is_not_empty_meanwhile()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        using var data = new TempDirectory("welcome clone held read");
+        var configuration = new HeldConfiguration();
+        var services = new TabServices(
+            new NoClones(),
+            new FakeFolderPicker(),
+            new JsonSettingsStore(Path.Combine(data.Path, "settings.json")),
+            new JsonSessionStore(Path.Combine(data.Path, "session.json")),
+            new DateDisplay(TimeZoneInfo.Utc),
+            gitSettings: configuration,
+            hosting: setup.Session);
+        using var tab = new RepoTabViewModel(services);
+        var welcome = tab.Welcome;
+        welcome.CloneUrl = Scenarios.HostingUrl("octo/hello", setup.Fake.Port);
+        welcome.CloneParent = data.Path;
+        Assert.NotEmpty(setup.Session.BindingsForClone(welcome.CloneUrl));
+        Assert.True(tab.IsEmpty);
+
+        var cloning = welcome.StartCloneCommand.ExecuteAsync(null);
+        await configuration.Reading.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+        Assert.True(welcome.IsCloning);
+        Assert.False(tab.IsEmpty);
+        Assert.True(welcome.RunningClone is { IsCompleted: true }, "No completed task stands in for the clone during the read.");
+
+        welcome.CancelCloneCommand.Execute(null);
+        await cloning.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+        Assert.Equal("Clone cancelled.", welcome.ErrorText);
+        Assert.False(welcome.IsCloning);
+        Assert.Null(welcome.RunningClone);
+        Assert.True(tab.IsEmpty);
+    }
+
     /// <summary>Starts a clone of <paramref name="url"/> that git asks the user's credentials for, checks the form while the dialog is open, then cancels it.</summary>
     private static async Task AssertAsksAsync(ShellDriver app, string url, string parent, bool readsConfiguration)
     {
@@ -307,6 +353,17 @@ public sealed class WelcomeCloneFromGitHubTests
 
     private static WelcomeViewModel Welcome(ShellDriver app) => app.Session.Shell.ActiveTab.Welcome;
 
+    /// <summary>
+    /// The working tree <paramref name="folder"/> as git names it (<c>rev-parse --show-toplevel</c>),
+    /// as the tab keeps it: the physical folder (macOS: <c>/private/var/…</c> for a temporary folder
+    /// made as <c>/var/…</c>), full and without a trailing separator.
+    /// </summary>
+    private static async Task<string> TopLevelAsync(ServedHosting served, string folder)
+    {
+        var topLevel = (await served.Hello.GitAsync("-C", folder, "rev-parse", "--show-toplevel")).StandardOutput.TrimEnd('\r', '\n');
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(topLevel));
+    }
+
     private static Button Button(ShellDriver app) =>
         app.Find<Button>("CloneFromGitHubButton");
 
@@ -338,6 +395,53 @@ public sealed class WelcomeCloneFromGitHubTests
 
         Assert.Equal(0, app.RefusedRequests.Count);
         Assert.Empty(served.GitHub.Errors);
+    }
+
+    /// <summary>Git's configuration whose read waits until it is cancelled: a bound clone's read of the user's rules held (9.3).</summary>
+    private sealed class HeldConfiguration : IGitConfiguration
+    {
+        private readonly TaskCompletionSource _reading = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Completes when the read begins.</summary>
+        public Task Reading => _reading.Task;
+
+        public string GlobalFile => string.Empty;
+
+        public string XdgFile => string.Empty;
+
+        public async Task<GitConfigRead> ReadAsync(string? workingTree, CancellationToken cancellationToken = default)
+        {
+            _reading.TrySetResult();
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+            throw new UnreachableException();
+        }
+
+        public Task<GitIdentityRead> ReadIdentityAsync(string workingTree, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public string? Variable(string name) => null;
+
+        public Task WriteGlobalAsync(IReadOnlyList<GitConfigWrite> writes, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<MergeToolHelp> ReadToolHelpAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public void Dispose()
+        {
+        }
+    }
+
+    /// <summary>No repository opens or clones: the held read is cancelled before git would start.</summary>
+    private sealed class NoClones : IRepositoryProvider
+    {
+        public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IGitRepository> CloneAsync(
+            string url,
+            string destination,
+            IProgress<CloneProgress>? progress,
+            CancellationToken cancellationToken = default,
+            IReadOnlyDictionary<string, string?>? environment = null) => throw new NotSupportedException();
     }
 }
 

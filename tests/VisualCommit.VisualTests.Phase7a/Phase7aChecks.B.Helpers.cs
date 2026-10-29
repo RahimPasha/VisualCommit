@@ -105,6 +105,18 @@ public sealed partial class Phase7aChecksB
         Assert.Empty(app.Launcher.Requests);
     }
 
+    /// <summary>
+    /// The working tree <paramref name="folder"/> as git names it (<c>rev-parse --show-toplevel</c>),
+    /// which is how the tab and the recent list keep it: the physical folder (macOS: <c>/private/var/…</c>
+    /// for a temporary folder made as <c>/var/…</c>), full and without a trailing separator. Run with
+    /// the copy's isolated environment, outside the app's call log.
+    /// </summary>
+    private static async Task<string> TopLevelAsync(ServedHosting served, string folder)
+    {
+        var topLevel = (await served.Hello.GitAsync("-C", folder, "rev-parse", "--show-toplevel")).StandardOutput.TrimEnd('\r', '\n');
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(topLevel));
+    }
+
     /// <summary>The fake's API requests since <paramref name="mark"/> (<c>Requests.Count</c> read before the step).</summary>
     private static List<FakeGitHubRequest> RequestsSince(ServedHosting served, int mark) => [.. served.GitHub.Requests.Skip(mark)];
 
@@ -237,6 +249,57 @@ public sealed partial class Phase7aChecksB
         {
             Assert.Contains(text, texts);
         }
+    }
+
+    /// <summary>
+    /// "Add GitHub account" as it opens over the welcome page (B7 step 3, as part A's conventions,
+    /// "The dialog", and A2's step 3 give it; part A's <c>AssertDialog</c> without the settings screen
+    /// under it): alone in the dialog host; named and titled <c>Add GitHub account</c>; its card x 350
+    /// to 750 at 1100×700, centred vertically; top to bottom the help, the link in the accent colour 6
+    /// below it, the label <c>Token</c> and the box, empty, named <c>Token</c> and with the focus; no
+    /// no-keychain warning, no status line and no "In …" line; <c>Cancel</c> enabled, then
+    /// <c>Sign in</c> disabled in the primary look, right-aligned.
+    /// </summary>
+    private static void AssertSignInDialog(ShellDriver app, SignInDialogViewModel dialog)
+    {
+        var host = app.Session.Services.DialogHost;
+        Assert.Equal([dialog], host.Open.Cast<DialogViewModel>());
+        Assert.Same(dialog, host.Current);
+        var view = app.SignInDialogView();
+        Assert.Equal(PartA.DialogTitle, AutomationProperties.GetName(view));
+        var card = app.BoundsOf(app.Window.GetVisualDescendants().OfType<Border>().First(border => border.Name == "SignInCard" && border.IsEffectivelyVisible));
+        var (left, right) = PartA.DialogCard;
+        Assert.Equal(left, card.Left, PartA.Tolerance);
+        Assert.Equal(right, card.Right, PartA.Tolerance);
+        Assert.Equal(app.Window.ClientSize.Height / 2, card.Center.Y, PartA.Tolerance);
+        Assert.Equal(PartA.DialogTitle, ((TextBlock)app.FindByAutomationId(view, "DialogTitle")).Text);
+        var help = (TextBlock)app.FindByAutomationId(view, "SignInHelp");
+        Assert.Equal(PartA.Help, help.Text);
+        var link = app.FindByAutomationId(view, "SignInTokenLink");
+        var linkText = link.GetVisualDescendants().OfType<TextBlock>().Single();
+        Assert.Equal(PartA.TokenLink, linkText.Text);
+        Assert.Equal(PaletteOf(app).Accent, (linkText.Foreground as ISolidColorBrush)?.Color);
+        Assert.Equal(PartA.LinkGap, app.BoundsOf(link).Top - app.BoundsOf(help).Bottom, PartA.Tolerance);
+        var label = view.GetVisualDescendants().OfType<TextBlock>().First(block => block.Text == PartA.TokenLabel && block.IsEffectivelyVisible);
+        var box = (TextBox)app.FindByAutomationId(view, "SignInToken");
+        Assert.True(app.BoundsOf(label).Top > app.BoundsOf(link).Bottom && app.BoundsOf(box).Top > app.BoundsOf(label).Bottom, "The label and the box are not below the link in order.");
+        Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(box));
+        Assert.Equal(string.Empty, box.Text ?? string.Empty);
+        Assert.Equal("SignInToken", app.FocusedAutomationId());
+        var shown = view.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible).Select(AutomationProperties.GetAutomationId).ToHashSet();
+        foreach (var id in new[] { "SignInNoKeychain", "SignInChecking", "SignInError", "SignInSaveFailed", "DialogRepository" })
+        {
+            Assert.False(shown.Contains(id), $"{id} shows.");
+        }
+
+        Assert.Equal([PartA.Cancel, PartA.SignIn], ButtonsOf(app, view));
+        var cancel = (Button)app.FindByAutomationId(view, "CancelButton");
+        var confirm = (Button)app.FindByAutomationId(view, "ConfirmButton");
+        Assert.True(cancel.IsEffectivelyEnabled, "Cancel is disabled.");
+        Assert.False(confirm.IsEffectivelyEnabled, "Sign in is enabled.");
+        Assert.Same(Application.Current!.FindResource("VcPrimaryButton"), confirm.Theme);
+        Assert.DoesNotContain("danger", confirm.Classes);
+        Assert.True(app.BoundsOf(confirm).Right > app.BoundsOf(cancel).Right && app.BoundsOf(confirm).Right >= card.Right - 22, "The buttons are not right-aligned.");
     }
 
     // ---- The browser ---------------------------------------------------------------------------

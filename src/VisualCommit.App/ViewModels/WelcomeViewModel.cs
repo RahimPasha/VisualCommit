@@ -113,8 +113,13 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     [ObservableProperty]
     public partial string CloneProgressText { get; private set; } = string.Empty;
 
-    /// <summary>The clone that is running, or null: the app waits for it to clean up when it closes.</summary>
-    public Task? RunningClone => _cloneTask is { IsCompleted: false } running ? running : null;
+    /// <summary>
+    /// The clone that is running, or null: the app waits for it to clean up when it closes, and the
+    /// tab is not empty meanwhile. From Clone's press on: while git's configuration is read before git
+    /// starts (9.3) a completed task stands in, so that nothing opens in the tab then and the close
+    /// has nothing to wait for (the tab's <see cref="Dispose"/> cancels the read).
+    /// </summary>
+    public Task? RunningClone => _cloneTask is { IsCompleted: false } running ? running : IsCloning ? Task.CompletedTask : null;
 
     /// <summary>Shows a failure under the buttons.</summary>
     public void ShowError(string message) => ErrorText = message;
