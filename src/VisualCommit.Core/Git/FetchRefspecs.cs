@@ -266,15 +266,26 @@ public sealed class FetchRefspecs
     /// another remote whose lines also fill the ref (a mirror line, <c>+refs/*:refs/*</c>) does not
     /// hide that this one fetches it from two refs, which the push would make every fetch of it fail on.
     /// </summary>
-    public RemoteSource SourceOf(string trackingRef, string remote)
+    public RemoteSource SourceOf(string trackingRef, string remote) => SourceOf(trackingRef, remote, static _ => true);
+
+    /// <summary>
+    /// <see cref="SourceOf(string, string)"/> with the candidate sources
+    /// <paramref name="sourceCanExist"/> refuses removed before rules 1 to 3 (ruling 8,
+    /// docs/phase-7a-design.md 4.7): on GitHub a <c>refs/pull/&lt;x&gt;/head</c> whose
+    /// <c>&lt;x&gt;</c> is not all digits names no ref, so <c>pr/fix-typo</c> is not fetched from
+    /// it. None left: <see cref="RemoteSourceKind.NotFetched"/>. A predicate that is always true
+    /// gives the two-argument form's answer.
+    /// </summary>
+    public RemoteSource SourceOf(string trackingRef, string remote, Func<string, bool> sourceCanExist)
     {
         ArgumentNullException.ThrowIfNull(trackingRef);
         ArgumentNullException.ThrowIfNull(remote);
+        ArgumentNullException.ThrowIfNull(sourceCanExist);
         foreach (var (name, lines) in _byRemote)
         {
             if (string.Equals(name, remote, StringComparison.Ordinal))
             {
-                return SourceOn(name, lines, trackingRef) ?? NotFetched;
+                return SourceOn(name, lines, trackingRef, sourceCanExist) ?? NotFetched;
             }
         }
 
@@ -283,8 +294,12 @@ public sealed class FetchRefspecs
 
     private static RemoteSource NotFetched { get; } = new(RemoteSourceKind.NotFetched, null, null, []);
 
-    /// <summary>Rules 1 to 3 for one remote's <paramref name="lines"/>: its one candidate, AmbiguousRefs for two or more, null for none or one a negative line excludes.</summary>
-    private static RemoteSource? SourceOn(string remote, FetchRefspec[] lines, string trackingRef)
+    /// <summary>
+    /// Rules 1 to 3 for one remote's <paramref name="lines"/>: its one candidate, AmbiguousRefs for
+    /// two or more, null for none or one a negative line excludes. Candidates that
+    /// <paramref name="sourceCanExist"/> refuses are left out first.
+    /// </summary>
+    private static RemoteSource? SourceOn(string remote, FetchRefspec[] lines, string trackingRef, Func<string, bool>? sourceCanExist = null)
     {
         var candidates = new List<string>();
         foreach (var line in lines)
@@ -301,6 +316,11 @@ public sealed class FetchRefspecs
             {
                 candidates.Add(candidate);
             }
+        }
+
+        if (sourceCanExist is not null)
+        {
+            candidates.RemoveAll(candidate => !sourceCanExist(candidate));
         }
 
         if (candidates.Count == 0 || candidates.Exists(candidate => IsExcluded(lines, candidate)))
