@@ -12,11 +12,17 @@ sections 0, 1, 2.5, 2.6, 7, 8, 13.4 and 16, decisions D249, D253, D256, D263, D2
 D291, D294 to D298 and D330, and the harness and scenario as wave 1 built them
 (`tests/VisualCommit.Testing`, `tests/VisualCommit.VisualTests.Phase7a` at `92ce1ba`). No part A UI
 existed: every text is design 8.2's or an earlier package's, every position design 8.3's or 8.4's, and
-the checks take positions from the controls' bounds (D122's rule). "What the checks share" holds what
-every part relies on, then part A's conventions, test methods and texts; "Checks" is the table of A1
-to A11 (design 8.7's numbering); "Changes to expected results" lists the earlier pictures part A changes
-on purpose; "Open points for the lead" lists where the design is silent or its sections disagree, with
-the reading this report takes. Tokens are written here only by their constant names, never by value.
+the checks take positions from the controls' bounds (D122's rule). Part B was added on 2026-10-29,
+while WP-A was being built and before WP-B started, from the design's sections 0, 1, 2.6, 6.2, 9, 13.4 B, 16
+and 17, decisions D255, D261, D276, D299 to D302, D331 and D338, phase 1's clone checks 13 and 14, and
+the harness, the fake and the scenario as wave 1 and WP-S built them (`5613450`). No part B UI existed,
+nor WP-A's dialog: every text is design 9.2's, 1.7's or an earlier package's, every place design 9.3's or
+9.4's or the clone form's as phase 1 drew it. "What the checks share" holds what every part relies on,
+then each part's conventions, test methods and texts; "Checks" is the table of A1 to A11 (design 8.7's
+numbering) and B1 to B9 (design 9.7's list, numbered here in its order); "Changes to expected results"
+lists the earlier pictures and tests each part changes on purpose; "Open points and the lead's rulings"
+lists where the design is silent or its sections disagree, with the reading this report takes. Tokens
+are written here only by their constant names, never by value.
 
 ## Run
 
@@ -47,7 +53,8 @@ What every part of phase 7a relies on; each part's conventions add to these.
   of texts, picture names, positions and tolerances, written from this report and not from the App's
   texts; the real-window pass links them) and their tests in `Phase7aExpectationTests.<part>.cs`.
   Shared helpers live in `Phase7aChecks.Support.cs` only. Check names are the part's letter and its
-  number in its section of the design (A1 to A11, design 8.7); test methods are `Check_<id>…_<what>`.
+  number in its section of the design (A1 to A11, design 8.7; B1 to B9, design 9.7's list in its order,
+  which this report numbers); test methods are `Check_<id>…_<what>`.
 - **One test method per app start** (phase 3's rule, `FreshApplication`), each on a fresh copy of the
   scenario and a fresh data folder; a restart on one data folder is a plain `[Fact]` with one
   `FreshApplication.RunAsync` half per start (D32), the one `FakeTokenStore` handed to every start
@@ -94,7 +101,8 @@ What every part of phase 7a relies on; each part's conventions add to these.
 - **Git calls** are counted only through `GitCallBudget` (ruling 28); `CallsSince`, `AssertCalled` and
   `AssertCalledInOrder` take a `long` mark from `ShellDriver.QuietCallMarkAsync()` and prove presence and
   order only (2.8). Signed out, no part adds a git call to an earlier count: the URL-rewrites read
-  (`git config --null --get-regexp ^url\.`) runs only while signed in (D281).
+  (`git config --null --get-regexp ^url\.`) runs only while signed in (D281), and a clone reads git's
+  configuration only when the account binds its URL (9.3).
 - **Dialogs, menus, the toolbar and the status bar** are phase 6's (its report's "Conventions of every
   part"): dialogs stack (D104), the error dialog is asserted by `ErrorTitle`, `ErrorSummary`,
   `ErrorRepository` (`In <repo>`: an error dialog names its repository always, with one tab too;
@@ -130,7 +138,8 @@ What every part of phase 7a relies on; each part's conventions add to these.
   constant in `Phase7aExpectations.<part>.cs` with the texts, rows and menus the step asserts; its state
   is built only by code both projects compile (`VisualCommit.Testing`, the linked expectations, a part's
   `Part<X>.PrepareAsync`), never by `FakeFileLauncher`, `FakeClipboard`, `FakeTokenStore`'s hooks or a
-  held request, and it is taken signed in with `OctoToken`. Part A's R pictures are on one empty tab.
+  held request, and it is taken signed in with `OctoToken`. Part A's R pictures are on one empty tab;
+  part B's one, `b03a-listed`, in the state the palette's path reaches (part B's conventions).
 - **The real window** (design 13; D319, D320, D33). One method and one launch per part, at 1100×700,
   dark, in the order A, B, N, G, P; each launch signs in by typing `OctoToken` into the real "Add GitHub
   account" dialog; the app gets `VISUALCOMMIT_GITHUB_URL=http://127.0.0.1:<port>/` and
@@ -151,7 +160,8 @@ What every part of phase 7a relies on; each part's conventions add to these.
 
 ### Scenario facts ("hosting", design 2.6; as `Scenarios.Phase7a.cs` builds it)
 
-What part A uses; later parts add theirs.
+What part A uses, which later parts share; each later part's own facts are in its own section (part
+B's in "Scenario facts part B uses").
 
 - **The fake** serves the copy's `github/` at `http://127.0.0.1:47395/` (`GitHubEndpoints.Local(47395)`:
   web base `http://127.0.0.1:47395/`, API `http://127.0.0.1:47395/api/v3/`, `Host` `127.0.0.1:47395`, which
@@ -346,15 +356,140 @@ Design 8.2's texts, word for word (`OperationTexts.AccountTexts`, and `HostingTe
 - **WP-P's text in A9's pictures, asserted by no part A check** (10.2): the left panel's "Pull requests"
   section signed out reads `Sign in to GitHub to see pull requests…` from WP-P's merge.
 
+### Part B: browse and clone
+
+Part B covers the clone form's "From GitHub…" (design 9.3; D261, D302), the repository browser "Clone
+from GitHub" loading, listed, filtered and failed, with the 1,000 cap's and single sign-on's lines (9.4;
+D301, D338), the keyless palette command "Clone from GitHub…", which signs in first (9.5; D299, D300),
+and a clone of the private `octo/hello` chosen in the browser that takes the account's token through
+the app's helper and writes none (0.2, 4.6, 9.3; D255, D331, ruling 5): checks B1 to B9, numbered here
+in the order of design 9.7's list, which numbers none. It uses WP-A's sign-in dialog and the window's
+entry (8.4, 8.5) and WP-C's and WP-S's binding as they are. Its one R picture is B3's `b03a-listed`, in
+the state the palette's path reaches (0.5): one empty tab, the form open with empty boxes, the filter
+focused and empty; the real window also repeats B7's palette path and B6's clone, comparing no capture
+there (13.4 B; what only it proves, 13.1). No picture of part B shows an opened GitHub repository, the
+clone included (0.4, 9.7): the clone's result is asserted through git, the fake's records, the call
+log, the app's log and the tripwire.
+
+#### Conventions of part B
+
+- **Code** (9.7): `Phase7aChecks.B.cs` (`Phase7aChecksB`, one method per app start, below) and
+  `Phase7aChecks.B.Helpers.cs` (part B's helpers, the builder's to name: waits for the browser and its
+  load, and snapshots of the browser and of the form holding what the rows assert);
+  `Phase7aExpectations.B.cs` (nested `PartB`: 9.2's texts, the two failure texts below, `PartB.Rows`
+  (full name and detail, in order), the clone's URL and folder name, the palette query, the picture
+  names, the R picture `b03a-listed`, positions and tolerances; written from this report, not from
+  `CloneTexts`); `Phase7aExpectationTests.B.cs` (`CloneTexts` and the two `HostingTexts.Describe` texts
+  equal `PartB`'s; the picture names unique and matching the rule). Part A's driver helpers and phase
+  6's palette helpers (`PressPalette`, `TypeInPalette`, `PaletteSnapshot`) are used as they are.
+- **Names in the checks** are part A's, and: "the form" is the clone form of the named tab's welcome
+  page (`CloneForm`); "the browser" the open `CloneFromGitHubDialogViewModel` and its view; "rows" its
+  `Rows` as its `CloneFromGitHubItem`s draw them; "the log" the app's log file's lines since a mark,
+  Debug included (`AppLogFile.ReadLines`). The fake records a request after its answer, so a step that
+  asserts requests after a load first waits until `GitHub.Requests` holds the last one it expects.
+- **Signing in.** B1, B5 and B9 sign in through the session (`SignInAsync(OctoToken)`), a state their
+  steps start from; B3, B6, B7 and B8 through WP-A's dialog that the palette's command opens, typing
+  `OctoToken`, as the real window does (13.4 B).
+- **The form** (phase 1's checks 13 and 14; 9.3): on an empty tab at 1100×700 the welcome page's
+  `CloneForm` lies at x 284 to 676, its texts and controls as phase 1's `13a` shows them; opening it
+  focuses `CloneUrlBox` (`WelcomeView.axaml.cs:36-40`). `CloneFromGitHubButton` (named `From GitHub…`,
+  no tooltip) is collapsed signed out or needing sign-in (D302) and takes no room; signed in it shows
+  whole at the URL row's right end, `VcActionButton`, enabled while no clone runs (`CanEditClone`).
+  Positions come from the controls' bounds, ±1.
+- **The browser** (9.4; D301): `CloneFromGitHubDialog`, named `Clone from GitHub`, on the dialog layer
+  under its backdrop (D104), a `wide` `dialogCard`; top to bottom `CloneFromGitHubTitle` (`dialogTitle`),
+  no repository line; `CloneFromGitHubFilter` (`dialogBox`, named `Filter`), enabled in every state;
+  `CloneFromGitHubList` (named `Clone from GitHub`) as `PickList`, 58 to 232 high, shown in every state;
+  the lines `CloneFromGitHubStatus` (`settingsNote`), `CloneFromGitHubError` (`dialogError`),
+  `CloneFromGitHubMore` and `CloneFromGitHubSso` (`settingsNote`), each only with text, in that order
+  (open point 18); `CancelButton` (`VcActionButton`) and `ConfirmButton` `Choose` (`VcPrimaryButton`),
+  right-aligned. A row (`CloneFromGitHubItem`) has `Padding` 10,0, its detail cut at its end and hidden
+  when null. Theme brushes only: the rows give the dark values; the card is `#1A1D24`.
+- **The palette's command** (9.5; D299, D300) is listed while GitHub is not off, as at every part B
+  start. Signed out it runs the window's sign-in entry first (8.5); a cancelled sign-in stops there; a
+  sign-in goes on to the active tab if empty, else to a new tab at the end (5.10's `TabForOpening`), and
+  opens its form and the browser over it. Signed in it asks nothing.
+- **No token on screen** (as part A's): before every `Shot` of part B, no visible text, automation value
+  or name holds `OctoToken`, `OctoClassicToken` or `AdaToken`.
+- **Pictures**: the neutral point (760, 687) is the status bar's empty middle under the form, or the
+  backdrop below the open card (every card ends well above y 687 at 1100×700, the browser at its
+  largest in `b09a` too).
+- **Every method ends**, after closing the app, with the tripwire for `OctoToken`, `OctoClassicToken` and
+  `AdaToken` over the data folder, the copy's `hello/` and `tool/` and, in method 2, the `clones` folder
+  (the clone, `.git` included), with the session's call log; the fake's `Errors` and `RefusedRequests`
+  empty; no API request answered 400 or 415; `Launcher.Requests` empty (part B launches nothing).
+
+#### Scenario facts part B uses (2.6, as `Scenarios.Phase7a.cs` builds it)
+
+- **octo's list.** The session's `ListRepositoriesAsync` is WP-G's A2, `GET api/v3/user/repos` with the
+  query `per_page=100&sort=updated`, route `user/repos`, at most 10 pages (`GitHubProvider.cs:74-82`),
+  answered with the repositories octo owns or may push to, most recently updated first; `PartB.Rows`:
+  1. `octo/hello`: private, updated at `HarnessTime`; detail `Private`;
+  2. `octo/tool`: public, a fork of `acme/tool`, an hour before; detail `Fork`;
+  3. `octo/notes`: private, empty, a day before; detail `Private`;
+  4. `octo/website`: public, archived, empty, 30 days before; detail `Archived`.
+
+  Not listed: `acme/tool` and `ada/hello`. No repository has a description (open point 11). Each row's
+  clone URL is the fake's `clone_url`, `http://127.0.0.1:47395/<owner>/<name>.git`, with no user part.
+- **The long list** (B9 only): `AddListedRepositories("octo", 1001)` before the start adds API-only
+  records `octo/listed-0001` to `octo/listed-1001`, public, without flags or description, each a minute
+  older than the one before from 60 days before `HarnessTime`: after the four, so the first 1,000 are the
+  four and `listed-0001` to `listed-0996`, and the tenth page of 100 names an eleventh (`MoreExist`).
+- **Faults on the list** (2.3, 2.4; once, after the header checks, before auth): `SsoPartialResults`, the
+  normal answer with `X-GitHub-SSO: partial-results; organizations=1002` (`SomeHiddenBySso`); `ServerError`,
+  500 `Server Error`; `BadCredentials`, 401 `Bad credentials`, which marks the account at once (7.6,
+  D330). Every answer's `X-GitHub-Request-Id` is `FAKE-` and four digits.
+
+#### Test methods and app starts (part B)
+
+Four methods, four app starts, each from `ServeAsync()` and a fresh data folder; each stays well under a
+minute alone (the heaviest git work is method 2's clone of `octo/hello`, seven commits, and its opening).
+
+| # | Test method | Checks | Start and what is set before it | Window, theme | Pictures |
+|---|---|---|---|---|---|
+| 1 | `Check_B1_B2_B4_form_loading_and_filter` | B1, B2, B4 | one empty tab (`ShellDriver.Start(data, gitHub: served.GitHub)`), a new store; signed in through the session after the form opens | 1100×700, dark | `b01a`, `b02a`, `b04a` |
+| 2 | `Check_B3_B6_B7_palette_sign_in_listed_and_clone` | B7, B3, B6 | one empty tab, a new store, signed out; `clones` (a `TempDirectory`) made before the app | 1100×700, dark | `b07a`, `b07b`, `b03a`, `b06a` |
+| 3 | `Check_B5_B9_cap_single_sign_on_and_failures` | B9, B5 | one empty tab, a new store; `served.GitHub.AddListedRepositories("octo", 1001)` before the start; signed in through the session | 1100×700, dark | `b09a`, `b05a`, `b05b` |
+| 4 | `Check_B8_cancelled_sign_in_and_a_new_tab` | B8 | one tab on `hello` (`StartWithTabs(data, [served.Hello.Path], activeTab: 0, gitHub: served.GitHub)`), a new store, signed out | 1100×700, dark | none |
+
+#### Texts these checks rely on (part B)
+
+- **Design 9.2's texts**, word for word (`OperationTexts.CloneTexts`): `FromGitHubButton` `From GitHub…`;
+  `DialogTitle` `Clone from GitHub`; `PaletteCommand` `Clone from GitHub…`; `Loading` `Loading
+  repositories…`; `Empty` `No repositories to list`; `MoreExist` `Only the 1,000 most recently updated
+  repositories are listed.`; `SomeHiddenBySso` `Some organisations' repositories are hidden until the token
+  is authorised for single sign-on.`; `Unexpected` `The repositories could not be loaded.`; `Choose`
+  `Choose`; the flags `Private`, `Fork`, `Archived`, joined with ` · ` before a description (9.4). No check
+  shows `Empty` or `Unexpected` (9.6's tests do).
+- **The browser's other texts** (9.4): the filter's placeholder and name `Filter`; `Cancel`.
+- **`HostingTexts.Describe`** (1.7; D338) for the two failures pictured: `ServerError` `GitHub had a
+  problem. Try again later.`; `BadCredentials` with the login `octo`, `OperationTexts.TokenRefused("octo")`
+  (D276), `GitHub refused the token of octo. Sign in to GitHub in Settings, Accounts.`
+- **Earlier texts**: the form's (part B's conventions, "The form"); the palette's neighbours `Clone
+  repository…` and `Init repository…` (phase 6's 5.4); WP-A's dialog, `Add GitHub account` and the rest
+  as part A's texts give them.
+- **Log lines** (Debug included; `{id}` the request's `X-GitHub-Request-Id`): a failed list logs three
+  Warnings, each naming the one request: WP-B's, once (9.4), `Listing GitHub repositories failed: {Kind}:
+  {Message} (request {id})`; WP-G's client's (6.2) `GitHub: GET /api/v3/user/repos failed: {status}
+  (request {id}).`; and WP-S's (17.1), for `BadCredentials` `GitHub account octo on 127.0.0.1:47395: GitHub
+  refused the token (the API, request {id}); it needs signing in again.`, for any other kind `GitHub:
+  listing the account's repositories failed: {Kind}, {Message} (request {id})` (`HostingSession.CallAsync`).
+  4.6's `hello: Clone: git's credential get for 127.0.0.1:47395 answered from the account.`; 9.3's Warning
+  `Cloning {url}: git's configuration could not be read; the clone goes without the account's token.`,
+  never expected; WP-S's `hello: listed 4 open pull requests of octo/hello` (D322).
+
 ## Checks
 
-Result values: Pass, Fail, Not run (with the reason in Notes). Each check is named A and its number in
-design 8.7; its scenario, theme and window size end its "Check" column; its methods and starts are in
-part A's table above. "R" in Notes marks the steps the real-window pass repeats (design 13.4 A), "n/a" says
-why a check is not repeated. "Screenshots" lists the planned pictures, the scripted run's and then the real
-window's. Every step's "requests" are those the fake recorded since the step's mark; every "calls" are the
-store's `Calls` since its mark; "git calls" are the call log's, since a quiet mark (part A's "Names in
-the checks").
+Result values: Pass, Fail, Not run (with the reason in Notes). Each check is named by its part's letter
+and its number: A and its number in design 8.7, B and its place in design 9.7's list (B1 to B9, numbered
+here); its scenario, theme and window size end its "Check" column; its methods and starts are in its
+part's table above. "R" in Notes marks the steps the real-window pass repeats (design 13.4 A and B), "n/a"
+says why a check is not repeated. "Screenshots" lists the planned pictures, the scripted run's and then the
+real window's. Every step's "requests" are those the fake recorded since the step's mark; every "calls" are
+the store's `Calls` since its mark; "git calls" are the call log's, since a quiet mark (part A's "Names in
+the checks", which part B's add to). In part A's rows and methods table, "part A" and "part B" of A5
+and A10 name the two halves of those checks (A5 at 1100×700 and at 1920×1080; A10's starts after a
+session-only sign-in and after one with the keychain), not the report's parts A and B.
 
 | # | Check | Steps | Expected result | Scripted | Real window | Screenshots | Notes |
 |---|---|---|---|---|---|---|---|
@@ -369,26 +504,35 @@ the checks").
 | A9 | Needs sign-in after a refused token, the API's way and git's (D330, D276, D273, D255; design 7.6, 7.8, 4.6, 4.7, 8.3): a revoked token refused by the pull-request read of `hello` marks the account; "Sign in…" again with `OctoClassicToken` works; that token revoked, a fetch through the app's helper fails with WP-C's dialog, no credentials dialog, and the account needs sign-in again once the session's `GET /user` has answered 401; "Open settings…" opens Accounts; "hosting", one empty tab then `hello`, dark, 1100×700 | **Method 6** (`Check_A9_needs_sign_in_after_a_refused_token`): 1. `ServeAsync()`. Start one empty tab (`gitHub: served.GitHub`); `SignInAsync(OctoToken)`. 2. `GitHub.Revoke(OctoToken)`. Mark the requests and the calls. `Folders.Answer(served.Hello.Path)`; click `OpenRepoButton`; `WaitForRepositoryAsync()`; `WaitForAccountAsync(a => a?.State == AccountState.NeedsSignIn)`; wait until the parsed `accounts.json` shows `tokenState` `refused` (part A's conventions); `WaitForWatchersQuietAsync()`. 3. `OpenAccountsAsync()`. Screenshot (`a09a-needs-sign-in-api`). 4. Mark. `OpenSignInDialogAsync()`; `TypeToken(OctoClassicToken)`; press Enter; wait until signed in. Press Esc. Wait for the log line `hello: listed 4 open pull requests of octo/hello` since the mark (and, from WP-V's merge, `AvatarsShown("hello")`) and for the watchers to be quiet. 5. `GitHub.Revoke(OctoClassicToken)`. Mark the requests, the git requests, the calls and the call log. Click `FetchButton`; wait for the fetch's end and the error dialog; wait for a request `GET api/v3/user` answered 401 since the mark, for `WaitForAccountAsync(a => a?.State == AccountState.NeedsSignIn)` and until the parsed `accounts.json` shows `tokenState` `refused`. Screenshot (`a09b-git-refused`). 6. Click `Open settings…` (`ErrorExtraButton`); wait for the screen and its reads. Screenshot (`a09c-needs-sign-in-git`). | **After step 2:** `hello`'s tab open with its graph; requests since the mark: each made with a token and answered 401, the first `GET api/v3/repos/octo/hello` (route `repo:octo/hello`, the refresh's first read, 7.8 step 1), none answered 200 and none made after the account was marked (no request without the account's token, 7.6). The session's `Account`: `NeedsSignIn`, note kind `Refused`; `accounts.json` (waited for: 7.6 sets the account before it writes the file): `tokenState` `refused`, `useForGit` true, the record otherwise as after the sign-in; calls none (the entry stays, `Holds(…octo)` true); `hello`'s hosting: `State.PullRequests` `SignedOut`, `Bindings` empty; no dialog of any kind (the API's refusal shows only in Accounts).<br>**After step 3:** the screen over `hello`'s window, on Accounts: `AccountLogin` `octo`, `AccountNeedsSignIn` `GitHub refused the token. Sign in again with a new token.` (`dialogWarning`); `Sign in…` and `Sign out…` both enabled; the `Git` row, checked, with its note. The left panel's "Pull requests" section behind the backdrop is WP-P's region: today's placeholder until WP-P merges, then `Sign in to GitHub to see pull requests…` (10.2); nothing is asserted there.<br>**After step 4:** requests since the mark begin with `GET api/v3/user` with a token, 200, `Login` `octo`; the refresh's `GET api/v3/repos/octo/hello` and `GET api/v3/repos/octo/hello/pulls` follow, 200 (from WP-V's merge the avatars' requests too), none answered 401; calls exactly `save github:127.0.0.1:47395:octo` (the same key, no forget: D263); the session's `Account` `SignedIn`, `Keychain`, `None`; `accounts.json` one record, `tokenState` `keychain` (a sign-in writes the file before it sets the account, 7.5); `hello`'s hosting's `Bindings` exactly the scenario facts' one binding.<br>**After step 5:** no credentials dialog and no prompt at any time. The error dialog over `hello`'s window: `ErrorTitle` `Fetch failed`; `ErrorSummary` `GitHub refused git's credentials for octo. If the token has expired or was revoked, sign in to GitHub again in Settings, Accounts.`; `ErrorRepository` `In hello`; `ErrorOutput` git's standard error cleaned (`GitOutputCleaner.Clean`), holding the key line `fatal: Authentication failed for 'http://127.0.0.1:47395/octo/hello.git/'` and ending with the app's line `error: Could not fetch origin` (the toolbar's Fetch is `FetchAsync(null)`, D109; the lines before it are git's); `ErrorCommand` `git fetch --progress origin` (`hello`'s only remote, so the last fetch, without `--no-auto-maintenance`; the account reaches git through the environment, not the command); buttons left to right `Copy output`, `Open settings…`, `Close`. Git requests on `octo/hello` since the mark: each answered 401; at least one carries credentials with `GivenUserName` `x-access-token` (the app's helper answered git's `get` from the account, D255); none carries another user name. API requests since the mark: exactly one, `GET api/v3/user` with a token, 401 (the session's check of git's `erase`, D330). The session's `Account` `NeedsSignIn`, `Refused`; `accounts.json` (waited for) `tokenState` `refused`, `useForGit` true; calls none. `hello`'s remote branches as before the fetch.<br>**After step 6:** the error dialog closed; the screen open with `SelectedSection` `Accounts` and its button selected; the section as after step 3. Behind the backdrop, the same WP-P region as step 3. | | n/a | `a09a-needs-sign-in-api`, `a09b-git-refused`, `a09c-needs-sign-in-git` | n/a: the real window revokes nothing; the refusal's paths are WP-C's and WP-S's classes' as well (`RefusedTokenDisplayTests`, `AccountCredentialTests`, `HostingSessionCredentialTests`). The fetch is the first request with `OctoClassicToken` after its revoke: step 4's waits keep a later API request (the pull requests' or, from WP-V's merge, the avatars') from marking the account first, after which the fetch would be unbound and git would ask through the credentials dialog. 7a's first error-dialog assertion (design 16.3) is added here. **WP-P's region**: the three pictures show `hello`'s left panel; the lead inspects them again at WP-P's and WP-V's merges (0.4, 10.8, 11.6). Varies by nature: git's output in `ErrorOutput` (only the key line and the app's last line `error: Could not fetch origin` are asserted) and the status bar's git box. |
 | A10 | Starts after a sign-in (ruling 6; D253, D287; design 7.4): after a session-only sign-in the account needs sign-in with no keychain call; after a keychain sign-in the next start is signed in with one store read and no request to GitHub; a token gone from the keychain gives "needs sign-in"; "hosting", one empty tab per start, dark, 1100×700 | **Part A, method 4's second start** (after A6, one data folder, the same store, still unavailable, and the same fake): 4. Mark the requests and the calls. Start one empty tab on the same data folder (`gitHub: served.GitHub`, `tokens:` the same store). `OpenAccountsAsync()`. Screenshot (`a10a-session-ended`).<br>**Part B, method 7** (`Check_A10_restart_keeps_the_sign_in_and_finds_the_token_gone`, a `[Fact]`, one data folder, one store, one fake): 5. `ServeAsync()`. First start, one empty tab; `SignInAsync(OctoToken)`; close the app. 6. Mark. Second start; `OpenAccountsAsync()`. Screenshot (`a10b-still-signed-in`). Close the app. 7. `Tokens.Remove(TokenKey("github", "127.0.0.1:47395", "octo"))`. Mark. Third start; `OpenAccountsAsync()`. Screenshot (`a10c-token-gone`). Close the app. | **After step 4:** the start's calls: none (a `session` record reads no store, D287); requests none (no `GET /user` at a start). The session's `Account`: `NeedsSignIn`, note kind `SessionEnded`. The section: `AccountLogin` `octo`, `AccountNeedsSignIn` `The token was kept for the last session only. Sign in again.` (`dialogWarning`); `Sign in…` and `Sign out…` enabled; the `Git` row, checked. `accounts.json` as step 2 of A6 left it.<br>**After step 5:** `accounts.json` one record, `tokenState` `keychain`; `Holds(…octo)` true.<br>**After step 6:** the second start's calls exactly `probe`, `read github:127.0.0.1:47395:octo` (one store read, ruling 6); requests since the mark none (no `GET /user`, D287; an empty tab lists nothing). The session's `Account` `SignedIn`, `Keychain`, `None`. The section as A5's step 7 shows it, the focus on `SettingsNavAccounts`. `accounts.json` byte for byte as after step 5.<br>**After step 7:** the third start's calls exactly `probe`, `read github:127.0.0.1:47395:octo` (not found); requests none. The session's `Account` `NeedsSignIn`, note kind `TokenMissing`. The section: `AccountLogin` `octo`, `AccountNeedsSignIn` `The token is no longer in this computer's keychain. Sign in again.`; `Sign in…` and `Sign out…` enabled; the `Git` row, checked. `accounts.json` byte for byte as after step 5 (a start writes nothing). | | n/a | `a10a-session-ended`, `a10b-still-signed-in`, `a10c-token-gone` | n/a: scripted only (0.5): a restart that keeps the sign-in needs one store for two starts, and the real window's store is memory. Each start is a `FreshApplication.RunAsync` half (D32). |
 | A11 | The "Use for git over HTTPS" switch (D216, D255, D290; design 8.3, 7.5, 7.8): off and Save gives `useForGit` false and no bindings for `hello`; the reopened screen shows it off; Cancel and Esc after a toggle change nothing; on and Save binds again; "hosting", tabs `hello` and an empty one, dark, 1100×700 | **Method 8** (`Check_A11_use_for_git_switch`): 1. `ServeAsync()`. `StartWithTabs(data, [served.Hello.Path, null], activeTab: 0, gitHub: served.GitHub)`; `WaitForRepositoryAsync()`; `SignInAsync(OctoToken)`; wait for `hello: listed 4 open pull requests of octo/hello` and for the watchers to be quiet. 2. Click tab 1 (the empty tab). `OpenAccountsAsync()`; click `AccountUseForGit`; click `Save`; wait until the screen has closed, then until the parsed `accounts.json` shows `useForGit` false and `hello`'s hosting's `Bindings` is empty (part A's conventions). 3. `OpenAccountsAsync()`. Screenshot (`a11a-switch-off`). 4. Click `AccountUseForGit`; click `Cancel`. `OpenAccountsAsync()`; click `AccountUseForGit`; press Esc. `OpenAccountsAsync()`. 5. Click `AccountUseForGit`; click `Save`; wait until the screen has closed, then until the parsed `accounts.json` shows `useForGit` true and `hello`'s hosting's `Bindings` holds one binding. | **After step 1:** `hello`'s hosting's `Bindings` is the scenario facts' one binding; the session's `BindsGit` true; `accounts.json` `useForGit` true.<br>**After step 2:** before Save, the box unchecked and nothing changed (D216: `accounts.json` `useForGit` true, the bindings as step 1's); after Save, the screen closed; `accounts.json` (waited for: the switch's Save writes it off the UI thread after the screen has closed, 7.2, 7.5) `useForGit` false, the record otherwise unchanged (`tokenState` `keychain`); the session's `Account` still `SignedIn` with `UseForGit` false and its `BindsGit` false; `hello`'s hosting's `Bindings` empty (waited for: the events go through the UI thread); calls none (the switch touches no keychain).<br>**After step 3:** the section: `AccountLogin` `octo`, `The token is kept in this computer's keychain.`, `Sign out…`; `AccountUseForGit` `Use for git over HTTPS` unchecked and enabled, `AccountUseForGitNote` with its text; the welcome page of the empty tab behind the backdrop, the tab strip `hello`, `New tab` (active).<br>**After step 4:** after Cancel and after Esc the screen closed with `accounts.json` `useForGit` false and `hello`'s hosting's `Bindings` empty; the last opening shows the switch unchecked.<br>**After step 5:** `accounts.json` (waited for) `useForGit` true, the record otherwise unchanged; `hello`'s hosting's `Bindings` the one binding again (waited for); the session's `BindsGit` true; calls none. | | n/a | `a11a-switch-off` | n/a: a setting at Save; the real window shows the switch on in `a05a`. The picture is taken on the empty tab so that it shows no region of WP-P's or WP-V's (open point 5). |
+| B1 | The clone form signed in, with "From GitHub…" (design 9.3, 9.2; D261, D302): signed out the form as today, no button and the URL box at its full width; after a sign-in the button at the URL row's end and the box narrower; "hosting" served, one empty tab, dark, 1100×700 | **Method 1** (`Check_B1_B2_B4_form_loading_and_filter`): 1. `ServeAsync()`. `ShellDriver.Start(data, gitHub: served.GitHub)` (one empty tab, a new store); wait for the welcome page. Mark the requests and the calls. Click `CloneRepoButton`; wait until `CloneUrlBox` has the keyboard focus. 2. `SignInAsync(OctoToken)`; wait until `CloneFromGitHubButton` is visible. Screenshot (`b01a-form-signed-in`). | **After step 1:** the form open (part B's conventions, "The form"), its three boxes empty, the focus in `CloneUrlBox`, no error line; `CloneFromGitHubButton` not visible (signed out, D261) and taking no room: `CloneUrlBox` from x 284 to 676, the edges of `CloneNameBox`; the session's `IsOff` false and its `Account` null; requests none (D257); calls none.<br>**After step 2:** requests since the mark exactly one, `GET api/v3/user`, `TokenPresent`, 200, `Login` `octo`; calls `probe`, `save github:127.0.0.1:47395:octo`; the session's `Account` `SignedIn` with `UseForGit` true, its `BindsGit` true. The form: `CloneFromGitHubButton` `From GitHub…` visible and enabled (`VcActionButton`), on the URL row right of `CloneUrlBox`, 6 apart; its right edge 676 and its height `CloneBrowseButton`'s; `CloneUrlBox` still from x 284, ending 6 left of the button; the URL row as tall as the parent-folder row; no tooltip on the button; the boxes still empty, the focus still in `CloneUrlBox`; the page's other texts and controls as phase 1's `13a` shows them; no text cut. | | n/a | `b01a-form-signed-in` | n/a: the real window reaches the form through the palette with the browser over it (13.4 B), so the button shows only under the backdrop of `b03a`. The step tests the button's appearance on `AccountChanged`; its absence with GitHub off and after a sign-out, and its being disabled while a clone runs, are `WelcomeCloneFromGitHubTests`' (9.6). Varies by nature: the URL box's caret; the status bar's git box (D248). |
+| B2 | The browser loading (design 9.4, 9.2; D301): stacked over the form with its title, the filter enabled with the focus, the list empty and `Loading repositories…`, "Choose" disabled; "hosting", one empty tab, signed in, dark, 1100×700 | **Method 1**, after B1: 3. Mark the requests. `GitHub.HoldNext("user/repos")`. Click `CloneFromGitHubButton`; wait for the hold's `Arrived` and for the browser. Screenshot (`b02a-loading`). | **After step 3:** the browser (part B's conventions, "The browser") over the form: the card 460 wide at x 320 to 780, centred vertically; `CloneFromGitHubTitle` `Clone from GitHub`; no repository line; the filter empty, its placeholder `Filter` showing, enabled, with the keyboard focus; the list empty at its least height, 58 inside its border; below it `CloneFromGitHubStatus` `Loading repositories…` (`settingsNote`, `#9BA3B0`, 11.5); no error, more or SSO line; `Cancel` enabled, `Choose` disabled. The hold's `Arrived` completed: one `GET api/v3/user/repos` waits at the fake, not yet recorded (requests since the mark none). Calls none since step 2 (a list reads no keychain). Behind the backdrop the form as `b01a` shows it. No text cut. | | n/a | `b02a-loading` | n/a: a held request (0.5). Varies by nature: the filter's caret; the status bar's git box. |
+| B3 | The browser listed (design 9.4, 9.2, 0.5; D301), in the state the palette's path reaches: one empty tab, the form open with empty boxes, the scenario's four repositories in GitHub's order with their flags, the filter focused and empty, "Choose" disabled until a row is chosen; "hosting", one empty tab, signed in through the palette's dialog, dark, 1100×700 | **Method 2** (`Check_B3_B6_B7_palette_sign_in_listed_and_clone`), after B7's steps 1 to 4: 5. Wait for the browser, until its load has ended and until the fake has recorded the `user/repos` request. Screenshot (`b03a-listed`). | **After step 5:** the browser over the one empty tab's form, the card 460 wide at x 320 to 780, centred vertically; `CloneFromGitHubTitle` `Clone from GitHub`; no repository line; the filter empty, its placeholder showing, enabled, with the keyboard focus (not `CloneUrlBox`, which the form's opening focused first); the rows in order, `PartB.Rows`: `octo/hello` `Private`, `octo/tool` `Fork`, `octo/notes` `Private`, `octo/website` `Archived`; each `CloneFromGitHubItem` named by its full name, its help text its detail, its tooltip the full name, a line break and the detail; each 28 high, the full name in `#E4E7EC`, the detail 12 after it in `#9BA3B0` at 11.5, whole; four rows and no scroll bar; no status, error, more or SSO line; none selected; `Cancel` enabled, `Choose` disabled. Requests since step 1's mark: the sign-in's `GET api/v3/user` (200), then exactly one `GET api/v3/user/repos` with the query `per_page=100&sort=updated`, `TokenPresent`, 200, `Login` `octo`. Behind the backdrop the welcome page of the one tab (`New tab`) with the form open, its three boxes empty and `From GitHub…` visible; no settings screen. No text cut; no visible text or automation value holds a token. | | | `b03a-listed`; real window: `b03a-listed` | **R** (13.4 B step 3): after B7's real path, wait for `CloneFromGitHubDialog`, then until `CloneBrowserRowNames()` equals `PartB.Rows`' full names in order and `CloneFromGitHubFilter` has the focus; compared with `b03a-listed`. Its state owes nothing to a fake's hook: the start, the palette, the typed token and the scenario only (0.5). The form's opening posts the focus to `CloneUrlBox` (`WelcomeView.axaml.cs:36-40`, at `Loaded`) while the command opens the browser over it (9.5); the filter's focus is the R state 9.7 names, in both harnesses. **Depends on open point 11** (a described row). Varies by nature: the filter's caret; the status bar's git box. |
+| B4 | The browser filtered (design 9.4; D301, D300): a filter typed while loading applies when the rows come; it matches the detail's flag, ignoring case; a selected row it hides is no longer selected; emptied, the rows come back in the list's order; Esc leaves the form open; "hosting", one empty tab, signed in, dark, 1100×700 | **Method 1**, after B2: 4. With the focus in the filter, `app.Type("private")`. 5. Dispose the hold; wait until the browser's load has ended and until the fake has recorded the `user/repos` request. Screenshot (`b04a-filtered`). 6. Click the row `octo/notes`. Click the filter; press Ctrl+A; `app.Type("tool")`. 7. Press Ctrl+A, then Backspace. 8. Press Esc. | **After step 4:** the filter holds `private`; still `Loading repositories…`, no rows, `Choose` disabled.<br>**After step 5:** requests since step 3's mark exactly one, `GET api/v3/user/repos` with the query `per_page=100&sort=updated`, `TokenPresent`, 200, `Login` `octo`. The rows in order: `octo/hello` `Private`, `octo/notes` `Private` (of the four, the two whose detail holds the text); no status, error, more or SSO line; none selected, `Choose` disabled; the list at its least height, 58; the filter still focused, holding `private`. No text cut.<br>**After step 6:** after the click `octo/notes` selected (`#2A3150`), `Choose` enabled; after `tool` the rows exactly `octo/tool` `Fork`, none selected (`Selected` null), `Choose` disabled.<br>**After step 7:** the filter empty, its placeholder showing; the four rows of `PartB.Rows` in their order; none selected; `Choose` disabled.<br>**After step 8:** the browser closed; the form open, its three boxes empty (nothing chosen), `From GitHub…` visible; requests since step 3's mark still that one; calls none. | | n/a | `b04a-filtered` | n/a: scripted only (13.4 B repeats the list, not the filter), and its state follows a held request (0.5). The filter on a description is `CloneFromGitHubDialogViewModelTests`' (9.6). Varies by nature: the filter's caret; the status bar's git box. |
+| B5 | The browser failed (design 9.4, 1.7, 7.6; D338, D276, D302, D330): a server error in `HostingTexts.Describe`'s words, no rows, the account kept; then the API's refusal, `GitHub refused the token of octo. …`, the account needing sign-in at once and "From GitHub…" gone from the form; "hosting" with B9's long list, one empty tab, signed in, dark, 1100×700 | **Method 3** (`Check_B5_B9_cap_single_sign_on_and_failures`), after B9: 4. Mark the requests and the log. `GitHub.FailNext("user/repos", FakeGitHubFault.ServerError)`. Click `CloneFromGitHubButton`; wait until `CloneFromGitHubError` shows and the fake has recorded the request. Screenshot (`b05a-failed`). 5. Press Esc. Mark the requests, the calls and the log. `GitHub.FailNext("user/repos", FakeGitHubFault.BadCredentials)`. Click `CloneFromGitHubButton`; wait until `CloneFromGitHubError` shows, for `WaitForAccountAsync(a => a?.State == AccountState.NeedsSignIn)`, until the parsed `accounts.json` shows `tokenState` `refused` (part A's conventions) and until `CloneFromGitHubButton` is not visible. Screenshot (`b05b-refused`). 6. Press Esc. | **After step 4:** requests since the mark exactly one, `GET api/v3/user/repos`, `TokenPresent`, 500; `CloneFromGitHubError` `GitHub had a problem. Try again later.` (`dialogError`, `#E5606B`) below the list, which is empty at 58; no status, more or SSO line; the filter enabled with the focus; `Cancel` enabled, `Choose` disabled. The session's `Account` still `SignedIn` (only a 401 marks it); calls none. The log since the mark, `{id}` the failed request's id (`FAKE-` and four digits): exactly one line that begins `Listing GitHub repositories failed:` (WP-B's; 9.4 logs a failure once), the Warning `Listing GitHub repositories failed: ServerError: Server Error (request {id})`; besides it, once each, WP-G's client's Warning `GitHub: GET /api/v3/user/repos failed: 500 (request {id}).` and WP-S's Warning `GitHub: listing the account's repositories failed: ServerError, Server Error (request {id})` (part B's texts, "Log lines"). Behind the backdrop the form with `From GitHub…`. No text cut.<br>**After step 5:** requests since the mark exactly one, `GET api/v3/user/repos`, `TokenPresent`, 401, and no `GET api/v3/user` after it (the API's 401 marks the account at once, D330); `CloneFromGitHubError` `GitHub refused the token of octo. Sign in to GitHub in Settings, Accounts.`; no rows. The session's `Account` `NeedsSignIn`, note kind `Refused`, login `octo`; `accounts.json` `tokenState` `refused`, `useForGit` true, the record otherwise unchanged; calls none (the entry stays: `Holds(…octo)` true). The log since the mark, `{id}` the refused request's id: exactly one line that begins `Listing GitHub repositories failed:`, the Warning `Listing GitHub repositories failed: BadCredentials: Bad credentials (request {id})`; besides it, once each, WP-G's client's Warning `GitHub: GET /api/v3/user/repos failed: 401 (request {id}).` and WP-S's Warning `GitHub account octo on 127.0.0.1:47395: GitHub refused the token (the API, request {id}); it needs signing in again.`; no line `GitHub: listing the account's repositories failed:` (the 401 marks the account instead, 7.6). Behind the backdrop the form without `From GitHub…` (D302): `CloneUrlBox` again from x 284 to 676. No text cut.<br>**After step 6:** the browser closed; the form open, its boxes empty, no `From GitHub…`; requests none since step 5's. | | n/a | `b05a-failed`, `b05b-refused` | n/a: faults (`FailNext`, 0.5). `ServerError` is the failure pictured for 9.7's "failed", `BadCredentials` a step beyond 9.7's list (open points 12, 13 and 15); the other kinds, `Unexpected` and `Empty` are `HostingTextsDescribeTests`' and `CloneFromGitHubDialogViewModelTests`' (9.6). B9's long list does not show: each fault answers the first page. Varies by nature: the filter's caret; the status bar's git box. |
+| B6 | Choose, then Clone of the private `octo/hello` through the app's helper (design 9.3, 9.4, 9.5, 0.2, 4.6; D255, D331, ruling 5; O4, R3): the plain URL and the folder name filled; the clone asks nothing, takes the account's token as `x-access-token` through the app's helper and writes no credential into the clone; the token in no file and no git call; no picture of the clone (0.4); "hosting", one empty tab, signed in through the palette's dialog, a `clones` folder, dark, 1100×700 | **Method 2**, after B3: 6. Mark the requests and take a quiet call mark (`QuietCallMarkAsync()`). Click the row `octo/hello`; click `Choose`; wait until the browser has closed. Screenshot (`b06a-chosen`). 7. Click `CloneParentBox`; `app.Type(clones.Path)` (typed, as the real window does, not through the fake folder dialog). 8. Mark the requests, the git requests, the calls and the log, and take a quiet call mark (`QuietCallMarkAsync()`). Click `CloneStartButton`. Wait until the tab shows the repository (`WaitForRepositoryAsync()`), for `hello: listed 4 open pull requests of octo/hello` in the log since the mark (from WP-V's merge also `AvatarsShown("hello")`, D322) and for the watchers to be quiet. 9. Close the app. In `{clones}/hello`, through `GitRunner` with `TempRepo.IsolatedEnvironment` (as 13.4 B step 7): `git config --get remote.origin.url`; `git config --get-regexp ^credential`; `git config --local --list`; `git symbolic-ref HEAD`; `git rev-parse HEAD`; `git status --porcelain`. | **After step 6:** after the click `octo/hello` selected and `Choose` enabled; then the browser closed and the form: `CloneUrlBox` `http://127.0.0.1:47395/octo/hello.git` (the plain clone URL, ruling 5; `WithPort`), shown whole; `CloneNameBox` `hello` (from the URL, 9.3); `CloneParentBox` empty; no error line; `From GitHub…` visible and enabled; requests since the mark none; git calls since the quiet mark none (choosing runs no git). No text cut.<br>**After step 8:** at no time a credentials dialog or any other prompt: the log since the mark has no line `hello: Clone: git asks (`, and no dialog is open. Git calls since the quiet mark, in this order (presence and order, `AssertCalledInOrder`): `git config --show-scope --show-origin -z --list` in the data folder (9.3's read of the user's `url.` rules, D331), then `git clone --progress -- http://127.0.0.1:47395/octo/hello.git hello` in `{clones}`. The log since the mark holds `hello: Clone: git's credential get for 127.0.0.1:47395 answered from the account.`; no `hello: Clone: git's credential` line ending `is not bound.`, `names another user.` or `has no token.`; no `refused the account's token`; no Warning `Cloning …: git's configuration could not be read; …`. Git requests on `octo/hello` since the mark (paths under `/octo/hello.git/`): the first without credentials, 401 (2.2); at least one with `GivenUserName` `x-access-token` answered 200 (the account's token through the app's helper, D255); none with another user name; none with credentials answered 401. API requests since the mark: no `user` and no `user/repos`; `hello`'s refresh (7.8), `GET api/v3/repos/octo/hello` and `GET api/v3/repos/octo/hello/pulls`, each `TokenPresent`, 200 (from WP-V's merge the avatars' too); none answered 401. Calls since the mark none (the token is in memory, ruling 6). The window: one tab, `hello`, showing `{clones}/hello` (the empty tab took the clone); the form closed; the recent list holds `hello`; `hello`'s hosting's `Bindings` exactly one `CredentialBinding`, `Url` `http://127.0.0.1:47395/octo/hello.git`, account `github:127.0.0.1:47395:octo`; the session's `Account` `SignedIn`, `Keychain`, `None`.<br>**After step 9:** `remote.origin.url` `http://127.0.0.1:47395/octo/hello.git` (step 6's); `--get-regexp ^credential` exits 1 and prints nothing; the keys of `--local --list` other than `core.*` exactly `remote.origin.url`, `remote.origin.fetch` (`+refs/heads/*:refs/remotes/origin/*`), `branch.main.remote` (`origin`) and `branch.main.merge` (`refs/heads/main`): nothing of the scope's `GIT_CONFIG_COUNT` pairs, no `http.` or `url.` key (9.5's git fact); `HEAD` `refs/heads/main`, at the commit of `hello/`'s `origin/main` ("Add the docs folder"); the working tree clean. `accounts.json` one record, `tokenState` `keychain`, `useForGit` true. Part B's end (its conventions): the tripwire passes over `{clones}` with `.git`, the data folder (the log and `recent.json` included) and the call log (the clone's command, output and error included). | | | `b06a-chosen`; real window: none (no capture of the clone's tab) | **R** (13.4 B steps 4 to 7): a real click on `octo/hello`, then "Choose": `CloneUrlBox` `WithPort("http://127.0.0.1:47395/octo/hello.git")`, `CloneNameBox` `hello`; `ReplaceText("CloneParentBox", clones.Path)` (a `TempDirectory("rw7a-clone")` made before the app); a real click on "Clone"; `Opened(app, "hello", 0, 0)` within `NetworkTimeout` (a time-out says whether `CredentialsDialog` shows); no `CredentialsDialog`; `octo/hello`'s git requests include one answered 200 whose `GivenUserName` is `x-access-token` and none with another user name; run.txt `B: the clone went through {HelperPath}` and whether that path holds a space; after `app.Close()` the two `git config` reads; `AssertCleanEnd(app, served, clones.Path)`. The real window waits only for `Opened` before closing; the scripted check also waits for D322's lines, so that the close cuts no request of the clone's tab. `b06a` is scripted only; the temporary folder's name is in no picture (step 7 comes after it). Where the focus returns when the browser closes is not asserted (D104). Varies by nature: a caret where the focus returned; the status bar's git box. |
+| B7 | The palette's "Clone from GitHub…" signed out (design 9.5, 8.5, 9.2; D299, D300, D261): listed right after "Clone repository…", without a key; "Add GitHub account" first, over the welcome page, the form not yet open; after the sign-in the form and the browser on the same empty tab, and no settings screen; "hosting", one empty tab, signed out, dark, 1100×700 | **Method 2**: 1. `ServeAsync()`; `using var clones = new TempDirectory("clones")` before the app. `ShellDriver.Start(data, gitHub: served.GitHub)` (one empty tab, a new store); wait for the welcome page. Mark the requests and the calls. 2. `PressPalette()`; with the box empty read the palette's shown entries (`Palette.Shown`, not only the realised rows). `TypeInPalette("Clone from GitHub")`; read `PaletteSnapshot()`. Screenshot (`b07a-palette-command`). 3. Press Enter; wait for `SignInDialog` with the focus in `SignInToken`. Screenshot (`b07b-sign-in-first`). 4. `TypeToken(OctoToken)`; `ConfirmSignInAsync()`. | **After step 2:** with the box empty the palette's commands hold `Clone repository…`, `Clone from GitHub…`, `Init repository…` one after another, `Clone from GitHub…` enabled, with no detail and no key; after the typing one row, `Clone from GitHub…`, highlighted, enabled, no key; the card as phase 6's (`paletteCard`: 600 wide at the top centre, x 250 to 850, from y 96, 84 high with one row). Requests none; calls none.<br>**After step 3:** the palette closed; `SignInDialog` `Add GitHub account` as part A's conventions ("The dialog") and A2's step 3 give it (the help, the link, `Token`, the box empty with the focus, no `SignInNoKeychain`, `Cancel` enabled, `Sign in` disabled), over the empty tab's welcome page, which shows its `Open`, `Clone` and `Init` buttons, not the form (it opens after the sign-in, 9.5); one tab; no settings screen (the entry is the window's, 8.5); calls `probe`; requests none.<br>**After step 4:** the dialog closed; requests since the mark begin with exactly one `GET api/v3/user`, `TokenPresent`, 200, `Login` `octo`; calls `probe`, `save github:127.0.0.1:47395:octo`; the session's `Account` `SignedIn`, `Keychain`, `None`; `accounts.json` one record, `tokenState` `keychain`, `useForGit` true; still one tab (the form and the browser over it, which open after the sign-in, are B3's step 5's, which waits for them); no settings screen at any time. | | | `b07a-palette-command`, `b07b-sign-in-first`; real window: none (its steps 1 and 2 compare nothing) | **R** (13.4 B steps 1 and 2): a real Ctrl+Shift+P, `TypeInPalette("Clone from GitHub", …)`, the highlighted row `Clone from GitHub…`, Enter; `WaitForSignInDialog`, then `TypeTokenAndConfirm` (the box's value "" and its name `Token`); Settings stays closed, so B3's wait for the browser is the sign-in's proof. Varies by nature: the palette box's caret (`b07a`), the token box's caret (`b07b`); the status bar's git box. |
+| B8 | A cancelled sign-in changes nothing (design 9.5, 8.5; D300): from a repository tab, "Clone from GitHub…" signed out, then the dialog's Cancel, leaves no account, no new tab and no form; signed in from there, the form opens on a new tab at the end with the browser over it, and Esc on the browser leaves the form open; "hosting", one tab on `hello`, signed out, dark, 1100×700 | **Method 4** (`Check_B8_cancelled_sign_in_and_a_new_tab`): 1. `ServeAsync()`. `StartWithTabs(data, [served.Hello.Path], activeTab: 0, gitHub: served.GitHub)`; `WaitForRepositoryAsync()`; `WaitForWatchersQuietAsync()`. Mark the requests and the calls. 2. `PressPalette()`; `TypeInPalette("Clone from GitHub")`; read `PaletteSnapshot()`; press Enter; wait for `SignInDialog`. 3. Click the dialog's `Cancel`. 4. Mark the requests, the calls and the log. `PressPalette()`; `TypeInPalette("Clone from GitHub")`; press Enter; wait for `SignInDialog`; `TypeToken(OctoToken)`; press Enter; wait for the browser and until its load has ended; wait for `hello: listed 4 open pull requests of octo/hello` in the log since the mark (from WP-V's merge also `AvatarsShown("hello")`, D322) and for the watchers to be quiet (`WaitForWatchersQuietAsync()`); then until the fake has recorded the `user/repos` request and `GET api/v3/repos/octo/hello/pulls` (part B's "Names in the checks"). 5. Press Esc. | **After step 1:** one tab, `hello`; the session's `Account` null; requests none (D257).<br>**After step 2:** before Enter, the palette's first row `Clone from GitHub…`, highlighted; then `SignInDialog` over `hello`'s window; calls `probe`; requests none.<br>**After step 3:** the dialog closed and no dialog open; the session's `Account` null; no `accounts.json`; the tabs exactly one, `hello`, active and showing `hello` (no new tab, no welcome page, no form; D300); requests none; calls since step 1's mark exactly `probe`.<br>**After step 4:** requests since the mark: first `GET api/v3/user`, `TokenPresent`, 200, `Login` `octo`; then, in an order not asserted, exactly one `GET api/v3/user/repos` (200) and `hello`'s refresh, `GET api/v3/repos/octo/hello` and `GET api/v3/repos/octo/hello/pulls` (200; from WP-V's merge the avatars' requests too); none answered 401; calls exactly `save github:127.0.0.1:47395:octo` (the start's one probe was step 2's). Two tabs: `hello`, then a new tab at the end, active and empty (5.10's `TabForOpening`, where "Clone repository…" opens its form), its form open with its three boxes empty and `From GitHub…` visible, the browser over it with `PartB.Rows` in order and the filter focused and empty; `hello`'s tab still on the copy's `hello/`.<br>**After step 5:** the browser closed; the new tab's form still open (D300), its boxes empty; still two tabs, the new one active; no request since step 4's; calls none since. | | n/a | none | n/a: 13.4 B has no such step, and a cancelled dialog adds no screen to the real window. No picture (open point 16): the cancel is tested from `hello`'s tab, where `TabForOpening` would have opened a new tab, and a picture there shows an opened GitHub repository (0.4, 9.7); after the sign-in the new tab shows what `b03a` shows but for the tab strip. `PaletteCloneFromGitHubTests` (9.6) covers the window's entry answering false and true on an empty active tab, with a stub. |
+| B9 | The 1,000 cap and single sign-on's line (design 9.4, 9.2, 6.3; D301, ruling 14): ten pages read, the first 1,000 repositories in GitHub's order, the list at its largest with a scroll bar, and under it `Only the 1,000 most recently updated repositories are listed.` and `Some organisations' repositories are hidden until the token is authorised for single sign-on.`; "hosting" with 1,001 more repositories of octo, one empty tab, signed in, dark, 1100×700 | **Method 3**: 1. `ServeAsync()`; `served.GitHub.AddListedRepositories("octo", 1001)`. `ShellDriver.Start(data, gitHub: served.GitHub)` (one empty tab, a new store); `SignInAsync(OctoToken)`. Click `CloneRepoButton`; wait until `CloneUrlBox` has the focus and `CloneFromGitHubButton` shows. 2. Mark the requests. `GitHub.FailNext("user/repos", FakeGitHubFault.SsoPartialResults)`. Click `CloneFromGitHubButton`; wait for the browser, until its load has ended and until the fake has recorded ten `user/repos` requests. Screenshot (`b09a-cap-and-sso`). 3. Press Esc. | **After step 2:** requests since the mark exactly ten `GET api/v3/user/repos`, each `TokenPresent`, 200, `Login` `octo`: the first with the query `per_page=100&sort=updated`, then pages 2 to 10 as the `Link` headers name them (`page=2` to `page=10`, the other parameters kept); no eleventh (the provider stops at ten pages, 6.3). The rows: 1,000 (`Rows.Count`), the first four `PartB.Rows`, then `octo/listed-0001`, `octo/listed-0002`, … `octo/listed-0996` in that order, these without a detail; the list 232 high inside its border, scrolled to its top, showing 8 whole rows (`octo/hello` to `octo/listed-0004`) and a vertical scroll bar, no horizontal one; below it `CloneFromGitHubMore` `Only the 1,000 most recently updated repositories are listed.` and under it `CloneFromGitHubSso` `Some organisations' repositories are hidden until the token is authorised for single sign-on.`, both `settingsNote` (`#9BA3B0`, 11.5) and whole, wrapping where they need; no status or error line; none selected, `Choose` disabled; the card still 460 wide at x 320 to 780, centred vertically. No text cut.<br>**After step 3:** the browser closed; the form open, its boxes empty, `From GitHub…` visible. | | n/a | `b09a-cap-and-sso` | n/a: needs `AddListedRepositories` and a fault (0.5); the real window lists only the scenario. Pictured, as 9.7 allows (open point 14); the texts are also `CloneFromGitHubDialogViewModelTests`' and the paging `FakeGitHubTests`' (2.9). Varies by nature: the filter's caret; the status bar's git box. |
 
 ## What proves each Delivers item
 
-`plan.md`'s phase 7a "Delivers", against part A; "later parts" are B, P, N and G, written before their
-packages, or the work packages' own classes (design 0.1).
+`plan.md`'s phase 7a "Delivers", against parts A and B; "later parts" are P, N and G, written before
+their packages, or the work packages' own classes (design 0.1).
 
-| Delivers item | Part A | Elsewhere |
-|---|---|---|
-| The provider model for 7b | — | later parts; WP-G's and WP-S's classes |
-| Sign-in to GitHub with a token in Settings, Accounts; keychain, else the session; one account (D249, D253, D256, D258, D263; R3) | A1 to A11 (the keychain through `FakeTokenStore`); the real window repeats A1, A2 and A5 | the real stores: WP-K's classes on CI (D259, D333) |
-| The account's token on the app's git calls to github.com (D255) | A9 (the fetch's credentials from the app's helper as `x-access-token`, git's refusal), A11 (the switch) | WP-C's classes; part B's clone |
-| Browse and clone (D261) | — | later parts (B) |
-| Pull-request list and menu, create, badge, open in browser (D251) | — | later parts (P, N, G) |
-| Avatars from GitHub only (D252) | A8 in part: a sign-out leaves no `avatars/` (D291) | later parts (G) |
-| The opt-in live command (D250) | — | WP-LIVE |
-| From phase 3: "Create pull request" in the branch, remote-branch and drop menus; the section's menu | — | later parts (P, N) |
-| From phase 3: a provider's token reaches git | A9 | WP-C's classes |
-| From phase 6: the push guard; the prompt group per account | — | WP-C's classes |
-| From phase 6: the wheel test; the real-window csproj's comment | — | L1 (`ShellDriverTests`; the file) |
-| From the review: W1, S8, R8; G23's split | — | WP1 |
+| Delivers item | Part A | Part B | Elsewhere |
+|---|---|---|---|
+| The provider model for 7b | — | — | later parts; WP-G's and WP-S's classes |
+| Sign-in to GitHub with a token in Settings, Accounts; keychain, else the session; one account (D249, D253, D256, D258, D263; R3) | A1 to A11 (the keychain through `FakeTokenStore`); the real window repeats A1, A2 and A5 | B7, B8: the sign-in the palette's "Clone from GitHub…" asks for first, and a cancelled one (D300); the real window repeats B7's | the real stores: WP-K's classes on CI (D259, D333) |
+| The account's token on the app's git calls to github.com (D255) | A9 (the fetch's credentials from the app's helper as `x-access-token`, git's refusal), A11 (the switch) | B6: a clone through the app's helper as `x-access-token`, no credentials dialog, no credential written; the real window repeats it in the real process | WP-C's classes; `WelcomeCloneFromGitHubTests` (a typed URL, another user's URL, D331's rule) |
+| Browse and clone (D261) | — | B1 to B9; the real window repeats B3, B6 and B7 | `CloneFromGitHubDialogViewModelTests`, `CloneFromGitHubDialogViewTests`, `WelcomeCloneFromGitHubTests`, `PaletteCloneFromGitHubTests`, `HostingTextsDescribeTests` (9.6) |
+| Pull-request list and menu, create, badge, open in browser (D251) | — | — | later parts (P, N, G) |
+| Avatars from GitHub only (D252) | A8 in part: a sign-out leaves no `avatars/` (D291) | — | later parts (G) |
+| The opt-in live command (D250) | — | — | WP-LIVE |
+| From phase 3: "Create pull request" in the branch, remote-branch and drop menus; the section's menu | — | — | later parts (P, N) |
+| From phase 3: a provider's token reaches git | A9 | B6 | WP-C's classes |
+| From phase 6: the push guard; the prompt group per account | — | — | WP-C's classes |
+| From phase 6: the wheel test; the real-window csproj's comment | — | — | L1 (`ShellDriverTests`; the file) |
+| From the review: W1, S8, R8; G23's split | — | — | WP1 |
 
 ## Changes to expected results
 
@@ -434,13 +578,54 @@ card (the laptop's `artifacts/visual/phase-6/` as wave 1's whole run left it on 
   opens (8.3). WP-A runs `Phase6ChecksS` and `--filter-method "*Check_L31*"` in
   `VisualCommit.VisualTests.Phase6Look`.
 
+### Part B: the clone form, the palette and one earlier test (D261, D299; design 0.7, 9.3, 9.5, 9.8)
+
+Part B changes no earlier picture on purpose, and one earlier test's list:
+
+- **The clone form** (9.3): "From GitHub…" is collapsed while no account is signed in, and a collapsed
+  child takes no room in its `DockPanel`; both harnesses start with GitHub off (rulings 23, 24), so every
+  earlier picture of the form shows it as before: phase 1's `13a-clone-form`, `13b-clone-in-progress`,
+  `14a-clone-failed` and `14b-clone-cancelled` (9.3's "13a to 14b"; `13c-cloned`, in that range, shows
+  the cloned tab rather than the form and stays too) and phase 6's `l26b-clone-form-dark`,
+  `l26b-clone-form-light`, `l32b-clone-failed-dark` and `l32b-clone-failed-light`. No real-window
+  picture of an earlier phase shows the form.
+- **The palette** (9.5, D299): "Clone from GitHub…" is listed only while GitHub is not off, so phase 6's
+  palette pictures (`k10a` to `k10f`, `l31c-palette-dark` and `l31c-palette-light`; the real window's
+  `k10a` to `k10d` and `l31c-palette-light`), K10's lists and `PaletteEntriesTests` stay; it has no
+  key, so the Keyboard shortcuts list (`s14e`, `s14f`, which change only by part A's nav button) gains
+  no row.
+- **One earlier test changes on purpose**: `AppShortcutsTests.The_commands_without_a_key_are_6_1s_list`
+  (`tests/VisualCommit.App.Tests/AppShortcutsTests.cs:258-274`): `AppCommand.CloneFromGitHub` joins
+  `withoutKey`, with a comment naming D299, which amends D199's list (9.1, 9.6). The command comes after
+  `FollowSystemTheme` in `AppCommand` (`AppCommand.cs:55`), so no earlier value moves.
+- **What 9.8's "no earlier picture changed beyond D248's box" means.** Each picture of the form and of
+  the palette above shows the status bar's `Git 2.56.0` box, so its file differs from the last gate's
+  list (`docs/test-reports/phase-6-pictures.sha256`, made with Git 2.36) in that box whatever WP-B does
+  (D248), and `sha256sum -c` against that list proves nothing for it. At WP-B's merge the lead makes
+  references on `master` with the same git and compares WP-B's pictures with them by region
+  (`scripts/compare-pictures.py`; design 0.7, 9.3): of phase 1's checks 13 and 14 and phase 6's L26 and
+  L32, which 9.3 names, and, since 9.8's sentence covers the palette's pictures too, of phase 6's K10
+  and L31, scripted (wave 1 had no reference of `k10e` and `k10f`); the real window's `k10a` to `k10d`
+  and `l31c-palette-light` are compared at the gate (the shared conventions' "Earlier pictures"). The
+  binding criterion is 9.3's: no difference outside the status bar's git box, and none is expected
+  inside it against references made with the same git. Wave 1's comparison with its references
+  (2026-10-29) found differences outside it where wave 1 changed nothing, in what varies by nature: a
+  focused box's caret (`l26b-clone-form-light`, `k10a`) and the temporary folder's name in the parent
+  box and in git's message (`13b`, `14a`, `14b`, `l32b-clone-failed-dark` and `-light`). The report
+  reads 9.3's criterion as allowing these too (a caret in `13a`, `l26b` and the palette's box, the
+  folder's name in `13b`, `14a`, `14b` and `l32b`), each difference opened and judged, and any other
+  difference as WP-B's defect; that reading waits for the lead's ruling (open point 19), and until it,
+  9.3's sentence binds.
+
 ### Stays as it is
 
 Every other earlier picture and expectation: both harnesses start with GitHub off and the keychain in
-memory (rulings 23, 24), so the welcome page, the palette (no Accounts or sign-in entry, D299), the
-left panel's "Pull requests" placeholder and every menu stay as they are, and no earlier count of git
-calls moves. Pictures that show the status bar's git box differ from `phase-6-pictures.sha256` for D248
-whatever part A does; they are compared by region with `master`'s references made with the same git.
+memory (rulings 23, 24), so the welcome page and its clone form (no "From GitHub…", D261), the palette
+(no Accounts or sign-in entry and no "Clone from GitHub…", D299), the left panel's "Pull requests"
+placeholder and every menu stay as they are, and no earlier count of git calls moves (signed out, a
+clone reads no configuration, 9.3). Pictures that show the status bar's git box differ from
+`phase-6-pictures.sha256` for D248 whatever parts A and B do; they are compared by region with
+`master`'s references made with the same git.
 
 ### Changed in this report after its first commit
 
@@ -467,8 +652,8 @@ the class or, refused with error 1312, its removal from the job (D259, D333; des
 
 ## macOS checklist for the owner
 
-To try by hand on a Mac (CI runs part A headless with the fake keychain, and the real store's class
-against a throw-away keychain; these are what only a person on a Mac sees):
+To try by hand on a Mac (CI runs parts A and B headless with the fake keychain and the fake of GitHub,
+and the real store's class against a throw-away keychain; these are what only a person on a Mac sees):
 
 1. **Sign in** (D249, D295): Cmd+, , "Accounts" (last in the list), "Sign in…". "Create a token on GitHub"
    opens the default browser on github.com's new fine-grained token page with the name VisualCommit and
@@ -485,6 +670,12 @@ against a throw-away keychain; these are what only a person on a Mac sees):
    34); a repository with a github.com remote fetches without a credentials dialog.
 4. **Sign out**: "Sign out…", then "Sign out" in the question: the section reads "Not signed in." and
    the Keychain Access item is gone.
+5. **Clone from GitHub** (part B; D261, D255, D300): signed out, Cmd+Shift+P, "Clone from GitHub…": "Add
+   GitHub account" comes first; after signing in, the clone form opens with "Clone from GitHub" over it,
+   listing your repositories, the most recently updated first, a private one marked "Private". Choose a
+   private one, a parent folder, then Clone: it clones with no credentials dialog and no keychain prompt
+   (the app's helper runs through macOS's `/bin/sh`); `git config --local --get-regexp credential` in the
+   clone prints nothing, and Keychain Access holds no new `github.com` internet password.
 
 ## Open points and the lead's rulings
 
@@ -549,3 +740,94 @@ lead's ruling on it (2026-10-29, before this report was first committed and befo
    record.
 10. **`accounts.json` after a sign-out (A8).** Design 7.5 removes the record; the report expects the file
     kept with `version` 1 and no record, not deleted. **Ruling:** accepted: 7.5's sign-out removes the record and 7.2's save writes the file.
+
+Part B's points (11 on) were written on 2026-10-29, before WP-B starts; each waits for the lead's ruling.
+
+11. **A described repository (part B: B3, B4, B9; design 9.7, 2.6).** 9.7 pictures the browser "listed
+    with private, fork, archived and described repositories", but no repository of the scenario as built
+    has a description: 2.6 names none, `ServeHostingAsync` passes no `description:`, and
+    `FakeRepository.Description` is set only by `AddRepositoryAsync`. So `b03a` shows `Private`, `Fork`,
+    `Private`, `Archived` and no description, and the ` · ` join and a description's place are proven only
+    by `CloneFromGitHubDialogViewModelTests` (9.6, "rows in order with each detail form"). The report's
+    reading: the scenario gains one description, on `octo/tool` (its row then reads `Fork · ` and the
+    text, the join 9.4 gives), passed as `description:` to `ServeHostingAsync`'s `AddRepositoryAsync("octo",
+    "tool", …)`, by the lead in a commit of its own before WP-B's branch is cut (the scenario is every
+    part's, and `Phase7aScenarioTests` pins it), or by WP-B's builder in its part B commit with the lead's
+    leave. The text is the lead's to choose (the design gives none); it must not contain `private`, or
+    B4's filter would keep `octo/tool` too. The scenario is code both projects compile, so the R picture
+    may show it and 13.4 B still names no preparation (a `PartB.PrepareAsync(TempRepo hello)` could not
+    reach the fake). Until the ruling, `PartB.Rows`' second row is `octo/tool` `Fork`, and B3, B4 and B9
+    depend on it. **Ruling:** WP-B's builder gives `octo/tool` the description `Small command-line tools.` in the
+    scenario's data (design 2.6's fake), with the fake's own tests; it holds no "private".
+12. **Which failure is pictured (part B: B5; design 9.7, 1.7).** 9.7 names "failed (`FailNext("user/repos",
+    …)`)" without a fault. The report pictures `ServerError`, one fixed sentence that changes no account,
+    and, beyond 9.7's list, `BadCredentials`: the one failure of the list that changes the account (the
+    API's 401 marks it at once, 7.6, D330), and so the one place where D302's rule shows in the app ("From
+    GitHub…" gone under the browser). The other kinds stay with 9.6's unit tests. **Ruling:** accepted: `ServerError`, and `BadCredentials` for D302.
+13. **The login in the refused text (part B: B5; design 9.3, 9.4).** 9.4's table words a failure as
+    `HostingTexts.Describe(Failure, login)`, "`login` the signed-in account's", but 9.4's constructor is
+    `(list, log)`, and 9.3 makes the dialog with `_services.Hosting.ListRepositoriesAsync` and
+    `_services.Log` only, which name no login. The report expects `GitHub refused the token of octo. Sign in
+    to GitHub in Settings, Accounts.` whichever way WP-B passes the login (a constructor parameter, or the
+    session's account read when the failure is applied: a needs-sign-in account keeps its login), as 9.6's
+    view-model test expects `OperationTexts.TokenRefused(login)`. **Ruling:** accepted: the login is the session's signed-in account's (`IHostingSession.Account`) when
+    the list fails, as 9.4's text needs; the report's expected text stands.
+14. **The cap and single sign-on pictured (part B: B9; design 9.7).** 9.7 lets them be pictured "else the
+    unit tests prove them". The report pictures both in one start, scripted only
+    (`AddListedRepositories("octo", 1001)` before it, `SsoPartialResults` on the first page): where the two
+    lines lie under the list, and the list at its largest with its scroll bar, are layout that no unit test
+    shows; the cost is ten loopback requests and a list of 1,000 rows. **Ruling:** accepted.
+15. **Steps beyond 9.7's list (part B)**, with texts and places the design gives: B1's signed-out form (the
+    button collapsed, the URL box at full width; 9.3, 9.6); B4's filter typed while loading (9.4: "what it
+    holds filters the rows when they come"), the hidden selection cleared and the order restored (9.4); B5's
+    refused token and D302; B6's checks of 9.3's configuration read before the clone (D331), of 4.6's log
+    line, of the clone's other `.git/config` keys (9.5's git fact) and of `hello`'s binding after the clone;
+    B7's order in the empty palette (9.5); B8's sign-in from a repository tab, which opens a new tab (9.5,
+    5.10's `TabForOpening`), and Esc on the browser leaving the form open (D300's last clause; B4's step 8
+    too). **Ruling:** accepted.
+16. **A cancelled sign-in from a repository tab, without a picture (part B: B8; D300).** "Makes no tab"
+    can only fail where a tab would be made, so B8 starts on `hello`'s tab, where `TabForOpening` would
+    open a new one. Every picture there shows an opened GitHub repository, which part B never takes (0.4,
+    9.7), and after the sign-in the new tab looks as `b03a` but for its tab strip, so B8 has no picture;
+    `PaletteCloneFromGitHubTests` covers the empty-tab case with a stub (9.6). **Ruling:** accepted.
+17. **No 1920×1080 or light picture (part B).** 9.7 names none; 9.4's "460 wide at 1100×700 and
+    1920×1080" is `CloneFromGitHubDialogViewTests`' (9.6), and the browser uses theme brushes only. The
+    report takes none. Should the lead want one, as part A's A5 has, a fifth start at 1920×1080 in the
+    light theme would picture the browser listed (`b03b-listed-1920-light`), scripted only. **Ruling:** accepted: part B is dark at 1100×700 (0.5).
+18. **The browser's lines and its empty list (part B: B2, B5, B9; design 9.4).** 9.4 puts `MoreText` and
+    `SsoText` "under the status", and its view table lists the four lines after the list and before the
+    buttons; the report reads them as below the list, in the order status, error, more, SSO. It reads the
+    list as shown in every state, empty at its least height (58) while loading and after a failure, as
+    `PickList` is (9.4 gives it no visibility rule). **Ruling:** accepted.
+19. **What 9.8's "no earlier picture changed beyond D248's box" allows (part B; design 9.3, 9.8, 0.7).**
+    9.3 and 9.8 allow no difference outside the status bar's git box against references made on `master`
+    with the same git. Wave 1's comparison with its references (2026-10-29) found differences outside it
+    in pictures wave 1 did not change: a caret (`l26b-clone-form-light`, `k10a`) and the temporary
+    folder's name (`13b`, `14a`, `14b`, `l32b-clone-failed-dark` and `-light`), so the sentence read
+    literally fails whatever WP-B does. The report's reading: a difference may also lie in what varies by
+    nature (the shared conventions' "Pictures": a focused box's caret, a temporary folder's name, git's
+    output), each opened and judged; anything else is WP-B's defect. And 9.3 names references for phase
+    1's checks 13 and 14 and phase 6's L26 and L32 only, while 9.8's sentence covers the palette's
+    pictures too, which show the git box: the report reads the lead's references at WP-B's merge as
+    covering phase 6's K10 and L31 as well (scripted; wave 1 had no reference of `k10e` and `k10f`), the
+    real window's `k10a` to `k10d` and `l31c-palette-light` being compared at the gate ("Changes to
+    expected results", part B). Until the ruling, 9.3's sentence binds. **Ruling:** the references at WP-B's merge are the pictures of the last full run before it
+    (same laptop, same git), already inspected, and the region comparison covers every earlier phase's
+    scripted pictures, K10 and L31 included. A difference is allowed only in the status bar's git
+    box, in what the report lists as changed on purpose, and in what varies by nature as the shared
+    conventions and design 16 item 9 name it (a temporary folder's name, a caret, anti-aliased edges and
+    icons, the indeterminate bar, `a2d`'s reads), each opened and judged; anything else is WP-B's
+    defect.
+20. **D244's limit on the shared conventions (part B; D244, `plan.md`'s Visual test gate, step 1).** D244
+    holds a report's shared conventions to about 30 KB, against phase 6's 291 KB, which was that report's
+    whole "What the checks share", its parts' sections included. Measured the same way, this report's
+    section held 29.5 KB with part A alone and holds 40.6 KB with part B: what every part shares
+    ("Conventions of every part" and "Scenario facts") 13.9 KB, part A 15.9 KB, part B 10.7 KB after its
+    trim (its browser's layout left to `PartB` and the rows, what only the real window proves to 13.1,
+    the git of `octo/hello` to the shared facts, the clone's path to B6). Parts P, N and G are still to
+    come. The report's reading: the limit binds what every part shares, and each part's section holds
+    only what its rows do not say, at about 10 KB; read as the whole section's, it could hold only by
+    moving each part's conventions under its rows, which changes where they are and not what is read.
+    The lead's ruling is asked. **Ruling:** accepted: D244's limit of about 30 KB binds what every part shares ("Conventions of
+    every part" and "Scenario facts"); each part's own section holds only what its rows do not say,
+    at about 10 KB. Part A's section stays as written; parts P, N and G keep to it.
