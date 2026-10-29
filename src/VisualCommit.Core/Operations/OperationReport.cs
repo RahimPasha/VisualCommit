@@ -1,3 +1,5 @@
+using VisualCommit.Core.Hosting;
+
 namespace VisualCommit.Core.Operations;
 
 /// <summary>How an operation ended (phase 3 design 1.2, D95).</summary>
@@ -62,6 +64,13 @@ public sealed record OperationResult(OperationOutcome Outcome, string Message, G
 
     /// <summary>A success whose message the status bar shows in the warning colour (<see cref="OperationReport.Warning"/>).</summary>
     public bool IsWarning { get; init; }
+
+    /// <summary>
+    /// After a failed operation: the account whose token git erased through the app's helper
+    /// (<see cref="PromptScope.RefusedAccount"/>, ruling 4, docs/phase-7a-design.md 0.2), for the
+    /// error dialog. Null otherwise.
+    /// </summary>
+    public AccountKey? RefusedAccount { get; init; }
 }
 
 /// <summary>What the status bar shows of the running operation.</summary>

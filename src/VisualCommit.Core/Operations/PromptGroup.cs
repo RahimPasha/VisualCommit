@@ -13,6 +13,7 @@ public sealed class PromptGroup : IDisposable
     private static long s_next;
     private readonly CancellationTokenSource _ended = new();
     private int _disposed;
+    private int _answersVersion;
 
     public PromptGroup()
     {
@@ -28,6 +29,15 @@ public sealed class PromptGroup : IDisposable
 
     /// <summary>Whether the group has ended.</summary>
     public bool IsEnded => Volatile.Read(ref _disposed) != 0;
+
+    /// <summary>
+    /// Which generation of kept answers is current: <see cref="ForgetAnswers"/> moves it on, and an
+    /// answer kept under an older one is no longer used (ruling 9, docs/phase-7a-design.md 0.2).
+    /// </summary>
+    public int AnswersVersion => Volatile.Read(ref _answersVersion);
+
+    /// <summary>Forgets the group's kept answers: a row failed because its credentials were refused (ruling 9).</summary>
+    public void ForgetAnswers() => Interlocked.Increment(ref _answersVersion);
 
     /// <summary>Ends the group: the run is over.</summary>
     public void Dispose()

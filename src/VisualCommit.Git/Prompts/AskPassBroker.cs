@@ -4,6 +4,7 @@ using System.IO.Pipes;
 using System.Security.Cryptography;
 using System.Text;
 using VisualCommit.AskPass;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 
@@ -50,7 +51,16 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// <param name="handler">Answers the prompts (the app's dialogs).</param>
     /// <param name="log">The app log.</param>
     /// <param name="helperPath">The helper to name in the variables; null finds it next to this assembly (<see cref="AskPassLocator"/>).</param>
-    public AskPassBroker(IGitPromptHandler handler, IAppLog? log = null, string? helperPath = null)
+    /// <param name="credentials">Where a bound URL's credential comes from (D255, docs/phase-7a-design.md 1.3); null: none. Not used yet: WP-C answers git's credential requests from it.</param>
+    /// <param name="sessionEnvironment">The session's git environment (D220), which with the process's gives the <c>GIT_CONFIG_COUNT</c> already present (1.3); null: none. Not used yet (WP-C).</param>
+    /// <param name="gitVersion">The detected git's version, or null while unknown; below 2.31 no binding is used (D277). A function, as the broker is made before git's detection ends. Not used yet (WP-C).</param>
+    public AskPassBroker(
+        IGitPromptHandler handler,
+        IAppLog? log = null,
+        string? helperPath = null,
+        IGitCredentialSource? credentials = null,
+        IReadOnlyDictionary<string, string?>? sessionEnvironment = null,
+        Func<GitVersion?>? gitVersion = null)
     {
         ArgumentNullException.ThrowIfNull(handler);
         _handler = handler;
@@ -90,8 +100,12 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     private string TokenText { get; }
 
     /// <inheritdoc/>
-    /// <remarks>Every prompt of the scope carries <paramref name="group"/> (<see cref="GitPrompt.Group"/>, docs/phase-6-design.md 4.4).</remarks>
-    public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null)
+    /// <remarks>
+    /// Every prompt of the scope carries <paramref name="group"/> (<see cref="GitPrompt.Group"/>,
+    /// docs/phase-6-design.md 4.4). <paramref name="bindings"/> are not used yet: WP-C gives a bound
+    /// scope its credential helper (docs/phase-7a-design.md 4.6).
+    /// </remarks>
+    public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null, IReadOnlyList<CredentialBinding>? bindings = null)
     {
         ArgumentNullException.ThrowIfNull(title);
         ArgumentNullException.ThrowIfNull(repositoryName);

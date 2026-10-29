@@ -116,6 +116,13 @@ public sealed record RepoRefs(
     public FetchRefspecs? Refspecs { get; init; }
 
     /// <summary>
+    /// Every remote's configured URLs as the refs read read them (<c>remote.&lt;r&gt;.url</c> and
+    /// <c>remote.&lt;r&gt;.pushurl</c>, docs/phase-7a-design.md 1.2), in configuration order; empty
+    /// when they were not read (the fakes and snapshots a test builds by hand). Never shown.
+    /// </summary>
+    public IReadOnlyList<RemoteUrl> RemoteUrls { get; init; } = [];
+
+    /// <summary>
     /// Where the remote-tracking ref <paramref name="trackingRef"/> (<c>refs/remotes/…</c>) is
     /// fetched from (10.1): <see cref="FetchRefspecs.SourceOf"/> of <see cref="Refspecs"/>. While
     /// <see cref="Refspecs"/> is null, exactly phase 5's assumption: Mapped to its remote, the

@@ -1,3 +1,5 @@
+using VisualCommit.Core.Hosting;
+
 namespace VisualCommit.Core.Operations;
 
 /// <summary>What git or ssh asks for (phase 3 design 3.2).</summary>
@@ -38,6 +40,11 @@ public enum GitPromptKind
 /// The bulk run whose prompts it belongs to (docs/phase-6-design.md 4.4), from its scope; null for
 /// an operation outside a run, whose prompt is answered on its own.
 /// </param>
+/// <param name="Account">
+/// The hosting account of the binding whose URL the prompt names (docs/phase-7a-design.md 1.2),
+/// from its scope's <see cref="CredentialBinding"/>s; null when no binding names it. No prompt is
+/// ever answered from the account.
+/// </param>
 public sealed record GitPrompt(
     GitPromptKind Kind,
     string Text,
@@ -47,7 +54,8 @@ public sealed record GitPrompt(
     string? Url = null,
     string? User = null,
     string? KeyPath = null,
-    PromptGroup? Group = null);
+    PromptGroup? Group = null,
+    AccountKey? Account = null);
 
 /// <summary>The user's answer to a prompt.</summary>
 /// <param name="Text">What git or ssh gets; null refuses the prompt (git then fails).</param>
@@ -90,7 +98,8 @@ public interface IGitPromptBroker
     /// <param name="mode">How prompts are answered.</param>
     /// <param name="operationId">The operation's id, which becomes the scope's <see cref="PromptScope.Id"/>; null lets the broker make one (a clone).</param>
     /// <param name="group">The bulk run the operation belongs to (<see cref="GitOperation.PromptGroup"/>, docs/phase-6-design.md 4.4), which every prompt of the scope carries; null outside a run.</param>
-    PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null);
+    /// <param name="bindings">The URLs whose credentials come from a hosting account (<see cref="GitOperation.CredentialBindings"/>, D255, docs/phase-7a-design.md 0.2); null or empty: none.</param>
+    PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null, IReadOnlyList<CredentialBinding>? bindings = null);
 }
 
 /// <summary>One open prompt scope (3.1): its id, the variables for git's environment and whether the user cancelled a prompt.</summary>
@@ -114,6 +123,12 @@ public abstract class PromptScope : IDisposable
 
     /// <summary>The user cancelled one of this scope's prompts (Cancel or Esc).</summary>
     public bool UserCancelled { get; protected set; }
+
+    /// <summary>
+    /// The account whose token git erased through the app's helper in this scope (ruling 4,
+    /// docs/phase-7a-design.md 0.2): GitHub refused git's credentials. Null otherwise.
+    /// </summary>
+    public AccountKey? RefusedAccount { get; protected set; }
 
     public bool IsDisposed => Volatile.Read(ref _disposed) != 0;
 
@@ -144,8 +159,8 @@ public sealed class NullGitPromptBroker : IGitPromptBroker
 
     public static NullGitPromptBroker Instance { get; } = new();
 
-    /// <summary>Opens a scope without variables; <paramref name="group"/> is ignored, as no prompt reaches the app.</summary>
-    public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null) =>
+    /// <summary>Opens a scope without variables; <paramref name="group"/> and <paramref name="bindings"/> are ignored, as no prompt reaches the app.</summary>
+    public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null, IReadOnlyList<CredentialBinding>? bindings = null) =>
         new EmptyScope(operationId ?? $"prompt-{Interlocked.Increment(ref _next)}");
 
     private sealed class EmptyScope(string id) : PromptScope(id, null);

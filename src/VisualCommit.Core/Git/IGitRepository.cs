@@ -50,6 +50,13 @@ public interface IGitRepository
     Task<FetchRefspecs?> ReadFetchRefspecsAsync(CancellationToken cancellationToken = default) => Task.FromResult<FetchRefspecs?>(null);
 
     /// <summary>
+    /// The repository's URL rewrites (docs/phase-7a-design.md 1.3, 4.3): one <c>git config --null
+    /// --get-regexp ^url\.</c>, exit 1 meaning none. Read only while a hosting account is signed
+    /// in, so that no earlier count of git calls moves.
+    /// </summary>
+    Task<UrlRewrites> ReadUrlRewritesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Where HEAD is now, without the rest of the refs: the branch it is on (null while detached)
     /// and its commit (null while unborn). An operation that waited in the queue reads it to check
     /// that HEAD is still where the user saw it. The default implementation reads all the refs.
@@ -437,6 +444,14 @@ public interface IGitRepository
     /// <c>--no-auto-maintenance</c> (2.16, 2.17). Pull's first step is the fetch of one remote (2.18).
     /// </summary>
     Task FetchAsync(string? remote, NetworkOptions options, bool noAutoMaintenance = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Fetches <paramref name="sourceRef"/> of <paramref name="remote"/> (a pull request's head,
+    /// docs/phase-7a-design.md 1.3, 10.5) into <c>FETCH_HEAD</c> only: no ref and no configuration
+    /// written. Returns the commit's SHA read from <c>FETCH_HEAD</c>'s line, or null when that line
+    /// is not this fetch's.
+    /// </summary>
+    Task<string?> FetchToFetchHeadAsync(string remote, string sourceRef, NetworkOptions options, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Pull's second step, after its fetch (2.18, D84): integrates the current branch

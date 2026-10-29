@@ -628,7 +628,7 @@ public sealed class OperationQueue : IOperationQueue
         {
             if (mode != PromptMode.None && _prompts is not null)
             {
-                scope = _prompts.Begin(operation.Title, _repositoryName, mode, entry.Id, operation.PromptGroup);
+                scope = _prompts.Begin(operation.Title, _repositoryName, mode, entry.Id, operation.PromptGroup, operation.CredentialBindings);
                 bool disposed;
                 lock (_gate)
                 {
@@ -701,6 +701,13 @@ public sealed class OperationQueue : IOperationQueue
         if (scope is { UserCancelled: true } && result.Outcome == OperationOutcome.Failed)
         {
             result = CancelledResult(operation);
+        }
+
+        // git erased an account's token through the app's helper: the error dialog says that
+        // GitHub refused git's credentials (ruling 4, docs/phase-7a-design.md 0.2).
+        if (scope is { RefusedAccount: { } refused } && result.Outcome == OperationOutcome.Failed)
+        {
+            result = result with { RefusedAccount = refused };
         }
 
         return result;
