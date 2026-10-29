@@ -48,7 +48,7 @@ public sealed partial class Phase6ChecksW
             archiveState = await located.ExactStateAsync();
         }
 
-        using var app = await OpenWorkspaceAsync(data, copy);
+        using var app = await OpenWorkspaceAsync(data, copy, readClock: new ManualTimeProvider());
         var shot = Shot(app, PartW.W2aTenRows);
         var w0 = PartW.W0(copy.PathOf("old-site"));
         Assert.Equal(PartW.Workspace, Control<TextBlock>(app, "DashboardTitle").Text);

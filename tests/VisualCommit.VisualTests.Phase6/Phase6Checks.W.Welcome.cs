@@ -41,7 +41,8 @@ public sealed partial class Phase6ChecksW
         var paths = new AppPaths(data.Path);
 
         // Step 1: a fresh data folder, no workspaces.json and no session; the app writes nothing before it starts.
-        using var app = ShellDriver.Start(data.Path, 1100, 700);
+        // The session's read clock is held (never moved, ruling 27): a pass ends only when its reads have.
+        using var app = ShellDriver.Start(data.Path, 1100, 700, readClock: new ManualTimeProvider());
         await app.WaitUntilReadyAsync();
         app.MoveToNeutral();
         var shot = Shot(app, PartW.W1aWelcomeWorkspaces);
@@ -196,16 +197,19 @@ public sealed partial class Phase6ChecksW
 
         // Step 8: the item "Web": its open dashboard is activated (D227), nothing else opens (D188).
         var item = app.ActiveWelcomeView.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "WorkspaceItem");
+        logMark = app.LogMark();
         app.Click(item);
         app.Settle();
+        AssertNothingReads(app);
         strip = app.TabStrip();
         Assert.Equal(2, strip.Tabs.Count);
         AssertDashboardTab(app, strip, 0, PartW.Workspace, active: true);
         Assert.Equal(("RepoTab", PartW.NewTab, false), (strip.Tabs[1].AutomationId, strip.Tabs[1].Title, strip.Tabs[1].IsActive));
 
-        // Whether trigger 1 reads rows here depends on the real time since step 6 (the 10 s rule; W1
-        // has no read clock): no read is asserted either way, and the rows are read once any read ended.
+        // Every row was read 0 s before by the held read clock, so the activation starts no pass
+        // (trigger 1's 10 s rule, WD35).
         await WaitForAllRowsIdleAsync(app, OperationChainTimeout);
+        Assert.Empty(PassLines(app, logMark));
         AssertRows(app, copy, [.. PartW.WaOrder.Select(name => w0[name])], selected: "api");
         await app.WaitForAsync(() => app.FocusIsWithin(app.Find<ListBox>("DashboardList")), "the dashboard's list to have the keyboard focus");
         AssertTd(app, PartW.Workspace, PartW.Count(9));
@@ -246,7 +250,8 @@ public sealed partial class Phase6ChecksW
             [new TabState(null, PartW.WorkspaceId), new TabState(copy.PathOf("web-app")), new TabState(copy.PathOf("docs"))],
             0,
             1100,
-            700);
+            700,
+            readClock: new ManualTimeProvider());
         await app.WaitUntilReadyAsync();
         await app.WaitForDashboardReadAsync(timeout: OperationChainTimeout);
         var webApp = await app.WaitForTabOpenedAsync(copy.PathOf("web-app"), OperationChainTimeout);

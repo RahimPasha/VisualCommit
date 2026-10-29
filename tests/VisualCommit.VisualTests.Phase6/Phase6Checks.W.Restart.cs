@@ -69,7 +69,7 @@ public sealed partial class Phase6ChecksW
                 // Step 4: the dashboard restored first, in the background; api active; nothing read by the dashboard.
                 // The app log of the data folder holds the first start's lines: the second start's are those after them.
                 var startMark = AppLogFile.ReadLines(data.Path).Count;
-                using var app = ShellDriver.Start(data.Path, 1100, 700);
+                using var app = ShellDriver.Start(data.Path, 1100, 700, readClock: new ManualTimeProvider());
                 var api = await app.WaitForRepositoryAsync(OperationChainTimeout);
                 var picture = Shot(app, PartW.W9bRestarted);
                 Assert.True(app.Session.Initialization.IsCompletedSuccessfully, "The app's start-up has not completed.");
