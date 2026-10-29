@@ -163,6 +163,12 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// </summary>
     public string? SocketPath => OperatingSystem.IsWindows() ? null : Path.Combine(Path.GetTempPath(), "CoreFxPipe_" + PipeName);
 
+    /// <summary>
+    /// Called by the listening loop between an accept and its serve, for tests that hold the
+    /// channel there while another helper connects (AskPassChannelTests). Null in the app.
+    /// </summary>
+    internal Func<Task>? AfterAccept { get; set; }
+
     /// <summary>The session's secret. Never logged; only the scopes' variables carry it.</summary>
     private string TokenText { get; }
 
@@ -322,6 +328,10 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             {
                 pipe = CreatePipe();
                 await pipe.WaitForConnectionAsync(token).ConfigureAwait(false);
+                if (AfterAccept is { } hook)
+                {
+                    await hook().ConfigureAwait(false);
+                }
             }
             catch (OperationCanceledException)
             {

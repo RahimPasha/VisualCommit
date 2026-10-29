@@ -99,6 +99,12 @@ public class RefusedTokenDisplayTests
 
         await dashboard.Bulk.FetchAllAsync().WaitAsync(TimeSpan.FromSeconds(90));
 
+        // CI's macOS run once gave one row the generic dialog (run 40878208671): the whole session then.
+        if (dashboard.Bulk.Current?.Failed != 2 || dashboard.Rows.Any(row => row.KeptDialog?.Display?.Summary != OperationTexts.GitCredentialsRefused("octocat")))
+        {
+            Assert.Fail(setup.Describe(dashboard));
+        }
+
         Assert.Equal(2, dashboard.Bulk.Current!.Failed);
         foreach (var row in dashboard.Rows)
         {
