@@ -1,3 +1,6 @@
+using VisualCommit.Hosting;
+using VisualCommit.Hosting.Tokens;
+
 namespace VisualCommit.Testing;
 
 /// <summary>
@@ -275,6 +278,22 @@ public static class GitIsolation
     ];
 
     /// <summary>
+    /// The variables through which the machine could hand the app or a tool a hosting service's
+    /// token or host (docs/phase-7a-design.md 1.8, ruling 24): the GitHub CLI's and the live
+    /// command's (D260), removed from every test process and from the app the real-window pass starts.
+    /// </summary>
+    public static IReadOnlyList<string> HostingTokenVariables { get; } =
+    [
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_ENTERPRISE_TOKEN",
+        "GITHUB_ENTERPRISE_TOKEN",
+        "GH_HOST",
+        "VISUALCOMMIT_LIVE_GITHUB_TOKEN",
+        "VISUALCOMMIT_LIVE_GITHUB_REPO",
+    ];
+
+    /// <summary>
     /// <c>PATHEXT</c> as the tests have it: Windows' default
     /// (<see cref="Core.ToolCatalogues.DefaultWindowsPathExtensions"/>, the value the harnesses'
     /// fixed catalogues give, docs/phase-6-design.md 12.9), not the machine's, to which installers
@@ -289,7 +308,10 @@ public static class GitIsolation
     /// <see cref="ProxyVariables"/>, <see cref="EditorVariables"/>, <see cref="ShellVariables"/>
     /// and <see cref="IdentityVariables"/> removed (null), <c>no_proxy</c> and <c>NO_PROXY</c> set
     /// to <see cref="NoProxyHosts"/>, auto-fetch turned off (<see cref="AutoFetchMinutesVariable"/>
-    /// 0) and <c>PATHEXT</c> fixed (<see cref="PathExtensionsVariable"/>). Applied to the test
+    /// 0), <c>PATHEXT</c> fixed (<see cref="PathExtensionsVariable"/>), and since phase 7a GitHub off
+    /// (<c>VISUALCOMMIT_GITHUB_URL=none</c>), tokens in memory (<c>VISUALCOMMIT_KEYCHAIN=memory</c>)
+    /// and <see cref="HostingTokenVariables"/> removed (docs/phase-7a-design.md 1.8, ruling 24); a
+    /// check's own variables override them. Applied to the test
     /// process (<see cref="IsolateThisProcess"/>), to the app the real-window pass starts
     /// (<c>RealApp.Launch</c>) and to <see cref="TempRepo"/>'s git calls, which then set
     /// <c>GIT_EDITOR</c> and <c>GIT_SEQUENCE_EDITOR</c> to <c>:</c> and their own author.
@@ -305,6 +327,9 @@ public static class GitIsolation
         new("NO_PROXY", NoProxyHosts),
         new(AutoFetchMinutesVariable, "0"),
         new(PathExtensionsVariable, Core.ToolCatalogues.DefaultWindowsPathExtensions),
+        .. HostingTokenVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
+        new(HostingOptions.GitHubVariable, "none"),
+        new(TokenStores.Variable, "memory"),
     ];
 
     /// <summary>

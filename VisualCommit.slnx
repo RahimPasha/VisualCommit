@@ -12,12 +12,14 @@
     <Project Path="src/VisualCommit.AskPass/VisualCommit.AskPass.csproj" />
     <Project Path="src/VisualCommit.Core/VisualCommit.Core.csproj" />
     <Project Path="src/VisualCommit.Git/VisualCommit.Git.csproj" />
+    <Project Path="src/VisualCommit.Hosting/VisualCommit.Hosting.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <!-- VisualCommit.RealWindowTests is left out on purpose: it takes over the mouse and is
          Windows-only, so it must never run as part of "dotnet test" at the repo root. -->
     <Project Path="tests/VisualCommit.App.Tests/VisualCommit.App.Tests.csproj" />
     <Project Path="tests/VisualCommit.Git.Tests/VisualCommit.Git.Tests.csproj" />
+    <Project Path="tests/VisualCommit.Hosting.Tests/VisualCommit.Hosting.Tests.csproj" />
     <Project Path="tests/VisualCommit.Testing/VisualCommit.Testing.csproj" />
     <Project Path="tests/VisualCommit.VisualTests/VisualCommit.VisualTests.csproj" />
     <Project Path="tests/VisualCommit.VisualTests.Phase3/VisualCommit.VisualTests.Phase3.csproj" />

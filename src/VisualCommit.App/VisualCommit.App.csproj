@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\VisualCommit.Core\VisualCommit.Core.csproj" />
     <ProjectReference Include="..\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\VisualCommit.Hosting\VisualCommit.Hosting.csproj" />
   </ItemGroup>
 
 </Project>

@@ -15,6 +15,9 @@
     <PackageVersion Include="Avalonia.AvaloniaEdit" Version="12.0.0" />
     <PackageVersion Include="TextMateSharp" Version="2.0.4" />
     <PackageVersion Include="TextMateSharp.Grammars" Version="2.0.4" />
+    <!-- The Secret Service's D-Bus client on Linux (docs/phase-7a-design.md 1.1, 3.6): the version
+         Avalonia 12.1.3 resolves, so it moves with AvaloniaVersion, as xunit does (D24). -->
+    <PackageVersion Include="Tmds.DBus.Protocol" Version="0.94.1" />
 
     <!-- Tests -->
     <PackageVersion Include="Avalonia.Headless" Version="$(AvaloniaVersion)" />
