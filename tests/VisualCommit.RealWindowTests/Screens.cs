@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.InteropServices;
 
@@ -17,14 +18,26 @@ public static class Screens
             .First(attribute => attribute.Key == "RepoRoot").Value!;
 
     /// <summary>Where the real-window pass of a phase keeps its screenshots: <c>artifacts/visual/phase-N/real-window/</c>.</summary>
-    public static string RealWindowFolder(int phase) =>
+    public static string RealWindowFolder(int phase) => RealWindowFolder(phase.ToString(CultureInfo.InvariantCulture));
+
+    /// <summary>
+    /// Where the real-window pass of a phase keeps its screenshots, the phase named as the docs
+    /// write it (docs/phase-7a-design.md 0.3): <c>artifacts/visual/phase-7a/real-window/</c> for "7a".
+    /// </summary>
+    public static string RealWindowFolder(string phase) =>
         Path.Combine(RepoRoot, "artifacts", "visual", $"phase-{phase}", "real-window");
 
     /// <summary>The scripted walk-through's screenshot with this name, written by VisualCommit.VisualTests.</summary>
-    public static string ScriptedFile(int phase, string name) =>
+    public static string ScriptedFile(int phase, string name) => ScriptedFile(phase.ToString(CultureInfo.InvariantCulture), name);
+
+    /// <summary>The scripted walk-through's screenshot with this name, the phase named as the docs write it ("7a").</summary>
+    public static string ScriptedFile(string phase, string name) =>
         Path.Combine(RepoRoot, "artifacts", "visual", $"phase-{phase}", "scripted", name + ".png");
 
-    public static string Save(this Bitmap bitmap, int phase, string name)
+    public static string Save(this Bitmap bitmap, int phase, string name) => bitmap.Save(phase.ToString(CultureInfo.InvariantCulture), name);
+
+    /// <summary>Saves a capture as <c>&lt;name&gt;.png</c> in the phase's real-window folder, the phase named as the docs write it ("7a").</summary>
+    public static string Save(this Bitmap bitmap, string phase, string name)
     {
         var path = Path.Combine(RealWindowFolder(phase), name + ".png");
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
