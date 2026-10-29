@@ -4,6 +4,12 @@
        the hosting session and the token stores. No UI and no git process: it references Core only. -->
 
   <ItemGroup>
+    <!-- The Secret Service store's D-Bus client on Linux (docs/phase-7a-design.md 3.6); its version
+         is Directory.Packages.props' line, the one Avalonia resolves. -->
+    <PackageReference Include="Tmds.DBus.Protocol" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\VisualCommit.Core\VisualCommit.Core.csproj" />
   </ItemGroup>
 

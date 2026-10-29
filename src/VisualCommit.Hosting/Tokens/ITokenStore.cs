@@ -81,10 +81,12 @@ public static class TokenStores
     public const string TestsVariable = "VISUALCOMMIT_KEYCHAIN_TESTS";
 
     /// <summary>
-    /// The store <paramref name="readEnvironment"/>'s <see cref="Variable"/> asks for, logged:
-    /// <c>memory</c> a <see cref="MemoryTokenStore"/> that keeps tokens, <c>unavailable</c> one
-    /// without a keychain (D253), any other value memory and a warning (D269); unset, the
-    /// platform's, which is memory until the platforms' stores exist.
+    /// The store <paramref name="readEnvironment"/>'s <see cref="Variable"/> asks for, logged
+    /// (docs/phase-7a-design.md 3.7): unset or empty, the platform's (<see cref="WindowsCredentialStore"/>,
+    /// <see cref="MacKeychainStore"/>, <see cref="SecretServiceStore"/>, elsewhere memory without a
+    /// keychain); <c>memory</c> a <see cref="MemoryTokenStore"/> that keeps tokens; <c>unavailable</c>
+    /// one without a keychain (D253); any other value memory and a warning, never a real store (D269).
+    /// No store is touched: their constructors do nothing.
     /// </summary>
     public static ITokenStore FromEnvironment(Func<string, string?> readEnvironment, IAppLog log)
     {
@@ -92,9 +94,12 @@ public static class TokenStores
         ArgumentNullException.ThrowIfNull(log);
         var value = readEnvironment(Variable)?.Trim();
         ITokenStore store;
-        if (string.IsNullOrEmpty(value) || string.Equals(value, "memory", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrEmpty(value))
         {
-            // Unset: the platform's store, which WP-K adds (docs/phase-7a-design.md 3.7).
+            store = Platform(log);
+        }
+        else if (string.Equals(value, "memory", StringComparison.OrdinalIgnoreCase))
+        {
             store = new MemoryTokenStore(available: true);
         }
         else if (string.Equals(value, "unavailable", StringComparison.OrdinalIgnoreCase))
@@ -103,13 +108,21 @@ public static class TokenStores
         }
         else
         {
-            log.Warning($"{Variable}={value} is not known; tokens are kept in memory.");
+            // The variable is named without its value, as HostingOptions' warning is: a value
+            // pasted by mistake could be a token.
+            log.Warning($"{Variable} is neither memory nor unavailable: tokens are kept in memory.");
             return new MemoryTokenStore(available: true);
         }
 
         log.Info($"Token store: {store.Name}.");
         return store;
     }
+
+    private static ITokenStore Platform(IAppLog log) =>
+        OperatingSystem.IsWindows() ? new WindowsCredentialStore(log)
+        : OperatingSystem.IsMacOS() ? new MacKeychainStore(log)
+        : OperatingSystem.IsLinux() ? new SecretServiceStore(log)
+        : new MemoryTokenStore(available: false);
 }
 
 /// <summary>
@@ -118,7 +131,7 @@ public static class TokenStores
 /// </summary>
 public sealed class MemoryTokenStore(bool available = true) : ITokenStore
 {
-    private const string NoKeychain = "No keychain was found on this computer.";
+    private const string NoKeychain = TokenStoreReasons.NoKeychain;
 
     private readonly ConcurrentDictionary<TokenKey, string> _tokens = new();
 
