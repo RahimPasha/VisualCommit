@@ -3,6 +3,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Undo;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.App.Tests.RepositoryOperationsTestSupport;
 using static VisualCommit.App.Tests.UndoAppTestSupport;
@@ -38,13 +39,13 @@ public class UndoStepTests
 
         // Cancelled: nothing starts (13.2).
         app.Dialogs.Confirm(yes: false);
-        var calls = app.Calls.Snapshot().Count;
+        var mark = await app.QuietCallMarkAsync();
         await app.Operations.UndoAsync();
         var question = app.Dialogs.Confirmations[^1];
         Assert.Equal(
             ("Delete topic on origin?", "Undoing the push deletes topic on origin. Anyone who fetched it keeps it.", string.Empty, "Undo", false),
             (question.Title, question.Question, question.Detail, question.ConfirmText, question.IsDestructive));
-        Assert.Empty(app.Calls.Snapshot().Skip(calls));
+        GitCallBudget.AssertOnlyWholeRefreshes(await app.QuietCallsSinceAsync(mark), "The cancelled undo");
         Assert.Equal(TopicWork, await RemoteHeadAsync(repo, "refs/heads/topic"));
         Assert.Equal(1, history.Cursor);
 

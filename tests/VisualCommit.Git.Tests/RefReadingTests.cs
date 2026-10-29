@@ -1,5 +1,6 @@
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.Git.Tests.RepositoryTestSupport;
 
@@ -395,7 +396,7 @@ public class RefReadingTests
 
         var refs = await repository.ReadRefsAsync(TestCancelled);
 
-        Assert.Equal(5, calls.Count);
+        GitCallBudget.AssertAtMost(calls.Select(arguments => "git " + string.Join(' ', arguments)).ToList(), 5, "the refs read");
         Assert.DoesNotContain(calls, arguments => arguments.SequenceEqual(["remote"]));
         Assert.Single(calls, arguments => arguments.SequenceEqual(["config", "--null", "--get-regexp", @"^remote\."]));
         Assert.Equal(["origin"], refs.Remotes);

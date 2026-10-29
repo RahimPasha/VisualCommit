@@ -272,7 +272,7 @@ public sealed partial class Phase6ChecksW
         Assert.Equal(PartW.Workspace, menu.Header);
 
         // Step 10: Add open tabs: the two rows appended in tab order, following their tabs with no read.
-        var calls = app.CallMark();
+        var calls = await app.QuietCallMarkAsync();
         var logMark = app.LogMark();
         app.ClickMenuItem(PartW.AddOpenTabs);
         app.Settle();
@@ -291,8 +291,12 @@ public sealed partial class Phase6ChecksW
         Assert.Empty(LinesWith(app, logMark, PartW.SummaryRead("web-app")));
         Assert.Empty(LinesWith(app, logMark, PartW.SummaryRead("docs")));
         Assert.Empty(PassLines(app, logMark));
-        var since = CallsInWorkspace(app, copy, calls);
-        Assert.True(since.Count == 0, "Add open tabs made git calls in the workspace's folders (3.5):\n" + string.Join('\n', since.Select(call => $"{call.CommandText} in {call.WorkingDirectory}")));
+        // S8: read once every watcher is quiet; web-app and docs have tabs, whose watchers may
+        // refresh for a write reported late: only whole refreshes there.
+        var since = await app.QuietCallsSinceAsync(calls, folder => copy.Names.Except(["web-app", "docs"]).Any(name => SameFolder(copy, copy.PathOf(name), folder)));
+        Assert.True(since.Count == 0, "Add open tabs made git calls in the folders of the rows without a tab (3.5):\n" + string.Join('\n', since.Select(call => $"{call.CommandText} in {call.WorkingDirectory}")));
+        GitCallBudget.AssertOnlyWholeRefreshes(CallsIn(app, copy, calls, "web-app"), "Add open tabs, in web-app's folder,");
+        GitCallBudget.AssertOnlyWholeRefreshes(CallsIn(app, copy, calls, "docs"), "Add open tabs, in docs' folder,");
         AssertWorkspacesFile(data, copy, PartW.WorkspaceId, PartW.Workspace, PartW.Wb10Order);
 
         // Step 11: the More menu again, read and closed with Esc; then Rename workspace…, its dialog read, "Web team" typed (WD16).

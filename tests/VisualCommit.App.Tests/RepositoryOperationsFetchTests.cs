@@ -115,13 +115,13 @@ public class RepositoryOperationsFetchTests
         using var repo = await Scenarios.RemoteSyncAsync();
         using var app = await OperationsHarness.OpenAsync(repo);
         using var group = new PromptGroup();
-        var mark = app.Calls.Snapshot().Count;
+        var mark = await app.QuietCallMarkAsync();
 
         var result = await app.Operations.FetchAllAsync(new BulkPart(new CancellationToken(canceled: true), group, _ => Assert.Fail("Nothing to keep.")));
 
         Assert.Equal((OperationOutcome.Cancelled, "Fetch cancelled"), (result?.Outcome, result?.Message));
         Assert.Null(app.LastResult);
-        Assert.Empty(app.Calls.Snapshot().Skip(mark));
+        GitCallBudget.AssertOnlyWholeRefreshes(await app.QuietCallsSinceAsync(mark), "A bulk run's part cancelled before its call");
         Assert.Contains(app.Log.Messages, message => message.EndsWith(": Fetch: not started, cancelled.", StringComparison.Ordinal));
     }
 

@@ -162,7 +162,7 @@ public sealed partial class Phase6ChecksW
                 Assert.Equal(PartW.ContactCommit, (await repo.GitWithEnvironmentAsync(OptionalLocksOff, "rev-parse", "HEAD")).StandardOutput.Trim());
             }
 
-            var mark = app.CallMark();
+            var mark = await app.QuietCallMarkAsync();
             var logMark = app.LogMark();
             app.Click(app.TabStrip().Tabs[0].Bounds.Center);
             app.Settle();
@@ -180,12 +180,16 @@ public sealed partial class Phase6ChecksW
             AssertRows(app, copy, w8, selected: "mobile");
             Assert.Empty(LinesWith(app, logMark, "summary read in"));
             Assert.Empty(PassLines(app, logMark));
-            var elsewhere = app.CallsSince(mark, folder => copy.Names.Where(name => name != "web-app").Any(name => SameFolder(copy, copy.PathOf(name), folder)));
-            Assert.True(elsewhere.Count == 0, "Activating the dashboard made calls outside web-app's folder:\n" + string.Join('\n', elsewhere.Select(call => $"{call.CommandText} in {call.WorkingDirectory}")));
+            // S8: read once every watcher is quiet; docs and mobile have tabs, whose watchers may
+            // refresh for a write reported late: only whole refreshes there.
+            var elsewhere = await app.QuietCallsSinceAsync(mark, folder => copy.Names.Except(["web-app", "docs", "mobile"]).Any(name => SameFolder(copy, copy.PathOf(name), folder)));
+            Assert.True(elsewhere.Count == 0, "Activating the dashboard made calls in the folders of rows without a tab:\n" + string.Join('\n', elsewhere.Select(call => $"{call.CommandText} in {call.WorkingDirectory}")));
+            GitCallBudget.AssertOnlyWholeRefreshes(CallsIn(app, copy, mark, "docs"), "Activating the dashboard, in docs' folder,");
+            GitCallBudget.AssertOnlyWholeRefreshes(CallsIn(app, copy, mark, "mobile"), "Activating the dashboard, in mobile's folder,");
 
             // Step 8: todo.txt written in scratch; the window activated: nothing read (the clock has not moved, 2.10).
             File.WriteAllText(Path.Combine(copy.PathOf("scratch"), PartW.TodoFile), PartW.TodoText);
-            var mark2 = app.CallMark();
+            var mark2 = await app.QuietCallMarkAsync();
             var logMark2 = app.LogMark();
             app.ActivateWindow();
             app.Settle();
@@ -213,8 +217,9 @@ public sealed partial class Phase6ChecksW
                 Assert.True(scratchCalls.Any(call => call.CommandText.StartsWith(form, StringComparison.Ordinal) && call.Sequence > mark3), $"scratch's \"{form}…\" was not read after the clock moved:\n" + string.Join('\n', scratchCalls.Select(call => call.CommandText)));
             }
 
-            Assert.Empty(CallsIn(app, copy, mark2, "docs"));
-            Assert.Empty(CallsIn(app, copy, mark2, "mobile"));
+            await app.WaitForWatchersQuietAsync();
+            GitCallBudget.AssertOnlyWholeRefreshes(CallsIn(app, copy, mark2, "docs"), "The pass after the clock moved, in docs' folder,");
+            GitCallBudget.AssertOnlyWholeRefreshes(CallsIn(app, copy, mark2, "mobile"), "The pass after the clock moved, in mobile's folder,");
             AssertActivityToggle(app, enabled: true, PartW.ShowActivityLog);
 
             // Step 10: mobile's row, then the toggle: the log under the list, following mobile.

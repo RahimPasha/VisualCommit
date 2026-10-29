@@ -78,14 +78,14 @@ public sealed partial class Phase6ChecksK
         }
 
         // Step 3: Ctrl+F is consumed while Search is disabled.
-        var sequence = app.CallMark();
+        var sequence = await app.QuietCallMarkAsync();
         PressMod(app, Key.F);
         app.Settle();
         Assert.Null(app.SearchBar());
         Assert.Equal(PartK.Fm, app.Resolver().Result);
         Assert.Equal(PartK.TwoConflictsLeft, app.Resolver().ResultCount);
         Assert.NotNull(app.ShownResolver);
-        AssertNoCall(app, sequence, "Ctrl+F in the resolver");
+        await AssertNoCallAsync(app, sequence, "Ctrl+F in the resolver");
 
         // Step 4: Use ours on block 1 puts the focus in the result (R1); Ctrl+Tab leaves the result, the tab kept.
         app.ClickBarButton(0, ConflictPaneSide.Ours, ConflictChoice.UseOurs);
@@ -250,14 +250,14 @@ public sealed partial class Phase6ChecksK
         AssertKeyed(app, PartK.ShowLog);
 
         // Step 14: Ctrl+B and Ctrl+Z consumed; Ctrl+J shows docs' activity, and hides it.
-        sequence = app.CallMark();
+        sequence = await app.QuietCallMarkAsync();
         operations = app.Session.Operations.Snapshot().Count;
         var rows = app.DashboardSnapshot().Rows.Select(row => row.ToString()).ToList();
         PressMod(app, Key.B);
         PressMod(app, Key.Z);
         app.Settle();
         Assert.False(app.Session.Services.DialogHost.IsOpen, "A dialog opened.");
-        AssertNoCall(app, sequence, "Ctrl+B and Ctrl+Z on the dashboard");
+        await AssertNoCallAsync(app, sequence, "Ctrl+B and Ctrl+Z on the dashboard");
         AssertNoWrite(app, sequence, operations, "Ctrl+B and Ctrl+Z on the dashboard");
         Assert.Equal(PartK.Docs, app.DashboardSnapshot().SelectedRow);
         Assert.True(app.FocusIsWithin(app.FindByAutomationId("DashboardList")), "The focus left DashboardList.");
@@ -284,14 +284,14 @@ public sealed partial class Phase6ChecksK
         Assert.True(app.FocusIsWithin(app.FindByAutomationId("DashboardList")), "The focus left DashboardList.");
 
         // Step 15: Alt+Down moves docs below mobile; docs keeps the selection and the focus (KD11).
-        sequence = app.CallMark();
+        sequence = await app.QuietCallMarkAsync();
         app.PressKey(Key.Down, RawInputModifiers.Alt);
         await app.WaitForAsync(() => app.DashboardSnapshot().Rows.Select(row => row.Name).SequenceEqual(PartK.MovedOrder), "docs below mobile");
         Assert.Equal(PartK.Docs, app.DashboardSnapshot().SelectedRow);
         Assert.True(app.FocusIsWithin(app.FindByAutomationId("DashboardList")), "The focus left DashboardList.");
         await app.WaitForAsync(() => WorkspacePathsOf(data, PartK.WorkspaceId).Count == PartK.MovedOrder.Length && WorkspacePathsOf(data, PartK.WorkspaceId).Zip(PartK.MovedOrder).All(pair => SameFolder(copy, copy.PathOf(pair.Second), pair.First)), "workspaces.json to hold Web's new order");
         AssertToolsUnchanged(data, copy);
-        AssertNoCall(app, sequence, "Alt+Down");
+        await AssertNoCallAsync(app, sequence, "Alt+Down");
 
         // Step 16: Enter opens docs in a new tab after the dashboards (2.3), adopting the row's view model.
         var row = app.ActiveDashboard!.Rows.Single(candidate => candidate.Name == PartK.Docs);
@@ -319,7 +319,7 @@ public sealed partial class Phase6ChecksK
         Assert.Equal(3, app.DashboardSnapshot().Rows.ToList().FindIndex(candidate => candidate.Name == PartK.Docs));
 
         // Step 18: End selects old-site; Delete removes it at once (K-WEBm).
-        sequence = app.CallMark();
+        sequence = await app.QuietCallMarkAsync();
         app.PressKey(Key.End);
         await app.WaitForAsync(() => app.DashboardSnapshot().SelectedRow == "old-site", "old-site to be selected");
         app.PressKey(Key.Delete);
@@ -334,7 +334,7 @@ public sealed partial class Phase6ChecksK
         AssertToolsUnchanged(data, copy);
         Assert.False(Directory.Exists(oldSite), "old-site exists on disk.");
         Assert.All(PartK.WithFolder, name => Assert.True(Directory.Exists(copy.PathOf(name)), $"{name}'s folder is gone."));
-        AssertNoCall(app, sequence, "End and Delete");
+        await AssertNoCallAsync(app, sequence, "End and Delete");
     }
 
     /// <summary>
