@@ -1,10 +1,16 @@
+using VisualCommit.App.Services;
 using VisualCommit.App.Tests;
+using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Settings;
+using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Operations;
+using VisualCommit.Core.Settings;
 using VisualCommit.Hosting;
+using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using Texts = VisualCommit.App.ViewModels.Operations.OperationTexts.AccountTexts;
 
@@ -13,7 +19,8 @@ namespace VisualCommit.VisualTests.Phase7a;
 /// <summary>
 /// The settings screen's Accounts section as a view model (docs/phase-7a-design.md 8.3, 8.8): each
 /// state and note kind to its texts and visibility, the switch and <c>IsChanged</c>, the sign-out's
-/// confirmation and note, the older git's texts (D277), off, and <c>Dispose</c>. The session is a
+/// confirmation and note, the older git's texts (D277), off, the screen's Save and Cancel (D216),
+/// and <c>Dispose</c>. The session is a
 /// stub that raises <c>AccountChanged</c> where the test says.
 /// </summary>
 public sealed class AccountsSettingsViewModelTests
@@ -227,6 +234,53 @@ public sealed class AccountsSettingsViewModelTests
         Assert.True(model.ShowsSignOut);
         Assert.False(model.ShowsSignIn);
         Assert.Equal(["AccountsSignOutButton"], focus);
+    }
+
+    [Fact]
+    public async Task The_screen_s_save_sets_the_switch_once_only_when_changed_and_cancel_never()
+    {
+        // D216: the switch is a setting, applied at Save; the screen disposes the section when it closes.
+        using var data = new TempDirectory("accounts save");
+        var session = new StubSession { Account = Status(AccountState.SignedIn, TokenPlace.Keychain) };
+        SettingsDialogViewModel Open() => new(
+            new SettingsScreenServices(
+                new JsonSettingsStore(Path.Combine(data.Path, "settings.json")),
+                AppTheme.Dark,
+                _ => { },
+                null,
+                null,
+                ToolCatalogues.Fixed,
+                [],
+                new FakeFolderPicker(),
+                new DialogHostViewModel(),
+                null,
+                new RecordingLog())
+            {
+                Hosting = session,
+            },
+            SettingsSection.Accounts);
+
+        var unchanged = Open();
+        await unchanged.Loaded;
+        Assert.True(unchanged.ShowsAccounts);
+        await unchanged.ConfirmCommand.ExecuteAsync(null);
+        Assert.True(unchanged.IsClosed);
+        Assert.Empty(session.UseForGitCalls);
+
+        var cancelled = Open();
+        await cancelled.Loaded;
+        cancelled.Accounts.UseForGit = false;
+        cancelled.CancelCommand.Execute(null);
+        Assert.True(cancelled.IsClosed);
+        Assert.Empty(session.UseForGitCalls);
+
+        var saved = Open();
+        await saved.Loaded;
+        saved.Accounts.UseForGit = false;
+        await saved.ConfirmCommand.ExecuteAsync(null);
+        Assert.True(saved.IsClosed);
+        Assert.Equal([false], session.UseForGitCalls);
+        Assert.Equal(0, session.Subscribers);
     }
 
     [Fact]
