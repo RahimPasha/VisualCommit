@@ -155,39 +155,11 @@ public sealed class Phase6SupportTests : Phase6Checks
     }
 
     /// <summary>
-    /// Part S's rule for calls besides a step's own (its conventions' "The screen's reads"): only
-    /// whole refreshes outside every operation, the refs read's five forms and the status, each as
-    /// often as the others.
-    /// </summary>
-    [Fact]
-    public void Calls_besides_a_steps_own_pass_only_as_whole_refreshes_outside_every_operation()
-    {
-        static GitCallRecord Call(string command, string? operation = null) =>
-            new(DateTimeOffset.UnixEpoch, TimeSpan.Zero, command, "/repo", GitCallOutcome.Completed, 0, string.Empty, string.Empty, operation);
-        GitCallRecord[] refresh =
-        [
-            Call("git stash list --no-show-signature --no-color --encoding=UTF-8 --format=%gd"),
-            Call("git for-each-ref --format=%(refname) refs/heads refs/remotes refs/tags"),
-            Call("git rev-parse -q --verify HEAD"),
-            Call("git config --null --get-regexp ^remote\\."),
-            Call("git symbolic-ref -q HEAD"),
-            Call("git status --porcelain=v2 -z --untracked-files=all --renames"),
-        ];
-
-        Assert.Null(Phase6ChecksS.NotWholeRefreshes([]));
-        Assert.Null(Phase6ChecksS.NotWholeRefreshes(refresh));
-        Assert.Null(Phase6ChecksS.NotWholeRefreshes([.. refresh, .. Enumerable.Reverse(refresh)]));
-        Assert.Contains("not whole refreshes", Phase6ChecksS.NotWholeRefreshes(refresh[..5]), StringComparison.Ordinal);
-        Assert.Contains("not whole refreshes", Phase6ChecksS.NotWholeRefreshes([.. refresh, refresh[5]]), StringComparison.Ordinal);
-        Assert.Contains("git config --show-scope --show-origin -z --list is no refresh's call", Phase6ChecksS.NotWholeRefreshes([.. refresh, Call("git config --show-scope --show-origin -z --list")]), StringComparison.Ordinal);
-        Assert.Contains("(in op-3) is no refresh's call", Phase6ChecksS.NotWholeRefreshes([.. refresh[..5], Call(refresh[5].CommandText, "op-3")]), StringComparison.Ordinal);
-    }
-
-    /// <summary>
     /// The watcher's refresh as the app makes it, on "settings": a write to <c>.git/config</c>
-    /// outside the app starts it, <see cref="ShellDriver.WaitForWatchersQuietAsync"/> waits for its
-    /// end, and its calls are whole refreshes by part S's rule (<see cref="Phase6ChecksS.RefreshForms"/>
-    /// are the app's own forms), as is a refresh asked for.
+    /// outside the app starts it, <see cref="ShellDriver.QuietCallsSinceAsync"/> waits for its end,
+    /// and its calls are whole refreshes by part S's rule (<see cref="GitCallBudget.RefreshForms"/>
+    /// are the app's own forms), as is a refresh asked for. Part S's rule itself is tried in
+    /// <c>GitCallBudgetTests</c> (App.Tests).
     /// </summary>
     [AvaloniaFact]
     public async Task A_write_to_the_git_folder_outside_the_app_is_waited_out_as_whole_refreshes()
@@ -202,18 +174,16 @@ public sealed class Phase6SupportTests : Phase6Checks
         await app.WaitForWatchersQuietAsync();
         Assert.True(app.WatchersQuiet);
 
-        var mark = app.CallMark();
+        var mark = await app.QuietCallMarkAsync();
         await repository.RefreshAsync();
-        var asked = app.CallsSince(mark);
-        Assert.True(asked.Count == Phase6ChecksS.RefreshForms.Length && Phase6ChecksS.NotWholeRefreshes(asked) is null, "A refresh is not one whole refresh:\n  " + string.Join("\n  ", asked.Select(call => call.CommandText)));
+        var asked = await app.QuietCallsSinceAsync(mark);
+        Assert.True(asked.Count == GitCallBudget.RefreshForms.Count && GitCallBudget.NotWholeRefreshes(asked) is null, "A refresh is not one whole refresh:\n  " + string.Join("\n  ", asked.Select(call => call.CommandText)));
 
-        await app.WaitForWatchersQuietAsync();
-        mark = app.CallMark();
+        mark = await app.QuietCallMarkAsync();
         await repo.ConfigAsync("pull.ff", "true");
         await app.WaitForAsync(() => app.CallsSince(mark).Any(call => call.CommandText.StartsWith("git status --porcelain=v2 ", StringComparison.Ordinal)), "the watcher's refresh after the write");
-        await app.WaitForWatchersQuietAsync();
-        var refreshed = app.CallsSince(mark);
-        Assert.True(refreshed.Count >= Phase6ChecksS.RefreshForms.Length && Phase6ChecksS.NotWholeRefreshes(refreshed) is null, "The watcher's refresh is not whole refreshes:\n  " + string.Join("\n  ", refreshed.Select(call => call.CommandText)));
+        var refreshed = await app.QuietCallsSinceAsync(mark);
+        Assert.True(refreshed.Count >= GitCallBudget.RefreshForms.Count && GitCallBudget.NotWholeRefreshes(refreshed) is null, "The watcher's refresh is not whole refreshes:\n  " + string.Join("\n  ", refreshed.Select(call => call.CommandText)));
     }
 
     /// <summary>

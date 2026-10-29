@@ -160,6 +160,40 @@ internal sealed class OperationsHarness : IDisposable
     public Task WaitForIdleAsync() => Repository.Queue.WhenIdleAsync();
 
     /// <summary>
+    /// Waits until the repository's watcher is quiet (<see cref="RepositoryViewModel.IsWatcherQuiet"/>):
+    /// no change it saw waits, and no refresh or status read runs. Polled every 15 ms, at most
+    /// <see cref="ShellDriver.DefaultWaitTimeout"/> (docs/phase-7a-design.md 5.3).
+    /// </summary>
+    /// <exception cref="TimeoutException">The watcher was still busy when the time was up.</exception>
+    public async Task WaitForWatcherQuietAsync()
+    {
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!Repository.IsWatcherQuiet)
+        {
+            if (waited.Elapsed > ShellDriver.DefaultWaitTimeout)
+            {
+                throw new TimeoutException($"Timed out after {ShellDriver.DefaultWaitTimeout.TotalSeconds:F0} s waiting for the repository watcher to be quiet.");
+            }
+
+            await Task.Delay(15, TestContext.Current.CancellationToken);
+        }
+    }
+
+    /// <summary>The mark of a step's git calls, the highest <see cref="GitCallRecord.Sequence"/> so far (0 for none), taken once the watcher is quiet (S8, <see cref="GitCallBudget"/>).</summary>
+    public async Task<long> QuietCallMarkAsync()
+    {
+        await WaitForWatcherQuietAsync();
+        return Calls.Snapshot().Select(call => call.Sequence).DefaultIfEmpty(0).Max();
+    }
+
+    /// <summary>The git calls after <paramref name="sequence"/>, read once the watcher is quiet again.</summary>
+    public async Task<IReadOnlyList<GitCallRecord>> QuietCallsSinceAsync(long sequence)
+    {
+        await WaitForWatcherQuietAsync();
+        return [.. Calls.Snapshot().Where(call => call.Sequence > sequence)];
+    }
+
+    /// <summary>
     /// Fails the test with what the dialog script noted: answers that did not fit, dialogs that
     /// came unscripted (error dialogs aside), and answers that were never used.
     /// </summary>
