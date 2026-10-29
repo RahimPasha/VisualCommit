@@ -430,6 +430,30 @@ public sealed partial class RepositoryViewModel
     }
 
     /// <summary>
+    /// A click on a clickable message row of the "Pull requests" section (docs/phase-7a-design.md
+    /// 10.3, 10.4): the sign-in row signs in to GitHub (the window's entry, 8.5), the "more" row
+    /// opens the repository's pull requests in the browser.
+    /// </summary>
+    public void ActivatePullRequestMessage(PullRequestMessageRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+        if (IsClosed)
+        {
+            return;
+        }
+
+        switch (row.Kind)
+        {
+            case PullRequestMessageKind.SignIn:
+                Start(MenuActions.SignInToGitHubAsync(), "signing in to GitHub");
+                break;
+            case PullRequestMessageKind.More:
+                Start(MenuActions.OpenPullRequestsInBrowserAsync(), "opening the pull requests in the browser");
+                break;
+        }
+    }
+
+    /// <summary>
     /// A double-click on a graph label (4c): a local branch checks out (nothing more on the current
     /// one), a remote branch checks out into a tracking branch; a tag, a stash or <c>HEAD</c> does
     /// nothing more than the click (D93).

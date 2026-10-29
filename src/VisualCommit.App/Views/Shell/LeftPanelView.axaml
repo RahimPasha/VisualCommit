@@ -185,6 +185,16 @@
                         AutomationProperties.AutomationId="RefSoloToggle">
                   <c:Icon Data="{StaticResource IconSolo}" Width="12" Height="12" />
                 </Button>
+                <!-- The branch's open pull request (docs/phase-7a-design.md 10.3, D308), left of the
+                     toggles and counts: the name is cut first; collapsed, it takes no room. -->
+                <TextBlock DockPanel.Dock="Right"
+                           Name="RefPullRequest"
+                           Classes="secondary count"
+                           Margin="6,0,0,0"
+                           Text="{Binding PullRequestText}"
+                           ToolTip.Tip="{Binding PullRequestToolTip}"
+                           IsVisible="{Binding ShowsPullRequest}"
+                           AutomationProperties.AutomationId="RefPullRequest" />
                 <TextBlock Name="RefName"
                            Classes="refName"
                            Classes.dimmed="{Binding IsDimmed}"
@@ -192,6 +202,71 @@
                            Text="{Binding Text}"
                            TextTrimming="CharacterEllipsis"
                            ToolTip.Tip="{Binding NameToolTip}"
+                           VerticalAlignment="Center" />
+              </DockPanel>
+            </Button>
+          </DataTemplate>
+
+          <!-- An open pull request (docs/phase-7a-design.md 10.3; D303, D304), 26 high at depth 1:
+               #n, the title, cut first, and at the right "Draft" for a draft and the author. A
+               click selects its head commit, a double-click checks it out; it starts no drag. -->
+          <DataTemplate DataType="vm:PullRequestRow" x:DataType="vm:PullRequestRow">
+            <Button Theme="{StaticResource RefRowButton}"
+                    Height="26"
+                    Classes.selected="{Binding IsSelected}"
+                    Command="{Binding ActivateCommand}"
+                    AutomationProperties.AutomationId="PullRequestItem"
+                    AutomationProperties.Name="{Binding Text}">
+              <DockPanel Margin="0,0,12,0" Background="Transparent" ToolTip.Tip="{Binding ToolTip}">
+                <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                <Border DockPanel.Dock="Left" Width="18" />
+                <TextBlock DockPanel.Dock="Right"
+                           Name="PullRequestAuthor"
+                           Classes="secondary"
+                           MaxWidth="90"
+                           Margin="8,0,0,0"
+                           Text="{Binding Author}"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
+                <TextBlock DockPanel.Dock="Right"
+                           Name="PullRequestDraft"
+                           Classes="secondary"
+                           Margin="8,0,0,0"
+                           Text="{Binding DraftText}"
+                           IsVisible="{Binding IsDraft}"
+                           VerticalAlignment="Center" />
+                <TextBlock DockPanel.Dock="Left"
+                           Name="PullRequestNumber"
+                           Classes="secondary"
+                           Margin="0,0,6,0"
+                           Text="{Binding NumberText}"
+                           VerticalAlignment="Center" />
+                <TextBlock Name="PullRequestTitle"
+                           Text="{Binding Title}"
+                           TextTrimming="CharacterEllipsis"
+                           VerticalAlignment="Center" />
+              </DockPanel>
+            </Button>
+          </DataTemplate>
+
+          <!-- A message of the "Pull requests" section (10.3): signed out, loading, a failure, none
+               open, or more than 300; only the sign-in and "more" rows take a click, the others
+               are disabled and keep their look and their tooltip. -->
+          <DataTemplate DataType="vm:PullRequestMessageRow" x:DataType="vm:PullRequestMessageRow">
+            <Button Theme="{StaticResource RefRowButton}"
+                    Height="26"
+                    Command="{Binding ActivateCommand}"
+                    AutomationProperties.AutomationId="PullRequestMessage"
+                    AutomationProperties.Name="{Binding Text}">
+              <DockPanel Margin="0,0,12,0">
+                <Border DockPanel.Dock="Left" Width="{Binding Indent}" />
+                <Border DockPanel.Dock="Left" Width="18" />
+                <TextBlock Name="PullRequestMessageText"
+                           Classes="secondary"
+                           Text="{Binding Text}"
+                           TextTrimming="CharacterEllipsis"
+                           ToolTip.Tip="{Binding ToolTip}"
+                           ToolTip.ShowOnDisabled="True"
                            VerticalAlignment="Center" />
               </DockPanel>
             </Button>
