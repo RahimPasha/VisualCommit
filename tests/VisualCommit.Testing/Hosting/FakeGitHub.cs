@@ -335,7 +335,7 @@ public sealed partial class FakeGitHub : IAsyncDisposable
     }
 
     /// <summary>Answers the next request of <paramref name="route"/> with <paramref name="fault"/> once, after the header checks and before auth; the one after it is normal.</summary>
-    /// <exception cref="NotSupportedException">A git route.</exception>
+    /// <exception cref="NotSupportedException">A git, avatar or page route: those are answered before faults are taken, so a fault would never apply.</exception>
     public void FailNext(string route, FakeGitHubFault fault)
     {
         ArgumentNullException.ThrowIfNull(fault);
@@ -343,6 +343,11 @@ public sealed partial class FakeGitHub : IAsyncDisposable
         if (key.StartsWith("git:", StringComparison.Ordinal))
         {
             throw new NotSupportedException("The fake fails API routes only; git's requests are the server's.");
+        }
+
+        if (key.StartsWith("avatar:", StringComparison.Ordinal) || key.StartsWith("page:", StringComparison.Ordinal))
+        {
+            throw new NotSupportedException("The fake fails API routes only; an avatar or a page is answered before any fault.");
         }
 
         lock (_gate)

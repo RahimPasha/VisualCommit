@@ -330,6 +330,8 @@ public sealed class FakeGitHubTests
         await AssertInvalidAsync(fake, token, """{"title":"Again","head":"topic/no-pr","base":"main"}""", """{"resource":"PullRequest","code":"custom","message":"A pull request already exists for octo:topic/no-pr."}""");
 
         Assert.Throws<NotSupportedException>(() => fake.FailNext("git:octo/hello", FakeGitHubFault.ServerError));
+        Assert.Throws<NotSupportedException>(() => fake.FailNext("avatar:1001", FakeGitHubFault.ServerError));
+        Assert.Throws<NotSupportedException>(() => fake.FailNext("page:octo/hello", FakeGitHubFault.ServerError));
         Assert.Empty(fake.Errors);
     }
 

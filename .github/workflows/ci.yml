@@ -52,6 +52,7 @@ jobs:
           git --version
 
       - name: Build
+        id: build
         run: dotnet build --configuration Release
 
       # The step has a time limit of its own, so that a hang cannot use up the job's whole time.
@@ -63,6 +64,24 @@ jobs:
       - name: Test
         timeout-minutes: 55
         run: dotnet test --configuration Release --no-build
+
+      # The keychain's own tests (D259, D270): each runs the platform's real store against an entry
+      # of its own that it deletes. They run also after a failed Test, so that one failing test does
+      # not hide the keychain's result. Windows' step leaves the job if the runner refuses the
+      # Credential Manager with error 1312 (D333).
+      - name: Keychain (Windows Credential Manager)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && runner.os == 'Windows' }}
+        timeout-minutes: 5
+        env:
+          VISUALCOMMIT_KEYCHAIN_TESTS: windows
+        run: dotnet test --project tests/VisualCommit.Hosting.Tests --configuration Release --no-build --filter-class "*WindowsTokenStoreRealTests"
+
+      - name: Keychain (macOS keychain)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' && runner.os == 'macOS' }}
+        timeout-minutes: 5
+        env:
+          VISUALCOMMIT_KEYCHAIN_TESTS: macos
+        run: dotnet test --project tests/VisualCommit.Hosting.Tests --configuration Release --no-build --filter-class "*MacKeychainTokenStoreRealTests"
 
       # The real-window pass is outside the solution and never runs here. Building it keeps it
       # from going stale unnoticed.
@@ -89,7 +108,11 @@ jobs:
   bare-linux-container:
     name: bare ubuntu container, SDK from ${{ matrix.sdk.from }}
     runs-on: ubuntu-latest
-    container: ubuntu:24.04
+    # IPC_LOCK: Ubuntu's gnome-keyring package gives its daemon that file capability when setcap is
+    # installed, and a container without it in its bounding set cannot start the daemon at all.
+    container:
+      image: ubuntu:24.04
+      options: --cap-add=IPC_LOCK
     timeout-minutes: 25
     strategy:
       fail-fast: false
@@ -133,11 +156,23 @@ jobs:
           git --version
 
       - name: Build
+        id: build
         run: dotnet build --configuration Release
 
       - name: Test
         timeout-minutes: 14
         run: dotnet test --configuration Release --no-build
+
+      # The Secret Service store's own tests under a private session bus, with a keyring that lives
+      # only in this step's temporary folder (D259, D270).
+      - name: Keychain (Secret Service)
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        timeout-minutes: 5
+        env:
+          VISUALCOMMIT_KEYCHAIN_TESTS: secret-service
+        run: |
+          export XDG_DATA_HOME="$(mktemp -d)"; mkdir -p -m 700 "$XDG_DATA_HOME/keyrings"
+          dbus-run-session -- sh -c 'echo "throwaway-$GITHUB_RUN_ID" | gnome-keyring-daemon --unlock --components=secrets >/dev/null && dotnet test --project tests/VisualCommit.Hosting.Tests --configuration Release --no-build --filter-class "*SecretServiceTokenStoreRealTests"'
 
       - name: Upload screenshots
         if: always()
