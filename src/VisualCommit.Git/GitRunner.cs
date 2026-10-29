@@ -635,8 +635,9 @@ public sealed class GitRunner : IGitRunner
         /// more of when <paramref name="cutOff"/>: the credentials of every URL hidden on the whole
         /// text first (D103), then cut to <see cref="GitCallRecord.MaxOutputLength"/> with
         /// <see cref="GitCallRecord.TruncationMarker"/>. A URL's authority that runs on to the cut
-        /// is left out from its <c>://</c>: its <c>@</c> may lie beyond the cut, and then its user
-        /// information was not found to be hidden.
+        /// (no <c>/</c>, <c>?</c>, <c>#</c>, white space or a control character ends it before,
+        /// <see cref="GitCommand.EndsAuthority"/>) is left out from its <c>://</c>: its <c>@</c> may
+        /// lie beyond the cut, and then its user information was not found to be hidden.
         /// </summary>
         public static string RecordedOutput(string text, bool cutOff)
         {
@@ -655,7 +656,7 @@ public sealed class GitRunner : IGitRunner
                 var authorityEnded = false;
                 for (var i = authorityStart; i < end && !authorityEnded; i++)
                 {
-                    authorityEnded = hidden[i] is '/' or '?' or '#' || char.IsWhiteSpace(hidden[i]);
+                    authorityEnded = GitCommand.EndsAuthority(hidden[i]);
                 }
 
                 if (!authorityEnded)
