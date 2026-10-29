@@ -13,6 +13,8 @@ using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
+using VisualCommit.Hosting;
+using VisualCommit.Testing.Hosting;
 
 namespace VisualCommit.Testing.Headless;
 
@@ -47,9 +49,17 @@ public sealed partial class ShellDriver : IDisposable
         FakeFileLauncher launcher,
         FakeClipboard clipboard,
         FakeSystemTheme systemTheme,
-        TimeProvider? readClock)
+        TimeProvider? readClock,
+        FakeTokenStore tokens,
+        FakeGitHub? gitHub,
+        HostingOptions hosting,
+        RefusedRequests refusedRequests)
     {
         Session = session;
+        Tokens = tokens;
+        GitHub = gitHub;
+        Hosting = hosting;
+        RefusedRequests = refusedRequests;
         Folders = folders;
         Launcher = launcher;
         Clipboard = clipboard;
@@ -104,7 +114,19 @@ public sealed partial class ShellDriver : IDisposable
     /// for a check that needs other ones (12.9's <c>HeldMergeTools</c>, which holds the merge
     /// tools' list back for a check of its loading state); without it <see cref="ToolCatalogues.Fixed"/>.
     /// </para>
+    /// <para>
+    /// Phase 7a (docs/phase-7a-design.md 2.5, 1.9): GitHub is off unless <paramref name="gitHub"/>
+    /// (a fake on a port, reached through a <see cref="LoopbackOnlyHandler"/>) or
+    /// <paramref name="hosting"/> (options as given, such as a fake's in-process handler) says
+    /// where it is; even off, every client's handler is the loopback tripwire
+    /// (<see cref="RefusedRequests"/>). Tokens go to <paramref name="tokens"/>, or a new
+    /// <see cref="FakeTokenStore"/> (<see cref="Tokens"/>); one store handed to two starts is the
+    /// scripted restart. The start pumps the UI thread until the hosting session has read its
+    /// account and token (<see cref="AppSession.HostingStarted"/>), at most
+    /// <see cref="DefaultWaitTimeout"/>, and rethrows what that start threw.
+    /// </para>
     /// </summary>
+    /// <exception cref="ArgumentException">Both <paramref name="gitHub"/> and <paramref name="hosting"/> are given.</exception>
     public static ShellDriver Start(
         string dataDirectory,
         int? width = 1100,
@@ -112,8 +134,16 @@ public sealed partial class ShellDriver : IDisposable
         IGitPromptHandler? promptHandler = null,
         bool systemDark = true,
         TimeProvider? readClock = null,
-        ToolCatalogues? tools = null)
+        ToolCatalogues? tools = null,
+        FakeGitHub? gitHub = null,
+        FakeTokenStore? tokens = null,
+        HostingOptions? hosting = null)
     {
+        if (gitHub is not null && hosting is not null)
+        {
+            throw new ArgumentException("Give the fake of GitHub (gitHub) or the hosting options (hosting), not both.", nameof(hosting));
+        }
+
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
 
@@ -124,6 +154,10 @@ public sealed partial class ShellDriver : IDisposable
         var launcher = new FakeFileLauncher();
         var clipboard = new FakeClipboard();
         var systemTheme = new FakeSystemTheme(systemDark);
+        var refused = new RefusedRequests();
+        var store = tokens ?? new FakeTokenStore();
+        var options = hosting ?? HarnessHosting(gitHub, refused);
+
         // The activity log's times read 09:00:00 and its durations 0 ms, and the backups get the
         // same names in every run, still in order (docs/phase-5-design.md 2.3).
         var session = AppSession.Start(
@@ -138,7 +172,9 @@ public sealed partial class ShellDriver : IDisposable
             gitEnvironment: GitIsolation.SessionGitEnvironment(dataDirectory),
             systemTheme: systemTheme,
             tools: tools ?? ToolCatalogues.Fixed,
-            readClock: readClock);
+            readClock: readClock,
+            hosting: options,
+            tokens: store);
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;
@@ -151,7 +187,17 @@ public sealed partial class ShellDriver : IDisposable
 
         session.MainWindow.Show();
 
-        var driver = new ShellDriver(session, folders, launcher, clipboard, systemTheme, readClock);
+        var driver = new ShellDriver(session, folders, launcher, clipboard, systemTheme, readClock, store, gitHub, options, refused);
+        try
+        {
+            driver.PumpUntilHostingStarted();
+        }
+        catch
+        {
+            driver.Dispose();
+            throw;
+        }
+
         driver.Settle();
         return driver;
     }
@@ -170,13 +216,21 @@ public sealed partial class ShellDriver : IDisposable
         IGitPromptHandler? promptHandler = null,
         bool systemDark = true,
         TimeProvider? readClock = null,
-        ToolCatalogues? tools = null)
+        ToolCatalogues? tools = null,
+        FakeGitHub? gitHub = null,
+        FakeTokenStore? tokens = null,
+        HostingOptions? hosting = null)
     {
         ArgumentNullException.ThrowIfNull(tabs);
+        if (gitHub is not null && hosting is not null)
+        {
+            throw new ArgumentException("Give the fake of GitHub (gitHub) or the hosting options (hosting), not both.", nameof(hosting));
+        }
+
         WriteSession(
             dataDirectory,
             new SessionState { Tabs = tabs.Select(path => new TabState(path)).ToList(), ActiveTab = activeTab });
-        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools);
+        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools, gitHub, tokens, hosting);
     }
 
     /// <summary>
