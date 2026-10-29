@@ -49,7 +49,8 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
     /// <summary>
     /// The options <paramref name="readEnvironment"/>'s <see cref="GitHubVariable"/> asks for:
     /// unset or empty, github.com; <c>none</c>, <see cref="Off"/>; <c>http://127.0.0.1:&lt;port&gt;/</c>,
-    /// <see cref="GitHubEndpoints.Local"/>; anything else, <see cref="Off"/> and a warning.
+    /// <see cref="GitHubEndpoints.Local"/>; anything else, <see cref="Off"/> and a warning that
+    /// names the variable but not its value.
     /// </summary>
     public static HostingOptions FromEnvironment(Func<string, string?> readEnvironment, IAppLog log)
     {
@@ -71,7 +72,9 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
             return For(GitHubEndpoints.Local(port));
         }
 
-        log.Warning($"{GitHubVariable}={value} is neither none nor http://127.0.0.1:<port>/: GitHub is off.");
+        // The value is left out: whatever it holds (a user part, a token typed by mistake) never
+        // reaches the log (docs/phase-7a-design.md 1).
+        log.Warning($"{GitHubVariable} is neither none nor http://127.0.0.1:<port>/: GitHub is off.");
         return Off;
     }
 

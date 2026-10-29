@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
@@ -1163,6 +1164,43 @@ public class OperationQueueTests
         Assert.StartsWith("bulk-", group.Id, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task The_operations_bindings_reach_Begin_and_only_a_failure_takes_the_scopes_refused_account()
+    {
+        // docs/phase-7a-design.md 1.2: the queue's two lines of WP0, on their own until WP-C's
+        // end-to-end classes check them with git.
+        var broker = new RecordingBroker();
+        using var queue = new TestQueue(prompts: broker);
+        var account = new AccountKey(HostingProvider.GitHub, "github.com", "octocat");
+        IReadOnlyList<CredentialBinding> bindings = [new("https://github.com/octocat/hello.git", account)];
+        static GitException Refused() =>
+            new("git push origin", 128, "remote: Invalid username or token.\nfatal: Authentication failed for 'https://github.com/octocat/hello.git/'");
+
+        var failed = await queue.Queue.RunAsync(Network("Push", _ =>
+        {
+            broker.Begun[^1].Refuse(account);
+            throw Refused();
+        }) with { CredentialBindings = bindings });
+        var succeeded = await queue.Queue.RunAsync(Network("Fetch", _ =>
+        {
+            broker.Begun[^1].Refuse(account);
+            return Task.FromResult(OperationReport.Done(string.Empty));
+        }) with { CredentialBindings = bindings });
+        var cancelled = await queue.Queue.RunAsync(Network("Pull", _ =>
+        {
+            broker.Begun[^1].Refuse(account);
+            broker.Begun[^1].CancelByUser();
+            throw Refused();
+        }) with { CredentialBindings = bindings });
+        await queue.Queue.RunAsync(Network("Fetch", _ => Task.FromResult(OperationReport.Done(string.Empty))));
+
+        Assert.All(broker.Begun.Take(3), scope => Assert.Same(bindings, scope.Bindings));
+        Assert.Empty(broker.Begun[3].Bindings!);
+        Assert.Equal((OperationOutcome.Failed, account), (failed.Outcome, failed.RefusedAccount));
+        Assert.Equal((OperationOutcome.Succeeded, null), (succeeded.Outcome, succeeded.RefusedAccount));
+        Assert.Equal((OperationOutcome.Cancelled, null), (cancelled.Outcome, cancelled.RefusedAccount));
+    }
+
     private static GitOperation Network(string title, Func<OperationContext, Task<OperationReport>> run) =>
         new(title, title + "…", OperationKind.Network, RefreshScope.Refs, run);
 
@@ -1234,7 +1272,7 @@ public class OperationQueueTests
 
         public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null, IReadOnlyList<CredentialBinding>? bindings = null)
         {
-            var scope = new Scope(operationId ?? "prompt", title, repositoryName, mode) { Group = group };
+            var scope = new Scope(operationId ?? "prompt", title, repositoryName, mode) { Group = group, Bindings = bindings };
             lock (Begun)
             {
                 Begun.Add(scope);
@@ -1255,7 +1293,13 @@ public class OperationQueueTests
             /// <summary>The prompt group the queue passed (docs/phase-6-design.md 4.4), or null.</summary>
             public PromptGroup? Group { get; init; }
 
+            /// <summary>The credential bindings the queue passed (docs/phase-7a-design.md 1.2), as passed.</summary>
+            public IReadOnlyList<CredentialBinding>? Bindings { get; init; }
+
             public void CancelByUser() => UserCancelled = true;
+
+            /// <summary>As the app's helper does when git erases the account's token (ruling 4).</summary>
+            public void Refuse(AccountKey account) => RefusedAccount = account;
         }
     }
 }

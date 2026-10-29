@@ -74,28 +74,4 @@ public sealed class HostingSmokeTests
 
     private static Func<string, string?> Variable(string name, string value) =>
         variable => variable == name ? value : null;
-
-    private sealed class ListLog : IAppLog
-    {
-        private readonly List<(LogLevel Level, string Message)> _lines = [];
-
-        public IReadOnlyList<(LogLevel Level, string Message)> Lines
-        {
-            get
-            {
-                lock (_lines)
-                {
-                    return [.. _lines];
-                }
-            }
-        }
-
-        public void Write(LogLevel level, string message, Exception? exception = null)
-        {
-            lock (_lines)
-            {
-                _lines.Add((level, message));
-            }
-        }
-    }
 }

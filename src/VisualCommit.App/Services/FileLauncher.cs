@@ -59,16 +59,12 @@ public sealed class FileLauncher : IFileLauncher
     /// <summary>
     /// Opens a web address in the default browser through Avalonia's launcher
     /// (<c>TopLevel.Launcher.LaunchUriAsync</c>), on the UI thread (docs/phase-7a-design.md 1.7).
-    /// Only <c>http</c> and <c>https</c>: any other scheme throws <see cref="ArgumentException"/>.
+    /// Only <c>http</c> and <c>https</c>: any other address fails the task with
+    /// <see cref="ArgumentException"/> (<see cref="ThrowIfNotWebAddress"/>).
     /// </summary>
     public async Task OpenUrlAsync(Uri url, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(url);
-        if (!url.IsAbsoluteUri || (url.Scheme != Uri.UriSchemeHttp && url.Scheme != Uri.UriSchemeHttps))
-        {
-            throw new ArgumentException("Only an http or https address can be opened in the browser.", nameof(url));
-        }
-
+        ThrowIfNotWebAddress(url);
         if (!Dispatcher.UIThread.CheckAccess())
         {
             await Dispatcher.UIThread.InvokeAsync(() => OpenUrlAsync(url, cancellationToken)).ConfigureAwait(false);
@@ -85,6 +81,21 @@ public sealed class FileLauncher : IFileLauncher
         if (!await topLevel.Launcher.LaunchUriAsync(url))
         {
             Log.Warning($"The system could not open {url.AbsoluteUri} in the browser.");
+        }
+    }
+
+    /// <summary>
+    /// The check <see cref="OpenUrlAsync"/> makes first, shared with the test harness's fake
+    /// launcher so that a test sees the same refusal: <see cref="ArgumentException"/> unless
+    /// <paramref name="url"/> is an absolute <c>http</c> or <c>https</c> address (a relative link,
+    /// a <c>git@</c> or <c>ssh</c> URL of a remote, a file).
+    /// </summary>
+    public static void ThrowIfNotWebAddress(Uri url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        if (!url.IsAbsoluteUri || (url.Scheme != Uri.UriSchemeHttp && url.Scheme != Uri.UriSchemeHttps))
+        {
+            throw new ArgumentException("Only an http or https address can be opened in the browser.", nameof(url));
         }
     }
 

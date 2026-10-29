@@ -68,9 +68,22 @@ public sealed class FakeFileLauncher : IFileLauncher
     public Task RevealAsync(string fullPath, CancellationToken cancellationToken = default) =>
         Record(new FileLaunch(FileLaunchKind.Reveal, fullPath));
 
+    /// <summary>
+    /// Records an <c>http</c> or <c>https</c> address; any other fails the task with the real
+    /// launcher's <see cref="ArgumentException"/> (<see cref="FileLauncher.ThrowIfNotWebAddress"/>)
+    /// and is not recorded, as the real launcher opens nothing.
+    /// </summary>
     public Task OpenUrlAsync(Uri url, CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(url);
+        try
+        {
+            FileLauncher.ThrowIfNotWebAddress(url);
+        }
+        catch (ArgumentException refused)
+        {
+            return Task.FromException(refused);
+        }
+
         return Record(new FileLaunch(FileLaunchKind.OpenUrl, url.AbsoluteUri));
     }
 
