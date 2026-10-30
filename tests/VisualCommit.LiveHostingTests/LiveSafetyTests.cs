@@ -1,17 +1,21 @@
 using System.Net;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using VisualCommit.Testing;
 using Xunit;
+using Xunit.Sdk;
 
 namespace VisualCommit.LiveHostingTests;
 
 /// <summary>
 /// The live command's safety nets proven offline (the lead's ruling for WP-LIVE; docs/phase-7a-design.md
-/// 14.3, 14.5, D323): <see cref="LiveSettings"/>' message, <see cref="LiveRun"/>'s search for the token
-/// in its notes and in run.txt, <see cref="LiveRequestLog"/>'s record and <see cref="GitHubLiveApi"/>'s
-/// messages, with made-up tokens and in-process handlers: no network, no variables, no app. They run
-/// in every run of the project, with or without the owner's token.
+/// 14.3, 14.5, D323, D324, D327): <see cref="LiveSettings"/>' message, <see cref="LiveRun"/>'s search
+/// for the token in its notes, messages, a failed step's exception and run.txt,
+/// <see cref="LiveRequestLog"/>'s record and its refusal of a request that would break D327's reach,
+/// <see cref="GitHubLiveApi"/>'s messages and bodies, and what <see cref="LiveLeftovers"/> lets the
+/// clean-up remove, with made-up tokens and in-process handlers: no network, no variables, no app.
+/// They run in every run of the project, with or without the owner's token.
 /// </summary>
 public sealed class LiveSafetyTests
 {
@@ -39,6 +43,9 @@ public sealed class LiveSafetyTests
     [InlineData(Token, "/sandbox", "VISUALCOMMIT_LIVE_GITHUB_REPO is \"/sandbox\", not owner/name.")]
     [InlineData(Token, "octo/sandbox/x", "VISUALCOMMIT_LIVE_GITHUB_REPO is \"octo/sandbox/x\", not owner/name.")]
     [InlineData(Token, "oc to/sandbox", "VISUALCOMMIT_LIVE_GITHUB_REPO is \"oc to/sandbox\", not owner/name.")]
+    [InlineData(Token, "x/..", "VISUALCOMMIT_LIVE_GITHUB_REPO is \"x/..\", not owner/name.")]
+    [InlineData(Token, "../y", "VISUALCOMMIT_LIVE_GITHUB_REPO is \"../y\", not owner/name.")]
+    [InlineData(Token, "./.", "VISUALCOMMIT_LIVE_GITHUB_REPO is \"./.\", not owner/name.")]
     [InlineData(null, "octo", "Missing: VISUALCOMMIT_LIVE_GITHUB_TOKEN. VISUALCOMMIT_LIVE_GITHUB_REPO is \"octo\", not owner/name.")]
     public void Without_both_variables_every_test_fails_with_one_message(string? token, string? repository, string detail)
     {
@@ -62,6 +69,7 @@ public sealed class LiveSafetyTests
     {
         var sandbox = LiveSettings.Resolve(" " + Token + " ", " octo-cat/visualcommit.sandbox_1 ");
         Assert.Equal(("octo-cat", "visualcommit.sandbox_1", "octo-cat/visualcommit.sandbox_1"), (sandbox.Owner, sandbox.Name, sandbox.FullName));
+        Assert.Equal(".dotfiles", LiveSettings.Resolve(Token, "octo/.dotfiles").Name);
         Assert.True(string.Equals(sandbox.Token, Token, StringComparison.Ordinal), "The token was not trimmed as read.");
         Assert.Equal(sandbox.FullName, sandbox.ToString());
         Assert.Equal("fine-grained (github_pat_)", LiveSettings.KindOf(Token));
@@ -180,22 +188,57 @@ public sealed class LiveSafetyTests
     }
 
     [Fact]
-    public void A_run_without_notes_writes_no_file_and_passes()
+    public void A_run_without_notes_writes_that_it_took_none_in_place_of_an_earlier_file_and_passes()
     {
         using var folder = new TempDirectory("live-safety");
         var file = folder.Combine("run.txt");
         File.WriteAllText(file, "An earlier run's record.");
         new LiveRun(null, file, _ => { }).Dispose();
-        Assert.Equal("An earlier run's record.", File.ReadAllText(file));
+        var text = File.ReadAllText(file);
+        Assert.StartsWith("VisualCommit's live command against GitHub (docs/phase-7a-design.md 14.5), written ", text, StringComparison.Ordinal);
+        Assert.EndsWith(" UTC.\n\n" + LiveRun.NoNotes + "\n", text, StringComparison.Ordinal);
     }
 
     [Fact]
-    public void A_message_is_screened_for_the_token()
+    public void A_message_is_screened_for_the_token_and_a_find_fails_the_run()
     {
         using var folder = new TempDirectory("live-safety");
         var run = new LiveRun(Token, folder.Combine("run.txt"), _ => { });
         Assert.Equal("The sign-in failed: Bad credentials", run.Screen("The sign-in failed: Bad credentials"));
+        Assert.Empty(run.Failures);
         Assert.Equal(LiveRun.WithheldText, run.Screen($"The sign-in failed: {Token} is not valid"));
+        Assert.Equal("A message held the token (as written); it was withheld.", Assert.Single(run.Failures));
+        var failed = Assert.Throws<InvalidOperationException>(run.Dispose);
+        Assert.Null(LiveTokenForms.FoundIn(failed.Message, Token));
+    }
+
+    [Fact]
+    public void A_failed_step_s_exception_that_holds_the_token_is_withheld_whole()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var run = new LiveRun(EscapingToken, folder.Combine("run.txt"), _ => { });
+
+        // An assertion that shows a git value, as Assert.Equal on remote.origin.url would, and an
+        // exception that holds the token only in an inner one (Exception.ToString shows it).
+        var assertion = Record.Exception(() => Assert.Equal("https://github.com/octo/sandbox.git", $"https://x-access-token:{EscapingToken}@github.com/octo/sandbox.git"));
+        var wrapped = new InvalidOperationException("The clone failed.", new HttpRequestException("Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("x-access-token:" + EscapingToken))));
+        foreach (var original in new[] { assertion!, wrapped })
+        {
+            var thrown = Assert.ThrowsAny<Exception>(() => run.FailureOf(original, "4, the clone").Throw());
+            Assert.NotSame(original, thrown);
+            Assert.IsType<XunitException>(thrown);
+            Assert.Null(thrown.InnerException);
+            Assert.Equal($"Step 4, the clone failed with {original.GetType().Name}, whose text held the token, so it is withheld (D323).", thrown.Message);
+            Assert.Null(LiveTokenForms.FoundIn(thrown.ToString(), EscapingToken));
+        }
+
+        Assert.Equal(2, run.Failures.Count);
+        Assert.All(run.Failures, failure => Assert.StartsWith("The failure of step 4, the clone held the token (", failure, StringComparison.Ordinal));
+
+        // A clean exception comes out as itself, and fails nothing more.
+        var clean = new XunitException("The browser does not list octo/sandbox.");
+        Assert.Same(clean, Assert.ThrowsAny<Exception>(() => run.FailureOf(clean, "3, the browser").Throw()));
+        Assert.Equal(2, run.Failures.Count);
     }
 
     // ---- LiveRequestLog (14.5) -----------------------------------------------------------------
@@ -318,11 +361,82 @@ public sealed class LiveSafetyTests
         Assert.Empty(LiveRequestLog.ReachProblems(requests.Take(2)));
         Assert.Equal(
             [
-                "The app's requests to api.github.com: 2, 2 with Authorization and 0 without; answered 200 ×2.",
-                "The app's requests to avatars.githubusercontent.com: 2, 1 with Authorization and 1 without; answered 200 ×2.",
-                "The app's requests to github.com: 1, 1 with Authorization and 0 without; answered 200 ×1.",
+                "The app's requests to api.github.com: 2, 2 with Authorization and 0 without; answered 200 ×2; API version selected not sent ×2; X-OAuth-Scopes absent ×2; the token expires not sent ×2.",
+                "The app's requests to avatars.githubusercontent.com: 2, 1 with Authorization and 1 without; answered 200 ×2; API version selected not sent ×2; X-OAuth-Scopes absent ×2; the token expires not sent ×2.",
+                "The app's requests to github.com: 1, 1 with Authorization and 0 without; answered 200 ×1; API version selected not sent ×1; X-OAuth-Scopes absent ×1; the token expires not sent ×1.",
             ],
             LiveRequestLog.PerHost(requests));
+    }
+
+    [Fact]
+    public void The_answers_headers_are_shown_per_request_and_per_host()
+    {
+        static LiveRequest Request(int? status, string? version, bool scopes, string? expiry, string? failed = null) =>
+            new(DateTimeOffset.UtcNow, "GET", "https", "api.github.com", "/user", status, true, "C0DE", version, scopes, expiry, failed);
+
+        Assert.Equal("API version selected 2026-03-10, X-OAuth-Scopes absent, the token expires 2026-12-31", Request(200, "2026-03-10", false, "2026-12-31").Headers());
+        Assert.Equal("API version selected not sent, X-OAuth-Scopes present, the token expires not sent", Request(200, null, true, null).Headers());
+        Assert.Equal(
+            "The app's requests to api.github.com: 4, 4 with Authorization and 0 without; answered 200 ×2, 404 ×1, failed: HttpRequestException ×1; "
+                + "API version selected 2026-03-10 ×2, not sent ×1; X-OAuth-Scopes absent ×3; the token expires 2026-12-31 ×3.",
+            Assert.Single(LiveRequestLog.PerHost(
+            [
+                Request(200, "2026-03-10", false, "2026-12-31"),
+                Request(404, null, false, "2026-12-31"),
+                Request(null, null, false, null, "HttpRequestException"),
+                Request(200, "2026-03-10", false, "2026-12-31"),
+            ])));
+    }
+
+    [Theory]
+    [InlineData("http://api.github.com/user", true, "not https")]
+    [InlineData("http://avatars.githubusercontent.com/u/1001", false, "not https")]
+    [InlineData("https://avatars.githubusercontent.com/u/1001", true, "Authorization for another host than api.github.com")]
+    [InlineData("https://github.com/octo/sandbox", true, "Authorization for another host than api.github.com")]
+    [InlineData("https://api.github.com:8443/user", true, "Authorization for another host than api.github.com")]
+    [InlineData("https://api.github.com.example.invalid/user", true, "Authorization for another host than api.github.com")]
+    public async Task A_request_that_would_break_the_reach_never_leaves(string url, bool authorization, string reason)
+    {
+        var inner = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var store = new LiveRequestLog.Store();
+        using var client = new HttpClient(new LiveRequestLog(inner, store));
+        using var request = new HttpRequestMessage(HttpMethod.Get, url + "?s=64&email=author%40example.invalid");
+        if (authorization)
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
+        }
+
+        var refused = await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(request, Cancelled));
+
+        Assert.Empty(inner.Requests);
+        var uri = new Uri(url);
+        Assert.Equal($"The live command refused GET {uri.Scheme}://{uri.Authority}{uri.AbsolutePath}: {reason} (D327).", refused.Message);
+        Assert.DoesNotContain("author", refused.Message, StringComparison.Ordinal);
+        var record = Assert.Single(store.Snapshot());
+        Assert.Equal(((int?)null, authorization, "refused: " + reason), (record.Status, record.AuthorizationSent, record.FailedWith));
+        Assert.NotEmpty(LiveRequestLog.ReachProblems([record]));
+    }
+
+    [Theory]
+    [InlineData("https://api.github.com/user", true)]
+    [InlineData("https://API.GitHub.com/user", true)]
+    [InlineData("https://avatars.githubusercontent.com/u/1001?s=64&v=4", false)]
+    public async Task A_request_within_the_reach_goes_on_unchanged(string url, bool authorization)
+    {
+        var inner = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var store = new LiveRequestLog.Store();
+        using var client = new HttpClient(new LiveRequestLog(inner, store));
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        if (authorization)
+        {
+            request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
+        }
+
+        using var response = await client.SendAsync(request, Cancelled);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Single(inner.Requests);
+        Assert.Empty(LiveRequestLog.ReachProblems(store.Snapshot()));
     }
 
     [Theory]
@@ -361,15 +475,90 @@ public sealed class LiveSafetyTests
     public async Task An_answer_that_holds_the_token_never_reaches_a_message()
     {
         var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent($"{{\"message\":\"Bad credentials for {Token}\"}}") });
-        using var api = new GitHubLiveApi(new LiveSandbox("octo", "sandbox", Token), handler);
+        var withheld = new List<string>();
+        using var api = new GitHubLiveApi(new LiveSandbox("octo", "sandbox", Token), handler, withheld.Add);
 
         var failed = await Assert.ThrowsAsync<GitHubLiveException>(() => api.BranchesUnderAsync("visualcommit-live/", Cancelled));
         Assert.Equal("GitHub's answer was withheld: it held the token.", failed.Message);
         Assert.Null(LiveTokenForms.FoundIn(failed.Message, Token));
         Assert.Equal("https://api.github.com/repos/octo/sandbox/git/matching-refs/heads/visualcommit-live/", Assert.Single(handler.Requests).Url);
 
+        // The find is told to the run, which then fails at its end.
+        Assert.Equal("GitHub's answer held the token (as written); it was withheld.", Assert.Single(withheld));
+
         var answer = await api.ReadRepositoryAsync(Cancelled);
         Assert.Equal("401 (request none)", answer.ToString());
+    }
+
+    [Theory]
+    [InlineData(401, "{\"message\":\"Bad credentials\"}", "GitHub's body as sent:\n{\"message\":\"Bad credentials\"}")]
+    [InlineData(422, "{\"message\":\"Validation Failed\"}", "GitHub's body as sent:\n{\"message\":\"Validation Failed\"}")]
+    [InlineData(200, "[{\"full_name\":\"someone/private-thing\"},{\"full_name\":\"octo/sandbox\"}]", "GitHub's body, a 2xx's, by its shape only: an array of 2.")]
+    [InlineData(201, "{\"full_name\":\"octo/sandbox\",\"description\":\"x\"}", "GitHub's body, a 2xx's, by its shape only: an object.")]
+    [InlineData(200, "<html>made-up</html>", "GitHub's body, a 2xx's, by its shape only: no JSON, 20 characters.")]
+    public async Task A_body_is_kept_whole_only_for_a_refusal(int status, string body, string kept)
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(body) });
+        using var api = new GitHubLiveApi(new LiveSandbox("octo", "sandbox", Token), handler);
+
+        var answer = await api.ProbeTypeWithVisibilityAsync(Cancelled);
+
+        Assert.Equal(kept, answer.BodyForNotes);
+    }
+
+    [Fact]
+    public async Task The_clean_up_may_remove_only_the_sandbox_s_own_live_branches_and_their_pull_requests()
+    {
+        var handler = new StubHandler(request => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(request.RequestUri!.AbsolutePath.Contains("/git/matching-refs/", StringComparison.Ordinal)
+                ? """
+                  [{"ref":"refs/heads/main"},{"ref":"refs/heads/visualcommit-livex"},{"ref":"refs/heads/visualcommit-live"},
+                   {"ref":"refs/heads/visualcommit-live/20261030-120000Z"},{"ref":"refs/heads/visualcommit-live/x/y"},
+                   {"ref":"refs/heads/visualcommit-live/"},{"ref":"refs/tags/visualcommit-live/v1"}]
+                  """
+                : """
+                  [{"number":1,"head":{"ref":"visualcommit-live/20261030-120000Z","repo":{"full_name":"Octo/Sandbox"}}},
+                   {"number":2,"head":{"ref":"visualcommit-live/20261030-120000Z","repo":{"full_name":"someone/sandbox"}}},
+                   {"number":3,"head":{"ref":"visualcommit-live/20261030-120000Z","repo":null}},
+                   {"number":4,"head":{"ref":"visualcommit-livex","repo":{"full_name":"octo/sandbox"}}},
+                   {"number":5,"head":{"ref":"feature/visualcommit-live/x","repo":{"full_name":"octo/sandbox"}}},
+                   {"number":6,"head":{"ref":"visualcommit-live/x/y","repo":{"full_name":"octo/sandbox"}}}]
+                  """),
+        });
+        using var api = new GitHubLiveApi(new LiveSandbox("octo", "sandbox", Token), handler);
+
+        var branches = await api.BranchesUnderAsync(LiveLeftovers.Prefix, Cancelled);
+        var open = await api.OpenPullRequestsAsync(Cancelled);
+
+        Assert.Equal(["visualcommit-live/20261030-120000Z", "visualcommit-live/x/y"], branches.Under);
+        Assert.Equal(
+            ["refs/heads/main", "refs/heads/visualcommit-livex", "refs/heads/visualcommit-live", "refs/heads/visualcommit-live/", "refs/tags/visualcommit-live/v1"],
+            branches.Others);
+        Assert.Equal([1, 6], open.Where(pull => LiveLeftovers.IsLeftover(pull, "octo/sandbox")).Select(pull => pull.Number));
+        Assert.Equal([1], open.Where(pull => LiveLeftovers.IsFrom(pull, "visualcommit-live/20261030-120000Z", "octo/sandbox")).Select(pull => pull.Number));
+        Assert.DoesNotContain(open, pull => LiveLeftovers.IsFrom(pull, "visualcommit-live/20261030-120000", "octo/sandbox"));
+    }
+
+    [Theory]
+    [InlineData("""[{"sha":"a","author":{"login":"octo"}}]""", "octo")]
+    [InlineData("""[{"sha":"a","author":null}]""", null)]
+    [InlineData("""[{"sha":"a"}]""", null)]
+    [InlineData("[]", null)]
+    public async Task The_latest_commit_s_linked_author_is_read_by_its_login(string body, string? login)
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+        using var api = new GitHubLiveApi(new LiveSandbox("octo", "sandbox", Token), handler);
+
+        Assert.Equal(login, await api.LatestCommitAuthorAsync("main", Cancelled));
+        Assert.Equal("https://api.github.com/repos/octo/sandbox/commits?sha=main&per_page=1", Assert.Single(handler.Requests).Url);
+    }
+
+    [Fact]
+    public void A_pull_request_is_read_from_GitHub_s_object()
+    {
+        using var document = JsonDocument.Parse("""{"number":7,"head":{"ref":"visualcommit-live/a","repo":{"full_name":"octo/sandbox"}}}""");
+        Assert.Equal(new LivePullRequest(7, "visualcommit-live/a", "octo/sandbox"), LivePullRequest.From(document.RootElement));
     }
 
     /// <summary>An in-process handler: answers every request with <paramref name="answer"/>'s, and keeps what each request sent.</summary>

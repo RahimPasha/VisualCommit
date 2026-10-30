@@ -16,8 +16,74 @@ namespace VisualCommit.LiveHostingTests;
 /// </summary>
 internal sealed record LiveRepository(string FullName, bool IsPrivate, string Visibility, string DefaultBranch, bool CanPush);
 
-/// <summary>An open pull request as <c>GET …/pulls</c> lists it: its number, its head's branch and its head's repository (null for a deleted fork).</summary>
-internal sealed record LivePullRequest(int Number, string HeadRef, string? HeadRepository);
+/// <summary>A pull request as <c>GET …/pulls</c> lists it and <c>GET …/pulls/{n}</c> reads it: its number, its head's branch and its head's repository (null for a deleted fork).</summary>
+internal sealed record LivePullRequest(int Number, string HeadRef, string? HeadRepository)
+{
+    /// <summary>The three fields of GitHub's pull request object.</summary>
+    internal static LivePullRequest From(JsonElement pull) => new(
+        pull.GetProperty("number").GetInt32(),
+        pull.GetProperty("head").GetProperty("ref").GetString() ?? string.Empty,
+        pull.GetProperty("head").TryGetProperty("repo", out var repo) && repo.ValueKind == JsonValueKind.Object
+            ? repo.GetProperty("full_name").GetString()
+            : null);
+}
+
+/// <summary>The branches <c>git/matching-refs</c> answered: those under the prefix asked for, by name, and any other ref it returned, whole and never touched.</summary>
+internal sealed record LiveBranches(IReadOnlyList<string> Under, IReadOnlyList<string> Others);
+
+/// <summary>
+/// What the live command may remove from the sandbox (D324; docs/phase-7a-design.md 14.4 step 3),
+/// decided here and nowhere else: the branches whose full ref starts with
+/// <c>refs/heads/visualcommit-live/</c>, compared ordinally, whatever GitHub's matching-refs made of
+/// the trailing slash, and the open pull requests from such a branch of the sandbox itself, never
+/// one from a fork.
+/// </summary>
+internal static class LiveLeftovers
+{
+    /// <summary>The branches the command pushes, and the only ones it removes (D324).</summary>
+    public const string Prefix = "visualcommit-live/";
+
+    public const string HeadsPrefix = "refs/heads/";
+
+    /// <summary>Whether <paramref name="pull"/> comes from a <see cref="Prefix"/> branch of <paramref name="sandbox"/> itself (its head's repository, case ignored).</summary>
+    internal static bool IsLeftover(LivePullRequest pull, string sandbox)
+    {
+        ArgumentNullException.ThrowIfNull(pull);
+        return pull.HeadRef.StartsWith(Prefix, StringComparison.Ordinal) && IsFromTheSandbox(pull, sandbox);
+    }
+
+    /// <summary>Whether <paramref name="pull"/> comes from exactly <paramref name="branch"/> of <paramref name="sandbox"/> itself: the one the clean-up may close.</summary>
+    internal static bool IsFrom(LivePullRequest pull, string branch, string sandbox)
+    {
+        ArgumentNullException.ThrowIfNull(pull);
+        return string.Equals(pull.HeadRef, branch, StringComparison.Ordinal) && IsFromTheSandbox(pull, sandbox);
+    }
+
+    /// <summary><paramref name="refs"/> split into the branches under <paramref name="prefix"/> (their names after <c>refs/heads/</c>) and every other ref, whole.</summary>
+    internal static LiveBranches Branches(IEnumerable<string> refs, string prefix)
+    {
+        ArgumentNullException.ThrowIfNull(refs);
+        ArgumentException.ThrowIfNullOrEmpty(prefix);
+        var under = new List<string>();
+        var others = new List<string>();
+        foreach (var reference in refs)
+        {
+            if (reference.StartsWith(HeadsPrefix + prefix, StringComparison.Ordinal) && reference.Length > HeadsPrefix.Length + prefix.Length)
+            {
+                under.Add(reference[HeadsPrefix.Length..]);
+            }
+            else
+            {
+                others.Add(reference);
+            }
+        }
+
+        return new LiveBranches(under, others);
+    }
+
+    private static bool IsFromTheSandbox(LivePullRequest pull, string sandbox) =>
+        string.Equals(pull.HeadRepository, sandbox, StringComparison.OrdinalIgnoreCase);
+}
 
 /// <summary>
 /// One answer of GitHub to the test's own call: the status, <c>X-GitHub-Request-Id</c>, GitHub's
@@ -37,6 +103,20 @@ internal sealed record LiveAnswer(
     string? RateLimitRemaining)
 {
     public override string ToString() => $"{Status.ToString(CultureInfo.InvariantCulture)} (request {RequestId ?? "none"})";
+
+    /// <summary>
+    /// The body for a note: GitHub's text as sent for a status that is not 2xx (its refusals are what
+    /// the fake copies, 2.4); for a 2xx only its shape, since a 2xx's body is a record, which may name
+    /// repositories outside the sandbox (14.4 step 3: counts, no names).
+    /// </summary>
+    public string BodyForNotes => Status is >= 200 and < 300
+        ? "GitHub's body, a 2xx's, by its shape only: " + (Json switch
+        {
+            { ValueKind: JsonValueKind.Array } array => $"an array of {array.GetArrayLength().ToString(CultureInfo.InvariantCulture)}.",
+            { ValueKind: JsonValueKind.Object } => "an object.",
+            _ => $"no JSON, {Text.Length.ToString(CultureInfo.InvariantCulture)} characters.",
+        })
+        : "GitHub's body as sent:\n" + Text;
 }
 
 /// <summary>A call of the test's own that GitHub did not answer as the step needs: the status, GitHub's message and the request id, never a request or an answer.</summary>
@@ -51,7 +131,8 @@ internal sealed class GitHubLiveException(string message) : Exception(message);
 /// call 30 s at most; <c>Authorization: Bearer</c>, <c>Accept</c> and <c>X-GitHub-Api-Version</c> as
 /// the app sends them and its own <c>User-Agent</c>. A failure's message holds the status, GitHub's
 /// <c>message</c> and the request id, and is searched for the token (<see cref="LiveTokenForms"/>)
-/// before it is thrown.
+/// before it is thrown; a find is withheld and told to the run (<see cref="LiveRun.Withheld"/>),
+/// which then fails.
 /// </summary>
 internal sealed class GitHubLiveApi : IDisposable
 {
@@ -62,24 +143,27 @@ internal sealed class GitHubLiveApi : IDisposable
 
     private readonly LiveSandbox _sandbox;
     private readonly HttpClient _client;
+    private readonly Action<string>? _withheld;
 
-    public GitHubLiveApi(LiveSandbox sandbox)
+    /// <summary>The calls to github.com; <paramref name="withheld"/> is told when an answer held the token.</summary>
+    public GitHubLiveApi(LiveSandbox sandbox, Action<string>? withheld = null)
         : this(sandbox, new SocketsHttpHandler
         {
             AllowAutoRedirect = false,
             AutomaticDecompression = DecompressionMethods.All,
             UseCookies = false,
             ConnectTimeout = TimeSpan.FromSeconds(10),
-        })
+        }, withheld)
     {
     }
 
     /// <summary>The calls over <paramref name="handler"/>: an in-process one for <see cref="LiveSafetyTests"/>.</summary>
-    internal GitHubLiveApi(LiveSandbox sandbox, HttpMessageHandler handler)
+    internal GitHubLiveApi(LiveSandbox sandbox, HttpMessageHandler handler, Action<string>? withheld = null)
     {
         ArgumentNullException.ThrowIfNull(sandbox);
         ArgumentNullException.ThrowIfNull(handler);
         _sandbox = sandbox;
+        _withheld = withheld;
         _client = new HttpClient(handler, disposeHandler: true)
         {
             BaseAddress = GitHubEndpoints.GitHubCom.ApiBase,
@@ -103,23 +187,35 @@ internal sealed class GitHubLiveApi : IDisposable
     {
         var query = head is null ? string.Empty : "&head=" + Uri.EscapeDataString(head);
         var answer = await ExpectAsync(HttpMethod.Get, $"{RepositoryPath}/pulls?state=open&per_page=100{query}", null, 200, "the open pull requests", cancellationToken);
-        return [.. ListOf(answer).Select(pull => new LivePullRequest(
-            pull.GetProperty("number").GetInt32(),
-            pull.GetProperty("head").GetProperty("ref").GetString() ?? string.Empty,
-            pull.GetProperty("head").TryGetProperty("repo", out var repo) && repo.ValueKind == JsonValueKind.Object
-                ? repo.GetProperty("full_name").GetString()
-                : null))];
+        return [.. ListOf(answer).Select(LivePullRequest.From)];
     }
 
-    /// <summary>The branches under <paramref name="prefix"/> (<c>GET …/git/matching-refs/heads/&lt;prefix&gt;</c>), as branch names.</summary>
+    /// <summary>
+    /// The branches under <paramref name="prefix"/> (<c>GET …/git/matching-refs/heads/&lt;prefix&gt;</c>),
+    /// split by <see cref="LiveLeftovers.Branches"/>: a ref GitHub returns that is not under the
+    /// prefix, as written with its slash, is kept apart and never removed.
+    /// </summary>
     /// <exception cref="GitHubLiveException">GitHub did not answer 200 with a list.</exception>
-    public async Task<IReadOnlyList<string>> BranchesUnderAsync(string prefix, CancellationToken cancellationToken)
+    public async Task<LiveBranches> BranchesUnderAsync(string prefix, CancellationToken cancellationToken)
     {
         var answer = await ExpectAsync(HttpMethod.Get, $"{RepositoryPath}/git/matching-refs/heads/{EscapePath(prefix)}", null, 200, $"the branches under {prefix}", cancellationToken);
-        return [.. ListOf(answer)
-            .Select(reference => reference.GetProperty("ref").GetString() ?? string.Empty)
-            .Where(name => name.StartsWith("refs/heads/", StringComparison.Ordinal))
-            .Select(name => name["refs/heads/".Length..])];
+        return LiveLeftovers.Branches(ListOf(answer).Select(reference => reference.GetProperty("ref").GetString() ?? string.Empty), prefix);
+    }
+
+    /// <summary>
+    /// The login GitHub links to the latest commit of <paramref name="branch"/>
+    /// (<c>GET …/commits?sha=&lt;branch&gt;&amp;per_page=1</c>, its <c>author</c>), or null when it links
+    /// none: whether the app has an avatar to show (11.3).
+    /// </summary>
+    /// <exception cref="GitHubLiveException">GitHub did not answer 200 with a list.</exception>
+    public async Task<string?> LatestCommitAuthorAsync(string branch, CancellationToken cancellationToken)
+    {
+        var answer = await ExpectAsync(HttpMethod.Get, $"{RepositoryPath}/commits?sha={Uri.EscapeDataString(branch)}&per_page=1", null, 200, "the latest commit", cancellationToken);
+        return ListOf(answer).FirstOrDefault() is { ValueKind: JsonValueKind.Object } commit
+            && commit.TryGetProperty("author", out var author) && author.ValueKind == JsonValueKind.Object
+            && author.TryGetProperty("login", out var login) && login.ValueKind == JsonValueKind.String
+            ? login.GetString()
+            : null;
     }
 
     /// <summary><c>PATCH …/pulls/{n}</c> with <c>{"state":"closed"}</c>, as answered (200 expected).</summary>
@@ -161,9 +257,17 @@ internal sealed class GitHubLiveApi : IDisposable
         return Screen($"GitHub answered {answer.Status.ToString(CultureInfo.InvariantCulture)} {answer.Message ?? "(no message)"} for {what} (request {answer.RequestId ?? "none"})");
     }
 
-    /// <summary><paramref name="text"/>, or a sentence without it when it holds the token.</summary>
-    public string Screen(string text) =>
-        LiveTokenForms.FoundIn(text, _sandbox.Token) is null ? text : "GitHub's answer was withheld: it held the token";
+    /// <summary><paramref name="text"/>, or a sentence without it when it holds the token; a find is told to the run (<see cref="LiveRun.Withheld"/>).</summary>
+    public string Screen(string text)
+    {
+        if (LiveTokenForms.FoundIn(text, _sandbox.Token) is not { } form)
+        {
+            return text;
+        }
+
+        _withheld?.Invoke($"GitHub's answer held the token ({form}); it was withheld.");
+        return "GitHub's answer was withheld: it held the token";
+    }
 
     /// <summary>One call, answered: a status GitHub sent, whatever it is.</summary>
     /// <exception cref="GitHubLiveException">No answer came within <see cref="CallLimit"/>, or GitHub was not reached.</exception>

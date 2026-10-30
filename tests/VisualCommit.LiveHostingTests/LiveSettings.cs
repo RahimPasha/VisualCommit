@@ -19,8 +19,12 @@ internal static class LiveSettings
     /// <summary>The prefixes of GitHub's tokens: a value of the repository's variable that starts with one is never shown.</summary>
     private static readonly string[] TokenPrefixes = ["github_pat_", "ghp_", "gho_", "ghu_", "ghs_", "ghr_"];
 
-    /// <summary>One segment of owner/name: letters, digits, <c>.</c>, <c>-</c> and <c>_</c>.</summary>
-    private static readonly Regex Segment = new("^[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant);
+    /// <summary>
+    /// One segment of owner/name: letters, digits, <c>.</c>, <c>-</c> and <c>_</c>, not dots alone:
+    /// <c>.</c> and <c>..</c> would make the API's paths name other ones (<c>repos/x/..</c>), and the
+    /// test's calls must never reach another repository than the sandbox.
+    /// </summary>
+    private static readonly Regex Segment = new(@"^(?!\.+$)[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant);
 
     private static readonly Lock Gate = new();
     private static bool captured;
@@ -80,7 +84,8 @@ internal static class LiveSettings
 
     /// <summary>
     /// <see cref="Require"/>'s rule on the two values as read (14.3): both present, the repository two
-    /// non-empty segments of letters, digits, <c>.</c>, <c>-</c> and <c>_</c>. The message names the
+    /// non-empty segments of letters, digits, <c>.</c>, <c>-</c> and <c>_</c>, neither of dots alone
+    /// (<see cref="Segment"/>). The message names the
     /// repository's value when it is not owner/name, unless the value holds the token or starts like
     /// one of GitHub's tokens (the two variables swapped): then it says so without the value.
     /// </summary>

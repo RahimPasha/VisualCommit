@@ -54,9 +54,13 @@ public sealed class GitHubLiveOrder : ITestCaseOrderer
 /// the sandbox read and the leftovers of a stopped run removed, then the whole app headless signing
 /// in through the "Add GitHub account" dialog, cloning the private sandbox through its own credential
 /// helper, listing its pull requests, pushing a branch and opening a draft pull request through the
-/// form, which the test reads back, tries again (r5 14), closes and deletes. Every test asks
+/// form, which the test reads back, tries again (r5 14), closes and deletes. GitHub gives drafts in
+/// private repositories only on its Team and Enterprise Cloud plans: when it refuses the draft, the
+/// form's error line is recorded for the fake and the same form creates a ready pull request, which
+/// the later steps then expect (design 17's WP-LIVE item has the lead's ruling). Every test asks
 /// <see cref="LiveSettings.Require"/> first and fails without the variables. Its notes go to
-/// <see cref="LiveRun"/>, searched for the token, and to run.txt. The token is sent only by the
+/// <see cref="LiveRun"/>, searched for the token, and to run.txt; so is a failed step's exception
+/// before it reaches the test output (<see cref="LiveRun.FailureOf"/>). The token is sent only by the
 /// dialog's typing and the test's own API calls, and compared only with <c>string.Equals</c> or
 /// <c>string.Contains</c>; it is never an assertion's argument or in a message.
 /// </summary>
@@ -64,9 +68,12 @@ public sealed class GitHubLiveOrder : ITestCaseOrderer
 public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
 {
     /// <summary>The branches the command pushes, and the only ones it removes (D324).</summary>
-    private const string LivePrefix = "visualcommit-live/";
+    private const string LivePrefix = LiveLeftovers.Prefix;
 
-    private const string HeadsPrefix = "refs/heads/";
+    private const string HeadsPrefix = LiveLeftovers.HeadsPrefix;
+
+    /// <summary>The avatars' host (6.4): the only other host the app may ask, never with the token.</summary>
+    private const string AvatarHost = "avatars.githubusercontent.com";
 
     /// <summary>The identity of the command's commit (D325): no address of the owner's.</summary>
     private const string IdentityName = "VisualCommit live test";
@@ -87,15 +94,16 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
     /// <summary>The clone's limit (14.4).</summary>
     private static readonly TimeSpan CloneLimit = TimeSpan.FromSeconds(120);
 
-    private static readonly Regex CreatedDraft = new(@"^Created draft pull request #(?<number>\d+)$", RegexOptions.CultureInvariant);
+    private static readonly Regex Created = new(@"^Created (?:draft )?pull request #(?<number>\d+)$", RegexOptions.CultureInvariant);
 
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
     /// <summary>
     /// 14.4's Check_1: the variables gone from the process; the sandbox read (200, the token may push,
-    /// private, D326); GitHub's texts that the fake writes from memory probed (2.4, 15 point 1); the
-    /// leftovers of a stopped run removed: open pull requests from the sandbox's own
-    /// <c>visualcommit-live/</c> branches closed, those branches deleted, nothing else touched (D324).
+    /// private, D326, not a fork); the leftovers of a stopped run removed: open pull requests from the
+    /// sandbox's own <c>visualcommit-live/</c> branches closed, those branches deleted, nothing else
+    /// touched (D324, <see cref="LiveLeftovers"/>); then GitHub's texts that the fake writes from
+    /// memory probed (2.4, 15 point 1), as findings that fail nothing.
     /// </summary>
     [Fact]
     public async Task Check_1_the_sandbox_and_its_leftovers()
@@ -114,18 +122,13 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
 
             // Step 2: the sandbox.
             step = "2, the sandbox";
-            using var api = new GitHubLiveApi(sandbox);
+            using var api = new GitHubLiveApi(sandbox, run.Withheld);
             await ReadSandboxAsync(api, sandbox);
 
-            // GitHub's texts that the fake writes from memory (2.4; 15 point 1), as findings only.
-            step = "2, GitHub's texts";
-            await ProbeTextsAsync(api);
-
-            // Step 3: the leftovers of a stopped run (D324).
+            // Step 3: the leftovers of a stopped run (D324), before anything that is a finding only.
             step = "3, the leftovers";
             var open = await api.OpenPullRequestsAsync(Cancelled);
-            var leftovers = open.Where(pull => pull.HeadRef.StartsWith(LivePrefix, StringComparison.Ordinal)
-                && string.Equals(pull.HeadRepository, sandbox.FullName, StringComparison.OrdinalIgnoreCase)).ToList();
+            var leftovers = open.Where(pull => LiveLeftovers.IsLeftover(pull, sandbox.FullName)).ToList();
             run.Note($"Open pull requests: {Show(open.Count)}, {Show(leftovers.Count)} of them from {LivePrefix} branches of the sandbox.");
             var refused = new List<string>();
             foreach (var pull in leftovers)
@@ -138,7 +141,13 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
                 }
             }
 
-            var branches = await api.BranchesUnderAsync(LivePrefix, Cancelled);
+            var found = await api.BranchesUnderAsync(LivePrefix, Cancelled);
+            var branches = found.Under;
+            if (found.Others.Count > 0)
+            {
+                run.Note($"GitHub's matching-refs for heads/{LivePrefix} also returned {Show(found.Others.Count)} refs not under {HeadsPrefix}{LivePrefix}, not touched: {string.Join(", ", found.Others)}.");
+            }
+
             foreach (var branch in branches)
             {
                 var deleted = await api.DeleteBranchAsync(branch, Cancelled);
@@ -153,18 +162,24 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
                 ? "Leftovers of a stopped run: none."
                 : $"Leftovers of a stopped run: {Show(leftovers.Count)} pull requests closed, {Show(branches.Count)} branches deleted, {Show(refused.Count)} refused.");
             Assert.True(refused.Count == 0, "The leftovers' clean-up was refused: " + string.Join("; ", refused));
+
+            // GitHub's texts that the fake writes from memory (2.4; 15 point 1), as findings only: a
+            // probe that gets no answer is noted and fails nothing.
+            step = "3, GitHub's texts";
+            await ProbeTextsAsync(api);
         }
         catch (Exception ex)
         {
             run.Note($"Check_1 failed in step {step}: {ex.GetType().Name}: {ex.Message}");
-            throw;
+            run.FailureOf(ex, step).Throw();
         }
     }
 
     /// <summary>
     /// 14.4's Check_2: the app signs in, clones the sandbox from the repository browser through its
     /// own helper (no credentials dialog, no helper of the user's or the system's), lists its pull
-    /// requests, pushes a new branch and creates a draft pull request through the form; the test
+    /// requests and waits for its avatars, pushes a new branch and creates a draft pull request through
+    /// the form (a ready one when GitHub refuses the draft, the refusal recorded); the test
     /// reads it back, tries the same create again (r5 14), closes it and deletes the branch, then
     /// proves that the token reached no file and no git call and that every request with it went to
     /// <c>https://api.github.com/</c> (D327).
@@ -179,7 +194,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
         using var data = new TempDirectory("live-data");
         using var clones = new TempDirectory("live-clone");
         using var home = new TempDirectory("live-home");
-        using var api = new GitHubLiveApi(sandbox);
+        using var api = new GitHubLiveApi(sandbox, run.Withheld);
         var git = new GitRunner(GitLocator.FindExecutable(GitSearchContext.FromSystem()) ?? throw new InvalidOperationException("The live command needs git."));
         var session = GitIsolation.SessionGitEnvironment(data.Path);
 
@@ -190,6 +205,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
         DateTimeOffset? signInStarted = null;
         int? number = null;
         var createClicked = false;
+        var draft = true;
         var duplicates = new List<int>();
         ExceptionDispatchInfo? failure = null;
         var problems = new List<string>();
@@ -229,7 +245,8 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             }
 
             var signIn = requests.Snapshot();
-            run.Note($"The sign-in: {string.Join("; ", signIn.Select(request => request.Describe()))}; GET /user for a token with no account permission answered {(signIn.Count > 0 && signIn[0].Status is { } status ? Show(status) : "nothing")}.");
+            run.Note($"The sign-in: {string.Join("; ", signIn.Select(request => request.Describe()))}; GET /user for a token with no account permission answered {(signIn.Count > 0 && signIn[0].Status is { } status ? Show(status) : "nothing")}"
+                + (signIn.Count > 0 ? $"; its answer's {signIn[0].Headers()}." : "."));
             if (signIn is not [{ Method: "GET", Scheme: "https", Host: LiveRequestLog.ApiHost, Path: "/user", Status: 200, AuthorizationSent: true }])
             {
                 throw new XunitException("The sign-in did not send exactly one GET https://api.github.com/user, answered 200 with Authorization: " + string.Join("; ", signIn.Select(request => request.Describe())));
@@ -282,6 +299,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             app.ReplaceText("CloneParentBox", clones.Path);
             var clone = Path.Combine(clones.Path, app.Find<TextBox>("CloneNameBox").Text ?? sandbox.Name);
             var cloneMark = app.LogMark();
+            var cloneStarted = DateTimeOffset.UtcNow;
             var cloneClock = Stopwatch.StartNew();
             app.Click(app.FindByAutomationId("CloneStartButton"));
             await WaitWatchingAsync(app, () => tab.Repository is not null || (!tab.Welcome.IsCloning && tab.Welcome.HasError), "the clone to open its repository", CloneLimit);
@@ -312,6 +330,26 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             var none = tab.LeftPanel.Rows.OfType<PullRequestMessageRow>().Any(message => message is { Kind: PullRequestMessageKind.None } && message.Text == OperationTexts.NoOpenPullRequests);
             Assert.True(listed == 0 ? none && shown == 0 : shown == listed, $"The section shows {Show(shown)} pull request rows{(none ? " and \"No open pull requests\"" : string.Empty)} for {Show(listed)} listed.");
             run.Note($"Open pull requests the app listed before the create: {Show(listed)}.");
+
+            // The avatars (11.3; 15 point 1): when GitHub links an account to the sandbox's latest
+            // commit, the app's avatar run ends in the AvatarsShown line (only the shown tab, here the
+            // only one, writes it) or in an answer after which no picture comes; the wait is for
+            // either, so that run.txt's avatar findings do not hang on the network's speed.
+            step = "5, the avatars";
+            var linked = await api.LatestCommitAuthorAsync(repository.DefaultBranch, Cancelled);
+            if (linked is null)
+            {
+                run.Note("GitHub links no account to the sandbox's latest commit: no avatar to wait for.");
+            }
+            else
+            {
+                string? avatars = null;
+                await app.WaitForAsync(
+                    () => (avatars = AvatarsEnded(app, opened.Name, cloneMark, requests, cloneStarted, sandbox)) is not null,
+                    "the avatars' run to end",
+                    NetworkStep);
+                run.Note($"GitHub links {linked} to the sandbox's latest commit; the app's avatar run ended: {avatars}.");
+            }
 
             // Step 6: the branch, its commit (D325), the push and the create through the form.
             step = "6, the branch";
@@ -346,6 +384,13 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             }
 
             Assert.Equal((branch, repository.DefaultBranch), (form.Head.Text, baseEnd.Branch));
+
+            // In the sandbox and from it (0.2: for a fork the app creates in the parent, where the
+            // number would name another repository's pull request than the one the clean-up closes).
+            Assert.True(
+                string.Equals(baseEnd.Repository, sandbox.FullName, StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(form.Head.Repository, sandbox.FullName, StringComparison.OrdinalIgnoreCase),
+                $"The form would create in {baseEnd.Repository} from {form.Head.Repository}, not in and from {sandbox.FullName}.");
             app.ReplaceText("PullRequestTitle", title);
             app.TypeInto("PullRequestDescription", Description);
             app.Click(app.FindByAutomationId("PullRequestDraft"));
@@ -356,32 +401,51 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             var operationMark = app.Session.Operations.Snapshot().Select(record => record.Sequence).DefaultIfEmpty(0).Max();
             var operationTitle = CreateTexts.Operation(branch).Title;
             createClicked = true;
-            app.Click(app.FindByAutomationId("ConfirmButton"));
-            await WaitWatchingAsync(app, () => form.IsClosed || (!form.IsCreating && form.Error is not null), "the push and the create to end", NetworkStep);
+            await CreateAsync(app, form);
+            if (!form.IsClosed && form.Error is { } refusal && refusal.Contains("draft", StringComparison.OrdinalIgnoreCase))
+            {
+                // GitHub gives drafts in private repositories only on its Team and Enterprise Cloud
+                // plans, so on a personal account's private sandbox (D326) the POST is refused with
+                // a 422, whose words the form shows. The push before it went through, and a refused
+                // create starts no refresh of the list (only a succeeded network operation does).
+                // GitHub's words are recorded for the fake (2.4); the same form then creates a ready
+                // pull request, which the later steps expect.
+                step = "6, the create without Draft";
+                run.Note($"GitHub refused a draft pull request in the sandbox; the form's error line: {refusal}");
+                var refusedCreate = await OperationAfterAsync(app, operationMark, operationTitle);
+                if (refusedCreate.Outcome == OperationOutcome.Succeeded)
+                {
+                    throw new XunitException(run.Screen($"The refused create's operation ended {refusedCreate.Outcome}: {refusedCreate.Message}"));
+                }
+
+                operationMark = refusedCreate.Sequence;
+                draft = false;
+                app.Click(app.FindByAutomationId("PullRequestDraft"));
+                await app.WaitForAsync(() => !form.IsDraft && form.Error is null, "Draft unticked and the error line cleared");
+                createMark = app.LogMark();
+                await CreateAsync(app, form);
+            }
+
             if (!form.IsClosed)
             {
                 throw new XunitException(run.Screen("The form says: " + form.Error));
             }
 
-            OperationRecord? created = null;
-            await app.WaitForAsync(
-                () => (created = app.Session.Operations.Snapshot().FirstOrDefault(record => record.Sequence > operationMark && record.Title == operationTitle)) is not null,
-                "the create's operation in the activity log",
-                NetworkStep);
-            var match = CreatedDraft.Match(created!.Message);
+            var created = await OperationAfterAsync(app, operationMark, operationTitle);
+            var match = Created.Match(created.Message);
             if (created.Outcome != OperationOutcome.Succeeded || !match.Success)
             {
                 throw new XunitException(run.Screen($"The create ended {created.Outcome}: {created.Message}"));
             }
 
             number = int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture);
-            Assert.Equal(CreateTexts.Created(number.Value, draft: true), created.Message);
-            run.Note($"Created draft pull request #{Show(number.Value)} with the head {head}.");
+            Assert.Equal(CreateTexts.Created(number.Value, draft), created.Message);
+            run.Note($"{created.Message} with the head {head}{(draft ? "; GitHub accepts drafts in the sandbox" : string.Empty)}.");
             await app.WaitForAsync(
                 () => opened.HostingState.ByRef.TryGetValue(HeadsPrefix + branch, out var pull) && pull.Number == number,
                 $"#{Show(number.Value)} on {HeadsPrefix}{branch}",
                 NetworkStep);
-            Assert.True(opened.HostingState.ByRef[HeadsPrefix + branch].IsDraft, $"#{Show(number.Value)} is not a draft in the app.");
+            Assert.True(opened.HostingState.ByRef[HeadsPrefix + branch].IsDraft == draft, $"#{Show(number.Value)} is {(draft ? "not a draft" : "a draft")} in the app.");
             await app.WaitForLogLineAsync(AppLogFile.PullRequestsListed(opened.Name), occurrence: 2, mark: createMark, timeout: NetworkStep);
             await app.WaitForWatchersQuietAsync();
             Assert.Equal("origin", (await GitOkAsync(git, clone, session, "config", "--get", $"branch.{branch}.remote")).StandardOutput.Trim());
@@ -404,7 +468,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
                 }
             }
 
-            Expect("draft", pullRequest.GetProperty("draft").GetBoolean() ? "true" : "false", "true");
+            Expect("draft", pullRequest.GetProperty("draft").GetBoolean() ? "true" : "false", draft ? "true" : "false");
             Expect("state", pullRequest.GetProperty("state").GetString(), "open");
             Expect("title", pullRequest.GetProperty("title").GetString(), title);
             Expect("head.ref", pullRequest.GetProperty("head").GetProperty("ref").GetString(), branch);
@@ -412,12 +476,12 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             Expect("base.ref", pullRequest.GetProperty("base").GetProperty("ref").GetString(), repository.DefaultBranch);
             Expect("user.login", pullRequest.GetProperty("user").GetProperty("login").GetString(), login, StringComparison.OrdinalIgnoreCase);
             Assert.True(differences.Count == 0, $"GitHub's #{Show(number.Value)} differs: " + string.Join("; ", differences));
-            run.Note($"Read back: #{Show(number.Value)} is an open draft from {branch} at {head} into {repository.DefaultBranch}, opened by {login} ({read}).");
+            run.Note($"Read back: #{Show(number.Value)} is an open {(draft ? "draft" : "pull request")} from {branch} at {head} into {repository.DefaultBranch}, opened by {login} ({read}).");
 
             // Step 8: the same create again (r5 14), recorded as GitHub answers it.
             step = "8, the duplicate create";
-            var duplicate = await api.CreatePullRequestAsync(branch, repository.DefaultBranch, title, draft: true, Cancelled);
-            run.Note($"The duplicate create (POST …/pulls with the same head, base and title, draft): {duplicate}; 422 expected. GitHub's body as sent:\n{duplicate.Text}");
+            var duplicate = await api.CreatePullRequestAsync(branch, repository.DefaultBranch, title, draft, Cancelled);
+            run.Note($"The duplicate create (POST …/pulls with the same head, base, title and draft {(draft ? "true" : "false")}): {duplicate}; 422 expected. {duplicate.BodyForNotes}");
             if (duplicate is { Status: 201, Json: { } second } && second.TryGetProperty("number", out var secondNumber))
             {
                 duplicates.Add(secondNumber.GetInt32());
@@ -425,7 +489,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
         }
         catch (Exception ex)
         {
-            failure = ExceptionDispatchInfo.Capture(ex);
+            failure = run.FailureOf(ex, step);
             var last = requests.Snapshot() is [.., var lastRequest] ? $" The app's last request: {lastRequest.Describe()}." : string.Empty;
             run.Note($"Check_2 failed in step {step}: {ex.GetType().Name}: {ex.Message}{last}");
         }
@@ -452,7 +516,18 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             try
             {
                 TokenTripwire.AssertAbsent(sandbox.Token, [data.Path, clones.Path, home.Path], app.Session.GitCalls);
-                run.Note("The token's tripwire: not in the data folder, the clone, the identity's home or the app's git calls.");
+
+                // The tripwire searches each call's command, output and error; its standard input,
+                // which a call records only for update-ref --stdin, is searched here.
+                foreach (var call in app.Session.GitCalls.Snapshot())
+                {
+                    if (LiveTokenForms.FoundIn(call.StandardInput, sandbox.Token) is { } form)
+                    {
+                        throw new TokenTripwireException($"The token was found in the standard input of the app's git call {call.Sequence.ToString(CultureInfo.InvariantCulture)} ({form}).");
+                    }
+                }
+
+                run.Note("The token's tripwire: not in the data folder, the clone, the identity's home or the app's git calls (command, output, error and standard input).");
             }
             catch (TokenTripwireException ex)
             {
@@ -490,8 +565,9 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
     /// <summary>
     /// 14.4 Check_1 step 2, once per run (<see cref="LiveRun.Repository"/>): <c>GET /repos/{o}/{r}</c>
     /// answered 200, the token may push, the sandbox private (D326: then the clone proves that the
-    /// token reached git); visibility, default branch, the selected API version, <c>X-OAuth-Scopes</c>
-    /// and the token's expiry recorded.
+    /// token reached git) and not a fork (whose pull requests the app keeps in the parent, 0.2);
+    /// visibility, default branch, the selected API version, <c>X-OAuth-Scopes</c> and the token's
+    /// expiry recorded.
     /// </summary>
     private async Task<LiveRepository> ReadSandboxAsync(GitHubLiveApi api, LiveSandbox sandbox)
     {
@@ -525,6 +601,11 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             throw new XunitException($"{sandbox.FullName} is public: D326 wants the sandbox private, so that the clone proves the token reached git.");
         }
 
+        if (json.TryGetProperty("fork", out var fork) && fork.ValueKind == JsonValueKind.True)
+        {
+            throw new XunitException($"{sandbox.FullName} is a fork: the app lists and creates a fork's pull requests in its parent (docs/phase-7a-design.md 0.2), so the sandbox must be a repository of its own (14.6).");
+        }
+
         if (repository.DefaultBranch.Length == 0)
         {
             throw new XunitException($"GitHub gave {sandbox.FullName} no default branch.");
@@ -537,40 +618,81 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
     /// <summary>
     /// GitHub's texts that the fake writes from memory (2.4; 15 point 1), recorded for the lead to
     /// correct the fake: an API version it does not have, <c>type</c> beside <c>visibility</c>, a SHA
-    /// it does not know. The empty repository's answer is not tried: the sandbox has a commit.
+    /// it does not know. The empty repository's answer is not tried: the sandbox has a commit. Each
+    /// body is kept whole only for a refusal (<see cref="LiveAnswer.BodyForNotes"/>), and a probe that
+    /// gets no answer is noted and fails nothing.
     /// </summary>
     private async Task ProbeTextsAsync(GitHubLiveApi api)
     {
-        var version = await api.ProbeVersionAsync(UnknownVersion, Cancelled);
-        run.Note($"GitHub's text for X-GitHub-Api-Version {UnknownVersion} on GET /repos/{{o}}/{{r}}: {version}; the fake: 400 \"Unsupported 'X-GitHub-Api-Version' header: {UnknownVersion}.\". GitHub's body as sent:\n{version.Text}");
-        var type = await api.ProbeTypeWithVisibilityAsync(Cancelled);
-        run.Note($"GitHub's text for GET /user/repos?type=owner&visibility=all: {type}; the fake: 422 \"If you specify visibility or affiliation, you cannot specify type.\". GitHub's body as sent:\n{type.Text}");
-        var commits = await api.ProbeCommitsAsync(UnknownSha, Cancelled);
-        run.Note($"GitHub's text for GET /repos/{{o}}/{{r}}/commits?sha={UnknownSha}: {commits}; the fake: 422 \"No commit found for SHA: {UnknownSha}\". GitHub's body as sent:\n{commits.Text}");
+        await ProbeAsync(
+            $"X-GitHub-Api-Version {UnknownVersion} on GET /repos/{{o}}/{{r}}",
+            $"400 \"Unsupported 'X-GitHub-Api-Version' header: {UnknownVersion}.\"",
+            () => api.ProbeVersionAsync(UnknownVersion, Cancelled));
+        await ProbeAsync(
+            "GET /user/repos?type=owner&visibility=all",
+            "422 \"If you specify visibility or affiliation, you cannot specify type.\"",
+            () => api.ProbeTypeWithVisibilityAsync(Cancelled));
+        await ProbeAsync(
+            $"GET /repos/{{o}}/{{r}}/commits?sha={UnknownSha}",
+            $"422 \"No commit found for SHA: {UnknownSha}\"",
+            () => api.ProbeCommitsAsync(UnknownSha, Cancelled));
         run.Note("GitHub's text for the commits of an empty repository: not tried (the sandbox has a commit); the fake: 409 \"Git Repository is empty.\".");
+    }
+
+    /// <summary>One probe of <see cref="ProbeTextsAsync"/>: GitHub's answer beside the fake's, or why none came.</summary>
+    private async Task ProbeAsync(string what, string fake, Func<Task<LiveAnswer>> probe)
+    {
+        try
+        {
+            var answer = await probe();
+            run.Note($"GitHub's text for {what}: {answer}; the fake: {fake}. {answer.BodyForNotes}");
+        }
+        catch (GitHubLiveException ex)
+        {
+            run.Note($"GitHub's text for {what}: no answer, a finding only: {ex.Message}");
+        }
     }
 
     // ---- The clean-up --------------------------------------------------------------------------
 
     /// <summary>
-    /// 14.4 step 9: closes the created pull request (found by its head when the app's answer never
-    /// came), and any a duplicate create made, then deletes the branch; each call on its own, with
-    /// its own 30 s and not the test's cancellation, each recorded. A refusal goes to
-    /// <paramref name="problems"/>; the next Check_1 removes what is left (D324).
+    /// 14.4 step 9: closes the created pull request, and any a duplicate create made, then deletes the
+    /// branch; each call on its own, with its own 30 s and not the test's cancellation, each recorded.
+    /// A number is closed only once GitHub confirms it as the sandbox's pull request from the branch
+    /// (<see cref="LiveLeftovers.IsFrom"/>); without a confirmed one (the app's answer never came, or
+    /// named another) the sandbox's open pull requests from the branch are looked up by their head.
+    /// A refusal goes to <paramref name="problems"/>; the next Check_1 removes what is left (D324).
     /// </summary>
     private async Task CleanUpAsync(GitHubLiveApi api, LiveSandbox sandbox, string branch, int? number, List<int> duplicates, List<string> problems)
     {
-        var toClose = new List<int>(duplicates);
-        if (number is { } known)
+        var toClose = new List<int>();
+        foreach (var candidate in (number is { } known ? [known] : Array.Empty<int>()).Concat(duplicates))
         {
-            toClose.Insert(0, known);
+            try
+            {
+                var read = await api.ReadPullRequestAsync(candidate, CancellationToken.None);
+                if (read is { Status: 200, Json: { ValueKind: JsonValueKind.Object } pull } && LiveLeftovers.IsFrom(LivePullRequest.From(pull), branch, sandbox.FullName))
+                {
+                    toClose.Add(candidate);
+                }
+                else
+                {
+                    problems.Add($"#{Show(candidate)} in {sandbox.FullName} is not confirmed as the pull request from {branch} ({read}), so it was not closed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                // The clean-up records what went wrong and goes on: it runs in the test's finally.
+                problems.Add($"The clean-up could not read #{Show(candidate)}: {ex.GetType().Name}: {api.Screen(ex.Message)}");
+            }
         }
-        else
+
+        if (number is null || !toClose.Contains(number.Value))
         {
             try
             {
                 var open = await api.OpenPullRequestsAsync(CancellationToken.None, head: $"{sandbox.Owner}:{branch}");
-                toClose.InsertRange(0, open.Where(pull => pull.HeadRef == branch).Select(pull => pull.Number));
+                toClose.AddRange(open.Where(pull => LiveLeftovers.IsFrom(pull, branch, sandbox.FullName) && !toClose.Contains(pull.Number)).Select(pull => pull.Number));
             }
             catch (Exception ex)
             {
@@ -633,6 +755,48 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
                 error.Cancel();
                 throw new XunitException(run.Screen("The app showed an error: " + text));
         }
+    }
+
+    /// <summary>Clicks the form's Create and waits until it closes or shows its error line, failing on a credentials or error dialog meanwhile.</summary>
+    private Task CreateAsync(ShellDriver app, CreatePullRequestDialogViewModel form)
+    {
+        app.Click(app.FindByAutomationId("ConfirmButton"));
+        return WaitWatchingAsync(app, () => form.IsClosed || (!form.IsCreating && form.Error is not null), "the push and the create to end", NetworkStep);
+    }
+
+    /// <summary>The first operation titled <paramref name="title"/> after <paramref name="mark"/> in the activity log, once it is there.</summary>
+    private static async Task<OperationRecord> OperationAfterAsync(ShellDriver app, long mark, string title)
+    {
+        OperationRecord? found = null;
+        await app.WaitForAsync(
+            () => (found = app.Session.Operations.Snapshot().FirstOrDefault(record => record.Sequence > mark && record.Title == title)) is not null,
+            "the create's operation in the activity log",
+            NetworkStep);
+        return found!;
+    }
+
+    /// <summary>
+    /// How the app's avatar run for <paramref name="repository"/> ended since <paramref name="mark"/>
+    /// (11.3), or null while it runs: the <see cref="AppLogFile.AvatarsShown"/> line, or an answer
+    /// after which no picture comes: the avatar host's other than 200 (a redirect to another host
+    /// among them, 6.4), or the sandbox's or its commits' read (A3, A6) other than 200 or 304 (the
+    /// app's client asks again with the ETag it kept).
+    /// </summary>
+    private static string? AvatarsEnded(ShellDriver app, string repository, int mark, LiveRequestLog.Store requests, DateTimeOffset since, LiveSandbox sandbox)
+    {
+        var shown = AppLogFile.AvatarsShown(repository);
+        if (app.LogLinesSince(mark).Select(line => shown.Match(line)).FirstOrDefault(match => match.Success) is { } line)
+        {
+            return $"the app showed avatars for {line.Groups["count"].Value} authors";
+        }
+
+        var sandboxPath = "/repos/" + sandbox.FullName;
+        var ended = requests.Snapshot().FirstOrDefault(request => request.Time >= since
+            && request.Status is not (200 or 304)
+            && (string.Equals(request.Host, AvatarHost, StringComparison.OrdinalIgnoreCase)
+                || (string.Equals(request.Host, LiveRequestLog.ApiHost, StringComparison.OrdinalIgnoreCase)
+                    && (string.Equals(request.Path, sandboxPath, StringComparison.OrdinalIgnoreCase) || string.Equals(request.Path, sandboxPath + "/commits", StringComparison.OrdinalIgnoreCase)))));
+        return ended is null ? null : "no picture, after " + ended.Describe();
     }
 
     private static DialogViewModel? Interruption(ShellDriver app) =>

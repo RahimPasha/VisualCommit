@@ -1,7 +1,9 @@
 using System.Globalization;
 using System.Reflection;
+using System.Runtime.ExceptionServices;
 using System.Text;
 using Xunit;
+using Xunit.Sdk;
 
 namespace VisualCommit.LiveHostingTests;
 
@@ -12,9 +14,11 @@ namespace VisualCommit.LiveHostingTests;
 /// list takes whole). Every note is searched for the token (<see cref="LiveTokenForms"/>) before it
 /// is kept or written to the test output, and run.txt's text again before it is written: a note
 /// that holds the token is kept as <see cref="WithheldNote"/>, a file that holds it is not written,
-/// and either fails the run at its end. A run whose tests failed before their first note (no
-/// variables) writes no run.txt and leaves an earlier one as it was. It also keeps what
-/// <c>Check_1</c> read of the sandbox for <c>Check_2</c>.
+/// and either fails the run at its end. So do a message (<see cref="Screen"/>) and a failed step's
+/// exception (<see cref="FailureOf"/>) that hold it: they are replaced before they reach the test
+/// output. A run whose tests failed before their first note (no variables) writes a run.txt that
+/// says so (<see cref="NoNotes"/>), so that an earlier run's file is never read as this run's. It
+/// also keeps what <c>Check_1</c> read of the sandbox for <c>Check_2</c>.
 /// </summary>
 public sealed class LiveRun : IDisposable
 {
@@ -23,6 +27,9 @@ public sealed class LiveRun : IDisposable
 
     /// <summary>What stands in an exception's message for a text that held the token.</summary>
     public const string WithheldText = "(withheld: it held the token)";
+
+    /// <summary>run.txt's only line after its heading when no note was taken.</summary>
+    public const string NoNotes = "No note was taken: the tests failed before their first step.";
 
     private static readonly string RepoRoot =
         typeof(LiveRun).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
@@ -110,17 +117,59 @@ public sealed class LiveRun : IDisposable
         _output(kept);
     }
 
-    /// <summary><paramref name="text"/> as it is, or <see cref="WithheldText"/> when it holds the token: for an exception's or an assertion's message.</summary>
-    public string Screen(string text) => LiveTokenForms.FoundIn(text, _token) is null ? text : WithheldText;
+    /// <summary>
+    /// <paramref name="text"/> as it is, or <see cref="WithheldText"/> when it holds the token: for an
+    /// exception's or an assertion's message. A find fails the run at its end, as a note's does.
+    /// </summary>
+    public string Screen(string text)
+    {
+        if (LiveTokenForms.FoundIn(text, _token) is not { } form)
+        {
+            return text;
+        }
 
-    /// <summary>run.txt's text: a heading with the time it was written, then the notes, one or more lines each.</summary>
+        Withheld($"A message held the token ({form}); it was withheld.");
+        return WithheldText;
+    }
+
+    /// <summary>Records that a text held the token and was withheld (<see cref="GitHubLiveApi"/>'s answers too): the run fails at its end.</summary>
+    internal void Withheld(string why)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(why);
+        lock (_gate)
+        {
+            _failures.Add(why);
+        }
+    }
+
+    /// <summary>
+    /// What a step that failed with <paramref name="exception"/> throws at the test's end: the
+    /// exception itself, unless its text (<see cref="Exception.ToString"/>, with its inner exceptions)
+    /// holds the token, as an assertion's message that shows a URL or a git value would. Then an
+    /// <see cref="XunitException"/> that names the step and the exception's type, without an inner
+    /// exception, and the run fails at its end; the test output never sees the original's text.
+    /// </summary>
+    internal ExceptionDispatchInfo FailureOf(Exception exception, string step)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        if (LiveTokenForms.FoundIn(exception.ToString(), _token) is not { } form)
+        {
+            return ExceptionDispatchInfo.Capture(exception);
+        }
+
+        Withheld($"The failure of step {step} held the token ({form}); its exception was withheld.");
+        return ExceptionDispatchInfo.Capture(new XunitException($"Step {step} failed with {exception.GetType().Name}, whose text held the token, so it is withheld (D323)."));
+    }
+
+    /// <summary>run.txt's text: a heading with the time it was written, then the notes, one or more lines each, or <see cref="NoNotes"/>.</summary>
     internal string Render()
     {
         var text = new StringBuilder()
             .Append("VisualCommit's live command against GitHub (docs/phase-7a-design.md 14.5), written ")
             .Append(DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture))
             .Append(" UTC.\n\n");
-        foreach (var note in Notes)
+        var notes = Notes;
+        foreach (var note in notes.Count > 0 ? notes : [NoNotes])
         {
             text.Append(note.Replace("\r\n", "\n", StringComparison.Ordinal)).Append('\n');
         }
@@ -151,8 +200,8 @@ public sealed class LiveRun : IDisposable
         System.IO.File.WriteAllText(File, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
 
-    /// <summary>Writes run.txt when a note was taken, then fails when a note or the file held the token.</summary>
-    /// <exception cref="InvalidOperationException">A note or run.txt's text held the token.</exception>
+    /// <summary>Writes run.txt, <see cref="NoNotes"/> when no note was taken, then fails when a note, a message, an exception or the file held the token.</summary>
+    /// <exception cref="InvalidOperationException">A note, a message, an exception or run.txt's text held the token.</exception>
     public void Dispose()
     {
         if (_disposed)
@@ -161,10 +210,7 @@ public sealed class LiveRun : IDisposable
         }
 
         _disposed = true;
-        if (Notes.Count > 0)
-        {
-            WriteRunFile(Render());
-        }
+        WriteRunFile(Render());
 
         var failures = Failures;
         if (failures.Count > 0)

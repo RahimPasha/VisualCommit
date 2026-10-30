@@ -28,6 +28,14 @@ internal sealed record LiveRequest(
     public string Describe() =>
         $"{Method} {Scheme}://{Host}{Path} {(Status is { } status ? status.ToString(CultureInfo.InvariantCulture) : "failed: " + FailedWith)} "
         + $"{(AuthorizationSent ? "with" : "without")} Authorization (request {RequestId ?? "none"})";
+
+    /// <summary>
+    /// The three headers of the answer that run.txt shows (14.5): <c>API version selected 2026-03-10,
+    /// X-OAuth-Scopes absent, the token expires 2026-12-31</c>, each "not sent" when it was not.
+    /// </summary>
+    public string Headers() =>
+        $"API version selected {ApiVersionSelected ?? "not sent"}, X-OAuth-Scopes {(ScopesHeaderPresent ? "present" : "absent")}, "
+        + $"the token expires {TokenExpiration ?? "not sent"}";
 }
 
 /// <summary>
@@ -36,7 +44,9 @@ internal sealed record LiveRequest(
 /// the request and the answer on unchanged. It reads no body, and of the headers only the four
 /// <see cref="LiveRequest"/> names, and of <c>Authorization</c> only whether it was sent. One
 /// <see cref="Store"/> serves every handler the session creates (its client's and the avatar
-/// cache's).
+/// cache's). A request that would break D327's reach (<see cref="RefusalOf"/>) is recorded and
+/// refused before it leaves, so that a regression in the app never sends the owner's token
+/// elsewhere; <see cref="ReachProblems"/> then names it among the run's problems.
 /// </summary>
 internal sealed class LiveRequestLog(HttpMessageHandler inner, LiveRequestLog.Store store) : DelegatingHandler(inner)
 {
@@ -49,6 +59,15 @@ internal sealed class LiveRequestLog(HttpMessageHandler inner, LiveRequestLog.St
         var time = DateTimeOffset.UtcNow;
         var uri = request.RequestUri ?? throw new InvalidOperationException("A request without a URL.");
         var authorization = request.Headers.Contains("Authorization");
+        if (RefusalOf(uri, authorization) is { } refusal)
+        {
+            // An HttpRequestException, as for a request that did not reach its host: the app's client
+            // and its avatar cache take it as a network failure, so the test goes on to its clean-up
+            // and its record, where ReachProblems names the request. Its message has no query.
+            store.Add(new LiveRequest(time, request.Method.Method, uri.Scheme, uri.Authority, uri.AbsolutePath, null, authorization, null, null, false, null, "refused: " + refusal));
+            throw new HttpRequestException($"The live command refused {request.Method.Method} {uri.Scheme}://{uri.Authority}{uri.AbsolutePath}: {refusal} (D327).");
+        }
+
         HttpResponseMessage response;
         try
         {
@@ -77,8 +96,26 @@ internal sealed class LiveRequestLog(HttpMessageHandler inner, LiveRequestLog.St
     }
 
     /// <summary>
+    /// Why a request to <paramref name="uri"/> must not leave (D327), or null: it is not <c>https</c>,
+    /// or it carries <c>Authorization</c> to another host than <see cref="ApiHost"/> on port 443.
+    /// </summary>
+    internal static string? RefusalOf(Uri uri, bool authorization)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal))
+        {
+            return "not https";
+        }
+
+        return authorization && !(string.Equals(uri.IdnHost, ApiHost, StringComparison.OrdinalIgnoreCase) && uri.Port == 443)
+            ? $"Authorization for another host than {ApiHost}"
+            : null;
+    }
+
+    /// <summary>
     /// D327's reach, against <paramref name="requests"/>: every one <c>https</c>, and every one that
-    /// sent <c>Authorization</c> to <see cref="ApiHost"/>. One line per request that breaks a rule.
+    /// sent <c>Authorization</c> to <see cref="ApiHost"/>. One line per request that breaks a rule,
+    /// also for one that <see cref="RefusalOf"/> kept from leaving.
     /// </summary>
     internal static IReadOnlyList<string> ReachProblems(IEnumerable<LiveRequest> requests)
     {
@@ -100,7 +137,11 @@ internal sealed class LiveRequestLog(HttpMessageHandler inner, LiveRequestLog.St
         return problems;
     }
 
-    /// <summary>Per host, in the order first seen: the requests with and without <c>Authorization</c> and the statuses (run.txt, 14.5).</summary>
+    /// <summary>
+    /// Per host, in the order first seen: the requests with and without <c>Authorization</c>, the
+    /// statuses, and of the answers the API version GitHub selected, whether <c>X-OAuth-Scopes</c> was
+    /// present and the token's expiry, each value with its count (run.txt, 14.5).
+    /// </summary>
     internal static IReadOnlyList<string> PerHost(IEnumerable<LiveRequest> requests)
     {
         ArgumentNullException.ThrowIfNull(requests);
@@ -109,14 +150,22 @@ internal sealed class LiveRequestLog(HttpMessageHandler inner, LiveRequestLog.St
             .. requests.GroupBy(request => request.Host, StringComparer.OrdinalIgnoreCase).Select(host =>
             {
                 var with = host.Count(request => request.AuthorizationSent);
-                var statuses = string.Join(", ", host
-                    .GroupBy(request => request.Status is { } status ? status.ToString(CultureInfo.InvariantCulture) : "failed: " + request.FailedWith)
-                    .Select(group => $"{group.Key} ×{group.Count().ToString(CultureInfo.InvariantCulture)}"));
+                var statuses = Counted(host, request => request.Status is { } status ? status.ToString(CultureInfo.InvariantCulture) : "failed: " + request.FailedWith);
+                var answered = host.Where(request => request.Status is not null).ToList();
+                var headers = answered.Count == 0
+                    ? string.Empty
+                    : $"; API version selected {Counted(answered, request => request.ApiVersionSelected ?? "not sent")}"
+                        + $"; X-OAuth-Scopes {Counted(answered, request => request.ScopesHeaderPresent ? "present" : "absent")}"
+                        + $"; the token expires {Counted(answered, request => request.TokenExpiration ?? "not sent")}";
                 return $"The app's requests to {host.Key}: {host.Count().ToString(CultureInfo.InvariantCulture)}, "
-                    + $"{with.ToString(CultureInfo.InvariantCulture)} with Authorization and {(host.Count() - with).ToString(CultureInfo.InvariantCulture)} without; answered {statuses}.";
+                    + $"{with.ToString(CultureInfo.InvariantCulture)} with Authorization and {(host.Count() - with).ToString(CultureInfo.InvariantCulture)} without; answered {statuses}{headers}.";
             }),
         ];
     }
+
+    /// <summary>Each value of <paramref name="value"/> over <paramref name="requests"/> with its count, in the order first seen: <c>200 ×3, 404 ×1</c>.</summary>
+    private static string Counted(IEnumerable<LiveRequest> requests, Func<LiveRequest, string> value) =>
+        string.Join(", ", requests.GroupBy(value).Select(group => $"{group.Key} ×{group.Count().ToString(CultureInfo.InvariantCulture)}"));
 
     private static string? First(HttpResponseMessage response, string header) =>
         response.Headers.TryGetValues(header, out var values) ? values.FirstOrDefault() : null;
