@@ -552,12 +552,10 @@ D341 gives the 106 waits a sweep found D237's 60 s, and the create test waits fo
 avatars before it revokes the token and runs with a prompt handler that refuses; plan.md's risk
 39 asks the owner about the dialog the app shows in that order of events. Those are `745ce9a` and
 `7015753`: the rested run on `7015753` (1 h 12 min 6 s) passed 5,891 of 5,895 (4 skipped), the
-lagged list passed and CI's run 41111820880 is green on all five jobs, so step 17 is done. Next: the
-references for the gate's earlier pictures, made on `master` with git 2.56 in a worktree of their
-own (design 0.7, the phase 6 handoff's "Running the visual gate", step 2) into
-`D:/Projects/Personal/gate7a-reference/`, which needs neither the owner nor the token. Then step 16,
-the live run, in a new session that inherits the owner's private sandbox, token and two variables
-(design 14.6; "Waiting on the owner"), and step 18, the gate, which runs the live command once
+lagged list passed and CI's run 41111820880 is green on all five jobs, so step 17 is done. The
+gate's references for the earlier pictures are made and judged (Notes). Next: step 16, the live
+run, in a new session that inherits the owner's private sandbox, token and two variables (design
+14.6; "Waiting on the owner"), and step 18, the gate, which runs the live command once
 before its pictures and D246's two runs of 7a's real-window checks with the owner present. Each of
 parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
@@ -572,6 +570,16 @@ every commit.
 
 ### Notes for whoever resumes
 
+- **The gate's references are made** (2026-10-30, design 0.7, risk 32), outside the repository in
+  `D:/Projects/Personal/gate7a-reference/`: phases 0 to 6's walk-throughs on `master` (`5fe9148`)
+  with git 2.56 in a worktree of their own (544 of 544 in 21 min 40 s; the worktree removed), 972
+  scripted pictures (`scripted-pictures.sha256`) and phase 6's gate's 364 real-window files, copied
+  before any 7a real-window run. Against phase 6's gate, 5 are the same file, 927 differ only in the
+  status bar's git box (D248) and 40 elsewhere too; Opus inspectors judged the 40, every verdict
+  that was not plainly a caret or a path checked again: 31 vary by nature and 9 show git 2.56's own
+  words in quoted output, none unexplained (`reference-verdicts.md` there). The gate compares its
+  earlier pictures with these by region: `python scripts/compare-pictures.py
+  D:/Projects/Personal/gate7a-reference/artifacts/visual artifacts/visual <output folder>`.
 - **Phase 7a started on 2026-10-28** from `master` at `5fe9148`, after the owner's reboot of
   11:36 that day (`WUDFHost`'s instances held 2 to 12 MB afterwards). At the start no worktree, no
   `wip/*` or `worktree-*` branch and only the main tree's fsmonitor daemon existed; C: had 36.1 GB
