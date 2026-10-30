@@ -401,13 +401,17 @@ pass, and their 24 pictures are inspected and pass; part N's checks are written,
 (rulings 45 to 61; design 17 item 8). CI's run on `1958755` failed one test on all five jobs, a
 double-click the headless harness turned into a triple click (Notes); the harness's fix is merged at
 `ccd1ebe` (design 17 item 9), the lagged list passed on it, and step 12's left-panel half is done. The
-lead's icon commit for WP-V is `fb43def` (design 11.1). WP-V is being built on `wip/p7a-graph` in
-`D:/Projects/Personal/vc-wt/p7a-graph` (builders, then an independent reviewer and a fixer). CI's
-run on `ccd1ebe` failed two tests on macOS alone (Notes), which are being investigated meanwhile;
-their fix is merged, pushed and read on CI first. Next: at WP-V's end, read its reports and diff, merge it with `--no-ff`, and run 11.6's checks with no
-agent running: the lagged list; phase 1's checks, phase 3's walk-through, `Phase5` and `Phase6Look`
-through `bash scripts/heavy-run.sh`, compared by region with `master`'s references; part G; part P,
-part A's check 9 and part B's B6 and B8 again (design 17 items 3 and 6); inspect the pictures; then
+lead's icon commit for WP-V is `fb43def` (design 11.1). WP-V is merged at `8810136` (design 17
+item 10: built, reviewed by an agent that did not build it, one major and six minor findings fixed,
+two ruled on); its builder and reviewer ran its classes, part G, part P, A9, B6 and B8, and the
+review inspected part G's pictures and the part P and A9 pictures it changes. CI's run on `ccd1ebe`
+failed two tests on macOS alone (Notes); P13's failure came once on the laptop too, in WP-V's build.
+Both are being investigated, and their fix is being built (workflow `ww0ovir23`; `wip/p7a-macos`).
+Next: when that fix is merged and pushed, run 11.6's checks on it with no agent running: the lagged
+list; phase 1's checks, phase 3's walk-through, `Phase5` and `Phase6Look` through
+`bash scripts/heavy-run.sh`, compared by region with `master`'s references; part G; part P, part A's
+check 9 and part B's B6 (`--filter-method "*Check_B3_B6_B7*"`) and B8 again (design 17 items 3, 6 and
+10); inspect every picture; read CI on WP-V's merge and on the fix; tick steps 12 and 14; then
 WP-N. Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
