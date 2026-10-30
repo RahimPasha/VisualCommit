@@ -27,6 +27,9 @@ public sealed partial class CommitGraphControl
     /// <summary>Space between a label's edge and its text or icon.</summary>
     public const double LabelPadding = 6;
 
+    /// <summary>The radius of a label's rounded corners.</summary>
+    public const double LabelCornerRadius = 4;
+
     /// <summary>Space between the Branch / Tag column's left edge and the first label, and between two labels.</summary>
     public const double LabelStart = 6;
 
@@ -46,13 +49,11 @@ public sealed partial class CommitGraphControl
     /// <summary>The width of a stash node's ring; its outer diameter is <see cref="NodeDiameter"/>.</summary>
     public const double RingThickness = 2;
 
-    private const double LabelCornerRadius = 4;
-
-    /// <summary>The thickness of an icon's stroke in a label, in pixels.</summary>
-    private const double LabelIconStroke = 1.3;
+    /// <summary>The thickness of an icon's stroke in a label, in pixels; its caps and joins are round.</summary>
+    public const double LabelIconStroke = 1.3;
 
     /// <summary>The grid the outlines in Theme/Icons.axaml are drawn on.</summary>
-    private const double IconGridSize = 24;
+    public const double IconGridSize = 24;
 
     private const string Ellipsis = "…";
 
@@ -388,17 +389,41 @@ public sealed partial class CommitGraphControl
                 context.DrawRectangle(fill, border, new RoundedRect(bounds.Deflate(0.5), LabelCornerRadius - 0.5));
             }
 
-            var x = bounds.X + LabelPadding;
             var icon = LabelIcon(label, palette);
+            var places = PlacesOf(label, bounds, icon is not null);
             if (icon is not null)
             {
-                DrawIcon(context, icon, iconPen, new Point(x, bounds.Y + ((LabelHeight - LabelIconSize) / 2)));
-                x += LabelIconSize + LabelIconGap;
+                DrawIcon(context, icon, iconPen, places.Icon);
             }
 
-            label.Layout.Draw(context, new Point(x, bounds.Y + ((LabelHeight - label.Layout.Height) / 2)));
-            DrawBadge(context, label, bounds, x + label.Layout.WidthIncludingTrailingWhitespace, iconPen, palette);
+            label.Layout.Draw(context, places.Name);
+            DrawBadge(context, label, places, iconPen, palette);
         }
+    }
+
+    /// <summary>
+    /// Where a label's parts are drawn inside <paramref name="bounds"/>: after the padding its icon,
+    /// when <paramref name="hasIcon"/>, then its name, its laid-out text's height centred; after the
+    /// name's right edge the badge's icon and <c>#n</c> (11.2), whether the label has a badge or not.
+    /// <see cref="DrawLabels"/> draws at these places and <see cref="BadgeInRow"/> reports them.
+    /// </summary>
+    private static LabelPlaces PlacesOf(LabelVisual label, Rect bounds, bool hasIcon)
+    {
+        var iconTop = bounds.Y + ((LabelHeight - LabelIconSize) / 2);
+        var x = bounds.X + LabelPadding;
+        var icon = new Point(x, iconTop);
+        if (hasIcon)
+        {
+            x += LabelIconSize + LabelIconGap;
+        }
+
+        var name = new Point(x, bounds.Y + ((LabelHeight - label.Layout.Height) / 2));
+        x += label.Layout.WidthIncludingTrailingWhitespace;
+        x += BadgeGap;
+        var badgeIcon = new Point(x, iconTop);
+        x += LabelIconSize + BadgeIconGap;
+        var number = new Point(x, label.BadgeLayout is { } layout ? bounds.Y + ((LabelHeight - layout.Height) / 2) : iconTop);
+        return new LabelPlaces(icon, name, badgeIcon, number);
     }
 
     /// <summary>A label's fill, border and the pen of its icon, which has the colour of its text.</summary>
@@ -440,13 +465,9 @@ public sealed partial class CommitGraphControl
         {
             // The image at the text inset, the name 16 + 6 further (11.3).
             DrawAvatar(context, avatar, columns.Author.X, top);
-            DrawCell(context, visual.Author, columns.Author.X + AvatarSize + AvatarGap, top);
-        }
-        else
-        {
-            DrawCell(context, visual.Author, columns.Author.X, top);
         }
 
+        DrawCell(context, visual.Author, AuthorX(columns.Author, visual.Avatar is not null), top);
         DrawCell(context, visual.Date, columns.Date.X, top);
         DrawCell(context, visual.Sha, columns.Sha.X, top);
     }
@@ -458,8 +479,12 @@ public sealed partial class CommitGraphControl
             return;
         }
 
-        layout.Draw(context, new Point(columnX + GraphColumns.TextInset, top + ((RowHeight - layout.Height) / 2)));
+        layout.Draw(context, CellOrigin(layout, columnX, top));
     }
+
+    /// <summary>Where a cell's laid-out text is drawn: the text inset into its column, which starts at <paramref name="columnX"/>, its height centred in the row.</summary>
+    private static Point CellOrigin(TextLayout layout, double columnX, double top) =>
+        new(columnX + GraphColumns.TextInset, top + ((RowHeight - layout.Height) / 2));
 
     private static int Modulo(int color) => ((color % Palette.LaneCount) + Palette.LaneCount) % Palette.LaneCount;
 
@@ -736,6 +761,9 @@ public sealed partial class CommitGraphControl
     /// badge's laid-out <c>#n</c> (11.2); <see cref="Bounds"/> is relative to the row's top and includes the badge.
     /// </summary>
     private sealed record LabelVisual(string Text, string FullText, RefLabelKind Kind, Rect Bounds, bool IsOverflow, TextLayout Layout, string? RefName = null, PullRequestBadge? Badge = null, TextLayout? BadgeLayout = null);
+
+    /// <summary>Where a label's parts are drawn (<see cref="PlacesOf"/>): the top-left of its icon and of its badge's, the origins of its name and of its <c>#n</c>.</summary>
+    private readonly record struct LabelPlaces(Point Icon, Point Name, Point BadgeIcon, Point Number);
 
     /// <summary>
     /// The theme's colours as immutable brushes and pens, looked up once per theme from the
