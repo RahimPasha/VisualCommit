@@ -678,7 +678,9 @@ drawing at the display's scaling.
   columns, Author at x 928 to 1068 (open point 35). A label is 18 high at its row's top + 4; a badge
   follows the name: 6, the icon 10 (`IconPullRequest`), 3, then `#n` in the label's typeface, then the
   label's padding 6, all in the label's own text colour (11.2; no new token). Positions are in the
-  graph's coordinates, ±1; the widths were measured (open point 41).
+  graph's coordinates, ±1 for a label's edges; a badge's name edge, icon and `#n`, and an author's
+  image and name, exactly to one decimal as the control lays them out (since 2026-10-30, "Changed in
+  this report after its first commit"); the widths were measured (open point 41).
 - **An avatar as drawn** (11.3): 16×16, clipped to a circle, at (Author's x + 8, the row's top + 5), the
   name from Author's x + 30 (today + 8); in the details panel the ellipse 16×16 at the value column's
   left, its top at `DetailsAuthor`'s, the text 22 further; a row or a line without an image exactly as
@@ -1164,6 +1166,17 @@ parts A, B, P, G and N do; they are compared by region with `master`'s reference
 
 A method split when the checks first run, a mark for the real-window pass changed after it was written,
 or an expected result changed for a reason the build or the gate finds, goes here with its reason.
+
+- **How part G proves its places** (2026-10-30, CI runs 40993671970 and 41001188676, macOS; the lead's
+  record): G1's check read where the name's ink ends in `g01a` to ±1 px, and macOS's glyph
+  rasterisation ends it at x 79 against the layout edge 80.4 (its glyphs' outline ends at 79.72), so
+  the check failed there while the drawing was right. The places are layout facts: the control now
+  gives its tests the places its drawing uses (`BadgeInRow`, `AuthorInRow`), and G1's three positions
+  and the Author column's image and name places are compared with the report's exactly, to one
+  decimal. The pictures' ink is held by rules that hold on every platform: a text's ink within its
+  glyphs' outlines (the bundled Inter, unhinted) ±1; the icon's within its stroked outline and an
+  image's within its square, with no allowance (Skia rasterises paths and images alike everywhere);
+  none in the gaps between them or in the label's padding. No expected result changed.
 
 - **A8 step 6, the second sign-in's `GET api/v3/user`** (2026-10-29, WP-A's build, the lead's record):
   the same token signs in again in one app session, so WP-G's client sends it conditionally with the
