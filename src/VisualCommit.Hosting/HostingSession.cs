@@ -255,10 +255,14 @@ public sealed class HostingSession : IHostingSession
     /// <summary>
     /// Signs out (7.5, D291): the keychain's entry forgotten (null, or why it was kept; without a
     /// keychain in this run, <see cref="TokenStoreReasons.NoKeychain"/> for a record whose token an
-    /// earlier run saved there), the record removed even when the entry was kept, the account cleared. Runs on the thread pool, never on
-    /// the caller's thread (the vault answers at once without a keychain). <paramref name="ct"/>
-    /// stops the waits before the gate only: once begun, the sign-out completes, the session's
-    /// closing included.
+    /// earlier run saved there), the record removed even when the entry was kept, the account
+    /// cleared. Runs on the thread pool, never on the caller's thread (the vault answers at once
+    /// without a keychain). <paramref name="ct"/> stops the waits before the gate only: once begun,
+    /// the sign-out completes when the session is disposed meanwhile, but nothing keeps the process
+    /// alive for it. An exit while the store's delete runs leaves the record and its entry, and the
+    /// next start is signed in. Only an exit just after the delete, or a macOS <c>security</c>
+    /// child that ends after the app, leaves the record without its entry (the next start says the
+    /// token is missing) or <c>avatars/</c> without a record.
     /// </summary>
     public Task<string?> SignOutAsync(CancellationToken ct) =>
         _provider is null || _vault is null ? Task.FromResult<string?>(null) : Task.Run(() => SignOutCoreAsync(ct), CancellationToken.None);
@@ -606,9 +610,9 @@ public sealed class HostingSession : IHostingSession
                 return null;
             }
 
-            // Not cut off by the session's closing: a record without its token would need signing
-            // in at the next start, and avatars/ would stay (D291). The vault's delete is bounded
-            // by the store's own limits.
+            // Not cut off by the session's Dispose (the process's exit still ends it; see above): a
+            // record without its token would need signing in at the next start, and avatars/ would
+            // stay (D291). The vault's delete is bounded by the store's own limits.
             var reason = await _vault!.ForgetAsync(TokenKey.Of(slot.Key), CancellationToken.None).ConfigureAwait(false)
                 ?? await KeptUnreachedAsync(slot.Key, slot.TokenState).ConfigureAwait(false);
             _file = _file.WithoutGitHub(Host);
