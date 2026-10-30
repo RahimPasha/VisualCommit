@@ -78,7 +78,8 @@ public sealed partial class FakeGitHub
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // Given up by its sender: neither answered nor recorded, so a test waiting for this looks at once.
+            // Given up by its sender in process (over a server ct is only the server's stop): neither
+            // answered nor recorded, so a test waiting for this looks at once.
             hold.Abandoned.TrySetResult();
             throw;
         }

@@ -479,7 +479,7 @@ public sealed partial class FakeGitHub : IAsyncDisposable
 
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
-        /// <summary>Completed when the request waiting here is cancelled before its release (<see cref="FakeGitHubHold.Abandoned"/>).</summary>
+        /// <summary>Completed when the wait here is cancelled before its release: by its sender in process, by the server's stop over TCP (<see cref="FakeGitHubHold.Abandoned"/>).</summary>
         public TaskCompletionSource Abandoned { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
