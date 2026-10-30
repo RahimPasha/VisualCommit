@@ -1,6 +1,3 @@
-// The name ends in ".G.Helpers.cs"; nullable annotations are on as in every file of the project.
-#nullable enable
-
 using System.Globalization;
 using System.Text.RegularExpressions;
 using Avalonia;

@@ -1,6 +1,3 @@
-// The name ends in ".G.cs", which the compiler takes for generated code: nullable annotations are on explicitly.
-#nullable enable
-
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Styling;
