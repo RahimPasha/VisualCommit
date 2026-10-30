@@ -288,7 +288,8 @@ public sealed class AvatarCache : IDisposable
     /// fetched again). An entry that is null, or whose key is not a user's id or whose file is not
     /// that user's image, is left out with the same warning. An entry whose image is gone is left out
     /// without one, from a single listing of the folder, so the next save writes the index without
-    /// it; an image that goes later is caught by <see cref="Kept"/>, and its entry stays until then.
+    /// it. An image that goes later is caught by <see cref="Kept"/>, which fetches it again; its
+    /// entry stays until that user's image is saved again or the index is next read.
     /// </summary>
     private Dictionary<string, AvatarIndexEntryJson> IndexLocked()
     {

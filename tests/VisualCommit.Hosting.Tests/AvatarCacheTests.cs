@@ -143,7 +143,7 @@ public sealed class AvatarCacheTests
     }
 
     [Fact]
-    public async Task An_entry_whose_image_is_gone_is_dropped_when_the_index_is_read()
+    public async Task An_entry_whose_image_is_gone_is_dropped_when_the_index_is_read_and_not_at_each_save()
     {
         using var setup = Setup.Start();
         var folder = setup.Folder.Combine("avatars");
@@ -161,6 +161,19 @@ public sealed class AvatarCacheTests
         Assert.Single(setup.Recorder.Sent);
         Assert.Equal(
             "{\"users\":{\"1001\":{\"file\":\"1001.png\",\"fetchedAt\":\"2026-01-02T08:00:00Z\"},\"1005\":{\"file\":\"1005.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"}}}",
+            await File.ReadAllTextAsync(Path.Combine(folder, "index.json"), Cancelled));
+
+        // 1001's image goes now: a save looks for no other user's image, so 1004's keeps 1001's entry,
+        // until 1001 is asked for, fetched again and saved.
+        File.Delete(Path.Combine(folder, "1001.png"));
+        Assert.Equal(Path.Combine(folder, "1004.png"), await setup.Cache.FileOfAsync(setup.Avatar(1004), Cancelled));
+        Assert.Equal(
+            "{\"users\":{\"1001\":{\"file\":\"1001.png\",\"fetchedAt\":\"2026-01-02T08:00:00Z\"},\"1004\":{\"file\":\"1004.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"},\"1005\":{\"file\":\"1005.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"}}}",
+            await File.ReadAllTextAsync(Path.Combine(folder, "index.json"), Cancelled));
+        Assert.Equal(Path.Combine(folder, "1001.png"), await setup.Cache.FileOfAsync(setup.Avatar(1001), Cancelled));
+        Assert.Equal(3, setup.Recorder.Sent.Count);
+        Assert.Equal(
+            "{\"users\":{\"1001\":{\"file\":\"1001.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"},\"1004\":{\"file\":\"1004.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"},\"1005\":{\"file\":\"1005.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"}}}",
             await File.ReadAllTextAsync(Path.Combine(folder, "index.json"), Cancelled));
         Assert.Empty(setup.Log.Lines);
     }
