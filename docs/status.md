@@ -160,6 +160,18 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for WP-V's merge (`8810136`) is
+[40993671970](https://github.com/RahimPasha/VisualCommit/actions/runs/40993671970): `ubuntu-latest`
+(6 min 2 s; Test step 4 min 35 s, 5,811 of 5,814 passed and 3 skipped) and the two "bare ubuntu
+container" jobs (7 min 10 s and 5 min 46 s; Test steps 5 min 5 s and 4 min 9 s; their Secret Service
+steps green) succeeded. `windows-latest` (37 min 58 s; its Test step 35 min 21 s of 55; its keychain
+step green) failed P13 at step 2 again, tool's list request after the mark (5,812 of 5,817 passed, 4
+skipped). `macos-latest` (24 min 45 s; Test step 23 min 28 s; its keychain step green) failed part G's
+method 1 at G1's new pixel check, "Row 0's name ends at x 79; the report gives 80.4 ±1" (5,810 of
+5,814 passed, 3 skipped): it read a text's ink to ±1 px, which the platforms' glyph rasterisation
+moves. Its fix is being built (Notes). Windows' Test step has taken 34 and 35 minutes in two of the
+last three runs, against D232's mark of 44.
+
 Phase 7a's run for the lead's icon commit before WP-V (`fb43def`, pushed with the docs commit
 `713b31f`) is [40986166736](https://github.com/RahimPasha/VisualCommit/actions/runs/40986166736): all
 five jobs succeeded: `windows-latest` (25 min 35 s; its Test step 23 min 25 s of 55, 5,786 of 5,790
@@ -655,7 +667,22 @@ every commit.
   list request came after hello's step 2 mark, and the two-tab start waits for hello's list only. The
   other is `KeyRouterTests`' branch drag: a key never reached the element that had the focus when the
   test read it. Each passed on the other four jobs and in every earlier macOS run. Investigators and
-  a judge are on both while WP-V is built; a fix is merged before WP-V's merge runs.
+  a judge are on both while WP-V is built; a fix is merged before WP-V's merge runs. The judges
+  (workflow `ww0ovir23`, high confidence, both test races, no product bug). P13: a sign-in lists
+  every open tab (design 7.8, D289) through the session's one client, which sends one request at a
+  time (D285), so tool's list can be answered after hello's line; step 1 is to wait for both tabs'
+  lines (a wait only, recorded in the report). The branch drag: the drag's press selects row 4, whose
+  details nothing waited for, and the keys the drag lets through move the focus (Ctrl+Tab and
+  Ctrl+Shift+Tab reach the details' file row; Mod+Enter on it opens a diff). The diff's late focus
+  move then fell between the test's read of the focus and a key's delivery: headless input runs the
+  dispatcher's jobs before it delivers. The test is to wait for row 4's details and give the graph
+  the focus before every key. The fix is being built on `wip/p7a-macos`.
+- **CI on WP-V's merge: P13 again on Windows, and G1's new pixel check on macOS** (run 40993671970).
+  WP-V's review added `AssertLoginLabel`, which reads where the name's ink ends to ±1 px; macOS draws
+  the name's last column 1.4 px before its layout edge. The report gives layout positions, so the
+  fix asserts the control's own layout of the badge exactly. It reads the ink only by rules that hold
+  on every platform (each part's ink inside its box, none in the gaps), and audits parts A, B, G and
+  P for other text-ink reads (workflow `wzf5zbhxr`, `wip/p7a-g1`).
 - **macOS's failed refusal test is a product race on macOS and Linux** (CI's run on `8b02805`): .NET
   backs every pipe instance of one name with one listening Unix socket and closes it with the
   last instance (dotnet/runtime's `NamedPipeServerStream.Unix.cs`, `SharedServer.Dispose`, read by
