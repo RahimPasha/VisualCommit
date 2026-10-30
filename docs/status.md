@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-29
+Last updated: 2026-10-30
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -559,9 +559,17 @@ avatars before it revokes the token and runs with a prompt handler that refuses;
 `7015753`: the rested run on `7015753` (1 h 12 min 6 s) passed 5,891 of 5,895 (4 skipped), the
 lagged list passed and CI's run 41111820880 is green on all five jobs, so step 17 is done. The
 gate's references for the earlier pictures are made and judged (Notes), and `docs/architecture.md`
-describes 7a as built (step 19). Next: step 16, the live
-run, in a new session that inherits the owner's private sandbox, token and two variables (design
-14.6; "Waiting on the owner"), and step 18, the gate, which runs the live command once
+describes 7a as built (step 19). Step 16's first run with the
+token passed on 2026-10-30 (80 of 80; the report's "Live command"): GitHub's real answers showed
+two defects of the app, its version refusal read as malformed and D339's lookups stopped for good by
+a commit GitHub lacks, and the fake's texts to correct. The lead's rulings (D342, to be recorded at
+the merge) are being built in two worktrees by workflow `wucjgwxh2`: `wip/p7a-livefix`
+(`D:/Projects/Personal/vc-wt/p7a-livefix`: the client's `errors`, the version's classification, the
+lookups' rule, the fake and their tests) and `wip/p7a-liveprobes` (`.../p7a-liveprobes`: the live
+command's new probes, its premises as checks and a third method running the product's provider
+against GitHub), each reviewed by two agents that did not build it and fixed. Next: merge both with
+`--no-ff`, record D342 and design 20, run the touched classes, parts B, G, N and P, and the live
+command again; tick step 16; then step 18, the gate, which runs the live command once
 before its pictures and D246's two runs of 7a's real-window checks with the owner present. Each of
 parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
@@ -575,6 +583,17 @@ Once a phase is running, this always names the single next thing to do and is ke
 every commit.
 
 ### Notes for whoever resumes
+
+- **The live command's variables in a session that started before them** (2026-10-30): Windows
+  gives a process the environment of the one that started it, so VS Code (and every Claude Code
+  shell in it) lacks user variables set after it started, until it is quit entirely. The live
+  command then gets them for its own process alone, without printing them, from PowerShell:
+  `$env:VISUALCOMMIT_LIVE_GITHUB_TOKEN = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_TOKEN','User'); $env:VISUALCOMMIT_LIVE_GITHUB_REPO = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_REPO','User'); & 'C:\Program Files\Git\bin\bash.exe' scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`
+  (PowerShell has no `bash` on `PATH` here; a bare `bash` could be WSL's). The PowerShell tool's
+  variables last for that one command. Check the variables only by name, length and prefix. The
+  first run's full run.txt is copied outside the repository at
+  `D:/Projects/Personal/phase7a-work/live/run-1-step16.txt` (`artifacts/` is ignored and the next
+  run overwrites it).
 
 - **The gate's references are made** (2026-10-30, design 0.7, risk 32), outside the repository in
   `D:/Projects/Personal/gate7a-reference/`: phases 0 to 6's walk-throughs on `master` (`5fe9148`)
@@ -916,10 +935,12 @@ every commit.
   session. The token is never written to the repository. The command is built and waits only for
   these (design 18 item 2). Done so far (2026-10-30): the private sandbox
   `RahimPasha/visualcommit-sandbox` (default branch `main`, two commits: "Initial commit" and a README
-  change; the live command reads only the latest) and a fine-grained token for it; the two user
-  variables are next (the owner sets them with a PowerShell script that reads the token without
-  echoing it, so it lands in no shell history), then VS Code quit and reopened, a new Claude Code
-  session and "Continue". That session checks the variables by name only, never printing them.
+  change; the live command reads only the latest) and a fine-grained token for it, expiring
+  2026-11-29, and the two user variables. Done: the session of 2026-10-30 found both set (checked by
+  name, length and prefix only) but not in its shells, which had started before them; it gave them to
+  the live command's own process from the Windows user scope, never printed, and the first run
+  passed (step 16). Nothing more is needed from the owner for the live command until the token
+  expires on 2026-11-29: phase 7a's gate runs it twice before then.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's

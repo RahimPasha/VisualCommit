@@ -82,8 +82,63 @@ of personal accounts: the command ticks Draft first and, when GitHub refuses wit
 drafts, records that text and creates a ready pull request through the same form; run.txt says
 which ran (design 18 item 2).
 
-Not run yet: it waits for the owner's sandbox, token and two variables (design 14.6; status step
-16).
+**Run 1, status step 16** (2026-10-30, 16:25 Pacific, 23:25 UTC; the build of `0ffbcc2`, whose code
+is `7015753`'s; the Windows machine, git 2.56.0.windows.4): `bash scripts/heavy-run.sh --project
+tests/VisualCommit.LiveHostingTests -c Release`, 80 of 80 passed (both live tests and the 78 offline
+safety tests) in 33 s with the build up to date. The session had started before the owner set the
+two variables, so its shells lacked them; the command read them from the Windows user scope into its
+own process only (`[Environment]::GetEnvironmentVariable(name, 'User')` in PowerShell, never
+printed), which exposes the token to fewer processes than a session that inherits it. Afterwards the
+lead searched run.txt and the console output for the token as written, URL-escaped, as the base64 of
+`x-access-token:<token>` and by its last 12 characters: none found. `Check_1` alone then ran twice
+more (8 s and 9 s, no pull request made) to see whether GitHub's answers to the probes repeat: they
+did, word for word. Its findings, against the fake (design 2.4):
+
+- The sandbox `RahimPasha/visualcommit-sandbox`: private, default branch `main`, `permissions.push`
+  true. The token: fine-grained (`github_pat_`), no `X-OAuth-Scopes`, expires 2026-11-29 (a 304
+  carries no expiry header; the fake sent it on every answer).
+- The API version: GitHub selected `2026-03-10`, as asked, on every answer of `api.github.com`. Its
+  answer to an unsupported version (`2000-01-01`) is 400 `{"message":"Bad Request","errors":"The
+  version you specified in the \"X-GitHub-API-Version\" request header, \"2000-01-01\", is not a
+  supported version. The following versions are currently supported: \"2026-03-10\" (most recent)
+  and \"2022-11-28\".","documentation_url":"https://docs.github.com/rest","status":"400"}`: the
+  explanation is in `errors`, one string, not in `message`. The fake answered 400 "Unsupported
+  'X-GitHub-Api-Version' header: 2000-01-01.". **A defect of the app**: `GitHubErrorJson.Errors`
+  is a list, so the whole body failed to parse and the client would have called GitHub's refusal of
+  its version `Malformed` ("GitHub's answer could not be read.") instead of `ApiVersion` ("This
+  version of VisualCommit needs an update to work with GitHub."), latent until GitHub retires
+  2026-03-10.
+- `type` with `visibility` on `user/repos`: 422 with the fake's text word for word.
+- An unknown SHA in `commits?sha=`: 404 "Not Found"; beside `author=`, as the avatars' lookup asks
+  (D339), 500 with an empty body. The fake answered 422 "No commit found for SHA: …" to both. **A
+  defect of the app**: D339 stopped every later lookup of the run at a 500, and the address, left
+  unrecorded, heads the next run's lookups, so one commit GitHub no longer has (a stale
+  remote-tracking branch, a re-pointed remote) would have kept every later author without a picture
+  in every session.
+- The lookup with the latest commit and its author's address: 200, an array of 1; with an address
+  that has no commit: 200, an array of 0; both as the fake.
+- The empty repository's 409: not tried (the sandbox has a commit).
+- `GET /user` for a fine-grained token with no account permission: 200, as the fake.
+- `GET /user/repos` with that token, whose access is the sandbox alone: 12 rows on one page, the
+  sandbox and 11 public repositories outside its selection, none private. The fake's fine-grained
+  token reaches every repository of its login; "Only select repositories" is not modelled, and no
+  check depends on it.
+- The clone over HTTPS through the app's helper: 2.6 s, no credentials dialog, no helper of the
+  user's or the system's.
+- Pull requests: none open before; the create made draft #1, so GitHub accepts drafts in the owner's
+  private sandbox; read back as typed; the duplicate create: 422 `{"message":"Validation
+  Failed","errors":[{"resource":"PullRequest","code":"custom","message":"A pull request already
+  exists for RahimPasha:visualcommit-live/20261030-232555Z."}],…}`, the fake's but for `resource`
+  and the route's `documentation_url`; #1 closed (200) and its branch deleted (204).
+- Avatars: one, a 64×64 JPEG from `avatars.githubusercontent.com` for `s=64` on a `v=4` address, 200
+  without a redirect and without `Authorization`.
+- The app's requests: 9 to `api.github.com`, every one with `Authorization` (200 ×7, 201, 304), and 1
+  to `avatars.githubusercontent.com` without it. `X-RateLimit-Remaining` 4985 at the end.
+- Every error body of GitHub's carries `status` as a string, as the fake's, and the
+  `documentation_url` of its route.
+
+What it changed: the client, the avatars' lookups and the fake (D342), and the live command's
+probes; recorded below once merged.
 
 ## What the checks share
 
