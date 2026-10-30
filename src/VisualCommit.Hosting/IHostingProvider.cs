@@ -35,8 +35,10 @@ public interface IHostingProvider
     Task<HostingResult<PullRequest>> CreatePullRequestAsync(string token, HostedRepository baseRepository, NewPullRequest request, CancellationToken ct);
 
     /// <summary>
-    /// A6: commit authors by e-mail. A null <paramref name="branch"/> asks the lookups only (no
-    /// commits page); at most 20 lookups a call.
+    /// A6: commit authors by e-mail, <paramref name="branch"/>'s commits page read in
+    /// <paramref name="repository"/>; each of <paramref name="lookups"/> is looked up from its own
+    /// commit in its own repository (D339). A null <paramref name="branch"/> asks the lookups only
+    /// (no commits page); at most 20 lookups a call.
     /// </summary>
-    Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<string> moreEmails, CancellationToken ct);
+    Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, CancellationToken ct);
 }

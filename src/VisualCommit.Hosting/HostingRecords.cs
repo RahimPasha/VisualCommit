@@ -96,6 +96,17 @@ public sealed record AuthorAvatar(long UserId, string Login, Uri AvatarUrl);
 /// <param name="ByEmail">Lower-case e-mail to its account; null when the service does not know it.</param>
 public sealed record AuthorMap(IReadOnlyDictionary<string, AuthorAvatar?> ByEmail);
 
+/// <summary>
+/// A commit author to look up (A6; D311, D339): the e-mail, with the newest of its commits that a
+/// remote-tracking branch of a remote on the service reaches and that remote's repository. The
+/// lookup searches that repository's history from that commit, so an author whose commits are only
+/// on a feature branch, or only on a fork, is found.
+/// </summary>
+/// <param name="Email">The author's e-mail, lower-cased.</param>
+/// <param name="Sha">The newest commit of the author's that <paramref name="Repository"/>'s branch reaches.</param>
+/// <param name="Repository">The repository of the remote whose branch reaches it.</param>
+public sealed record AuthorCommit(string Email, string Sha, HostedRepository Repository);
+
 /// <summary>Why a request to the hosting service failed (docs/phase-7a-design.md 1.4, 6.2).</summary>
 public enum HostingFailureKind
 {

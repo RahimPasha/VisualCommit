@@ -196,8 +196,8 @@ public interface IRepositoryHosting : IDisposable
 
     Task RefreshPullRequestsAsync(CancellationToken ct);
 
-    /// <summary>Authors of graph commits on known remotes' branches (D311); capped lookups.</summary>
-    void ShowAvatarsFor(IReadOnlyCollection<string> emails);
+    /// <summary>Authors of graph commits on known remotes' branches (D311), each with its newest such commit and that remote (D339); capped lookups.</summary>
+    void ShowAvatarsFor(IReadOnlyCollection<AuthorCommit> authors);
 
     /// <summary>A3 of the first remote on the service in <see cref="HostingRemoteOrder"/>; on the UI thread; kept per candidate.</summary>
     Task<HostingResult<RepositoryInfo>> ReadRepositoryAsync(CancellationToken ct);
@@ -308,7 +308,7 @@ public sealed class NullRepositoryHosting : IRepositoryHosting
 
     public Task RefreshPullRequestsAsync(CancellationToken ct) => Task.CompletedTask;
 
-    public void ShowAvatarsFor(IReadOnlyCollection<string> emails)
+    public void ShowAvatarsFor(IReadOnlyCollection<AuthorCommit> authors)
     {
     }
 

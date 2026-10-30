@@ -226,9 +226,10 @@ public sealed class GitHubProviderTests
     public async Task A6_maps_the_branchs_authors_then_looks_up_the_others_once_each()
     {
         await using var setup = await Setup.StartAsync();
+        var main = await TipAsync(setup, "octo/hello", "main");
 
         var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), "main",
-            ["ADA@example.com", "Stranger@Example.com", "", "stranger@example.com"], Cancelled);
+            OnMain(main, "ADA@example.com", "Stranger@Example.com", "", "stranger@example.com"), Cancelled);
 
         var map = authors.Value!.ByEmail;
         Assert.Equal(new[] { "ada@example.com", "author@example.com", "octo@example.com", "stranger@example.com" }, map.Keys.Order(StringComparer.Ordinal));
@@ -236,7 +237,7 @@ public sealed class GitHubProviderTests
         Assert.Equal(new AuthorAvatar(1003, "ada", new Uri("http://127.0.0.1:1/avatars/u/1003?v=4")), map["ada@example.com"]);
         Assert.Null(map["author@example.com"]);
         Assert.Null(map["stranger@example.com"]);
-        Assert.Equal(new[] { "sha=main&per_page=100", "author=stranger%40example.com&per_page=1" }, setup.Fake.Requests.Select(request => request.Query));
+        Assert.Equal(new[] { "sha=main&per_page=100", $"sha={main}&author=stranger%40example.com&per_page=1" }, setup.Fake.Requests.Select(request => request.Query));
 
         var branch = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), "feature/login", [], Cancelled);
         Assert.True(branch.Succeeded);
@@ -247,9 +248,10 @@ public sealed class GitHubProviderTests
     public async Task A6_without_a_branch_asks_no_commits_page_and_at_most_twenty_lookups()
     {
         await using var setup = await Setup.StartAsync();
+        var main = await TipAsync(setup, "octo/hello", "main");
         string[] emails = [Scenarios.OctoEmail, .. Enumerable.Range(1, 24).Select(n => FormattableString.Invariant($"user{n:D2}@example.com"))];
 
-        var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null, emails, Cancelled);
+        var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null, OnMain(main, emails), Cancelled);
 
         var map = authors.Value!.ByEmail;
         Assert.Equal(20, map.Count);
@@ -257,7 +259,22 @@ public sealed class GitHubProviderTests
         Assert.All(emails[1..20], email => Assert.Null(map[email]));
         Assert.DoesNotContain(emails[20], map.Keys);
         Assert.Equal(20, setup.Fake.Requests.Count);
-        Assert.All(setup.Fake.Requests, request => Assert.StartsWith("author=", request.Query, StringComparison.Ordinal));
+        Assert.All(setup.Fake.Requests, request => Assert.StartsWith($"sha={main}&author=", request.Query, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task A6_looks_an_address_up_from_its_own_commit_in_the_repository_that_holds_it()
+    {
+        await using var setup = await Setup.StartAsync();
+
+        // Ada's fix is only on her fork's fix-typo: listed as octo/hello, looked up on ada/hello from it.
+        var fix = await TipAsync(setup, "ada/hello", "fix-typo");
+        var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null,
+            [new AuthorCommit("Ada@Example.com", fix, Repository("ada", "hello"))], Cancelled);
+
+        Assert.Equal(new AuthorAvatar(1003, "ada", new Uri("http://127.0.0.1:1/avatars/u/1003?v=4")), Assert.Single(authors.Value!.ByEmail, pair => pair.Key == Scenarios.AdaEmail).Value);
+        var lookup = Assert.Single(setup.Fake.Requests);
+        Assert.Equal(("commits:ada/hello", $"sha={fix}&author=ada%40example.com&per_page=1"), (lookup.Route, lookup.Query));
     }
 
     [Fact]
@@ -265,17 +282,18 @@ public sealed class GitHubProviderTests
     {
         await using var setup = await Setup.StartAsync();
 
-        var empty = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "notes"), "main", [Scenarios.OctoEmail], Cancelled);
+        var main = await TipAsync(setup, "octo/hello", "main");
+        var empty = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "notes"), "main", OnMain(main, Scenarios.OctoEmail), Cancelled);
         Assert.Equal((true, 0), (empty.Succeeded, empty.Value!.ByEmail.Count));
         Assert.Single(setup.Fake.Requests);
 
         setup.Fake.FailNext("commits:octo/hello", FakeGitHubFault.ServerError);
-        var stopped = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null, [Scenarios.OctoEmail, Scenarios.AdaEmail], Cancelled);
+        var stopped = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null, OnMain(main, Scenarios.OctoEmail, Scenarios.AdaEmail), Cancelled);
         Assert.Equal((true, 0), (stopped.Succeeded, stopped.Value!.ByEmail.Count));
         Assert.Equal(2, setup.Fake.Requests.Count);
 
         setup.Fake.FailNext("commits:octo/hello", FakeGitHubFault.ServerError);
-        var failed = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), "main", [Scenarios.OctoEmail], Cancelled);
+        var failed = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), "main", OnMain(main, Scenarios.OctoEmail), Cancelled);
         Assert.Equal(HostingFailureKind.ServerError, failed.Failure!.Kind);
         Assert.Equal(3, setup.Fake.Requests.Count);
     }
@@ -344,6 +362,13 @@ public sealed class GitHubProviderTests
     }
 
     private static HostedRepository Repository(string owner, string name) => new(HostingProvider.GitHub, Host, owner, name);
+
+    /// <summary><paramref name="emails"/> to look up, each from <paramref name="main"/> on octo/hello.</summary>
+    private static AuthorCommit[] OnMain(string main, params string[] emails) => [.. emails.Select(email => new AuthorCommit(email, main, Repository("octo", "hello")))];
+
+    /// <summary>The tip of <paramref name="branch"/> in the fake's <paramref name="repository"/> (<c>owner/name</c>).</summary>
+    private static async Task<string> TipAsync(Setup setup, string repository, string branch) =>
+        (await setup.Served.Hello.GitAsync("ls-remote", setup.Fake.Repository(repository).BarePath!, "refs/heads/" + branch)).StandardOutput.Split('\t')[0];
 
     /// <summary>A copy of "hosting" served in process, and a provider over its handler (on its endpoints unless given).</summary>
     private sealed class Setup : IAsyncDisposable

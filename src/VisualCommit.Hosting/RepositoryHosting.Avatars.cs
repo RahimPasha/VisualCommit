@@ -3,14 +3,15 @@ using VisualCommit.Core.Logging;
 namespace VisualCommit.Hosting;
 
 // The authors' avatars of one repository tab (docs/phase-7a-design.md 7.9; D252, D291, D311,
-// ruling 22): the e-mails the graph gives, matched through the repository's map, then the images
-// from the session's cache. One run at a time; a call during a run folds into one more with the
-// latest set. Signed out, nothing is read or asked.
+// ruling 22): the e-mails the graph gives, matched through the repository's map, each looked up
+// through a commit of its own when the map lacks it (D339), then the images from the session's
+// cache. One run at a time; a call during a run folds into one more with the latest set. Signed
+// out, nothing is read or asked.
 public sealed partial class RepositoryHosting
 {
     // On the UI thread.
     private Task? _avatarRun;
-    private IReadOnlyList<string>? _avatarNext;
+    private IReadOnlyList<AuthorCommit>? _avatarNext;
     private int _avatarGeneration;
 
     /// <summary>The avatars' run in progress, for the tests; read on the UI thread.</summary>
@@ -18,17 +19,21 @@ public sealed partial class RepositoryHosting
 
     /// <summary>
     /// On the UI thread: the authors of graph commits that a GitHub remote's branch reaches (D311),
-    /// copied and lower-cased; GitHub is asked about no other address. Signed out, nothing happens.
+    /// each with the newest such commit and that remote's repository (D339), copied, lower-cased and
+    /// one per e-mail (the first); GitHub is asked about no other address. Signed out, nothing happens.
     /// </summary>
-    public void ShowAvatarsFor(IReadOnlyCollection<string> emails)
+    public void ShowAvatarsFor(IReadOnlyCollection<AuthorCommit> authors)
     {
-        ArgumentNullException.ThrowIfNull(emails);
+        ArgumentNullException.ThrowIfNull(authors);
         if (_disposed || !IsSignedIn)
         {
             return;
         }
 
-        IReadOnlyList<string> set = [.. emails.Where(email => !string.IsNullOrWhiteSpace(email)).Select(email => email.ToLowerInvariant()).Distinct(StringComparer.Ordinal)];
+        IReadOnlyList<AuthorCommit> set = [.. authors
+            .Where(author => author is not null && !string.IsNullOrWhiteSpace(author.Email))
+            .Select(author => author with { Email = author.Email.ToLowerInvariant() })
+            .DistinctBy(author => author.Email, StringComparer.Ordinal)];
         if (_avatarRun is not null)
         {
             _avatarNext = set;
@@ -47,7 +52,7 @@ public sealed partial class RepositoryHosting
 
     private void DisposeAvatars() => StopAvatars();
 
-    private void StartAvatars(IReadOnlyList<string> set)
+    private void StartAvatars(IReadOnlyList<AuthorCommit> set)
     {
         if (_candidate is not { } candidate || set.Count == 0)
         {
@@ -104,8 +109,9 @@ public sealed partial class RepositoryHosting
     // Off the UI thread (7.9 steps 1 to 4): the listed repository and its branch, the map brought
     // up to date by one A6 when anything is due, then the images, four at a time. Null when A3 or
     // A6 failed (logged by the session's call).
-    private async Task<AuthorAvatars?> ReadAvatarsAsync(HostedRepository candidate, IReadOnlyList<string> emails, CancellationToken ct)
+    private async Task<AuthorAvatars?> ReadAvatarsAsync(HostedRepository candidate, IReadOnlyList<AuthorCommit> authors, CancellationToken ct)
     {
+        IReadOnlyList<string> emails = [.. authors.Select(author => author.Email)];
         var read = await ReadInfoAsync(candidate, ct).ConfigureAwait(false);
         if (read.Value is not { } info)
         {
@@ -119,12 +125,16 @@ public sealed partial class RepositoryHosting
         var (commitsDue, due) = maps.Plan(listed, emails);
         if (commitsDue || due.Count > 0)
         {
+            // The map stays the listed repository's; each address due is looked up through its own
+            // commit, on the remote whose branch reaches it (D339).
+            var byEmail = authors.ToDictionary(author => author.Email, StringComparer.Ordinal);
+            IReadOnlyList<AuthorCommit> lookups = [.. due.Select(email => byEmail[email])];
             HostingResult<AuthorMap>? answer = null;
             try
             {
                 answer = await _session.CallAsync(
                     $"reading the authors of {listed.FullName}",
-                    (provider, token, linked) => provider.ReadAuthorsAsync(token, listed, commitsDue ? branch : null, due, linked),
+                    (provider, token, linked) => provider.ReadAuthorsAsync(token, listed, commitsDue ? branch : null, lookups, linked),
                     ct).ConfigureAwait(false);
             }
             finally

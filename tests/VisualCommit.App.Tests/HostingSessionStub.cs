@@ -178,7 +178,7 @@ internal sealed class HostingSessionStub : IHostingSession
 
         public Task RefreshPullRequestsAsync(CancellationToken ct) => Task.CompletedTask;
 
-        public void ShowAvatarsFor(IReadOnlyCollection<string> emails)
+        public void ShowAvatarsFor(IReadOnlyCollection<AuthorCommit> authors)
         {
         }
 

@@ -1,19 +1,27 @@
 using System.Globalization;
 using System.Text.Json;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Testing;
 using Xunit;
 
 namespace VisualCommit.Hosting.Tests;
 
 /// <summary>
-/// A tab's authors' avatars (docs/phase-7a-design.md 7.9, 7.13; D252, D291, ruling 22): one commits
-/// page; the 20 lookups a repository has per app session, shared by its tabs; an unknown e-mail not
-/// asked again; the map used within 7 days (no page asked) and read again after; images fetched
+/// A tab's authors' avatars (docs/phase-7a-design.md 7.9, 7.13; D252, D291, D339, ruling 22): one
+/// commits page; the 20 lookups a repository has per app session, shared by its tabs, each from the
+/// author's own commit on the remote that holds it (a feature branch's, a fork's); an unknown e-mail
+/// not asked again; the map used within 7 days (no page asked) and read again after; images fetched
 /// without the token; nothing at all while signed out.
 /// </summary>
 public sealed class RepositoryHostingAvatarsTests
 {
+    private const string NewbieEmail = "newbie@example.com";
+
+    private static readonly HostedRepository OctoHello = new(HostingProvider.GitHub, "127.0.0.1:1", "octo", "hello");
+
+    private static readonly HostedRepository AdaHello = new(HostingProvider.GitHub, "127.0.0.1:1", "ada", "hello");
+
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -64,11 +72,11 @@ public sealed class RepositoryHostingAvatarsTests
         await ShowAsync(setup, first, unknown);
 
         Assert.Equal(20, Lookups(setup));
-        Assert.Single(Commits(setup), request => request.Query.StartsWith("sha=", StringComparison.Ordinal));
+        Assert.Single(Commits(setup), IsPage);
         Assert.Empty(first.Avatars.FileByEmail);
 
         // Asked once and unknown: not asked again within 7 days, the budget aside.
-        var asked = setup.Fake.Requests.Where(request => request.Query.StartsWith("author=", StringComparison.Ordinal)).Select(request => request.Query).ToList();
+        var asked = Commits(setup).Where(request => !IsPage(request)).Select(request => request.Query).ToList();
         Assert.Equal(asked.Count, asked.Distinct(StringComparer.Ordinal).Count());
     }
 
@@ -89,13 +97,54 @@ public sealed class RepositoryHostingAvatarsTests
         setup.Clock.Advance(TimeSpan.FromDays(6));
         await ShowAsync(setup, later, Scenarios.OctoEmail, "newcomer@example.com");
 
-        Assert.Equal(["sha=main&per_page=100", "author=newcomer%40example.com&per_page=1"], Commits(setup).Select(request => request.Query));
+        var main = await MainAsync(setup);
+        Assert.Equal(["sha=main&per_page=100", $"sha={main}&author=newcomer%40example.com&per_page=1"], Commits(setup).Select(request => request.Query));
         Assert.NotNull(later.Avatars.FileOf(Scenarios.OctoEmail));
 
         setup.Clock.Advance(TimeSpan.FromDays(1));
         await ShowAsync(setup, later, Scenarios.OctoEmail);
         Assert.Equal("sha=main&per_page=100", Commits(setup)[^1].Query);
-        Assert.Equal(2, Commits(setup).Count(request => request.Query.StartsWith("sha=", StringComparison.Ordinal)));
+        Assert.Equal(2, Commits(setup).Count(IsPage));
+    }
+
+    [Fact]
+    public async Task An_author_only_on_a_feature_branch_is_looked_up_from_that_commit_and_found()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await OpenHelloAsync(setup);
+        var sha = await PushNewbieAsync(setup, "octo/hello", "feature/newbie");
+
+        await ShowAsync(setup, hosting, new AuthorCommit(NewbieEmail, sha, OctoHello));
+
+        // main's page does not hold the commit; the lookup searches from it, so GitHub finds the author.
+        Assert.Equal(["sha=main&per_page=100", $"sha={sha}&author=newbie%40example.com&per_page=1"], Commits(setup).Select(request => request.Query));
+        Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
+    }
+
+    [Fact]
+    public async Task A_fork_tabs_author_is_looked_up_on_the_fork_and_kept_in_the_listed_repositorys_map()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await setup.Thread.RunAsync(() => (RepositoryHosting)setup.Session.ForRepository(setup.Served.Hello.Path));
+        await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.Refs(("origin", "http://127.0.0.1:1/ada/hello.git")), UrlRewrites.None));
+        var sha = await PushNewbieAsync(setup, "ada/hello", "newbie-work");
+
+        await ShowAsync(setup, hosting, new AuthorCommit(NewbieEmail, sha, AdaHello));
+
+        // ada/hello is a fork of octo/hello, the listed repository: its main's page, and the lookup
+        // on the fork, which alone holds the commit; the map is octo/hello's.
+        Assert.Equal(["sha=main&per_page=100"], Commits(setup).Select(request => request.Query));
+        Assert.Equal(
+            [$"sha={sha}&author=newbie%40example.com&per_page=1"],
+            setup.Fake.Requests.Where(request => request.Route == "commits:ada/hello").Select(request => request.Query));
+        Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
+        var authors = Path.Combine(setup.Paths.AvatarsDirectory, "authors");
+        Assert.Equal(["github_127.0.0.1_1_octo_hello.json"], Directory.GetFiles(authors).Select(Path.GetFileName));
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(authors, "github_127.0.0.1_1_octo_hello.json")));
+        var newbie = json.RootElement.GetProperty("authors").EnumerateArray().Single(author => author.GetProperty("email").GetString() == NewbieEmail);
+        Assert.Equal((1010L, "newbie"), (newbie.GetProperty("userId").GetInt64(), newbie.GetProperty("login").GetString()));
     }
 
     [Fact]
@@ -119,12 +168,16 @@ public sealed class RepositoryHostingAvatarsTests
         return hosting;
     }
 
-    /// <summary>Shows <paramref name="emails"/>' avatars and waits for the run and its answer to be applied.</summary>
-    internal static async Task ShowAsync(HostingSessionSetup setup, RepositoryHosting hosting, params string[] emails)
+    /// <summary>Shows <paramref name="emails"/>' avatars, each with origin/main's tip on octo/hello (<see cref="OnMainAsync"/>), and waits for the run and its answer to be applied.</summary>
+    internal static async Task ShowAsync(HostingSessionSetup setup, RepositoryHosting hosting, params string[] emails) =>
+        await ShowAsync(setup, hosting, await OnMainAsync(setup, emails));
+
+    /// <summary>Shows <paramref name="authors"/>' avatars and waits for the run and its answer to be applied.</summary>
+    internal static async Task ShowAsync(HostingSessionSetup setup, RepositoryHosting hosting, params AuthorCommit[] authors)
     {
         var run = await setup.Thread.RunAsync<Task>(() =>
         {
-            hosting.ShowAvatarsFor(emails);
+            hosting.ShowAvatarsFor(authors);
             return hosting.AvatarRun;
         });
         await run.WaitAsync(Cancelled);
@@ -132,8 +185,36 @@ public sealed class RepositoryHostingAvatarsTests
         await setup.Thread.IdleAsync();
     }
 
+    /// <summary><paramref name="emails"/> as a tab of octo/hello tells them: each with origin/main's tip, on octo/hello.</summary>
+    internal static async Task<AuthorCommit[]> OnMainAsync(HostingSessionSetup setup, params string[] emails)
+    {
+        var main = await MainAsync(setup);
+        return [.. emails.Select(email => new AuthorCommit(email, main, OctoHello))];
+    }
+
+    private static async Task<string> MainAsync(HostingSessionSetup setup) =>
+        (await setup.Served.Hello.GitAsync("rev-parse", "refs/remotes/origin/main")).StandardOutput.Trim();
+
+    /// <summary>
+    /// A user newbie (1010), linked to <see cref="NewbieEmail"/>, whose one commit, on origin/main,
+    /// is pushed to <paramref name="branch"/> of <paramref name="repository"/> only. Returns its SHA.
+    /// </summary>
+    private static async Task<string> PushNewbieAsync(HostingSessionSetup setup, string repository, string branch)
+    {
+        setup.Fake.AddUser("newbie", 1010, "New Bie");
+        setup.Fake.LinkEmail(NewbieEmail, "newbie");
+        var hello = setup.Served.Hello;
+        await hello.GitAsync("switch", "--quiet", "--create", "newbie-work", "refs/remotes/origin/main");
+        var sha = await hello.CommitFileAsAsync("newbie.txt", "hello\n", "Add the newcomer's file", "New Bie", NewbieEmail);
+        await hello.GitAsync("push", "--quiet", setup.Fake.Repository(repository).BarePath!, $"{sha}:refs/heads/{branch}");
+        await hello.GitAsync("switch", "--quiet", "main");
+        return sha;
+    }
+
+    private static bool IsPage(Testing.Hosting.FakeGitHubRequest request) => request.Query.EndsWith("&per_page=100", StringComparison.Ordinal);
+
     private static List<Testing.Hosting.FakeGitHubRequest> Commits(HostingSessionSetup setup) =>
         [.. setup.Fake.Requests.Where(request => request.Route == "commits:octo/hello")];
 
-    private static int Lookups(HostingSessionSetup setup) => Commits(setup).Count(request => request.Query.StartsWith("author=", StringComparison.Ordinal));
+    private static int Lookups(HostingSessionSetup setup) => Commits(setup).Count(request => !IsPage(request));
 }
