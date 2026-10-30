@@ -199,16 +199,21 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     }
 
     /// <summary>
-    /// A6 (D252): with <paramref name="branch"/>, the first page of its commits, each lower-cased
-    /// author e-mail to its GitHub user (the first commit of an e-mail wins; null when GitHub links
-    /// none); a 409 (an empty repository) is an empty map. Then at most 20 lookups
-    /// <c>commits?author=&lt;e-mail&gt;&amp;per_page=1</c> for <paramref name="moreEmails"/> not yet
-    /// in the map, in order; a failing lookup stops them and is left out.
+    /// A6 (D252): with <paramref name="branch"/>, the first page of its commits in
+    /// <paramref name="repository"/>, each lower-cased author e-mail to its GitHub user (the first
+    /// commit of an e-mail wins; null when GitHub links none); a 409 (an empty repository) is an
+    /// empty map. Then at most 20 lookups for <paramref name="lookups"/> whose e-mail is not yet in
+    /// the map, in order, each in its own repository's history from its own commit (D339):
+    /// <c>repos/{owner}/{name}/commits?sha=&lt;SHA&gt;&amp;author=&lt;e-mail&gt;&amp;per_page=1</c>.
+    /// A lookup answered 404 or 409 (GitHub does not let the token read that repository, or it is
+    /// empty) is left out with the rest of that repository's, asked no more in this call, and the
+    /// others go on; one answered 422 (no such commit) is left out alone. Any other failing lookup
+    /// stops them and is left out.
     /// </summary>
-    public async Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<string> moreEmails, CancellationToken ct)
+    public async Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(repository);
-        ArgumentNullException.ThrowIfNull(moreEmails);
+        ArgumentNullException.ThrowIfNull(lookups);
         if (Refusal(token) is { } refused)
         {
             return HostingResult<AuthorMap>.Fail(refused);
@@ -244,23 +249,43 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             }
         }
 
-        var asked = moreEmails
-            .Where(email => !string.IsNullOrWhiteSpace(email))
-            .Select(email => email.ToLowerInvariant())
-            .Distinct(StringComparer.Ordinal)
-            .Where(email => !map.ContainsKey(email))
+        var asked = lookups
+            .Where(lookup => lookup is not null && !string.IsNullOrWhiteSpace(lookup.Email))
+            .Select(lookup => lookup with { Email = lookup.Email.ToLowerInvariant() })
+            .DistinctBy(lookup => lookup.Email, StringComparer.Ordinal)
+            .Where(lookup => !map.ContainsKey(lookup.Email))
             .Take(MaxAuthorLookups)
             .ToList();
-        foreach (var email in asked)
+        var unreadable = new HashSet<HostedRepository>();
+        foreach (var lookup in asked)
         {
-            var url = Api($"{commits}?author={Uri.EscapeDataString(email)}&per_page=1");
+            if (unreadable.Contains(lookup.Repository))
+            {
+                continue;
+            }
+
+            var url = Api($"{RepositoryPath(lookup.Repository)}/commits?sha={Uri.EscapeDataString(lookup.Sha)}&author={Uri.EscapeDataString(lookup.Email)}&per_page=1");
             var reply = await _client.SendAsync(HttpMethod.Get, token, url, null, GitHubJsonContext.Default.ListGitHubCommitItemJson, ct).ConfigureAwait(false);
+            if (reply.Failure?.Kind is HostingFailureKind.NotFound || reply.Status == 409)
+            {
+                // A remote whose repository is gone, private to others or empty: none of its addresses
+                // is found there, so its other lookups are not asked in this call; the rest go on.
+                unreadable.Add(lookup.Repository);
+                continue;
+            }
+
+            if (reply.Failure?.Kind is HostingFailureKind.Validation)
+            {
+                // A rewritten branch: GitHub has no such commit, so only this address is not found.
+                continue;
+            }
+
             if (!reply.Succeeded || reply.Value is null)
             {
                 break;
             }
 
-            map[email] = reply.Value is [var first, ..] ? Author(first.Author) : null;
+            map[lookup.Email] = reply.Value is [var first, ..] ? Author(first.Author) : null;
         }
 
         return HostingResult<AuthorMap>.Ok(new AuthorMap(map));

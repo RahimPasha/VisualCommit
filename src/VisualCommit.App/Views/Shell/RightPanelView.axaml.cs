@@ -22,8 +22,11 @@ public partial class RightPanelView : UserControl
     /// <summary>The header part may always be this tall, however small the panel, so that the subject stays readable.</summary>
     private const double MinimumHeaderHeight = 120;
 
-    /// <summary>The authors' images decoded so far, by file, for the view's life; null for one that did not decode.</summary>
-    private readonly Dictionary<string, Bitmap?> _avatars = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The authors' images decoded so far, by file, for the view's life. A file that did not decode is
+    /// not kept: it is decoded again when it is shown next, since it may have been written since.
+    /// </summary>
+    private readonly Dictionary<string, Bitmap> _avatars = new(StringComparer.Ordinal);
 
     private CommitDetailsViewModel? _details;
 
@@ -92,10 +95,16 @@ public partial class RightPanelView : UserControl
             return;
         }
 
-        if (!_avatars.TryGetValue(file, out var bitmap))
+        if (!_avatars.TryGetValue(file, out Bitmap? bitmap))
         {
             bitmap = await AvatarBitmaps.DecodeAsync(file, CancellationToken.None);
-            _avatars.TryAdd(file, bitmap);
+
+            // An overlapping decode of the same file may have come first: its image is kept and this one disposed.
+            if (bitmap is not null && !_avatars.TryAdd(file, bitmap))
+            {
+                bitmap.Dispose();
+                bitmap = _avatars[file];
+            }
         }
 
         if (version != _avatarVersion)

@@ -1,6 +1,7 @@
 // The authors' avatars of a repository tab (docs/phase-7a-design.md 11.3; D252, D257, D310, D311):
-// the tab tells its hosting the authors of the commits that a GitHub remote's branch reaches, and
-// gives the avatars it gets back to the details panel; the graph's view logs them once drawn (D322).
+// the tab tells its hosting the authors of the commits that a GitHub remote's branch reaches, each
+// with the newest such commit and that remote (D339), and gives the avatars it gets back to the
+// details panel; the graph's view logs them once drawn (D322).
 // The only override of OnPropertyChanged in RepositoryViewModel (1.7).
 
 using System.ComponentModel;
@@ -22,7 +23,7 @@ public sealed partial class RepositoryViewModel
     // On the UI thread: the loading graph followed until it is whole or has AvatarRows rows, and the
     // set last given to the hosting, forgotten signed out or without a GitHub remote.
     private CommitGraphData? _followedGraph;
-    private IReadOnlyList<string>? _authorsSent;
+    private IReadOnlyList<AuthorCommit>? _authorsSent;
 
     /// <summary>
     /// The graph's view drew this tab's avatars (<c>CommitGraphControl.AvatarsApplied</c>, on the UI
@@ -96,9 +97,11 @@ public sealed partial class RepositoryViewModel
 
     /// <summary>
     /// Tells the hosting the authors of the graph's commits on a GitHub remote's branches (D311), when
-    /// the set differs from the one last sent (the empty set before any): never in summary mode or without an account's listing
+    /// their e-mails differ from those last sent (none before any): never in summary mode or without an account's listing
     /// (D257: only <c>Loading</c>, <c>Failed</c> or <c>Loaded</c>), nor while the graph still loads
-    /// its first <see cref="AvatarRows"/> rows.
+    /// its first <see cref="AvatarRows"/> rows. An author's newer commit alone is not news: the one
+    /// sent before still finds the author on GitHub, unless GitHub could not answer that lookup (its
+    /// remote unreadable, its branch rewritten); that author waits for the next change of the e-mails (D339).
     /// </summary>
     private void UpdateAuthors()
     {
@@ -117,7 +120,7 @@ public sealed partial class RepositoryViewModel
         // no GitHub branch reaches, tells the hosting nothing (an empty set would only replace a set
         // the hosting has waiting).
         var authors = AuthorsOnGitHub(graph, HostingState.Remotes);
-        if ((_authorsSent ?? []).SequenceEqual(authors, StringComparer.Ordinal))
+        if ((_authorsSent ?? []).Select(author => author.Email).SequenceEqual(authors.Select(author => author.Email), StringComparer.Ordinal))
         {
             return;
         }
@@ -129,25 +132,31 @@ public sealed partial class RepositoryViewModel
     /// <summary>
     /// The distinct author e-mails, lower-case (invariant), newest first and at most
     /// <see cref="AvatarAuthors"/>, of those of the first <see cref="AvatarRows"/> rows that a
-    /// remote-tracking branch of a GitHub remote (a key of <paramref name="remotes"/>) reaches. One
-    /// pass in row order: the branches' tips start the set and a row in it adds its parents, since
-    /// the graph's order shows no parent before its children. The address of a commit that is only
-    /// local, or only on another remote, is never in it (D311).
+    /// remote-tracking branch of a GitHub remote (a key of <paramref name="remotes"/>) reaches, each
+    /// with its newest such commit and the repository of the remote that reaches it, the first in
+    /// <see cref="HostingRemoteOrder"/> when several do (D339). One pass in row order: the branches'
+    /// tips start the set and a row in it adds its parents, with its remote, since the graph's order
+    /// shows no parent before its children. The address of a commit that is only local, or only on
+    /// another remote, is never in it (D311).
     /// </summary>
-    public static IReadOnlyList<string> AuthorsOnGitHub(CommitGraphData graph, IReadOnlyDictionary<string, HostedRepository> remotes)
+    public static IReadOnlyList<AuthorCommit> AuthorsOnGitHub(CommitGraphData graph, IReadOnlyDictionary<string, HostedRepository> remotes)
     {
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(remotes);
-        var reached = new HashSet<string>(StringComparer.Ordinal);
+
+        // Each reached SHA with the place, in the remotes' order, of the first remote that reaches it.
+        var order = HostingRemoteOrder.Of(remotes.Keys);
+        var places = order.Select((remote, place) => (remote, place)).ToDictionary(pair => pair.remote, pair => pair.place, StringComparer.Ordinal);
+        var reached = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var gitRef in graph.Refs.Refs)
         {
-            if (gitRef.Kind == RefKind.RemoteBranch && gitRef.RemoteName is { } remote && remotes.ContainsKey(remote))
+            if (gitRef.Kind == RefKind.RemoteBranch && gitRef.RemoteName is { } remote && places.TryGetValue(remote, out var place))
             {
-                reached.Add(gitRef.TargetSha);
+                Reach(reached, gitRef.TargetSha, place);
             }
         }
 
-        var authors = new List<string>();
+        var authors = new List<AuthorCommit>();
         if (reached.Count == 0)
         {
             return authors;
@@ -158,23 +167,32 @@ public sealed partial class RepositoryViewModel
         for (var row = 0; row < rows && authors.Count < AvatarAuthors; row++)
         {
             var commit = graph.CommitAt(row);
-            if (!reached.Contains(commit.Sha))
+            if (!reached.TryGetValue(commit.Sha, out var by))
             {
                 continue;
             }
 
             foreach (var parent in commit.Parents)
             {
-                reached.Add(parent);
+                Reach(reached, parent, by);
             }
 
             var email = commit.AuthorEmail.ToLowerInvariant();
             if (email.Length > 0 && seen.Add(email))
             {
-                authors.Add(email);
+                authors.Add(new AuthorCommit(email, commit.Sha, remotes[order[by]]));
             }
         }
 
         return authors;
+    }
+
+    /// <summary>Marks <paramref name="sha"/> reached by the remote at <paramref name="place"/>, unless one before it already reaches it.</summary>
+    private static void Reach(Dictionary<string, int> reached, string sha, int place)
+    {
+        if (!reached.TryGetValue(sha, out var held) || place < held)
+        {
+            reached[sha] = place;
+        }
     }
 }

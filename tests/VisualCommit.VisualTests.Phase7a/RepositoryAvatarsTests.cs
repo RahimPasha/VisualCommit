@@ -21,7 +21,8 @@ namespace VisualCommit.VisualTests.Phase7a;
 /// What a repository tab tells its hosting about its authors (docs/phase-7a-design.md 11.3, 11.4;
 /// D257, D311), with fakes of <see cref="IHostingSession"/> and <see cref="IRepositoryHosting"/> in
 /// hand-built <see cref="TabServices"/>: the set (lower-case, newest first, at most 200, of the first
-/// 2,000 rows) of the commits a GitHub remote's branch reaches only; nothing without an account's
+/// 2,000 rows) of the commits a GitHub remote's branch reaches only, each address with its newest such
+/// commit and the first remote in the remotes' order that reaches it (D339); nothing without an account's
 /// listing or in summary mode; not twice, but again after a sign-out; with the state there before
 /// the graph, nothing for the placeholder graph and the set once the loading graph, followed on a UI
 /// thread the test pumps, is whole or has 2,000 rows; the avatars to the details panel; and the
@@ -34,10 +35,14 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
 
     private static readonly HostedRepository OctoHello = new(HostingProvider.GitHub, "github.com", "octo", "hello");
 
+    private static readonly HostedRepository AcmeHello = new(HostingProvider.GitHub, "github.com", "acme", "hello");
+
     private readonly TempDirectory _data = new("phase7a repository avatars");
     private readonly FakeSession _session = new();
     private readonly RecordingLog _log = new();
     private TempRepo? _repo;
+    private string _octoOnOrigin = string.Empty;
+    private string _adaOnOrigin = string.Empty;
 
     public async ValueTask InitializeAsync()
     {
@@ -45,8 +50,9 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         // Lin's only local, on main.
         var repo = await TempRepo.CreateAsync("hello");
         _repo = repo;
-        await repo.CommitFileAsAsync("a.txt", "1\n", "One", "Octo Cat", "octo@example.com");
+        _octoOnOrigin = await repo.CommitFileAsAsync("a.txt", "1\n", "One", "Octo Cat", "octo@example.com");
         var onOrigin = await repo.CommitFileAsAsync("b.txt", "2\n", "Two", "Ada Lovelace", "Ada@Example.com");
+        _adaOnOrigin = onOrigin;
         await repo.GitAsync("remote", "add", "origin", "https://github.com/octo/hello.git");
         await repo.GitAsync("remote", "add", "other", "https://example.com/other.git");
         await repo.GitAsync("update-ref", "refs/remotes/origin/main", onOrigin);
@@ -63,6 +69,10 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         _data.Dispose();
         return ValueTask.CompletedTask;
     }
+
+    /// <summary>The e-mails of each set <paramref name="hosting"/> was told, in order.</summary>
+    private static List<IReadOnlyList<string>> Emails(FakeHosting hosting) =>
+        [.. hosting.Sent.Select(set => (IReadOnlyList<string>)[.. set.Select(author => author.Email)])];
 
     private static RepositoryHostingState State(PullRequestsState state, bool gitHub = true) =>
         new(state, gitHub ? new Dictionary<string, HostedRepository>(StringComparer.Ordinal) { ["origin"] = OctoHello } : new Dictionary<string, HostedRepository>(StringComparer.Ordinal), gitHub ? OctoHello : null, null, null, new Dictionary<string, PullRequest>(StringComparer.Ordinal));
@@ -153,8 +163,9 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         hosting.Raise(State(PullRequestsState.Loading));
 
         // Lin's commit is only local and Bob's only on another server: neither address is sent. Ada's
-        // newest commit is local, but her older one is on origin.
-        Assert.Equal([["ada@example.com", "octo@example.com"]], hosting.Sent);
+        // newest commit is local, but her older one is on origin: that one comes with her address.
+        Assert.Equal([["ada@example.com", "octo@example.com"]], Emails(hosting));
+        Assert.Equal([new AuthorCommit("ada@example.com", _adaOnOrigin, OctoHello), new AuthorCommit("octo@example.com", _octoOnOrigin, OctoHello)], hosting.Sent[0]);
 
         // The same set is not sent again, whatever state follows.
         hosting.Raise(State(PullRequestsState.Loaded));
@@ -213,7 +224,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         // A few rows: the set went once the graph was whole, through the followed graph's Changed.
         var at = Assert.Single(followed.Sends);
         Assert.True(at.IsComplete, "The set was sent before the graph was whole.");
-        Assert.Equal([["ada@example.com", "octo@example.com"]], followed.Hosting.Sent);
+        Assert.Equal([["ada@example.com", "octo@example.com"]], Emails(followed.Hosting));
     }
 
     [Fact]
@@ -252,14 +263,40 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         Assert.True(viewModel.Graph.IsComplete);
 
         // 300 addresses among the newest 2,000 rows: the first 200 of them, newest first; none of the oldest.
-        var sent = Assert.Single(hosting.Sent);
+        var sent = Assert.Single(Emails(hosting));
         Assert.Equal(RepositoryViewModel.AvatarAuthors, sent.Count);
         Assert.Equal(sent.Count, sent.Distinct().Count());
         Assert.Equal("author0@example.com", sent[0]);
         Assert.DoesNotContain("old@example.com", sent);
 
         // The static pass over the same graph says the same.
-        Assert.Equal(sent, RepositoryViewModel.AuthorsOnGitHub(viewModel.Graph, hosting.State.Remotes));
+        Assert.Equal(hosting.Sent[0], RepositoryViewModel.AuthorsOnGitHub(viewModel.Graph, hosting.State.Remotes));
+    }
+
+    [Fact]
+    public async Task Each_address_comes_with_its_newest_reached_commit_and_the_first_remote_that_reaches_it()
+    {
+        // Octo's commit is upstream's main and origin's main's parent; Ada's is origin's main; Bob's,
+        // the newest, only upstream's topic.
+        using var repo = await TempRepo.CreateAsync("remotes");
+        var octo = await repo.CommitFileAsAsync("a.txt", "1\n", "One", "Octo Cat", "octo@example.com");
+        var ada = await repo.CommitFileAsAsync("b.txt", "2\n", "Two", "Ada Lovelace", "ada@example.com");
+        await repo.GitAsync("remote", "add", "origin", "https://github.com/octo/hello.git");
+        await repo.GitAsync("remote", "add", "upstream", "https://github.com/acme/hello.git");
+        await repo.GitAsync("update-ref", "refs/remotes/origin/main", ada);
+        await repo.GitAsync("update-ref", "refs/remotes/upstream/main", octo);
+        await repo.GitAsync("reset", "--hard", "--quiet", octo);
+        var bob = await repo.CommitFileAsAsync("c.txt", "3\n", "Three", "Bob", "bob@example.com");
+        await repo.GitAsync("update-ref", "refs/remotes/upstream/topic", bob);
+        await repo.GitAsync("reset", "--hard", "--quiet", ada);
+        using var viewModel = await OpenAsync(repo.Path);
+
+        // Octo's commit goes with origin, first in the remotes' order (whatever the dictionary's),
+        // though upstream reaches it too; Bob's with upstream, the only remote that reaches it.
+        var remotes = new Dictionary<string, HostedRepository>(StringComparer.Ordinal) { ["upstream"] = AcmeHello, ["origin"] = OctoHello };
+        Assert.Equal(
+            [new AuthorCommit("bob@example.com", bob, AcmeHello), new AuthorCommit("ada@example.com", ada, OctoHello), new AuthorCommit("octo@example.com", octo, OctoHello)],
+            RepositoryViewModel.AuthorsOnGitHub(viewModel.Graph, remotes));
     }
 
     [Fact]
@@ -362,7 +399,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
 
         public bool WantsUrlRewrites => false;
 
-        public List<IReadOnlyList<string>> Sent { get; } = [];
+        public List<IReadOnlyList<AuthorCommit>> Sent { get; } = [];
 
         public event EventHandler? Changed;
 
@@ -385,7 +422,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
 
         public Task RefreshPullRequestsAsync(CancellationToken ct) => Task.CompletedTask;
 
-        public void ShowAvatarsFor(IReadOnlyCollection<string> emails) => Sent.Add([.. emails]);
+        public void ShowAvatarsFor(IReadOnlyCollection<AuthorCommit> authors) => Sent.Add([.. authors]);
 
         public Task<HostingResult<RepositoryInfo>> ReadRepositoryAsync(CancellationToken ct) => throw new NotSupportedException();
 

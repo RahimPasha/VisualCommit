@@ -189,6 +189,22 @@ public sealed class GraphAvatarTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_file_missing_at_its_first_decode_shows_once_it_is_written()
+    {
+        // As at a sign-out whose files go while a decode is on its way: the file is missing, then
+        // written again under the same name, and the next change decodes it rather than keep none.
+        using var host = Show(new CommitGraphControl { Data = Authors() }, WideWidth);
+        var file = Path.Combine(_folder.Path, "1001.png");
+        Assert.Equal([0], Apply(host, Of((OctoEmail, file))));
+        Assert.False(host.Control.ShowsAvatarFor(OctoEmail));
+
+        Assert.Equal(file, OctoImage());
+        Assert.Equal([0], Apply(host, AuthorAvatars.None));
+        Assert.Equal([1], Apply(host, Of((OctoEmail, file))));
+        Assert.True(host.Control.ShowsAvatarFor(OctoEmail));
+    }
+
+    [AvaloniaFact]
     public void A_hidden_author_column_draws_none_and_still_counts_the_decoded_authors()
     {
         var data = Authors();
@@ -232,12 +248,27 @@ public sealed class GraphAvatarTests : IDisposable
     public void An_overtaken_change_applies_nothing_and_the_newest_is_applied_once()
     {
         var data = Authors();
-        using var host = Show(new CommitGraphControl { Data = data }, WideWidth);
-        var counts = new List<int>();
-        host.Control.AvatarsApplied += (_, count) => counts.Add(count);
-        host.Control.Avatars = Of((OctoEmail, OctoImage()));
-        Assert.Equal([0], Apply(host, Of(("author@example.com", Path.Combine(_folder.Path, "missing.png")))));
-        Assert.Equal([0], counts);
-        Assert.False(host.Control.ShowsAvatarFor(OctoEmail));
+        var octo = Of((OctoEmail, OctoImage()));
+
+        // The decode runs on the thread pool and can finish before the UI thread reaches its await;
+        // the first change is then applied at once, inside its own setter, and was never overtaken.
+        // Such a try proves nothing, so it is made again with a fresh control, which decodes anew.
+        for (var attempt = 1; ; attempt++)
+        {
+            using var host = Show(new CommitGraphControl { Data = data }, WideWidth);
+            var counts = new List<int>();
+            host.Control.AvatarsApplied += (_, count) => counts.Add(count);
+            host.Control.Avatars = octo;
+            if (counts.Count > 0)
+            {
+                Assert.True(attempt < 10, $"In each of {attempt} tries the first change was applied before the second was set, so none was overtaken.");
+                continue;
+            }
+
+            Assert.Equal([0], Apply(host, Of(("author@example.com", Path.Combine(_folder.Path, "missing.png")))));
+            Assert.Equal([0], counts);
+            Assert.False(host.Control.ShowsAvatarFor(OctoEmail));
+            return;
+        }
     }
 }

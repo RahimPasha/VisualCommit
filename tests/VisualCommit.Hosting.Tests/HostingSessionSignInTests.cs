@@ -263,11 +263,12 @@ public sealed class HostingSessionSignInTests
         Assert.True(File.Exists(Path.Combine(setup.Paths.AvatarsDirectory, "authors", "github_127.0.0.1_1_octo_hello.json")));
         Assert.True(File.Exists(Path.Combine(setup.Paths.AvatarsDirectory, "1001.png")));
 
+        var authors = await RepositoryHostingAvatarsTests.OnMainAsync(setup, Scenarios.OctoEmail, Scenarios.AdaEmail);
         using (var hold = setup.Fake.HoldNext("avatar:1003"))
         {
             var run = await setup.Thread.RunAsync<Task>(() =>
             {
-                hosting.ShowAvatarsFor([Scenarios.OctoEmail, Scenarios.AdaEmail]);
+                hosting.ShowAvatarsFor(authors);
                 return hosting.AvatarRun;
             });
             await hold.Arrived.WaitAsync(Cancelled);
