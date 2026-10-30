@@ -177,7 +177,8 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
 
     /// <summary>
     /// 14.4's Check_2: the app signs in, clones the sandbox from the repository browser through its
-    /// own helper (no credentials dialog, no helper of the user's or the system's), lists its pull
+    /// own helper (no credentials dialog, no helper of the user's or the system's, the broker's line
+    /// that git's get was answered from the account), lists its pull
     /// requests and waits for its avatars, pushes a new branch and creates a draft pull request through
     /// the form (a ready one when GitHub refuses the draft, the refusal recorded); the test
     /// reads it back, tries the same create again (r5 14), closes it and deletes the branch, then
@@ -310,6 +311,13 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
 
             var opened = await app.WaitForRepositoryAsync(CloneLimit);
             run.Note($"The clone: {cloneClock.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s to the repository opened in the tab.");
+
+            // The account's token reached git through the app's helper (D255): a credential of
+            // another kind (a netrc entry, D340) would clone the private sandbox as well.
+            var answered = $"{Path.GetFileName(clone)}: Clone: git's credential get for github.com answered from the account.";
+            Assert.True(
+                app.LogLinesSince(cloneMark).Any(line => line.EndsWith(answered, StringComparison.Ordinal)),
+                $"No line of the log since the click on Clone ends with \"{answered}\".");
             Assert.Equal(url, (await GitOkAsync(git, clone, session, "config", "--get", "remote.origin.url")).StandardOutput.Trim());
             var credentialKeys = await GitAsync(git, clone, session, "config", "--get-regexp", "^credential");
             Assert.True(credentialKeys.ExitCode == 1, "The clone's configuration holds credential keys: " + string.Join(", ", Keys(credentialKeys.StandardOutput)));
