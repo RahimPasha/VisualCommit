@@ -293,7 +293,10 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
     public void Dispose() => _client.Dispose();
 
-    /// <summary>Forgets the client's kept answers (a sign-out, 7.5): no answer to the old token stays in memory.</summary>
+    /// <summary>
+    /// Forgets the client's kept answers (a sign-out, 7.5). An answer a request still in flight
+    /// brings is kept under its token's fingerprint, which no other token's request finds.
+    /// </summary>
     internal void ForgetKept() => _client.ForgetKept();
 
     /// <summary><c>repos/{owner}/{name}</c>, each segment escaped.</summary>

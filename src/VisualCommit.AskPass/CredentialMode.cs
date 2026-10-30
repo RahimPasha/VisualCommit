@@ -72,7 +72,8 @@ internal static class CredentialMode
         await pipe.WriteAsync(AskPassProtocol.FormatCredentialRequest(request)).ConfigureAwait(false);
         await pipe.FlushAsync().ConfigureAwait(false);
 
-        // The app answers without UI; it may wait for the keychain's first read (at most 10 s).
+        // The app answers without UI. Through git it never waits for the keychain's first read:
+        // nothing is bound before that read ends (the session's GetAsync).
         using var waiting = new CancellationTokenSource(AskPassProtocol.CredentialAnswerTimeout);
         var line = await AskPassProtocol.ReadLineAsync(pipe, waiting.Token).ConfigureAwait(false);
         if (action != "get" || line is null || !AskPassProtocol.TryParseAnswer(line, out var answer))

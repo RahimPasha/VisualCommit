@@ -335,9 +335,9 @@ public sealed class HostingSession : IHostingSession
     /// git's <c>get</c> for a bound URL (7.6, ruling 6): the token while <paramref name="account"/>
     /// is the signed-in account and "Use for git over HTTPS" is on; else null. Never UI. It waits
     /// for the start's read, at most 10 s by the session's clock, but through git no get comes
-    /// before that read ends: nothing is bound until the read has put the token in the slot (7.4)
-    /// and the tab's next refs read has read the rules, so an operation started meanwhile goes
-    /// D82's order. The wait guards a direct call.
+    /// before that read ends: nothing is bound until the read has put the token in the slot (7.4),
+    /// just before it ends, and a tab's bindings also wait for its next refs read with the rules, so
+    /// an operation started meanwhile goes D82's order. The wait guards a direct call.
     /// </summary>
     public async Task<GitCredential?> GetAsync(AccountKey account, CancellationToken cancellationToken)
     {
