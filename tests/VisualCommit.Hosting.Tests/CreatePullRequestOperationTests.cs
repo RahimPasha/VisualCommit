@@ -19,7 +19,9 @@ namespace VisualCommit.Hosting.Tests;
 /// fake of GitHub on port 0 and signed in: the head's place and push (a pushed branch, one not on
 /// GitHub, one ahead, one tracking another name, a remote branch, a fork's), the POST's body, the
 /// report, the offer, the list, the undo entry of the push, Cancel offered while pushing only,
-/// 12.6's error rows, a lost answer counted as created, the bases of a fork, and signed out.
+/// 12.6's error rows (GitHub's and git's: a rejected push, a declined one, git's credentials
+/// refused), the note read again after a failure, a lost answer counted as created, the bases of
+/// a fork, and signed out.
 /// </summary>
 public sealed class CreatePullRequestOperationTests
 {
@@ -236,9 +238,11 @@ public sealed class CreatePullRequestOperationTests
         Assert.Equal(("upstream/main", "acme/tool"), (form.BaseText, form.BaseRepository));
 
         // octo's fine-grained token cannot open one in another owner's repository (12.6); its classic one can.
+        // The push ended before the refused POST: idea is on origin now, and the note read again says nothing (12.4).
         await form.CreateCommand.ExecuteAsync(null);
         Assert.Equal(Texts.ForkTokenRefused("acme/tool"), form.Error);
         Assert.Contains(served.GitHub.Requests.Skip(requests), request => request.Route == "create:acme/tool" && request.Status == 403);
+        Assert.Null(form.HeadNote);
         await app.SignInAsync(served.OctoClassicToken, Cancelled);
         await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.Loaded, "signed in with the classic token");
 
@@ -253,8 +257,20 @@ public sealed class CreatePullRequestOperationTests
         Assert.Equal(("An idea for the tool", string.Empty, "octo:idea", "main", false, true), Body(post));
         Assert.Contains(served.GitHub.PullRequests("acme/tool"), pull => pull.HeadRef == "idea" && pull.IsOpen);
 
-        // D314: one entry, for the push; the failed create pushed too, and its push is the first.
-        Assert.All(repository.UndoHistory.Entries.Skip(undo), entry => Assert.Equal(UndoKind.Push, entry.Kind));
+        // D314: one entry, for the push of the failed create; the second pushed nothing.
+        Assert.Equal(UndoKind.Push, Assert.Single(repository.UndoHistory.Entries.Skip(undo)).Kind);
+
+        // "Already exists" for one the list cannot hold (the list is acme/tool's, the base octo/tool): GitHub's words (12.6).
+        served.GitHub.AddPullRequest("octo", "tool", "An idea for the tool", "octo", "idea", "main");
+        (form, opening) = await OpenFormAsync(app, repository, "refs/heads/idea");
+        Assert.Null(form.HeadNote);
+        await ChooseAsync(app, form, "origin/main");
+        await form.CreateCommand.ExecuteAsync(null);
+        Assert.Equal("Validation Failed: A pull request already exists for octo:idea.", form.Error);
+        Assert.Null(form.ExistingNumber);
+        Assert.False(form.IsClosed);
+        form.Cancel();
+        await opening;
         await EndAsync(app, data, served);
     }
 
@@ -263,6 +279,8 @@ public sealed class CreatePullRequestOperationTests
     {
         await using var served = await ServeAsync();
         await served.Tool.GitAsync("remote", "remove", "upstream");
+        await served.Tool.GitAsync("switch", "--quiet", "-c", "idea");
+        await served.Tool.CommitFileAsync("idea.txt", "idea\n", "An idea for the tool");
         using var data = new TempDirectory("create pull request");
         using var app = await OpenAsync(data, served, served.Tool, count: 2);
         var repository = app.Session.Shell.ActiveTab.Repository!;
@@ -283,6 +301,21 @@ public sealed class CreatePullRequestOperationTests
         Assert.Equal("acme:main", form.BaseText);
         form.Cancel();
         await opening;
+
+        // Into acme:main, a repository no remote is (ruling 61): idea pushed to origin, the POST into acme/tool from octo:idea.
+        await app.SignInAsync(served.OctoClassicToken, Cancelled);
+        await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.Loaded, "signed in with the classic token");
+        var calls = app.CallMark();
+        var requests = served.GitHub.Requests.Count;
+        (form, opening) = await OpenFormAsync(app, repository, "refs/heads/idea");
+        Assert.Equal(("acme:main", "acme/tool"), (form.BaseText, form.BaseRepository));
+        Assert.Equal(Texts.PushedFirstWithUpstream("origin/idea"), form.HeadNote);
+        await CreateAsync(form, opening);
+        await app.WaitForIdleAsync();
+        Assert.Contains("git push --progress --set-upstream origin refs/heads/idea:refs/heads/idea", CallsSince(app, calls));
+        Assert.Equal(("An idea for the tool", string.Empty, "octo:idea", "main", false, true), Body(Post(served, "create:acme/tool", requests)));
+        Assert.Single(served.GitHub.Requests.Skip(requests), request => request.Route == "create:acme/tool");
+        Assert.Contains(served.GitHub.PullRequests("acme/tool"), pull => pull.HeadRef == "idea" && pull.IsOpen);
         await EndAsync(app, data, served);
     }
 
@@ -312,7 +345,7 @@ public sealed class CreatePullRequestOperationTests
             await form.CreateCommand.ExecuteAsync(null);
             Assert.False(form.IsClosed);
             Assert.NotNull(form.Error);
-            Assert.StartsWith(words.Replace("acme", form.Error!.Split(' ')[0], StringComparison.Ordinal), form.Error, StringComparison.Ordinal);
+            Assert.StartsWith(words, form.Error, StringComparison.Ordinal);
             Assert.True(form.IsIdle);
             Assert.Equal("Create pull request for topic/no-pr failed", repository.OperationStatus.Text);
             Assert.False(repository.OperationStatus.HasOffer);
@@ -396,6 +429,82 @@ public sealed class CreatePullRequestOperationTests
     }
 
     [AvaloniaFact]
+    public async Task A_rejected_push_and_one_GitHub_declines_give_git_s_words_and_post_nothing()
+    {
+        await using var served = await ServeAsync();
+        await served.Hello.GitAsync("switch", "--quiet", "--track", "-c", "topic/no-pr", "origin/topic/no-pr");
+        await served.Hello.CommitFileAsync("idea.txt", "more\n", "More of the idea");
+
+        // GitHub's topic/no-pr moved on to a commit the clone has never seen: the push is no fast-forward.
+        var bare = Bare(served, "octo/hello");
+        var tip = (await GitInAsync(bare, "rev-parse", TopicRef)).Trim();
+        var elsewhere = (await GitInAsync(bare, "commit-tree", tip + "^{tree}", "-p", tip, "-m", "Pushed from elsewhere")).Trim();
+        await GitInAsync(bare, "update-ref", TopicRef, elsewhere, tip);
+        await served.GitHub.SyncRefsAsync("octo/hello", Cancelled);
+        using var data = new TempDirectory("create pull request");
+        using var app = await OpenAsync(data, served);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        var requests = served.GitHub.Requests.Count;
+
+        var (form, opening) = await OpenFormAsync(app, repository, TopicRef);
+        Assert.Equal(Texts.AheadPushedFirst(1, "origin/topic/no-pr"), form.HeadNote);
+        await form.CreateCommand.ExecuteAsync(null);
+        Assert.Equal("origin has commits that your topic/no-pr does not have. Pull first, then push again.", form.Error);
+        Assert.Equal(OperationTexts.PushRejected("origin", "topic/no-pr"), form.Error);
+        Assert.Same(form, app.Session.Services.DialogHost.Current);
+        Assert.True(form.IsIdle);
+        Assert.Equal(Texts.AheadPushedFirst(1, "origin/topic/no-pr"), form.HeadNote);
+        Assert.Equal("Create pull request for topic/no-pr failed", repository.OperationStatus.Text);
+        Assert.Equal(elsewhere, (await GitInAsync(bare, "rev-parse", TopicRef)).Trim());
+        form.Cancel();
+        await opening;
+
+        // GitHub's git declines the push (a pre-receive hook): git's first line about it, after the pack's lines and "To".
+        InstallPreReceive(bare, "echo 'Pushes to octo/hello are closed today.' >&2\nexit 1");
+        (form, opening) = await OpenFormAsync(app, repository, "refs/heads/local-work");
+        await form.CreateCommand.ExecuteAsync(null);
+        Assert.Equal("Git could not push local-work to origin/local-work: remote: Pushes to octo/hello are closed today.", form.Error);
+        Assert.Same(form, app.Session.Services.DialogHost.Current);
+        Assert.True(form.IsIdle);
+        Assert.Equal(Texts.PushedFirstWithUpstream("origin/local-work"), form.HeadNote);
+        Assert.Equal("Create pull request for local-work failed", repository.OperationStatus.Text);
+        Assert.Equal(string.Empty, (await GitInAsync(bare, "for-each-ref", "refs/heads/local-work")).Trim());
+        form.Cancel();
+        await opening;
+
+        Assert.DoesNotContain(served.GitHub.Requests.Skip(requests), request => request.Route == "create:octo/hello");
+        await EndAsync(app, data, served);
+    }
+
+    [AvaloniaFact]
+    public async Task A_push_that_ended_before_a_refused_create_is_not_noted_or_pushed_again()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("create pull request");
+        using var app = await OpenAsync(data, served);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        var calls = app.CallMark();
+
+        var (form, opening) = await OpenFormAsync(app, repository, "refs/heads/local-work");
+        Assert.Equal(Texts.PushedFirstWithUpstream("origin/local-work"), form.HeadNote);
+        served.GitHub.FailNext("create:octo/hello", FakeGitHubFault.Forbidden);
+        await form.CreateCommand.ExecuteAsync(null);
+
+        // 12.4: the note read again from the refs the operation left, where local-work is on origin with that upstream.
+        Assert.Equal("GitHub refused to create a pull request in octo/hello with this token. It needs the permission pull_requests=write.", form.Error);
+        Assert.Single(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Equal("refs/heads/local-work", await GitAsync(served.Hello, "config", "branch.local-work.merge"));
+        Assert.Null(form.HeadNote);
+
+        calls = app.CallMark();
+        await CreateAsync(form, opening);
+        await app.WaitForIdleAsync();
+        Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
+        Assert.Equal("Created pull request #6", repository.OperationStatus.Text);
+        await EndAsync(app, data, served);
+    }
+
+    [AvaloniaFact]
     public async Task Signed_out_the_sign_in_comes_first_and_refusing_it_opens_no_form()
     {
         await using var served = await ServeAsync();
@@ -464,6 +573,18 @@ public sealed class CreatePullRequestOperationTests
         [.. app.Launcher.Requests.Where(request => request.Kind == FileLaunchKind.OpenUrl).Select(request => request.FullPath)];
 
     private static string Bare(ServedHosting served, string fullName) => served.GitHub.Repository(fullName).BarePath!;
+
+    /// <summary>A <c>pre-receive</c> hook in the bare repository, which the fake's <c>git http-backend</c> runs (executable on Linux and macOS; git for Windows runs any file there).</summary>
+    private static void InstallPreReceive(string bare, string body)
+    {
+        var path = Path.Combine(bare, "hooks", "pre-receive");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "#!/bin/sh\ncat >/dev/null\n" + body.ReplaceLineEndings("\n") + "\n");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
 
     /// <summary>The scenario "hosting" served on port 0: the clones' URLs are the fake's, so the app recognises them (design 16.3).</summary>
     private static async Task<ServedHosting> ServeAsync()

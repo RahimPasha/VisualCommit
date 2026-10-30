@@ -4,6 +4,7 @@
 // itself: PullRequestForm does, on the UI thread.
 
 using System.Globalization;
+using System.Text.RegularExpressions;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.Core.Git;
@@ -84,7 +85,7 @@ public sealed partial class RepositoryOperations
     /// refs at each Create, the bases, A3's default, and Create as one network operation of the
     /// queue (D312, D315, D316), its cancel window open while the push runs (ruling 59).
     /// </summary>
-    private sealed class PullRequestForm(RepositoryOperations operations, GitRef head) : ICreatePullRequestActions
+    private sealed partial class PullRequestForm(RepositoryOperations operations, GitRef head) : ICreatePullRequestActions
     {
         private PullRequestPlace? _place;
         private PullRequest? _existing;
@@ -269,8 +270,9 @@ public sealed partial class RepositoryOperations
         /// 12.5: the head's place again from the refs now, then one network operation: the push when
         /// it needs one (WP-C's guards, then git), the end of the cancel window (D315), the POST, and
         /// on success the list's refresh and the status bar's offer (D317); a failure's words come
-        /// back to the form (D312). Its own cancellation (<see cref="CancelCreate"/>) cancels it
-        /// through the queue.
+        /// back to the form (D312), with the head's place read again from the refs the operation
+        /// left (12.4: a push that ended before a refused POST leaves no note). Its own
+        /// cancellation (<see cref="CancelCreate"/>) cancels it through the queue.
         /// </summary>
         public async Task<CreatePullRequestOutcome> CreateAsync(PullRequestEnd baseEnd, string title, string body, bool draft)
         {
@@ -336,6 +338,12 @@ public sealed partial class RepositoryOperations
                 SetWindow(false);
             }
 
+            // The queue ends a push's operation only once it has read the refs again (RefreshScope.Refs).
+            if (result.Outcome != OperationOutcome.Succeeded)
+            {
+                await ComputePlaceAsync();
+            }
+
             return result.Outcome switch
             {
                 OperationOutcome.Succeeded => new CreatePullRequestOutcome(true, null, null),
@@ -358,7 +366,7 @@ public sealed partial class RepositoryOperations
             }
 
             var failure = answer.Failure ?? new HostingFailure(HostingFailureKind.Malformed, string.Empty);
-            Log.Warning($"{Repository.Name}: {text.Title}: GitHub did not create it: {failure.Kind}, {failure.Message}"
+            Log.Warning($"{Repository.Name}: {text.Title}: the request to create it failed: {failure.Kind}, {failure.Message}"
                 + (failure.RequestId is { } id ? $" (request {id})" : string.Empty));
             string words;
             if (failure.Kind == HostingFailureKind.Validation && failure.Detail?.StartsWith("A pull request already exists", StringComparison.Ordinal) == true)
@@ -444,9 +452,18 @@ public sealed partial class RepositoryOperations
                 return OperationTexts.GitCredentialsRefused(LoginOf(refused));
             }
 
-            var line = failure.GitOutput.Split('\n').Select(part => part.Trim()).FirstOrDefault(part => part.Length > 0) ?? failure.Summary;
+            var line = failure.GitOutput.Split('\n').Select(part => part.Trim()).FirstOrDefault(part => part.Length > 0 && !PushReportLine().IsMatch(part)) ?? failure.Summary;
             return Texts.PushFailed(push.Branch, place.Target, line);
         }
+
+        /// <summary>
+        /// The lines a push writes whatever its outcome, which say nothing of a failure: the pack's
+        /// (<c>Enumerating objects: 4, done.</c>, <c>Delta compression using up to 8 threads</c>,
+        /// <c>Total 3 (delta 0), …</c>, which the progress filter keeps, having no percentage) and
+        /// the report's <c>To {url}</c>.
+        /// </summary>
+        [GeneratedRegex(@"^(?:Enumerating objects: |Delta compression using |Total [0-9]+ \(delta |To \S+$)", RegexOptions.CultureInvariant)]
+        private static partial Regex PushReportLine();
 
         private string LoginOf(AccountKey key) =>
             operations.Services?.Hosting.Account?.Account is { } account && account.Key.Equals(key) ? account.Login : key.Login;
