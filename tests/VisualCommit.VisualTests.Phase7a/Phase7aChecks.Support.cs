@@ -168,12 +168,41 @@ public abstract partial class Phase7aChecks
     private static Screenshot CaptureForPicture(ShellDriver app, bool keepPointer)
     {
         app.WaitForCommitDetails();
+        WaitForAuthorAvatar(app);
         if (!keepPointer && !app.IsMenuOpen && !IsDragging(app))
         {
             app.MoveToNeutral();
         }
 
         return app.Capture();
+    }
+
+    /// <summary>
+    /// The report's open point 44: while the active tab's details name an author's image
+    /// (<c>Details.AuthorAvatarFile</c>) that <c>DetailsAuthorAvatar</c> does not show yet (it is
+    /// decoded off the UI thread, design 11.3), waits for it. Nothing to wait for without a file, as
+    /// always with GitHub off, or without the panel in the window.
+    /// </summary>
+    private static void WaitForAuthorAvatar(ShellDriver app)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            app.Settle();
+            if (app.Session.Shell.ActiveTab.Repository?.Details is not { AuthorAvatarFile: not null }
+                || app.Window.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().FirstOrDefault(ellipse => ellipse.Name == "DetailsAuthorAvatar") is not { } avatar
+                || avatar.IsVisible)
+            {
+                return;
+            }
+
+            if (clock.Elapsed >= ShellDriver.DefaultWaitTimeout)
+            {
+                throw new TimeoutException("Timed out waiting for the details panel to show the author's avatar.");
+            }
+
+            Thread.Sleep(10);
+        }
     }
 
     /// <summary>

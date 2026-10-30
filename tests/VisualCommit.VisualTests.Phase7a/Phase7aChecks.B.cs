@@ -246,6 +246,7 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
             app.Click(app.Find<Button>("CloneStartButton"));
             var repository = await app.WaitForRepositoryAsync();
             await app.WaitForAsync(() => app.LogLinesSince(log).Any(line => line.Contains(PartB.HelloListed, StringComparison.Ordinal)), "hello's pull requests listed");
+            await app.WaitForLogLineAsync(AppLogFile.AvatarsShown(Hello), mark: log);
             await app.WaitForWatchersQuietAsync();
 
             var lines = LogSince(app, log);
@@ -508,6 +509,14 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
             await app.WaitForSignInCheckAsync(dialog);
             var browser = await WaitForBrowserAsync(app, loaded: true);
             await app.WaitForAsync(() => app.LogLinesSince(log).Any(line => line.Contains(PartB.HelloListed, StringComparison.Ordinal)), "hello's pull requests listed");
+
+            // From WP-V's merge (open point 43): hello's tab is no longer active, so its avatars' line
+            // does not come; the avatars' requests and hello's Avatars instead.
+            await WaitForRequestsAsync(app, served, requests, "avatar:1001");
+            await WaitForRequestsAsync(app, served, requests, "avatar:1003");
+            await app.WaitForAsync(
+                () => helloTab.Repository is { } hello && hello.Avatars.FileOf(OctoEmail) is not null && hello.Avatars.FileOf(AdaEmail) is not null,
+                "hello's avatars of octo and ada");
             await app.WaitForWatchersQuietAsync();
             await WaitForRequestsAsync(app, served, requests, PartB.ListRoute);
             await app.WaitForAsync(() => RequestsSince(served, requests).Any(request => request.Path == "/api/v3/repos/octo/hello/pulls"), "hello's pull requests requested");

@@ -199,12 +199,17 @@ public sealed partial class Phase7aChecksP
             Math.Abs(menu.Bounds.Height - height) <= 2,
             string.Create(CultureInfo.InvariantCulture, $"The menu is {menu.Bounds.Height} high; the report gives {height} ±2."));
 
-    /// <summary>D322: the tab's <c>{repo}: listed {count} open pull requests of {listed}</c> since <paramref name="logMark"/>, then quiet watchers.</summary>
+    /// <summary>D322: the tab's <c>{repo}: listed {count} open pull requests of {listed}</c> since <paramref name="logMark"/> and its avatars' line once since the start (<c>AvatarsShown</c>), then quiet watchers.</summary>
     private static async Task WaitForListedAsync(ShellDriver app, string repository, int count, string listed, int logMark)
     {
         var line = await app.WaitForLogLineAsync(AppLogFile.PullRequestsListed(repository), mark: logMark);
         var match = AppLogFile.PullRequestsListed(repository).Match(line);
         Assert.Equal((count.ToString(CultureInfo.InvariantCulture), listed), (match.Groups["count"].Value, match.Groups["repository"].Value));
+
+        // From WP-V's merge (open point 29, design 17 items 3 and 6): the tab's avatars once since the
+        // start, hello's 2 authors, tool's 1 (open point 42).
+        var avatars = await app.WaitForLogLineAsync(AppLogFile.AvatarsShown(repository), mark: 0);
+        Assert.Equal(repository == Phase7aExpectations.Tool ? "1" : "2", AppLogFile.AvatarsShown(repository).Match(avatars).Groups["count"].Value);
         await app.WaitForWatchersQuietAsync();
     }
 
