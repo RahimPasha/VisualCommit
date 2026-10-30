@@ -334,17 +334,19 @@ public sealed record FakeGitHubRequest(string Method, string Host, string Path, 
 
 /// <summary>
 /// A hold on a route's next request (<see cref="FakeGitHub.HoldNext"/>): the request waits, before
-/// anything is decided about it, until the hold is disposed (at most 120 s).
+/// anything is decided about it, until the hold is disposed (at most 120 s) or the request's own
+/// cancellation ends its wait (<see cref="Abandoned"/>).
 /// </summary>
 public sealed class FakeGitHubHold : IDisposable
 {
     private readonly Action _release;
     private int _disposed;
 
-    internal FakeGitHubHold(string route, Task arrived, Action release)
+    internal FakeGitHubHold(string route, Task arrived, Task abandoned, Action release)
     {
         Route = route;
         Arrived = arrived;
+        Abandoned = abandoned;
         _release = release;
     }
 
@@ -353,6 +355,14 @@ public sealed class FakeGitHubHold : IDisposable
 
     /// <summary>Completes when the request has arrived and waits; cancelled when the hold is disposed first.</summary>
     public Task Arrived { get; }
+
+    /// <summary>
+    /// Completes when the held request's own cancellation has ended its wait before the hold let it
+    /// go: it is neither answered nor recorded, so no answer of it can reach its sender. It never
+    /// completes when the request went on, and never for a git route, whose request waits at the
+    /// server's gate whatever its cancellation.
+    /// </summary>
+    public Task Abandoned { get; }
 
     /// <summary>Lets the held request go on, or drops the hold when none arrived.</summary>
     public void Dispose()
