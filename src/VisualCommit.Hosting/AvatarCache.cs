@@ -251,11 +251,6 @@ public sealed class AvatarCache : IDisposable
                 File.Delete(Path.Combine(_directory, other));
                 var index = IndexLocked();
                 index[Key(userId)] = new AvatarIndexEntryJson { File = name, FetchedAt = _clock.GetUtcNow().UtcDateTime };
-                foreach (var gone in index.Where(pair => !File.Exists(Path.Combine(_directory, pair.Value.File))).Select(pair => pair.Key).ToList())
-                {
-                    index.Remove(gone);
-                }
-
                 var json = JsonSerializer.Serialize(new AvatarIndexJson { Users = new SortedDictionary<string, AvatarIndexEntryJson>(index, StringComparer.Ordinal) }, AvatarIndexJsonContext.Default.AvatarIndexJson);
                 DurableFile.Replace(Path.Combine(_directory, IndexFileName), json);
             }
@@ -291,7 +286,9 @@ public sealed class AvatarCache : IDisposable
     /// <summary>
     /// The index, read from the disk once; empty when it is missing or unreadable (each image is then
     /// fetched again). An entry that is null, or whose key is not a user's id or whose file is not
-    /// that user's image, is left out with the same warning.
+    /// that user's image, is left out with the same warning. An entry whose image is gone is left out
+    /// without one, from a single listing of the folder, so the next save writes the index without
+    /// it; an image that goes later is caught by <see cref="Kept"/>, and its entry stays until then.
     /// </summary>
     private Dictionary<string, AvatarIndexEntryJson> IndexLocked()
     {
@@ -305,11 +302,14 @@ public sealed class AvatarCache : IDisposable
         {
             var read = File.Exists(path) ? JsonSerializer.Deserialize(File.ReadAllBytes(path), AvatarIndexJsonContext.Default.AvatarIndexJson) : null;
             var users = read?.Users ?? new Dictionary<string, AvatarIndexEntryJson>();
-            _index = new Dictionary<string, AvatarIndexEntryJson>(users.Where(pair => IsEntry(pair.Key, pair.Value)), StringComparer.Ordinal);
-            if (_index.Count < users.Count)
+            var entries = users.Where(pair => IsEntry(pair.Key, pair.Value)).ToList();
+            if (entries.Count < users.Count)
             {
                 _log.Warning("The avatars' index could not be read: the avatars are fetched again.");
             }
+
+            var images = entries.Count > 0 ? Directory.EnumerateFiles(_directory).Select(file => Path.GetFileName(file)).ToHashSet(StringComparer.Ordinal) : [];
+            _index = new Dictionary<string, AvatarIndexEntryJson>(entries.Where(pair => images.Contains(pair.Value.File)), StringComparer.Ordinal);
         }
         catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {

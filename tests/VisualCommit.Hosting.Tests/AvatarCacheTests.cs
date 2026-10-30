@@ -143,6 +143,29 @@ public sealed class AvatarCacheTests
     }
 
     [Fact]
+    public async Task An_entry_whose_image_is_gone_is_dropped_when_the_index_is_read()
+    {
+        using var setup = Setup.Start();
+        var folder = setup.Folder.Combine("avatars");
+        Directory.CreateDirectory(folder);
+        await File.WriteAllBytesAsync(Path.Combine(folder, "1001.png"), Png, Cancelled);
+        await File.WriteAllTextAsync(
+            Path.Combine(folder, "index.json"),
+            "{\"users\":{\"1001\":{\"file\":\"1001.png\",\"fetchedAt\":\"2026-01-02T08:00:00Z\"},\"1003\":{\"file\":\"1003.png\",\"fetchedAt\":\"2026-01-02T08:00:00Z\"}}}",
+            Cancelled);
+
+        // 1003's image is gone: its entry is left out, without a warning, and the next save writes
+        // the index without it; 1001's is kept and used without a request.
+        Assert.Equal(Path.Combine(folder, "1005.png"), await setup.Cache.FileOfAsync(setup.Avatar(1005), Cancelled));
+        Assert.Equal(Path.Combine(folder, "1001.png"), await setup.Cache.FileOfAsync(setup.Avatar(1001), Cancelled));
+        Assert.Single(setup.Recorder.Sent);
+        Assert.Equal(
+            "{\"users\":{\"1001\":{\"file\":\"1001.png\",\"fetchedAt\":\"2026-01-02T08:00:00Z\"},\"1005\":{\"file\":\"1005.png\",\"fetchedAt\":\"2026-01-02T09:00:00Z\"}}}",
+            await File.ReadAllTextAsync(Path.Combine(folder, "index.json"), Cancelled));
+        Assert.Empty(setup.Log.Lines);
+    }
+
+    [Fact]
     public async Task Two_calls_for_one_user_make_one_request()
     {
         using var setup = Setup.Start();
