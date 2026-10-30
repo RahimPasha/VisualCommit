@@ -547,7 +547,11 @@ default browser, comparing no capture there (13.4 P, 13.5; D321).
   watchers (open point 34): the hosting's own `State` changes before the post whose handler
   (`RepositoryViewModel.OnHostingChanged`) updates the section. From WP-V's merge a picture of
   a signed-in tab also waits for its tab's `AvatarsShown` once since the start (open point 29), and no
-  "exactly" of a row counts the avatars' requests (routes `commits:` and `avatar:`, 7.9).
+  "exactly" of a row counts the avatars' requests (routes `commits:` and `avatar:`, 7.9). A sign-in
+  lists every open tab with a GitHub remote (7.8, D289) through the one client, which sends one request
+  at a time (D285), so a step that signs in with more than one such tab open waits for each tab's line
+  before the next step counts requests (P13 step 1); for a tab in the background, the list line alone,
+  since only the shown tab's graph writes `AvatarsShown` (11.3).
 - **The section** (10.3): without a GitHub remote phase 1's placeholder (closed, `0`, no toggle, no menu).
   With one, the header toggles and is open at the opening; its count is the rows' matches (`0` beside a
   message row); rows and message rows are 26 high at depth 1 (`Indent` 24 as a branch row's, the 18-wide
@@ -1177,7 +1181,7 @@ or an expected result changed for a reason the build or the gate finds, goes her
   avatars can come, so the line would not come while B8 runs. From WP-V's merge the step waits instead
   until the fake has recorded `avatar:1001` and `avatar:1003` and `hello`'s view model's `Avatars`
   maps octo's and ada's addresses; B8 takes no picture, and its expected results are unchanged.
-- **P13 step 1's wait** (2026-10-30, CI run 40982132445 on `ccd1ebe`, macOS; the lead's record): the
+- **P13 step 1's wait** (2026-10-30, CI run 40982132445 on `ccd1ebe`, macOS; the judges' verdict): the
   sign-in lists `tool`'s pull requests too, though it is the tab in the background (design 7.8's
   triggers, D289), and GitHub's client sends one request at a time (D285). When `hello`'s list goes
   first, `tool`'s `GET api/v3/repos/acme/tool/pulls` is answered after `hello`'s line, once the fake has
