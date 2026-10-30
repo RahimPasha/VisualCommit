@@ -219,11 +219,16 @@ public sealed partial class RealApp
             var found => throw new InvalidOperationException($"The left panel shows {found.Count} pull requests \"{name}\"; it shows: {string.Join(" | ", PullRequestRowNames())}."),
         };
 
-    /// <summary>Whether the pull request row <paramref name="row"/> shows its <c>Draft</c> mark (<c>PullRequestDraft</c> on screen inside it).</summary>
+    /// <summary>
+    /// Whether the pull request row <paramref name="row"/> shows its <c>Draft</c> mark: a text element
+    /// inside it, on screen, named <c>Draft</c> (<see cref="PartP.Draft"/>). The mark's TextBlock has a
+    /// name (<c>PullRequestDraft</c>) but no automation id of its own, so it is found by its text; while
+    /// hidden it has no place on screen.
+    /// </summary>
     public static bool ShowsDraftMark(AutomationElement row)
     {
         ArgumentNullException.ThrowIfNull(row);
-        return row.FindAllDescendants(condition => condition.ByAutomationId("PullRequestDraft"))
-            .Any(mark => !mark.IsOffscreen && mark.BoundingRectangle is { Width: > 0, Height: > 0 });
+        return row.FindAllDescendants(condition => condition.ByControlType(FlaUI.Core.Definitions.ControlType.Text))
+            .Any(text => text.Name == PartP.Draft && !text.IsOffscreen && text.BoundingRectangle is { Width: > 0, Height: > 0 });
     }
 }

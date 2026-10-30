@@ -323,22 +323,23 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
     // ---- Pictures ----
 
     /// <summary>
-    /// Asserts that no element of the window is named with a token (<see cref="AssertNoTokenOnScreen"/>),
-    /// then captures the client area, saves it as <c>&lt;name&gt;.png</c> and asserts that it matches the
+    /// Rests the pointer at the neutral point unless <paramref name="keepPointer"/> is true (a capture
+    /// with a menu open), asserts that no element of the window is named with a token
+    /// (<see cref="AssertNoTokenOnScreen"/>), then captures the client area, saves it as <c>&lt;name&gt;.png</c> and asserts that it matches the
     /// scripted picture of the same name within <see cref="RealWindowRun.MaxDifference"/> (D33, D58);
-    /// run.txt gets a line with the difference and <c>&lt;name&gt;-difference.png</c> shows it. The
-    /// pointer moves to the neutral point first unless <paramref name="keepPointer"/> is true: a capture
-    /// with a menu open. As phase 6's (Phase6RealWindowPass.cs), with the token check.
+    /// run.txt gets a line with the difference and <c>&lt;name&gt;-difference.png</c> shows it. As phase
+    /// 6's (Phase6RealWindowPass.cs), with the token check.
     /// </summary>
     private void Compare(RealApp app, ServedHosting served, string name, bool keepPointer = false)
     {
         ArgumentNullException.ThrowIfNull(app);
-        AssertNoTokenOnScreen(app, served);
         if (!keepPointer)
         {
             app.MoveToNeutral();
         }
 
+        // After the move, so that no tooltip opens over the pointer's last place during the scan.
+        AssertNoTokenOnScreen(app, served);
         using var capture = app.CaptureClient();
         Run.Save(capture, name);
         Run.AssertMatchesScripted(capture, name, name);
