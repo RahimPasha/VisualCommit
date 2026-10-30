@@ -221,7 +221,8 @@ public sealed class HostingSession : IHostingSession
             var previous = _file.GitHubOn(Host);
             if (previous is { Login: { } oldLogin } && !string.IsNullOrWhiteSpace(oldLogin)
                 && new AccountKey(HostingProvider.GitHub, Host, oldLogin) is var oldKey && oldKey != key
-                && await _vault.ForgetAsync(TokenKey.Of(oldKey), lifetime).ConfigureAwait(false) is { } kept)
+                && (await _vault.ForgetAsync(TokenKey.Of(oldKey), lifetime).ConfigureAwait(false)
+                    ?? await KeptUnreachedAsync(oldKey, AccountTokenStates.Of(previous.TokenState)).ConfigureAwait(false)) is { } kept)
             {
                 _log.Warning($"GitHub account {oldLogin} on {Host}: the keychain kept its entry: {kept}.");
             }
@@ -252,8 +253,9 @@ public sealed class HostingSession : IHostingSession
     }
 
     /// <summary>
-    /// Signs out (7.5, D291): the keychain's entry forgotten (null, or why it was kept), the record
-    /// removed even when the entry was kept, the account cleared. Runs on the thread pool, never on
+    /// Signs out (7.5, D291): the keychain's entry forgotten (null, or why it was kept; without a
+    /// keychain in this run, <see cref="TokenStoreReasons.NoKeychain"/> for a record whose token an
+    /// earlier run saved there), the record removed even when the entry was kept, the account cleared. Runs on the thread pool, never on
     /// the caller's thread (the vault answers at once without a keychain). <paramref name="ct"/>
     /// stops the waits before the gate only: once begun, the sign-out completes, the session's
     /// closing included.
@@ -607,7 +609,8 @@ public sealed class HostingSession : IHostingSession
             // Not cut off by the session's closing: a record without its token would need signing
             // in at the next start, and avatars/ would stay (D291). The vault's delete is bounded
             // by the store's own limits.
-            var reason = await _vault!.ForgetAsync(TokenKey.Of(slot.Key), CancellationToken.None).ConfigureAwait(false);
+            var reason = await _vault!.ForgetAsync(TokenKey.Of(slot.Key), CancellationToken.None).ConfigureAwait(false)
+                ?? await KeptUnreachedAsync(slot.Key, slot.TokenState).ConfigureAwait(false);
             _file = _file.WithoutGitHub(Host);
             _accounts.Save(_file);
             Volatile.Write(ref _slot, null);
@@ -622,6 +625,24 @@ public sealed class HostingSession : IHostingSession
         {
             _gate.Release();
         }
+    }
+
+    // After the vault's forget answered null (7.5): without a keychain in this run it deletes
+    // nothing (D272), yet a record whose token state is "keychain" was saved there by an earlier
+    // run, so its entry may stay. The log names it for whoever removes it by hand, and the reason
+    // goes to the caller as the keychain's. Null when the keychain was reached or the record never
+    // used it. The probe was made by the forget, so this answers at once.
+    private async Task<string?> KeptUnreachedAsync(AccountKey key, string tokenState)
+    {
+        if (tokenState != AccountTokenStates.Keychain || await _vault!.KeychainAvailableAsync(CancellationToken.None).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var tokenKey = TokenKey.Of(key);
+        var entry = TokenEntryNames.TryFor(tokenKey, TokenEntryNames.Application, out var names) ? names.Entry : TokenEntryNames.ForLog(tokenKey);
+        _log.Warning($"The keychain could not be reached in this run; it may still hold the entry {entry}. Remove it by hand.");
+        return TokenStoreReasons.NoKeychain;
     }
 
     // Under _gate, at a sign-out (7.5, D291): the avatar work cancelled and awaited, the maps
