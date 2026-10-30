@@ -182,15 +182,25 @@ public sealed partial class Phase7aChecksP
     /// <summary>D322: the tab's <c>{repo}: listed {count} open pull requests of {listed}</c> since <paramref name="logMark"/> and its avatars' line once since the start (<c>AvatarsShown</c>), then quiet watchers.</summary>
     private static async Task WaitForListedAsync(ShellDriver app, string repository, int count, string listed, int logMark)
     {
-        var line = await app.WaitForLogLineAsync(AppLogFile.PullRequestsListed(repository), mark: logMark);
-        var match = AppLogFile.PullRequestsListed(repository).Match(line);
-        Assert.Equal((count.ToString(CultureInfo.InvariantCulture), listed), (match.Groups["count"].Value, match.Groups["repository"].Value));
+        await WaitForListLineAsync(app, repository, count, listed, logMark);
 
         // From WP-V's merge (open point 29, design 17 items 3 and 6): the tab's avatars once since the
         // start, hello's 2 authors, tool's 1 (open point 42).
         var avatars = await app.WaitForLogLineAsync(AppLogFile.AvatarsShown(repository), mark: 0);
         Assert.Equal(repository == Phase7aExpectations.Tool ? "1" : "2", AppLogFile.AvatarsShown(repository).Match(avatars).Groups["count"].Value);
         await app.WaitForWatchersQuietAsync();
+    }
+
+    /// <summary>
+    /// D322: the tab's <c>{repo}: listed {count} open pull requests of {listed}</c> since
+    /// <paramref name="logMark"/>, alone: the list of a tab in the background (P13 step 1), whose
+    /// avatars' line only the shown tab writes (11.3).
+    /// </summary>
+    private static async Task WaitForListLineAsync(ShellDriver app, string repository, int count, string listed, int logMark)
+    {
+        var line = await app.WaitForLogLineAsync(AppLogFile.PullRequestsListed(repository), mark: logMark);
+        var match = AppLogFile.PullRequestsListed(repository).Match(line);
+        Assert.Equal((count.ToString(CultureInfo.InvariantCulture), listed), (match.Groups["count"].Value, match.Groups["repository"].Value));
     }
 
     /// <summary>Open point 34: a state without a list waits for the view model's state, the section's message row, then quiet watchers.</summary>

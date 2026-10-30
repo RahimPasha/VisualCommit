@@ -27,6 +27,12 @@ public sealed partial class Phase7aChecksP
         {
             var hello = await app.WaitForRepositoryAsync();
             await app.SignInAsync(served.OctoToken, Cancelled);
+
+            // The sign-in lists every open tab with a GitHub remote (design 7.8, D289) through the one
+            // client, one request at a time (D285): tool's list, in the background, can be answered
+            // after hello's line, so step 2 counts the requests only once both are in (CI run
+            // 40982132445, macOS). tool is not shown, so its avatars' line comes only in step 4.
+            await WaitForListLineAsync(app, "tool", 2, "acme/tool", 0);
             await WaitForListedAsync(app, "hello", 4, "octo/hello", 0);
             configBefore = (await served.Hello.GitAsync("config", "--local", "--list")).StandardOutput;
             refsBefore = (await served.Hello.GitAsync("for-each-ref", "--format=%(refname)")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries);
