@@ -3,7 +3,8 @@ name: CI
 # Builds and runs the default tests on Windows, macOS and Linux, and twice more in a bare Ubuntu
 # container that the repo's own set-up script prepares. The default tests include the scripted
 # visual walk-through; its screenshots are uploaded so each platform's rendering can be looked
-# at. The real-window pass is Windows-only, takes over the mouse and never runs here.
+# at. The real-window pass is Windows-only, takes over the mouse and never runs here; nor does the
+# live command against real GitHub (D250, D337), which needs the owner's token.
 
 on:
   push:
@@ -83,11 +84,17 @@ jobs:
           VISUALCOMMIT_KEYCHAIN_TESTS: macos
         run: dotnet test --project tests/VisualCommit.Hosting.Tests --configuration Release --no-build --filter-class "*MacKeychainTokenStoreRealTests"
 
-      # The real-window pass is outside the solution and never runs here. Building it keeps it
-      # from going stale unnoticed.
-      - name: Build the real-window pass
+      # The real-window pass and the live command against real GitHub are outside the solution,
+      # and neither runs here (D337): the pass takes over the mouse, the live command acts on the
+      # owner's account with a token CI never has. Building them keeps them from going stale
+      # unnoticed. Bash, which GitHub runs with -e, so that a failure of the first build fails the
+      # step (PowerShell's step would go by the last command's exit code alone).
+      - name: Build the opt-in projects
         if: runner.os == 'Windows'
-        run: dotnet build tests/VisualCommit.RealWindowTests --configuration Release
+        shell: bash
+        run: |
+          dotnet build tests/VisualCommit.RealWindowTests --configuration Release
+          dotnet build tests/VisualCommit.LiveHostingTests --configuration Release
 
       - name: Upload screenshots
         if: always()

@@ -4856,3 +4856,120 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
       detail of all five items through the dialog. The "any other 422" arm of the create's `Describe`
       stays untested: the fake answers the form no 422 beyond the four 12.6 names, a new fault kind
       would change WP-F's fake for one line of a `switch`, and `GitHubSaid`'s words are tested.
+
+## 18. As built: wave 3
+
+What wave 3's builds and reviews (2026-10-30) changed or settled against the sections above, package
+by package, with the lead's rulings. The report and the handoff cite these as "design 18.N". Both
+packages were built in their worktrees by one builder each, reviewed by two agents that built none of
+it (WP-R for the design and the report's coverage, and for the real Windows desktop; WP-LIVE for the
+design, and for the token's and the account's safety) and fixed by a fixer (workflow `wb6m484z6`).
+
+1. **WP-R, merged at `5cfce9f`** (`4573ceb`, `88a4510`, `9d674e2`, `1bd8540`, `40ab872`; the review's
+   fixes `9324162`, `e485e61`). Written and built in Release with no warning, never run: its first run
+   is D246's at the gate (13.7 step 4).
+   - **The builder's readings, which the lead keeps.** (1) Before the first key of a launch a real click
+     at the neutral point (the status bar's empty middle) gives the window the activation, so that
+     Ctrl+, and Ctrl+Shift+P reach the app; in `SignInThroughSettings` on a `hello` launch the pass then
+     waits for the keyboard focus to be on the window itself before the key, so that a click that
+     moved the focus fails by name rather than as an unexplained difference of the capture (open point
+     30; the twin opens the screen with no control focused). Not tried: that UI Automation reports the
+     window itself while the app's focus is on the window or on nothing; if D246's first run fails
+     there, naming an element without an automation id, the lead rules before a counted round.
+     (3) `AssertCleanEnd` runs the tripwire for all three of the scenario's tokens over the data
+     folder, `hello/`, `tool/` and the given folders, as the twins do. (4) Before every capture the
+     names of the window's elements are checked for a token, the pointer moved first so that no
+     tooltip opens during the scan. (6) `HelperPath` is computed on each read (`Executable` is set in
+     another file of the partial class); `TypeToken` waits for "Sign in" enabled, the proof that the
+     typing reached the box. (7) The draft mark is found as the text element "Draft" inside the row:
+     `PullRequestDraft` (`LeftPanelView.axaml:232`) has a `Name` and no automation id, and the review's
+     probe in a scratch app showed an explicit `TextBlock` in a templated button's content listed as a
+     Text control element. (8) N also checks `PullRequestHead` `topic/no-pr` and no head note. (9) P15
+     accepts at least one `page:octo/hello` request for `octo/hello/pull/1` (a browser may fetch a page
+     more than once).
+   - **The review's findings, fixed.** (Blocker) G step 2 waited for `DetailsAuthorAvatar` through UI
+     Automation, but it is a plain `Ellipse` (`RightPanelView.axaml:136-139`), whose automation peer is
+     no control element in Avalonia 12.1.3 (the review checked it in a scratch app outside the repo; the
+     project's rule since phase 3's design, section 0): the wait would time out on every run. The
+     lead's ruling: the pass reads the screen, and 13.4 G step 2 and the report's G1 note change with
+     it. It waits, the pointer at the neutral point, until the author's text starts 22 (±1.5) right of
+     `DetailsDate`'s left, the room the avatar takes only while shown, and a capture shows the
+     avatar's white centre with octo's colour 5 to its left, ±24 per channel at the display's scaling,
+     as the twin's `ShowsDetailsImage` reads them. The product stays as it is: a control-element peer
+     for a round image beside the author's name, which the text already gives, would add nothing a
+     screen reader needs. "Asks GitHub nothing" (N3, P11) now leaves out the `commits:` and `avatar:`
+     routes, word for word as the twins' `ApiSince`; reading 5 had left out only `avatar:`, for a wrong
+     reason, since the fake records a request before it answers it, so `WaitForFake` is needed only
+     for the browser's page request. B step 5 waits only for `Opened` before the close, as the report's
+     B6 note says (reading 2 dropped: a connection the close cuts reaches no `Errors`,
+     `AuthRemoteServer.cs:814`). Text from the app, git or the log goes into a failure's message only
+     through a token check (`Checked`, `WithoutToken`), the fake's records through `Recorded`, and
+     assertions over log lines are counts with a message naming the line looked for, never the
+     collection. run.txt's browser line reads `P: the browser opened {url}; its tab is left open: close
+     it before the next run of the pass.`, 13.5's quoted line changing with it: at 13.7 step 4 the owner
+     closes that tab between D246's two runs, since a reload while a later launch serves the fake on
+     47395 would be a request A1, A5, N3 and P11 do not expect.
+   - **Left to the desktop** (D246's two runs): whether the default browser fetches the fake's page (15
+     point 2), the focus check above, the draft mark's text element, and the 3 % comparisons; the time
+     the part adds (13.6) is measured at the gate and goes into CLAUDE.md (ruling 30). The real window
+     does not wait for quiet watchers before N3's and P11's "asks GitHub nothing", as the twins do; with
+     `commits:` and `avatar:` left out, nothing in the code needs it.
+2. **WP-LIVE, merged at `b695778`** (`a1eb0d0`, `f2d6ab6`, `7fad18a`; the reviews' fixes `0de1abe`,
+   `624f25d`). Built in Release with no warning; run only without its variables, where both tests fail
+   at once with 14.3's message, none skipped and no request made, and `LiveSafetyTests` (the lead's
+   ruling: its token search, request log and clean-up's selection with made-up tokens, in process; 72
+   cases) pass. Its first run with the token is status step 16.
+   - **The builder's readings, which the lead keeps.** (1) Check_1 probes, read-only, GitHub's answers to
+     an unknown API version, `user/repos?type=owner&visibility=all` and an unknown SHA (15 point 1, 2.4)
+     and records them beside the fake's. (2) A public sandbox, a fork or a token that may not push fails
+     at the sandbox's read with a message naming D326 or 14.6. (4) The token search adds base64 of the
+     token and any 16 of its characters in a row to 14.5's forms. (5) `Resolve` never shows a repository
+     variable that holds what looks like a token. (6) The app is disposed after the clean-up, the
+     tripwire runs after the dispose. (7) Step 6 waits for the activity log's record of the create, then
+     for `ByRef`, then for two listed lines (ruling 51). (8) Step 3 records counts, never names, of rows
+     outside the sandbox. (9) The avatars' pixel sizes are read after the dispose. (10) A duplicate
+     create answered other than 422 fails nothing; a 201 is closed in the clean-up. (11) A 422 on
+     deleting the branch is no problem only when no pull request was found or made.
+   - **The reviews' findings, fixed.** (Major) A failing step's exception reached the test output
+     unsearched, so an `Assert.Equal` printing `remote.origin.url` would print a token git had kept:
+     both catch blocks now go through `LiveRun.FailureOf`, which throws a new exception naming the step
+     and the exception's type, with no inner exception, when `ex.ToString()` holds any form of the
+     token, and `Screen` records such a find as a failure. (Major) The clean-up deleted every branch
+     GitHub's `matching-refs` returned: `LiveLeftovers` now selects only refs under
+     `refs/heads/visualcommit-live/` (ordinal) and pull requests whose head is such a branch of the
+     sandbox itself, and notes the others as not touched, with an offline case. (Minor) The probes run
+     after the leftovers' removal, and a probe without an answer is only noted; the avatars are waited
+     for, when GitHub knows the latest commit's author, until `AvatarsShown` since the clone's mark or
+     an answer after which no picture can come; a 2xx probe's body is recorded by its shape only; the
+     sign-in's note gives the app's `GET /user`'s selected version, scopes header and expiry; run.txt is
+     always written (`No note was taken: …` when none was); the create's base and head repository must
+     be the sandbox, and the clean-up closes a number only once GitHub confirms its head; an owner or
+     name of dots only is refused; `LiveRequestLog` refuses, before it leaves, a request that is not
+     HTTPS or that carries Authorization to any host but `api.github.com:443`, as an
+     `HttpRequestException`, the type the app's clients take as a network failure.
+   - **Drafts in a private sandbox.** Reviewer A, from memory: GitHub has given drafts in private
+     repositories only on its Team and Enterprise Cloud plans, so D326's private sandbox on the owner's
+     personal account might refuse 14.4's draft. GitHub's pull-request and plans pages, read by the lead
+     on 2026-10-30, no longer state a limit by plan or visibility. The lead's ruling: the sandbox stays
+     private on the owner's account (D326); step 6 ticks Draft and, when GitHub refuses with a text
+     that names drafts, records the text, unticks Draft and creates a ready pull request through the
+     same form; steps 7 and 8 expect what was made, and run.txt says which ran. 14.8's "the draft is
+     created" reads "a draft, or a ready pull request where GitHub refuses the draft, recorded". If
+     GitHub refuses, the fake's private `octo/hello` keeps its draft #2 (its pictures stand for a plan
+     that allows one), and whether the form should know before it asks goes to plan.md's phase 8 with
+     GitHub's text.
+   - **`TokenTripwire`** (reviewer B; outside both packages, the lead's change at the merge). A find in
+     a git call's command named the call by its whole command, the very text that held the token,
+     against the class's own "never the token". It now names the call by its words before the first
+     that holds a form, then "…" and its sequence number, and it also searches a call's recorded
+     standard input (`update-ref --stdin`'s, which the activity log shows);
+     `The_token_tripwire_finds_each_form_in_a_file_and_a_call_and_passes_clean_ones` asserts both. The
+     environment of the app's git calls is not recorded, so no run sees it; WP-C's tests prove it
+     (the report's "Live command").
+   - **The lead's merge items** (14.8, 13.7): the solution's comment; CI's Windows step "Build the opt-in
+     projects", run in bash so that a failure of the first build fails the step; CLAUDE.md's rows (the
+     7a class alone, the live command, its offline safety tests) and notes; D335's changes to the
+     "Phase N accepted" row, closing steps 1 and 6 and the Rules' bullet on "Awaiting acceptance";
+     plan.md's Visual test gate, steps 4 and 6; the report's "Live command" section.
+   - **15 point 1's empty-repository text** stays open: the sandbox has a commit, so the command cannot
+     settle it.

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text;
 using VisualCommit.Core.Git;
 
@@ -15,8 +16,9 @@ public static class TokenTripwire
     /// <paramref name="token"/> as UTF-8, UTF-16LE, <see cref="Uri.EscapeDataString"/>, base64 of
     /// <c>x-access-token:&lt;token&gt;</c> (git's Basic header) and base64 of the token's UTF-8
     /// (the macOS store's form, 3.5), and each record of <paramref name="calls"/> (its command,
-    /// output and error) for the text forms. A find fails naming the file or the command and the
-    /// form, never the token. A file is read sharing read, write and delete, so one another process
+    /// recorded standard input, output and error) for the text forms. A find fails naming the file
+    /// or the git call (<see cref="NameOf"/>) and the form, never the token. A file is read sharing
+    /// read, write and delete, so one another process
     /// holds open for writing is read too; one that still cannot be read after
     /// <see cref="ReadAttempts"/> tries, 100 ms apart, fails as unreadable, since it may hold the
     /// token. A file deleted before it is read holds nothing any more and is passed.
@@ -55,15 +57,17 @@ public static class TokenTripwire
             }
         }
 
+        var textForms = TextFormsOf(token);
         foreach (var record in calls?.Snapshot() ?? [])
         {
-            foreach (var (form, text) in TextFormsOf(token))
+            var call = NameOf(record, textForms);
+            foreach (var (form, text) in textForms)
             {
-                foreach (var (part, value) in new[] { ("command", record.CommandText), ("output", record.StandardOutput), ("error", record.StandardError) })
+                foreach (var (part, value) in new[] { ("command", record.CommandText), ("input", record.StandardInput ?? string.Empty), ("output", record.StandardOutput), ("error", record.StandardError) })
                 {
                     if (value.Contains(text, StringComparison.Ordinal))
                     {
-                        finds.Add($"the {part} of the git call {record.CommandText} ({form})");
+                        finds.Add($"the {part} of the git call {call} ({form})");
                     }
                 }
             }
@@ -75,6 +79,24 @@ public static class TokenTripwire
             var unread = unreadable.Count > 0 ? "Files not read, so the token's absence is not proved there:\n" + string.Join('\n', unreadable) : null;
             throw new TokenTripwireException(string.Join('\n', new[] { found, unread }.OfType<string>()));
         }
+    }
+
+    /// <summary>
+    /// How a find names its git call: the command as recorded, or, when the command holds one of
+    /// <paramref name="forms"/>, its words before the first that holds one, then "…" and the call's
+    /// sequence number, so that the message never holds the token.
+    /// </summary>
+    private static string NameOf(GitCallRecord record, IReadOnlyList<(string Form, string Text)> forms)
+    {
+        if (!forms.Any(form => record.CommandText.Contains(form.Text, StringComparison.Ordinal)))
+        {
+            return record.CommandText;
+        }
+
+        var words = record.CommandText.Split(' ');
+        var first = Array.FindIndex(words, word => forms.Any(form => word.Contains(form.Text, StringComparison.Ordinal)));
+        var before = first > 0 ? string.Join(' ', words[..first]) + " " : string.Empty;
+        return $"{before}… (number {record.Sequence.ToString(CultureInfo.InvariantCulture)})";
     }
 
     /// <summary>How many times a file is tried before it fails as unreadable.</summary>

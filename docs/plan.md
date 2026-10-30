@@ -156,6 +156,13 @@ too, but they do not replace it.
    captures with them and fail without them. The two runs are made once, not again before the
    rounds that follow a fix. Phase 6's real-window code never ran before its gate, and two of its
    rounds, about 3.5 hours of laptop time, failed only on S14's Windows Open dialog.
+   Since phase 7a the gate also runs the opt-in live command against real GitHub
+   (`tests/VisualCommit.LiveHostingTests`, D250), which acts on the owner's sandbox repository
+   with their token, so the owner is told first; it takes no mouse and writes nothing under
+   `artifacts/visual`. It runs once before the gate's pictures, and what it finds about GitHub's
+   answers goes into the fake of GitHub, committed before the passes; then once on the counted
+   round, after the real-window pass and the list of pictures (D328, D335). The phase's report
+   records its `run.txt` in a "Live command" section.
 5. **Inspection.** Every screenshot is opened and compared with the expected result in the
    report: layout, text, colours and state. A check passes only when the screenshot shows the
    expected result and the repo's real git state matches it. The practice since phase 3: Opus
@@ -185,7 +192,10 @@ too, but they do not replace it.
    prints nothing and the list of pictures written after the round before
    (`phase-N-pictures.sha256`, checked as the Commands in `CLAUDE.md` say, before the pass) shows
    the scripted pictures unchanged; the list is written again after the pass. Phase 6's rounds 3 and 4 changed only `RealApp.cs` and still ran the
-   default run again, about 1.8 hours.
+   default run again, about 1.8 hours. A second exception (D335): a commit after the counted round
+   that changes only `tests/VisualCommit.LiveHostingTests` re-runs only the live command, on that
+   commit, and the gate's commit stays the passes' commit; neither pass builds or references that
+   project. A correction to the fake, which both passes see, starts a new counted round.
 7. **Report.** `docs/test-reports/phase-N.md` records the outcome and screenshot file for every
    check. Screenshots stay local under `artifacts/visual/phase-N/` (git-ignored to keep the repo
    small). The report also names the CI run of the gate's commit and which of the screenshots CI

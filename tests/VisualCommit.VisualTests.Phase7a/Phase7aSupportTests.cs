@@ -187,8 +187,16 @@ public sealed class Phase7aSupportTests : Phase7aChecks
         var inCall = Assert.Throws<TokenTripwireException>(() => TokenTripwire.AssertAbsent(Token, [repo.Path], repo.Calls));
         Assert.Contains("the command of the git call", inCall.Message, StringComparison.Ordinal);
         Assert.Contains("(UTF-8)", inCall.Message, StringComparison.Ordinal);
-        Assert.Contains("git rev-parse --verify --quiet", inCall.Message, StringComparison.Ordinal);
+        Assert.Contains("git rev-parse --verify --quiet …", inCall.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Token, inCall.Message, StringComparison.Ordinal);
         TokenTripwire.AssertAbsent("github_pat_FAKE-ada-3", [repo.Path], repo.Calls);
+
+        // A call whose recorded standard input holds the token (update-ref --stdin's record keeps it).
+        var log = new VisualCommit.Git.GitCallLog();
+        log.Add(new VisualCommit.Core.Git.GitCallRecord(DateTimeOffset.UnixEpoch, TimeSpan.Zero, "git update-ref --stdin", repo.Path, VisualCommit.Core.Git.GitCallOutcome.Completed, 0, string.Empty, string.Empty) { StandardInput = "update refs/heads/x " + Token + "\n" });
+        var inInput = Assert.Throws<TokenTripwireException>(() => TokenTripwire.AssertAbsent(Token, [repo.Path], log));
+        Assert.Contains("the input of the git call git update-ref --stdin (UTF-8)", inInput.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(Token, inInput.Message, StringComparison.Ordinal);
     }
 
     [Fact]

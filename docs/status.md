@@ -137,9 +137,10 @@ App:
 
 Checks, live trial and review:
 
-- [ ] 15. Each part's visual checks written into `docs/test-reports/phase-7a.md` just before its
+- [x] 15. Each part's visual checks written into `docs/test-reports/phase-7a.md` just before its
   package is built (D244), by one writer and one reviewer, each marked for the real-window pass or
-  not, committed before the UI they test.
+  not, committed before the UI they test. (Done 2026-10-30: parts A, B, P, G and N, each before its
+  package; their R steps are WP-R's pass, merged at `5cfce9f`, design 18 item 1.)
 - [ ] 16. The opt-in live command against real GitHub (D250), run with the owner's token on the
   sandbox repository.
 - [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
@@ -471,14 +472,19 @@ pictures of phases 3 and 7a are the same files, 10 changed and part N's 20 are n
 whole run phase 3 has 16 changed, its status-bar changes all in the progress bar's segment, the
 percentages or an edge a level or two apart (ruling 60; Notes). Five inspectors (workflow
 `wamj7cyfy`) passed part N's 20 pictures and the 19 earlier ones that changed, with nothing left for
-a verifier; step 13 is ticked and WP-N's worktree is removed. Under way: wave 3 (workflow
-`wb6m484z6`): WP-R in
-`D:/Projects/Personal/vc-wt/p7a-real-window` (`wip/p7a-real-window`, written and built, never run by
-its agents) and WP-LIVE in `D:/Projects/Personal/vc-wt/p7a-live` (`wip/p7a-live`, run only without its
-variables), each reviewed by two agents that did not build it. Next: at wave 3's end read its
-reports and diffs and merge each with `--no-ff`
-(WP-LIVE with the lead's slnx, `ci.yml` and CLAUDE.md rows, 14.8; WP-R with 13.7's CLAUDE.md rows).
-The live run (step 16) waits for the owner's sandbox, token and two variables (design 14.6). Each of parts B, P, G and N
+a verifier; step 13 is ticked and WP-N's worktree is removed. Wave 3 (workflow `wb6m484z6`, each
+package built in its worktree, reviewed by two agents that built none of it and fixed) is merged:
+WP-R at `5cfce9f`, the real-window pass of parts A, B, N, G and P, written and built in Release and
+never run (its first run is D246's at the gate), and WP-LIVE at `b695778`, the live command, built and
+run only without its variables (both tests fail at once with the one message, its 72 offline safety
+tests pass). The lead's merge items follow (design 18: the solution's comment, CI's step "Build the
+opt-in projects", CLAUDE.md's rows and notes, D335's changes to CLAUDE.md and plan.md, the report's
+"Live command" section, and `TokenTripwire`'s message and standard-input search); step 15 is ticked.
+The default run's product code is unchanged by wave 3, so no whole run was made at its merge: the
+build passed, the tripwire's test passed, and CI runs the rest. Next: read CI's run on that push;
+then step 17, the independent review of the code before the gate, while the live run (step 16)
+waits for the owner's private sandbox, token and two variables (design 14.6; "Waiting on the
+owner"). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -812,9 +818,14 @@ every commit.
   commits reachable from the GitHub remote's branches, and sign-out deletes the avatars folder; F21,
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
-- **For phase 7a's live command (D250), before step 16**: a fine-grained token that the owner
-  creates for one sandbox repository on the owner's account, with the rights the design names,
-  set in the environment variable the design names. It is never written to the repository.
+- **For phase 7a's live command (D250), before step 16** (design 14.6, which gives each click): a
+  **private** repository on the owner's account with one commit (a README), for example
+  `visualcommit-sandbox`; a fine-grained token for that repository alone, with Contents and Pull
+  requests "Read and write" and no account permission; and two Windows user variables set in the
+  Environment Variables dialog, never typed in a shell: `VISUALCOMMIT_LIVE_GITHUB_TOKEN` (the token)
+  and `VISUALCOMMIT_LIVE_GITHUB_REPO` (`<owner>/visualcommit-sandbox`); then a new Claude Code
+  session. The token is never written to the repository. The command is built and waits only for
+  these (design 18 item 2).
 - **D240's connectors switch** (Notes): `ENABLE_CLAUDEAI_MCP_SERVERS=false` in
   `.claude/settings.local.json` did not keep the claude.ai connectors out of this session. Turning
   them off another way (the variable set in Windows' user environment before VS Code starts, or

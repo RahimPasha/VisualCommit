@@ -16,7 +16,9 @@
   </Folder>
   <Folder Name="/tests/">
     <!-- VisualCommit.RealWindowTests is left out on purpose: it takes over the mouse and is
-         Windows-only, so it must never run as part of "dotnet test" at the repo root. -->
+         Windows-only, so it must never run as part of "dotnet test" at the repo root.
+         VisualCommit.LiveHostingTests is left out on purpose too: it acts on the owner's GitHub
+         account with a token from the environment and runs only by its own command (D250). -->
     <Project Path="tests/VisualCommit.App.Tests/VisualCommit.App.Tests.csproj" />
     <Project Path="tests/VisualCommit.Git.Tests/VisualCommit.Git.Tests.csproj" />
     <Project Path="tests/VisualCommit.Hosting.Tests/VisualCommit.Hosting.Tests.csproj" />

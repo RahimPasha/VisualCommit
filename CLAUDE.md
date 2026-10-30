@@ -92,7 +92,7 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
 |---|---|
 | "Start phase N" | The start steps above, then build phase N through to its closing steps |
 | "Continue" | Resume the phase whose Progress checklist in `docs/status.md` still has unticked items (state "In progress" or "Blocked") |
-| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names (run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built (a phase's `docs/status.md` does not hold it: take it from `docs/status.md` on `master` before the merge, as phase 4's acceptance wrote it: `git show 50cf35c:docs/status.md`; phase 5's acceptance added a sentence that points at the phase's own checklist in the merge's second parent, `git show acdac12:docs/status.md`, and D241 added the weekly share of the plan's allowance on 2026-10-28; the current form is always the one on `master` before the merge, `git show HEAD^1:docs/status.md` once the merge is made); the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
+| "Phase N accepted" | First `git fetch origin`, check out the branch that `docs/status.md` names for the phase and fast-forward it (`git merge --ff-only origin/<branch>`), so that what is checked is what `origin` holds now. Only when `docs/status.md` on that branch says the phase is "Awaiting acceptance", and nothing but docs changed after the "Gate commit" it names, apart from the live command's project, whose fixes re-run only that command (D335; run at the repo root, `git diff --stat <gate commit> <branch> -- . ':(exclude)docs' ':(exclude)*.md' ':(exclude)tests/VisualCommit.LiveHostingTests'` prints nothing): check out `master`, fast-forward it to `origin/master`, `git merge --no-ff` that branch, set the phase to "Done" in `docs/status.md` and say in its handoff's "State of the repo" and "Waiting on the owner" that it is merged (with the merge commit), commit, push `master`. Setting it to "Done" also resets the file for the next phase, as phase 1's acceptance (`eb626ba`) did: "Current phase" says none is in progress and names the merge commit; Progress goes back to its paragraph on how the checklist is built (a phase's `docs/status.md` does not hold it: take it from `docs/status.md` on `master` before the merge, as phase 4's acceptance wrote it: `git show 50cf35c:docs/status.md`; phase 5's acceptance added a sentence that points at the phase's own checklist in the merge's second parent, `git show acdac12:docs/status.md`, and D241 added the weekly share of the plan's allowance on 2026-10-28; the current form is always the one on `master` before the merge, `git show HEAD^1:docs/status.md` once the merge is made); the CI section names the branch's last run; "Next step" says to wait for "Start phase N+1" and points to the handoff's "For the next phase"; the phase's working notes leave "Notes for whoever resumes". Then read the CI run that the push of `master` started and record it in the CI section (a docs-only commit). In any other case, change nothing more, say what is still open and ask |
 
 ## Rules
 
@@ -134,7 +134,9 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
   rewrites "Next step" (both passes of the gate again on one commit on the Windows machine, or
   the real-window pass alone when the change is only to `tests/VisualCommit.RealWindowTests`, as
   `docs/plan.md`'s Visual test gate allows (D246); then closing step 6 with the new "Gate
-  commit") and, when "Blocked", "Waiting on the owner".
+  commit") and, when "Blocked", "Waiting on the owner". A change only to
+  `tests/VisualCommit.LiveHostingTests` re-runs only the live command, on its commit, and leaves
+  the "Gate commit" where it was (D335).
 - Expected results for visual checks are written before the UI exists. Changing one afterwards
   needs a reason recorded in the test report.
 - CI runs on GitHub when a branch is pushed. After pushing, read the result with `gh run list`
@@ -164,7 +166,9 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
    walk-through has saved its pictures on that machine (the real-window checks compare their
    captures with them and fail without them), run the new phase's real-window checks twice on
    their own, with the owner told and present (D246; `docs/plan.md`'s Visual test gate, step 4).
-   The two runs are made once, not again before the rounds that follow a fix.
+   The two runs are made once, not again before the rounds that follow a fix. Since phase 7a the
+   gate also runs the live command against real GitHub, the owner told: once before the gate's
+   pictures and once on the counted round (D335; the same step 4).
 2. Update `docs/architecture.md` so it describes what is actually built.
 3. Update `docs/plan.md`: move anything this phase did not deliver into the phase that now owns it, and update the risks.
 4. Write `docs/handoffs/phase-N.md` from `docs/handoffs/TEMPLATE.md`.
@@ -179,7 +183,8 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
    after the commit the default run ran on), and anything waiting on the owner.
    Set the phase to "Awaiting acceptance" only if the whole gate passed: a session on the
    Windows machine has run `dotnet test` and the real-window pass on the last commit that
-   changed anything other than docs (or, by D246, the real-window pass on it and `dotnet test`
+   changed anything other than docs and `tests/VisualCommit.LiveHostingTests` (a fix to that
+   project alone re-runs only the live command, on its commit, D335) (or, by D246, the real-window pass on it and `dotnet test`
    on the last commit the default run ran on, when both conditions of `docs/plan.md`'s Visual
    test gate, step 6, hold: the `git diff --stat` between the two that leaves out
    `tests/VisualCommit.RealWindowTests` and the docs prints nothing, and the phase's list of
@@ -300,6 +305,9 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | The real keychains' own tests (D270): on Windows and macOS only CI's steps "Keychain (…)" run them, because they write in the machine's real store, so never on the owner's laptop; on Linux the Secret Service's under a private bus with a throwaway keyring, safe on any machine (run so far only in CI's two containers, first on `8b02805`) | `export XDG_DATA_HOME="$(mktemp -d)"; mkdir -p -m 700 "$XDG_DATA_HOME/keyrings"; VISUALCOMMIT_KEYCHAIN_TESTS=secret-service dbus-run-session -- sh -c 'echo throwaway \| gnome-keyring-daemon --unlock --components=secrets >/dev/null && dotnet test --project tests/VisualCommit.Hosting.Tests --filter-class "*SecretServiceTokenStoreRealTests"'` (needs `dbus` and `gnome-keyring`, which `scripts/setup-linux.sh` installs; a container needs `--cap-add=IPC_LOCK`). CI's Windows and macOS steps run `--filter-class "*WindowsTokenStoreRealTests"` with `VISUALCOMMIT_KEYCHAIN_TESTS=windows` and `"*MacKeychainTokenStoreRealTests"` with `macos` |
 | Real-window pass (Windows only) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`: the pass is a whole-project run, so on the laptop it runs under the heavy-run lock (D245) and no other heavy run starts beside it; without the lock it is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (the script has not run the pass yet) |
 | One real-window check alone (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*<test name>*"`, for example `--filter-method "*Check_S14*"` (run so at phase 6's gate for S14) |
+| A phase's own real-window checks alone (Windows only; D246's two runs) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`: it takes the mouse like the pass and empties `artifacts/visual/phase-7a/real-window/` (not run yet: phase 7a's gate runs it first) |
+| The opt-in live command against real GitHub (Windows only; the owner's sandbox token, D250, D260) | `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`: about two minutes with its build; its findings in `artifacts/live/github/run.txt` (not run with its variables yet; without them both its tests fail at once by design) |
+| The live command's offline safety tests (Windows; no variables, no network) | `dotnet test --project tests/VisualCommit.LiveHostingTests -c Release --filter-class "*LiveSafetyTests"`: the token search, the request log and the clean-up's selection with made-up tokens, in process |
 | Compare pictures with reference pictures (a gate's inspection; needs Python with Pillow and NumPy) | `python scripts/compare-pictures.py <reference folder> artifacts/visual <output folder>`: a difference picture per changed picture and `summary.md`, grouped by the window regions the changes lie in |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
 | CI result of a branch | `gh run list --branch <branch> --limit 3`, then `gh run view <run id>` |
@@ -383,6 +391,24 @@ What to know about them:
 - One real-window check run alone (`--filter-method`) empties its phase's `real-window/` folder,
   as the whole pass does, and takes over the mouse just the same: tell the owner before starting
   it, and run the whole pass again before a gate writes its list of pictures.
+- Phase 7a's part of the pass starts the fake of GitHub (`FakeGitHub`) on port 47395 in the test
+  process, so phase 7a's walk-through never runs beside it. Near its end it opens one tab in the
+  owner's default browser, on the fake's page (D321); the owner closes it before the next run of
+  the pass. The time the part adds is measured at phase 7a's gate.
+- The live command (`tests/VisualCommit.LiveHostingTests`, D250) acts on the owner's GitHub
+  account: it signs in, clones, lists pull requests and creates one in a private sandbox
+  repository, with a fine-grained token for that repository alone. It reads two Windows user
+  variables, set in Windows' Environment Variables dialog and never typed in a shell:
+  `VISUALCOMMIT_LIVE_GITHUB_TOKEN` (the token) and `VISUALCOMMIT_LIVE_GITHUB_REPO`
+  (`<owner>/<name>`); `docs/phase-7a-design.md` 14.6 says how the owner makes them. It runs never
+  in CI or the default run: the project is in no solution, and CI's Windows job only builds it
+  (D337). At its start it removes what a stopped run left in the sandbox (branches under
+  `visualcommit-live/` and their pull requests, D324), and it closes and deletes what it made. The
+  owner is told before it runs; at a gate it runs as D335 says (`docs/plan.md`'s Visual test gate,
+  step 4). In a session where the two variables are set, every shell inherits the token: never
+  print the whole environment (`env`, `printenv`, `set`, `export -p`, `Get-ChildItem Env:`); read
+  a variable by its name, or filter the list (`env | grep -v '^VISUALCOMMIT_LIVE_'`), and tell
+  every agent of that session so.
 - To run the app without touching the real settings, set the environment variable
   `VISUALCOMMIT_DATA_DIR` to an empty folder first. Without it the app uses the per-user data
   folder: `%APPDATA%\VisualCommit` on Windows, `~/.config/VisualCommit` on Linux,
