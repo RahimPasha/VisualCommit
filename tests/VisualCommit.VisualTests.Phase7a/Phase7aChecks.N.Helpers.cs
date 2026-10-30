@@ -1,3 +1,5 @@
+using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -227,6 +229,24 @@ public sealed partial class Phase7aChecksN
 
         Assert.True(block.IsEffectivelyVisible, $"{string.Join(" › ", path)} shows no #n.");
         Assert.Equal(("#" + shown.ToString(CultureInfo.InvariantCulture), P.PullRequestOfBranch(shown, title!)), (block.Text, ToolTip.GetTip(block) as string));
+    }
+
+    /// <summary>Records every dialog that opens from now on, until disposed (the report's "no dialog at any time" and "no dialog but the form", D312).</summary>
+    private sealed class DialogRecorder : IDisposable
+    {
+        private readonly ObservableCollection<DialogViewModel> _open;
+
+        public DialogRecorder(ShellDriver app)
+        {
+            _open = app.Session.Services.DialogHost.Open;
+            _open.CollectionChanged += OnChanged;
+        }
+
+        public List<DialogViewModel> Opened { get; } = [];
+
+        public void Dispose() => _open.CollectionChanged -= OnChanged;
+
+        private void OnChanged(object? sender, NotifyCollectionChangedEventArgs e) => Opened.AddRange(e.NewItems?.OfType<DialogViewModel>() ?? []);
     }
 
     /// <summary>The newest record's number in the queue's log (the activity log's source), a mark for <see cref="OperationsSince"/>.</summary>

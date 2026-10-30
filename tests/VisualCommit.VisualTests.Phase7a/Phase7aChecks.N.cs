@@ -81,9 +81,14 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             logMark = app.LogMark();
             var operations = OperationMark(app);
             var calls = await app.QuietCallMarkAsync();
-            app.Click(app.FindByAutomationId("ConfirmButton"));
-            await WaitForEndAsync(app, N.Topic, logMark, OperationOutcome.Succeeded);
-            await WaitForListedAsync(app, 5, logMark, times: 2);
+            using (var dialogs = new DialogRecorder(app))
+            {
+                app.Click(app.FindByAutomationId("ConfirmButton"));
+                await WaitForEndAsync(app, N.Topic, logMark, OperationOutcome.Succeeded);
+                await WaitForListedAsync(app, 5, logMark, times: 2);
+                Assert.Empty(dialogs.Opened);
+            }
+
             Assert.True(form.IsClosed);
             ShotN(app, N.N01b);
             Assert.Null(app.Session.Services.DialogHost.Current);
@@ -190,6 +195,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             requests = served.GitHub.Requests.Count;
             var logMark = app.LogMark();
             var operations = OperationMark(app);
+            using var dialogs = new DialogRecorder(app);
             var calls = await app.QuietCallMarkAsync();
             var pushHold = served.GitHub.HoldNext("git:octo/hello");
             try
@@ -259,6 +265,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
                 Assert.Single(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
                 var receive = Assert.Single(served.GitHub.GitRequests.Skip(gitRequests), request => request.Method == "POST" && request.Path.EndsWith("git-receive-pack", StringComparison.Ordinal));
                 Assert.Equal((200, "x-access-token"), (receive.Status, receive.GivenUserName));
+                Assert.All(served.GitHub.GitRequests.Skip(gitRequests).Where(request => request.GivenUserName is not null), request => Assert.Equal("x-access-token", request.GivenUserName));
                 Assert.Equal(await GitAsync(served.Hello, "rev-parse", N.LocalWorkRef), (await GitInAsync(Bare(served), "rev-parse", N.LocalWorkRef)).Output);
                 Assert.Empty(ApiSince(served, requests));
                 Assert.Null(hello.Refs!.Refs.FirstOrDefault(gitRef => gitRef.FullName == "refs/remotes/origin/local-work"));
@@ -278,6 +285,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             await WaitForListedAsync(app, 5, logMark, times: 2);
             ShotN(app, N.N03a);
             Assert.Null(app.Session.Services.DialogHost.Current);
+            Assert.Empty(dialogs.Opened);
             Assert.Equal(["POST create:octo/hello 201", "GET pulls:octo/hello 200 conditional", "GET pulls:octo/hello 304 conditional"], Routes(served, requests));
             Assert.Equal((N.LocalWorkTitle, N.Note, N.LocalWork, N.Main, true, false), Body(PostSince(served, requests)));
             var six = Assert.Single(served.GitHub.PullRequests(N.Repository), pull => pull.Number == N.NewNumber);
@@ -339,10 +347,15 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             var form = await OpenFormFromMenuAsync(app);
             var requests = served.GitHub.Requests.Count;
             var logMark = app.LogMark();
-            app.Click(app.FindByAutomationId("ConfirmButton"));
-            await WaitForEndAsync(app, N.Topic, logMark, OperationOutcome.Failed);
-            await WaitForListedAsync(app, 5, logMark);
-            await app.WaitForAsync(() => !form.IsCreating, "the form idle again");
+            using (var dialogs = new DialogRecorder(app))
+            {
+                app.Click(app.FindByAutomationId("ConfirmButton"));
+                await WaitForEndAsync(app, N.Topic, logMark, OperationOutcome.Failed);
+                await WaitForListedAsync(app, 5, logMark);
+                await app.WaitForAsync(() => !form.IsCreating, "the form idle again");
+                Assert.Empty(dialogs.Opened);
+            }
+
             ShotN(app, N.N04a);
             Assert.Equal(["POST create:octo/hello 422", "GET pulls:octo/hello 200 conditional"], Routes(served, requests));
             Assert.Equal((N.TopicTitle, string.Empty, N.Topic, N.Main, false, false), Body(PostSince(served, requests)));
@@ -420,10 +433,15 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             requests = served.GitHub.Requests.Count;
             logMark = app.LogMark();
             var calls = await app.QuietCallMarkAsync();
-            app.Click(confirm);
-            await WaitForEndAsync(app, N.Main, logMark, OperationOutcome.Failed);
-            await app.WaitForAsync(() => !form.IsCreating, "the form idle again");
-            await app.WaitForWatchersQuietAsync();
+            using (var dialogs = new DialogRecorder(app))
+            {
+                app.Click(confirm);
+                await WaitForEndAsync(app, N.Main, logMark, OperationOutcome.Failed);
+                await app.WaitForAsync(() => !form.IsCreating, "the form idle again");
+                await app.WaitForWatchersQuietAsync();
+                Assert.Empty(dialogs.Opened);
+            }
+
             ShotN(app, N.N04b);
             Assert.Equal(["POST create:octo/hello 422"], Routes(served, requests));
             Assert.Equal((N.MainTitle, string.Empty, N.Main, N.Topic, false, false), Body(PostSince(served, requests)));
@@ -614,6 +632,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             await MenuOfAsync(app, "Local branches", "topic", "no-pr");
             var form = await OpenFormFromMenuAsync(app);
             served.GitHub.FailNext("create:octo/hello", FakeGitHubFault.Forbidden);
+            using var dialogs = new DialogRecorder(app);
             var requests = served.GitHub.Requests.Count;
             var logMark = app.LogMark();
             app.Click(app.FindByAutomationId("ConfirmButton"));
@@ -643,6 +662,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.True(form.IsClosed);
             AssertStatus(app, N.Created(6, false));
             Assert.True(hello.OperationStatus.HasOffer);
+            Assert.Empty(dialogs.Opened);
             var api = ApiSince(served, requests);
             Assert.Single(api, request => request.Route == "create:octo/hello");
             Assert.Equal((N.TopicTitle, string.Empty, N.Topic, N.Main, false, false), Body(PostSince(served, requests)));
