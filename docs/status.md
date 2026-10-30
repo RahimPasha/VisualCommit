@@ -160,6 +160,15 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for the lead's icon commit before WP-V (`fb43def`, pushed with the docs commit
+`713b31f`) is [40986166736](https://github.com/RahimPasha/VisualCommit/actions/runs/40986166736): all
+five jobs succeeded: `windows-latest` (25 min 35 s; its Test step 23 min 25 s of 55, 5,786 of 5,790
+passed and 4 skipped; its keychain step green), `macos-latest` (26 min 51 s; Test step 24 min 58 s,
+5,784 of 5,787 passed and 3 skipped; its keychain step green), `ubuntu-latest` (6 min 40 s; Test step
+4 min 54 s, 5,784 of 5,787) and the two "bare ubuntu container" jobs (8 min 6 s and 5 min 38 s; Test
+steps 5 min 50 s and 3 min 57 s; their Secret Service steps green). macOS passed the two tests it
+failed on `ccd1ebe`, so both failures come and go.
+
 Phase 7a's run for the harness's double-click fix (`ccd1ebe`) is
 [40982132445](https://github.com/RahimPasha/VisualCommit/actions/runs/40982132445): `windows-latest`
 (37 min 12 s; its Test step 34 min 16 s of 55, 5,786 of 5,790 passed and 4 skipped; its keychain
