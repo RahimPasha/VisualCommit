@@ -165,6 +165,15 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for the two test races and part P's `End` (`1d297a0`) is
+[41079852791](https://github.com/RahimPasha/VisualCommit/actions/runs/41079852791): four jobs
+succeeded and one failed. `windows-latest` failed in 37 min 58 s: the hang watchdog stopped
+`VisualCommit.Hosting.Tests` after 181 s counted in
+`CreatePullRequestOperationTests.Git_s_credentials_refused_during_the_push_give_their_own_words`, a
+race in that test since WP-N (design 19 item 8), every other test passing (5,886 of 5,890, 4
+skipped), its keychain step and "Build the opt-in projects" green; `macos-latest` 35 min 12 s,
+`ubuntu-latest` 8 min 6 s, and the two containers 8 min 18 s and 8 min 12 s, all green.
+
 Phase 7a's run for the step-17 record (`07e7642`) is
 [41071722860](https://github.com/RahimPasha/VisualCommit/actions/runs/41071722860): all five jobs
 succeeded. `windows-latest` 38 min 6 s (Test step 34 min 25 s of 55; its keychain step green; "Build
@@ -524,9 +533,15 @@ rested) passed 5,842 of 5,851; its failures are design 19 item 7: A8 and part P'
 expectations the fixes change (`07e7642`; CI's run on it is green on all five jobs), two were test
 races that predate step 17, now fixed and run in six contended copies, part P's `End` hid a step's
 failure and now runs after the app has closed, and the watchdog's two stops were the unrested
-laptop's load. Next: commit those fixes; let the laptop rest, with nothing running; then the whole
-default run again (`bash scripts/heavy-run.sh`) and the lagged list (design 0.4); if both pass, tick
-step 17. The live run (step 16) waits for the owner's private sandbox, token and two variables
+laptop's load; those fixes are `1d297a0`. The rested run on it (1 h 13 min 34 s) passed 5,890 of
+5,895 and the lagged list passed; its one failure, phase 3's check 14b, waited 30 s where D237 has
+60, and CI's Windows job stopped a create test on a race of the test's own (design 19 item 8).
+D341 gives the 106 waits a sweep found D237's 60 s, and the create test waits for the tab's
+avatars before it revokes the token and runs with a prompt handler that refuses; plan.md's risk
+39 asks the owner about the dialog the app shows in that order of events. Next: commit and push
+those changes and read CI; let the laptop rest, with nothing running; then the whole default run
+again (`bash scripts/heavy-run.sh`) and the lagged list (design 0.4); if both pass and CI is green,
+tick step 17. The live run (step 16) waits for the owner's private sandbox, token and two variables
 (design 14.6; "Waiting on the owner"). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
@@ -869,6 +884,11 @@ every commit.
   and `VISUALCOMMIT_LIVE_GITHUB_REPO` (`<owner>/visualcommit-sandbox`); then a new Claude Code
   session. The token is never written to the repository. The command is built and waits only for
   these (design 18 item 2).
+- **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
+  for the gate): when the session refuses a bound account through the API, or it signs out,
+  just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
+  refusal without a dialog, as D340 records for a sign-out. Should the broker also refuse such a
+  prompt without a dialog, from what the session knows (amending D273 and D340)?
 - **D240's connectors switch** (Notes): `ENABLE_CLAUDEAI_MCP_SERVERS=false` in
   `.claude/settings.local.json` did not keep the claude.ai connectors out of this session. Turning
   them off another way (the variable set in Windows' user environment before VS Code starts, or

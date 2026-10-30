@@ -5146,3 +5146,50 @@ handoff cite these as "design 19.N".
      unset), and TempRepo's git calls have had an empty HOME since `8858b16`. Each check passes alone in
      about 25 s; nothing changed in code. If one stops again on a rested laptop, the remedy is the
      owner's call (D237, D264).
+8. **The lead's rested run on `1d297a0`** (2026-10-30, after ten minutes' rest,
+   `bash scripts/heavy-run.sh`, 1 h 13 min 34 s): 5,890 of 5,895 tests passed, 4 were skipped (the
+   keychains' own tests) and one failed; the lagged list (0.4) passed in all five commands. CI's run
+   on the same commit (41079852791) passed on four jobs and stopped one test on Windows.
+   - **`Phase3ChecksC.Check_14b_checkout_failed`** (the run's failure): its helper
+     `WaitForOperationAsync` gave the end of "Check out feature/clash with your changes" 30 s, a
+     limit D237's commit left at the call site. Measured with a temporary probe: 2.7 s alone, 17.6 s
+     in check 14 of the same run (the same step), 25.8 to 28.9 s in six copies pinned to one core
+     beside two busy loops, every copy finishing. Nothing waited forever, and step 17 changed
+     nothing on the path (a local operation has had no bindings since `0d0d48c`; the session's HOME
+     and `NETRC` cost nothing measurable, item 7). D341 gives such waits D237's 60 s. Three Opus
+     classifiers listed every wait under 60 s of the default run, each list checked by an Opus
+     skeptic (workflow `wjvbem7sz`); three Opus fixers applied the 106 waits found, each group's
+     diff checked by a reviewer who did not write it (workflow `wfoigg3mb`; 37 files, where fields
+     and helpers cover most call sites). Kept: the four assertions that git fails at once
+     (`AccountCredentialTests`, `AuthenticatedRemoteTests`; their 30 s was set under D237), every
+     negative wait and limit under test, three waits whose condition holds at the first look
+     (`Phase2Checks.DiffText`'s rows are built synchronously; `RepositoryOperationsConflictsTests`'
+     closed resolver after the tool it awaited), and `GitRunnerTests`' 1.5 s hold before a cancel, a
+     fixed hold that has never failed and would fail, not pass wrongly, if git took longer to exit.
+   - **`CreatePullRequestOperationTests.Git_s_credentials_refused_during_the_push_give_their_own_words`**
+     (CI's Windows job; the watchdog after 181 s): a race in the test since WP-N (`3f541d5`), not in
+     step 17's changes (`07e7642`, with the same product code, passed on all five jobs). The tab's
+     avatar run (7.9, D339) sends A6 and the lookups with octo's token, and the test revoked the
+     token without waiting for it. When that request reaches the fake after the revoke and its 401
+     marks the account refused (D330) before git's credential request (about 0.7 s after Create on
+     the laptop), the broker's `get` finds no token; git then asks for a user name (before any
+     request, D340), and since no erase put the account into the scope's refused set (D273), the
+     app's own prompt dialog opened over the form, which nothing in a headless test answers; git's
+     askpass waits for its answer without a limit. Not met in 63 runs on the laptop (alone, six and
+     ten contended copies, the watcher's lag, a narrow thread pool); forced by holding the run's
+     request at the fake until the revoke, it hung 3 of 3 with "Sign in to 127.0.0.1:<port>" open
+     and the log "has no token", then "git asks (Username)" (workflow `wfky5l6s0`: an analyst, a
+     reproducer and a skeptic who could not refute the cause; CI kept no app log, so its path is
+     inferred). The test now waits for the tab's avatars line (D322's `AvatarsShown`, 2 authors)
+     before the revoke, after which no request with the token is left (A3 is kept, the list
+     refreshes only on an account change or a succeeded network operation, images carry no token),
+     and asserts that no prompt came; every test of the class runs with a prompt handler that
+     refuses and records, so a prompt fails git at once instead of opening a dialog. Proof on the
+     final code, run three times: with the request held until after the revoke, git's Username
+     prompt was refused and Create ended in 1.2 to 1.6 s; with it let go 3 s late, the fence waited
+     and the test passed without a prompt. The fixed test passed alone 5 of 5.
+   - **Left to the owner** (plan.md's risk 39): in the app the same order of events (the session
+     refuses a bound account through the API, or signs out, after an operation bound its git calls
+     and before git's credential request) shows git's "Sign in to <host>" dialog in a bound tab, as
+     D340 records for a sign-out during the call; D273's no-dialog rule covers only an erase in the
+     scope. The user can cancel it; refusing it without a dialog would amend D273 and D340.

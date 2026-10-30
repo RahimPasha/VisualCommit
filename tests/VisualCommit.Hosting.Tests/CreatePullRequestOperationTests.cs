@@ -475,14 +475,22 @@ public sealed class CreatePullRequestOperationTests
     {
         await using var served = await ServeAsync();
         using var data = new TempDirectory("create pull request");
-        using var app = await OpenAsync(data, served);
+        var prompts = new ScriptedPromptHandler();
+        using var app = await OpenAsync(data, served, prompts: prompts);
         var repository = app.Session.Shell.ActiveTab.Repository!;
+
+        // The tab's avatar run asks GitHub for its authors' commits with octo's token (D339). Were
+        // its answer a 401 after the revoke, the account would be refused before git's credential
+        // request, which then finds no token and asks for a user name (design 19 item 8).
+        var avatars = await app.WaitForLogLineAsync(AppLogFile.AvatarsShown("hello"), mark: 0);
+        Assert.Equal("2", AppLogFile.AvatarsShown("hello").Match(avatars).Groups["count"].Value);
         var requests = served.GitHub.Requests.Count;
 
         var (form, opening) = await OpenFormAsync(app, repository, "refs/heads/local-work");
         served.GitHub.Revoke(served.OctoToken);
         await form.CreateCommand.ExecuteAsync(null);
 
+        Assert.Empty(prompts.Prompts);
         Assert.Equal(OperationTexts.GitCredentialsRefused("octo"), form.Error);
         Assert.False(app.Session.Services.DialogHost.Current is ErrorDialogViewModel);
         Assert.DoesNotContain(served.GitHub.Requests.Skip(requests), request => request.Route == "create:octo/hello");
@@ -664,10 +672,15 @@ public sealed class CreatePullRequestOperationTests
         }
     }
 
-    /// <summary>One tab on <paramref name="repo"/> (<c>hello</c> by default), signed in as octo, once its <paramref name="count"/> pull requests are listed and the watchers are quiet.</summary>
-    private static async Task<ShellDriver> OpenAsync(TempDirectory data, ServedHosting served, TempRepo? repo = null, int count = 4)
+    /// <summary>
+    /// One tab on <paramref name="repo"/> (<c>hello</c> by default), signed in as octo, once its
+    /// <paramref name="count"/> pull requests are listed and the watchers are quiet. Git's prompts go
+    /// to <paramref name="prompts"/>, or to a handler that refuses them: no test here expects one, so
+    /// one that comes fails git at once instead of opening a dialog nobody answers (design 19 item 8).
+    /// </summary>
+    private static async Task<ShellDriver> OpenAsync(TempDirectory data, ServedHosting served, TempRepo? repo = null, int count = 4, ScriptedPromptHandler? prompts = null)
     {
-        var app = ShellDriver.StartWithTabs(data.Path, [(repo ?? served.Hello).Path], gitHub: served.GitHub);
+        var app = ShellDriver.StartWithTabs(data.Path, [(repo ?? served.Hello).Path], promptHandler: prompts ?? new ScriptedPromptHandler(), gitHub: served.GitHub);
         try
         {
             var repository = await app.WaitForRepositoryAsync();
