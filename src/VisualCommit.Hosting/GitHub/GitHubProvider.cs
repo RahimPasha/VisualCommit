@@ -205,9 +205,10 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// empty map. Then at most 20 lookups for <paramref name="lookups"/> whose e-mail is not yet in
     /// the map, in order, each in its own repository's history from its own commit (D339):
     /// <c>repos/{owner}/{name}/commits?sha=&lt;SHA&gt;&amp;author=&lt;e-mail&gt;&amp;per_page=1</c>.
-    /// A lookup answered 404, 409 or 422 (GitHub does not let the token read that repository, or it
-    /// has no such commit) is left out and the others go on; any other failing lookup stops them and
-    /// is left out.
+    /// A lookup answered 404 or 409 (GitHub does not let the token read that repository, or it is
+    /// empty) is left out with the rest of that repository's, asked no more in this call, and the
+    /// others go on; one answered 422 (no such commit) is left out alone. Any other failing lookup
+    /// stops them and is left out.
     /// </summary>
     public async Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, CancellationToken ct)
     {
@@ -255,14 +256,27 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             .Where(lookup => !map.ContainsKey(lookup.Email))
             .Take(MaxAuthorLookups)
             .ToList();
+        var unreadable = new HashSet<HostedRepository>();
         foreach (var lookup in asked)
         {
+            if (unreadable.Contains(lookup.Repository))
+            {
+                continue;
+            }
+
             var url = Api($"{RepositoryPath(lookup.Repository)}/commits?sha={Uri.EscapeDataString(lookup.Sha)}&author={Uri.EscapeDataString(lookup.Email)}&per_page=1");
             var reply = await _client.SendAsync(HttpMethod.Get, token, url, null, GitHubJsonContext.Default.ListGitHubCommitItemJson, ct).ConfigureAwait(false);
-            if (reply.Failure?.Kind is HostingFailureKind.NotFound or HostingFailureKind.Validation || reply.Status == 409)
+            if (reply.Failure?.Kind is HostingFailureKind.NotFound || reply.Status == 409)
             {
-                // A remote whose repository is gone, private to others or empty, or whose branch was
-                // rewritten: only this address is not found there, and nothing tells against the rest.
+                // A remote whose repository is gone, private to others or empty: none of its addresses
+                // is found there, so its other lookups are not asked in this call; the rest go on.
+                unreadable.Add(lookup.Repository);
+                continue;
+            }
+
+            if (reply.Failure?.Kind is HostingFailureKind.Validation)
+            {
+                // A rewritten branch: GitHub has no such commit, so only this address is not found.
                 continue;
             }
 

@@ -278,22 +278,29 @@ public sealed class GitHubProviderTests
     }
 
     [Fact]
-    public async Task A6_a_lookup_in_a_repository_or_from_a_commit_github_does_not_give_is_left_out_and_the_others_go_on()
+    public async Task A6_a_repository_github_does_not_give_is_asked_once_a_commit_it_lacks_leaves_out_one_address_and_the_others_go_on()
     {
         await using var setup = await Setup.StartAsync();
         var main = await TipAsync(setup, "octo/hello", "main");
 
-        // A repository GitHub does not have (404), a commit octo/hello does not have (422), then octo on main.
+        // A repository GitHub does not have (404) and an empty one (409), each asked once for its two
+        // addresses (ada/gone's second in another case); a commit octo/hello does not have (422),
+        // which leaves out its address alone; then octo on main.
         var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null,
             [
                 new AuthorCommit(Scenarios.AdaEmail, main, Repository("ada", "gone")),
+                new AuthorCommit("author@example.com", main, Repository("Ada", "Gone")),
+                new AuthorCommit("first@example.com", main, Repository("octo", "notes")),
+                new AuthorCommit("second@example.com", main, Repository("octo", "notes")),
                 new AuthorCommit("stranger@example.com", new string('0', 40), Repository("octo", "hello")),
                 new AuthorCommit(Scenarios.OctoEmail, main, Repository("octo", "hello")),
             ],
             Cancelled);
 
         Assert.Equal(new AuthorAvatar(1001, "octo", new Uri("http://127.0.0.1:1/avatars/u/1001?v=4")), Assert.Single(authors.Value!.ByEmail).Value);
-        Assert.Equal([404, 422, 200], setup.Fake.Requests.Select(request => request.Status));
+        Assert.Equal(
+            [("commits:ada/gone", 404), ("commits:octo/notes", 409), ("commits:octo/hello", 422), ("commits:octo/hello", 200)],
+            setup.Fake.Requests.Select(request => (request.Route, request.Status)));
     }
 
     [Fact]
