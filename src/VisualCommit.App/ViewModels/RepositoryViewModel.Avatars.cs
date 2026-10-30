@@ -96,7 +96,7 @@ public sealed partial class RepositoryViewModel
 
     /// <summary>
     /// Tells the hosting the authors of the graph's commits on a GitHub remote's branches (D311), when
-    /// the set differs from the one last sent: never in summary mode or without an account's listing
+    /// the set differs from the one last sent (the empty set before any): never in summary mode or without an account's listing
     /// (D257: only <c>Loading</c>, <c>Failed</c> or <c>Loaded</c>), nor while the graph still loads
     /// its first <see cref="AvatarRows"/> rows.
     /// </summary>
@@ -113,8 +113,11 @@ public sealed partial class RepositoryViewModel
             return;
         }
 
+        // Nothing sent counts as the empty set: the placeholder graph a tab starts with, or a history
+        // no GitHub branch reaches, tells the hosting nothing (an empty set would only replace a set
+        // the hosting has waiting).
         var authors = AuthorsOnGitHub(graph, HostingState.Remotes);
-        if (_authorsSent is { } sent && sent.SequenceEqual(authors, StringComparer.Ordinal))
+        if ((_authorsSent ?? []).SequenceEqual(authors, StringComparer.Ordinal))
         {
             return;
         }

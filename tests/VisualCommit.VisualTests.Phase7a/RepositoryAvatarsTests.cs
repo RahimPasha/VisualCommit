@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
@@ -21,8 +22,10 @@ namespace VisualCommit.VisualTests.Phase7a;
 /// D257, D311), with fakes of <see cref="IHostingSession"/> and <see cref="IRepositoryHosting"/> in
 /// hand-built <see cref="TabServices"/>: the set (lower-case, newest first, at most 200, of the first
 /// 2,000 rows) of the commits a GitHub remote's branch reaches only; nothing without an account's
-/// listing or in summary mode; not twice, but again after a sign-out; the avatars to the details
-/// panel; and the line the graph's view writes.
+/// listing or in summary mode; not twice, but again after a sign-out; with the state there before
+/// the graph, nothing for the placeholder graph and the set once the loading graph, followed on a UI
+/// thread the test pumps, is whole or has 2,000 rows; the avatars to the details panel; and the
+/// line the graph's view writes.
 /// </summary>
 public sealed class RepositoryAvatarsTests : IAsyncLifetime
 {
@@ -95,6 +98,51 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// Opens <paramref name="path"/> on a UI thread the test pumps, one post at a time, until the
+    /// start has ended and the graph is whole, with the hosting's state <c>Loaded</c> from the tab's
+    /// first refs: the fake raises it in <c>Update</c>, which the tab calls before it assigns the
+    /// loading graph (the session's own post comes later still). Records, as each graph is assigned,
+    /// its rows and completeness, the hosting's state and the sets sent so far; and the graph's rows
+    /// and completeness after the post that sent each set.
+    /// </summary>
+    private async Task<Followed> OpenWithStateFirstAsync(string path)
+    {
+        _session.StateOnUpdate = State(PullRequestsState.Loaded);
+        var repository = await GitRepository.OpenAsync(Runner, path, TestContext.Current.CancellationToken);
+        var services = Services();
+        var ui = new QueuedContext();
+        var assigned = new List<(int Count, bool IsComplete, PullRequestsState State, int Sent)>();
+        var sends = new List<(int Count, bool IsComplete)>();
+        var (viewModel, hosting, started) = ui.Run(() =>
+        {
+            var tab = new RepositoryViewModel(repository, services.Settings, services.Dates, services.Log, services: services);
+            var fake = _session.Hostings[^1];
+            tab.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(RepositoryViewModel.Graph))
+                {
+                    assigned.Add((tab.Graph.Count, tab.Graph.IsComplete, fake.State.PullRequests, fake.Sent.Count));
+                }
+            };
+            return (tab, fake, tab.StartAsync());
+        });
+
+        ui.RunUntil(
+            () => started.IsCompleted && viewModel.Graph.IsComplete,
+            "the start and the whole graph",
+            () =>
+            {
+                if (hosting.Sent.Count > sends.Count)
+                {
+                    sends.Add((viewModel.Graph.Count, viewModel.Graph.IsComplete));
+                }
+            });
+        await started;
+        Assert.NotEmpty(assigned);
+        return new Followed(viewModel, hosting, assigned, sends);
+    }
+
     [Fact]
     public async Task The_set_is_the_authors_a_github_branch_reaches_lower_case_newest_first_and_the_avatars_reach_the_details()
     {
@@ -152,6 +200,23 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task A_state_before_the_graph_sends_nothing_for_the_placeholder_and_the_set_once_the_loading_graph_is_whole()
+    {
+        var followed = await OpenWithStateFirstAsync(_repo!.Path);
+        using var viewModel = followed.ViewModel;
+
+        // The state came with the first refs, before the graph: the placeholder graph sent no empty
+        // set, and the graph assigned was still loading, so the tab followed it.
+        var first = followed.Assigned[0];
+        Assert.Equal((PullRequestsState.Loaded, 0, false), (first.State, first.Sent, first.IsComplete));
+
+        // A few rows: the set went once the graph was whole, through the followed graph's Changed.
+        var at = Assert.Single(followed.Sends);
+        Assert.True(at.IsComplete, "The set was sent before the graph was whole.");
+        Assert.Equal([["ada@example.com", "octo@example.com"]], followed.Hosting.Sent);
+    }
+
+    [Fact]
     public async Task A_loading_graph_is_followed_until_2000_rows_and_no_later_row_is_told()
     {
         // 2,100 commits on origin's main: the 100 oldest by old@example.com, row 2000 on.
@@ -170,10 +235,21 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         await big.GitAsync("remote", "add", "origin", "https://github.com/octo/big.git");
         await big.GitAsync("update-ref", "refs/remotes/origin/main", "main");
 
-        using var viewModel = await OpenAsync(big.Path);
-        await WaitAsync(() => viewModel.Graph.IsComplete, "the whole graph");
-        var hosting = _session.Hostings.Single();
-        hosting.Raise(State(PullRequestsState.Loaded));
+        var followed = await OpenWithStateFirstAsync(big.Path);
+        using var viewModel = followed.ViewModel;
+        var hosting = followed.Hosting;
+
+        // The state came before the graph, which was assigned while it loaded.
+        var first = followed.Assigned[0];
+        Assert.Equal((PullRequestsState.Loaded, 0, false), (first.State, first.Sent, first.IsComplete));
+        Assert.True(first.Count < RepositoryViewModel.AvatarRows, $"The graph was assigned with {first.Count} rows.");
+
+        // Sent once, through the followed graph, when its rows passed 2,000 and before it was whole
+        // (git's pages: 100 rows, then 2,000); not again when it completed.
+        var at = Assert.Single(followed.Sends);
+        Assert.False(at.IsComplete, "The set was sent only once the graph was whole.");
+        Assert.True(at.Count >= RepositoryViewModel.AvatarRows, $"The set was sent with {at.Count} rows.");
+        Assert.True(viewModel.Graph.IsComplete);
 
         // 300 addresses among the newest 2,000 rows: the first 200 of them, newest first; none of the oldest.
         var sent = Assert.Single(hosting.Sent);
@@ -214,6 +290,9 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
             }
         }
 
+        /// <summary>The state each new hosting raises from its first <see cref="FakeHosting.Update"/>; none when null.</summary>
+        public RepositoryHostingState? StateOnUpdate { get; set; }
+
         public bool IsOff => false;
 
         public IHostingProvider? GitHub => null;
@@ -230,7 +309,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
 
         public IRepositoryHosting ForRepository(string workingDirectory)
         {
-            var hosting = new FakeHosting();
+            var hosting = new FakeHosting(StateOnUpdate);
             lock (_hostings)
             {
                 _hostings.Add(hosting);
@@ -273,7 +352,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
     }
 
     /// <summary>A repository's fake hosting: its state and avatars set by the test and announced through <see cref="Changed"/>; the sets it is told, recorded.</summary>
-    private sealed class FakeHosting : IRepositoryHosting
+    private sealed class FakeHosting(RepositoryHostingState? stateOnUpdate) : IRepositoryHosting
     {
         public RepositoryHostingState State { get; private set; } = RepositoryHostingState.NotGitHub;
 
@@ -295,8 +374,13 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
             Changed?.Invoke(this, EventArgs.Empty);
         }
 
+        /// <summary>The tab's refs: the first raises <c>stateOnUpdate</c>, when given, at once.</summary>
         public void Update(RepoRefs refs, UrlRewrites rewrites)
         {
+            if (stateOnUpdate is { } state && !ReferenceEquals(State, state))
+            {
+                Raise(state);
+            }
         }
 
         public Task RefreshPullRequestsAsync(CancellationToken ct) => Task.CompletedTask;
@@ -310,6 +394,59 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         public void Dispose()
         {
         }
+    }
+
+    /// <summary>A tab opened by <see cref="OpenWithStateFirstAsync"/>, with what was recorded while it started.</summary>
+    private sealed record Followed(
+        RepositoryViewModel ViewModel,
+        FakeHosting Hosting,
+        List<(int Count, bool IsComplete, PullRequestsState State, int Sent)> Assigned,
+        List<(int Count, bool IsComplete)> Sends);
+
+    /// <summary>A UI thread the test pumps: what is posted runs only in <see cref="RunUntil"/>, one post at a time, on the test's thread with this context current.</summary>
+    private sealed class QueuedContext : SynchronizationContext
+    {
+        private readonly ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _posted = new();
+
+        public override void Post(SendOrPostCallback d, object? state) => _posted.Enqueue((d, state));
+
+        public override void Send(SendOrPostCallback d, object? state) => throw new NotSupportedException();
+
+        /// <summary>Runs <paramref name="action"/> with this context current, as code on the UI thread runs.</summary>
+        public T Run<T>(Func<T> action)
+        {
+            var previous = Current;
+            SetSynchronizationContext(this);
+            try
+            {
+                return action();
+            }
+            finally
+            {
+                SetSynchronizationContext(previous);
+            }
+        }
+
+        /// <summary>Runs the posts in order, <paramref name="after"/> after each, until <paramref name="condition"/> holds; waits for posts from other threads.</summary>
+        public void RunUntil(Func<bool> condition, string what, Action after) =>
+            Run(() =>
+            {
+                var clock = Stopwatch.StartNew();
+                while (!condition())
+                {
+                    if (_posted.TryDequeue(out var work))
+                    {
+                        work.Callback(work.State);
+                        after();
+                        continue;
+                    }
+
+                    Assert.True(clock.Elapsed < TimeSpan.FromSeconds(60), $"Timed out waiting for {what}.");
+                    Thread.Sleep(5);
+                }
+
+                return true;
+            });
     }
 
     private sealed class NoRepositories : IRepositoryProvider
