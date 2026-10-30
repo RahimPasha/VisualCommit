@@ -442,7 +442,7 @@ public sealed class CreatePullRequestOperationTests
     }
 
     private static FakeGitHubRequest Post(ServedHosting served, string route, int mark) =>
-        Assert.Single(served.GitHub.Requests.Skip(mark), request => request.Route == route && request.Status != 403 && request.Status != 0 && request.Method == "POST" && request.Status == 201);
+        Assert.Single(served.GitHub.Requests.Skip(mark), request => request.Route == route && request.Method == "POST" && request.Status == 201);
 
     private static (string Title, string Body, string Head, string Base, bool Draft, bool MaintainerCanModify) Body(FakeGitHubRequest post)
     {

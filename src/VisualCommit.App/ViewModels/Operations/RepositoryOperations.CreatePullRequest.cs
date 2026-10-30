@@ -357,7 +357,7 @@ public sealed partial class RepositoryOperations
                 return (await CreatedAsync(text, baseRepository, created, draft), null);
             }
 
-            var failure = answer.Failure ?? new HostingFailure(HostingFailureKind.Malformed, HostingTexts.Describe(new HostingFailure(HostingFailureKind.Malformed, string.Empty), Login));
+            var failure = answer.Failure ?? new HostingFailure(HostingFailureKind.Malformed, string.Empty);
             Log.Warning($"{Repository.Name}: {text.Title}: GitHub did not create it: {failure.Kind}, {failure.Message}"
                 + (failure.RequestId is { } id ? $" (request {id})" : string.Empty));
             string words;
