@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -323,6 +324,17 @@ public class KeyRouterTests
         app.MoveMouseHeld(main, steps: 6);
         Assert.True(app.BranchDrag.IsDragging);
 
+        // Each key is pressed with the focus where the drag's press put it, on the graph, and with
+        // nothing loading. That press selected row 4 and started reading its details: while they were
+        // on the way the right panel had no tab stop, so NextTab and PreviousTab took the focus round
+        // to the details' file row once they came, Commit's declined Mod+Enter clicked that row (a
+        // button takes Enter with any modifier), and the diff it opened took the focus when its text
+        // came, between a later key's read of the focus and the key's delivery (CI run 40982132445,
+        // macOS: "it never arrived").
+        var row4 = repository.Graph.CommitAt(4).Sha;
+        await app.WaitForAsync(() => repository.Details is { IsLoading: false, HasCommit: true, Details.Sha: var shown } && shown == row4, "row 4's details");
+        var graph = app.Find<CommitGraphControl>("GraphRows");
+
         var drags = 1;
         PressEveryKey(app, () =>
         {
@@ -335,6 +347,12 @@ public class KeyRouterTests
             }
 
             Assert.True(app.BranchDrag.IsDragging);
+            Assert.True(repository.Diff is null, "A key during the drag opened a diff.");
+
+            // The graph takes none of these keys; a key that moved the focus (Tab) is undone.
+            graph.Focus();
+            app.Settle();
+            Assert.True(ReferenceEquals(graph, app.FocusedElement), $"The graph did not take the focus back: {app.FocusedElement?.GetType().Name ?? "nothing"} has it.");
         });
         AssertNothingRan(app, toolbar, menus, window);
         TestContext.Current.SendDiagnosticMessage($"The drag was started {drags} times.");
@@ -366,19 +384,34 @@ public class KeyRouterTests
                     }
                 }
 
+                // Where the key went instead, for the message: the element the keyboard delivered it
+                // to (in a menu's popup too, whose route the window does not see).
+                InputElement? deliveredTo = null;
                 focused.AddHandler(InputElement.KeyDownEvent, Record, Avalonia.Interactivity.RoutingStrategies.Tunnel, handledEventsToo: true);
-                try
+                using (InputElement.KeyDownEvent.AddClassHandler<InputElement>(
+                    (element, e) =>
+                    {
+                        if (e.Key == key && ReferenceEquals(element, e.Source))
+                        {
+                            deliveredTo ??= element;
+                        }
+                    },
+                    Avalonia.Interactivity.RoutingStrategies.Tunnel,
+                    handledEventsToo: true))
                 {
-                    app.PressShortcut(binding.Command, index);
-                }
-                finally
-                {
-                    focused.RemoveHandler(InputElement.KeyDownEvent, Record);
+                    try
+                    {
+                        app.PressShortcut(binding.Command, index);
+                    }
+                    finally
+                    {
+                        focused.RemoveHandler(InputElement.KeyDownEvent, Record);
+                    }
                 }
 
                 Assert.True(
                     reachedUnhandled == true,
-                    $"{binding.Command}'s key {index} ({ShortcutText.Format(binding.Keys[index], CommandKey.Ctrl)}) did not reach {focused.GetType().Name} {AutomationProperties.GetAutomationId((StyledElement)focused)} unhandled: {(reachedUnhandled is null ? "it never arrived" : "something took it on the way")}.");
+                    $"{binding.Command}'s key {index} ({ShortcutText.Format(binding.Keys[index], CommandKey.Ctrl)}) did not reach {focused.GetType().Name} {AutomationProperties.GetAutomationId((StyledElement)focused)} unhandled: {(reachedUnhandled is not null ? "something took it on the way" : deliveredTo is null ? "it never arrived" : $"it went to {deliveredTo.GetType().Name} {AutomationProperties.GetAutomationId(deliveredTo)}, which took the focus between the test's read of it and the key's delivery")}.");
             }
         }
     }
@@ -393,6 +426,7 @@ public class KeyRouterTests
         Assert.False(shell.ActivityLog.IsOpen);
         Assert.Empty(app.Folders.Titles);
         Assert.Null(shell.ActiveTab.Repository!.Search);
+        Assert.Null(shell.ActiveTab.Repository.Diff);
         Assert.Null(shell.ActiveTab.Repository.Page);
         Assert.Null(shell.OpenPalette);
         Assert.DoesNotContain(app.Session.Services.DialogHost.Open, dialog => dialog is SettingsDialogViewModel or CommandPaletteViewModel);
