@@ -123,13 +123,15 @@ App:
 - [x] 11. Browse and clone the repositories of a GitHub account. (Done 2026-10-29: WP-B merged at
   `b361388`, the lead's follow-ups `e40ddc8`; part B's ten pictures inspected (design 17 item 5); the
   whole run's earlier pictures unchanged but for what varies by nature; CI green on `e40ddc8`.)
-- [ ] 12. The left panel's "Pull requests" section with its menu (D251), the badge on branches,
-  open in browser. (The left panel's half done 2026-10-30: WP-P merged at `1958755`, part P's 24
-  pictures inspected, the harness's double-click fix at `ccd1ebe`, the lagged list on it passed; the
-  badge is WP-V's.)
+- [x] 12. The left panel's "Pull requests" section with its menu (D251), the badge on branches,
+  open in browser. (Done 2026-10-30: WP-P merged at `1958755`, part P's 24 pictures inspected, the
+  harness's double-click fix at `ccd1ebe`; the badge with WP-V, merged at `8810136`, with the fixes
+  `33313ef` and `5219eae`; 11.6's runs passed and their pictures were inspected; CI green on `5219eae`.)
 - [ ] 13. "Create pull request" in the branch menus (`ForLocalBranch`, `ForRemoteBranch`) and the
   drop menu (`ForDrop`), and its form.
-- [ ] 14. Author avatars from GitHub (D252).
+- [x] 14. Author avatars from GitHub (D252). (Done 2026-10-30: WP-V merged at `8810136`, G1's check
+  for every platform at `5219eae`; part G's ten pictures and the part P pictures it changes inspected;
+  CI green on `5219eae`.)
 
 Checks, live trial and review:
 
@@ -444,9 +446,17 @@ after another under `bash scripts/heavy-run.sh`, no agent running) all passed: t
 `Phase6Look` (19) and `VisualCommit.VisualTests.Phase7a` whole (176, parts A, B, G and P). Against
 WP-B's whole run 777 pictures are the same files and 43 changed; against WP-P's merge part P's pictures
 changed only in the graph's label column (and the author line in `p09a` and `p13a`), and `p12a` and
-A9's three are the same files. Their inspection is running (workflow `wqhcqjjrr`), and WP-N is being
-built meanwhile (workflow `wfgi3aatg`, `wip/p7a-create`). CI on `5219eae` is green on all
-five jobs. Next: the inspection's verdicts; tick steps 12 and 14; then WP-N's merge (12.9). Each of parts B, P, G and N
+A9's three are the same files. Seven inspectors (workflow `wqhcqjjrr`) passed all 66 pictures they
+were given, with nothing left for a verifier: part G's ten against rows G1 to G7, the thirteen part P
+pictures against part G's entry in "Changes to expected results" (`p12a` unchanged, its menu over the
+label column), and the 43 earlier pictures that differ from WP-B's run, each a temporary folder's name,
+a caret, a progress bar's position or percentage, or an anti-aliased edge (Notes). CI on `5219eae` is
+green on all five jobs. Steps 12 and 14 are ticked. WP-N is being built (workflow `wfgi3aatg`,
+`wip/p7a-create`). Next: at its end, read its reports and diff, merge it with `--no-ff`, and run
+12.9's checks with no agent running: the lagged list; phase 3's walk-through through
+`bash scripts/heavy-run.sh`, its status-bar pictures compared by region with the last full run's
+(ruling 60); part N; inspect the pictures; read CI; tick step 13; then wave 3 (WP-R on this machine,
+WP-LIVE with the owner's sandbox). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -701,6 +711,14 @@ every commit.
   the focus before every key. Both fixes are merged at `33313ef` (`79e631b`, `b3fe91a`, the report's
   `5f7d1aa`; design 17 item 11): on the merge `KeyRouterTests` passed 7 of 7 and part P 4 of 4 in
   Release. A diff's pending focus, which the investigation found, goes to phase 8's keyboard pass.
+- **WP-V's merge runs and pictures** (11.6, on `adc2a3a`). In this run part B's `b06a` shows the URL
+  on port 59807, not 47395: the classes of parts A, B, P and G run side by side and each serves on
+  47395 when it can, falling back to a free port (`ServeHostingAsync`, `fallBackToFreePort: true`;
+  the report's conventions and D265 allow it, and the gate's Run names it). With part G's class added,
+  such a clash is likelier, so a later comparison expects `b06a`'s port to vary. The inspectors also
+  noted, failing nothing: `g02a`'s tooltip wraps after the hyphen in `…that-the-`; the badge's 1-px
+  icon strokes fall on fractional x and draw as two half-intensity pixels; in the section each title
+  follows its `#n`, so `#1`'s title starts 2 px left of the others.
 - **CI on WP-V's merge: P13 again on Windows, and G1's new pixel check on macOS** (run 40993671970).
   WP-V's review added `AssertLoginLabel`, which reads where the name's ink ends to ±1 px; macOS draws
   the name's last column 1.4 px before its layout edge. The report gives layout positions, so the
