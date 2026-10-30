@@ -232,12 +232,27 @@ public sealed class GraphAvatarTests : IDisposable
     public void An_overtaken_change_applies_nothing_and_the_newest_is_applied_once()
     {
         var data = Authors();
-        using var host = Show(new CommitGraphControl { Data = data }, WideWidth);
-        var counts = new List<int>();
-        host.Control.AvatarsApplied += (_, count) => counts.Add(count);
-        host.Control.Avatars = Of((OctoEmail, OctoImage()));
-        Assert.Equal([0], Apply(host, Of(("author@example.com", Path.Combine(_folder.Path, "missing.png")))));
-        Assert.Equal([0], counts);
-        Assert.False(host.Control.ShowsAvatarFor(OctoEmail));
+        var octo = Of((OctoEmail, OctoImage()));
+
+        // The decode runs on the thread pool and can finish before the UI thread reaches its await;
+        // the first change is then applied at once, inside its own setter, and was never overtaken.
+        // Such a try proves nothing, so it is made again with a fresh control, which decodes anew.
+        for (var attempt = 1; ; attempt++)
+        {
+            using var host = Show(new CommitGraphControl { Data = data }, WideWidth);
+            var counts = new List<int>();
+            host.Control.AvatarsApplied += (_, count) => counts.Add(count);
+            host.Control.Avatars = octo;
+            if (counts.Count > 0)
+            {
+                Assert.True(attempt < 10, $"In each of {attempt} tries the first change was applied before the second was set, so none was overtaken.");
+                continue;
+            }
+
+            Assert.Equal([0], Apply(host, Of(("author@example.com", Path.Combine(_folder.Path, "missing.png")))));
+            Assert.Equal([0], counts);
+            Assert.False(host.Control.ShowsAvatarFor(OctoEmail));
+            return;
+        }
     }
 }
