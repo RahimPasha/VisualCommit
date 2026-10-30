@@ -454,12 +454,20 @@ a caret, a progress bar's position or percentage, or an anti-aliased edge (Notes
 green on all five jobs. Steps 12 and 14 are ticked. WP-N is merged at `93e3410` (design 17 item 13:
 built by two builders, reviewed by an agent that built none of it, two major and six minor findings
 fixed, two ruled on; the report's "Part N as built" records the checks' changes), and CI's run
-41023837694 started on it. 12.9's runs are under way on `93e3410`, one after another under
-`bash scripts/heavy-run.sh`, no agent running: the lagged list, phase 3's walk-through and the 7a
-project whole. Next: compare phase 3's status-bar pictures by region with WP-V's merge run's
-(`D:/Projects/Personal/phase7a-work/wpv-merge-pictures`, ruling 60) and the 7a project's with it,
-inspect part N's 20 pictures and every earlier one that changed, read CI, tick step 13, remove the
-worktree; then wave 3 (WP-R on this machine, WP-LIVE with the owner's sandbox). Each of parts B, P, G and N
+41023837694 started on it. 12.9's runs on `93e3410` (one after another under
+`bash scripts/heavy-run.sh`, no agent running) all passed: the lagged list (25, 66, 21, 201 and 42
+tests), phase 3's walk-through (82) and the 7a project whole (201). Against WP-V's merge run 410
+pictures of phases 3 and 7a are the same files, 10 changed and part N's 20 are new; against WP-B's
+whole run phase 3 has 16 changed, its status-bar changes all in the progress bar's segment, the
+percentages or an edge a level or two apart (ruling 60; Notes). WP-N's worktree is removed. Under
+way: the inspection of part N's 20 pictures and of the 21 earlier ones that changed (workflow
+`wamj7cyfy`), CI's run 41023837694, and wave 3 (workflow `wb6m484z6`): WP-R in
+`D:/Projects/Personal/vc-wt/p7a-real-window` (`wip/p7a-real-window`, written and built, never run by
+its agents) and WP-LIVE in `D:/Projects/Personal/vc-wt/p7a-live` (`wip/p7a-live`, run only without its
+variables), each reviewed by two agents that did not build it. Next: the inspection's verdicts and
+CI's, then tick step 13; at wave 3's end read its reports and diffs and merge each with `--no-ff`
+(WP-LIVE with the lead's slnx, `ci.yml` and CLAUDE.md rows, 14.8; WP-R with 13.7's CLAUDE.md rows).
+The live run (step 16) waits for the owner's sandbox, token and two variables (design 14.6). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
