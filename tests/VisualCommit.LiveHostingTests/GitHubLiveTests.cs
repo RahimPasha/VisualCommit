@@ -431,12 +431,18 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
         }
         finally
         {
-            app?.Dispose();
-
-            // Step 9: the clean-up, each call on its own (D324); a failure is recorded and fails the test.
-            if (createClicked)
+            try
             {
-                await CleanUpAsync(api, sandbox, branch, number, duplicates, problems);
+                // Step 9: the clean-up, each call on its own (D324); a failure is recorded and fails the
+                // test. Before the app closes, so that nothing the closing does can keep it from running.
+                if (createClicked)
+                {
+                    await CleanUpAsync(api, sandbox, branch, number, duplicates, problems);
+                }
+            }
+            finally
+            {
+                app?.Dispose();
             }
         }
 
@@ -566,9 +572,10 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
                 var open = await api.OpenPullRequestsAsync(CancellationToken.None, head: $"{sandbox.Owner}:{branch}");
                 toClose.InsertRange(0, open.Where(pull => pull.HeadRef == branch).Select(pull => pull.Number));
             }
-            catch (Exception ex) when (ex is GitHubLiveException or JsonException or InvalidOperationException or KeyNotFoundException)
+            catch (Exception ex)
             {
-                problems.Add($"The clean-up could not look for a pull request from {branch}: {ex.Message}");
+                // The clean-up records what went wrong and goes on: it runs in the test's finally.
+                problems.Add($"The clean-up could not look for a pull request from {branch}: {ex.GetType().Name}: {api.Screen(ex.Message)}");
             }
         }
 
@@ -583,9 +590,9 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
                     problems.Add(api.Describe(closed, $"closing #{Show(pull)}"));
                 }
             }
-            catch (GitHubLiveException ex)
+            catch (Exception ex)
             {
-                problems.Add(ex.Message);
+                problems.Add($"{ex.GetType().Name}: {api.Screen(ex.Message)}");
             }
         }
 
@@ -600,9 +607,9 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
                 problems.Add(api.Describe(deleted, $"deleting {branch}"));
             }
         }
-        catch (GitHubLiveException ex)
+        catch (Exception ex)
         {
-            problems.Add(ex.Message);
+            problems.Add($"{ex.GetType().Name}: {api.Screen(ex.Message)}");
         }
     }
 
