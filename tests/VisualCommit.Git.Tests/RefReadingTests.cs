@@ -165,7 +165,7 @@ public class RefReadingTests
             {
                 if (armed && (listFirst ? IsHeadSha(command) : IsList(command)))
                 {
-                    await firstDone.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+                    await firstDone.Task.WaitAsync(TimeSpan.FromSeconds(60), TestCancelled);
                     second = await repo.CommitFileAsync("a.txt", "b\n", "Second");
                 }
             },

@@ -203,7 +203,7 @@ public class SearchBarTests
         await repo.GitAsync("add", "--", "src/Config.cs");
         await repo.GitAsync("commit", "--quiet", "--message", "Trace again");
         var traced = (await repo.GitAsync("rev-parse", "HEAD")).StandardOutput.Trim();
-        await app.WaitForAsync(() => repository.Graph.Count > 0 && repository.Graph.CommitAt(0).Sha == traced, "the outside commit in the graph", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Graph.Count > 0 && repository.Graph.CommitAt(0).Sha == traced, "the outside commit in the graph");
         await app.WaitForSearchAsync();
         Assert.Equal([0, 2, 10], app.SearchMarks().Marked);
         Assert.Equal("3 matches", app.SearchBar()!.Count);

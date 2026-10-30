@@ -14,7 +14,7 @@ namespace VisualCommit.VisualTests.Phase2;
 /// <summary>Phase 2's check of changes made outside the app (Q4 for the working tree, D71).</summary>
 public partial class Phase2Checks
 {
-    private static readonly TimeSpan OutsideChange = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan OutsideChange = ShellDriver.DefaultWaitTimeout;
 
     [AvaloniaFact]
     public async Task Check_20_working_tree_changes_made_outside_the_app_appear()

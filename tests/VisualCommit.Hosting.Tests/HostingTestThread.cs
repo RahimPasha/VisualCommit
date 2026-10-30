@@ -11,7 +11,7 @@ namespace VisualCommit.Hosting.Tests;
 /// </summary>
 internal sealed class HostingTestThread : IDisposable
 {
-    private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan WaitLimit = TimeSpan.FromSeconds(60);
 
     private readonly BlockingCollection<Action> _queue = [];
     private readonly ConcurrentQueue<Exception> _errors = new();
@@ -95,7 +95,7 @@ internal sealed class HostingTestThread : IDisposable
     /// <summary>Everything posted so far has run.</summary>
     public Task IdleAsync() => RunAsync(() => { });
 
-    /// <summary>Waits until <paramref name="condition"/>, read on the thread, holds; fails after 30 s naming <paramref name="what"/>.</summary>
+    /// <summary>Waits until <paramref name="condition"/>, read on the thread, holds; fails after 60 s naming <paramref name="what"/>.</summary>
     public async Task WaitForAsync(Func<bool> condition, string what)
     {
         var limit = DateTime.UtcNow + WaitLimit;
@@ -103,7 +103,7 @@ internal sealed class HostingTestThread : IDisposable
         {
             if (DateTime.UtcNow > limit)
             {
-                throw new TimeoutException($"Still waiting after 30 s for {what}.");
+                throw new TimeoutException($"Still waiting after 60 s for {what}.");
             }
 
             await Task.Delay(10);

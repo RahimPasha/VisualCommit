@@ -295,7 +295,7 @@ public class GitRunnerTests
         var run = runner.RunAsync(
             Script("echo started; sleep 30", onOutputLine: _ => started.TrySetResult()),
             cancellation.Token);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(60), TestCancelled);
 
         var stopwatch = Stopwatch.StartNew();
         await cancellation.CancelAsync();
@@ -324,7 +324,7 @@ public class GitRunnerTests
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
         var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var run = runner.RunAsync(Script("echo started; sleep 30", onOutputLine: _ => started.TrySetResult()), cancellation.Token);
-        await started.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(60), TestCancelled);
 
         var context = new CountingContext();
         var cancelled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -403,7 +403,7 @@ public class GitRunnerTests
                         release.Wait(TimeSpan.FromSeconds(60));
                     }),
                 cancellation.Token);
-            await inHandler.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+            await inHandler.Task.WaitAsync(TimeSpan.FromSeconds(60), TestCancelled);
 
             // Git is long gone by now; the busy handler still holds the call.
             await Task.Delay(TimeSpan.FromSeconds(3), TestCancelled);
@@ -438,7 +438,7 @@ public class GitRunnerTests
                     Thread.Sleep(TimeSpan.FromSeconds(1.5));
                     cancellation.Cancel();
                 }),
-            cancellation.Token).WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+            cancellation.Token).WaitAsync(TimeSpan.FromSeconds(60), TestCancelled);
 
         Assert.True(cancellation.IsCancellationRequested);
         Assert.True(result.Succeeded);

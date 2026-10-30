@@ -405,7 +405,7 @@ public class ActivityLogViewTests
         using var repo = await Scenarios.ConflictsStoppedAsync(Scenarios.ConflictsStop.Merge);
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
         var repository = await app.WaitForRepositoryAsync();
-        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read");
         repository.IsWorkingRowSelected = true;
         repository.OpenDiff(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted), staged: false);
         await app.WaitForResolverAsync("notes.txt");

@@ -182,7 +182,7 @@ public partial class Phase2Checks
         await GitInAsync(fresh, "config", "user.name", TempRepo.AuthorName);
         await GitInAsync(fresh, "config", "user.email", TempRepo.AuthorEmail);
         File.WriteAllText(Path.Combine(fresh, "first.txt"), "First\n");
-        await app.WaitForAsync(() => tab.Repository!.HasWorkingChanges, "the working-changes row", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => tab.Repository!.HasWorkingChanges, "the working-changes row");
         app.MoveMouse(new Point(130, 700 - 13));
         var unborn = app.Capture();
         unborn.Save(Phase, "24a-working-row-without-commits");

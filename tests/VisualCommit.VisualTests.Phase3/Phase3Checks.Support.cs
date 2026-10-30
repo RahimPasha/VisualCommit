@@ -79,10 +79,11 @@ public abstract partial class Phase3Checks
 
     /// <summary>
     /// How long a wait for a change made outside the app (through <see cref="TempRepo"/>, seen by
-    /// the app's file watcher) may take: 30 seconds (part D's "Waiting"; a hot laptop has missed
-    /// 5 before). The expected result is the state after the wait, not how long it took.
+    /// the app's file watcher) may take: 30 seconds at first (part D's "Waiting"; a hot laptop has
+    /// missed 5 before), since D341 the driver's default, 60 s, as the default run's load needs
+    /// (D237). The expected result is the state after the wait, not how long it took.
     /// </summary>
-    protected static readonly TimeSpan OutsideChangeTimeout = TimeSpan.FromSeconds(30);
+    protected static readonly TimeSpan OutsideChangeTimeout = ShellDriver.DefaultWaitTimeout;
 
     /// <summary>
     /// How long a network operation against the test server may take before a check gives up:

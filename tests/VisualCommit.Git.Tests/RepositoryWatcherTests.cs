@@ -25,6 +25,9 @@ public class RepositoryWatcherTests
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>How long to wait for a working-tree change, raised only once its ignore check, a call of git, has run: the run's load sets it (D237, D341).</summary>
+    private static readonly TimeSpan WorkingTreeTimeout = TimeSpan.FromSeconds(60);
+
     [Fact]
     public async Task A_commit_made_outside_the_app_raises_changed()
     {
@@ -68,7 +71,7 @@ public class RepositoryWatcherTests
         // would now rewrite it. The touch itself is reported once the ignore check has run, which
         // takes a call of git, slow on a busy machine; it is waited for, not timed.
         File.SetLastWriteTimeUtc(Path.Combine(repo.Path, "a.txt"), DateTime.UtcNow.AddMinutes(-5));
-        Assert.True(await changed.WaitForAsync(1, Timeout), "Touching a.txt was not reported.");
+        Assert.True(await changed.WaitForAsync(1, WorkingTreeTimeout), "Touching a.txt was not reported.");
         await Task.Delay(Settle, TestCancelled);
         changed.Reset();
         await repository.ReadStatusAsync(TestCancelled);
@@ -295,7 +298,7 @@ public class RepositoryWatcherTests
 
         repo.WriteFile("notes.txt", "A note\n");
 
-        Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
+        Assert.True(await changed.WaitForAsync(1, WorkingTreeTimeout), "Changed was not raised.");
         Assert.True(changed.Last!.WorkingTree);
         Assert.False(changed.Last.GitFolder);
     }
@@ -332,7 +335,7 @@ public class RepositoryWatcherTests
         Assert.Equal(0, changed.Count);
 
         repo.WriteFile("notes.txt", "A note\n");
-        Assert.True(await changed.WaitForAsync(1, Timeout), "A change to a file that is not ignored was not reported.");
+        Assert.True(await changed.WaitForAsync(1, WorkingTreeTimeout), "A change to a file that is not ignored was not reported.");
     }
 
     [Fact]
@@ -354,7 +357,7 @@ public class RepositoryWatcherTests
         await Task.Delay(Settle, TestCancelled);
         changed.Reset();
         repo.WriteFile("later.txt", "y\n");
-        Assert.True(await changed.WaitForAsync(1, Timeout), "A change after the pause was not reported.");
+        Assert.True(await changed.WaitForAsync(1, WorkingTreeTimeout), "A change after the pause was not reported.");
     }
 
     [Theory]

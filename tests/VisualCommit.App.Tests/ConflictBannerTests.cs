@@ -648,7 +648,7 @@ public class ConflictBannerTests
         Assert.False(app.FindByAutomationId("ConflictBanner").IsEffectivelyVisible);
 
         Assert.Equal(1, (await repo.GitAllowingFailureAsync("merge", "feature/conflict")).ExitCode);
-        await app.WaitForAsync(() => repository.Banner.IsVisible, "the banner", TimeSpan.FromSeconds(10));
+        await app.WaitForAsync(() => repository.Banner.IsVisible, "the banner");
         app.Settle();
 
         // In a wide window the text fits on one line with Continue and Abort beside it: the banner
@@ -659,7 +659,7 @@ public class ConflictBannerTests
         Assert.True(app.BoundsOf(app.FindByAutomationId("BannerContinueButton")).Left >= app.BoundsOf(app.FindByAutomationId("BannerText")).Right - 0.5);
 
         await repo.GitAsync("merge", "--abort");
-        await app.WaitForAsync(() => !repository.Banner.IsVisible, "the banner to go", TimeSpan.FromSeconds(10));
+        await app.WaitForAsync(() => !repository.Banner.IsVisible, "the banner to go");
         app.Settle();
         Assert.False(app.FindByAutomationId("ConflictBanner").IsEffectivelyVisible);
         Assert.Equal("Working changes", repository.WorkingRowText);

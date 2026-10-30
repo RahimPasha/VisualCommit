@@ -29,7 +29,7 @@ public class ShellDriverPhase5ShellTests
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
         await app.WaitForRepositoryAsync();
 
-        var record = await app.WaitForOperationRecordAsync(RepositoryViewModel.CleanUpBackupsTitle, TimeSpan.FromSeconds(30));
+        var record = await app.WaitForOperationRecordAsync(RepositoryViewModel.CleanUpBackupsTitle);
         await app.WaitForIdleAsync();
 
         Assert.Equal((true, OperationKind.Local, OperationOutcome.Succeeded, "Removed 3 backups"), (record.IsBackground, record.Kind, record.Outcome, record.Message));

@@ -63,7 +63,7 @@ public sealed partial class Phase3ChecksC
         app.Click(app.WorkingRowPoint());
         await WaitForStagePanelAsync(app, "Unstaged files (1, 1 with conflicts)", "Staged files (0)");
         // The panel fills its message from the operation after a read of its own.
-        await app.WaitForAsync(() => CommitBoxText(app, "CommitSummary") == "Conflicting change", "the summary filled from the pick's message", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => CommitBoxText(app, "CommitSummary") == "Conflicting change", "the summary filled from the pick's message");
         Shot(app, "25b-cherry-pick-stage-panel");
         Assert.Equal(["U core.txt src"], FileRows(app, "UnstagedFileList"));
         await AssertConflictRowAsync(app, "src/core.txt");

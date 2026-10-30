@@ -567,7 +567,7 @@ public class DiffTextViewTests
         using var host = DiffHost.Show(view, InlineWidth, InlineHeight, ThemeVariant.Dark);
 
         var keyword = Color.Parse("#569CD6");
-        var deadline = DateTime.UtcNow.AddSeconds(30);
+        var deadline = DateTime.UtcNow.AddSeconds(60);
         while ((view.ForegroundAt(new DiffLineRef(0, 0), 4) as ISolidColorBrush)?.Color != keyword && DateTime.UtcNow < deadline)
         {
             await Task.Delay(20, TestContext.Current.CancellationToken);

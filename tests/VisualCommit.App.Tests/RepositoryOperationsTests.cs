@@ -250,7 +250,7 @@ public class RepositoryOperationsTests
 
         Assert.Equal((OperationKind.Local, true), (app.Operations.Queue.Current!.Kind, app.Operations.Queue.Current.CanCancel));
         app.Operations.Queue.CancelCurrent();
-        var result = await run.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        var result = await run.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
 
         Assert.Equal(OperationOutcome.Cancelled, result.Outcome);
         Assert.Equal("Merge tool for notes.txt cancelled", app.StatusText);

@@ -388,8 +388,9 @@ public sealed partial class Phase3ChecksA
 
     /// <summary>
     /// Waits until the open diff of <paramref name="path"/> shows its text rows laid out. Loading a
-    /// diff runs git, so the wait is the outside-change bound, not one step's 10 s: on CI's bare
-    /// container, with five test processes side by side, it took longer (run 38256873492).
+    /// diff runs git, so the wait is the outside-change bound, not the driver's default of the time
+    /// (10 s; since D341 the two are the same, 60 s): on CI's bare container, with five test
+    /// processes side by side, it took longer (run 38256873492).
     /// When it times out on CI (Linux, run 38258811117) it says what the app showed instead, saves
     /// the picture <c>04z-diff-timeout</c> and the log lines written meanwhile, then fails.
     /// </summary>

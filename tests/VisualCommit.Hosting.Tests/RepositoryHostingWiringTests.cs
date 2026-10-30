@@ -29,7 +29,7 @@ public sealed class RepositoryHostingWiringTests
 {
     private const string RulesRead = "git config --null --get-regexp ^url\\.";
 
-    private static readonly TimeSpan Limit = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan Limit = TimeSpan.FromSeconds(60);
 
     private static readonly string GitPath = GitLocator.FindExecutable(GitSearchContext.FromSystem())
         ?? throw new InvalidOperationException("git was not found on PATH.");
@@ -196,7 +196,7 @@ public sealed class RepositoryHostingWiringTests
         var limit = DateTime.UtcNow + Limit;
         while (!condition())
         {
-            Assert.True(DateTime.UtcNow < limit, $"Still waiting after 30 s for {what}.");
+            Assert.True(DateTime.UtcNow < limit, $"Still waiting after 60 s for {what}.");
             await Task.Delay(10);
         }
     }

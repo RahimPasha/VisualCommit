@@ -23,10 +23,10 @@ internal static class DashboardTestSupport
 
     public static readonly string Upstream = new('b', 40);
 
-    /// <summary>Waits, letting the UI thread run, until <paramref name="condition"/> holds; fails after 30 s.</summary>
+    /// <summary>Waits, letting the UI thread run, until <paramref name="condition"/> holds; fails after 60 s.</summary>
     public static async Task WaitUntilAsync(Func<bool> condition, string what)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
         while (true)
         {
             Dispatcher.UIThread.RunJobs();

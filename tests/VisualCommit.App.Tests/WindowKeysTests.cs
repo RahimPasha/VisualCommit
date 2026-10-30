@@ -160,7 +160,7 @@ public class WindowKeysTests
         var searches = 0;
         toolbar.SearchAction = () => searches++;
         var repository = app.Session.Shell.ActiveTab.Repository!;
-        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read");
         Assert.Equal((true, $"Search commits ({SearchGesture(app)})"), (toolbar.CanSearch, toolbar.SearchToolTip));
 
         repository.IsWorkingRowSelected = true;

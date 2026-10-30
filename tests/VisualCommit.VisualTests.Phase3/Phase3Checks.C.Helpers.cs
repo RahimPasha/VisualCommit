@@ -440,7 +440,7 @@ public sealed partial class Phase3ChecksC
     /// <summary>Waits until the queue logged the end of <paramref name="title"/> since <paramref name="mark"/>, and the tab is idle.</summary>
     private static async Task WaitForOperationAsync(ShellDriver app, TempRepo repo, string title, int mark)
     {
-        await app.WaitForLogLineAsync(AppLogFile.OperationEnded(NameOf(repo), title), mark: mark, timeout: TimeSpan.FromSeconds(30));
+        await app.WaitForLogLineAsync(AppLogFile.OperationEnded(NameOf(repo), title), mark: mark);
         await app.WaitForIdleAsync();
     }
 

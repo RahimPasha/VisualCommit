@@ -475,10 +475,10 @@ public class WorkingChangesTests
         Assert.All(viewModel.Changes.Unstaged.Rows, row => Assert.False(row.IsSelected));
     }
 
-    /// <summary>Waits until <paramref name="condition"/> holds, looking every few milliseconds, for at most 30 seconds.</summary>
+    /// <summary>Waits until <paramref name="condition"/> holds, looking every few milliseconds, for at most 60 seconds.</summary>
     private static async Task WaitUntilAsync(Func<bool> condition, string what)
     {
-        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(60);
         while (!condition())
         {
             Assert.True(DateTime.UtcNow < deadline, $"Timed out waiting for {what}.");
