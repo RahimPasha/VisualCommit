@@ -126,15 +126,15 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             var open = await api.OpenPullRequestsAsync(Cancelled);
             var leftovers = open.Where(pull => pull.HeadRef.StartsWith(LivePrefix, StringComparison.Ordinal)
                 && string.Equals(pull.HeadRepository, sandbox.FullName, StringComparison.OrdinalIgnoreCase)).ToList();
-            run.Note($"Open pull requests: {Count(open.Count)}, {Count(leftovers.Count)} of them from {LivePrefix} branches of the sandbox.");
+            run.Note($"Open pull requests: {Show(open.Count)}, {Show(leftovers.Count)} of them from {LivePrefix} branches of the sandbox.");
             var refused = new List<string>();
             foreach (var pull in leftovers)
             {
                 var closed = await api.ClosePullRequestAsync(pull.Number, Cancelled);
-                run.Note($"Leftover pull request #{Count(pull.Number)} ({pull.HeadRef}) closed: {closed}.");
+                run.Note($"Leftover pull request #{Show(pull.Number)} ({pull.HeadRef}) closed: {closed}.");
                 if (closed.Status != 200)
                 {
-                    refused.Add(api.Describe(closed, $"closing #{Count(pull.Number)}"));
+                    refused.Add(api.Describe(closed, $"closing #{Show(pull.Number)}"));
                 }
             }
 
@@ -151,7 +151,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
 
             run.Note(leftovers.Count == 0 && branches.Count == 0
                 ? "Leftovers of a stopped run: none."
-                : $"Leftovers of a stopped run: {Count(leftovers.Count)} pull requests closed, {Count(branches.Count)} branches deleted, {Count(refused.Count)} refused.");
+                : $"Leftovers of a stopped run: {Show(leftovers.Count)} pull requests closed, {Show(branches.Count)} branches deleted, {Show(refused.Count)} refused.");
             Assert.True(refused.Count == 0, "The leftovers' clean-up was refused: " + string.Join("; ", refused));
         }
         catch (Exception ex)
@@ -205,7 +205,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             await app.WaitUntilReadyAsync();
             var hostingSession = app.Session.Services.Hosting;
             Assert.False(hostingSession.IsOff, "GitHub is off in the app.");
-            Assert.True(app.LogLines().Any(line => line.EndsWith(" [INF] GitHub: github.com.", StringComparison.Ordinal)), "The log has no \"GitHub: github.com.\".");
+            await app.WaitForAsync(() => app.LogLines().Any(line => line.EndsWith(" [INF] GitHub: github.com.", StringComparison.Ordinal)), "the log's \"GitHub: github.com.\"");
             Assert.True(requests.Count == 0, "The app sent a request before the sign-in: " + string.Join("; ", requests.Snapshot().Select(request => request.Describe())));
 
             // Step 2: the sign-in through Settings, Accounts, as a user signs in.
@@ -229,7 +229,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             }
 
             var signIn = requests.Snapshot();
-            run.Note($"The sign-in: {string.Join("; ", signIn.Select(request => request.Describe()))}; GET /user for a token with no account permission answered {(signIn.Count > 0 && signIn[0].Status is { } status ? Count(status) : "nothing")}.");
+            run.Note($"The sign-in: {string.Join("; ", signIn.Select(request => request.Describe()))}; GET /user for a token with no account permission answered {(signIn.Count > 0 && signIn[0].Status is { } status ? Show(status) : "nothing")}.");
             if (signIn is not [{ Method: "GET", Scheme: "https", Host: LiveRequestLog.ApiHost, Path: "/user", Status: 200, AuthorizationSent: true }])
             {
                 throw new XunitException("The sign-in did not send exactly one GET https://api.github.com/user, answered 200 with Authorization: " + string.Join("; ", signIn.Select(request => request.Describe())));
@@ -261,15 +261,15 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
 
             var outside = rows.Where(row => !string.Equals(row.FullName, sandbox.FullName, StringComparison.OrdinalIgnoreCase)).ToList();
             var outsidePrivate = outside.Count(row => row.Detail is { } detail && detail.Split(CloneTexts.DetailSeparator)[0] == CloneTexts.Private);
-            run.Note($"The browser (GET /user/repos): {Count(rows.Count)} rows, more exist: {(browser.MoreText is null ? "no" : "yes")}; "
-                + $"{Count(outside.Count)} outside the sandbox, {Count(outside.Count - outsidePrivate)} public and {Count(outsidePrivate)} private.");
+            run.Note($"The browser (GET /user/repos): {Show(rows.Count)} rows, more exist: {(browser.MoreText is null ? "no" : "yes")}; "
+                + $"{Show(outside.Count)} outside the sandbox, {Show(outside.Count - outsidePrivate)} public and {Show(outsidePrivate)} private.");
             var row = rows.FirstOrDefault(candidate => string.Equals(candidate.FullName, sandbox.FullName, StringComparison.OrdinalIgnoreCase))
                 ?? throw new XunitException($"The browser does not list {sandbox.FullName}.");
             app.TypeInto("CloneFromGitHubFilter", sandbox.Name);
             ListBoxItem? item = null;
             await app.WaitForAsync(() => (item = BrowserItem(app, row.FullName)) is not null, $"{row.FullName}'s row in the filtered list");
             app.Click(item!);
-            await app.WaitForAsync(() => ReferenceEquals(browser.Selected, row), $"{row.FullName} selected");
+            await app.WaitForAsync(() => Equals(browser.Selected, row), $"{row.FullName} selected");
             app.Click(app.FindByAutomationId("ConfirmButton"));
             await app.WaitForAsync(() => browser.IsClosed, "the browser to close");
             var url = app.Find<TextBox>("CloneUrlBox").Text ?? string.Empty;
@@ -310,8 +310,8 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             var listed = opened.HostingState.List!.PullRequests.Count;
             var shown = tab.LeftPanel.Rows.OfType<PullRequestRow>().Count();
             var none = tab.LeftPanel.Rows.OfType<PullRequestMessageRow>().Any(message => message is { Kind: PullRequestMessageKind.None } && message.Text == OperationTexts.NoOpenPullRequests);
-            Assert.True(listed == 0 ? none && shown == 0 : shown == listed, $"The section shows {Count(shown)} pull request rows{(none ? " and \"No open pull requests\"" : string.Empty)} for {Count(listed)} listed.");
-            run.Note($"Open pull requests the app listed before the create: {Count(listed)}.");
+            Assert.True(listed == 0 ? none && shown == 0 : shown == listed, $"The section shows {Show(shown)} pull request rows{(none ? " and \"No open pull requests\"" : string.Empty)} for {Show(listed)} listed.");
+            run.Note($"Open pull requests the app listed before the create: {Show(listed)}.");
 
             // Step 6: the branch, its commit (D325), the push and the create through the form.
             step = "6, the branch";
@@ -376,12 +376,12 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
 
             number = int.Parse(match.Groups["number"].Value, CultureInfo.InvariantCulture);
             Assert.Equal(CreateTexts.Created(number.Value, draft: true), created.Message);
-            run.Note($"Created draft pull request #{Count(number.Value)} with the head {head}.");
+            run.Note($"Created draft pull request #{Show(number.Value)} with the head {head}.");
             await app.WaitForAsync(
                 () => opened.HostingState.ByRef.TryGetValue(HeadsPrefix + branch, out var pull) && pull.Number == number,
-                $"#{Count(number.Value)} on {HeadsPrefix}{branch}",
+                $"#{Show(number.Value)} on {HeadsPrefix}{branch}",
                 NetworkStep);
-            Assert.True(opened.HostingState.ByRef[HeadsPrefix + branch].IsDraft, $"#{Count(number.Value)} is not a draft in the app.");
+            Assert.True(opened.HostingState.ByRef[HeadsPrefix + branch].IsDraft, $"#{Show(number.Value)} is not a draft in the app.");
             await app.WaitForLogLineAsync(AppLogFile.PullRequestsListed(opened.Name), occurrence: 2, mark: createMark, timeout: NetworkStep);
             await app.WaitForWatchersQuietAsync();
             Assert.Equal("origin", (await GitOkAsync(git, clone, session, "config", "--get", $"branch.{branch}.remote")).StandardOutput.Trim());
@@ -392,7 +392,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             var read = await api.ReadPullRequestAsync(number.Value, Cancelled);
             if (read is not { Status: 200, Json: { } pullRequest })
             {
-                throw new XunitException(api.Describe(read, $"pull request #{Count(number.Value)}") + ".");
+                throw new XunitException(api.Describe(read, $"pull request #{Show(number.Value)}") + ".");
             }
 
             var differences = new List<string>();
@@ -411,8 +411,8 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             Expect("head.sha", pullRequest.GetProperty("head").GetProperty("sha").GetString(), head);
             Expect("base.ref", pullRequest.GetProperty("base").GetProperty("ref").GetString(), repository.DefaultBranch);
             Expect("user.login", pullRequest.GetProperty("user").GetProperty("login").GetString(), login, StringComparison.OrdinalIgnoreCase);
-            Assert.True(differences.Count == 0, $"GitHub's #{Count(number.Value)} differs: " + string.Join("; ", differences));
-            run.Note($"Read back: #{Count(number.Value)} is an open draft from {branch} at {head} into {repository.DefaultBranch}, opened by {login} ({read}).");
+            Assert.True(differences.Count == 0, $"GitHub's #{Show(number.Value)} differs: " + string.Join("; ", differences));
+            run.Note($"Read back: #{Show(number.Value)} is an open draft from {branch} at {head} into {repository.DefaultBranch}, opened by {login} ({read}).");
 
             // Step 8: the same create again (r5 14), recorded as GitHub answers it.
             step = "8, the duplicate create";
@@ -577,10 +577,10 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             try
             {
                 var closed = await api.ClosePullRequestAsync(pull, CancellationToken.None);
-                run.Note($"Clean-up: PATCH …/pulls/{Count(pull)} state closed: {closed}.");
+                run.Note($"Clean-up: PATCH …/pulls/{Show(pull)} state closed: {closed}.");
                 if (closed.Status != 200)
                 {
-                    problems.Add(api.Describe(closed, $"closing #{Count(pull)}"));
+                    problems.Add(api.Describe(closed, $"closing #{Show(pull)}"));
                 }
             }
             catch (GitHubLiveException ex)
@@ -667,7 +667,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             try
             {
                 using var bitmap = new Bitmap(image);
-                sizes.Add($"{Count(bitmap.PixelSize.Width)}×{Count(bitmap.PixelSize.Height)} {Path.GetExtension(image)[1..]}");
+                sizes.Add($"{Show(bitmap.PixelSize.Width)}×{Show(bitmap.PixelSize.Height)} {Path.GetExtension(image)[1..]}");
             }
             catch (Exception ex) when (ex is IOException or ArgumentException or InvalidOperationException or NotSupportedException)
             {
@@ -675,7 +675,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             }
         }
 
-        run.Note(images.Count == 0 ? "Avatars kept: none." : $"Avatars kept: {Count(images.Count)}, {string.Join(", ", sizes)}.");
+        run.Note(images.Count == 0 ? "Avatars kept: none." : $"Avatars kept: {Show(images.Count)}, {string.Join(", ", sizes)}.");
     }
 
     // ---- Git -----------------------------------------------------------------------------------
@@ -708,12 +708,12 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
         var result = await GitAsync(git, folder, environment, arguments);
         return result.Succeeded
             ? result
-            : throw new XunitException(run.Screen($"git {string.Join(' ', arguments)} failed ({Count(result.ExitCode)}): {result.StandardError.Trim()}"));
+            : throw new XunitException(run.Screen($"git {string.Join(' ', arguments)} failed ({Show(result.ExitCode)}): {result.StandardError.Trim()}"));
     }
 
     /// <summary>The keys of <c>git config --get-regexp</c>'s lines, without their values.</summary>
     private static IEnumerable<string> Keys(string output) =>
         output.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Select(line => line.Split(' ')[0]);
 
-    private static string Count(int value) => value.ToString(CultureInfo.InvariantCulture);
+    private static string Show(int value) => value.ToString(CultureInfo.InvariantCulture);
 }
