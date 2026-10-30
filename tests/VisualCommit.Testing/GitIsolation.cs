@@ -103,23 +103,37 @@ public static class GitIsolation
     /// <summary>
     /// The git environment of an app session on <paramref name="dataDirectory"/>
     /// (docs/phase-6-design.md 8.12, 17.2, amending D112): <c>GIT_CONFIG_GLOBAL</c> =
-    /// <see cref="SessionGlobalConfigFile"/> and <c>XDG_CONFIG_HOME</c> =
-    /// <c>&lt;data&gt;/harness/xdg</c>, both made here (the file by git's first write). Both
-    /// harnesses hand it to the app: <c>ShellDriver.Start</c> through <c>AppSession.Start</c>'s
-    /// <c>gitEnvironment</c>, which the session's one runner applies, and <c>RealApp.Launch</c>
-    /// through the app's environment. Only this and <c>FetchHold.Install</c> make the harness
-    /// folder, never a git call.
+    /// <see cref="SessionGlobalConfigFile"/>, <c>XDG_CONFIG_HOME</c> = <c>&lt;data&gt;/harness/xdg</c>
+    /// and, since phase 7a, <c>HOME</c> = <see cref="SessionHomeFolder"/>, all made here (the file
+    /// by git's first write). Both harnesses hand it to the app: <c>ShellDriver.Start</c> through
+    /// <c>AppSession.Start</c>'s <c>gitEnvironment</c>, which the session's one runner applies, and
+    /// <c>RealApp.Launch</c> through the app's environment. Only this and <c>FetchHold.Install</c>
+    /// make the harness folder, never a git call.
     /// </summary>
     public static IReadOnlyDictionary<string, string?> SessionGitEnvironment(string dataDirectory)
     {
         var xdg = Path.Combine(SessionHarnessFolder(dataDirectory), "xdg");
         Directory.CreateDirectory(xdg);
+        var home = SessionHomeFolder(dataDirectory);
+        Directory.CreateDirectory(home);
         return new Dictionary<string, string?>
         {
             ["GIT_CONFIG_GLOBAL"] = SessionGlobalConfigFile(dataDirectory),
             ["XDG_CONFIG_HOME"] = xdg,
+            ["HOME"] = home,
         };
     }
+
+    /// <summary>
+    /// An app session's home folder for git (docs/phase-7a-design.md 4.2, D340): an empty
+    /// <c>&lt;data&gt;/harness/home</c>, so that the curl of the session's git calls never reads the
+    /// machine's <c>.netrc</c> or <c>_netrc</c>, which answers a server's 401 before any credential
+    /// helper (on git older than 2.46 even for a URL bound to the account). The global configuration
+    /// and the XDG folder keep their own variables, which take the place of the home folder's files.
+    /// Git for Windows takes <c>HOME</c> as it is; curl looks there before <c>USERPROFILE</c>.
+    /// </summary>
+    public static string SessionHomeFolder(string dataDirectory) =>
+        Path.Combine(SessionHarnessFolder(dataDirectory), "home");
 
     /// <summary>
     /// The tripwire (docs/phase-6-design.md 17.2, 8.12): what shows that some git call wrote a

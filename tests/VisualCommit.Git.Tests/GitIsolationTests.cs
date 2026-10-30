@@ -277,25 +277,71 @@ public class GitIsolationTests
 
         var global = Path.Combine(data.Path, "harness", "global.gitconfig");
         var xdg = Path.Combine(data.Path, "harness", "xdg");
-        Assert.Equal(2, environment.Count);
+        var home = Path.Combine(data.Path, "harness", "home");
+        Assert.Equal(3, environment.Count);
         Assert.Equal(global, environment["GIT_CONFIG_GLOBAL"]);
         Assert.Equal(xdg, environment["XDG_CONFIG_HOME"]);
+        Assert.Equal(home, environment["HOME"]);
         Assert.Equal(global, GitIsolation.SessionGlobalConfigFile(data.Path));
+        Assert.Equal(home, GitIsolation.SessionHomeFolder(data.Path));
         Assert.True(Directory.Exists(xdg));
+        Assert.True(Directory.Exists(home));
         Assert.False(File.Exists(global));
 
-        // The first write makes the file (0.10); the session's runner reads it back.
+        // The first write makes the file (0.10); the session's runner reads it back. The home
+        // folder, which only keeps the machine's netrc out (D340), stays empty.
         var runner = new GitRunner(TempRepo.GitPath, environment: environment);
         var write = await runner.RunAsync(new GitCommand("config", "--global", "user.name", "Session User") { WorkingDirectory = data.Path }, TestCancelled);
         Assert.True(write.Succeeded, write.StandardError);
         Assert.True(File.Exists(global));
         var read = await runner.RunAsync(new GitCommand("config", "--global", "user.name") { WorkingDirectory = data.Path }, TestCancelled);
         Assert.Equal("Session User", read.StandardOutput.Trim());
+        Assert.Empty(Directory.EnumerateFileSystemEntries(home));
 
         // A runner without the session's environment sees none of it.
         var outside = await new GitRunner(TempRepo.GitPath).RunAsync(new GitCommand("config", "--global", "user.name") { WorkingDirectory = data.Path }, TestCancelled);
         Assert.Equal(1, outside.ExitCode);
         Assert.Empty(GitIsolation.GlobalConfigurationWrittenOutsideASession());
+    }
+
+    [Fact]
+    public async Task A_netrc_in_the_machines_home_answers_no_git_call_of_a_session()
+    {
+        await using var server = await AuthRemoteServer.StartAsync();
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        using var machineHome = new TempDirectory("machine home");
+        using var data = new TempDirectory("data");
+        var entry = $"machine 127.0.0.1 login {server.Credentials.UserName} password {server.Credentials.Password}\n";
+        File.WriteAllText(machineHome.Combine(".netrc"), entry);
+        File.WriteAllText(machineHome.Combine("_netrc"), entry);
+
+        // A machine whose home folder (HOME, or USERPROFILE, where Git for Windows finds it) holds a
+        // netrc entry for the server: git's curl answers the server's 401 with it, no helper asked.
+        var machine = new Dictionary<string, string?>(repo.Environment)
+        {
+            ["HOME"] = machineHome.Path,
+            ["USERPROFILE"] = machineHome.Path,
+            ["NETRC"] = null,
+            ["GIT_TERMINAL_PROMPT"] = "0",
+        };
+        var answered = await LsRemoteAsync(repo, machine);
+        Assert.True(answered.Succeeded, answered.StandardError);
+        Assert.Contains(server.Requests, request => request.Status == 200 && request.UserName == server.Credentials.UserName);
+
+        // A session's git environment over it: its own empty home, where curl looks first (D340).
+        var requests = server.Requests.Count;
+        var session = new Dictionary<string, string?>(machine);
+        foreach (var (name, value) in GitIsolation.SessionGitEnvironment(data.Path))
+        {
+            session[name] = value;
+        }
+
+        var refused = await LsRemoteAsync(repo, session);
+
+        Assert.False(refused.Succeeded);
+        Assert.Contains("could not read Username", refused.StandardError, StringComparison.Ordinal);
+        Assert.DoesNotContain(server.Requests.Skip(requests), request => request.UserName is not null);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(GitIsolation.SessionHomeFolder(data.Path)));
     }
 
     private static Task<GitResult> LsRemoteAsync(TempRepo repo, IReadOnlyDictionary<string, string?> environment) =>
