@@ -621,6 +621,9 @@ public sealed class HostingSession : IHostingSession
             _file = _file.WithoutGitHub(Host);
             _accounts.Save(_file);
             Volatile.Write(ref _slot, null);
+
+            // No request starts with the token from here on; what GitHub answered to it goes too.
+            _provider!.ForgetKept();
             _log.Info(reason is null
                 ? $"GitHub account {slot.Status.Account.Login} on {Host}: signed out."
                 : $"GitHub account {slot.Status.Account.Login} on {Host}: signed out; the keychain kept its entry: {reason}.");

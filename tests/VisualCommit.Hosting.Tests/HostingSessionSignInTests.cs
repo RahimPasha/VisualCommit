@@ -15,7 +15,8 @@ namespace VisualCommit.Hosting.Tests;
 /// GitHub's answer and after it; another login replacing the account; the switch carried; signing
 /// out with and without a kept entry; in a run without a keychain, a keychain record's entry named
 /// at a sign-out and at another login; sign-in and sign-out one at a time; the switch and the
-/// sign-out writing off the caller's thread; a sign-out completing when the session closes.
+/// sign-out writing off the caller's thread; a sign-out completing when the session closes; GitHub's
+/// kept answers forgotten at a sign-out.
 /// </summary>
 public sealed class HostingSessionSignInTests
 {
@@ -326,6 +327,25 @@ public sealed class HostingSessionSignInTests
         Assert.Equal(["probe", "save github:127.0.0.1:1:octo", "delete github:127.0.0.1:1:octo"], setup.FakeTokens.Calls);
         Assert.Empty(Load(setup).Accounts);
         Assert.False(Directory.Exists(setup.Paths.AvatarsDirectory));
+    }
+
+    [Fact]
+    public async Task A_sign_out_forgets_githubs_kept_answers_so_the_next_sign_ins_requests_are_full()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hello = new HostedRepository(HostingProvider.GitHub, setup.Fake.Endpoints.Host, "octo", "hello");
+        Assert.True((await setup.Session.GitHub!.ReadRepositoryAsync(setup.OctoToken, hello, Cancelled)).Succeeded);
+        Assert.True((await setup.Session.GitHub!.ReadRepositoryAsync(setup.OctoToken, hello, Cancelled)).Succeeded);
+
+        Assert.Null(await setup.Session.SignOutAsync(Cancelled));
+        Assert.Null((await setup.Session.SignInAsync(setup.OctoToken, Cancelled)).Failure);
+        Assert.True((await setup.Session.GitHub!.ReadRepositoryAsync(setup.OctoToken, hello, Cancelled)).Succeeded);
+
+        // Kept, the second A3 was conditional; after the sign-out neither A1 nor A3 is, with the
+        // same token (6.2: in memory, now also dropped at a sign-out).
+        Assert.Equal([false, true, false], setup.Fake.Requests.Where(request => request.Route == "repo:octo/hello").Select(request => request.Conditional));
+        Assert.Equal([false, false], setup.Fake.Requests.Where(request => request.Route == "user").Select(request => request.Conditional));
     }
 
     internal static AccountsFile Load(HostingSessionSetup setup) => new JsonAccountStore(setup.Paths.AccountsFile, new ListLog()).Load();

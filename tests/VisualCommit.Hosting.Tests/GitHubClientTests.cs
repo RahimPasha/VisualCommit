@@ -253,6 +253,48 @@ public sealed class GitHubClientTests
     }
 
     [Fact]
+    public async Task Kept_answers_are_bounded_by_their_bytes_and_the_oldest_stored_goes_first()
+    {
+        // Bodies of 1,000 bytes (d's 3,000) under a budget of 2,500: two are kept. The script
+        // answers 304 to a URL's current ETag, which a new version changes.
+        var versions = new Dictionary<string, int>(StringComparer.Ordinal) { ["/a"] = 1, ["/b"] = 1, ["/c"] = 1, ["/d"] = 1 };
+        var recorder = new RecordingHttpHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            var etag = $"\"{path[1..]}{versions[path]}\"";
+            if (request.Headers.TryGetValues("If-None-Match", out var given) && given.Contains(etag))
+            {
+                return RecordingHttpHandler.Json(HttpStatusCode.NotModified, string.Empty, ("ETag", etag));
+            }
+
+            const string Start = "{\"login\":\"octo\",\"id\":1001,\"pad\":\"";
+            var size = path == "/d" ? 3000 : 1000;
+            return RecordingHttpHandler.Json(HttpStatusCode.OK, Start + new string('x', size - Start.Length - 2) + "\"}", ("ETag", etag));
+        });
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), new ManualTimeProvider(), keptBytes: 2500);
+        async Task<int> GetAsync(string path) =>
+            (await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, path), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled)).Status;
+
+        // a and b kept; a's new version makes it the newest; c then drops b, the oldest stored.
+        Assert.Equal(200, await GetAsync("a"));
+        Assert.Equal(200, await GetAsync("b"));
+        versions["/a"] = 2;
+        Assert.Equal(200, await GetAsync("a"));
+        Assert.Equal(200, await GetAsync("c"));
+        Assert.Equal(304, await GetAsync("a"));
+        Assert.Equal(200, await GetAsync("b"));
+
+        // A body over the whole budget is not kept, and drops nothing.
+        Assert.Equal(200, await GetAsync("d"));
+        Assert.Equal(200, await GetAsync("d"));
+        Assert.Equal(304, await GetAsync("b"));
+
+        Assert.Equal(
+            new[] { "/a -", "/b -", "/a \"a1\"", "/c -", "/a \"a2\"", "/b -", "/d -", "/d -", "/b \"b1\"" },
+            recorder.Sent.Select(sent => $"{sent.Url.AbsolutePath} {sent.Header("If-None-Match") ?? "-"}"));
+    }
+
+    [Fact]
     public async Task Each_fault_is_classified_with_its_message_detail_retry_time_and_request()
     {
         await using var setup = Setup.Start();
