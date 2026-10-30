@@ -108,14 +108,44 @@ public sealed partial class CommitGraphControl
     private Bitmap? AvatarOf(string email, GraphColumn author) =>
         author.IsVisible && _images.Count > 0 && _images.TryGetValue(email.ToLowerInvariant(), out var bitmap) ? bitmap : null;
 
-    /// <summary>Draws a row's avatar 16×16 at (Author's x + 8, the row's top + 5), clipped to a circle, smoothly scaled.</summary>
+    /// <summary>Draws a row's avatar at its <see cref="AvatarPlace"/>, clipped to a circle, smoothly scaled.</summary>
     private static void DrawAvatar(DrawingContext context, Bitmap image, double columnX, double top)
     {
-        var place = new Rect(columnX + GraphColumns.TextInset, top + AvatarTop, AvatarSize, AvatarSize);
+        var place = AvatarPlace(columnX, top);
         using (context.PushGeometryClip(new EllipseGeometry(place)))
         using (context.PushRenderOptions(new RenderOptions { BitmapInterpolationMode = BitmapInterpolationMode.HighQuality }))
         {
             context.DrawImage(image, place);
         }
     }
+
+    /// <summary>Where a row's avatar is drawn: 16×16 at (Author's x + 8, the row's top + 5).</summary>
+    private static Rect AvatarPlace(double columnX, double top) => new(columnX + GraphColumns.TextInset, top + AvatarTop, AvatarSize, AvatarSize);
+
+    /// <summary>Where the Author cell's text starts, as <see cref="DrawCell"/> takes it: at the column's x, beside an avatar 16 + 6 further (11.3).</summary>
+    private static double AuthorX(GraphColumn author, bool withAvatar) => withAvatar ? author.X + AvatarSize + AvatarGap : author.X;
+
+    /// <summary>
+    /// For tests (11.3): where row <paramref name="index"/>'s author is drawn, in the control's
+    /// coordinates, from the places the drawing uses: its avatar (null without one) and its name's
+    /// laid-out text; null while the Author column is hidden, and for a row that is not there.
+    /// </summary>
+    public PlacedAuthor? AuthorInRow(int index)
+    {
+        var data = Data;
+        if (data is null || index < 0 || index >= data.Count || GetRowVisual(data, index) is not { Author: { } name } visual)
+        {
+            return null;
+        }
+
+        var (column, top) = (Columns.Author, RowBounds(index).Y);
+        return new PlacedAuthor(
+            visual.Avatar is null ? null : AvatarPlace(column.X, top),
+            new Rect(CellOrigin(name, AuthorX(column, visual.Avatar is not null), top), new Size(name.WidthIncludingTrailingWhitespace, name.Height)));
+    }
 }
+
+/// <summary>Where a row draws its author (<see cref="CommitGraphControl.AuthorInRow"/>), in the control's coordinates.</summary>
+/// <param name="Avatar">The avatar, <see cref="CommitGraphControl.AvatarSize"/> square and clipped to a circle; null for a row without one.</param>
+/// <param name="Name">The name's laid-out text, its height centred in the row.</param>
+public sealed record PlacedAuthor(Rect? Avatar, Rect Name);

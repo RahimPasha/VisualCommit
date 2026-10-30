@@ -150,6 +150,34 @@ public sealed class GraphAvatarTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void AuthorInRow_gives_where_the_image_and_the_name_are_drawn()
+    {
+        var data = Authors();
+        using var host = Show(new CommitGraphControl { Data = data }, WideWidth);
+        var column = host.Control.Columns.Author;
+        var before = host.Control.AuthorInRow(0) ?? throw new Xunit.Sdk.XunitException("Row 0 draws no author.");
+        Assert.Null(before.Avatar);
+        Assert.Equal(column.X + 8, before.Name.X);
+
+        // With octo's image: the image at x + 8 and the row's top + 5, 16 square; the name from + 30,
+        // centred in the row, inside the column; the row without an image as before.
+        Apply(host, Of((OctoEmail, OctoImage())));
+        var top = host.Control.RowBounds(0).Y;
+        var placed = host.Control.AuthorInRow(0) ?? throw new Xunit.Sdk.XunitException("Row 0 draws no author.");
+        Assert.Equal(new Rect(column.X + 8, top + 5, 16, 16), placed.Avatar);
+        Assert.Equal(column.X + 30, placed.Name.X);
+        Assert.Equal(top + ((CommitGraphControl.RowHeight - placed.Name.Height) / 2), placed.Name.Y, 0.01);
+        Assert.Equal(before.Name.Size, placed.Name.Size);
+        Assert.True(placed.Name.Width > 0 && placed.Name.Right <= column.Right, $"Row 0's name is laid out at {placed.Name}, the column at {column.X} to {column.Right}.");
+        var other = host.Control.AuthorInRow(1) ?? throw new Xunit.Sdk.XunitException("Row 1 draws no author.");
+        Assert.Equal((null, column.X + 8), (other.Avatar, other.Name.X));
+
+        // None for a row that is not there, nor while the column is hidden.
+        using var narrow = Show(new CommitGraphControl { Data = data });
+        Assert.All(new[] { host.Control.AuthorInRow(3), host.Control.AuthorInRow(-1), narrow.Control.AuthorInRow(0) }, Assert.Null);
+    }
+
+    [AvaloniaFact]
     public void A_file_that_does_not_decode_draws_as_today_and_is_counted_out()
     {
         var data = Authors();

@@ -104,24 +104,51 @@ public sealed partial class CommitGraphControl
         badge is null ? 0 : BadgeGap + LabelIconSize + BadgeIconGap + MeasureLabelText(BadgeText(badge.Number), typeface);
 
     /// <summary>
-    /// Draws a label's badge from <paramref name="x"/>, the name's right edge: the icon in the label's
-    /// icon pen and <c>#n</c> in its text colour. Without the icon resource its space stays empty.
+    /// Draws a label's badge at its <paramref name="places"/>, after the name's right edge: the icon
+    /// in the label's icon pen and <c>#n</c> in its text colour. Without the icon resource its space
+    /// stays empty.
     /// </summary>
-    private static void DrawBadge(DrawingContext context, LabelVisual label, Rect bounds, double x, IPen iconPen, Palette palette)
+    private static void DrawBadge(DrawingContext context, LabelVisual label, LabelPlaces places, IPen iconPen, Palette palette)
     {
         if (label.BadgeLayout is not { } layout)
         {
             return;
         }
 
-        x += BadgeGap;
         if (palette.PullRequestIcon is { } icon)
         {
-            DrawIcon(context, icon, iconPen, new Point(x, bounds.Y + ((LabelHeight - LabelIconSize) / 2)));
+            DrawIcon(context, icon, iconPen, places.BadgeIcon);
         }
 
-        x += LabelIconSize + BadgeIconGap;
-        layout.Draw(context, new Point(x, bounds.Y + ((LabelHeight - layout.Height) / 2)));
+        layout.Draw(context, places.Number);
+    }
+
+    /// <summary>
+    /// For tests (11.2): where label <paramref name="label"/> of row <paramref name="index"/> (as
+    /// <see cref="LabelsInRow"/> counts them) draws its name and its badge, in the control's
+    /// coordinates, from the places the drawing uses; null for a label without a badge, and for a row
+    /// or a label that is not there.
+    /// </summary>
+    public PlacedBadge? BadgeInRow(int index, int label)
+    {
+        var data = Data;
+        if (data is null || index < 0 || index >= data.Count)
+        {
+            return null;
+        }
+
+        var labels = GetRowVisual(data, index).Labels;
+        if (label < 0 || label >= labels.Length || labels[label] is not { BadgeLayout: { } number } placed)
+        {
+            return null;
+        }
+
+        var bounds = placed.Bounds.Translate(new Vector(0, RowBounds(index).Y));
+        var places = PlacesOf(placed, bounds, LabelIcon(placed, GetPalette()) is not null);
+        return new PlacedBadge(
+            new Rect(places.Name, new Size(placed.Layout.WidthIncludingTrailingWhitespace, placed.Layout.Height)),
+            new Rect(places.BadgeIcon, new Size(LabelIconSize, LabelIconSize)),
+            new Rect(places.Number, new Size(number.WidthIncludingTrailingWhitespace, number.Height)));
     }
 
     /// <summary>
@@ -139,3 +166,9 @@ public sealed partial class CommitGraphControl
 /// <param name="Title">Its title, which the tooltip names.</param>
 /// <param name="IsDraft">It is a draft, which the tooltip says.</param>
 public sealed record PullRequestBadge(int Number, string Title, bool IsDraft);
+
+/// <summary>Where a label draws its name and its pull request's badge (<see cref="CommitGraphControl.BadgeInRow"/>), in the control's coordinates.</summary>
+/// <param name="Name">The name's laid-out text: from the label's padding (and its icon, if any) to the name's right edge, its height centred in the label.</param>
+/// <param name="Icon">The badge's icon, <see cref="CommitGraphControl.LabelIconSize"/> square, <see cref="CommitGraphControl.BadgeGap"/> right of the name.</param>
+/// <param name="Number">The laid-out <c>#n</c>, <see cref="CommitGraphControl.BadgeIconGap"/> right of the icon.</param>
+public sealed record PlacedBadge(Rect Name, Rect Icon, Rect Number);

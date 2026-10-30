@@ -51,6 +51,37 @@ public sealed class GraphPullRequestBadgeTests
     }
 
     [AvaloniaFact]
+    public void BadgeInRow_gives_where_the_name_the_icon_and_the_number_are_drawn()
+    {
+        var data = Graph(3, (0, Local("feature/login")), (1, Local("main", head: true)), (1, Remote("origin/x")), (2, Local("plain")));
+        using var host = Show(new CommitGraphControl
+        {
+            Data = data,
+            PullRequests = ByRef(("refs/heads/feature/login", Pull(1, "Add the login form", "feature/login")), ("refs/heads/main", Pull(2, "Main", "main"))),
+        });
+
+        // A branch without an icon: the name after the padding, then 6, the icon 10 square, 3, #1 to the padding.
+        var label = host.Control.LabelsInRow(0)[0].Bounds;
+        var badge = host.Control.BadgeInRow(0, 0) ?? throw new Xunit.Sdk.XunitException("Row 0's label has no badge.");
+        Assert.Equal(label.X + CommitGraphControl.LabelPadding, badge.Name.X);
+        Assert.Equal(host.LabelTextWidth("feature/login"), badge.Name.Width, 0.01);
+        Assert.Equal(label.Y + ((CommitGraphControl.LabelHeight - badge.Name.Height) / 2), badge.Name.Y, 0.01);
+        Assert.Equal(new Rect(badge.Name.Right + CommitGraphControl.BadgeGap, label.Y + 4, CommitGraphControl.LabelIconSize, CommitGraphControl.LabelIconSize), badge.Icon);
+        Assert.Equal(badge.Icon.Right + CommitGraphControl.BadgeIconGap, badge.Number.X, 0.01);
+        Assert.Equal(host.LabelTextWidth("#1"), badge.Number.Width, 0.01);
+        Assert.Equal(label.Right - CommitGraphControl.LabelPadding, badge.Number.Right, 0.01);
+
+        // The current branch's name after its check mark and the gap.
+        var main = host.Control.LabelsInRow(1)[0].Bounds;
+        var current = host.Control.BadgeInRow(1, 0) ?? throw new Xunit.Sdk.XunitException("main's label has no badge.");
+        Assert.Equal(main.X + CommitGraphControl.LabelPadding + CommitGraphControl.LabelIconSize + CommitGraphControl.LabelIconGap, current.Name.X, 0.01);
+        Assert.Equal(main.Right - CommitGraphControl.LabelPadding, current.Number.Right, 0.01);
+
+        // None for a label without a badge, and for a row or a label that is not there.
+        Assert.All(new[] { host.Control.BadgeInRow(1, 1), host.Control.BadgeInRow(2, 0), host.Control.BadgeInRow(0, 1), host.Control.BadgeInRow(3, 0), host.Control.BadgeInRow(-1, 0) }, Assert.Null);
+    }
+
+    [AvaloniaFact]
     public void A_long_name_is_cut_and_the_badge_kept_inside_the_column()
     {
         var data = Graph(2, (0, Remote("origin/" + LongBranch)), (1, Local("main", head: true)));
