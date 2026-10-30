@@ -91,35 +91,90 @@ public sealed partial class Phase7aChecksG
     }
 
     /// <summary>
-    /// G1: in <paramref name="picture"/> row 0's label holds the name whole to x 80.4, the icon from
-    /// 86.4 and <c>#1</c> from 99.4 (±1, in the graph's x): the columns that hold ink against the
-    /// label's fill, between its rounded ends; the name's ink ends before the gap to the icon, the
-    /// icon's starts after it, and <c>#1</c>'s is the first after the gap that follows the icon.
+    /// G1: row 0's label as laid out and as drawn in <paramref name="picture"/>. Laid out, from the
+    /// control (<see cref="CommitGraphControl.BadgeInRow"/>, the places the drawing uses), to the
+    /// report's one decimal: the name whole to x 80.4, the icon from 86.4 and <c>#1</c> from 99.4.
+    /// Drawn, between the label's rounded ends (<see cref="AssertInkInParts"/>): the name's ink inside
+    /// its laid-out box ±1, so from the label's left padding; the icon's inside its 10-px box;
+    /// <c>#1</c>'s inside its box ±1, within the label; none in the padding or the gaps between them.
     /// </summary>
     private static void AssertLoginLabel(ShellDriver app, Screenshot picture)
     {
         var graph = Graph(app);
         var label = graph.LabelsInRow(0)[0].Bounds;
-        Point At(double x, double y) => graph.TranslatePoint(new Point(x, y), app.Window) ?? throw new InvalidOperationException("The graph is not in the window.");
-        var fill = picture.PixelAt(At(label.X + 3, label.Center.Y));
-        var ink = new List<int>();
-        for (var x = (int)Math.Ceiling(label.X + 3); x < (int)Math.Floor(label.Right - 3); x++)
+        var badge = graph.BadgeInRow(0, 0) ?? throw new Xunit.Sdk.XunitException("Row 0's label has no badge.");
+        Assert.Equal(
+            (G.LoginNameRight, G.LoginIconLeft, G.LoginNumberLeft),
+            (Math.Round(badge.Name.Right, 1), Math.Round(badge.Icon.X, 1), Math.Round(badge.Number.X, 1)));
+        var fill = picture.PixelAt(graph.TranslatePoint(new Point(label.X + 3, label.Center.Y), app.Window) ?? throw new InvalidOperationException("The graph is not in the window."));
+        AssertInkInParts(
+            app,
+            picture,
+            new Rect(label.X + LabelCorner, label.Y, label.Width - (2 * LabelCorner), label.Height),
+            fill,
+            "Row 0's label",
+            new InkPart("the name", badge.Name, TextAllowance),
+            new InkPart("the icon", badge.Icon, 0),
+            new InkPart("#1", badge.Number, TextAllowance));
+    }
+
+    /// <summary>The radius of a label's rounded ends (phase 1's labels): the pixels inside them are the fill's or its edge's.</summary>
+    private const double LabelCorner = 4;
+
+    /// <summary>
+    /// How far a text's ink may lie outside its laid-out box: each platform's font back-end under
+    /// Skia (DirectWrite on Windows, CoreText on macOS, FreeType on Linux) places and smooths glyphs
+    /// its own way, so the ink reaches a pixel past a layout's edge or stops short of it (CI's macOS
+    /// ended row 0's name, laid out to x 80.4, at x 79; Windows inks x 80 faintly, and puts the
+    /// <c>f</c> of <c>feature/login</c>, laid out from 12, into x 11). Paths and images, which Skia
+    /// draws itself on every platform, get none.
+    /// </summary>
+    private const double TextAllowance = 1;
+
+    /// <summary>A part of a drawing whose ink lies in <paramref name="Box"/> (the graph's coordinates), grown by <paramref name="Allowance"/> on every side.</summary>
+    private sealed record InkPart(string What, Rect Box, double Allowance);
+
+    /// <summary>
+    /// The ink rule of part G's pictures, which holds whatever the platform's text rasterising: every
+    /// pixel of <paramref name="picture"/> inside <paramref name="area"/> (the graph's coordinates)
+    /// that is not <paramref name="background"/> overlaps one of <paramref name="parts"/>' grown
+    /// boxes, and each part holds some ink, so the gaps between the parts are clear. A failure names
+    /// the pixel in the graph's coordinates.
+    /// </summary>
+    private static void AssertInkInParts(ShellDriver app, Screenshot picture, Rect area, Color background, string what, params InkPart[] parts)
+    {
+        var origin = Graph(app).TranslatePoint(default, app.Window) ?? throw new InvalidOperationException("The graph is not in the window.");
+        var inWindow = area.Translate(new Vector(origin.X, origin.Y));
+        var inked = new bool[parts.Length];
+        for (var y = (int)Math.Ceiling(inWindow.Top); y + 1 <= inWindow.Bottom; y++)
         {
-            for (var y = label.Y + 2; y < label.Bottom - 2; y++)
+            for (var x = (int)Math.Ceiling(inWindow.Left); x + 1 <= inWindow.Right; x++)
             {
-                if (picture.PixelAt(At(x, y)) != fill)
+                var pixel = picture.PixelAt(x, y);
+                if (pixel == background)
                 {
-                    ink.Add(x);
-                    break;
+                    continue;
                 }
+
+                var (gx, gy) = (x - origin.X, y - origin.Y);
+                var part = Array.FindIndex(parts, part => Grown(part) is var box && gx + 1 > box.Left && gx < box.Right && gy + 1 > box.Top && gy < box.Bottom);
+                if (part < 0)
+                {
+                    throw new Xunit.Sdk.XunitException(string.Create(CultureInfo.InvariantCulture, $"{what} has ink {pixel} at ({gx}, {gy}), in none of: {string.Join("; ", parts.Select(Describe))}."));
+                }
+
+                inked[part] = true;
             }
         }
 
-        var gap = (G.LoginNameRight + G.LoginIconLeft) / 2;
-        var (nameEnd, iconStart, numberStart) = (ink.Where(x => x < gap).Max(), ink.Where(x => x > gap).Min(), ink.Where(x => x > G.LoginNumberLeft - 2).Min());
-        Assert.True(Math.Abs(nameEnd - G.LoginNameRight) <= 1, string.Create(CultureInfo.InvariantCulture, $"Row 0's name ends at x {nameEnd}; the report gives {G.LoginNameRight} ±1."));
-        Assert.True(Math.Abs(iconStart - G.LoginIconLeft) <= 1, string.Create(CultureInfo.InvariantCulture, $"Row 0's icon starts at x {iconStart}; the report gives {G.LoginIconLeft} ±1."));
-        Assert.True(Math.Abs(numberStart - G.LoginNumberLeft) <= 1, string.Create(CultureInfo.InvariantCulture, $"Row 0's #1 starts at x {numberStart}; the report gives {G.LoginNumberLeft} ±1."));
+        for (var i = 0; i < parts.Length; i++)
+        {
+            Assert.True(inked[i], $"{what} shows no ink of {Describe(parts[i])}.");
+        }
+
+        static Rect Grown(InkPart part) => part.Box.Inflate(part.Allowance);
+        static string Describe(InkPart part) =>
+            string.Create(CultureInfo.InvariantCulture, $"{part.What} at x {Grown(part).Left:0.0} to {Grown(part).Right:0.0}, y {Grown(part).Top:0.0} to {Grown(part).Bottom:0.0}");
     }
 
     /// <summary>The details panel's changed files as "{status} {path}".</summary>
@@ -195,11 +250,15 @@ public sealed partial class Phase7aChecksG
         Math.Abs(expected.R - actual.R) <= G.ColourTolerance && Math.Abs(expected.G - actual.G) <= G.ColourTolerance && Math.Abs(expected.B - actual.B) <= G.ColourTolerance;
 
     /// <summary>
-    /// At 1920×1080 (G3, G6): each row's author in the picture, the Author column at x 928 to 1068 —
-    /// with <paramref name="images"/> octo's and ada's rows show their image at x + 8 to + 24 (its
-    /// centre white, 5 left of it the user's colour) and the name from x + 30; every other row
-    /// (<c>BareRows</c>), and every row without them, the name from x + 8 and no image: no pixel of the
-    /// image's 16×16 box within ±24 of either user's colour, and the 4×4 block at its centre not all white.
+    /// At 1920×1080 (G3, G6): each row's author, the Author column at x 928 to 1068. Laid out, from
+    /// the control (<see cref="CommitGraphControl.AuthorInRow"/>, the places the drawing uses): with
+    /// <paramref name="images"/> octo's and ada's rows have their image at x + 8 to + 24, the row's top
+    /// + 5 to + 21, and the name from x + 30; every other row (<c>BareRows</c>), and every row without
+    /// them, no image and the name from x + 8. In the picture: an image's centre white, 5 left of it
+    /// the user's colour and the 4×4 block at its centre white; where there is none, no pixel of the
+    /// image's 16×16 box within ±24 of either user's colour and that block not all white; and the
+    /// cell's ink (<see cref="AssertInkInParts"/>) inside the image's square and the name's laid-out
+    /// box ±1 only, each holding some, so the gaps before and after the name are clear.
     /// </summary>
     private static void AssertAuthorColumn(ShellDriver app, Screenshot picture, bool images)
     {
@@ -212,6 +271,9 @@ public sealed partial class Phase7aChecksG
         {
             var colour = !images ? null : G.OctoRows.Contains(row) ? G.OctoColour : G.AdaRows.Contains(row) ? G.AdaColour : null;
             var top = graph.RowBounds(row).Y;
+            var placed = graph.AuthorInRow(row) ?? throw new Xunit.Sdk.XunitException($"Row {row} draws no author.");
+            Assert.Equal(colour is null ? (Rect?)null : new Rect(column.X + 8, top + 5, 16, 16), placed.Avatar);
+            Assert.True(placed.Name.X == column.X + (colour is null ? 8 : 30), string.Create(CultureInfo.InvariantCulture, $"Row {row}'s author is laid out from x {placed.Name.X}, not {column.X + (colour is null ? 8 : 30)}."));
             Point At(double x, double y) => graph.TranslatePoint(new Point(x, y), app.Window) ?? throw new InvalidOperationException("The graph is not in the window.");
             var background = picture.PixelAt(At(column.Right - 2, top + 2));
 
@@ -239,23 +301,16 @@ public sealed partial class Phase7aChecksG
                 }
             }
 
-            // The name's first ink: + 30 beside an image, + 8 without (a glyph's bearing allowed: 2).
-            var from = colour is null ? column.X : column.X + 25;
-            var ink = -1d;
-            for (var x = from; x < column.Right && ink < 0; x++)
-            {
-                for (var y = top + 6; y < top + 21; y++)
-                {
-                    if (picture.PixelAt(At(x, y)) != background)
-                    {
-                        ink = x;
-                        break;
-                    }
-                }
-            }
-
-            var start = column.X + (colour is null ? 8 : 30);
-            Assert.True(ink >= start && ink <= start + 2, string.Create(CultureInfo.InvariantCulture, $"Row {row}'s author begins at x {ink}, not {start}."));
+            // The cell's ink: the image's (a bitmap in a circle, which Skia draws itself on every
+            // platform) inside its square, the name's inside its laid-out box ±1.
+            var name = new InkPart("the name", placed.Name, TextAllowance);
+            AssertInkInParts(
+                app,
+                picture,
+                new Rect(column.X, top, column.Width, CommitGraphControl.RowHeight),
+                background,
+                $"Row {row}'s author",
+                placed.Avatar is { } image ? [new InkPart("the image", image, 0), name] : [name]);
         }
     }
 
