@@ -325,8 +325,9 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
     /// <summary>
     /// Rests the pointer at the neutral point unless <paramref name="keepPointer"/> is true (a capture
     /// with a menu open), asserts that no element of the window is named with a token
-    /// (<see cref="AssertNoTokenOnScreen"/>), then captures the client area, saves it as <c>&lt;name&gt;.png</c> and asserts that it matches the
-    /// scripted picture of the same name within <see cref="RealWindowRun.MaxDifference"/> (D33, D58);
+    /// (<see cref="AssertNoTokenOnScreen"/>), then captures the client area, saves it as
+    /// <c>&lt;name&gt;.png</c> and asserts that it matches the scripted picture of the same name within
+    /// <see cref="RealWindowRun.MaxDifference"/> (D33, D58);
     /// run.txt gets a line with the difference and <c>&lt;name&gt;-difference.png</c> shows it. As phase
     /// 6's (Phase6RealWindowPass.cs), with the token check.
     /// </summary>

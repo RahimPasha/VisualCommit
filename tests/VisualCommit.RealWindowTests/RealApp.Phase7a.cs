@@ -93,6 +93,12 @@ public sealed partial class RealApp
         return ShownElements(SignInDialogId)[0];
     }
 
+    /// <summary>The open sign-in dialog's root; throws when not exactly one shows.</summary>
+    private AutomationElement OpenSignInDialogRoot() =>
+        ShownElements(SignInDialogId) is [var dialog]
+            ? dialog
+            : throw new InvalidOperationException($"{ShownElements(SignInDialogId).Count} sign-in dialogs show, not one.");
+
     /// <summary>
     /// The text box <paramref name="automationId"/>'s value through its Value pattern: empty while a
     /// <c>SecretTextBox</c> is masked (<c>src/VisualCommit.App/Controls/SecretTextBox.cs</c>, D103,
@@ -122,8 +128,8 @@ public sealed partial class RealApp
         TypeText(token);
 
         // "Sign in" is enabled once the box holds a token (8.4): the typing has reached the box.
-        WaitFor(() => FindIn(WaitForSignInDialog(DefaultWaitTimeout), "ConfirmButton").IsEnabled, "the dialog's Sign in to be enabled by the typed token", DefaultWaitTimeout);
-        var box = FindIn(WaitForSignInDialog(DefaultWaitTimeout), "SignInToken");
+        WaitFor(() => FindIn(OpenSignInDialogRoot(), "ConfirmButton").IsEnabled, "the dialog's Sign in to be enabled by the typed token", DefaultWaitTimeout);
+        var box = FindIn(OpenSignInDialogRoot(), "SignInToken");
         if (box.Name != PartA.TokenLabel)
         {
             throw new InvalidOperationException($"The token box is named \"{box.Name}\", not \"{PartA.TokenLabel}\".");
@@ -142,7 +148,7 @@ public sealed partial class RealApp
     /// </summary>
     public void ConfirmSignIn(TimeSpan timeout)
     {
-        var confirm = FindIn(WaitForSignInDialog(DefaultWaitTimeout), "ConfirmButton");
+        var confirm = FindIn(OpenSignInDialogRoot(), "ConfirmButton");
         if (confirm.Name != PartA.SignIn || !confirm.IsEnabled)
         {
             throw new InvalidOperationException($"The dialog's confirm button is \"{confirm.Name}\" and {(confirm.IsEnabled ? "enabled" : "disabled")}; \"{PartA.SignIn}\", enabled, was expected.");
