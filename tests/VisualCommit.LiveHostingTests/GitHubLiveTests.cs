@@ -557,7 +557,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
         }
 
         failure?.Throw();
-        Assert.True(problems.Count == 0, string.Join("\n", problems));
+        Assert.True(problems.Count == 0, run.Screen(string.Join("\n", problems)));
     }
 
     // ---- The sandbox ---------------------------------------------------------------------------
