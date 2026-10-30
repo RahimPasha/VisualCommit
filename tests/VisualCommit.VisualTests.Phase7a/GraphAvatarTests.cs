@@ -168,13 +168,15 @@ public sealed class GraphAvatarTests : IDisposable
         using var host = Show(new CommitGraphControl { Data = data });
         Assert.False(host.Control.Columns.Author.IsVisible);
 
-        // Open point 42: the event and its count come with the column hidden too.
+        // Open point 42: the event and its count come with the column hidden too. The image is
+        // applied (ShowsAvatarFor says so whatever the column), but no pixel shows it.
         Assert.Equal([1], Apply(host, Of((OctoEmail, OctoImage()))));
-        Assert.False(host.Control.ShowsAvatarFor(OctoEmail));
+        Assert.True(host.Control.ShowsAvatarFor(OctoEmail));
         AssertSamePixels(plain.Capture(), host.Capture(), new Rect(0, 0, GraphTestHost.AreaWidth, 3 * CommitGraphControl.RowHeight));
 
         // Back to none: a change too, counting 0.
         Assert.Equal([0], Apply(host, AuthorAvatars.None));
+        Assert.False(host.Control.ShowsAvatarFor(OctoEmail));
     }
 
     [AvaloniaFact]

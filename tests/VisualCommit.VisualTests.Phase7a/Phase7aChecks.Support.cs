@@ -19,6 +19,7 @@ using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.App.Views.Shell;
 using VisualCommit.Core;
@@ -45,6 +46,27 @@ public abstract partial class Phase7aChecks
 
     /// <summary>The phase, as the docs write it (design 0.3).</summary>
     protected const string Phase = Phase7aExpectations.Phase;
+
+    /// <summary>The active tab's "Pull requests" section as lines: "v"/"&gt;" title count; a row's name; a message row's "[Kind] text" (parts P and G).</summary>
+    protected static List<string> Section(ShellDriver app)
+    {
+        app.Settle();
+        var rows = app.Session.Shell.ActiveTab.LeftPanel.Rows.ToList();
+        var start = rows.FindIndex(row => row is RefSectionRow { Section: RefSection.PullRequests });
+        var lines = new List<string>();
+        for (var i = start; i < rows.Count && (i == start || rows[i] is not RefSectionRow); i++)
+        {
+            lines.Add(rows[i] switch
+            {
+                RefSectionRow section => $"{(section.IsOpen ? "v" : ">")} {section.Text} {section.CountText}",
+                PullRequestRow pull => pull.Text,
+                PullRequestMessageRow message => $"[{message.Kind}] {message.Text}",
+                _ => rows[i].Text,
+            });
+        }
+
+        return lines;
+    }
 
     /// <summary>
     /// One empty tab with the fake as GitHub (<c>gitHub:</c>) and <paramref name="tokens"/> or a new

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Avalonia;
 using Avalonia.Automation;
@@ -89,6 +90,65 @@ public sealed partial class Phase7aChecksG
         }
     }
 
+    /// <summary>
+    /// G1: in <paramref name="picture"/> row 0's label holds the name whole to x 80.4, the icon from
+    /// 86.4 and <c>#1</c> from 99.4 (±1, in the graph's x): the columns that hold ink against the
+    /// label's fill, between its rounded ends; the name's ink ends before the gap to the icon, the
+    /// icon's starts after it, and <c>#1</c>'s is the first after the gap that follows the icon.
+    /// </summary>
+    private static void AssertLoginLabel(ShellDriver app, Screenshot picture)
+    {
+        var graph = Graph(app);
+        var label = graph.LabelsInRow(0)[0].Bounds;
+        Point At(double x, double y) => graph.TranslatePoint(new Point(x, y), app.Window) ?? throw new InvalidOperationException("The graph is not in the window.");
+        var fill = picture.PixelAt(At(label.X + 3, label.Center.Y));
+        var ink = new List<int>();
+        for (var x = (int)Math.Ceiling(label.X + 3); x < (int)Math.Floor(label.Right - 3); x++)
+        {
+            for (var y = label.Y + 2; y < label.Bottom - 2; y++)
+            {
+                if (picture.PixelAt(At(x, y)) != fill)
+                {
+                    ink.Add(x);
+                    break;
+                }
+            }
+        }
+
+        var gap = (G.LoginNameRight + G.LoginIconLeft) / 2;
+        var (nameEnd, iconStart, numberStart) = (ink.Where(x => x < gap).Max(), ink.Where(x => x > gap).Min(), ink.Where(x => x > G.LoginNumberLeft - 2).Min());
+        Assert.True(Math.Abs(nameEnd - G.LoginNameRight) <= 1, string.Create(CultureInfo.InvariantCulture, $"Row 0's name ends at x {nameEnd}; the report gives {G.LoginNameRight} ±1."));
+        Assert.True(Math.Abs(iconStart - G.LoginIconLeft) <= 1, string.Create(CultureInfo.InvariantCulture, $"Row 0's icon starts at x {iconStart}; the report gives {G.LoginIconLeft} ±1."));
+        Assert.True(Math.Abs(numberStart - G.LoginNumberLeft) <= 1, string.Create(CultureInfo.InvariantCulture, $"Row 0's #1 starts at x {numberStart}; the report gives {G.LoginNumberLeft} ±1."));
+    }
+
+    /// <summary>The details panel's changed files as "{status} {path}".</summary>
+    private static List<string> ChangedFiles(ShellDriver app) =>
+        [.. HelloOf(app).Details.Files.Where(row => row.IsFile).Select(row => $"{row.StatusLetter} {row.Key}")];
+
+    /// <summary>Row <paramref name="row"/> whole within the graph's view.</summary>
+    private static void AssertRowInView(ShellDriver app, int row)
+    {
+        var graph = Graph(app);
+        var bounds = graph.RowBounds(row);
+        Assert.True(bounds.Top >= 0 && bounds.Bottom <= graph.ViewportHeight, string.Create(CultureInfo.InvariantCulture, $"Row {row} at y {bounds.Top} to {bounds.Bottom} is not in the graph's view, 0 to {graph.ViewportHeight}."));
+    }
+
+    /// <summary>G3 method 2: no author cut: with the pointer over each row's Author cell the graph has no tooltip (a cut author's is its whole name); then the pointer goes back to rest.</summary>
+    private static void AssertNoAuthorCut(ShellDriver app)
+    {
+        var graph = Graph(app);
+        var column = graph.Columns.Author;
+        for (var row = 0; row < G.Rows.Count; row++)
+        {
+            var cell = graph.TranslatePoint(new Point(column.X + (column.Width / 2), graph.RowBounds(row).Center.Y), app.Window) ?? throw new InvalidOperationException("The graph is not in the window.");
+            app.MoveMouse(cell);
+            Assert.True(ToolTip.GetTip(graph) is null, $"Row {row}'s author is cut: the graph's tooltip is \"{ToolTip.GetTip(graph)}\".");
+        }
+
+        app.MoveToNeutral();
+    }
+
     /// <summary>Clicks row <paramref name="row"/> and waits for its author line, and for the image when <paramref name="withAvatar"/>.</summary>
     private static async Task SelectAsync(ShellDriver app, int row, string authorLine, bool withAvatar)
     {
@@ -137,8 +197,9 @@ public sealed partial class Phase7aChecksG
     /// <summary>
     /// At 1920×1080 (G3, G6): each row's author in the picture, the Author column at x 928 to 1068 —
     /// with <paramref name="images"/> octo's and ada's rows show their image at x + 8 to + 24 (its
-    /// centre white, 5 left of it the user's colour) and the name from x + 30; every other row, and
-    /// every row without them, the name from x + 8 and no image.
+    /// centre white, 5 left of it the user's colour) and the name from x + 30; every other row
+    /// (<c>BareRows</c>), and every row without them, the name from x + 8 and no image: no pixel of the
+    /// image's 16×16 box within ±24 of either user's colour, and the 4×4 block at its centre not all white.
     /// </summary>
     private static void AssertAuthorColumn(ShellDriver app, Screenshot picture, bool images)
     {
@@ -146,16 +207,36 @@ public sealed partial class Phase7aChecksG
         var column = graph.Columns.Author;
         Assert.True(column.IsVisible, "The Author column is hidden.");
         Assert.Equal((G.AuthorX, G.AuthorRight), (column.X, column.Right));
+        Assert.Equal(Enumerable.Range(0, G.Rows.Count).Except(G.OctoRows).Except(G.AdaRows), G.BareRows);
         for (var row = 0; row < G.Rows.Count; row++)
         {
             var colour = !images ? null : G.OctoRows.Contains(row) ? G.OctoColour : G.AdaRows.Contains(row) ? G.AdaColour : null;
             var top = graph.RowBounds(row).Y;
             Point At(double x, double y) => graph.TranslatePoint(new Point(x, y), app.Window) ?? throw new InvalidOperationException("The graph is not in the window.");
             var background = picture.PixelAt(At(column.Right - 2, top + 2));
+
+            // The 4×4 block around an image's centre: white in an image (its white square is 6 px).
+            var centre = Enumerable.Range(14, 4).SelectMany(x => Enumerable.Range(11, 4).Select(y => picture.PixelAt(At(column.X + x, top + y)))).ToList();
             if (colour is not null)
             {
                 Assert.True(Near(Colors.White, picture.PixelAt(At(column.X + 16, top + 13))), $"Row {row}'s image has no white centre.");
                 Assert.True(Near(Color.Parse(colour), picture.PixelAt(At(column.X + 11, top + 13))), $"Row {row}'s image is not {colour}.");
+                Assert.True(centre.TrueForAll(pixel => Near(Colors.White, pixel)), $"Row {row}'s image has no white square.");
+            }
+            else
+            {
+                // An image here would start at x + 8 as the name does: its colours and its white
+                // square tell it. A name's glyph can be near white in the dark theme (Ada's "A" at
+                // x + 16, top + 13), so the square is the whole 4×4 block, which no glyph's stroke fills.
+                Assert.False(centre.TrueForAll(pixel => Near(Colors.White, pixel)), $"Row {row} has a white square at an image's centre.");
+                for (var y = top + CommitGraphControl.AvatarTop; y < top + CommitGraphControl.AvatarTop + CommitGraphControl.AvatarSize; y++)
+                {
+                    for (var x = column.X + 8; x < column.X + 8 + CommitGraphControl.AvatarSize; x++)
+                    {
+                        var pixel = picture.PixelAt(At(x, y));
+                        Assert.False(Near(Color.Parse(G.OctoColour), pixel) || Near(Color.Parse(G.AdaColour), pixel), string.Create(CultureInfo.InvariantCulture, $"Row {row} has an image's colour {pixel} at ({x}, {y - top}) of its row."));
+                    }
+                }
             }
 
             // The name's first ink: + 30 beside an image, + 8 without (a glyph's bearing allowed: 2).
@@ -187,7 +268,8 @@ public sealed partial class Phase7aChecksG
     /// <summary>
     /// G3's avatars' requests since <paramref name="mark"/>: exactly one commits page (the query,
     /// the token, 200) after the repository's, no lookup, and octo's and ada's images once each
-    /// without the token, 200; then the avatars and <c>avatars/</c> as part G's facts give them.
+    /// without the token, 200; then the avatars and <c>avatars/</c> as part G's facts give them: its
+    /// files, the two images byte for byte, the index's users and the map's entries.
     /// </summary>
     private static void AssertAvatarRun(ShellDriver app, TempDirectory data, ServedHosting served, int mark)
     {
@@ -212,6 +294,23 @@ public sealed partial class Phase7aChecksG
             Directory.GetFiles(avatars, "*", SearchOption.AllDirectories).Select(file => Path.GetRelativePath(avatars, file)).Order(StringComparer.Ordinal));
         Assert.Equal(TestImages.SquareOn(64, 64, TestImages.Rgb.Parse(G.OctoColour), TestImages.Rgb.Parse("#FFFFFF"), 24), File.ReadAllBytes(Path.Combine(avatars, "1001.png")));
         Assert.Equal(TestImages.SquareOn(64, 64, TestImages.Rgb.Parse(G.AdaColour), TestImages.Rgb.Parse("#FFFFFF"), 24), File.ReadAllBytes(Path.Combine(avatars, "1003.png")));
+
+        // The index's users and the e-mail map's entries, in order (the dates are the system clock's).
+        var port = served.GitHub.Port;
+        using (var index = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(avatars, "index.json"))))
+        {
+            Assert.Equal(G.IndexUsers, index.RootElement.GetProperty("users").EnumerateObject().Select(user => (user.Name, user.Value.GetProperty("file").GetString() ?? string.Empty)));
+        }
+
+        using (var map = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(avatars, WithPort(G.AuthorsFile, port)))))
+        {
+            Assert.Equal(
+                G.AuthorsEntries.Select(entry => (entry.Email, entry.UserId, entry.AvatarUrl is null ? null : WithPort(entry.AvatarUrl, port))),
+                map.RootElement.GetProperty("authors").EnumerateArray().Select(author => (author.GetProperty("email").GetString() ?? string.Empty, Number(author, "userId"), Text(author, "avatarUrl"))));
+        }
+
+        static long? Number(JsonElement entry, string name) => entry.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetInt64() : null;
+        static string? Text(JsonElement entry, string name) => entry.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
     }
 
     /// <summary>The request id a log line names, <c>(request …)</c>.</summary>

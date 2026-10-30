@@ -110,9 +110,6 @@ public static partial class Phase7aExpectations
 
         // ---- Tooltips (11.2) ---------------------------------------------------------------------
 
-        public static string PullRequestSuffix(int number, string title, bool draft) =>
-            string.Create(System.Globalization.CultureInfo.InvariantCulture, $" ({(draft ? "draft pull request" : "pull request")} #{number}: {title})");
-
         public const string LoginTip = "feature/login (pull request #1: Add the login form)";
         public const string LongTip = Long + " (pull request #3: Shorten long labels)";
         public const string ReadmeTip = "origin/docs/readme (draft pull request #2: Update the readme)";
@@ -141,6 +138,21 @@ public static partial class Phase7aExpectations
         public const string CommitsQuery = "sha=main&per_page=100";
         public const string AvatarQuery = "v=4&s=64";
         public const string AuthorsFile = "authors/github_127.0.0.1_47395_octo_hello.json";
+
+        /// <summary><c>avatars/index.json</c>'s users (part G's facts): octo's and ada's ids, each with its image; the dates are not asserted.</summary>
+        public static IReadOnlyList<(string User, string File)> IndexUsers { get; } = [("1001", "1001.png"), ("1003", "1003.png")];
+
+        /// <summary>
+        /// <see cref="AuthorsFile"/>'s entries in e-mail order (part G's facts): ada 1003, Test Author
+        /// without a user, octo 1001, with their avatar URLs on port 47395 (<c>WithPort</c> for the
+        /// fake's); the dates are not asserted.
+        /// </summary>
+        public static IReadOnlyList<(string Email, long? UserId, string? AvatarUrl)> AuthorsEntries { get; } =
+        [
+            (AdaEmail, AdaId, "http://127.0.0.1:47395/avatars/u/1003?v=4"),
+            (TestAuthorEmail, null, null),
+            (OctoEmail, OctoId, "http://127.0.0.1:47395/avatars/u/1001?v=4"),
+        ];
 
         /// <summary>G7's Warnings' beginnings (WP-G's client, WP-S's session).</summary>
         public const string CommitsFailedPrefix = "GitHub: GET /api/v3/repos/octo/hello/commits failed: 500 (request ";

@@ -72,9 +72,16 @@ public sealed partial class Phase7aChecksG : Phase7aChecks
             await SelectAsync(app, G.Row, G.OctoAuthorLine, withAvatar: true);
             var g01a = ShotG(app, G.G01a);
             Assert.Equal(G.Row, hello.SelectedIndex);
+            AssertRowInView(app, G.Row);
             Assert.Equal(("Update the readme", "2026-01-01 12:04", G.TestAuthorLine, "Changed files (1)"), (hello.Details.Subject, hello.Details.DateText, hello.Details.CommitterText, hello.Details.ChangedFilesTitle));
+            Assert.Equal(["M README.md"], ChangedFiles(app));
             AssertAuthorLine(app, G.OctoAuthorLine, withAvatar: true);
             Assert.True(ShowsDetailsImage(app, g01a, G.OctoColour), "g01a does not show octo's image before the author.");
+            AssertLoginLabel(app, g01a);
+
+            // The left panel as in p06a: the section open with the four pull requests, none selected.
+            Assert.Equal(["v Pull requests 4", .. P.HelloRows.Select(row => row.Name)], Section(app));
+            Assert.DoesNotContain(hello.LeftPanel.Rows.OfType<PullRequestRow>(), row => row.IsSelected);
             Assert.Equal(afterStep1, served.GitHub.Requests.Count);
 
             // G1 step 3: the tooltip over row 0's label.
@@ -102,6 +109,7 @@ public sealed partial class Phase7aChecksG : Phase7aChecks
             ShotG(app, G.G03a);
             AssertAuthorLine(app, G.TestAuthorLine, withAvatar: false);
             Assert.Equal(("Add the docs folder", "2026-01-01 12:02", string.Empty, "Changed files (1)"), (hello.Details.Subject, hello.Details.DateText, hello.Details.CommitterText, hello.Details.ChangedFilesTitle));
+            Assert.Equal(["A docs/index.md"], ChangedFiles(app));
             Assert.Equal(afterStep1, served.GitHub.Requests.Count);
         }
         finally
@@ -158,6 +166,7 @@ public sealed partial class Phase7aChecksG : Phase7aChecks
             AssertAuthorLine(app, G.OctoAuthorLine, withAvatar: true);
             Assert.True(ShowsDetailsImage(app, g03b, G.OctoColour), "g03b does not show octo's image before the author.");
             AssertLabels(app, G.SignedInLabels);
+            AssertNoAuthorCut(app);
 
             // G4 step 3: light.
             requests = served.GitHub.Requests.Count;
@@ -230,6 +239,7 @@ public sealed partial class Phase7aChecksG : Phase7aChecks
                     off = ShotG(app, G.G05a);
                     var hello = HelloOf(app);
                     Assert.Equal(PullRequestsState.NotGitHub, hello.HostingState.PullRequests);
+                    AssertPlaceholderSection(app);
                     AssertLabels(app, G.TodayLabels);
                     labels = Labels(app);
                     author = app.BoundsOf(app.FindByAutomationId("DetailsAuthor"));
@@ -259,6 +269,7 @@ public sealed partial class Phase7aChecksG : Phase7aChecks
                     Assert.Equal(AccountState.SignedIn, app.Session.Services.Hosting.Account?.State);
                     Assert.Equal(["user 200"], RequestsSince(served, requests).Select(request => $"{request.Route} {request.Status}"));
                     Assert.Equal(PullRequestsState.NotGitHub, hello.HostingState.PullRequests);
+                    AssertPlaceholderSection(app);
                     Assert.Empty(hello.HostingState.Remotes);
                     Assert.Empty(hello.HostingState.ByRef);
                     Assert.Same(AuthorAvatars.None, hello.Avatars);
@@ -332,6 +343,13 @@ public sealed partial class Phase7aChecksG : Phase7aChecks
         }
 
         End(app, data, served);
+    }
+
+    /// <summary>G5: the section phase 1's placeholder, as P1 shows it: closed, <c>0</c>, no row of a pull request or a message.</summary>
+    private static void AssertPlaceholderSection(ShellDriver app)
+    {
+        Assert.Equal(["> Pull requests 0"], Section(app));
+        Assert.DoesNotContain(HelloOf(app).LeftPanel.Rows, row => row is PullRequestRow or PullRequestMessageRow);
     }
 
     /// <summary>Every row's labels as lines, for G5's comparison of two starts.</summary>

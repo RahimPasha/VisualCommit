@@ -51,11 +51,15 @@ public sealed partial class CommitGraphControl
         set => SetValue(AvatarsProperty, value);
     }
 
-    /// <summary>For tests: an image is drawn for <paramref name="email"/>'s rows (case ignored): it decoded and the Author column shows.</summary>
+    /// <summary>
+    /// For tests (11.4: true after decoding): <paramref name="email"/>'s rows (case ignored) have an
+    /// image, decoded and applied, which they draw wherever the Author column shows; with the column
+    /// hidden none is drawn, which only the pixels tell.
+    /// </summary>
     public bool ShowsAvatarFor(string email)
     {
         ArgumentNullException.ThrowIfNull(email);
-        return Columns.Author.IsVisible && _images.ContainsKey(email.ToLowerInvariant());
+        return _images.ContainsKey(email.ToLowerInvariant());
     }
 
     /// <summary>
