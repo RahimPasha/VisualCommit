@@ -220,6 +220,40 @@ public sealed class CreatePullRequestOperationTests
     }
 
     [AvaloniaFact]
+    public async Task A_remote_branch_whose_remote_leaves_GitHub_while_the_form_is_open_is_not_created()
+    {
+        // 12.3 step 3: the head's place is computed again at each Create. The place the form opened
+        // with (origin/fix-typo on octo/tool) is not used once origin points elsewhere, while
+        // upstream still holds the base.
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("create pull request");
+        using var app = await OpenAsync(data, served, served.Tool, count: 2);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+
+        var (form, opening) = await OpenFormAsync(app, repository, "refs/remotes/origin/fix-typo");
+        Assert.Equal(("origin/fix-typo", "octo/tool"), (form.Head.Text, form.Head.Repository));
+        Assert.Equal(("upstream/main", "acme/tool"), (form.BaseText, form.BaseRepository));
+        await served.Tool.GitAsync("remote", "set-url", "origin", "http://127.0.0.1:9/octo/tool.git");
+        await app.WaitForAsync(
+            () => repository.HostingState is { PullRequests: PullRequestsState.Loaded, Repository.FullName: "acme/tool" } state && !state.Remotes.ContainsKey("origin"),
+            "origin no longer a GitHub remote");
+        await app.WaitForWatchersQuietAsync();
+        var calls = app.CallMark();
+        var requests = served.GitHub.Requests.Count;
+
+        await form.CreateCommand.ExecuteAsync(null);
+
+        Assert.False(form.IsClosed);
+        Assert.Equal(Texts.Operation("origin/fix-typo").FailureSummary, form.Error);
+        Assert.Null(form.HeadNote);
+        Assert.DoesNotContain(served.GitHub.Requests.Skip(requests), request => request.Method != "GET");
+        Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
+        form.Cancel();
+        await opening;
+        await EndAsync(app, data, served);
+    }
+
+    [AvaloniaFact]
     public async Task In_a_fork_the_head_goes_to_origin_by_the_remotes_order_and_the_base_is_the_parent_s_default_branch()
     {
         await using var served = await ServeAsync();
