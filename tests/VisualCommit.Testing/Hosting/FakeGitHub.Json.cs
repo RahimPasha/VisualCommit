@@ -7,7 +7,8 @@ namespace VisualCommit.Testing.Hosting;
 
 /// <summary>
 /// The shapes of the fake's answers (docs/phase-7a-design.md 2.4, r5 10.4): snake_case fields,
-/// times in UTC as <c>yyyy-MM-ddTHH:mm:ssZ</c>, addresses on <see cref="Endpoints"/>.
+/// times in UTC as <c>yyyy-MM-ddTHH:mm:ssZ</c>, addresses on <see cref="Endpoints"/>, a repository
+/// by the name GitHub gives it now (<see cref="FakeRepository.CurrentFullName"/>).
 /// </summary>
 public sealed partial class FakeGitHub
 {
@@ -61,17 +62,17 @@ public sealed partial class FakeGitHub
         var json = new JsonObject
         {
             ["id"] = repository.Id,
-            ["name"] = repository.Name,
-            ["full_name"] = repository.FullName,
+            ["name"] = repository.CurrentName,
+            ["full_name"] = repository.CurrentFullName,
             ["owner"] = UserJson(repository.Owner),
             ["private"] = repository.IsPrivate,
             ["fork"] = repository.ForkOf is not null,
             ["archived"] = repository.IsArchived,
             ["description"] = repository.Description,
             ["default_branch"] = repository.DefaultBranch,
-            ["html_url"] = Web(repository.FullName).AbsoluteUri,
-            ["clone_url"] = Web(repository.FullName + ".git").AbsoluteUri,
-            ["ssh_url"] = $"git@127.0.0.1:{repository.FullName}.git",
+            ["html_url"] = Web(repository.CurrentFullName).AbsoluteUri,
+            ["clone_url"] = Web(repository.CurrentFullName + ".git").AbsoluteUri,
+            ["ssh_url"] = $"git@127.0.0.1:{repository.CurrentFullName}.git",
             ["created_at"] = Time(repository.UpdatedAt),
             ["updated_at"] = Time(repository.UpdatedAt),
             ["pushed_at"] = Time(repository.UpdatedAt),
@@ -135,7 +136,7 @@ public sealed partial class FakeGitHub
             baseSha = _branches.TryGetValue(baseRepository.FullName, out var refs) && refs.TryGetValue("refs/heads/" + pull.BaseRef, out var sha) ? sha : string.Empty;
         }
 
-        var html = Web(string.Create(CultureInfo.InvariantCulture, $"{baseRepository.FullName}/pull/{pull.Number}")).AbsoluteUri;
+        var html = Web(string.Create(CultureInfo.InvariantCulture, $"{baseRepository.CurrentFullName}/pull/{pull.Number}")).AbsoluteUri;
         return new JsonObject
         {
             ["id"] = 4000 + pull.Number,
@@ -145,7 +146,7 @@ public sealed partial class FakeGitHub
             ["title"] = pull.Title,
             ["body"] = pull.Body,
             ["html_url"] = html,
-            ["url"] = new Uri(Endpoints.ApiBase, string.Create(CultureInfo.InvariantCulture, $"repos/{baseRepository.FullName}/pulls/{pull.Number}")).AbsoluteUri,
+            ["url"] = new Uri(Endpoints.ApiBase, string.Create(CultureInfo.InvariantCulture, $"repos/{baseRepository.CurrentFullName}/pulls/{pull.Number}")).AbsoluteUri,
             ["created_at"] = Time(pull.CreatedAt),
             ["updated_at"] = Time(pull.CreatedAt),
             ["user"] = UserJson(pull.Author),
@@ -175,7 +176,7 @@ public sealed partial class FakeGitHub
         return new JsonObject
         {
             ["sha"] = commit.Sha,
-            ["html_url"] = Web($"{repository.FullName}/commit/{commit.Sha}").AbsoluteUri,
+            ["html_url"] = Web($"{repository.CurrentFullName}/commit/{commit.Sha}").AbsoluteUri,
             ["commit"] = new JsonObject
             {
                 ["author"] = new JsonObject { ["name"] = commit.AuthorName, ["email"] = commit.AuthorEmail, ["date"] = Time(commit.AuthorDate) },

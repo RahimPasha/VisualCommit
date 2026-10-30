@@ -112,9 +112,8 @@ public sealed partial class RepositoryHosting
             return null;
         }
 
-        var (listed, branch) = info is { IsFork: true, Parent: { } parent }
-            ? (parent, info.ParentDefaultBranch ?? info.DefaultBranch)
-            : (candidate, info.DefaultBranch);
+        var listed = ListedOf(candidate, info);
+        var branch = info is { IsFork: true, Parent: not null } ? info.ParentDefaultBranch ?? info.DefaultBranch : info.DefaultBranch;
         var maps = _session.AuthorMaps;
         var (commitsDue, due) = maps.Plan(listed, emails);
         if (commitsDue || due.Count > 0)

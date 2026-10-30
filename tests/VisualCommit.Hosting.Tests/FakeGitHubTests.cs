@@ -12,8 +12,9 @@ namespace VisualCommit.Hosting.Tests;
 /// <summary>
 /// The fake of GitHub in process (docs/phase-7a-design.md 2.4, 2.9): every route, the checks in
 /// their order, GitHub's shapes and headers, each fault once and then the normal answer, the
-/// holds, A5's ref and refusals, A6 and its 409, avatars and pages, and a long list's pages. On a
-/// copy of "hosting" served in process (<see cref="Scenarios.ServeHostingAsync"/>).
+/// holds, A5's ref and refusals, A6 and its 409, avatars and pages, a renamed repository's names
+/// and redirects, and a long list's pages. On a copy of "hosting" served in process
+/// (<see cref="Scenarios.ServeHostingAsync"/>).
 /// </summary>
 public sealed class FakeGitHubTests
 {
@@ -332,6 +333,48 @@ public sealed class FakeGitHubTests
         Assert.Throws<NotSupportedException>(() => fake.FailNext("git:octo/hello", FakeGitHubFault.ServerError));
         Assert.Throws<NotSupportedException>(() => fake.FailNext("avatar:1001", FakeGitHubFault.ServerError));
         Assert.Throws<NotSupportedException>(() => fake.FailNext("page:octo/hello", FakeGitHubFault.ServerError));
+        Assert.Empty(fake.Errors);
+    }
+
+    [Fact]
+    public async Task A_renamed_repository_answers_under_its_new_name_and_redirects_every_route_of_its_old_one()
+    {
+        await using var scenario = await ScenarioAsync();
+        var fake = scenario.Served.GitHub;
+        var token = scenario.Served.OctoToken;
+        var api = fake.Endpoints.ApiBase.AbsoluteUri;
+        var id = fake.Repository("octo/hello").Id;
+        fake.Rename("octo/hello", "greeting");
+
+        var renamed = await SendAsync(fake, HttpMethod.Get, "repos/octo/greeting", token);
+        Assert.Equal((HttpStatusCode.OK, "greeting", "octo/greeting", fake.Endpoints.WebBase.AbsoluteUri + "octo/greeting.git"),
+            (renamed.Status, renamed.Text("name"), renamed.Text("full_name"), renamed.Text("clone_url")));
+        var byId = await SendAsync(fake, HttpMethod.Get, $"repositories/{id}/pulls", token);
+        Assert.Equal(new[] { 5, 3, 2, 1 }, Numbers(byId));
+        Assert.Equal(("octo/greeting", fake.Endpoints.WebBase.AbsoluteUri + "octo/greeting/pull/5"),
+            (byId.Json[0].GetProperty("base").GetProperty("repo").GetProperty("full_name").GetString(), byId.Json[0].GetProperty("html_url").GetString()));
+
+        // Every route of the old name goes to the id, the rest of the path and the query kept: a
+        // 301, and a 307 for a request with a body (GitHub's redirect of a renamed repository).
+        foreach (var (method, path, body, status, location) in new[]
+        {
+            (HttpMethod.Get, "repos/octo/hello", (string?)null, HttpStatusCode.MovedPermanently, $"repositories/{id}"),
+            (HttpMethod.Get, "repos/octo/hello/pulls?state=open&per_page=100", null, HttpStatusCode.MovedPermanently, $"repositories/{id}/pulls?state=open&per_page=100"),
+            (HttpMethod.Get, "repos/octo/hello/commits?per_page=1", null, HttpStatusCode.MovedPermanently, $"repositories/{id}/commits?per_page=1"),
+            (HttpMethod.Post, "repos/octo/hello/pulls", """{"title":"T","head":"topic/no-pr","base":"main"}""", HttpStatusCode.TemporaryRedirect, $"repositories/{id}/pulls"),
+            (HttpMethod.Patch, "repos/octo/hello/pulls/3", """{"state":"closed"}""", HttpStatusCode.TemporaryRedirect, $"repositories/{id}/pulls/3"),
+        })
+        {
+            var moved = await SendAsync(fake, method, path, token, body);
+            Assert.Equal((status, api + location), (moved.Status, moved.Header("Location")));
+        }
+
+        // Nothing was made or changed through the old name, and the routes' keys are the new name's.
+        Assert.Equal(new[] { 1, 2, 3, 4, 5 }, fake.PullRequests("octo/greeting").Select(pull => pull.Number));
+        Assert.Equal("open", fake.PullRequests("octo/hello").Single(pull => pull.Number == 3).State);
+        Assert.All(fake.Requests, request => Assert.EndsWith(":octo/greeting", request.Route, StringComparison.Ordinal));
+        Assert.Equal(("octo/hello", "octo/greeting"), (fake.Repository("octo/greeting").FullName, fake.Repository("octo/hello").CurrentFullName));
+        Assert.Throws<ArgumentException>(() => fake.Rename("octo/tool", "greeting"));
         Assert.Empty(fake.Errors);
     }
 

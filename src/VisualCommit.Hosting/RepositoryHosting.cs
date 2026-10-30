@@ -211,13 +211,54 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     private static bool SameDictionary<T>(IReadOnlyDictionary<string, T> a, IReadOnlyDictionary<string, T> b) =>
         a.Count == b.Count && a.All(pair => b.TryGetValue(pair.Key, out var other) && Equals(pair.Value, other));
 
-    /// <summary>The repository listed for <paramref name="candidate"/>: its parent once A3 says it is a fork with one.</summary>
-    private HostedRepository ListedOf(HostedRepository candidate)
+    /// <summary>
+    /// The repository listed for <paramref name="candidate"/> with A3's answer for it (7.8): its
+    /// parent when A3 says it is a fork with one, else A3's repository, which is the candidate under
+    /// the name GitHub gives it now (renamed or transferred, the client having followed GitHub's
+    /// 301: 6.3); the candidate itself before A3 has answered.
+    /// <para>
+    /// Not covered: a parent renamed or transferred behind an <c>upstream</c> remote. A3 is read for
+    /// the candidate only, so that remote keeps the name in its URL and is not taken for the parent;
+    /// only GitHub's ids, or an A3 for each remote, would cover it.
+    /// </para>
+    /// </summary>
+    private static HostedRepository ListedOf(HostedRepository candidate, RepositoryInfo? info) => info switch
+    {
+        { IsFork: true, Parent: { } parent } => parent,
+        { } read => read.Repository,
+        null => candidate,
+    };
+
+    /// <summary>A3's answer for <paramref name="candidate"/>, once it has come; null before.</summary>
+    private RepositoryInfo? InfoOf(HostedRepository candidate)
     {
         lock (_infoLock)
         {
-            return _info is { } kept && kept.Candidate.Equals(candidate) && kept.Info is { IsFork: true, Parent: { } parent } ? parent : candidate;
+            return _info is { } kept && kept.Candidate.Equals(candidate) ? kept.Info : null;
         }
+    }
+
+    /// <summary>
+    /// The remotes as the state gives them (7.8): once A3 has answered for <paramref name="candidate"/>
+    /// under another name, every remote that names the candidate names A3's repository instead, so
+    /// that the refs' pull requests, a pull request's checkout and the create compare one name with
+    /// GitHub's answers. <c>_remotes</c> itself stays as recognised from the URLs, so that
+    /// <see cref="Update"/>'s candidate does not change with A3's answer.
+    /// </summary>
+    private IReadOnlyDictionary<string, HostedRepository> RemotesOf(HostedRepository candidate, RepositoryInfo? info)
+    {
+        if (info?.Repository is not { } current || current.Equals(candidate))
+        {
+            return _remotes;
+        }
+
+        var remotes = new Dictionary<string, HostedRepository>(StringComparer.Ordinal);
+        foreach (var (name, repository) in _remotes)
+        {
+            remotes[name] = repository.Equals(candidate) ? current : repository;
+        }
+
+        return remotes;
     }
 
     // On the UI thread: the state and the bindings as the fields say, with the avatars given;
@@ -272,11 +313,13 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             return RepositoryHostingState.NotGitHub;
         }
 
-        var listed = ListedOf(candidate);
-        return slot is not { IsSignedIn: true } ? new(PullRequestsState.SignedOut, _remotes, listed, null, null, NoPullRequests)
-            : _list is { } list ? new(PullRequestsState.Loaded, _remotes, listed, list, null, HostingRules.ByRef(refs, _remotes, list))
-            : _failure is { } failure ? new(PullRequestsState.Failed, _remotes, listed, null, failure, NoPullRequests)
-            : new(PullRequestsState.Loading, _remotes, listed, null, null, NoPullRequests);
+        var info = InfoOf(candidate);
+        var listed = ListedOf(candidate, info);
+        var remotes = RemotesOf(candidate, info);
+        return slot is not { IsSignedIn: true } ? new(PullRequestsState.SignedOut, remotes, listed, null, null, NoPullRequests)
+            : _list is { } list ? new(PullRequestsState.Loaded, remotes, listed, list, null, HostingRules.ByRef(refs, remotes, list))
+            : _failure is { } failure ? new(PullRequestsState.Failed, remotes, listed, null, failure, NoPullRequests)
+            : new(PullRequestsState.Loading, remotes, listed, null, null, NoPullRequests);
     }
 
     // On the UI thread: a run of A3 and A4 for the candidate; a failure shown before is cleared,
@@ -300,7 +343,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                 }
                 else
                 {
-                    listed = ListedOf(candidate);
+                    listed = ListedOf(candidate, info.Value);
                     result = await _session.CallAsync(
                         $"listing the pull requests of {listed.FullName}",
                         (provider, token, linked) => provider.ListPullRequestsAsync(token, listed, linked),

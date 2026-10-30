@@ -21,7 +21,7 @@ namespace VisualCommit.Hosting.Tests;
 /// report, the offer, the list, the undo entry of the push, Cancel offered while pushing only,
 /// 12.6's error rows (GitHub's and git's: a rejected push, a declined one, git's credentials
 /// refused), the note read again after a failure, a lost answer counted as created, the bases of
-/// a fork, and signed out.
+/// a fork, a renamed repository's default base, and signed out.
 /// </summary>
 public sealed class CreatePullRequestOperationTests
 {
@@ -64,6 +64,35 @@ public sealed class CreatePullRequestOperationTests
 
         await repository.OperationStatus.OfferCommand.ExecuteAsync(null);
         Assert.Equal([new Uri(served.GitHub.Endpoints.WebBase, "octo/hello/pull/6").AbsoluteUri], OpenedUrls(app));
+        await EndAsync(app, data, served);
+    }
+
+    [AvaloniaFact]
+    public async Task A_renamed_repository_creates_into_its_default_base_under_its_new_name()
+    {
+        await using var served = await ServeAsync();
+        served.GitHub.Rename("octo/hello", "greeting");
+        await served.Hello.GitAsync("branch", "--track", "topic/no-pr", "origin/topic/no-pr");
+        using var data = new TempDirectory("create pull request");
+        using var app = await OpenAsync(data, served);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        var requests = served.GitHub.Requests.Count;
+
+        // origin's URL names octo/hello; GitHub's answers name octo/greeting, and so does the form,
+        // whose default base is origin's main (7.8, 12.3).
+        var (form, opening) = await OpenFormAsync(app, repository, TopicRef);
+        Assert.Equal(new PullRequestEnd("topic/no-pr", "octo/greeting") { Branch = "topic/no-pr" }, form.Head);
+        Assert.Equal(("origin/main", "octo/greeting"), (form.BaseText, form.BaseRepository));
+        Assert.Null(form.Error);
+        await CreateAsync(form, opening);
+        await app.WaitForIdleAsync();
+
+        var post = Post(served, "create:octo/greeting", requests);
+        Assert.Equal("/api/v3/repos/octo/greeting/pulls", post.Path);
+        Assert.Equal(("Try an idea", string.Empty, "topic/no-pr", "main", false, false), Body(post));
+        Assert.Equal("Created pull request #6", repository.OperationStatus.Text);
+        Assert.Equal(6, repository.HostingState.List!.PullRequests[0].Number);
+        Assert.Equal(6, repository.HostingState.ByRef[TopicRef].Number);
         await EndAsync(app, data, served);
     }
 
