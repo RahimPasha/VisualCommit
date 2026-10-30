@@ -339,10 +339,12 @@ public sealed partial class RepositoryOperations
             return new OperationResult(OperationOutcome.Cancelled, OperationTexts.Cancelled(text.Title), null);
         }
 
-        // The URLs whose credentials come from the account (D255): the tab's hosting's, or for a
-        // dashboard row without a tab, whose hosting is the null object, its remotes' URLs after
-        // the rules read now (D332, docs/phase-7a-design.md 4.7). Signed out nothing is read.
-        var bindings = Repository.Hosting.Bindings;
+        // The URLs whose credentials come from the account (D255), for a network operation only
+        // (docs/phase-7a-design.md 0.2, 4.7): the tab's hosting's, or for a dashboard row without a
+        // tab, whose hosting is the null object, its remotes' URLs after the rules read now (D332).
+        // Signed out nothing is read. A local operation's git calls get no credential pair and keep
+        // an inherited command-line configuration (D329), as in a tab that is not bound.
+        var bindings = kind == OperationKind.Network ? Repository.Hosting.Bindings : [];
         if (kind == OperationKind.Network && Repository.IsSummary && Services?.Hosting is { BindsGit: true } hosting && Repository.Refs is { } refs)
         {
             try
