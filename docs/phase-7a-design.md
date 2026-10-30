@@ -5046,8 +5046,9 @@ handoff cite these as "design 19.N".
    - **leak-2:** the graph's and the details panel's decoded caches keep only images that decoded
      (11.3): a file that did not decode is decoded again at the next change instead of staying empty
      for the window's life, and a bitmap that loses an overlapping decode's `TryAdd` is disposed. D310
-     and 11.3's "An avatar replaced under the same path shows from the next start" stand. The losing decode can be produced
-     in the graph control (two changes naming one file before the UI thread runs); no test was added.
+     and 11.3's "An avatar replaced under the same path shows from the next start" stand. The losing
+     decode can be produced in the graph control (two changes naming one file before the UI thread
+     runs); no test was added.
    - **ci-1:** `GraphAvatarTests.An_overtaken_change_applies_nothing_and_the_newest_is_applied_once`
      tries again with a fresh control, up to 10 times, when the first decode ended inside its setter.
    - **Kept by the lead:** a non-fork's A6 and author map follow A3's name too (beyond integration-1's
@@ -5110,3 +5111,38 @@ handoff cite these as "design 19.N".
    for an address with no commit), and an unknown SHA with 422 beside `author` (D339's 404 rule
    relies on it); the live command's Check_1 probes all three, read-only, and run.txt never names the
    address.
+7. **The lead's whole run at the merge** (`6a21b58`, 2026-10-30, `bash scripts/heavy-run.sh`, 69 min
+   2 s): 5,842 of 5,851 tests passed, 5 failed and the watchdog stopped two projects. CI's run on the
+   same commit failed only the first two below, in all five jobs. Four Opus investigators, each
+   challenged by a skeptic (workflow `wbzbjz8tq`), found:
+   - **A8 step 6 and part P's `tool`** (both deterministic, CI too): the expectations that leak-1 and
+     D339 change (items 2 and 3), fixed at `07e7642`. The fixers had run neither check.
+   - **`HostingSessionCredentialTests.Gits_erase_marks_the_account_only_when_github_then_refuses_the_token`**
+     (a test race from WP-S, `539f571`): the network step waited for a count of two warnings, which
+     the client's own warning of the failed request (6.2) reaches before the session's (7.6), so under
+     load it read the client's line. Reproduced in 5 of 12 copies run on one core beside two busy
+     loops. Each step now awaits the check its `Refused` started (`RefusalCheck`), which also closes two
+     latent races of the same kind (a `Refused` joining a check that has not ended, D330; the state
+     visible before its warning), and asserts the two warnings' order; in the same set-up 12 of 12
+     copies pass.
+   - **`RepositoryOperationsRemotesTests.A_renamed_remote_branch_fetched_after_the_refs_were_read_checks_out_into_its_name_on_the_remote_too`**
+     (a test race from phase 6, `4d82f50`): on a busy machine git's writes lie more than the watcher's
+     300 ms apart, so the watcher read the refs again before the assert that they lack the fetched
+     ref, or before the checkout's lookups, where the test would pass without reaching the fallback
+     it is for. The test now pauses the real watcher, as an operation does (D71), from before the
+     outside push until the checkout has ended (`KeptWatcher`, a proxy that keeps the watcher the view
+     model makes); 12 of 12 copies pass on one core beside two busy loops.
+   - **`Phase7aChecksP.Check_P7_P5_more_than_300_and_none`**: the reported failure, no launch, was
+     `End`'s, which part P ran in `finally`, so it replaced the step's own; the launch is synchronous
+     and the check waits for it. Part P's four methods now dispose the app in `finally` and call `End`
+     after it, as parts A, B and N do; the first failure was not recorded, most likely a 60 s wait
+     under the run's load (the 300 pull requests' refresh runs seven of the fake's git processes).
+   - **The watchdog's stops** of `VisualCommit.VisualTests.Phase6Look`
+     (`Check_L31_overlays_and_settings_in_both_themes`) and `VisualCommit.VisualTests.Phase4` (`Check_A4_pull_with_rebase_stopped_and_continued`), each
+     after its 180 s counted: slowness only. The laptop was not rested (the run began five minutes
+     after the fixers' worktree builds), git calls took a median 1,370 ms against 230 alone and work
+     without git slowed alike (the window's creation 35.5 s against 2.6). The session's HOME and the
+     removal of `NETRC` cost nothing measurable (fetch, status and rev-parse with HOME empty, real or
+     unset), and TempRepo's git calls have had an empty HOME since `8858b16`. Each check passes alone in
+     about 25 s; nothing changed in code. If one stops again on a rested laptop, the remedy is the
+     owner's call (D237, D264).

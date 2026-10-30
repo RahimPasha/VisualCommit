@@ -1,3 +1,5 @@
+using System.Reflection;
+using System.Runtime.ExceptionServices;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -395,14 +397,25 @@ public class RepositoryOperationsRemotesTests
     {
         // A ref the refs do not hold (a stale menu's, fetched since the snapshot): its local name by
         // the fetch lines read with the refs, as for one they hold, not by phase 5's split of its
-        // name, which gave up/feature.
+        // name, which gave up/feature. The watcher reads the refs again once the push's and the
+        // fetch's writes have been quiet for 300 ms; on a busy machine, where git's writes lie more
+        // than 300 ms apart, that can come before the assert below or before the checkout's lookups.
+        // It is paused, as an operation pauses it (D71), from before the push until the checkout has
+        // ended, so the checkout finds the refs as read before the fetch, however fast git and the
+        // watcher are.
         using var repo = await Scenarios.RenamingRefspecAsync();
-        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo);
-        await repo.PushAsync("fork", setUpstream: false, "topic:refs/heads/feature");
-        await repo.GitAsync("fetch", "--quiet", "fork");
-        Assert.Null(app.Operations.FindRef("refs/remotes/fork/up/feature"));
+        KeptWatcher? kept = null;
+        using var app = await OpenWithoutKeepingIgnoredFilesAsync(repo, inner => KeptWatcher.Wrap(inner, out kept));
+        using (kept!.Watcher.Pause())
+        {
+            // A refresh the opening started ends first; none starts while the watcher is paused.
+            await app.WaitForWatcherQuietAsync();
+            await repo.PushAsync("fork", setUpstream: false, "topic:refs/heads/feature");
+            await repo.GitAsync("fetch", "--quiet", "fork");
+            Assert.Null(app.Operations.FindRef("refs/remotes/fork/up/feature"));
 
-        await app.Operations.CheckoutAsync("refs/remotes/fork/up/feature");
+            await app.Operations.CheckoutAsync("refs/remotes/fork/up/feature");
+        }
 
         Assert.Empty(app.Dialogs.Shown);
         Assert.Equal("Created feature tracking fork/up/feature and checked it out", app.StatusText);
@@ -629,11 +642,52 @@ public class RepositoryOperationsRemotesTests
     }
 
     /// <summary>Opens the harness with Keep ignored files off, so that a checkout's command has no <c>--no-overwrite-ignore</c> (9.11).</summary>
-    private static async Task<OperationsHarness> OpenWithoutKeepingIgnoredFilesAsync(TempRepo repo)
+    private static async Task<OperationsHarness> OpenWithoutKeepingIgnoredFilesAsync(TempRepo repo, Func<IGitRepository, IGitRepository>? wrap = null)
     {
-        var app = await OperationsHarness.OpenAsync(repo);
+        var app = wrap is null ? await OperationsHarness.OpenAsync(repo) : await OperationsHarness.OpenWrappedAsync(repo, wrap);
         app.Settings.Update(settings => settings with { KeepIgnoredFiles = false });
         return app;
+    }
+
+    /// <summary>
+    /// The real repository, keeping the watcher the view model makes (<see cref="IGitRepository.CreateWatcher"/>)
+    /// so that a test can pause it as an operation does (D71). Every call goes to the real repository.
+    /// </summary>
+    public class KeptWatcher : DispatchProxy
+    {
+        private IGitRepository _inner = null!;
+
+        public IRepositoryWatcher Watcher { get; private set; } = null!;
+
+        public static IGitRepository Wrap(IGitRepository inner, out KeptWatcher kept)
+        {
+            var proxy = Create<IGitRepository, KeptWatcher>();
+            kept = (KeptWatcher)(object)proxy;
+            kept._inner = inner;
+            return proxy;
+        }
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            ArgumentNullException.ThrowIfNull(targetMethod);
+            object? result;
+            try
+            {
+                result = targetMethod.Invoke(_inner, args);
+            }
+            catch (TargetInvocationException ex) when (ex.InnerException is not null)
+            {
+                ExceptionDispatchInfo.Throw(ex.InnerException);
+                throw;
+            }
+
+            if (targetMethod.Name == nameof(IGitRepository.CreateWatcher))
+            {
+                Watcher = (IRepositoryWatcher)result!;
+            }
+
+            return result;
+        }
     }
 
     /// <summary>

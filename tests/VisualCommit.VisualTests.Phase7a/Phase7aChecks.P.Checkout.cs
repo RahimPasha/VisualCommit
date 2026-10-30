@@ -133,8 +133,10 @@ public sealed partial class Phase7aChecksP
         }
         finally
         {
-            End(app, data, served, []);
+            app.Dispose();
         }
+
+        End(app, data, served, []);
 
         // P13 step 6: git's state after the app closed.
         Assert.Equal("refs/heads/fix-typo", (await served.Hello.GitAsync("symbolic-ref", "HEAD")).StandardOutput.Trim());

@@ -79,17 +79,23 @@ public sealed class HostingSessionCredentialTests
         var written = File.GetLastWriteTimeUtc(setup.Paths.AccountsFile);
         var file = File.ReadAllText(setup.Paths.AccountsFile);
 
-        // The token is valid: an http.extraHeader or a redirect made git erase it (D330).
+        // The token is valid: an http.extraHeader or a redirect made git erase it (D330). Each step
+        // waits for the check its Refused started to end: by then its warning, or its mark and its
+        // warning, are in, and a later Refused starts a check of its own instead of joining it.
         setup.Session.Refused(octo);
-        await WaitForWarningsAsync(setup, 1);
+        await CheckedAsync(setup);
         Assert.Equal("GitHub account octo on 127.0.0.1:1: git was refused, yet the token is valid (an http.extraHeader, a proxy or a redirect?).", setup.Warnings[^1]);
         Assert.Equal(AccountState.SignedIn, setup.Session.Account!.State);
 
-        // The network fails: the account stays too.
+        // The network fails: the account stays too. The client's warning of the request (6.2) comes
+        // before the session's (7.6).
+        var valid = setup.Session.RefusalCheck;
         setup.NetworkDown = true;
         setup.Session.Refused(octo);
-        await WaitForWarningsAsync(setup, 2);
+        Assert.NotSame(valid, setup.Session.RefusalCheck);
+        await CheckedAsync(setup);
         setup.NetworkDown = false;
+        Assert.Equal("GitHub: GET /api/v3/user failed: Network.", setup.Warnings[^2]);
         Assert.StartsWith("GitHub account octo on 127.0.0.1:1: git was refused; the token could not be checked: ", setup.Warnings[^1], StringComparison.Ordinal);
         Assert.Equal(AccountState.SignedIn, setup.Session.Account!.State);
         Assert.Equal((written, file), (File.GetLastWriteTimeUtc(setup.Paths.AccountsFile), File.ReadAllText(setup.Paths.AccountsFile)));
@@ -103,8 +109,9 @@ public sealed class HostingSessionCredentialTests
         // Revoked: GET /user answers 401 and the account needs signing in, its source git.
         setup.Fake.Revoke(setup.OctoToken);
         setup.Session.Refused(octo);
-        await WaitForAsync(() => setup.Session.Account!.State == AccountState.NeedsSignIn);
-        Assert.Equal(AccountNoteKind.Refused, setup.Session.Account!.NoteKind);
+        Assert.NotSame(check, setup.Session.RefusalCheck);
+        await CheckedAsync(setup);
+        Assert.Equal((AccountState.NeedsSignIn, AccountNoteKind.Refused), (setup.Session.Account!.State, setup.Session.Account.NoteKind));
         Assert.Equal(AccountTokenStates.Refused, Load(setup).TokenState);
         Assert.Contains("GitHub account octo on 127.0.0.1:1: GitHub refused the token (git); it needs signing in again.", setup.Warnings);
         Assert.Equal(requests + 1, setup.UserRequests);
@@ -184,6 +191,9 @@ public sealed class HostingSessionCredentialTests
     private static AccountRecord Load(HostingSessionSetup setup) => Assert.Single(HostingSessionSignInTests.Load(setup).Accounts);
 
     private static Task WaitForWarningsAsync(HostingSessionSetup setup, int count) => WaitForAsync(() => setup.Warnings.Count >= count);
+
+    /// <summary>The check the last <c>Refused</c> started, to its end: its warning, or its mark and its warning, are in by then (D330).</summary>
+    private static Task CheckedAsync(HostingSessionSetup setup) => setup.Session.RefusalCheck!.WaitAsync(Cancelled);
 
     private static async Task WaitForAsync(Func<bool> condition)
     {

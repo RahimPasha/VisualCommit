@@ -165,6 +165,20 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for the step-17 record (`07e7642`) is
+[41071722860](https://github.com/RahimPasha/VisualCommit/actions/runs/41071722860): all five jobs
+succeeded. `windows-latest` 38 min 6 s (Test step 34 min 25 s of 55; its keychain step green; "Build
+the opt-in projects" 29 s), `macos-latest` 37 min 42 s (Test step 36 min 10 s; its keychain step
+green), `ubuntu-latest` 6 min 24 s (Test step 4 min 52 s), the container with the SDK from
+Microsoft's installer 6 min 25 s and the one from Ubuntu's packages 8 min 38 s (each container's
+Secret Service step green). The containers run git 2.43, so D340's older-git branches of
+`AccountCredentialTests` ran there for the first time, and passed. The run before it, on the merge of
+the review's fixes (`6a21b58`,
+[41061139528](https://github.com/RahimPasha/VisualCommit/actions/runs/41061139528)), failed in all five
+jobs on the same two checks only, `Check_A8_sign_out` and `Check_P13_P6_checkout_and_a_forks_tab`,
+whose expectations leak-1 and D339 change (`07e7642`, design 19 item 7); there Windows' "Build the
+opt-in projects" ran after the failed Test step, as tests-2 meant.
+
 Phase 7a's run for wave 3's merge and its items (`fdb1986`) is
 [41038505814](https://github.com/RahimPasha/VisualCommit/actions/runs/41038505814): four jobs
 succeeded and one failed. `windows-latest` (38 min 25 s; Test step 35 min 5 s of 55; its keychain step
@@ -494,20 +508,26 @@ opt-in projects", CLAUDE.md's rows and notes, D335's changes to CLAUDE.md and pl
 "Live command" section, and `TokenTripwire`'s message and standard-input search); step 15 is ticked.
 The default run's product code is unchanged by wave 3, so no whole run was made at its merge: the
 build passed, the tripwire's test passed, and CI's run 41038505814 on `fdb1986` passed on four
-jobs and failed one test in one container, a test's race now fixed with the review's findings (CI).
-Under way: step 17, the independent review of the code. Five read-only Opus reviewers (token and
-account safety; git safety; threads, lifetimes and performance; design fit and GitHub's behaviour;
-tests and CI) found 18 problems on `fdb1986`, two of them major (a renamed or transferred repository
-breaks badges, checkout and Create; a user's `~/.netrc` answers before the app's helper). Six
-skeptics verified them: 3 refuted (git-1 by D305 and D93, perf-1 by design 17.1's ruling,
-integration-6 by design 6.2 and D338), 15 stand, two of them as text or a test pin only. Four Opus
-fixers by area (workflow `wfihbpput`: session, avatars, git, waits; worktrees
-`D:/Projects/Personal/vc-wt/p7a-fix-<area>`, branches `wip/p7a-fix-<area>`), each reviewed by an
-agent that did not write it. Next: read their reports, merge each with `--no-ff`, record design 18
-item 3 and decisions D339 (avatar lookups through a reached commit) and D340 (netrc kept out by
-`http.<url>.proactiveAuth`, git 2.46 and later), run the touched projects and the lagged list,
-push and read CI. The live run (step 16) waits for the owner's private sandbox, token and two
-variables (design 14.6; "Waiting on the owner"). Each of parts B, P, G and N
+jobs and failed one test in one container, a test's race fixed with the review's findings (CI).
+Step 17, the independent review of the code, is merged and recorded (design 19): five read-only Opus
+reviewers found 18 problems on `fdb1986`, two of them major (a renamed repository broke badges,
+checkout and Create; a user's netrc answered before the app's helper); six skeptics refuted 3, and
+four Opus fixers by area (workflow `wfihbpput`), each followed by a reviewer who did not write the
+fix, fixed the 15 and CI's ci-1, merged with `--no-ff` at `8e98d4a`, `4fe3779`, `0d0d48c` and
+`e5d09fb` (worktrees and `wip/p7a-fix-*` branches removed), the reviews' last nits at `6a21b58`; D339
+(avatar lookups from each author's commit on the remote that holds it) and D340
+(`http.<url>.proactiveAuth`, git 2.46 and later; the harness's HOME and `NETRC`) are recorded, with
+plan.md's risks 35 to 38. A read-only Opus reviewer checked that record against the code; its
+findings are applied. The live command's Check_1 now also probes the avatars' lookup (design 19 item
+6; 78 offline safety tests pass). The lead's whole run on `6a21b58` (69 min 2 s, the laptop not
+rested) passed 5,842 of 5,851; its failures are design 19 item 7: A8 and part P's `tool` were
+expectations the fixes change (`07e7642`; CI's run on it is green on all five jobs), two were test
+races that predate step 17, now fixed and run in six contended copies, part P's `End` hid a step's
+failure and now runs after the app has closed, and the watchdog's two stops were the unrested
+laptop's load. Next: commit those fixes; let the laptop rest, with nothing running; then the whole
+default run again (`bash scripts/heavy-run.sh`) and the lagged list (design 0.4); if both pass, tick
+step 17. The live run (step 16) waits for the owner's private sandbox, token and two variables
+(design 14.6; "Waiting on the owner"). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).

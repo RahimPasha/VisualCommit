@@ -244,8 +244,10 @@ public sealed partial class Phase7aChecksP
         }
         finally
         {
-            End(app, data, served, [P.PullRequestUrl(1, port), P.PullRequestUrl(1, port)]);
+            app.Dispose();
         }
+
+        End(app, data, served, [P.PullRequestUrl(1, port), P.PullRequestUrl(1, port)]);
     }
 
     /// <summary>The open menu is <paramref name="lines"/> whole, <paramref name="highlighted"/> highlighted, 4a's shape and the report's height.</summary>

@@ -195,8 +195,10 @@ public sealed partial class Phase7aChecksP : Phase7aChecks
         }
         finally
         {
-            End(app, data, served, [P.PullsUrl(port)], ops.Path);
+            app.Dispose();
         }
+
+        End(app, data, served, [P.PullsUrl(port)], ops.Path);
     }
 
     [AvaloniaFact]
@@ -304,8 +306,10 @@ public sealed partial class Phase7aChecksP : Phase7aChecks
         }
         finally
         {
-            End(app, data, served, [P.PullsUrl(port)]);
+            app.Dispose();
         }
+
+        End(app, data, served, [P.PullsUrl(port)]);
     }
 
     /// <summary>P1: no <c>PullRequestItem</c> or <c>PullRequestMessage</c> control in the panel and no visible <c>RefPullRequest</c>.</summary>

@@ -284,14 +284,14 @@ public sealed partial class Phase7aChecksP
         [.. app.Launcher.Requests.Where(request => request.Kind == FileLaunchKind.OpenUrl).Select(request => request.FullPath)];
 
     /// <summary>
-    /// Every method's end (part P's conventions): the app closed, the tripwire for the three tokens,
-    /// the fake's errors and refusals none, no 400 or 415, and the launcher's requests exactly the
+    /// Every method's end (part P's conventions), after the app has closed and only when every step
+    /// passed, so that a step's failure is the one reported: the tripwire for the three tokens, the
+    /// fake's errors and refusals none, no 400 or 415, and the launcher's requests exactly the
     /// <c>OpenUrl</c> launches of <paramref name="launches"/>.
     /// </summary>
     private static void End(ShellDriver app, TempDirectory data, ServedHosting served, string[] launches, params string[] more)
     {
         var calls = app.Session.GitCalls;
-        app.Dispose();
         foreach (var (_, token) in P.Tokens)
         {
             TokenTripwire.AssertAbsent(token, [data.Path, served.Hello.Path, served.Tool.Path, .. more], calls);
