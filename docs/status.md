@@ -914,7 +914,12 @@ every commit.
   Environment Variables dialog, never typed in a shell: `VISUALCOMMIT_LIVE_GITHUB_TOKEN` (the token)
   and `VISUALCOMMIT_LIVE_GITHUB_REPO` (`<owner>/visualcommit-sandbox`); then a new Claude Code
   session. The token is never written to the repository. The command is built and waits only for
-  these (design 18 item 2).
+  these (design 18 item 2). Done so far (2026-10-30): the private sandbox
+  `RahimPasha/visualcommit-sandbox` (default branch `main`, two commits: "Initial commit" and a README
+  change; the live command reads only the latest) and a fine-grained token for it; the two user
+  variables are next (the owner sets them with a PowerShell script that reads the token without
+  echoing it, so it lands in no shell history), then VS Code quit and reopened, a new Claude Code
+  session and "Continue". That session checks the variables by name only, never printing them.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
