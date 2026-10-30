@@ -418,8 +418,9 @@ item 10: built, reviewed by an agent that did not build it, one major and six mi
 two ruled on); its builder and reviewer ran its classes, part G, part P, A9, B6 and B8, and the
 review inspected part G's pictures and the part P and A9 pictures it changes. CI's run on `ccd1ebe`
 failed two tests on macOS alone (Notes); P13's failure came once on the laptop too, in WP-V's build.
-Both are being investigated, and their fix is being built (workflow `ww0ovir23`; `wip/p7a-macos`).
-Next: when that fix is merged and pushed, run 11.6's checks on it with no agent running: the lagged
+Both were races in the tests, fixed at `33313ef` (design 17 item 11). CI's run on WP-V's merge
+also failed G1's new pixel check on macOS; its fix is being built (workflow `wzf5zbhxr`;
+`wip/p7a-g1`). Next: when it is merged and pushed, run 11.6's checks on it with no agent running: the lagged
 list; phase 1's checks, phase 3's walk-through, `Phase5` and `Phase6Look` through
 `bash scripts/heavy-run.sh`, compared by region with `master`'s references; part G; part P, part A's
 check 9 and part B's B6 (`--filter-method "*Check_B3_B6_B7*"`) and B8 again (design 17 items 3, 6 and
