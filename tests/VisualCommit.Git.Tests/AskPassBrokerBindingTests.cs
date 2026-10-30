@@ -28,7 +28,7 @@ public class AskPassBrokerBindingTests
     private static readonly CredentialBinding Upstream = new("https://github.com/u/r.git", Octocat);
 
     [Fact]
-    public void Two_pairs_per_binding_numbered_from_zero_without_an_inherited_count()
+    public void Three_pairs_per_binding_numbered_from_zero_without_an_inherited_count()
     {
         using var broker = Broker();
         using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo, Upstream]);
@@ -36,15 +36,17 @@ public class AskPassBrokerBindingTests
         var environment = scope.Environment;
 
         var helper = $"!'{broker.HelperPath.Replace('\\', '/')}' --vc-credential";
-        Assert.Equal("4", environment["GIT_CONFIG_COUNT"]);
+        Assert.Equal("6", environment["GIT_CONFIG_COUNT"]);
         Assert.Equal(
             [
                 ("credential.https://github.com/o/r.git.helper", string.Empty),
                 ("credential.https://github.com/o/r.git.helper", helper),
+                ("http.https://github.com/o/r.git.proactiveAuth", "basic"),
                 ("credential.https://github.com/u/r.git.helper", string.Empty),
                 ("credential.https://github.com/u/r.git.helper", helper),
+                ("http.https://github.com/u/r.git.proactiveAuth", "basic"),
             ],
-            Pairs(environment, 0, 4));
+            Pairs(environment, 0, 6));
         Assert.Equal("1", environment["GIT_TRACE_REDACT"]);
         Assert.True(environment.TryGetValue("GIT_CONFIG_PARAMETERS", out var parameters));
         Assert.Null(parameters);
@@ -59,11 +61,12 @@ public class AskPassBrokerBindingTests
         using var broker = Broker(session: new Dictionary<string, string?> { ["GIT_CONFIG_COUNT"] = inherited });
         using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo]);
 
-        Assert.Equal((first + 2).ToString(System.Globalization.CultureInfo.InvariantCulture), scope.Environment["GIT_CONFIG_COUNT"]);
+        Assert.Equal((first + 3).ToString(System.Globalization.CultureInfo.InvariantCulture), scope.Environment["GIT_CONFIG_COUNT"]);
         Assert.Equal("credential.https://github.com/o/r.git.helper", scope.Environment[$"GIT_CONFIG_KEY_{first}"]);
         Assert.Equal(string.Empty, scope.Environment[$"GIT_CONFIG_VALUE_{first}"]);
         Assert.StartsWith("!'", scope.Environment[$"GIT_CONFIG_VALUE_{first + 1}"], StringComparison.Ordinal);
-        Assert.False(scope.Environment.ContainsKey($"GIT_CONFIG_KEY_{first + 2}"));
+        Assert.Equal(("http.https://github.com/o/r.git.proactiveAuth", "basic"), (scope.Environment[$"GIT_CONFIG_KEY_{first + 2}"], scope.Environment[$"GIT_CONFIG_VALUE_{first + 2}"]));
+        Assert.False(scope.Environment.ContainsKey($"GIT_CONFIG_KEY_{first + 3}"));
     }
 
     [Theory]
@@ -79,9 +82,9 @@ public class AskPassBrokerBindingTests
         using var broker = Broker(session: sessionEnvironment, process: name => name == "GIT_CONFIG_COUNT" ? process : null);
         using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo]);
 
-        Assert.Equal((first + 2).ToString(System.Globalization.CultureInfo.InvariantCulture), scope.Environment["GIT_CONFIG_COUNT"]);
+        Assert.Equal((first + 3).ToString(System.Globalization.CultureInfo.InvariantCulture), scope.Environment["GIT_CONFIG_COUNT"]);
         Assert.Equal("credential.https://github.com/o/r.git.helper", scope.Environment[$"GIT_CONFIG_KEY_{first}"]);
-        Assert.False(scope.Environment.ContainsKey($"GIT_CONFIG_KEY_{first + 2}"));
+        Assert.False(scope.Environment.ContainsKey($"GIT_CONFIG_KEY_{first + 3}"));
     }
 
     [Fact]
@@ -150,7 +153,7 @@ public class AskPassBrokerBindingTests
         if (pairs)
         {
             using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo]);
-            Assert.Equal("2", scope.Environment["GIT_CONFIG_COUNT"]);
+            Assert.Equal("3", scope.Environment["GIT_CONFIG_COUNT"]);
         }
         else
         {
@@ -165,7 +168,7 @@ public class AskPassBrokerBindingTests
         using var broker = Broker(version: () => null);
         using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo]);
 
-        Assert.Equal("2", scope.Environment["GIT_CONFIG_COUNT"]);
+        Assert.Equal("3", scope.Environment["GIT_CONFIG_COUNT"]);
     }
 
     [Fact]
@@ -244,7 +247,7 @@ public class AskPassBrokerBindingTests
         using var broker = Broker();
         using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo, Repo with { }, Upstream, Repo]);
 
-        Assert.Equal("4", scope.Environment["GIT_CONFIG_COUNT"]);
+        Assert.Equal("6", scope.Environment["GIT_CONFIG_COUNT"]);
     }
 
     [Fact]

@@ -264,7 +264,11 @@ public sealed partial class Phase7aChecksB : Phase7aChecks
 
             var git = served.GitHub.GitRequests.Skip(gitRequests).Where(request => request.Path.StartsWith("/octo/hello.git/", StringComparison.Ordinal)).ToList();
             Assert.NotEmpty(git);
-            Assert.True(git[0] is { GivenUserName: null, Status: 401 }, $"The clone's first request was {git[0]}.");
+            Assert.True(
+                app.Session.Shell.Git?.Version >= PartB.ProactiveAuthVersion
+                    ? git[0] is { GivenUserName: "x-access-token", Status: 200 }
+                    : git[0] is { GivenUserName: null, Status: 401 },
+                $"The clone's first request was {git[0]}, with git {app.Session.Shell.Git?.Version}.");
             Assert.Contains(git, request => request is { GivenUserName: "x-access-token", Status: 200 });
             Assert.DoesNotContain(git, request => request.GivenUserName is not null && request.GivenUserName != "x-access-token");
             Assert.DoesNotContain(git, request => request is { GivenUserName: not null, Status: 401 });
