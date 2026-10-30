@@ -419,8 +419,9 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             var confirm = app.FindByAutomationId("ConfirmButton");
             Assert.False(confirm.IsEffectivelyEnabled);
             app.MoveMouse(confirm);
-            await app.WaitForAsync(() => ToolTip.GetIsOpen(confirm), "Create's tooltip");
-            Assert.Equal(N.EnterTitle, ToolTip.GetTip(confirm));
+
+            // Open and faded in: a picture taken during the theme's fade shows the tooltip half transparent.
+            Assert.Equal(N.EnterTitle, await app.WaitForToolTipAsync(confirm));
             var titleBox = (TextBox)app.FindByAutomationId("PullRequestTitle");
             Assert.Equal((string.Empty, N.TitlePlaceholder), (titleBox.Text ?? string.Empty, titleBox.PlaceholderText));
             Assert.Null(form.Error);
