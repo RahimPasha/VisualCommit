@@ -168,6 +168,29 @@ public static partial class Phase7aExpectations
         /// <summary>N1 step 5's section menu after a create: its two items, no create item (open point 45).</summary>
         public static readonly string[] SectionMenu = ["Pull requests", "Refresh pull requests", "Open pull requests in browser"];
 
+        /// <summary>The menus' heights the report gives (±2): <c>topic/no-pr</c>'s (N1), <c>local-work</c>'s (N2), <c>origin/topic/no-pr</c>'s (N5), the drop's (N5) and the section's (N1 step 5).</summary>
+        public const double TopicMenuHeight = 597;
+        public const double LocalWorkMenuHeight = 519;
+        public const double OriginTopicMenuHeight = 415;
+        public const double DropMenuHeight = 215;
+        public const double SectionMenuHeight = 84;
+
+        // ---- After a create (N1, N3) -------------------------------------------------------------------
+
+        /// <summary>The graph's rows (the report's "The graph", rows 0 to 7).</summary>
+        public const int GraphRows = 8;
+
+        /// <summary>The graph's badges on rows 2 to 4, before and after a create (11.2, from <c>ByRef</c>): #3 on row 2, #2 (a draft) on row 3, #1 on row 4's first label <c>feature/login</c>.</summary>
+        public static readonly (int Row, string? FullText, int Number, string Title, bool Draft)[] EarlierBadges =
+        [
+            (2, null, 3, "Shorten long labels", false),
+            (3, null, 2, "Update the readme", true),
+            (4, "feature/login", 1, "Add the login form", false),
+        ];
+
+        /// <summary>N3's row of #6, its tooltip (10.3): the header, a line break, the second line.</summary>
+        public const string DraftSixToolTip = "#6 Local change\nocto · local-work → main · Draft";
+
         // ---- Pictures -----------------------------------------------------------------------------------
 
         public const string N01a = "n01a-form";
@@ -206,6 +229,29 @@ public static partial class Phase7aExpectations
         public const double ContentRight = 760;
         public const double TitleHeight = 32;
         public const double DescriptionHeight = 120;
+
+        /// <summary>
+        /// N10's "every control placed as at 1100×700 relative to the card" (±1): N1's form, no note
+        /// and no error, measured from the controls' layout at 1100×700 (name, x, y, width, height
+        /// from the card's top left).
+        /// </summary>
+        public static readonly (string Name, double X, double Y, double Width, double Height)[] FormLayout =
+        [
+            ("CreatePullRequestDialogCard", 0, 0, 460, 386),
+            ("CreatePullRequestDialogTitle", 21, 21, 418, 20),
+            (From, 21, 55, 48, 16),
+            ("PullRequestHead", 69, 55, 67, 16),
+            ("PullRequestHeadRepository", 144, 55, 59, 16),
+            (Into, 21, 86, 48, 16),
+            ("PullRequestBase", 69, 86, 66, 16),
+            ("PullRequestBaseRepository", 143, 86, 59, 16),
+            ("PullRequestBaseChooseButton", 210, 79, 82, 30),
+            ("PullRequestTitle", 21, 121, 418, 32),
+            ("PullRequestDescription", 21, 161, 418, 120),
+            ("PullRequestDraft", 21, 293, 52, 20),
+            ("CancelButton", 299, 333, 67, 32),
+            ("ConfirmButton", 374, 333, 65, 32),
+        ];
 
         /// <summary>N10's rest point at 1920×1080 (open point 56): the backdrop under the card.</summary>
         public static readonly (double X, double Y) RestPoint1920 = (760, 1000);

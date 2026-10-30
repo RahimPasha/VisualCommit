@@ -52,6 +52,8 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.All(ApiSince(served, requests), request => Assert.Equal((true, "octo"), (request.TokenPresent, request.Login)));
             Assert.Equal([5, 3, 2, 1], hello.HostingState.List!.PullRequests.Select(pull => pull.Number));
             Assert.DoesNotContain(N.TopicRef, hello.HostingState.ByRef.Keys);
+            AssertSectionRows(app, [.. P.HelloRows]);
+            Assert.False(((RefItemRow)app.RefRowModel("Local branches", "topic")).IsOpen);
 
             // Step 2: the menu and the form.
             requests = served.GitHub.Requests.Count;
@@ -59,6 +61,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             var menu = await MenuOfAsync(app, "Local branches", "topic", "no-pr");
             AssertMenu(menu, N.TopicMenu(P.CreatePullRequest));
             AssertHighlighted(menu, "Check out topic/no-pr");
+            AssertMenuHeight(app, menu, N.TopicMenuHeight);
             var form = await OpenFormFromMenuAsync(app);
             await app.WaitForAsync(() => app.FocusedAutomationId() == "PullRequestTitle", "the focus in the title");
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle);
@@ -68,6 +71,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.True(app.FindByAutomationId("CancelButton").IsEffectivelyEnabled);
             Assert.True(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
             AssertFormPlaces(app, N.CardLeft);
+            AssertFormLayout(app);
             Assert.Empty(ApiSince(served, requests));
             ShotN(app, N.N01a);
 
@@ -75,6 +79,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             requests = served.GitHub.Requests.Count;
             var gitRequests = served.GitHub.GitRequests.Count;
             logMark = app.LogMark();
+            var operations = OperationMark(app);
             var calls = await app.QuietCallMarkAsync();
             app.Click(app.FindByAutomationId("ConfirmButton"));
             await WaitForEndAsync(app, N.Topic, logMark, OperationOutcome.Succeeded);
@@ -82,6 +87,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.True(form.IsClosed);
             ShotN(app, N.N01b);
             Assert.Null(app.Session.Services.DialogHost.Current);
+            Assert.Equal([(N.OperationTitle(N.Topic), OperationOutcome.Succeeded, N.Created(6, false))], OperationsSince(app, operations).Select(record => (record.Title, record.Outcome, record.Message)));
             Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
             Assert.Equal(gitRequests, served.GitHub.GitRequests.Count);
             var post = PostSince(served, requests);
@@ -90,35 +96,46 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.Equal(["POST create:octo/hello 201", "GET pulls:octo/hello 200 conditional", "GET pulls:octo/hello 304 conditional"], Routes(served, requests));
             var six = Assert.Single(served.GitHub.PullRequests(N.Repository), pull => pull.Number == N.NewNumber);
             Assert.Equal((true, N.TopicTitle, string.Empty, "octo", N.Topic, (string?)null, N.Main, false), (six.IsOpen, six.Title, six.Body, six.Author, six.HeadRef, six.HeadRepository, six.BaseRef, six.IsDraft));
+            Assert.Equal(await GitAsync(served.Hello, "rev-parse", N.TopicRef), (await GitInAsync(Bare(served), "rev-parse", "refs/pull/6/head")).Output);
             Assert.Equal([6, 5, 3, 2, 1], hello.HostingState.List!.PullRequests.Select(pull => pull.Number));
             Assert.Equal((6, 6), (hello.HostingState.ByRef[N.TopicRef].Number, hello.HostingState.ByRef[N.OriginTopicRef].Number));
             AssertStatus(app, N.Created(6, false));
+            Assert.Equal(N.Created(6, false), ToolTip.GetTip(app.FindByAutomationId("OperationStatus")));
             var offer = (Button)app.FindByAutomationId("OperationOfferButton");
             Assert.True(offer.IsEffectivelyVisible);
             Assert.Equal(N.OpenInBrowser, Avalonia.Automation.AutomationProperties.GetName(offer));
+            Assert.Equal(N.OpenInBrowser, hello.OperationStatus.OfferText);
             Assert.Equal(app.BoundsOf(app.FindByAutomationId("OperationStatus")).Right + 6, app.BoundsOf(offer).X, 1.0);
             Assert.False(app.FindByAutomationId("OperationProgress").IsVisible);
             Assert.False(app.FindByAutomationId("OperationCancelButton").IsVisible);
-            Assert.Equal("#6 Try an idea", Section(app)[1]);
-            Assert.Contains(app.LogLinesSince(logMark), line => line.EndsWith("hello: Create pull request for topic/no-pr: into octo/hello main, draft no, no push", StringComparison.Ordinal));
+            AssertSectionRows(app, [("#6 Try an idea", "octo", false), .. P.HelloRows]);
+            await AssertRefPullRequestAsync(app, 6, N.TopicTitle, "Local branches", "topic", "no-pr");
+            AssertBadges(app, [(1, N.Topic, 6, N.TopicTitle, false), .. N.EarlierBadges]);
+            Assert.Contains(app.LogLinesSince(logMark), line => line.EndsWith("[INF] hello: Create pull request for topic/no-pr: into octo/hello main, draft no, no push", StringComparison.Ordinal));
             Assert.DoesNotContain(app.LogLinesSince(logMark), line => line.Contains("[WRN]", StringComparison.Ordinal));
 
             // Step 4: the offer's click.
             requests = served.GitHub.Requests.Count;
+            operations = OperationMark(app);
             app.Click(offer);
             await app.WaitForAsync(() => OpenedUrls(app).Count == 1, "the page handed to the launcher");
             Assert.Equal([N.PullRequestPage(served.GitHub.Port)], OpenedUrls(app));
             Assert.Empty(ApiSince(served, requests));
+            Assert.Empty(OperationsSince(app, operations));
             AssertStatus(app, N.Created(6, false));
             Assert.True(offer.IsEffectivelyVisible);
 
             // Step 5: the branch's menu and the section's.
-            AssertMenu(await MenuOfAsync(app, "Local branches", "topic", "no-pr"), N.TopicMenu(P.OpenPullRequest(6)));
+            menu = await MenuOfAsync(app, "Local branches", "topic", "no-pr");
+            AssertMenu(menu, N.TopicMenu(P.OpenPullRequest(6)));
+            AssertMenuHeight(app, menu, N.TopicMenuHeight);
             app.PressKey(Key.Escape);
             await app.WaitForAsync(() => !app.Session.Shell.Menu.IsOpen, "the menu closed");
             app.RightClick(await app.RefRowAsync(P.Title));
             await app.WaitForAsync(() => app.Session.Shell.Menu.IsOpen, "the section's menu");
             AssertMenu(app.Menu(), N.SectionMenu);
+            AssertHighlighted(app.Menu(), "Refresh pull requests");
+            AssertMenuHeight(app, app.Menu(), N.SectionMenuHeight);
             app.PressKey(Key.Escape);
             Assert.Empty(ApiSince(served, requests));
 
@@ -158,15 +175,21 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             // Step 2: the note.
             var requests = served.GitHub.Requests.Count;
             var menu = await MenuOfAsync(app, "Local branches", N.LocalWork);
-            Assert.Contains(P.CreatePullRequest, menu.Lines());
+            AssertMenu(menu, P.LocalWorkMenu);
+            AssertMenuHeight(app, menu, N.LocalWorkMenuHeight);
             var form = await OpenFormFromMenuAsync(app);
+            await app.WaitForAsync(() => app.FocusedAutomationId() == "PullRequestTitle", "the focus in the title");
             AssertForm(app, form, N.LocalWork, N.PushedFirstWithUpstream("origin/local-work"), N.OriginMain, N.LocalWorkTitle);
+            var note = app.FindByAutomationId("PullRequestHeadNote");
+            Assert.Contains("settingsNote", note.Classes);
+            Assert.True(app.BoundsOf(note).Top >= app.BoundsOf(app.FindByAutomationId("PullRequestHead")).Bottom - 0.5, "The note is not under the head.");
             Assert.Empty(ApiSince(served, requests));
             ShotN(app, N.N02a);
 
             // N7, steps 3 and 4: Cancel while the push is held.
             requests = served.GitHub.Requests.Count;
             var logMark = app.LogMark();
+            var operations = OperationMark(app);
             var calls = await app.QuietCallMarkAsync();
             var pushHold = served.GitHub.HoldNext("git:octo/hello");
             try
@@ -174,11 +197,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
                 app.Click(app.FindByAutomationId("ConfirmButton"));
                 await app.WaitForAsync(() => pushHold.Arrived.IsCompleted, "the push held");
                 await app.WaitForAsync(() => hello.OperationStatus.Text == N.Pushing(N.LocalWork, "origin/local-work"), "the push's running text");
-                Assert.True(form.IsCreating);
-                Assert.Equal(N.Creating, form.CreateText);
-                Assert.True(app.FindByAutomationId("CancelButton").IsEffectivelyEnabled);
-                Assert.False(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
-                Assert.False(app.FindByAutomationId("PullRequestTitle").IsEffectivelyEnabled);
+                AssertCreating(app, form, cancelEnabled: true);
                 Assert.True(hello.OperationStatus.CanCancel);
                 Assert.True(hello.OperationStatus.IsIndeterminate);
                 Assert.True(app.FindByAutomationId("OperationCancelButton").IsVisible);
@@ -205,9 +224,11 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             AssertCalledInOrder(app, calls, @"git config --null --get-regexp ^remote\.", "git push --progress --set-upstream origin refs/heads/local-work:refs/heads/local-work");
             Assert.False(form.IsClosed);
             AssertForm(app, form, N.LocalWork, N.PushedFirstWithUpstream("origin/local-work"), N.OriginMain, N.LocalWorkTitle, N.Cancelled);
-            Assert.Equal(N.Create, form.CreateText);
+            AssertIdle(app, form);
+            Assert.Same(form, app.Session.Services.DialogHost.Current);
             AssertStatus(app, N.CancelledStatus(N.LocalWork));
             Assert.False(hello.OperationStatus.HasOffer);
+            Assert.False(app.FindByAutomationId("OperationCancelButton").IsVisible);
             Assert.DoesNotContain(served.GitHub.Requests.Skip(requests), request => request.Route == "create:octo/hello");
             Assert.DoesNotContain(served.GitHub.GitRequests, request => request.Path.EndsWith("git-receive-pack", StringComparison.Ordinal) && request.Method == "POST");
             Assert.Equal(1, (await served.Hello.GitAllowingFailureAsync(["config", "--get-regexp", @"^branch\.local-work\."])).ExitCode);
@@ -231,8 +252,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
                 await app.WaitForAsync(() => postHold.Arrived.IsCompleted, "the POST held");
                 await app.WaitForAsync(() => hello.OperationStatus.Text == N.CreatingPullRequest, "the POST's running text");
                 await app.WaitForWatchersQuietAsync();
-                Assert.True(form.IsCreating);
-                Assert.False(app.FindByAutomationId("CancelButton").IsEffectivelyEnabled);
+                AssertCreating(app, form, cancelEnabled: false);
                 Assert.False(app.FindByAutomationId("OperationCancelButton").IsVisible);
                 Assert.True(hello.OperationStatus.IsIndeterminate);
                 AssertCalledInOrder(app, calls, @"git config --null --get-regexp ^remote\.", "git push --progress --set-upstream origin refs/heads/local-work:refs/heads/local-work");
@@ -242,6 +262,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
                 Assert.Equal(await GitAsync(served.Hello, "rev-parse", N.LocalWorkRef), (await GitInAsync(Bare(served), "rev-parse", N.LocalWorkRef)).Output);
                 Assert.Empty(ApiSince(served, requests));
                 Assert.Null(hello.Refs!.Refs.FirstOrDefault(gitRef => gitRef.FullName == "refs/remotes/origin/local-work"));
+                Assert.Null(hello.Refs.Refs.Single(gitRef => gitRef.FullName == N.LocalWorkRef).Upstream);
                 ShotN(app, N.N02b);
                 app.PressKey(Key.Escape);
                 app.Settle();
@@ -263,15 +284,22 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.Equal((true, true, N.LocalWorkTitle, N.Note, "octo", N.LocalWork, N.Main), (six.IsOpen, six.IsDraft, six.Title, six.Body, six.Author, six.HeadRef, six.BaseRef));
             AssertStatus(app, N.Created(6, true));
             Assert.True(hello.OperationStatus.HasOffer);
-            Assert.Equal("#6 Local change", Section(app)[1]);
+            Assert.Equal(N.OpenInBrowser, hello.OperationStatus.OfferText);
+            AssertSectionRows(app, [("#6 Local change", "octo", true), .. P.HelloRows]);
+            Assert.Equal(N.DraftSixToolTip, app.Session.Shell.ActiveTab.LeftPanel.Rows.OfType<PullRequestRow>().First().ToolTip);
             Assert.Equal((6, 6), (hello.HostingState.ByRef[N.LocalWorkRef].Number, hello.HostingState.ByRef["refs/remotes/origin/local-work"].Number));
-            var ended = app.LogLines().Where(line => AppLogFile.OperationEnded(Phase7aExpectations.Hello, N.OperationTitle(N.LocalWork)).IsMatch(line)).ToList();
-            Assert.Equal(2, ended.Count);
-            Assert.Contains("Cancelled", ended[0], StringComparison.Ordinal);
-            Assert.Contains("Succeeded", ended[1], StringComparison.Ordinal);
-            Assert.DoesNotContain(app.LogLines(), AppLogFile.OperationEnded(Phase7aExpectations.Hello, "Push local-work").IsMatch);
+            AssertBadges(app, [(0, N.LocalWork, 6, N.LocalWorkTitle, true), .. N.EarlierBadges]);
+            await app.RefRowAsync("Remotes", "origin", N.LocalWork);
+            await AssertRefPullRequestAsync(app, 6, N.LocalWorkTitle, "Local branches", N.LocalWork);
+
+            // The activity log's operations since step 3 (open point 47): one per Create, the push in the second's calls.
+            var records = OperationsSince(app, operations);
+            Assert.Equal(
+                [(N.OperationTitle(N.LocalWork), OperationOutcome.Cancelled), (N.OperationTitle(N.LocalWork), OperationOutcome.Succeeded)],
+                records.Select(record => (record.Title, record.Outcome)));
+            Assert.Contains(app.GitCalls(), call => call.OperationId == records[1].Id && call.CommandText == "git push --progress --set-upstream origin refs/heads/local-work:refs/heads/local-work");
             Assert.DoesNotContain(app.LogLines(), line => line.Contains(N.Note, StringComparison.Ordinal));
-            Assert.Contains(app.LogLinesSince(logMark), line => line.EndsWith("hello: Create pull request for local-work: into octo/hello main, draft yes, push to origin/local-work first", StringComparison.Ordinal));
+            Assert.Contains(app.LogLinesSince(logMark), line => line.EndsWith("[INF] hello: Create pull request for local-work: into octo/hello main, draft yes, push to origin/local-work first", StringComparison.Ordinal));
 
             End(app, data, served);
         }
@@ -306,7 +334,8 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
 
             // Step 2: already open.
             app.Click(await app.RefRowAsync("Local branches", "topic"));
-            await MenuOfAsync(app, "Local branches", "topic", "no-pr");
+            await AssertRefPullRequestAsync(app, null, null, "Local branches", "topic", "no-pr");
+            AssertMenu(await MenuOfAsync(app, "Local branches", "topic", "no-pr"), N.TopicMenu(P.CreatePullRequest));
             var form = await OpenFormFromMenuAsync(app);
             var requests = served.GitHub.Requests.Count;
             var logMark = app.LogMark();
@@ -319,12 +348,14 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.Equal((N.TopicTitle, string.Empty, N.Topic, N.Main, false, false), Body(PostSince(served, requests)));
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle, N.AlreadyOpen(6, N.Topic, N.OriginMain), 6);
             Assert.Equal(N.OpenExisting(6), ((Button)app.FindByAutomationId("PullRequestOpenExisting")).Content);
-            Assert.True(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
+            AssertIdle(app, form);
+            Assert.Same(form, app.Session.Services.DialogHost.Current);
+            Assert.Equal([1, 2, 3, 4, 5, 6], served.GitHub.PullRequests(N.Repository).Select(pull => pull.Number).Order());
             AssertStatus(app, N.Failed(N.Topic), OperationStatusTone.Danger);
             Assert.False(hello.OperationStatus.HasOffer);
-            Assert.Equal("#6 Try an idea", Section(app)[1]);
-            Assert.Contains(app.LogLinesSince(logMark), line => line.Contains("GitHub: POST /api/v3/repos/octo/hello/pulls failed: 422", StringComparison.Ordinal));
-            Assert.Contains(app.LogLinesSince(logMark), line => line.Contains("GitHub: creating a pull request on octo/hello failed: Validation, Validation Failed", StringComparison.Ordinal));
+            AssertSectionRows(app, [("#6 Try an idea", "octo", false), .. P.HelloRows]);
+            await AssertRefPullRequestAsync(app, 6, N.TopicTitle, "Local branches", "topic", "no-pr");
+            AssertRefusedPostWarnings(app, logMark, 422, "Validation", "Validation Failed");
 
             // Step 3: the existing pull request's button.
             requests = served.GitHub.Requests.Count;
@@ -332,6 +363,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             await app.WaitForAsync(() => form.IsClosed, "the form closed");
             Assert.Equal([N.PullRequestPage(served.GitHub.Port)], OpenedUrls(app));
             Assert.Empty(ApiSince(served, requests));
+            AssertStatus(app, N.Failed(N.Topic), OperationStatusTone.Danger);
 
             // N8, step 4: main's form, its own branch.
             await MenuOfAsync(app, "Local branches", N.Main);
@@ -350,6 +382,8 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.All(pick.Options, option => Assert.Equal(N.Repository, option.Detail));
             Assert.Equal(N.OriginMain, pick.Selected);
             await app.WaitForAsync(() => app.FocusedAutomationId() == "PickFilter", "the Pick's filter focused");
+            Assert.Equal(string.Empty, ((TextBox)app.FindByAutomationId("PickFilter")).Text ?? string.Empty);
+            Assert.Equal(["Cancel", N.PickConfirm], ButtonsOf(app, app.TopDialogView!));
             ShotN(app, N.N08b);
             app.PressKey(Key.Escape);
             await app.WaitForAsync(() => pick.IsClosed, "the Pick closed");
@@ -374,6 +408,8 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             app.MoveMouse(confirm);
             await app.WaitForAsync(() => ToolTip.GetIsOpen(confirm), "Create's tooltip");
             Assert.Equal(N.EnterTitle, ToolTip.GetTip(confirm));
+            var titleBox = (TextBox)app.FindByAutomationId("PullRequestTitle");
+            Assert.Equal((string.Empty, N.TitlePlaceholder), (titleBox.Text ?? string.Empty, titleBox.PlaceholderText));
             Assert.Null(form.Error);
             ShotN(app, N.N08c, keepPointer: true);
             app.TypeInto("PullRequestTitle", N.MainTitle);
@@ -393,6 +429,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.Equal((N.MainTitle, string.Empty, N.Main, N.Topic, false, false), Body(PostSince(served, requests)));
             Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
             AssertForm(app, form, N.Main, null, N.OriginTopic, N.MainTitle, N.NoCommits(N.OriginTopic, N.Main));
+            AssertIdle(app, form);
             AssertStatus(app, N.Failed(N.Main), OperationStatusTone.Danger);
             requests = served.GitHub.Requests.Count;
             app.PressKey(Key.Escape);
@@ -424,6 +461,8 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             app.Click(await app.RefRowAsync("Remotes", "origin", "topic"));
             var menu = await MenuOfAsync(app, "Remotes", "origin", "topic", "no-pr");
             AssertMenu(menu, N.OriginTopicMenu);
+            AssertHighlighted(menu, "Check out origin/topic/no-pr");
+            AssertMenuHeight(app, menu, N.OriginTopicMenuHeight);
             var form = await OpenFormFromMenuAsync(app);
             AssertForm(app, form, N.OriginTopic, null, N.OriginMain, N.TopicTitle);
             Assert.Empty(ApiSince(served, requests));
@@ -433,6 +472,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             requests = served.GitHub.Requests.Count;
             var gitRequests = served.GitHub.GitRequests.Count;
             var logMark = app.LogMark();
+            var operations = OperationMark(app);
             var calls = await app.QuietCallMarkAsync();
             app.Click(app.FindByAutomationId("ConfirmButton"));
             await WaitForEndAsync(app, N.OriginTopic, logMark, OperationOutcome.Succeeded);
@@ -441,8 +481,12 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.Equal(gitRequests, served.GitHub.GitRequests.Count);
             Assert.Equal(["POST create:octo/hello 201", "GET pulls:octo/hello 200 conditional", "GET pulls:octo/hello 304 conditional"], Routes(served, requests));
             Assert.Equal((N.TopicTitle, string.Empty, N.Topic, N.Main, false, false), Body(PostSince(served, requests)));
+            var six = Assert.Single(served.GitHub.PullRequests(N.Repository), pull => pull.Number == N.NewNumber);
+            Assert.Equal((true, N.TopicTitle, string.Empty, "octo", N.Topic, (string?)null, N.Main, false), (six.IsOpen, six.Title, six.Body, six.Author, six.HeadRef, six.HeadRepository, six.BaseRef, six.IsDraft));
+            Assert.Equal([(N.OperationTitle(N.OriginTopic), OperationOutcome.Succeeded)], OperationsSince(app, operations).Select(record => (record.Title, record.Outcome)));
             Assert.Equal((6, 6), (hello.HostingState.ByRef[N.TopicRef].Number, hello.HostingState.ByRef[N.OriginTopicRef].Number));
             AssertStatus(app, N.Created(6, false));
+            Assert.True(hello.OperationStatus.HasOffer);
 
             // Step 4: the drop.
             var source = app.BoundsOf(await app.RefRowAsync("Local branches", N.LocalWork)).Center;
@@ -453,20 +497,25 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             app.ReleaseMouse(target);
             await app.WaitForAsync(() => app.Session.Shell.Menu.IsOpen, "the drop's menu");
             AssertMenu(app.Menu(), N.DropMenu);
+            AssertHighlighted(app.Menu(), "Push local-work to origin/main");
+            AssertMenuHeight(app, app.Menu(), N.DropMenuHeight);
             ShotN(app, N.N05b);
             form = await OpenFormFromMenuAsync(app);
             Assert.False(form.IsReadingBase);
             AssertForm(app, form, N.LocalWork, N.PushedFirstWithUpstream("origin/local-work"), N.OriginMain, N.LocalWorkTitle);
             Assert.True(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
             AssertStatus(app, N.Created(6, false));
+            Assert.True(hello.OperationStatus.HasOffer);
             ShotN(app, N.N05c);
 
             // Step 5: Esc.
             requests = served.GitHub.Requests.Count;
+            operations = OperationMark(app);
             calls = await app.QuietCallMarkAsync();
             app.PressKey(Key.Escape);
             await app.WaitForAsync(() => form.IsClosed, "the form closed");
             Assert.Empty(ApiSince(served, requests));
+            Assert.Empty(OperationsSince(app, operations));
             Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
 
             End(app, data, served);
@@ -491,6 +540,8 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             await app.WaitForAsync(() => hello.LeftPanel.Rows.OfType<PullRequestMessageRow>().Any(row => row.Kind == PullRequestMessageKind.SignIn), "the sign-in row");
             await app.WaitForWatchersQuietAsync();
             Assert.Empty(served.GitHub.Requests);
+            var section = Section(app);
+            var operations = OperationMark(app);
             var storeMark = app.Tokens.Calls.Count;
             var logMark = app.LogMark();
 
@@ -500,7 +551,9 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             app.ClickMenuItem(P.CreatePullRequest);
             var signIn = await app.WaitForDialogAsync<SignInDialogViewModel>();
             await app.WaitForAsync(() => app.FocusedAutomationId() == "SignInToken", "the focus in the token's box");
+            Assert.Equal(string.Empty, ((TextBox)app.FindByAutomationId("SignInToken")).Text ?? string.Empty);
             Assert.IsType<SignInDialogViewModel>(app.Session.Services.DialogHost.Current);
+            Assert.Empty(served.GitHub.Requests);
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is CreatePullRequestDialogViewModel);
             ShotN(app, N.N06a);
 
@@ -512,7 +565,8 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.Equal(PullRequestsState.SignedOut, hello.HostingState.PullRequests);
             Assert.Empty(served.GitHub.Requests);
             Assert.Equal(["probe"], app.Tokens.Calls.Skip(storeMark));
-            Assert.DoesNotContain(app.LogLinesSince(logMark), line => line.Contains("Create pull request for", StringComparison.Ordinal) && line.Contains(" after ", StringComparison.Ordinal));
+            Assert.Empty(OperationsSince(app, operations));
+            Assert.Equal(section, Section(app));
 
             // Step 4: a sign-in goes on to the form.
             var requests = served.GitHub.Requests.Count;
@@ -527,6 +581,8 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             await WaitForHelloAsync(app, logMark);
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle);
             Assert.Equal(["GET user 200", "GET repo:octo/hello 200", "GET pulls:octo/hello 200"], Routes(served, requests));
+            Assert.All(ApiSince(served, requests), request => Assert.True(request.TokenPresent));
+            AssertSectionRows(app, [.. P.HelloRows]);
             Assert.Contains("save github:127.0.0.1:" + served.GitHub.Port.ToString(System.Globalization.CultureInfo.InvariantCulture) + ":octo", app.Tokens.Calls.Skip(storeMark));
             ShotN(app, N.N06b);
             app.PressKey(Key.Escape);
@@ -569,10 +625,10 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.True(PostSince(served, requests).TokenPresent);
             Assert.Equal(AccountState.SignedIn, app.Session.Services.Hosting.Account?.State);
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle, N.RefusedWithPermission);
-            Assert.True(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
+            AssertIdle(app, form);
+            Assert.Same(form, app.Session.Services.DialogHost.Current);
             AssertStatus(app, N.Failed(N.Topic), OperationStatusTone.Danger);
-            Assert.Contains(app.LogLinesSince(logMark), line => line.Contains("GitHub: POST /api/v3/repos/octo/hello/pulls failed: 403", StringComparison.Ordinal));
-            Assert.Contains(app.LogLinesSince(logMark), line => line.Contains("GitHub: creating a pull request on octo/hello failed: Forbidden, Resource not accessible by personal access token", StringComparison.Ordinal));
+            AssertRefusedPostWarnings(app, logMark, 403, "Forbidden", "Resource not accessible by personal access token");
             Assert.DoesNotContain(served.GitHub.PullRequests(N.Repository), pull => pull.Number == 6);
 
             // Step 3: a lost answer counted as created (D316).
@@ -594,7 +650,9 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             Assert.Equal(200, lists[0].Status);
             Assert.Equal((true, 304), (lists[^1].Conditional, lists[^1].Status));
             Assert.DoesNotContain(api, request => request.Status == 401);
-            Assert.Equal("#6 Try an idea", Section(app)[1]);
+            var six = Assert.Single(served.GitHub.PullRequests(N.Repository), pull => pull.Number == N.NewNumber);
+            Assert.Equal((true, N.TopicTitle, string.Empty, "octo", N.Topic, (string?)null, N.Main, false), (six.IsOpen, six.Title, six.Body, six.Author, six.HeadRef, six.HeadRepository, six.BaseRef, six.IsDraft));
+            AssertSectionRows(app, [("#6 Try an idea", "octo", false), .. P.HelloRows]);
             Assert.Equal((6, 6), (hello.HostingState.ByRef[N.TopicRef].Number, hello.HostingState.ByRef[N.OriginTopicRef].Number));
 
             End(app, data, served);
@@ -623,6 +681,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             var form = await OpenFormFromMenuAsync(app);
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle);
             AssertFormPlaces(app, N.CardLeft1920);
+            AssertFormLayout(app);
             app.MoveMouse(rest);
             ShotN(app, N.N10a, keepPointer: true);
             app.PressKey(Key.Escape);
@@ -633,9 +692,15 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             form = await OpenFormFromMenuAsync(app);
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle);
             AssertFormPlaces(app, N.CardLeft1920);
+            AssertFormLayout(app);
             var card = app.FindByAutomationId("CreatePullRequestDialog").GetVisualDescendants().OfType<Border>().First(border => border.Name == "CreatePullRequestDialogCard");
             Assert.Equal(Color.Parse("#F5F6F8"), ((ISolidColorBrush)card.Background!).Color);
-            Assert.Equal(Color.Parse("#5C6572"), ((ISolidColorBrush)((TextBlock)app.FindByAutomationId("PullRequestHeadRepository")).Foreground!).Color);
+            var secondary = card.GetVisualDescendants().OfType<TextBlock>()
+                .Where(block => block.Text is N.From or N.Into || block.Name is "PullRequestHeadRepository" or "PullRequestBaseRepository")
+                .ToList();
+            Assert.Equal(4, secondary.Count);
+            Assert.All(secondary, block => Assert.Equal(Color.Parse("#5C6572"), ((ISolidColorBrush)block.Foreground!).Color));
+            Assert.Same(app.Window.FindResource("VcPrimaryButton"), ((Button)app.FindByAutomationId("ConfirmButton")).Theme);
             app.MoveMouse(rest);
             ShotN(app, N.N10b, keepPointer: true);
             app.PressKey(Key.Escape);
