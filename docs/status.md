@@ -143,8 +143,13 @@ Checks, live trial and review:
   package; their R steps are WP-R's pass, merged at `5cfce9f`, design 18 item 1.)
 - [ ] 16. The opt-in live command against real GitHub (D250), run with the owner's token on the
   sandbox repository.
-- [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
-  tests.
+- [x] 17. An independent review of the code before the gate; every confirmed finding fixed with
+  tests. (Done 2026-10-30: five read-only Opus reviewers found 18 problems on `fdb1986`, six
+  skeptics refuted 3, and the 15 were fixed with tests by four fixers, each reviewed by an agent that
+  did not write it, merged by `e5d09fb` (design 19). The whole runs that followed found expectations
+  the fixes change, test races and waits D237 had missed (design 19 items 7 and 8, D341); the rested
+  run on `7015753` passed 5,891 of 5,895 (4 skipped) in 1 h 12 min 6 s, the lagged list passed in all
+  five commands, and CI's run 41111820880 is green on all five jobs.)
 
 Closing (`CLAUDE.md`, "Closing a phase"):
 
@@ -164,6 +169,13 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
+
+Phase 7a's run for D341 and the create test's fence (`7015753`) is
+[41111820880](https://github.com/RahimPasha/VisualCommit/actions/runs/41111820880): all five jobs
+succeeded. `windows-latest` 32 min 1 s (Test step 29 min 9 s of 55; its keychain step green; "Build
+the opt-in projects" 22 s), `macos-latest` 33 min 23 s (Test step 30 min 58 s; its keychain step
+green), `ubuntu-latest` 7 min 53 s (Test step 6 min 1 s), the container from Ubuntu's packages 7 min
+25 s and the one from Microsoft's installer 7 min 19 s (each container's Secret Service step green).
 
 Phase 7a's run for the two test races and part P's `End` (`1d297a0`) is
 [41079852791](https://github.com/RahimPasha/VisualCommit/actions/runs/41079852791): four jobs
@@ -538,11 +550,16 @@ laptop's load; those fixes are `1d297a0`. The rested run on it (1 h 13 min 34 s)
 60, and CI's Windows job stopped a create test on a race of the test's own (design 19 item 8).
 D341 gives the 106 waits a sweep found D237's 60 s, and the create test waits for the tab's
 avatars before it revokes the token and runs with a prompt handler that refuses; plan.md's risk
-39 asks the owner about the dialog the app shows in that order of events. Next: commit and push
-those changes and read CI; let the laptop rest, with nothing running; then the whole default run
-again (`bash scripts/heavy-run.sh`) and the lagged list (design 0.4); if both pass and CI is green,
-tick step 17. The live run (step 16) waits for the owner's private sandbox, token and two variables
-(design 14.6; "Waiting on the owner"). Each of parts B, P, G and N
+39 asks the owner about the dialog the app shows in that order of events. Those are `745ce9a` and
+`7015753`: the rested run on `7015753` (1 h 12 min 6 s) passed 5,891 of 5,895 (4 skipped), the
+lagged list passed and CI's run 41111820880 is green on all five jobs, so step 17 is done. Next: the
+references for the gate's earlier pictures, made on `master` with git 2.56 in a worktree of their
+own (design 0.7, the phase 6 handoff's "Running the visual gate", step 2) into
+`D:/Projects/Personal/gate7a-reference/`, which needs neither the owner nor the token. Then step 16,
+the live run, in a new session that inherits the owner's private sandbox, token and two variables
+(design 14.6; "Waiting on the owner"), and step 18, the gate, which runs the live command once
+before its pictures and D246's two runs of 7a's real-window checks with the owner present. Each of
+parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
