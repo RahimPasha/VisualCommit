@@ -128,13 +128,15 @@ internal sealed class OperationsHarness : IDisposable
     /// Null gives no broker, as <see cref="OpenAsync(TempRepo)"/>. Added by WP7-remotes.
     /// <paramref name="undoHistories"/> are the app session's undo histories, new ones when null.
     /// <paramref name="hosting"/> is the tabs' hosting session (docs/phase-7a-design.md 4.1), also
-    /// the broker's credential source; null: none, as before.
+    /// the broker's credential source; null: none, as before. <paramref name="gitEnvironment"/> is
+    /// the session's git environment (D220), which the runner applies to every call and the broker
+    /// reads as what git already gets (4.6), as an app session hands them both; null: none.
     /// </summary>
-    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null, UndoHistories? undoHistories = null, IHostingSession? hosting = null)
+    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null, UndoHistories? undoHistories = null, IHostingSession? hosting = null, IReadOnlyDictionary<string, string?>? gitEnvironment = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
         var calls = new GitCallLog();
-        IGitRepository git = await GitRepository.OpenAsync(new GitRunner(GitPath, calls), repo.Path, TestContext.Current.CancellationToken);
+        IGitRepository git = await GitRepository.OpenAsync(new GitRunner(GitPath, calls, environment: gitEnvironment), repo.Path, TestContext.Current.CancellationToken);
         git = wrap?.Invoke(git) ?? git;
         var log = new RecordingLog();
         var host = new DialogHostViewModel();
@@ -142,7 +144,7 @@ internal sealed class OperationsHarness : IDisposable
         var launcher = new FakeFileLauncher();
         var settings = new MainWindowViewModelTests.FakeSettings();
         var dates = new DateDisplay(TimeZoneInfo.Utc);
-        var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log, credentials: hosting);
+        var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log, credentials: hosting, sessionEnvironment: gitEnvironment);
         var services = new TabServices(new NoRepositories(), new NoFolders(), settings, session ?? new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls, undoHistories: undoHistories, hosting: hosting);
         var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
         var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher, calls) { _broker = broker as IDisposable };

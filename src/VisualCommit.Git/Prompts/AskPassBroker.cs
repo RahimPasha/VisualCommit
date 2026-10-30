@@ -23,11 +23,13 @@ namespace VisualCommit.Git.Prompts;
 /// </para>
 /// <para>
 /// A scope with <see cref="CredentialBinding"/>s (D255, docs/phase-7a-design.md 4.6) also makes
-/// the helper git's only credential helper for the bound URLs: two <c>GIT_CONFIG_COUNT</c> pairs
+/// the helper git's only credential helper for the bound URLs: three <c>GIT_CONFIG_COUNT</c> pairs
 /// per URL, an empty <c>credential.&lt;url&gt;.helper</c> that clears the user's helpers for it,
-/// then the helper's credential mode. git's <c>get</c> is answered from
-/// <see cref="IGitCredentialSource"/> without UI, never from a prompt; its <c>erase</c> of a token
-/// this scope handed out marks the account refused in the scope (D273).
+/// then the helper's credential mode, then <c>http.&lt;url&gt;.proactiveAuth</c> = <c>basic</c>, so
+/// that git 2.46 and later ask the helper before their first request and curl never sends an entry
+/// of the user's netrc file for the URL (D340; older git ignores the key). git's <c>get</c> is
+/// answered from <see cref="IGitCredentialSource"/> without UI, never from a prompt; its
+/// <c>erase</c> of a token this scope handed out marks the account refused in the scope (D273).
 /// </para>
 /// </summary>
 public sealed class AskPassBroker : IGitPromptBroker, IDisposable
@@ -50,6 +52,9 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
 
     /// <summary>The oldest git that reads <c>GIT_CONFIG_COUNT</c> (D277).</summary>
     private static readonly GitVersion BindingsVersion = new(2, 31, 0);
+
+    /// <summary>The <c>GIT_CONFIG_COUNT</c> pairs a bound URL takes (4.6, D340).</summary>
+    private const int PairsPerBinding = 3;
 
     private const string ConfigCountVariable = "GIT_CONFIG_COUNT";
     private const string ConfigParametersVariable = "GIT_CONFIG_PARAMETERS";
@@ -258,8 +263,10 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// is removed, so that nothing inherited mixes in). With bindings (4.6), Ask's variables, or
     /// Deny's with the pipe, the token and the scope's id; then, numbered after the inherited count
     /// <c>n</c>, for binding <c>i</c> the pair <c>credential.&lt;url&gt;.helper</c> = empty at
-    /// <c>n+2i</c> and = the helper's credential mode at <c>n+2i+1</c>; <c>GIT_CONFIG_COUNT</c>
-    /// <c>n+2k</c>; <c>GIT_TRACE_REDACT=1</c> (ruling 7); and no <c>GIT_CONFIG_PARAMETERS</c> (D329).
+    /// <c>n+3i</c>, = the helper's credential mode at <c>n+3i+1</c>, and
+    /// <c>http.&lt;url&gt;.proactiveAuth</c> = <c>basic</c> at <c>n+3i+2</c> (D340);
+    /// <c>GIT_CONFIG_COUNT</c> <c>n+3k</c>; <c>GIT_TRACE_REDACT=1</c> (ruling 7); and no
+    /// <c>GIT_CONFIG_PARAMETERS</c> (D329).
     /// </summary>
     private Dictionary<string, string?> EnvironmentFor(string id, PromptMode mode, IReadOnlyList<CredentialBinding> bindings)
     {
@@ -281,15 +288,25 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         for (var i = 0; i < bindings.Count; i++)
         {
             var key = $"credential.{bindings[i].Url}.helper";
-            var reset = (first + (2 * i)).ToString(CultureInfo.InvariantCulture);
-            var ours = (first + (2 * i) + 1).ToString(CultureInfo.InvariantCulture);
+            var reset = (first + (PairsPerBinding * i)).ToString(CultureInfo.InvariantCulture);
+            var ours = (first + (PairsPerBinding * i) + 1).ToString(CultureInfo.InvariantCulture);
+            var proactive = (first + (PairsPerBinding * i) + 2).ToString(CultureInfo.InvariantCulture);
             environment["GIT_CONFIG_KEY_" + reset] = key;
             environment["GIT_CONFIG_VALUE_" + reset] = string.Empty;
             environment["GIT_CONFIG_KEY_" + ours] = key;
             environment["GIT_CONFIG_VALUE_" + ours] = helper;
+
+            // Git 2.46 and later then ask the helper before the first request, which carries its
+            // credential: curl answers a 401 from the user's netrc file only for a request that
+            // has none (D340). When the helper has nothing, git asks for a user name before any
+            // request: through the broker in an Ask scope (no dialog for an account refused in the
+            // scope, D273), a failed call in a Deny one. Older git ignores the key, and so does
+            // git-lfs's own HTTP client, which asks the netrc file in HOME before any helper.
+            environment["GIT_CONFIG_KEY_" + proactive] = $"http.{bindings[i].Url}.proactiveAuth";
+            environment["GIT_CONFIG_VALUE_" + proactive] = "basic";
         }
 
-        environment[ConfigCountVariable] = (first + (2 * bindings.Count)).ToString(CultureInfo.InvariantCulture);
+        environment[ConfigCountVariable] = (first + (PairsPerBinding * bindings.Count)).ToString(CultureInfo.InvariantCulture);
         environment["GIT_TRACE_REDACT"] = "1";
         environment[ConfigParametersVariable] = null;
         return environment;

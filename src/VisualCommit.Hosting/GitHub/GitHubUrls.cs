@@ -214,7 +214,13 @@ internal static partial class GitHubUrls
 
     private static bool HasPassword(string? user) => user is not null && user.Contains(':', StringComparison.Ordinal);
 
-    [GeneratedRegex("^[A-Za-z0-9](?:[A-Za-z0-9-]{0,38})$", RegexOptions.CultureInvariant)]
+    /// <summary>
+    /// An owner GitHub allows: 1 to 39 letters, digits and hyphens, the first not a hyphen, or an
+    /// Enterprise Managed User's login, such a name followed by one underscore and the enterprise's
+    /// short code (<c>mona-cat_octo</c>), all of it within the 39 (GitHub's "Username considerations
+    /// for external authentication").
+    /// </summary>
+    [GeneratedRegex("^(?=.{1,39}$)[A-Za-z0-9][A-Za-z0-9-]*(?:_[A-Za-z0-9]+)?$", RegexOptions.CultureInvariant)]
     private static partial Regex OwnerPattern();
 
     [GeneratedRegex("^[A-Za-z0-9._-]{1,100}$", RegexOptions.CultureInvariant)]

@@ -168,6 +168,32 @@ public sealed class HostingRulesTests
         Assert.Empty(HostingRules.ByRef(refs, new Dictionary<string, HostedRepository>(), list));
     }
 
+    [Fact]
+    public void A_managed_users_fork_is_a_GitHub_remote_and_its_branches_map_their_pull_request()
+    {
+        // An Enterprise Managed User's login ends in _<short code> (6.3): her fork is origin, the
+        // organisation's repository upstream, and her branch's pull request has its badge.
+        RemoteUrl[] configured =
+        [
+            new("origin", "https://github.com/mona-cat_octo/app.git", false),
+            new("upstream", "git@github.com:octo-org/app.git", false),
+        ];
+        var fork = Repository("mona-cat_octo", "app");
+
+        var remotes = HostingRules.Remotes(configured, [], Recognise);
+        var byRef = HostingRules.ByRef(
+            Refs(Local("feature", "origin", "refs/heads/feature"), Remote("origin/feature"), Remote("upstream/main")),
+            remotes,
+            new PullRequestList([Pull(3, "feature", fork)], MoreExist: false));
+
+        Assert.Equal(fork, remotes["origin"]);
+        Assert.Equal(Repository("octo-org", "app"), remotes["upstream"]);
+        Assert.Equal(fork, HostingRules.ListedCandidate(remotes));
+        Assert.Equal(
+            new Dictionary<string, int> { ["refs/heads/feature"] = 3, ["refs/remotes/origin/feature"] = 3 },
+            byRef.ToDictionary(pair => pair.Key, pair => pair.Value.Number));
+    }
+
     private static HostedRepository? Recognise(string url) => GitHubUrls.Recognise(GitHubEndpoints.GitHubCom, url);
 
     private static HostedRepository Repository(string owner, string name) => new(HostingProvider.GitHub, "github.com", owner, name);

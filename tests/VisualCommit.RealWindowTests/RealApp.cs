@@ -164,7 +164,10 @@ public sealed partial class RealApp : IDisposable
         // scripted walk-through (HeadlessTestApp.IsolateFromTheMachine). Since phase 6 each
         // launch has a global configuration and an XDG folder of its own in its data folder, as
         // a scripted session has (docs/phase-6-design.md 17.2, 8.12): what the app writes there
-        // stays with that data folder, and a relaunch on it keeps it.
+        // stays with that data folder, and a relaunch on it keeps it. Since phase 7a a home folder
+        // of its own there too (HOME), so that git's curl never reads this machine's .netrc or
+        // _netrc in the user's profile (docs/phase-7a-design.md 4.2, D340). On Windows .NET's special
+        // folders, which the app's own paths come from, do not go by HOME.
         startInfo.Environment["GIT_CONFIG_NOSYSTEM"] = "1";
         foreach (var (variable, value) in GitIsolation.SessionGitEnvironment(dataDirectory))
         {

@@ -146,10 +146,12 @@ public sealed partial class RepositoryOperations
         /// <summary>
         /// The head's place (12.3 step 3, D313), computed again at each Create from the refs then;
         /// the count of commits GitHub's branch lacks is read here, only when that branch exists
-        /// and is not at the head's tip.
+        /// and is not at the head's tip. None when the refs and remotes now give none (a remote
+        /// branch whose remote is no longer GitHub's): the earlier place is never used again.
         /// </summary>
         public async Task ComputePlaceAsync()
         {
+            _place = null;
             if (operations.Refs is not { } refs)
             {
                 return;

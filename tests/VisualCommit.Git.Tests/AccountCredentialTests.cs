@@ -24,6 +24,12 @@ public class AccountCredentialTests
 {
     private const string Token = "github_pat_FAKE-octocat-1";
 
+    /// <summary>The first git that reads <c>http.&lt;url&gt;.proactiveAuth</c> (its 2.46.0 release notes, D340); older git ignores the scope's key.</summary>
+    private static readonly GitVersion ProactiveAuthVersion = new(2, 46, 0);
+
+    /// <summary>A made-up netrc entry's pair (<see cref="Setup.NetrcHome"/>).</summary>
+    private static readonly NetworkCredential NetrcCredential = new("netrcuser", "netrcpass");
+
     [Fact]
     public async Task A_bound_fetch_takes_the_token_without_a_prompt_and_the_users_helper_gets_nothing()
     {
@@ -177,7 +183,7 @@ public class AccountCredentialTests
         var value = await GitAsync(setup.Repo, environment, ["config", "--get", "vc.inherited"]);
 
         Assert.True(fetch.Succeeded, fetch.StandardError);
-        Assert.Equal("3", scope.Environment["GIT_CONFIG_COUNT"]);
+        Assert.Equal("4", scope.Environment["GIT_CONFIG_COUNT"]);
         Assert.Equal("kept", value.StandardOutput.Trim());
         Assert.Empty(setup.Handler.Prompts);
     }
@@ -262,6 +268,118 @@ public class AccountCredentialTests
     }
 
     [Fact]
+    public async Task A_bound_fetch_keeps_a_netrc_entry_of_another_user_out_from_git_2_46_on()
+    {
+        // The server takes the netrc's pair only. Git 2.46 and later ask the app's helper before the
+        // first request (http.<url>.proactiveAuth, 4.2, D340), so curl never reads the netrc for the
+        // bound URL and the account's token is refused; older git ignores the key, and the netrc's
+        // entry answers the server's first 401 before any helper is asked.
+        await using var setup = await Setup.StartAsync();
+        setup.Server.Credentials = NetrcCredential;
+        using var scope = setup.Broker.Begin("Fetch", "auth", PromptMode.Ask, bindings: [setup.Binding]);
+
+        var fetch = await GitAsync(setup.Repo, Combine(setup.NetrcHome(), scope.Environment), ["fetch", "origin"]);
+
+        Assert.Empty(setup.Handler.Prompts);
+        if (await GitConfigTestSupport.GitVersionAsync() >= ProactiveAuthVersion)
+        {
+            Assert.False(fetch.Succeeded);
+            Assert.Equal(GitFailureKind.AuthenticationFailed, GitFailureClassifier.Classify(fetch.StandardError, fetch.StandardOutput, fetch.ExitCode));
+            Assert.Equal([setup.Account], setup.Source.Gets);
+            Assert.Equal([setup.Account], setup.Source.Refusals);
+            Assert.DoesNotContain(setup.Server.Requests, request => request.UserName == NetrcCredential.UserName);
+        }
+        else
+        {
+            Assert.True(fetch.Succeeded, fetch.StandardError);
+            Assert.Empty(setup.Source.Gets);
+            Assert.Contains(setup.Server.Requests, request => request.Status == 200 && request.UserName == NetrcCredential.UserName);
+        }
+
+        Assert.False(File.Exists(setup.UserStore));
+    }
+
+    [Fact]
+    public async Task A_bound_fetch_beside_a_netrc_entry_sends_the_token_from_its_first_request_from_git_2_46_on()
+    {
+        await using var setup = await Setup.StartAsync();
+        using var scope = setup.Broker.Begin("Fetch", "auth", PromptMode.Ask, bindings: [setup.Binding]);
+
+        var fetch = await GitAsync(setup.Repo, Combine(setup.NetrcHome(), scope.Environment), ["fetch", "origin"]);
+
+        Assert.True(fetch.Succeeded, fetch.StandardError);
+        Assert.Empty(setup.Handler.Prompts);
+        Assert.Equal([setup.Account], setup.Source.Gets);
+        Assert.NotEmpty(setup.Server.Requests);
+        if (await GitConfigTestSupport.GitVersionAsync() >= ProactiveAuthVersion)
+        {
+            // No request without the token, none refused, so none for the netrc to answer.
+            Assert.All(setup.Server.Requests, request => Assert.Equal((200, AskPassProtocol.CredentialUserName), (request.Status, request.UserName)));
+        }
+        else
+        {
+            // The server's 401s come first (the netrc's pair is refused among them), then the token.
+            Assert.Contains(setup.Server.Requests, request => request.Status == 401);
+            Assert.Contains(setup.Server.Requests, request => request.Status == 200 && request.UserName == AskPassProtocol.CredentialUserName);
+        }
+
+        Assert.False(File.Exists(setup.UserStore));
+    }
+
+    [Fact]
+    public async Task When_the_helper_has_nothing_for_a_bound_url_git_asks_before_any_request_from_git_2_46_on()
+    {
+        // A public server and no token (refused earlier, unread, signed out meanwhile): git 2.46 and
+        // later ask for a user name before their first request (D340), which an Ask scope hands to
+        // the handler with the binding's account and a Deny scope refuses; older git fetches
+        // anonymously. The netrc's entry answers in neither case.
+        await using var setup = await Setup.StartAsync();
+        setup.Server.RequireAuth = false;
+        setup.Server.Credentials = NetrcCredential;
+        setup.Source.Token = null;
+        var proactive = await GitConfigTestSupport.GitVersionAsync() >= ProactiveAuthVersion;
+        var netrc = setup.NetrcHome();
+        using (var ask = setup.Broker.Begin("Fetch", "auth", PromptMode.Ask, bindings: [setup.Binding]))
+        {
+            var fetch = await GitAsync(setup.Repo, Combine(netrc, ask.Environment), ["fetch", "origin"]);
+
+            if (proactive)
+            {
+                Assert.False(fetch.Succeeded);
+                var prompt = Assert.Single(setup.Handler.Prompts);
+                Assert.Equal((GitPromptKind.Username, setup.Account), (prompt.Kind, prompt.Account));
+                Assert.Empty(setup.Server.Requests);
+            }
+            else
+            {
+                Assert.True(fetch.Succeeded, fetch.StandardError);
+                Assert.Empty(setup.Handler.Prompts);
+            }
+        }
+
+        var requests = setup.Server.Requests.Count;
+        using var deny = setup.Broker.Begin("Auto-fetch", "auth", PromptMode.Deny, bindings: [setup.Binding]);
+        var denied = await GitAsync(setup.Repo, Combine(netrc, deny.Environment), ["fetch", "origin"]);
+
+        Assert.Equal(proactive ? 1 : 0, setup.Handler.Prompts.Count);
+        if (proactive)
+        {
+            Assert.False(denied.Succeeded);
+            Assert.Contains("could not read Username", denied.StandardError, StringComparison.Ordinal);
+            Assert.Equal(requests, setup.Server.Requests.Count);
+            Assert.Equal([setup.Account, setup.Account], setup.Source.Gets);
+        }
+        else
+        {
+            Assert.True(denied.Succeeded, denied.StandardError);
+            Assert.Empty(setup.Source.Gets);
+        }
+
+        Assert.DoesNotContain(setup.Server.Requests, request => request.UserName == NetrcCredential.UserName);
+        Assert.False(File.Exists(setup.UserStore));
+    }
+
+    [Fact]
     public async Task A_stale_authorization_header_makes_git_erase_the_token_once_and_the_users_helper_gets_nothing()
     {
         // actions/checkout leaves such a header in .git/config (4.2, D330): git's request carries it
@@ -340,6 +458,21 @@ public class AccountCredentialTests
                 Assert.DoesNotContain(Token, File.ReadAllText(UserStore), StringComparison.Ordinal);
                 Assert.DoesNotContain("x-access-token", File.ReadAllText(UserStore), StringComparison.Ordinal);
             }
+        }
+
+        /// <summary>
+        /// Writes a netrc entry for 127.0.0.1 with <see cref="NetrcCredential"/> into the repo's
+        /// home folder, as <c>.netrc</c> and as <c>_netrc</c> (curl looks for both on Windows), and
+        /// returns the variables that make it the git call's <c>HOME</c> and <c>USERPROFILE</c>
+        /// (curl's netrc folder, in that order), with no <c>NETRC</c> naming another file.
+        /// </summary>
+        public Dictionary<string, string?> NetrcHome()
+        {
+            var home = Repo.Environment["HOME"]!;
+            var entry = $"machine 127.0.0.1 login {NetrcCredential.UserName} password {NetrcCredential.Password}\n";
+            File.WriteAllText(Path.Combine(home, ".netrc"), entry);
+            File.WriteAllText(Path.Combine(home, "_netrc"), entry);
+            return new Dictionary<string, string?> { ["HOME"] = home, ["USERPROFILE"] = home, ["NETRC"] = null };
         }
 
         /// <summary><c>git config --list --show-origin</c> in <paramref name="folder"/>: the repository's and the global file's keys.</summary>

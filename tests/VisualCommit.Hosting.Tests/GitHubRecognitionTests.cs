@@ -34,6 +34,10 @@ public sealed class GitHubRecognitionTests
     [InlineData("https://github.com/a-b-c/my.repo_name-1", "a-b-c", "my.repo_name-1")]
     [InlineData("https://github.com/octo/hello.git.git", "octo", "hello.git")]
     [InlineData("https://github.com/o/.hidden", "o", ".hidden")]
+    [InlineData("https://github.com/octo_cat/hello", "octo_cat", "hello")]
+    [InlineData("https://github.com/mona-cat_octo/app.git", "mona-cat_octo", "app")]
+    [InlineData("git@github.com:mona-cat_octo/app.git", "mona-cat_octo", "app")]
+    [InlineData("https://github.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_octo/app", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_octo", "app")]
     public void Github_com_recognises_its_forms_with_the_owner_and_name_as_written(string url, string owner, string name)
     {
         var repository = GitHubUrls.Recognise(GitHubEndpoints.GitHubCom, url);
@@ -61,7 +65,11 @@ public sealed class GitHubRecognitionTests
     [InlineData("https://github.com/octo/hel%6Co")]
     [InlineData("https://github.com/octo/hello/.git")]
     [InlineData("https://github.com/-octo/hello")]
-    [InlineData("https://github.com/octo_cat/hello")]
+    [InlineData("https://github.com/_octo/hello")]
+    [InlineData("https://github.com/octo_/hello")]
+    [InlineData("https://github.com/a_b_c/hello")]
+    [InlineData("https://github.com/mona-cat_-octo/hello")]
+    [InlineData("https://github.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa_octo/hello")]
     [InlineData("https://github.com/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/hello")]
     [InlineData("https://github.com/octo/.")]
     [InlineData("https://github.com/octo/..")]

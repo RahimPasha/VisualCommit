@@ -109,6 +109,14 @@ public static partial class Phase7aExpectations
         /// <summary>4.6's line of the clone's prompt scope when git's <c>get</c> is answered from the account.</summary>
         public static string AnsweredFromTheAccount(int port) => $"hello: Clone: git's credential get for {Host(port)} answered from the account.";
 
+        /// <summary>
+        /// The first git that sends the account's token with its first request to a bound URL
+        /// (<c>http.&lt;url&gt;.proactiveAuth</c>, 4.6, D340): from it on B6's clone starts with a
+        /// request answered 200; older git's starts with one without credentials, which the private
+        /// repository refuses (2.2).
+        /// </summary>
+        public static readonly Core.Git.GitVersion ProactiveAuthVersion = new(2, 46, 0);
+
         /// <summary>D322's line once hello's pull requests are listed.</summary>
         public const string HelloListed = "hello: listed 4 open pull requests of octo/hello";
 
