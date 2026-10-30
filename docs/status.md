@@ -429,13 +429,15 @@ review inspected part G's pictures and the part P and A9 pictures it changes. CI
 failed two tests on macOS alone (Notes); P13's failure came once on the laptop too, in WP-V's build.
 Both were races in the tests, fixed at `33313ef` (design 17 item 11). CI's run on WP-V's merge
 also failed G1's new pixel check on macOS; its fix is merged at `5219eae` (design 17 item 12; part
-G 4 of 4 in Release, the graph's badge and avatar tests 15 of 15). Next: read CI on it, and run 11.6's
-checks on it with no agent running: the lagged
-list; phase 1's checks, phase 3's walk-through, `Phase5` and `Phase6Look` through
-`bash scripts/heavy-run.sh`, compared by region with `master`'s references; part G; part P, part A's
-check 9 and part B's B6 (`--filter-method "*Check_B3_B6_B7*"`) and B8 again (design 17 items 3, 6 and
-10); inspect every picture; read CI on WP-V's merge and on the fix; tick steps 12 and 14; then
-WP-N. Each of parts B, P, G and N
+G 4 of 4 in Release, the graph's badge and avatar tests 15 of 15). 11.6's runs on it (`adc2a3a`, one
+after another under `bash scripts/heavy-run.sh`, no agent running) all passed: the lagged list (25,
+66, 21, 176 and 29 tests), phase 1's checks (18), phase 3's walk-through (82), `Phase5` (99),
+`Phase6Look` (19) and `VisualCommit.VisualTests.Phase7a` whole (176, parts A, B, G and P). Against
+WP-B's whole run 777 pictures are the same files and 43 changed; against WP-P's merge part P's pictures
+changed only in the graph's label column (and the author line in `p09a` and `p13a`), and `p12a` and
+A9's three are the same files. Their inspection is running (workflow `wqhcqjjrr`), and WP-N is being
+built meanwhile (workflow `wfgi3aatg`, `wip/p7a-create`). Next: read CI on `5219eae` (run
+41006619244); the inspection's verdicts; tick steps 12 and 14; then WP-N's merge (12.9). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
