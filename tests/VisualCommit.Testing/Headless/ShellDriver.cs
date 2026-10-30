@@ -45,9 +45,10 @@ public sealed partial class ShellDriver : IDisposable
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(15);
 
     /// <summary>
-    /// The last press in the window, by anyone: where it was, in window coordinates, and its
-    /// input-clock stamp (<see cref="RecordPress"/>). <see cref="DoubleClick(Point)"/> waits out
-    /// the double-tap time after it when it lay at the double-click's spot.
+    /// The last press in the window, by anyone: where it was, as the point the window's input got
+    /// (the one given to <c>MouseDown</c>), and its input-clock stamp (<see cref="RecordPress"/>).
+    /// <see cref="DoubleClick(Point)"/> waits out the double-tap time after it when it lay at the
+    /// double-click's spot.
     /// </summary>
     private (Point Position, ulong Timestamp)? _lastPress;
 
@@ -389,8 +390,20 @@ public sealed partial class ShellDriver : IDisposable
         Settle();
     }
 
-    /// <summary>Moves the mouse to the centre of a control and double-clicks the left button.</summary>
-    public void DoubleClick(Visual visual) => DoubleClick(BoundsOf(visual).Center);
+    /// <summary>
+    /// Moves the mouse to the centre of a control and double-clicks the left button. The centre is
+    /// read again after the wait of <see cref="DoubleClick(Point)"/>, which runs the dispatcher's
+    /// jobs for up to the double-tap time and so can move the control (a list still arriving).
+    /// </summary>
+    public void DoubleClick(Visual visual)
+    {
+        WaitOutDoubleTapTime(_lastPress, BoundsOf(visual).Center);
+
+        // A new centre needs no wait of its own: inside the last press's rectangle the clock has
+        // passed its time now, and outside it Avalonia counts from 1 again. DoubleClick(Point)
+        // looks once more all the same, and returns from that look at once.
+        DoubleClick(BoundsOf(visual).Center);
+    }
 
     /// <summary>
     /// Moves the mouse to a window position and double-clicks the left button: two presses at one
@@ -476,10 +489,15 @@ public sealed partial class ShellDriver : IDisposable
         }
     }
 
-    /// <summary>Keeps the spot and stamp of every press in the window, and the click count of <see cref="DoubleClick(Point)"/>'s own.</summary>
+    /// <summary>
+    /// Keeps the spot and stamp of every press in the window, and the click count of
+    /// <see cref="DoubleClick(Point)"/>'s own. The spot is the event's position relative to no
+    /// control, which is the point the window's input got unchanged: the one Avalonia's mouse
+    /// draws its double-tap rectangle around, whatever the root visual lays the window out at.
+    /// </summary>
     private void RecordPress(object? sender, PointerPressedEventArgs e)
     {
-        _lastPress = (e.GetPosition(Window), e.Timestamp);
+        _lastPress = (e.GetPosition(null), e.Timestamp);
         _doubleClickPresses?.Add((e.ClickCount, e.Timestamp));
     }
 
