@@ -4732,3 +4732,33 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
    nothing reads would prove nothing. Builders' briefs say so from WP-V on. Also latent: a click in
    the conflict resolver at the spot that opened it, within 500 ms, is swallowed by its double-click
    guard (`ConflictResolverView.axaml.cs:284-286`). No test makes such a click.
+10. **WP-V, merged at `8810136`** (11.5's four commits, the rulings' waits `f8c438c`, part G's checks
+    `7d85ed6`, and the review's fixes `9b28c54`, `a744bcf` and `77aa2d4`: one major, six minor, two
+    ruled here). The builder's readings, which the lead keeps:
+    - A tab tells its hosting the authors once, when its loading graph is whole or reaches 2,000 rows,
+      not at every `Changed` before (which would spend WP-S's lookups on sets about to change), and
+      never the empty set before any: a placeholder graph or a history no GitHub branch reaches tells
+      it nothing. The review found the loading graph's path untested (major); `RepositoryAvatarsTests`
+      now gives the state before the graph on a pumped UI thread and asserts the one send by
+      `OnFollowedGraphChanged` (a mutation that drops the handler fails both cases).
+    - `ShowsAvatarFor` is true when the control has applied an image for the address, whether or not
+      the Author column shows (11.4's "after decoding"); with the column hidden only the pixels tell
+      that none is drawn (`GraphAvatarTests`' hidden-column case). A change back to `None` raises
+      `AvatarsApplied(0)` and writes the line with 0 (ruling 42), and a tab made active with other
+      avatars raises it again (ruling 43).
+    - A row without an image is proved in the pictures by its 16×16 box holding no pixel within ±24
+      of octo's or ada's colour and the 4×4 block at its centre not all white (a 6-px white square
+      fills it, a glyph's stroke does not: in `g06a` the centre pixel of row 5 is ada's name's "A");
+      an image row's block is all white. `g05b` equal to `g05a` is asserted pixel for pixel on the two
+      captures (the review found the files the same by SHA-256 too).
+    - The 7a project's `*.G.cs` files are no generated code (`.editorconfig`, as phase 6's), so the
+      analyzers run on them. B6 runs as `--filter-method "*Check_B3_B6_B7*"`.
+    - The builder's confirmations: the avatars' line follows the avatars, not the list, so it comes in
+      the loading and failed states once A3 and the commits page answer (17 item 3); and it is not
+      written when a run applies nothing (ruling 39; G7 asserts it).
+    **The lead's rulings.** Part P's loading and failed pictures (`p03a`, `p11b`, `p04a`, `p04b`) keep
+    their state waits (rulings 29 and 34): the avatars' line can come during them, but at 1100×700 the
+    Author column is hidden and none of them shows the details panel of an octo or ada commit, so no
+    pixel of theirs depends on it. `p12a`, listed among part P's pictures that gain badges, shows its
+    open branch menu over the label column, so it does not change; the inspection at the merge
+    records it.
