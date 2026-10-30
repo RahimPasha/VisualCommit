@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The opt-in live command of phase 7a (D250, D260): the whole app in Avalonia's headless mode
+       against real GitHub, with the owner's fine-grained token for one sandbox repository. It signs
+       in through the "Add GitHub account" dialog, finds the sandbox in the repository browser,
+       clones it over HTTPS through the app's own credential helper, lists its pull requests,
+       pushes a branch visualcommit-live/<UTC time> with one commit and opens a draft pull request
+       through the form, reads it back, then closes it and deletes the branch. The token and the
+       sandbox come from the Windows user variables VISUALCOMMIT_LIVE_GITHUB_TOKEN and
+       VISUALCOMMIT_LIVE_GITHUB_REPO (owner/name); without them every test fails at once.
+       Windows-only and opt-in: NOT in VisualCommit.slnx, so "dotnet build" and "dotnet test" at
+       the repo root never touch it; CI's Windows job builds it and never runs it (D337). Run it with the live command in CLAUDE.md's
+       Commands, at a gate before its pictures and on the counted round (ruling 26, D335): about
+       two minutes with its build (CLAUDE.md has the measured time). No screenshots; no keychain
+       (the token stays in memory);
+       its findings in artifacts/live/github/run.txt, never with the token. Its class
+       LiveSafetyTests proves the token's search and the request log offline, with a made-up token,
+       an in-process handler and no network. -->
+
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Hosting\VisualCommit.Hosting.csproj" />
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <AssemblyMetadata Include="RepoRoot" Value="$(RepoRoot)" />
+  </ItemGroup>
+</Project>
