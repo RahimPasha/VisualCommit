@@ -4807,3 +4807,52 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
     the label's middle rows to its edges and holds each text's ink to its glyphs' outlines. The
     builder's audit found no other text-ink read in parts A, B, G and P: parts A, B and P read no
     pixel, and part G's image and colour rules read bitmap pixels or rely on the theme's colours.
+13. **WP-N, merged at `93e3410`** (12.8's four commits `cde34f7`, `663366f`, `be3652e`, `3f541d5`; part
+    N's checks `3cd2718`, `587ca0e`, `951feb6`, `e808454`, `1774a03`; the review's fixes `942dd2a`,
+    `5fec99a`; workflow `wfgi3aatg`: a builder, a second builder that asserted what the first had left
+    out, a reviewer that built none of it, and a fixer for its two major and six minor findings). The
+    report's "Part N as built" records what changed in the checks.
+    - **The builders' readings** (nothing outside the package changed). Ruling 59:
+      `ICreatePullRequestActions` gains `CanCancelCreate`, `CanCancelCreateChanged` and `CancelCreate()`,
+      and the form's `CancelButton` binds its own `CancelFormCommand`: it closes the form when idle, and
+      while creating it is enabled only inside the push's cancel window, cancelling through
+      `RunOptions.Cancellation`; a create without a push offers no Cancel. `PullRequestEnd` gains `Branch`,
+      GitHub's name of the branch (`SameBranch`, the POST's base). A create that pushes starts with the
+      push's running text, so the status bar never shows `Creating pull request…` before the push. A
+      drop's given base skips `StartAsync`, so Into never reads `Reading GitHub…` (N5). `SameBranch`
+      stays on the error line while the base is the head's own branch, and Create's tooltip is the same
+      text (ruling 49 left it open). The card measures 386 high (12.4's "about 415").
+    - **Log lines (ruling 53):** Info `{repo}: Create pull request for {head}: into {owner/name}
+      {branch}, draft yes|no, push to {target} first` (or `no push`) and `… created #{n} in
+      {owner/name}.`; Warning `{repo}: Create pull request for {head}: the request to create it failed:
+      {Kind}, {Message} (request {id})`, worded so that it stays true when D316's read then finds the
+      pull request; three Info lines for a create not started (no GitHub remote, no branch GitHub can
+      hold, a base that is no branch on GitHub). Neither the title nor the description is logged.
+    - **The review's major findings, fixed.** (1) After a failed create the head's note was the one
+      computed before the push: a create that pushed `local-work` and then met a 403 still said `Not on
+      GitHub yet: …`. `CreateAsync` now computes the place again after every outcome but a success (the
+      queue has applied the operation's refs refresh by then), so 12.4's "the head note read again"
+      holds after a failure and after a cancel, and the next Create does not push again. (2) Three 12.6
+      rows had no test. `CreatePullRequestOperationTests` (13 cases) now reaches a rejected push (the
+      bare repository's branch moved to a commit that is no ancestor, by `commit-tree` and `update-ref`)
+      and a declined one (a `pre-receive` hook that exits 1) through real git state, and `GitHubSaid`
+      through "already exists" not listed. Those tests showed that "git's first line" was `Enumerating
+      objects: 4, done.`: the pack lines have no percentage, so the progress filter keeps them. It is now
+      the first line of git's cleaned output after the pack lines and `To {url}` (`PushReportLine`): a
+      hook's message as `remote: …`, a silent hook's `! [remote rejected] … (pre-receive hook declined)`.
+    - **The minor findings, fixed:** N8 step 6 clicks the Pick's row (`PickAsync`); "one operation" is
+      counted in N4 and N9; `AssertNewFormAsync` checks "the form as N1's" (focus and caret, the
+      description, Draft, the buttons) in N1, N2, N5, N6 and N10; N4 step 1 asserts #6's head and base
+      and the section's rows; N1 asserts the sign-in again after the screen closes; N9 waits for
+      `listed 5`; Ctrl+A is `app.CommandModifier`'s; the fork case's undo entry is `Assert.Single`; the
+      `owner:branch` case creates from a local `idea` into `acme:main` (from `octo:main` GitHub would
+      answer "No commits between"); the SSO text names the fake's organisation.
+    - **Tests' own facts.** 12.7's `topic` case is named `next`: git cannot hold `refs/heads/topic`
+      beside `topic/no-pr` (a directory and a file of one name). The fork case asserts first that the
+      fake refuses octo's fine-grained token across owners (`ForkTokenRefused`), then signs in with
+      `OctoClassicToken`.
+    - **The lead's rulings.** The Pick's long item in `n08b` shows no detail: phase 6's row (its design
+      7.7) cuts the detail, not the text, so the expected result changes and the check keeps the
+      detail of all five items through the dialog. The "any other 422" arm of the create's `Describe`
+      stays untested: the fake answers the form no 422 beyond the four 12.6 names, a new fault kind
+      would change WP-F's fake for one line of a `switch`, and `GitHubSaid`'s words are tested.

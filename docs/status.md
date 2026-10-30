@@ -451,12 +451,15 @@ were given, with nothing left for a verifier: part G's ten against rows G1 to G7
 pictures against part G's entry in "Changes to expected results" (`p12a` unchanged, its menu over the
 label column), and the 43 earlier pictures that differ from WP-B's run, each a temporary folder's name,
 a caret, a progress bar's position or percentage, or an anti-aliased edge (Notes). CI on `5219eae` is
-green on all five jobs. Steps 12 and 14 are ticked. WP-N is being built (workflow `wfgi3aatg`,
-`wip/p7a-create`). Next: at its end, read its reports and diff, merge it with `--no-ff`, and run
-12.9's checks with no agent running: the lagged list; phase 3's walk-through through
-`bash scripts/heavy-run.sh`, its status-bar pictures compared by region with the last full run's
-(ruling 60); part N; inspect the pictures; read CI; tick step 13; then wave 3 (WP-R on this machine,
-WP-LIVE with the owner's sandbox). Each of parts B, P, G and N
+green on all five jobs. Steps 12 and 14 are ticked. WP-N is merged at `93e3410` (design 17 item 13:
+built by two builders, reviewed by an agent that built none of it, two major and six minor findings
+fixed, two ruled on; the report's "Part N as built" records the checks' changes), and CI's run
+41023837694 started on it. 12.9's runs are under way on `93e3410`, one after another under
+`bash scripts/heavy-run.sh`, no agent running: the lagged list, phase 3's walk-through and the 7a
+project whole. Next: compare phase 3's status-bar pictures by region with WP-V's merge run's
+(`D:/Projects/Personal/phase7a-work/wpv-merge-pictures`, ruling 60) and the 7a project's with it,
+inspect part N's 20 pictures and every earlier one that changed, read CI, tick step 13, remove the
+worktree; then wave 3 (WP-R on this machine, WP-LIVE with the owner's sandbox). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
