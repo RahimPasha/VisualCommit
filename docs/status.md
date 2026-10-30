@@ -124,7 +124,9 @@ App:
   `b361388`, the lead's follow-ups `e40ddc8`; part B's ten pictures inspected (design 17 item 5); the
   whole run's earlier pictures unchanged but for what varies by nature; CI green on `e40ddc8`.)
 - [ ] 12. The left panel's "Pull requests" section with its menu (D251), the badge on branches,
-  open in browser.
+  open in browser. (The left panel's half done 2026-10-30: WP-P merged at `1958755`, part P's 24
+  pictures inspected, the harness's double-click fix at `ccd1ebe`, the lagged list on it passed; the
+  badge is WP-V's.)
 - [ ] 13. "Create pull request" in the branch menus (`ForLocalBranch`, `ForRemoteBranch`) and the
   drop menu (`ForDrop`), and its form.
 - [ ] 14. Author avatars from GitHub (D252).
@@ -157,6 +159,18 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
+
+Phase 7a's run for the harness's double-click fix (`ccd1ebe`) is
+[40982132445](https://github.com/RahimPasha/VisualCommit/actions/runs/40982132445): `windows-latest`
+(37 min 12 s; its Test step 34 min 16 s of 55, 5,786 of 5,790 passed and 4 skipped; its keychain
+step green), `ubuntu-latest` (7 min 25 s; Test step 5 min 32 s, 5,784 of 5,787 passed and 3 skipped)
+and the two "bare ubuntu container" jobs (7 min 5 s and 5 min 35 s; Test steps 4 min 56 s and 4 min
+6 s; their Secret Service steps green) succeeded, with the double-click test passing. `macos-latest`
+(21 min 46 s; Test step 20 min 52 s) failed two tests that passed on every other job and on macOS
+in the runs before; 5,782 of 5,787 passed and 3 skipped. They are part P's
+`Check_P13_P6_checkout_and_a_forks_tab` (step 2's "no request since the mark" saw tool's list
+request, `pulls:acme/tool`) and `KeyRouterTests.Every_key_declines_during_a_branch_drag` (Ctrl+Shift+E
+"never arrived" at the focused `ChangedFile` button). Both are being investigated (Notes).
 
 Phase 7a's run for WP-P's merge (`1958755`) is
 [40965836423](https://github.com/RahimPasha/VisualCommit/actions/runs/40965836423): all five jobs
@@ -376,10 +390,16 @@ ticked. Part G's checks are written, reviewed and ruled on (rulings 35 to 44; de
 WP-P is merged at `1958755` (design 17 item 7): 10.8's classes, part P's checks and part A's check 9
 pass, and their 24 pictures are inspected and pass; part N's checks are written, reviewed and ruled on
 (rulings 45 to 61; design 17 item 8). CI's run on `1958755` failed one test on all five jobs, a
-double-click the headless harness turned into a triple click (Notes). Next: the harness's fix (being
-built on `wip/p7a-dblclick`, then reviewed), merged and pushed, CI read; then the lagged list on it
-under `bash scripts/heavy-run.sh` with no agent running; then tick step 12's left-panel half and
-start WP-V (part G's checks are committed). Each of parts B, P, G and N
+double-click the headless harness turned into a triple click (Notes); the harness's fix is merged at
+`ccd1ebe` (design 17 item 9), the lagged list passed on it, and step 12's left-panel half is done. The
+lead's icon commit for WP-V is `fb43def` (design 11.1). WP-V is being built on `wip/p7a-graph` in
+`D:/Projects/Personal/vc-wt/p7a-graph` (builders, then an independent reviewer and a fixer). CI's
+run on `ccd1ebe` failed two tests on macOS alone (Notes), which are being investigated meanwhile;
+their fix is merged, pushed and read on CI first. Next: at WP-V's end, read its reports and diff, merge it with `--no-ff`, and run 11.6's checks with no
+agent running: the lagged list; phase 1's checks, phase 3's walk-through, `Phase5` and `Phase6Look`
+through `bash scripts/heavy-run.sh`, compared by region with `master`'s references; part G; part P,
+part A's check 9 and part B's B6 and B8 again (design 17 items 3 and 6); inspect the pictures; then
+WP-N. Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
@@ -611,8 +631,18 @@ every commit.
   500 ms; the laptop mostly not (it failed warm in Release in 2 of 18 runs alone). Found by four
   investigators and a judge (task `wt75y84uy`), reproduced on Windows with logged click counts. A user
   cannot reach it. The fix: `ShellDriver.DoubleClick` waits out the double-tap time after a press at
-  the same spot and fails at once when its presses are not counted 1 and 2, with a regression test in
-  `ShellDriverTests` (being built on `wip/p7a-dblclick`).
+  the same spot and fails at once when its presses are not counted 1 and 2, with three tests in
+  `ShellDriverTests`; built on `wip/p7a-dblclick`, reviewed by an agent that did not build it (five
+  minor findings) and merged at `ccd1ebe` (design 17 item 9, with the lead's ruling that `Click` and
+  `RightClick` stay as they are). On the merge `ShellDriverTests` passed 11 of 11 and
+  `LeftPanelPullRequestsViewTests` 5 of 5 in Release, and the lagged list's five commands passed
+  (25, 66, 21, 147 and 29 tests; `VisualCommit.VisualTests.Phase7a` has grown from 95 to 147 tests
+  since WP-B's merge).
+- **macOS on `ccd1ebe`: two failures new to CI** (run 40982132445). They are part P's P13: tool's
+  list request came after hello's step 2 mark, and the two-tab start waits for hello's list only. The
+  other is `KeyRouterTests`' branch drag: a key never reached the element that had the focus when the
+  test read it. Each passed on the other four jobs and in every earlier macOS run. Investigators and
+  a judge are on both while WP-V is built; a fix is merged before WP-V's merge runs.
 - **macOS's failed refusal test is a product race on macOS and Linux** (CI's run on `8b02805`): .NET
   backs every pipe instance of one name with one listening Unix socket and closes it with the
   last instance (dotnet/runtime's `NamedPipeServerStream.Unix.cs`, `SharedServer.Dispose`, read by

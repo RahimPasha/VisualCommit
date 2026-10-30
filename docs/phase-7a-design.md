@@ -4706,3 +4706,29 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
    ref's name, `origin/topic/no-pr` (48). 12.5 step 4 keeps its own refresh, so two `listed` lines
    follow a create, and 13.4 N step 4 waits for both before its compare (51). At WP-N's merge the
    status-bar pictures are compared with the last full run's, as ruling 19 (60).
+9. **The headless harness's double-click, merged at `ccd1ebe`** (CI's run 40965836423 on WP-P's merge
+   failed `LeftPanelPullRequestsViewTests`' double-click on pull request #5 on all five jobs; status
+   Notes). Avalonia 12.1.3's `MouseDevice` counts a press on from the last one when it lies within the
+   double-tap size (4 by 4 pixels) around it and the double-tap time (500 ms, by the window's input
+   clock) after it, whatever control either went to, and `Gestures` raises `DoubleTapped` only on an even
+   press whose control is the last odd press's. #5's row had taken the clicked sign-in row's place, so
+   on a fast machine the double-click's presses were counted 2 and 3. `ShellDriver` now records every
+   press in the window (a tunnel handler that sees handled presses too). `DoubleClick` waits, running
+   the dispatcher, until the clock stands more than the double-tap time past a press within that size
+   of its spot. `DoubleClick(Visual)` reads the control's centre again after that wait, and
+   `DoubleClick` throws when its presses are not counted 1 and 2. `HeadlessInputClock.Read` throws
+   while the clock is paused, where the wait would never end. Three `ShellDriverTests` pin the wait,
+   the rectangle's corner and the point just outside it; the regression test failed before the fix
+   with the counts [1, 2, 3]. Built, reviewed by an agent that did not build it (five minor findings:
+   three fixed in code, the docs one in `architecture.md` and plan.md's risk 22, the fifth ruled
+   here). Of all the tests' double-clicks, only phase 3's check 32 step 4 also waited on the laptop
+   (249 ms after `OpenMenu`'s right-click at its spot; its pictures are the same files). Check 9 step 7
+   and W8 step 5 come about a second after a press at their spot, so on faster machines they may wait.
+   **The lead's ruling on `Click` and `RightClick`**, which have the same trap: they stay as they are.
+   Two presses at one spot within 500 ms are a double-click for a user too, so these methods do what
+   the window would do. The builder's scan of the tests found no pair of presses that reaches a
+   double-tap handler this way. A throw would break the tests whose back-to-back clicks are counted 2
+   and 3 on purpose (`ShellDriverPhase3Tests`' modifiers, the graph's ctrl-clicks), and a warning that
+   nothing reads would prove nothing. Builders' briefs say so from WP-V on. Also latent: a click in
+   the conflict resolver at the spot that opened it, within 500 ms, is swallowed by its double-click
+   guard (`ConflictResolverView.axaml.cs:284-286`). No test makes such a click.
