@@ -83,6 +83,16 @@ public sealed partial class DashboardBulkViewModel : ObservableObject, IStatusBa
     /// <summary>The rows in line of the running run.</summary>
     public int Waiting => Current is { IsRunning: true } run ? run.InLine : 0;
 
+    /// <summary>A dashboard's bulk runs make no offer (docs/phase-7a-design.md 12.2): its rows keep their compact texts.</summary>
+    public string? OfferText => null;
+
+    public bool HasOffer => false;
+
+    public ICommand OfferCommand => NoOffer;
+
+    /// <summary>The offer's command of every dashboard: it never runs.</summary>
+    private static readonly ICommand NoOffer = new RelayCommand(() => { }, () => false);
+
     // The header's run part (2.5).
 
     /// <summary>The header's <c>DashboardBulkText</c>: the run's text (4.9), null before the first run.</summary>

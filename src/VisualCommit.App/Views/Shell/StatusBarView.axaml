@@ -64,6 +64,15 @@
                    TextTrimming="CharacterEllipsis"
                    Margin="16,0,0,0" VerticalAlignment="Center"
                    AutomationProperties.AutomationId="OperationStatus" />
+        <!-- The offer beside a success (D317, docs/phase-7a-design.md 12.2): hidden, it takes no room. -->
+        <Button Name="OperationOfferButton" Theme="{StaticResource VcFlatButton}"
+                IsVisible="{Binding ActiveTab.OperationStatus.HasOffer}"
+                Command="{Binding ActiveTab.OperationStatus.OfferCommand}"
+                CornerRadius="0" Margin="6,0,0,0"
+                AutomationProperties.AutomationId="OperationOfferButton"
+                AutomationProperties.Name="{Binding ActiveTab.OperationStatus.OfferText}">
+          <TextBlock Text="{Binding ActiveTab.OperationStatus.OfferText}" FontSize="11.5" VerticalAlignment="Center" />
+        </Button>
         <ProgressBar Name="OperationProgress"
                      IsVisible="{Binding ActiveTab.OperationStatus.IsRunning}"
                      IsIndeterminate="{Binding ActiveTab.OperationStatus.IsIndeterminate}"

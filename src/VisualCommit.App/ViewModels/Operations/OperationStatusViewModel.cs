@@ -53,6 +53,9 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
     private string _resultText = ReadyText;
     private OperationStatusTone _resultTone = OperationStatusTone.Secondary;
     private string? _resultToolTip;
+
+    /// <summary>The last result's offer (D317): a user's succeeded operation's, kept as its text is.</summary>
+    private OperationOffer? _resultOffer;
     private bool _mergeToolRuns;
     private bool _disposed;
 
@@ -158,6 +161,22 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
     [ObservableProperty]
     public partial bool RunningIsCancellable { get; private set; }
 
+    /// <summary>
+    /// The offer's text and name (D317, docs/phase-7a-design.md 12.2): the last result's offer's
+    /// label while <see cref="HasOffer"/>; null otherwise.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? OfferText { get; private set; }
+
+    /// <summary>
+    /// The offer's button is shown: the text is the last result's, a succeeded operation of the
+    /// user whose report carried an offer; never under ssh's notice or while an operation of the
+    /// user runs. A background success keeps it, as it keeps the text.
+    /// </summary>
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OfferCommand))]
+    public partial bool HasOffer { get; private set; }
+
     public void Dispose()
     {
         if (_disposed)
@@ -183,6 +202,18 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
     private void Cancel() => _queue?.CancelCurrent();
 
     System.Windows.Input.ICommand IStatusBarOperation.CancelCommand => CancelCommand;
+
+    /// <summary>Runs the shown offer (D317): "Open in browser" opens the created pull request.</summary>
+    [RelayCommand(CanExecute = nameof(HasOffer))]
+    private async Task OfferAsync()
+    {
+        if (HasOffer && _resultOffer is { } offer)
+        {
+            await offer.Run();
+        }
+    }
+
+    System.Windows.Input.ICommand IStatusBarOperation.OfferCommand => OfferCommand;
 
     private void OnQueueChanged(object? sender, EventArgs e) => OnUiThread(Update);
 
@@ -227,6 +258,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
             {
                 (_resultText, _resultTone) = (AutoFetchFailedText, OperationStatusTone.Secondary);
                 _resultToolTip = result.Failure?.GitOutput.Split('\n')[0] is { Length: > 0 } line ? line : null;
+                _resultOffer = null;
             }
 
             return;
@@ -236,9 +268,11 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
         {
             // The stage panel shows its own errors; the status bar says nothing of them (1.4, 1.9).
             (_resultText, _resultTone, _resultToolTip) = (ReadyText, OperationStatusTone.Secondary, null);
+            _resultOffer = null;
             return;
         }
 
+        _resultOffer = result.Offer;
         _resultTone = result.Outcome switch
         {
             OperationOutcome.Conflicts => OperationStatusTone.Warning,
@@ -273,6 +307,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
         {
             // The message of the last operation goes as soon as the next one starts.
             (_resultText, _resultTone, _resultToolTip) = (ReadyText, OperationStatusTone.Secondary, null);
+            _resultOffer = null;
             if (current.Errors == ErrorDisplay.StagePanel)
             {
                 Show(ReadyText, OperationStatusTone.Secondary, null, running: false, percent: null);
@@ -302,7 +337,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
             return;
         }
 
-        Show(_resultText, _resultTone, _resultToolTip, running: false, percent: null);
+        Show(_resultText, _resultTone, _resultToolTip, running: false, percent: null, offer: _resultOffer);
     }
 
     /// <summary>
@@ -329,7 +364,7 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
         RunningIsCancellable = current.Kind == OperationKind.Network || _mergeToolRuns;
     }
 
-    private void Show(string text, OperationStatusTone tone, string? toolTip, bool running, int? percent, string? compactText = null)
+    private void Show(string text, OperationStatusTone tone, string? toolTip, bool running, int? percent, string? compactText = null, OperationOffer? offer = null)
     {
         // A row's compact text (2.6): the text as built, without git's stage and never ssh's
         // notice; empty for "Ready". "Waiting for auto-fetch…" has no tooltip of its own there.
@@ -343,7 +378,12 @@ public sealed partial class OperationStatusViewModel : ObservableObject, IStatus
         if (_notices?.Text is { } notice)
         {
             (text, tone, toolTip) = (notice, OperationStatusTone.Secondary, notice);
+            offer = null;
         }
+
+        // The offer (D317) lasts as the result's text does: shown only beside it.
+        OfferText = offer?.Label;
+        HasOffer = offer is not null;
 
         Text = text;
         Tone = tone;
