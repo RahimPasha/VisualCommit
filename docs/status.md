@@ -157,7 +157,12 @@ Closing (`CLAUDE.md`, "Closing a phase"):
   real-window checks twice on their own with the owner told and present (D246); `dotnet test` and
   the real-window pass on one commit; every picture inspected, in batches of at most about 150
   (D247); `docs/test-reports/phase-7a.md` completed.
-- [ ] 19. `docs/architecture.md` describes what is built.
+- [x] 19. `docs/architecture.md` describes what is built. (Done 2026-10-30, before the gate: four
+  Opus writers by area, one integrator, four reviewers each checking an area it did not write
+  against the code, one fixer; "As built (after phase 7a)". Three passages say what holds before the
+  gate and are found by "phase 7a's gate": the fake's texts not yet checked against GitHub, the live
+  command run only without its variables, 7a's real-window part not yet run; the gate's session
+  brings them up to date.)
 - [ ] 20. `docs/plan.md`: what 7a did not deliver moved to the phase that owns it; risks updated.
 - [ ] 21. `docs/handoffs/phase-7a.md` written from the template.
 - [ ] 22. Cold-read check by a fresh agent; every gap fixed.
@@ -553,7 +558,8 @@ avatars before it revokes the token and runs with a prompt handler that refuses;
 39 asks the owner about the dialog the app shows in that order of events. Those are `745ce9a` and
 `7015753`: the rested run on `7015753` (1 h 12 min 6 s) passed 5,891 of 5,895 (4 skipped), the
 lagged list passed and CI's run 41111820880 is green on all five jobs, so step 17 is done. The
-gate's references for the earlier pictures are made and judged (Notes). Next: step 16, the live
+gate's references for the earlier pictures are made and judged (Notes), and `docs/architecture.md`
+describes 7a as built (step 19). Next: step 16, the live
 run, in a new session that inherits the owner's private sandbox, token and two variables (design
 14.6; "Waiting on the owner"), and step 18, the gate, which runs the live command once
 before its pictures and D246's two runs of 7a's real-window checks with the owner present. Each of
