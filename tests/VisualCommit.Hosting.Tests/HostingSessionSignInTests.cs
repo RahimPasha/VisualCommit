@@ -264,8 +264,10 @@ public sealed class HostingSessionSignInTests
         Assert.True(File.Exists(Path.Combine(setup.Paths.AvatarsDirectory, "1001.png")));
 
         var authors = await RepositoryHostingAvatarsTests.OnMainAsync(setup, Scenarios.OctoEmail, Scenarios.AdaEmail);
+        Task abandoned;
         using (var hold = setup.Fake.HoldNext("avatar:1003"))
         {
+            abandoned = hold.Abandoned;
             var run = await setup.Thread.RunAsync<Task>(() =>
             {
                 hosting.ShowAvatarsFor(authors);
@@ -279,8 +281,9 @@ public sealed class HostingSessionSignInTests
             Assert.False(Directory.Exists(setup.Paths.AvatarsDirectory));
         }
 
+        // The held download gave its request up, so no image of it can come after the sign-out.
         await setup.Thread.IdleAsync();
-        await Task.Delay(200, Cancelled);
+        await abandoned.WaitAsync(TimeSpan.FromSeconds(60), Cancelled);
         Assert.False(Directory.Exists(setup.Paths.AvatarsDirectory));
         Assert.Same(AuthorAvatars.None, hosting.Avatars);
     }

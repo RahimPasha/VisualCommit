@@ -107,9 +107,20 @@ public sealed class RepositoryHostingWiringTests
         await Settle();
         var lists = wiring.Lists();
 
-        await viewModel.Queue.RunAsync(Operation(OperationKind.Local, fail: false));
-        await viewModel.Queue.RunAsync(Operation(OperationKind.Network, fail: true));
-        await Settle();
+        // Held, a refresh of either is seen as it reaches the fake: the fake records a list only
+        // after the git it runs for it, which a loaded machine slows ten times over (D237).
+        using (var hold = wiring.Fake.HoldNext("pulls:octo/hello"))
+        {
+            await viewModel.Queue.RunAsync(Operation(OperationKind.Local, fail: false));
+            await viewModel.Queue.RunAsync(Operation(OperationKind.Network, fail: true));
+
+            // The queue raises Finished before RunAsync's task completes, so a refresh posted from
+            // it has started once the dispatcher has gone round below that post's priority.
+            await Dispatcher.UIThread.InvokeAsync(() => { }, DispatcherPriority.Background);
+            await Settle();
+            Assert.False(hold.Arrived.IsCompleted, "A local or a failed operation asked for the pull requests.");
+        }
+
         Assert.Equal(lists, wiring.Lists());
 
         await viewModel.Queue.RunAsync(Operation(OperationKind.Network, fail: false));

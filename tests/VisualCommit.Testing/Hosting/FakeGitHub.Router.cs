@@ -77,6 +77,13 @@ public sealed partial class FakeGitHub
         {
             RecordError($"The hold on {key} was not released within {HoldLimit.TotalSeconds:F0} s; the request went on.");
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            // Given up by its sender in process (over a server ct is only the server's stop): neither
+            // answered nor recorded, so a test waiting for this looks at once.
+            hold.Abandoned.TrySetResult();
+            throw;
+        }
     }
 
     private async Task<AuthRemoteResponse> AnswerAsync(Call call, CancellationToken ct)

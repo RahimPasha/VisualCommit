@@ -341,7 +341,7 @@ public sealed partial class FakeGitHub : IAsyncDisposable
         {
             var server = _server ?? throw new InvalidOperationException("The fake in process serves no git: git:<owner>/<name> is held on a server only.");
             var name = key[4..];
-            return new FakeGitHubHold(key, server.HoldNextRequest(name), () => server.ReleaseRequest(name));
+            return new FakeGitHubHold(key, server.HoldNextRequest(name), new TaskCompletionSource().Task, () => server.ReleaseRequest(name));
         }
 
         var hold = new PendingHold();
@@ -354,7 +354,7 @@ public sealed partial class FakeGitHub : IAsyncDisposable
             }
         }
 
-        return new FakeGitHubHold(key, hold.Arrived.Task, () =>
+        return new FakeGitHubHold(key, hold.Arrived.Task, hold.Abandoned.Task, () =>
         {
             lock (_gate)
             {
@@ -513,6 +513,9 @@ public sealed partial class FakeGitHub : IAsyncDisposable
         public TaskCompletionSource Arrived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Completed when the wait here is cancelled before its release: by its sender in process, by the server's stop over TCP (<see cref="FakeGitHubHold.Abandoned"/>).</summary>
+        public TaskCompletionSource Abandoned { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     /// <summary>The fake's routes as the server's hook (<see cref="IAuthRemoteRoutes"/>).</summary>

@@ -231,8 +231,10 @@ public sealed class AvatarCacheTests
         await cancel.CancelAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call.WaitAsync(TimeSpan.FromSeconds(60), Cancelled));
         hold.Dispose();
-        await Task.Delay(TimeSpan.FromMilliseconds(200), Cancelled);
 
+        // The download gave its request up at the hold, so no answer can reach the cache after it:
+        // one left running past the caller's cancellation would go on at the release instead.
+        await hold.Abandoned.WaitAsync(TimeSpan.FromSeconds(60), Cancelled);
         Assert.False(File.Exists(setup.Folder.Combine("avatars", "1001.png")));
         Assert.False(File.Exists(setup.Folder.Combine("avatars", "index.json")));
         Assert.Empty(setup.Log.Lines);
