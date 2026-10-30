@@ -292,6 +292,17 @@ public static class GitIsolation
     ];
 
     /// <summary>
+    /// The variable through which the machine names a netrc file for git's curl in place of the
+    /// home folder's (<c>NETRC</c>, read from libcurl 8.16 on): curl answers a server's 401 from it
+    /// before git asks any credential helper (docs/phase-7a-design.md 4.2, D340), so it would
+    /// undo <see cref="SessionHomeFolder"/> and <see cref="TempRepo"/>'s own home folder.
+    /// </summary>
+    public static IReadOnlyList<string> NetrcVariables { get; } =
+    [
+        "NETRC",
+    ];
+
+    /// <summary>
     /// The variables through which the machine could hand the app or a tool a hosting service's
     /// token or host (docs/phase-7a-design.md 1.8, ruling 24): the GitHub CLI's and the live
     /// command's (D260), removed from every test process and from the app the real-window pass starts.
@@ -319,9 +330,10 @@ public static class GitIsolation
     /// <summary>
     /// The variables beyond git's configuration that make the app's and git's behaviour depend
     /// on the machine, with what the tests give them instead (D112): <see cref="PromptVariables"/>,
-    /// <see cref="ProxyVariables"/>, <see cref="EditorVariables"/>, <see cref="ShellVariables"/>
-    /// and <see cref="IdentityVariables"/> removed (null), <c>no_proxy</c> and <c>NO_PROXY</c> set
-    /// to <see cref="NoProxyHosts"/>, auto-fetch turned off (<see cref="AutoFetchMinutesVariable"/>
+    /// <see cref="ProxyVariables"/>, <see cref="EditorVariables"/>, <see cref="ShellVariables"/>,
+    /// <see cref="IdentityVariables"/> and, since phase 7a, <see cref="NetrcVariables"/> removed
+    /// (null), <c>no_proxy</c> and <c>NO_PROXY</c> set to <see cref="NoProxyHosts"/>, auto-fetch
+    /// turned off (<see cref="AutoFetchMinutesVariable"/>
     /// 0), <c>PATHEXT</c> fixed (<see cref="PathExtensionsVariable"/>), and since phase 7a GitHub off
     /// (<c>VISUALCOMMIT_GITHUB_URL=none</c>), tokens in memory (<c>VISUALCOMMIT_KEYCHAIN=memory</c>)
     /// and <see cref="HostingTokenVariables"/> removed (docs/phase-7a-design.md 1.8, ruling 24); a
@@ -337,6 +349,7 @@ public static class GitIsolation
         .. EditorVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         .. ShellVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         .. IdentityVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
+        .. NetrcVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         new("no_proxy", NoProxyHosts),
         new("NO_PROXY", NoProxyHosts),
         new(AutoFetchMinutesVariable, "0"),

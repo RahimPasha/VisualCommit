@@ -18,6 +18,7 @@ public class GitIsolationTests
     {
         Assert.All(GitIsolation.PromptVariables, variable => Assert.Null(Environment.GetEnvironmentVariable(variable)));
         Assert.All(GitIsolation.ProxyVariables, variable => Assert.Null(Environment.GetEnvironmentVariable(variable)));
+        Assert.Null(Environment.GetEnvironmentVariable("NETRC"));
         Assert.Equal("127.0.0.1,localhost", Environment.GetEnvironmentVariable("no_proxy"));
         Assert.Equal("127.0.0.1,localhost", Environment.GetEnvironmentVariable("NO_PROXY"));
         Assert.Equal("0", Environment.GetEnvironmentVariable("VISUALCOMMIT_AUTO_FETCH_MINUTES"));
@@ -31,6 +32,7 @@ public class GitIsolationTests
             GitIsolation.PromptVariables);
         Assert.Equal(["http_proxy", "https_proxy", "all_proxy", "HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY"], GitIsolation.ProxyVariables);
         Assert.Equal(["EDITOR", "VISUAL", "GIT_EDITOR", "GIT_SEQUENCE_EDITOR"], GitIsolation.EditorVariables);
+        Assert.Equal(["NETRC"], GitIsolation.NetrcVariables);
         Assert.Equal("VISUALCOMMIT_AUTO_FETCH_MINUTES", GitIsolation.AutoFetchMinutesVariable);
     }
 
@@ -138,13 +140,14 @@ public class GitIsolationTests
         startInfo.Environment["HTTPS_PROXY"] = "http://proxy.example:3128";
         startInfo.Environment["all_proxy"] = "socks5://proxy.example:1080";
         startInfo.Environment["no_proxy"] = "example.com";
+        startInfo.Environment["NETRC"] = "C:/Users/someone/_netrc";
         startInfo.Environment["VISUALCOMMIT_AUTO_FETCH_MINUTES"] = "5";
         startInfo.Environment["PATH_TO_KEEP"] = "kept";
 
         GitIsolation.ApplyMachineIndependence(startInfo.Environment);
 
         var names = startInfo.Environment.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Assert.All([.. GitIsolation.PromptVariables, .. GitIsolation.ProxyVariables], variable => Assert.DoesNotContain(variable, names));
+        Assert.All([.. GitIsolation.PromptVariables, .. GitIsolation.ProxyVariables, .. GitIsolation.NetrcVariables], variable => Assert.DoesNotContain(variable, names));
         Assert.Equal("127.0.0.1,localhost", startInfo.Environment["no_proxy"]);
         Assert.Equal("127.0.0.1,localhost", startInfo.Environment["NO_PROXY"]);
         Assert.Equal("0", startInfo.Environment["VISUALCOMMIT_AUTO_FETCH_MINUTES"]);
