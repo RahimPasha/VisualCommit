@@ -5,6 +5,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.TextFormatting;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
@@ -94,40 +95,69 @@ public sealed partial class Phase7aChecksG
     /// G1: row 0's label as laid out and as drawn in <paramref name="picture"/>. Laid out, from the
     /// control (<see cref="CommitGraphControl.BadgeInRow"/>, the places the drawing uses), to the
     /// report's one decimal: the name whole to x 80.4, the icon from 86.4 and <c>#1</c> from 99.4.
-    /// Drawn, between the label's rounded ends (<see cref="AssertInkInParts"/>): the name's ink inside
-    /// its laid-out box ±1, so from the label's left padding; the icon's inside its 10-px box;
-    /// <c>#1</c>'s inside its box ±1, within the label; none in the padding or the gaps between them.
+    /// Drawn (<see cref="AssertInkInParts"/>), between the label's rounded corners and, in its middle
+    /// rows, out to 1 px inside its edges: the name's and <c>#1</c>'s ink within their glyphs'
+    /// outlines across and their laid-out boxes down (<see cref="LabelTextInk"/>), ±1; the icon's
+    /// inside its 10-px box; none in the padding or the gaps between them.
     /// </summary>
     private static void AssertLoginLabel(ShellDriver app, Screenshot picture)
     {
         var graph = Graph(app);
-        var label = graph.LabelsInRow(0)[0].Bounds;
+        var placed = graph.LabelsInRow(0)[0];
+        var label = placed.Bounds;
         var badge = graph.BadgeInRow(0, 0) ?? throw new Xunit.Sdk.XunitException("Row 0's label has no badge.");
         Assert.Equal(
             (G.LoginNameRight, G.LoginIconLeft, G.LoginNumberLeft),
             (Math.Round(badge.Name.Right, 1), Math.Round(badge.Icon.X, 1), Math.Round(badge.Number.X, 1)));
         var fill = picture.PixelAt(graph.TranslatePoint(new Point(label.X + 3, label.Center.Y), app.Window) ?? throw new InvalidOperationException("The graph is not in the window."));
+        InkPart[] parts =
+        [
+            new("the name", LabelTextInk(graph, placed.Text, badge.Name), TextAllowance),
+            new("the icon", badge.Icon, 0),
+            new("#1", LabelTextInk(graph, string.Create(CultureInfo.InvariantCulture, $"#{placed.Badge?.Number}"), badge.Number), TextAllowance),
+        ];
+        const double corner = CommitGraphControl.LabelCornerRadius;
         AssertInkInParts(
             app,
             picture,
-            new Rect(label.X + LabelCorner, label.Y, label.Width - (2 * LabelCorner), label.Height),
+            new Rect(label.X + corner, label.Y, label.Width - (2 * corner), label.Height),
             fill,
-            "Row 0's label",
-            new InkPart("the name", badge.Name, TextAllowance),
-            new InkPart("the icon", badge.Icon, 0),
-            new InkPart("#1", badge.Number, TextAllowance));
+            "Row 0's label between its rounded corners",
+            parts);
+        AssertInkInParts(
+            app,
+            picture,
+            new Rect(label.X + 1, label.Y + corner, label.Width - 2, label.Height - (2 * corner)),
+            fill,
+            "Row 0's label in its middle rows",
+            parts);
     }
 
-    /// <summary>The radius of a label's rounded ends (phase 1's labels): the pixels inside them are the fill's or its edge's.</summary>
-    private const double LabelCorner = 4;
+    /// <summary>
+    /// Where a label's <paramref name="text"/>, laid out at <paramref name="laidOut"/>, puts its ink
+    /// before <see cref="TextAllowance"/>: across, from its glyphs' outlines' left to their right; down,
+    /// its laid-out box. The outlines are the font's own, unhinted (a glyph run's geometry), and Inter
+    /// is the app's own file, so they are the same on every platform. Across, the laid-out box ±1
+    /// would hide 2 px: the <c>1</c> of <c>#1</c> ends its outline 1.3 px inside it (at x 110.5, the
+    /// box at 111.8), so <c>#1</c> drawn 2 px right of its place stays in the box. The text is laid
+    /// out again in the label's typeface, as wide as the control's or the check fails.
+    /// </summary>
+    private static Rect LabelTextInk(CommitGraphControl graph, string text, Rect laidOut)
+    {
+        var layout = new TextLayout(text, new Typeface(graph.FontFamily, FontStyle.Normal, FontWeight.SemiBold), CommitGraphControl.LabelFontSize, Brushes.Black, textWrapping: TextWrapping.NoWrap, maxLines: 1);
+        Assert.True(layout.WidthIncludingTrailingWhitespace == laidOut.Width, string.Create(CultureInfo.InvariantCulture, $"{text} is {layout.WidthIncludingTrailingWhitespace} wide in the label's typeface, {laidOut.Width} in the graph."));
+        var run = Assert.Single(Assert.Single(layout.TextLines).TextRuns.OfType<ShapedTextRun>());
+        var outline = run.GlyphRun.BuildGeometry().Bounds;
+        return new Rect(laidOut.X + outline.X, laidOut.Y, outline.Width, laidOut.Height);
+    }
 
     /// <summary>
-    /// How far a text's ink may lie outside its laid-out box: each platform's font back-end under
-    /// Skia (DirectWrite on Windows, CoreText on macOS, FreeType on Linux) places and smooths glyphs
-    /// its own way, so the ink reaches a pixel past a layout's edge or stops short of it (CI's macOS
-    /// ended row 0's name, laid out to x 80.4, at x 79; Windows inks x 80 faintly, and puts the
-    /// <c>f</c> of <c>feature/login</c>, laid out from 12, into x 11). Paths and images, which Skia
-    /// draws itself on every platform, get none.
+    /// How far a text's ink may lie outside its glyphs' outlines, and so outside its laid-out box:
+    /// each platform's font back-end under Skia (DirectWrite on Windows, CoreText on macOS, FreeType
+    /// on Linux) places and smooths glyphs its own way, so the ink reaches less than a pixel past an
+    /// outline's edge or stops short of it. Row 0's name has its outline from x 12.2 to 79.7 and its
+    /// layout from 12 to 80.4: CI's macOS ended its ink at x 79; Windows inks x 80 faintly, and puts
+    /// the <c>f</c> into x 11. Paths and images, which Skia draws itself on every platform, get none.
     /// </summary>
     private const double TextAllowance = 1;
 
@@ -288,8 +318,9 @@ public sealed partial class Phase7aChecksG
             else
             {
                 // An image here would start at x + 8 as the name does: its colours and its white
-                // square tell it. A name's glyph can be near white in the dark theme (Ada's "A" at
-                // x + 16, top + 13), so the square is the whole 4×4 block, which no glyph's stroke fills.
+                // square tell it. In the light theme a pixel without ink is the white background, so
+                // one white pixel would tell nothing: an image's square is the whole 4×4 block white,
+                // and on a bare row the name's strokes leave ink in that block.
                 Assert.False(centre.TrueForAll(pixel => Near(Colors.White, pixel)), $"Row {row} has a white square at an image's centre.");
                 for (var y = top + CommitGraphControl.AvatarTop; y < top + CommitGraphControl.AvatarTop + CommitGraphControl.AvatarSize; y++)
                 {

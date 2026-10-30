@@ -27,6 +27,9 @@ public sealed partial class CommitGraphControl
     /// <summary>Space between a label's edge and its text or icon.</summary>
     public const double LabelPadding = 6;
 
+    /// <summary>The radius of a label's rounded corners.</summary>
+    public const double LabelCornerRadius = 4;
+
     /// <summary>Space between the Branch / Tag column's left edge and the first label, and between two labels.</summary>
     public const double LabelStart = 6;
 
@@ -45,8 +48,6 @@ public sealed partial class CommitGraphControl
 
     /// <summary>The width of a stash node's ring; its outer diameter is <see cref="NodeDiameter"/>.</summary>
     public const double RingThickness = 2;
-
-    private const double LabelCornerRadius = 4;
 
     /// <summary>The thickness of an icon's stroke in a label, in pixels.</summary>
     private const double LabelIconStroke = 1.3;
