@@ -49,11 +49,11 @@ public sealed partial class CommitGraphControl
     /// <summary>The width of a stash node's ring; its outer diameter is <see cref="NodeDiameter"/>.</summary>
     public const double RingThickness = 2;
 
-    /// <summary>The thickness of an icon's stroke in a label, in pixels.</summary>
-    private const double LabelIconStroke = 1.3;
+    /// <summary>The thickness of an icon's stroke in a label, in pixels; its caps and joins are round.</summary>
+    public const double LabelIconStroke = 1.3;
 
     /// <summary>The grid the outlines in Theme/Icons.axaml are drawn on.</summary>
-    private const double IconGridSize = 24;
+    public const double IconGridSize = 24;
 
     private const string Ellipsis = "…";
 

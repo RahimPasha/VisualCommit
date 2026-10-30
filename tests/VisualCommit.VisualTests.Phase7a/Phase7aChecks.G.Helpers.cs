@@ -98,7 +98,7 @@ public sealed partial class Phase7aChecksG
     /// Drawn (<see cref="AssertInkInParts"/>), between the label's rounded corners and, in its middle
     /// rows, out to 1 px inside its edges: the name's and <c>#1</c>'s ink within their glyphs'
     /// outlines across and their laid-out boxes down (<see cref="LabelTextInk"/>), ±1; the icon's
-    /// inside its 10-px box; none in the padding or the gaps between them.
+    /// within its stroked outline (<see cref="IconInk"/>); none in the padding or the gaps between them.
     /// </summary>
     private static void AssertLoginLabel(ShellDriver app, Screenshot picture)
     {
@@ -113,7 +113,7 @@ public sealed partial class Phase7aChecksG
         InkPart[] parts =
         [
             new("the name", LabelTextInk(graph, placed.Text, badge.Name), TextAllowance),
-            new("the icon", badge.Icon, 0),
+            new("the icon", IconInk(graph, badge.Icon), 0),
             new("#1", LabelTextInk(graph, string.Create(CultureInfo.InvariantCulture, $"#{placed.Badge?.Number}"), badge.Number), TextAllowance),
         ];
         const double corner = CommitGraphControl.LabelCornerRadius;
@@ -131,6 +131,20 @@ public sealed partial class Phase7aChecksG
             fill,
             "Row 0's label in its middle rows",
             parts);
+    }
+
+    /// <summary>
+    /// Where the badge's icon, drawn in its 10-px <paramref name="box"/>, puts its ink: its outline
+    /// (<c>IconPullRequest</c>, 3 to 21 on the 24 grid) scaled into the box, grown by half the stroke,
+    /// whose caps and joins are round. Skia draws the path itself on every platform, so it needs no
+    /// allowance; the box would hide 1 px, as the stroked outline keeps 0.6 px inside it on each side.
+    /// </summary>
+    private static Rect IconInk(CommitGraphControl graph, Rect box)
+    {
+        Assert.True(graph.TryFindResource("IconPullRequest", graph.ActualThemeVariant, out var icon), "IconPullRequest is not a resource.");
+        var outline = Assert.IsAssignableFrom<Geometry>(icon).Bounds;
+        var scale = CommitGraphControl.LabelIconSize / CommitGraphControl.IconGridSize;
+        return new Rect(box.X + (outline.X * scale), box.Y + (outline.Y * scale), outline.Width * scale, outline.Height * scale).Inflate(CommitGraphControl.LabelIconStroke / 2);
     }
 
     /// <summary>
