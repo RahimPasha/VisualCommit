@@ -671,7 +671,11 @@ public sealed class OperationQueue : IOperationQueue
                     report.Message.Length > 0 ? report.Message : $"{operation.Title} failed",
                     report.Failure ?? FailureOf(operation, report.Message)),
                 OperationOutcome.Cancelled => CancelledResult(operation),
-                _ => new OperationResult(report.Outcome, report.Message, null) { IsWarning = report.IsWarning && report.Outcome == OperationOutcome.Succeeded },
+                _ => new OperationResult(report.Outcome, report.Message, null)
+                {
+                    IsWarning = report.IsWarning && report.Outcome == OperationOutcome.Succeeded,
+                    Offer = report.Outcome == OperationOutcome.Succeeded ? report.Offer : null,
+                },
             };
         }
         catch (OperationCanceledException)
@@ -742,6 +746,7 @@ public sealed class OperationQueue : IOperationQueue
             return result;
         }
 
+        // The rest of the result, its offer included (D317), is kept.
         return result with { StaleLockFiles = locks };
     }
 

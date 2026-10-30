@@ -32,6 +32,13 @@ public sealed record OperationReport(OperationOutcome Outcome, string Message)
     /// </summary>
     public bool IsWarning { get; init; }
 
+    /// <summary>
+    /// What the status bar offers beside a success's message (D317, docs/phase-7a-design.md 12.2:
+    /// "Open in browser" after a created pull request); the queue passes it on only when the report
+    /// is <see cref="OperationOutcome.Succeeded"/>.
+    /// </summary>
+    public OperationOffer? Offer { get; init; }
+
     public static OperationReport Done(string message) => new(OperationOutcome.Succeeded, message);
 
     /// <summary>
@@ -71,7 +78,21 @@ public sealed record OperationResult(OperationOutcome Outcome, string Message, G
     /// error dialog. Null otherwise.
     /// </summary>
     public AccountKey? RefusedAccount { get; init; }
+
+    /// <summary>
+    /// After a succeeded operation whose report carried one (<see cref="OperationReport.Offer"/>,
+    /// D317): what the status bar offers beside its message. Null for every other result.
+    /// </summary>
+    public OperationOffer? Offer { get; init; }
 }
+
+/// <summary>
+/// A button the status bar shows beside an operation's success (D317, docs/phase-7a-design.md 12.2):
+/// its text and what it runs. General, so that no hosting type reaches Core or the status bar.
+/// </summary>
+/// <param name="Label">The button's text and name, "Open in browser".</param>
+/// <param name="Run">What a click runs, on the UI thread.</param>
+public sealed record OperationOffer(string Label, Func<Task> Run);
 
 /// <summary>What the status bar shows of the running operation.</summary>
 /// <param name="Title">The operation's title.</param>

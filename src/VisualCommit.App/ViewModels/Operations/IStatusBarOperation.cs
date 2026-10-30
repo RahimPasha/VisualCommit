@@ -47,4 +47,13 @@ public interface IStatusBarOperation : INotifyPropertyChanged
 
     /// <summary>How many wait.</summary>
     int Waiting { get; }
+
+    /// <summary>The offer's text and name beside a success (D317, docs/phase-7a-design.md 12.2), "Open in browser"; null without one.</summary>
+    string? OfferText { get; }
+
+    /// <summary>The offer's button is shown: the text is a succeeded operation's result that carries an offer.</summary>
+    bool HasOffer { get; }
+
+    /// <summary>What the offer's button runs.</summary>
+    ICommand OfferCommand { get; }
 }
