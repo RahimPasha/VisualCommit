@@ -185,6 +185,116 @@ public class ShellDriverTests
         }
     }
 
+    /// <summary>
+    /// A double-click right after a click at its spot is a double-click of its own: Avalonia
+    /// counts a press on from the last one when it lies within the double-tap size and time of it,
+    /// whatever was pressed, so without a pause its presses were the click's second and third (a
+    /// triple click here). LeftPanelPullRequestsViewTests' double-click on a pull request that had
+    /// taken the clicked sign-in row's place came so on fast machines and checked nothing out.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_double_click_right_after_a_click_at_its_spot_is_not_counted_on_from_the_click()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var (filter, spot) = FilterWithTwoWords(app);
+
+        var presses = RecordPresses(app, () =>
+        {
+            app.Click(spot);
+            app.DoubleClick(spot);
+        });
+
+        Assert.Equal([1, 1, 2], presses.Select(press => press.ClickCount));
+        Assert.Equal("feature", filter.SelectedText);
+    }
+
+    /// <summary>
+    /// The double-click waits after a click whose double-tap size reaches its spot: at the corner
+    /// of the rectangle Avalonia's mouse counts on in, 2 pixels across and 2 down from the click,
+    /// its presses come more than the double-tap time after the click's and count from 1.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_double_click_at_the_corner_of_a_clicks_double_tap_size_waits_out_the_double_tap_time()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var (filter, spot) = FilterWithTwoWords(app);
+
+        var presses = RecordPresses(app, () =>
+        {
+            app.Click(spot);
+            app.DoubleClick(spot + new Vector(2, 2));
+        });
+
+        Assert.Equal([1, 1, 2], presses.Select(press => press.ClickCount));
+        var gap = presses[1].Timestamp - presses[0].Timestamp;
+        Assert.True(gap > 500, $"The double-click's first press came {gap} ms after the click's by the window's clock, not more than the double-tap time of 500 ms.");
+        Assert.Equal("feature", filter.SelectedText);
+    }
+
+    /// <summary>
+    /// Just outside a click's double-tap size the double-click does not wait: Avalonia counts its
+    /// presses from 1 again however soon they come. The window's input clock stands still for the
+    /// click and the double-click, so all three presses carry one stamp, and a wait for the clock
+    /// to pass the double-tap time would throw (<c>HeadlessInputClock.Read</c>) instead of ending.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_double_click_just_outside_a_clicks_double_tap_size_does_not_wait()
+    {
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path);
+        await app.WaitUntilReadyAsync();
+        var (filter, spot) = FilterWithTwoWords(app);
+
+        var presses = RecordPresses(app, () =>
+        {
+            using (HeadlessInputClock.Pause(app.Window))
+            {
+                app.Click(spot);
+                app.DoubleClick(spot + new Vector(2.01, 0));
+            }
+        });
+
+        Assert.Equal([1, 1, 2], presses.Select(press => press.ClickCount));
+        Assert.All(presses, press => Assert.Equal(presses[0].Timestamp, press.Timestamp));
+        Assert.Equal("feature", filter.SelectedText);
+    }
+
+    /// <summary>
+    /// Types two words into the filter box and returns it with a spot on its first word, in whole
+    /// pixels, so that a spot 2 pixels off lies exactly on the edge of its double-tap size.
+    /// </summary>
+    private static (TextBox Filter, Point Spot) FilterWithTwoWords(ShellDriver app)
+    {
+        var filter = app.Find<TextBox>("FilterBox");
+        app.Click(filter);
+        app.Type("feature login");
+        var area = app.BoundsOf(filter);
+        return (filter, new Point(Math.Round(area.X) + 24, Math.Round(area.Center.Y)));
+    }
+
+    /// <summary>The click count and input-clock stamp of every press in the window while <paramref name="action"/> runs.</summary>
+    private static List<(int ClickCount, ulong Timestamp)> RecordPresses(ShellDriver app, Action action)
+    {
+        var presses = new List<(int ClickCount, ulong Timestamp)>();
+        app.Window.AddHandler(InputElement.PointerPressedEvent, RecordPress, RoutingStrategies.Tunnel, handledEventsToo: true);
+        try
+        {
+            action();
+        }
+        finally
+        {
+            app.Window.RemoveHandler(InputElement.PointerPressedEvent, RecordPress);
+        }
+
+        return presses;
+
+        void RecordPress(object? sender, PointerPressedEventArgs e) => presses.Add((e.ClickCount, e.Timestamp));
+    }
+
     [AvaloniaFact]
     public async Task StartWithTabs_writes_a_session_file_with_those_tabs_before_the_app_starts()
     {
