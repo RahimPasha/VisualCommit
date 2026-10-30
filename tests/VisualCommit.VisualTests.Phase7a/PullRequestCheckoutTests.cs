@@ -1,7 +1,11 @@
+using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting;
+using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
+using VisualCommit.Testing.Hosting;
 using Xunit;
 using static VisualCommit.VisualTests.Phase7a.PullRequestTestData;
 
@@ -12,7 +16,7 @@ namespace VisualCommit.VisualTests.Phase7a;
 /// remote (the same repository, or the user's fork as <c>origin</c> while <c>upstream</c> is the
 /// base, also before the remote branch is read), a fork's head through <c>FETCH_HEAD</c>, no base
 /// remote, a deleted fork, and the local name: taken, conflicting as a path, reused at the head,
-/// current.
+/// current; and through the app, a renamed repository's pull requests from its <c>origin</c>.
 /// </summary>
 public sealed class PullRequestCheckoutTests
 {
@@ -129,6 +133,36 @@ public sealed class PullRequestCheckoutTests
         // Taken at another commit, the reused one comes later in the order.
         var later = HelloRefs() with { Refs = [.. HelloRefs().Refs, Local("fix-typo", 'z', null), Local("ada-fix-typo", 'f', null)] };
         Assert.Equal(("ada-fix-typo", PullRequestCheckoutKind.LocalBranch), (PullRequestCheckout.Plan(Loaded(), later, Five).LocalBranch, PullRequestCheckout.Plan(Loaded(), later, Five).Kind));
+    }
+
+    [AvaloniaFact]
+    public async Task A_renamed_repositorys_pull_request_checks_out_from_origin()
+    {
+        var copy = await Scenarios.HostingAsync();
+        await using var served = await Scenarios.ServeHostingAsync(copy, port: 0, ct: TestContext.Current.CancellationToken, ownsCopy: true);
+        served.GitHub.Rename("octo/hello", "greeting");
+        using var data = new TempDirectory("renamed checkout");
+        using var app = ShellDriver.StartWithTabs(data.Path, [served.Hello.Path], gitHub: served.GitHub);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.SignInAsync(served.OctoToken, TestContext.Current.CancellationToken);
+        await app.WaitForAsync(() => repository.HostingState.List is not null, "the list");
+
+        // origin's URL names octo/hello, GitHub's answers octo/greeting: the hosting's state takes
+        // GitHub's name for origin (7.8), so both heads are found.
+        var list = repository.HostingState.List!.PullRequests;
+        var one = list.Single(pull => pull.Number == 1);
+        var five = list.Single(pull => pull.Number == 5);
+        Assert.Equal(("octo/greeting", "octo/greeting"), (one.HeadRepository!.FullName, five.BaseRepository.FullName));
+
+        Assert.Equal(
+            new PullRequestCheckoutPlan(PullRequestCheckoutKind.RemoteBranch, "Check out feature/login", null, "origin", "refs/remotes/origin/feature/login", "feature/login"),
+            PullRequestCheckout.Plan(repository.HostingState, repository.Refs!, one));
+        Assert.Equal(
+            new PullRequestCheckoutPlan(PullRequestCheckoutKind.FetchHead, "Check out ada:fix-typo", null, "origin", null, "fix-typo"),
+            PullRequestCheckout.Plan(repository.HostingState, repository.Refs!, five));
+        app.Dispose();
+        TokenTripwire.AssertAbsent(served.OctoToken, [data.Path], null);
+        Assert.Empty(served.GitHub.Errors);
     }
 
     /// <summary><c>tool</c>: <c>origin</c> octo/tool (a fork of acme/tool), <c>upstream</c> acme/tool; <c>main</c>, <c>fix-typo</c> tracking <c>origin/fix-typo</c>.</summary>

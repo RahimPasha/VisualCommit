@@ -70,12 +70,14 @@ public sealed class FakeRepository
     private readonly ConcurrentDictionary<string, bool> _pushers = new(StringComparer.OrdinalIgnoreCase);
     private long _updatedAtTicks = AppClocks.HarnessTime.UtcTicks;
     private volatile bool _isArchived;
+    private string _currentName;
 
     internal FakeRepository(long id, string owner, string name, bool isPrivate, string? forkOf, string? description, string defaultBranch, string? barePath)
     {
         Id = id;
         Owner = owner;
         Name = name;
+        _currentName = name;
         IsPrivate = isPrivate;
         ForkOf = forkOf;
         Description = description;
@@ -88,10 +90,24 @@ public sealed class FakeRepository
 
     public string Owner { get; }
 
+    /// <summary>The name it was added under; the API's is <see cref="CurrentName"/>.</summary>
     public string Name { get; }
 
-    /// <summary><c>owner/name</c>.</summary>
+    /// <summary>
+    /// <c>owner/name</c> as added: its folder, git's URL, its pull requests' and forks' key and the
+    /// name the fake's methods take (an older name or the current one also finds it).
+    /// </summary>
     public string FullName => Owner + "/" + Name;
+
+    /// <summary>The name GitHub gives it now: <see cref="Name"/> until <see cref="FakeGitHub.Rename"/>.</summary>
+    public string CurrentName
+    {
+        get => Volatile.Read(ref _currentName);
+        internal set => Volatile.Write(ref _currentName, value);
+    }
+
+    /// <summary><c>owner/</c><see cref="CurrentName"/>: the name the API answers with and the routes' keys name.</summary>
+    public string CurrentFullName => Owner + "/" + CurrentName;
 
     public bool IsPrivate { get; }
 

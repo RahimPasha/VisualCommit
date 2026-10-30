@@ -38,7 +38,8 @@ public sealed partial class RepositoryHosting
         StartAvatars(set);
     }
 
-    // On the UI thread: a sign-out (the session cancels the run itself); what a run still brings is dropped.
+    // On the UI thread: a sign-out (the session cancels the run itself) or no GitHub remote left;
+    // what a run still brings is dropped.
     private void StopAvatars()
     {
         _avatarGeneration++;
@@ -112,9 +113,8 @@ public sealed partial class RepositoryHosting
             return null;
         }
 
-        var (listed, branch) = info is { IsFork: true, Parent: { } parent }
-            ? (parent, info.ParentDefaultBranch ?? info.DefaultBranch)
-            : (candidate, info.DefaultBranch);
+        var listed = ListedOf(candidate, info);
+        var branch = info is { IsFork: true, Parent: not null } ? info.ParentDefaultBranch ?? info.DefaultBranch : info.DefaultBranch;
         var maps = _session.AuthorMaps;
         var (commitsDue, due) = maps.Plan(listed, emails);
         if (commitsDue || due.Count > 0)

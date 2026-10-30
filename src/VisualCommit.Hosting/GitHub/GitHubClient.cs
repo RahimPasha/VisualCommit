@@ -31,7 +31,8 @@ internal sealed record GitHubReply<T>(T? Value, HostingFailure? Failure, int Sta
 /// GitHub's headers on every request and the token only to the API's own scheme, host and port;
 /// redirects repeated by hand on the API's address only; <c>Link</c> pages followed on it only; one
 /// request at a time; ETags kept in memory per token fingerprint and URL, with the body and the
-/// headers read from an answer; every answer that is not
+/// headers read from an answer, at most 512 of them and 32 MB of bodies, the oldest going first,
+/// and all forgotten at a sign-out (<see cref="ForgetKept"/>); every answer that is not
 /// a value classified into a <see cref="HostingFailure"/>, with one warning that names neither a
 /// header, a body, a query nor a token. Every request has 30 s once sent and the caller's
 /// cancellation, which throws <see cref="OperationCanceledException"/>.
@@ -59,6 +60,9 @@ internal sealed partial class GitHubClient : IDisposable
     /// <summary>The answers whose ETag and body are kept at most; the oldest goes first.</summary>
     private const int MaxKeptAnswers = 512;
 
+    /// <summary>The bytes the kept answers' bodies take at most, unless the constructor says otherwise; the oldest go first.</summary>
+    private const long DefaultKeptBytes = 32L * 1024 * 1024;
+
     private static readonly TimeSpan SecondaryRetry = TimeSpan.FromSeconds(60);
 
     /// <summary>
@@ -75,10 +79,16 @@ internal sealed partial class GitHubClient : IDisposable
     private readonly TimeSpan _timeout;
     private readonly SemaphoreSlim _one = new(1, 1);
     private readonly Lock _keptGate = new();
+    private readonly long _keptBudget;
+
+    // Under _keptGate: the kept answers, their keys from the oldest stored to the newest, and the
+    // bytes of their bodies.
     private readonly Dictionary<(string Fingerprint, string Url), KeptAnswer> _kept = [];
     private readonly Queue<(string Fingerprint, string Url)> _keptOrder = new();
+    private long _keptBytes;
 
-    public GitHubClient(GitHubEndpoints endpoints, Func<HttpMessageHandler> createHandler, IAppLog log, TimeProvider clock, TimeSpan? timeout = null)
+    /// <summary>A client over one handler; <paramref name="keptBytes"/> bounds the kept answers' bodies, 32 MB unless given.</summary>
+    public GitHubClient(GitHubEndpoints endpoints, Func<HttpMessageHandler> createHandler, IAppLog log, TimeProvider clock, TimeSpan? timeout = null, long? keptBytes = null)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
         ArgumentNullException.ThrowIfNull(createHandler);
@@ -88,6 +98,7 @@ internal sealed partial class GitHubClient : IDisposable
         _log = log;
         _clock = clock;
         _timeout = timeout ?? DefaultTimeout;
+        _keptBudget = keptBytes ?? DefaultKeptBytes;
         _http = new HttpClient(createHandler(), disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
     }
 
@@ -126,6 +137,20 @@ internal sealed partial class GitHubClient : IDisposable
     }
 
     public void Dispose() => _http.Dispose();
+
+    /// <summary>
+    /// Forgets every kept answer, whatever its token (a sign-out, 7.5): the next request of each
+    /// URL is a full one. An answer a request still in flight brings is kept as usual.
+    /// </summary>
+    internal void ForgetKept()
+    {
+        lock (_keptGate)
+        {
+            _kept.Clear();
+            _keptOrder.Clear();
+            _keptBytes = 0;
+        }
+    }
 
     /// <summary>Whether two addresses have the same scheme, host and port.</summary>
     internal static bool SameOrigin(Uri a, Uri b) => GitHubUrls.SameOrigin(a, b);
@@ -571,22 +596,41 @@ internal sealed partial class GitHubClient : IDisposable
         }
     }
 
+    // A new answer of a URL is the newest kept, an earlier one of it dropped; the oldest go first
+    // while more than MaxKeptAnswers would be kept or their bodies would pass the budget. A body
+    // over the whole budget is not kept.
     private void Keep(string fingerprint, Uri url, KeptAnswer answer)
     {
         var key = (fingerprint, url.AbsoluteUri);
         lock (_keptGate)
         {
-            if (!_kept.ContainsKey(key))
+            if (_kept.Remove(key, out var earlier))
             {
-                while (_keptOrder.Count >= MaxKeptAnswers)
+                _keptBytes -= earlier.Body.Length;
+                var others = _keptOrder.Where(kept => kept != key).ToList();
+                _keptOrder.Clear();
+                foreach (var other in others)
                 {
-                    _kept.Remove(_keptOrder.Dequeue());
+                    _keptOrder.Enqueue(other);
                 }
-
-                _keptOrder.Enqueue(key);
             }
 
+            if (answer.Body.Length > _keptBudget)
+            {
+                return;
+            }
+
+            while ((_kept.Count >= MaxKeptAnswers || _keptBytes + answer.Body.Length > _keptBudget) && _keptOrder.TryDequeue(out var oldest))
+            {
+                if (_kept.Remove(oldest, out var dropped))
+                {
+                    _keptBytes -= dropped.Body.Length;
+                }
+            }
+
+            _keptOrder.Enqueue(key);
             _kept[key] = answer;
+            _keptBytes += answer.Body.Length;
         }
     }
 

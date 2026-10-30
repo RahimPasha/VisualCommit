@@ -268,6 +268,9 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
     public void Dispose() => _client.Dispose();
 
+    /// <summary>Forgets the client's kept answers (a sign-out, 7.5): no answer to the old token stays in memory.</summary>
+    internal void ForgetKept() => _client.ForgetKept();
+
     /// <summary><c>repos/{owner}/{name}</c>, each segment escaped.</summary>
     private static string RepositoryPath(HostedRepository repository) =>
         $"repos/{Uri.EscapeDataString(repository.Owner)}/{Uri.EscapeDataString(repository.Name)}";

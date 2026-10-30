@@ -10,7 +10,8 @@ namespace VisualCommit.Hosting.Tests;
 /// A tab's authors' avatars (docs/phase-7a-design.md 7.9, 7.13; D252, D291, ruling 22): one commits
 /// page; the 20 lookups a repository has per app session, shared by its tabs; an unknown e-mail not
 /// asked again; the map used within 7 days (no page asked) and read again after; images fetched
-/// without the token; nothing at all while signed out.
+/// without the token; nothing at all while signed out; the avatars gone with the GitHub remote, a
+/// run in flight then applying nothing, and kept when the remote names another GitHub repository.
 /// </summary>
 public sealed class RepositoryHostingAvatarsTests
 {
@@ -110,6 +111,79 @@ public sealed class RepositoryHostingAvatarsTests
         Assert.Same(AuthorAvatars.None, hosting.Avatars);
         Assert.Empty(setup.Fake.Requests);
         Assert.False(Directory.Exists(setup.Paths.AvatarsDirectory));
+    }
+
+    [Fact]
+    public async Task Avatars_go_when_the_repository_loses_its_github_remote_and_come_back_with_it()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await OpenHelloAsync(setup);
+        await ShowAsync(setup, hosting, Scenarios.OctoEmail, Scenarios.AdaEmail);
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "the list");
+        await setup.Thread.IdleAsync();
+        Assert.Equal(2, hosting.Avatars.FileByEmail.Count);
+        var changed = 0;
+        await setup.Thread.RunAsync(() => hosting.Changed += (_, _) => changed++);
+
+        // origin set to another server's URL: the tab looks as it does without GitHub (D252).
+        await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.Refs(("origin", "https://gitlab.example/octo/hello.git")), UrlRewrites.None));
+        await setup.Thread.IdleAsync();
+
+        Assert.Same(RepositoryHostingState.NotGitHub, hosting.State);
+        Assert.Same(AuthorAvatars.None, hosting.Avatars);
+        Assert.Equal(1, changed);
+
+        // GitHub's remote again: the set the tab sends again brings them back.
+        await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.HelloRefs(), UrlRewrites.None));
+        await ShowAsync(setup, hosting, Scenarios.OctoEmail, Scenarios.AdaEmail);
+        Assert.Equal(2, hosting.Avatars.FileByEmail.Count);
+    }
+
+    [Fact]
+    public async Task An_avatar_run_in_flight_when_the_github_remote_goes_applies_nothing()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await OpenHelloAsync(setup);
+
+        Task run;
+        using (var hold = setup.Fake.HoldNext("commits:octo/hello"))
+        {
+            run = await setup.Thread.RunAsync<Task>(() =>
+            {
+                hosting.ShowAvatarsFor([Scenarios.OctoEmail, Scenarios.AdaEmail]);
+                return hosting.AvatarRun;
+            });
+            await hold.Arrived.WaitAsync(Cancelled);
+            await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.Refs(), UrlRewrites.None));
+        }
+
+        await run.WaitAsync(Cancelled);
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+
+        Assert.Same(RepositoryHostingState.NotGitHub, hosting.State);
+        Assert.Same(AuthorAvatars.None, hosting.Avatars);
+    }
+
+    [Fact]
+    public async Task A_change_to_another_github_repository_keeps_the_avatars()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await OpenHelloAsync(setup);
+        await ShowAsync(setup, hosting, Scenarios.OctoEmail, Scenarios.AdaEmail);
+        var avatars = hosting.Avatars;
+
+        // The tab sends its set again only after NotGitHub or a sign-out (11.3): avatars dropped
+        // here would not come back until its authors change.
+        await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.Refs(("origin", "http://127.0.0.1:1/octo/tool.git")), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "acme/tool's list");
+
+        Assert.Equal("acme/tool", hosting.State.Repository!.FullName);
+        Assert.Same(avatars, hosting.Avatars);
+        Assert.Equal(2, hosting.Avatars.FileByEmail.Count);
     }
 
     internal static async Task<RepositoryHosting> OpenHelloAsync(HostingSessionSetup setup)

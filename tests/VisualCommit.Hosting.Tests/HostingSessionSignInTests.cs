@@ -13,8 +13,10 @@ namespace VisualCommit.Hosting.Tests;
 /// rulings 18, 19): one <c>GET /user</c> with the token only in <c>Authorization</c>; no keychain;
 /// a failed save; a refused token and a network failure changing nothing; a cancellation before
 /// GitHub's answer and after it; another login replacing the account; the switch carried; signing
-/// out with and without a kept entry; sign-in and sign-out one at a time; the switch and the
-/// sign-out writing off the caller's thread; a sign-out completing when the session closes.
+/// out with and without a kept entry; in a run without a keychain, a keychain record's entry named
+/// at a sign-out and at another login; sign-in and sign-out one at a time; the switch and the
+/// sign-out writing off the caller's thread; a sign-out completing when the session closes; GitHub's
+/// kept answers forgotten at a sign-out.
 /// </summary>
 public sealed class HostingSessionSignInTests
 {
@@ -182,6 +184,53 @@ public sealed class HostingSessionSignInTests
     }
 
     [Fact]
+    public async Task A_sign_out_in_a_run_without_a_keychain_says_a_keychain_records_entry_may_stay()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        HostingSessionStartTests.WriteRecord(setup, AccountTokenStates.Keychain);
+        var key = TokenKey.Of(HostingSessionStartTests.OctoKey(setup));
+        await setup.FakeTokens.SaveAsync(key, setup.OctoToken, Cancelled);
+        setup.FakeTokens.Available = false;
+        await setup.Session.StartAsync(Cancelled);
+        Assert.Equal((AccountState.NeedsSignIn, AccountNoteKind.ReadFailed), (setup.Session.Account!.State, setup.Session.Account.NoteKind));
+
+        Assert.Equal(TokenStoreReasons.NoKeychain, await setup.Session.SignOutAsync(Cancelled));
+
+        // Nothing could be deleted (D272): the record goes, the entry an earlier run saved may stay,
+        // and the log names it.
+        Assert.Null(setup.Session.Account);
+        Assert.Empty(Load(setup).Accounts);
+        Assert.True(setup.FakeTokens.Holds(key));
+        Assert.Equal(["save github:127.0.0.1:1:octo", "probe"], setup.FakeTokens.Calls);
+        Assert.Contains("The keychain could not be reached in this run; it may still hold the entry VisualCommit:github:127.0.0.1:1:octo. Remove it by hand.", setup.Warnings);
+        Assert.Contains(setup.Log.Lines, line => line.Message == "GitHub account octo on 127.0.0.1:1: signed out; the keychain kept its entry: " + TokenStoreReasons.NoKeychain + ".");
+    }
+
+    [Fact]
+    public async Task Another_login_in_a_run_without_a_keychain_names_the_old_keychain_records_entry_that_may_stay()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        HostingSessionStartTests.WriteRecord(setup, AccountTokenStates.Keychain);
+        var octo = TokenKey.Of(HostingSessionStartTests.OctoKey(setup));
+        await setup.FakeTokens.SaveAsync(octo, setup.OctoToken, Cancelled);
+        setup.FakeTokens.Available = false;
+        await setup.Session.StartAsync(Cancelled);
+
+        var ada = await setup.Session.SignInAsync(setup.Served.AdaToken, Cancelled);
+
+        Assert.Equal(("ada", TokenPlace.Session), (ada.Status!.Account.Login, ada.Status.Place));
+        Assert.Equal(["ada"], Load(setup).Accounts.Select(record => record.Login));
+        Assert.True(setup.FakeTokens.Holds(octo));
+        Assert.DoesNotContain(setup.FakeTokens.Calls, call => call.StartsWith("delete", StringComparison.Ordinal));
+        Assert.Contains("The keychain could not be reached in this run; it may still hold the entry VisualCommit:github:127.0.0.1:1:octo. Remove it by hand.", setup.Warnings);
+        Assert.Contains("GitHub account octo on 127.0.0.1:1: the keychain kept its entry: " + TokenStoreReasons.NoKeychain + ".", setup.Warnings);
+
+        // Ada's record says "session": her sign-out has nothing to name.
+        Assert.Null(await setup.Session.SignOutAsync(Cancelled));
+        Assert.DoesNotContain(setup.Warnings, warning => warning.Contains(":ada.", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_sign_in_and_a_sign_out_run_one_at_a_time()
     {
         await using var setup = await HostingSessionSetup.StartAsync();
@@ -278,6 +327,25 @@ public sealed class HostingSessionSignInTests
         Assert.Equal(["probe", "save github:127.0.0.1:1:octo", "delete github:127.0.0.1:1:octo"], setup.FakeTokens.Calls);
         Assert.Empty(Load(setup).Accounts);
         Assert.False(Directory.Exists(setup.Paths.AvatarsDirectory));
+    }
+
+    [Fact]
+    public async Task A_sign_out_forgets_githubs_kept_answers_so_the_next_sign_ins_requests_are_full()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hello = new HostedRepository(HostingProvider.GitHub, setup.Fake.Endpoints.Host, "octo", "hello");
+        Assert.True((await setup.Session.GitHub!.ReadRepositoryAsync(setup.OctoToken, hello, Cancelled)).Succeeded);
+        Assert.True((await setup.Session.GitHub!.ReadRepositoryAsync(setup.OctoToken, hello, Cancelled)).Succeeded);
+
+        Assert.Null(await setup.Session.SignOutAsync(Cancelled));
+        Assert.Null((await setup.Session.SignInAsync(setup.OctoToken, Cancelled)).Failure);
+        Assert.True((await setup.Session.GitHub!.ReadRepositoryAsync(setup.OctoToken, hello, Cancelled)).Succeeded);
+
+        // Kept, the second A3 was conditional; after the sign-out neither A1 nor A3 is, with the
+        // same token (6.2: in memory, now also dropped at a sign-out).
+        Assert.Equal([false, true, false], setup.Fake.Requests.Where(request => request.Route == "repo:octo/hello").Select(request => request.Conditional));
+        Assert.Equal([false, false], setup.Fake.Requests.Where(request => request.Route == "user").Select(request => request.Conditional));
     }
 
     internal static AccountsFile Load(HostingSessionSetup setup) => new JsonAccountStore(setup.Paths.AccountsFile, new ListLog()).Load();

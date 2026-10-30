@@ -1,5 +1,7 @@
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 using VisualCommit.Hosting.Tokens;
 using VisualCommit.Testing.Headless;
 using VisualCommit.Hosting.Tests.Tokens;
@@ -11,10 +13,13 @@ namespace VisualCommit.Hosting.Tests;
 /// The hosting session's start (docs/phase-7a-design.md 7.4, 7.13; ruling 6, D287): no record, no
 /// store call; each <c>tokenState</c> and read outcome to its state and note; one store read; off
 /// reads nothing; <c>AccountChanged</c> once; git's request waiting for a held read, and going
-/// without the token after 10 s on the session's clock.
+/// without the token after 10 s on the session's clock; nothing bound and the tab signed out while
+/// the read is held.
 /// </summary>
 public sealed class HostingSessionStartTests
 {
+    private const string Hello = "http://127.0.0.1:1/octo/hello.git";
+
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -148,6 +153,43 @@ public sealed class HostingSessionStartTests
         Assert.Equal(setup.OctoToken, credential!.Token);
         Assert.Equal("GitCredential(***)", credential.ToString());
         Assert.Equal(AccountState.SignedIn, setup.Session.Account!.State);
+    }
+
+    [Fact]
+    public async Task Before_the_start_read_ends_nothing_is_bound_and_the_tab_shows_signed_out()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        WriteRecord(setup, AccountTokenStates.Keychain, useForGit: true);
+        await setup.FakeTokens.SaveAsync(TokenKey.Of(OctoKey(setup)), setup.OctoToken, Cancelled);
+        await setup.Session.KeychainAvailableAsync(Cancelled);
+        var hold = setup.FakeTokens.HoldNext();
+        var start = Task.Run(() => setup.Session.StartAsync(Cancelled), Cancelled);
+        await hold.Arrived.WaitAsync(Cancelled);
+        var hosting = await RepositoryHostingTests.OpenAsync(setup, out _);
+        await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.HelloRefs(), UrlRewrites.None));
+
+        // Until the read has put the token in the slot (7.4) the account is not there: nothing is
+        // bound, so no get of git's can come yet (GetAsync's wait guards a direct call), and the
+        // tab is signed out.
+        Assert.Null(setup.Session.Account);
+        Assert.False(setup.Session.BindsGit);
+        Assert.Empty(hosting.Bindings);
+        Assert.Empty(setup.Session.BindingsForClone(Hello));
+        Assert.Equal(PullRequestsState.SignedOut, hosting.State.PullRequests);
+        Assert.False(hosting.WantsUrlRewrites);
+
+        hold.Dispose();
+        await start.WaitAsync(Cancelled);
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "the list after the read");
+
+        // Signed in; the tab's bindings wait for its next refs read with the rewrites (D290).
+        Assert.Equal(AccountState.SignedIn, setup.Session.Account!.State);
+        Assert.True(hosting.WantsUrlRewrites);
+        Assert.Empty(hosting.Bindings);
+        Assert.Single(setup.Session.BindingsForClone(Hello));
+
+        await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.HelloRefs(), UrlRewrites.None));
+        Assert.Equal([new CredentialBinding(Hello, OctoKey(setup))], hosting.Bindings);
     }
 
     internal static AccountKey OctoKey(HostingSessionSetup setup) => new(HostingProvider.GitHub, setup.Fake.Endpoints.Host, "octo");

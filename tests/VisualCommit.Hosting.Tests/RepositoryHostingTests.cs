@@ -8,7 +8,8 @@ namespace VisualCommit.Hosting.Tests;
 
 /// <summary>
 /// One repository's hosting (docs/phase-7a-design.md 7.8, 7.13; D251, D289, D290, D293): its
-/// states, signed out without a request; a fork's parent listed; a changed candidate; refreshes
+/// states, signed out without a request; a fork's parent listed; a changed candidate; a renamed
+/// repository under its new name; refreshes
 /// during a run folded into one more; no <c>Changed</c> for an unchanged answer; a sign-out
 /// clearing it; A4's 401 signing it out; <c>Dispose</c> ending its work; a created pull request on
 /// top of the listed base's list only; its bindings, those of the session's dashboard row for the
@@ -99,6 +100,38 @@ public sealed class RepositoryHostingTests
         Assert.Equal(("octo/tool", "acme/tool"), (info.Value!.Repository.FullName, info.Value.Parent!.FullName));
         Assert.Equal(1, setup.Fake.Requests.Count(request => request.Route == "repo:octo/tool"));
         Assert.Contains(setup.Fake.Requests, request => request.Route == "pulls:acme/tool");
+    }
+
+    [Fact]
+    public async Task A_renamed_repository_is_listed_under_its_new_name_and_its_branches_keep_their_badges()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        setup.Fake.Rename("octo/hello", "greeting");
+        await setup.SignInAsync();
+        var hosting = await OpenAsync(setup, out _);
+
+        await setup.Thread.RunAsync(() => hosting.Update(HelloRefs(), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "the renamed repository's list");
+
+        // origin's URL names octo/hello: A3 of that name went to the repository's id and answered
+        // with its new name, which the remote, the listed repository and A4 then take (7.8).
+        var state = hosting.State;
+        Assert.Equal(("octo/greeting", "octo/greeting"), (state.Repository!.FullName, state.Remotes["origin"].FullName));
+        Assert.Equal([5, 3, 2, 1], state.List!.PullRequests.Select(pull => pull.Number));
+        Assert.Equal(1, state.ByRef["refs/heads/feature/login"].Number);
+        Assert.Equal(1, state.ByRef["refs/remotes/origin/feature/login"].Number);
+        Assert.Equal(2, state.ByRef["refs/remotes/origin/docs/readme"].Number);
+        var id = setup.Fake.Repository("octo/hello").Id;
+        Assert.Equal(
+            [("/api/v3/repos/octo/hello", 301), ($"/api/v3/repositories/{id}", 200), ("/api/v3/repos/octo/greeting/pulls", 200)],
+            setup.Fake.Requests.Where(request => request.Route is "repo:octo/greeting" or "pulls:octo/greeting").Select(request => (request.Path, request.Status)));
+
+        // The candidate stays as the URL names it: another refs read reads nothing again.
+        var requests = setup.Fake.Requests.Count;
+        await setup.Thread.RunAsync(() => hosting.Update(HelloRefs(), UrlRewrites.None));
+        await setup.Thread.IdleAsync();
+        Assert.Equal(requests, setup.Fake.Requests.Count);
+        Assert.Equal(("octo/greeting", 1), (hosting.State.Remotes["origin"].FullName, hosting.State.ByRef["refs/heads/feature/login"].Number));
     }
 
     [Fact]

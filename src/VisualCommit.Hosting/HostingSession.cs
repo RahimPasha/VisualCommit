@@ -20,7 +20,7 @@ namespace VisualCommit.Hosting;
 /// </summary>
 public sealed class HostingSession : IHostingSession
 {
-    /// <summary>How long git's request for a token waits for the start's keychain read (ruling 6).</summary>
+    /// <summary>How long a request for a token waits for the start's keychain read (ruling 6); git's cannot come before it ends (<see cref="GetAsync"/>).</summary>
     internal static readonly TimeSpan CredentialWait = TimeSpan.FromSeconds(10);
 
     private static readonly HostingFailure NotSignedIn = new(HostingFailureKind.BadCredentials, "Not signed in.");
@@ -221,7 +221,8 @@ public sealed class HostingSession : IHostingSession
             var previous = _file.GitHubOn(Host);
             if (previous is { Login: { } oldLogin } && !string.IsNullOrWhiteSpace(oldLogin)
                 && new AccountKey(HostingProvider.GitHub, Host, oldLogin) is var oldKey && oldKey != key
-                && await _vault.ForgetAsync(TokenKey.Of(oldKey), lifetime).ConfigureAwait(false) is { } kept)
+                && (await _vault.ForgetAsync(TokenKey.Of(oldKey), lifetime).ConfigureAwait(false)
+                    ?? await KeptUnreachedAsync(oldKey, AccountTokenStates.Of(previous.TokenState)).ConfigureAwait(false)) is { } kept)
             {
                 _log.Warning($"GitHub account {oldLogin} on {Host}: the keychain kept its entry: {kept}.");
             }
@@ -252,11 +253,16 @@ public sealed class HostingSession : IHostingSession
     }
 
     /// <summary>
-    /// Signs out (7.5, D291): the keychain's entry forgotten (null, or why it was kept), the record
-    /// removed even when the entry was kept, the account cleared. Runs on the thread pool, never on
-    /// the caller's thread (the vault answers at once without a keychain). <paramref name="ct"/>
-    /// stops the waits before the gate only: once begun, the sign-out completes, the session's
-    /// closing included.
+    /// Signs out (7.5, D291): the keychain's entry forgotten (null, or why it was kept; without a
+    /// keychain in this run, <see cref="TokenStoreReasons.NoKeychain"/> for a record whose token an
+    /// earlier run saved there), the record removed even when the entry was kept, the account
+    /// cleared. Runs on the thread pool, never on the caller's thread (the vault answers at once
+    /// without a keychain). <paramref name="ct"/> stops the waits before the gate only: once begun,
+    /// the sign-out completes when the session is disposed meanwhile, but nothing keeps the process
+    /// alive for it. An exit while the store's delete runs leaves the record and its entry, and the
+    /// next start is signed in. Only an exit just after the delete, or a macOS <c>security</c>
+    /// child that ends after the app, leaves the record without its entry (the next start says the
+    /// token is missing) or <c>avatars/</c> without a record.
     /// </summary>
     public Task<string?> SignOutAsync(CancellationToken ct) =>
         _provider is null || _vault is null ? Task.FromResult<string?>(null) : Task.Run(() => SignOutCoreAsync(ct), CancellationToken.None);
@@ -326,9 +332,12 @@ public sealed class HostingSession : IHostingSession
     }
 
     /// <summary>
-    /// git's <c>get</c> for a bound URL (7.6, ruling 6): waits for the start's read, at most 10 s by
-    /// the session's clock; then the token while <paramref name="account"/> is the signed-in
-    /// account and "Use for git over HTTPS" is on; else null. Never UI.
+    /// git's <c>get</c> for a bound URL (7.6, ruling 6): the token while <paramref name="account"/>
+    /// is the signed-in account and "Use for git over HTTPS" is on; else null. Never UI. It waits
+    /// for the start's read, at most 10 s by the session's clock, but through git no get comes
+    /// before that read ends: nothing is bound until the read has put the token in the slot (7.4)
+    /// and the tab's next refs read has read the rules, so an operation started meanwhile goes
+    /// D82's order. The wait guards a direct call.
     /// </summary>
     public async Task<GitCredential?> GetAsync(AccountKey account, CancellationToken cancellationToken)
     {
@@ -604,13 +613,17 @@ public sealed class HostingSession : IHostingSession
                 return null;
             }
 
-            // Not cut off by the session's closing: a record without its token would need signing
-            // in at the next start, and avatars/ would stay (D291). The vault's delete is bounded
-            // by the store's own limits.
-            var reason = await _vault!.ForgetAsync(TokenKey.Of(slot.Key), CancellationToken.None).ConfigureAwait(false);
+            // Not cut off by the session's Dispose (the process's exit still ends it; see above): a
+            // record without its token would need signing in at the next start, and avatars/ would
+            // stay (D291). The vault's delete is bounded by the store's own limits.
+            var reason = await _vault!.ForgetAsync(TokenKey.Of(slot.Key), CancellationToken.None).ConfigureAwait(false)
+                ?? await KeptUnreachedAsync(slot.Key, slot.TokenState).ConfigureAwait(false);
             _file = _file.WithoutGitHub(Host);
             _accounts.Save(_file);
             Volatile.Write(ref _slot, null);
+
+            // No request starts with the token from here on; what GitHub answered to it goes too.
+            _provider!.ForgetKept();
             _log.Info(reason is null
                 ? $"GitHub account {slot.Status.Account.Login} on {Host}: signed out."
                 : $"GitHub account {slot.Status.Account.Login} on {Host}: signed out; the keychain kept its entry: {reason}.");
@@ -622,6 +635,24 @@ public sealed class HostingSession : IHostingSession
         {
             _gate.Release();
         }
+    }
+
+    // After the vault's forget answered null (7.5): without a keychain in this run it deletes
+    // nothing (D272), yet a record whose token state is "keychain" was saved there by an earlier
+    // run, so its entry may stay. The log names it for whoever removes it by hand, and the reason
+    // goes to the caller as the keychain's. Null when the keychain was reached or the record never
+    // used it. The probe was made by the forget, so this answers at once.
+    private async Task<string?> KeptUnreachedAsync(AccountKey key, string tokenState)
+    {
+        if (tokenState != AccountTokenStates.Keychain || await _vault!.KeychainAvailableAsync(CancellationToken.None).ConfigureAwait(false))
+        {
+            return null;
+        }
+
+        var tokenKey = TokenKey.Of(key);
+        var entry = TokenEntryNames.TryFor(tokenKey, TokenEntryNames.Application, out var names) ? names.Entry : TokenEntryNames.ForLog(tokenKey);
+        _log.Warning($"The keychain could not be reached in this run; it may still hold the entry {entry}. Remove it by hand.");
+        return TokenStoreReasons.NoKeychain;
     }
 
     // Under _gate, at a sign-out (7.5, D291): the avatar work cancelled and awaited, the maps

@@ -10,7 +10,8 @@ namespace VisualCommit.Testing.Hosting;
 
 /// <summary>
 /// The fake's routes (docs/phase-7a-design.md 2.4): which request is which route, the checks in
-/// r5 10.3's order, the routes' answers, GitHub's headers (r5 10.4) and the faults (r5 10.5).
+/// r5 10.3's order, the routes' answers, GitHub's headers (r5 10.4), the faults (r5 10.5) and a
+/// renamed repository's redirects (<see cref="Rename"/>).
 /// </summary>
 public sealed partial class FakeGitHub
 {
@@ -153,6 +154,11 @@ public sealed partial class FakeGitHub
             return Error(call, 404, "Not Found");
         }
 
+        if (route.Moved)
+        {
+            return Renamed(call);
+        }
+
         var answer = route.Kind switch
         {
             RouteKind.User => User(call),
@@ -230,8 +236,8 @@ public sealed partial class FakeGitHub
         var byName = sort == "full_name";
         var ascending = (query.Value("direction") ?? (byName ? "asc" : "desc")) == "asc";
         List<FakeRepository> sorted = byName
-            ? [.. listed.OrderBy(repository => repository.FullName, StringComparer.OrdinalIgnoreCase)]
-            : [.. listed.OrderByDescending(repository => repository.UpdatedAt).ThenBy(repository => repository.FullName, StringComparer.OrdinalIgnoreCase)];
+            ? [.. listed.OrderBy(repository => repository.CurrentFullName, StringComparer.OrdinalIgnoreCase)]
+            : [.. listed.OrderByDescending(repository => repository.UpdatedAt).ThenBy(repository => repository.CurrentFullName, StringComparer.OrdinalIgnoreCase)];
         if (ascending != byName)
         {
             sorted.Reverse();
@@ -371,7 +377,7 @@ public sealed partial class FakeGitHub
                 _pulls.Add(pull);
             }
 
-            var location = new Uri(Endpoints.ApiBase, string.Create(CultureInfo.InvariantCulture, $"repos/{repository.FullName}/pulls/{number}")).AbsoluteUri;
+            var location = new Uri(Endpoints.ApiBase, string.Create(CultureInfo.InvariantCulture, $"repos/{repository.CurrentFullName}/pulls/{number}")).AbsoluteUri;
             return Json(call, 201, PullJson(pull, repository, login), [KeyValuePair.Create("Location", location)]);
         }
         finally
@@ -512,7 +518,19 @@ public sealed partial class FakeGitHub
         }
     }
 
-    /// <summary>Where <see cref="FakeGitHubFault.Moved"/> sends a repository's route: <c>api/v3/repositories/&lt;id&gt;</c> plus the rest of the path, the query kept.</summary>
+    /// <summary>
+    /// A request of an older name of a renamed repository (<see cref="Rename"/>): 301 to
+    /// <see cref="MovedLocation"/>, or 307 for a request with a body, as GitHub redirects it.
+    /// </summary>
+    private AuthRemoteResponse Renamed(Call call)
+    {
+        var location = MovedLocation(call);
+        var status = call.Request.Method is "POST" or "PATCH" ? 307 : 301;
+        var moved = new JsonObject { ["message"] = ReasonOf(status), ["url"] = location, ["documentation_url"] = DocumentationUrl };
+        return Json(call, status, moved, [KeyValuePair.Create("Location", location)]);
+    }
+
+    /// <summary>Where <see cref="FakeGitHubFault.Moved"/> and a renamed repository's older name send a repository's route: <c>api/v3/repositories/&lt;id&gt;</c> plus the rest of the path, the query kept.</summary>
     private string MovedLocation(Call call)
     {
         var route = call.Route!;
@@ -652,6 +670,7 @@ public sealed partial class FakeGitHub
         201 => "Created",
         301 => "Moved Permanently",
         304 => "Not Modified",
+        307 => "Temporary Redirect",
         400 => "Bad Request",
         401 => "Unauthorized",
         403 => "Forbidden",
@@ -726,7 +745,7 @@ public sealed partial class FakeGitHub
             && long.TryParse(idText, NumberStyles.None, CultureInfo.InvariantCulture, out var repositoryId)
             && RepositoryById(repositoryId) is { } byId)
         {
-            segments = ["repos", byId.Owner, byId.Name, .. segments[2..]];
+            segments = ["repos", byId.Owner, byId.CurrentName, .. segments[2..]];
         }
 
         switch (segments)
@@ -742,16 +761,20 @@ public sealed partial class FakeGitHub
                     repository = RepositoryLocked(owner + "/" + name);
                 }
 
-                var fullName = (repository?.FullName ?? owner + "/" + name).ToLowerInvariant();
+                var fullName = (repository?.CurrentFullName ?? owner + "/" + name).ToLowerInvariant();
                 var restPath = string.Join('/', rest);
+
+                // An older name of a renamed repository: the route is its, and redirected.
+                var asked = owner + "/" + (name.EndsWith(".git", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name);
+                var moved = repository is not null && !string.Equals(asked, repository.CurrentFullName, StringComparison.OrdinalIgnoreCase);
                 return (rest, method) switch
                 {
-                    ([], "GET") => new Route("repo:" + fullName, RouteKind.Repo, repository),
-                    (["pulls"], "GET") => new Route("pulls:" + fullName, RouteKind.Pulls, repository, Rest: restPath),
-                    (["pulls"], "POST") => new Route("create:" + fullName, RouteKind.Create, repository, Rest: restPath),
+                    ([], "GET") => new Route("repo:" + fullName, RouteKind.Repo, repository, Moved: moved),
+                    (["pulls"], "GET") => new Route("pulls:" + fullName, RouteKind.Pulls, repository, Rest: restPath, Moved: moved),
+                    (["pulls"], "POST") => new Route("create:" + fullName, RouteKind.Create, repository, Rest: restPath, Moved: moved),
                     (["pulls", var n], "PATCH") when int.TryParse(n, NumberStyles.None, CultureInfo.InvariantCulture, out var number)
-                        => new Route("update:" + fullName, RouteKind.Update, repository, number, Rest: restPath),
-                    (["commits"], "GET") => new Route("commits:" + fullName, RouteKind.Commits, repository, Rest: restPath),
+                        => new Route("update:" + fullName, RouteKind.Update, repository, number, Rest: restPath, Moved: moved),
+                    (["commits"], "GET") => new Route("commits:" + fullName, RouteKind.Commits, repository, Rest: restPath, Moved: moved),
                     _ => null,
                 };
             default:
@@ -795,8 +818,8 @@ public sealed partial class FakeGitHub
         Page,
     }
 
-    /// <summary>A route: its key, kind, repository (null when the fake has none of that name), pull request number, avatar's user id, and the rest of the path after the repository (a page's title).</summary>
-    private sealed record Route(string Key, RouteKind Kind, FakeRepository? Repository, int Number = 0, long UserId = 0, string Rest = "");
+    /// <summary>A route: its key, kind, repository (null when the fake has none of that name), pull request number, avatar's user id, the rest of the path after the repository (a page's title), and whether it named a renamed repository's older name.</summary>
+    private sealed record Route(string Key, RouteKind Kind, FakeRepository? Repository, int Number = 0, long UserId = 0, string Rest = "", bool Moved = false);
 
     /// <summary>One request on its way through the checks: who it signed in as, once it has.</summary>
     private sealed class Call(AuthRemoteRouteRequest request, Route? route)

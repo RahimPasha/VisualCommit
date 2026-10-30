@@ -244,7 +244,7 @@ public sealed partial class FakeGitHub : IAsyncDisposable
         }
     }
 
-    /// <summary>The repository <paramref name="fullName"/> (<c>owner/name</c>, case ignored).</summary>
+    /// <summary>The repository <paramref name="fullName"/> (<c>owner/name</c>, case ignored; any name of a renamed one).</summary>
     /// <exception cref="KeyNotFoundException">The fake has none.</exception>
     public FakeRepository Repository(string fullName)
     {
@@ -254,12 +254,47 @@ public sealed partial class FakeGitHub : IAsyncDisposable
         }
     }
 
-    /// <summary>The pull requests of <paramref name="fullName"/>, by number.</summary>
+    /// <summary>
+    /// Renames <paramref name="fullName"/> to <paramref name="newName"/> under the same owner, as
+    /// GitHub does: the API serves the new name and answers with it
+    /// (<see cref="FakeRepository.CurrentFullName"/>, which the routes' keys name from then on),
+    /// and every request of an older name gets a redirect to <c>api/v3/repositories/&lt;id&gt;</c>
+    /// plus the rest of the path, the query kept: 301, or 307 for a POST or a PATCH. Git keeps the
+    /// folder and the URL of the name it was added under, as GitHub keeps git's old URL working.
+    /// A transfer to another owner is not modelled.
+    /// </summary>
+    /// <exception cref="ArgumentException">The fake has no such repository, the name is not plain, or another repository has it.</exception>
+    public void Rename(string fullName, string newName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(fullName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newName);
+        if (!IsPlain(newName) || newName.EndsWith(".git", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"A repository's name is of letters, digits, '.', '-' and '_': '{newName}'.", nameof(newName));
+        }
+
+        lock (_gate)
+        {
+            var repository = RepositoryLocked(fullName) ?? throw new ArgumentException($"The fake has no repository {fullName}.", nameof(fullName));
+            var renamed = repository.Owner + "/" + newName;
+            if (RepositoryLocked(renamed) is { } other && other != repository)
+            {
+                throw new ArgumentException($"The fake has a repository {renamed} already.", nameof(newName));
+            }
+
+            // Every name it had still finds it, so that an older one is redirected.
+            _byName[renamed] = repository;
+            repository.CurrentName = newName;
+        }
+    }
+
+    /// <summary>The pull requests of <paramref name="fullName"/> (any of its names), by number.</summary>
     public IReadOnlyList<FakePullRequest> PullRequests(string fullName)
     {
         lock (_gate)
         {
-            return [.. _pulls.Where(pull => string.Equals(pull.Repository, fullName, StringComparison.OrdinalIgnoreCase)).OrderBy(pull => pull.Number)];
+            var key = RepositoryLocked(fullName)?.FullName ?? fullName;
+            return [.. _pulls.Where(pull => string.Equals(pull.Repository, key, StringComparison.OrdinalIgnoreCase)).OrderBy(pull => pull.Number)];
         }
     }
 
