@@ -299,8 +299,9 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             // Git 2.46 and later then ask the helper before the first request, which carries its
             // credential: curl answers a 401 from the user's netrc file only for a request that
             // has none (D340). When the helper has nothing, git asks for a user name before any
-            // request: the dialog in an Ask scope, a failed call in a Deny one. Older git ignores
-            // the key.
+            // request: through the broker in an Ask scope (no dialog for an account refused in the
+            // scope, D273), a failed call in a Deny one. Older git ignores the key, and so does
+            // git-lfs's own HTTP client, which asks the netrc file in HOME before any helper.
             environment["GIT_CONFIG_KEY_" + proactive] = $"http.{bindings[i].Url}.proactiveAuth";
             environment["GIT_CONFIG_VALUE_" + proactive] = "basic";
         }
