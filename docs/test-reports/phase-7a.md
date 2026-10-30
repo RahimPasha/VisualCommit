@@ -1181,7 +1181,7 @@ or an expected result changed for a reason the build or the gate finds, goes her
   avatars can come, so the line would not come while B8 runs. From WP-V's merge the step waits instead
   until the fake has recorded `avatar:1001` and `avatar:1003` and `hello`'s view model's `Avatars`
   maps octo's and ada's addresses; B8 takes no picture, and its expected results are unchanged.
-- **P13 step 1's wait** (2026-10-30, CI run 40982132445 on `ccd1ebe`, macOS; the judges' verdict): the
+- **P13 step 1's wait** (2026-10-30, CI run 40982132445 on `ccd1ebe`, macOS; the lead's record, after the judges' verdict): the
   sign-in lists `tool`'s pull requests too, though it is the tab in the background (design 7.8's
   triggers, D289), and GitHub's client sends one request at a time (D285). When `hello`'s list goes
   first, `tool`'s `GET api/v3/repos/acme/tool/pulls` is answered after `hello`'s line, once the fake has

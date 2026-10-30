@@ -4762,3 +4762,34 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
     pixel of theirs depends on it. `p12a`, listed among part P's pictures that gain badges, shows its
     open branch menu over the label column, so it does not change; the inspection at the merge
     records it.
+11. **Two races in the tests that macOS showed, merged at `33313ef`** (CI run 40982132445 on
+    `ccd1ebe`; four investigators, a judge for each, a builder, a reviewer that did not build it, its
+    one minor finding fixed; workflow `ww0ovir23`). Neither is a product bug; both fixes are in the
+    tests alone, and each race was reproduced on Windows by a probe before its fix (failing with CI's
+    message) and closed after it.
+    - **P13** (`79e631b`, the report's `5f7d1aa`). A sign-in lists every open tab with a GitHub remote,
+      the one in the background included (7.8's triggers, D289), through the session's one client,
+      which sends one request at a time (D285). When `hello`'s list went first, `tool`'s list was
+      answered after `hello`'s line, once the fake had synced acme/tool's refs, and was recorded after
+      step 2's mark. Step 1 now also waits for `tool`'s list line (`WaitForListLineAsync`, split out of
+      `WaitForListedAsync`); not for `tool`'s `AvatarsShown`, which only the shown tab writes (11.3).
+      The report changes only the wait, and its convention "Waiting for a list" says so for every
+      sign-in with more than one GitHub tab open. Rejected: filtering `ApiSince` to `hello`'s routes
+      (it loosens step 2), holding the request at the fake (the one client would hold `hello`'s list
+      behind it), and opening `tool` later (it changes method 3). WP-V's builder had also seen it
+      fail once in three runs on the laptop, and CI's Windows job failed it on `8810136`.
+    - **`KeyRouterTests.Every_key_declines_during_a_branch_drag`** (`b3fe91a`). The drag's press
+      selects row 4, whose details nothing waited for; during a drag the router takes no key, so the
+      keys go to the focused control and can move the focus. With one timing Ctrl+Tab and
+      Ctrl+Shift+Tab reached the details' file row, and a declined Mod+Enter on it opened a diff
+      whose late focus move fell between the test's read of the focus and a key's delivery. Headless
+      input runs the dispatcher's jobs and renders before it delivers, so a focus move queued by an
+      asynchronous load lands first. The test now waits for row 4's details and gives the graph the
+      focus before every key, asserting no diff opened; `AssertNothingRan` asserts no diff for all
+      three `PressEveryKey` tests. Judging the key where it was delivered was rejected: CI's run
+      would then have passed while a declined key opened a diff in the middle of the drag.
+    - **For phase 8's keyboard pass (closing step 3 moves it into plan.md):** a diff that is still
+      loading keeps a pending focus and takes the focus when its text arrives, even when the user
+      has moved the focus elsewhere meanwhile (`DiffView.axaml.cs:131-135`, `:146-149`;
+      `DiffTextView.cs:209-213`, `:605-617`; an investigator showed it in a run on Windows). It is
+      phase 6's behaviour and outside 7a's scope.

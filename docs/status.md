@@ -676,7 +676,9 @@ every commit.
   Ctrl+Shift+Tab reach the details' file row; Mod+Enter on it opens a diff). The diff's late focus
   move then fell between the test's read of the focus and a key's delivery: headless input runs the
   dispatcher's jobs before it delivers. The test is to wait for row 4's details and give the graph
-  the focus before every key. The fix is being built on `wip/p7a-macos`.
+  the focus before every key. Both fixes are merged at `33313ef` (`79e631b`, `b3fe91a`, the report's
+  `5f7d1aa`; design 17 item 11): on the merge `KeyRouterTests` passed 7 of 7 and part P 4 of 4 in
+  Release. A diff's pending focus, which the investigation found, goes to phase 8's keyboard pass.
 - **CI on WP-V's merge: P13 again on Windows, and G1's new pixel check on macOS** (run 40993671970).
   WP-V's review added `AssertLoginLabel`, which reads where the name's ink ends to ±1 px; macOS draws
   the name's last column 1.4 px before its layout edge. The report gives layout positions, so the
