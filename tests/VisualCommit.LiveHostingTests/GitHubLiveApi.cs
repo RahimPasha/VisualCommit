@@ -126,7 +126,8 @@ internal sealed class GitHubLiveException(string message) : Exception(message);
 /// The live command's own calls to GitHub's API, outside the app (docs/phase-7a-design.md 14.5):
 /// read the sandbox and a pull request, list the open pull requests and the
 /// <c>visualcommit-live/</c> branches, close a pull request, delete a branch, the duplicate create
-/// (r5 14) and the probes of GitHub's texts the fake writes from memory (2.4, 15 point 1). Its own
+/// (r5 14), the probes of GitHub's texts the fake writes from memory (2.4, 15 point 1), and the
+/// latest commit's SHA and author's address with the avatars' lookup (D339). Its own
 /// <see cref="HttpClient"/> over a <see cref="SocketsHttpHandler"/> that follows no redirect; each
 /// call 30 s at most; <c>Authorization: Bearer</c>, <c>Accept</c> and <c>X-GitHub-Api-Version</c> as
 /// the app sends them and its own <c>User-Agent</c>. A failure's message holds the status, GitHub's
@@ -249,6 +250,31 @@ internal sealed class GitHubLiveApi : IDisposable
     /// <summary><c>GET …/commits?sha={sha}&amp;per_page=1</c>, as answered: GitHub's text for a SHA it does not know (2.4).</summary>
     public Task<LiveAnswer> ProbeCommitsAsync(string sha, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Get, $"{RepositoryPath}/commits?sha={Uri.EscapeDataString(sha)}&per_page=1", null, cancellationToken);
+
+    /// <summary>
+    /// The SHA and the author's address of the latest commit of <paramref name="branch"/>
+    /// (<c>GET …/commits?sha=&lt;branch&gt;&amp;per_page=1</c>, its <c>sha</c> and
+    /// <c>commit.author.email</c>), or null when the list is empty or its commit has no SHA or no
+    /// author's address as text: what the avatars' lookup asks with (D339). The address is the
+    /// commit's author's: never written to the run.
+    /// </summary>
+    /// <exception cref="GitHubLiveException">GitHub did not answer 200 with a list.</exception>
+    public async Task<(string Sha, string Email)?> LatestCommitAsync(string branch, CancellationToken cancellationToken)
+    {
+        var answer = await ExpectAsync(HttpMethod.Get, $"{RepositoryPath}/commits?sha={Uri.EscapeDataString(branch)}&per_page=1", null, 200, "the latest commit", cancellationToken);
+        return ListOf(answer).FirstOrDefault() is { ValueKind: JsonValueKind.Object } commit
+            && commit.TryGetProperty("sha", out var sha) && sha.ValueKind == JsonValueKind.String
+            && commit.TryGetProperty("commit", out var data) && data.ValueKind == JsonValueKind.Object
+            && data.TryGetProperty("author", out var author) && author.ValueKind == JsonValueKind.Object
+            && author.TryGetProperty("email", out var email) && email.ValueKind == JsonValueKind.String
+            && sha.GetString() is { Length: > 0 } shaText && email.GetString() is { Length: > 0 } emailText
+            ? (shaText, emailText)
+            : null;
+    }
+
+    /// <summary><c>GET …/commits?sha={sha}&amp;author={email}&amp;per_page=1</c>, as answered: the avatars' lookup (6.3's A6, D339).</summary>
+    public Task<LiveAnswer> ProbeLookupAsync(string sha, string email, CancellationToken cancellationToken) =>
+        SendAsync(HttpMethod.Get, $"{RepositoryPath}/commits?sha={Uri.EscapeDataString(sha)}&author={Uri.EscapeDataString(email)}&per_page=1", null, cancellationToken);
 
     /// <summary>"GitHub answered {status} {message} for {what} (request {id})", searched for the token.</summary>
     public string Describe(LiveAnswer answer, string what)

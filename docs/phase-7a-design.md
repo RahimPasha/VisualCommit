@@ -4973,3 +4973,140 @@ design, and for the token's and the account's safety) and fixed by a fixer (work
      plan.md's Visual test gate, steps 4 and 6; the report's "Live command" section.
    - **15 point 1's empty-repository text** stays open: the sandbox has a commit, so the command cannot
      settle it.
+
+## 19. As built: the review before the gate
+
+What the independent review of the code before the gate (status step 17, 2026-10-30) found, and what
+its fixes changed or settled against the sections above, with the lead's rulings. The report and the
+handoff cite these as "design 19.N".
+
+1. **The review.** Five read-only Opus reviewers on `fdb1986`, one per subject (the token's and the
+   account's safety; git's safety; threads, lifetimes and performance; the design's fit and GitHub's
+   behaviour; tests and CI), found 18 problems. Six skeptics tried to refute them: three fell (git-1,
+   a checkout onto a branch of the same name, as D305 and D93 specify; perf-1, the lookups' budget
+   that 17.1 ruled; integration-6, statuses outside 6.2's table, D338) and 15 stood: two of them as
+   a comment or a pinning test only, and git-3, which its skeptic judged harmless, as hardening (item
+   4 shows it was not harmless). CI's run on `fdb1986` added one (ci-1). Four Opus fixers by area
+   (session, avatars, git, waits; worktrees `D:/Projects/Personal/vc-wt/p7a-fix-<area>`, workflow
+   `wfihbpput`), each followed by an Opus reviewer who did not write the fix and a refix of what that
+   reviewer found, fixed them; each fix that changed the product came with a test shown to fail
+   without it, unless items 2 to 5 say otherwise. Merged at `8e98d4a`,
+   `4fe3779`, `0d0d48c` and `e5d09fb`, the reviews' last comment nits at `6a21b58`.
+2. **Session area** (`1212004` to `07de735`).
+   - **tokens-1:** a sign-out, or a sign-in that replaces an account, in a run whose keychain probe
+     found none while the record says `keychain` returns `TokenStoreReasons.NoKeychain` and logs a
+     Warning naming the entry (`VisualCommit:github:<host>:<login>`) to remove by hand, so 7.5's
+     sign-out note shows; the vault still returns null (D272, 3.7). A `refused` record is left out on
+     purpose: `MarkRefusedAsync` rewrites `session` records too, so a warning there would be false,
+     and its token is one GitHub has already refused.
+   - **life-1** (comments only): a begun sign-out completes when the session is disposed, but nothing
+     keeps the process alive for it, so 17.1's "nor the app closing leaves half a sign-out" holds for
+     the session object, not for the process. An exit during the store's delete leaves the record and
+     its entry (the next start is signed in); just after it, the record without its entry (the token
+     shows as missing) or `avatars/` without a record.
+   - **integration-4** (a pinning test only): through git no `get` comes before the start's read ends,
+     since a clone is bound once the read has put the token in the slot, just before it ends, and a
+     tab's bindings also wait for its next refs read. 0.2's and 7.6's 10 s wait guards a direct call.
+   - **integration-1** (major): GitHub's answers name a renamed repository by its new name, which the
+     remotes' URLs do not. Once A3 has answered, every remote equal to the recognised candidate takes
+     A3's name in the state (`RemotesOf`), and a non-fork's listed repository is A3's (`ListedOf`):
+     the list, `ByRef`, checkout, the create form and the avatars' page and map go by it (7.8 step 3,
+     7.9 step 1). `_remotes` and the candidate stay as recognised, so an Update does not loop. A name
+     that differs only in case: the listed repository shows GitHub's case, the remotes keep the URL's
+     (`RemotesOf` compares without case). Not covered: a fork whose renamed parent is reached through
+     an `upstream` remote under its old name (plan.md's risk 36), and a transfer to another
+     owner, which the fake does not model. The fake gains `FakeGitHub.Rename(fullName, newName)` (2.4):
+     the same owner only; every route of the old name redirected (301 for a GET, 307 for a POST or a
+     PATCH, to `repositories/<id>/…`); git still served at the old URL.
+   - **integration-2:** an Update that leaves no GitHub remote also stops the avatar runs and drops the
+     avatars (D252); a change to another GitHub repository keeps them, since the tab sends its set
+     again only after NotGitHub or a sign-out (11.3).
+   - **leak-1:** the client keeps at most 512 answers and 32 MB of their bodies (6.2); a new 200 for a
+     kept URL takes the newest place; a body over the whole budget is not kept. A sign-out forgets them
+     too (`GitHubProvider.ForgetKept`), not only the client's disposal; an answer a request still in
+     flight brings is kept under its token's fingerprint, which no other token's request finds, and
+     for that reason a sign-in that replaces the account does not clear them. Walk-through check A8
+     step 6 expects its second sign-in's `GET api/v3/user` in full again, 200 and not a conditional
+     304 (the report's "Changed in this report after its first commit"); the fixer had not run it, and
+     the lead's whole run at the merge found it.
+3. **Avatars area** (`4986d33` to `797c7eb`).
+   - **integration-3** (D339): `AuthorCommit(Email, Sha, Repository)` in `HostingRecords.cs`;
+     `IRepositoryHosting.ShowAvatarsFor(IReadOnlyCollection<AuthorCommit>)` (1.5) and
+     `IHostingProvider.ReadAuthorsAsync(token, repository, branch, lookups, ct)` (1.4);
+     `RepositoryViewModel.AuthorsOnGitHub` gives each e-mail with the SHA of its newest reached row and
+     the first remote in the hosting order whose branches reach it, a parent taking the best of its
+     children's in the one pass over the rows (7.9 step 3, 11.3). 6.3's A6 is
+     `commits?sha={sha}&author={e-mail}&per_page=1` on that repository: 404 or 409 leave out that
+     repository's remaining lookups in the call, 422 its own address, anything else stops them. A
+     lookup GitHub could not answer leaves its author waiting for the next change of the e-mails.
+   - **perf-2:** `AvatarCache` drops the entries whose image is gone once, when the index is read
+     (one listing of the folder), not at every save (6.4); an image deleted while the app runs keeps
+     its entry until that user's image is saved again or the index is next read, and `Kept` fetches it
+     again meanwhile.
+   - **leak-2:** the graph's and the details panel's decoded caches keep only images that decoded
+     (11.3): a file that did not decode is decoded again at the next change instead of staying empty
+     for the window's life, and a bitmap that loses an overlapping decode's `TryAdd` is disposed. D310
+     and 11.3's "An avatar replaced under the same path shows from the next start" stand. The losing decode can be produced
+     in the graph control (two changes naming one file before the UI thread runs); no test was added.
+   - **ci-1:** `GraphAvatarTests.An_overtaken_change_applies_nothing_and_the_newest_is_applied_once`
+     tries again with a fresh control, up to 10 times, when the first decode ended inside its setter.
+   - **Kept by the lead:** a non-fork's A6 and author map follow A3's name too (beyond integration-1's
+     letter, as 7.9 step 1's "the listed repository"); the first remote in the hosting order when
+     several reach a commit; e-mails alone decide whether the set is sent again.
+4. **Git area** (`df2aa77` to `b76cbc2`).
+   - **tests-1** (major; D340): the third pair per binding, `http.<url>.proactiveAuth=basic`, at
+     n+3i+2 after the two credential pairs at n+3i and n+3i+1, with `GIT_CONFIG_COUNT` n+3k (0.2 says
+     two pairs, 4.6 numbers them 2i and 2k). The three new `AccountCredentialTests` read the version
+     git reports and expect the older behaviour below 2.46. Walk-through check B6 expects the clone's
+     first git request to carry the token from 2.46 on and the old 401 below (the report's "Changed in
+     this report after its first commit").
+   - **4.2's git facts, added** (2.56.0.windows.4, libcurl 8.23.0, loopback, HOME holding `.netrc` and
+     `_netrc`): without the key (2.31 to 2.45 ignore it) a bound fetch's first request goes without
+     credentials, its 401 makes curl send the netrc's pair, and the helper is asked only if that is
+     refused; with `http.<url>.proactiveAuth=basic` git runs the helper's `get` before its first
+     request, every request carries `x-access-token`, a refused token gets one 401 and no netrc retry,
+     and a helper with nothing makes git ask for a user name before any request. The key matches as
+     `credential.<url>` does. `http.emptyAuth=true` does not undo it (measured; 2.46.0's
+     `http_request_reauth` fills the credential first). curl finds the netrc through `NETRC` (libcurl
+     8.16 and later), then HOME, then USERPROFILE on Windows when HOME is unset, `.netrc` before
+     `_netrc`. git-lfs's own client asks HOME's netrc before any helper and reads neither the key nor
+     `NETRC` (its source read). 4.2's heading, "isolated, with HOME there too", names the isolation
+     that hid this.
+   - **The harness:** `GitIsolation.SessionGitEnvironment` adds `HOME = <data>/harness/home`, empty,
+     which `RealApp.Launch` passes too, and `GitIsolation.MachineIndependence` removes `NETRC` (phase
+     6's design 8.12 and 17.2 name the earlier contents). Runners that use neither TempRepo's
+     environment nor a session's (App.Tests' `OperationsHarness`, static runners, `LargeHistory`,
+     `AuthRemoteServer`'s own) still see the machine's HOME (plan.md's risk 37). The live command's
+     Check_2 asserts the broker's "answered from the account" line since the clone's mark, as the real
+     window's B does, the proof D326 counts on.
+   - **git-2:** only `OperationKind.Network` operations carry the tab's bindings (0.2, 4.7, D329), so
+     local writes in a bound tab keep an inherited `GIT_CONFIG_PARAMETERS`, a merge's identity among
+     them. A hook or git-lfs filter that a local operation runs there asks the user's helpers in D82's
+     order, as before 7a.
+   - **git-3:** Create computes the head's place afresh every time (12.3), never keeping one from
+     before. Measured before the fix: a stale place did POST to GitHub, refused only because the
+     fake's fine-grained token may not create there.
+   - **integration-5:** 6.3's owner pattern is
+     `^(?=.{1,39}$)[A-Za-z0-9][A-Za-z0-9-]*(?:_[A-Za-z0-9]+)?$`: an Enterprise Managed User's login on
+     github.com (`mona-cat_octo`) is an owner, so her fork is a GitHub remote; such users are within
+     D258's github.com.
+   - **tests-2:** 14.8's CI step "Build the opt-in projects" runs
+     `if: ${{ !cancelled() && steps.build.outcome == 'success' && runner.os == 'Windows' }}`, as the
+     keychain steps do, so a failed Test step no longer hides it.
+5. **Waits area** (`63ef0d8` to `899ec0a`; tests-3).
+   - `FakeGitHubHold` gains `Abandoned`, completed when a request held in process (through
+     `CreateHandler`) is given up by its sender. Over a served fake the wait sees only the server's
+     stop: a client that gives up never completes it, and the fake's disposal may; a `git:` route never
+     does.
+   - The avatar download's and the sign-out's checks wait for `Abandoned` in place of 200 ms, and the
+     wiring test holds `pulls:octo/hello` and checks that the hold was never reached, in place of a
+     count after 200 ms. The verifier's mutation (the download's send without the caller's token) left
+     the outcome right, since the body's read and the save still see that token: it shows only that
+     the request must be given up at the hold. The finding's own case, a download detached and saved
+     (and for the sign-out the old cache left undisposed), fails both at the wait. The sign-out has two
+     guards: the run's token and the old `AvatarCache`'s disposal.
+6. **Left to the live run** (15 point 1, status step 16): whether github.com answers
+   `commits?sha=<sha>&author=<e-mail>` with both combined (an array of 1 for the commit's author, 0
+   for an address with no commit), and an unknown SHA with 422 beside `author` (D339's 404 rule
+   relies on it); the live command's Check_1 probes all three, read-only, and run.txt never names the
+   address.

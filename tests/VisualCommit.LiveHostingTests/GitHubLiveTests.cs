@@ -85,6 +85,9 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
     /// <summary>A SHA no repository holds, for GitHub's text on an unknown one (2.4).</summary>
     private const string UnknownSha = "ffffffffffffffffffffffffffffffffffffffff";
 
+    /// <summary>An address no commit has, for the avatars' lookup that finds nothing (D339).</summary>
+    private const string NoAuthor = "no-such-author@visualcommit.invalid";
+
     /// <summary>A version GitHub's API does not have, for its text on one (2.4).</summary>
     private const string UnknownVersion = "2000-01-01";
 
@@ -123,7 +126,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             // Step 2: the sandbox.
             step = "2, the sandbox";
             using var api = new GitHubLiveApi(sandbox, run.Withheld);
-            await ReadSandboxAsync(api, sandbox);
+            var repository = await ReadSandboxAsync(api, sandbox);
 
             // Step 3: the leftovers of a stopped run (D324), before anything that is a finding only.
             step = "3, the leftovers";
@@ -166,7 +169,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             // GitHub's texts that the fake writes from memory (2.4; 15 point 1), as findings only: a
             // probe that gets no answer is noted and fails nothing.
             step = "3, GitHub's texts";
-            await ProbeTextsAsync(api);
+            await ProbeTextsAsync(api, repository.DefaultBranch);
         }
         catch (Exception ex)
         {
@@ -626,11 +629,14 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
     /// <summary>
     /// GitHub's texts that the fake writes from memory (2.4; 15 point 1), recorded for the lead to
     /// correct the fake: an API version it does not have, <c>type</c> beside <c>visibility</c>, a SHA
-    /// it does not know. The empty repository's answer is not tried: the sandbox has a commit. Each
-    /// body is kept whole only for a refusal (<see cref="LiveAnswer.BodyForNotes"/>), and a probe that
-    /// gets no answer is noted and fails nothing.
+    /// it does not know, alone and beside <c>author</c>; and the avatars' lookup (D339), the latest
+    /// commit of <paramref name="branch"/> asked with its author's address, which the notes never
+    /// name, and with an address no commit has. The empty repository's answer is not tried: the
+    /// sandbox has a commit. Each body is kept
+    /// whole only for a refusal (<see cref="LiveAnswer.BodyForNotes"/>), and a probe that gets no
+    /// answer is noted and fails nothing.
     /// </summary>
-    private async Task ProbeTextsAsync(GitHubLiveApi api)
+    private async Task ProbeTextsAsync(GitHubLiveApi api, string branch)
     {
         await ProbeAsync(
             $"X-GitHub-Api-Version {UnknownVersion} on GET /repos/{{o}}/{{r}}",
@@ -644,16 +650,58 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             $"GET /repos/{{o}}/{{r}}/commits?sha={UnknownSha}",
             $"422 \"No commit found for SHA: {UnknownSha}\"",
             () => api.ProbeCommitsAsync(UnknownSha, Cancelled));
+        (string Sha, string Email)? latest;
+        try
+        {
+            latest = await api.LatestCommitAsync(branch, Cancelled);
+        }
+        catch (GitHubLiveException ex)
+        {
+            run.Note($"The avatars' lookup (D339): not tried, the latest commit could not be read, a finding only: {ex.Message}");
+            latest = null;
+        }
+
+        if (latest is { } commit)
+        {
+            await ProbeAsync(
+                $"GET /repos/{{o}}/{{r}}/commits?sha=<the latest commit of {branch}>&author=<its author's address> (the avatars' lookup, D339)",
+                "200, an array of 1 (that commit)",
+                () => api.ProbeLookupAsync(commit.Sha, commit.Email, Cancelled),
+                commit.Email);
+            await ProbeAsync(
+                $"GET /repos/{{o}}/{{r}}/commits?sha=<the latest commit of {branch}>&author={NoAuthor}",
+                "200, an array of 0",
+                () => api.ProbeLookupAsync(commit.Sha, NoAuthor, Cancelled));
+            await ProbeAsync(
+                $"GET /repos/{{o}}/{{r}}/commits?sha={UnknownSha}&author=<that address>",
+                $"422 \"No commit found for SHA: {UnknownSha}\" (D339 takes a 404 for a repository it cannot read)",
+                () => api.ProbeLookupAsync(UnknownSha, commit.Email, Cancelled),
+                commit.Email);
+        }
+        else
+        {
+            run.Note("The avatars' lookup (D339): not tried, GitHub gave no latest commit, or one without a SHA or an author's address.");
+        }
+
         run.Note("GitHub's text for the commits of an empty repository: not tried (the sandbox has a commit); the fake: 409 \"Git Repository is empty.\".");
     }
 
-    /// <summary>One probe of <see cref="ProbeTextsAsync"/>: GitHub's answer beside the fake's, or why none came.</summary>
-    private async Task ProbeAsync(string what, string fake, Func<Task<LiveAnswer>> probe)
+    /// <summary>
+    /// One probe of <see cref="ProbeTextsAsync"/>: GitHub's answer beside the fake's, or why none
+    /// came. <paramref name="hidden"/>, an address the request asked with, is replaced in a body that
+    /// echoes it, as written and escaped.
+    /// </summary>
+    private async Task ProbeAsync(string what, string fake, Func<Task<LiveAnswer>> probe, string? hidden = null)
     {
         try
         {
             var answer = await probe();
-            run.Note($"GitHub's text for {what}: {answer}; the fake: {fake}. {answer.BodyForNotes}");
+            var body = hidden is null
+                ? answer.BodyForNotes
+                : answer.BodyForNotes
+                    .Replace(hidden, "<the address>", StringComparison.OrdinalIgnoreCase)
+                    .Replace(Uri.EscapeDataString(hidden), "<the address>", StringComparison.OrdinalIgnoreCase);
+            run.Note($"GitHub's text for {what}: {answer}; the fake: {fake}. {body}");
         }
         catch (GitHubLiveException ex)
         {

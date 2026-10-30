@@ -185,9 +185,10 @@ public sealed partial class Phase7aChecksP
         await WaitForListLineAsync(app, repository, count, listed, logMark);
 
         // From WP-V's merge (open point 29, design 17 items 3 and 6): the tab's avatars once since the
-        // start, hello's 2 authors, tool's 1 (open point 42).
+        // start, 2 authors in hello and in tool, where octo's address is looked up from its commit on
+        // origin, octo/tool (D339; open point 42).
         var avatars = await app.WaitForLogLineAsync(AppLogFile.AvatarsShown(repository), mark: 0);
-        Assert.Equal(repository == Phase7aExpectations.Tool ? "1" : "2", AppLogFile.AvatarsShown(repository).Match(avatars).Groups["count"].Value);
+        Assert.Equal("2", AppLogFile.AvatarsShown(repository).Match(avatars).Groups["count"].Value);
         await app.WaitForWatchersQuietAsync();
     }
 

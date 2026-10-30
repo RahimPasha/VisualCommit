@@ -498,7 +498,9 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             app.Tokens.FailNextDelete(TokenStoreReasons.Locked);
             await app.SignOutAsync(confirm: true);
             await app.WaitForAsync(() => FocusedId(app) == "AccountsSignInButton", "the focus on Sign in…");
-            AssertOneUserRequest(RequestsSince(served, requests), 200, againInThisSession: true);
+            // The sign-out forgot the client's kept answers (design 19 item 2), so this request is a
+            // full one, not a conditional one.
+            AssertOneUserRequest(RequestsSince(served, requests), 200);
             Assert.Equal([$"save {PartA.OctoKey(port)}", $"delete {PartA.OctoKey(port)}"], StoreCallsSince(app, stored));
             snapshot = app.AccountsSnapshot();
             Assert.Equal(PartA.SignedOut, snapshot.Field("AccountsSignedOut")?.Text);

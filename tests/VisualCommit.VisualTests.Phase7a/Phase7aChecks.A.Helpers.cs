@@ -98,33 +98,22 @@ public sealed partial class Phase7aChecksA
     private static List<string> StoreCallsSince(ShellDriver app, int mark) => [.. app.Tokens.Calls.Skip(mark)];
 
     /// <summary>Asserts that <paramref name="requests"/> is exactly one <c>GET api/v3/user</c> with a token, answered <paramref name="status"/>.</summary>
-    private static void AssertOneUserRequest(IReadOnlyList<FakeGitHubRequest> requests, int status, string? login = OctoLogin, bool againInThisSession = false)
+    private static void AssertOneUserRequest(IReadOnlyList<FakeGitHubRequest> requests, int status, string? login = OctoLogin)
     {
         var request = Assert.Single(requests);
-        AssertUserRequest(request, status, login, againInThisSession);
+        AssertUserRequest(request, status, login);
     }
 
     /// <summary>
     /// Asserts that <paramref name="request"/> is <c>GET api/v3/user</c> with a token, answered
-    /// <paramref name="status"/>. With <paramref name="againInThisSession"/> (A8 step 6 only) the
-    /// same token is checked a second time in one app session: WP-G's kept answer makes the request
-    /// conditional, and the fake's 304 stands for GitHub's 200 (design 6.2, 16.10).
+    /// <paramref name="status"/>. A 304 cannot stand for a 200 here: a sign-out forgets the client's
+    /// kept answers, so a second sign-in in one app session asks in full (design 19 item 2).
     /// </summary>
-    private static void AssertUserRequest(FakeGitHubRequest request, int status, string? login = OctoLogin, bool againInThisSession = false)
+    private static void AssertUserRequest(FakeGitHubRequest request, int status, string? login = OctoLogin)
     {
         Assert.Equal(("GET", "/api/v3/user", "user"), (request.Method, request.Path, request.Route));
         Assert.True(request.TokenPresent, "The sign-in's request carried no token.");
-        if (againInThisSession)
-        {
-            Assert.Equal(200, status);
-            Assert.True(
-                request is { Status: 304, Conditional: true },
-                $"GET /api/v3/user was answered {request.Status} (conditional: {request.Conditional}), expected a conditional 304.");
-        }
-        else
-        {
-            Assert.Equal(status, request.Status);
-        }
+        Assert.Equal(status, request.Status);
 
         if (status == 200)
         {

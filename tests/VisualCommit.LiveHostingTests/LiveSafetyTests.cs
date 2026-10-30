@@ -554,6 +554,35 @@ public sealed class LiveSafetyTests
         Assert.Equal("https://api.github.com/repos/octo/sandbox/commits?sha=main&per_page=1", Assert.Single(handler.Requests).Url);
     }
 
+    [Theory]
+    [InlineData("""[{"sha":"a","commit":{"author":{"email":"x@example.invalid"}}}]""", "a", "x@example.invalid")]
+    [InlineData("""[{"sha":"a","commit":{"author":{}}}]""", null, null)]
+    [InlineData("""[{"sha":"","commit":{"author":{"email":"x@example.invalid"}}}]""", null, null)]
+    [InlineData("""[{"sha":"a","author":{"login":"octo"}}]""", null, null)]
+    [InlineData("[]", null, null)]
+    public async Task The_latest_commit_s_sha_and_author_s_address_are_read_for_the_avatars_lookup(string body, string? sha, string? email)
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+        using var api = new GitHubLiveApi(new LiveSandbox("octo", "sandbox", Token), handler);
+
+        var latest = await api.LatestCommitAsync("main", Cancelled);
+
+        Assert.Equal((sha, email), (latest?.Sha, latest?.Email));
+        Assert.Equal("https://api.github.com/repos/octo/sandbox/commits?sha=main&per_page=1", Assert.Single(handler.Requests).Url);
+    }
+
+    [Fact]
+    public async Task The_avatars_lookup_is_one_get_of_the_sandbox_s_commits_by_sha_and_escaped_address()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("[]") });
+        using var api = new GitHubLiveApi(new LiveSandbox("octo", "sandbox", Token), handler);
+
+        Assert.Equal(200, (await api.ProbeLookupAsync("a", "x@example.invalid", Cancelled)).Status);
+
+        var request = Assert.Single(handler.Requests);
+        Assert.Equal(("GET", "https://api.github.com/repos/octo/sandbox/commits?sha=a&author=x%40example.invalid&per_page=1"), (request.Method, request.Url));
+    }
+
     [Fact]
     public void A_pull_request_is_read_from_GitHub_s_object()
     {
