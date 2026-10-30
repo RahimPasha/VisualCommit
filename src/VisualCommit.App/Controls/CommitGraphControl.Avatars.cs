@@ -28,8 +28,11 @@ public sealed partial class CommitGraphControl
 
     private static readonly IReadOnlyDictionary<string, Bitmap> NoImages = new Dictionary<string, Bitmap>(StringComparer.Ordinal);
 
-    /// <summary>The decoded images by file, for the control's life (a few dozen 32-px images); null for a file that did not decode.</summary>
-    private readonly Dictionary<string, Bitmap?> _decoded = new(StringComparer.Ordinal);
+    /// <summary>
+    /// The decoded images by file, for the control's life (a few dozen 32-px images). A file that did
+    /// not decode is not kept: the next change decodes it again, since it may have been written since.
+    /// </summary>
+    private readonly Dictionary<string, Bitmap> _decoded = new(StringComparer.Ordinal);
 
     /// <summary>The images drawn, by lower-case e-mail: those of <see cref="Avatars"/> that decoded, once all of them have.</summary>
     private IReadOnlyDictionary<string, Bitmap> _images = NoImages;
@@ -74,11 +77,15 @@ public sealed partial class CommitGraphControl
         var files = byEmail.Values.Distinct(StringComparer.Ordinal).Where(file => !_decoded.ContainsKey(file)).ToList();
         if (files.Count > 0)
         {
-            // DecodeAsync never throws: a file that does not decode is null.
+            // DecodeAsync never throws: a file that does not decode is null. An overlapping change
+            // may have decoded the same file first; its image is kept and this one disposed.
             var bitmaps = await Task.WhenAll(files.Select(file => AvatarBitmaps.DecodeAsync(file, CancellationToken.None)));
             for (var i = 0; i < files.Count; i++)
             {
-                _decoded.TryAdd(files[i], bitmaps[i]);
+                if (bitmaps[i] is { } bitmap && !_decoded.TryAdd(files[i], bitmap))
+                {
+                    bitmap.Dispose();
+                }
             }
         }
 
@@ -90,7 +97,7 @@ public sealed partial class CommitGraphControl
         var images = new Dictionary<string, Bitmap>(StringComparer.Ordinal);
         foreach (var (email, file) in byEmail)
         {
-            if (_decoded.TryGetValue(file, out var bitmap) && bitmap is not null)
+            if (_decoded.TryGetValue(file, out var bitmap))
             {
                 images[email.ToLowerInvariant()] = bitmap;
             }

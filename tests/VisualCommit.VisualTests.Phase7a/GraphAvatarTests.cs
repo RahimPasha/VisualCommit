@@ -189,6 +189,22 @@ public sealed class GraphAvatarTests : IDisposable
     }
 
     [AvaloniaFact]
+    public void A_file_missing_at_its_first_decode_shows_once_it_is_written()
+    {
+        // As at a sign-out whose files go while a decode is on its way: the file is missing, then
+        // written again under the same name, and the next change decodes it rather than keep none.
+        using var host = Show(new CommitGraphControl { Data = Authors() }, WideWidth);
+        var file = Path.Combine(_folder.Path, "1001.png");
+        Assert.Equal([0], Apply(host, Of((OctoEmail, file))));
+        Assert.False(host.Control.ShowsAvatarFor(OctoEmail));
+
+        Assert.Equal(file, OctoImage());
+        Assert.Equal([0], Apply(host, AuthorAvatars.None));
+        Assert.Equal([1], Apply(host, Of((OctoEmail, file))));
+        Assert.True(host.Control.ShowsAvatarFor(OctoEmail));
+    }
+
+    [AvaloniaFact]
     public void A_hidden_author_column_draws_none_and_still_counts_the_decoded_authors()
     {
         var data = Authors();

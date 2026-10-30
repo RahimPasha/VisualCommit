@@ -139,6 +139,30 @@ public sealed class CommitDetailsAvatarTests : IAsyncLifetime
         Assert.Equal(octoHost.BoundsOf(octoHost.Date).X, octoHost.BoundsOf(octoHost.Author).X);
     }
 
+    [AvaloniaFact]
+    public async Task A_file_missing_at_its_first_decode_shows_once_it_is_written()
+    {
+        var token = TestContext.Current.CancellationToken;
+        var details = await DetailsAsync();
+        var file = System.IO.Path.Combine(_data.Path, "1001.png");
+        details.Avatars = Of(("octo@example.com", Image("9.png")));
+        using var host = Show(details);
+        await details.ShowAsync(_octo, cancellationToken: token);
+        await WaitAsync(() => host.Avatar.IsVisible, "the first image");
+
+        // As at a sign-out whose files go while a decode is on its way: the shown image stays until
+        // the missing file's decode ends and hides it; the file is then written again under the
+        // same name, and the next time it is shown it is decoded rather than kept as none.
+        details.Avatars = Of(("octo@example.com", file));
+        await WaitAsync(() => !host.Avatar.IsVisible, "the missing file's decode");
+
+        Assert.Equal(file, Image("1001.png"));
+        details.Avatars = AuthorAvatars.None;
+        details.Avatars = Of(("octo@example.com", file));
+        await WaitAsync(() => host.Avatar.IsVisible, "the written file's image");
+        Assert.IsType<ImageBrush>(host.Avatar.Fill);
+    }
+
     private static async Task WaitAsync(Func<bool> condition, string what)
     {
         var clock = Stopwatch.StartNew();
