@@ -160,6 +160,15 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for the macOS races' fix (`33313ef`, pushed as `0aa7cdb`) is
+[41001188676](https://github.com/RahimPasha/VisualCommit/actions/runs/41001188676): `windows-latest`
+(34 min 1 s; its Test step 31 min 25 s of 55, 5,813 of 5,817 passed and 4 skipped; its keychain step
+green), `ubuntu-latest` (7 min 48 s; Test step 5 min 49 s) and the two "bare ubuntu container" jobs
+(8 min 18 s and 7 min 50 s; Test steps 6 min 5 s and 5 min 45 s; their Secret Service steps green)
+succeeded, P13 and `KeyRouterTests` passing. `macos-latest` (29 min 9 s; Test step 26 min 45 s; its
+keychain step green) failed only G1's pixel check again, as on `8810136` (5,810 of 5,814 passed and 3
+skipped); its fix is being built.
+
 Phase 7a's run for WP-V's merge (`8810136`) is
 [40993671970](https://github.com/RahimPasha/VisualCommit/actions/runs/40993671970): `ubuntu-latest`
 (6 min 2 s; Test step 4 min 35 s, 5,811 of 5,814 passed and 3 skipped) and the two "bare ubuntu
