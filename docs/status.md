@@ -165,6 +165,18 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for wave 3's merge and its items (`fdb1986`) is
+[41038505814](https://github.com/RahimPasha/VisualCommit/actions/runs/41038505814): four jobs
+succeeded and one failed. `windows-latest` (38 min 25 s; Test step 35 min 5 s of 55; its keychain step
+green; the new step "Build the opt-in projects" built the real-window pass and the live command in
+29 s), `macos-latest` (39 min 59 s; Test step 37 min 57 s; its keychain step green), `ubuntu-latest`
+(7 min 29 s) and the container with the SDK from Ubuntu's packages (6 min 1 s) passed. The container
+with the SDK from Microsoft's installer failed one test of 5,857:
+`GraphAvatarTests.An_overtaken_change_applies_nothing_and_the_newest_is_applied_once` saw the first
+change applied (`[1, 0]`). `AvatarBitmaps.DecodeAsync` is a `Task.Run` that can end before the UI
+thread reaches its `await`, so that change applied at once and was never overtaken: the product is
+right and the test assumed the decode always yields. It is fixed with the review's findings (step 17).
+
 Phase 7a's run for WP-N's merge (`93e3410`) is
 [41023837694](https://github.com/RahimPasha/VisualCommit/actions/runs/41023837694): all five jobs
 succeeded: `windows-latest` (37 min 24 s; its Test step 34 min 24 s of 55, 5,856 of 5,860 passed and
@@ -481,10 +493,21 @@ tests pass). The lead's merge items follow (design 18: the solution's comment, C
 opt-in projects", CLAUDE.md's rows and notes, D335's changes to CLAUDE.md and plan.md, the report's
 "Live command" section, and `TokenTripwire`'s message and standard-input search); step 15 is ticked.
 The default run's product code is unchanged by wave 3, so no whole run was made at its merge: the
-build passed, the tripwire's test passed, and CI runs the rest. Next: read CI's run on that push;
-then step 17, the independent review of the code before the gate, while the live run (step 16)
-waits for the owner's private sandbox, token and two variables (design 14.6; "Waiting on the
-owner"). Each of parts B, P, G and N
+build passed, the tripwire's test passed, and CI's run 41038505814 on `fdb1986` passed on four
+jobs and failed one test in one container, a test's race now fixed with the review's findings (CI).
+Under way: step 17, the independent review of the code. Five read-only Opus reviewers (token and
+account safety; git safety; threads, lifetimes and performance; design fit and GitHub's behaviour;
+tests and CI) found 18 problems on `fdb1986`, two of them major (a renamed or transferred repository
+breaks badges, checkout and Create; a user's `~/.netrc` answers before the app's helper). Six
+skeptics verified them: 3 refuted (git-1 by D305 and D93, perf-1 by design 17.1's ruling,
+integration-6 by design 6.2 and D338), 15 stand, two of them as text or a test pin only. Four Opus
+fixers by area (workflow `wfihbpput`: session, avatars, git, waits; worktrees
+`D:/Projects/Personal/vc-wt/p7a-fix-<area>`, branches `wip/p7a-fix-<area>`), each reviewed by an
+agent that did not write it. Next: read their reports, merge each with `--no-ff`, record design 18
+item 3 and decisions D339 (avatar lookups through a reached commit) and D340 (netrc kept out by
+`http.<url>.proactiveAuth`, git 2.46 and later), run the touched projects and the lagged list,
+push and read CI. The live run (step 16) waits for the owner's private sandbox, token and two
+variables (design 14.6; "Waiting on the owner"). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
