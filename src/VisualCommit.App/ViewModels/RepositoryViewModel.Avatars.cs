@@ -100,7 +100,8 @@ public sealed partial class RepositoryViewModel
     /// their e-mails differ from those last sent (none before any): never in summary mode or without an account's listing
     /// (D257: only <c>Loading</c>, <c>Failed</c> or <c>Loaded</c>), nor while the graph still loads
     /// its first <see cref="AvatarRows"/> rows. An author's newer commit alone is not news: the one
-    /// sent before still finds the author on GitHub (D339).
+    /// sent before still finds the author on GitHub, unless GitHub could not answer that lookup (its
+    /// remote unreadable, its branch rewritten); that author waits for the next change of the e-mails (D339).
     /// </summary>
     private void UpdateAuthors()
     {
