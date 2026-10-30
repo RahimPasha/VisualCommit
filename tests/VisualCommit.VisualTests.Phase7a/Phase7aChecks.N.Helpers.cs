@@ -104,6 +104,23 @@ public sealed partial class Phase7aChecksN
 
     private static string? Text(ShellDriver app, string id) => ((TextBlock)app.FindByAutomationId(id)).Text;
 
+    /// <summary>
+    /// The rest of N1 step 2's form (the report's "the rest as N1's form"): the focus in the title
+    /// with the caret at its end, the description empty with its placeholder, Draft unticked, and
+    /// <c>Choose…</c>, <c>Cancel</c> and <c>Create</c> enabled.
+    /// </summary>
+    private static async Task AssertNewFormAsync(ShellDriver app, CreatePullRequestDialogViewModel form)
+    {
+        await app.WaitForAsync(() => app.FocusedAutomationId() == "PullRequestTitle", "the focus in the title");
+        var title = (TextBox)app.FindByAutomationId("PullRequestTitle");
+        Assert.Equal((title.Text ?? string.Empty).Length, title.CaretIndex);
+        var description = (TextBox)app.FindByAutomationId("PullRequestDescription");
+        Assert.Equal((string.Empty, N.DescriptionPlaceholder), (description.Text ?? string.Empty, description.PlaceholderText));
+        Assert.Equal((string.Empty, false), (form.Description, form.IsDraft));
+        Assert.False(((CheckBox)app.FindByAutomationId("PullRequestDraft")).IsChecked);
+        Assert.All(["PullRequestBaseChooseButton", "CancelButton", "ConfirmButton"], id => Assert.True(app.FindByAutomationId(id).IsEffectivelyEnabled, $"{id} is disabled."));
+    }
+
     /// <summary>The form's controls that 12.4's creating state disables; Cancel apart (open point 59).</summary>
     private static readonly string[] FormInputs = ["PullRequestBaseChooseButton", "PullRequestTitle", "PullRequestDescription", "PullRequestDraft", "ConfirmButton"];
 

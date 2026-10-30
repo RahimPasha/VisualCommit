@@ -47,6 +47,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             await app.WaitForAccountAsync(account => account is { State: AccountState.SignedIn });
             app.PressKey(Key.Escape);
             await app.WaitForAsync(() => screen.IsClosed, "the settings screen to close");
+            Assert.Equal(AccountState.SignedIn, app.Session.Services.Hosting.Account?.State);
             await WaitForHelloAsync(app, logMark);
             Assert.Equal(["GET user 200", "GET repo:octo/hello 200", "GET pulls:octo/hello 200"], Routes(served, requests));
             Assert.All(ApiSince(served, requests), request => Assert.Equal((true, "octo"), (request.TokenPresent, request.Login)));
@@ -63,13 +64,9 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             AssertHighlighted(menu, "Check out topic/no-pr");
             AssertMenuHeight(app, menu, N.TopicMenuHeight);
             var form = await OpenFormFromMenuAsync(app);
-            await app.WaitForAsync(() => app.FocusedAutomationId() == "PullRequestTitle", "the focus in the title");
+            await AssertNewFormAsync(app, form);
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle);
             Assert.Equal(N.TopicTitle.Length, ((TextBox)app.FindByAutomationId("PullRequestTitle")).CaretIndex);
-            Assert.Equal((string.Empty, false), (form.Description, form.IsDraft));
-            Assert.True(app.FindByAutomationId("PullRequestBaseChooseButton").IsEffectivelyEnabled);
-            Assert.True(app.FindByAutomationId("CancelButton").IsEffectivelyEnabled);
-            Assert.True(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
             AssertFormPlaces(app, N.CardLeft);
             AssertFormLayout(app);
             Assert.Empty(ApiSince(served, requests));
@@ -183,7 +180,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             AssertMenu(menu, P.LocalWorkMenu);
             AssertMenuHeight(app, menu, N.LocalWorkMenuHeight);
             var form = await OpenFormFromMenuAsync(app);
-            await app.WaitForAsync(() => app.FocusedAutomationId() == "PullRequestTitle", "the focus in the title");
+            await AssertNewFormAsync(app, form);
             AssertForm(app, form, N.LocalWork, N.PushedFirstWithUpstream("origin/local-work"), N.OriginMain, N.LocalWorkTitle);
             var note = app.FindByAutomationId("PullRequestHeadNote");
             Assert.Contains("settingsNote", note.Classes);
@@ -337,8 +334,10 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             var hello = app.Session.Shell.ActiveTab.Repository!;
             await WaitForHelloAsync(app);
             served.GitHub.AddPullRequest("octo", "hello", N.TopicTitle, "octo", N.Topic, N.Main);
-            Assert.Contains(served.GitHub.PullRequests(N.Repository), pull => pull.Number == 6 && pull.IsOpen);
+            var added = Assert.Single(served.GitHub.PullRequests(N.Repository), pull => pull.Number == 6);
+            Assert.Equal((true, N.Topic, (string?)null, N.Main), (added.IsOpen, added.HeadRef, added.HeadRepository, added.BaseRef));
             Assert.Equal(4, hello.HostingState.List!.PullRequests.Count);
+            AssertSectionRows(app, [.. P.HelloRows]);
 
             // Step 2: already open.
             app.Click(await app.RefRowAsync("Local branches", "topic"));
@@ -347,6 +346,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             var form = await OpenFormFromMenuAsync(app);
             var requests = served.GitHub.Requests.Count;
             var logMark = app.LogMark();
+            var operations = OperationMark(app);
             using (var dialogs = new DialogRecorder(app))
             {
                 app.Click(app.FindByAutomationId("ConfirmButton"));
@@ -357,6 +357,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             }
 
             ShotN(app, N.N04a);
+            Assert.Equal([(N.OperationTitle(N.Topic), OperationOutcome.Failed)], OperationsSince(app, operations).Select(record => (record.Title, record.Outcome)));
             Assert.Equal(["POST create:octo/hello 422", "GET pulls:octo/hello 200 conditional"], Routes(served, requests));
             Assert.Equal((N.TopicTitle, string.Empty, N.Topic, N.Main, false, false), Body(PostSince(served, requests)));
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle, N.AlreadyOpen(6, N.Topic, N.OriginMain), 6);
@@ -405,16 +406,14 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
 
             // Step 6: another base.
             app.Click(app.FindByAutomationId("PullRequestBaseChooseButton"));
-            pick = await app.WaitForDialogAsync<PickDialogViewModel>();
-            pick.Selected = N.OriginTopic;
-            app.Click(app.FindByAutomationId("ConfirmButton"));
+            await app.PickAsync(N.OriginTopic);
             await app.WaitForAsync(() => form.BaseText == N.OriginTopic, "the chosen base");
             Assert.Null(form.Error);
             Assert.True(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
 
             // Step 7: an empty title.
             app.Click(app.FindByAutomationId("PullRequestTitle"));
-            app.PressGesture(new KeyGesture(Key.A, KeyModifiers.Control));
+            app.PressGesture(new KeyGesture(Key.A, app.CommandModifier));
             app.PressKey(Key.Delete);
             var confirm = app.FindByAutomationId("ConfirmButton");
             Assert.False(confirm.IsEffectivelyEnabled);
@@ -433,6 +432,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             // Step 8: no commits between.
             requests = served.GitHub.Requests.Count;
             logMark = app.LogMark();
+            operations = OperationMark(app);
             var calls = await app.QuietCallMarkAsync();
             using (var dialogs = new DialogRecorder(app))
             {
@@ -444,6 +444,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             }
 
             ShotN(app, N.N04b);
+            Assert.Equal([(N.OperationTitle(N.Main), OperationOutcome.Failed)], OperationsSince(app, operations).Select(record => (record.Title, record.Outcome)));
             Assert.Equal(["POST create:octo/hello 422"], Routes(served, requests));
             Assert.Equal((N.MainTitle, string.Empty, N.Main, N.Topic, false, false), Body(PostSince(served, requests)));
             Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
@@ -483,6 +484,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             AssertHighlighted(menu, "Check out origin/topic/no-pr");
             AssertMenuHeight(app, menu, N.OriginTopicMenuHeight);
             var form = await OpenFormFromMenuAsync(app);
+            await AssertNewFormAsync(app, form);
             AssertForm(app, form, N.OriginTopic, null, N.OriginMain, N.TopicTitle);
             Assert.Empty(ApiSince(served, requests));
             ShotN(app, N.N05a);
@@ -598,6 +600,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             var form = await app.WaitForDialogAsync<CreatePullRequestDialogViewModel>();
             await app.WaitForAsync(() => form.BaseText == N.OriginMain, "the form's base");
             await WaitForHelloAsync(app, logMark);
+            await AssertNewFormAsync(app, form);
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle);
             Assert.Equal(["GET user 200", "GET repo:octo/hello 200", "GET pulls:octo/hello 200"], Routes(served, requests));
             Assert.All(ApiSince(served, requests), request => Assert.True(request.TokenPresent));
@@ -636,11 +639,13 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             using var dialogs = new DialogRecorder(app);
             var requests = served.GitHub.Requests.Count;
             var logMark = app.LogMark();
+            var operations = OperationMark(app);
             app.Click(app.FindByAutomationId("ConfirmButton"));
             await WaitForEndAsync(app, N.Topic, logMark, OperationOutcome.Failed);
             await app.WaitForAsync(() => !form.IsCreating, "the form idle again");
             await app.WaitForWatchersQuietAsync();
             ShotN(app, N.N09a);
+            Assert.Equal([(N.OperationTitle(N.Topic), OperationOutcome.Failed)], OperationsSince(app, operations).Select(record => (record.Title, record.Outcome)));
             Assert.Equal(["POST create:octo/hello 403"], Routes(served, requests));
             Assert.True(PostSince(served, requests).TokenPresent);
             Assert.Equal(AccountState.SignedIn, app.Session.Services.Hosting.Account?.State);
@@ -655,12 +660,15 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             served.GitHub.FailNext("create:octo/hello", FakeGitHubFault.CreatedThenDropped);
             requests = served.GitHub.Requests.Count;
             logMark = app.LogMark();
+            operations = OperationMark(app);
             app.Click(app.FindByAutomationId("ConfirmButton"));
             var end = await WaitForEndAsync(app, N.Topic, logMark, OperationOutcome.Succeeded);
             var endAt = app.LogLines().ToList().IndexOf(end);
-            await app.WaitForAsync(() => app.LogLines().Skip(endAt + 1).Any(AppLogFile.PullRequestsListed(Phase7aExpectations.Hello).IsMatch), "D289's list after the end");
+            var listed = AppLogFile.PullRequestsListed(Phase7aExpectations.Hello);
+            await app.WaitForAsync(() => app.LogLines().Skip(endAt + 1).Any(line => listed.Match(line) is { Success: true } match && match.Groups["count"].Value == "5"), "D289's listed 5 after the end");
             await app.WaitForWatchersQuietAsync();
             Assert.True(form.IsClosed);
+            Assert.Equal([(N.OperationTitle(N.Topic), OperationOutcome.Succeeded, N.Created(6, false))], OperationsSince(app, operations).Select(record => (record.Title, record.Outcome, record.Message)));
             AssertStatus(app, N.Created(6, false));
             Assert.True(hello.OperationStatus.HasOffer);
             Assert.Empty(dialogs.Opened);
@@ -700,6 +708,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             app.Click(await app.RefRowAsync("Local branches", "topic"));
             await MenuOfAsync(app, "Local branches", "topic", "no-pr");
             var form = await OpenFormFromMenuAsync(app);
+            await AssertNewFormAsync(app, form);
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle);
             AssertFormPlaces(app, N.CardLeft1920);
             AssertFormLayout(app);
@@ -711,6 +720,7 @@ public sealed partial class Phase7aChecksN : Phase7aChecks
             app.Click(app.FindByAutomationId("ThemeSwitch"));
             await MenuOfAsync(app, "Local branches", "topic", "no-pr");
             form = await OpenFormFromMenuAsync(app);
+            await AssertNewFormAsync(app, form);
             AssertForm(app, form, N.Topic, null, N.OriginMain, N.TopicTitle);
             AssertFormPlaces(app, N.CardLeft1920);
             AssertFormLayout(app);
