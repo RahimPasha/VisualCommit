@@ -132,7 +132,7 @@ public sealed partial class RealApp
         var box = FindIn(OpenSignInDialogRoot(), "SignInToken");
         if (box.Name != PartA.TokenLabel)
         {
-            throw new InvalidOperationException($"The token box is named \"{box.Name}\", not \"{PartA.TokenLabel}\".");
+            throw new InvalidOperationException($"The token box is named \"{WithoutToken(box.Name, token, "The token box's name")}\", not \"{PartA.TokenLabel}\".");
         }
 
         if (SecretBoxValue("SignInToken").Length != 0)
@@ -142,12 +142,24 @@ public sealed partial class RealApp
     }
 
     /// <summary>
+    /// <paramref name="text"/>, read from the app, for an exception's message, after checking that it
+    /// does not hold <paramref name="token"/>, the token typed into the dialog: when it does, throws
+    /// naming <paramref name="place"/> instead, so that no message holds the token and the leak fails
+    /// by its place (design 13.2).
+    /// </summary>
+    private static string WithoutToken(string text, string token, string place) =>
+        text.Contains(token, StringComparison.Ordinal) ? throw new InvalidOperationException($"{place} holds the typed token.") : text;
+
+    /// <summary>
     /// A real click on the open dialog's own "Sign in" (<c>ConfirmButton</c>, found inside the dialog:
     /// the settings screen below has one too), named <c>Sign in</c> (<see cref="PartA.SignIn"/>) and
-    /// enabled, and waits until the dialog has gone: the token checked out and kept.
+    /// enabled, and waits until the dialog has gone: the token checked out and kept. A time-out's
+    /// message gives the dialog's error and notes, each checked first for <paramref name="token"/>, the
+    /// token typed (<see cref="WithoutToken"/>).
     /// </summary>
-    public void ConfirmSignIn(TimeSpan timeout)
+    public void ConfirmSignIn(string token, TimeSpan timeout)
     {
+        ArgumentException.ThrowIfNullOrEmpty(token);
         var confirm = FindIn(OpenSignInDialogRoot(), "ConfirmButton");
         if (confirm.Name != PartA.SignIn || !confirm.IsEnabled)
         {
@@ -163,7 +175,7 @@ public sealed partial class RealApp
             () => ShownElements(SignInDialogId).Count == 0,
             "\"Add GitHub account\" to close after the sign-in",
             timeout,
-            () => $"It still shows: {string.Join(" | ", NamesOnScreen("SignInError").Concat(NamesOnScreen("SignInSaveFailed")).Concat(NamesOnScreen("SignInChecking")))}.");
+            () => $"It still shows: {WithoutToken(string.Join(" | ", NamesOnScreen("SignInError").Concat(NamesOnScreen("SignInSaveFailed")).Concat(NamesOnScreen("SignInChecking"))), token, "The dialog's error or note")}.");
     }
 
     /// <summary>
@@ -173,14 +185,23 @@ public sealed partial class RealApp
     public void TypeTokenAndConfirm(string token, TimeSpan timeout)
     {
         TypeToken(token);
-        ConfirmSignIn(timeout);
+        ConfirmSignIn(token, timeout);
     }
 
     /// <summary>
     /// Signs in through Settings as the scripted R twins do (design 13.3, the report's open point 30):
     /// <see cref="OpenAccountsSection"/>, "Sign in…", <see cref="TypeTokenAndConfirm"/>, waits until
     /// <c>AccountLogin</c> reads <paramref name="login"/>, then Esc closes the screen; the sign-in stays
-    /// (D256).
+    /// (D256). Then waits until the keyboard focus is on the window itself
+    /// (<see cref="FocusIsOnTheWindow"/>), the state the twin's screen gives back on Esc: the screen
+    /// gives the focus back to what had it when it opened (D104, <c>MainWindow.OnDialogRemoving</c>);
+    /// in the twin, which opens it by the key alone (<c>SettingsOpening.Key</c>), that is what the
+    /// launch left, and no view of a repository's tab takes the focus when it opens. Here the click at
+    /// the neutral point comes before the key (<see cref="OpenAccountsSection"/>): should it ever give
+    /// a control the focus, the screen would give that control the focus back, and the pictures that
+    /// follow (p06a first) would be taken in another state than their twins' (open point 30), seen
+    /// only as a difference in pixels; this fails by name first. For a launch on hello only: an empty
+    /// tab's welcome page gives its URL box the focus (<c>WelcomeView.axaml.cs</c>).
     /// </summary>
     public void SignInThroughSettings(string token, string login, TimeSpan timeout)
     {
@@ -191,6 +212,29 @@ public sealed partial class RealApp
         WaitForText("AccountLogin", login, timeout);
         PressKey(VirtualKeyShort.ESCAPE);
         WaitUntilGone(SettingsDialogId, timeout);
+        WaitForTelling(
+            FocusIsOnTheWindow,
+            "the keyboard focus back on the window itself, on none of its controls, after the settings screen closed (D104; the twin's state, open point 30)",
+            DefaultWaitTimeout,
+            () => $"The focus is on {FocusedAutomationId() switch { null or "" => "an element without an automation id", var id => id }}.");
+    }
+
+    /// <summary>
+    /// Whether UI Automation's focused element is the window itself, on none of its controls: what it
+    /// reports while the app's own focus is on the window or on nothing in it. False when it cannot be
+    /// read.
+    /// </summary>
+    public bool FocusIsOnTheWindow()
+    {
+        try
+        {
+            return _automation.FocusedElement() is { } focused
+                && (focused.Equals(Window) || focused.Properties.NativeWindowHandle.ValueOrDefault == Handle);
+        }
+        catch (Exception ex) when (ex is System.Runtime.InteropServices.COMException or FlaUI.Core.Exceptions.ElementNotAvailableException)
+        {
+            return false;
+        }
     }
 
     /// <summary>The repository browser's rows (<c>CloneFromGitHubItem</c>, named by the full name), top to bottom.</summary>

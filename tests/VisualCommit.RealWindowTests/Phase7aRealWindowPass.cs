@@ -31,7 +31,9 @@
 //   (keepPointer). At most 3 % differ (D33, D58). The 7a walk-through's pictures must exist: run
 //   `dotnet test --project tests/VisualCommit.VisualTests.Phase7a` first.
 // - No token is ever passed to an Assert method or put in a message: texts that could hold one are
-//   tested with string.Contains and a failure names the place. Never click "Copy link", "Copy …",
+//   tested with string.Contains and a failure names the place. A text read from the app, git or the
+//   fake goes into a message only through Checked; the fake's records only through Recorded (whose
+//   paths, queries and bodies are checked); the log's lines only as a count (CountLinesSince). Never click "Copy link", "Copy …",
 //   "Open file", "Open in editor", "Show in folder" or the status bar's "Open in browser"; never change
 //   a desktop setting (D224). The one browser opened is part P's (13.5, D321).
 using System.Globalization;
@@ -210,20 +212,52 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
     // ---- The fake's records and the log ----
 
     /// <summary>
+    /// The fake's records after its first <paramref name="mark"/> (<c>Requests.Count</c> read before
+    /// the step), each checked first (<see cref="AssertNoTokenIn"/>): an assertion over them may then
+    /// print them, as xUnit prints a collection when it fails, without printing a token.
+    /// </summary>
+    private static List<FakeGitHubRequest> Recorded(ServedHosting served, int mark = 0)
+    {
+        List<FakeGitHubRequest> records = [.. served.GitHub.Requests.Skip(mark)];
+        AssertNoTokenIn(served, records);
+        return records;
+    }
+
+    /// <summary>Fails, naming the record's method and route, when the path, the query or the body of one of <paramref name="records"/> holds one of the scenario's tokens (<see cref="AssertNoToken"/>).</summary>
+    private static void AssertNoTokenIn(ServedHosting served, IEnumerable<FakeGitHubRequest> records)
+    {
+        foreach (var record in records)
+        {
+            var place = $"The fake's record of {record.Method} {record.Route ?? "(no route)"}";
+            AssertNoToken(served, record.Path, $"{place}: its path");
+            AssertNoToken(served, record.Query, $"{place}: its query");
+            AssertNoToken(served, record.Body, $"{place}: its body");
+        }
+    }
+
+    /// <summary>Fails, naming <paramref name="what"/> and listing the records (method, path, route, status), unless <paramref name="records"/> (from <see cref="Recorded"/>) is empty.</summary>
+    private static void AssertNoRequests(IReadOnlyCollection<FakeGitHubRequest> records, string what) =>
+        Assert.True(records.Count == 0, $"{what}; the fake recorded: {string.Join(" | ", records.Select(request => $"{request.Method} {request.Path} {request.Route} {request.Status}"))}.");
+
+    /// <summary>
     /// Waits until the fake has recorded, after its first <paramref name="mark"/> requests
     /// (<c>Requests.Count</c> read before the step), a request that <paramref name="match"/> accepts,
-    /// and returns it. The fake records a request after its answer, so a step that the app has
-    /// already shown may still lack its record: this read ends that race (design 13.3). Reads the
-    /// records every 100 ms, at most <paramref name="timeout"/>.
+    /// and returns it; on a time-out the message lists what it recorded since the mark
+    /// (<see cref="Recorded"/>). The fake writes its record before the answer goes out
+    /// (<c>FakeGitHub.ServeAsync</c> records, then <c>AuthRemoteServer.ServeRouteAsync</c> writes the
+    /// answer), so for a step that the app shows only after the answer this is a plain read of a
+    /// record that is there already; the wait is needed for a request the app does not wait for, the
+    /// browser's page request of 13.5 (P15). Reads the records every 100 ms, at most
+    /// <paramref name="timeout"/>.
     /// </summary>
-    private static FakeGitHubRequest WaitForFake(FakeGitHub gitHub, int mark, Func<FakeGitHubRequest, bool> match, string what, TimeSpan timeout)
+    private static FakeGitHubRequest WaitForFake(ServedHosting served, int mark, Func<FakeGitHubRequest, bool> match, string what, TimeSpan timeout)
     {
-        ArgumentNullException.ThrowIfNull(gitHub);
+        ArgumentNullException.ThrowIfNull(served);
         ArgumentNullException.ThrowIfNull(match);
         var clock = System.Diagnostics.Stopwatch.StartNew();
         while (true)
         {
-            if (gitHub.Requests.Skip(mark).FirstOrDefault(match) is { } found)
+            if (Recorded(served, mark).FirstOrDefault(match) is { } found)
             {
                 return found;
             }
@@ -232,7 +266,7 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
             {
                 throw new TimeoutException(
                     $"Timed out after {timeout.TotalSeconds:0} s waiting for the fake's record of {what}. Since the mark it recorded: "
-                    + string.Join(" | ", gitHub.Requests.Skip(mark).Select(request => $"{request.Method} {request.Path} {request.Route} {request.Status}")));
+                    + string.Join(" | ", Recorded(served, mark).Select(request => $"{request.Method} {request.Path} {request.Route} {request.Status}")));
             }
 
             Thread.Sleep(FakePollInterval);
@@ -273,11 +307,23 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
 
     /// <summary>
     /// The fake's API and page requests since <paramref name="mark"/> (<c>Requests.Count</c> read before
-    /// the step), the avatars' left out: a step that "asks GitHub nothing" is read on these, since an
-    /// avatar run of the sign-in may be recorded after D322's line (the fake records after its answer).
+    /// the step, <see cref="Recorded"/>), the avatars' requests left out (routes <c>commits:</c> and
+    /// <c>avatar:</c>), word for word as the twins' <c>ApiSince</c> (Phase7aChecks.P.Helpers.cs and
+    /// N.Helpers.cs) and the report's rule: a step that "asks GitHub nothing" is read on these. An avatar
+    /// run is no request of the step: a set of authors the hosting is given while a run is under way
+    /// waits for that run's end and then starts its own (<c>RepositoryHosting.Avatars.cs</c>,
+    /// <c>FinishAvatars</c> and <c>_avatarNext</c>), whose requests may come after D322's line.
     /// </summary>
     private static List<FakeGitHubRequest> ApiRequestsSince(ServedHosting served, int mark) =>
-        [.. served.GitHub.Requests.Skip(mark).Where(request => !(request.Route?.StartsWith("avatar:", StringComparison.Ordinal) ?? false))];
+        [.. Recorded(served, mark).Where(request => request.Route is not { } route || !(route.StartsWith("commits:", StringComparison.Ordinal) || route.StartsWith("avatar:", StringComparison.Ordinal)))];
+
+    /// <summary>
+    /// How many lines of the log since <paramref name="logMark"/> <paramref name="match"/> accepts: a
+    /// check of the log fails with the count and a message naming the line it looked for, never with
+    /// the lines themselves, which xUnit's <c>Contains</c>, <c>DoesNotContain</c> and <c>Single</c>
+    /// would print and no one has checked for a token.
+    /// </summary>
+    private static int CountLinesSince(RealApp app, int logMark, Func<string, bool> match) => app.LogLinesSince(logMark).Count(match);
 
     // ---- Tokens ----
 
@@ -292,6 +338,17 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
         {
             Assert.False(text?.Contains(token, StringComparison.Ordinal) ?? false, $"{place} holds {name}.");
         }
+    }
+
+    /// <summary>
+    /// <paramref name="text"/>, read from the app, git or the log, for a failure's message, after
+    /// <see cref="AssertNoToken"/> has checked it: a message that reports a failure never prints a token,
+    /// and a token in such a text fails by its place instead (design 13.2, the report's "Tokens").
+    /// </summary>
+    private static string Checked(ServedHosting served, string text, string place)
+    {
+        AssertNoToken(served, text, place);
+        return text;
     }
 
     /// <summary>
@@ -464,9 +521,16 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
             TokenTripwire.AssertAbsent(token, searched, calls: null);
         }
 
-        Assert.Empty(served.GitHub.Errors);
-        Assert.DoesNotContain(served.GitHub.Requests, request => request.Status is 400 or 415);
-        Assert.DoesNotContain(served.GitHub.Requests, request => (request.Route?.StartsWith("avatar:", StringComparison.Ordinal) ?? false) && request.TokenPresent);
+        var errors = served.GitHub.Errors;
+        foreach (var error in errors)
+        {
+            AssertNoToken(served, error, "An error of the fake");
+        }
+
+        Assert.Empty(errors);
+        var records = Recorded(served);
+        Assert.DoesNotContain(records, request => request.Status is 400 or 415);
+        Assert.DoesNotContain(records, request => (request.Route?.StartsWith("avatar:", StringComparison.Ordinal) ?? false) && request.TokenPresent);
     }
 
     [GeneratedRegex(@" \((danger|disabled: "".*""|disabled)\)$", RegexOptions.CultureInvariant)]

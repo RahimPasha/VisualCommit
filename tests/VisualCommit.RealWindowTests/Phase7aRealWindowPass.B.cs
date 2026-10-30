@@ -46,7 +46,7 @@ public partial class Phase7aRealWindowPass
             () => app.PaletteRowsInView() is [{ IsHighlighted: true } row] && row.Label == PartB.PaletteCommand,
             $"the palette's one row \"{PartB.PaletteCommand}\", highlighted",
             () => $"It shows: {app.DescribePaletteRows()}.");
-        Assert.Empty(served.GitHub.Requests);
+        AssertNoRequests(Recorded(served), "The palette asked GitHub");
         app.PressKey(VirtualKeyShort.RETURN);
         app.WaitForPaletteClosed(StepTimeout);
 
@@ -61,7 +61,7 @@ public partial class Phase7aRealWindowPass
 
         // Step 3 (B3): the form with the browser over it, listed, the filter focused; "Choose" disabled.
         app.WaitFor(() => app.ShownElements(RealApp.CloneFromGitHubDialogId).Count == 1, "the repository browser \"Clone from GitHub\"", NetworkTimeout);
-        WaitForFake(served.GitHub, requests, request => request.Route == PartB.ListRoute, "GET api/v3/user/repos", NetworkTimeout);
+        WaitForFake(served, requests, request => request.Route == PartB.ListRoute, "GET api/v3/user/repos", NetworkTimeout);
         IReadOnlyList<string> rows = [.. PartB.Rows.Select(row => row.FullName)];
         WaitTelling(
             app,
@@ -74,7 +74,7 @@ public partial class Phase7aRealWindowPass
         Assert.Equal(string.Empty, app.BoxText("CloneFromGitHubFilter"));
         var choose = app.FindIn(browser, "ConfirmButton");
         Assert.Equal((PartB.Choose, false), (choose.Name, choose.IsEnabled));
-        Assert.Equal(["user", PartB.ListRoute], served.GitHub.Requests.Skip(requests).Select(request => request.Route ?? request.Path));
+        Assert.Equal(["user", PartB.ListRoute], Recorded(served, requests).Select(request => request.Route ?? request.Path));
         Assert.Empty(app.ShownElements("AccountLogin"));
         Compare(app, served, PartB.B03aListed);
 
@@ -91,7 +91,7 @@ public partial class Phase7aRealWindowPass
             app,
             () => app.BoxText("CloneUrlBox") == url && app.BoxText("CloneNameBox") == PartB.HelloFolder,
             $"the form to hold {url} and {PartB.HelloFolder}",
-            () => $"It holds \"{app.BoxText("CloneUrlBox")}\" and \"{app.BoxText("CloneNameBox")}\".");
+            () => $"It holds \"{Checked(served, app.BoxText("CloneUrlBox"), "The form's URL box")}\" and \"{Checked(served, app.BoxText("CloneNameBox"), "The form's name box")}\".");
 
         // Step 5 (B6): the parent folder typed; "Clone"; hello opens in the tab within the network's
         // limit, with no credentials dialog; the helper answered git from the account as x-access-token.
@@ -112,21 +112,25 @@ public partial class Phase7aRealWindowPass
         }
         catch (TimeoutException ex)
         {
-            throw new TimeoutException($"{ex.Message} The credentials dialog {(app.ShownElements("CredentialsDialog").Count == 0 ? "does not show" : "shows")}; the clone's error reads \"{string.Join(" | ", app.NamesOnScreen("CloneError"))}\".", ex);
+            throw new TimeoutException($"{ex.Message} The credentials dialog {(app.ShownElements("CredentialsDialog").Count == 0 ? "does not show" : "shows")}; the clone's error reads \"{Checked(served, string.Join(" | ", app.NamesOnScreen("CloneError")), "The clone's error")}\".", ex);
         }
 
         Assert.Empty(app.ShownElements("CredentialsDialog"));
-        var lines = app.LogLinesSince(logMark);
-        Assert.Contains(lines, line => line.EndsWith(PartB.AnsweredFromTheAccount(port), StringComparison.Ordinal));
-        Assert.DoesNotContain(lines, line => line.Contains("hello: Clone: git asks (", StringComparison.Ordinal));
+        var answered = PartB.AnsweredFromTheAccount(port);
+        Assert.True(
+            CountLinesSince(app, logMark, line => line.EndsWith(answered, StringComparison.Ordinal)) > 0,
+            $"No line of the log since the click on Clone ends with \"{answered}\".");
+        var asks = CountLinesSince(app, logMark, line => line.Contains("hello: Clone: git asks (", StringComparison.Ordinal));
+        Assert.True(asks == 0, $"{asks} lines of the log since the click on Clone hold \"hello: Clone: git asks (\".");
         var git = served.GitHub.GitRequests.Skip(gitRequests).Where(request => request.Path.StartsWith("/octo/hello.git/", StringComparison.Ordinal)).ToList();
+        foreach (var request in git)
+        {
+            AssertNoToken(served, request.Path, "The path of a git request to the fake");
+            AssertNoToken(served, request.Query, "The query of a git request to the fake");
+        }
+
         Assert.Contains(git, request => request is { GivenUserName: "x-access-token", Status: 200 });
         Assert.DoesNotContain(git, request => request.GivenUserName is not null && request.GivenUserName != "x-access-token");
-
-        // The clone's tab lists and shows avatars, as its twin waits, so that the close below cuts no
-        // request of the fake (the report's B6 note: the real window needs only Opened; the wait is
-        // the twin's, no expected result changes).
-        WaitForHostingSettled(app, logMark);
 
         // Step 6: run.txt names the helper the clone went through and whether its path holds a space.
         Assert.True(File.Exists(RealApp.HelperPath), $"The askpass helper {RealApp.HelperPath} does not exist.");

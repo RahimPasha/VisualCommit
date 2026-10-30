@@ -58,7 +58,7 @@ public partial class Phase7aRealWindowPass
         Assert.Empty(app.ShownElements("PullRequestHeadNote"));
         var create = app.FindIn(form, "ConfirmButton");
         Assert.Equal((PartN.Create, true), (create.Name, create.IsEnabled));
-        Assert.Empty(ApiRequestsSince(served, requests));
+        AssertNoRequests(ApiRequestsSince(served, requests), "Opening the form asked GitHub");
         Compare(app, served, PartN.N01a);
 
         // Step 4: Create. The operation's end, then both "listed" lines (ruling 51) since the mark.
@@ -73,7 +73,7 @@ public partial class Phase7aRealWindowPass
             app,
             () => app.CountLogLinesSince(ended, logMark) > 0,
             $"\"{PartN.OperationTitle(PartN.Topic)}\" to succeed",
-            () => $"Since the mark the log says: {string.Join(" | ", app.LogLinesSince(logMark).Where(line => line.Contains(PartN.OperationTitle(PartN.Topic), StringComparison.Ordinal)))}; the form reads \"{string.Join(" | ", app.NamesOnScreen("PullRequestError"))}\".",
+            () => $"Since the mark the log says: {Checked(served, string.Join(" | ", app.LogLinesSince(logMark).Where(line => line.Contains(PartN.OperationTitle(PartN.Topic), StringComparison.Ordinal))), "A line of the log about the operation")}; the form reads \"{Checked(served, string.Join(" | ", app.NamesOnScreen("PullRequestError")), "The form's error")}\".",
             OperationTimeout);
         WaitTelling(
             app,
@@ -82,13 +82,13 @@ public partial class Phase7aRealWindowPass
             () => $"Since the mark the log has {app.CountLogLinesSince(listed, logMark)}.",
             NetworkTimeout);
         app.WaitUntilGone(RealApp.CreatePullRequestDialogId, StepTimeout);
-        Assert.All(
-            app.LogLinesSince(logMark).Where(line => listed.IsMatch(line)),
-            line => Assert.EndsWith("listed 5 open pull requests of octo/hello", line, StringComparison.Ordinal));
+        const string listedFive = "listed 5 open pull requests of octo/hello";
+        var otherLists = CountLinesSince(app, logMark, line => listed.IsMatch(line) && !line.EndsWith(listedFive, StringComparison.Ordinal));
+        Assert.True(otherLists == 0, $"{otherLists} \"listed\" lines of hello since the create do not end with \"{listedFive}\".");
 
         // The POST: one, 201, with the title, head, base and "draft":false; no push.
-        WaitForFake(served.GitHub, requests, request => request.Route == $"create:{PartN.Repository}", $"POST api/v3/repos/{PartN.Repository}/pulls", NetworkTimeout);
-        var post = Assert.Single(served.GitHub.Requests.Skip(requests), request => request.Route == $"create:{PartN.Repository}");
+        WaitForFake(served, requests, request => request.Route == $"create:{PartN.Repository}", $"POST api/v3/repos/{PartN.Repository}/pulls", NetworkTimeout);
+        var post = Assert.Single(Recorded(served, requests), request => request.Route == $"create:{PartN.Repository}");
         Assert.Equal(("POST", true, OctoLogin, 201), (post.Method, post.TokenPresent, post.Login, post.Status));
         AssertNoToken(served, post.Body, "The POST's body");
         using (var body = JsonDocument.Parse(post.Body ?? "{}"))
@@ -107,7 +107,7 @@ public partial class Phase7aRealWindowPass
             () => app.OperationStatusText() == PartN.Created(PartN.NewNumber, draft: false)
                 && app.NamesOnScreen("OperationOfferButton").SequenceEqual([PartN.OpenInBrowser]),
             $"the status bar \"{PartN.Created(PartN.NewNumber, draft: false)}\" with \"{PartN.OpenInBrowser}\"",
-            () => $"It reads \"{app.OperationStatusText()}\" with \"{string.Join(" | ", app.NamesOnScreen("OperationOfferButton"))}\".");
+            () => $"It reads \"{Checked(served, app.OperationStatusText(), "The status bar's text")}\" with \"{string.Join(" | ", app.NamesOnScreen("OperationOfferButton"))}\".");
         WaitTelling(
             app,
             () => app.PullRequestRowNames() is [var first, ..] && first == PartP.PullRequestHeader(PartN.NewNumber, PartN.TopicTitle),

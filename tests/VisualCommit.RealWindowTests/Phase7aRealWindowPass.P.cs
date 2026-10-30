@@ -62,7 +62,7 @@ public partial class Phase7aRealWindowPass
         app.RightClickWithMouse(app.PullRequestRow(PartP.PullRequestHeader(one.Number, one.Title)));
         app.WaitForMenu();
         Assert.Equal(ItemLabels(PartP.PullRequestMenu(one.Number, one.Title, PartP.CheckOutName(one.HeadRef))), app.MenuItemNames());
-        Assert.Empty(ApiRequestsSince(served, requests));
+        AssertNoRequests(ApiRequestsSince(served, requests), "Asking for the section's menu and #1's asked GitHub");
 
         // Step 4 (P15, 13.5): the browser step, or Esc.
         OpenInTheBrowser(app, served, one.Number, OpensTheBrowser);
@@ -78,7 +78,8 @@ public partial class Phase7aRealWindowPass
     /// without a token: the real launcher handed the address to the default browser, which fetched it (a
     /// browser may fetch it more than once); no Warning in the log since the mark; a real click at the
     /// neutral point (the status bar's empty middle) takes the activation back; run.txt says the tab is
-    /// left open, for the owner to close. Otherwise Esc, and run.txt says the item was not clicked.
+    /// left open, for the owner to close before the next run. Otherwise Esc, and run.txt says the item
+    /// was not clicked.
     /// </summary>
     private void OpenInTheBrowser(RealApp app, ServedHosting served, int number, bool opens)
     {
@@ -95,14 +96,18 @@ public partial class Phase7aRealWindowPass
         var logMark = app.LogMark();
         app.ClickMenuItem(PartP.OpenInBrowser);
         WaitForFake(
-            served.GitHub,
+            served,
             requests,
             request => request.Route == "page:octo/hello" && request.Path.TrimStart('/') == path && request.Status == 200 && !request.TokenPresent,
             $"the default browser's request for {url}",
             NetworkTimeout);
-        Assert.DoesNotContain(served.GitHub.Requests.Skip(requests), request => (request.Route?.StartsWith("page:", StringComparison.Ordinal) ?? false) && request.TokenPresent);
-        Assert.DoesNotContain(app.LogLinesSince(logMark), line => line.Contains("[WRN]", StringComparison.Ordinal));
+        Assert.DoesNotContain(Recorded(served, requests), request => (request.Route?.StartsWith("page:", StringComparison.Ordinal) ?? false) && request.TokenPresent);
+        var warnings = CountLinesSince(app, logMark, line => line.Contains("[WRN]", StringComparison.Ordinal));
+        Assert.True(warnings == 0, $"{warnings} Warning lines in the log since the click on \"{PartP.OpenInBrowser}\".");
         app.ClickAt(RealApp.NeutralPoint.X, RealApp.NeutralPoint.Y);
-        Run.Note($"P: the browser opened {url}; its tab is left open.");
+
+        // The tab stays open for the owner. A reload of it while a later run's fake is on the same port
+        // would record a page: request in that run's "asks GitHub nothing", so the line says to close it.
+        Run.Note($"P: the browser opened {url}; its tab is left open: close it before the next run of the pass.");
     }
 }

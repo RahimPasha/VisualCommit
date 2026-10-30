@@ -27,7 +27,7 @@ public partial class Phase7aRealWindowPass
         var port = served.GitHub.Port;
 
         // Step 1: the launch makes no request (D257).
-        Assert.Empty(served.GitHub.Requests);
+        AssertNoRequests(Recorded(served), "The launch asked GitHub (D257)");
 
         // Step 2 (A1): a real Ctrl+, then a click on Accounts.
         app.OpenAccountsSection(StepTimeout);
@@ -43,7 +43,7 @@ public partial class Phase7aRealWindowPass
         var signIn = app.Find("AccountsSignInButton");
         Assert.Equal((PartA.SignInButton, true), (signIn.Name, signIn.IsEnabled));
         Assert.Empty(app.ShownElements("AccountLogin"));
-        Assert.Empty(served.GitHub.Requests);
+        AssertNoRequests(Recorded(served), "Opening the Accounts section asked GitHub");
         Compare(app, served, PartA.A01SignedOut);
 
         // Step 3 (A2): "Add GitHub account" over the screen, the token typed and masked.
@@ -56,16 +56,16 @@ public partial class Phase7aRealWindowPass
             AssertNoToken(served, text, "A text element of the window");
         }
 
-        Assert.Empty(served.GitHub.Requests);
+        AssertNoRequests(Recorded(served), "Typing the token asked GitHub");
         Compare(app, served, PartA.A02TokenMasked);
 
         // Step 4 (A5): "Sign in": exactly one request, GET api/v3/user with the token, 200.
         var requests = served.GitHub.Requests.Count;
-        app.ConfirmSignIn(NetworkTimeout);
-        WaitForFake(served.GitHub, requests, request => request.Route == "user", "GET api/v3/user", NetworkTimeout);
+        app.ConfirmSignIn(served.OctoToken, NetworkTimeout);
+        WaitForFake(served, requests, request => request.Route == "user", "GET api/v3/user", NetworkTimeout);
         Assert.Equal(
             [("GET", "/api/v3/user", "user", true, OctoLogin, 200)],
-            served.GitHub.Requests.Skip(requests).Select(request => (request.Method, request.Path, request.Route, request.TokenPresent, request.Login, request.Status)));
+            Recorded(served, requests).Select(request => (request.Method, request.Path, request.Route, request.TokenPresent, request.Login, request.Status)));
         app.WaitForText("AccountLogin", OctoLogin, StepTimeout);
         app.WaitForText("AccountTokenPlace", PartA.InKeychain, StepTimeout);
         Assert.True(RealApp.IsOn(app.Find("AccountUseForGit")), "\"Use for git over HTTPS\" is off after a first sign-in (D255).");
@@ -80,9 +80,9 @@ public partial class Phase7aRealWindowPass
             app,
             () => ReadSavedAccount(app.DataDirectory, served) is { Version: 1, Provider: "github", Login: OctoLogin, UseForGit: true, TokenState: "keychain" } saved && saved.Host == PartA.Host(port),
             "accounts.json to name octo on the fake's host with useForGit true",
-            () => $"It holds: {ReadSavedAccount(app.DataDirectory, served) switch { null => "no single record", var saved => $"version {saved.Version}, {saved.Provider}, {saved.Host}, {saved.Login}, useForGit {saved.UseForGit}, {saved.TokenState}" }}.");
+            () => $"It holds: {ReadSavedAccount(app.DataDirectory, served) switch { null => "no single record", { HoldsAToken: true } => "a token (its fields are not printed)", var saved => $"version {saved.Version}, {saved.Provider}, {saved.Host}, {saved.Login}, useForGit {saved.UseForGit}, {saved.TokenState}" }}.");
         Assert.False(ReadSavedAccount(app.DataDirectory, served)!.HoldsAToken, $"{new AppPaths(app.DataDirectory).AccountsFile} holds a token.");
-        Assert.Equal([("GET", "user")], served.GitHub.Requests.Select(request => (request.Method, request.Route ?? string.Empty)));
+        Assert.Equal([("GET", "user")], Recorded(served).Select(request => (request.Method, request.Route ?? string.Empty)));
         AssertCleanEnd(app, served);
     }
 }
