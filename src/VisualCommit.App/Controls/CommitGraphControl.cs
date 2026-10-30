@@ -439,6 +439,10 @@ public sealed partial class CommitGraphControl : Control
         {
             OnPullRequestsChanged(change.GetOldValue<IReadOnlyDictionary<string, Hosting.PullRequest>?>(), change.GetNewValue<IReadOnlyDictionary<string, Hosting.PullRequest>?>());
         }
+        else if (change.Property == AvatarsProperty)
+        {
+            OnAvatarsChanged(change.GetNewValue<Hosting.AuthorAvatars?>());
+        }
     }
 
     /// <summary>
