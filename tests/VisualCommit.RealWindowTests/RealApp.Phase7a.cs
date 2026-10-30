@@ -58,9 +58,13 @@ public sealed partial class RealApp
     /// gives the window the activation so that the key goes to it, then a real Ctrl+, , the screen
     /// on General, then a real click on Accounts, and waits until the section shows.
     /// </summary>
-    public void OpenAccountsSection(TimeSpan timeout)
+    public void OpenAccountsSection(TimeSpan timeout) => OpenAccountsSection(timeout, afterClick: null);
+
+    /// <summary><see cref="OpenAccountsSection(TimeSpan)"/>, running <paramref name="afterClick"/> between the click at the neutral point and the key.</summary>
+    private void OpenAccountsSection(TimeSpan timeout, Action? afterClick)
     {
         ClickAt(NeutralPoint.X, NeutralPoint.Y);
+        afterClick?.Invoke();
         PressSettingsKey();
         WaitForSettings(timeout);
         WaitForSettingsSection("General", timeout);
@@ -190,39 +194,43 @@ public sealed partial class RealApp
 
     /// <summary>
     /// Signs in through Settings as the scripted R twins do (design 13.3, the report's open point 30):
-    /// <see cref="OpenAccountsSection"/>, "Sign in…", <see cref="TypeTokenAndConfirm"/>, waits until
+    /// <see cref="OpenAccountsSection(TimeSpan)"/>, "Sign in…", <see cref="TypeTokenAndConfirm"/>, waits until
     /// <c>AccountLogin</c> reads <paramref name="login"/>, then Esc closes the screen; the sign-in stays
-    /// (D256). Then waits until the keyboard focus is on the window itself
-    /// (<see cref="FocusIsOnTheWindow"/>), the state the twin's screen gives back on Esc: the screen
-    /// gives the focus back to what had it when it opened (D104, <c>MainWindow.OnDialogRemoving</c>);
-    /// in the twin, which opens it by the key alone (<c>SettingsOpening.Key</c>), that is what the
-    /// launch left, and no view of a repository's tab takes the focus when it opens. Here the click at
-    /// the neutral point comes before the key (<see cref="OpenAccountsSection"/>): should it ever give
-    /// a control the focus, the screen would give that control the focus back, and the pictures that
-    /// follow (p06a first) would be taken in another state than their twins' (open point 30), seen
-    /// only as a difference in pixels; this fails by name first. For a launch on hello only: an empty
-    /// tab's welcome page gives its URL box the focus (<c>WelcomeView.axaml.cs</c>).
+    /// (D256).
+    /// <para>
+    /// Between the click at the neutral point and the key, waits until the keyboard focus is on the
+    /// window itself, on none of its controls (<see cref="FocusIsOnTheWindow"/>): the screen gives the
+    /// focus back on Esc to what had it when it opened (D104, <c>MainWindow.OnDialogRemoving</c>). The
+    /// twin opens the screen by the key alone (<c>SettingsOpening.Key</c>), with the focus where the
+    /// launch left it, and no view of a repository's tab takes the focus when it opens; the click here
+    /// comes before the key, so a click that gave a control the focus would have that control given
+    /// the focus back, and the pictures after it (p06a first) taken in another state than their
+    /// twins' (open point 30), seen only as a difference in pixels. This fails by name instead. For a
+    /// launch on hello only: an empty tab's welcome page gives its URL box the focus
+    /// (<c>WelcomeView.axaml.cs</c>).
+    /// </para>
     /// </summary>
     public void SignInThroughSettings(string token, string login, TimeSpan timeout)
     {
         ArgumentException.ThrowIfNullOrEmpty(login);
-        OpenAccountsSection(timeout);
+        OpenAccountsSection(
+            timeout,
+            afterClick: () => WaitForTelling(
+                FocusIsOnTheWindow,
+                "the keyboard focus on the window itself, on none of its controls, after the click at the neutral point (the twin's state when the screen opens, D104, open point 30)",
+                DefaultWaitTimeout,
+                () => $"The focus is on {FocusedAutomationId() switch { null or "" => "an element without an automation id", var id => id }}."));
         OpenSignInDialog(timeout);
         TypeTokenAndConfirm(token, timeout);
         WaitForText("AccountLogin", login, timeout);
         PressKey(VirtualKeyShort.ESCAPE);
         WaitUntilGone(SettingsDialogId, timeout);
-        WaitForTelling(
-            FocusIsOnTheWindow,
-            "the keyboard focus back on the window itself, on none of its controls, after the settings screen closed (D104; the twin's state, open point 30)",
-            DefaultWaitTimeout,
-            () => $"The focus is on {FocusedAutomationId() switch { null or "" => "an element without an automation id", var id => id }}.");
     }
 
     /// <summary>
     /// Whether UI Automation's focused element is the window itself, on none of its controls: what it
-    /// reports while the app's own focus is on the window or on nothing in it. False when it cannot be
-    /// read.
+    /// reports for the foreground window while the app's own focus is on the window or on nothing in
+    /// it. False when it cannot be read, and while another window has the focus.
     /// </summary>
     public bool FocusIsOnTheWindow()
     {
