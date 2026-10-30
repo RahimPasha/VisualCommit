@@ -1,7 +1,10 @@
+using System.ComponentModel;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
+using VisualCommit.App.Controls;
 using Avalonia.Media.TextFormatting;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Panels;
@@ -18,6 +21,14 @@ public partial class RightPanelView : UserControl
 
     /// <summary>The header part may always be this tall, however small the panel, so that the subject stays readable.</summary>
     private const double MinimumHeaderHeight = 120;
+
+    /// <summary>The authors' images decoded so far, by file, for the view's life; null for one that did not decode.</summary>
+    private readonly Dictionary<string, Bitmap?> _avatars = new(StringComparer.Ordinal);
+
+    private CommitDetailsViewModel? _details;
+
+    /// <summary>Counts the author images asked for: a decode that a newer one overtook shows nothing.</summary>
+    private int _avatarVersion;
 
     public RightPanelView()
     {
@@ -37,6 +48,75 @@ public partial class RightPanelView : UserControl
         // A commit's changed file has a menu of its own (docs/phase-3-design.md 4b): open file,
         // show in folder, copy path. It opens the menu only; the file's diff opens on a click.
         FileList.AddHandler(ContextRequestedEvent, OnFileContextRequested);
+
+        // The author's avatar (docs/phase-7a-design.md 11.3) follows the shown commit's author.
+        DataContextChanged += (_, _) => FollowDetails();
+    }
+
+    private void FollowDetails()
+    {
+        if (_details is not null)
+        {
+            _details.PropertyChanged -= OnDetailsPropertyChanged;
+        }
+
+        _details = DataContext as CommitDetailsViewModel;
+        if (_details is not null)
+        {
+            _details.PropertyChanged += OnDetailsPropertyChanged;
+        }
+
+        ShowAvatar(_details?.AuthorAvatarFile);
+    }
+
+    private void OnDetailsPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(CommitDetailsViewModel.AuthorAvatarFile) && ReferenceEquals(sender, _details))
+        {
+            ShowAvatar(_details?.AuthorAvatarFile);
+        }
+    }
+
+    /// <summary>
+    /// Shows <paramref name="file"/>'s image in the round <c>DetailsAuthorAvatar</c> before the author:
+    /// none hides it at once; a file is decoded off the UI thread (D59) and, unless a newer one came
+    /// meanwhile, fills the ellipse, which shows. Until then the ellipse keeps what it showed. A file
+    /// that does not decode hides it: that author looks as without an avatar (D310).
+    /// </summary>
+    private async void ShowAvatar(string? file)
+    {
+        var version = ++_avatarVersion;
+        if (file is null)
+        {
+            HideAvatar();
+            return;
+        }
+
+        if (!_avatars.TryGetValue(file, out var bitmap))
+        {
+            bitmap = await AvatarBitmaps.DecodeAsync(file, CancellationToken.None);
+            _avatars.TryAdd(file, bitmap);
+        }
+
+        if (version != _avatarVersion)
+        {
+            return;
+        }
+
+        if (bitmap is null)
+        {
+            HideAvatar();
+            return;
+        }
+
+        DetailsAuthorAvatar.Fill = new ImageBrush(bitmap) { Stretch = Stretch.UniformToFill };
+        DetailsAuthorAvatar.IsVisible = true;
+    }
+
+    private void HideAvatar()
+    {
+        DetailsAuthorAvatar.IsVisible = false;
+        DetailsAuthorAvatar.Fill = null;
     }
 
     private void OnFileContextRequested(object? sender, ContextRequestedEventArgs e)
