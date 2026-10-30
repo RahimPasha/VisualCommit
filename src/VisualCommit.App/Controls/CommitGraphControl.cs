@@ -313,7 +313,7 @@ public sealed partial class CommitGraphControl : Control
         for (var i = 0; i < placed.Length; i++)
         {
             var label = visual.Labels[i];
-            placed[i] = new PlacedLabel(label.Text, label.FullText, label.Kind, label.Bounds.Translate(new Vector(0, top)), label.IsOverflow, label.RefName);
+            placed[i] = new PlacedLabel(label.Text, label.FullText, label.Kind, label.Bounds.Translate(new Vector(0, top)), label.IsOverflow, label.RefName, label.Badge);
         }
 
         return placed;
@@ -434,6 +434,10 @@ public sealed partial class CommitGraphControl : Control
         else if (change.Property == SearchProperty)
         {
             OnSearchChanged(change.GetOldValue<GraphSearchMarks?>(), change.GetNewValue<GraphSearchMarks?>());
+        }
+        else if (change.Property == PullRequestsProperty)
+        {
+            OnPullRequestsChanged(change.GetOldValue<IReadOnlyDictionary<string, Hosting.PullRequest>?>(), change.GetNewValue<IReadOnlyDictionary<string, Hosting.PullRequest>?>());
         }
     }
 
@@ -821,7 +825,10 @@ public sealed partial class CommitGraphControl : Control
         static bool IsCut(TextLayout? layout) => layout is { TextLines.Count: > 0 } && layout.TextLines[0].HasCollapsed;
     }
 
-    /// <summary>The tooltip over a row's labels: every label in full, one per line. Null when the mouse is not over labels.</summary>
+    /// <summary>
+    /// The tooltip over a row's labels: every label in full, one per line, a label with an open pull
+    /// request followed by it (11.2), also those folded into "+N". Null when the mouse is not over labels.
+    /// </summary>
     private string? LabelsTipAt(int row)
     {
         var data = Data;
@@ -838,7 +845,7 @@ public sealed partial class CommitGraphControl : Control
             return null;
         }
 
-        return string.Join("\n", data.LabelsAt(row).Select(label => label.Text));
+        return string.Join("\n", data.LabelsAt(row).Select(LabelTipLine));
     }
 
     /// <summary>
@@ -863,7 +870,11 @@ public sealed partial class CommitGraphControl : Control
 /// <param name="Bounds">Where it is drawn, in the control's coordinates.</param>
 /// <param name="IsOverflow">The label is the "+N" label for the labels that did not fit.</param>
 /// <param name="RefName">The full ref name of a branch, remote branch or tag label; null for HEAD, a stash and the "+N" label.</param>
-public sealed record PlacedLabel(string Text, string FullText, RefLabelKind Kind, Rect Bounds, bool IsOverflow, string? RefName = null);
+/// <param name="Badge">
+/// The open pull request whose badge the label carries after its name (docs/phase-7a-design.md
+/// 11.2), which <paramref name="Bounds"/> includes; null for a label without one and for "+N".
+/// </param>
+public sealed record PlacedLabel(string Text, string FullText, RefLabelKind Kind, Rect Bounds, bool IsOverflow, string? RefName = null, PullRequestBadge? Badge = null);
 
 /// <summary>What a point of the graph is over (<see cref="CommitGraphControl.HitTest"/>).</summary>
 public enum GraphHitKind
