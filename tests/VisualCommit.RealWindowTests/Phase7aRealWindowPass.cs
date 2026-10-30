@@ -271,6 +271,14 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
         }
     }
 
+    /// <summary>
+    /// The fake's API and page requests since <paramref name="mark"/> (<c>Requests.Count</c> read before
+    /// the step), the avatars' left out: a step that "asks GitHub nothing" is read on these, since an
+    /// avatar run of the sign-in may be recorded after D322's line (the fake records after its answer).
+    /// </summary>
+    private static List<FakeGitHubRequest> ApiRequestsSince(ServedHosting served, int mark) =>
+        [.. served.GitHub.Requests.Skip(mark).Where(request => !(request.Route?.StartsWith("avatar:", StringComparison.Ordinal) ?? false))];
+
     // ---- Tokens ----
 
     /// <summary>The scenario's three tokens with their constants' names, for a failure's message (design 2.6).</summary>
@@ -295,8 +303,20 @@ public partial class Phase7aRealWindowPass(Phase7aRun fixture) : IClassFixture<P
     {
         foreach (var element in app.Window.FindAllDescendants())
         {
-            var name = element.Properties.Name.ValueOrDefault;
-            AssertNoToken(served, name, $"The name of the element {element.Properties.AutomationId.ValueOrDefault}");
+            string? name;
+            string? id;
+            try
+            {
+                name = element.Properties.Name.ValueOrDefault;
+                id = element.Properties.AutomationId.ValueOrDefault;
+            }
+            catch (Exception ex) when (ex is FlaUI.Core.Exceptions.ElementNotAvailableException or System.Runtime.InteropServices.COMException)
+            {
+                // Gone since the walk listed it (a tooltip, a closing popup): it shows nothing.
+                continue;
+            }
+
+            AssertNoToken(served, name, $"The name of the element {id}");
         }
     }
 

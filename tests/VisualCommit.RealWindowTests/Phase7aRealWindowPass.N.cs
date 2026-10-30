@@ -55,9 +55,10 @@ public partial class Phase7aRealWindowPass
             () => app.HasFocusOnScreen("PullRequestTitle") && app.BoxText("PullRequestTitle") == PartN.TopicTitle,
             $"the focused title box to hold \"{PartN.TopicTitle}\"",
             () => $"It holds \"{app.BoxText("PullRequestTitle")}\"; the focus is on {app.FocusedAutomationId() ?? "nothing"}.");
+        Assert.Empty(app.ShownElements("PullRequestHeadNote"));
         var create = app.FindIn(form, "ConfirmButton");
         Assert.Equal((PartN.Create, true), (create.Name, create.IsEnabled));
-        Assert.Equal(requests, served.GitHub.Requests.Count);
+        Assert.Empty(ApiRequestsSince(served, requests));
         Compare(app, served, PartN.N01a);
 
         // Step 4: Create. The operation's end, then both "listed" lines (ruling 51) since the mark.

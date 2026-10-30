@@ -30,9 +30,11 @@ public sealed partial class RealApp
     /// <summary>
     /// The askpass helper the app runs beside its executable (<c>visualcommit-askpass.exe</c>,
     /// <see cref="AskPassLocator.FileName"/>): the program git runs, through Git for Windows'
-    /// <c>sh</c>, as the app's credential helper (design 0.2, 4.5, 13.1).
+    /// <c>sh</c>, as the app's credential helper (design 0.2, 4.5, 13.1). Computed on each read, not in
+    /// a field's initializer: <see cref="Executable"/> is initialised in another file of this partial
+    /// class, and the order of the two would be undefined.
     /// </summary>
-    public static string HelperPath { get; } = Path.Combine(Path.GetDirectoryName(Executable)!, AskPassLocator.FileName);
+    public static string HelperPath => Path.Combine(Path.GetDirectoryName(Executable)!, AskPassLocator.FileName);
 
     /// <summary>
     /// The variables a launch of phase 7a gives the app, applied after the isolation's own

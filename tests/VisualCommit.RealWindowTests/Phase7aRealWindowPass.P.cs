@@ -62,7 +62,7 @@ public partial class Phase7aRealWindowPass
         app.RightClickWithMouse(app.PullRequestRow(PartP.PullRequestHeader(one.Number, one.Title)));
         app.WaitForMenu();
         Assert.Equal(ItemLabels(PartP.PullRequestMenu(one.Number, one.Title, PartP.CheckOutName(one.HeadRef))), app.MenuItemNames());
-        Assert.Equal(requests, served.GitHub.Requests.Count);
+        Assert.Empty(ApiRequestsSince(served, requests));
 
         // Step 4 (P15, 13.5): the browser step, or Esc.
         OpenInTheBrowser(app, served, one.Number, OpensTheBrowser);
