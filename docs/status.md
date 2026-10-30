@@ -428,8 +428,9 @@ two ruled on); its builder and reviewer ran its classes, part G, part P, A9, B6 
 review inspected part G's pictures and the part P and A9 pictures it changes. CI's run on `ccd1ebe`
 failed two tests on macOS alone (Notes); P13's failure came once on the laptop too, in WP-V's build.
 Both were races in the tests, fixed at `33313ef` (design 17 item 11). CI's run on WP-V's merge
-also failed G1's new pixel check on macOS; its fix is being built (workflow `wzf5zbhxr`;
-`wip/p7a-g1`). Next: when it is merged and pushed, run 11.6's checks on it with no agent running: the lagged
+also failed G1's new pixel check on macOS; its fix is merged at `5219eae` (design 17 item 12; part
+G 4 of 4 in Release, the graph's badge and avatar tests 15 of 15). Next: read CI on it, and run 11.6's
+checks on it with no agent running: the lagged
 list; phase 1's checks, phase 3's walk-through, `Phase5` and `Phase6Look` through
 `bash scripts/heavy-run.sh`, compared by region with `master`'s references; part G; part P, part A's
 check 9 and part B's B6 (`--filter-method "*Check_B3_B6_B7*"`) and B8 again (design 17 items 3, 6 and
@@ -694,7 +695,8 @@ every commit.
   the name's last column 1.4 px before its layout edge. The report gives layout positions, so the
   fix asserts the control's own layout of the badge exactly. It reads the ink only by rules that hold
   on every platform (each part's ink inside its box, none in the gaps), and audits parts A, B, G and
-  P for other text-ink reads (workflow `wzf5zbhxr`, `wip/p7a-g1`).
+  P for other text-ink reads (workflow `wzf5zbhxr`, `wip/p7a-g1`). Merged at `5219eae` (design 17
+  item 12; the report's "How part G proves its places").
 - **macOS's failed refusal test is a product race on macOS and Linux** (CI's run on `8b02805`): .NET
   backs every pipe instance of one name with one listening Unix socket and closes it with the
   last instance (dotnet/runtime's `NamedPipeServerStream.Unix.cs`, `SharedServer.Dispose`, read by

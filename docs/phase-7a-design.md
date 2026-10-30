@@ -4793,3 +4793,17 @@ with the lead's rulings. The report and the handoff cite these as "design 17.N".
       has moved the focus elsewhere meanwhile (`DiffView.axaml.cs:131-135`, `:146-149`;
       `DiffTextView.cs:209-213`, `:605-617`; an investigator showed it in a run on Windows). It is
       phase 6's behaviour and outside 7a's scope.
+12. **G1's check for every platform, merged at `5219eae`** (CI's macOS job on `8810136` and
+    `0aa7cdb`; a builder, a reviewer that did not build it, its one major and two minor findings
+    fixed; workflow `wzf5zbhxr`). WP-V's review had added a pixel check that read a text's ink edge
+    to ±1 px; macOS's glyph rasterisation (CoreText under Skia; DirectWrite on Windows, FreeType on
+    Linux) ends the name's ink 1.44 px before its layout edge. The graph now gives its tests the
+    places its drawing uses, from one computation the drawing shares (`BadgeInRow` with
+    `PlacedBadge`, `AuthorInRow` with `PlacedAuthor`; `LabelCornerRadius`, `LabelIconStroke` and
+    `IconGridSize` public), and part G's ten pictures are the same files. The checks compare those
+    places with the report's exactly and hold the ink by outline rules (the report's "How part G
+    proves its places"). The review found that #1 could move 2 to 3 px unseen (the scan stopped
+    before the label's right padding and the "1"'s outline ends 1.3 px inside its box); the fix scans
+    the label's middle rows to its edges and holds each text's ink to its glyphs' outlines. The
+    builder's audit found no other text-ink read in parts A, B, G and P: parts A, B and P read no
+    pixel, and part G's image and colour rules read bitmap pixels or rely on the theme's colours.
