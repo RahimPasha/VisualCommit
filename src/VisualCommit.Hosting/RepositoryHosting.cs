@@ -74,7 +74,8 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// <summary>
     /// After each refs read, on the UI thread (7.8): the remotes recognised, the candidate, the
     /// bindings and the state again; a new candidate drops the list and, while signed in, starts a
-    /// refresh (D289). The rewrites count as known only when they were wanted for this read (D290).
+    /// refresh (D289); no candidate left drops the avatars too. The rewrites count as known only
+    /// when they were wanted for this read (D290).
     /// </summary>
     public void Update(RepoRefs refs, UrlRewrites rewrites)
     {
@@ -98,7 +99,19 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             _failure = null;
         }
 
-        Apply();
+        if (changed && candidate is null)
+        {
+            // No GitHub remote left (D252, 11.3): the avatars go, and a run in flight brings none.
+            // A change to another GitHub repository keeps them: the tab sends the same set again
+            // only after NotGitHub or a sign-out, so dropping them there would leave none.
+            StopAvatars();
+            Apply(AuthorAvatars.None);
+        }
+        else
+        {
+            Apply();
+        }
+
         if (changed && candidate is not null && IsSignedIn)
         {
             _ = RefreshPullRequestsAsync(CancellationToken.None);

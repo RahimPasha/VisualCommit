@@ -38,7 +38,8 @@ public sealed partial class RepositoryHosting
         StartAvatars(set);
     }
 
-    // On the UI thread: a sign-out (the session cancels the run itself); what a run still brings is dropped.
+    // On the UI thread: a sign-out (the session cancels the run itself) or no GitHub remote left;
+    // what a run still brings is dropped.
     private void StopAvatars()
     {
         _avatarGeneration++;
