@@ -21,7 +21,8 @@ namespace VisualCommit.VisualTests.Phase7a;
 
 /// <summary>
 /// Part P's helpers (docs/test-reports/phase-7a.md, part P's conventions): a picture with no token
-/// on screen and no text cut, a snapshot of the section and of the whole panel, a row's control by
+/// on screen and no text cut, a snapshot of the whole panel (the section's, <c>Section</c>, is the
+/// support's, which part G shares), a row's control by
 /// number or message kind, the waits for a list (D322) and for a state without one (open point 34),
 /// the API requests, the store's calls and the log's lines since a mark, and the end of every method.
 /// </summary>
@@ -68,27 +69,6 @@ public sealed partial class Phase7aChecksP
                 }
             }
         }
-    }
-
-    /// <summary>The active tab's "Pull requests" section as lines: "v"/"&gt;" title count; a row's name; a message row's "[Kind] text".</summary>
-    private static List<string> Section(ShellDriver app)
-    {
-        app.Settle();
-        var rows = app.Session.Shell.ActiveTab.LeftPanel.Rows.ToList();
-        var start = rows.FindIndex(row => row is RefSectionRow { Section: RefSection.PullRequests });
-        var lines = new List<string>();
-        for (var i = start; i < rows.Count && (i == start || rows[i] is not RefSectionRow); i++)
-        {
-            lines.Add(rows[i] switch
-            {
-                RefSectionRow section => $"{(section.IsOpen ? "v" : ">")} {section.Text} {section.CountText}",
-                PullRequestRow pull => pull.Text,
-                PullRequestMessageRow message => $"[{message.Kind}] {message.Text}",
-                _ => rows[i].Text,
-            });
-        }
-
-        return lines;
     }
 
     /// <summary>
@@ -199,12 +179,17 @@ public sealed partial class Phase7aChecksP
             Math.Abs(menu.Bounds.Height - height) <= 2,
             string.Create(CultureInfo.InvariantCulture, $"The menu is {menu.Bounds.Height} high; the report gives {height} ±2."));
 
-    /// <summary>D322: the tab's <c>{repo}: listed {count} open pull requests of {listed}</c> since <paramref name="logMark"/>, then quiet watchers.</summary>
+    /// <summary>D322: the tab's <c>{repo}: listed {count} open pull requests of {listed}</c> since <paramref name="logMark"/> and its avatars' line once since the start (<c>AvatarsShown</c>), then quiet watchers.</summary>
     private static async Task WaitForListedAsync(ShellDriver app, string repository, int count, string listed, int logMark)
     {
         var line = await app.WaitForLogLineAsync(AppLogFile.PullRequestsListed(repository), mark: logMark);
         var match = AppLogFile.PullRequestsListed(repository).Match(line);
         Assert.Equal((count.ToString(CultureInfo.InvariantCulture), listed), (match.Groups["count"].Value, match.Groups["repository"].Value));
+
+        // From WP-V's merge (open point 29, design 17 items 3 and 6): the tab's avatars once since the
+        // start, hello's 2 authors, tool's 1 (open point 42).
+        var avatars = await app.WaitForLogLineAsync(AppLogFile.AvatarsShown(repository), mark: 0);
+        Assert.Equal(repository == Phase7aExpectations.Tool ? "1" : "2", AppLogFile.AvatarsShown(repository).Match(avatars).Groups["count"].Value);
         await app.WaitForWatchersQuietAsync();
     }
 

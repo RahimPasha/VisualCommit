@@ -19,6 +19,7 @@ using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.App.Views.Shell;
 using VisualCommit.Core;
@@ -45,6 +46,27 @@ public abstract partial class Phase7aChecks
 
     /// <summary>The phase, as the docs write it (design 0.3).</summary>
     protected const string Phase = Phase7aExpectations.Phase;
+
+    /// <summary>The active tab's "Pull requests" section as lines: "v"/"&gt;" title count; a row's name; a message row's "[Kind] text" (parts P and G).</summary>
+    protected static List<string> Section(ShellDriver app)
+    {
+        app.Settle();
+        var rows = app.Session.Shell.ActiveTab.LeftPanel.Rows.ToList();
+        var start = rows.FindIndex(row => row is RefSectionRow { Section: RefSection.PullRequests });
+        var lines = new List<string>();
+        for (var i = start; i < rows.Count && (i == start || rows[i] is not RefSectionRow); i++)
+        {
+            lines.Add(rows[i] switch
+            {
+                RefSectionRow section => $"{(section.IsOpen ? "v" : ">")} {section.Text} {section.CountText}",
+                PullRequestRow pull => pull.Text,
+                PullRequestMessageRow message => $"[{message.Kind}] {message.Text}",
+                _ => rows[i].Text,
+            });
+        }
+
+        return lines;
+    }
 
     /// <summary>
     /// One empty tab with the fake as GitHub (<c>gitHub:</c>) and <paramref name="tokens"/> or a new
@@ -168,12 +190,41 @@ public abstract partial class Phase7aChecks
     private static Screenshot CaptureForPicture(ShellDriver app, bool keepPointer)
     {
         app.WaitForCommitDetails();
+        WaitForAuthorAvatar(app);
         if (!keepPointer && !app.IsMenuOpen && !IsDragging(app))
         {
             app.MoveToNeutral();
         }
 
         return app.Capture();
+    }
+
+    /// <summary>
+    /// The report's open point 44: while the active tab's details name an author's image
+    /// (<c>Details.AuthorAvatarFile</c>) that <c>DetailsAuthorAvatar</c> does not show yet (it is
+    /// decoded off the UI thread, design 11.3), waits for it. Nothing to wait for without a file, as
+    /// always with GitHub off, or without the panel in the window.
+    /// </summary>
+    private static void WaitForAuthorAvatar(ShellDriver app)
+    {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            app.Settle();
+            if (app.Session.Shell.ActiveTab.Repository?.Details is not { AuthorAvatarFile: not null }
+                || app.Window.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Ellipse>().FirstOrDefault(ellipse => ellipse.Name == "DetailsAuthorAvatar") is not { } avatar
+                || avatar.IsVisible)
+            {
+                return;
+            }
+
+            if (clock.Elapsed >= ShellDriver.DefaultWaitTimeout)
+            {
+                throw new TimeoutException("Timed out waiting for the details panel to show the author's avatar.");
+            }
+
+            Thread.Sleep(10);
+        }
     }
 
     /// <summary>

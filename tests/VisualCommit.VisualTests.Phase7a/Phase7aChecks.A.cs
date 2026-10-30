@@ -590,6 +590,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             app.PressKey(Key.Escape);
             await app.WaitForAsync(() => screen.IsClosed, "the settings screen to close");
             await app.WaitForAsync(() => app.LogLinesSince(logMark).Any(line => line.Contains(PartA.HelloListed, StringComparison.Ordinal)), "hello's pull requests listed");
+            await app.WaitForLogLineAsync(AppLogFile.AvatarsShown(Hello), mark: logMark);
             await app.WaitForWatchersQuietAsync();
             var signedIn = RequestsSince(served, requests);
             AssertUserRequest(signedIn[0], 200);

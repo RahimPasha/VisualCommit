@@ -3,6 +3,7 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Media.Immutable;
 using Avalonia.Media.TextFormatting;
 using VisualCommit.App.ViewModels.Graph;
@@ -76,7 +77,7 @@ public sealed partial class CommitGraphControl
 
     private readonly Dictionary<int, RowVisual> _rowCache = [];
     private TextLayout? _workingRowLayout;
-    private readonly Dictionary<string, TextLayout?> _authorCache = new(StringComparer.Ordinal);
+    private readonly Dictionary<(string Name, bool WithAvatar), TextLayout?> _authorCache = [];
     private Palette? _palette;
 
     public override void Render(DrawingContext context)
@@ -396,6 +397,7 @@ public sealed partial class CommitGraphControl
             }
 
             label.Layout.Draw(context, new Point(x, bounds.Y + ((LabelHeight - label.Layout.Height) / 2)));
+            DrawBadge(context, label, bounds, x + label.Layout.WidthIncludingTrailingWhitespace, iconPen, palette);
         }
     }
 
@@ -434,7 +436,17 @@ public sealed partial class CommitGraphControl
     private static void DrawTextCells(DrawingContext context, RowVisual visual, double top, GraphColumns columns)
     {
         DrawCell(context, visual.Message, columns.Message.X, top);
-        DrawCell(context, visual.Author, columns.Author.X, top);
+        if (visual.Avatar is { } avatar)
+        {
+            // The image at the text inset, the name 16 + 6 further (11.3).
+            DrawAvatar(context, avatar, columns.Author.X, top);
+            DrawCell(context, visual.Author, columns.Author.X + AvatarSize + AvatarGap, top);
+        }
+        else
+        {
+            DrawCell(context, visual.Author, columns.Author.X, top);
+        }
+
         DrawCell(context, visual.Date, columns.Date.X, top);
         DrawCell(context, visual.Sha, columns.Sha.X, top);
     }
@@ -481,25 +493,27 @@ public sealed partial class CommitGraphControl
         var messageBrush = commit.Kind == CommitKind.Stash ? palette.TextSecondary : palette.TextPrimary;
         var messageTypeface = SearchStateOf(data, index, ActiveSearch) == GraphSearchRowState.Marked ? MatchTypeface : typeface;
         var message = CellLayout(commit.Subject, messageTypeface, messageBrush, columns.Message);
-        var author = AuthorLayout(commit.AuthorName, typeface, palette, columns.Author);
+        var avatar = AvatarOf(commit.AuthorEmail, columns.Author);
+        var author = AuthorLayout(commit.AuthorName, avatar is not null, typeface, palette, columns.Author);
         var date = CellLayout(dates.Format(commit.AuthorDate), typeface, palette.TextSecondary, columns.Date);
         var sha = CellLayout(commit.ShortSha, typeface, palette.TextSecondary, columns.Sha);
         var labels = PlaceLabels(data.LabelsAt(index), columns.Refs, palette);
-        return new RowVisual(message, author, date, sha, labels);
+        return new RowVisual(message, author, date, sha, labels, avatar);
     }
 
     /// <summary>
     /// The Author cell. A history has few authors, so their laid-out names are shared between
-    /// rows: a frame that brings many new rows into view then lays out fewer texts.
+    /// rows: a frame that brings many new rows into view then lays out fewer texts. Beside an avatar
+    /// the name is laid out 22 narrower (11.3), so it is cached apart.
     /// </summary>
-    private TextLayout? AuthorLayout(string author, Typeface typeface, Palette palette, GraphColumn column)
+    private TextLayout? AuthorLayout(string author, bool withAvatar, Typeface typeface, Palette palette, GraphColumn column)
     {
         if (!column.IsVisible)
         {
             return null;
         }
 
-        if (_authorCache.TryGetValue(author, out var cached))
+        if (_authorCache.TryGetValue((author, withAvatar), out var cached))
         {
             return cached;
         }
@@ -509,20 +523,23 @@ public sealed partial class CommitGraphControl
             _authorCache.Clear();
         }
 
-        var layout = CellLayout(author, typeface, palette.TextSecondary, column);
-        _authorCache[author] = layout;
+        var layout = CellLayout(author, typeface, palette.TextSecondary, column, withAvatar ? AvatarSize + AvatarGap : 0);
+        _authorCache[(author, withAvatar)] = layout;
         return layout;
     }
 
-    /// <summary>One cell's text, cut with "…" to fit between the text inset and the column's right edge; null for a hidden column.</summary>
-    private static TextLayout? CellLayout(string text, Typeface typeface, IBrush brush, GraphColumn column)
+    /// <summary>
+    /// One cell's text, cut with "…" to fit between the text inset (and <paramref name="before"/>, an
+    /// avatar's room) and the column's right edge; null for a hidden column.
+    /// </summary>
+    private static TextLayout? CellLayout(string text, Typeface typeface, IBrush brush, GraphColumn column, double before = 0)
     {
         if (!column.IsVisible)
         {
             return null;
         }
 
-        var maxWidth = Math.Max(0, column.Width - GraphColumns.TextInset);
+        var maxWidth = Math.Max(0, column.Width - GraphColumns.TextInset - before);
         return new TextLayout(
             text,
             typeface,
@@ -552,10 +569,12 @@ public sealed partial class CommitGraphControl
         var right = column.Right;
         var labelTop = (RowHeight - LabelHeight) / 2;
 
+        // A label with a pull request is its badge wider (11.2), so it folds the next ones into "+N" sooner.
+        var badges = BadgesOf(labels);
         var widths = new double[labels.Count];
         for (var i = 0; i < labels.Count; i++)
         {
-            widths[i] = LabelWidth(MeasureLabelText(labels[i].Text, typeface), HasIcon(labels[i].Kind));
+            widths[i] = LabelWidth(MeasureLabelText(labels[i].Text, typeface), HasIcon(labels[i].Kind)) + BadgeWidth(badges[i], typeface);
         }
 
         // How many labels are shown by name: as many as fit one after another...
@@ -599,14 +618,17 @@ public sealed partial class CommitGraphControl
                 var room = right - left - (hiddenCount > 0 ? LabelSpacing + OverflowWidth(hiddenCount) : 0);
                 if (width > room)
                 {
-                    var textRoom = room - LabelWidth(0, HasIcon(label.Kind));
+                    // The name is cut, never the badge (D309).
+                    var textRoom = room - LabelWidth(0, HasIcon(label.Kind)) - BadgeWidth(badges[0], typeface);
                     text = CutToFit(label.Text, typeface, textRoom);
-                    width = LabelWidth(MeasureLabelText(text, typeface), HasIcon(label.Kind));
+                    width = LabelWidth(MeasureLabelText(text, typeface), HasIcon(label.Kind)) + BadgeWidth(badges[0], typeface);
                 }
             }
 
             var layout = LabelLayout(text, typeface, label.Kind, palette);
-            placed.Add(new LabelVisual(text, label.Text, label.Kind, new Rect(x, labelTop, width, LabelHeight), IsOverflow: false, layout, label.RefName));
+            var badge = badges[i];
+            var badgeLayout = badge is null ? null : LabelLayout(BadgeText(badge.Number), typeface, label.Kind, palette);
+            placed.Add(new LabelVisual(text, label.Text, label.Kind, new Rect(x, labelTop, width, LabelHeight), IsOverflow: false, layout, label.RefName, badge, badgeLayout));
             x += width + LabelSpacing;
         }
 
@@ -706,11 +728,14 @@ public sealed partial class CommitGraphControl
         }
     }
 
-    /// <summary>A row's laid-out text, made once and drawn in every frame that shows the row.</summary>
-    private sealed record RowVisual(TextLayout? Message, TextLayout? Author, TextLayout? Date, TextLayout? Sha, LabelVisual[] Labels);
+    /// <summary>A row's laid-out text, made once and drawn in every frame that shows the row, and its author's avatar when one is drawn (11.3).</summary>
+    private sealed record RowVisual(TextLayout? Message, TextLayout? Author, TextLayout? Date, TextLayout? Sha, LabelVisual[] Labels, Bitmap? Avatar = null);
 
-    /// <summary>A placed label with its laid-out text; <see cref="Bounds"/> is relative to the row's top.</summary>
-    private sealed record LabelVisual(string Text, string FullText, RefLabelKind Kind, Rect Bounds, bool IsOverflow, TextLayout Layout, string? RefName = null);
+    /// <summary>
+    /// A placed label with its laid-out text and, with an open pull request, its badge and the
+    /// badge's laid-out <c>#n</c> (11.2); <see cref="Bounds"/> is relative to the row's top and includes the badge.
+    /// </summary>
+    private sealed record LabelVisual(string Text, string FullText, RefLabelKind Kind, Rect Bounds, bool IsOverflow, TextLayout Layout, string? RefName = null, PullRequestBadge? Badge = null, TextLayout? BadgeLayout = null);
 
     /// <summary>
     /// The theme's colours as immutable brushes and pens, looked up once per theme from the
@@ -768,6 +793,9 @@ public sealed partial class CommitGraphControl
 
         public Geometry? TagIcon { get; init; }
 
+        /// <summary>The pull-request badge's icon (Lucide "git-pull-request", 11.2); null without the resource.</summary>
+        public Geometry? PullRequestIcon { get; init; }
+
         public static Palette Resolve(CommitGraphControl control)
         {
             var theme = control.ActualThemeVariant;
@@ -816,6 +844,7 @@ public sealed partial class CommitGraphControl
                 LabelBorderPens = borderPens,
                 CheckIcon = Icon("IconCheck"),
                 TagIcon = Icon("IconTag"),
+                PullRequestIcon = Icon("IconPullRequest"),
             };
         }
     }
