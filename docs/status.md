@@ -160,6 +160,15 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for G1's fix (`5219eae`, pushed as `441bf8d`) is
+[41006619244](https://github.com/RahimPasha/VisualCommit/actions/runs/41006619244): all five jobs
+succeeded: `windows-latest` (37 min 51 s; its Test step 34 min 19 s of 55, 5,815 of 5,819 passed and
+4 skipped; its keychain step green), `macos-latest` (29 min 59 s; Test step 27 min 50 s, 5,813 of
+5,816 passed and 3 skipped; its keychain step green), `ubuntu-latest` (7 min 27 s; Test step 5 min
+39 s, 5,813 of 5,816) and the two "bare ubuntu container" jobs (6 min 55 s and 6 min 33 s; Test steps
+4 min 45 s and 4 min 32 s; their Secret Service steps green). Part G's method 1 passed on macOS for
+the first time, with its later steps, which had not run there before.
+
 Phase 7a's run for the macOS races' fix (`33313ef`, pushed as `0aa7cdb`) is
 [41001188676](https://github.com/RahimPasha/VisualCommit/actions/runs/41001188676): `windows-latest`
 (34 min 1 s; its Test step 31 min 25 s of 55, 5,813 of 5,817 passed and 4 skipped; its keychain step
@@ -436,8 +445,8 @@ after another under `bash scripts/heavy-run.sh`, no agent running) all passed: t
 WP-B's whole run 777 pictures are the same files and 43 changed; against WP-P's merge part P's pictures
 changed only in the graph's label column (and the author line in `p09a` and `p13a`), and `p12a` and
 A9's three are the same files. Their inspection is running (workflow `wqhcqjjrr`), and WP-N is being
-built meanwhile (workflow `wfgi3aatg`, `wip/p7a-create`). Next: read CI on `5219eae` (run
-41006619244); the inspection's verdicts; tick steps 12 and 14; then WP-N's merge (12.9). Each of parts B, P, G and N
+built meanwhile (workflow `wfgi3aatg`, `wip/p7a-create`). CI on `5219eae` is green on all
+five jobs. Next: the inspection's verdicts; tick steps 12 and 14; then WP-N's merge (12.9). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
 D248 change how phases are built (`plan.md`'s "Workflow" and "Visual test gate", `CLAUDE.md`).
