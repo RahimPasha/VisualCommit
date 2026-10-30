@@ -6,6 +6,7 @@ using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Settings;
+using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels.Panels;
 
@@ -77,6 +78,28 @@ public partial class CommitDetailsViewModel : ObservableObject
 
     /// <summary>Neither details, an error nor several selected commits: the panel says "Select a commit to see its details.".</summary>
     public bool ShowsPlaceholder => !HasCommit && !HasError && !IsMultiSelection;
+
+    /// <summary>
+    /// The repository's authors' avatars (docs/phase-7a-design.md 11.3): set by the repository when
+    /// its avatars change; setting it finds the shown commit's author's image again.
+    /// </summary>
+    public AuthorAvatars Avatars
+    {
+        get;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            field = value;
+            AuthorAvatarFile = Details is { } shown ? value.FileOf(shown.AuthorEmail) : null;
+        }
+    } = AuthorAvatars.None;
+
+    /// <summary>
+    /// The local image of the shown commit's author (its e-mail, case ignored), which the panel draws
+    /// before the author line (11.3, D310); null without one, and while no commit is shown.
+    /// </summary>
+    [ObservableProperty]
+    public partial string? AuthorAvatarFile { get; private set; }
 
     /// <summary>A commit's details are being read. The panel keeps showing the previous ones until they arrive.</summary>
     [ObservableProperty]
@@ -402,6 +425,7 @@ public partial class CommitDetailsViewModel : ObservableObject
         Subject = details.Subject;
         Body = details.Body;
         AuthorText = Person(details.AuthorName, details.AuthorEmail);
+        AuthorAvatarFile = Avatars.FileOf(details.AuthorEmail);
         DateText = _dates.Format(details.AuthorDate);
         var committer = Person(details.CommitterName, details.CommitterEmail);
         CommitterText = committer == AuthorText ? string.Empty : committer;
@@ -441,6 +465,7 @@ public partial class CommitDetailsViewModel : ObservableObject
         Subject = string.Empty;
         Body = string.Empty;
         AuthorText = string.Empty;
+        AuthorAvatarFile = null;
         DateText = string.Empty;
         CommitterText = string.Empty;
         CommitDateText = string.Empty;
