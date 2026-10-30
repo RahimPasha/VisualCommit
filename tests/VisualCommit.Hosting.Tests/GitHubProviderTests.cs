@@ -278,6 +278,25 @@ public sealed class GitHubProviderTests
     }
 
     [Fact]
+    public async Task A6_a_lookup_in_a_repository_or_from_a_commit_github_does_not_give_is_left_out_and_the_others_go_on()
+    {
+        await using var setup = await Setup.StartAsync();
+        var main = await TipAsync(setup, "octo/hello", "main");
+
+        // A repository GitHub does not have (404), a commit octo/hello does not have (422), then octo on main.
+        var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null,
+            [
+                new AuthorCommit(Scenarios.AdaEmail, main, Repository("ada", "gone")),
+                new AuthorCommit("stranger@example.com", new string('0', 40), Repository("octo", "hello")),
+                new AuthorCommit(Scenarios.OctoEmail, main, Repository("octo", "hello")),
+            ],
+            Cancelled);
+
+        Assert.Equal(new AuthorAvatar(1001, "octo", new Uri("http://127.0.0.1:1/avatars/u/1001?v=4")), Assert.Single(authors.Value!.ByEmail).Value);
+        Assert.Equal([404, 422, 200], setup.Fake.Requests.Select(request => request.Status));
+    }
+
+    [Fact]
     public async Task A6_an_empty_repository_is_an_empty_map_and_a_failing_lookup_is_left_out()
     {
         await using var setup = await Setup.StartAsync();

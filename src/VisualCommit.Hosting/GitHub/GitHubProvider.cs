@@ -204,8 +204,10 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// commit of an e-mail wins; null when GitHub links none); a 409 (an empty repository) is an
     /// empty map. Then at most 20 lookups for <paramref name="lookups"/> whose e-mail is not yet in
     /// the map, in order, each in its own repository's history from its own commit (D339):
-    /// <c>repos/{owner}/{name}/commits?sha=&lt;SHA&gt;&amp;author=&lt;e-mail&gt;&amp;per_page=1</c>;
-    /// a failing lookup stops them and is left out.
+    /// <c>repos/{owner}/{name}/commits?sha=&lt;SHA&gt;&amp;author=&lt;e-mail&gt;&amp;per_page=1</c>.
+    /// A lookup answered 404, 409 or 422 (GitHub does not let the token read that repository, or it
+    /// has no such commit) is left out and the others go on; any other failing lookup stops them and
+    /// is left out.
     /// </summary>
     public async Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, CancellationToken ct)
     {
@@ -257,6 +259,13 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         {
             var url = Api($"{RepositoryPath(lookup.Repository)}/commits?sha={Uri.EscapeDataString(lookup.Sha)}&author={Uri.EscapeDataString(lookup.Email)}&per_page=1");
             var reply = await _client.SendAsync(HttpMethod.Get, token, url, null, GitHubJsonContext.Default.ListGitHubCommitItemJson, ct).ConfigureAwait(false);
+            if (reply.Failure?.Kind is HostingFailureKind.NotFound or HostingFailureKind.Validation || reply.Status == 409)
+            {
+                // A remote whose repository is gone, private to others or empty, or whose branch was
+                // rewritten: only this address is not found there, and nothing tells against the rest.
+                continue;
+            }
+
             if (!reply.Succeeded || reply.Value is null)
             {
                 break;
