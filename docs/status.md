@@ -127,8 +127,10 @@ App:
   open in browser. (Done 2026-10-30: WP-P merged at `1958755`, part P's 24 pictures inspected, the
   harness's double-click fix at `ccd1ebe`; the badge with WP-V, merged at `8810136`, with the fixes
   `33313ef` and `5219eae`; 11.6's runs passed and their pictures were inspected; CI green on `5219eae`.)
-- [ ] 13. "Create pull request" in the branch menus (`ForLocalBranch`, `ForRemoteBranch`) and the
-  drop menu (`ForDrop`), and its form.
+- [x] 13. "Create pull request" in the branch menus (`ForLocalBranch`, `ForRemoteBranch`) and the
+  drop menu (`ForDrop`), and its form. (Done 2026-10-30: WP-P's menu items at `1958755`; WP-N merged
+  at `93e3410` (design 17 item 13); 12.9's runs passed; part N's 20 pictures and the 19 earlier
+  pictures that changed inspected and pass; CI green on `93e3410`.)
 - [x] 14. Author avatars from GitHub (D252). (Done 2026-10-30: WP-V merged at `8810136`, G1's check
   for every platform at `5219eae`; part G's ten pictures and the part P pictures it changes inspected;
   CI green on `5219eae`.)
@@ -161,6 +163,14 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
+
+Phase 7a's run for WP-N's merge (`93e3410`) is
+[41023837694](https://github.com/RahimPasha/VisualCommit/actions/runs/41023837694): all five jobs
+succeeded: `windows-latest` (37 min 24 s; its Test step 34 min 24 s of 55, 5,856 of 5,860 passed and
+4 skipped; its keychain step green; the real-window pass built), `macos-latest` (33 min 25 s; Test step
+31 min 8 s, 5,854 of 5,857 passed and 3 skipped; its keychain step green), `ubuntu-latest` (6 min 23 s;
+Test step 4 min 51 s, 5,854 of 5,857) and the two "bare ubuntu container" jobs (7 min 58 s and 7 min
+28 s; Test steps 5 min 51 s and 5 min 3 s; their Secret Service steps green).
 
 Phase 7a's run for G1's fix (`5219eae`, pushed as `441bf8d`) is
 [41006619244](https://github.com/RahimPasha/VisualCommit/actions/runs/41006619244): all five jobs
@@ -454,18 +464,19 @@ a caret, a progress bar's position or percentage, or an anti-aliased edge (Notes
 green on all five jobs. Steps 12 and 14 are ticked. WP-N is merged at `93e3410` (design 17 item 13:
 built by two builders, reviewed by an agent that built none of it, two major and six minor findings
 fixed, two ruled on; the report's "Part N as built" records the checks' changes), and CI's run
-41023837694 started on it. 12.9's runs on `93e3410` (one after another under
+41023837694 on it is green on all five jobs. 12.9's runs on `93e3410` (one after another under
 `bash scripts/heavy-run.sh`, no agent running) all passed: the lagged list (25, 66, 21, 201 and 42
 tests), phase 3's walk-through (82) and the 7a project whole (201). Against WP-V's merge run 410
 pictures of phases 3 and 7a are the same files, 10 changed and part N's 20 are new; against WP-B's
 whole run phase 3 has 16 changed, its status-bar changes all in the progress bar's segment, the
-percentages or an edge a level or two apart (ruling 60; Notes). WP-N's worktree is removed. Under
-way: the inspection of part N's 20 pictures and of the 21 earlier ones that changed (workflow
-`wamj7cyfy`), CI's run 41023837694, and wave 3 (workflow `wb6m484z6`): WP-R in
+percentages or an edge a level or two apart (ruling 60; Notes). Five inspectors (workflow
+`wamj7cyfy`) passed part N's 20 pictures and the 19 earlier ones that changed, with nothing left for
+a verifier; step 13 is ticked and WP-N's worktree is removed. Under way: wave 3 (workflow
+`wb6m484z6`): WP-R in
 `D:/Projects/Personal/vc-wt/p7a-real-window` (`wip/p7a-real-window`, written and built, never run by
 its agents) and WP-LIVE in `D:/Projects/Personal/vc-wt/p7a-live` (`wip/p7a-live`, run only without its
-variables), each reviewed by two agents that did not build it. Next: the inspection's verdicts and
-CI's, then tick step 13; at wave 3's end read its reports and diffs and merge each with `--no-ff`
+variables), each reviewed by two agents that did not build it. Next: at wave 3's end read its
+reports and diffs and merge each with `--no-ff`
 (WP-LIVE with the lead's slnx, `ci.yml` and CLAUDE.md rows, 14.8; WP-R with 13.7's CLAUDE.md rows).
 The live run (step 16) waits for the owner's sandbox, token and two variables (design 14.6). Each of parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
@@ -730,6 +741,16 @@ every commit.
   noted, failing nothing: `g02a`'s tooltip wraps after the hyphen in `…that-the-`; the badge's 1-px
   icon strokes fall on fractional x and draw as two half-intensity pixels; in the section each title
   follows its `#n`, so `#1`'s title starts 2 px left of the others.
+- **WP-N's merge runs and pictures** (12.9, on `93e3410`). `b06a` shows port 47395 again (59807 in
+  WP-V's merge run), as the note below expects. Phase 3's `17b`, `31a` and `31b` are one fetch at two
+  progress points (60 % here, 80 % in WP-B's run), `21a`, `21b1` and `21b3` show the indeterminate
+  bar's segment elsewhere, and `10f` and `21b3` alternate between runs; `16j` and `30g` hold a
+  temporary folder's name; the rest are rounded corners or anti-aliased edges one or two levels apart,
+  and `15b3`'s, `18b`'s and the Pop icon's (`17d`, `17e`) first appeared in WP-V's merge run. No
+  earlier picture shows the status bar's offer; `17e`'s succeeded fetch confirms that only a create
+  gives one. The inspectors noted, failing nothing: the form's card grows with its note (418 high in
+  `n02a`) and its error line (446 in `n04a`); undo is enabled after a create that pushed (`n03a`),
+  from the push's entry (open point 54).
 - **CI on WP-V's merge: P13 again on Windows, and G1's new pixel check on macOS** (run 40993671970).
   WP-V's review added `AssertLoginLabel`, which reads where the name's ink ends to ±1 px; macOS draws
   the name's last column 1.4 px before its layout edge. The report gives layout positions, so the
