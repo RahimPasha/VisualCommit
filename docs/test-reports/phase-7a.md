@@ -1380,10 +1380,65 @@ Faults the gate found, and the commit that fixed each.
    (2026-10-30, 19:26 to 19:49, through the lock, with xUnit's timing report: 2,495 of 2,495 in
    22 min 30 s) it took 35.9 s; in the stopped run's snapshot the tests beside it ran four to five
    times their project-alone times (one at 77 s that takes 19.4 s). Slowness under the run's load,
-   not a hang. D237's rule splits a test that holds several scenarios' work in one; it is applied
-   to every test of that project that took 25 s or more in the project-alone run (45 tests in 20
-   files; the 24 s ones and below are left), each kept test with its reason (filled in when the
-   splits are merged).
+   not a hang. D237's rule splits a test that holds several scenarios' work in one; it is applied to
+   every test of that project that took 25 s or more in the project-alone run, 41 tests in 20 files
+   (the 24 s ones and below are left), by six Opus fixers in worktrees, each change reviewed by an
+   Opus agent that did not write it and repaired where the review found something, then reviewed
+   again (workflow `wcvkskdxp`; the design's 21 item 1). 11 are split, every assertion kept on the
+   state it was made on, and 30 are kept with a reason. Split (the new names):
+   - `UndoEffectTests.Renames_configuration_remotes_and_tags_go_forth_and_back`:
+     `A_branchs_rename_and_a_tag_go_forth_and_back`,
+     `A_branchs_configuration_and_a_remotes_rename_URL_and_HEAD_go_forth_and_back` (the remote's
+     rename rewrites the key the configuration's effect wrote, so they stay together) and
+     `Renames_configuration_tags_and_symbolic_refs_are_refused_where_the_repository_changed_since`.
+   - `UndoStepRefusalTests.A_keep_move_that_git_stops_at_a_file_held_open_puts_back_the_files_it_rewrote`
+     keeps the undo; `A_redos_keep_move_that_git_stops_at_a_file_held_open_takes_away_the_file_it_added`
+     holds the redo, which off Windows now runs and goes through with the file open, as the undo
+     already did there (first run by CI's Linux and macOS jobs).
+   - `UndoStepRemoteTests.Deletions_on_a_remote_and_a_tag_push_are_undone_and_redone`:
+     `A_branch_deletion_on_a_remote_is_undone_and_redone`, `A_tag_push_is_undone_and_redone` and
+     `A_tag_deletion_on_a_remote_is_undone_and_redone` (its tag pushed by the same call, unrecorded).
+   - `PullRebaseSettingsParityTests.The_configured_pull_calls_the_callback_before_its_rebase_and_not_before_a_fast_forward`:
+     one row per pull (`Diverged`, `FastForward`).
+   - `IntegratePullTests.A_branch_with_a_merged_side_branch_is_not_rebased_over_what_the_side_branchs_branch_point_tracks`
+     keeps the refusal; `Without_keep_ignored_a_branch_with_a_merged_side_branch_is_rebased_and_loses_the_file_only_with_rebase_merges`
+     holds git's rebase, both rows.
+   - `Phase5ScenarioTests.Protect_merge_and_cherry_pick_of_others_work_are_refused_over_a_changed_or_a_staged_file`:
+     `Protect_merge_and_cherry_pick_of_others_work_are_refused_over_a_changed_file` (a row each),
+     `Protect_merge_of_others_work_is_refused_over_a_staged_file_other_does_not_touch` and
+     `Protect_cherry_pick_of_others_work_is_refused_over_a_staged_file_other_does_not_touch`
+     (phase 5's design 15.9 and report name the old test, as history).
+   - `Phase6ScenarioTests.A_copy_of_the_workspace_takes_no_git_process_and_fetches_from_its_own_remotes`
+     keeps the three fetches that bring commits;
+     `A_copy_of_the_workspace_fetches_nothing_into_the_repositories_whose_remote_holds_nothing_new`
+     holds the five quiet ones.
+   - `FailureClassifierTests.Real_checkouts_of_the_protect_scenario_give_each_kind_with_gits_paths`
+     and `Real_merges_picks_and_reverts_refused_for_changes_give_the_merge_kinds_on_any_git`: one row
+     per refusal (6 and 7), as `ProtectedChangesTests` since D237.
+   - `IgnoredInTheWayTests.Each_read_makes_its_usual_number_of_git_calls`: one test per read
+     (`A_merge_…`, `A_pick_a_revert_and_a_list_…`, `A_rebase_…`,
+     `An_interactive_rebase_and_a_squash_…`, `A_stash_makes_its_usual_number_of_git_calls`).
+   - `TempRepoClockTests.A_step_after_an_app_operation_counts_for_force_if_includes_only_once_the_clock_has_moved_past_it`:
+     `…_counts_for_force_if_includes_once_the_clock_has_moved_past_it` and
+     `…_does_not_count_for_force_if_includes_before_the_clock_has_moved_past_it`.
+
+   Kept: 11 whose time is mostly a shared template's wait, which the watchdog does not count (four
+   of `Phase5ScenarioTests`' and `Phase6ScenarioTests`' scenario descriptions, `Phase7aScenarioTests`'
+   other port, `ScenarioTests`' graph copies, and five pull-parity cases, each one comparison);
+   `MergeToolHelpTests`' live run, whose time is a `WaitingForSlowProgram` wait; and 18 that are one
+   action, or one comparison, whose steps each need what the step before left (D181), so that no
+   split shortens the longest piece meaningfully: `UndoStepTests`' hard reset and its check-out-and-rebase,
+   `UndoStepRefusalTests`' hard reset's refused undo, `UndoStepBranchTests`' six, four of
+   `UndoStepFileTests`', two of `UndoStepRemoteTests`', `MergeToolTests`' failing tool and phase 4's
+   fake merge tool (one `git mergetool` run each), and `GraphFilterTests`' stale soloed name. The
+   project alone on the split code (2026-10-30, 20:56 to 21:20, through the lock, the timing report
+   again): 2,523 of 2,523 in 22 min 25 s; the new tests take 2.2 to 20.4 s (the stopped test's three
+   parts 20.4, 12.7 and 11.5 s), `IgnoredInTheWayTests`' stash test 30.4 s with its class's template.
+   The times vary by a template's wait and the run's order (a test left as it was went from 12.9 to
+   41.1 s between the two runs). What is left near the limit is the kept chains of about 30 to 40 s
+   alone in the project (`UndoStepBranchTests`' automatic stash 40.3 s, `UndoStepFileTests`' popped
+   stash 34.1 s, `UndoStepTests`' hard reset 32.8 s): D237's rule cannot shorten them, and a limit of
+   their own is the owner's call (D264; plan.md's risk 12). Commits `939e9fa` to `377d354`.
 
 ## Could not run
 

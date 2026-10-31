@@ -589,11 +589,11 @@ nature, to be judged with the rest). The first default run of the counted round 
 in, in `UndoEffectTests.Renames_configuration_remotes_and_tags_go_forth_and_back` after its 180 s
 (14 s alone, 35.9 s in a run of the project alone; slowness, not a hang; the report's "Run" and
 "Found by the gate"). By D237's rule every test of that project that took 25 s or more in the
-project-alone run (45, in 20 files) is being split where it holds several scenarios' work, by six
-Opus fixers in worktrees, each change reviewed by an agent that did not write it (workflow
-`wcvkskdxp`). Next: bring those splits into the branch, run the changed classes and the project
-alone with its timing report, commit and push; then the counted round's default run again (`bash
-scripts/heavy-run.sh`, after a rest), and, with the owner told and present, D246's two runs of
+project-alone run (41, in 20 files) was judged by six Opus fixers in worktrees, each change reviewed
+by an agent that did not write it (workflow `wcvkskdxp`; design 21 item 1): 11 are split, 30 kept
+with their reasons, at `939e9fa` to `377d354`, and the project alone on them passed 2,523 of 2,523.
+Next: the counted round's default run again on `377d354`'s code (`bash scripts/heavy-run.sh`, after
+a 10-minute rest), and, with the owner told and present, D246's two runs of
 `--filter-class "*Phase7aRealWindowPass"` one after the other (step 4), then the whole real-window
 pass (step 5), at once the pictures' list, the live command again, and the inspection (step 6). The
 default run comes before D246's two runs here only to use the time until the owner is at the
@@ -611,6 +611,14 @@ Once a phase is running, this always names the single next thing to do and is ke
 every commit.
 
 ### Notes for whoever resumes
+
+- **The gate's split of the long `VisualCommit.Git.Tests` tests** (2026-10-30, design 21 item 1):
+  the two timing reports, the first default run's log and the workflow's result are outside the
+  repository in `D:/Projects/Personal/phase7a-work/gate/` (`git-tests-timing-before-split.xml`,
+  `git-tests-timing-after-split.xml`, `default-run-1-a140017.log`, `split-workflow-result.json`);
+  CLAUDE.md's "Each test's time in a project run alone" makes such a report. The six worktrees under
+  `.claude/worktrees/` and their branches are removed, their fsmonitor daemons and the build
+  servers stopped.
 
 - **The live command's variables in a session that started before them** (2026-10-30): Windows
   gives a process the environment of the one that started it, so VS Code (and every Claude Code

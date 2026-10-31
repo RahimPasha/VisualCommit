@@ -5299,3 +5299,26 @@ report's "Live command" holds each run's findings; the report and the handoff ci
    repository outside its selection (D340's case; the browser lists such rows); GitHub's empty
    repository's 409; a retired version's status (only `2022-11-28` and `2026-03-10` exist, both
    supported).
+
+## 21. As built: the gate
+
+What the gate's rounds found and settled (13.7); the report's "Run" and "Found by the gate" hold the
+runs and their counts.
+
+1. **The watchdog in `VisualCommit.Git.Tests`** (the counted round's first default run, 2026-10-30,
+   on `a140017`'s code): `UndoEffectTests.Renames_configuration_remotes_and_tags_go_forth_and_back`
+   passed 180 s counted, slowness under the run's load (14 s alone, 35.9 s in the project alone). The
+   lead applied D237's rule ahead of the next stop rather than per stop: xUnit's timing report of the
+   project alone listed 41 tests of 25 s or more in 20 files; six Opus fixers, one per group of files,
+   each in a worktree, judged each test split or keep and split along the test's own sections, every
+   assertion on the state it was made on and no limit or wait changed; six Opus reviewers that did not
+   write them checked every split against the original and every keep's reason, counting git calls,
+   and four groups were repaired and reviewed again (workflow `wcvkskdxp`; the blocking finding was a
+   worktree based on `master`'s `5fe9148`, rebased onto the phase's `a9326a5` before anything was
+   taken; the others were names, comments and one theory's rows). 11 tests are split (the report's
+   "Found by the gate" item 1 names each new test) and 30 kept: 11 whose time is a shared template's
+   wait, one a slow program's wait (`git mergetool --tool-help`), and 18 single actions or comparisons
+   whose steps each need the one before (D181). The project alone on the split code passed 2,523 of
+   2,523, the new tests at 2.2 to 20.4 s. Left near the limit: the kept undo chains of 30 to 40 s
+   alone in the project; a limit of their own, or fewer projects side by side, is the owner's call
+   (D237, D264; plan.md's risk 12). The splits are `939e9fa` to `377d354`.
