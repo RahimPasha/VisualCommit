@@ -89,8 +89,8 @@ fix `ccd1ebe`, WP-V `8810136`, the macOS races `33313ef`, G1's fix `5219eae`, WP
 `a140017`, the gate's splits `939e9fa` to `377d354`, Check_N `723f2d3`, D343 `391f7f2` and the torn
 reads `a9d02c1`, the real-window harness's `TitleOf` `a2c312a`; the phase's Progress checklist
 names the rest (`git show origin/phase/7a-hosting-github:docs/status.md`, since the acceptance resets
-status.md's). Merged into `master`: not yet, awaiting the owner's acceptance ("Phase 7a accepted"
-merges it with `--no-ff`).
+status.md's). The owner accepted the phase on 2026-10-31 and it is merged into `master` (merge
+commit `019e68a`).
 
 - **Default run, counted round** (`a9d02c1`'s code): 2026-10-31, 00:51 to 02:06, after a 10-minute
   rest, at most four projects at once (D343): 5,948 of 5,952 passed and 4 were skipped in 1 h 12 min
@@ -441,8 +441,8 @@ Do first:
    Manager: since git 2.56 its system setting opens a sign-in window on a plain `git push`, which
    then waits (Things that cost time; status.md's "Waiting on the owner").
 2. Before the design, the owner's answers, each recorded as a decision and carried into plan.md and
-   requirements.md (status.md's "Waiting on the owner" says Azure DevOps' and GitLab's accounts and
-   sign-in are asked then): sign-in and test accounts or tokens for Azure DevOps and GitLab (risks 4
+   requirements.md (status.md's "Waiting on the owner" holds the owner's answers of 2026-10-31 and
+   the lead's recommendations for the rest, "For phase 7b, answered on 2026-10-31"): sign-in and test accounts or tokens for Azure DevOps and GitLab (risks 4
    and 5), and whether each gets a live command; and the questions 7a's decisions leave open for 7b:
    avatars, which D252 and O4 give to GitHub only while plan.md's 7b lists "author avatars, as 7a
    built them for GitHub"; whether self-hosted GitLab is in scope, which plan.md's 7b includes while
@@ -488,17 +488,18 @@ Risks to watch:
 
 ## Waiting on the owner
 
-- **Acceptance of phase 7a**: the phase is "Awaiting acceptance" on the Gate commit `a2c312a`;
-  "Phase 7a accepted" merges it into `master`. The macOS checklist in the report is the owner's,
-  by hand on a Mac, whenever one is at hand.
+- **Acceptance of phase 7a**: given on 2026-10-31; merged into `master` (merge commit `019e68a`).
+  The whole gate passed on `a2c312a`, its Gate commit, and the commits after it change only docs.
+  The macOS checklist in the report is the owner's, by hand on a Mac, whenever one is at hand.
 - **A sign-in dialog in a bound tab** (plan risk 39, design 19.8): should the broker refuse such a
   prompt without a dialog, from what the session knows (amending D273 and D340)?
 - **The banner's brief torn state** (plan risk 40, design 21 item 4): leave it, or have the refresh read the
   in-progress files before and after `git status`?
 - **The kept undo chains**: a limit of their own if one stops a rested run again (D264).
 - **For phase 7b**: Azure DevOps' and GitLab's sign-in and test accounts or tokens (risks 4 and 5),
-  and the questions under "Do first", step 2. The live command's token for GitHub expires on
-  2026-11-29; a later live run needs a new one.
+  and the questions under "Do first", step 2. Answered in part on 2026-10-31, with the lead's
+  recommendations for the rest, under status.md's "Waiting on the owner". The live command's token
+  for GitHub expires on 2026-11-29; a later live run needs a new one.
 - **Decisions made during 7a without the owner**, which the owner may want to look at: the design's
   D265 to D338 beyond the eight questions the owner answered on 2026-10-29 (their reasons in
   decisions.md say so: D277, D291 with D311, D296, D299, D313, D317, D321 and D335);

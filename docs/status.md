@@ -16,7 +16,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 4. Rebase and conflict resolution | Done | `phase/4-rebase-conflicts` | [phase-4](handoffs/phase-4.md) | [phase-4](test-reports/phase-4.md) |
 | 5. History, traceability and undo | Done | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
 | 6. Multi-repo and productivity | Done | `phase/6-multi-repo` | [phase-6](handoffs/phase-6.md) | [phase-6](test-reports/phase-6.md) |
-| 7a. Hosting foundation and GitHub | Awaiting acceptance | `phase/7a-hosting-github` | [phase-7a](handoffs/phase-7a.md) | [phase-7a](test-reports/phase-7a.md) |
+| 7a. Hosting foundation and GitHub | Done | `phase/7a-hosting-github` | [phase-7a](handoffs/phase-7a.md) | [phase-7a](test-reports/phase-7a.md) |
 | 7b. Azure DevOps and GitLab | Not started | `phase/7b-hosting-azure-gitlab` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
 
@@ -26,392 +26,51 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-Phase 7a, "Hosting foundation and GitHub", is awaiting acceptance on `phase/7a-hosting-github`,
-started on 2026-10-28 from `master` at `5fe9148`; its visual gate passed on 2026-10-31 (the
-[report](test-reports/phase-7a.md), the [handoff](handoffs/phase-7a.md)). Phase 6 was accepted by the owner on 2026-10-24 and merged into `master` (merge
-commit `3f34c87`); its gate ran on `b561b7c`. Phase 5 was accepted on 2026-10-17 (merge commit
-`c299939`), phase 4 on 2026-10-12 (merge commit `ce5f337`), phase 3 on 2026-10-11 (merge commit
-`8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit
-`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). Phase 7 was split into 7a and 7b on
-2026-10-28 (D241).
+None in progress. Phase 7a was accepted by the owner on 2026-10-31 and merged into `master` (merge
+commit `019e68a`); its gate ran on `a2c312a`. Phase 6 was accepted on 2026-10-24 (merge commit
+`3f34c87`), phase 5 on 2026-10-17 (merge commit `c299939`), phase 4 on 2026-10-12 (merge commit
+`ce5f337`), phase 3 on 2026-10-11 (merge commit `8b33745`), phase 2 on 2026-10-10 (merge commit
+`e039070`), phase 1 on 2026-10-10 (merge commit `b5eb1ed`) and phase 0 on 2026-10-06 (merge commit
+`b5f4723`). The next phase to start is phase 7b, the second half of phase 7 (D241).
 
-Gate commit: `a2c312a`. The default run ran on `a9d02c1`'s code and the real-window pass on
-`a2c312a`, which changes only `tests/VisualCommit.RealWindowTests` after it (D246; `git diff --stat
-a9d02c1 a2c312a -- . ':(exclude)docs' ':(exclude)*.md' ':(exclude)tests/VisualCommit.RealWindowTests'`
-prints nothing, and every scripted picture of the round's list was the same file). Every commit
-after it changes docs only. When a phase is set to "Awaiting acceptance", this line names the commit
+Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
 that both passes of the gate ran on (or, by D246, the real-window pass's commit when it changes
 only `tests/VisualCommit.RealWindowTests` after the commit the default run ran on); "Phase N accepted" checks that
 nothing but docs changed after it.
 
 ### Progress
 
-Each item is ticked in the commit that completes it, and each tick, like the start of each stage,
-records the share of the plan's weekly allowance used at that point (D241). The numbers are plain
-step numbers, not requirement numbers. The design (step 3) splits the Core, Git-layer and App
-steps into work packages and says how they map onto the steps below.
-
-The week: the plan's allowance resets on Thursdays at 2:00. The session cannot read `/usage`; on
-2026-10-28, at the phase's start, the owner said that what is left of the week will not run out
-before the reset of 2026-10-29.
-
-Start:
-
-- [x] 1. Phase branch created, phase set to "In progress", this checklist; the owner's answers to
-  the open points of phase 6's handoff and plan risks 4 and 5 recorded (D249 to D254) and carried
-  into `plan.md` and `requirements.md`. (2026-10-28: sign-in with a personal access token, no
-  device flow; a local fake of GitHub's API in the default run and CI, and an opt-in command
-  against real GitHub with the owner's fine-grained token for a sandbox repository; the
-  pull-request list in the left panel's section with a menu; avatars from GitHub only, every
-  other author as before; the session only where no keychain can be reached; the review's W1, S8
-  and R8 in the first package. After the design's research, before its drafting, the same day:
-  D255 to D263, recorded in step 3.)
-- [x] 2. Baseline: the default run on `master` (`5fe9148`) as inherited, after the owner's reboot,
-  through `bash scripts/heavy-run.sh`, before anything changes. (2026-10-28, 13:54 to 14:54, the
-  laptop quiet: 5,001 of 5,001 tests that ran passed in 58 min 13 s, exit 127: the watchdog
-  stopped `VisualCommit.VisualTests.Phase6` 1,028 s into the run in G23's part B,
-  `Check_G23_pull_refused_inside_the_integration`, after its 180 s (pictures at 28.8 s, 119.7 s
-  and 160.9 s), so that project's other tests did not run; the fourth such failure on git 2.56,
-  the first on a quiet laptop after the reboot. The owner chose to split the check (D264, step 4).
-  The projects ended after: part L's walk-through 11 min 15 s, phases 0 to 2's 15 min 0 s, phase
-  6's 17 min 11 s (stopped), phase 4's 29 min 5 s, phase 5's 32 min 18 s, phase 5's undo
-  walk-through 49 min 50 s, phase 3's 50 min 9 s, `VisualCommit.Git.Tests` 50 min 11 s and
-  `VisualCommit.App.Tests` 58 min 12 s. The first attempt, from 12:01, was disturbed by the
-  session's own research (Notes). Week: share not read; the owner: enough left before the reset.)
-- [x] 3. Design in `docs/phase-7a-design.md` (D243: about 150 to 200 KB, its decisions only in
-  `decisions.md`): GitHub's API facts as the fake must serve them, the keychains of Windows, macOS
-  and Linux, git 2.56's credential facts (with 2.43 and 2.55 from CI where they differ, D248), the
-  texts, the layouts, the tests and harness (the fake, the keychain's seam, the opt-in live
-  command), how the code and the harness name phase 7a, an estimate of what the phase adds to the
-  default run (about 55 minutes) and to the real-window pass (28), and the work packages, each
-  section a builder's brief of at most about 25 KB (D242). Its review: 3 or 4 lenses, git safety
-  and tests/gate among them, a verifier only for each blocker and major; questions of taste to
-  the owner; its decisions recorded. (Done 2026-10-29: drafted by 9 agents, reviewed by four
-  lenses with 20 agents, 36 findings fixed by 9; its decisions D265 to D338; the owner answered
-  eight questions, the lead ruled on the rest (Notes). About 345 KB before its as-built sections 16
-  to 21 (about 431 KB with them), over D243's mark, accepted by
-  the lead (Notes). Week: share not read; the owner: enough left before the reset.)
-- [x] 4. First package (plan.md's "From phase 6" and D254): `ShellDriverTests`' wheel test waits
-  for the hit test; the real-window csproj's comment gives the pass of phases 0 to 6 as 27 min
-  39 s; W1's failure under load looked at and fixed; S8's git-call counts as upper bounds taken
-  with the watcher quiet; R8's test switch that delays the watcher's events; G23's part B split
-  (D264). (Done 2026-10-29: L1 at `f1dc80e`, WP1 merged at `a4a388e`; the lagged list's first run
-  passed at that merge, and the whole default run on `069c5c7` passed: 5,547 of 5,551, 4 skipped.)
-- [x] 5. Harness: phase 7a's walk-through project, the local fake of GitHub's API (its port
-  amending D97, as D150, D229 and D238 did), the keychain's fake in both harnesses so that no run
-  touches the owner's keychain, the timing script and CLAUDE.md's Commands, the real-window
-  project's link to the phase's expectations. (Done 2026-10-29: WP-F merged at `c562ff4`; CLAUDE.md's
-  7a commands at `069c5c7`.)
-
-Core and Git layer:
-
-- [x] 6. The provider model that 7b builds Azure DevOps and GitLab on: hosts, accounts, a GitHub
-  remote recognised from its URL. Tests. (Done 2026-10-29: WP0, WP-G at `1d6b688` and WP-S at
-  `7bea4fb`; CI green on `5613450`.)
-- [x] 7. Tokens in the OS keychain on Windows, macOS and Linux behind a seam (R3), and in memory
-  for the session where none can be reached (D253). Tests. (Done 2026-10-29: WP-K merged at `2582e53`;
-  each real store's test passed on CI's run on `8b02805`, the first run of any.)
-- [x] 8. GitHub's API: a token checked at sign-in, the account's repositories, a repository's pull
-  requests, creating one, avatars; all against the fake. Tests. (Done 2026-10-29: WP-G merged at
-  `1d6b688`.)
-- [x] 9. The token reaching git (plan.md's "From phase 3": git's credential helpers first, then the
-  askpass helper and `AskPassBroker`; auto-fetch never prompts), a bulk run's prompt group and
-  accounts ("From phase 6"), and the push guard's refusals of `pr/*` and two-namespace pushes
-  ("From phase 6"), each as the design decides. Tests. (Done 2026-10-29: WP-C at `afb91a7`, WP-S's
-  bindings at `7bea4fb`, the prompt channel's fix for macOS and Linux at `9d48d0b`; CI green on
-  `5613450`.)
-
-App:
-
-- [x] 10. Sign-in dialog and the accounts in the settings screen (D249, D253). (Done 2026-10-29:
-  WP-A merged at `42b6be2`; part A's 24 pictures and the 31 settings pictures it changes inspected;
-  CI green on `e40ddc8`.)
-- [x] 11. Browse and clone the repositories of a GitHub account. (Done 2026-10-29: WP-B merged at
-  `b361388`, the lead's follow-ups `e40ddc8`; part B's ten pictures inspected (design 17 item 5); the
-  whole run's earlier pictures unchanged but for what varies by nature; CI green on `e40ddc8`.)
-- [x] 12. The left panel's "Pull requests" section with its menu (D251), the badge on branches,
-  open in browser. (Done 2026-10-30: WP-P merged at `1958755`, part P's 24 pictures inspected, the
-  harness's double-click fix at `ccd1ebe`; the badge with WP-V, merged at `8810136`, with the fixes
-  `33313ef` and `5219eae`; 11.6's runs passed and their pictures were inspected; CI green on `5219eae`.)
-- [x] 13. "Create pull request" in the branch menus (`ForLocalBranch`, `ForRemoteBranch`) and the
-  drop menu (`ForDrop`), and its form. (Done 2026-10-30: WP-P's menu items at `1958755`; WP-N merged
-  at `93e3410` (design 17 item 13); 12.9's runs passed; part N's 20 pictures and the 19 earlier
-  pictures that changed inspected and pass; CI green on `93e3410`.)
-- [x] 14. Author avatars from GitHub (D252). (Done 2026-10-30: WP-V merged at `8810136`, G1's check
-  for every platform at `5219eae`; part G's ten pictures and the part P pictures it changes inspected;
-  CI green on `5219eae`.)
-
-Checks, live trial and review:
-
-- [x] 15. Each part's visual checks written into `docs/test-reports/phase-7a.md` just before its
-  package is built (D244), by one writer and one reviewer, each marked for the real-window pass or
-  not, committed before the UI they test. (Done 2026-10-30: parts A, B, P, G and N, each before its
-  package; their R steps are WP-R's pass, merged at `5cfce9f`, design 18 item 1.)
-- [x] 16. The opt-in live command against real GitHub (D250), run with the owner's token on the
-  sandbox repository. (Done 2026-10-30: the first run passed, 80 of 80, and showed GitHub's
-  version refusal and its answer to an unknown SHA beside `author` unlike the fake's, each hiding a
-  defect of the app's; D342's corrections, built in two worktrees and reviewed by four agents, merged
-  at `5c20ee6` and `c6491cb`, the lead's `a140017`; the second run on them passed, 112 of 112, every
-  probe "the fake: same"; `VisualCommit.Hosting.Tests` 465 of 469 (4 skipped) and 7a's walk-through
-  205 of 205 on `a140017` (design 20; the report's "Live command"). Week: share not read.)
-- [x] 17. An independent review of the code before the gate; every confirmed finding fixed with
-  tests. (Done 2026-10-30: five read-only Opus reviewers found 18 problems on `fdb1986`, six
-  skeptics refuted 3, and the 15 were fixed with tests by four fixers, each reviewed by an agent that
-  did not write it, merged by `e5d09fb` (design 19). The whole runs that followed found expectations
-  the fixes change, test races and waits D237 had missed (design 19 items 7 and 8, D341); the rested
-  run on `7015753` passed 5,891 of 5,895 (4 skipped) in 1 h 12 min 6 s, the lagged list passed in all
-  five commands, and CI's run 41111820880 is green on all five jobs.)
-
-Closing (`CLAUDE.md`, "Closing a phase"):
-
-- [x] 18. The visual test gate: the scripted walk-through's pictures on this machine, then the new
-  real-window checks twice on their own with the owner told and present (D246); `dotnet test` and
-  the real-window pass on one commit; every picture inspected, in batches of at most about 150
-  (D247); `docs/test-reports/phase-7a.md` completed. (Done 2026-10-31: the counted round's default
-  run on `a9d02c1`'s code passed 5,948 of 5,952 (4 skipped) in 1 h 12 min 18 s; the real-window
-  pass on `a2c312a`, which changes only the real-window harness (D246), 72 of 72 in 31 min 6 s, Q1
-  1,400 ms; the live command 112 of 112; 16 Opus inspectors passed all 1,432 files of
-  `docs/test-reports/phase-7a-pictures.sha256` and 45 of CI's pictures; the report's "Run", "Found
-  by the gate" items 1 to 5 and design 21 give the rounds.)
-- [x] 19. `docs/architecture.md` describes what is built. (Done 2026-10-30, before the gate: four
-  Opus writers by area, one integrator, four reviewers each checking an area it did not write
-  against the code, one fixer; "As built (after phase 7a)". Three passages say what holds before the
-  gate and are found by "phase 7a's gate": the fake's texts not yet checked against GitHub, the live
-  command run only without its variables, 7a's real-window part not yet run; the gate's session
-  brings them up to date.)
-- [x] 20. `docs/plan.md`: what 7a did not deliver moved to the phase that owns it; risks updated.
-  (Done 2026-10-31: 7a's outcome, phase 8's five "From phase 7a" items, 7b's open questions, the
-  backlog, risks 4 to 39 updated and 40 to 42 new; drafted by an Opus agent, checked by another,
-  corrected, and filled in after the gate.)
-- [x] 21. `docs/handoffs/phase-7a.md` written from the template. (Done 2026-10-31: drafted by an
-  Opus agent, checked by another against its sources, corrected, and filled in after the gate.)
-- [x] 22. Cold-read check by a fresh agent; every gap fixed. (Done 2026-10-31: two fresh Opus
-  readers given only the repository, told 7a was accepted and merged, one on building, running and
-  testing, one on beginning 7b; 39 gaps between them, fixed by two Opus fixers and the lead, each
-  fixer's edits checked by another agent and the checks' corrections applied: CLAUDE.md's Commands
-  (the push on the Windows machine, the keychain command's pipe, the run's times), the hand run's
-  keychain and GitHub variables, the cloud session's live command, the report template's "Live
-  command" and "What proves each Delivers item", README.md, `ubuntu-latest`'s git 2.56.0 since
-  2026-10-29, the handoff's pointers into these notes, 7b's questions for the owner, and stale notes
-  here. Left to the owner: the start reading's size (review proposal P6) and self-hosted GitLab in
-  `requirements.md` (Waiting on the owner). Left for 7b's first code commit: `scripts/heavy-run.sh`'s
-  header still says about 55 minutes, a script after the Gate commit (the handoff's Known issues).)
-- [x] 23. The CI run of the gate's commit read, with each job's result. (Done 2026-10-31: run
-  41190572421 on `47506ca`, the gate's commit `a2c312a`: all five jobs green; the CI section.)
-- [x] 24. `docs/status.md`: links, the CI run, the "Gate commit", and "Awaiting acceptance" only if
-  the whole gate passed; the owner told what passed and what needs a decision. (Done 2026-10-31: the
-  Gate commit `a2c312a`, CI's run 41190572421 green on all five jobs, "Awaiting acceptance".)
+Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
+"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
+steps from `CLAUDE.md` and a step for reading the CI run of the gate's commit. Each item is ticked
+in the commit that completes it, and each tick, like the start of each stage, records the share
+of the plan's weekly allowance used at that point, as `/usage` or the status line's seven-day
+percentage shows it (D241): a phase or a stage starts only when the share left covers it
+(`plan.md`, "Workflow"). The allowance resets on Thursdays at 2:00; a session cannot read `/usage`
+itself, so it asks the owner for the share. Number the steps plainly; do not label them C1, C2 and
+so on, which are requirement numbers. Phase 7a's checklist, with a note on each step, is in this
+file as of `019e68a`'s second parent (`git show 3a3cc71:docs/status.md`).
 
 ### CI
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
-Phase 7a's run for the gate's commit `a2c312a` (the real-window harness's `TitleOf`; the branch at
-`47506ca`) is
-[41190572421](https://github.com/RahimPasha/VisualCommit/actions/runs/41190572421): all five jobs
-succeeded, none failed a test: `windows-latest` (git 2.56.0.windows.2) 5,952 tests with 4 skipped, 24
-min 6 s (Test step 21 min 48 s of 55; its keychain step green; "Build the opt-in projects" 17 s, the
-real-window project with it), `macos-latest` (2.56.0) 5,949 with 3 skipped, 34 min 11 s (Test step 32
-min 16 s; its keychain step green), `ubuntu-latest` (2.56.0) 5,949 with 3 skipped, 6 min 26 s (Test
-step 4 min 54 s), and the containers (2.43.0) 5,949 with 3 skipped each, 6 min 28 s and 6 min 6 s
-(Test steps 4 min 43 s and 4 min 21 s; Secret Service steps green).
-
-Phase 7a's run for the stage panel's message read again and the terminal merge's banner test
-(`a9d02c1`, the gate's fix of CI's two failures; the branch at `8dd323d`) is
-[41181591519](https://github.com/RahimPasha/VisualCommit/actions/runs/41181591519): all five jobs
-succeeded, the held rebase's new test on each platform among them. `windows-latest` 37 min 41 s
-(Test step 34 min 44 s of 55; its keychain step green; "Build the opt-in projects" 28 s),
-`macos-latest` 30 min 43 s (Test step 28 min 20 s; its keychain step green), `ubuntu-latest` 7 min
-32 s (Test step 5 min 36 s), the containers 8 min 10 s and 7 min 12 s (Secret Service steps green).
-
-Phase 7a's run for D343 and the record of D246's runs (`391f7f2`, the code of the gate's third
-default run, which passed on the laptop) is
-[41172878322](https://github.com/RahimPasha/VisualCommit/actions/runs/41172878322): its first
-attempt failed two tests on `windows-latest` (32 min 21 s; Test step 29 min 34 s of 55): phase 4's
-`Check_C17_terminal_rebase`, a fault of the app, and `ConflictBannerTests`' terminal merge, a fault
-of the test, both a status read in the middle of a terminal's git (the report's "Found by the
-gate", item 4; fixed in `a9d02c1`). The other four passed: `macos-latest` 36 min 37 s (Test step 34
-min 25 s; its keychain step green), `ubuntu-latest` 8 min 4 s (Test step 6 min 9 s), the containers
-8 min 22 s and 8 min 37 s (Secret Service steps green). The lead re-ran the Windows job, which
-passed on attempt 2 (34 min 39 s; Test step 31 min 56 s; its keychain step green).
-
-Phase 7a's run for the splits of `VisualCommit.Git.Tests`' long tests (`8271c8e`) is
-[41168259074](https://github.com/RahimPasha/VisualCommit/actions/runs/41168259074): all five jobs
-succeeded, the split redo's first run off Windows among them. `windows-latest` 30 min 49 s (Test
-step 28 min 8 s of 55; its keychain step green; "Build the opt-in projects" 24 s), `macos-latest`
-28 min 30 s (Test step 26 min 11 s; its keychain step green), `ubuntu-latest` 7 min 27 s (Test step
-5 min 28 s), the containers 6 min 41 s and 6 min 30 s (Secret Service steps green).
-
-Phase 7a's run for D342's corrections and the fake's empty 500 (`a140017`, the code of the gate's
-first default run) is
-[41153159610](https://github.com/RahimPasha/VisualCommit/actions/runs/41153159610): all five jobs
-succeeded. `windows-latest` 29 min 42 s (Test step 26 min 47 s of 55; its keychain step green;
-"Build the opt-in projects" 22 s), `macos-latest` 23 min 56 s (Test step 22 min 28 s; its keychain
-step green), `ubuntu-latest` 6 min 19 s (Test step 4 min 53 s), the container from Ubuntu's packages
-8 min 32 s and the one from Microsoft's installer 8 min 36 s (each container's Secret Service step
-green).
-
-Phase 7a's run for D341 and the create test's fence (`7015753`) is
-[41111820880](https://github.com/RahimPasha/VisualCommit/actions/runs/41111820880): all five jobs
-succeeded. `windows-latest` 32 min 1 s (Test step 29 min 9 s of 55; its keychain step green; "Build
-the opt-in projects" 22 s), `macos-latest` 33 min 23 s (Test step 30 min 58 s; its keychain step
-green), `ubuntu-latest` 7 min 53 s (Test step 6 min 1 s), the container from Ubuntu's packages 7 min
-25 s and the one from Microsoft's installer 7 min 19 s (each container's Secret Service step green).
-
-Phase 7a's run for the two test races and part P's `End` (`1d297a0`) is
-[41079852791](https://github.com/RahimPasha/VisualCommit/actions/runs/41079852791): four jobs
-succeeded and one failed. `windows-latest` failed in 37 min 58 s: the hang watchdog stopped
-`VisualCommit.Hosting.Tests` after 181 s counted in
-`CreatePullRequestOperationTests.Git_s_credentials_refused_during_the_push_give_their_own_words`, a
-race in that test since WP-N (design 19 item 8), every other test passing (5,886 of 5,890, 4
-skipped), its keychain step and "Build the opt-in projects" green; `macos-latest` 35 min 12 s,
-`ubuntu-latest` 8 min 6 s, and the two containers 8 min 18 s and 8 min 12 s, all green.
-
-Phase 7a's run for the step-17 record (`07e7642`) is
-[41071722860](https://github.com/RahimPasha/VisualCommit/actions/runs/41071722860): all five jobs
-succeeded. `windows-latest` 38 min 6 s (Test step 34 min 25 s of 55; its keychain step green; "Build
-the opt-in projects" 29 s), `macos-latest` 37 min 42 s (Test step 36 min 10 s; its keychain step
-green), `ubuntu-latest` 6 min 24 s (Test step 4 min 52 s), the container with the SDK from
-Microsoft's installer 6 min 25 s and the one from Ubuntu's packages 8 min 38 s (each container's
-Secret Service step green). The containers run git 2.43, so D340's older-git branches of
-`AccountCredentialTests` ran there for the first time, and passed. The run before it, on the merge of
-the review's fixes (`6a21b58`,
-[41061139528](https://github.com/RahimPasha/VisualCommit/actions/runs/41061139528)), failed in all five
-jobs on the same two checks only, `Check_A8_sign_out` and `Check_P13_P6_checkout_and_a_forks_tab`,
-whose expectations leak-1 and D339 change (`07e7642`, design 19 item 7); there Windows' "Build the
-opt-in projects" ran after the failed Test step, as tests-2 meant.
-
-Phase 7a's run for wave 3's merge and its items (`fdb1986`) is
-[41038505814](https://github.com/RahimPasha/VisualCommit/actions/runs/41038505814): four jobs
-succeeded and one failed. `windows-latest` (38 min 25 s; Test step 35 min 5 s of 55; its keychain step
-green; the new step "Build the opt-in projects" built the real-window pass and the live command in
-29 s), `macos-latest` (39 min 59 s; Test step 37 min 57 s; its keychain step green), `ubuntu-latest`
-(7 min 29 s) and the container with the SDK from Ubuntu's packages (6 min 1 s) passed. The container
-with the SDK from Microsoft's installer failed one test of 5,857:
-`GraphAvatarTests.An_overtaken_change_applies_nothing_and_the_newest_is_applied_once` saw the first
-change applied (`[1, 0]`). `AvatarBitmaps.DecodeAsync` is a `Task.Run` that can end before the UI
-thread reaches its `await`, so that change applied at once and was never overtaken: the product is
-right and the test assumed the decode always yields. It is fixed with the review's findings (step 17).
-
-Phase 7a's run for WP-N's merge (`93e3410`) is
-[41023837694](https://github.com/RahimPasha/VisualCommit/actions/runs/41023837694): all five jobs
-succeeded: `windows-latest` (37 min 24 s; its Test step 34 min 24 s of 55, 5,856 of 5,860 passed and
-4 skipped; its keychain step green; the real-window pass built), `macos-latest` (33 min 25 s; Test step
-31 min 8 s, 5,854 of 5,857 passed and 3 skipped; its keychain step green), `ubuntu-latest` (6 min 23 s;
-Test step 4 min 51 s, 5,854 of 5,857) and the two "bare ubuntu container" jobs (7 min 58 s and 7 min
-28 s; Test steps 5 min 51 s and 5 min 3 s; their Secret Service steps green).
-
-Phase 7a's run for G1's fix (`5219eae`, pushed as `441bf8d`) is
-[41006619244](https://github.com/RahimPasha/VisualCommit/actions/runs/41006619244): all five jobs
-succeeded: `windows-latest` (37 min 51 s; its Test step 34 min 19 s of 55, 5,815 of 5,819 passed and
-4 skipped; its keychain step green), `macos-latest` (29 min 59 s; Test step 27 min 50 s, 5,813 of
-5,816 passed and 3 skipped; its keychain step green), `ubuntu-latest` (7 min 27 s; Test step 5 min
-39 s, 5,813 of 5,816) and the two "bare ubuntu container" jobs (6 min 55 s and 6 min 33 s; Test steps
-4 min 45 s and 4 min 32 s; their Secret Service steps green). Part G's method 1 passed on macOS for
-the first time, with its later steps, which had not run there before.
-
-Phase 7a's run for the macOS races' fix (`33313ef`, pushed as `0aa7cdb`) is
-[41001188676](https://github.com/RahimPasha/VisualCommit/actions/runs/41001188676): `windows-latest`
-(34 min 1 s; its Test step 31 min 25 s of 55, 5,813 of 5,817 passed and 4 skipped; its keychain step
-green), `ubuntu-latest` (7 min 48 s; Test step 5 min 49 s) and the two "bare ubuntu container" jobs
-(8 min 18 s and 7 min 50 s; Test steps 6 min 5 s and 5 min 45 s; their Secret Service steps green)
-succeeded, P13 and `KeyRouterTests` passing. `macos-latest` (29 min 9 s; Test step 26 min 45 s; its
-keychain step green) failed only G1's pixel check again, as on `8810136` (5,810 of 5,814 passed and 3
-skipped); its fix is being built.
-
-Phase 7a's run for WP-V's merge (`8810136`) is
-[40993671970](https://github.com/RahimPasha/VisualCommit/actions/runs/40993671970): `ubuntu-latest`
-(6 min 2 s; Test step 4 min 35 s, 5,811 of 5,814 passed and 3 skipped) and the two "bare ubuntu
-container" jobs (7 min 10 s and 5 min 46 s; Test steps 5 min 5 s and 4 min 9 s; their Secret Service
-steps green) succeeded. `windows-latest` (37 min 58 s; its Test step 35 min 21 s of 55; its keychain
-step green) failed P13 at step 2 again, tool's list request after the mark (5,812 of 5,817 passed, 4
-skipped). `macos-latest` (24 min 45 s; Test step 23 min 28 s; its keychain step green) failed part G's
-method 1 at G1's new pixel check, "Row 0's name ends at x 79; the report gives 80.4 ±1" (5,810 of
-5,814 passed, 3 skipped): it read a text's ink to ±1 px, which the platforms' glyph rasterisation
-moves. Its fix is being built (Notes). Windows' Test step has taken 34 and 35 minutes in two of the
-last three runs, against D232's mark of 44.
-
-Phase 7a's run for the lead's icon commit before WP-V (`fb43def`, pushed with the docs commit
-`713b31f`) is [40986166736](https://github.com/RahimPasha/VisualCommit/actions/runs/40986166736): all
-five jobs succeeded: `windows-latest` (25 min 35 s; its Test step 23 min 25 s of 55, 5,786 of 5,790
-passed and 4 skipped; its keychain step green), `macos-latest` (26 min 51 s; Test step 24 min 58 s,
-5,784 of 5,787 passed and 3 skipped; its keychain step green), `ubuntu-latest` (6 min 40 s; Test step
-4 min 54 s, 5,784 of 5,787) and the two "bare ubuntu container" jobs (8 min 6 s and 5 min 38 s; Test
-steps 5 min 50 s and 3 min 57 s; their Secret Service steps green). macOS passed the two tests it
-failed on `ccd1ebe`, so both failures come and go.
-
-Phase 7a's run for the harness's double-click fix (`ccd1ebe`) is
-[40982132445](https://github.com/RahimPasha/VisualCommit/actions/runs/40982132445): `windows-latest`
-(37 min 12 s; its Test step 34 min 16 s of 55, 5,786 of 5,790 passed and 4 skipped; its keychain
-step green), `ubuntu-latest` (7 min 25 s; Test step 5 min 32 s, 5,784 of 5,787 passed and 3 skipped)
-and the two "bare ubuntu container" jobs (7 min 5 s and 5 min 35 s; Test steps 4 min 56 s and 4 min
-6 s; their Secret Service steps green) succeeded, with the double-click test passing. `macos-latest`
-(21 min 46 s; Test step 20 min 52 s) failed two tests that passed on every other job and on macOS
-in the runs before; 5,782 of 5,787 passed and 3 skipped. They are part P's
-`Check_P13_P6_checkout_and_a_forks_tab` (step 2's "no request since the mark" saw tool's list
-request, `pulls:acme/tool`) and `KeyRouterTests.Every_key_declines_during_a_branch_drag` (Ctrl+Shift+E
-"never arrived" at the focused `ChangedFile` button). Both are being investigated (Notes).
-
-Phase 7a's run for WP-P's merge (`1958755`) is
-[40965836423](https://github.com/RahimPasha/VisualCommit/actions/runs/40965836423): all five jobs
-failed one and the same test, `LeftPanelPullRequestsViewTests.In_the_window_the_sign_in_row_signs_in_and_a_double_click_checks_out`
-("Timed out after 60 s waiting for the double-click's action"); every other test passed
-(`windows-latest` 29 min 46 s, 5,786 of 5,787; `macos-latest` 34 min 54 s, 5,783 of 5,784; the
-three Linux jobs 7 min 22 s, 8 min 12 s and 6 min 56 s, 5,783 of 5,784 each, with 3 or 4 skipped).
-The cause is the headless harness, not the product (Notes); the fix is being built.
-
-Phase 7a's run for WP-B's merge (`b361388`, the lead's follow-ups `e40ddc8`) is
-[40939757597](https://github.com/RahimPasha/VisualCommit/actions/runs/40939757597), for `e40ddc8`:
-all five jobs succeeded: `windows-latest` (23 min 26 s; its Test step 21 min 22 s of 55, 5,710 of
-5,714 passed and 4 skipped; its keychain step green), `macos-latest` (33 min 25 s; Test step 31 min
-10 s, 5,708 of 5,711 passed and 3 skipped; its keychain step green), `ubuntu-latest` (5 min 50 s;
-Test step 4 min 26 s) and the two "bare ubuntu container" jobs (7 min 50 s and 6 min 8 s; Test steps
-5 min 44 s and 4 min 10 s; their Secret Service steps green), each Linux job 5,708 of 5,711 passed
-and 3 skipped. The run before it,
-[40936332833](https://github.com/RahimPasha/VisualCommit/actions/runs/40936332833) for `2a90e05`
-(part A's start), passed on the three Linux jobs; its Windows and macOS jobs were cancelled by the
-push of `e40ddc8`, not failed.
-
-Phase 7a's run for WP-A's merge (`42b6be2`, the lead's follow-ups `c25326e`) is
-[40925952120](https://github.com/RahimPasha/VisualCommit/actions/runs/40925952120), for `c25326e`:
-four jobs succeeded (`macos-latest` 37 min 58 s, `ubuntu-latest` 5 min 38 s, the containers 6 min
-8 s and 5 min 55 s) and `windows-latest` (34 min 7 s) failed one test of 5,663:
-`Phase7aChecksA.Check_A1_A2_A5_signed_out_dialog_and_signed_in`, whose git calls after A1's quiet
-mark began with git's detection (`git --version`): part A's start did not wait for the app's
-start-up work (design 17 item 2); fixed by the lead on the phase branch.
-
-Phase 7a's run for the prompt channel's fix and WP-S (`9d48d0b`, `7bea4fb`, the wiring `04952c8`) is
-[40916152337](https://github.com/RahimPasha/VisualCommit/actions/runs/40916152337), for `5613450`:
-all five jobs succeeded: `windows-latest` (25 min 16 s; its Test step 23 min 5 s of 55, 5,603 of
-5,607 passed and 4 skipped), `macos-latest` (27 min 17 s; Test step 25 min 17 s), `ubuntu-latest`
-(7 min 2 s; Test step 5 min 17 s) and the two "bare ubuntu container" jobs (7 min 5 s and 5 min
-41 s; Test steps 4 min 58 s and 3 min 49 s), each with 5,601 of 5,604 passed and 3 skipped; every
-keychain step passed with its one test. The run before it,
-[40910893877](https://github.com/RahimPasha/VisualCommit/actions/runs/40910893877) for `6fc2d28`
-(the held test alone), failed on purpose on macOS and the three Linux jobs with exactly
-`AskPassChannelTests`' three tests (Notes); its Windows job was cancelled by the next push.
-
-Phase 7a's run for wave 1 (its five merges and the lead's follow-ups `8b02805`) is
-[40878208671](https://github.com/RahimPasha/VisualCommit/actions/runs/40878208671), for `8b02805`:
-four jobs succeeded and `macos-latest` failed. `windows-latest` (35 min 24 s; its Test step 32 min
-34 s of 55, 5,547 of 5,551 tests passed and 4 skipped; "Build the real-window pass" green),
-`ubuntu-latest` (6 min 7 s; Test step 4 min 40 s) and the two "bare ubuntu container" jobs (7 min
-42 s and 8 min 1 s; Test steps 5 min 39 s and 5 min 40 s, 5,545 of 5,548 passed, 3 skipped).
-`macos-latest` (34 min 42 s; Test step 32 min 25 s) failed one test of 5,548:
-`RefusedTokenDisplayTests.A_bulk_rows_kept_dialog_on_a_row_without_a_tab_says_the_same`, whose
-row's kept dialog said "Git could not fetch from origin." without "Open settings…" instead of the
-refusal (Notes, "Wave 1"). The keychain steps, the first run of any real store (WP-K 3.10), all
-passed with their one test run, not skipped: Windows' Credential Manager in 2 s (no error 1312,
-so D333's fallback is not needed), the macOS keychain in 3 s, and the Secret Service in both
-containers in 2 s and 1 s, under `dbus-run-session` with gnome-keyring and `--cap-add=IPC_LOCK`.
-
-Phase 7a's first run with code, for L1 and WP0 (`f1dc80e` to `8bfdd6b`), is
-[40848974456](https://github.com/RahimPasha/VisualCommit/actions/runs/40848974456), for `37fb9e0`:
-all five jobs succeeded: `windows-latest` (24 min 48 s; its Test step 22 min 4 s of 55, and "Build
-the real-window pass" green), `macos-latest` (25 min 11 s; Test step 23 min 10 s), `ubuntu-latest`
-(5 min 54 s; Test step 4 min 24 s) and the two "bare ubuntu container" jobs (6 min 23 s and 5 min
-39 s; Test steps 4 min 31 s and 4 min 13 s).
+The last run on `phase/7a-hosting-github` was
+[41190572421](https://github.com/RahimPasha/VisualCommit/actions/runs/41190572421), for the gate's
+commit `a2c312a` (the branch at `47506ca`): all five jobs succeeded, none failed a test:
+`windows-latest` (git 2.56.0.windows.2) 5,952 tests with 4 skipped, 24 min 6 s (Test step 21 min 48
+s of 55; its keychain step green; "Build the opt-in projects", the real-window and live projects,
+17 s), `macos-latest` (2.56.0) 5,949 with 3 skipped, 34 min 11 s (Test step 32 min 16 s; its
+keychain step green), `ubuntu-latest` (2.56.0) 5,949 with 3 skipped, 6 min 26 s (Test step 4 min 54
+s), and the two "bare ubuntu container" jobs (2.43.0) 5,949 with 3 skipped each, 6 min 28 s and 6 min
+6 s (Test steps 4 min 43 s and 4 min 21 s; Secret Service steps green). The commits after it change
+docs only, which start no run. Before it, run 41172878322 on `391f7f2` failed two tests in its first
+Windows attempt, both a status read in the middle of a terminal's git (phase 7a's report, "Found by
+the gate", item 4; fixed in `a9d02c1`, whose run 41181591519 had all five jobs green). During phase
+7a the Windows Test step took up to 35 min 21 s and macOS's up to 37 min 57 s, under the 44 minutes
+at which the lead raises D232's limit of 55 (D186's rule). Each of the phase's runs, with what it
+found, is in this file as of the merge's second parent (`git show 3a3cc71:docs/status.md`).
 
 The run for the review's changes on `master` (the build trim `32b238c`, the heavy-run lock
 `d56591b` and the docs `abf6ca5`) is
@@ -540,106 +199,26 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Phase 7a is "Awaiting acceptance": wait for the owner's "Phase 7a accepted", then do what
-CLAUDE.md's table says for it (the merge into `master` with `--no-ff`, "Done", this file reset as
-the earlier phases' acceptances reset it, and the CI run of the push of `master` recorded). The
-phase's build and gate are recorded in the Progress items' notes above, in
-`docs/phase-7a-design.md`'s sections 16 to 21 and in the report's "Run" and "Found by the gate";
-what 7b needs first is in the [handoff](handoffs/phase-7a.md), "For the next phase", and
-"Waiting on the owner" below.
+Wait for the owner's "Start phase 7b". The [phase 7a handoff](handoffs/phase-7a.md), "For the next
+phase", says what to reuse, what to do first and which risks to watch. Before 7b's design, its
+start steps put the lead's recommendations under "Waiting on the owner" ("For phase 7b, answered on
+2026-10-31") to the owner once and record the answers as decisions, D344 on, carried into `plan.md`
+and `requirements.md`; the session also asks the owner for the share of the weekly allowance used
+(D241). The phase's branch is `phase/7b-hosting-azure-gitlab` (Phases above).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
 
 ### Notes for whoever resumes
 
-- **The gate's split of the long `VisualCommit.Git.Tests` tests** (2026-10-30, design 21 item 1):
-  the two timing reports, the first default run's log and the workflow's result are outside the
-  repository in `D:/Projects/Personal/phase7a-work/gate/` (`git-tests-timing-before-split.xml`,
-  `git-tests-timing-after-split.xml`, `default-run-1-a140017.log`, `split-workflow-result.json`);
-  CLAUDE.md's "Each test's time in a project run alone" makes such a report. The six worktrees under
-  `.claude/worktrees/` and their branches are removed, their fsmonitor daemons and the build
-  servers stopped.
-
-- **CI's two failures on `391f7f2`** (2026-10-31, design 21 item 4): the failed Windows job's log,
-  the checking workflow's result (the order of git 2.56's writes in a conflicting merge and rebase,
-  measured) and the review's are in the same folder (`ci-41172878322-attempt1-windows-failed.log`,
-  `ci-flakes-workflow-result.json`, `flake-fix-review-result.json`); the third default run's log is
-  `default-run-3-391f7f2.log`.
-
-- **The live command's variables in a session that started before them** (2026-10-30): Windows
-  gives a process the environment of the one that started it, so VS Code (and every Claude Code
-  shell in it) lacks user variables set after it started, until it is quit entirely. The live
-  command then gets them for its own process alone, without printing them (CLAUDE.md's "What to
-  know" gives the PowerShell line). Each run's run.txt is copied outside the repository, since
-  `artifacts/` is ignored and the next run overwrites it: `D:/Projects/Personal/phase7a-work/live/`
-  holds `run-1-step16.txt`, `run-1c-check1-alone.txt` and `run-2-after-d342.txt`, with the
-  investigators' reports (`inv0.md` to `inv3.md`, `critic.md`).
-
-- **The gate's references are made** (2026-10-30, design 0.7, risk 32), outside the repository in
-  `D:/Projects/Personal/gate7a-reference/`: phases 0 to 6's walk-throughs on `master` (`5fe9148`)
-  with git 2.56 in a worktree of their own (544 of 544 in 21 min 40 s; the worktree removed), 972
-  scripted pictures (`scripted-pictures.sha256`) and phase 6's gate's 364 real-window files, copied
-  before any 7a real-window run. Against phase 6's gate, 5 are the same file, 927 differ only in the
-  status bar's git box (D248) and 40 elsewhere too; Opus inspectors judged the 40, every verdict
-  that was not plainly a caret or a path checked again: 31 vary by nature and 9 show git 2.56's own
-  words in quoted output, none unexplained (`reference-verdicts.md` there). The gate compares its
-  earlier pictures with these by region: `python scripts/compare-pictures.py
-  D:/Projects/Personal/gate7a-reference/artifacts/visual artifacts/visual <output folder>`.
-- **Phase 7a started on 2026-10-28** from `master` at `5fe9148`, after the owner's reboot of
-  11:36 that day (`WUDFHost`'s instances held 2 to 12 MB afterwards). At the start no worktree, no
-  `wip/*` or `worktree-*` branch and only the main tree's fsmonitor daemon existed; C: had 36.1 GB
-  free and D: 27.2 GB.
-- **D240's connectors switch does not work**: this session, started after the reboot with
-  `ENABLE_CLAUDEAI_MCP_SERVERS=false` in `.claude/settings.local.json`'s `env`, still listed the
-  claude.ai connectors (Gmail, Google Calendar, Figma, Claude Docs and others) among its tools
-  (Waiting on the owner).
-- **The design's inputs lie outside the repository**, in `D:/Projects/Personal/phase7a-work/`:
-  seven research notes (`research/r1` to `r7`, 2026-10-28: the credential and network code, the UI
-  surfaces, the harness and gate, the first package's items, GitHub's API, the keychains, git
-  2.56's credentials), and `lead-rulings.md`, the lead's 32 rulings on their questions, which the
-  designer follows beside D249 to D263. A cloud session cannot see them; the design, once written,
-  carries everything that matters.
-- **The design's draft** (2026-10-28, 14:57 to 16:42): an architect wrote the scope and the
-  contracts, seven drafters one or two briefs each (the drafts in `phase7a-work/design/`, 384 KB),
-  and a consolidator assembled `docs/phase-7a-design.md` (297 KB) and numbered its decisions D265
-  to D328, which `decisions.md` holds as proposed; the review may change them. 9 Opus agents, 3.66M
-  tokens, 918 tool calls; none built or ran tests. It is about half as large again as D243's 150 to
-  200 KB: thirteen work packages, each brief self-contained (sections 0 and 1 together 50 KB, every
-  brief 13 to 26 KB), so a builder still reads about 70 KB. Its section 15 lists the open points.
-- **The design's review** (2026-10-28 to 29, at `6fc5b2b`): four lenses (git safety and
-  credentials; the token's security and privacy; tests, gate, harness and CI; conformance and fit
-  with the code), 46 findings merged into 36 (F1 to F36: 1 blocker, 8 majors, 27 minors, none
-  refuted), each blocker and major verified (20 Opus agents, 3.20M tokens). The findings lie in
-  `D:/Projects/Personal/phase7a-work/review/findings.md`, outside the repository; the design and
-  decisions carry their fixes. Seven fixers applied them in turn (six batches of findings, one of
-  the lead's rulings and the owner's answers), a checker read the diff and found 13 gaps, and one
-  more fixer closed them (9 Opus agents, 2.10M tokens); the new decisions are D329 to D338.
-- **The lead's rulings on the design, 2026-10-29**, besides the owner's answers: accounts.json and
-  7a's other JSON files in camelCase (D336); one `HostingTexts.Describe` for GitHub's failures
-  (D338); CI's Windows job compiles the live project and never runs it (D337, amends ruling 26);
-  Windows' real store tried on CI and taken off the job's list if refused (D333); ruling 3
-  withdrawn (D277, the owner's answer to F1); D330 accepted (git's `erase` marks the account only
-  after `GET /user` answers 401), with a text of its own for a refusal from git; D334 and D335
-  confirmed. **The design's size is accepted at about 345 KB**, against D243's 150 to 200: it has
-  thirteen work packages, each brief self-contained, and the review's fixes added 40 KB; a builder
-  reads sections 0 and 1 (about 59 KB) and its own (13 to 28 KB), about 85 KB, far below what
-  phase 6's builders read before their first edit (306k to 557k tokens). Section 1 (about 33 KB)
-  and section 2 (about 28) are over D242's 25 KB per brief.
-- **The first baseline run was disturbed by the session's own research** (2026-10-28, `5fe9148`,
-  12:01 to 13:10, 1 h 6 min 58 s): seven research agents ran git experiments and local servers
-  beside it for its first 50 minutes. 4,915 of the 4,917 tests that ran passed; the watchdog
-  stopped phase 3's walk-through at 602 s (`Check_18b`, waiting for the sync scenario's
-  template), phase 4's at 805 s (`Check_C13`, after `Check_B7` timed out waiting for the
-  interactive rebase's log line) and phase 6's at 1,321 s (G23, as in every run since phase 6's
-  gate), and phase 5's `Check_A2` timed out waiting 120 s for the merge tool. It is no baseline;
-  the run was repeated on the quiet laptop from 13:54 (step 2). Lesson: no agent that runs
-  processes works beside a heavy run, not even "light" git experiments.
-- When phase 6 was merged (`3f34c87`), the working tree was clean and no worktree, `wip/*` or
-  `worktree-*` branch was left. The gate's
-  reference pictures, inspection verdicts and the lead's rulings lie outside the repository in
-  `D:/Projects/Personal/gate6-reference/` and `D:/Projects/Personal/gate6-inspection/`; phase 7a's
-  gate makes its own references on `master` if it changes earlier pictures in many places (phase 6's
+- Nothing is in flight. `master` holds everything; the working tree was clean, and no worktree,
+  `wip/*` or `worktree-*` branch was left, when phase 7a was merged (`019e68a`). Phase 7a's gate
+  references and work lie outside the repository: `D:/Projects/Personal/gate7a-reference/` (phases
+  0 to 6's pictures on `master` with git 2.56, the earlier pictures' references) and
+  `D:/Projects/Personal/phase7a-work/` (the research notes, the design's drafts, the review's
+  findings, the lead's rulings, the live runs' `run.txt` copies and, in `gate/`, the gate's logs,
+  the counted round's copy `round-a2c312a/` and the inspection's verdicts). Phase 7b's gate makes
+  its own references on `master` if it changes earlier pictures in many places (phase 7a's
   handoff, "Running the visual gate").
 - **The review before phase 7 was applied on 2026-10-28** (D239 to D248, on `master`): the build
   trim (`Directory.Build.targets`, D239), the owner's Claude Code settings and a one-time clean-up
@@ -680,8 +259,8 @@ every commit.
   fetch, pull, push and remotes classes, those against the credential test server, fail locally
   and pass on CI: that trimmed git has no `git http-backend`, which the server runs (explained in
   phase 6; plan risk 28). It also lacks `sleep`, so phase 6's fetch hold does not hold with it.
-- Phases 1 to 6 were built partly by sub-agents in git worktrees under `.claude/worktrees/`
-  (git-ignored); the phase 3, 4, 5 and 6 handoffs' "Things that cost time" say what to watch
+- Phases 1 to 7a were built partly by sub-agents in git worktrees under `.claude/worktrees/`
+  (git-ignored); the phase 3 to 7a handoffs' "Things that cost time" say what to watch
   for: a worktree starts from `master` and its agent must create its branch from the phase
   branch first; merged worktrees must be removed at once (a built worktree took about 6.4 GB in
   phase 6, and the review measured 0.658 GB with D239's trim; plan risk 27); a global
@@ -699,41 +278,26 @@ every commit.
   stop first. On the laptop the default run and whole-project runs go through
   `scripts/heavy-run.sh`, one at a time (D245), and a session's start makes one only when the
   machine changed or the tree holds code that is not pushed.
-- **The first default run with git 2.56 and the trimmed build failed on load** (2026-10-28, on
-  `abf6ca5`, through `bash scripts/heavy-run.sh`, after about 1.75 hours of builds and test runs
-  that applied the review, so not rested): 66 min 47 s, against 56 min 25 s at phase 6's gate. The
-  hang watchdog stopped `VisualCommit.VisualTests.Phase6` 1,232 s into it, in
-  `Phase6ChecksG.Check_G23_pull_refused_inside_the_integration`, which had run its 180 s; the
-  project's other 31 tests did not run. The other eight projects passed, 5,006 tests, and ended
-  after: part L's walk-through 12 min 44 s, phases 0 to 2's 15 min 48 s, phase 4's 30 min 27 s,
-  phase 5's 33 min 50 s, phase 5's undo walk-through 54 min 54 s, phase 3's 55 min 52 s,
-  `VisualCommit.Git.Tests` 56 min 0 s and `VisualCommit.App.Tests` 66 min 44 s. G23 did not hang:
-  its app log shows every git call taking 0.8 to 2.5 s (a `git rev-parse` takes about 80 ms alone
-  with 2.56, measured from Git Bash), and G23 alone passes in 40 s. The review's run of
-  2026-10-26, on git 2.36, failed the same way in `VisualCommit.App.Tests`, so the load of nine
-  projects side by side, not git 2.56, is the likely cause; the review's S10 (a cap of
-  `--max-parallel-test-modules`) is the measurement for it. `dotnet test` itself exits with 127
-  when a test process is stopped (tried with `VISUALCOMMIT_TEST_HANG_SECONDS=5`, plain and through
-  the script), so a 127 from `scripts/heavy-run.sh` is that, not the script.
-- **The review's S10, measured, did not help** (2026-10-28, on `71e174e`, after 10 minutes' rest:
-  `bash scripts/heavy-run.sh --max-parallel-test-modules 5`, S10's first half only, without
-  `VisualCommit.Git.Tests` at 4 threads): 72 min 22 s, longer than the 66 min 47 s with nine
-  projects at once, and the watchdog stopped `VisualCommit.VisualTests.Phase6` again in G23's pull
-  check, 1,170 s into the run, after its 180 s. Its step times (`artifacts/visual/phase-6/timings/`)
-  were 40 s to step 10's picture and 115 s more for steps 11 to 13, four pulls of about 29 s each:
-  slow throughout, not stuck in one call. The other eight projects passed, 5,005 tests, and ended
-  after: phases 0 to 2's 6 min 56 s, part L's 9 min 13 s, phase 4's 26 min 47 s, phase 5's 34 min
-  43 s, phase 5's undo walk-through 40 min 18 s, `VisualCommit.Git.Tests` 60 min 27 s, phase 3's
-  60 min 44 s and `VisualCommit.App.Tests` 71 min 1 s. A cap on projects side by side was
-  therefore not adopted then; at phase 7a's gate, after two rested runs stopped by the watchdog
-  in slow tests, the owner chose a cap of four (D343), and the runs with it passed. All three default runs made on the laptop since phase 6's gate failed on
-  the watchdog (2026-10-26 on git 2.36, and these two), so the cause is more likely the machine
-  than git or the number of projects: right after this run, with no test running, `WUDFHost`
-  (PID 10968, running since the boot of 2026-10-14) held 11,190 MB private, up from 9,569 MB on
-  2026-10-26 (the review's N4), 32.4 of 35.9 GB was committed and 2.3 of 15.9 GB of memory was
-  free. C: had 29.3 GB free and D: 27.2 GB. After the owner's reboot of 2026-10-28 the baseline
-  failed in G23 alone, which the owner chose to split (D264), and phase 7a's gate's default runs
-  passed with D343's cap.
+- **The laptop's default runs since phase 6's gate** (the detail is in this file as of `3a3cc71`):
+  every default run there from 2026-10-26 to 2026-10-28 stopped on the hang watchdog under load (in
+  `VisualCommit.App.Tests` on git 2.36, then twice in phase 6's G23, with nine projects at once and
+  with five), while `WUDFHost` leaked memory since the boot of 2026-10-14. After the owner's reboot
+  of 2026-10-28 the baseline failed in G23 alone, which the owner chose to split (D264); at phase
+  7a's gate two rested runs stopped in slow tests until the owner chose at most four projects at
+  once (D343), and with it the gate's runs passed (1 h 8 min 39 s and 1 h 12 min 18 s). `dotnet
+  test` itself exits with 127 when a test process is stopped, so a 127 from `scripts/heavy-run.sh`
+  is that, not the script.
+- **No agent that runs processes works beside a heavy run**, not even "light" git experiments:
+  phase 7a's first baseline (2026-10-28) ran beside seven research agents and lost three
+  walk-throughs to the watchdog and one check to a timeout, and was no baseline.
+- **The live command's variables in a session that started before them** (2026-10-30): Windows
+  gives a process the environment of the one that started it, so VS Code (and every Claude Code
+  shell in it) lacks user variables set after it started, until it is quit entirely. The live
+  command then gets them for its own process alone, without printing them (CLAUDE.md's "What to
+  know" gives the PowerShell line). Each run's run.txt is copied outside the repository, since
+  `artifacts/` is ignored and the next run overwrites it: `D:/Projects/Personal/phase7a-work/live/`
+  holds `run-1-step16.txt`, `run-1c-check1-alone.txt` and `run-2-after-d342.txt`, with the
+  investigators' reports (`inv0.md` to `inv3.md`, `critic.md`).
 - The next phase can be started on the Windows machine or in a cloud session; see
   [cloud-sessions.md](cloud-sessions.md). No cloud session has worked on the repo yet, and that
   page lists what the first one should check.
@@ -763,128 +327,57 @@ every commit.
   the dashes and backticks in this file once. In the Bash tool, a long heredoc that holds
   apostrophes fails and turns `\n` in a string into a line break, and `sed -i` drops a CRLF
   file's carriage returns; write such a script to a file first.
-- **Wave 1** (2026-10-29): one workflow of 22 agents (builders, reviewers, fixers, merge agents)
-  ran 3 h 35 min and used about 4.9 million tokens of sub-agents. WP-K's and WP-C's first builders
-  stopped unfinished and a second builder finished from their last commits. The reviews found 36
-  items (one blocker, WP-G's paged list after ETags; two majors), all fixed or ruled on (design
-  16). The worktrees, their branches and WP1's picture references are removed.
-- **Wave 1's whole run and pictures** (2026-10-29, `069c5c7`, through `bash scripts/heavy-run.sh`,
-  nothing else running): 5,547 of 5,551 passed and 4 skipped (the three real stores and
-  `WindowsCredentialStoreTests`' Off-Windows test, D270) in 1 h 3 min 26 s; the projects ended
-  after: phase 7a's walk-through 26 s, `VisualCommit.Hosting.Tests` 4 min 29 s, part L's 11 min
-  59 s, phases 0 to 2's 16 min 15 s, phase 4's 25 min 20 s, phase 5's 29 min 9 s, phase 6's 44 min
-  25 s, `VisualCommit.Git.Tests` 52 min 8 s, phase 3's 53 min 33 s, phase 5's undo walk-through
-  53 min 48 s and `VisualCommit.App.Tests` 1 h 3 min 24 s. Its pictures, kept in
-  `D:/Projects/Personal/phase7a-work/wave1-run-pictures/` as wave 2's reference, against the
-  baseline's (step 2): 1,217 the same, 38 changed, 74 new (phase 6's whose walk-through the
-  baseline's G23 had stopped). Four inspectors judged all 38, and the 74 against phase 6's gate run:
-  every change varies by nature: a temporary folder's name (14), a caret (11), anti-aliased edges
-  and icons and the indeterminate bar (12), `a2d`'s number of reads, and against phase 6's gate
-  git 2.56's version in the status bar and its nine `advice.diverging` lines in `s19b` and `w7b`.
-  None comes from wave 1's code (it changed no view, style or icon). Their verdicts are in the
-  workflow's output (task `wtdlbm9d2`).
-- **WP-B's whole run and pictures** (2026-10-29, `e40ddc8`, through `bash scripts/heavy-run.sh`, no
-  agent running): 5,709 of 5,714 passed, 4 skipped and 1 failed, in 1 h 15 min 28 s, 12 minutes
-  longer than wave 1's. The failure is `GraphLayoutTests.A_100k_commit_history_with_a_merge_every_50_commits_lays_out_in_under_2_seconds`,
-  phase 1's in-memory layout of 100k commits (no git), which took 2,620 ms against its 2 s; run
-  alone three times right after, it passed each time (the whole test, with building the history,
-  in 1.6 to 2.9 s). It measures the processor under the run's load (eleven projects side by side),
-  its first failure; it is watched at the next whole runs and dealt with at the gate if it fails
-  again (plan.md's risk 12). The projects ended after: phase 7a's walk-through 9 min 31 s,
-  part L's 11 min 11 s, `VisualCommit.Hosting.Tests` 11 min 13 s, phases 0 to 2's 23 min 9 s,
-  phase 4's 29 min 1 s, phase 5's 32 min 46 s, phase 6's 48 min 35 s, phase 5's undo walk-through
-  50 min 37 s, phase 3's 56 min 3 s, `VisualCommit.Git.Tests` 1 h 0 min 30 s and
-  `VisualCommit.App.Tests` 1 h 15 min 27 s. The lagged list's five commands passed (25, 66, 21, 95
-  and 23 tests). Its pictures, kept in `D:/Projects/Personal/phase7a-work/wpb-run-pictures/`,
-  against wave 1's run (ruling 19): 1,264 the same, 34 new (parts A and B), 65 changed: the 31
-  settings pictures of the Accounts slot, the same files as at WP-A's merge, and 34 that vary by
-  nature (a temporary folder's name 16, `k10e` and the push refusals' paths in `16j` and `u21v`
-  among them; a caret 11; anti-aliased edges and the indeterminate bar 7), each of which also
-  changed between earlier runs or was looked at by the lead. Part A's 24 pictures are the same files
-  as at WP-A's merge.
-- **WP-P's merge: a double-click the harness turned into a triple click** (CI's run on `1958755`).
-  The test clicks the sign-in row, signs in from code, and pull request #5's row then takes that row's
-  place at the same point; when the double-click comes 500 ms or less after that click by the window's
-  input clock, Avalonia 12.1.3's `MouseDevice` counts its presses 2 and 3 (it resets the count only
-  after 500 ms or outside a 4×4 rect, whichever element was pressed) and `Gestures` raises no
-  `DoubleTapped`, since press 2's element is not the remembered one. Fast CI machines always fell under
-  500 ms; the laptop mostly not (it failed warm in Release in 2 of 18 runs alone). Found by four
-  investigators and a judge (task `wt75y84uy`), reproduced on Windows with logged click counts. A user
-  cannot reach it. The fix: `ShellDriver.DoubleClick` waits out the double-tap time after a press at
-  the same spot and fails at once when its presses are not counted 1 and 2, with three tests in
-  `ShellDriverTests`; built on `wip/p7a-dblclick`, reviewed by an agent that did not build it (five
-  minor findings) and merged at `ccd1ebe` (design 17 item 9, with the lead's ruling that `Click` and
-  `RightClick` stay as they are). On the merge `ShellDriverTests` passed 11 of 11 and
-  `LeftPanelPullRequestsViewTests` 5 of 5 in Release, and the lagged list's five commands passed
-  (25, 66, 21, 147 and 29 tests; `VisualCommit.VisualTests.Phase7a` has grown from 95 to 147 tests
-  since WP-B's merge).
-- **macOS on `ccd1ebe`: two failures new to CI** (run 40982132445). They are part P's P13: tool's
-  list request came after hello's step 2 mark, and the two-tab start waits for hello's list only. The
-  other is `KeyRouterTests`' branch drag: a key never reached the element that had the focus when the
-  test read it. Each passed on the other four jobs and in every earlier macOS run. Investigators and
-  a judge are on both while WP-V is built; a fix is merged before WP-V's merge runs. The judges
-  (workflow `ww0ovir23`, high confidence, both test races, no product bug). P13: a sign-in lists
-  every open tab (design 7.8, D289) through the session's one client, which sends one request at a
-  time (D285), so tool's list can be answered after hello's line; step 1 is to wait for both tabs'
-  lines (a wait only, recorded in the report). The branch drag: the drag's press selects row 4, whose
-  details nothing waited for, and the keys the drag lets through move the focus (Ctrl+Tab and
-  Ctrl+Shift+Tab reach the details' file row; Mod+Enter on it opens a diff). The diff's late focus
-  move then fell between the test's read of the focus and a key's delivery: headless input runs the
-  dispatcher's jobs before it delivers. The test is to wait for row 4's details and give the graph
-  the focus before every key. Both fixes are merged at `33313ef` (`79e631b`, `b3fe91a`, the report's
-  `5f7d1aa`; design 17 item 11): on the merge `KeyRouterTests` passed 7 of 7 and part P 4 of 4 in
-  Release. A diff's pending focus, which the investigation found, goes to phase 8's keyboard pass.
-- **WP-V's merge runs and pictures** (11.6, on `adc2a3a`). In this run part B's `b06a` shows the URL
-  on port 59807, not 47395: the classes of parts A, B, P and G run side by side and each serves on
-  47395 when it can, falling back to a free port (`ServeHostingAsync`, `fallBackToFreePort: true`;
-  the report's conventions and D265 allow it, and the gate's Run names it). With part G's class added,
-  such a clash is likelier, so a later comparison expects `b06a`'s port to vary. The inspectors also
-  noted, failing nothing: `g02a`'s tooltip wraps after the hyphen in `…that-the-`; the badge's 1-px
-  icon strokes fall on fractional x and draw as two half-intensity pixels; in the section each title
-  follows its `#n`, so `#1`'s title starts 2 px left of the others.
-- **WP-N's merge runs and pictures** (12.9, on `93e3410`). `b06a` shows port 47395 again (59807 in
-  WP-V's merge run), as the note below expects. Phase 3's `17b`, `31a` and `31b` are one fetch at two
-  progress points (60 % here, 80 % in WP-B's run), `21a`, `21b1` and `21b3` show the indeterminate
-  bar's segment elsewhere, and `10f` and `21b3` alternate between runs; `16j` and `30g` hold a
-  temporary folder's name; the rest are rounded corners or anti-aliased edges one or two levels apart,
-  and `15b3`'s, `18b`'s and the Pop icon's (`17d`, `17e`) first appeared in WP-V's merge run. No
-  earlier picture shows the status bar's offer; `17e`'s succeeded fetch confirms that only a create
-  gives one. The inspectors noted, failing nothing: the form's card grows with its note (418 high in
-  `n02a`) and its error line (446 in `n04a`); undo is enabled after a create that pushed (`n03a`),
-  from the push's entry (open point 54).
-- **CI on WP-V's merge: P13 again on Windows, and G1's new pixel check on macOS** (run 40993671970).
-  WP-V's review added `AssertLoginLabel`, which reads where the name's ink ends to ±1 px; macOS draws
-  the name's last column 1.4 px before its layout edge. The report gives layout positions, so the
-  fix asserts the control's own layout of the badge exactly. It reads the ink only by rules that hold
-  on every platform (each part's ink inside its box, none in the gaps), and audits parts A, B, G and
-  P for other text-ink reads (workflow `wzf5zbhxr`, `wip/p7a-g1`). Merged at `5219eae` (design 17
-  item 12; the report's "How part G proves its places").
-- **macOS's failed refusal test is a product race on macOS and Linux** (CI's run on `8b02805`): .NET
-  backs every pipe instance of one name with one listening Unix socket and closes it with the
-  last instance (dotnet/runtime's `NamedPipeServerStream.Unix.cs`, `SharedServer.Dispose`, read by
-  the lead); `AskPassBroker.ListenAsync` keeps one waiting instance and serves an answer without UI
-  (WP-C's credential `get` and `erase`) to its end before it makes the next, so a second helper
-  queued on the socket is dropped silently: a lost `erase` gives the generic dialog, a lost `get`
-  git's fallback prompt. Found by four investigators and a judge (task `wtdlbm9d2`). The fix (a
-  keeper instance on macOS and Linux, `MaxConnections + 1` there, diagnostics, the held test
-  `AskPassChannelTests` and a failure report for the credential dashboard's tests; design 16 item
-  11) was built on `wip/p7a-channel`, reviewed by an agent that did not build it (two minor findings,
-  fixed) and merged in two steps: the held test alone at `6fc2d28`, whose CI run 40910893877 failed
-  on all three Linux jobs and on macOS with exactly its three tests (the queued client: "Connection
-  reset by peer" on Linux, an end without a line on macOS; the other 5,545 passed), which proves
-  the cause, and the fix at `9d48d0b` (the 105 tests of
-  the eight classes it touched pass on Windows). The channel's builder was stopped by an API
-  safeguard's false positive ("reasoning_extraction") after its work was committed; its report was
-  read from its transcript, and later prompts ask for an explanation of a mechanism, not reasoning.
 - When a cloud session has worked on a phase, say so here. If it had to use a branch of its own,
   that name stands in the Branch column of the Phases table in place of the phase's.
 
 ## Waiting on the owner
 
-- **Phase 7a's acceptance**: the gate passed on 2026-10-31 on the Gate commit `a2c312a` (the
-  report's "Run"; the handoff's "State of the repo"); "Phase 7a accepted" merges the branch into
-  `master`. The pass left one tab open in the default browser, on the fake's page
-  (`127.0.0.1:47395`): close it before the next run of the pass (D321).
+- **Phase 7a's acceptance**: given on 2026-10-31; merged into `master` (`019e68a`); its gate ran on
+  `a2c312a`. The tab the real-window pass opened on the fake's page was closed by the owner the
+  same day (D321). Still open from the phase, below: risk 39's sign-in dialog in a bound tab and
+  risk 40's torn banner.
+- **For phase 7b, answered on 2026-10-31**, after 7a's acceptance and before 7b's start (the
+  questions are `plan.md`'s phase 7b section and the 7a handoff's "Do first", step 2):
+  - **Azure DevOps**: the owner has an organization on dev.azure.com for 7b's checks, under a
+    Microsoft account of the owner's. That account's address stays out of the repository
+    (CLAUDE.md's rule on the owner's addresses); the organization's name reaches the live command
+    through the variables the design names. The owner makes a personal access token for it when
+    the design says which scopes and which variables, and sets it as a Windows user variable in the
+    Environment Variables dialog, never typed in a shell or pasted into the conversation (D250,
+    D260).
+  - **GitLab**: the owner has no GitLab account and no experience of it, and leaves every GitLab
+    question to the lead's recommendation.
+  - **The lead's recommendations** (2026-10-31), for both providers. The session that starts 7b
+    puts them to the owner once, records each answer as a decision (D344 on) and carries them into
+    `plan.md` and `requirements.md`:
+    1. Sign-in with a personal access token, as D249 for GitHub, with no app registration (risk
+       5): for Azure DevOps a token for the one organization, for GitLab one with the `api` scope;
+       the design names the exact scopes and the dialog's link to each provider's token page.
+    2. A local fake of each provider's API for the default run and CI, as `FakeGitHub` (D250,
+       D266), and the opt-in live command extended to both providers in the same project,
+       `tests/VisualCommit.LiveHostingTests`, so that D335's exception holds as written: each
+       provider against a private sandbox repository, its token and repository in Windows user
+       variables that the design names (risk 4; the live run found two faults the fake had hidden,
+       D342, risk 42). For GitLab that needs a free gitlab.com account: a new one that holds only
+       the sandbox, so that its token, which reaches every project its account can, reaches the
+       sandbox alone.
+    3. Hosts: Azure DevOps Services alone, its remotes on `dev.azure.com` and on the older
+       `<organization>.visualstudio.com` (the same service), and gitlab.com alone. Azure DevOps
+       Server on premises and self-managed GitLab go to the backlog beside GitHub Enterprise Server
+       (D258): one fixed host per provider stays, and no live run could try them. `plan.md`'s 7b
+       then loses "self-hosted GitLab included"; `requirements.md`'s providers line already names
+       GitLab alone.
+    4. One account per provider at once: D263's one account becomes one each of GitHub, Azure
+       DevOps and GitLab; Azure DevOps' account is one organization.
+    5. Avatars stay GitHub's alone (D252 unchanged): Azure DevOps' and GitLab's authors keep their
+       initials, and their avatars go to the backlog. Each provider's lookup would send the authors'
+       addresses to another service and need its own research and checks, in a phase that already
+       holds two providers.
+    6. D255 (the account's token on git's calls through the app's own credential helper) and D257
+       (no request signed out) hold for the new hosts as for github.com.
+    7. GitLab's screens say "merge request", GitHub's and Azure DevOps' "pull request". 7a's
+       GitHub-worded screens and commands name the provider of the account or remote they act on,
+       as the design settles, and every 7a picture that changes is inspected again (risk 32).
 - **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
   (the review before the gate and the runs after it: the avatars' lookup per author, git's
@@ -892,13 +385,11 @@ every commit.
   the client and the fake); and the lead's rulings in the design (its 32 of 2026-10-28) and in the
   report's "Open points and the lead's rulings". D343 is the owner's choice. The next decision
   number is D344.
-- **For phase 7b, before its design** (plan.md's phase 7b section; the handoff's "For the next
-  phase", "Do first"): how Azure DevOps and GitLab are signed in and tried (risks 4 and 5);
-  whether their authors get avatars, which D252 and O4 give to GitHub only; whether self-hosted
-  GitLab is in scope (plan.md's 7b says so, requirements.md's line does not) and how its host is
-  given; which Azure DevOps hosts are in scope; whether D263's one account is one per provider;
-  D255 and D257 for the new hosts; whether GitLab's screens say "merge request"; how 7a's
-  GitHub-worded screens generalise (risk 32); where 7b's live checks and variables live.
+- **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
+  for the gate): when the session refuses a bound account through the API, or it signs out,
+  just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
+  refusal without a dialog, as D340 records for a sign-out. Should the broker also refuse such a
+  prompt without a dialog, from what the session knows (amending D273 and D340)?
 - **The banner's brief torn state** (plan.md's risk 40, design 21 item 4): during a merge started
   in a terminal the banner can read "Conflicts resolved" for about 0.3 s and one refresh. Removing
   it takes a status read that checks the in-progress files before and after `git status`; no
@@ -912,6 +403,15 @@ every commit.
 - **The weekly allowance** (D241): a session cannot read `/usage` itself, so phase 7a's checkpoints
   record "share not read"; for 7b the session asks the owner for the share at the phase's start and
   before each stage (plan.md's "Workflow").
+- **The live command's sandbox for GitHub (D250)**: the private `RahimPasha/visualcommit-sandbox`
+  and a fine-grained token for it alone, expiring 2026-11-29, in the two Windows user variables
+  `VISUALCOMMIT_LIVE_GITHUB_TOKEN` and `VISUALCOMMIT_LIVE_GITHUB_REPO` (set on 2026-10-30; the
+  live command passed 80 of 80 at status step 16 and 112 of 112 twice at the gate). A gate after
+  2026-11-29 needs a new token, made as design 14.6 says.
+- **D240's connectors switch** (Notes): `ENABLE_CLAUDEAI_MCP_SERVERS=false` in
+  `.claude/settings.local.json` did not keep the claude.ai connectors out of this session. Turning
+  them off another way (the variable set in Windows' user environment before VS Code starts, or
+  the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
   owner"; each answer becomes a decision, D344 on, since D239 to D248 went to the review before
@@ -945,31 +445,6 @@ every commit.
   commits reachable from the GitHub remote's branches, and sign-out deletes the avatars folder; F21,
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
-- **For phase 7a's live command (D250), before step 16** (design 14.6, which gives each click): a
-  **private** repository on the owner's account with one commit (a README), for example
-  `visualcommit-sandbox`; a fine-grained token for that repository alone, with Contents and Pull
-  requests "Read and write" and no account permission; and two Windows user variables set in the
-  Environment Variables dialog, never typed in a shell: `VISUALCOMMIT_LIVE_GITHUB_TOKEN` (the token)
-  and `VISUALCOMMIT_LIVE_GITHUB_REPO` (`<owner>/visualcommit-sandbox`); then a new Claude Code
-  session. The token is never written to the repository. The command is built and waits only for
-  these (design 18 item 2). Done so far (2026-10-30): the private sandbox
-  `RahimPasha/visualcommit-sandbox` (default branch `main`, two commits: "Initial commit" and a README
-  change; the live command reads only the latest) and a fine-grained token for it, expiring
-  2026-11-29, and the two user variables. Done: the session of 2026-10-30 found both set (checked by
-  name, length and prefix only) but not in its shells, which had started before them; it gave them to
-  the live command's own process from the Windows user scope, never printed, and the first run
-  passed (step 16). Phase 7a's gate ran it twice more (2026-10-30 and 2026-10-31, 112 of 112 each
-  time). Nothing more is needed from the owner for it until the token expires on 2026-11-29: a gate
-  after that date needs a new token, made as design 14.6 says.
-- **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
-  for the gate): when the session refuses a bound account through the API, or it signs out,
-  just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
-  refusal without a dialog, as D340 records for a sign-out. Should the broker also refuse such a
-  prompt without a dialog, from what the session knows (amending D273 and D340)?
-- **D240's connectors switch** (Notes): `ENABLE_CLAUDEAI_MCP_SERVERS=false` in
-  `.claude/settings.local.json` did not keep the claude.ai connectors out of this session. Turning
-  them off another way (the variable set in Windows' user environment before VS Code starts, or
-  the connectors switched off on claude.ai) is the owner's.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
   each answer becomes a decision, D344 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
