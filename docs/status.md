@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-30
+Last updated: 2026-10-31
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -179,6 +179,15 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
+
+Phase 7a's run for D342's corrections and the fake's empty 500 (`a140017`, the code of the gate's
+first default run) is
+[41153159610](https://github.com/RahimPasha/VisualCommit/actions/runs/41153159610): all five jobs
+succeeded. `windows-latest` 29 min 42 s (Test step 26 min 47 s of 55; its keychain step green;
+"Build the opt-in projects" 22 s), `macos-latest` 23 min 56 s (Test step 22 min 28 s; its keychain
+step green), `ubuntu-latest` 6 min 19 s (Test step 4 min 53 s), the container from Ubuntu's packages
+8 min 32 s and the one from Microsoft's installer 8 min 36 s (each container's Secret Service step
+green).
 
 Phase 7a's run for D341 and the create test's fence (`7015753`) is
 [41111820880](https://github.com/RahimPasha/VisualCommit/actions/runs/41111820880): all five jobs
@@ -574,14 +583,22 @@ every probe "the fake: same", and `VisualCommit.Hosting.Tests` and 7a's walk-thr
 Step 18, the gate (design 13.7), on `a140017`'s code: its step 1 is done (worktrees removed; the main
 tree's fsmonitor daemon is stopped before each heavy run); its step 2 is the second live run (design
 20.7), its one correction committed before any picture; its step 3 is the walk-through's run at
-18:20 (205 of 205; 80 of its 85 pictures the same files as on `7015753`, the other five varying by
-nature, to be judged with the rest). Next: the counted round's default run (`bash
-scripts/heavy-run.sh`, about 75 minutes, after a rest), and, with the owner told and present, D246's
-two runs of `--filter-class "*Phase7aRealWindowPass"` one after the other (step 4), then the whole
-real-window pass (step 5), at once the pictures' list, the live command again, and the inspection
-(step 6). The default run comes before D246's two runs here only to use the time until the owner is
-at the machine: if those runs need a fix outside `tests/VisualCommit.RealWindowTests`, the default
-run is made again. Each of
+18:05 (205 of 205; 80 of its 85 pictures the same files as on `7015753`, the other five varying by
+nature, to be judged with the rest). The first default run of the counted round (2026-10-30, 18:20 to
+19:24 Pacific, rested) failed only on the hang watchdog: it stopped `VisualCommit.Git.Tests` 1,306 s
+in, in `UndoEffectTests.Renames_configuration_remotes_and_tags_go_forth_and_back` after its 180 s
+(14 s alone, 35.9 s in a run of the project alone; slowness, not a hang; the report's "Run" and
+"Found by the gate"). By D237's rule every test of that project that took 25 s or more in the
+project-alone run (45, in 20 files) is being split where it holds several scenarios' work, by six
+Opus fixers in worktrees, each change reviewed by an agent that did not write it (workflow
+`wcvkskdxp`). Next: bring those splits into the branch, run the changed classes and the project
+alone with its timing report, commit and push; then the counted round's default run again (`bash
+scripts/heavy-run.sh`, after a rest), and, with the owner told and present, D246's two runs of
+`--filter-class "*Phase7aRealWindowPass"` one after the other (step 4), then the whole real-window
+pass (step 5), at once the pictures' list, the live command again, and the inspection (step 6). The
+default run comes before D246's two runs here only to use the time until the owner is at the
+machine: if those runs need a fix outside `tests/VisualCommit.RealWindowTests`, the default run is
+made again. Each of
 parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to

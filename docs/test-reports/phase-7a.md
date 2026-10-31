@@ -58,6 +58,14 @@ If a cloud session ran the scripted pass earlier, its run is listed here too, ma
 session, before the gate", and its results stand in the Scripted column until the Windows
 session replaces them with its own. It does not count as the gate's scripted pass.
 
+The gate runs on the Windows machine from 2026-10-30; times are Pacific (the machine's clock, UTC-7).
+
+| | |
+|---|---|
+| Machine | Windows 11 Pro 10.0.26300, Intel Core i7-8650U laptop, 3000x2000 screen at 200 percent scaling; Git 2.56.0.windows.4; .NET SDK 10.0.303 |
+| Before the gate: 7a's walk-through (`a140017`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7a`, 2026-10-30, ended 18:08: 205 of 205 in 3 min 9 s; 80 of its 85 pictures the same files as on `7015753` |
+| Counted round, first default run (`a140017`'s code, the branch at `a9326a5`) | `bash scripts/heavy-run.sh`, 2026-10-30 18:20 to 19:24, after a 10-minute rest: 3,918 of the 3,922 tests that ran passed and 4 were skipped (the three real keychains' tests and `WindowsCredentialStoreTests`' Off-Windows test, D270), in 1 h 2 min 5 s; exit 127: the hang watchdog stopped `VisualCommit.Git.Tests` 1,306 s in, in `UndoEffectTests.Renames_configuration_remotes_and_tags_go_forth_and_back` after its 180 s counted, so that project's other tests did not run ("Found by the gate", item 1). The projects' own times: phase 6's part L 13 min 21 s, phases 0 to 2's 12 min 39 s, phase 7a's 15 min 47 s, `VisualCommit.Git.Tests` 21 min 53 s (stopped), `VisualCommit.Hosting.Tests` 25 min 1 s, phase 5's 25 min 23 s, phase 4's 26 min 50 s, phase 6's 31 min 5 s, phase 3's 43 min 12 s, phase 5's undo walk-through 46 min 20 s and `VisualCommit.App.Tests` 1 h 2 min 3 s |
+
 ## Live command
 
 The opt-in command against real GitHub (`tests/VisualCommit.LiveHostingTests`, D250; design 14),
@@ -1365,6 +1373,17 @@ or an expected result changed for a reason the build or the gate finds, goes her
 ## Found by the gate
 
 Faults the gate found, and the commit that fixed each.
+
+1. **The hang watchdog in `VisualCommit.Git.Tests`** (the counted round's first default run): it
+   stopped `UndoEffectTests.Renames_configuration_remotes_and_tags_go_forth_and_back` after 180 s
+   counted. Alone the test passes in 14 s with its process start, and in a run of the project alone
+   (2026-10-30, 19:26 to 19:49, through the lock, with xUnit's timing report: 2,495 of 2,495 in
+   22 min 30 s) it took 35.9 s; in the stopped run's snapshot the tests beside it ran four to five
+   times their project-alone times (one at 77 s that takes 19.4 s). Slowness under the run's load,
+   not a hang. D237's rule splits a test that holds several scenarios' work in one; it is applied
+   to every test of that project that took 25 s or more in the project-alone run (45 tests in 20
+   files; the 24 s ones and below are left), each kept test with its reason (filled in when the
+   splits are merged).
 
 ## Could not run
 
