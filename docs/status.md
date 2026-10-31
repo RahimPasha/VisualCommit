@@ -180,6 +180,16 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for the gate's commit `a2c312a` (the real-window harness's `TitleOf`; the branch at
+`47506ca`) is
+[41190572421](https://github.com/RahimPasha/VisualCommit/actions/runs/41190572421): all five jobs
+succeeded, none failed a test: `windows-latest` (git 2.56.0.windows.2) 5,952 tests with 4 skipped, 24
+min 6 s (Test step 21 min 48 s of 55; its keychain step green; "Build the opt-in projects" 17 s, the
+real-window project with it), `macos-latest` (2.56.0) 5,949 with 3 skipped, 34 min 11 s (Test step 32
+min 16 s; its keychain step green), `ubuntu-latest` (2.56.0) 5,949 with 3 skipped, 6 min 26 s (Test
+step 4 min 54 s), and the containers (2.43.0) 5,949 with 3 skipped each, 6 min 28 s and 6 min 6 s
+(Test steps 4 min 43 s and 4 min 21 s; Secret Service steps green).
+
 Phase 7a's run for the stage panel's message read again and the terminal merge's banner test
 (`a9d02c1`, the gate's fix of CI's two failures; the branch at `8dd323d`) is
 [41181591519](https://github.com/RahimPasha/VisualCommit/actions/runs/41181591519): all five jobs
@@ -635,9 +645,17 @@ skipped, 1 h 12 min 18 s; CI's run 41181591519 green on all five jobs), and its 
 the owner told, 70 of 72: W1 met the harness reading a closing dialog's title, now read through
 `RealApp.TitleOf`, and Q1 measured 2,456 ms while other programs' scheduled tasks ran at 2 am (the
 report's "Found by the gate", item 5); the round's files are kept in `phase7a-work/gate/round-a9d02c1/`.
-Next: by D246, only the real-window pass again, on the harness fix's commit, after a 10-minute rest,
-the owner told; at once the pictures' list (its scripted pictures checked against the round's list
-first), the live command again, and the inspection (step 6); D246's two runs are not made again. Each of
+By D246 only the pass ran again, on `a2c312a` (the branch at `47506ca`), after a 10-minute rest, the
+owner told: 72 of 72 in 31 min 6 s, Q1 1,400 ms; every scripted picture of the round's list was the
+same file, and the new list (1,432 files) was written at once; the live command then passed 112 of 112
+(the report's "Run" and "Live command", run 3); CI's run 41190572421 on it is green on all five jobs.
+The round's files are in `phase7a-work/gate/round-a2c312a/`, the comparison with the references in
+`compare-a2c312a/` (899 the same file, 430 changed, 103 new) and CI's macOS and Linux pictures in
+`ci-41190572421/`. Next: the inspection (step 6; D247), 16 Opus inspectors on the batches in
+`phase7a-work/gate/inspection/` (7a's scripted pictures by part, its real-window files, phases 0 to
+6's scripted and real-window files against the references, 45 of CI's pictures), each picture not
+passed checked by a skeptic; then the list `docs/test-reports/phase-7a-pictures.sha256` committed,
+the report's results filled in, and closing steps 22 to 24 (the gate's commit `a2c312a`). Each of
 parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to

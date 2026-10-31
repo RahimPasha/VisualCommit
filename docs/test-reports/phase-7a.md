@@ -72,6 +72,8 @@ The gate runs on the Windows machine from 2026-10-30; times are Pacific (the mac
 | Counted round, third default run (`391f7f2`) | `bash scripts/heavy-run.sh`, 2026-10-30 22:41 to 23:51, after a 10-minute rest, at most four projects at once (D343): 5,946 of 5,950 passed and 4 were skipped, in 1 h 8 min 39 s (4,210 s with the build), no watchdog stop. The projects ended after: part L's walk-through 6 min 53 s, `VisualCommit.Hosting.Tests` 15 min 5 s, phase 7a's 29 min 45 s (14 min 40 s of its own), phase 6's 31 min 56 s, phase 4's 51 min 43 s, phase 5's 53 min 38 s, `VisualCommit.Git.Tests` 55 min 13 s (48 min 21 s of its own), phases 0 to 2's 61 min 43 s, `VisualCommit.App.Tests` 61 min 53 s, phase 5's undo walk-through 67 min 30 s and phase 3's 68 min 34 s. Not counted: CI's run on the same commit failed two tests on Windows, one of them a fault of the app, whose fix changes the app ("Found by the gate", item 4), so the round stopped before its real-window pass |
 | Counted round, fourth default run (`a9d02c1`'s code, the branch at `8dd323d`) | `bash scripts/heavy-run.sh`, 2026-10-31 00:51 to 02:06, after a 10-minute rest, at most four projects at once (D343): 5,948 of 5,952 passed and 4 were skipped, in 1 h 12 min 18 s (4,486 s with the build), no watchdog stop. The projects ended after: `VisualCommit.Hosting.Tests` 12 min 44 s, phase 7a's walk-through 14 min 2 s, phases 0 to 2's 24 min 4 s, phase 6's 30 min 50 s, `VisualCommit.Git.Tests` 41 min 5 s, phase 5's 43 min 25 s, part L's 46 min 35 s, phase 4's 58 min 29 s, phase 5's undo walk-through 59 min 0 s, phase 3's 69 min 38 s and `VisualCommit.App.Tests` 72 min 15 s (59 min 31 s of its own) |
 | Counted round, the real-window pass (`a9d02c1`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`, 2026-10-31 02:18 to 02:50, after the default run and a 10-minute rest, the owner told: 70 of 72 passed in 31 min 5 s (1,913 s with its build). `Phase6RealWindowPass.Check_W1_workspace_from_the_welcome_page` failed on the harness's read of a closing dialog's title, and Q1 measured 2,456 ms against its 2,000 while scheduled tasks of other programs ran ("Found by the gate", item 5). The list of 1,424 pictures was written at once; the round's `artifacts/visual`, its list and log are kept outside the repository (`phase7a-work/gate/round-a9d02c1/`) |
+| Counted round, the real-window pass again (`a2c312a`, D246; the branch at `47506ca`) | the same command, 2026-10-31 03:04 to 03:36, after a 10-minute rest, the owner told: 72 of 72 passed in 31 min 6 s (1,920 s with its build); Q1 1,400 ms (at most 2,000), its 459 frames at a 95th percentile of 1.3 ms and the longest 21.2 ms; 185 captures at 200 percent scaling, each within 2.35 percent of its scripted twin (the highest phase 5's `a2f-log-closed-page-kept`, 4.08 compared in place only; the limit is 3), phase 7a's nine within 1.15. Before the list, every scripted picture of the round's list was the same file (`sha256sum -c --quiet` printed nothing); the list, written at once, holds 1,432 files: 1,057 scripted and 375 real-window ones. Only the real-window project changed since `a9d02c1` (`git diff --stat a9d02c1 a2c312a`, docs and that project left out, prints nothing) |
+| Counted round, the live command (`a2c312a`, the branch at `47506ca`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`, 03:38, the owner told, its variables from the Windows user scope for its process alone: 112 of 112 passed in 29.9 s (46 s with its build); draft #3 made and removed ("Live command", run 3) |
 
 ## Live command
 
@@ -172,6 +174,18 @@ the same empty 500, which carries `Content-Type: application/json; charset=utf-8
 `X-GitHub-Api-Version-Selected`. `Check_3`: the provider's sign-in with version `2000-01-01` failed as
 `ApiVersion` with GitHub's explanation, and its lookups were answered 500 then 200, the second address
 mapped to the owner. This run is the gate's live run before its pictures (design 13.7 step 2, 20.7).
+
+**Run 3, the counted round** (2026-10-31, 03:38 Pacific, 10:38 UTC; the branch at `47506ca`, the
+gate's code `a2c312a`, right after the real-window pass and its list of pictures; the owner told):
+112 of 112 passed in 29.9 s (46 s with its build). No leftovers of a stopped run at its start;
+draft #3 created from `visualcommit-live/20261031-103751Z`, read back, the duplicate create's 422,
+then closed (200) and its branch deleted (204). Every probe GitHub answered: "the fake: same" (9);
+the empty repository's 409 is still not tried. The clone took 2.3 s; one avatar, 64×64 JPEG; the
+app's 9 requests to `api.github.com` all with `Authorization` (200 ×7, 201, 304) and 1 to
+`avatars.githubusercontent.com` without it; `X-RateLimit-Remaining` 4992 at the end; the token
+expires 2026-11-29. The lead searched run.txt for the token: only the 11 characters of its prefix
+`github_pat_`, in `Check_1`'s line that names the kind of token; nothing in the console output.
+Its run.txt is kept outside the repository (`phase7a-work/gate/live-run-gate-a2c312a.txt`).
 
 ## What the checks share
 
@@ -1506,8 +1520,8 @@ Faults the gate found, and the commit that fixed each.
      ran during it: Disk Cleanup's `SilentCleanup`, Office's and Visual Studio's updates at 02:07,
      Zoom's updater at 02:17, Office's again at 02:28 and 02:33, EasyDuplicateFinder at 02:42 and
      Acrobat's updater at 02:49 (risk 10: a warm or busy laptop fails Q1 by itself; signed out,
-     7a adds no git call to Q1's path, design 0.2). Measured again in the pass on the fix:
-     <TO FILL AT THE GATE'S END: Q1 in the pass on the fix>.
+     7a adds no git call to Q1's path, design 0.2). Measured again in the pass on the fix, after
+     a 10-minute rest and with no other program's task running: 1,400 ms, and every check passed.
 
 ## Could not run
 
