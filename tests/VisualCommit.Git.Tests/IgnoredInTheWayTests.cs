@@ -622,32 +622,61 @@ public class IgnoredInTheWayTests
         Assert.Equal(before, await repo.ExactStateAsync());
     }
 
+    // Each read's usual number of git calls, one read per test, each on a copy of its own (D237):
+    // the five in one test took 38 s in the project's own run, too close to the hang watchdog's
+    // 180 s under the gate's default run.
+
     [Fact]
-    public async Task Each_read_makes_its_usual_number_of_git_calls()
+    public async Task A_merge_makes_its_usual_number_of_git_calls()
+    {
+        var (repo, _) = await CopyAsync();
+        using var __ = repo;
+        var (repository, calls) = await OpenWithCallsAsync(repo);
+
+        // Its added path is not on disk: its first read alone.
+        var (merge, mergeCalls) = await CountAsync(calls, () => repository.FindIgnoredInTheWayOfMergeAsync("HEAD", "refs/heads/feature", TestCancelled));
+        Assert.Empty(merge);
+        Assert.Equal(["diff-tree --diff-filter=A"], mergeCalls.Select(call => Kind(call.CommandText)));
+    }
+
+    [Fact]
+    public async Task A_pick_a_revert_and_a_list_make_their_usual_number_of_git_calls()
     {
         var (repo, c) = await CopyAsync();
         using var _ = repo;
         var (repository, calls) = await OpenWithCallsAsync(repo);
-
-        // A merge whose added path is not on disk: its first read alone.
-        var (merge, mergeCalls) = await CountAsync(calls, () => repository.FindIgnoredInTheWayOfMergeAsync("HEAD", "refs/heads/feature", TestCancelled));
-        Assert.Empty(merge);
-        Assert.Equal(["diff-tree --diff-filter=A"], mergeCalls.Select(call => Kind(call.CommandText)));
-
         repo.WriteFile("secret.env", Local);
 
-        // A pick, a revert and a list: diff-tree --stdin and check-ignore.
+        // diff-tree --stdin and check-ignore.
         Assert.Equal(["diff-tree --stdin", "check-ignore"], (await CountAsync(calls, () => repository.FindIgnoredInTheWayOfCommitsAsync([c.Edit], revert: false, cancellationToken: TestCancelled))).Calls.Select(call => Kind(call.CommandText)));
         Assert.Equal(["diff-tree --stdin", "check-ignore"], (await CountAsync(calls, () => repository.FindIgnoredInTheWayOfCommitsAsync([c.Edit], revert: true, cancellationToken: TestCancelled))).Calls.Select(call => Kind(call.CommandText)));
         Assert.Equal(["diff-tree --stdin", "check-ignore"], (await CountAsync(calls, () => repository.FindIgnoredInTheWayOfCommitsAsync([c.SideAdds, c.SideDeletes], revert: false, cancellationToken: TestCancelled))).Calls.Select(call => Kind(call.CommandText)));
+    }
 
-        // A rebase: four reads side by side, then check-ignore.
+    [Fact]
+    public async Task A_rebase_makes_its_usual_number_of_git_calls()
+    {
+        var (repo, c) = await CopyAsync();
+        using var _ = repo;
+        var (repository, calls) = await OpenWithCallsAsync(repo);
+        repo.WriteFile("secret.env", Local);
+
+        // Four reads side by side, then check-ignore.
         var rebase = (await CountAsync(calls, () => repository.FindIgnoredInTheWayOfRebaseAsync("HEAD", c.T, TestCancelled))).Calls;
         Assert.Equal(["diff-tree --diff-filter=A", "log", "merge-base --is-ancestor", "rev-list"], rebase.Take(4).Select(call => Kind(call.CommandText)).Order(StringComparer.Ordinal));
         Assert.Equal("check-ignore", Kind(rebase[4].CommandText));
         Assert.Equal(5, rebase.Count);
+    }
 
-        // An interactive rebase: three reads without leading picks, four with them; a squash three.
+    [Fact]
+    public async Task An_interactive_rebase_and_a_squash_make_their_usual_number_of_git_calls()
+    {
+        var (repo, c) = await CopyAsync();
+        using var _ = repo;
+        var (repository, calls) = await OpenWithCallsAsync(repo);
+        repo.WriteFile("secret.env", Local);
+
+        // Three reads without leading picks, four with them; a squash three.
         RebasePlan Plan(params RebaseStep[] steps) => new(c.Add, c.X, "refs/heads/main", steps);
         Assert.Equal(3, (await CountAsync(calls, () => repository.FindIgnoredInTheWayOfRebaseAsync(
             Plan(new(c.Edit, RebaseAction.Reword, "Edit again\n"), new(c.Ignore, RebaseAction.Pick, null), new(c.X, RebaseAction.Pick, null)), TestCancelled))).Calls.Count);
@@ -655,9 +684,17 @@ public class IgnoredInTheWayTests
             Plan(new(c.X, RebaseAction.Pick, null), new(c.Edit, RebaseAction.Pick, null), new(c.Ignore, RebaseAction.Pick, null)), TestCancelled))).Calls.Count);
         var list = await repository.ReadRebaseListAsync(c.Add, "refs/heads/main", fromCommit: true, cancellationToken: TestCancelled);
         Assert.Equal(3, (await CountAsync(calls, () => repository.FindIgnoredInTheWayOfRebaseAsync(RebaseTodo.SquashPlan(list, "refs/heads/main", [c.Edit, c.Ignore], "Squashed\n"), TestCancelled))).Calls.Count);
+    }
 
-        // A stash after D179's count, which read its paths: check-ignore alone.
-        repo.DeleteFile("secret.env").WriteFile("secret.env", "STASHED\n");
+    [Fact]
+    public async Task A_stash_makes_its_usual_number_of_git_calls()
+    {
+        var (repo, _) = await CopyAsync();
+        using var __ = repo;
+        var (repository, calls) = await OpenWithCallsAsync(repo);
+
+        // After D179's count, which read its paths: check-ignore alone.
+        repo.WriteFile("secret.env", "STASHED\n");
         await repo.GitAsync("add", "--force", "secret.env");
         var stash = await repo.StashAsync("st1");
         repo.WriteFile("secret.env", Local);

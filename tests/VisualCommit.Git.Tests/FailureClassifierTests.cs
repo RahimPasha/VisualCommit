@@ -401,52 +401,103 @@ public class FailureClassifierTests
         Assert.Equal(GitFailureKind.CheckoutBlockedByUntrackedFiles, GitFailureClassifier.Classify(both.StandardError, both.StandardOutput, both.ExitCode));
     }
 
-    [Fact]
-    public async Task Real_checkouts_of_the_protect_scenario_give_each_kind_with_gits_paths()
+    // One case per refusal, each on a scenario of its own (D237): the six in one test took 36 s in
+    // the project's own run, too close to the hang watchdog's 180 s under the gate's default run.
+    [Theory]
+    [InlineData("TP1, a changed file")]
+    [InlineData("TP3, three changed files")]
+    [InlineData("TP4, an untracked file")]
+    [InlineData("TP5, a folder with an untracked file")]
+    [InlineData("a changed file and an untracked one")]
+    [InlineData("TP6, an ignored file with --no-overwrite-ignore")]
+    public async Task Real_checkouts_of_the_protect_scenario_give_each_kind_with_gits_paths(string refusal)
     {
-        // The report's TP1, TP3, TP4 and TP5, on the git that runs the tests.
-        await AssertRefusedAsync(repo => repo.WriteFile("src/app.txt", "app\nlocal\n"), GitFailureKind.CheckoutBlockedByLocalChanges, ["src/app.txt"], "switch", "--no-guess", "other");
-        await AssertRefusedAsync(
-            repo => repo.WriteFile("src/app.txt", "app\nlocal\n").WriteFile("src/lib.txt", "lib\nlocal\n").WriteFile("docs/guide.txt", "guide\nlocal\n"),
-            GitFailureKind.CheckoutBlockedByLocalChanges,
-            ["docs/guide.txt", "src/app.txt", "src/lib.txt"],
-            "switch",
-            "--no-guess",
-            "other");
-        await AssertRefusedAsync(repo => repo.WriteFile("notes", "my own notes\n"), GitFailureKind.CheckoutBlockedByUntrackedFiles, ["notes"], "switch", "--no-guess", "other");
-        await AssertRefusedAsync(repo => repo.WriteFile("notes/today.txt", "today\n"), GitFailureKind.CheckoutBlockedByUntrackedFolder, ["notes"], "switch", "--no-guess", "other");
-        await AssertRefusedAsync(
-            repo => repo.WriteFile("src/app.txt", "app\nlocal\n").WriteFile("notes", "my own notes\n"),
-            GitFailureKind.CheckoutBlockedByUntrackedFiles,
-            ["src/app.txt", "notes"],
-            "switch",
-            "--no-guess",
-            "other");
-
-        // TP6: the ignored settings an old commit tracks, with --no-overwrite-ignore.
-        await AssertRefusedAsync(_ => { }, GitFailureKind.CheckoutBlockedByUntrackedFiles, ["settings.local.json"], "switch", "--detach", "--no-overwrite-ignore", "main~3");
+        // The report's TP1 and TP3 to TP6, on the git that runs the tests.
+        switch (refusal)
+        {
+            case "TP1, a changed file":
+                await AssertRefusedAsync(repo => repo.WriteFile("src/app.txt", "app\nlocal\n"), GitFailureKind.CheckoutBlockedByLocalChanges, ["src/app.txt"], "switch", "--no-guess", "other");
+                break;
+            case "TP3, three changed files":
+                await AssertRefusedAsync(
+                    repo => repo.WriteFile("src/app.txt", "app\nlocal\n").WriteFile("src/lib.txt", "lib\nlocal\n").WriteFile("docs/guide.txt", "guide\nlocal\n"),
+                    GitFailureKind.CheckoutBlockedByLocalChanges,
+                    ["docs/guide.txt", "src/app.txt", "src/lib.txt"],
+                    "switch",
+                    "--no-guess",
+                    "other");
+                break;
+            case "TP4, an untracked file":
+                await AssertRefusedAsync(repo => repo.WriteFile("notes", "my own notes\n"), GitFailureKind.CheckoutBlockedByUntrackedFiles, ["notes"], "switch", "--no-guess", "other");
+                break;
+            case "TP5, a folder with an untracked file":
+                await AssertRefusedAsync(repo => repo.WriteFile("notes/today.txt", "today\n"), GitFailureKind.CheckoutBlockedByUntrackedFolder, ["notes"], "switch", "--no-guess", "other");
+                break;
+            case "a changed file and an untracked one":
+                await AssertRefusedAsync(
+                    repo => repo.WriteFile("src/app.txt", "app\nlocal\n").WriteFile("notes", "my own notes\n"),
+                    GitFailureKind.CheckoutBlockedByUntrackedFiles,
+                    ["src/app.txt", "notes"],
+                    "switch",
+                    "--no-guess",
+                    "other");
+                break;
+            case "TP6, an ignored file with --no-overwrite-ignore":
+                // The ignored settings an old commit tracks.
+                await AssertRefusedAsync(_ => { }, GitFailureKind.CheckoutBlockedByUntrackedFiles, ["settings.local.json"], "switch", "--detach", "--no-overwrite-ignore", "main~3");
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "No such refusal.");
+        }
     }
 
-    [Fact]
-    public async Task Real_merges_picks_and_reverts_refused_for_changes_give_the_merge_kinds_on_any_git()
+    // One case per refusal, each on a scenario of its own (D237): the seven in one test took 37 s
+    // in the project's own run, too close to the hang watchdog's 180 s under the gate's default run.
+    [Theory]
+    [InlineData("TP7, git merge over a changed file")]
+    [InlineData("TP8, git cherry-pick over a changed file")]
+    [InlineData("git merge over an untracked file")]
+    [InlineData("TP12, git revert over a changed file")]
+    [InlineData("TP9, git merge over a staged file")]
+    [InlineData("TP10, git cherry-pick over a staged file")]
+    [InlineData("TP11, git revert over a staged file")]
+    public async Task Real_merges_picks_and_reverts_refused_for_changes_give_the_merge_kinds_on_any_git(string refusal)
     {
         // The report's TP7, TP8, TP12 (a changed file: git's "by merge" block) and TP9 to TP11
         // (a staged one: no names), each changing nothing; 2.55's merge exits 2 with a line more.
-        await AssertRefusedAsync(repo => repo.WriteFile("src/app.txt", "app\nlocal\n"), GitFailureKind.MergeBlockedByLocalChanges, ["src/app.txt"], "merge", "--no-edit", "refs/heads/other");
-        await AssertRefusedAsync(repo => repo.WriteFile("src/app.txt", "app\nlocal\n"), GitFailureKind.MergeBlockedByLocalChanges, ["src/app.txt"], "cherry-pick", "refs/heads/other~1");
-        await AssertRefusedAsync(repo => repo.WriteFile("notes", "my own notes\n"), GitFailureKind.MergeBlockedByLocalChanges, ["notes"], "merge", "--no-edit", "refs/heads/other");
-        await AssertRefusedAsync(
-            repo => repo.WriteFile("README.md", "# Protect\n\nLocal.\n").WriteFile("src/app.txt", "app\nlocal\n"),
-            GitFailureKind.MergeBlockedByLocalChanges,
-            ["README.md"],
-            "revert",
-            "--no-edit",
-            "refs/heads/main~1");
-
         static void Staged(TempRepo repo) => repo.WriteFile("README.md", "# Protect\n\nStaged.\n");
-        await AssertRefusedAsync(Staged, GitFailureKind.MergeBlockedByStagedChanges, [], "merge", "--no-edit", "refs/heads/other");
-        await AssertRefusedAsync(Staged, GitFailureKind.MergeBlockedByStagedChanges, [], "cherry-pick", "refs/heads/other~1");
-        await AssertRefusedAsync(Staged, GitFailureKind.MergeBlockedByStagedChanges, [], "revert", "--no-edit", "refs/heads/main~1");
+        switch (refusal)
+        {
+            case "TP7, git merge over a changed file":
+                await AssertRefusedAsync(repo => repo.WriteFile("src/app.txt", "app\nlocal\n"), GitFailureKind.MergeBlockedByLocalChanges, ["src/app.txt"], "merge", "--no-edit", "refs/heads/other");
+                break;
+            case "TP8, git cherry-pick over a changed file":
+                await AssertRefusedAsync(repo => repo.WriteFile("src/app.txt", "app\nlocal\n"), GitFailureKind.MergeBlockedByLocalChanges, ["src/app.txt"], "cherry-pick", "refs/heads/other~1");
+                break;
+            case "git merge over an untracked file":
+                await AssertRefusedAsync(repo => repo.WriteFile("notes", "my own notes\n"), GitFailureKind.MergeBlockedByLocalChanges, ["notes"], "merge", "--no-edit", "refs/heads/other");
+                break;
+            case "TP12, git revert over a changed file":
+                await AssertRefusedAsync(
+                    repo => repo.WriteFile("README.md", "# Protect\n\nLocal.\n").WriteFile("src/app.txt", "app\nlocal\n"),
+                    GitFailureKind.MergeBlockedByLocalChanges,
+                    ["README.md"],
+                    "revert",
+                    "--no-edit",
+                    "refs/heads/main~1");
+                break;
+            case "TP9, git merge over a staged file":
+                await AssertRefusedAsync(Staged, GitFailureKind.MergeBlockedByStagedChanges, [], "merge", "--no-edit", "refs/heads/other");
+                break;
+            case "TP10, git cherry-pick over a staged file":
+                await AssertRefusedAsync(Staged, GitFailureKind.MergeBlockedByStagedChanges, [], "cherry-pick", "refs/heads/other~1");
+                break;
+            case "TP11, git revert over a staged file":
+                await AssertRefusedAsync(Staged, GitFailureKind.MergeBlockedByStagedChanges, [], "revert", "--no-edit", "refs/heads/main~1");
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(refusal), refusal, "No such refusal.");
+        }
     }
 
     [Fact]

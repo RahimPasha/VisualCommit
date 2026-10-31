@@ -50,10 +50,17 @@ public class TempRepoClockTests
         Assert.Equal(start, repo.ClockTime);
     }
 
+    // A test per case, each on a scenario of its own (D237): the two in one test took 25 s in the
+    // project's own run.
     [Fact]
-    public async Task A_step_after_an_app_operation_counts_for_force_if_includes_only_once_the_clock_has_moved_past_it()
+    public async Task A_step_after_an_app_operation_counts_for_force_if_includes_once_the_clock_has_moved_past_it()
     {
         Assert.True(await ForceIfIncludesAllowsAsync(moveClock: true), "The force push was refused although the reset came after the fetch.");
+    }
+
+    [Fact]
+    public async Task A_step_after_an_app_operation_does_not_count_for_force_if_includes_before_the_clock_has_moved_past_it()
+    {
         Assert.False(await ForceIfIncludesAllowsAsync(moveClock: false), "The force push went through although git saw the reset as older than the fetch.");
     }
 
