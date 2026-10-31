@@ -5330,8 +5330,30 @@ runs and their counts.
    laptop's whole default run with at most four projects at once. The script adds the limit only
    when no project, solution or limit of its own is named (checked with a stand-in `dotnet`: none
    for `--project`, `--solution=` or `--max-parallel-test-modules=2`, added before a
-   `--filter-class`). The run's length with it is measured at the counted round.
+   `--filter-class`). The counted round's third run, rested, on `391f7f2`, passed with it in 1 h 8
+   min 39 s and no stop, 5,950 tests (phase 6's gate: 56 min 25 s for 5,037 at eight projects).
 3. **D246's two runs** (the owner present, 2026-10-30 22:16 and 22:24): the first failed only
    `Check_N_new_pull_request`, whose step 3 read the title box by a search of the whole window and
    found the left panel's row title of the same automation id first; read inside the form since
    `723f2d3`, the second run passed all five checks. Only the real-window project changed (D246).
+4. **CI's two failures on `391f7f2`** (the first attempt of run 41172878322, Windows; the laptop's
+   third default run had passed the same code). Both are a status read in the middle of a
+   terminal's git:
+   - The stage panel's message (phase 4 design 5.3): `FollowOperationMessageAsync` recorded the
+     stop's key before it read the stop's message, so a read that found none (git names the pick in
+     `rebase-merge/done`, and a merge's `MERGE_HEAD`, before it writes the message) left the boxes
+     empty for that stop, and C17 timed out. A read that finds no message now gives the key back,
+     so the next status of the same stop reads again; a message found is still filled once per
+     stop, and one the user cleared stays clear. The read that finds no file is synchronous and
+     starts no git, so no status can pass while it runs. Left as it is, from the review: a stop
+     whose message tidies to nothing (a commit made with `--allow-empty-message`) now reads it at
+     every status, one `git config --get core.commentChar` each time, with nothing shown otherwise.
+   - The banner: a refresh's `git status` comes before its look at `MERGE_HEAD`, so a refresh that
+     straddles the merge's index shows "Conflicts resolved" for about 0.3 s and one refresh, with
+     Continue enabled (git refuses to commit with files unmerged). The test now waits for the final
+     text. Removing the brief state would take a status read that checks the in-progress files
+     before and after `git status` and reads again when they differ; no requirement asks for it
+     (Q4 asks for a refresh, phase 6 design 3.3 accepts in-between states of an outside operation),
+     so it is left for the owner to weigh (the handoff).
+   Fixed in `a9d02c1`; both new tests failed on the old code and pass on the new, the held rebase's
+   three times more on the laptop.

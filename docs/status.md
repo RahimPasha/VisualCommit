@@ -180,6 +180,24 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for D343 and the record of D246's runs (`391f7f2`, the code of the gate's third
+default run, which passed on the laptop) is
+[41172878322](https://github.com/RahimPasha/VisualCommit/actions/runs/41172878322): its first
+attempt failed two tests on `windows-latest` (32 min 21 s; Test step 29 min 34 s of 55): phase 4's
+`Check_C17_terminal_rebase`, a fault of the app, and `ConflictBannerTests`' terminal merge, a fault
+of the test, both a status read in the middle of a terminal's git (the report's "Found by the
+gate", item 4; fixed in `a9d02c1`). The other four passed: `macos-latest` 36 min 37 s (Test step 34
+min 25 s; its keychain step green), `ubuntu-latest` 8 min 4 s (Test step 6 min 9 s), the containers
+8 min 22 s and 8 min 37 s (Secret Service steps green). The lead re-ran the Windows job, which
+passed on attempt 2 (34 min 39 s; Test step 31 min 56 s; its keychain step green).
+
+Phase 7a's run for the splits of `VisualCommit.Git.Tests`' long tests (`8271c8e`) is
+[41168259074](https://github.com/RahimPasha/VisualCommit/actions/runs/41168259074): all five jobs
+succeeded, the split redo's first run off Windows among them. `windows-latest` 30 min 49 s (Test
+step 28 min 8 s of 55; its keychain step green; "Build the opt-in projects" 24 s), `macos-latest`
+28 min 30 s (Test step 26 min 11 s; its keychain step green), `ubuntu-latest` 7 min 27 s (Test step
+5 min 28 s), the containers 6 min 41 s and 6 min 30 s (Secret Service steps green).
+
 Phase 7a's run for D342's corrections and the fake's empty 500 (`a140017`, the code of the gate's
 first default run) is
 [41153159610](https://github.com/RahimPasha/VisualCommit/actions/runs/41153159610): all five jobs
@@ -597,10 +615,17 @@ undo chain (`UndoRecordingTests`' hard reset); the owner, at the machine, chose 
 side: D343, the laptop's whole run through `scripts/heavy-run.sh` at most four projects at once. The
 lead stopped that run to make D246's two runs with the owner present (step 4): the first failed only
 `Check_N_new_pull_request` on the test's own lookup, fixed at `723f2d3`, and the second passed 5 of 5
-(the report's "Run"; design 21 items 2 and 3). Next: the counted round's default run on the branch's
-code (`bash scripts/heavy-run.sh`, after a 10-minute rest, now four projects at once), then, the owner
-told, the whole real-window pass (step 5), at once the pictures' list, the live command again, and
-the inspection (step 6). Each of
+(the report's "Run"; design 21 items 2 and 3). The third rested run, on `391f7f2` with four projects
+at once, passed (5,946 of 5,950, 4 skipped, 1 h 8 min 39 s, no stop), but CI's first attempt on the
+same commit failed two tests on Windows, each a status read in the middle of a terminal's git: phase
+4's C17 found an app fault (the stage panel never read a stop's message again once a read had found
+none) and `ConflictBannerTests`' terminal merge asserted a torn banner. Three Opus agents checked the
+causes, three more reviewed the fix, and the fix with two tests that failed on the old code is
+`a9d02c1` (the report's "Found by the gate", item 4; design 21 item 4); the round stopped before its
+real-window pass. Next: the counted round's default run on `a9d02c1`'s code (`bash
+scripts/heavy-run.sh`, after a 10-minute rest, four projects at once), then, the owner told, the whole
+real-window pass (step 5), at once the pictures' list, the live command again, and the inspection
+(step 6); D246's two runs are not made again. Each of
 parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
@@ -621,6 +646,12 @@ every commit.
   CLAUDE.md's "Each test's time in a project run alone" makes such a report. The six worktrees under
   `.claude/worktrees/` and their branches are removed, their fsmonitor daemons and the build
   servers stopped.
+
+- **CI's two failures on `391f7f2`** (2026-10-31, design 21 item 4): the failed Windows job's log,
+  the checking workflow's result (the order of git 2.56's writes in a conflicting merge and rebase,
+  measured) and the review's are in the same folder (`ci-41172878322-attempt1-windows-failed.log`,
+  `ci-flakes-workflow-result.json`, `flake-fix-review-result.json`); the third default run's log is
+  `default-run-3-391f7f2.log`.
 
 - **The live command's variables in a session that started before them** (2026-10-30): Windows
   gives a process the environment of the one that started it, so VS Code (and every Claude Code

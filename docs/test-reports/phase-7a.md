@@ -65,7 +65,11 @@ The gate runs on the Windows machine from 2026-10-30; times are Pacific (the mac
 | Machine | Windows 11 Pro 10.0.26300, Intel Core i7-8650U laptop, 3000x2000 screen at 200 percent scaling; Git 2.56.0.windows.4; .NET SDK 10.0.303 |
 | Before the gate: 7a's walk-through (`a140017`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7a`, 2026-10-30, ended 18:08: 205 of 205 in 3 min 9 s; 80 of its 85 pictures the same files as on `7015753` |
 | Counted round, first default run (`a140017`'s code, the branch at `a9326a5`) | `bash scripts/heavy-run.sh`, 2026-10-30 18:20 to 19:24, after a 10-minute rest: 3,918 of the 3,922 tests that ran passed and 4 were skipped (the three real keychains' tests and `WindowsCredentialStoreTests`' Off-Windows test, D270), in 1 h 2 min 5 s; exit 127: the hang watchdog stopped `VisualCommit.Git.Tests` 1,306 s in, in `UndoEffectTests.Renames_configuration_remotes_and_tags_go_forth_and_back` after its 180 s counted, so that project's other tests did not run ("Found by the gate", item 1). The projects' own times: phase 6's part L 13 min 21 s, phases 0 to 2's 12 min 39 s, phase 7a's 15 min 47 s, `VisualCommit.Git.Tests` 21 min 53 s (stopped), `VisualCommit.Hosting.Tests` 25 min 1 s, phase 5's 25 min 23 s, phase 4's 26 min 50 s, phase 6's 31 min 5 s, phase 3's 43 min 12 s, phase 5's undo walk-through 46 min 20 s and `VisualCommit.App.Tests` 1 h 2 min 3 s |
-| Counted round, second default run (`377d354`'s code, the branch at `8271c8e`) | `bash scripts/heavy-run.sh`, 2026-10-30 from 21:32, after a 10-minute rest, eight projects at once as before: the hang watchdog stopped `VisualCommit.App.Tests` 1,898 s in, in `UndoRecordingTests.A_hard_reset_is_undone_with_its_files_and_index_from_the_snapshot_and_redone_with_a_new_one` after its 180 s counted ("Found by the gate", item 2), with phases 0 to 2's walk-through (14 min 55 s), `VisualCommit.Hosting.Tests` (24 min 31 s), phase 5's (30 min 46 s) and part L's (10 min 17 s) passed by then. The lead stopped the run at 22:11, with the owner's agreement, to make D246's two runs while the owner was at the machine || Before the gate: 7a's walk-through again (`8271c8e`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7a`, 22:12 to 22:16: 205 of 205 in 3 min 24 s, its pictures complete again after the stopped run || Before the gate: D246's first run (`8271c8e`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`, 22:16 to 22:20, the owner told and present: 4 of 5 passed; `Check_N_new_pull_request` failed in its step 3 on the test's own lookup ("Found by the gate", item 3) || Before the gate: D246's second run (`723f2d3`) | the same command, 22:24 to 22:28, the owner present: 5 of 5 passed in 2 min 55 s (3 min 17 s with the build); every capture within 1.15 percent of its scripted twin (2.59 compared in place only; the limit is 3); part P's check opened the fake's page in the owner's browser, as D321 allows |
+| Counted round, second default run (`377d354`'s code, the branch at `8271c8e`) | `bash scripts/heavy-run.sh`, 2026-10-30 from 21:32, after a 10-minute rest, eight projects at once as before: the hang watchdog stopped `VisualCommit.App.Tests` 1,898 s in, in `UndoRecordingTests.A_hard_reset_is_undone_with_its_files_and_index_from_the_snapshot_and_redone_with_a_new_one` after its 180 s counted ("Found by the gate", item 2), with phases 0 to 2's walk-through (14 min 55 s), `VisualCommit.Hosting.Tests` (24 min 31 s), phase 5's (30 min 46 s) and part L's (10 min 17 s) passed by then. The lead stopped the run at 22:11, with the owner's agreement, to make D246's two runs while the owner was at the machine |
+| Before the gate: 7a's walk-through again (`8271c8e`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7a`, 22:12 to 22:16: 205 of 205 in 3 min 24 s, its pictures complete again after the stopped run |
+| Before the gate: D246's first run (`8271c8e`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`, 22:16 to 22:20, the owner told and present: 4 of 5 passed; `Check_N_new_pull_request` failed in its step 3 on the test's own lookup ("Found by the gate", item 3) |
+| Before the gate: D246's second run (`723f2d3`) | the same command, 22:24 to 22:28, the owner present: 5 of 5 passed in 2 min 55 s (3 min 17 s with the build); every capture within 1.15 percent of its scripted twin (2.59 compared in place only; the limit is 3); part P's check opened the fake's page in the owner's browser, as D321 allows |
+| Counted round, third default run (`391f7f2`) | `bash scripts/heavy-run.sh`, 2026-10-30 22:41 to 23:51, after a 10-minute rest, at most four projects at once (D343): 5,946 of 5,950 passed and 4 were skipped, in 1 h 8 min 39 s (4,210 s with the build), no watchdog stop. The projects ended after: part L's walk-through 6 min 53 s, `VisualCommit.Hosting.Tests` 15 min 5 s, phase 7a's 29 min 45 s (14 min 40 s of its own), phase 6's 31 min 56 s, phase 4's 51 min 43 s, phase 5's 53 min 38 s, `VisualCommit.Git.Tests` 55 min 13 s (48 min 21 s of its own), phases 0 to 2's 61 min 43 s, `VisualCommit.App.Tests` 61 min 53 s, phase 5's undo walk-through 67 min 30 s and phase 3's 68 min 34 s. Not counted: CI's run on the same commit failed two tests on Windows, one of them a fault of the app, whose fix changes the app ("Found by the gate", item 4), so the round stopped before its real-window pass |
 
 ## Live command
 
@@ -1455,6 +1459,37 @@ Faults the gate found, and the commit that fixed each.
    check now reads the box inside the form (`FindIn`, as it finds the form's Create button), at
    `723f2d3`; the second run passed it. A fault of the test alone: the app's two elements are in
    different layers, as phase 6's `ConfirmButton`s are.
+4. **Two failures of CI's Windows job on `391f7f2`** (the first attempt of run 41172878322), after the
+   laptop's third default run had passed the same code. Both start git in a terminal while the app
+   is open, and both are a status read that came in the middle of git's writes:
+   - `Phase4ChecksC.Check_C17_terminal_rebase` timed out after 60 s waiting for the stage panel's
+     summary "Pick conflicting": a fault of the app. The panel fills its boxes once per stopped
+     commit, and it recorded the stop before it read the stop's message. Git names the stopped
+     pick in `rebase-merge/done` before it merges and writes `rebase-merge/message` (55 to 85 ms
+     later with the laptop's git 2.56; a merge has the same gap between `MERGE_HEAD` and
+     `MERGE_MSG`), so a status read in between found no message, and every later status of the
+     same stop was taken as done: the boxes stayed empty (Continue still committed the stop's own
+     message, which the git layer reads when the boxes hold none). A stop whose message was not
+     found is now read again at its next status, and the watcher's refresh after git's write brings
+     one. `WorkingChangesInProgressTests.A_stop_whose_message_git_has_not_written_yet_is_filled_at_its_next_status`
+     and `ConflictBannerTests.A_rebase_stopped_in_a_terminal_fills_the_stage_panels_message_also_after_a_refresh_saw_the_stop_before_its_message`,
+     which holds a terminal's `git rebase` in that gap with a merge driver that waits for a file,
+     failed on the old code (the second with CI's own timeout) and pass on the new.
+   - `ConflictBannerTests.A_merge_started_in_a_terminal_while_the_app_is_open_brings_the_banner_and_an_abort_in_a_terminal_takes_it_away`
+     read `Merging: "Merge branch 'feature/conflict'". Conflicts resolved: commit to finish the merge.`
+     where it expected `… 1 file has conflicts.`: a fault of the test. A refresh reads
+     `git status` before `MERGE_HEAD`, and one whose status came before the merge's conflicted
+     index and whose `MERGE_HEAD` came after it shows the merge without conflicts until the
+     watcher's next refresh, which always follows (the watcher keeps every write git makes after a
+     refresh began, and a refresh asked for during one runs once more). The test asserted the first
+     banner shown; it now waits for the merge's own text, with its assertions unchanged, as C17
+     waits for its final state (CI run 38311351849).
+
+   Three Opus agents checked the causes, two of them each trying to refute one with git 2.56 in
+   scratch repositories (the order of git's writes, the held window, a torn read caught once in 12
+   tries), the third sweeping the tests and the app for the same two patterns and finding no other
+   instance; three more reviewed the change and a skeptic each finding (workflows `we3ft7rzz` and
+   `whwkujjb3`; the design's 21 item 4). Commit `a9d02c1`.
 
 ## Could not run
 
