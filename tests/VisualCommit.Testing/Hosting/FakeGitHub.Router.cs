@@ -221,9 +221,10 @@ public sealed partial class FakeGitHub
 
     /// <summary>
     /// A2: those the login owns or may push to, and the listed records, paged. A fine-grained token
-    /// reaches every repository of its login (GitHub's "All repositories"); "Only select
-    /// repositories" is not modelled, for which GitHub lists the selected repositories and the
-    /// owner's public ones (the live run of 2026-10-30: the sandbox and 11 public).
+    /// reaches every repository its login owns or may push to, as a classic token with <c>repo</c>
+    /// does: more than GitHub's "All repositories", which keeps to the token's one resource owner.
+    /// "Only select repositories" is not modelled, for which GitHub lists the selected repositories
+    /// and the owner's public ones (the live run of 2026-10-30: the sandbox and 11 public).
     /// </summary>
     private AuthRemoteResponse UserRepositories(Call call)
     {
@@ -464,8 +465,8 @@ public sealed partial class FakeGitHub
         var sha = call.Query.Value("sha") ?? repository.DefaultBranch;
         if (await LogAsync(bare, sha, ct).ConfigureAwait(false) is not { } commits)
         {
-            // github.com, 2026-10-30, three samples: a SHA it does not have is 404 alone and 500 with
-            // an empty body beside author. A branch name GitHub lacks is taken to answer as an
+            // github.com, 2026-10-30, one sample each: a SHA it does not have is 404 alone and 500
+            // with an empty body beside author. A branch name GitHub lacks is taken to answer as an
             // unknown SHA (not measured).
             return call.Query.Value("author") is null
                 ? Error(call, 404, "Not Found", documentationUrl: ListCommitsDocumentationUrl)
@@ -604,8 +605,8 @@ public sealed partial class FakeGitHub
     /// A JSON answer with GitHub's headers (r5 10.4): <c>ETag</c> on a success, and a matching
     /// <c>If-None-Match</c> answered 304 without a body and not counted; the rate limit's headers
     /// for a signed-in request; <c>X-OAuth-Scopes</c> for a classic token; the token's expiry
-    /// when set, except on a 304 (GitHub's had none in the live run of 2026-10-30); <c>Link</c>
-    /// for a page; <c>X-GitHub-Request-Id</c>.
+    /// when set, except on a 304 (inferred: the live run of 2026-10-30 counted one 304 and one
+    /// answer without the expiry, not paired); <c>Link</c> for a page; <c>X-GitHub-Request-Id</c>.
     /// </summary>
     private AuthRemoteResponse Json(Call call, int status, JsonNode node, string? link = null, IEnumerable<KeyValuePair<string, string>>? extra = null)
     {

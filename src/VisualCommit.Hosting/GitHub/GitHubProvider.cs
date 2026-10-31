@@ -284,9 +284,10 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             {
                 // A commit GitHub does not have (a remote-tracking branch GitHub has since lost or
                 // rewritten, a remote pointed elsewhere): github.com answers such a lookup 500 without
-                // a body (the live run of 2026-10-30), and a 422 or a 404 is taken the same; the listed
-                // repository answered A3 a moment ago, so its 404 is this commit's. Only this address
-                // is not found, and it is asked again at a later run (D342).
+                // a body (the live run of 2026-10-30), and a 422 is taken the same, in any repository.
+                // A 404 in the listed repository (the tab's own: A3's, or for a fork the parent A3
+                // names) is taken as this commit's, not the repository's (not measured). Only this
+                // address is not found, and it is asked again at a later run (D342).
                 continue;
             }
 

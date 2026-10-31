@@ -98,7 +98,8 @@ public sealed class FakeGitHubTests
         var ada = await SendAsync(fake, HttpMethod.Get, "user", expiring);
         Assert.Equal("2026-02-01 00:00:00 UTC", ada.Header("GitHub-Authentication-Token-Expiration"));
 
-        // Its 304 does not show it, as GitHub's did not (the live run of 2026-10-30).
+        // Its 304 does not show it, as GitHub's is taken not to (inferred from the live run of
+        // 2026-10-30, which counted one 304 and one answer without the expiry, not paired).
         var adaAgain = await SendAsync(fake, HttpMethod.Get, "user", expiring, edit: request => request.Headers.TryAddWithoutValidation("If-None-Match", ada.Header("ETag")));
         Assert.Equal((HttpStatusCode.NotModified, (string?)null, "1"), (adaAgain.Status, adaAgain.Header("GitHub-Authentication-Token-Expiration"), adaAgain.Header("X-RateLimit-Used")));
 

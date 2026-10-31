@@ -46,7 +46,7 @@ internal sealed class AuthorMapStore
     /// What to ask GitHub for <paramref name="emails"/> (lower case) of <paramref name="repository"/>
     /// (7.9 step 3): the commits page when the map is missing or its page is 7 days old or more; the
     /// e-mails the map lacks or whose answer is that old, in order, as many as the repository's
-    /// lookups left, which they use up (<see cref="Merge"/> gives back those not reached).
+    /// lookups left, which they use up (<see cref="Merge"/> gives back those the answer lacks).
     /// </summary>
     public (bool CommitsDue, IReadOnlyList<string> Emails) Plan(HostedRepository repository, IReadOnlyList<string> emails)
     {
@@ -70,8 +70,10 @@ internal sealed class AuthorMapStore
     /// Takes A6's answer into <paramref name="repository"/>'s map and writes it, unless
     /// <paramref name="ct"/> was cancelled (a sign-out): every e-mail answered, checked now, and the
     /// page's date when <paramref name="commitsRead"/>. The e-mails of <paramref name="asked"/> the
-    /// answer lacks were not reached: their lookups are given back. Without an answer
-    /// (<paramref name="map"/> null), every lookup is given back.
+    /// answer lacks were not reached, or were asked and left out (a lookup GitHub could not answer,
+    /// D342): their lookups are given back, so such an address is asked again at every run, bounded
+    /// only by A6's 20 a call. Without an answer (<paramref name="map"/> null), every lookup is
+    /// given back.
     /// </summary>
     public void Merge(HostedRepository repository, AuthorMap? map, bool commitsRead, IReadOnlyCollection<string> asked, CancellationToken ct)
     {
