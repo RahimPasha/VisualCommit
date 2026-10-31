@@ -765,6 +765,31 @@ public sealed class LiveSafetyTests
     }
 
     [Fact]
+    public async Task Check_1_s_probes_with_a_fake_standing_in_for_github_note_same_break_nothing_and_name_no_address()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var output = new List<string>();
+        var run = new LiveRun(Token, folder.Combine("run.txt"), output.Add);
+        await using var github = await LiveFake.StartAsync("octo", "sandbox", Cancelled);
+
+        var broken = await new GitHubLiveTests(run).ProbeTextsAsync(github.Api, new LiveSandbox("octo", "sandbox", Token), "main", "20261030-232555Z");
+
+        Assert.Empty(broken);
+        var probes = run.Notes.Where(note => note.StartsWith("GitHub's text for ", StringComparison.Ordinal)).ToList();
+        Assert.Equal(10, probes.Count);
+
+        // The fake answers a wrong version before it reads the token, so without the rate limit's headers.
+        Assert.All(probes.SkipLast(1), note => Assert.Matches(@"^GitHub's text for .+: \d{3} \(request FAKE-\d{4}\); Content-Type application/json; charset=utf-8, API version selected not sent, X-RateLimit-Remaining (\d+|not sent); the fake: same\. GitHub's body", note));
+        Assert.Equal("GitHub's text for the commits of an empty repository: not tried (the sandbox has a commit); the fake: status 409, message \"Git Repository is empty.\".", probes[^1]);
+
+        // The latest commit's author's address, which three of the lookups asked with, is in no note.
+        run.Dispose();
+        Assert.Equal(run.Notes, output);
+        Assert.DoesNotContain(run.Notes, note => note.Contains(LiveFake.Email, StringComparison.OrdinalIgnoreCase) || note.Contains(Uri.EscapeDataString(LiveFake.Email), StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(LiveFake.Email, File.ReadAllText(folder.Combine("run.txt")), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void The_order_names_every_live_test_once()
     {
         var methods = typeof(GitHubLiveTests).GetMethods()

@@ -793,9 +793,10 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
     /// selected API version and <c>X-RateLimit-Remaining</c>; each body is kept whole only for a
     /// refusal (<see cref="LiveAnswer.BodyForNotes"/>). Returns the premises (<see cref="LivePremises"/>)
     /// that GitHub's answers broke, a premise's probe without an answer among them; any other probe
-    /// without one is noted and fails nothing.
+    /// without one is noted and fails nothing. Internal for <see cref="LiveSafetyTests"/>, which runs
+    /// it with a second fake standing in for GitHub.
     /// </summary>
-    private async Task<List<string>> ProbeTextsAsync(GitHubLiveApi api, LiveSandbox sandbox, string branch, string stamp)
+    internal async Task<List<string>> ProbeTextsAsync(GitHubLiveApi api, LiveSandbox sandbox, string branch, string stamp)
     {
         var broken = new List<string>();
         await using var fake = await StartFakeAsync(sandbox);
