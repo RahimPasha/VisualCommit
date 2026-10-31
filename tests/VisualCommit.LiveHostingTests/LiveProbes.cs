@@ -162,8 +162,8 @@ internal sealed class LiveFake : IAsyncDisposable
         _source = source;
         _fake = fake;
         Sha = sha;
-        Api = new GitHubLiveApi(new LiveSandbox(owner, name, token), fake.CreateHandler(), apiBase: fake.Endpoints.ApiBase);
-        EmptyApi = new GitHubLiveApi(new LiveSandbox(owner, EmptyName, token), fake.CreateHandler(), apiBase: fake.Endpoints.ApiBase);
+        Api = new GitHubLiveApi(new LiveSandbox(owner, name, token), fake.CreateHandler(), apiBase: fake.Endpoints.ApiBase, limit: GitHubLiveApi.FakeCallLimit);
+        EmptyApi = new GitHubLiveApi(new LiveSandbox(owner, EmptyName, token), fake.CreateHandler(), apiBase: fake.Endpoints.ApiBase, limit: GitHubLiveApi.FakeCallLimit);
     }
 
     /// <summary>The test's own calls, on the fake's namesake of the sandbox.</summary>

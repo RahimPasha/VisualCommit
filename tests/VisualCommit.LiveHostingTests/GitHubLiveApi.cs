@@ -153,12 +153,13 @@ internal sealed record LiveAnswer(
 
     /// <summary>
     /// The fake's answer to a probe beside GitHub's (since the live run of 2026-10-30, so that a
-    /// note stays right whatever the fake answers): <c>same</c> when the status, <c>message</c>, <c>errors</c> and the body's
-    /// <see cref="Shape"/> agree, else the fake's value of each that differs; without GitHub's
-    /// answer, the fake's status, message and errors. <c>documentation_url</c> and the body's
-    /// <c>status</c> are left out. Each side's own address (<paramref name="address"/>,
-    /// <paramref name="fakeAddress"/>), which a probe asked with, is replaced in its texts first
-    /// (<see cref="Hide"/>), so that an echo of it compares equal and is never shown.
+    /// note stays right whatever the fake answers): <c>same</c> when the status, <c>message</c>,
+    /// <c>errors</c> and the body's <see cref="Shape"/> agree, else the fake's value of each that
+    /// differs; without GitHub's answer, the fake's status, message and errors.
+    /// <c>documentation_url</c> and the body's <c>status</c> are left out. Each side's own address
+    /// (<paramref name="address"/>, <paramref name="fakeAddress"/>), which a probe asked with, is
+    /// replaced in its texts first (<see cref="Hide"/>), so that an echo of it compares equal and is
+    /// never shown.
     /// </summary>
     internal static string FakeBeside(LiveAnswer? github, LiveAnswer fake, string? address = null, string? fakeAddress = null)
     {
@@ -223,9 +224,13 @@ internal sealed class GitHubLiveApi : IDisposable
     /// <summary>How long one call may take.</summary>
     public static readonly TimeSpan CallLimit = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long one call to the fake in process may take: its ten in Check_1 add 50 s at most to the watchdog's sum (14.3).</summary>
+    public static readonly TimeSpan FakeCallLimit = TimeSpan.FromSeconds(5);
+
     private readonly LiveSandbox _sandbox;
     private readonly HttpClient _client;
     private readonly Action<string>? _withheld;
+    private readonly TimeSpan _limit;
 
     /// <summary>The calls to github.com; <paramref name="withheld"/> is told when an answer held the token.</summary>
     public GitHubLiveApi(LiveSandbox sandbox, Action<string>? withheld = null)
@@ -241,15 +246,16 @@ internal sealed class GitHubLiveApi : IDisposable
 
     /// <summary>
     /// The calls over <paramref name="handler"/>, an in-process one: for <see cref="LiveSafetyTests"/>,
-    /// and with <paramref name="apiBase"/> the fake's API (<see cref="LiveFake"/>); github.com's API
-    /// without one.
+    /// and with <paramref name="apiBase"/> the fake's API (<see cref="LiveFake"/>, each call
+    /// <paramref name="limit"/> at most); github.com's API and <see cref="CallLimit"/> without them.
     /// </summary>
-    internal GitHubLiveApi(LiveSandbox sandbox, HttpMessageHandler handler, Action<string>? withheld = null, Uri? apiBase = null)
+    internal GitHubLiveApi(LiveSandbox sandbox, HttpMessageHandler handler, Action<string>? withheld = null, Uri? apiBase = null, TimeSpan? limit = null)
     {
         ArgumentNullException.ThrowIfNull(sandbox);
         ArgumentNullException.ThrowIfNull(handler);
         _sandbox = sandbox;
         _withheld = withheld;
+        _limit = limit ?? CallLimit;
         _client = new HttpClient(handler, disposeHandler: true)
         {
             BaseAddress = apiBase ?? GitHubEndpoints.GitHubCom.ApiBase,
@@ -381,7 +387,7 @@ internal sealed class GitHubLiveApi : IDisposable
     }
 
     /// <summary>One call, answered: a status GitHub sent, whatever it is.</summary>
-    /// <exception cref="GitHubLiveException">No answer came within <see cref="CallLimit"/>, or GitHub was not reached.</exception>
+    /// <exception cref="GitHubLiveException">No answer came within <see cref="CallLimit"/> (the fake's: its own limit), or GitHub was not reached.</exception>
     internal async Task<LiveAnswer> SendAsync(HttpMethod method, string path, JsonObject? body, CancellationToken cancellationToken, string version = GitHubApi.Version)
     {
         using var request = new HttpRequestMessage(method, path);
@@ -396,7 +402,7 @@ internal sealed class GitHubLiveApi : IDisposable
 
         var shown = $"{method.Method} /{path.Split('?')[0]}";
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        limit.CancelAfter(CallLimit);
+        limit.CancelAfter(_limit);
         try
         {
             using var response = await _client.SendAsync(request, limit.Token);
@@ -437,7 +443,7 @@ internal sealed class GitHubLiveApi : IDisposable
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new GitHubLiveException($"GitHub did not answer {shown} within {CallLimit.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s.");
+            throw new GitHubLiveException($"GitHub did not answer {shown} within {_limit.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s.");
         }
         catch (HttpRequestException ex)
         {
