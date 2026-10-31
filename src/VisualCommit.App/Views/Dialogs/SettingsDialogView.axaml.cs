@@ -39,6 +39,7 @@ public partial class SettingsDialogView : DialogView
         SettingsSection.Git => SettingsNavGit,
         SettingsSection.Tools => SettingsNavTools,
         SettingsSection.KeyboardShortcuts => SettingsNavShortcuts,
+        SettingsSection.Accounts => SettingsNavAccounts,
         _ => SettingsNavGeneral,
     };
 

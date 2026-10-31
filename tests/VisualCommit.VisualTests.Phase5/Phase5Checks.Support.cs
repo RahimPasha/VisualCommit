@@ -32,10 +32,11 @@ public abstract partial class Phase5Checks
 
     /// <summary>
     /// How long a wait for a change made outside the app (through <see cref="TempRepo"/>, seen by
-    /// the app's file watcher) may take: 30 seconds (phase 3's; a hot laptop has missed 5 before).
+    /// the app's file watcher) may take: phase 3's, 30 seconds at first (a hot laptop has missed 5
+    /// before), since D341 the driver's default, 60 s, as the default run's load needs (D237).
     /// The expected result is the state after the wait, not how long it took.
     /// </summary>
-    protected static readonly TimeSpan OutsideChangeTimeout = TimeSpan.FromSeconds(30);
+    protected static readonly TimeSpan OutsideChangeTimeout = ShellDriver.DefaultWaitTimeout;
 
     /// <summary>How long a network operation (a push or a pull through a file remote, the undo of a push) may take before a check gives up.</summary>
     protected static readonly TimeSpan NetworkTimeout = TimeSpan.FromSeconds(60);

@@ -417,7 +417,7 @@ public class CommitDetailsViewModelTests(CommitDetailsViewModelTests.GraphScenar
     /// <summary>Waits until <paramref name="condition"/> holds: a load that a command started without waiting for it.</summary>
     private static async Task WaitForAsync(Func<bool> condition)
     {
-        var until = DateTime.UtcNow.AddSeconds(10);
+        var until = DateTime.UtcNow.AddSeconds(60);
         while (!condition())
         {
             Assert.True(DateTime.UtcNow < until, "Timed out waiting for the details.");

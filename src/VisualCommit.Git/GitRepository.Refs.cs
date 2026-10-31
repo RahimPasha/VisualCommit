@@ -46,14 +46,14 @@ public sealed partial class GitRepository
         var headShaTask = ReadHeadShaAsync(cancellationToken);
         await Task.WhenAll((Task[])[refsTask, remotesTask, stashesTask, headRefTask, headShaTask]).ConfigureAwait(false);
 
-        var (remotes, refspecs) = await remotesTask.ConfigureAwait(false);
+        var (remotes, refspecs, remoteUrls) = await remotesTask.ConfigureAwait(false);
         var headRef = await headRefTask.ConfigureAwait(false);
         var refs = await ParseRefsAsync(await refsTask.ConfigureAwait(false), remotes, refspecs, headRef, cancellationToken).ConfigureAwait(false);
         var stashes = ParseStashes(await stashesTask.ConfigureAwait(false));
 
         var branchName = headRef is null ? null : headRef.StartsWith(HeadsPrefix, StringComparison.Ordinal) ? headRef[HeadsPrefix.Length..] : headRef;
         var head = new HeadState(branchName, HeadCommit(refs, await headShaTask.ConfigureAwait(false)));
-        return new RepoRefs(head, refs, stashes, remotes) { Refspecs = refspecs };
+        return new RepoRefs(head, refs, stashes, remotes) { Refspecs = refspecs, RemoteUrls = remoteUrls };
     }
 
     public async Task<FetchRefspecs?> ReadFetchRefspecsAsync(CancellationToken cancellationToken = default) =>
@@ -76,14 +76,18 @@ public sealed partial class GitRepository
     /// warning names the line), and a line git takes that names no source
     /// (<c>:refs/remotes/origin/x</c>). An empty value, which git takes and which fetches into
     /// <c>FETCH_HEAD</c> only, maps nothing and is not logged. Exit 1 is no remote and no line.
+    /// The <c>.url</c> and <c>.pushurl</c> values the same read returns are kept as they are, in
+    /// its order, for the hosting's bound URLs (docs/phase-7a-design.md 1.2); a key without a value
+    /// gives none.
     /// </summary>
-    private async Task<(List<string> Remotes, FetchRefspecs Refspecs)> ReadRemoteKeysAsync(CancellationToken cancellationToken)
+    private async Task<(List<string> Remotes, FetchRefspecs Refspecs, List<RemoteUrl> Urls)> ReadRemoteKeysAsync(CancellationToken cancellationToken)
     {
         const string Prefix = "remote.";
         var command = Read("config", "--null", "--get-regexp", @"^remote\.");
         var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
         var names = new HashSet<string>(StringComparer.Ordinal);
         var lines = new List<(string Remote, string Value)>();
+        var urls = new List<RemoteUrl>();
         if (result.ExitCode != 1)
         {
             foreach (var entry in result.EnsureSuccess(command).StandardOutput.Split('\0', StringSplitOptions.RemoveEmptyEntries))
@@ -113,12 +117,16 @@ public sealed partial class GitRepository
 
                     lines.Add((name, value));
                 }
+                else if (newline >= 0 && key[(dot + 1)..] is "url" or "pushurl")
+                {
+                    urls.Add(new RemoteUrl(name, entry[(newline + 1)..], IsPushUrl: key[(dot + 1)..] == "pushurl"));
+                }
             }
         }
 
         var remotes = names.ToList();
         remotes.Sort(StringComparer.Ordinal);
-        return (remotes, FetchRefspecs.Parse(lines));
+        return (remotes, FetchRefspecs.Parse(lines), urls);
     }
 
     /// <summary>

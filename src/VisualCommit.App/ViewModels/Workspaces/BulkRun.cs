@@ -430,6 +430,13 @@ public sealed class BulkRun
             }
 
             row.Result = result;
+
+            // A refused sign-in makes the run's kept answers stale (ruling 9): its next prompt asks again.
+            if (result.Failure?.Kind == GitFailureKind.AuthenticationFailed)
+            {
+                PromptGroup.ForgetAnswers();
+            }
+
             row.State = BulkRowState.Ended;
             if (repository.Queue.Current is { IsBackground: false })
             {

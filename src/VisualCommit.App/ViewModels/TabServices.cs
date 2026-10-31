@@ -10,6 +10,7 @@ using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 using VisualCommit.Core.Undo;
 using VisualCommit.Core.Workspaces;
+using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels;
 
@@ -35,7 +36,8 @@ public sealed class TabServices
         IWorkspaceStore? workspaces = null,
         IGitConfiguration? gitSettings = null,
         ToolCatalogues? tools = null,
-        TimeProvider? readClock = null)
+        TimeProvider? readClock = null,
+        IHostingSession? hosting = null)
     {
         ArgumentNullException.ThrowIfNull(repositories);
         ArgumentNullException.ThrowIfNull(folders);
@@ -69,6 +71,9 @@ public sealed class TabServices
         GitSettings = gitSettings;
         Tools = tools;
         ReadClock = readClock ?? Clock;
+
+        // Phase 7a (docs/phase-7a-design.md 1.7): the session's hosting.
+        Hosting = hosting ?? NullHostingSession.Instance;
         OpenRepositories = new OpenRepositories(this);
         BulkSlots = new BulkSlots();
         WorkspaceCommands = new WorkspaceCommands(this);
@@ -183,6 +188,19 @@ public sealed class TabServices
     public TimeProvider ReadClock { get; }
 
     /// <summary>
+    /// The session's hosting (docs/phase-7a-design.md 1.5, 1.7): the GitHub account, recognition
+    /// and the bindings of git's credentials. <see cref="NullHostingSession"/> unless the session
+    /// gives one: GitHub off.
+    /// </summary>
+    public IHostingSession Hosting { get; }
+
+    /// <summary>
+    /// Signs in to GitHub (1.7): set by the window, answers whether an account is signed in
+    /// afterwards; null without a window.
+    /// </summary>
+    public Func<Task<bool>>? SignInToGitHub { get; set; }
+
+    /// <summary>
     /// Whether a file exists on disk, called off the UI thread only (D59): Open in editor's check of
     /// its file (docs/phase-6-design.md 12.1) and the open diff's check of its working-tree file,
     /// which the diff's menu and the palette's items read (5.5). A file on a share that does not
@@ -220,6 +238,9 @@ public enum SettingsSection
     Git,
     Tools,
     KeyboardShortcuts,
+
+    /// <summary>The GitHub account (D256, docs/phase-7a-design.md 1.7): the last section.</summary>
+    Accounts,
 }
 
 /// <summary>A repository in the welcome page's recent list.</summary>

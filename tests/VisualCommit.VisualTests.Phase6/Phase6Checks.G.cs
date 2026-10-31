@@ -307,33 +307,24 @@ public sealed partial class Phase6ChecksG : Phase6Checks
     }
 
     /// <summary>
-    /// Check G23, part B (steps 9 to 15): the pull's check inside its integration (design 9.10) on
-    /// IG1, a branch only ahead of its upstream with a local merge whose side branch starts at a
-    /// commit that tracks the file: refused under <c>pull.rebase</c> <c>merges</c> and <c>true</c>
-    /// through the branch points (9.6's (5) and (6)); a merge whose source adds nothing HEAD lacks let
-    /// through; a diverged upstream's merge refused; under <c>pull.ff=only</c> git's own refusal.
+    /// Check G23, part B, steps 9 to 11 (D264, D283: part B is three tests of at most two pulls):
+    /// the pull's check inside its integration (design 9.10) on IG1, a branch only ahead of its
+    /// upstream with a local merge whose side branch starts at a commit that tracks the file:
+    /// refused under <c>pull.rebase</c> <c>merges</c> and <c>true</c> through the branch points
+    /// (9.6's (5) and (6)).
     /// </summary>
     [AvaloniaFact]
-    public async Task Check_G23_pull_refused_inside_the_integration()
+    public async Task Check_G23_pull_rebase_refused_inside_the_integration()
     {
         using var repo = await Scenarios.IgnoredAsync();
 
         // Step 9: IG1 built before the app starts (GD7), pull.rebase = merges in .git/config.
-        var side = (await repo.GitAsync(PartG.SideStartCommitTree)).StandardOutput.Trim();
-        Assert.Equal(PartG.SideStartSha, side);
-        await repo.CreateBranchAsync(PartG.SideBranch, side);
-        Assert.Equal(PartG.SideMergeSha, await repo.MergeAsync(PartG.SideBranch));
+        await BuildIg1Async(repo);
         await repo.ConfigAsync("pull.rebase", "merges");
         using var data = new TempDirectory("data");
         using var app = await OpenAsync(data, repo);
         var exact = await repo.ExactStateAsync();
-        AssertGraph(app, PartG.Ig1, PartG.Ig1Lanes, showsDate: false);
-        AssertDashedLines(app, PartG.Ig1Dashes);
-        AssertLeftPanel(app, PartG.Ig1Panel);
-        AssertBranch(app, "main");
-        AssertEnabledToolTip(app, "PullButton", PartG.PullFromOriginMain);
-        Assert.Equal(PartG.SecretLocal, WorkingFile(repo, "secret.env"));
-        AssertNothingToUndo(app);
+        AssertIg1Opened(app, repo, PartG.Ig1Panel, PartG.PullFromOriginMain);
 
         // Step 10: Pull under pull.rebase = merges: the rebase keeping merges refused (TR6).
         var mark = app.LogMark();
@@ -367,13 +358,31 @@ public sealed partial class Phase6ChecksG : Phase6Checks
         await AssertPullRefusedAsync(app, repo, PartG.IgnoredFileInTheWayOf("rebase"), exact);
         await CloseDialogAsync(app);
 
-        // Step 12: pull.rebase unset: the merge of origin/main, which adds nothing, goes on (TR7, TG11).
-        await ConfigOutsideAsync(app, repo, "--unset", "pull.rebase");
-        mark = app.LogMark();
-        calls = app.GitCalls().Count;
+        await AssertG23PartBUnchangedAsync(app, repo, exact);
+    }
+
+    /// <summary>
+    /// Check G23, part B, steps 9 and 12 (D264, D283): on IG1 with <c>pull.rebase</c> unset, a
+    /// merge whose source adds nothing HEAD lacks is let through.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Check_G23_pull_merge_that_adds_nothing_goes_on()
+    {
+        using var repo = await Scenarios.IgnoredAsync();
+
+        // Step 9: IG1 built before the app starts (GD7).
+        await BuildIg1Async(repo);
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo);
+        var exact = await repo.ExactStateAsync();
+        AssertIg1Opened(app, repo, PartG.Ig1Panel, PartG.PullFromOriginMain);
+
+        // Step 12: pull.rebase unset (never set here): the merge of origin/main, which adds nothing, goes on (TR7, TG11).
+        var mark = app.LogMark();
+        var calls = app.GitCalls().Count;
         app.Click(ToolbarButton(app, "PullButton"));
         await WaitForSuccessAsync(app, repo, PartG.PullTitle, mark, NetworkTimeout);
-        fetch = AssertPullConfigReads(app, calls, (PartG.PullFfRead, 1, string.Empty), (PartG.BranchMainRebaseRead, 1, string.Empty), (PartG.PullRebaseRead, 1, string.Empty));
+        var fetch = AssertPullConfigReads(app, calls, (PartG.PullFfRead, 1, string.Empty), (PartG.BranchMainRebaseRead, 1, string.Empty), (PartG.PullRebaseRead, 1, string.Empty));
         await AssertQuietFetchAsync(fetch);
         var pull = OperationCalls(app, calls, PartG.FetchOriginCommand);
         var at = AssertReadsInOrder(pull, pull.FindIndex(call => call.CommandText == PartG.FetchOriginCommand), new ExpectedRead(PartG.HeadRead, 0, PartG.SideMergeSha), PartG.Tr7Added);
@@ -387,23 +396,39 @@ public sealed partial class Phase6ChecksG : Phase6Checks
         Assert.Equal(exact, await repo.ExactStateAsync());
         AssertNothingToUndo(app);
 
-        // Step 13: main tracks origin/vendor (IG1v): the merge of vendor's tip refused (TR8).
-        await ConfigOutsideAsync(app, repo, "branch.main.merge", "refs/heads/vendor");
-        await app.WaitForAsync(
-            () => Avalonia.Controls.ToolTip.GetTip(ToolbarButton(app, "PullButton")) as string == PartG.PullFromOriginVendor,
-            $"Pull's tooltip to be \"{PartG.PullFromOriginVendor}\"",
-            OutsideChangeTimeout);
+        await AssertG23PartBUnchangedAsync(app, repo, exact);
+    }
+
+    /// <summary>
+    /// Check G23, part B, steps 9, 13 and 14 (D264, D283): on IG1v, main tracking origin/vendor
+    /// (written before the start), a diverged upstream's merge refused; under <c>pull.ff=only</c>
+    /// git's own refusal.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Check_G23_pull_merge_refused_then_ff_only_refused_by_git()
+    {
+        using var repo = await Scenarios.IgnoredAsync();
+
+        // Step 9 on IG1v: IG1 built before the app starts (GD7), branch.main.merge = refs/heads/vendor in .git/config.
+        await BuildIg1Async(repo);
+        await repo.ConfigAsync("branch.main.merge", "refs/heads/vendor");
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo);
+        var exact = await repo.ExactStateAsync();
+        AssertIg1Opened(app, repo, PartG.Ig1vPanel, PartG.PullFromOriginVendor);
+
+        // Step 13: main tracks origin/vendor (IG1v, written before the start): the merge of vendor's tip refused (TR8).
         AssertLeftPanel(app, PartG.Ig1vPanel);
         AssertGraph(app, PartG.Ig1, PartG.Ig1Lanes, showsDate: false);
-        mark = app.LogMark();
-        calls = app.GitCalls().Count;
+        var mark = app.LogMark();
+        var calls = app.GitCalls().Count;
         app.Click(ToolbarButton(app, "PullButton"));
         await WaitForFailureAsync(app, repo, PartG.PullTitle, mark, NetworkTimeout);
         Shot(app, "g23h-pull-merge-blocked");
-        fetch = AssertPullConfigReads(app, calls, (PartG.PullFfRead, 1, string.Empty), (PartG.BranchMainRebaseRead, 1, string.Empty), (PartG.PullRebaseRead, 1, string.Empty));
+        var fetch = AssertPullConfigReads(app, calls, (PartG.PullFfRead, 1, string.Empty), (PartG.BranchMainRebaseRead, 1, string.Empty), (PartG.PullRebaseRead, 1, string.Empty));
         await AssertQuietFetchAsync(fetch);
         AssertFetchHeadMarksVendor(repo);
-        pull = OperationCalls(app, calls, PartG.FetchOriginCommand);
+        var pull = OperationCalls(app, calls, PartG.FetchOriginCommand);
         AssertReadsInOrder(pull, pull.FindIndex(call => call.CommandText == PartG.FetchOriginCommand), [new ExpectedRead(PartG.HeadRead, 0, PartG.SideMergeSha), .. PartG.Tr8]);
         await AssertNoWriteAsync(app, repo, calls, []);
         await AssertPullRefusedAsync(app, repo, PartG.IgnoredFileInTheWayOf("merge"), exact);
@@ -419,7 +444,7 @@ public sealed partial class Phase6ChecksG : Phase6Checks
         fetch = AssertPullConfigReads(app, calls, (PartG.PullFfRead, 0, "only"), (PartG.PullFfBoolRead, 128, string.Empty), (PartG.BranchMainRebaseRead, 1, string.Empty), (PartG.PullRebaseRead, 1, string.Empty));
         await AssertQuietFetchAsync(fetch);
         pull = OperationCalls(app, calls, PartG.FetchOriginCommand);
-        at = AssertReadsInOrder(pull, pull.FindIndex(call => call.CommandText == PartG.FetchOriginCommand), [new ExpectedRead(PartG.HeadRead, 0, PartG.SideMergeSha), .. PartG.Tr8, PartG.Tr9Diverged]);
+        var at = AssertReadsInOrder(pull, pull.FindIndex(call => call.CommandText == PartG.FetchOriginCommand), [new ExpectedRead(PartG.HeadRead, 0, PartG.SideMergeSha), .. PartG.Tr8, PartG.Tr9Diverged]);
         var fastForward = pull[IndexOf(pull, PartG.PullFastForwardCommand, at)];
         Assert.True(fastForward.ExitCode == 128, $"\"{fastForward.CommandText}\" exited {fastForward.ExitCode}; the report says 128.\n{fastForward.StandardError}");
         await AssertGitPrintedAsync(fastForward.StandardOutput, [], null, "The fast-forward's standard output");
@@ -431,6 +456,33 @@ public sealed partial class Phase6ChecksG : Phase6Checks
         AssertNoClippedText(app);
         await CloseDialogAsync(app);
 
+        await AssertG23PartBUnchangedAsync(app, repo, exact);
+    }
+
+    /// <summary>G23 part B's step 9 before the app starts: IG1 built on "ignored" (GD7), the side branch merged into main.</summary>
+    private static async Task BuildIg1Async(TempRepo repo)
+    {
+        var side = (await repo.GitAsync(PartG.SideStartCommitTree)).StandardOutput.Trim();
+        Assert.Equal(PartG.SideStartSha, side);
+        await repo.CreateBranchAsync(PartG.SideBranch, side);
+        Assert.Equal(PartG.SideMergeSha, await repo.MergeAsync(PartG.SideBranch));
+    }
+
+    /// <summary>G23 part B's step 9 once the app has opened IG1: its graph and dashed lines, the left panel <paramref name="panel"/>, main checked out, Pull's tooltip <paramref name="pullTip"/>, the ignored file and nothing to undo.</summary>
+    private static void AssertIg1Opened(ShellDriver app, TempRepo repo, IReadOnlyList<string> panel, string pullTip)
+    {
+        AssertGraph(app, PartG.Ig1, PartG.Ig1Lanes, showsDate: false);
+        AssertDashedLines(app, PartG.Ig1Dashes);
+        AssertLeftPanel(app, panel);
+        AssertBranch(app, "main");
+        AssertEnabledToolTip(app, "PullButton", pullTip);
+        Assert.Equal(PartG.SecretLocal, WorkingFile(repo, "secret.env"));
+        AssertNothingToUndo(app);
+    }
+
+    /// <summary>G23 part B's step 15: nothing changed since step 9 (<paramref name="exact"/>): no backup, nothing in progress, the ignored file kept, nothing to undo.</summary>
+    private static async Task AssertG23PartBUnchangedAsync(ShellDriver app, TempRepo repo, string exact)
+    {
         // Step 15: nothing changed in the whole part.
         Assert.Equal(exact, await repo.ExactStateAsync());
         await AssertNoBackupAsync(repo);

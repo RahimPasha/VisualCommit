@@ -21,6 +21,7 @@ public partial class LeftPanelView : UserControl
         InitializeComponent();
         RefList.AddHandler(ContextRequestedEvent, OnContextRequested);
         RefList.AddHandler(DoubleTappedEvent, OnDoubleTapped, handledEventsToo: true);
+        RefList.AddHandler(Button.ClickEvent, OnRowClicked);
     }
 
     /// <summary>
@@ -66,6 +67,21 @@ public partial class LeftPanelView : UserControl
 
         var (position, openedBy) = ContextMenuRequests.Where(e, button);
         e.Handled = repository.OpenRefRowMenu(layer, row, position, openedBy);
+    }
+
+    /// <summary>
+    /// A click on the sign-in or "more" row of the "Pull requests" section (docs/phase-7a-design.md
+    /// 10.3): the repository signs in or opens the list in the browser. Its command has already
+    /// done the panel's part (nothing); the other rows' clicks are the panel's alone.
+    /// </summary>
+    private void OnRowClicked(object? sender, RoutedEventArgs e)
+    {
+        if (e.Source is Button { DataContext: PullRequestMessageRow { CanActivate: true } row }
+            && ContextMenuRequests.ActiveRepository(this) is (_, { } repository)
+            && ReferenceEquals(repository.LeftPanel, DataContext))
+        {
+            repository.ActivatePullRequestMessage(row);
+        }
     }
 
     /// <summary>

@@ -265,6 +265,37 @@ public class WorkingChangesInProgressTests
     }
 
     [Fact]
+    public void A_stop_whose_message_git_has_not_written_yet_is_filled_at_its_next_status()
+    {
+        // Git names the stopped commit (rebase-merge/done, MERGE_HEAD) before it writes the
+        // message: a status read in between finds none (the first attempt of CI run 41172878322).
+        var host = new FakeHost();
+        var panel = Panel(host);
+        panel.Update(Status([], [Conflicted], RebaseStop), hasHead: true);
+        Assert.Equal((string.Empty, string.Empty), (panel.Summary, panel.Description));
+
+        host.OperationMessage = "First change\n";
+        panel.Update(Status([], [Conflicted], RebaseStop), hasHead: true);
+        Assert.Equal(("First change", string.Empty), (panel.Summary, panel.Description));
+        Assert.Equal([RebaseStop, RebaseStop], host.ReadFor);
+
+        // Found, it is the stop's message: cleared by the user, it stays clear.
+        panel.Summary = string.Empty;
+        panel.Update(Status([], [Conflicted], RebaseStop), hasHead: true);
+        Assert.Equal(string.Empty, panel.Summary);
+        Assert.Equal(2, host.ReadFor.Count);
+
+        // A merge whose MERGE_MSG is not there yet the same.
+        host.OperationMessage = null;
+        panel.Update(Status([], [Conflicted], Merge), hasHead: true);
+        Assert.Equal(string.Empty, panel.Summary);
+        host.OperationMessage = "Merge branch 'feature/conflict'\n";
+        panel.Update(Status([], [Conflicted], Merge), hasHead: true);
+        Assert.Equal(("Merge branch 'feature/conflict'", string.Empty), (panel.Summary, panel.Description));
+        Assert.Equal([RebaseStop, RebaseStop, Merge, Merge], host.ReadFor);
+    }
+
+    [Fact]
     public void A_list_paused_between_commits_and_git_am_fill_nothing()
     {
         var host = new FakeHost { OperationMessage = "Something\n" };

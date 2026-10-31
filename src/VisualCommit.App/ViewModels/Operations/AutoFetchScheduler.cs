@@ -157,7 +157,7 @@ public sealed class AutoFetchScheduler : IDisposable
             return;
         }
 
-        if (repository.Queue.TryStartInBackground(CreateOperation(repository.Repository)))
+        if (repository.Queue.TryStartInBackground(CreateOperation(repository.Repository, repository.Hosting.Bindings)))
         {
             // A failing remote is tried again one interval later, not at every tick.
             tracked.LastFetch = now;
@@ -179,8 +179,10 @@ public sealed class AutoFetchScheduler : IDisposable
     /// The auto-fetch (2.17): 2.16's fetch of every remote, each call with
     /// <c>--no-auto-maintenance</c> (D109) and <see cref="NetworkTimeout"/>, as a background
     /// network operation that denies every prompt and refreshes the refs afterwards.
+    /// <paramref name="bindings"/> are the tab's URLs whose credentials come from the hosting
+    /// account (docs/phase-7a-design.md 1.7, 4.7), which take the account's token without a prompt.
     /// </summary>
-    public static GitOperation CreateOperation(IGitRepository repository)
+    public static GitOperation CreateOperation(IGitRepository repository, IReadOnlyList<CredentialBinding>? bindings = null)
     {
         ArgumentNullException.ThrowIfNull(repository);
         return new GitOperation(
@@ -197,6 +199,9 @@ public sealed class AutoFetchScheduler : IDisposable
         {
             IsBackground = true,
             Prompts = PromptMode.Deny,
+
+            // Bound URLs take the account's token and still never prompt (D255, D79).
+            CredentialBindings = bindings ?? [],
         };
     }
 

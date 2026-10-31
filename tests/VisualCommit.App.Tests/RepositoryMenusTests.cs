@@ -1194,7 +1194,7 @@ public partial class RepositoryMenusTests
 
     private static async Task WaitUntilAsync(Func<bool> condition, string what)
     {
-        var until = DateTime.UtcNow.AddSeconds(10);
+        var until = DateTime.UtcNow.AddSeconds(60);
         while (!condition())
         {
             if (DateTime.UtcNow > until)

@@ -78,7 +78,7 @@ public class RepositoryOperationsConflictsTests
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
         await app.WaitForRepositoryAsync();
         var repository = app.Session.Shell.ActiveTab.Repository!;
-        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read");
         repository.OpenResolver(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted));
         await app.WaitForResolverAsync("notes.txt");
         var resolver = repository.Resolver;
@@ -120,7 +120,7 @@ public class RepositoryOperationsConflictsTests
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
         await app.WaitForRepositoryAsync();
         var repository = app.Session.Shell.ActiveTab.Repository!;
-        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read");
         repository.OpenResolver(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted));
         await app.WaitForResolverAsync("notes.txt");
         var resolver = repository.Resolver;
@@ -139,7 +139,7 @@ public class RepositoryOperationsConflictsTests
 
         // Going ahead, the operation finds the file changed and writes nothing; 7.2 asks.
         markers.ConfirmCommand.Execute(null);
-        await app.WaitForAsync(() => app.Session.Services.DialogHost.Current is ConfirmationViewModel { Title: "notes.txt changed on disk." }, "the changed-on-disk question", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => app.Session.Services.DialogHost.Current is ConfirmationViewModel { Title: "notes.txt changed on disk." }, "the changed-on-disk question");
         var changed = app.Dialog<ConfirmationViewModel>();
         Assert.Equal("resolved in an editor\n", Read(repo, "notes.txt"));
 
@@ -217,11 +217,11 @@ public class RepositoryOperationsConflictsTests
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
         await app.WaitForRepositoryAsync();
         var repository = app.Session.Shell.ActiveTab.Repository!;
-        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read");
         repository.OpenResolver(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted));
         await app.WaitForResolverAsync("notes.txt");
         var resolver = repository.Resolver;
-        await app.WaitForAsync(() => resolver.RunMergeToolCommand.CanExecute(null), "the resolver's merge tool", TimeSpan.FromSeconds(10));
+        await app.WaitForAsync(() => resolver.RunMergeToolCommand.CanExecute(null), "the resolver's merge tool");
         resolver.Choose(0, ConflictChoice.UseOurs);
         Assert.True(resolver.IsModified);
 
@@ -259,7 +259,7 @@ public class RepositoryOperationsConflictsTests
         {
             await app.WaitForRepositoryAsync();
             var repository = app.Session.Shell.ActiveTab.Repository!;
-            await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+            await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read");
             var notes = Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted);
 
             // The file menu's "Open in merge tool" with the resolver closed; then a click on the file.
@@ -317,7 +317,7 @@ public class RepositoryOperationsConflictsTests
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
         await app.WaitForRepositoryAsync();
         var repository = app.Session.Shell.ActiveTab.Repository!;
-        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1 && repository.Refs is not null, "the conflict read", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1 && repository.Refs is not null, "the conflict read");
         repository.OpenResolver(Assert.Single(repository.Status.Unstaged, file => file.Kind == FileChangeKind.Conflicted));
         await app.WaitForResolverAsync("notes.txt");
 
@@ -347,7 +347,7 @@ public class RepositoryOperationsConflictsTests
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
         await app.WaitForRepositoryAsync();
         var repository = app.Session.Shell.ActiveTab.Repository!;
-        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 2, "the conflicts read", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 2, "the conflicts read");
         repository.Changes.ShowTreeCommand.Execute(null);
 
         // The tree shows src/ > b.txt above a.txt (11.2: the stage list's order).

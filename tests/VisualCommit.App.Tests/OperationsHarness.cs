@@ -9,6 +9,7 @@ using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
 using VisualCommit.Core.Undo;
 using VisualCommit.Git;
+using VisualCommit.Hosting;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -126,12 +127,16 @@ internal sealed class OperationsHarness : IDisposable
     /// <see cref="Dialogs"/> to answer; a <see cref="ScriptedPromptHandler"/> answers without any.
     /// Null gives no broker, as <see cref="OpenAsync(TempRepo)"/>. Added by WP7-remotes.
     /// <paramref name="undoHistories"/> are the app session's undo histories, new ones when null.
+    /// <paramref name="hosting"/> is the tabs' hosting session (docs/phase-7a-design.md 4.1), also
+    /// the broker's credential source; null: none, as before. <paramref name="gitEnvironment"/> is
+    /// the session's git environment (D220), which the runner applies to every call and the broker
+    /// reads as what git already gets (4.6), as an app session hands them both; null: none.
     /// </summary>
-    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null, UndoHistories? undoHistories = null)
+    public static async Task<OperationsHarness> OpenAsync(TempRepo repo, Func<DialogHostViewModel, IGitPromptHandler>? prompts, Func<IGitRepository, IGitRepository>? wrap = null, ISessionStore? session = null, UndoHistories? undoHistories = null, IHostingSession? hosting = null, IReadOnlyDictionary<string, string?>? gitEnvironment = null)
     {
         ArgumentNullException.ThrowIfNull(repo);
         var calls = new GitCallLog();
-        IGitRepository git = await GitRepository.OpenAsync(new GitRunner(GitPath, calls), repo.Path, TestContext.Current.CancellationToken);
+        IGitRepository git = await GitRepository.OpenAsync(new GitRunner(GitPath, calls, environment: gitEnvironment), repo.Path, TestContext.Current.CancellationToken);
         git = wrap?.Invoke(git) ?? git;
         var log = new RecordingLog();
         var host = new DialogHostViewModel();
@@ -139,8 +144,8 @@ internal sealed class OperationsHarness : IDisposable
         var launcher = new FakeFileLauncher();
         var settings = new MainWindowViewModelTests.FakeSettings();
         var dates = new DateDisplay(TimeZoneInfo.Utc);
-        var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log);
-        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, session ?? new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls, undoHistories: undoHistories);
+        var broker = prompts is null ? null : PromptDialogs.CreateBroker(prompts(host), log, credentials: hosting, sessionEnvironment: gitEnvironment);
+        var services = new TabServices(new NoRepositories(), new NoFolders(), settings, session ?? new MemorySession(), dates, log, dialogs: host, prompts: broker, launcher: launcher, clipboard: clipboard, gitCalls: calls, undoHistories: undoHistories, hosting: hosting);
         var repository = new RepositoryViewModel(git, settings, dates, log, dialogs: host, services: services);
         var harness = new OperationsHarness(repo, repository, host, services, log, clipboard, launcher, calls) { _broker = broker as IDisposable };
         await repository.StartAsync();
@@ -155,6 +160,65 @@ internal sealed class OperationsHarness : IDisposable
 
     /// <summary>Waits until the repository's queue has nothing running or waiting.</summary>
     public Task WaitForIdleAsync() => Repository.Queue.WhenIdleAsync();
+
+    /// <summary>
+    /// Waits until the repository's watcher is quiet (<see cref="RepositoryViewModel.IsWatcherQuiet"/>):
+    /// no change it saw waits, and no refresh or status read runs. Polled every 15 ms, at most
+    /// <see cref="ShellDriver.DefaultWaitTimeout"/> (docs/phase-7a-design.md 5.3).
+    /// </summary>
+    /// <exception cref="TimeoutException">The watcher was still busy when the time was up.</exception>
+    public async Task WaitForWatcherQuietAsync()
+    {
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!Repository.IsWatcherQuiet)
+        {
+            if (waited.Elapsed > ShellDriver.DefaultWaitTimeout)
+            {
+                throw new TimeoutException($"Timed out after {ShellDriver.DefaultWaitTimeout.TotalSeconds:F0} s waiting for the repository watcher to be quiet.");
+            }
+
+            await Task.Delay(15, TestContext.Current.CancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Waits until the opening's clean-up has read the backups it might remove (docs/phase-4-design.md
+    /// 9 (b)): <see cref="ShellDriver.OpeningCleanUpRead"/> recorded outside every operation, or the
+    /// line saying that the read failed. <see cref="RepositoryViewModel.StartAsync"/> starts that read
+    /// once the first load is done and does not await it, and
+    /// <see cref="RepositoryViewModel.IsWatcherQuiet"/> does not cover it, so a step that marks its
+    /// calls right after the opening waits for it first: a read still running never straddles a mark
+    /// (S8, docs/phase-7a-design.md 5.3). Polled every 15 ms, at most <see cref="ShellDriver.DefaultWaitTimeout"/>.
+    /// </summary>
+    /// <exception cref="TimeoutException">Neither came in time.</exception>
+    public async Task WaitForOpeningCleanUpReadAsync()
+    {
+        var waited = System.Diagnostics.Stopwatch.StartNew();
+        while (!Calls.Snapshot().Any(call => call.OperationId is null && call.CommandText == ShellDriver.OpeningCleanUpRead)
+            && !Log.Messages.Any(message => message.EndsWith(": the backups to clean up could not be read; they stay.", StringComparison.Ordinal)))
+        {
+            if (waited.Elapsed > ShellDriver.DefaultWaitTimeout)
+            {
+                throw new TimeoutException($"Timed out after {ShellDriver.DefaultWaitTimeout.TotalSeconds:F0} s waiting for the opening's clean-up to read the backups.");
+            }
+
+            await Task.Delay(15, TestContext.Current.CancellationToken);
+        }
+    }
+
+    /// <summary>The mark of a step's git calls, the highest <see cref="GitCallRecord.Sequence"/> so far (0 for none), taken once the watcher is quiet (S8, <see cref="GitCallBudget"/>).</summary>
+    public async Task<long> QuietCallMarkAsync()
+    {
+        await WaitForWatcherQuietAsync();
+        return Calls.Snapshot().Select(call => call.Sequence).DefaultIfEmpty(0).Max();
+    }
+
+    /// <summary>The git calls after <paramref name="sequence"/>, read once the watcher is quiet again.</summary>
+    public async Task<IReadOnlyList<GitCallRecord>> QuietCallsSinceAsync(long sequence)
+    {
+        await WaitForWatcherQuietAsync();
+        return [.. Calls.Snapshot().Where(call => call.Sequence > sequence)];
+    }
 
     /// <summary>
     /// Fails the test with what the dialog script noted: answers that did not fit, dialogs that

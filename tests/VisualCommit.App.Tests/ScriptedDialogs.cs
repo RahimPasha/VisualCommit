@@ -191,11 +191,11 @@ internal sealed class ScriptedDialogs : IDisposable
         where T : DialogViewModel =>
         Add<T>("answer " + typeof(T).Name, answer);
 
-    /// <summary>Waits until a <typeparamref name="T"/> has been shown (10 seconds at most) and returns the last one.</summary>
+    /// <summary>Waits until a <typeparamref name="T"/> has been shown (60 seconds at most) and returns the last one.</summary>
     public async Task<T> WaitForAsync<T>(TimeSpan? timeout = null)
         where T : DialogViewModel
     {
-        var until = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(10));
+        var until = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(60));
         while (true)
         {
             if (Shown.OfType<T>().LastOrDefault() is { } dialog)

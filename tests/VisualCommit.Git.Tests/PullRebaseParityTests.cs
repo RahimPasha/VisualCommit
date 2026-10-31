@@ -95,13 +95,14 @@ public class PullRebaseSettingsParityTests
     public async Task The_chosen_rebase_ends_where_git_pull_rebase_ends(string settings, PullState state) =>
         await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), settings, PullIntegration.Rebase, leftOutByForkPoint: 0);
 
-    [Fact]
-    public async Task The_configured_pull_calls_the_callback_before_its_rebase_and_not_before_a_fast_forward()
+    [Theory]
+    [InlineData(PullState.Diverged)]
+    [InlineData(PullState.FastForward)]
+    public async Task The_configured_pull_calls_the_callback_before_its_rebase_and_not_before_a_fast_forward(PullState state)
     {
-        // PullParity checks the callback for every case; these two are the configured pull's
+        // PullParity checks the callback for every case; these two rows are the configured pull's
         // rebase and fast-forward with pull.rebase=true.
-        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(PullState.Diverged), "pull.rebase=true", PullIntegration.AsConfigured, leftOutByForkPoint: 0);
-        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(PullState.FastForward), "pull.rebase=true", PullIntegration.AsConfigured, leftOutByForkPoint: 0);
+        await PullParity.CompareAsync(await PullParityTemplates.SyncAsync(state), "pull.rebase=true", PullIntegration.AsConfigured, leftOutByForkPoint: 0);
     }
 }
 

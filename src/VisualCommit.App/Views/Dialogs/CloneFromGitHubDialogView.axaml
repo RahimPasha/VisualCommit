@@ -1,0 +1,126 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
+                  x:Class="VisualCommit.App.Views.Dialogs.CloneFromGitHubDialogView"
+                  x:DataType="vm:CloneFromGitHubDialogViewModel"
+                  AutomationProperties.AutomationId="CloneFromGitHubDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The repository browser "Clone from GitHub" (docs/phase-7a-design.md 9.4, D301): the pick
+       dialog's structure on the wide card (460), a filter box over the account's repositories, the
+       lines of the list's state under it, then Cancel and Choose. The filter takes the focus and is
+       enabled while loading; Enter confirms with a selection. -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="CloneFromGitHubCard" Classes="dialogCard wide">
+      <StackPanel>
+        <TextBlock Name="CloneFromGitHubTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="CloneFromGitHubTitle" />
+        <TextBox Name="CloneFromGitHubFilter"
+                 Classes="dialogBox"
+                 Text="{Binding Filter}"
+                 PlaceholderText="{x:Static ops:OperationTexts+CloneTexts.Filter}"
+                 AutomationProperties.AutomationId="CloneFromGitHubFilter"
+                 AutomationProperties.Name="{x:Static ops:OperationTexts+CloneTexts.Filter}" />
+        <Border Margin="0,8,0,0"
+                BorderBrush="{DynamicResource VcBorderBrush}"
+                BorderThickness="1"
+                CornerRadius="5"
+                Background="{DynamicResource VcWindowBackgroundBrush}">
+          <ListBox Name="CloneFromGitHubList"
+                   ItemsSource="{Binding Rows}"
+                   SelectedItem="{Binding Selected}"
+                   MaxHeight="232"
+                   MinHeight="58"
+                   Background="Transparent"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                   AutomationProperties.AutomationId="CloneFromGitHubList"
+                   AutomationProperties.Name="{Binding Title}">
+            <!-- The full name, then 12 apart the detail (flags and description) in the secondary
+                 colour at 11.5, cut at its end, hidden when there is none (a PickRowPanel). -->
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:GitHubRepositoryRow">
+                <local:PickRowPanel>
+                  <TextBlock Text="{Binding FullName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <TextBlock Name="CloneFromGitHubItemDetail"
+                             Text="{Binding Detail}"
+                             FontSize="11.5"
+                             Foreground="{DynamicResource VcTextSecondaryBrush}"
+                             TextTrimming="CharacterEllipsis"
+                             VerticalAlignment="Center"
+                             IsVisible="{Binding Detail, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                </local:PickRowPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </Border>
+        <TextBlock Name="CloneFromGitHubStatus"
+                   Classes="settingsNote"
+                   Text="{Binding StatusText}"
+                   IsVisible="{Binding ShowsStatus}"
+                   AutomationProperties.AutomationId="CloneFromGitHubStatus" />
+        <TextBlock Name="CloneFromGitHubError"
+                   Classes="dialogError"
+                   Text="{Binding ErrorText}"
+                   IsVisible="{Binding ShowsError}"
+                   AutomationProperties.AutomationId="CloneFromGitHubError" />
+        <TextBlock Name="CloneFromGitHubMore"
+                   Classes="settingsNote"
+                   Text="{Binding MoreText}"
+                   IsVisible="{Binding ShowsMore}"
+                   AutomationProperties.AutomationId="CloneFromGitHubMore" />
+        <TextBlock Name="CloneFromGitHubSso"
+                   Classes="settingsNote"
+                   Text="{Binding SsoText}"
+                   IsVisible="{Binding ShowsSso}"
+                   AutomationProperties.AutomationId="CloneFromGitHubSso" />
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="{x:Static ops:OperationTexts+CloneTexts.Cancel}"
+                  Command="{Binding CancelCommand}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="{x:Static ops:OperationTexts+CloneTexts.Cancel}" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="{x:Static ops:OperationTexts+CloneTexts.Choose}"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{x:Static ops:OperationTexts+CloneTexts.Choose}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+
+  <!-- Each item is a CloneFromGitHubItem named by the full name, its help text the detail and its
+       tooltip both; 28 high in the pick list's colours. -->
+  <local:DialogView.Styles>
+    <Style Selector="ListBox#CloneFromGitHubList ListBoxItem" x:DataType="vm:GitHubRepositoryRow">
+      <Setter Property="AutomationProperties.AutomationId" Value="CloneFromGitHubItem" />
+      <Setter Property="AutomationProperties.Name" Value="{Binding FullName}" />
+      <Setter Property="AutomationProperties.HelpText" Value="{Binding Detail}" />
+      <Setter Property="ToolTip.Tip" Value="{Binding ToolTip}" />
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="10,0" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="ListBox#CloneFromGitHubList ListBoxItem:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcHoverBackgroundBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox#CloneFromGitHubList ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource VcTextPrimaryBrush}" />
+    </Style>
+    <Style Selector="ListBox#CloneFromGitHubList ListBoxItem:selected:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+    <Style Selector="ListBox#CloneFromGitHubList ListBoxItem:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>

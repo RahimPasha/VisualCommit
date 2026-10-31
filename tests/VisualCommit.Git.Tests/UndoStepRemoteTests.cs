@@ -278,7 +278,7 @@ public class UndoStepRemoteTests
     }
 
     [Fact]
-    public async Task Deletions_on_a_remote_and_a_tag_push_are_undone_and_redone()
+    public async Task A_branch_deletion_on_a_remote_is_undone_and_redone()
     {
         using var repo = await UndoRepoAsync();
         var (repository, _) = await OpenDatedAsync(repo);
@@ -298,7 +298,16 @@ public class UndoStepRemoteTests
         Assert.Equal(start, await PictureAsync(repo));
         await RedoAsync(repository, deletion);
         Assert.Equal(remoteDeleted, await RemoteAsync(repo));
-        deletion = await UndoAsync(repository, deletion);
+        await UndoAsync(repository, deletion);
+        Assert.Equal(remoteStart, await RemoteAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_tag_push_is_undone_and_redone()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var remoteStart = await RemoteAsync(repo);
 
         await repo.AnnotatedTagAsync("v2", "Release 2");
         var tagObject = (await TargetAsync(repo, "refs/tags/v2"))!;
@@ -310,6 +319,20 @@ public class UndoStepRemoteTests
         Assert.Equal(remoteStart, await RemoteAsync(repo));
         await RedoAsync(repository, push);
         Assert.Equal(remoteTagged, await RemoteAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_tag_deletion_on_a_remote_is_undone_and_redone()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var remoteStart = await RemoteAsync(repo);
+
+        // v2 made and pushed by the tag push's own call, unrecorded: the remote as the tag push left it.
+        await repo.AnnotatedTagAsync("v2", "Release 2");
+        var tagObject = (await TargetAsync(repo, "refs/tags/v2"))!;
+        await repository.PushTagAsync("origin", "v2", NetworkOptions.None, TestCancelled);
+        var remoteTagged = await RemoteAsync(repo);
 
         var tagDeletion = await RecordAsync(repository, UndoScope.DeleteRemoteTag("v2", "origin"), async () =>
         {

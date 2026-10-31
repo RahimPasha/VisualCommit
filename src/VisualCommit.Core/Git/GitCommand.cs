@@ -79,8 +79,8 @@ public sealed class GitCommand
     /// (<c>https://user:token@host/x.git</c>) with <c>***</c>
     /// (<c>https://***@host/x.git</c>), as git does when it shows a URL. The user information is
     /// everything from <c>://</c> to the last <c>@</c> before the host ends (at the first
-    /// <c>/</c>, <c>?</c>, <c>#</c> or white space), so a password with an <c>@</c> in it is
-    /// hidden whole. An <c>@</c> in the path, or in <c>user@host:path</c>, is left alone.
+    /// <c>/</c>, <c>?</c>, <c>#</c>, white space or a control character: <see cref="EndsAuthority"/>),
+    /// so a password with an <c>@</c> in it is hidden whole. An <c>@</c> in the path, or in <c>user@host:path</c>, is left alone.
     /// </summary>
     public static string HideCredentials(string text) => ReplaceCredentials(text, "***@");
 
@@ -91,6 +91,15 @@ public sealed class GitCommand
     /// information is found as <see cref="HideCredentials"/> finds it.
     /// </summary>
     public static string RemoveCredentials(string text) => ReplaceCredentials(text, string.Empty);
+
+    /// <summary>
+    /// Whether <paramref name="c"/> ends a URL's authority where credentials are looked for: a
+    /// <c>/</c>, <c>?</c> or <c>#</c>, white space, or a control character, so that the <c>\0</c>
+    /// between <c>config --null</c>'s entries ends a value without a trailing <c>/</c>
+    /// (docs/phase-7a-design.md 4.2, 4.3). Public for the runner's cut, as Core grants no
+    /// <c>InternalsVisibleTo</c>.
+    /// </summary>
+    public static bool EndsAuthority(char c) => c is '/' or '?' or '#' || char.IsWhiteSpace(c) || char.IsControl(c);
 
     private static string ReplaceCredentials(string text, string replacement)
     {
@@ -108,7 +117,7 @@ public sealed class GitCommand
         {
             var authorityStart = schemeEnd + SchemeEnd.Length;
             var authorityEnd = authorityStart;
-            while (authorityEnd < text.Length && text[authorityEnd] is not ('/' or '?' or '#') && !char.IsWhiteSpace(text[authorityEnd]))
+            while (authorityEnd < text.Length && !EndsAuthority(text[authorityEnd]))
             {
                 authorityEnd++;
             }

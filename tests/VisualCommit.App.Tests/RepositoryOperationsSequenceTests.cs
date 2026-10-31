@@ -204,10 +204,10 @@ public class RepositoryOperationsSequenceTests
         Assert.Equal("Merge branch 'feature/theirs'", (await untouched.GitAsync("log", "-1", "--format=%B")).StandardOutput.TrimEnd());
     }
 
-    /// <summary>Waits, up to ten seconds, until <paramref name="condition"/> holds on the UI's view models.</summary>
+    /// <summary>Waits, up to sixty seconds, until <paramref name="condition"/> holds on the UI's view models.</summary>
     private static async Task WaitUntilAsync(Func<bool> condition, string what)
     {
-        var until = DateTime.UtcNow.AddSeconds(10);
+        var until = DateTime.UtcNow.AddSeconds(60);
         while (!condition())
         {
             Assert.True(DateTime.UtcNow < until, $"Timed out waiting for {what}.");

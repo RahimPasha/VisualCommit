@@ -12,6 +12,12 @@
 #   bash scripts/heavy-run.sh                                          the whole default run
 #   bash scripts/heavy-run.sh --project tests/VisualCommit.App.Tests
 #   VISUALCOMMIT_HEAVY_RUN_WAIT_SECONDS=600 bash scripts/heavy-run.sh --project tests/VisualCommit.Git.Tests
+# A run that names no project, solution or --max-parallel-test-modules of its own (the whole default
+# run) gets --max-parallel-test-modules 4: at most four test projects side by side, where dotnet test
+# would run as many as the machine has processors (eight on the laptop). Eleven projects of git
+# processes at eight at a time made a git call 5 to 15 times as long as alone and the hang watchdog
+# stop single tests past their 180 s (D343, which amends D237 for the laptop).
+#
 # The exit code is dotnet test's own. VISUALCOMMIT_HEAVY_RUN_WAIT_SECONDS=N gives up after N
 # seconds of waiting (0: at once; N is read as a decimal number, so 08 is 8) with exit code 75;
 # without it, the script waits as long as it takes. Exit code 1 means the script itself could not
@@ -55,6 +61,7 @@ set -euo pipefail
 
 poll_seconds=10
 give_up_status=75
+default_run_modules=4
 
 say() { printf 'heavy-run: %s\n' "$*" >&2; }
 fail() { printf 'heavy-run: %s\n' "$*" >&2; exit 1; }
@@ -89,6 +96,17 @@ shown="$lock"
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
+
+# The whole default run: no project, solution or module limit among the arguments (D343).
+whole_run=true
+for argument in "$@"; do
+  case "$argument" in
+    --project | --project=* | --solution | --solution=* | --max-parallel-test-modules | --max-parallel-test-modules=*) whole_run=false ;;
+  esac
+done
+if [ "$whole_run" = true ]; then
+  set -- --max-parallel-test-modules "$default_run_modules" ${1+"$@"}
+fi
 
 command_line="dotnet test"
 if [ "$#" -gt 0 ]; then

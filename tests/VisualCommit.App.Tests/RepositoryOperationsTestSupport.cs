@@ -49,20 +49,21 @@ internal static class RepositoryOperationsTestSupport
 
     /// <summary>
     /// How long a test in the window waits for an operation that runs several git commands in a row
-    /// (stash, check out, re-apply): 60 seconds, where a single step has the driver's 10. In a whole
-    /// default run, which keeps every processor busy, such a chain took more than 10 seconds (18
-    /// alone). The expected result is the state after the wait, not how long it took (as phase 3's
+    /// (stash, check out, re-apply): 60 seconds, set when a single step had the driver's 10 (the
+    /// driver's default too since D237). In a whole default run, which keeps every processor busy,
+    /// such a chain took more than 10 seconds (18 alone). The expected result is the state after the wait, not how long it took (as phase 3's
     /// OutsideChangeTimeout).
     /// </summary>
     public static readonly TimeSpan OperationChainTimeout = TimeSpan.FromSeconds(60);
 
     /// <summary>
     /// How long a test in the window waits for a write that saves a backup and then runs the
-    /// backups' clean-up (an abort, a reset, a discard; docs/phase-4-design.md section 9): 30
-    /// seconds, as phase 2's checks wait for a discard or a restore (<c>a7e9db3</c>). With the
-    /// default run's test processes side by side, 10 was not always enough (phase 5's baseline run).
+    /// backups' clean-up (an abort, a reset, a discard; docs/phase-4-design.md section 9): the
+    /// driver's default, 60 seconds, as phase 2's checks wait for a discard or a restore (30 at
+    /// first, <c>a7e9db3</c>; 60 since D237, and here since D341). With the default run's test
+    /// processes side by side, 10 was not always enough (phase 5's baseline run).
     /// </summary>
-    public static readonly TimeSpan WriteTimeout = TimeSpan.FromSeconds(30);
+    public static readonly TimeSpan WriteTimeout = ShellDriver.DefaultWaitTimeout;
 
     /// <summary>How many times the queue ran the operation <paramref name="title"/> to its end (its log line, 1.7).</summary>
     public static int Ran(OperationsHarness app, string title) =>

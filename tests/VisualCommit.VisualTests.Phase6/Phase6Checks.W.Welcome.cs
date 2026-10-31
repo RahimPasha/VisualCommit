@@ -41,7 +41,8 @@ public sealed partial class Phase6ChecksW
         var paths = new AppPaths(data.Path);
 
         // Step 1: a fresh data folder, no workspaces.json and no session; the app writes nothing before it starts.
-        using var app = ShellDriver.Start(data.Path, 1100, 700);
+        // The session's read clock is held (never moved, ruling 27): a pass ends only when its reads have.
+        using var app = ShellDriver.Start(data.Path, 1100, 700, readClock: new ManualTimeProvider());
         await app.WaitUntilReadyAsync();
         app.MoveToNeutral();
         var shot = Shot(app, PartW.W1aWelcomeWorkspaces);
@@ -196,16 +197,19 @@ public sealed partial class Phase6ChecksW
 
         // Step 8: the item "Web": its open dashboard is activated (D227), nothing else opens (D188).
         var item = app.ActiveWelcomeView.GetVisualDescendants().OfType<Button>().Single(button => button.Name == "WorkspaceItem");
+        logMark = app.LogMark();
         app.Click(item);
         app.Settle();
+        AssertNothingReads(app);
         strip = app.TabStrip();
         Assert.Equal(2, strip.Tabs.Count);
         AssertDashboardTab(app, strip, 0, PartW.Workspace, active: true);
         Assert.Equal(("RepoTab", PartW.NewTab, false), (strip.Tabs[1].AutomationId, strip.Tabs[1].Title, strip.Tabs[1].IsActive));
 
-        // Whether trigger 1 reads rows here depends on the real time since step 6 (the 10 s rule; W1
-        // has no read clock): no read is asserted either way, and the rows are read once any read ended.
+        // Every row was read 0 s before by the held read clock, so the activation starts no pass
+        // (trigger 1's 10 s rule, WD35).
         await WaitForAllRowsIdleAsync(app, OperationChainTimeout);
+        Assert.Empty(PassLines(app, logMark));
         AssertRows(app, copy, [.. PartW.WaOrder.Select(name => w0[name])], selected: "api");
         await app.WaitForAsync(() => app.FocusIsWithin(app.Find<ListBox>("DashboardList")), "the dashboard's list to have the keyboard focus");
         AssertTd(app, PartW.Workspace, PartW.Count(9));
@@ -246,7 +250,8 @@ public sealed partial class Phase6ChecksW
             [new TabState(null, PartW.WorkspaceId), new TabState(copy.PathOf("web-app")), new TabState(copy.PathOf("docs"))],
             0,
             1100,
-            700);
+            700,
+            readClock: new ManualTimeProvider());
         await app.WaitUntilReadyAsync();
         await app.WaitForDashboardReadAsync(timeout: OperationChainTimeout);
         var webApp = await app.WaitForTabOpenedAsync(copy.PathOf("web-app"), OperationChainTimeout);
@@ -272,7 +277,7 @@ public sealed partial class Phase6ChecksW
         Assert.Equal(PartW.Workspace, menu.Header);
 
         // Step 10: Add open tabs: the two rows appended in tab order, following their tabs with no read.
-        var calls = app.CallMark();
+        var calls = await app.QuietCallMarkAsync();
         var logMark = app.LogMark();
         app.ClickMenuItem(PartW.AddOpenTabs);
         app.Settle();
@@ -291,8 +296,12 @@ public sealed partial class Phase6ChecksW
         Assert.Empty(LinesWith(app, logMark, PartW.SummaryRead("web-app")));
         Assert.Empty(LinesWith(app, logMark, PartW.SummaryRead("docs")));
         Assert.Empty(PassLines(app, logMark));
-        var since = CallsInWorkspace(app, copy, calls);
-        Assert.True(since.Count == 0, "Add open tabs made git calls in the workspace's folders (3.5):\n" + string.Join('\n', since.Select(call => $"{call.CommandText} in {call.WorkingDirectory}")));
+        // S8: read once every watcher is quiet; web-app and docs have tabs, whose watchers may
+        // refresh for a write reported late: only whole refreshes there.
+        var since = await app.QuietCallsSinceAsync(calls, folder => copy.Names.Except(["web-app", "docs"]).Any(name => SameFolder(copy, copy.PathOf(name), folder)));
+        Assert.True(since.Count == 0, "Add open tabs made git calls in the folders of the rows without a tab (3.5):\n" + string.Join('\n', since.Select(call => $"{call.CommandText} in {call.WorkingDirectory}")));
+        GitCallBudget.AssertOnlyWholeRefreshes(CallsIn(app, copy, calls, "web-app"), "Add open tabs, in web-app's folder,");
+        GitCallBudget.AssertOnlyWholeRefreshes(CallsIn(app, copy, calls, "docs"), "Add open tabs, in docs' folder,");
         AssertWorkspacesFile(data, copy, PartW.WorkspaceId, PartW.Workspace, PartW.Wb10Order);
 
         // Step 11: the More menu again, read and closed with Esc; then Rename workspace…, its dialog read, "Web team" typed (WD16).

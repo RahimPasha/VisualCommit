@@ -1,0 +1,116 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:c="using:VisualCommit.App.Controls"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
+                  x:Class="VisualCommit.App.Views.Dialogs.SignInDialogView"
+                  x:DataType="vm:SignInDialogViewModel"
+                  AutomationProperties.AutomationId="SignInDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- "Add GitHub account" (docs/phase-7a-design.md 8.4): the help, the link to GitHub's page for a
+       new token, the masked token box, one line of state and the buttons. No "In {repo}" line. -->
+  <local:DialogView.Resources>
+    <!-- The link: ParentLinkButton's look (RightPanelView.axaml), reached by Tab. -->
+    <ControlTheme x:Key="SignInLinkButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </ControlTemplate>
+      </Setter>
+    </ControlTheme>
+  </local:DialogView.Resources>
+
+  <local:DialogView.Styles>
+    <Style Selector="TextBlock.promptLabel">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+      <Setter Property="FontSize" Value="12" />
+      <Setter Property="Margin" Value="0,12,0,4" />
+    </Style>
+    <!-- Underlined on pointer-over and while focused. -->
+    <Style Selector="Button.tokenLink:pointerover TextBlock, Button.tokenLink:focus TextBlock">
+      <Setter Property="TextDecorations" Value="Underline" />
+    </Style>
+  </local:DialogView.Styles>
+
+  <Panel Classes="dialogBackdrop">
+    <Border Name="SignInCard" Classes="dialogCard">
+      <StackPanel>
+        <TextBlock Name="DialogTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="DialogTitle" />
+        <TextBlock Name="SignInHelp"
+                   Classes="dialogText"
+                   Text="{x:Static ops:OperationTexts+AccountTexts.SignInHelp}"
+                   AutomationProperties.AutomationId="SignInHelp" />
+        <Button Name="SignInTokenLink"
+                Theme="{StaticResource SignInLinkButton}"
+                Classes="tokenLink"
+                HorizontalAlignment="Left"
+                Margin="0,6,0,0"
+                Command="{Binding OpenTokenPageCommand}"
+                ToolTip.Tip="{x:Static ops:OperationTexts+AccountTexts.SignInTokenLinkTip}"
+                AutomationProperties.AutomationId="SignInTokenLink"
+                AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.SignInTokenLink}">
+          <TextBlock Text="{x:Static ops:OperationTexts+AccountTexts.SignInTokenLink}" />
+        </Button>
+
+        <TextBlock Classes="promptLabel" Text="{x:Static ops:OperationTexts+AccountTexts.TokenLabel}" />
+        <c:SecretTextBox Name="SignInToken"
+                         Text="{Binding Token}"
+                         PasswordChar="{x:Static vm:PromptDialogViewModel.MaskCharacter}"
+                         IsEnabled="{Binding IsBoxEnabled}"
+                         AutomationProperties.AutomationId="SignInToken"
+                         AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.TokenLabel}" />
+        <TextBlock Name="SignInNoKeychain"
+                   Classes="dialogWarning"
+                   Text="{x:Static ops:OperationTexts+AccountTexts.NoKeychain}"
+                   IsVisible="{Binding ShowsNoKeychain}"
+                   AutomationProperties.AutomationId="SignInNoKeychain" />
+        <TextBlock Name="SignInChecking"
+                   Classes="secondary"
+                   Margin="0,6,0,0"
+                   TextWrapping="Wrap"
+                   Text="{x:Static ops:OperationTexts+AccountTexts.SignInChecking}"
+                   IsVisible="{Binding IsChecking}"
+                   AutomationProperties.AutomationId="SignInChecking" />
+        <TextBlock Name="SignInError"
+                   Classes="dialogError"
+                   Text="{Binding ErrorText}"
+                   IsVisible="{Binding ErrorText, Converter={x:Static ObjectConverters.IsNotNull}}"
+                   AutomationProperties.AutomationId="SignInError" />
+        <TextBlock Name="SignInSaveFailed"
+                   Classes="dialogWarning"
+                   Text="{Binding SaveFailedText}"
+                   IsVisible="{Binding IsSaveFailed}"
+                   AutomationProperties.AutomationId="SignInSaveFailed" />
+
+        <StackPanel Classes="dialogButtons">
+          <Button Name="CancelButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="{x:Static ops:OperationTexts+AccountTexts.Cancel}"
+                  Command="{Binding CancelCommand}"
+                  IsVisible="{Binding ShowsCancel}"
+                  AutomationProperties.AutomationId="CancelButton"
+                  AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.Cancel}" />
+          <Button Name="ConfirmButton"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="{Binding ConfirmText}"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{Binding ConfirmText}" />
+        </StackPanel>
+      </StackPanel>
+    </Border>
+  </Panel>
+</local:DialogView>

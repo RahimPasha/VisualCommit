@@ -130,9 +130,17 @@
 
             <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto" Margin="0,6,0,0">
               <TextBlock Grid.Row="0" Classes="label" Text="Author" />
-              <SelectableTextBlock Grid.Row="0" Grid.Column="1" Name="DetailsAuthor" Classes="value"
-                                   Text="{Binding AuthorText}"
-                                   AutomationProperties.AutomationId="DetailsAuthor" />
+              <!-- The author's GitHub avatar before the name (docs/phase-7a-design.md 11.3, D310): collapsed,
+                   it takes no room and the text has the cell as before; the code-behind shows it. -->
+              <DockPanel Grid.Row="0" Grid.Column="1">
+                <Ellipse Name="DetailsAuthorAvatar" DockPanel.Dock="Left" Width="16" Height="16"
+                         Margin="0,0,6,0" VerticalAlignment="Top" IsVisible="False"
+                         AutomationProperties.AutomationId="DetailsAuthorAvatar"
+                         AutomationProperties.Name="Author's avatar" />
+                <SelectableTextBlock Name="DetailsAuthor" Classes="value"
+                                     Text="{Binding AuthorText}"
+                                     AutomationProperties.AutomationId="DetailsAuthor" />
+              </DockPanel>
 
               <TextBlock Grid.Row="1" Classes="label" Text="Date" />
               <TextBlock Grid.Row="1" Grid.Column="1" Name="DetailsDate" Classes="value"

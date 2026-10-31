@@ -35,7 +35,7 @@ public class GraphAreaHooksTests
         await app.WaitForRepositoryAsync();
         var tab = app.Session.Shell.ActiveTab;
         var repository = tab.Repository!;
-        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.Status.Conflicts.Count == 1, "the conflict read");
 
         repository.IsWorkingRowSelected = true;
         var file = Assert.Single(repository.Status.Unstaged, candidate => candidate.Kind == FileChangeKind.Conflicted);
@@ -83,9 +83,8 @@ public class GraphAreaHooksTests
 
         await app.WaitForAsync(
             () => !Task.Run(() => repo.GitAsync("for-each-ref", "--format=%(refname)", "refs/visualcommit/backup/")).GetAwaiter().GetResult().StandardOutput.Contains("20250101", StringComparison.Ordinal),
-            "the backup of 2025-01-01 removed",
-            TimeSpan.FromSeconds(30));
-        await app.WaitForAsync(() => repository.Queue.Current is null, "the clean-up ended", TimeSpan.FromSeconds(30));
+            "the backup of 2025-01-01 removed");
+        await app.WaitForAsync(() => repository.Queue.Current is null, "the clean-up ended");
 
         var left = (await repo.GitAsync("for-each-ref", "--format=%(refname)", "refs/visualcommit/backup/")).StandardOutput.Trim();
         Assert.Equal(recent, left);
@@ -237,7 +236,7 @@ public class GraphAreaHooksTests
         using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700);
         await app.WaitForRepositoryAsync();
         var repository = app.Session.Shell.ActiveTab.Repository!;
-        await app.WaitForAsync(() => repository.HasWorkingChanges, "the working changes read", TimeSpan.FromSeconds(30));
+        await app.WaitForAsync(() => repository.HasWorkingChanges, "the working changes read");
 
         // A page in place of the graph, in the slot after the diff's and the resolver's (11.1).
         var page = new RecordingPage();

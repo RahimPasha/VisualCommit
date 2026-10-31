@@ -1,3 +1,5 @@
+using VisualCommit.Core.Hosting;
+
 namespace VisualCommit.Core.Operations;
 
 /// <summary>How an operation ended (phase 3 design 1.2, D95).</summary>
@@ -29,6 +31,13 @@ public sealed record OperationReport(OperationOutcome Outcome, string Message)
     /// something the user should know happened, though nothing failed and nothing conflicts.
     /// </summary>
     public bool IsWarning { get; init; }
+
+    /// <summary>
+    /// What the status bar offers beside a success's message (D317, docs/phase-7a-design.md 12.2:
+    /// "Open in browser" after a created pull request); the queue passes it on only when the report
+    /// is <see cref="OperationOutcome.Succeeded"/>.
+    /// </summary>
+    public OperationOffer? Offer { get; init; }
 
     public static OperationReport Done(string message) => new(OperationOutcome.Succeeded, message);
 
@@ -62,7 +71,28 @@ public sealed record OperationResult(OperationOutcome Outcome, string Message, G
 
     /// <summary>A success whose message the status bar shows in the warning colour (<see cref="OperationReport.Warning"/>).</summary>
     public bool IsWarning { get; init; }
+
+    /// <summary>
+    /// After a failed operation: the account whose token git erased through the app's helper
+    /// (<see cref="PromptScope.RefusedAccount"/>, ruling 4, docs/phase-7a-design.md 0.2), for the
+    /// error dialog. Null otherwise.
+    /// </summary>
+    public AccountKey? RefusedAccount { get; init; }
+
+    /// <summary>
+    /// After a succeeded operation whose report carried one (<see cref="OperationReport.Offer"/>,
+    /// D317): what the status bar offers beside its message. Null for every other result.
+    /// </summary>
+    public OperationOffer? Offer { get; init; }
 }
+
+/// <summary>
+/// A button the status bar shows beside an operation's success (D317, docs/phase-7a-design.md 12.2):
+/// its text and what it runs. General, so that no hosting type reaches Core or the status bar.
+/// </summary>
+/// <param name="Label">The button's text and name, "Open in browser".</param>
+/// <param name="Run">What a click runs, on the UI thread.</param>
+public sealed record OperationOffer(string Label, Func<Task> Run);
 
 /// <summary>What the status bar shows of the running operation.</summary>
 /// <param name="Title">The operation's title.</param>

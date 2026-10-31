@@ -292,8 +292,7 @@ public partial class Phase2Checks
     private static Task WaitForHeadAsync(ShellDriver app, TempRepo repo, string sha) =>
         app.WaitForAsync(
             () => app.Session.Shell.ActiveTab.Repository is { Graph: { IsComplete: true } graph } && graph.Count > 0 && graph.Refs.Head.Sha == sha,
-            $"HEAD at {sha[..7]} in the graph",
-            TimeSpan.FromSeconds(20));
+            $"HEAD at {sha[..7]} in the graph");
 
     private static async Task<List<string>> PorcelainAsync(TempRepo repo) =>
         [.. (await repo.GitAsync("status", "--porcelain", "--untracked-files=all")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)];

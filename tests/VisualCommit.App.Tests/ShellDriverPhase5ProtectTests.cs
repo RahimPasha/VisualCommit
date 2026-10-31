@@ -67,7 +67,7 @@ public class ShellDriverPhase5ProtectTests
         // The opening's read was 0 and 0; the untracked notes makes a read of 0 and 1 after the mark.
         var mark = app.LogMark();
         repo.WriteFile("notes", "my own notes\n");
-        await app.WaitForStatusReadAsync(0, 1, mark, timeout: TimeSpan.FromSeconds(30));
+        await app.WaitForStatusReadAsync(0, 1, mark);
         Assert.True(repository.Status.IsUntracked("notes"));
 
         // Only reads after the mark count: the opening's 0 and 0 is logged before it, and no read
@@ -80,7 +80,7 @@ public class ShellDriverPhase5ProtectTests
         mark = app.LogMark();
         File.Delete(Path.Combine(repo.Path, "notes"));
         repo.WriteFile("notes/today.txt", "today\n");
-        await app.WaitForStatusReadAsync(0, 1, mark, status => status.IsUntracked("notes/today.txt") && !status.IsUntracked("notes"), TimeSpan.FromSeconds(30));
+        await app.WaitForStatusReadAsync(0, 1, mark, status => status.IsUntracked("notes/today.txt") && !status.IsUntracked("notes"));
         Assert.True(repository.Status.IsUntracked("notes/today.txt"));
         Assert.False(repository.Status.IsUntracked("notes"));
     }

@@ -25,6 +25,9 @@ public class RepositoryWatcherTests
 
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(10);
 
+    /// <summary>How long to wait for a working-tree change, raised only once its ignore check, a call of git, has run: the run's load sets it (D237, D341).</summary>
+    private static readonly TimeSpan WorkingTreeTimeout = TimeSpan.FromSeconds(60);
+
     [Fact]
     public async Task A_commit_made_outside_the_app_raises_changed()
     {
@@ -68,7 +71,7 @@ public class RepositoryWatcherTests
         // would now rewrite it. The touch itself is reported once the ignore check has run, which
         // takes a call of git, slow on a busy machine; it is waited for, not timed.
         File.SetLastWriteTimeUtc(Path.Combine(repo.Path, "a.txt"), DateTime.UtcNow.AddMinutes(-5));
-        Assert.True(await changed.WaitForAsync(1, Timeout), "Touching a.txt was not reported.");
+        Assert.True(await changed.WaitForAsync(1, WorkingTreeTimeout), "Touching a.txt was not reported.");
         await Task.Delay(Settle, TestCancelled);
         changed.Reset();
         await repository.ReadStatusAsync(TestCancelled);
@@ -199,6 +202,76 @@ public class RepositoryWatcherTests
     }
 
     [Fact]
+    public async Task A_lag_reports_a_write_made_inside_a_pause_that_ended_before_it()
+    {
+        // R8's lag (D262): the pause is checked when the held event is delivered, late, as on
+        // macOS, so a write inside a pause that has ended by then counts as an outside change.
+        var lag = TimeSpan.FromSeconds(1);
+        using var folder = new TempDirectory("watch");
+        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, eventLag: lag);
+        var changed = new Counter(watcher);
+        watcher.Start();
+        var started = Stopwatch.StartNew();
+        long firstCounted = -1;
+        watcher.EventCounted = _ => Interlocked.CompareExchange(ref firstCounted, started.Elapsed.Ticks, -1);
+
+        using (watcher.Pause())
+        {
+            File.WriteAllText(folder.Combine("written-in-a-pause"), "x");
+        }
+
+        Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
+        Assert.True(changed.Last!.GitFolder);
+        var counted = TimeSpan.FromTicks(Interlocked.Read(ref firstCounted));
+        Assert.True(counted >= lag, $"The first event was counted {counted.TotalMilliseconds} ms after the stopwatch started, before the lag of {lag.TotalMilliseconds} ms.");
+    }
+
+    [Fact]
+    public async Task A_lagged_watcher_disposed_with_events_held_drops_them()
+    {
+        // The watcher's own counts tell what was held and what was delivered: Changed alone could
+        // not fail, since a delivery after Dispose would count nothing. The lag leaves a slow
+        // machine room between the write's event being held and the Dispose.
+        var lag = TimeSpan.FromSeconds(2);
+        using var folder = new TempDirectory("watch");
+        var log = new ListLog();
+        var watcher = new RepositoryWatcher(folder.Path, folder.Path, log, quietPeriod: Quiet, eventLag: lag);
+        var changed = new Counter(watcher);
+        watcher.Start();
+
+        File.WriteAllText(folder.Combine("held"), "x");
+        var waited = Stopwatch.StartNew();
+        while (watcher.HeldEvents == 0)
+        {
+            Assert.True(waited.Elapsed < Timeout, "The write's event was never held.");
+            await Task.Delay(15, TestCancelled);
+        }
+
+        watcher.Dispose();
+        Assert.True(watcher.DeliveredEvents == 0, $"A held event was delivered before the watcher was disposed, {waited.Elapsed.TotalMilliseconds:F0} ms after the write (the lag is {lag.TotalMilliseconds} ms).");
+
+        await Task.Delay(lag + Settle, TestCancelled);
+        Assert.True(watcher.DeliveredEvents == 0, $"{watcher.DeliveredEvents} of the {watcher.HeldEvents} held events were delivered after the watcher was disposed.");
+        Assert.Equal(0, changed.Count);
+        Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Error);
+    }
+
+    [Theory]
+    [InlineData("1500", 1500)]
+    [InlineData("0", 0)]
+    [InlineData("10000", 10_000)]
+    [InlineData("10001", 0)]
+    [InlineData("-1", 0)]
+    [InlineData("+5", 0)]
+    [InlineData(" 1500", 0)]
+    [InlineData("1.5", 0)]
+    [InlineData("abc", 0)]
+    [InlineData("", 0)]
+    [InlineData(null, 0)]
+    public void The_lag_variable_takes_whole_milliseconds_from_0_to_10000(string? value, int milliseconds) =>
+        Assert.Equal(TimeSpan.FromMilliseconds(milliseconds), GitRepository.ParseWatcherLag(value));
+
+    [Fact]
     public async Task A_linked_worktree_is_watched_through_the_common_folder_that_holds_its_git_folder()
     {
         using var common = new TempDirectory("common");
@@ -225,7 +298,7 @@ public class RepositoryWatcherTests
 
         repo.WriteFile("notes.txt", "A note\n");
 
-        Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
+        Assert.True(await changed.WaitForAsync(1, WorkingTreeTimeout), "Changed was not raised.");
         Assert.True(changed.Last!.WorkingTree);
         Assert.False(changed.Last.GitFolder);
     }
@@ -262,7 +335,7 @@ public class RepositoryWatcherTests
         Assert.Equal(0, changed.Count);
 
         repo.WriteFile("notes.txt", "A note\n");
-        Assert.True(await changed.WaitForAsync(1, Timeout), "A change to a file that is not ignored was not reported.");
+        Assert.True(await changed.WaitForAsync(1, WorkingTreeTimeout), "A change to a file that is not ignored was not reported.");
     }
 
     [Fact]
@@ -284,7 +357,7 @@ public class RepositoryWatcherTests
         await Task.Delay(Settle, TestCancelled);
         changed.Reset();
         repo.WriteFile("later.txt", "y\n");
-        Assert.True(await changed.WaitForAsync(1, Timeout), "A change after the pause was not reported.");
+        Assert.True(await changed.WaitForAsync(1, WorkingTreeTimeout), "A change after the pause was not reported.");
     }
 
     [Theory]

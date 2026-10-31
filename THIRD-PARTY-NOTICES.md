@@ -2,8 +2,8 @@
 
 VisualCommit includes work by others. This file lists what is copied into the repository's own
 source. The libraries the app is built on (Avalonia, the Inter typeface, CommunityToolkit.Mvvm,
-AvaloniaEdit, TextMateSharp with the grammars and themes of TextMateSharp.Grammars, and their
-dependencies, such as Onigwrap and Oniguruma) are fetched as packages and keep their own
+AvaloniaEdit, TextMateSharp with the grammars and themes of TextMateSharp.Grammars,
+Tmds.DBus.Protocol, and their dependencies, such as Onigwrap and Oniguruma) are fetched as packages and keep their own
 licences; the grammars and themes come from Visual Studio Code and keep theirs. A complete list
 for the installed app is added with the public release (phase 8, requirement R6).
 
@@ -32,8 +32,8 @@ OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 Some Lucide icons derive from the Feather project. Of the icons used here, these do: arrow-down,
 arrow-up, check, chevron-down, chevron-left, chevron-right, chevron-up, cloud, crosshair, download,
-ellipsis (Feather's more-horizontal), eye-off, folder, list, minus, moon, plus, rotate-cw, search,
-settings, tag, triangle-alert (Feather's alert-triangle) and x.
+ellipsis (Feather's more-horizontal), eye-off, folder, git-pull-request, list, minus, moon, plus,
+rotate-cw, search, settings, tag, triangle-alert (Feather's alert-triangle) and x.
 
 ```
 The MIT License (MIT)

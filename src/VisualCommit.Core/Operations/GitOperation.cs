@@ -106,6 +106,12 @@ public sealed record GitOperation(
     public PromptGroup? PromptGroup { get; init; }
 
     /// <summary>
+    /// The URLs whose credentials come from a hosting account (D255, docs/phase-7a-design.md 0.2):
+    /// the queue passes them to <see cref="IGitPromptBroker.Begin"/>. Empty (the default): none.
+    /// </summary>
+    public IReadOnlyList<CredentialBinding> CredentialBindings { get; init; } = [];
+
+    /// <summary>
     /// A local operation of more than one git call (stash, check out and re-apply; check out and
     /// merge; several cherry-picks): the "Finishing operations" dialog says that its remaining
     /// steps will not run when the user quits now (1.8).

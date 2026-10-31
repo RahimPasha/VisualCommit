@@ -4,6 +4,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App;
@@ -13,6 +14,8 @@ using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
+using VisualCommit.Hosting;
+using VisualCommit.Testing.Hosting;
 
 namespace VisualCommit.Testing.Headless;
 
@@ -41,15 +44,34 @@ public sealed partial class ShellDriver : IDisposable
     /// </summary>
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(15);
 
+    /// <summary>
+    /// The last press in the window, by anyone: where it was, as the point the window's input got
+    /// (the one given to <c>MouseDown</c>), and its input-clock stamp (<see cref="RecordPress"/>).
+    /// <see cref="DoubleClick(Point)"/> waits out the double-tap time after it when it lay at the
+    /// double-click's spot.
+    /// </summary>
+    private (Point Position, ulong Timestamp)? _lastPress;
+
+    /// <summary>The click counts and stamps of <see cref="DoubleClick(Point)"/>'s own presses while it presses; null otherwise.</summary>
+    private List<(int ClickCount, ulong Timestamp)>? _doubleClickPresses;
+
     private ShellDriver(
         AppSession session,
         FakeFolderPicker folders,
         FakeFileLauncher launcher,
         FakeClipboard clipboard,
         FakeSystemTheme systemTheme,
-        TimeProvider? readClock)
+        TimeProvider? readClock,
+        FakeTokenStore tokens,
+        FakeGitHub? gitHub,
+        HostingOptions hosting,
+        RefusedRequests refusedRequests)
     {
         Session = session;
+        Tokens = tokens;
+        GitHub = gitHub;
+        Hosting = hosting;
+        RefusedRequests = refusedRequests;
         Folders = folders;
         Launcher = launcher;
         Clipboard = clipboard;
@@ -58,6 +80,10 @@ public sealed partial class ShellDriver : IDisposable
 
         // Check 31 waits for the window to close by itself (ShellDriver.Checks.cs).
         session.MainWindow.Closed += (_, _) => IsWindowClosed = true;
+
+        // Every press, handled or not, before any of the window's controls sees it: DoubleClick
+        // needs the last one's spot and stamp, and the counts of its own.
+        session.MainWindow.AddHandler(InputElement.PointerPressedEvent, RecordPress, RoutingStrategies.Tunnel, handledEventsToo: true);
     }
 
     /// <summary>The app instance under test.</summary>
@@ -104,7 +130,19 @@ public sealed partial class ShellDriver : IDisposable
     /// for a check that needs other ones (12.9's <c>HeldMergeTools</c>, which holds the merge
     /// tools' list back for a check of its loading state); without it <see cref="ToolCatalogues.Fixed"/>.
     /// </para>
+    /// <para>
+    /// Phase 7a (docs/phase-7a-design.md 2.5, 1.9): GitHub is off unless <paramref name="gitHub"/>
+    /// (a fake on a port, reached through a <see cref="LoopbackOnlyHandler"/>) or
+    /// <paramref name="hosting"/> (options as given, such as a fake's in-process handler) says
+    /// where it is; even off, every client's handler is the loopback tripwire
+    /// (<see cref="RefusedRequests"/>). Tokens go to <paramref name="tokens"/>, or a new
+    /// <see cref="FakeTokenStore"/> (<see cref="Tokens"/>); one store handed to two starts is the
+    /// scripted restart. The start pumps the UI thread until the hosting session has read its
+    /// account and token (<see cref="AppSession.HostingStarted"/>), at most
+    /// <see cref="DefaultWaitTimeout"/>, and rethrows what that start threw.
+    /// </para>
     /// </summary>
+    /// <exception cref="ArgumentException">Both <paramref name="gitHub"/> and <paramref name="hosting"/> are given, or <paramref name="gitHub"/> is in process (<see cref="FakeGitHub.InProcess"/>: it goes in <paramref name="hosting"/>).</exception>
     public static ShellDriver Start(
         string dataDirectory,
         int? width = 1100,
@@ -112,8 +150,18 @@ public sealed partial class ShellDriver : IDisposable
         IGitPromptHandler? promptHandler = null,
         bool systemDark = true,
         TimeProvider? readClock = null,
-        ToolCatalogues? tools = null)
+        ToolCatalogues? tools = null,
+        FakeGitHub? gitHub = null,
+        FakeTokenStore? tokens = null,
+        HostingOptions? hosting = null)
     {
+        if (gitHub is not null && hosting is not null)
+        {
+            throw new ArgumentException("Give the fake of GitHub (gitHub) or the hosting options (hosting), not both.", nameof(hosting));
+        }
+
+        RefuseInProcess(gitHub, nameof(gitHub));
+
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
 
@@ -124,6 +172,10 @@ public sealed partial class ShellDriver : IDisposable
         var launcher = new FakeFileLauncher();
         var clipboard = new FakeClipboard();
         var systemTheme = new FakeSystemTheme(systemDark);
+        var refused = new RefusedRequests();
+        var store = tokens ?? new FakeTokenStore();
+        var options = hosting ?? HarnessHosting(gitHub, refused);
+
         // The activity log's times read 09:00:00 and its durations 0 ms, and the backups get the
         // same names in every run, still in order (docs/phase-5-design.md 2.3).
         var session = AppSession.Start(
@@ -138,7 +190,9 @@ public sealed partial class ShellDriver : IDisposable
             gitEnvironment: GitIsolation.SessionGitEnvironment(dataDirectory),
             systemTheme: systemTheme,
             tools: tools ?? ToolCatalogues.Fixed,
-            readClock: readClock);
+            readClock: readClock,
+            hosting: options,
+            tokens: store);
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;
@@ -151,7 +205,17 @@ public sealed partial class ShellDriver : IDisposable
 
         session.MainWindow.Show();
 
-        var driver = new ShellDriver(session, folders, launcher, clipboard, systemTheme, readClock);
+        var driver = new ShellDriver(session, folders, launcher, clipboard, systemTheme, readClock, store, gitHub, options, refused);
+        try
+        {
+            driver.PumpUntilHostingStarted();
+        }
+        catch
+        {
+            driver.Dispose();
+            throw;
+        }
+
         driver.Settle();
         return driver;
     }
@@ -170,13 +234,23 @@ public sealed partial class ShellDriver : IDisposable
         IGitPromptHandler? promptHandler = null,
         bool systemDark = true,
         TimeProvider? readClock = null,
-        ToolCatalogues? tools = null)
+        ToolCatalogues? tools = null,
+        FakeGitHub? gitHub = null,
+        FakeTokenStore? tokens = null,
+        HostingOptions? hosting = null)
     {
         ArgumentNullException.ThrowIfNull(tabs);
+        if (gitHub is not null && hosting is not null)
+        {
+            throw new ArgumentException("Give the fake of GitHub (gitHub) or the hosting options (hosting), not both.", nameof(hosting));
+        }
+
+        RefuseInProcess(gitHub, nameof(gitHub));
+
         WriteSession(
             dataDirectory,
             new SessionState { Tabs = tabs.Select(path => new TabState(path)).ToList(), ActiveTab = activeTab });
-        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools);
+        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools, gitHub, tokens, hosting);
     }
 
     /// <summary>
@@ -316,8 +390,20 @@ public sealed partial class ShellDriver : IDisposable
         Settle();
     }
 
-    /// <summary>Moves the mouse to the centre of a control and double-clicks the left button.</summary>
-    public void DoubleClick(Visual visual) => DoubleClick(BoundsOf(visual).Center);
+    /// <summary>
+    /// Moves the mouse to the centre of a control and double-clicks the left button. The centre is
+    /// read again after the wait of <see cref="DoubleClick(Point)"/>, which runs the dispatcher's
+    /// jobs for up to the double-tap time and so can move the control (a list still arriving).
+    /// </summary>
+    public void DoubleClick(Visual visual)
+    {
+        WaitOutDoubleTapTime(_lastPress, BoundsOf(visual).Center);
+
+        // A new centre needs no wait of its own: inside the last press's rectangle the clock has
+        // passed its time now, and outside it Avalonia counts from 1 again. DoubleClick(Point)
+        // looks once more all the same, and returns from that look at once.
+        DoubleClick(BoundsOf(visual).Center);
+    }
 
     /// <summary>
     /// Moves the mouse to a window position and double-clicks the left button: two presses at one
@@ -330,20 +416,108 @@ public sealed partial class ShellDriver : IDisposable
     /// The clock stands still for the presses (<see cref="HeadlessInputClock"/>), as a user's
     /// double-click carries the times of the presses however busy the app is; the app handles
     /// them as before.
+    /// <para>
+    /// Avalonia also counts a press on from the last one, whatever control either went to, when it
+    /// lies within the double-tap size (4 by 4 pixels) around it and the double-tap time after it.
+    /// So a double-click right after a click at its spot came as that click's second and third
+    /// press, and no double-click: LeftPanelPullRequestsViewTests' on pull request #5, which had
+    /// taken the clicked sign-in row's place, on machines fast enough to get there within 500 ms.
+    /// After a press at its spot (any press in the window, <see cref="RecordPress"/>) the
+    /// double-click first waits, running the dispatcher's jobs, until the clock stands more than
+    /// the double-tap time past that press, as a user pauses before a double-click: at most about
+    /// 500 ms, and only then.
+    /// </para>
     /// </summary>
+    /// <exception cref="InvalidOperationException">Its presses were not counted 1 and 2, so the app did not get a plain double-click. The message gives the counts and how long before the first of them the press before it came.</exception>
     public void DoubleClick(Point position)
     {
         Window.MouseMove(position);
-        using (HeadlessInputClock.Pause(Window))
+        var before = _lastPress;
+        WaitOutDoubleTapTime(before, position);
+        var presses = new List<(int ClickCount, ulong Timestamp)>(2);
+        _doubleClickPresses = presses;
+        try
         {
-            for (var click = 0; click < 2; click++)
+            using (HeadlessInputClock.Pause(Window))
             {
-                Window.MouseDown(position, MouseButton.Left);
-                Window.MouseUp(position, MouseButton.Left);
+                for (var click = 0; click < 2; click++)
+                {
+                    Window.MouseDown(position, MouseButton.Left);
+                    Window.MouseUp(position, MouseButton.Left);
+                }
             }
+        }
+        finally
+        {
+            _doubleClickPresses = null;
         }
 
         Settle();
+        if (presses is not [(1, _), (2, _)])
+        {
+            throw new InvalidOperationException(LostDoubleClick(position, presses, before));
+        }
+    }
+
+    /// <summary>
+    /// Waits until the window's input clock stands more than the platform's double-tap time past
+    /// <paramref name="last"/>, when that press lay within the double-tap size around it of
+    /// <paramref name="position"/>: the rectangle and the comparison with which Avalonia's mouse
+    /// counts a press on from the last one. Returns at once otherwise.
+    /// </summary>
+    private void WaitOutDoubleTapTime((Point Position, ulong Timestamp)? last, Point position)
+    {
+        if (last is not { } press)
+        {
+            return;
+        }
+
+        var settings = Window.GetPlatformSettings()
+            ?? throw new InvalidOperationException("The window has no platform settings, so the double-tap size and time are unknown.");
+        var size = settings.GetDoubleTapSize(PointerType.Mouse);
+        var around = new Rect(press.Position, default(Size)).Inflate(new Thickness(size.Width / 2, size.Height / 2));
+        if (!around.Contains(position))
+        {
+            return;
+        }
+
+        var time = settings.GetDoubleTapTime(PointerType.Mouse).TotalMilliseconds;
+        while (HeadlessInputClock.Read(Window) - press.Timestamp <= time)
+        {
+            Settle();
+            Thread.Sleep(PollInterval);
+        }
+    }
+
+    /// <summary>
+    /// Keeps the spot and stamp of every press in the window, and the click count of
+    /// <see cref="DoubleClick(Point)"/>'s own. The spot is the event's position relative to no
+    /// control, which is the point the window's input got unchanged: the one Avalonia's mouse
+    /// draws its double-tap rectangle around, whatever the root visual lays the window out at.
+    /// </summary>
+    private void RecordPress(object? sender, PointerPressedEventArgs e)
+    {
+        _lastPress = (e.GetPosition(null), e.Timestamp);
+        _doubleClickPresses?.Add((e.ClickCount, e.Timestamp));
+    }
+
+    private static string LostDoubleClick(
+        Point position,
+        List<(int ClickCount, ulong Timestamp)> presses,
+        (Point Position, ulong Timestamp)? before)
+    {
+        var counts = string.Join(", ", presses.Select(press => press.ClickCount));
+        var earlier = (before, presses) switch
+        {
+            ({ } last, [var first, ..]) => string.Create(
+                CultureInfo.InvariantCulture,
+                $"{(long)first.Timestamp - (long)last.Timestamp} ms after the press before it, at ({last.Position.X:0.##}, {last.Position.Y:0.##})"),
+            (null, [_, ..]) => "with no press in the window before it",
+            _ => "nowhere: no press reached a control",
+        };
+        return string.Create(
+            CultureInfo.InvariantCulture,
+            $"The double-click at ({position.X:0.##}, {position.Y:0.##}) was not counted as one: its presses were counted [{counts}], not [1, 2]. Its first press came {earlier}.");
     }
 
     /// <summary>Types text into whatever has the keyboard focus, as key presses would.</summary>

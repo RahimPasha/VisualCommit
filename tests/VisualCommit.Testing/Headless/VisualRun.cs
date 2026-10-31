@@ -12,7 +12,8 @@ namespace VisualCommit.Testing.Headless;
 /// Shared by the walk-through projects (<c>VisualCommit.VisualTests</c> for phases 0 to 2,
 /// <c>VisualCommit.VisualTests.Phase3</c> and <c>.Phase4</c> for phases 3 and 4, and
 /// <c>VisualCommit.VisualTests.Phase5</c> and <c>.Phase5Undo</c>, which both fill phase 5's
-/// folder, docs/phase-5-design.md 15.3).
+/// folder, docs/phase-5-design.md 15.3). Since phase 7a a phase is named by a string ("7a",
+/// docs/phase-7a-design.md 0.3, 2.7); the <c>int</c> forms of phases 0 to 6 name the same folders.
 /// </summary>
 public static class VisualRun
 {
@@ -30,12 +31,18 @@ public static class VisualRun
             .First(attribute => attribute.Key == "RepoRoot").Value!;
 
     private static readonly Lock Gate = new();
-    private static readonly HashSet<int> PhasesStarted = [];
+    private static readonly HashSet<string> PhasesStarted = new(StringComparer.Ordinal);
     private static readonly Lazy<string> RunKeyOfThisProcess = new(ReadRunKey);
 
     /// <summary>The screenshot folder of a phase's scripted walk-through.</summary>
-    public static string FolderFor(int phase) =>
-        Path.Combine(RepoRoot, "artifacts", "visual", $"phase-{phase}", "scripted");
+    public static string FolderFor(int phase) => FolderFor(phase.ToString(CultureInfo.InvariantCulture));
+
+    /// <summary>The screenshot folder of a phase's scripted walk-through, the phase named as the docs write it: <c>artifacts/visual/phase-7a/scripted</c> for "7a".</summary>
+    public static string FolderFor(string phase)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(phase);
+        return Path.Combine(RepoRoot, "artifacts", "visual", $"phase-{phase}", "scripted");
+    }
 
     /// <summary>
     /// The test run this process belongs to: the process that started it when that is the dotnet
@@ -54,9 +61,14 @@ public static class VisualRun
     /// <see cref="RunKey"/>'s, not a process's: phase 5's two walk-through projects, two
     /// processes of one <c>dotnet test</c>, empty its folder once between them (<see cref="StartRun"/>).
     /// </summary>
-    public static string Save(this Screenshot screenshot, int phase, string name)
+    public static string Save(this Screenshot screenshot, int phase, string name) =>
+        screenshot.Save(phase.ToString(CultureInfo.InvariantCulture), name);
+
+    /// <summary>Saves a screenshot of a phase's walk-through, the phase named as the docs write it ("7a"), as the <c>int</c> form does.</summary>
+    public static string Save(this Screenshot screenshot, string phase, string name)
     {
         ArgumentNullException.ThrowIfNull(screenshot);
+        ArgumentException.ThrowIfNullOrWhiteSpace(phase);
         lock (Gate)
         {
             if (PhasesStarted.Add(phase))

@@ -341,7 +341,6 @@ public class IntegratePullTests
         using var repo = await CopyAsync(MergedSide, "the pull template with a merged side branch");
         await repo.ConfigAsync("pull.rebase", rebase);
         repo.WriteFile("secret.env", Local);
-        using var plain = await repo.CopyAsync();
         var (repository, calls, branch) = await FetchedAsync(repo);
         var head = await repo.HeadAsync();
 
@@ -352,23 +351,34 @@ public class IntegratePullTests
         Assert.Equal(0, beforeRebase);
         Assert.Equal(head, await repo.HeadAsync());
         Assert.Equal(Local, Read(repo, "secret.env"));
+    }
 
+    [Theory]
+    [InlineData("merges")]
+    [InlineData("true")]
+    public async Task Without_keep_ignored_a_branch_with_a_merged_side_branch_is_rebased_and_loses_the_file_only_with_rebase_merges(string rebase)
+    {
         // Without Keep ignored files git's rebase runs: with --rebase-merges the file is gone, the
         // plain rebase keeps it.
-        var (plainRepository, plainCalls, plainBranch) = await FetchedAsync(plain);
-        var (rebased, plainBeforeRebase, plainMade) = await PullAsync(plainRepository, plainCalls, plainBranch, PullIntegration.AsConfigured, options: null);
-        Assert.Equal(PullOutcome.Rebased, rebased.Outcome);
-        Assert.Equal(1, plainBeforeRebase);
-        var rebaseCall = Assert.Single(plainMade, call => call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));
+        using var repo = await CopyAsync(MergedSide, "the pull template with a merged side branch");
+        await repo.ConfigAsync("pull.rebase", rebase);
+        repo.WriteFile("secret.env", Local);
+        var (repository, calls, branch) = await FetchedAsync(repo);
+
+        var (result, beforeRebase, made) = await PullAsync(repository, calls, branch, PullIntegration.AsConfigured, options: null);
+
+        Assert.Equal(PullOutcome.Rebased, result.Outcome);
+        Assert.Equal(1, beforeRebase);
+        var rebaseCall = Assert.Single(made, call => call.CommandText.StartsWith("git rebase", StringComparison.Ordinal));
         if (rebase == "merges")
         {
             Assert.Contains("--rebase-merges", rebaseCall.CommandText, StringComparison.Ordinal);
-            Assert.False(File.Exists(Path.Combine(plain.Path, "secret.env")), "secret.env is still there.");
+            Assert.False(File.Exists(Path.Combine(repo.Path, "secret.env")), "secret.env is still there.");
         }
         else
         {
             Assert.DoesNotContain("--rebase-merges", rebaseCall.CommandText, StringComparison.Ordinal);
-            Assert.Equal(Local, Read(plain, "secret.env"));
+            Assert.Equal(Local, Read(repo, "secret.env"));
         }
     }
 

@@ -35,6 +35,9 @@ public partial class RepositoryGraphView : UserControl
 
         GraphRows.RowsDrawn += (_, _) => _viewModel?.OnRowsDrawn();
         GraphRows.FrameDrawn += (_, duration) => _viewModel?.OnFrameDrawn(duration);
+
+        // The avatars drawn (docs/phase-7a-design.md 11.3, D322): the tab shown logs them, as the window's one graph shows it.
+        GraphRows.AvatarsApplied += (_, count) => _viewModel?.NoteAvatarsShown(count);
         GraphRows.PropertyChanged += OnGraphRowsPropertyChanged;
         GraphScrollBar.PropertyChanged += OnScrollBarPropertyChanged;
         GraphScrollBar.PointerWheelChanged += OnScrollBarWheel;

@@ -256,7 +256,7 @@ public static partial class RepositoryMenus
                 pullOrFastForward,
                 pullRebase,
             ],
-            [push, forcePush],
+            [push, forcePush, BranchPullRequestItem(context, branch, actions)],
             [
                 Item(actions, CreateBranchHere, () => actions.CreateBranchAsync(branchRef)),
                 Item(actions, CreateTagHere, () => actions.CreateTagAsync(branchRef)),
@@ -330,6 +330,7 @@ public static partial class RepositoryMenus
             [
                 Item(actions, DeleteOnRemoteLabel(deleted, remote), () => actions.DeleteRemoteBranchAsync(remoteBranchRef), RemoteSourceReason(source, name, needsBranch: true), isDestructive: true),
             ],
+            [BranchPullRequestItem(context, branch, actions)],
             [
                 CompareItem(context, branch, actions),
                 .. HideAndSoloItems(context, branch, actions),
@@ -414,7 +415,8 @@ public static partial class RepositoryMenus
     /// <summary>
     /// A left-panel section header (4b), headed by the section's title: "Local branches" create
     /// branch…; "Remotes" add remote…, fetch all remotes, manage remotes…; "Tags" create tag at
-    /// HEAD…; "Stashes" stash changes…. Null for "Pull requests", which has no menu (D92).
+    /// HEAD…; "Stashes" stash changes…; "Pull requests" with a GitHub remote refresh or sign in and
+    /// open in browser (docs/phase-7a-design.md 10.4), null without one, where it has no menu (D92).
     /// </summary>
     public static MenuModel? ForSection(RepositoryMenuContext context, RefSection section, IRepositoryActions actions)
     {
@@ -444,6 +446,7 @@ public static partial class RepositoryMenus
             RefSection.Stashes => Build(
                 Header(LeftPanelViewModel.StashesTitle),
                 [StashItem(context, actions)]),
+            RefSection.PullRequests => PullRequestsSection(context, actions),
             _ => null,
         };
     }
@@ -621,6 +624,7 @@ public static partial class RepositoryMenus
         var header = Header(DropHeader(source, target));
         var notAncestor = context.Drop is { TargetIsAncestorOfSource: false } ? HasCommitsThat(target, source) : null;
         var rebaseItems = DropRebaseItems(context, sourceRef, source, targetBranch, target, actions);
+        var pullRequestItems = DropPullRequestItems(context, sourceRef, targetRef, targetBranch, actions);
 
         if (targetRef.StartsWith("refs/remotes/", StringComparison.Ordinal))
         {
@@ -635,6 +639,7 @@ public static partial class RepositoryMenus
                     Item(actions, PushToAndTrack(source, target), () => actions.PushBranchToAsync(sourceRef, targetRef, setUpstream: true), reason),
                 ],
                 rebaseItems,
+                pullRequestItems,
                 [DropCompareItem(context, sourceRef, targetRef, actions)]);
         }
 
@@ -650,6 +655,7 @@ public static partial class RepositoryMenus
                     Item(actions, FastForwardTo(target, source), () => actions.MergeAsync(sourceRef, MergeMode.FastForwardOnly), notAncestor ?? mergeReason),
                 ],
                 rebaseItems,
+                pullRequestItems,
                 [DropCompareItem(context, sourceRef, targetRef, actions)]);
         }
 
@@ -661,6 +667,7 @@ public static partial class RepositoryMenus
                 Item(actions, CheckOutAndMergeLabel(target, source), () => actions.CheckoutAndMergeAsync(targetRef, sourceRef), worktree),
             ],
             rebaseItems,
+            pullRequestItems,
             [DropCompareItem(context, sourceRef, targetRef, actions)]);
     }
 

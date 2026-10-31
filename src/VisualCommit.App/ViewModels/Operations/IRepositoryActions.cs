@@ -2,6 +2,7 @@ using VisualCommit.App.ViewModels.Pages;
 using VisualCommit.App.ViewModels.Rebase;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels.Operations;
 
@@ -341,4 +342,28 @@ public interface IRepositoryActions
 
     /// <summary>The activity log's "Copy command", "Copy output" and "Copy title" (2.2): the text as shown.</summary>
     Task CopyTextAsync(string text);
+
+    // Hosting (docs/phase-7a-design.md 1.7): RepositoryOperations.CreatePullRequest.cs and
+    // RepositoryOperations.PullRequests.cs.
+
+    /// <summary>"Create pull request…" of a branch's or a drop's menu (12): the form, for <paramref name="headRef"/> (a full ref name) into <paramref name="baseRef"/>, or the repository's default branch when null.</summary>
+    Task CreatePullRequestAsync(string headRef, string? baseRef);
+
+    /// <summary>A pull request's "Open in browser" (10).</summary>
+    Task OpenPullRequestAsync(PullRequest pullRequest);
+
+    /// <summary>A pull request's "Check out {head}" (10.5).</summary>
+    Task CheckOutPullRequestAsync(PullRequest pullRequest);
+
+    /// <summary>A pull request's "Copy link" (10).</summary>
+    Task CopyPullRequestLinkAsync(PullRequest pullRequest);
+
+    /// <summary>The "Pull requests" section's refresh (10).</summary>
+    Task RefreshPullRequestsAsync();
+
+    /// <summary>The "Pull requests" section's page of open pull requests in the browser (10).</summary>
+    Task OpenPullRequestsInBrowserAsync();
+
+    /// <summary>"Sign in to GitHub…" (8.5): runs <see cref="TabServices.SignInToGitHub"/>.</summary>
+    Task SignInToGitHubAsync();
 }

@@ -339,6 +339,45 @@ public sealed partial class RepositoryOperations
             return new OperationResult(OperationOutcome.Cancelled, OperationTexts.Cancelled(text.Title), null);
         }
 
+        // The URLs whose credentials come from the account (D255), for a network operation only
+        // (docs/phase-7a-design.md 0.2, 4.7): the tab's hosting's, or for a dashboard row without a
+        // tab, whose hosting is the null object, its remotes' URLs after the rules read now (D332).
+        // Signed out nothing is read. A local operation's git calls get no credential pair and keep
+        // an inherited command-line configuration (D329), as in a tab that is not bound.
+        var bindings = kind == OperationKind.Network ? Repository.Hosting.Bindings : [];
+        if (kind == OperationKind.Network && Repository.IsSummary && Services?.Hosting is { BindsGit: true } hosting && Repository.Refs is { } refs)
+        {
+            try
+            {
+                // The view model's lifetime is its own; a tab closed meanwhile is caught below.
+                var rules = await Repository.Repository.ReadUrlRewritesAsync(options.Cancellation).ConfigureAwait(true);
+                bindings = hosting.BindingsFor(refs.RemoteUrls, rules);
+            }
+            catch (Exception ex) when (ex is GitException or OperationCanceledException)
+            {
+                if (ex is GitException)
+                {
+                    Log.Warning($"{Repository.Name}: {text.Title}: the URL rules could not be read, so the account is not used for git: {GitCommand.HideCredentials(ex.Message)}");
+                }
+
+                bindings = [];
+            }
+
+            // Not "after": the tests count "<title>: ... after" lines as the queue's ends of operations.
+            Log.Debug($"{Repository.Name}: {text.Title}: {bindings.Count} URLs bound to the account once the URL rules were read.");
+            if (IsClosed)
+            {
+                Log.Info($"{Repository.Name}: {text.Title}: not started, the tab is closed.");
+                return new OperationResult(OperationOutcome.Cancelled, OperationTexts.Cancelled(text.Title), null);
+            }
+
+            if (options.Cancellation.IsCancellationRequested)
+            {
+                Log.Info($"{Repository.Name}: {text.Title}: not started, cancelled.");
+                return new OperationResult(OperationOutcome.Cancelled, OperationTexts.Cancelled(text.Title), null);
+            }
+        }
+
         // The operation's id, for the git call a "<Title> cancelled" dialog of lock files names (1.8, 4f).
         var operationId = new StrongBox<string?>();
         var operation = new GitOperation(text.Title, text.RunningText, kind, refresh, async context =>
@@ -381,6 +420,7 @@ public sealed partial class RepositoryOperations
             Prompts = options.Prompts,
             CanBeCancelled = options.CanBeCancelled,
             PromptGroup = options.PromptGroup,
+            CredentialBindings = bindings,
         };
         // A second call with the dedupe key of a waiting or running operation gets that
         // operation's task (1.2): only the first caller shows its result, so a failure opens one
@@ -609,7 +649,7 @@ public sealed partial class RepositoryOperations
         ArgumentNullException.ThrowIfNull(result);
         options ??= RunOptions.Default;
         var failure = result.Outcome == OperationOutcome.Failed ? result.Failure : null;
-        var display = failure is null ? null : options.DescribeFailure?.Invoke(failure) ?? DefaultFailureDisplay(text, failure);
+        var display = failure is null ? null : RefusedDisplay(text, result) ?? options.DescribeFailure?.Invoke(failure) ?? DefaultFailureDisplay(text, failure);
         if (display is not null && operationId is not null)
         {
             Services?.Operations.SetFailureSummary(operationId, display.Summary);
@@ -671,11 +711,11 @@ public sealed partial class RepositoryOperations
     /// later (4.6): the failure's display by the same rule, or a cancel's lock files with their
     /// stamps taken now; null when it would open none.
     /// </summary>
-    private static DeferredDialog? DeferredOf(OperationText text, OperationResult result, RunOptions options, string? operationId)
+    private DeferredDialog? DeferredOf(OperationText text, OperationResult result, RunOptions options, string? operationId)
     {
         if (result is { Outcome: OperationOutcome.Failed, Failure: { } failure })
         {
-            var display = options.DescribeFailure?.Invoke(failure) ?? DefaultFailureDisplay(text, failure);
+            var display = RefusedDisplay(text, result) ?? options.DescribeFailure?.Invoke(failure) ?? DefaultFailureDisplay(text, failure);
             return options.ShowsErrorDialog ? new DeferredDialog(text, display, failure, [], null, operationId) : null;
         }
 
@@ -686,6 +726,27 @@ public sealed partial class RepositoryOperations
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The dialog of a failure whose credentials GitHub refused through the app's helper (ruling 4,
+    /// D276, D330, docs/phase-7a-design.md 4.7), before any other description: the operation's
+    /// error title, <see cref="OperationTexts.GitCredentialsRefused"/> with the signed-in login in
+    /// its own case (or the refused key's), and "Open settings…" on Accounts when the window can
+    /// open the settings screen. Null for any other result.
+    /// </summary>
+    private FailureDisplay? RefusedDisplay(OperationText text, OperationResult result)
+    {
+        if (result is not { Outcome: OperationOutcome.Failed, RefusedAccount: { } refused })
+        {
+            return null;
+        }
+
+        var login = Services?.Hosting.Account is { } status && status.Account.Key == refused ? status.Account.Login : refused.Login;
+        var extra = Services?.OpenSettings is { } openSettings
+            ? new ErrorAction(OperationTexts.OpenSettingsButton, () => openSettings(SettingsSection.Accounts))
+            : null;
+        return new FailureDisplay(text.ErrorTitle, OperationTexts.GitCredentialsRefused(login), extra);
     }
 
     /// <summary>

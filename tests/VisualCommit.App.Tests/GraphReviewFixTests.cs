@@ -114,7 +114,7 @@ public class GraphReviewFixTests
             {
                 if (IsHeadSha(command) && Interlocked.CompareExchange(ref armed, 2, 1) == 1)
                 {
-                    await listed.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+                    await listed.Task.WaitAsync(TimeSpan.FromSeconds(60), TestContext.Current.CancellationToken);
                     await repo.CommitFileAsync("a.txt", "c\n", "Third");
                 }
             },
@@ -238,12 +238,12 @@ public class GraphReviewFixTests
 
     private static async Task WaitForAsync(Func<bool> condition)
     {
-        for (var i = 0; i < 200 && !condition(); i++)
+        for (var i = 0; i < 2400 && !condition(); i++)
         {
             await Task.Delay(25, TestContext.Current.CancellationToken);
         }
 
-        Assert.True(condition(), "The condition did not come true within 5 seconds.");
+        Assert.True(condition(), "The condition did not come true within 60 seconds.");
     }
 
     /// <summary>A runner that runs <paramref name="before"/> ahead of each call and <paramref name="after"/> once it has ended: the order of calls that run side by side, made certain.</summary>

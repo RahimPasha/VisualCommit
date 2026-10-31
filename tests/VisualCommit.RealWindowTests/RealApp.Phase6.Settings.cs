@@ -25,6 +25,7 @@ public sealed partial class RealApp
         ["Git"] = "SettingsNavGit",
         ["Tools"] = "SettingsNavTools",
         ["Keyboard shortcuts"] = "SettingsNavShortcuts",
+        ["Accounts"] = "SettingsNavAccounts",
     };
 
     /// <summary>Ctrl+, on the real keyboard: the settings screen's key (6.1, D197).</summary>
@@ -43,13 +44,15 @@ public sealed partial class RealApp
     /// <summary>
     /// The section the screen shows, by a control only that section shows (the sections' panels are
     /// hidden, not removed): <c>General</c> (its theme's radios), <c>Git</c> (the scope switch),
-    /// <c>Tools</c> (the editor's value), <c>Keyboard shortcuts</c> (its intro line); null for none.
+    /// <c>Tools</c> (the editor's value), <c>Keyboard shortcuts</c> (its intro line), <c>Accounts</c>
+    /// (its intro line, phase 7a's, docs/phase-7a-design.md 8.3, 13.1); null for none.
     /// </summary>
     public string? ShownSettingsSection() =>
         ShownElements("SettingsThemeDark").Count == 1 ? "General"
         : ShownElements("GitScopeGlobal").Count == 1 ? "Git"
         : ShownElements("EditorValue").Count == 1 ? "Tools"
         : ShownElements("ShortcutsIntro").Count == 1 ? "Keyboard shortcuts"
+        : ShownElements("AccountsIntro").Count == 1 ? "Accounts"
         : null;
 
     /// <summary>Waits until the screen shows the section <paramref name="section"/> (<see cref="ShownSettingsSection"/>).</summary>

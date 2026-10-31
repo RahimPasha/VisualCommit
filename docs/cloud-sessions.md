@@ -76,7 +76,7 @@ phase is next), or "Continue" for a phase that is under way.
 
 | It can | It cannot |
 |---|---|
-| Build, and run all default tests, including the scripted visual walk-through | Run the real-window pass: that drives the real app on a Windows desktop with the real mouse |
+| Build, and run all default tests, including the scripted visual walk-through | Run the real-window pass (it drives the real app on a Windows desktop with the real mouse) or the live command against real GitHub (Windows-only: it reads your sandbox token from a Windows user variable on your machine, D250, D260) |
 | Inspect the walk-through's screenshots (drawn on Linux) | Start the app to look at it |
 | Push its commits and read CI, including CI's Windows and macOS jobs | Set a phase to "Awaiting acceptance" |
 
@@ -86,10 +86,13 @@ scripted pass, the updates to the architecture and the plan, and a first version
 
 To finish the phase, open a session on the Windows machine and say "Continue". Expect a working
 session, not a formality: the real-window test code has only been compiled until then. That
-session first runs the phase's scripted walk-through and then the new phase's real-window checks
+session first runs the live command against real GitHub once, after telling you, and commits what
+it corrects in the fake of GitHub before any picture (D335). Then it runs the phase's scripted
+walk-through and the new phase's real-window checks
 twice on their own, which take over the mouse, so it tells you and needs you present (D246).
 Then it runs both passes of the gate on one commit (only the real-window pass again when a fix
 changes nothing but `tests/VisualCommit.RealWindowTests`), fixes what the real window shows,
+tells you and runs the live command again on the counted round, after the real-window pass,
 inspects the pictures of both, completes the report and the handoff, runs the cold-read check and
 sets the phase to "Awaiting acceptance". Then you accept it as usual, by saying "Phase N
 accepted".

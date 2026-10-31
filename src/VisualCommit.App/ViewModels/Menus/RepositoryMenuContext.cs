@@ -3,6 +3,7 @@ using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Session;
+using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels.Menus;
 
@@ -152,6 +153,13 @@ public sealed record RepositoryMenuContext(
     /// Nothing touches the disk for it.
     /// </summary>
     public bool HasEditor { get; init; }
+
+    /// <summary>
+    /// The repository's hosting (docs/phase-7a-design.md 1.7, 10): its pull requests and which
+    /// branch has one, for the pull-request items of the menus; null for a repository without a
+    /// GitHub remote (<see cref="PullRequestsState.NotGitHub"/>).
+    /// </summary>
+    public RepositoryHostingState? Hosting { get; init; }
 
     public HeadState Head => Refs.Head;
 

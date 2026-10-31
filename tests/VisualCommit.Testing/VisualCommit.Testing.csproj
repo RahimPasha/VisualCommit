@@ -13,6 +13,8 @@
     <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
     <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
     <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <!-- The fake of GitHub and the harness's hosting seams (docs/phase-7a-design.md 2.1). -->
+    <ProjectReference Include="..\..\src\VisualCommit.Hosting\VisualCommit.Hosting.csproj" />
   </ItemGroup>
 
   <ItemGroup>

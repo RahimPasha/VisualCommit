@@ -1,5 +1,6 @@
 using VisualCommit.App.Services;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 
 namespace VisualCommit.App.Tests;
@@ -7,7 +8,9 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// The commands "Show in folder" runs on each platform (phase 3 design 2.32), built for paths of
 /// every platform on any machine. Nothing is launched: <see cref="FileLauncher.RevealCommands"/>
-/// only builds the commands, and the file system is given as functions.
+/// only builds the commands, and the file system is given as functions. Also the addresses
+/// <see cref="FileLauncher.OpenUrlAsync"/> refuses before it opens anything, which the headless
+/// tests' fake refuses too (docs/phase-7a-design.md 1.7).
 /// </summary>
 public class FileLauncherTests
 {
@@ -222,6 +225,41 @@ public class FileLauncherTests
             return false;
         }));
         Assert.Equal(["/bin/sh"], asked);
+    }
+
+    [Theory]
+    [InlineData("octocat/hello/pull/7")]
+    [InlineData("git@github.com:octocat/hello.git")]
+    [InlineData("ssh://git@github.com/octocat/hello.git")]
+    [InlineData("file:///tmp/index.html")]
+    [InlineData("javascript:alert(1)")]
+    public async Task Only_an_http_or_https_address_is_opened_and_the_fake_refuses_what_the_launcher_refuses(string address)
+    {
+        // docs/phase-7a-design.md 1.7: the launcher's task fails before the UI thread or a window
+        // is needed; the headless tests' fake fails the same way and records nothing, so a test
+        // sees the app hand over an address the real launcher would refuse.
+        var url = new Uri(address, UriKind.RelativeOrAbsolute);
+        var fake = new FakeFileLauncher();
+
+        await Assert.ThrowsAsync<ArgumentException>("url", () => new FileLauncher(() => null).OpenUrlAsync(url, TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<ArgumentException>("url", () => fake.OpenUrlAsync(url, TestContext.Current.CancellationToken));
+        Assert.Empty(fake.Requests);
+    }
+
+    [Fact]
+    public async Task The_fake_records_an_http_or_https_address_as_opened_in_the_browser()
+    {
+        var fake = new FakeFileLauncher();
+
+        await fake.OpenUrlAsync(new Uri("https://github.com/octocat/hello/pull/7"), TestContext.Current.CancellationToken);
+        await fake.OpenUrlAsync(new Uri("http://127.0.0.1:47395/octocat/hello/pull/7"), TestContext.Current.CancellationToken);
+
+        Assert.Equal(
+            [
+                new FileLaunch(FileLaunchKind.OpenUrl, "https://github.com/octocat/hello/pull/7"),
+                new FileLaunch(FileLaunchKind.OpenUrl, "http://127.0.0.1:47395/octocat/hello/pull/7"),
+            ],
+            fake.Requests);
     }
 
     private static IReadOnlyList<LaunchCommand> Reveal(string path, RevealPlatform platform, string[]? files = null, string[]? folders = null)

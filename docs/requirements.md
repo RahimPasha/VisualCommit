@@ -19,7 +19,7 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 | UI | Avalonia (all C#), MVVM |
 | Runtime | .NET 10 (LTS) |
 | Git engine | The real `git` executable, driven by the app (minimum Git 2.30) |
-| Hosting providers | GitHub, Azure DevOps, GitLab |
+| Hosting providers | GitHub (github.com; Enterprise Server in the backlog, D258), Azure DevOps, GitLab |
 | Accounts / telemetry | None. Everything stays on the user's machine |
 
 ## Core features
@@ -36,7 +36,7 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 | C8 | Remote actions | Fetch, pull, push, safe force-push, set upstream, manage remotes, auto-fetch |
 | C9 | Stash and tags | Stash, apply, pop, drop; create, delete and push tags |
 | C10 | Conflict resolution | Conflicted-file list; built-in three-pane resolver (pick ours, theirs or both per hunk, edit the result); take a whole file from one side; continue or abort |
-| C11 | Remote sign-in | HTTPS through Git Credential Manager; SSH keys; prompts shown as in-app dialogs |
+| C11 | Remote sign-in | HTTPS through Git Credential Manager; SSH keys; prompts shown as in-app dialogs. With a GitHub account signed in, the app's own git calls to github.com use its token (D255) |
 | C12 | Protect uncommitted changes | An operation that could lose uncommitted changes does not start and says why; checking out another commit on the same branch stashes them automatically, and the stash shows in the graph as a hollow circle joined to the commit it was taken on (D138). Phase 5, as D153 settles it. From phase 6 every checkout, merge, rebase, cherry-pick, revert and stash apply or pop also keeps ignored files by default, the hard reset aside (D193, D196) |
 
 ## Main window layout
@@ -88,7 +88,7 @@ Every object has a context menu. Every common action takes two clicks at most.
 | O1 | Interactive rebase (drag to reorder, squash, fixup, reword, drop) | Included |
 | O2 | Undo / redo of git actions, many steps back within a session (D154) | Included |
 | O3 | Multi-repo dashboard: status of all repos at a glance, bulk fetch/pull | Included |
-| O4 | Hosting integration (GitHub, Azure DevOps, GitLab): clone from account, view and create pull requests | Included |
+| O4 | Hosting integration (GitHub, Azure DevOps, GitLab): clone from account, view and create pull requests. Sign-in with a personal access token (D249); a repository's pull requests listed in the left panel (D251); author avatars from GitHub only, other authors as before (D252) | Included |
 | O5 | Command palette (Ctrl+Shift+P, D191) and keyboard shortcuts, a fixed set (D192) | Included |
 | O6 | Compare any two commits or branches | Included |
 | O7 | Search inside changes (find the commit that added or removed a piece of text) | Included |
@@ -119,7 +119,7 @@ commits) must still open and work normally.
 | Q2 | Responsive: the UI never freezes during a git operation; long operations show progress and can be cancelled |
 | Q3 | Safe: destructive actions (hard reset, discard, force-push, branch delete) ask for confirmation and save a backup first, so they can be undone |
 | Q4 | In sync: a file watcher refreshes the UI when the repo changes from a terminal or editor |
-| Q5 | Compatible: behaviour matches command-line git; existing config, hooks and credential helpers work unchanged. One deliberate exception: operations that would overwrite or delete an ignored file keep it by default, which a setting turns off (D193, D196) |
+| Q5 | Compatible: behaviour matches command-line git; existing config, hooks and credential helpers work unchanged. Two deliberate exceptions: operations that would overwrite or delete an ignored file keep it by default, which a setting turns off (D193, D196); and while a GitHub account is signed in for git, the app's own git calls to github.com take its token instead of asking the user's credential helpers, which a switch on the account turns off (D255) |
 | Q6 | Consistent: same features and look on Windows, macOS and Linux |
 
 ## Public-release requirements
@@ -128,7 +128,7 @@ commits) must still open and work normally.
 |---|---|
 | R1 | Installers and auto-update on all three platforms |
 | R2 | Code signing (Windows) and notarisation (macOS) |
-| R3 | Hosting tokens stored in the OS keychain, never in plain files |
+| R3 | Hosting tokens stored in the OS keychain, never in plain files; where no keychain can be reached, kept for the session only (D253) |
 | R4 | First-run check for Git, with guidance when it is missing or too old |
 | R5 | Original name, icons and visual design; no GitKraken branding or assets, and no "Git" in the product name (Git trademark policy) |
 | R6 | MIT licence file and third-party notices |

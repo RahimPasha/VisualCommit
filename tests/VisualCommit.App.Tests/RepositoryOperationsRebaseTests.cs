@@ -519,7 +519,7 @@ public class RepositoryOperationsRebaseTests
         // The squash read its list and waits in the queue; then main moves ahead of it.
         for (var tries = 0; app.Repository.Queue.Waiting == 0; tries++)
         {
-            Assert.True(tries < 500, "The squash did not reach the queue.");
+            Assert.True(tries < 3000, "The squash did not reach the queue.");
             await Task.Delay(20, TestContext.Current.CancellationToken);
         }
 

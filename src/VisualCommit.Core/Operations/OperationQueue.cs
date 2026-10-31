@@ -628,7 +628,7 @@ public sealed class OperationQueue : IOperationQueue
         {
             if (mode != PromptMode.None && _prompts is not null)
             {
-                scope = _prompts.Begin(operation.Title, _repositoryName, mode, entry.Id, operation.PromptGroup);
+                scope = _prompts.Begin(operation.Title, _repositoryName, mode, entry.Id, operation.PromptGroup, operation.CredentialBindings);
                 bool disposed;
                 lock (_gate)
                 {
@@ -671,7 +671,11 @@ public sealed class OperationQueue : IOperationQueue
                     report.Message.Length > 0 ? report.Message : $"{operation.Title} failed",
                     report.Failure ?? FailureOf(operation, report.Message)),
                 OperationOutcome.Cancelled => CancelledResult(operation),
-                _ => new OperationResult(report.Outcome, report.Message, null) { IsWarning = report.IsWarning && report.Outcome == OperationOutcome.Succeeded },
+                _ => new OperationResult(report.Outcome, report.Message, null)
+                {
+                    IsWarning = report.IsWarning && report.Outcome == OperationOutcome.Succeeded,
+                    Offer = report.Outcome == OperationOutcome.Succeeded ? report.Offer : null,
+                },
             };
         }
         catch (OperationCanceledException)
@@ -701,6 +705,13 @@ public sealed class OperationQueue : IOperationQueue
         if (scope is { UserCancelled: true } && result.Outcome == OperationOutcome.Failed)
         {
             result = CancelledResult(operation);
+        }
+
+        // git erased an account's token through the app's helper: the error dialog says that
+        // GitHub refused git's credentials (ruling 4, docs/phase-7a-design.md 0.2).
+        if (scope is { RefusedAccount: { } refused } && result.Outcome == OperationOutcome.Failed)
+        {
+            result = result with { RefusedAccount = refused };
         }
 
         return result;
@@ -735,6 +746,7 @@ public sealed class OperationQueue : IOperationQueue
             return result;
         }
 
+        // The rest of the result, its offer included (D317), is kept.
         return result with { StaleLockFiles = locks };
     }
 

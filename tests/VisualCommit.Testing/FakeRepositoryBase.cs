@@ -15,7 +15,8 @@ namespace VisualCommit.Testing;
 /// files or stash paths), the undo history's read sees HEAD alone, so that no action leaves an
 /// entry, and an undo step and C12's writes throw. Phase 6's reads find no ignored file in any
 /// operation's way and no pull setting, a folder is opened at its top, and the repository's
-/// settings write throws (docs/phase-6-design.md 1.2, 8.3, 8.9, 9.3).
+/// settings write throws (docs/phase-6-design.md 1.2, 8.3, 8.9, 9.3). Phase 7a's read finds no URL
+/// rewrite and its fetch of a pull request's head throws (docs/phase-7a-design.md 1.3).
 /// </summary>
 public abstract class FakeRepositoryBase : IGitRepository
 {
@@ -170,6 +171,12 @@ public abstract class FakeRepositoryBase : IGitRepository
         throw new NotSupportedException();
 
     public virtual Task<PullResult> IntegratePullAsync(GitRef branch, NetworkOptions? options = null, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    public virtual Task<UrlRewrites> ReadUrlRewritesAsync(CancellationToken cancellationToken = default) =>
+        Task.FromResult(UrlRewrites.None);
+
+    public virtual Task<string?> FetchToFetchHeadAsync(string remote, string sourceRef, NetworkOptions options, CancellationToken cancellationToken = default) =>
         throw new NotSupportedException();
 
     public virtual Task<PushOutcome> PushAsync(PushRequest request, NetworkOptions options, CancellationToken cancellationToken = default) =>

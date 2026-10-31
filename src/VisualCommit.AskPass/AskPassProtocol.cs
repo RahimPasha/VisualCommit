@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -30,6 +31,19 @@ public static class AskPassProtocol
 
     /// <summary>How long the helper tries to reach the app before it gives up.</summary>
     public static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(5);
+
+    /// <summary>
+    /// The helper's first argument in its credential mode (docs/phase-7a-design.md 4.5, D255): git
+    /// runs <c>!'&lt;helper&gt;' --vc-credential</c> as a credential helper and appends <c>get</c>,
+    /// <c>store</c> or <c>erase</c>.
+    /// </summary>
+    public const string CredentialArgument = "--vc-credential";
+
+    /// <summary>The user name the helper gives git with an account's token, never the login (0.2); equal to Core's <c>GitCredential.UserName</c>.</summary>
+    public const string CredentialUserName = "x-access-token";
+
+    /// <summary>How long the helper waits for the app's answer to a credential request.</summary>
+    public static readonly TimeSpan CredentialAnswerTimeout = TimeSpan.FromSeconds(30);
 
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
@@ -89,6 +103,121 @@ public static class AskPassProtocol
         {
             return null;
         }
+    }
+
+    /// <summary>A credential request as one line, its <c>\n</c> included (docs/phase-7a-design.md 4.5).</summary>
+    public static byte[] FormatCredentialRequest(AskPassCredentialRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return Line(writer =>
+        {
+            writer.WriteString("token", request.Token);
+            writer.WriteString("operation", request.Operation);
+            writer.WriteString("credential", request.Action);
+            writer.WriteString("protocol", request.Protocol);
+            writer.WriteString("host", request.Host);
+            WriteNullable(writer, "username", request.Username);
+            WriteNullable(writer, "secretHash", request.SecretHash);
+        });
+    }
+
+    /// <summary>
+    /// Reads a credential request line; null when it is not one: malformed, <c>credential</c>
+    /// neither <c>get</c> nor <c>erase</c>, or a string missing. A prompt's line is not one, and
+    /// <see cref="ParseRequest"/> refuses this one.
+    /// </summary>
+    public static AskPassCredentialRequest? ParseCredentialRequest(ReadOnlySpan<byte> line)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(Trim(line).ToArray());
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || String(root, "token") is not { } token
+                || String(root, "operation") is not { } operation
+                || String(root, "credential") is not { } action
+                || action is not ("get" or "erase")
+                || String(root, "protocol") is not { } protocol
+                || String(root, "host") is not { } host
+                || !TryNullable(root, "username", out var username)
+                || !TryNullable(root, "secretHash", out var secretHash))
+            {
+                return null;
+            }
+
+            return new AskPassCredentialRequest(token, operation, action, protocol, host, username, secretHash);
+        }
+        catch (Exception ex) when (ex is JsonException or ArgumentException or DecoderFallbackException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// What git gives a credential helper on standard input (docs/phase-7a-design.md 4.2, 4.5):
+    /// <c>key=value</c> lines, each split at its first <c>=</c>, a trailing <c>\r</c> dropped, up
+    /// to an empty line or the end. Keeps <c>protocol</c>, <c>host</c>, <c>username</c> and
+    /// <c>password</c>; ignores every other key (<c>capability[]</c>, <c>wwwauth[]</c>,
+    /// <c>state[]</c>, <c>path</c>, <c>url</c>, <c>password_expiry_utc</c>) and a line without
+    /// <c>=</c>. A key given twice keeps its last value.
+    /// </summary>
+    public static GitCredentialInput ParseGitCredentialInput(string input)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        string? protocol = null, host = null, username = null, password = null;
+        foreach (var raw in input.Split('\n'))
+        {
+            var line = raw.EndsWith('\r') ? raw[..^1] : raw;
+            if (line.Length == 0)
+            {
+                break;
+            }
+
+            var equals = line.IndexOf('=', StringComparison.Ordinal);
+            if (equals < 0)
+            {
+                continue;
+            }
+
+            var value = line[(equals + 1)..];
+            switch (line[..equals])
+            {
+                case "protocol":
+                    protocol = value;
+                    break;
+                case "host":
+                    host = value;
+                    break;
+                case "username":
+                    username = value;
+                    break;
+                case "password":
+                    password = value;
+                    break;
+            }
+        }
+
+        return new GitCredentialInput(protocol, host, username, password);
+    }
+
+    /// <summary>
+    /// What the helper prints for git's <c>get</c> (4.5): <c>username=x-access-token</c> and the
+    /// token, each line ended by <c>\n</c>; null when <paramref name="token"/> is null, empty, or
+    /// holds a carriage return, a line feed or a NUL, which would break git's format.
+    /// </summary>
+    public static string? CredentialAnswerText(string? token) =>
+        string.IsNullOrEmpty(token) || token.AsSpan().IndexOfAny('\r', '\n', '\0') >= 0
+            ? null
+            : $"username={CredentialUserName}\npassword={token}\n";
+
+    /// <summary>
+    /// The lower-case hex SHA-256 of <paramref name="secret"/>'s UTF-8 bytes: an erase names the
+    /// refused password by it, never by the password (D273).
+    /// </summary>
+    public static string SecretHash(string secret)
+    {
+        ArgumentNullException.ThrowIfNull(secret);
+        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(secret)));
     }
 
     /// <summary>
@@ -168,6 +297,39 @@ public static class AskPassProtocol
         return output.ToArray();
     }
 
+    private static void WriteNullable(Utf8JsonWriter writer, string name, string? value)
+    {
+        if (value is null)
+        {
+            writer.WriteNull(name);
+        }
+        else
+        {
+            writer.WriteString(name, value);
+        }
+    }
+
+    /// <summary>A field that must be there, as a string or null.</summary>
+    private static bool TryNullable(JsonElement root, string name, out string? value)
+    {
+        value = null;
+        if (!root.TryGetProperty(name, out var element))
+        {
+            return false;
+        }
+
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Null:
+                return true;
+            case JsonValueKind.String:
+                value = element.GetString();
+                return true;
+            default:
+                return false;
+        }
+    }
+
     private static string? String(JsonElement root, string name) =>
         root.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
@@ -181,3 +343,24 @@ public static class AskPassProtocol
 /// <param name="Prompt">The helper's one argument: the prompt as git or ssh wrote it.</param>
 /// <param name="SshPrompt"><c>SSH_ASKPASS_PROMPT</c>, or null when it is not set.</param>
 public sealed record AskPassRequest(string Token, string Operation, string Prompt, string? SshPrompt);
+
+/// <summary>One credential request of the helper's credential mode (docs/phase-7a-design.md 4.5).</summary>
+/// <param name="Token">The session's secret from <see cref="AskPassProtocol.TokenVariable"/>.</param>
+/// <param name="Operation">The scope's id from <see cref="AskPassProtocol.OperationVariable"/>.</param>
+/// <param name="Action">git's action: <c>get</c> or <c>erase</c>.</param>
+/// <param name="Protocol">git's <c>protocol</c>.</param>
+/// <param name="Host">git's <c>host</c> as git wrote it, with a port when the URL has one.</param>
+/// <param name="Username">git's <c>username</c>, when it gave one.</param>
+/// <param name="SecretHash">For <c>erase</c>: <see cref="AskPassProtocol.SecretHash"/> of the refused password, never the password.</param>
+public sealed record AskPassCredentialRequest(string Token, string Operation, string Action, string Protocol, string Host, string? Username, string? SecretHash);
+
+/// <summary>What the helper keeps of git's credential input (4.5). Its text never shows the password.</summary>
+/// <param name="Protocol">git's <c>protocol</c>, or null.</param>
+/// <param name="Host">git's <c>host</c>, or null.</param>
+/// <param name="Username">git's <c>username</c>, or null.</param>
+/// <param name="Password">git's <c>password</c> (on <c>store</c> and <c>erase</c>), or null.</param>
+public sealed record GitCredentialInput(string? Protocol, string? Host, string? Username, string? Password)
+{
+    public override string ToString() =>
+        $"GitCredentialInput {{ Protocol = {Protocol}, Host = {Host}, Username = {Username}, Password = {(Password is null ? "null" : "***")} }}";
+}

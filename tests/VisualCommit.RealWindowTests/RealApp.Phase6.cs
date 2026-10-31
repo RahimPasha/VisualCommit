@@ -60,8 +60,9 @@ public sealed partial class RealApp
 
     /// <summary>
     /// The git environment <see cref="Launch(string, IReadOnlyDictionary{string, string?}?)"/> gives a
-    /// launch on <paramref name="dataDirectory"/> (17.2): <c>GIT_CONFIG_GLOBAL</c> and
-    /// <c>XDG_CONFIG_HOME</c> in the data folder's <c>harness</c> folder, as a scripted session's.
+    /// launch on <paramref name="dataDirectory"/> (17.2): <c>GIT_CONFIG_GLOBAL</c>,
+    /// <c>XDG_CONFIG_HOME</c> and, since phase 7a, <c>HOME</c> in the data folder's <c>harness</c>
+    /// folder, as a scripted session's.
     /// </summary>
     public static IReadOnlyDictionary<string, string?> GitEnvironmentOf(string dataDirectory) => GitIsolation.SessionGitEnvironment(dataDirectory);
 

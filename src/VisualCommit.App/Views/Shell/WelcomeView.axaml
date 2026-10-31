@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
+             xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
              xmlns:vm="using:VisualCommit.App.ViewModels"
              xmlns:ws="using:VisualCommit.App.ViewModels.Workspaces"
              x:Class="VisualCommit.App.Views.Shell.WelcomeView"
@@ -175,11 +176,26 @@
         <TextBlock Classes="heading" Text="Clone a repository" />
 
         <TextBlock Classes="secondary" Text="Repository URL" />
-        <TextBox Name="CloneUrlBox"
-                 Text="{Binding CloneUrl}"
-                 IsEnabled="{Binding CanEditClone}"
-                 AutomationProperties.AutomationId="CloneUrlBox"
-                 AutomationProperties.Name="Repository URL" />
+        <!-- "From GitHub…" only while signed in (docs/phase-7a-design.md 9.3, D261, D302): collapsed,
+             it takes no room, so the URL box is laid out as before. No tooltip. -->
+        <DockPanel>
+          <Button Name="CloneFromGitHubButton"
+                  DockPanel.Dock="Right"
+                  Theme="{StaticResource VcActionButton}"
+                  Margin="6,0,0,0" Padding="10,4"
+                  Command="{Binding BrowseGitHubCommand}"
+                  IsVisible="{Binding ShowsGitHubButton}"
+                  IsEnabled="{Binding CanEditClone}"
+                  AutomationProperties.AutomationId="CloneFromGitHubButton"
+                  AutomationProperties.Name="{x:Static ops:OperationTexts+CloneTexts.FromGitHubButton}">
+            <TextBlock Text="{x:Static ops:OperationTexts+CloneTexts.FromGitHubButton}" />
+          </Button>
+          <TextBox Name="CloneUrlBox"
+                   Text="{Binding CloneUrl}"
+                   IsEnabled="{Binding CanEditClone}"
+                   AutomationProperties.AutomationId="CloneUrlBox"
+                   AutomationProperties.Name="Repository URL" />
+        </DockPanel>
 
         <TextBlock Classes="secondary" Text="Parent folder" />
         <DockPanel>

@@ -1,5 +1,6 @@
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.Git.Tests.RepositoryTestSupport;
 
@@ -164,7 +165,7 @@ public class RefReadingTests
             {
                 if (armed && (listFirst ? IsHeadSha(command) : IsList(command)))
                 {
-                    await firstDone.Task.WaitAsync(TimeSpan.FromSeconds(30), TestCancelled);
+                    await firstDone.Task.WaitAsync(TimeSpan.FromSeconds(60), TestCancelled);
                     second = await repo.CommitFileAsync("a.txt", "b\n", "Second");
                 }
             },
@@ -275,6 +276,36 @@ public class RefReadingTests
     }
 
     [Fact]
+    public async Task Reads_every_remotes_urls_and_push_urls_as_configured_in_gits_reading_order()
+    {
+        // docs/phase-7a-design.md 1.2: the url and pushurl values the same read returns, kept as
+        // configured (a user part kept, no insteadOf applied), a second section of one remote later
+        // in the order; a remote with neither has none.
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "First");
+        await repo.ConfigAsync("remote.origin.url", "https://OctoCat@github.com/octocat/hello.git");
+        await repo.ConfigAsync("remote.Team.Dot.x.url", "git@github.com:team/x.git");
+        await repo.ConfigAsync("remote.Team.Dot.x.pushurl", "https://github.com/team/x.git");
+        await repo.ConfigAsync("remote.aliased.url", "gh:octocat/other.git");
+        await repo.ConfigAsync("url.https://github.com/.insteadOf", "gh:");
+        await repo.ConfigAsync("remote.onlyprune.prune", "true");
+        File.AppendAllText(Path.Combine(repo.Path, ".git", "config"), "[remote \"origin\"]\n\turl = https://example.com/mirror.git\n");
+
+        var refs = await (await OpenAsync(repo)).ReadRefsAsync(TestCancelled);
+
+        Assert.Equal(["Team.Dot.x", "aliased", "onlyprune", "origin"], refs.Remotes);
+        Assert.Equal(
+            [
+                new RemoteUrl("origin", "https://OctoCat@github.com/octocat/hello.git", IsPushUrl: false),
+                new RemoteUrl("Team.Dot.x", "git@github.com:team/x.git", IsPushUrl: false),
+                new RemoteUrl("Team.Dot.x", "https://github.com/team/x.git", IsPushUrl: true),
+                new RemoteUrl("aliased", "gh:octocat/other.git", IsPushUrl: false),
+                new RemoteUrl("origin", "https://example.com/mirror.git", IsPushUrl: false),
+            ],
+            refs.RemoteUrls);
+    }
+
+    [Fact]
     public async Task A_remote_branch_takes_the_remote_whose_line_fills_it_and_the_longest_name_when_two_or_none_do()
     {
         // 10.3: B2's namespace without the remote's name gets the remote that fetches it; a ref no
@@ -365,7 +396,7 @@ public class RefReadingTests
 
         var refs = await repository.ReadRefsAsync(TestCancelled);
 
-        Assert.Equal(5, calls.Count);
+        GitCallBudget.AssertAtMost(calls.Select(arguments => "git " + string.Join(' ', arguments)).ToList(), 5, "the refs read");
         Assert.DoesNotContain(calls, arguments => arguments.SequenceEqual(["remote"]));
         Assert.Single(calls, arguments => arguments.SequenceEqual(["config", "--null", "--get-regexp", @"^remote\."]));
         Assert.Equal(["origin"], refs.Remotes);

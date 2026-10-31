@@ -397,12 +397,31 @@ public class UndoStepRefusalTests
             Assert.Equal(merged, await PictureAsync(repo));
         }
 
+        // Once the file is closed, the undo goes through.
+        await UndoAsync(repository, merge);
+    }
+
+    [Fact]
+    public async Task A_redos_keep_move_that_git_stops_at_a_file_held_open_takes_away_the_file_it_added()
+    {
+        using var repo = await UndoRepoAsync();
+        var (repository, _) = await OpenDatedAsync(repo);
+        var merge = await RecordAsync(repository, UndoScope.Merge("refs/heads/feature", "main"), () => repository.MergeAsync("refs/heads/feature", MergeMode.NoFastForward, keepIgnored: false, cancellationToken: TestCancelled));
         merge = await UndoAsync(repository, merge);
         var undone = await PictureAsync(repo);
 
-        // The redo adds f.txt before it stops at the held file: the file it added goes again.
+        // The redo adds f.txt before it stops at src/c.txt, held open as an editor or a build holds
+        // a file on Windows: the file it added goes again. Elsewhere an open file can be replaced
+        // and the redo goes through.
+        var held = Path.Combine(repo.Path, "src", "c.txt");
         using (new FileStream(held, FileMode.Open, FileAccess.Read, FileShare.Read))
         {
+            if (!OperatingSystem.IsWindows())
+            {
+                await RedoAsync(repository, merge);
+                return;
+            }
+
             await Assert.ThrowsAsync<GitException>(() => repository.RunUndoStepAsync(UndoStep.For(merge, UndoDirection.Redo), NetworkOptions.None, TestCancelled));
             Assert.Equal(undone, await PictureAsync(repo));
         }

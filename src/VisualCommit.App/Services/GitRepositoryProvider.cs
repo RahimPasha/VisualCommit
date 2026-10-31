@@ -1,3 +1,4 @@
+using System.Globalization;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 using VisualCommit.Git;
@@ -23,6 +24,27 @@ public sealed class GitRepositoryProvider : IRepositoryProvider
         _git = git;
         _log = log ?? NullAppLog.Instance;
         _backupClock = backupClock ?? BackupClock.System;
+        // R8's test switch (D262), said once per session: the session makes one provider.
+        if (WatcherLagLine(GitRepository.WatcherLag) is { } line)
+        {
+            _log.Info(line);
+        }
+    }
+
+    /// <summary>
+    /// The Info line that says R8's test switch is on (docs/phase-7a-design.md 5.2, D262), with the
+    /// lag in whole milliseconds; null when <paramref name="lag"/> is not positive. Public for the
+    /// tests (the app has no <c>InternalsVisibleTo</c>).
+    /// </summary>
+    public static string? WatcherLagLine(TimeSpan lag)
+    {
+        if (lag <= TimeSpan.Zero)
+        {
+            return null;
+        }
+
+        var milliseconds = ((long)lag.TotalMilliseconds).ToString(CultureInfo.InvariantCulture);
+        return $"{GitRepository.WatcherLagVariable}={milliseconds}: every repository watcher holds each file-system event for {milliseconds} ms before it counts it (a test switch, D262).";
     }
 
     /// <remarks>

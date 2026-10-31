@@ -60,6 +60,8 @@
                           WorkingRowText="{Binding WorkingRowText}"
                           ScrollOffset="{Binding ScrollOffset}"
                           Search="{Binding SearchMarks}"
+                          PullRequests="{Binding HostingState.ByRef}"
+                          Avatars="{Binding Avatars}"
                           AutomationProperties.AutomationId="GraphRows"
                           AutomationProperties.Name="Commit graph" />
 

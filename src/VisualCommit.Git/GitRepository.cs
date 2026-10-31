@@ -1,3 +1,4 @@
+using System.Globalization;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
 
@@ -165,8 +166,30 @@ public sealed partial class GitRepository : IGitRepository
         return await OpenAsync(runner, folder, cancellationToken, log).ConfigureAwait(false);
     }
 
+    /// <summary>The environment variable that sets <see cref="WatcherLag"/>: whole milliseconds, 0 to 10,000.</summary>
+    public const string WatcherLagVariable = "VISUALCOMMIT_WATCHER_LAG_MS";
+
+    /// <summary>
+    /// The lag every watcher of this process holds each file-system event for (R8, D262): read
+    /// once from <see cref="WatcherLagVariable"/>. A test switch that shows on any machine what
+    /// macOS's late watcher does; zero, none, unless the variable is set.
+    /// </summary>
+    public static TimeSpan WatcherLag => ProcessWatcherLag.Value;
+
+    private static readonly Lazy<TimeSpan> ProcessWatcherLag =
+        new(() => ParseWatcherLag(Environment.GetEnvironmentVariable(WatcherLagVariable)));
+
+    /// <summary>
+    /// <see cref="WatcherLagVariable"/>'s value as a lag: whole milliseconds from 0 to 10,000;
+    /// anything else (empty, a sign, a space, a decimal point, more than 10,000) is none.
+    /// </summary>
+    internal static TimeSpan ParseWatcherLag(string? value) =>
+        int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out var ms) && ms <= 10_000
+            ? TimeSpan.FromMilliseconds(ms)
+            : TimeSpan.Zero;
+
     public IRepositoryWatcher CreateWatcher() =>
-        new RepositoryWatcher(GitDirectory, CommonDirectory, _log, workingDirectory: WorkingDirectory, allIgnored: AllIgnoredAsync);
+        new RepositoryWatcher(GitDirectory, CommonDirectory, _log, workingDirectory: WorkingDirectory, allIgnored: AllIgnoredAsync, eventLag: WatcherLag);
 
     /// <summary>
     /// Whether git ignores every one of <paramref name="paths"/> (relative to the working tree), the

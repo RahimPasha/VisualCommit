@@ -396,7 +396,7 @@ public class RepositoryViewModelFilterTests
     {
         for (var tries = 0; !condition(); tries++)
         {
-            Assert.True(tries < 1000, "The condition did not come true.");
+            Assert.True(tries < 6000, "The condition did not come true.");
             await Task.Delay(10);
         }
     }

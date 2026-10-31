@@ -206,12 +206,19 @@ public sealed partial class RepositoryOperations
             return null;
         }
 
+        // On a remote recognised as GitHub by its first configured url (ruling 8, D279, no request):
+        // refs/pull/<x>/head and /merge count as sources only when <x> is all digits.
+        var url = Repository.Refs?.RemoteUrls.FirstOrDefault(candidate => !candidate.IsPushUrl && string.Equals(candidate.Remote, remote, StringComparison.Ordinal))?.Url;
+        RemoteSource SourceOf(string destination) => url is null
+            ? refspecs.SourceOf(destination, remote)
+            : refspecs.SourceOf(destination, remote, source => Services?.Hosting.SourceCanExist(url, source) ?? true);
+
         var destinations = refspecs.DestinationsOf(remote, remoteRef)
             .Where(destination => destination.StartsWith(RemotesPrefix, StringComparison.Ordinal))
             .ToList();
-        var ambiguous = destinations.FirstOrDefault(destination => refspecs.SourceOf(destination, remote).Kind == RemoteSourceKind.AmbiguousRefs);
+        var ambiguous = destinations.FirstOrDefault(destination => SourceOf(destination).Kind == RemoteSourceKind.AmbiguousRefs);
         if (ambiguous is null
-            || destinations.Exists(destination => refspecs.SourceOf(destination, remote).Kind == RemoteSourceKind.Mapped && FindRef(destination) is not null))
+            || destinations.Exists(destination => SourceOf(destination).Kind == RemoteSourceKind.Mapped && FindRef(destination) is not null))
         {
             return null;
         }

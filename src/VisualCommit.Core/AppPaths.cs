@@ -24,6 +24,12 @@ public sealed record AppPaths(string DataDirectory)
     /// </summary>
     public string MergeToolsFile => Path.Combine(DataDirectory, "merge-tools.json");
 
+    /// <summary>The hosting account's record, never its token (docs/phase-7a-design.md 1.8, D292).</summary>
+    public string AccountsFile => Path.Combine(DataDirectory, "accounts.json");
+
+    /// <summary>The hosting service's avatars and the authors' e-mail maps (D252, D291); a sign-out deletes it whole.</summary>
+    public string AvatarsDirectory => Path.Combine(DataDirectory, "avatars");
+
     public string LogDirectory => Path.Combine(DataDirectory, "logs");
 
     /// <summary>

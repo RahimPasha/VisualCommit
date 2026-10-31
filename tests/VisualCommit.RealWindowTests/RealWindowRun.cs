@@ -26,7 +26,17 @@ public sealed class RealWindowRun : IDisposable
 
     /// <summary>Starts the run of a phase's pass and empties its folder, so that every file in it comes from this run.</summary>
     public RealWindowRun(int phase)
+        : this(phase.ToString(CultureInfo.InvariantCulture))
     {
+    }
+
+    /// <summary>
+    /// Starts the run of a phase's pass, the phase named as the docs write it ("7a",
+    /// docs/phase-7a-design.md 0.3), and empties its folder, so that every file in it comes from this run.
+    /// </summary>
+    public RealWindowRun(string phase)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(phase);
         Phase = phase;
         Folder = Screens.RealWindowFolder(phase);
         Directory.CreateDirectory(Folder);
@@ -39,7 +49,8 @@ public sealed class RealWindowRun : IDisposable
         Note($"Windows: {RuntimeInformation.OSDescription}");
     }
 
-    public int Phase { get; }
+    /// <summary>The phase, as the docs write it: "6", "7a".</summary>
+    public string Phase { get; }
 
     /// <summary><c>artifacts/visual/phase-N/real-window/</c>.</summary>
     public string Folder { get; }

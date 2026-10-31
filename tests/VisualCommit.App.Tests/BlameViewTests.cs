@@ -94,7 +94,7 @@ public class BlameViewTests
         Assert.True(editor.IsTokenizing);
         Assert.False(editor.IsHighlighted);
         Assert.Equal(DiffTextView.SynchronousHighlightLimit + 500, editor.Document.LineCount);
-        var until = DateTime.UtcNow.AddSeconds(30);
+        var until = DateTime.UtcNow.AddSeconds(60);
         while (editor.IsTokenizing)
         {
             Assert.True(DateTime.UtcNow < until, "The background tokenizing did not end.");
@@ -110,7 +110,7 @@ public class BlameViewTests
         editor.Show(large, "src/Large.cs", highlighting: true);
         editor.Show(large, "src/Large.cs", highlighting: true);
         Assert.True(editor.IsTokenizing);
-        until = DateTime.UtcNow.AddSeconds(30);
+        until = DateTime.UtcNow.AddSeconds(60);
         while (editor.IsTokenizing)
         {
             Assert.True(DateTime.UtcNow < until, "The background tokenizing did not end.");

@@ -47,3 +47,7 @@ dotnet_diagnostic.CA1707.severity = none
 # compiler takes any *.g.cs name, in any case, for generated code and turns nullable annotations off.
 [tests/VisualCommit.VisualTests.Phase6*/*.G.cs]
 generated_code = false
+
+# Part G of phase 7a (Phase7aChecks.G.cs, Phase7aExpectations.G.cs, Phase7aExpectationTests.G.cs): the same.
+[tests/VisualCommit.VisualTests.Phase7a*/*.G.cs]
+generated_code = false

@@ -69,6 +69,37 @@ public static class AskPassRunner
         CancellationToken cancellationToken = default)
     {
         var startInfo = CreateStartInfo(environment, prompt, sshPromptKind, helperPath);
+        return await RunAsync(startInfo, null, $"the prompt \"{prompt}\"", timeout, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Runs the helper as git runs a credential helper (docs/phase-7a-design.md 4.5):
+    /// <c>--vc-credential</c> and <paramref name="action"/> as its arguments (none after the first
+    /// when <paramref name="action"/> is null), <paramref name="standardInput"/> written to its
+    /// input and the input closed, and the variables <paramref name="environment"/> gives on top of
+    /// the test process's (a null value removes one). <c>SSH_ASKPASS_PROMPT</c> is removed.
+    /// </summary>
+    public static Task<AskPassResult> RunCredentialAsync(
+        string? action,
+        string standardInput,
+        IReadOnlyDictionary<string, string?> environment,
+        string? helperPath = null,
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(standardInput);
+        string[] arguments = action is null ? ["--vc-credential"] : ["--vc-credential", action];
+        var startInfo = CreateStartInfo(environment, arguments, null, helperPath);
+        return RunAsync(startInfo, standardInput, $"the credential action \"{action}\"", timeout, cancellationToken);
+    }
+
+    private static async Task<AskPassResult> RunAsync(
+        ProcessStartInfo startInfo,
+        string? standardInput,
+        string description,
+        TimeSpan? timeout,
+        CancellationToken cancellationToken)
+    {
         if (!File.Exists(startInfo.FileName))
         {
             throw new FileNotFoundException(
@@ -79,7 +110,21 @@ public static class AskPassRunner
         var limit = timeout ?? DefaultTimeout;
         using var process = Process.Start(startInfo) ?? throw new InvalidOperationException($"{startInfo.FileName} did not start.");
 
-        // The helper never reads its input: closed at once, as nothing would answer it.
+        // A prompt's helper never reads its input: closed at once, as nothing would answer it. A
+        // credential helper gets git's request first, as git writes it before it reads.
+        if (standardInput is not null)
+        {
+            try
+            {
+                await process.StandardInput.WriteAsync(standardInput.AsMemory(), cancellationToken).ConfigureAwait(false);
+                await process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (IOException)
+            {
+                // The helper ended without reading it all: its exit code tells.
+            }
+        }
+
         process.StandardInput.Close();
         var output = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
         var error = process.StandardError.ReadToEndAsync(CancellationToken.None);
@@ -104,7 +149,7 @@ public static class AskPassRunner
             cancellationToken.ThrowIfCancellationRequested();
             throw new TimeoutException(string.Create(
                 System.Globalization.CultureInfo.InvariantCulture,
-                $"The askpass helper was still running after {limit.TotalSeconds:0.###} s with the prompt \"{prompt}\"."));
+                $"The askpass helper was still running after {limit.TotalSeconds:0.###} s with {description}."));
         }
 
         return new AskPassResult(process.ExitCode, await output.ConfigureAwait(false), await error.ConfigureAwait(false));
@@ -123,8 +168,19 @@ public static class AskPassRunner
         string? sshPromptKind = null,
         string? helperPath = null)
     {
-        ArgumentNullException.ThrowIfNull(environment);
         ArgumentNullException.ThrowIfNull(prompt);
+
+        // One argument, passed as it is, however many spaces, quotes or line feeds it holds.
+        return CreateStartInfo(environment, [prompt], sshPromptKind, helperPath);
+    }
+
+    private static ProcessStartInfo CreateStartInfo(
+        IReadOnlyDictionary<string, string?> environment,
+        IReadOnlyList<string> arguments,
+        string? sshPromptKind,
+        string? helperPath)
+    {
+        ArgumentNullException.ThrowIfNull(environment);
         var startInfo = new ProcessStartInfo(helperPath ?? HelperPath)
         {
             UseShellExecute = false,
@@ -136,8 +192,10 @@ public static class AskPassRunner
             StandardErrorEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
         };
 
-        // One argument, passed as it is, however many spaces, quotes or line feeds it holds.
-        startInfo.ArgumentList.Add(prompt);
+        foreach (var argument in arguments)
+        {
+            startInfo.ArgumentList.Add(argument);
+        }
 
         foreach (var (variable, value) in environment)
         {

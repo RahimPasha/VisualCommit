@@ -68,7 +68,12 @@ public partial class MainWindowViewModel
                     _tabServices.Folders,
                     Dialogs,
                     _tabServices.RaiseGitSettingsChanged,
-                    _log),
+                    _log)
+                {
+                    Hosting = _tabServices.Hosting,
+                    SignIn = SignInToGitHubAsync,
+                    GitVersion = Git?.Version,
+                },
                 section);
             await Dialogs.ShowAsync(dialog);
         }

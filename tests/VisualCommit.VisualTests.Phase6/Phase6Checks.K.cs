@@ -73,7 +73,7 @@ public sealed partial class Phase6ChecksK : Phase6Checks
 
         // Step 2: Ctrl+Shift+P (k10a).
         var mark = app.LogMark();
-        var sequence = app.CallMark();
+        var sequence = await app.QuietCallMarkAsync();
         var operations = app.Session.Operations.Snapshot().Count;
         PressPaletteKey(app);
         Assert.True(app.IsPaletteOpen, "Ctrl+Shift+P did not open the palette.");

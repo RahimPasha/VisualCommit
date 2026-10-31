@@ -1,6 +1,7 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Operations;
 
 namespace VisualCommit.App.ViewModels.Panels;
 
@@ -92,14 +93,18 @@ public sealed class RefSectionRow : RefListRow
 
     public RefSection Section { get; }
 
-    /// <summary>Matching local branches, remote branches, tags or stashes; always 0 for pull requests until phase 7.</summary>
+    /// <summary>
+    /// Matching local branches, remote branches, tags, stashes or pull requests; 0 for the "Pull
+    /// requests" placeholder of a repository without a GitHub remote (docs/phase-7a-design.md 10.3).
+    /// </summary>
     public int Count { get; }
 
     public string CountText => Count.ToString(CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// A click opens or closes the section. False for "Pull requests", which stays closed until
-    /// phase 7, and for every section of a panel without a repository.
+    /// A click opens or closes the section. False for the "Pull requests" placeholder of a
+    /// repository without a GitHub remote, which stays closed (D251), and for every section of a
+    /// panel without a repository.
     /// </summary>
     public bool CanToggle { get; }
 
@@ -142,7 +147,8 @@ public sealed partial class RefItemRow : RefListRow
         int behind = 0,
         RefRowMarks? marks = null,
         Action<RefItemRow>? showHidden = null,
-        Action<RefItemRow>? stopSoloing = null)
+        Action<RefItemRow>? stopSoloing = null,
+        (int Number, string Title)? pullRequest = null)
         : base(key, text, depth, isOpen, activate)
     {
         Kind = kind;
@@ -154,6 +160,11 @@ public sealed partial class RefItemRow : RefListRow
         Marks = marks ?? RefRowMarks.None;
         ShowHiddenCommand = new RelayCommand(() => showHidden?.Invoke(this), () => showHidden is not null);
         StopSoloingCommand = new RelayCommand(() => stopSoloing?.Invoke(this), () => stopSoloing is not null);
+        if (pullRequest is { } open)
+        {
+            PullRequestText = "#" + open.Number.ToString(CultureInfo.InvariantCulture);
+            PullRequestToolTip = OperationTexts.PullRequestOfBranch(open.Number, open.Title);
+        }
     }
 
     public RefItemKind Kind { get; }
@@ -221,10 +232,24 @@ public sealed partial class RefItemRow : RefListRow
     /// <summary>The solo button: ends the branch's solo (8.3).</summary>
     public IRelayCommand StopSoloingCommand { get; }
 
+    /// <summary>
+    /// The branch's open pull request (docs/phase-7a-design.md 10.3, D308): <c>#1</c> at the row's
+    /// right before its counts and toggles; empty without one, and for every row of a repository
+    /// without a GitHub remote.
+    /// </summary>
+    public string PullRequestText { get; } = string.Empty;
+
+    /// <summary>The <c>#1</c>'s tooltip: <c>Pull request #1: Add the login form</c>; null without one.</summary>
+    public string? PullRequestToolTip { get; }
+
+    /// <summary>The <c>#1</c> shows (<c>RefPullRequest</c>); collapsed, it takes no room.</summary>
+    public bool ShowsPullRequest => PullRequestText.Length > 0;
+
     public override bool ShowsSameAs(RefListRow other) =>
         other is RefItemRow item
         && item.Key == Key && item.Kind == Kind && item.Text == Text && item.ToolTip == ToolTip
         && item.Depth == Depth && item.IsOpen == IsOpen && item.TargetSha == TargetSha
         && item.IsHead == IsHead && item.Ahead == Ahead && item.Behind == Behind
-        && item.IsSelected == IsSelected && item.Marks == Marks;
+        && item.IsSelected == IsSelected && item.Marks == Marks
+        && item.PullRequestText == PullRequestText && item.PullRequestToolTip == PullRequestToolTip;
 }
