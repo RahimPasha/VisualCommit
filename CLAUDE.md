@@ -306,7 +306,7 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Real-window pass (Windows only) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`: the pass is a whole-project run, so on the laptop it runs under the heavy-run lock (D245) and no other heavy run starts beside it; without the lock it is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (the script has not run the pass yet) |
 | One real-window check alone (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*<test name>*"`, for example `--filter-method "*Check_S14*"` (run so at phase 6's gate for S14) |
 | A phase's own real-window checks alone (Windows only; D246's two runs) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`: it takes the mouse like the pass and empties `artifacts/visual/phase-7a/real-window/` (not run yet: phase 7a's gate runs it first) |
-| The opt-in live command against real GitHub (Windows only; the owner's sandbox token, D250, D260) | `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`: about two minutes with its build; its findings in `artifacts/live/github/run.txt` (not run with its variables yet; without them both its tests fail at once by design) |
+| The opt-in live command against real GitHub (Windows only; the owner's sandbox token, D250, D260) | `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`: about a minute with its build (63 s on 2026-10-30, 33 s with the build up to date); its findings in `artifacts/live/github/run.txt`; without the variables its three live tests fail at once by design (a session started before the owner set them: "What to know") |
 | The live command's offline safety tests (Windows; no variables, no network) | `dotnet test --project tests/VisualCommit.LiveHostingTests -c Release --filter-class "*LiveSafetyTests"`: the token search, the request log and the clean-up's selection with made-up tokens, in process |
 | Compare pictures with reference pictures (a gate's inspection; needs Python with Pillow and NumPy) | `python scripts/compare-pictures.py <reference folder> artifacts/visual <output folder>`: a difference picture per changed picture and `summary.md`, grouped by the window regions the changes lie in |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
@@ -408,7 +408,14 @@ What to know about them:
   step 4). In a session where the two variables are set, every shell inherits the token: never
   print the whole environment (`env`, `printenv`, `set`, `export -p`, `Get-ChildItem Env:`); read
   a variable by its name, or filter the list (`env | grep -v '^VISUALCOMMIT_LIVE_'`), and tell
-  every agent of that session so.
+  every agent of that session so. A session whose VS Code started before the owner set the
+  variables does not have them in its shells (a process inherits the environment it was started
+  with); then give them to the command's own process alone from the Windows user scope, never
+  printed, in PowerShell:
+  `$env:VISUALCOMMIT_LIVE_GITHUB_TOKEN = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_TOKEN','User'); $env:VISUALCOMMIT_LIVE_GITHUB_REPO = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_REPO','User'); & 'C:\Program Files\Git\bin\bash.exe' scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`
+  (Git Bash by its path: PowerShell finds no `bash` on `PATH` there, and a bare `bash` could be
+  WSL's). The variables last for that one command. Check that they exist by name, length and
+  prefix only (first done on 2026-10-30).
 - To run the app without touching the real settings, set the environment variable
   `VISUALCOMMIT_DATA_DIR` to an empty folder first. Without it the app uses the per-user data
   folder: `%APPDATA%\VisualCommit` on Windows, `~/.config/VisualCommit` on Linux,

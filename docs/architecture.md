@@ -3883,11 +3883,16 @@ supported (D258).
     (`RetryAt` from `X-RateLimit-Reset`); 403 or 429 with `Retry-After`, or with a message naming
     the secondary rate limit, `RateLimited` (`RetryAt` now plus `Retry-After`'s seconds, at most a
     day, or its date, or 60 s); any other 403 `Forbidden` (`Detail`
-    `X-Accepted-GitHub-Permissions`); 404 `NotFound`; 410, or a 400 whose message names
-    `X-GitHub-Api-Version`, `ApiVersion`; 422 `Validation` (`Detail` the first error's `message`,
+    `X-Accepted-GitHub-Permissions`); 404 `NotFound`; 410, or a 400 whose first `errors` item or
+    else whose `message` names `X-GitHub-Api-Version` (GitHub's refusal of a version: "Bad Request"
+    with its explanation in `errors` as one string, D342), `ApiVersion` with that text; 422
+    `Validation` (`Detail` the first error's `message`,
     else `<field> is invalid`, `is missing` or `already exists` by its code, else GitHub's
     `message`); 5xx `ServerError`; anything else (a 429 with none of the above included) and a body
-    that does not parse `Malformed`, "GitHub's answer could not be read.". `Message` is GitHub's own
+    that does not parse `Malformed`, "GitHub's answer could not be read.". `errors` is read by
+    `GitHubErrorsConverter` as an array of objects, an array of strings or one string, each string an
+    item with that `message`; any other value is skipped, so it never costs the body its `message`.
+    `Message` is GitHub's own
     `message` (ruling 15), else the reason phrase or `HTTP <status>` (a 5xx's "GitHub had a problem:
     HTTP <status>."); `Url` the address that answered, after any redirects (a renamed repository's
     `repositories/<id>`), without its query; `RequestId` `X-GitHub-Request-Id`. A 409 is no failure:
@@ -3917,9 +3922,11 @@ supported (D258).
     409 (an empty repository) ending the call with an empty map and no lookup; without a branch, no
     page. Then at most 20 lookups (`MaxAuthorLookups`) of the given `AuthorCommit`s whose e-mail the
     map lacks, in order, each `repos/{owner}/{name}/commits?sha={sha}&author={e-mail}&per_page=1` in
-    its own repository from its own commit. A lookup answered 404 or 409 leaves out the rest of that
-    repository's in the call, one answered 422 (no such commit) its own address, and any other
-    failure stops them; an address left out is not in the map.
+    its own repository from its own commit. A lookup answered 409, or 404 in a repository other than
+    the listed one, leaves out the rest of that repository's in the call; one answered 422, a 5xx or
+    404 in the listed repository (a commit GitHub lacks: github.com answers it 500 with an empty body
+    beside `author`) leaves out its own address and the others go on (D342); any other failure stops
+    them. An address left out is not in the map, so it is asked again at a later run.
   - Avatars' addresses are kept only when `https` on `avatars.githubusercontent.com` (github.com) or
     on the web address's own origin (the fake); any other makes the author unknown, with one warning
     per provider that names that address's scheme, host and port only.
@@ -5366,13 +5373,15 @@ in `HoldNext`, `FailNext` and the records:
 | `pulls:o/r` | `GET …/pulls` | paged, number descending; `state` (`open` by default), `head` as `owner:ref`, `base` |
 | `create:o/r` | `POST …/pulls` | 201, author the token's login, `refs/pull/<n>/head` written; 422 "Validation Failed" for a missing title, a base or head that is no branch, an open pull request with that head and base ("A pull request already exists for …") or nothing ahead ("No commits between …"); 403 "Resource not accessible by personal access token" with `X-Accepted-GitHub-Permissions: pull_requests=write` for a fine-grained token whose login cannot push to the base |
 | `update:o/r` | `PATCH …/pulls/<n>` | 200; `{"state":"closed"}` closes |
-| `commits:o/r` | `GET …/commits` | one `git log` from `sha` (the default branch when absent), filtered by `author` (an e-mail, or a login through `LinkEmail`), paged; 422 "No commit found for SHA: …", 409 "Git Repository is empty." |
+| `commits:o/r` | `GET …/commits` | one `git log` from `sha` (the default branch when absent), filtered by `author` (an e-mail, or a login through `LinkEmail`), paged; a revision git cannot resolve 404 "Not Found", or beside `author` 500 with an empty body (both as github.com answers, D342); 409 "Git Repository is empty." |
 | `avatar:<id>` | `GET avatars/u/<id>` (any query) | the user's `AvatarBytes`, without auth |
 | `page:o/r` | `GET o/r`, `o/r/pulls`, `o/r/pull/<n>` (and `page:settings` for `settings/…`) | `text/html`, `<!doctype html><title>…</title>` |
 | `git:o/r` | git, over TCP only | `AuthRemoteServer`'s host mode (below) |
 
 API requests are checked in order: no `User-Agent`, 403; `X-GitHub-Api-Version` other than
-`GitHubApi.Version`, 400 "Unsupported 'X-GitHub-Api-Version' header: …"; `Accept` without
+`GitHubApi.Version`, 400 "Bad Request" with the explanation in `errors` as one string: GitHub's own
+words for a version GitHub does not support, the fake's own for a missing header or `2022-11-28`,
+which GitHub accepts and only D266 refuses; `Accept` without
 `application/vnd.github+json`, 415; a pending fault; no `Authorization` or a `Basic` one, 401
 "Requires authentication"; a `Bearer` or `token` with an unknown or revoked token, 401 "Bad
 credentials"; a private repository the login cannot see (neither owner nor pusher, or a classic
@@ -5383,13 +5392,16 @@ the pages, and an avatar's 404, has `X-GitHub-Request-Id: FAKE-<4 digits>` (an a
 32 hex digits of the body's SHA-256), and a matching `If-None-Match` gets 304 without a body and is
 not counted; a signed-in request the `X-RateLimit-*` headers (5,000 per login, reset an hour after
 `AppClocks.HarnessTime`); a page `Link` (`next`, `last`, and `prev`, `first` past page 1); a classic
-token's answer `X-OAuth-Scopes`; a token with an expiry `GitHub-Authentication-Token-Expiration`.
+token's answer `X-OAuth-Scopes`; a token with an expiry `GitHub-Authentication-Token-Expiration`,
+except on a 304. Errors carry the generic documentation URL, except where GitHub's own was recorded:
+the `type` 422, the create's 422s (whose `errors` items carry `resource` first) and the commits 404.
 Avatars and pages are answered before any check; an avatar request that carries `Authorization` is
 answered and recorded `TokenPresent`, which the checks assert never happens. The texts of the
-version, `type`, unknown-SHA, empty-repository and duplicate-create answers were written from
-memory: the live command records GitHub's own for all but the empty repository's, which its sandbox,
-holding a commit, cannot show (see "The live command"), and the lead corrects the fake from its
-`run.txt` (design 15 point 1), which has not happened before phase 7a's gate.
+version, `type`, unknown-SHA and duplicate-create answers are GitHub's own, as the live command
+recorded them on 2026-10-30 (D342); the empty repository's 409, `ApiVersionGone`'s 410 and the
+`ServerError` fault's body are still from memory (its sandbox has a commit, and GitHub's one 500 had
+no body). A fine-grained token reaches every repository its login owns or may push to: GitHub's "Only
+select repositories" is not modelled.
 
 **Holds, faults and renames.** `HoldNext(route)` returns a `FakeGitHubHold`: the next request of
 that route waits before anything is decided about it until the hold is disposed, at most 120 s
@@ -5544,7 +5556,7 @@ that no git or app process inherits them; then `HeadlessTestApp.IsolateFromTheMa
 limit becomes 600 s unless the owner set one (`Check_2`'s step limits add up to about 510 s).
 `LiveSettings.Require()` gives a `LiveSandbox(Owner, Name, Token)`, whose `ToString()` leaves the
 token out, or throws one message naming the variable that is missing or not `owner/name`; every test
-calls it first and none is skipped, so without the variables both fail at once (a skip could pass
+calls it first and none is skipped, so without the variables all three fail at once (a skip could pass
 for green at a gate). Tests run one at a time (`DisableTestParallelization`), in `GitHubLiveOrder`'s
 order.
 
@@ -5555,11 +5567,18 @@ that may not push fails, naming D326 or design 14.6. It then removes what a stop
 open pull requests whose head is a `visualcommit-live/` branch of the sandbox itself are closed and
 the branches under `refs/heads/visualcommit-live/` (compared ordinally, `LiveLeftovers`) deleted;
 anything else GitHub's `matching-refs` returns is noted as not touched, and a refused clean-up fails
-the test. Last, read-only probes record GitHub's answers where the fake's texts were written from
-memory (an unknown API version, `user/repos?type=owner&visibility=all`, an unknown SHA, and the
-avatars' lookup `commits?sha=&author=` for the latest commit's author and for an address with no
-commit, D339), findings that fail nothing; a 2xx body is recorded by its shape only and no address
-is named.
+the test. Last, read-only probes (`LiveProbes.cs`) record GitHub's answers to what the fake imitates
+(an unknown API version, `user/repos?type=owner&visibility=all`, an unknown SHA without and beside
+`author`, beside a linked address and an unlinked one, a second unknown SHA that is not all f's, a
+branch GitHub lacks, and the avatars' lookup `commits?sha=&author=` for the latest commit's author and
+for an address with no commit, D339), each with its Content-Type, `X-GitHub-Api-Version-Selected`
+and `X-RateLimit-Remaining`; an empty body is noted "(empty)", a 2xx body by its shape only, and no
+address is named. Each probe is also answered by an in-process `FakeGitHub` (with a token of its own,
+5 s a call) and noted "the fake: same" or the fake's status, message and `errors` where they differ,
+so a change of GitHub's or of the fake shows at the next run. The answers the app relies on are
+premises that fail the run once noted: the version's 400 names the header in `message` or `errors`;
+the lookups answer an array of 1 and of 0; an unknown SHA beside `author` answers 422, a 5xx or 404
+(D342).
 
 **`Check_2_sign_in_clone_list_push_and_create`** (`[AvaloniaFact]`) starts the app with
 `ShellDriver.StartWithTabs(data, [null], hosting: new HostingOptions(GitHubEndpoints.GitHubCom, …))`
@@ -5579,13 +5598,22 @@ ends; the test commits a file on a new branch `visualcommit-live/<UTC time>` as 
 test" `<live-test@visualcommit.invalid>` (D325), and "Create pull request…" on its row pushes it and
 creates a draft through the form (when GitHub refuses the draft with a text that names drafts, the
 text is recorded and the same form creates a ready pull request, design 18 item 2); the test reads
-it back, tries the same create again and records GitHub's answer (422 expected, a 201 closed in the
+it back, tries the same create again and records GitHub's answer (422 expected, whose first error
+must start "A pull request already exists", D316's premise; a 201 closed in the
 clean-up), then in `finally` closes it and deletes the branch, each call on its own, a failure
 failing the test after it is recorded. After the app is disposed, `TokenTripwire` searches the data
 folder, the clone, the test identity's home and the app's git calls; every recorded request must be
 `https`, every one with `Authorization` must have gone to `api.github.com`, and none may precede the
 sign-in (D327). A watchdog stop ends the process mid-method: the clean-up does not run, and the next
 `Check_1` removes the leftovers.
+
+**`Check_3_the_providers_answers_from_github`** (`[Fact]`, D342) runs the product's own
+`GitHubProvider` against `api.github.com` through `LiveRequestLog`: its A1 with
+`X-GitHub-Api-Version` rewritten to `2000-01-01` by a handler of the test's must fail as `ApiVersion`
+with a message that names the header, and its A6 lookups alone (no branch, so that the commits page
+cannot answer the second address first), an unknown SHA beside a made-up address and then the latest
+commit beside its author's, must map the second to the sandbox's owner and leave the first out; each
+step needs its requests in the log, and the tripwires are `Check_2`'s.
 
 **What keeps the token in** (D323, design 14.5, 18 item 2). `LiveRequestLog`, a `DelegatingHandler`,
 records per request the time, method, scheme, host, path without the query, status, whether
@@ -5599,16 +5627,20 @@ text and a failing step's exception are searched for the token as written, URL-e
 `x-access-token:<token>` and of the token, and as any 16 of its characters in a row: a note that holds
 it is kept as "A note was withheld: it held the token.", a file that holds it is not written, and an
 exception that holds it is replaced by one naming the step and the exception's type
-(`LiveRun.FailureOf`); each find fails the run. The token is sent only by the dialog's typing and the
-test's own API calls, compared only with `string.Equals` or `string.Contains`, and never passed to an
-assertion, a message, a git argument or environment, or a file. `LiveSafetyTests` prove the search,
-the request log and the clean-up's selection offline, with made-up tokens and an in-process handler,
-by their own command (CLAUDE.md), with no variable and no network.
+(`LiveRun.FailureOf`); each find fails the run. The token is sent only by the dialog's typing, the
+test's own API calls and `Check_3`'s provider, all to `https://api.github.com/` alone (`GitHubLiveApi`
+refuses the owner's token with any other API base), compared only with `string.Equals` or
+`string.Contains`, and never passed to an assertion, a message, a git argument or environment, a
+file or the in-process fake. `LiveSafetyTests` (109) prove the search, the request log, the
+clean-up's selection, the probes' notes beside the fake, the premises and the version rewriter
+offline, with made-up tokens and an in-process handler, by their own command (CLAUDE.md), with no
+variable and no network.
 
-Until phase 7a's gate it has run only without its variables, where both tests fail at once with
-the one message and no request is made, and `LiveSafetyTests` pass (design 18 item 2). Its first
-run with the token comes at the gate, before the pictures (D335); its findings go into the 7a
-report's "Live command" and, where they differ, into the fake.
+Its runs with the token are in the 7a report's "Live command" and design 20: the first (status step
+16, 2026-10-30) found GitHub's version refusal and its answer to an unknown SHA beside `author`
+unlike the fake's, each hiding a defect of the app's (D342); the second, on the merged corrections,
+passed with every probe "the fake: same" (63 s with its build) and stands as the gate's run before
+its pictures.
 
 ### CI
 

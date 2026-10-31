@@ -4425,6 +4425,7 @@ sizes, which the lead accepted, in `docs/status.md`.
    a redirect to another host (which gives no picture, 6.4; LiveRequestLog's statuses show it). Settled by the live
    command's first run with the token (status step 16, 14.8): the lead corrects the fake (2.4) from
    run.txt then, and again after the gate's first live run, before its pictures (13.7, step 2).
+   Settled on 2026-10-30 but for the empty repository's text (design 20.1 to 20.3, 20.7; D342).
 2. **A browser that upgrades `http://127.0.0.1:47395/` to HTTPS**, or shows a first-run page (13.5),
    not tried: settled at D246's two runs of the 7a real-window checks (13.7, step 4), with the owner
    present; if the step fails there for that reason, the owner chooses between changing the browser's
@@ -5110,7 +5111,8 @@ handoff cite these as "design 19.N".
    `commits?sha=<sha>&author=<e-mail>` with both combined (an array of 1 for the commit's author, 0
    for an address with no commit), and an unknown SHA with 422 beside `author` (D339's 404 rule
    relies on it); the live command's Check_1 probes all three, read-only, and run.txt never names the
-   address.
+   address. Answered (design 20.3, D342): both combined as assumed, but an unknown SHA beside `author`
+   is 500 with an empty body.
 7. **The lead's whole run at the merge** (`6a21b58`, 2026-10-30, `bash scripts/heavy-run.sh`, 69 min
    2 s): 5,842 of 5,851 tests passed, 5 failed and the watchdog stopped two projects. CI's run on the
    same commit failed only the first two below, in all five jobs. Four Opus investigators, each
@@ -5193,3 +5195,107 @@ handoff cite these as "design 19.N".
      and before git's credential request) shows git's "Sign in to <host>" dialog in a bound tab, as
      D340 records for a sign-out during the call; D273's no-dialog rule covers only an erase in the
      scope. The user can cancel it; refusing it without a dialog would amend D273 and D340.
+
+## 20. As built: the live run
+
+What the live command's runs with the owner's token (status step 16, 2026-10-30) found, and what
+their corrections changed or settled against the sections above, with the lead's rulings (D342). The
+report's "Live command" holds each run's findings; the report and the handoff cite these as "design
+20.N".
+
+1. **Run 1** (step 16, the build of `0ffbcc2`, 23:25 UTC): both live tests and the 78 offline safety
+   tests passed in 33 s; draft #1 was created, read back, closed and its branch deleted, and the token
+   was in no form in run.txt or the console. The session had started before the owner set the two
+   variables, so the command read them from the Windows user scope into its own process only (status
+   Notes). `Check_1` alone ran twice more: GitHub's answers to the probes were the same each time.
+   Against 2.4 and 15 point 1, settled: `2026-03-10` is accepted (selected on every answer); the
+   `type` 422's text is the fake's; a fine-grained token with no account permission gets 200 from
+   `GET /user`, and `GET /user/repos` lists its selected private repository and every public one of the
+   owner (11 here); avatars for `s=64` on a `v=4` address come back 64×64 JPEG from
+   `avatars.githubusercontent.com` without a redirect; GitHub accepts a draft in the owner's private
+   sandbox, so 18 item 2's fallback did not run and its phase-8 item lapses; a 304 carries no token
+   expiry. Differing, each with a defect of the app: the version refusal and the unknown SHA (items 2
+   and 3). The empty repository's 409 stays from memory, as do `ApiVersionGone`'s 410 and the
+   `ServerError` fault's body, now marked so in the fake.
+2. **The version refusal.** GitHub: 400 `{"message":"Bad Request","errors":"The version you
+   specified in the \"X-GitHub-API-Version\" request header, \"<v>\", is not a supported version. The
+   following versions are currently supported: \"2026-03-10\" (most recent) and
+   \"2022-11-28\".",…}`. `GitHubErrorJson.Errors` was a list, so the deserializer threw, `Parse` gave
+   null and 6.2's 400 arm, which looked only at `message`, fell to `Malformed`: once GitHub retires
+   2026-03-10 the app would have said "GitHub's answer could not be read." where D338 promises "This
+   version of VisualCommit needs an update to work with GitHub.". Now (D342) `GitHubErrorsConverter`
+   reads `errors` as an array of objects, an array of strings or one string, and 6.2's row reads "410,
+   or 400 whose first `errors` item or `message` names `X-GitHub-Api-Version` | `ApiVersion` | that
+   text". 2.4's check 2 answers an unsupported value with GitHub's body byte for byte, and a missing
+   header or `2022-11-28` (refused by D266 alone) in that shape with the fake's own words.
+3. **The unknown SHA.** GitHub: `commits?sha=<unknown>` 404 "Not Found"; beside `author=`, A6's
+   lookup, 500 with an empty body. D339's loop stopped at the 500, and the address, given back by
+   `AuthorMapStore.Merge` and so first in the next run's newest-first list, stopped every run after
+   it: one stale remote-tracking branch or re-pointed remote left every later author without a
+   picture in every session. 6.3's A6 now reads, with 19 item 3 (D342): a lookup answered 422, 5xx or
+   404 in the listed repository (the method's `repository`: the tab's own, or a fork's parent) leaves
+   out its own address and the others go on; 409, or 404 in another repository, leaves out that
+   repository's other lookups in the call; any other failure stops them. The fake answers 404 without
+   `author` and an empty 500 beside it. Bound: a call sends at most the page and 20 lookups whatever
+   GitHub answers; while GitHub fails, a run costs up to 20 failed lookups and 20 warnings instead of
+   one.
+4. **The build** (workflow `wucjgwxh2`, after four Opus investigators and a critic, read-only,
+   workflow `wpk9skbnr`; their reports in `D:/Projects/Personal/phase7a-work/live/`). Two Opus
+   builders, each in its worktree; each package reviewed by two Opus agents that did not build it (no
+   blocker or major; the minor findings fixed by a third agent, two left to the lead and ruled as
+   item 6) and merged with `--no-ff`: `wip/p7a-livefix` at `5c20ee6` (`fd422db`, `0f2add9`, `407ac48`:
+   the client, the provider, the fake and `VisualCommit.Hosting.Tests`' new and changed tests) and
+   `wip/p7a-liveprobes` at `c6491cb` (`19cbfb8` to `0dc8161`: the live command). The lead's `f926b86`
+   and `a140017` follow item 7. Each test of the two defects was shown to fail on `0ffbcc2`'s client
+   and provider (the verbatim duplicate-create row, a pin, passes on both), and each changed
+   `FakeGitHubTests` case on the old fake. Besides D342's rulings, the
+   fake's create 422s already carried `resource` first; the type 422 and the create's 422s carry
+   their routes' documentation URLs; `AddToken`'s and `UserRepositories`' comments say that a
+   fine-grained token reaches every repository its login owns or may push to, and "Only select
+   repositories" is not modelled.
+5. **The live command, as built after the run** (amends 14.1, 14.4 and 14.5). A new file
+   `LiveProbes.cs`. `Check_1` answers each probe also from an in-process `FakeGitHub` beside GitHub
+   (never with the owner's token; its calls limited to 5 s each) and notes "the fake: same" or the
+   fake's status, message and `errors` where they differ (`documentation_url` left out), with each
+   probe's Content-Type, `X-GitHub-Api-Version-Selected` and `X-RateLimit-Remaining`, and an empty
+   body as "(empty)". New probes: an unknown SHA beside an address GitHub links to no one, a second
+   unknown SHA that is not all f's, and `sha=visualcommit-live/no-such-branch` without `author`. The
+   premises the app relies on fail the run after their note is kept: the version probe's 400 names
+   the header in `message` or `errors`; the lookups answer an array of 1 for the latest commit's author
+   and 0 for an address with no commit; an unknown SHA beside `author` answers 422, a 5xx or 404; the
+   duplicate create's first error starts "A pull request already exists" (D316's re-read relies on
+   it). A third method, `Check_3_the_providers_answers_from_github` (a `[Fact]`, third in
+   `GitHubLiveOrder`), runs the product's `GitHubProvider` against `api.github.com` through
+   `LiveRequestLog`: A1 with `X-GitHub-Api-Version` rewritten to `2000-01-01` fails as `ApiVersion`
+   with a message that names the header, and A6's lookups alone (no branch, so that the commits page
+   does not answer the second address first) for an unknown SHA beside a made-up address and then the
+   latest commit beside its author's address map the second to the sandbox's owner and leave the
+   first out; each step needs its requests in the log. `GitHubLiveApi` refuses the owner's token
+   with any API base but `api.github.com`'s. The sandbox's note says `permissions.push` is the user's
+   role as GitHub reports it, so a token without Contents or Pull requests write first shows at
+   `Check_2`'s push or create, whose failure now points at 14.6. The comment on drafts says GitHub
+   accepted one in the private sandbox. 109 offline safety tests (78 before). Without the variables
+   all three live tests fail at once with 14.3's message.
+6. **The lead's rulings on what the fixers left.** An address GitHub cannot answer is given back and
+   asked at every run: accepted, since before D342 one such address stopped all the others for good;
+   20 of them at the head of the newest-first list still keep the rest waiting (plan.md's risk 38).
+   The 404 exemption stays the listed repository's: a fork remote's 404 still leaves out that fork's
+   lookups for the call.
+7. **Run 2** (on `f926b86`, the merged code, 2026-10-31 00:57 UTC, 17:57 Pacific on the 30th): 112 of
+   112 passed in 63 s with its build, the token in no form in run.txt or the console; draft #2
+   created, read back, closed and its branch deleted. Every probe: "the fake: same". New facts: a
+   branch name GitHub lacks is 404 "Not Found" as an unknown SHA, which the fake had taken without a
+   measurement; an unknown SHA beside an address GitHub links to no one, and one that is not all f's,
+   is the same empty 500; that 500 carries `Content-Type: application/json; charset=utf-8`, which the
+   fake now sends too (`a140017`), and counts against the rate limit, as the fake counts it; GitHub's
+   version 400 carries no `X-GitHub-Api-Version-Selected` (nothing reads it, and the fake sends it on
+   no answer). `Check_3` passed: the provider's A1 failed as `ApiVersion` in GitHub's words, and its
+   lookups were answered 500, then 200, mapping the second address. This run is the gate's live run
+   before its pictures (13.7 step 2): its one correction, the empty 500's Content-Type, which no
+   client code reads, is committed before any picture of the gate.
+8. **Still not measured**, and why: a repository the token cannot read answering a lookup 404
+   beside `author` (D339's premise; it needs a repository outside the sandbox, which D250 and D326 keep
+   the command away from); git over HTTPS with a select-only fine-grained token on a public
+   repository outside its selection (D340's case; the browser lists such rows); GitHub's empty
+   repository's 409; a retired version's status (only `2022-11-28` and `2026-03-10` exist, both
+   supported).

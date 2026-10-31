@@ -80,7 +80,7 @@ WP-C's tests prove it offline (design 4). The empty repository's text is not tri
 has a commit (design 15 point 1). GitHub's plans have differed on drafts in private repositories
 of personal accounts: the command ticks Draft first and, when GitHub refuses with a text that names
 drafts, records that text and creates a ready pull request through the same form; run.txt says
-which ran (design 18 item 2).
+which ran (design 18 item 2). GitHub accepted the draft in both runs below.
 
 **Run 1, status step 16** (2026-10-30, 16:25 Pacific, 23:25 UTC; the build of `0ffbcc2`, whose code
 is `7015753`'s; the Windows machine, git 2.56.0.windows.4): `bash scripts/heavy-run.sh --project
@@ -137,8 +137,26 @@ did, word for word. Its findings, against the fake (design 2.4):
 - Every error body of GitHub's carries `status` as a string, as the fake's, and the
   `documentation_url` of its route.
 
-What it changed: the client, the avatars' lookups and the fake (D342), and the live command's
-probes; recorded below once merged.
+What it changed (D342; design 20, merged at `5c20ee6` and `c6491cb`): the client reads `errors` in
+every shape and calls GitHub's version refusal `ApiVersion` in GitHub's words; a lookup answered 422,
+a 5xx or 404 in the listed repository leaves out its own address alone; the fake gives GitHub's
+version 400 byte for byte, 404 "Not Found" for an unknown SHA or branch and an empty 500 beside
+`author`, the recorded routes' documentation URLs and no token expiry on a 304. The live command
+answers each probe also from an in-process fake and notes "the fake: same" or the difference, probes
+three more cases, fails on a broken premise of the app's, and gained `Check_3`, the product's
+provider against GitHub. No check's expected result changes: no walk-through sends an unknown SHA
+or another API version.
+
+**Run 2, after D342's merge** (2026-10-30, 17:57 Pacific, 2026-10-31 00:57 UTC; `f926b86`): 112 of
+112 passed (the three live tests and 109 offline safety tests) in 63 s with its build; draft #2
+created, read back, closed and its branch deleted; the token in no form in run.txt or the console.
+Every probe: "the fake: same". New: a branch name GitHub lacks is 404 "Not Found", as the fake had
+taken it; an unknown SHA beside an address GitHub links to no one, and one that is not all f's, is
+the same empty 500, which carries `Content-Type: application/json; charset=utf-8` (the fake now too,
+`a140017`) and counts against the rate limit; GitHub's version 400 has no
+`X-GitHub-Api-Version-Selected`. `Check_3`: the provider's sign-in with version `2000-01-01` failed as
+`ApiVersion` with GitHub's explanation, and its lookups were answered 500 then 200, the second address
+mapped to the owner. This run is the gate's live run before its pictures (design 13.7 step 2, 20.7).
 
 ## What the checks share
 

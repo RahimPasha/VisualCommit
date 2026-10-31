@@ -141,8 +141,13 @@ Checks, live trial and review:
   package is built (D244), by one writer and one reviewer, each marked for the real-window pass or
   not, committed before the UI they test. (Done 2026-10-30: parts A, B, P, G and N, each before its
   package; their R steps are WP-R's pass, merged at `5cfce9f`, design 18 item 1.)
-- [ ] 16. The opt-in live command against real GitHub (D250), run with the owner's token on the
-  sandbox repository.
+- [x] 16. The opt-in live command against real GitHub (D250), run with the owner's token on the
+  sandbox repository. (Done 2026-10-30: the first run passed, 80 of 80, and showed GitHub's
+  version refusal and its answer to an unknown SHA beside `author` unlike the fake's, each hiding a
+  defect of the app's; D342's corrections, built in two worktrees and reviewed by four agents, merged
+  at `5c20ee6` and `c6491cb`, the lead's `a140017`; the second run on them passed, 112 of 112, every
+  probe "the fake: same"; `VisualCommit.Hosting.Tests` 465 of 469 (4 skipped) and 7a's walk-through
+  205 of 205 on `a140017` (design 20; the report's "Live command"). Week: share not read.)
 - [x] 17. An independent review of the code before the gate; every confirmed finding fixed with
   tests. (Done 2026-10-30: five read-only Opus reviewers found 18 problems on `fdb1986`, six
   skeptics refuted 3, and the 15 were fixed with tests by four fixers, each reviewed by an agent that
@@ -559,18 +564,24 @@ avatars before it revokes the token and runs with a prompt handler that refuses;
 `7015753`: the rested run on `7015753` (1 h 12 min 6 s) passed 5,891 of 5,895 (4 skipped), the
 lagged list passed and CI's run 41111820880 is green on all five jobs, so step 17 is done. The
 gate's references for the earlier pictures are made and judged (Notes), and `docs/architecture.md`
-describes 7a as built (step 19). Step 16's first run with the
-token passed on 2026-10-30 (80 of 80; the report's "Live command"): GitHub's real answers showed
-two defects of the app, its version refusal read as malformed and D339's lookups stopped for good by
-a commit GitHub lacks, and the fake's texts to correct. The lead's rulings (D342, to be recorded at
-the merge) are being built in two worktrees by workflow `wucjgwxh2`: `wip/p7a-livefix`
-(`D:/Projects/Personal/vc-wt/p7a-livefix`: the client's `errors`, the version's classification, the
-lookups' rule, the fake and their tests) and `wip/p7a-liveprobes` (`.../p7a-liveprobes`: the live
-command's new probes, its premises as checks and a third method running the product's provider
-against GitHub), each reviewed by two agents that did not build it and fixed. Next: merge both with
-`--no-ff`, record D342 and design 20, run the touched classes, parts B, G, N and P, and the live
-command again; tick step 16; then step 18, the gate, which runs the live command once
-before its pictures and D246's two runs of 7a's real-window checks with the owner present. Each of
+describes 7a as built (step 19). Step 16 is done (2026-10-30;
+design 20, D342): the first run with the token showed two defects of the app (GitHub's version
+refusal read as malformed; D339's lookups stopped for good by a commit GitHub lacks) and the fake's
+texts to correct; the corrections were built in two worktrees (workflow `wucjgwxh2`, each package
+reviewed by two agents that did not build it and fixed), merged at `5c20ee6` and `c6491cb` (worktrees
+and branches removed), with the lead's `f926b86` and `a140017`; the second live run passed on them,
+every probe "the fake: same", and `VisualCommit.Hosting.Tests` and 7a's walk-through passed whole.
+Step 18, the gate (design 13.7), on `a140017`'s code: its step 1 is done (worktrees removed; the main
+tree's fsmonitor daemon is stopped before each heavy run); its step 2 is the second live run (design
+20.7), its one correction committed before any picture; its step 3 is the walk-through's run at
+18:20 (205 of 205; 80 of its 85 pictures the same files as on `7015753`, the other five varying by
+nature, to be judged with the rest). Next: the counted round's default run (`bash
+scripts/heavy-run.sh`, about 75 minutes, after a rest), and, with the owner told and present, D246's
+two runs of `--filter-class "*Phase7aRealWindowPass"` one after the other (step 4), then the whole
+real-window pass (step 5), at once the pictures' list, the live command again, and the inspection
+(step 6). The default run comes before D246's two runs here only to use the time until the owner is
+at the machine: if those runs need a fix outside `tests/VisualCommit.RealWindowTests`, the default
+run is made again. Each of
 parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
@@ -587,13 +598,11 @@ every commit.
 - **The live command's variables in a session that started before them** (2026-10-30): Windows
   gives a process the environment of the one that started it, so VS Code (and every Claude Code
   shell in it) lacks user variables set after it started, until it is quit entirely. The live
-  command then gets them for its own process alone, without printing them, from PowerShell:
-  `$env:VISUALCOMMIT_LIVE_GITHUB_TOKEN = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_TOKEN','User'); $env:VISUALCOMMIT_LIVE_GITHUB_REPO = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_REPO','User'); & 'C:\Program Files\Git\bin\bash.exe' scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`
-  (PowerShell has no `bash` on `PATH` here; a bare `bash` could be WSL's). The PowerShell tool's
-  variables last for that one command. Check the variables only by name, length and prefix. The
-  first run's full run.txt is copied outside the repository at
-  `D:/Projects/Personal/phase7a-work/live/run-1-step16.txt` (`artifacts/` is ignored and the next
-  run overwrites it).
+  command then gets them for its own process alone, without printing them (CLAUDE.md's "What to
+  know" gives the PowerShell line). Each run's run.txt is copied outside the repository, since
+  `artifacts/` is ignored and the next run overwrites it: `D:/Projects/Personal/phase7a-work/live/`
+  holds `run-1-step16.txt`, `run-1c-check1-alone.txt` and `run-2-after-d342.txt`, with the
+  investigators' reports (`inv0.md` to `inv3.md`, `critic.md`).
 
 - **The gate's references are made** (2026-10-30, design 0.7, risk 32), outside the repository in
   `D:/Projects/Personal/gate7a-reference/`: phases 0 to 6's walk-throughs on `master` (`5fe9148`)
