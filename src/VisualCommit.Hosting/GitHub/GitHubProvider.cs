@@ -205,10 +205,14 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// empty map. Then at most 20 lookups for <paramref name="lookups"/> whose e-mail is not yet in
     /// the map, in order, each in its own repository's history from its own commit (D339):
     /// <c>repos/{owner}/{name}/commits?sha=&lt;SHA&gt;&amp;author=&lt;e-mail&gt;&amp;per_page=1</c>.
-    /// A lookup answered 404 or 409 (GitHub does not let the token read that repository, or it is
-    /// empty) is left out with the rest of that repository's, asked no more in this call, and the
-    /// others go on; one answered 422 (no such commit) is left out alone. Any other failing lookup
-    /// stops them and is left out.
+    /// A lookup answered 409, or 404 in a repository other than <paramref name="repository"/>
+    /// (empty, or one GitHub does not let the token read), is left out with the rest of that
+    /// repository's, asked no more in this call, and the others go on. One answered 422, 404 in
+    /// <paramref name="repository"/> or a server error (GitHub lacks its commit: 500 without a body
+    /// beside <c>author</c>, the live run of 2026-10-30) is left out alone and the others go on
+    /// (D342, amending D339). Any other failure (the token refused or limited, the API version,
+    /// no answer, an answer not read) stops them and is left out. A lookup left out is not in the
+    /// map, so it is asked again at a later run.
     /// </summary>
     public async Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, CancellationToken ct)
     {
@@ -266,17 +270,23 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
             var url = Api($"{RepositoryPath(lookup.Repository)}/commits?sha={Uri.EscapeDataString(lookup.Sha)}&author={Uri.EscapeDataString(lookup.Email)}&per_page=1");
             var reply = await _client.SendAsync(HttpMethod.Get, token, url, null, GitHubJsonContext.Default.ListGitHubCommitItemJson, ct).ConfigureAwait(false);
-            if (reply.Failure?.Kind is HostingFailureKind.NotFound || reply.Status == 409)
+            var kind = reply.Failure?.Kind;
+            if (reply.Status == 409 || (kind is HostingFailureKind.NotFound && !repository.Equals(lookup.Repository)))
             {
-                // A remote whose repository is gone, private to others or empty: none of its addresses
-                // is found there, so its other lookups are not asked in this call; the rest go on.
+                // An empty repository, or another remote's that is gone or private to others: none of
+                // its addresses is found there, so its other lookups are not asked in this call; the
+                // rest go on.
                 unreadable.Add(lookup.Repository);
                 continue;
             }
 
-            if (reply.Failure?.Kind is HostingFailureKind.Validation)
+            if (kind is HostingFailureKind.Validation or HostingFailureKind.ServerError or HostingFailureKind.NotFound)
             {
-                // A rewritten branch: GitHub has no such commit, so only this address is not found.
+                // A commit GitHub does not have (a remote-tracking branch GitHub has since lost or
+                // rewritten, a remote pointed elsewhere): github.com answers such a lookup 500 without
+                // a body (the live run of 2026-10-30), and a 422 or a 404 is taken the same; the listed
+                // repository answered A3 a moment ago, so its 404 is this commit's. Only this address
+                // is not found, and it is asked again at a later run (D342).
                 continue;
             }
 

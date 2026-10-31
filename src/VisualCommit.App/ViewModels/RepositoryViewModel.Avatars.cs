@@ -101,7 +101,8 @@ public sealed partial class RepositoryViewModel
     /// (D257: only <c>Loading</c>, <c>Failed</c> or <c>Loaded</c>), nor while the graph still loads
     /// its first <see cref="AvatarRows"/> rows. An author's newer commit alone is not news: the one
     /// sent before still finds the author on GitHub, unless GitHub could not answer that lookup (its
-    /// remote unreadable, its branch rewritten); that author waits for the next change of the e-mails (D339).
+    /// remote unreadable, its commit unknown to GitHub); that author waits for the next change of the
+    /// e-mails (D339, D342).
     /// </summary>
     private void UpdateAuthors()
     {
