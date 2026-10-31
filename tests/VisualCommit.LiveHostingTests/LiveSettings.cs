@@ -149,7 +149,7 @@ internal static class LiveSettings
 /// <summary>
 /// The sandbox repository and the token for it (14.3). <see cref="ToString"/> is the repository's
 /// full name, never the token; the token is read only where it is sent (the sign-in dialog, the
-/// test's own API calls) or searched for.
+/// test's own API calls, Check_3's <c>GitHubProvider</c>) or searched for.
 /// </summary>
 internal sealed class LiveSandbox(string owner, string name, string token)
 {

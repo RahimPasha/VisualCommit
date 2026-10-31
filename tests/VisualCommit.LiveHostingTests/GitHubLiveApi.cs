@@ -1,7 +1,9 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using VisualCommit.Hosting;
@@ -12,7 +14,8 @@ namespace VisualCommit.LiveHostingTests;
 /// <summary>
 /// What the sandbox is, as <c>GET /repos/{o}/{r}</c> answered it (docs/phase-7a-design.md 14.4 step
 /// 2): its full name as GitHub writes it, whether it is private, its visibility, its default branch
-/// and whether the token may push.
+/// and its <c>permissions.push</c>, the user's role in the repository as GitHub reports it, not
+/// what the fine-grained token was granted: a token without Contents write fails at the push.
 /// </summary>
 internal sealed record LiveRepository(string FullName, bool IsPrivate, string Visibility, string DefaultBranch, bool CanPush);
 
@@ -88,8 +91,8 @@ internal static class LiveLeftovers
 /// <summary>
 /// One answer of GitHub to the test's own call: the status, <c>X-GitHub-Request-Id</c>, GitHub's
 /// <c>message</c>, the body as sent and parsed, the API version GitHub selected, whether
-/// <c>X-OAuth-Scopes</c> was present, the token's expiry date and <c>X-RateLimit-Remaining</c>.
-/// <see cref="ToString"/> shows the status and the request id only.
+/// <c>X-OAuth-Scopes</c> was present, the token's expiry date, <c>X-RateLimit-Remaining</c> and the
+/// body's <c>Content-Type</c>. <see cref="ToString"/> shows the status and the request id only.
 /// </summary>
 internal sealed record LiveAnswer(
     int Status,
@@ -100,23 +103,100 @@ internal sealed record LiveAnswer(
     string? ApiVersionSelected,
     bool ScopesHeaderPresent,
     string? TokenExpiration,
-    string? RateLimitRemaining)
+    string? RateLimitRemaining,
+    string? ContentType)
 {
+    /// <summary>How <see cref="ErrorsText"/> writes <c>errors</c>: as GitHub and the fake write JSON, <c>"</c> as <c>\"</c> and nothing else escaped.</summary>
+    private static readonly JsonSerializerOptions Relaxed = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
+
     public override string ToString() => $"{Status.ToString(CultureInfo.InvariantCulture)} (request {RequestId ?? "none"})";
 
     /// <summary>
-    /// The body for a note: GitHub's text as sent for a status that is not 2xx (its refusals are what
-    /// the fake copies, 2.4); for a 2xx only its shape, since a 2xx's body is a record, which may name
-    /// repositories outside the sandbox (14.4 step 3: counts, no names).
+    /// The body's shape: <c>(empty)</c> without one (GitHub's 500 for an unknown SHA beside
+    /// <c>author</c>, the live run of 2026-10-30), an array of its length, an object, or no JSON and
+    /// its length. It names nothing in the body.
     /// </summary>
-    public string BodyForNotes => Status is >= 200 and < 300
-        ? "GitHub's body, a 2xx's, by its shape only: " + (Json switch
+    public string Shape => Text.Length == 0
+        ? "(empty)"
+        : Json switch
         {
-            { ValueKind: JsonValueKind.Array } array => $"an array of {array.GetArrayLength().ToString(CultureInfo.InvariantCulture)}.",
-            { ValueKind: JsonValueKind.Object } => "an object.",
-            _ => $"no JSON, {Text.Length.ToString(CultureInfo.InvariantCulture)} characters.",
-        })
-        : "GitHub's body as sent:\n" + Text;
+            { ValueKind: JsonValueKind.Array } array => $"an array of {array.GetArrayLength().ToString(CultureInfo.InvariantCulture)}",
+            { ValueKind: JsonValueKind.Object } => "an object",
+            _ => $"no JSON, {Text.Length.ToString(CultureInfo.InvariantCulture)} characters",
+        };
+
+    /// <summary>
+    /// The body's <c>errors</c> as JSON, rewritten the same way whatever escaping the sender chose,
+    /// or null when the body is no object or has none: a 422's array, or the one string of the 400
+    /// for an API version GitHub does not have (the live run of 2026-10-30).
+    /// </summary>
+    public string? ErrorsText =>
+        Json is { ValueKind: JsonValueKind.Object } json && json.TryGetProperty("errors", out var errors) && errors.ValueKind != JsonValueKind.Null
+            ? JsonNode.Parse(errors.GetRawText())?.ToJsonString(Relaxed)
+            : null;
+
+    /// <summary>The answer's headers that a probe's note shows: <c>Content-Type</c>, the API version GitHub selected and <c>X-RateLimit-Remaining</c>, each "not sent" when it was not.</summary>
+    public string HeadersForNotes =>
+        $"Content-Type {ContentType ?? "not sent"}, API version selected {ApiVersionSelected ?? "not sent"}, X-RateLimit-Remaining {RateLimitRemaining ?? "not sent"}";
+
+    /// <summary>
+    /// The body for a note: <c>(empty)</c> without one; GitHub's text as sent for a status that is
+    /// not 2xx (its refusals are what the fake copies, 2.4); for a 2xx only its shape, since a 2xx's
+    /// body is a record, which may name repositories outside the sandbox (14.4 step 3: counts, no
+    /// names).
+    /// </summary>
+    public string BodyForNotes => Text.Length == 0
+        ? "GitHub's body: (empty)."
+        : Status is >= 200 and < 300
+            ? $"GitHub's body, a 2xx's, by its shape only: {Shape}."
+            : "GitHub's body as sent:\n" + Text;
+
+    /// <summary>
+    /// The fake's answer to a probe beside GitHub's (since the live run of 2026-10-30, so that a
+    /// note stays right whatever the fake answers): <c>same</c> when the status, <c>message</c>,
+    /// <c>errors</c> and the body's <see cref="Shape"/> agree, else the fake's value of each that
+    /// differs; without GitHub's answer, the fake's status, message and errors.
+    /// <c>documentation_url</c> and the body's <c>status</c> are left out. Each side's own address
+    /// (<paramref name="address"/>, <paramref name="fakeAddress"/>), which a probe asked with, is
+    /// replaced in its texts first (<see cref="Hide"/>), so that an echo of it compares equal and is
+    /// never shown.
+    /// </summary>
+    internal static string FakeBeside(LiveAnswer? github, LiveAnswer fake, string? address = null, string? fakeAddress = null)
+    {
+        ArgumentNullException.ThrowIfNull(fake);
+        var differences = new List<string>();
+        if (github is null || github.Status != fake.Status)
+        {
+            differences.Add("status " + fake.Status.ToString(CultureInfo.InvariantCulture));
+        }
+
+        var message = Hide(fake.Message, fakeAddress);
+        if (github is null || !string.Equals(Hide(github.Message, address), message, StringComparison.Ordinal))
+        {
+            differences.Add(message is null ? "no message" : $"message \"{message}\"");
+        }
+
+        var errors = Hide(fake.ErrorsText, fakeAddress);
+        if (github is null ? errors is not null : !string.Equals(Hide(github.ErrorsText, address), errors, StringComparison.Ordinal))
+        {
+            differences.Add(errors is null ? "no errors" : "errors " + errors);
+        }
+
+        if (github is not null && github.Shape != fake.Shape)
+        {
+            differences.Add("body " + fake.Shape);
+        }
+
+        return differences.Count == 0 ? "same" : string.Join(", ", differences);
+    }
+
+    /// <summary><paramref name="text"/> with <paramref name="address"/>, as written and URL-escaped, replaced by <c>&lt;the address&gt;</c> (case ignored); as it is without an address.</summary>
+    [return: NotNullIfNotNull(nameof(text))]
+    internal static string? Hide(string? text, string? address) =>
+        text is null || string.IsNullOrEmpty(address)
+            ? text
+            : text.Replace(address, "<the address>", StringComparison.OrdinalIgnoreCase)
+                .Replace(Uri.EscapeDataString(address), "<the address>", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>A call of the test's own that GitHub did not answer as the step needs: the status, GitHub's message and the request id, never a request or an answer.</summary>
@@ -128,9 +208,11 @@ internal sealed class GitHubLiveException(string message) : Exception(message);
 /// <c>visualcommit-live/</c> branches, close a pull request, delete a branch, the duplicate create
 /// (r5 14), the probes of GitHub's texts the fake writes from memory (2.4, 15 point 1), and the
 /// latest commit's SHA and author's address with the avatars' lookup (D339). Its own
-/// <see cref="HttpClient"/> over a <see cref="SocketsHttpHandler"/> that follows no redirect; each
-/// call 30 s at most; <c>Authorization: Bearer</c>, <c>Accept</c> and <c>X-GitHub-Api-Version</c> as
-/// the app sends them and its own <c>User-Agent</c>. A failure's message holds the status, GitHub's
+/// <see cref="HttpClient"/> over a <see cref="SocketsHttpHandler"/> that follows no redirect, on
+/// <c>https://api.github.com/</c>; each call 30 s at most; <c>Authorization: Bearer</c>,
+/// <c>Accept</c> and <c>X-GitHub-Api-Version</c> as the app sends them and its own
+/// <c>User-Agent</c>. The same calls reach the fake of GitHub in process (<see cref="LiveFake"/>)
+/// with the fake's own token, never the sandbox's. A failure's message holds the status, GitHub's
 /// <c>message</c> and the request id, and is searched for the token (<see cref="LiveTokenForms"/>)
 /// before it is thrown; a find is withheld and told to the run (<see cref="LiveRun.Withheld"/>),
 /// which then fails.
@@ -142,9 +224,13 @@ internal sealed class GitHubLiveApi : IDisposable
     /// <summary>How long one call may take.</summary>
     public static readonly TimeSpan CallLimit = TimeSpan.FromSeconds(30);
 
+    /// <summary>How long one call to the fake in process may take: its ten in Check_1 add 50 s at most to the watchdog's sum (14.3).</summary>
+    public static readonly TimeSpan FakeCallLimit = TimeSpan.FromSeconds(5);
+
     private readonly LiveSandbox _sandbox;
     private readonly HttpClient _client;
     private readonly Action<string>? _withheld;
+    private readonly TimeSpan _limit;
 
     /// <summary>The calls to github.com; <paramref name="withheld"/> is told when an answer held the token.</summary>
     public GitHubLiveApi(LiveSandbox sandbox, Action<string>? withheld = null)
@@ -158,22 +244,45 @@ internal sealed class GitHubLiveApi : IDisposable
     {
     }
 
-    /// <summary>The calls over <paramref name="handler"/>: an in-process one for <see cref="LiveSafetyTests"/>.</summary>
-    internal GitHubLiveApi(LiveSandbox sandbox, HttpMessageHandler handler, Action<string>? withheld = null)
+    /// <summary>
+    /// The calls over <paramref name="handler"/>, an in-process one: for <see cref="LiveSafetyTests"/>,
+    /// and with <paramref name="apiBase"/> the fake's API (<see cref="LiveFake"/>, each call
+    /// <paramref name="limit"/> at most); github.com's API and <see cref="CallLimit"/> without them.
+    /// The owner's token is refused with another address than github.com's API
+    /// (<see cref="SendsTheTokenElsewhere"/>, D327): the fake has a token of its own.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The sandbox's token is the owner's and <paramref name="apiBase"/> is not github.com's API.</exception>
+    internal GitHubLiveApi(LiveSandbox sandbox, HttpMessageHandler handler, Action<string>? withheld = null, Uri? apiBase = null, TimeSpan? limit = null)
     {
         ArgumentNullException.ThrowIfNull(sandbox);
         ArgumentNullException.ThrowIfNull(handler);
+        if (SendsTheTokenElsewhere(apiBase, sandbox.Token, LiveSettings.CapturedToken))
+        {
+            handler.Dispose();
+            throw new InvalidOperationException($"The owner's token goes to {GitHubEndpoints.GitHubCom.ApiBase} alone (D327): the test's calls to another API, the fake's, take the fake's own token.");
+        }
+
         _sandbox = sandbox;
         _withheld = withheld;
+        _limit = limit ?? CallLimit;
         _client = new HttpClient(handler, disposeHandler: true)
         {
-            BaseAddress = GitHubEndpoints.GitHubCom.ApiBase,
+            BaseAddress = apiBase ?? GitHubEndpoints.GitHubCom.ApiBase,
             Timeout = Timeout.InfiniteTimeSpan,
         };
     }
 
     /// <summary><c>X-RateLimit-Remaining</c> of the last answer that sent it, or null.</summary>
     public string? RateLimitRemaining { get; private set; }
+
+    /// <summary>
+    /// Whether calls on <paramref name="apiBase"/> with <paramref name="token"/> would send
+    /// <paramref name="owners"/>, the owner's token as read (<see cref="LiveSettings.CapturedToken"/>),
+    /// elsewhere than github.com's API (D327); compared with <c>string.Equals</c> alone.
+    /// </summary>
+    internal static bool SendsTheTokenElsewhere(Uri? apiBase, string token, string? owners) =>
+        apiBase is not null && apiBase != GitHubEndpoints.GitHubCom.ApiBase
+            && owners is not null && string.Equals(token, owners, StringComparison.Ordinal);
 
     /// <summary>The sandbox's path under the API: <c>repos/{o}/{r}</c>.</summary>
     private string RepositoryPath => $"repos/{Uri.EscapeDataString(_sandbox.Owner)}/{Uri.EscapeDataString(_sandbox.Name)}";
@@ -247,7 +356,7 @@ internal sealed class GitHubLiveApi : IDisposable
     public Task<LiveAnswer> ProbeTypeWithVisibilityAsync(CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Get, "user/repos?type=owner&visibility=all&per_page=1", null, cancellationToken);
 
-    /// <summary><c>GET …/commits?sha={sha}&amp;per_page=1</c>, as answered: GitHub's text for a SHA it does not know (2.4).</summary>
+    /// <summary><c>GET …/commits?sha={sha}&amp;per_page=1</c>, as answered: GitHub's text for a SHA, or a branch, it does not know (2.4; the branch is the commits page's case, A6).</summary>
     public Task<LiveAnswer> ProbeCommitsAsync(string sha, CancellationToken cancellationToken) =>
         SendAsync(HttpMethod.Get, $"{RepositoryPath}/commits?sha={Uri.EscapeDataString(sha)}&per_page=1", null, cancellationToken);
 
@@ -296,7 +405,7 @@ internal sealed class GitHubLiveApi : IDisposable
     }
 
     /// <summary>One call, answered: a status GitHub sent, whatever it is.</summary>
-    /// <exception cref="GitHubLiveException">No answer came within <see cref="CallLimit"/>, or GitHub was not reached.</exception>
+    /// <exception cref="GitHubLiveException">No answer came within <see cref="CallLimit"/> (the fake's: its own limit), or GitHub was not reached.</exception>
     internal async Task<LiveAnswer> SendAsync(HttpMethod method, string path, JsonObject? body, CancellationToken cancellationToken, string version = GitHubApi.Version)
     {
         using var request = new HttpRequestMessage(method, path);
@@ -311,7 +420,7 @@ internal sealed class GitHubLiveApi : IDisposable
 
         var shown = $"{method.Method} /{path.Split('?')[0]}";
         using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        limit.CancelAfter(CallLimit);
+        limit.CancelAfter(_limit);
         try
         {
             using var response = await _client.SendAsync(request, limit.Token);
@@ -347,11 +456,12 @@ internal sealed class GitHubLiveApi : IDisposable
                 First(response, "X-GitHub-Api-Version-Selected"),
                 response.Headers.Contains("X-OAuth-Scopes"),
                 LiveRequestLog.ExpirationDate(First(response, "GitHub-Authentication-Token-Expiration")),
-                remaining);
+                remaining,
+                response.Content.Headers.ContentType?.ToString());
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            throw new GitHubLiveException($"GitHub did not answer {shown} within {CallLimit.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s.");
+            throw new GitHubLiveException($"GitHub did not answer {shown} within {_limit.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s.");
         }
         catch (HttpRequestException ex)
         {
