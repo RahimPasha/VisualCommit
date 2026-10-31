@@ -391,23 +391,46 @@ public class UndoEffectTests
     }
 
     [Fact]
-    public async Task Renames_configuration_remotes_and_tags_go_forth_and_back()
+    public async Task A_branchs_rename_and_a_tag_go_forth_and_back()
     {
         using var repo = await UndoRepoAsync();
         var repository = await OpenAsync(repo);
         var start = await PictureAsync(repo);
         var c1 = await ShaAsync(repo, "HEAD~2");
+
+        UndoEffect[] effects = [new UndoEffect.RenameBranch("behind", "behind2"), new TagRef("t1", c1, Present: true)];
+        foreach (var effect in effects)
+        {
+            await RunAsync(repository, effect);
+        }
+
+        Assert.NotNull(await TargetAsync(repo, "refs/heads/behind2"));
+
+        foreach (var effect in effects.Reverse())
+        {
+            await RunAsync(repository, Inverse(effect), UndoDirection.Redo);
+        }
+
+        Assert.Equal(start, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task A_branchs_configuration_and_a_remotes_rename_URL_and_HEAD_go_forth_and_back()
+    {
+        using var repo = await UndoRepoAsync();
+        var repository = await OpenAsync(repo);
+        var start = await PictureAsync(repo);
         IReadOnlyList<ConfigEntry> upstream = [new("branch.feature.remote", "origin"), new("branch.feature.merge", "refs/heads/feature")];
         IReadOnlyList<ConfigEntry> other = [new("branch.feature.remote", "origin"), new("branch.feature.merge", "refs/heads/main"), new("branch.feature.rebase", "true")];
         var url = (await repo.GitAsync("config", "remote.origin.url")).StandardOutput.Trim();
 
+        // The remote's rename rewrites feature's remote key, which the first effect wrote; its
+        // inverse writes it back before the first effect's inverse checks the keys.
         UndoEffect[] effects =
         [
-            new UndoEffect.RenameBranch("behind", "behind2"),
             new BranchConfig("feature", upstream, other),
             new RemoteRename("origin", "upstream"),
             new UndoEffect.RemoteUrl("upstream", url, "https://example.com/x.git"),
-            new TagRef("t1", c1, Present: true),
             new SymbolicRef("refs/remotes/upstream/HEAD", null, "refs/remotes/upstream/main"),
         ];
         foreach (var effect in effects)
@@ -415,7 +438,6 @@ public class UndoEffectTests
             await RunAsync(repository, effect);
         }
 
-        Assert.NotNull(await TargetAsync(repo, "refs/heads/behind2"));
         Assert.Equal("refs/heads/main", (await repo.GitAsync("config", "branch.feature.merge")).StandardOutput.Trim());
         Assert.Equal("https://example.com/x.git", (await repo.GitAsync("config", "remote.upstream.url")).StandardOutput.Trim());
         Assert.Equal("refs/remotes/upstream/main", (await repo.GitAsync("symbolic-ref", "refs/remotes/upstream/HEAD")).StandardOutput.Trim());
@@ -427,6 +449,16 @@ public class UndoEffectTests
         }
 
         Assert.Equal(start, await PictureAsync(repo));
+    }
+
+    [Fact]
+    public async Task Renames_configuration_tags_and_symbolic_refs_are_refused_where_they_changed_since()
+    {
+        using var repo = await UndoRepoAsync();
+        var repository = await OpenAsync(repo);
+        var c1 = await ShaAsync(repo, "HEAD~2");
+        IReadOnlyList<ConfigEntry> upstream = [new("branch.feature.remote", "origin"), new("branch.feature.merge", "refs/heads/feature")];
+        IReadOnlyList<ConfigEntry> other = [new("branch.feature.remote", "origin"), new("branch.feature.merge", "refs/heads/main"), new("branch.feature.rebase", "true")];
 
         // Refused: a branch of the new name exists, a key changed since, a tag exists again, a
         // symbolic ref points elsewhere.
@@ -434,9 +466,9 @@ public class UndoEffectTests
         await repo.TagAsync("t1", "HEAD");
         await repo.GitAsync("symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/feature");
         var still = await StillAsync(repo);
-        Assert.Equal(new UndoRefusal(UndoRefusalKind.BranchExists, Name: "behind2"), await RefuseAsync(repository, effects[0]));
+        Assert.Equal(new UndoRefusal(UndoRefusalKind.BranchExists, Name: "behind2"), await RefuseAsync(repository, new UndoEffect.RenameBranch("behind", "behind2")));
         Assert.Equal(new UndoRefusal(UndoRefusalKind.ConfigChanged, Name: "feature"), await RefuseAsync(repository, new BranchConfig("feature", other, upstream)));
-        Assert.Equal(new UndoRefusal(UndoRefusalKind.TagExists, Name: "t1"), await RefuseAsync(repository, effects[4]));
+        Assert.Equal(new UndoRefusal(UndoRefusalKind.TagExists, Name: "t1"), await RefuseAsync(repository, new TagRef("t1", c1, Present: true)));
         Assert.Equal(
             new UndoRefusal(UndoRefusalKind.RefChanged, Name: "refs/remotes/origin/HEAD"),
             await RefuseAsync(repository, new SymbolicRef("refs/remotes/origin/HEAD", "refs/remotes/origin/main", null)));
