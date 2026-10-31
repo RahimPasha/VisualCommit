@@ -11,7 +11,8 @@ namespace VisualCommit.Hosting.Tests;
 /// A tab's authors' avatars (docs/phase-7a-design.md 7.9, 7.13; D252, D291, D339, ruling 22): one
 /// commits page; the 20 lookups a repository has per app session, shared by its tabs, each from the
 /// author's own commit on the remote that holds it (a feature branch's, a fork's); an unknown e-mail
-/// not asked again; the map used within 7 days (no page asked) and read again after; images fetched
+/// not asked again; one whose commit GitHub lacks left out alone and asked again (D342); the map
+/// used within 7 days (no page asked) and read again after; images fetched
 /// without the token; nothing at all while signed out; the avatars gone with the GitHub remote, a
 /// run in flight then applying nothing, and kept when the remote names another GitHub repository.
 /// </summary>
@@ -121,6 +122,41 @@ public sealed class RepositoryHostingAvatarsTests
         // main's page does not hold the commit; the lookup searches from it, so GitHub finds the author.
         Assert.Equal(["sha=main&per_page=100", $"sha={sha}&author=newbie%40example.com&per_page=1"], Commits(setup).Select(request => request.Query));
         Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
+    }
+
+    [Fact]
+    public async Task An_address_whose_commit_github_lacks_holds_up_no_other_in_this_run_or_the_next_session()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await OpenHelloAsync(setup);
+        var sha = await PushNewbieAsync(setup, "octo/hello", "feature/newbie");
+        var lost = new string('f', 40);
+        AuthorCommit[] authors = [new("stranger@example.com", lost, OctoHello), new(NewbieEmail, sha, OctoHello)];
+
+        // A remote-tracking branch GitHub no longer has: the lookup from its commit is answered 500
+        // without a body, as github.com did in the live run of 2026-10-30; the next is still asked (D342).
+        await ShowAsync(setup, hosting, authors);
+
+        var stranger = ($"sha={lost}&author=stranger%40example.com&per_page=1", 500);
+        Assert.Equal([("sha=main&per_page=100", 200), stranger, ($"sha={sha}&author=newbie%40example.com&per_page=1", 200)], Commits(setup).Select(request => (request.Query, request.Status)));
+        Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
+        using (var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(setup.Paths.AvatarsDirectory, "authors", "github_127.0.0.1_1_octo_hello.json"))))
+        {
+            var emails = json.RootElement.GetProperty("authors").EnumerateArray().Select(author => author.GetProperty("email").GetString()).ToList();
+            Assert.Contains(NewbieEmail, emails);
+            Assert.DoesNotContain("stranger@example.com", emails);
+        }
+
+        // Not recorded, the address is asked again in the next session, alone; newbie's is known.
+        var next = setup.NewSession();
+        await next.StartAsync(Cancelled);
+        var later = await setup.Thread.RunAsync(() => (RepositoryHosting)next.ForRepository(setup.Served.Hello.Path));
+        await setup.Thread.RunAsync(() => later.Update(RepositoryHostingTests.HelloRefs(), UrlRewrites.None));
+        await ShowAsync(setup, later, authors);
+
+        Assert.Equal([stranger], Commits(setup).Skip(3).Select(request => (request.Query, request.Status)));
+        Assert.True(File.Exists(later.Avatars.FileOf(NewbieEmail)));
     }
 
     [Fact]

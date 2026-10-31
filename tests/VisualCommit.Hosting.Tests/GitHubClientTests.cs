@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 using VisualCommit.Core;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting.GitHub;
@@ -11,12 +12,27 @@ namespace VisualCommit.Hosting.Tests;
 /// <summary>
 /// GitHub's API client (docs/phase-7a-design.md 6.2, 6.5; D284, D285): its headers and the token
 /// only to the API, redirects by hand on the API's address only, pages, kept ETags, the
-/// classification of every failure, the 30 s, cancellation, one request at a time, and log lines
-/// that hold no query, token or e-mail. Against the fake of GitHub in process, and a script where
-/// the fake cannot answer as asked.
+/// classification of every failure, an error body's <c>errors</c> in each shape GitHub sends (D342),
+/// the 30 s, cancellation, one request at a time, and log lines that hold no query, token or
+/// e-mail. Against the fake of GitHub in process, and a script where the fake cannot answer as asked.
 /// </summary>
 public sealed class GitHubClientTests
 {
+    /// <summary>
+    /// GitHub's answer to <c>X-GitHub-Api-Version: 2000-01-01</c> as the live run of 2026-10-30
+    /// recorded it (D342): <c>message</c> "Bad Request", the explanation in <c>errors</c> as one string.
+    /// </summary>
+    private const string UnsupportedVersionBody = """{"message":"Bad Request","errors":"The version you specified in the \"X-GitHub-API-Version\" request header, \"2000-01-01\", is not a supported version. The following versions are currently supported: \"2026-03-10\" (most recent) and \"2022-11-28\".","documentation_url":"https://docs.github.com/rest","status":"400"}""";
+
+    /// <summary>That answer's explanation, which the failure's message is.</summary>
+    private const string UnsupportedVersionExplanation = "The version you specified in the \"X-GitHub-API-Version\" request header, \"2000-01-01\", is not a supported version. The following versions are currently supported: \"2026-03-10\" (most recent) and \"2022-11-28\".";
+
+    /// <summary>An explanation that names the header, sent in <c>errors</c> as an array of strings.</summary>
+    private const string UnsupportedVersionHeaderNamed = "Unsupported X-GitHub-API-Version.";
+
+    /// <summary>GitHub's answer to a second create of the same head, as the live run of 2026-10-30 recorded it.</summary>
+    private const string DuplicateCreateBody = """{"message":"Validation Failed","errors":[{"resource":"PullRequest","code":"custom","message":"A pull request already exists for RahimPasha:visualcommit-live/20261030-232555Z."}],"documentation_url":"https://docs.github.com/rest/pulls/pulls#create-a-pull-request","status":"422"}""";
+
     private static readonly Uri Script = new("https://api.github.com/");
 
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
@@ -340,17 +356,26 @@ public sealed class GitHubClientTests
     }
 
     [Theory]
-    [InlineData(429, "30", "{\"message\":\"Too many\"}", HostingFailureKind.RateLimited, 30)]
-    [InlineData(429, null, "{\"message\":\"Too many\"}", HostingFailureKind.Malformed, null)]
-    [InlineData(403, "120", "{\"message\":\"Slow down\"}", HostingFailureKind.RateLimited, 120)]
-    [InlineData(403, null, "{\"message\":\"You have exceeded a Secondary Rate Limit.\"}", HostingFailureKind.RateLimited, 60)]
-    [InlineData(400, null, "{\"message\":\"Unsupported 'X-GitHub-Api-Version' header: x.\"}", HostingFailureKind.ApiVersion, null)]
-    [InlineData(400, null, "{\"message\":\"Problems parsing JSON\"}", HostingFailureKind.Malformed, null)]
-    [InlineData(415, null, "{\"message\":\"Unsupported 'Accept' header.\"}", HostingFailureKind.Malformed, null)]
-    [InlineData(418, null, "{}", HostingFailureKind.Malformed, null)]
-    [InlineData(503, null, "<html>busy</html>", HostingFailureKind.ServerError, null)]
-    [InlineData(401, null, "<html>no</html>", HostingFailureKind.BadCredentials, null)]
-    public async Task Other_answers_are_classified_by_the_table(int status, string? retryAfter, string body, HostingFailureKind kind, int? retrySeconds)
+    [InlineData(429, "30", "{\"message\":\"Too many\"}", HostingFailureKind.RateLimited, 30, "Too many")]
+    [InlineData(429, null, "{\"message\":\"Too many\"}", HostingFailureKind.Malformed, null, GitHubClient.MalformedText)]
+    [InlineData(403, "120", "{\"message\":\"Slow down\"}", HostingFailureKind.RateLimited, 120, "Slow down")]
+    [InlineData(403, null, "{\"message\":\"You have exceeded a Secondary Rate Limit.\"}", HostingFailureKind.RateLimited, 60, "You have exceeded a Secondary Rate Limit.")]
+    [InlineData(400, null, "{\"message\":\"Unsupported 'X-GitHub-Api-Version' header: x.\"}", HostingFailureKind.ApiVersion, null, "Unsupported 'X-GitHub-Api-Version' header: x.")]
+    [InlineData(400, null, UnsupportedVersionBody, HostingFailureKind.ApiVersion, null, UnsupportedVersionExplanation)]
+    [InlineData(400, null, "{\"message\":\"Bad Request\",\"errors\":[\"" + UnsupportedVersionHeaderNamed + "\"]}", HostingFailureKind.ApiVersion, null, UnsupportedVersionHeaderNamed)]
+    [InlineData(400, null, "{\"message\":\"Bad Request\",\"errors\":\"Something else\"}", HostingFailureKind.Malformed, null, GitHubClient.MalformedText)]
+    [InlineData(400, null, "{\"message\":\"Unsupported 'X-GitHub-Api-Version' header: x.\",\"errors\":\"Something else\"}", HostingFailureKind.ApiVersion, null, "Unsupported 'X-GitHub-Api-Version' header: x.")]
+    [InlineData(400, null, "{\"message\":\"Bad Request\",\"errors\":42}", HostingFailureKind.Malformed, null, GitHubClient.MalformedText)]
+    [InlineData(400, null, "{\"message\":\"Problems parsing JSON\"}", HostingFailureKind.Malformed, null, GitHubClient.MalformedText)]
+    [InlineData(403, null, "{\"message\":\"Resource not accessible by personal access token\",\"errors\":\"x\"}", HostingFailureKind.Forbidden, null, "Resource not accessible by personal access token")]
+    [InlineData(403, null, "{\"message\":\"Resource not accessible by personal access token\",\"errors\":42}", HostingFailureKind.Forbidden, null, "Resource not accessible by personal access token")]
+    [InlineData(404, null, "{\"message\":\"No such thing\",\"errors\":{\"field\":\"sha\"}}", HostingFailureKind.NotFound, null, "No such thing")]
+    [InlineData(415, null, "{\"message\":\"Unsupported 'Accept' header.\"}", HostingFailureKind.Malformed, null, GitHubClient.MalformedText)]
+    [InlineData(418, null, "{}", HostingFailureKind.Malformed, null, GitHubClient.MalformedText)]
+    [InlineData(500, null, "", HostingFailureKind.ServerError, null, "GitHub had a problem: HTTP 500.")]
+    [InlineData(503, null, "<html>busy</html>", HostingFailureKind.ServerError, null, "GitHub had a problem: HTTP 503.")]
+    [InlineData(401, null, "<html>no</html>", HostingFailureKind.BadCredentials, null, "Unauthorized")]
+    public async Task Other_answers_are_classified_by_the_table(int status, string? retryAfter, string body, HostingFailureKind kind, int? retrySeconds, string message)
     {
         var clock = new ManualTimeProvider(AppClocks.HarnessTime);
         var recorder = new RecordingHttpHandler(_ => retryAfter is null
@@ -360,19 +385,8 @@ public sealed class GitHubClientTests
 
         var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
 
-        Assert.Equal(kind, reply.Failure!.Kind);
+        Assert.Equal((kind, message), (reply.Failure!.Kind, reply.Failure.Message));
         Assert.Equal(retrySeconds is null ? null : AppClocks.HarnessTime.AddSeconds(retrySeconds.Value), reply.Failure.RetryAt);
-        var expected = kind switch
-        {
-            HostingFailureKind.Malformed => "GitHub's answer could not be read.",
-            HostingFailureKind.ServerError => "GitHub had a problem: HTTP 503.",
-            HostingFailureKind.BadCredentials => "Unauthorized",
-            _ => null,
-        };
-        if (expected is not null)
-        {
-            Assert.Equal(expected, reply.Failure.Message);
-        }
     }
 
     [Theory]
@@ -386,12 +400,44 @@ public sealed class GitHubClientTests
     public async Task A_422s_detail_is_the_first_errors_message_or_its_field_and_code(string? error, string detail)
     {
         var body = error is null ? "{\"message\":\"Validation Failed\"}" : $"{{\"message\":\"Validation Failed\",\"errors\":[{error}]}}";
-        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.UnprocessableContent, body));
-        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), new ManualTimeProvider());
+        Assert.Equal((HostingFailureKind.Validation, "Validation Failed", detail), await RefusedCreateAsync(body));
+    }
 
-        var reply = await client.SendAsync(HttpMethod.Post, "github_pat_FAKE-octo-1", new Uri(Script, "repos/octo/hello/pulls"), new GitHubNewPullRequestJson { Title = "t", Body = "b", Head = "h", Base = "main" }, GitHubJsonContext.Default.GitHubPullRequestJson, Cancelled);
+    [Theory]
+    [InlineData(DuplicateCreateBody, "A pull request already exists for RahimPasha:visualcommit-live/20261030-232555Z.")]
+    [InlineData("{\"message\":\"Validation Failed\",\"errors\":[\"head sha can't be blank\"]}", "head sha can't be blank")]
+    [InlineData("{\"message\":\"Validation Failed\",\"errors\":\"head sha can't be blank\"}", "head sha can't be blank")]
+    [InlineData("{\"message\":\"Validation Failed\",\"errors\":[{\"resource\":\"PullRequest\",\"field\":\"head\",\"code\":\"invalid\",\"message\":7}]}", "head is invalid")]
+    [InlineData("{\"message\":\"Validation Failed\",\"errors\":42}", "Validation Failed")]
+    public async Task A_422s_errors_are_read_as_an_array_of_objects_or_of_strings_or_one_string(string body, string detail)
+    {
+        Assert.Equal((HostingFailureKind.Validation, "Validation Failed", detail), await RefusedCreateAsync(body));
+    }
 
-        Assert.Equal((HostingFailureKind.Validation, "Validation Failed", detail), (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Detail));
+    [Theory]
+    [InlineData(UnsupportedVersionBody, "Bad Request", "-|-|" + UnsupportedVersionExplanation)]
+    [InlineData(DuplicateCreateBody, "Validation Failed", "-|custom|A pull request already exists for RahimPasha:visualcommit-live/20261030-232555Z.")]
+    [InlineData("{\"message\":\"m\",\"errors\":[{\"field\":\"head\",\"code\":\"invalid\",\"value\":{\"a\":[1,{\"message\":\"no\"}]},\"message\":null},\"one\",{\"field\":3,\"code\":[\"x\"],\"message\":\"two\"},7,[\"three\"],null]}", "m", "head|invalid|- / -|-|one / -|-|two")]
+    [InlineData("{\"errors\":\"e\",\"message\":\"m\"}", "m", "-|-|e")]
+    [InlineData("{\"errors\":[],\"message\":\"m\"}", "m", "")]
+    [InlineData("{\"message\":\"m\",\"errors\":{\"message\":\"no\"},\"status\":\"422\"}", "m", null)]
+    [InlineData("{\"message\":\"m\",\"errors\":true}", "m", null)]
+    [InlineData("{\"message\":\"m\",\"errors\":null}", "m", null)]
+    [InlineData("{\"message\":\"m\"}", "m", null)]
+    public void GitHubs_errors_are_read_in_every_shape_through_its_json_context(string body, string message, string? items)
+    {
+        var error = JsonSerializer.Deserialize(body, GitHubJsonContext.Default.GitHubErrorJson);
+
+        Assert.Equal(message, error!.Message);
+        Assert.Equal(items, error.Errors is null ? null : string.Join(" / ", error.Errors.Select(item => $"{item.Field ?? "-"}|{item.Code ?? "-"}|{item.Message ?? "-"}")));
+    }
+
+    [Fact]
+    public void GitHubs_errors_are_never_written()
+    {
+        var error = new GitHubErrorJson { Message = "m", Errors = [new GitHubErrorItemJson { Message = "e" }] };
+
+        Assert.Throws<NotSupportedException>(() => JsonSerializer.Serialize(error, GitHubJsonContext.Default.GitHubErrorJson));
     }
 
     [Fact]
@@ -401,7 +447,25 @@ public sealed class GitHubClientTests
 
         var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
 
-        Assert.Equal((HostingFailureKind.ApiVersion, "Unsupported 'X-GitHub-Api-Version' header: ."), (reply.Failure!.Kind, reply.Failure.Message));
+        Assert.Equal(
+            (HostingFailureKind.ApiVersion, "The fake of GitHub accepts only \"2026-03-10\" in the \"X-GitHub-API-Version\" request header (D266); the request sent none."),
+            (reply.Failure!.Kind, reply.Failure.Message));
+    }
+
+    [Fact]
+    public async Task A_version_github_does_not_support_is_an_api_version_failure_in_githubs_words()
+    {
+        await using var setup = Setup.Start(edit: request =>
+        {
+            request.Headers.Remove("X-GitHub-Api-Version");
+            request.Headers.Add("X-GitHub-Api-Version", "2000-01-01");
+        });
+
+        var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal((HostingFailureKind.ApiVersion, UnsupportedVersionExplanation), (reply.Failure!.Kind, reply.Failure.Message));
+        Assert.Matches("^FAKE-[0-9]{4}$", reply.Failure.RequestId);
+        Assert.Matches(@"^GitHub: GET /api/v3/user failed: 400 \(request FAKE-[0-9]{4}\)\.$", Assert.Single(setup.Log.Lines).Message);
     }
 
     [Fact]
@@ -526,6 +590,17 @@ public sealed class GitHubClientTests
         {
             Assert.DoesNotContain(secret, line.Message, StringComparison.Ordinal);
         }
+    }
+
+    /// <summary>A create GitHub refuses with 422 and <paramref name="body"/>: the failure's kind, message and detail.</summary>
+    private static async Task<(HostingFailureKind Kind, string Message, string? Detail)> RefusedCreateAsync(string body)
+    {
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.UnprocessableContent, body));
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Post, "github_pat_FAKE-octo-1", new Uri(Script, "repos/octo/hello/pulls"), new GitHubNewPullRequestJson { Title = "t", Body = "b", Head = "h", Base = "main" }, GitHubJsonContext.Default.GitHubPullRequestJson, Cancelled);
+
+        return (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Detail);
     }
 
     /// <summary>A log that keeps each line's message with its exception.</summary>

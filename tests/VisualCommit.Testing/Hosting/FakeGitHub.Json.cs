@@ -12,7 +12,17 @@ namespace VisualCommit.Testing.Hosting;
 /// </summary>
 public sealed partial class FakeGitHub
 {
+    /// <summary>GitHub's general <c>documentation_url</c>: the version 400's in the live run of 2026-10-30, and the fake's wherever a route's own was not seen.</summary>
     private const string DocumentationUrl = "https://docs.github.com/rest";
+
+    /// <summary>A2's refusal of <c>type</c> beside <c>visibility</c> or <c>affiliation</c>, as the live run of 2026-10-30 recorded it.</summary>
+    private const string ListRepositoriesDocumentationUrl = "https://docs.github.com/rest/reference/repos#list-repositories-for-the-authenticated-user";
+
+    /// <summary>A5's 422s, as the live run of 2026-10-30 recorded the duplicate's.</summary>
+    private const string CreatePullRequestDocumentationUrl = "https://docs.github.com/rest/pulls/pulls#create-a-pull-request";
+
+    /// <summary>A6's 404 for a revision GitHub does not have, as the live run of 2026-10-30 recorded it.</summary>
+    private const string ListCommitsDocumentationUrl = "https://docs.github.com/rest/commits/commits#list-commits";
 
     private static readonly JsonSerializerOptions JsonOptions = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
@@ -199,16 +209,20 @@ public sealed partial class FakeGitHub
         return user is null ? null : UserJson(user);
     }
 
-    /// <summary>GitHub's error body: <c>message</c>, <c>documentation_url</c>, <c>status</c> (a string), and a 422's <c>errors</c>.</summary>
-    private static JsonObject ErrorJson(int status, string message, JsonObject? error = null)
+    /// <summary>
+    /// GitHub's error body in GitHub's order: <c>message</c>, <c>errors</c> when given (a 422's
+    /// array, the version 400's one string), <c>documentation_url</c> (the route's where GitHub gave
+    /// one, D342), <c>status</c> (a string).
+    /// </summary>
+    private static JsonObject ErrorJson(int status, string message, JsonNode? errors = null, string documentationUrl = DocumentationUrl)
     {
         var json = new JsonObject { ["message"] = message };
-        if (error is not null)
+        if (errors is not null)
         {
-            json["errors"] = new JsonArray(error);
+            json["errors"] = errors;
         }
 
-        json["documentation_url"] = DocumentationUrl;
+        json["documentation_url"] = documentationUrl;
         json["status"] = status.ToString(CultureInfo.InvariantCulture);
         return json;
     }

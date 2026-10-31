@@ -284,8 +284,9 @@ public sealed class GitHubProviderTests
         var main = await TipAsync(setup, "octo/hello", "main");
 
         // A repository GitHub does not have (404) and an empty one (409), each asked once for its two
-        // addresses (ada/gone's second in another case); a commit octo/hello does not have (422),
-        // which leaves out its address alone; then octo on main.
+        // addresses (ada/gone's second in another case); a commit octo/hello does not have (500
+        // without a body, as github.com answers it beside author, D342), which leaves out its
+        // address alone; then octo on main.
         var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null,
             [
                 new AuthorCommit(Scenarios.AdaEmail, main, Repository("ada", "gone")),
@@ -299,12 +300,12 @@ public sealed class GitHubProviderTests
 
         Assert.Equal(new AuthorAvatar(1001, "octo", new Uri("http://127.0.0.1:1/avatars/u/1001?v=4")), Assert.Single(authors.Value!.ByEmail).Value);
         Assert.Equal(
-            [("commits:ada/gone", 404), ("commits:octo/notes", 409), ("commits:octo/hello", 422), ("commits:octo/hello", 200)],
+            [("commits:ada/gone", 404), ("commits:octo/notes", 409), ("commits:octo/hello", 500), ("commits:octo/hello", 200)],
             setup.Fake.Requests.Select(request => (request.Route, request.Status)));
     }
 
     [Fact]
-    public async Task A6_an_empty_repository_is_an_empty_map_and_a_failing_lookup_is_left_out()
+    public async Task A6_an_empty_repository_is_an_empty_map_a_server_error_leaves_out_one_lookup_and_a_refusal_stops_them()
     {
         await using var setup = await Setup.StartAsync();
 
@@ -313,15 +314,77 @@ public sealed class GitHubProviderTests
         Assert.Equal((true, 0), (empty.Succeeded, empty.Value!.ByEmail.Count));
         Assert.Single(setup.Fake.Requests);
 
+        // GitHub could not answer one lookup (a 5xx): only that address is left out (D342).
         setup.Fake.FailNext("commits:octo/hello", FakeGitHubFault.ServerError);
-        var stopped = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null, OnMain(main, Scenarios.OctoEmail, Scenarios.AdaEmail), Cancelled);
-        Assert.Equal((true, 0), (stopped.Succeeded, stopped.Value!.ByEmail.Count));
-        Assert.Equal(2, setup.Fake.Requests.Count);
+        var skipped = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null, OnMain(main, Scenarios.OctoEmail, Scenarios.AdaEmail), Cancelled);
+        Assert.Equal(new AuthorAvatar(1003, "ada", new Uri("http://127.0.0.1:1/avatars/u/1003?v=4")), Assert.Single(skipped.Value!.ByEmail, pair => pair.Key == Scenarios.AdaEmail).Value);
+        Assert.Single(skipped.Value.ByEmail);
+        Assert.Equal(3, setup.Fake.Requests.Count);
+
+        // A refusal of the token stops them, the refused one left out too.
+        foreach (var refusal in new[] { FakeGitHubFault.PrimaryRateLimit, FakeGitHubFault.BadCredentials })
+        {
+            setup.Fake.FailNext("commits:octo/hello", refusal);
+            var stopped = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null, OnMain(main, Scenarios.OctoEmail, Scenarios.AdaEmail), Cancelled);
+            Assert.Equal((true, 0), (stopped.Succeeded, stopped.Value!.ByEmail.Count));
+        }
+
+        Assert.Equal(5, setup.Fake.Requests.Count);
 
         setup.Fake.FailNext("commits:octo/hello", FakeGitHubFault.ServerError);
         var failed = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), "main", OnMain(main, Scenarios.OctoEmail), Cancelled);
         Assert.Equal(HostingFailureKind.ServerError, failed.Failure!.Kind);
-        Assert.Equal(3, setup.Fake.Requests.Count);
+        Assert.Equal(6, setup.Fake.Requests.Count);
+    }
+
+    [Fact]
+    public async Task A6_a_lookup_github_cannot_answer_leaves_out_its_address_and_a_404_on_another_repository_leaves_out_that_repository()
+    {
+        // github.com's answers to a commit it lacks beside author= (D342): a 500 without a body (the
+        // live run of 2026-10-30), and a 422 is taken the same, on the listed repository or the fork
+        // a lookup goes to; a 404 on the listed repository is taken the same. A 404 on another
+        // repository leaves out the rest of that repository's; a 401 stops them.
+        static string Found(string login, int id) =>
+            $$$"""[{"sha":"x","commit":{"author":{"email":"x@example.com"}},"author":{"login":"{{{login}}}","id":{{{id}}},"avatar_url":"https://avatars.githubusercontent.com/u/{{{id}}}?v=4"}}]""";
+        var recorder = new RecordingHttpHandler(request => request.RequestUri!.Query.Split('&')[0] switch
+        {
+            "?sha=1" or "?sha=5" => RecordingHttpHandler.Json(HttpStatusCode.UnprocessableContent, "{\"message\":\"No commit found for SHA\"}"),
+            "?sha=2" or "?sha=7" => RecordingHttpHandler.Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}"),
+            "?sha=3" or "?sha=4" => new HttpResponseMessage(HttpStatusCode.InternalServerError),
+            "?sha=6" => RecordingHttpHandler.Json(HttpStatusCode.OK, Found("ada", 1003)),
+            "?sha=9" => RecordingHttpHandler.Json(HttpStatusCode.OK, Found("eff", 1006)),
+            "?sha=11" => RecordingHttpHandler.Json(HttpStatusCode.Unauthorized, "{\"message\":\"Bad credentials\"}"),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.OK, "[]"),
+        });
+        using var provider = new GitHubProvider(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), new ManualTimeProvider());
+        var listed = new HostedRepository(HostingProvider.GitHub, "github.com", "octo", "hello");
+        var fork = new HostedRepository(HostingProvider.GitHub, "github.com", "ada", "hello");
+
+        var authors = await provider.ReadAuthorsAsync("github_pat_FAKE-octo-1", listed, null,
+            [
+                new AuthorCommit("a@example.com", "1", listed),
+                new AuthorCommit("b@example.com", "2", listed with { Owner = "Octo", Name = "HELLO" }),
+                new AuthorCommit("c@example.com", "3", listed),
+                new AuthorCommit("d@example.com", "4", fork),
+                new AuthorCommit("e@example.com", "5", fork),
+                new AuthorCommit("f@example.com", "6", fork),
+                new AuthorCommit("g@example.com", "7", fork),
+                new AuthorCommit("h@example.com", "8", fork),
+                new AuthorCommit("i@example.com", "9", listed),
+                new AuthorCommit("j@example.com", "10", listed),
+                new AuthorCommit("k@example.com", "11", listed),
+                new AuthorCommit("l@example.com", "12", listed),
+            ],
+            Cancelled);
+
+        Assert.True(authors.Succeeded);
+        Assert.Equal(new[] { "f@example.com", "i@example.com", "j@example.com" }, authors.Value!.ByEmail.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(new AuthorAvatar(1003, "ada", new Uri("https://avatars.githubusercontent.com/u/1003?v=4")), authors.Value.ByEmail["f@example.com"]);
+        Assert.Equal(new AuthorAvatar(1006, "eff", new Uri("https://avatars.githubusercontent.com/u/1006?v=4")), authors.Value.ByEmail["i@example.com"]);
+        Assert.Null(authors.Value.ByEmail["j@example.com"]);
+        Assert.Equal(
+            new[] { "octo/hello 1", "Octo/HELLO 2", "octo/hello 3", "ada/hello 4", "ada/hello 5", "ada/hello 6", "ada/hello 7", "octo/hello 9", "octo/hello 10", "octo/hello 11" },
+            recorder.Sent.Select(sent => $"{sent.Url.AbsolutePath["/repos/".Length..^"/commits".Length]} {sent.Url.Query.Split('&')[0]["?sha=".Length..]}"));
     }
 
     [Fact]

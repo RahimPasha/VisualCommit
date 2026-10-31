@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace VisualCommit.Hosting.GitHub;
@@ -109,15 +110,16 @@ internal sealed class GitHubCommitAuthorJson
     public string? Email { get; set; }
 }
 
-/// <summary>GitHub's error body: <c>message</c> and a 422's <c>errors</c>.</summary>
+/// <summary>GitHub's error body: <c>message</c> and <c>errors</c> (a 422's array, a 400's one string; <see cref="GitHubErrorsConverter"/>).</summary>
 internal sealed class GitHubErrorJson
 {
     public string? Message { get; set; }
 
+    [JsonConverter(typeof(GitHubErrorsConverter))]
     public List<GitHubErrorItemJson>? Errors { get; set; }
 }
 
-/// <summary>One of a 422's <c>errors</c>.</summary>
+/// <summary>One of <c>errors</c>: a 422's object, or a string as its <c>message</c>.</summary>
 internal sealed class GitHubErrorItemJson
 {
     public string? Field { get; set; }
@@ -125,6 +127,85 @@ internal sealed class GitHubErrorItemJson
     public string? Code { get; set; }
 
     public string? Message { get; set; }
+}
+
+/// <summary>
+/// <c>errors</c> in each shape GitHub sends (D342): an array of objects (a 422's: <c>field</c>,
+/// <c>code</c>, <c>message</c>, other members and a known one's value that is not a string
+/// skipped), an array of strings, or one string (a 400 for an unsupported
+/// <c>X-GitHub-Api-Version</c>, the live run of 2026-10-30), each string an item with that
+/// <c>message</c>. Any other value is skipped and gives null, so it never costs the body its
+/// <c>message</c>. Read only: nothing writes an error body.
+/// </summary>
+internal sealed class GitHubErrorsConverter : JsonConverter<List<GitHubErrorItemJson>>
+{
+    public override List<GitHubErrorItemJson>? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.String)
+        {
+            return [new GitHubErrorItemJson { Message = reader.GetString() }];
+        }
+
+        if (reader.TokenType != JsonTokenType.StartArray)
+        {
+            reader.Skip();
+            return null;
+        }
+
+        var items = new List<GitHubErrorItemJson>();
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
+        {
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                items.Add(new GitHubErrorItemJson { Message = reader.GetString() });
+            }
+            else if (reader.TokenType == JsonTokenType.StartObject)
+            {
+                items.Add(ReadItem(ref reader));
+            }
+            else
+            {
+                reader.Skip();
+            }
+        }
+
+        return items;
+    }
+
+    public override void Write(Utf8JsonWriter writer, List<GitHubErrorItemJson> value, JsonSerializerOptions options) =>
+        throw new NotSupportedException("GitHub's errors are read, never written.");
+
+    // From an object's start to its end: the strings of field, code and message.
+    private static GitHubErrorItemJson ReadItem(ref Utf8JsonReader reader)
+    {
+        var item = new GitHubErrorItemJson();
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            var name = reader.GetString();
+            reader.Read();
+            var text = reader.TokenType == JsonTokenType.String ? reader.GetString() : null;
+            if (text is null)
+            {
+                reader.Skip();
+                continue;
+            }
+
+            switch (name)
+            {
+                case "field":
+                    item.Field = text;
+                    break;
+                case "code":
+                    item.Code = text;
+                    break;
+                case "message":
+                    item.Message = text;
+                    break;
+            }
+        }
+
+        return item;
+    }
 }
 
 /// <summary>A5's body; <c>maintainer_can_modify</c> only across forks (left out when null).</summary>

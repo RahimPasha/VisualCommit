@@ -19,6 +19,9 @@ public sealed partial class FakeGitHub
     private const string AvatarPrefix = "/avatars/u/";
     private const int RateLimit = 5000;
 
+    /// <summary>GitHub's other supported API version, as the live run of 2026-10-30 recorded GitHub naming it; the fake refuses it all the same (D266).</summary>
+    private const string OtherSupportedVersion = "2022-11-28";
+
     /// <summary>Whether the fake answers this request itself (its API, avatars and pages), decided from the request line alone; git's paths are not claimed.</summary>
     internal bool Claims(string method, string path) =>
         path.StartsWith(ApiPrefix, StringComparison.Ordinal) || path == "/api/v3"
@@ -115,7 +118,7 @@ public sealed partial class FakeGitHub
         var version = request.Headers.GetValueOrDefault("X-GitHub-Api-Version");
         if (version != GitHubApi.Version)
         {
-            return Error(call, 400, $"Unsupported 'X-GitHub-Api-Version' header: {version}.");
+            return VersionRefused(call, version);
         }
 
         if (request.Headers.GetValueOrDefault("Accept") is not { } accept || !accept.Contains(GitHubApi.MediaType, StringComparison.OrdinalIgnoreCase))
@@ -186,6 +189,23 @@ public sealed partial class FakeGitHub
         return fault?.Kind == FakeGitHubFaultKind.CreatedThenDropped ? answer with { Drop = true } : answer;
     }
 
+    /// <summary>
+    /// 400 for an <c>X-GitHub-Api-Version</c> other than <see cref="GitHubApi.Version"/>, in GitHub's
+    /// shape (the live run of 2026-10-30, D342): <c>message</c> "Bad Request", the explanation in
+    /// <c>errors</c> as one string. A version GitHub does not support gets GitHub's words byte for
+    /// byte; none, or GitHub's other version, which GitHub accepts, gets the fake's own, which name
+    /// the header too (the fake is stricter than GitHub, D266).
+    /// </summary>
+    private AuthRemoteResponse VersionRefused(Call call, string? version)
+    {
+        var none = string.IsNullOrEmpty(version);
+        var sent = none ? "none" : $"\"{version}\"";
+        var explanation = none || version == OtherSupportedVersion
+            ? $"The fake of GitHub accepts only \"{GitHubApi.Version}\" in the \"X-GitHub-API-Version\" request header (D266); the request sent {sent}."
+            : $"The version you specified in the \"X-GitHub-API-Version\" request header, {sent}, is not a supported version. The following versions are currently supported: \"{GitHubApi.Version}\" (most recent) and \"{OtherSupportedVersion}\".";
+        return Json(call, 400, ErrorJson(400, "Bad Request", JsonValue.Create(explanation)));
+    }
+
     // ---- Routes ------------------------------------------------------------------------------------
 
     private AuthRemoteResponse User(Call call)
@@ -199,7 +219,13 @@ public sealed partial class FakeGitHub
         return user is null ? Error(call, 404, "Not Found") : Json(call, 200, UserJson(user, withName: true));
     }
 
-    /// <summary>A2: those the login owns or may push to, and the listed records, paged.</summary>
+    /// <summary>
+    /// A2: those the login owns or may push to, and the listed records, paged. A fine-grained token
+    /// reaches every repository its login owns or may push to, as a classic token with <c>repo</c>
+    /// does: more than GitHub's "All repositories", which keeps to the token's one resource owner.
+    /// "Only select repositories" is not modelled, for which GitHub lists the selected repositories
+    /// and the owner's public ones (the live run of 2026-10-30: the sandbox and 11 public).
+    /// </summary>
     private AuthRemoteResponse UserRepositories(Call call)
     {
         var query = call.Query;
@@ -208,7 +234,7 @@ public sealed partial class FakeGitHub
         var affiliation = query.Value("affiliation");
         if (type is not null && (visibility is not null || affiliation is not null))
         {
-            return Error(call, 422, "If you specify visibility or affiliation, you cannot specify type.");
+            return Error(call, 422, "If you specify visibility or affiliation, you cannot specify type.", documentationUrl: ListRepositoriesDocumentationUrl);
         }
 
         var login = call.Login!;
@@ -424,7 +450,11 @@ public sealed partial class FakeGitHub
         return Json(call, 200, PullJson(pull, repository, call.Login));
     }
 
-    /// <summary>A6: one <c>git log</c> from <c>sha</c> (the default branch), filtered by <c>author</c> (an e-mail, or a login through <see cref="LinkEmail"/>), paged; 409 when empty, 422 for an unknown SHA.</summary>
+    /// <summary>
+    /// A6: one <c>git log</c> from <c>sha</c> (the default branch), filtered by <c>author</c> (an
+    /// e-mail, or a login through <see cref="LinkEmail"/>), paged; 409 when empty; for a revision
+    /// git cannot resolve, 404 "Not Found", or 500 without a body beside <c>author</c> (D342).
+    /// </summary>
     private async Task<AuthRemoteResponse> CommitsAsync(Call call, FakeRepository repository, CancellationToken ct)
     {
         if (repository.BarePath is not { } bare || IsEmpty(bare))
@@ -435,7 +465,12 @@ public sealed partial class FakeGitHub
         var sha = call.Query.Value("sha") ?? repository.DefaultBranch;
         if (await LogAsync(bare, sha, ct).ConfigureAwait(false) is not { } commits)
         {
-            return Error(call, 422, $"No commit found for SHA: {sha}");
+            // github.com, 2026-10-30, one sample each: a SHA it does not have is 404 alone and 500
+            // with an empty body beside author. A branch name GitHub lacks is taken to answer as an
+            // unknown SHA (not measured).
+            return call.Query.Value("author") is null
+                ? Error(call, 404, "Not Found", documentationUrl: ListCommitsDocumentationUrl)
+                : Empty(call, 500);
         }
 
         if (call.Query.Value("author") is { } author)
@@ -549,10 +584,20 @@ public sealed partial class FakeGitHub
 
     // ---- Answers and headers -----------------------------------------------------------------------
 
-    private AuthRemoteResponse Invalid(Call call, JsonObject error) => Json(call, 422, ErrorJson(422, "Validation Failed", error));
+    /// <summary>A5's 422 "Validation Failed" with <paramref name="error"/> (<c>resource</c> first, as GitHub's) as its one error, on GitHub's documentation of the create.</summary>
+    private AuthRemoteResponse Invalid(Call call, JsonObject error) =>
+        Json(call, 422, ErrorJson(422, "Validation Failed", new JsonArray(error), CreatePullRequestDocumentationUrl));
 
-    private AuthRemoteResponse Error(Call call, int status, string message, IEnumerable<KeyValuePair<string, string>>? extra = null) =>
-        Json(call, status, ErrorJson(status, message), null, extra);
+    private AuthRemoteResponse Error(Call call, int status, string message, IEnumerable<KeyValuePair<string, string>>? extra = null, string documentationUrl = DocumentationUrl) =>
+        Json(call, status, ErrorJson(status, message, documentationUrl: documentationUrl), null, extra);
+
+    /// <summary>An answer of <paramref name="status"/> without a body or a <c>Content-Type</c>, with GitHub's common headers and counted (A6's 500, D342).</summary>
+    private AuthRemoteResponse Empty(Call call, int status)
+    {
+        var headers = new List<KeyValuePair<string, string>>();
+        AddCommonHeaders(call, headers, counted: true, notModified: false);
+        return new AuthRemoteResponse(status, ReasonOf(status), headers, []);
+    }
 
     private AuthRemoteResponse Json(Call call, int status, JsonNode node, IEnumerable<KeyValuePair<string, string>> extra) => Json(call, status, node, null, extra);
 
@@ -560,7 +605,8 @@ public sealed partial class FakeGitHub
     /// A JSON answer with GitHub's headers (r5 10.4): <c>ETag</c> on a success, and a matching
     /// <c>If-None-Match</c> answered 304 without a body and not counted; the rate limit's headers
     /// for a signed-in request; <c>X-OAuth-Scopes</c> for a classic token; the token's expiry
-    /// when set; <c>Link</c> for a page; <c>X-GitHub-Request-Id</c>.
+    /// when set, except on a 304 (inferred: the live run of 2026-10-30 counted one 304 and one
+    /// answer without the expiry, not paired); <c>Link</c> for a page; <c>X-GitHub-Request-Id</c>.
     /// </summary>
     private AuthRemoteResponse Json(Call call, int status, JsonNode node, string? link = null, IEnumerable<KeyValuePair<string, string>>? extra = null)
     {
@@ -572,15 +618,15 @@ public sealed partial class FakeGitHub
             if (call.Request.Headers.GetValueOrDefault("If-None-Match") is { } given
                 && given.Split(',', StringSplitOptions.TrimEntries).Contains(etag, StringComparer.Ordinal))
             {
-                var notModified = new List<KeyValuePair<string, string>> { KeyValuePair.Create("ETag", etag) };
-                AddCommonHeaders(call, notModified, counted: false);
-                return new AuthRemoteResponse(304, ReasonOf(304), notModified, []);
+                var unchanged = new List<KeyValuePair<string, string>> { KeyValuePair.Create("ETag", etag) };
+                AddCommonHeaders(call, unchanged, counted: false, notModified: true);
+                return new AuthRemoteResponse(304, ReasonOf(304), unchanged, []);
             }
 
             headers.Add(KeyValuePair.Create("ETag", etag));
         }
 
-        AddCommonHeaders(call, headers, counted: true);
+        AddCommonHeaders(call, headers, counted: true, notModified: false);
         if (link is not null)
         {
             headers.Add(KeyValuePair.Create("Link", link));
@@ -590,7 +636,12 @@ public sealed partial class FakeGitHub
         return new AuthRemoteResponse(status, ReasonOf(status), headers, body);
     }
 
-    private void AddCommonHeaders(Call call, List<KeyValuePair<string, string>> headers, bool counted)
+    /// <summary>
+    /// The rate limit's headers, <c>X-OAuth-Scopes</c> and the token's expiry for a signed-in
+    /// request, the request counted when <paramref name="counted"/>, the expiry left out of a 304
+    /// (<paramref name="notModified"/>); then <c>X-GitHub-Request-Id</c>.
+    /// </summary>
+    private void AddCommonHeaders(Call call, List<KeyValuePair<string, string>> headers, bool counted, bool notModified)
     {
         if (call.Token is { } token)
         {
@@ -611,7 +662,7 @@ public sealed partial class FakeGitHub
                 headers.Add(KeyValuePair.Create("X-OAuth-Scopes", string.Join(", ", token.Scopes)));
             }
 
-            if (token.Expires is { } expires)
+            if (!notModified && token.Expires is { } expires)
             {
                 headers.Add(KeyValuePair.Create("GitHub-Authentication-Token-Expiration", expires.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss 'UTC'", CultureInfo.InvariantCulture)));
             }

@@ -11,13 +11,20 @@ namespace VisualCommit.Hosting.Tests;
 
 /// <summary>
 /// The fake of GitHub in process (docs/phase-7a-design.md 2.4, 2.9): every route, the checks in
-/// their order, GitHub's shapes and headers, each fault once and then the normal answer, the
-/// holds, A5's ref and refusals, A6 and its 409, avatars and pages, a renamed repository's names
-/// and redirects, and a long list's pages. On a copy of "hosting" served in process
+/// their order, GitHub's shapes and headers (its bodies byte for byte where the live run of
+/// 2026-10-30 recorded them, D342), each fault once and then the normal answer, the holds, A5's ref
+/// and refusals, A6 with its 409 and an unknown revision, avatars and pages, a renamed repository's
+/// names and redirects, and a long list's pages. On a copy of "hosting" served in process
 /// (<see cref="Scenarios.ServeHostingAsync"/>).
 /// </summary>
 public sealed class FakeGitHubTests
 {
+    /// <summary>GitHub's <c>documentation_url</c> where it gave none of its own for the route.</summary>
+    private const string Documentation = "https://docs.github.com/rest";
+
+    /// <summary>GitHub's answer to <c>X-GitHub-Api-Version: 2000-01-01</c>, as the live run of 2026-10-30 recorded it (D342).</summary>
+    private const string UnsupportedVersionBody = """{"message":"Bad Request","errors":"The version you specified in the \"X-GitHub-API-Version\" request header, \"2000-01-01\", is not a supported version. The following versions are currently supported: \"2026-03-10\" (most recent) and \"2022-11-28\".","documentation_url":"https://docs.github.com/rest","status":"400"}""";
+
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -27,11 +34,16 @@ public sealed class FakeGitHubTests
         var fake = scenario.Served.GitHub;
 
         await AssertErrorAsync(fake, HttpMethod.Get, "user", 403, "Request forbidden by administrative rules. Please make sure your request has a User-Agent header.", token: null, edit: request => request.Headers.UserAgent.Clear());
-        await AssertErrorAsync(fake, HttpMethod.Get, "user", 400, "Unsupported 'X-GitHub-Api-Version' header: 2022-11-28.", token: null, edit: request =>
-        {
-            request.Headers.Remove("X-GitHub-Api-Version");
-            request.Headers.Add("X-GitHub-Api-Version", "2022-11-28");
-        });
+
+        // A version GitHub does not support: GitHub's answer byte for byte, as the live run of
+        // 2026-10-30 recorded it. GitHub's other version and none, which GitHub accepts, are refused
+        // in the same shape with the fake's own words (D266).
+        var unsupported = await SendAsync(fake, HttpMethod.Get, "user", token: null, edit: request => WithVersion(request, "2000-01-01"));
+        Assert.Equal((HttpStatusCode.BadRequest, UnsupportedVersionBody), (unsupported.Status, unsupported.Body));
+        await AssertErrorAsync(fake, HttpMethod.Get, "user", 400, "Bad Request", token: null, edit: request => WithVersion(request, "2022-11-28"),
+            errors: "The fake of GitHub accepts only \"2026-03-10\" in the \"X-GitHub-API-Version\" request header (D266); the request sent \"2022-11-28\".");
+        await AssertErrorAsync(fake, HttpMethod.Get, "user", 400, "Bad Request", token: null, edit: request => request.Headers.Remove("X-GitHub-Api-Version"),
+            errors: "The fake of GitHub accepts only \"2026-03-10\" in the \"X-GitHub-API-Version\" request header (D266); the request sent none.");
         await AssertErrorAsync(fake, HttpMethod.Get, "user", 415, "Unsupported 'Accept' header.", token: null, edit: request => request.Headers.Accept.Clear());
         await AssertErrorAsync(fake, HttpMethod.Get, "user", 401, "Requires authentication", token: null);
         await AssertErrorAsync(fake, HttpMethod.Get, "user", 401, "Requires authentication", token: null, edit: request =>
@@ -83,7 +95,13 @@ public sealed class FakeGitHubTests
         var classic = await SendAsync(fake, HttpMethod.Get, "user", scenario.Served.OctoClassicToken);
         Assert.Equal(("repo, workflow", "2"), (classic.Header("X-OAuth-Scopes"), classic.Header("X-RateLimit-Used")));
         var expiring = fake.AddToken("ada", expires: new DateTimeOffset(2026, 2, 1, 0, 0, 0, TimeSpan.Zero));
-        Assert.Equal("2026-02-01 00:00:00 UTC", (await SendAsync(fake, HttpMethod.Get, "user", expiring)).Header("GitHub-Authentication-Token-Expiration"));
+        var ada = await SendAsync(fake, HttpMethod.Get, "user", expiring);
+        Assert.Equal("2026-02-01 00:00:00 UTC", ada.Header("GitHub-Authentication-Token-Expiration"));
+
+        // Its 304 does not show it, as GitHub's is taken not to (inferred from the live run of
+        // 2026-10-30, which counted one 304 and one answer without the expiry, not paired).
+        var adaAgain = await SendAsync(fake, HttpMethod.Get, "user", expiring, edit: request => request.Headers.TryAddWithoutValidation("If-None-Match", ada.Header("ETag")));
+        Assert.Equal((HttpStatusCode.NotModified, (string?)null, "1"), (adaAgain.Status, adaAgain.Header("GitHub-Authentication-Token-Expiration"), adaAgain.Header("X-RateLimit-Used")));
 
         // A fork's parent and source; by id; the permissions of the login.
         var fork = await SendAsync(fake, HttpMethod.Get, "repos/ADA/Hello", scenario.Served.OctoToken);
@@ -115,7 +133,8 @@ public sealed class FakeGitHubTests
         Assert.Equal(["acme/tool", "ada/hello"], Names(await SendAsync(fake, HttpMethod.Get, "user/repos", scenario.Served.AdaToken)));
         Assert.Equal(["acme/tool"], Names(await SendAsync(fake, HttpMethod.Get, "user/repos?affiliation=organization_member", scenario.Served.AdaToken)));
         Assert.Equal(["ada/hello"], Names(await SendAsync(fake, HttpMethod.Get, "user/repos?type=owner", scenario.Served.AdaToken)));
-        await AssertErrorAsync(fake, HttpMethod.Get, "user/repos?type=all&visibility=all", 422, "If you specify visibility or affiliation, you cannot specify type.", token);
+        await AssertErrorAsync(fake, HttpMethod.Get, "user/repos?type=all&visibility=all", 422, "If you specify visibility or affiliation, you cannot specify type.", token,
+            documentationUrl: "https://docs.github.com/rest/reference/repos#list-repositories-for-the-authenticated-user");
 
         var first = await SendAsync(fake, HttpMethod.Get, "user/repos?sort=updated&per_page=3", token);
         var api = fake.Endpoints.ApiBase.AbsoluteUri;
@@ -247,8 +266,23 @@ public sealed class FakeGitHubTests
         Assert.Equal(["Initial commit octo@example.com octo"], Commits(await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?author=OCTO@example.com&per_page=1", token)));
         Assert.Contains("rel=\"next\"", (await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?per_page=1", token)).Header("Link"), StringComparison.Ordinal);
 
-        await AssertErrorAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?sha=nope", 422, "No commit found for SHA: nope", token);
+        // A revision GitHub does not have: 404 alone, 500 without a body beside author (the live
+        // run of 2026-10-30), counted like any answer; an empty repository's 409 comes first.
+        var unknown = new string('f', 40);
+        await AssertErrorAsync(fake, HttpMethod.Get, $"repos/octo/hello/commits?sha={unknown}", 404, "Not Found", token, documentationUrl: "https://docs.github.com/rest/commits/commits#list-commits");
+        await AssertErrorAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?sha=nope", 404, "Not Found", token, documentationUrl: "https://docs.github.com/rest/commits/commits#list-commits");
+        var used = int.Parse((await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?per_page=1", token)).Header("X-RateLimit-Used")!, System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var query in new[] { $"sha={unknown}&author=octo%40example.com&per_page=1", "sha=nope&author=ada" })
+        {
+            var failed = await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?" + query, token);
+            Assert.Equal((HttpStatusCode.InternalServerError, string.Empty, (string?)null), (failed.Status, failed.Body, failed.Header("Content-Type")));
+            Assert.Matches("^FAKE-[0-9]{4}$", failed.Header("X-GitHub-Request-Id"));
+            Assert.Equal((++used).ToString(System.Globalization.CultureInfo.InvariantCulture), failed.Header("X-RateLimit-Used"));
+            Assert.Equal(("commits:octo/hello", 500), (fake.Requests[^1].Route, fake.Requests[^1].Status));
+        }
+
         await AssertErrorAsync(fake, HttpMethod.Get, "repos/octo/notes/commits", 409, "Git Repository is empty.", token);
+        await AssertErrorAsync(fake, HttpMethod.Get, $"repos/octo/notes/commits?sha={unknown}&author=octo%40example.com", 409, "Git Repository is empty.", token);
         Assert.Empty(fake.Errors);
     }
 
@@ -449,18 +483,35 @@ public sealed class FakeGitHubTests
         return new Answer(response.StatusCode, body, headers);
     }
 
-    private static async Task AssertErrorAsync(FakeGitHub fake, HttpMethod method, string relative, int status, string message, string? token, string? json = null, Action<HttpRequestMessage>? edit = null)
+    /// <summary>
+    /// An error in GitHub's shape and order: <c>message</c>, <c>errors</c> only when
+    /// <paramref name="errors"/> is given (one string, its text), <c>documentation_url</c> (GitHub's
+    /// own for the route where the live run of 2026-10-30 saw one, else <see cref="Documentation"/>)
+    /// and <c>status</c> as a string.
+    /// </summary>
+    private static async Task AssertErrorAsync(FakeGitHub fake, HttpMethod method, string relative, int status, string message, string? token, string? json = null, Action<HttpRequestMessage>? edit = null,
+        string? errors = null, string documentationUrl = Documentation)
     {
         var answer = await SendAsync(fake, method, relative, token, json, edit);
-        Assert.Equal(((HttpStatusCode)status, message, "https://docs.github.com/rest", status.ToString(System.Globalization.CultureInfo.InvariantCulture)),
-            (answer.Status, answer.Text("message"), answer.Text("documentation_url"), answer.Text("status")));
+        Assert.Equal(((HttpStatusCode)status, message, errors, documentationUrl, status.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            (answer.Status, answer.Text("message"), answer.Json.TryGetProperty("errors", out var given) ? (given.ValueKind == JsonValueKind.String ? given.GetString() : given.GetRawText()) : null, answer.Text("documentation_url"), answer.Text("status")));
+        string[] members = errors is null ? ["message", "documentation_url", "status"] : ["message", "errors", "documentation_url", "status"];
+        Assert.Equal(members, answer.Json.EnumerateObject().Select(member => member.Name));
     }
 
+    /// <summary>A5's 422 with <paramref name="error"/> as its one error, the whole body as GitHub's duplicate of the live run of 2026-10-30 is.</summary>
     private static async Task AssertInvalidAsync(FakeGitHub fake, string token, string json, string error, string repository = "octo/hello")
     {
         var answer = await SendAsync(fake, HttpMethod.Post, $"repos/{repository}/pulls", token, json);
-        Assert.Equal((HttpStatusCode.UnprocessableContent, "Validation Failed"), (answer.Status, answer.Text("message")));
-        Assert.Equal(error, answer.Json.GetProperty("errors")[0].GetRawText());
+        Assert.Equal(
+            (HttpStatusCode.UnprocessableContent, $"{{\"message\":\"Validation Failed\",\"errors\":[{error}],\"documentation_url\":\"https://docs.github.com/rest/pulls/pulls#create-a-pull-request\",\"status\":\"422\"}}"),
+            (answer.Status, answer.Body));
+    }
+
+    private static void WithVersion(HttpRequestMessage request, string version)
+    {
+        request.Headers.Remove("X-GitHub-Api-Version");
+        request.Headers.Add("X-GitHub-Api-Version", version);
     }
 
     private static async Task FaultOnceAsync(FakeGitHub fake, string route, FakeGitHubFault fault, string token, Action<Answer> check, string? relative = null)

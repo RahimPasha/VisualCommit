@@ -153,7 +153,12 @@ public sealed partial class FakeGitHub : IAsyncDisposable
     /// Makes a token of <paramref name="login"/>: <c>github_pat_FAKE-&lt;login&gt;-&lt;n&gt;</c>, or
     /// for a classic one <c>ghp_FAKE-&lt;login&gt;-&lt;n&gt;</c> with <paramref name="scopes"/>
     /// (<c>repo</c> and <c>workflow</c> unless given), <c>n</c> from 1 across the fake's tokens.
-    /// <paramref name="expires"/> is shown in <c>GitHub-Authentication-Token-Expiration</c>.
+    /// <paramref name="expires"/> is shown in <c>GitHub-Authentication-Token-Expiration</c>, except
+    /// on a 304 (inferred from the live run of 2026-10-30). A fine-grained token reaches every
+    /// repository its login owns or may push to, as a classic token with <c>repo</c> does: more
+    /// than GitHub's "All repositories", which keeps to the token's one resource owner. "Only
+    /// select repositories" is not modelled, for which GitHub lists the selected repositories and
+    /// the owner's public ones (the live run of 2026-10-30: the sandbox and 11 public).
     /// </summary>
     public string AddToken(string login, FakeTokenKind kind = FakeTokenKind.FineGrained, IReadOnlyCollection<string>? scopes = null, DateTimeOffset? expires = null)
     {

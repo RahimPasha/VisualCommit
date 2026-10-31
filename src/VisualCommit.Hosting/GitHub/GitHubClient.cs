@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
@@ -408,6 +409,10 @@ internal sealed partial class GitHubClient : IDisposable
         var status = exchange.Status;
         var error = Parse(exchange.Body, GitHubJsonContext.Default.GitHubErrorJson);
         var message = error?.Message is { Length: > 0 } words ? words : null;
+
+        // An unsupported X-GitHub-Api-Version is a 400 "Bad Request" whose explanation is errors
+        // as one string (the live run of 2026-10-30, D342): the first item's message.
+        var explained = error?.Errors is [{ Message: { Length: > 0 } first }, ..] ? first : null;
         var fallback = exchange.Reason is { Length: > 0 } reason ? reason : string.Create(CultureInfo.InvariantCulture, $"HTTP {status}");
         string? Header(string name) => exchange.Headers.GetValueOrDefault(name);
         HostingFailure Fail(HostingFailureKind kind, string text, string? detail = null, DateTimeOffset? retryAt = null) =>
@@ -442,12 +447,16 @@ internal sealed partial class GitHubClient : IDisposable
             403 => Fail(HostingFailureKind.Forbidden, message ?? fallback, Header("X-Accepted-GitHub-Permissions")),
             404 => Fail(HostingFailureKind.NotFound, message ?? fallback),
             410 => Fail(HostingFailureKind.ApiVersion, message ?? fallback),
-            400 when message?.Contains("X-GitHub-Api-Version", StringComparison.OrdinalIgnoreCase) == true => Fail(HostingFailureKind.ApiVersion, message),
+            400 when NamesVersionHeader(explained) => Fail(HostingFailureKind.ApiVersion, explained),
+            400 when NamesVersionHeader(message) => Fail(HostingFailureKind.ApiVersion, message),
             422 => Fail(HostingFailureKind.Validation, message ?? fallback, ValidationDetail(error)),
             >= 500 and < 600 => Fail(HostingFailureKind.ServerError, message ?? string.Create(CultureInfo.InvariantCulture, $"GitHub had a problem: HTTP {status}.")),
             _ => Fail(HostingFailureKind.Malformed, MalformedText),
         };
     }
+
+    /// <summary>Whether <paramref name="text"/> names <c>X-GitHub-Api-Version</c> in any case (GitHub writes <c>X-GitHub-API-Version</c>).</summary>
+    private static bool NamesVersionHeader([NotNullWhen(true)] string? text) => text?.Contains("X-GitHub-Api-Version", StringComparison.OrdinalIgnoreCase) == true;
 
     /// <summary>
     /// A 422's detail (6.3, A5): the first error's <c>message</c> when it has one; else
