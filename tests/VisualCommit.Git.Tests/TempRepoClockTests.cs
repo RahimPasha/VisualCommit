@@ -51,7 +51,7 @@ public class TempRepoClockTests
     }
 
     // A test per case, each on a scenario of its own (D237): the two in one test took 25 s in the
-    // project's own run.
+    // project's own run, too close to the hang watchdog's 180 s under the gate's default run.
     [Fact]
     public async Task A_step_after_an_app_operation_counts_for_force_if_includes_once_the_clock_has_moved_past_it()
     {
