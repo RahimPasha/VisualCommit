@@ -180,6 +180,14 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7a's run for the stage panel's message read again and the terminal merge's banner test
+(`a9d02c1`, the gate's fix of CI's two failures; the branch at `8dd323d`) is
+[41181591519](https://github.com/RahimPasha/VisualCommit/actions/runs/41181591519): all five jobs
+succeeded, the held rebase's new test on each platform among them. `windows-latest` 37 min 41 s
+(Test step 34 min 44 s of 55; its keychain step green; "Build the opt-in projects" 28 s),
+`macos-latest` 30 min 43 s (Test step 28 min 20 s; its keychain step green), `ubuntu-latest` 7 min
+32 s (Test step 5 min 36 s), the containers 8 min 10 s and 7 min 12 s (Secret Service steps green).
+
 Phase 7a's run for D343 and the record of D246's runs (`391f7f2`, the code of the gate's third
 default run, which passed on the laptop) is
 [41172878322](https://github.com/RahimPasha/VisualCommit/actions/runs/41172878322): its first

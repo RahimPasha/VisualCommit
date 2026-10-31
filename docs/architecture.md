@@ -1043,7 +1043,9 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
 - During an operation in progress (D89, D144): the unstaged list's title becomes "Unstaged files
   (N, M with conflicts)" and a conflicted row has the tooltip "Conflict: click to resolve it"
   (`ChangedFileRow.RowToolTip`); a click on it opens the conflict resolver. Once per stopped
-  commit, when the summary and description are empty, they are filled with the operation's
+  commit whose message is found (a read that finds none, because git names the stop before it
+  writes the message, is made again at the stop's next status; phase 7a's gate), when the summary
+  and description are empty, they are filled with the operation's
   message (`IWorkingChangesHost.ReadOperationMessageAsync`, the git layer's
   `ReadOperationMessageAsync`: `MERGE_MSG` without git's comment block, so a commit's own `#`
   lines stay, a rebase's own message, or a group's), split as the message dialog splits it
