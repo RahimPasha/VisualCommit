@@ -70,6 +70,8 @@ The gate runs on the Windows machine from 2026-10-30; times are Pacific (the mac
 | Before the gate: D246's first run (`8271c8e`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`, 22:16 to 22:20, the owner told and present: 4 of 5 passed; `Check_N_new_pull_request` failed in its step 3 on the test's own lookup ("Found by the gate", item 3) |
 | Before the gate: D246's second run (`723f2d3`) | the same command, 22:24 to 22:28, the owner present: 5 of 5 passed in 2 min 55 s (3 min 17 s with the build); every capture within 1.15 percent of its scripted twin (2.59 compared in place only; the limit is 3); part P's check opened the fake's page in the owner's browser, as D321 allows |
 | Counted round, third default run (`391f7f2`) | `bash scripts/heavy-run.sh`, 2026-10-30 22:41 to 23:51, after a 10-minute rest, at most four projects at once (D343): 5,946 of 5,950 passed and 4 were skipped, in 1 h 8 min 39 s (4,210 s with the build), no watchdog stop. The projects ended after: part L's walk-through 6 min 53 s, `VisualCommit.Hosting.Tests` 15 min 5 s, phase 7a's 29 min 45 s (14 min 40 s of its own), phase 6's 31 min 56 s, phase 4's 51 min 43 s, phase 5's 53 min 38 s, `VisualCommit.Git.Tests` 55 min 13 s (48 min 21 s of its own), phases 0 to 2's 61 min 43 s, `VisualCommit.App.Tests` 61 min 53 s, phase 5's undo walk-through 67 min 30 s and phase 3's 68 min 34 s. Not counted: CI's run on the same commit failed two tests on Windows, one of them a fault of the app, whose fix changes the app ("Found by the gate", item 4), so the round stopped before its real-window pass |
+| Counted round, fourth default run (`a9d02c1`'s code, the branch at `8dd323d`) | `bash scripts/heavy-run.sh`, 2026-10-31 00:51 to 02:06, after a 10-minute rest, at most four projects at once (D343): 5,948 of 5,952 passed and 4 were skipped, in 1 h 12 min 18 s (4,486 s with the build), no watchdog stop. The projects ended after: `VisualCommit.Hosting.Tests` 12 min 44 s, phase 7a's walk-through 14 min 2 s, phases 0 to 2's 24 min 4 s, phase 6's 30 min 50 s, `VisualCommit.Git.Tests` 41 min 5 s, phase 5's 43 min 25 s, part L's 46 min 35 s, phase 4's 58 min 29 s, phase 5's undo walk-through 59 min 0 s, phase 3's 69 min 38 s and `VisualCommit.App.Tests` 72 min 15 s (59 min 31 s of its own) |
+| Counted round, the real-window pass (`a9d02c1`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`, 2026-10-31 02:18 to 02:50, after the default run and a 10-minute rest, the owner told: 70 of 72 passed in 31 min 5 s (1,913 s with its build). `Phase6RealWindowPass.Check_W1_workspace_from_the_welcome_page` failed on the harness's read of a closing dialog's title, and Q1 measured 2,456 ms against its 2,000 while scheduled tasks of other programs ran ("Found by the gate", item 5). The list of 1,424 pictures was written at once; the round's `artifacts/visual`, its list and log are kept outside the repository (`phase7a-work/gate/round-a9d02c1/`) |
 
 ## Live command
 
@@ -1490,6 +1492,22 @@ Faults the gate found, and the commit that fixed each.
    tries), the third sweeping the tests and the app for the same two patterns and finding no other
    instance; three more reviewed the change and a skeptic each finding (workflows `we3ft7rzz` and
    `whwkujjb3`; the design's 21 item 4). Commit `a9d02c1`.
+5. **The counted round's real-window pass on `a9d02c1`** failed two of its 72 checks:
+   - `Phase6RealWindowPass.Check_W1_workspace_from_the_welcome_page`: after the folder dialog's
+     confirm, the wait for it to close read the title of each of the app's modal windows, and the
+     closing dialog no longer gave its name, so FlaUI threw `PropertyNotSupportedException`. A
+     fault of the harness, which no earlier pass met. `RealApp`'s six dialog lookups now read a
+     window's title through `TitleOf`, which gives null for a window that gives none or is gone,
+     as `AssertNoTokenOnScreen` reads names. Only the real-window project changes, so only the
+     pass runs again (D246).
+   - Q1: the first graph rows of the 100k-commit repo after 2,456 ms, at most 2,000; its frames
+     stayed well inside their limits (95th percentile 1 ms, the longest 12.9 ms). The pass started
+     at 02:18, after the default run and a 10-minute rest, and scheduled tasks of other programs
+     ran during it: Disk Cleanup's `SilentCleanup`, Office's and Visual Studio's updates at 02:07,
+     Zoom's updater at 02:17, Office's again at 02:28 and 02:33, EasyDuplicateFinder at 02:42 and
+     Acrobat's updater at 02:49 (risk 10: a warm or busy laptop fails Q1 by itself; signed out,
+     7a adds no git call to Q1's path, design 0.2). Measured again in the pass on the fix:
+     <TO FILL AT THE GATE'S END: Q1 in the pass on the fix>.
 
 ## Could not run
 

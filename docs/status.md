@@ -630,10 +630,14 @@ same commit failed two tests on Windows, each a status read in the middle of a t
 none) and `ConflictBannerTests`' terminal merge asserted a torn banner. Three Opus agents checked the
 causes, three more reviewed the fix, and the fix with two tests that failed on the old code is
 `a9d02c1` (the report's "Found by the gate", item 4; design 21 item 4); the round stopped before its
-real-window pass. Next: the counted round's default run on `a9d02c1`'s code (`bash
-scripts/heavy-run.sh`, after a 10-minute rest, four projects at once), then, the owner told, the whole
-real-window pass (step 5), at once the pictures' list, the live command again, and the inspection
-(step 6); D246's two runs are not made again. Each of
+real-window pass. The counted round on `a9d02c1`'s code: its default run passed (5,948 of 5,952, 4
+skipped, 1 h 12 min 18 s; CI's run 41181591519 green on all five jobs), and its real-window pass,
+the owner told, 70 of 72: W1 met the harness reading a closing dialog's title, now read through
+`RealApp.TitleOf`, and Q1 measured 2,456 ms while other programs' scheduled tasks ran at 2 am (the
+report's "Found by the gate", item 5); the round's files are kept in `phase7a-work/gate/round-a9d02c1/`.
+Next: by D246, only the real-window pass again, on the harness fix's commit, after a 10-minute rest,
+the owner told; at once the pictures' list (its scripted pictures checked against the round's list
+first), the live command again, and the inspection (step 6); D246's two runs are not made again. Each of
 parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to
