@@ -285,10 +285,17 @@ public sealed class FakeGitHubFault
     /// <summary>404 "Not Found".</summary>
     public static FakeGitHubFault NotFound { get; } = new(FakeGitHubFaultKind.NotFound);
 
-    /// <summary>410: the API version is no longer supported.</summary>
+    /// <summary>
+    /// 410: the API version is no longer supported. Not observed on GitHub, whose answer to a
+    /// version it does not support is a 400 (the live run of 2026-10-30, which the fake's header
+    /// check gives); kept for a version GitHub retires (design 2.4, unverified).
+    /// </summary>
     public static FakeGitHubFault ApiVersionGone { get; } = new(FakeGitHubFaultKind.ApiVersionGone);
 
-    /// <summary>500 "Server Error".</summary>
+    /// <summary>
+    /// 500 "Server Error". This body is not observed on GitHub: the one 500 the live run of
+    /// 2026-10-30 saw had none (A6's lookup of a commit GitHub lacks, which the route answers so itself).
+    /// </summary>
     public static FakeGitHubFault ServerError { get; } = new(FakeGitHubFaultKind.ServerError);
 
     /// <summary>502 with an HTML body.</summary>

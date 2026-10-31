@@ -284,8 +284,9 @@ public sealed class GitHubProviderTests
         var main = await TipAsync(setup, "octo/hello", "main");
 
         // A repository GitHub does not have (404) and an empty one (409), each asked once for its two
-        // addresses (ada/gone's second in another case); a commit octo/hello does not have (422),
-        // which leaves out its address alone; then octo on main.
+        // addresses (ada/gone's second in another case); a commit octo/hello does not have (500
+        // without a body, as github.com answers it beside author, D342), which leaves out its
+        // address alone; then octo on main.
         var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null,
             [
                 new AuthorCommit(Scenarios.AdaEmail, main, Repository("ada", "gone")),
@@ -299,7 +300,7 @@ public sealed class GitHubProviderTests
 
         Assert.Equal(new AuthorAvatar(1001, "octo", new Uri("http://127.0.0.1:1/avatars/u/1001?v=4")), Assert.Single(authors.Value!.ByEmail).Value);
         Assert.Equal(
-            [("commits:ada/gone", 404), ("commits:octo/notes", 409), ("commits:octo/hello", 422), ("commits:octo/hello", 200)],
+            [("commits:ada/gone", 404), ("commits:octo/notes", 409), ("commits:octo/hello", 500), ("commits:octo/hello", 200)],
             setup.Fake.Requests.Select(request => (request.Route, request.Status)));
     }
 

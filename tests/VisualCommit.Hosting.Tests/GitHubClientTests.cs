@@ -446,7 +446,25 @@ public sealed class GitHubClientTests
 
         var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
 
-        Assert.Equal((HostingFailureKind.ApiVersion, "Unsupported 'X-GitHub-Api-Version' header: ."), (reply.Failure!.Kind, reply.Failure.Message));
+        Assert.Equal(
+            (HostingFailureKind.ApiVersion, "The fake of GitHub accepts only \"2026-03-10\" in the \"X-GitHub-API-Version\" request header (D266); the request sent none."),
+            (reply.Failure!.Kind, reply.Failure.Message));
+    }
+
+    [Fact]
+    public async Task A_version_github_does_not_support_is_an_api_version_failure_in_githubs_words()
+    {
+        await using var setup = Setup.Start(edit: request =>
+        {
+            request.Headers.Remove("X-GitHub-Api-Version");
+            request.Headers.Add("X-GitHub-Api-Version", "2000-01-01");
+        });
+
+        var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal((HostingFailureKind.ApiVersion, UnsupportedVersionExplanation), (reply.Failure!.Kind, reply.Failure.Message));
+        Assert.Matches("^FAKE-[0-9]{4}$", reply.Failure.RequestId);
+        Assert.Matches(@"^GitHub: GET /api/v3/user failed: 400 \(request FAKE-[0-9]{4}\)\.$", Assert.Single(setup.Log.Lines).Message);
     }
 
     [Fact]
