@@ -452,7 +452,7 @@ public class UndoEffectTests
     }
 
     [Fact]
-    public async Task Renames_configuration_tags_and_symbolic_refs_are_refused_where_they_changed_since()
+    public async Task Renames_configuration_tags_and_symbolic_refs_are_refused_where_the_repository_changed_since()
     {
         using var repo = await UndoRepoAsync();
         var repository = await OpenAsync(repo);
