@@ -441,13 +441,15 @@ Do first:
    Manager: since git 2.56 its system setting opens a sign-in window on a plain `git push`, which
    then waits (Things that cost time; status.md's "Waiting on the owner").
 2. Before the design, the owner's answers, each recorded as a decision and carried into plan.md and
-   requirements.md (status.md's "Waiting on the owner" holds the owner's answers of 2026-10-31 and
-   the lead's recommendations for the rest, "For phase 7b, answered on 2026-10-31"): sign-in and test accounts or tokens for Azure DevOps and GitLab (risks 4
+   requirements.md (given on 2026-10-31, after this handoff was written: D344 to D351, already in
+   plan.md and requirements.md; status.md's "Waiting on the owner", "For phase 7b, answered on
+   2026-10-31", where one question is still open for D346: whether the Azure DevOps organization
+   the owner named holds anything besides the sandbox, asked before the owner makes its token): sign-in and test accounts or tokens for Azure DevOps and GitLab (risks 4
    and 5), and whether each gets a live command; and the questions 7a's decisions leave open for 7b:
-   avatars, which D252 and O4 give to GitHub only while plan.md's 7b lists "author avatars, as 7a
-   built them for GitHub"; whether self-hosted GitLab is in scope, which plan.md's 7b includes while
-   requirements.md's providers line names GitLab alone, and if so how its host is given and
-   recognised, where 7a knows one fixed host per provider (D258, `HostingOptions`); which Azure
+   avatars, which D252 and O4 gave to GitHub only while plan.md's 7b listed "author avatars, as 7a
+   built them for GitHub"; whether self-hosted GitLab was in scope, which plan.md's 7b included
+   while requirements.md's providers line named GitLab alone, and if so how its host would be given
+   and recognised, where 7a knows one fixed host per provider (D258, `HostingOptions`); which Azure
    DevOps hosts are in scope (dev.azure.com, the older `*.visualstudio.com`, Azure DevOps Server on
    premises); whether D263's one account is one per provider or one in all; D255's exception to Q5
    and D257's "no request signed out" for the new hosts; whether GitLab's screens say "merge
@@ -497,8 +499,10 @@ Risks to watch:
   in-progress files before and after `git status`?
 - **The kept undo chains**: a limit of their own if one stops a rested run again (D264).
 - **For phase 7b**: Azure DevOps' and GitLab's sign-in and test accounts or tokens (risks 4 and 5),
-  and the questions under "Do first", step 2. Answered in part on 2026-10-31, with the lead's
-  recommendations for the rest, under status.md's "Waiting on the owner". The live command's token
+  and the questions under "Do first", step 2. Answered on 2026-10-31: D344 to D351; one question is
+  left for D346 (whether the named Azure DevOps organization holds anything besides the sandbox),
+  asked before the owner makes its token: status.md's "Waiting on the owner". The live
+  command's token
   for GitHub expires on 2026-11-29; a later live run needs a new one.
 - **Decisions made during 7a without the owner**, which the owner may want to look at: the design's
   D265 to D338 beyond the eight questions the owner answered on 2026-10-29 (their reasons in
