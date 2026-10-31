@@ -58,6 +58,17 @@ file as of `019e68a`'s second parent (`git show 3a3cc71:docs/status.md`).
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+The run for phase 7a's merge on `master` is
+[41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
+(the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
+none failed a test: `windows-latest` 5,952 tests with 4 skipped, 38 min 17 s (Test step 35 min 9 s
+of 55; its keychain step green; "Build the opt-in projects" 29 s), `macos-latest` 5,949 with 3
+skipped, 38 min 56 s (Test step 36 min 45 s; its keychain step green), `ubuntu-latest` 5,949 with 3
+skipped, 6 min 11 s (Test step 4 min 45 s), and the two "bare ubuntu container" jobs 5,949 with 3
+skipped each, 8 min 21 s and 8 min 8 s (Test steps 6 min 8 s and 5 min 54 s; Secret Service steps
+green). The commit after it, `aad961e` (the owner's answers for 7b, D344 to D351), changes docs
+only and started no run.
+
 The last run on `phase/7a-hosting-github` was
 [41190572421](https://github.com/RahimPasha/VisualCommit/actions/runs/41190572421), for the gate's
 commit `a2c312a` (the branch at `47506ca`): all five jobs succeeded, none failed a test:
