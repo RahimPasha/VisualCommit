@@ -465,9 +465,9 @@ public sealed partial class FakeGitHub
         var sha = call.Query.Value("sha") ?? repository.DefaultBranch;
         if (await LogAsync(bare, sha, ct).ConfigureAwait(false) is not { } commits)
         {
-            // github.com, 2026-10-30, one sample each: a SHA it does not have is 404 alone and 500
-            // with an empty body beside author. A branch name GitHub lacks is taken to answer as an
-            // unknown SHA (not measured).
+            // github.com, 2026-10-30, the same in three runs: a SHA it does not have is 404 alone and
+            // 500 with an empty body beside author. A branch name GitHub lacks is taken to answer as
+            // an unknown SHA (not measured).
             return call.Query.Value("author") is null
                 ? Error(call, 404, "Not Found", documentationUrl: ListCommitsDocumentationUrl)
                 : Empty(call, 500);
