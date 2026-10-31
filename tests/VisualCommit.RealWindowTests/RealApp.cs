@@ -357,11 +357,11 @@ public sealed partial class RealApp : IDisposable
         WaitFor(
             () =>
             {
-                dialog = Window.ModalWindows.FirstOrDefault(window => window.Title == title)
+                dialog = Window.ModalWindows.FirstOrDefault(window => TitleOf(window) == title)
                     ?? _automation.GetDesktop()
                         .FindAllChildren(condition => condition.ByProcessId(_process.Id))
                         .Select(element => element.AsWindow())
-                        .FirstOrDefault(window => window.Title == title);
+                        .FirstOrDefault(window => TitleOf(window) == title);
                 return dialog is not null;
             },
             $"the folder dialog \"{title}\"",
@@ -370,8 +370,24 @@ public sealed partial class RealApp : IDisposable
         var box = DialogControl(dialog!, "1152", "the folder dialog's folder box", timeout).AsTextBox();
         box.Text = folder;
         DialogButton(dialog!, "the folder dialog's confirm button", timeout).Invoke();
-        WaitFor(() => !Window.ModalWindows.Any(window => window.Title == title), "the folder dialog to close", timeout);
+        WaitFor(() => !Window.ModalWindows.Any(window => TitleOf(window) == title), "the folder dialog to close", timeout);
         WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// A window's title, or null when it gives none: a dialog that is closing stops giving its name
+    /// between the listing of the windows and the read (W1's folder dialog at phase 7a's gate).
+    /// </summary>
+    private static string? TitleOf(Window window)
+    {
+        try
+        {
+            return window.Properties.Name.ValueOrDefault;
+        }
+        catch (Exception ex) when (ex is FlaUI.Core.Exceptions.ElementNotAvailableException or System.Runtime.InteropServices.COMException)
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -387,11 +403,11 @@ public sealed partial class RealApp : IDisposable
         WaitFor(
             () =>
             {
-                dialog = Window.ModalWindows.FirstOrDefault(window => window.Title == title)
+                dialog = Window.ModalWindows.FirstOrDefault(window => TitleOf(window) == title)
                     ?? _automation.GetDesktop()
                         .FindAllChildren(condition => condition.ByProcessId(_process.Id))
                         .Select(element => element.AsWindow())
-                        .FirstOrDefault(window => window.Title == title);
+                        .FirstOrDefault(window => TitleOf(window) == title);
                 return dialog is not null;
             },
             $"the file dialog \"{title}\"",
@@ -409,7 +425,7 @@ public sealed partial class RealApp : IDisposable
         // automation id 1 as well) outlasted 30 s at the phase 6 gate's second and third passes.
         box.Focus();
         PressKey(VirtualKeyShort.RETURN);
-        WaitFor(() => !Window.ModalWindows.Any(window => window.Title == title), "the file dialog to close", timeout);
+        WaitFor(() => !Window.ModalWindows.Any(window => TitleOf(window) == title), "the file dialog to close", timeout);
         WaitUntilIdle();
     }
 
