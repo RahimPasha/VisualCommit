@@ -248,11 +248,20 @@ internal sealed class GitHubLiveApi : IDisposable
     /// The calls over <paramref name="handler"/>, an in-process one: for <see cref="LiveSafetyTests"/>,
     /// and with <paramref name="apiBase"/> the fake's API (<see cref="LiveFake"/>, each call
     /// <paramref name="limit"/> at most); github.com's API and <see cref="CallLimit"/> without them.
+    /// The owner's token is refused with another address than github.com's API
+    /// (<see cref="SendsTheTokenElsewhere"/>, D327): the fake has a token of its own.
     /// </summary>
+    /// <exception cref="InvalidOperationException">The sandbox's token is the owner's and <paramref name="apiBase"/> is not github.com's API.</exception>
     internal GitHubLiveApi(LiveSandbox sandbox, HttpMessageHandler handler, Action<string>? withheld = null, Uri? apiBase = null, TimeSpan? limit = null)
     {
         ArgumentNullException.ThrowIfNull(sandbox);
         ArgumentNullException.ThrowIfNull(handler);
+        if (SendsTheTokenElsewhere(apiBase, sandbox.Token, LiveSettings.CapturedToken))
+        {
+            handler.Dispose();
+            throw new InvalidOperationException($"The owner's token goes to {GitHubEndpoints.GitHubCom.ApiBase} alone (D327): the test's calls to another API, the fake's, take the fake's own token.");
+        }
+
         _sandbox = sandbox;
         _withheld = withheld;
         _limit = limit ?? CallLimit;
@@ -265,6 +274,15 @@ internal sealed class GitHubLiveApi : IDisposable
 
     /// <summary><c>X-RateLimit-Remaining</c> of the last answer that sent it, or null.</summary>
     public string? RateLimitRemaining { get; private set; }
+
+    /// <summary>
+    /// Whether calls on <paramref name="apiBase"/> with <paramref name="token"/> would send
+    /// <paramref name="owners"/>, the owner's token as read (<see cref="LiveSettings.CapturedToken"/>),
+    /// elsewhere than github.com's API (D327); compared with <c>string.Equals</c> alone.
+    /// </summary>
+    internal static bool SendsTheTokenElsewhere(Uri? apiBase, string token, string? owners) =>
+        apiBase is not null && apiBase != GitHubEndpoints.GitHubCom.ApiBase
+            && owners is not null && string.Equals(token, owners, StringComparison.Ordinal);
 
     /// <summary>The sandbox's path under the API: <c>repos/{o}/{r}</c>.</summary>
     private string RepositoryPath => $"repos/{Uri.EscapeDataString(_sandbox.Owner)}/{Uri.EscapeDataString(_sandbox.Name)}";

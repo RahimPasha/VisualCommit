@@ -617,8 +617,28 @@ public sealed class LiveSafetyTests
         Assert.Equal("same", LiveAnswer.FakeBeside(await AnswerAsync(400, VersionRefused), await AnswerAsync(400, VersionRefused.Replace("\"documentation_url\":\"https://docs.github.com/rest\",\"status\":\"400\"", "\"documentation_url\":\"https://example.invalid/\"", StringComparison.Ordinal))));
         Assert.Equal("same", LiveAnswer.FakeBeside(await AnswerAsync(500, string.Empty), await AnswerAsync(500, string.Empty)));
 
-        // errors compared as JSON, whatever escaping each chose.
-        Assert.Equal("same", LiveAnswer.FakeBeside(await AnswerAsync(422, """{"message":"Validation Failed","errors":[{"message":"can't be blank"}]}"""), await AnswerAsync(422, """{"message":"Validation Failed","errors":[{"message":"can't be blank"}]}""")));
+        // errors compared as JSON, whatever escaping each chose: GitHub's own beside System.Text.Json's
+        // default, which writes ", ', < and > as \u escapes, in one string and in an array's object.
+        const string Explanation = "the \"X-GitHub-API-Version\" header, can't be <2000-01-01>";
+        var escaped = JsonSerializer.Serialize(new { message = "Bad Request", errors = Explanation });
+        var escapedArray = JsonSerializer.Serialize(new { message = "Validation Failed", errors = new[] { new { message = "can't be blank" } } });
+        Assert.DoesNotContain("'", escaped + escapedArray, StringComparison.Ordinal);
+        Assert.DoesNotContain("<", escaped, StringComparison.Ordinal);
+        Assert.Equal(
+            "same",
+            LiveAnswer.FakeBeside(await AnswerAsync(400, """{"message":"Bad Request","errors":"the \"X-GitHub-API-Version\" header, can't be <2000-01-01>"}"""), await AnswerAsync(400, escaped)));
+        Assert.Equal(
+            "same",
+            LiveAnswer.FakeBeside(await AnswerAsync(422, """{"message":"Validation Failed","errors":[{"message":"can't be blank"}]}"""), await AnswerAsync(422, escapedArray)));
+        Assert.Equal("\"the \\\"X-GitHub-API-Version\\\" header, can't be <2000-01-01>\"", (await AnswerAsync(400, escaped)).ErrorsText);
+        Assert.Equal("""[{"message":"can't be blank"}]""", (await AnswerAsync(422, escapedArray)).ErrorsText);
+
+        // errors that differ in their value alone.
+        Assert.Equal(
+            "errors \"the version 2000-01-02 is not supported\"",
+            LiveAnswer.FakeBeside(
+                await AnswerAsync(400, """{"message":"Bad Request","errors":"the version 2000-01-01 is not supported"}"""),
+                await AnswerAsync(400, """{"message":"Bad Request","errors":"the version 2000-01-02 is not supported"}""")));
 
         // The fake's values of what differs, and only those.
         Assert.Equal(
@@ -655,23 +675,39 @@ public sealed class LiveSafetyTests
     }
 
     [Fact]
-    public async Task The_version_premise_takes_a_400_whose_message_or_errors_string_names_the_header()
+    public async Task The_version_premise_takes_a_400_whose_first_error_or_message_names_the_header_as_the_client_reads_them()
     {
         Assert.True(LivePremises.NamesVersionHeader(await AnswerAsync(400, VersionRefused)));
         Assert.True(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Unsupported 'X-GitHub-Api-Version' header: 2000-01-01."}""")));
+
+        // errors in the client's other shapes (D342): an array's first string, or its first object's message.
+        Assert.True(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Bad Request","errors":["X-GitHub-Api-Version"]}""")));
+        Assert.True(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Bad Request","errors":[7,{"code":"invalid","message":"The X-GitHub-API-Version header is not supported."}]}""")));
+
+        // Only the first error counts, as in the client; and only a 400 with one of them.
+        Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Bad Request","errors":["Bad value","X-GitHub-Api-Version"]}""")));
+        Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Bad Request","errors":[{"code":"invalid","field":"X-GitHub-Api-Version"}]}""")));
         Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Bad Request"}""")));
-        Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Bad Request","errors":["X-GitHub-Api-Version"]}""")));
         Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(400, string.Empty)));
         Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(410, VersionRefused)));
     }
 
     [Fact]
-    public async Task The_duplicate_create_premise_takes_a_422_whose_first_error_says_one_exists_already()
+    public async Task The_duplicate_create_premise_takes_a_422_whose_detail_as_the_client_reads_it_says_one_exists_already()
     {
         Assert.True(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, DuplicateRefused)));
         Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, DuplicateRefused.Replace("A pull request", "a pull request", StringComparison.Ordinal))));
-        Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"Validation Failed","errors":"A pull request already exists for octo:x."}""")));
+
+        // errors as one string or an array of strings (D342's converter), and GitHub's message when no
+        // error has one, as the client's ValidationDetail reads them.
+        Assert.True(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"Validation Failed","errors":"A pull request already exists for octo:x."}""")));
+        Assert.True(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"Validation Failed","errors":[null,"A pull request already exists for octo:x."]}""")));
+        Assert.True(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"A pull request already exists for octo:x.","errors":[]}""")));
+        Assert.True(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"A pull request already exists for octo:x.","errors":[{"resource":"PullRequest","code":"custom"}]}""")));
+        Assert.Equal("head is invalid", LivePremises.ValidationDetail(await AnswerAsync(422, """{"message":"A pull request already exists for octo:x.","errors":[{"field":"head","code":"invalid"}]}""")));
+        Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"A pull request already exists for octo:x.","errors":[{"field":"head","code":"invalid"}]}""")));
         Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"Validation Failed","errors":[]}""")));
+        Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"Validation Failed","errors":["No commits between main and x","A pull request already exists for octo:x."]}""")));
         Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"Validation Failed","errors":[{"resource":"PullRequest","code":"custom","message":"No commits between main and x"}]}""")));
         Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(201, """{"number":2}""")));
     }
@@ -738,6 +774,40 @@ public sealed class LiveSafetyTests
     }
 
     [Fact]
+    public async Task Check_3_s_provider_sends_through_the_log_then_the_rewriter_to_github_s_api_alone()
+    {
+        var inner = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.BadRequest) { Content = new StringContent(VersionRefused, Encoding.UTF8, "application/json") });
+        var store = new LiveRequestLog.Store();
+        var log = new LiveLog();
+        using (var provider = GitHubLiveTests.Provider(store, log, "2000-01-01", () => inner))
+        {
+            Assert.NotNull((await provider.CheckTokenAsync(Token, Cancelled)).Failure);
+        }
+
+        // The rewriter, behind the log, changed the version alone; the log saw the request as sent.
+        var sent = Assert.Single(inner.Requests);
+        Assert.Equal(("GET", "https://api.github.com/user", "2000-01-01"), (sent.Method, sent.Url, sent.Version));
+        Assert.True(string.Equals(sent.Authorization, "Bearer " + Token, StringComparison.Ordinal), "The provider's request did not carry the token as a Bearer token.");
+        var record = Assert.Single(store.Snapshot());
+        Assert.Equal(("GET", "https", "api.github.com", "/user", (int?)400, true), (record.Method, record.Scheme, record.Host, record.Path, record.Status, record.AuthorizationSent));
+        Assert.Empty(LiveRequestLog.ReachProblems(store.Snapshot()));
+        Assert.Null(log.FoundIn(Token));
+    }
+
+    [Fact]
+    public void The_owner_s_token_is_refused_for_another_api_than_github_s()
+    {
+        var github = VisualCommit.Hosting.GitHubEndpoints.GitHubCom.ApiBase;
+        var fake = VisualCommit.Hosting.GitHubEndpoints.Local(1).ApiBase;
+        Assert.True(GitHubLiveApi.SendsTheTokenElsewhere(fake, Token, Token));
+        Assert.False(GitHubLiveApi.SendsTheTokenElsewhere(fake, "github_pat_FAKE_made-up", Token));
+        Assert.False(GitHubLiveApi.SendsTheTokenElsewhere(fake, Token, null));
+        Assert.False(GitHubLiveApi.SendsTheTokenElsewhere(github, Token, Token));
+        Assert.False(GitHubLiveApi.SendsTheTokenElsewhere(new Uri("https://API.GitHub.com/"), Token, Token));
+        Assert.False(GitHubLiveApi.SendsTheTokenElsewhere(null, Token, Token));
+    }
+
+    [Fact]
     public void The_provider_s_log_is_searched_for_the_token_in_its_lines_and_their_exceptions()
     {
         var log = new LiveLog();
@@ -772,7 +842,7 @@ public sealed class LiveSafetyTests
         var run = new LiveRun(Token, folder.Combine("run.txt"), output.Add);
         await using var github = await LiveFake.StartAsync("octo", "sandbox", Cancelled);
 
-        var broken = await new GitHubLiveTests(run).ProbeTextsAsync(github.Api, new LiveSandbox("octo", "sandbox", Token), "main", "20261030-232555Z");
+        var broken = await new GitHubLiveTests(run).ProbeTextsAsync(github.Api, "octo", "sandbox", "main", "20261030-232555Z");
 
         Assert.Empty(broken);
         var probes = run.Notes.Where(note => note.StartsWith("GitHub's text for ", StringComparison.Ordinal)).ToList();

@@ -12,12 +12,15 @@ namespace VisualCommit.LiveHostingTests;
 /// kept (D342, after the live run of 2026-10-30): the duplicate create's refusal that the create
 /// form reads, the avatars' lookups' arrays (D339), the statuses after which a lookup leaves out
 /// only its own address, and the 400 for an API version GitHub does not have. Each reads only the
-/// status and the body's parts it names.
+/// status and the body's parts it names, in every shape the app's client reads them (D342's
+/// <c>errors</c>: one string, or an array of strings or objects), so that a premise fails only
+/// where the app would.
 /// </summary>
 internal static class LivePremises
 {
     /// <summary>
-    /// How GitHub's <c>errors[0].message</c> starts for a create from a head that has an open pull
+    /// How the duplicate create's detail starts (GitHub's first error's <c>message</c>, as the client
+    /// reads it: <see cref="ValidationDetail"/>) for a create from a head that has an open pull
     /// request already: the create form's D316 path matches it ordinally
     /// (<c>RepositoryOperations.CreatePullRequest.cs</c>, its <c>Validation</c> case).
     /// </summary>
@@ -26,29 +29,88 @@ internal static class LivePremises
     /// <summary>The header an answer about the API version names; GitHub writes it <c>X-GitHub-API-Version</c>, so it is compared ignoring case, as the client does (6.2).</summary>
     public const string VersionHeader = "X-GitHub-Api-Version";
 
-    /// <summary>The duplicate create's answer as the form needs it: 422 with <c>errors[0].message</c> starting <see cref="AlreadyExists"/>.</summary>
+    /// <summary>The duplicate create's answer as the form needs it: 422 whose detail (<see cref="ValidationDetail"/>) starts with <see cref="AlreadyExists"/>.</summary>
     internal static bool IsDuplicateRefusal(LiveAnswer answer)
     {
         ArgumentNullException.ThrowIfNull(answer);
-        return answer is { Status: 422, Json: { ValueKind: JsonValueKind.Object } json }
-            && json.TryGetProperty("errors", out var errors) && errors.ValueKind == JsonValueKind.Array && errors.GetArrayLength() > 0
-            && errors[0] is { ValueKind: JsonValueKind.Object } first
-            && first.TryGetProperty("message", out var message) && message.ValueKind == JsonValueKind.String
-            && message.GetString()!.StartsWith(AlreadyExists, StringComparison.Ordinal);
+        return answer.Status == 422 && ValidationDetail(answer)?.StartsWith(AlreadyExists, StringComparison.Ordinal) == true;
     }
 
-    /// <summary>A 400 whose <c>message</c>, or whose <c>errors</c> as one string, names <see cref="VersionHeader"/>: the client's <c>ApiVersion</c> (6.2, D342).</summary>
+    /// <summary>
+    /// A 400 whose first error's message (<see cref="FirstError"/>) or whose <c>message</c> names
+    /// <see cref="VersionHeader"/>: the client's <c>ApiVersion</c>, which reads them in that order
+    /// (6.2, D342; GitHub's explanation came as <c>errors</c>, one string, in the live run).
+    /// </summary>
     internal static bool NamesVersionHeader(LiveAnswer answer)
     {
         ArgumentNullException.ThrowIfNull(answer);
-        return answer.Status == 400
-            && (NamesVersionHeader(answer.Message)
-                || (answer.Json is { ValueKind: JsonValueKind.Object } json && json.TryGetProperty("errors", out var errors)
-                    && errors.ValueKind == JsonValueKind.String && NamesVersionHeader(errors.GetString())));
+        return answer.Status == 400 && (NamesVersionHeader(FirstError(answer)?.Message) || NamesVersionHeader(answer.Message));
     }
 
     /// <summary>Whether <paramref name="text"/> names <see cref="VersionHeader"/>, case ignored.</summary>
     internal static bool NamesVersionHeader(string? text) => text?.Contains(VersionHeader, StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>
+    /// The first of the body's <c>errors</c> as the client reads it since D342 (its
+    /// <c>GitHubErrorsConverter</c>): <c>errors</c> as one string, or an array's first string or
+    /// object (items of other kinds skipped), with its <c>message</c>, <c>field</c> and <c>code</c>
+    /// where each is a string; null without one.
+    /// </summary>
+    internal static (string? Message, string? Field, string? Code)? FirstError(LiveAnswer answer)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        if (answer.Json is not { ValueKind: JsonValueKind.Object } json || !json.TryGetProperty("errors", out var errors))
+        {
+            return null;
+        }
+
+        if (errors.ValueKind == JsonValueKind.String)
+        {
+            return (errors.GetString(), null, null);
+        }
+
+        if (errors.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var item in errors.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.String)
+                {
+                    return (item.GetString(), null, null);
+                }
+
+                if (item.ValueKind == JsonValueKind.Object)
+                {
+                    return (Text(item, "message"), Text(item, "field"), Text(item, "code"));
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// A 422's detail as the client reads it (its <c>ValidationDetail</c>, 6.3's A5): the first
+    /// error's message when it has one; else <c>&lt;field&gt; is invalid</c>, <c>is missing</c> or
+    /// <c>already exists</c> by its code; else GitHub's <c>message</c>.
+    /// </summary>
+    internal static string? ValidationDetail(LiveAnswer answer)
+    {
+        var first = FirstError(answer);
+        if (first?.Message is { Length: > 0 } message)
+        {
+            return message;
+        }
+
+        return first is { Field: { Length: > 0 } field, Code: var code }
+            ? code switch
+            {
+                "invalid" => field + " is invalid",
+                "missing" or "missing_field" => field + " is missing",
+                "already_exists" => field + " already exists",
+                _ => answer.Message,
+            }
+            : answer.Message;
+    }
 
     /// <summary>A 200 whose body is an array of <paramref name="count"/>: what the avatars' lookup answers for a commit by that address (1) and by an address with no commit (0), D339.</summary>
     internal static bool IsArrayOf(LiveAnswer answer, int count)
@@ -77,6 +139,10 @@ internal static class LivePremises
         ArgumentException.ThrowIfNullOrEmpty(stamp);
         return Convert.ToHexStringLower(SHA1.HashData(Encoding.UTF8.GetBytes("visualcommit-live " + stamp)));
     }
+
+    /// <summary><paramref name="item"/>'s member <paramref name="name"/> when it is a string, else null.</summary>
+    private static string? Text(JsonElement item, string name) =>
+        item.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 }
 
 /// <summary>
@@ -140,9 +206,11 @@ internal sealed class LiveLog : IAppLog
 /// note says where the fake answers otherwise, from what it answers at the time, not from words
 /// copied into the test: a user named as the sandbox's owner with a fine-grained token of the fake's
 /// own, a private repository named as the sandbox with one commit by <see cref="Email"/>, which is
-/// linked to that user, and an empty one, <see cref="EmptyName"/>. It never sees the sandbox's
-/// token, and its calls (<see cref="Api"/>, <see cref="EmptyApi"/>) go through its in-process
-/// handler alone, never to the network.
+/// linked to that user, and an empty one, <see cref="EmptyName"/>. It is given the sandbox's owner
+/// and name alone, never its token, which <see cref="GitHubLiveApi"/> refuses for the fake's address
+/// anyway (<see cref="GitHubLiveApi.SendsTheTokenElsewhere"/>); its calls (<see cref="Api"/>,
+/// <see cref="EmptyApi"/>) go through its in-process handler alone, never to the network. Its start
+/// (a few git calls) has no limit of its own beside the hang watchdog's (AssemblyInfo).
 /// </summary>
 internal sealed class LiveFake : IAsyncDisposable
 {

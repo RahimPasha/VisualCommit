@@ -65,8 +65,10 @@ public sealed class GitHubLiveOrder : ITestCaseOrderer
 /// <see cref="LiveSettings.Require"/> first and fails without the variables. Its notes go to
 /// <see cref="LiveRun"/>, searched for the token, and to run.txt; so is a failed step's exception
 /// before it reaches the test output (<see cref="LiveRun.FailureOf"/>). The token is sent only by the
-/// dialog's typing and the test's own API calls, and compared only with <c>string.Equals</c> or
-/// <c>string.Contains</c>; it is never an assertion's argument or in a message.
+/// dialog's typing, the test's own API calls and Check_3's <c>GitHubProvider</c> (behind
+/// <see cref="LiveRequestLog"/>), to <c>https://api.github.com/</c> alone (the fake in process has a
+/// token of its own), and compared only with <c>string.Equals</c> or <c>string.Contains</c>; it is
+/// never an assertion's argument or in a message.
 /// </summary>
 [TestCaseOrderer(typeof(GitHubLiveOrder))]
 public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
@@ -182,7 +184,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             // finding, which fails nothing, unless the app relies on the answer (D342); then the
             // answer that breaks a premise, or none, fails the test after every note is kept.
             step = "3, GitHub's texts";
-            var broken = await ProbeTextsAsync(api, sandbox, repository.DefaultBranch, stamp);
+            var broken = await ProbeTextsAsync(api, sandbox.Owner, sandbox.Name, repository.DefaultBranch, stamp);
             foreach (var premise in broken)
             {
                 run.Note("Problem: " + premise);
@@ -458,7 +460,9 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
 
             if (!form.IsClosed)
             {
-                throw new XunitException(run.Screen("The form says: " + form.Error));
+                // The sandbox's read checks the user's role (permissions.push); the token's own grant
+                // shows first here, at the push or the create.
+                throw new XunitException(run.Screen($"The form says: {form.Error} (when GitHub refused the push or the create, the token may lack Contents or Pull requests \"Read and write\": docs/phase-7a-design.md 14.6)."));
             }
 
             var created = await OperationAfterAsync(app, operationMark, operationTitle);
@@ -513,7 +517,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             // which fails the test after the clean-up.
             step = "8, the duplicate create";
             var duplicate = await api.CreatePullRequestAsync(branch, repository.DefaultBranch, title, draft, Cancelled);
-            run.Note($"The duplicate create (POST …/pulls with the same head, base, title and draft {(draft ? "true" : "false")}): {duplicate}; 422 with errors[0].message starting \"{LivePremises.AlreadyExists}\" expected. {duplicate.BodyForNotes}");
+            run.Note($"The duplicate create (POST …/pulls with the same head, base, title and draft {(draft ? "true" : "false")}): {duplicate}; 422 with a first error's message starting \"{LivePremises.AlreadyExists}\" expected. {duplicate.BodyForNotes}");
             if (duplicate is { Status: 201, Json: { } second } && second.TryGetProperty("number", out var secondNumber))
             {
                 duplicates.Add(secondNumber.GetInt32());
@@ -521,7 +525,7 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
 
             if (!LivePremises.IsDuplicateRefusal(duplicate))
             {
-                problems.Add($"The duplicate create answered {duplicate}, not 422 with errors[0].message starting \"{LivePremises.AlreadyExists}\", which the create form reads to show the open pull request (D316).");
+                problems.Add($"The duplicate create answered {duplicate}, not 422 with a detail starting \"{LivePremises.AlreadyExists}\" as the client reads it (its first error's message), which the create form reads to show the open pull request (D316).");
             }
         }
         catch (Exception ex)
@@ -608,9 +612,10 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
     /// mapped before its lookup): a commit GitHub does not know with an address it links to no one,
     /// then the latest commit of the default branch with its author's address. The first is left out
     /// and the lookups go on, so the second maps to the sandbox's owner. Then D327's reach over its
-    /// requests, and the token in none of the provider's log lines or failures. Its notes give
-    /// GitHub's words and counts, never an address. Before D342's change to the client and the
-    /// provider, (a) and (b) fail.
+    /// requests, of which each step must have sent at least one through the log, and the token in
+    /// none of the provider's log lines or failures. Its notes give GitHub's words, the lookups'
+    /// statuses and request ids in order, and counts, never an address. Before D342's change to the
+    /// client and the provider, (a) and (b) fail.
     /// </summary>
     [Fact]
     public async Task Check_3_the_providers_answers_from_github()
@@ -629,11 +634,18 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             var repository = await ReadSandboxAsync(api, sandbox);
             var hosted = new HostedRepository(HostingProvider.GitHub, GitHubEndpoints.GitHubCom.Host, sandbox.Owner, sandbox.Name);
 
-            // (a) A1 asking for a version GitHub does not have.
+            // (a) A1 asking for a version GitHub does not have. Each step proves that its requests
+            // passed the log, so that D327's reach below is not checked over none of them.
             step = "2, an API version GitHub does not have";
             using (var provider = Provider(requests, log, UnknownVersion))
             {
+                var before = requests.Count;
                 var checkedToken = await provider.CheckTokenAsync(sandbox.Token, Cancelled);
+                if (!requests.Snapshot().Skip(before).Any(request => request is { Method: "GET", Path: "/user", AuthorizationSent: true }))
+                {
+                    problems.Add("The provider's A1 (GET /user) did not pass LiveRequestLog, so D327's reach is not checked over it.");
+                }
+
                 if (checkedToken.Failure is not { } refused)
                 {
                     problems.Add($"A1 (GET /user) asking for X-GitHub-Api-Version {UnknownVersion} succeeded.");
@@ -653,18 +665,35 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
             }
 
             // (b) A6's lookups alone: a commit GitHub does not know first, then the latest commit.
+            // The latest commit's author's address is never noted (as LatestCommitAsync's).
             step = "3, the avatars' lookups";
             var latest = await api.LatestCommitAsync(repository.DefaultBranch, Cancelled)
                 ?? throw new XunitException($"GitHub gave no latest commit of {repository.DefaultBranch} with a SHA and an author's address.");
-            var owner = latest.Email.ToLowerInvariant();
+            var authorAddress = latest.Email.ToLowerInvariant();
+            var commitsPath = $"/repos/{sandbox.Owner}/{sandbox.Name}/commits";
             using (var provider = Provider(requests, log))
             {
+                var before = requests.Count;
                 var read = await provider.ReadAuthorsAsync(
                     sandbox.Token,
                     hosted,
                     null,
-                    [new AuthorCommit(NoAuthor2, LivePremises.UnknownSha(stamp), hosted), new AuthorCommit(owner, latest.Sha, hosted)],
+                    [new AuthorCommit(NoAuthor2, LivePremises.UnknownSha(stamp), hosted), new AuthorCommit(authorAddress, latest.Sha, hosted)],
                     Cancelled);
+
+                // Each lookup's answer in order, from the log, which keeps no query and so no address.
+                var lookups = requests.Snapshot().Skip(before)
+                    .Where(request => request.Method == "GET" && string.Equals(request.Path, commitsPath, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+                run.Note("The provider's A6 lookups as the log saw them, in order: "
+                    + (lookups.Count == 0
+                        ? "none."
+                        : string.Join(", ", lookups.Select(request => $"{(request.Status is { } status ? Show(status) : "failed: " + request.FailedWith)} (request {request.RequestId ?? "none"})")) + "."));
+                if (lookups.Count == 0)
+                {
+                    problems.Add("None of the provider's A6 lookups passed LiveRequestLog, so D327's reach is not checked over them.");
+                }
+
                 if (read.Value is not { } map)
                 {
                     problems.Add($"A6's lookups failed: {read.Failure?.Kind} (request {read.Failure?.RequestId ?? "none"}).");
@@ -679,10 +708,14 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
                         problems.Add($"A6 kept {NoAuthor2}, whose commit GitHub does not know, as {(stranger is null ? "linked to no one" : "linked to " + stranger.Login)}: it is left out (D342).");
                     }
 
-                    if (!map.ByEmail.TryGetValue(owner, out var found) || found is null || !string.Equals(found.Login, sandbox.Owner, StringComparison.OrdinalIgnoreCase))
+                    if (!map.ByEmail.TryGetValue(authorAddress, out var found) || found is null || !string.Equals(found.Login, sandbox.Owner, StringComparison.OrdinalIgnoreCase))
                     {
                         problems.Add("A6 did not map the latest commit's author's address to " + sandbox.Owner + ": "
-                            + (found is not null ? $"it is linked to {found.Login}." : map.ByEmail.ContainsKey(owner) ? "it is linked to no one." : "it is absent, so the lookups stopped at the commit GitHub does not know (D342)."));
+                            + (found is not null
+                                ? $"it is linked to {found.Login}."
+                                : map.ByEmail.ContainsKey(authorAddress)
+                                    ? "it is linked to no one."
+                                    : "it is absent: its own lookup failed, or the lookups stopped before it (the lookups' answers are noted above; D342)."));
                     }
                 }
             }
@@ -793,18 +826,19 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
     /// selected API version and <c>X-RateLimit-Remaining</c>; each body is kept whole only for a
     /// refusal (<see cref="LiveAnswer.BodyForNotes"/>). Returns the premises (<see cref="LivePremises"/>)
     /// that GitHub's answers broke, a premise's probe without an answer among them; any other probe
-    /// without one is noted and fails nothing. Internal for <see cref="LiveSafetyTests"/>, which runs
-    /// it with a second fake standing in for GitHub.
+    /// without one is noted and fails nothing. The fake is given the sandbox's
+    /// <paramref name="owner"/> and <paramref name="name"/> alone. Internal for
+    /// <see cref="LiveSafetyTests"/>, which runs it with a second fake standing in for GitHub.
     /// </summary>
-    internal async Task<List<string>> ProbeTextsAsync(GitHubLiveApi api, LiveSandbox sandbox, string branch, string stamp)
+    internal async Task<List<string>> ProbeTextsAsync(GitHubLiveApi api, string owner, string name, string branch, string stamp)
     {
         var broken = new List<string>();
-        await using var fake = await StartFakeAsync(sandbox);
+        await using var fake = await StartFakeAsync(owner, name);
         var what = $"X-GitHub-Api-Version {UnknownVersion} on GET /repos/{{o}}/{{r}}";
         var version = await ProbeAsync(what, () => api.ProbeVersionAsync(UnknownVersion, Cancelled), Fake(fake, f => f.Api.ProbeVersionAsync(UnknownVersion, Cancelled)));
         if (version is null || !LivePremises.NamesVersionHeader(version))
         {
-            broken.Add($"{what}: {Answered(version)}, not 400 with a message or errors that name {LivePremises.VersionHeader} (the client's ApiVersion, D342).");
+            broken.Add($"{what}: {Answered(version)}, not 400 with a first error or a message that names {LivePremises.VersionHeader} (the client's ApiVersion, D342).");
         }
 
         await ProbeAsync("GET /user/repos?type=owner&visibility=all", () => api.ProbeTypeWithVisibilityAsync(Cancelled), Fake(fake, f => f.Api.ProbeTypeWithVisibilityAsync(Cancelled)));
@@ -927,12 +961,12 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
         }
     }
 
-    /// <summary>The fake of GitHub in process for <see cref="ProbeTextsAsync"/>, or null, noted, when it could not start: its side is a finding only.</summary>
-    private async Task<LiveFake?> StartFakeAsync(LiveSandbox sandbox)
+    /// <summary>The fake of GitHub in process for <see cref="ProbeTextsAsync"/>, with the sandbox's <paramref name="owner"/> and <paramref name="name"/> and never its token, or null, noted, when it could not start: its side is a finding only.</summary>
+    private async Task<LiveFake?> StartFakeAsync(string owner, string name)
     {
         try
         {
-            return await LiveFake.StartAsync(sandbox.Owner, sandbox.Name, Cancelled);
+            return await LiveFake.StartAsync(owner, name, Cancelled);
         }
         catch (Exception ex) when (!Cancelled.IsCancellationRequested)
         {
@@ -1108,14 +1142,15 @@ public sealed class GitHubLiveTests(LiveRun run) : IClassFixture<LiveRun>
     /// The app's provider for Check_3, over the session's handler for github.com behind
     /// <see cref="LiveRequestLog"/>, as Check_2's session goes (14.4 step 1); with
     /// <paramref name="version"/> every request asks for that API version (<see cref="LiveVersionRewriter"/>,
-    /// between the log and the handler).
+    /// between the log and the handler). <paramref name="inner"/> stands in for the session's handler
+    /// in <see cref="LiveSafetyTests"/>, which proves the chain offline.
     /// </summary>
-    private static GitHubProvider Provider(LiveRequestLog.Store requests, LiveLog log, string? version = null) =>
+    internal static GitHubProvider Provider(LiveRequestLog.Store requests, LiveLog log, string? version = null, Func<HttpMessageHandler>? inner = null) =>
         new(
             GitHubEndpoints.GitHubCom,
             () =>
             {
-                var handler = HostingOptions.DefaultHandler(GitHubEndpoints.GitHubCom)();
+                var handler = (inner ?? HostingOptions.DefaultHandler(GitHubEndpoints.GitHubCom))();
                 return new LiveRequestLog(version is null ? handler : new LiveVersionRewriter(version, handler), requests);
             },
             log,
