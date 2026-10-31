@@ -496,6 +496,8 @@ public sealed class LiveSafetyTests
     [InlineData(200, "[{\"full_name\":\"someone/private-thing\"},{\"full_name\":\"octo/sandbox\"}]", "GitHub's body, a 2xx's, by its shape only: an array of 2.")]
     [InlineData(201, "{\"full_name\":\"octo/sandbox\",\"description\":\"x\"}", "GitHub's body, a 2xx's, by its shape only: an object.")]
     [InlineData(200, "<html>made-up</html>", "GitHub's body, a 2xx's, by its shape only: no JSON, 20 characters.")]
+    [InlineData(500, "", "GitHub's body: (empty).")]
+    [InlineData(204, "", "GitHub's body: (empty).")]
     public async Task A_body_is_kept_whole_only_for_a_refusal(int status, string body, string kept)
     {
         var handler = new StubHandler(_ => new HttpResponseMessage((HttpStatusCode)status) { Content = new StringContent(body) });
@@ -588,6 +590,205 @@ public sealed class LiveSafetyTests
     {
         using var document = JsonDocument.Parse("""{"number":7,"head":{"ref":"visualcommit-live/a","repo":{"full_name":"octo/sandbox"}}}""");
         Assert.Equal(new LivePullRequest(7, "visualcommit-live/a", "octo/sandbox"), LivePullRequest.From(document.RootElement));
+    }
+
+    // ---- The probes beside the fake, and the premises (D342) -----------------------------------
+
+    /// <summary>GitHub's answer to an API version it does not have, as the live run of 2026-10-30 recorded it.</summary>
+    private const string VersionRefused = """{"message":"Bad Request","errors":"The version you specified in the \"X-GitHub-API-Version\" request header, \"2000-01-01\", is not a supported version. The following versions are currently supported: \"2026-03-10\" (most recent) and \"2022-11-28\".","documentation_url":"https://docs.github.com/rest","status":"400"}""";
+
+    /// <summary>GitHub's answer to the duplicate create, as that run recorded it, with a made-up owner.</summary>
+    private const string DuplicateRefused = """{"message":"Validation Failed","errors":[{"resource":"PullRequest","code":"custom","message":"A pull request already exists for octo:visualcommit-live/20261030-232555Z."}],"documentation_url":"https://docs.github.com/rest/pulls/pulls#create-a-pull-request","status":"422"}""";
+
+    [Fact]
+    public async Task A_probe_s_note_shows_its_content_type_selected_version_and_rate_limit()
+    {
+        var empty = await AnswerAsync(500, string.Empty, answer => answer.Headers.Add("X-RateLimit-Remaining", "4990"));
+        Assert.Equal(("Content-Type not sent, API version selected not sent, X-RateLimit-Remaining 4990", "(empty)"), (empty.HeadersForNotes, empty.Shape));
+
+        var json = await AnswerAsync(404, """{"message":"Not Found"}""", answer => answer.Headers.Add("X-GitHub-Api-Version-Selected", "2026-03-10"));
+        Assert.Equal(("Content-Type application/json; charset=utf-8, API version selected 2026-03-10, X-RateLimit-Remaining not sent", "an object"), (json.HeadersForNotes, json.Shape));
+    }
+
+    [Fact]
+    public async Task The_fake_s_answer_is_same_or_its_status_message_errors_and_shape_where_they_differ()
+    {
+        // GitHub's own words from the fake are "same", whatever its documentation_url and status field.
+        Assert.Equal("same", LiveAnswer.FakeBeside(await AnswerAsync(400, VersionRefused), await AnswerAsync(400, VersionRefused.Replace("\"documentation_url\":\"https://docs.github.com/rest\",\"status\":\"400\"", "\"documentation_url\":\"https://example.invalid/\"", StringComparison.Ordinal))));
+        Assert.Equal("same", LiveAnswer.FakeBeside(await AnswerAsync(500, string.Empty), await AnswerAsync(500, string.Empty)));
+
+        // errors compared as JSON, whatever escaping each chose.
+        Assert.Equal("same", LiveAnswer.FakeBeside(await AnswerAsync(422, """{"message":"Validation Failed","errors":[{"message":"can't be blank"}]}"""), await AnswerAsync(422, """{"message":"Validation Failed","errors":[{"message":"can't be blank"}]}""")));
+
+        // The fake's values of what differs, and only those.
+        Assert.Equal(
+            "message \"Unsupported 'X-GitHub-Api-Version' header: 2000-01-01.\", no errors",
+            LiveAnswer.FakeBeside(await AnswerAsync(400, VersionRefused), await AnswerAsync(400, """{"message":"Unsupported 'X-GitHub-Api-Version' header: 2000-01-01.","documentation_url":"https://docs.github.com/rest","status":"400"}""")));
+        Assert.Equal(
+            "status 422, message \"No commit found for SHA: ffff\"",
+            LiveAnswer.FakeBeside(await AnswerAsync(404, """{"message":"Not Found","status":"404"}"""), await AnswerAsync(422, """{"message":"No commit found for SHA: ffff","status":"422"}""")));
+        Assert.Equal(
+            "status 422, message \"No commit found for SHA: ffff\", body an object",
+            LiveAnswer.FakeBeside(await AnswerAsync(500, string.Empty), await AnswerAsync(422, """{"message":"No commit found for SHA: ffff"}""")));
+        Assert.Equal(
+            "no message, no errors, body (empty)",
+            LiveAnswer.FakeBeside(await AnswerAsync(500, """{"message":"Server Error","errors":"x"}"""), await AnswerAsync(500, string.Empty)));
+        Assert.Equal("body an array of 0", LiveAnswer.FakeBeside(await AnswerAsync(200, "[{\"sha\":\"a\"}]"), await AnswerAsync(200, "[]")));
+
+        // Without GitHub's answer: the fake's status, message and errors.
+        Assert.Equal("status 409, message \"Git Repository is empty.\"", LiveAnswer.FakeBeside(null, await AnswerAsync(409, """{"message":"Git Repository is empty.","documentation_url":"https://docs.github.com/rest","status":"409"}""")));
+        Assert.Equal("status 422, message \"Validation Failed\", errors [{\"code\":\"invalid\"}]", LiveAnswer.FakeBeside(null, await AnswerAsync(422, """{"message":"Validation Failed","errors":[{"code":"invalid"}]}""")));
+    }
+
+    [Fact]
+    public async Task Each_side_s_address_is_hidden_before_the_comparison_and_never_shown()
+    {
+        const string Address = "author@example.invalid";
+        const string FakeAddress = "sandbox-author@visualcommit.invalid";
+        var github = await AnswerAsync(422, """{"message":"No commit by Author@Example.invalid","errors":["author%40example.invalid"]}""");
+        Assert.Equal("same", LiveAnswer.FakeBeside(github, await AnswerAsync(422, """{"message":"No commit by sandbox-author@visualcommit.invalid","errors":["sandbox-author%40visualcommit.invalid"]}"""), Address, FakeAddress));
+
+        var differs = LiveAnswer.FakeBeside(github, await AnswerAsync(404, """{"message":"Nothing for sandbox-author@visualcommit.invalid"}"""), Address, FakeAddress);
+        Assert.Equal("status 404, message \"Nothing for <the address>\", no errors", differs);
+        Assert.Equal("a <the address> b <the address> c", LiveAnswer.Hide("a AUTHOR@example.invalid b author%40example.invalid c", Address));
+        Assert.Equal("as it is", LiveAnswer.Hide("as it is", null));
+    }
+
+    [Fact]
+    public async Task The_version_premise_takes_a_400_whose_message_or_errors_string_names_the_header()
+    {
+        Assert.True(LivePremises.NamesVersionHeader(await AnswerAsync(400, VersionRefused)));
+        Assert.True(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Unsupported 'X-GitHub-Api-Version' header: 2000-01-01."}""")));
+        Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Bad Request"}""")));
+        Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(400, """{"message":"Bad Request","errors":["X-GitHub-Api-Version"]}""")));
+        Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(400, string.Empty)));
+        Assert.False(LivePremises.NamesVersionHeader(await AnswerAsync(410, VersionRefused)));
+    }
+
+    [Fact]
+    public async Task The_duplicate_create_premise_takes_a_422_whose_first_error_says_one_exists_already()
+    {
+        Assert.True(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, DuplicateRefused)));
+        Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, DuplicateRefused.Replace("A pull request", "a pull request", StringComparison.Ordinal))));
+        Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"Validation Failed","errors":"A pull request already exists for octo:x."}""")));
+        Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"Validation Failed","errors":[]}""")));
+        Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(422, """{"message":"Validation Failed","errors":[{"resource":"PullRequest","code":"custom","message":"No commits between main and x"}]}""")));
+        Assert.False(LivePremises.IsDuplicateRefusal(await AnswerAsync(201, """{"number":2}""")));
+    }
+
+    [Theory]
+    [InlineData(200, "[{\"sha\":\"a\"}]", 1, true)]
+    [InlineData(200, "[]", 0, true)]
+    [InlineData(200, "[]", 1, false)]
+    [InlineData(200, "{}", 0, false)]
+    [InlineData(404, "[]", 0, false)]
+    public async Task The_lookups_premise_takes_a_200_with_an_array_of_its_length(int status, string body, int count, bool holds) =>
+        Assert.Equal(holds, LivePremises.IsArrayOf(await AnswerAsync(status, body), count));
+
+    [Theory]
+    [InlineData(404, true)]
+    [InlineData(422, true)]
+    [InlineData(500, true)]
+    [InlineData(502, true)]
+    [InlineData(599, true)]
+    [InlineData(200, false)]
+    [InlineData(400, false)]
+    [InlineData(401, false)]
+    [InlineData(403, false)]
+    [InlineData(409, false)]
+    [InlineData(410, false)]
+    public async Task An_unknown_sha_s_lookup_premise_takes_the_statuses_after_which_the_provider_goes_on(int status, bool holds) =>
+        Assert.Equal(holds, LivePremises.LeavesOutOnlyItsAddress(await AnswerAsync(status, string.Empty)));
+
+    [Fact]
+    public void An_unknown_sha_is_forty_lower_case_hex_digits_not_all_f_and_the_same_for_one_stamp()
+    {
+        var sha = LivePremises.UnknownSha("20261030-232555Z");
+        Assert.Matches("^[0-9a-f]{40}$", sha);
+        Assert.NotEqual(new string('f', 40), sha);
+        Assert.Equal(sha, LivePremises.UnknownSha("20261030-232555Z"));
+        Assert.NotEqual(sha, LivePremises.UnknownSha("20261030-232556Z"));
+    }
+
+    [Fact]
+    public async Task The_version_rewriter_replaces_the_version_alone_and_never_touches_authorization()
+    {
+        var inner = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        var store = new LiveRequestLog.Store();
+        using var client = new HttpClient(new LiveRequestLog(new LiveVersionRewriter("2000-01-01", inner), store));
+        using var asked = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user?per_page=1");
+        asked.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", Token);
+        asked.Headers.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
+        asked.Headers.TryAddWithoutValidation("X-GitHub-Api-Version", "2026-03-10");
+        asked.Headers.TryAddWithoutValidation("User-Agent", "VisualCommit/0.1.0");
+        using var bare = new HttpRequestMessage(HttpMethod.Get, "https://api.github.com/user");
+
+        (await client.SendAsync(asked, Cancelled)).Dispose();
+        (await client.SendAsync(bare, Cancelled)).Dispose();
+
+        Assert.Equal(2, inner.Requests.Count);
+        var sent = inner.Requests[0];
+        Assert.Equal(("https://api.github.com/user?per_page=1", "application/vnd.github+json", "2000-01-01", "VisualCommit/0.1.0"), (sent.Url, sent.Accept, sent.Version, sent.UserAgent));
+        Assert.True(string.Equals(sent.Authorization, "Bearer " + Token, StringComparison.Ordinal), "The rewriter changed Authorization.");
+        Assert.Equal(("2000-01-01", (string?)null), (inner.Requests[1].Version, inner.Requests[1].Authorization));
+
+        // Behind the log, which saw Authorization go to api.github.com alone.
+        Assert.Equal([true, false], store.Snapshot().Select(record => record.AuthorizationSent));
+        Assert.Empty(LiveRequestLog.ReachProblems(store.Snapshot()));
+    }
+
+    [Fact]
+    public void The_provider_s_log_is_searched_for_the_token_in_its_lines_and_their_exceptions()
+    {
+        var log = new LiveLog();
+        log.Write(VisualCommit.Core.Logging.LogLevel.Warning, "GitHub: GET /repos/octo/sandbox/commits failed: 500 (request C0DE).");
+        Assert.Equal((1, (string?)null), (log.Count, log.FoundIn(EscapingToken)));
+
+        log.Write(VisualCommit.Core.Logging.LogLevel.Error, "GitHub: GET /user failed.", new HttpRequestException("made-up: " + Uri.EscapeDataString(EscapingToken)));
+        Assert.Equal((2, "URL-escaped"), (log.Count, log.FoundIn(EscapingToken)));
+    }
+
+    [Fact]
+    public async Task The_fake_in_process_answers_the_probes_through_its_own_handler_with_its_own_token()
+    {
+        await using var fake = await LiveFake.StartAsync("octo", "sandbox", Cancelled);
+
+        // Its address, 127.0.0.1:1, has no server: an answer came from the handler in process.
+        var version = await fake.Api.ProbeVersionAsync("2000-01-01", Cancelled);
+        Assert.True(LivePremises.NamesVersionHeader(version), $"The fake answered {version}.");
+        Assert.StartsWith("FAKE-", version.RequestId, StringComparison.Ordinal);
+        Assert.Equal(422, (await fake.Api.ProbeTypeWithVisibilityAsync(Cancelled)).Status);
+        Assert.True(LivePremises.IsArrayOf(await fake.Api.ProbeLookupAsync(fake.Sha, LiveFake.Email, Cancelled), 1));
+        Assert.True(LivePremises.IsArrayOf(await fake.Api.ProbeLookupAsync(fake.Sha, "no-such-author@visualcommit.invalid", Cancelled), 0));
+        Assert.True(LivePremises.LeavesOutOnlyItsAddress(await fake.Api.ProbeLookupAsync(new string('f', 40), LiveFake.Email, Cancelled)));
+        Assert.Equal(409, (await fake.EmptyApi.ProbeCommitsAsync("main", Cancelled)).Status);
+    }
+
+    [Fact]
+    public void The_order_names_every_live_test_once()
+    {
+        var methods = typeof(GitHubLiveTests).GetMethods()
+            .Where(method => method.GetCustomAttributes(inherit: true).OfType<Xunit.v3.IFactAttribute>().Any())
+            .Select(method => method.Name)
+            .Order(StringComparer.Ordinal);
+        Assert.Equal(methods, GitHubLiveOrder.Methods.Order(StringComparer.Ordinal));
+        Assert.Equal(GitHubLiveOrder.Methods.Count, GitHubLiveOrder.Methods.Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>An answer with <paramref name="status"/> and <paramref name="body"/> (JSON, or none at all) as the test's own call reads it, its headers set by <paramref name="headers"/>.</summary>
+    private static async Task<LiveAnswer> AnswerAsync(int status, string body, Action<HttpResponseMessage>? headers = null)
+    {
+        var handler = new StubHandler(_ =>
+        {
+            var answer = new HttpResponseMessage((HttpStatusCode)status)
+            {
+                Content = body.Length == 0 ? new ByteArrayContent([]) : new StringContent(body, Encoding.UTF8, "application/json"),
+            };
+            headers?.Invoke(answer);
+            return answer;
+        });
+        using var api = new GitHubLiveApi(new LiveSandbox("octo", "sandbox", Token), handler);
+        return await api.ProbeTypeWithVisibilityAsync(Cancelled);
     }
 
     /// <summary>An in-process handler: answers every request with <paramref name="answer"/>'s, and keeps what each request sent.</summary>
