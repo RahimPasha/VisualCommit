@@ -661,18 +661,17 @@ public class Phase5ScenarioTests
     }
 
     [Theory]
-    [InlineData("merge")]
-    [InlineData("cherry-pick")]
-    public async Task Protect_merge_and_cherry_pick_of_others_work_are_refused_over_a_changed_file(string operation)
+    [InlineData("merge", "--no-edit", "refs/heads/other")]
+    [InlineData("cherry-pick", "refs/heads/other~1")]
+    public async Task Protect_merge_and_cherry_pick_of_others_work_are_refused_over_a_changed_file(params string[] operation)
     {
         // A change to a file other changes: git's "by merge" block, for a merge and a pick alike (check P27).
         using var repo = await Scenarios.ProtectAsync();
-        string[] arguments = operation == "merge" ? ["merge", "--no-edit", "refs/heads/other"] : ["cherry-pick", "refs/heads/other~1"];
         repo.WriteFile("src/app.txt", "app\nlocal\n");
         var before = await repo.ExactStateAsync();
         var reflog = HeadLogFile(repo);
-        var refused = await repo.GitAllowingFailureAsync(arguments);
-        Assert.False(refused.Succeeded, $"git {operation} was not refused.");
+        var refused = await repo.GitAllowingFailureAsync(operation);
+        Assert.False(refused.Succeeded, $"git {operation[0]} was not refused.");
         Assert.Equal(["src/app.txt"], BlockedPaths(refused.StandardError, "error: Your local changes to the following files would be overwritten by merge:"));
         Assert.Equal(before, await repo.ExactStateAsync());
         Assert.Equal(reflog, HeadLogFile(repo));
