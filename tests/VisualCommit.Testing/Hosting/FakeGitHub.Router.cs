@@ -465,9 +465,9 @@ public sealed partial class FakeGitHub
         var sha = call.Query.Value("sha") ?? repository.DefaultBranch;
         if (await LogAsync(bare, sha, ct).ConfigureAwait(false) is not { } commits)
         {
-            // github.com, 2026-10-30, the same in three runs: a SHA it does not have is 404 alone and
-            // 500 with an empty body beside author. A branch name GitHub lacks is taken to answer as
-            // an unknown SHA (not measured).
+            // github.com, the same in four runs of 2026-10-30 and 31: a SHA it does not have is 404
+            // alone and 500 with an empty body beside author, whether or not GitHub links the address
+            // to an account; a branch name it lacks is 404 alone, as an unknown SHA.
             return call.Query.Value("author") is null
                 ? Error(call, 404, "Not Found", documentationUrl: ListCommitsDocumentationUrl)
                 : Empty(call, 500);
@@ -591,10 +591,14 @@ public sealed partial class FakeGitHub
     private AuthRemoteResponse Error(Call call, int status, string message, IEnumerable<KeyValuePair<string, string>>? extra = null, string documentationUrl = DocumentationUrl) =>
         Json(call, status, ErrorJson(status, message, documentationUrl: documentationUrl), null, extra);
 
-    /// <summary>An answer of <paramref name="status"/> without a body or a <c>Content-Type</c>, with GitHub's common headers and counted (A6's 500, D342).</summary>
+    /// <summary>
+    /// An answer of <paramref name="status"/> without a body, with GitHub's common headers and
+    /// counted (A6's 500, D342): github.com sent it with <c>Content-Type: application/json; charset=utf-8</c>
+    /// all the same (the live run of 2026-10-31).
+    /// </summary>
     private AuthRemoteResponse Empty(Call call, int status)
     {
-        var headers = new List<KeyValuePair<string, string>>();
+        var headers = new List<KeyValuePair<string, string>> { KeyValuePair.Create("Content-Type", "application/json; charset=utf-8") };
         AddCommonHeaders(call, headers, counted: true, notModified: false);
         return new AuthRemoteResponse(status, ReasonOf(status), headers, []);
     }

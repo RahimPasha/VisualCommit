@@ -275,7 +275,7 @@ public sealed class FakeGitHubTests
         foreach (var query in new[] { $"sha={unknown}&author=octo%40example.com&per_page=1", "sha=nope&author=ada" })
         {
             var failed = await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?" + query, token);
-            Assert.Equal((HttpStatusCode.InternalServerError, string.Empty, (string?)null), (failed.Status, failed.Body, failed.Header("Content-Type")));
+            Assert.Equal((HttpStatusCode.InternalServerError, string.Empty, "application/json; charset=utf-8"), (failed.Status, failed.Body, failed.Header("Content-Type")));
             Assert.Matches("^FAKE-[0-9]{4}$", failed.Header("X-GitHub-Request-Id"));
             Assert.Equal((++used).ToString(System.Globalization.CultureInfo.InvariantCulture), failed.Header("X-RateLimit-Used"));
             Assert.Equal(("commits:octo/hello", 500), (fake.Requests[^1].Route, fake.Requests[^1].Status));
