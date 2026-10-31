@@ -5,6 +5,7 @@
 // through its own handler, the operation's end and both "listed" lines (ruling 51), the status bar's
 // offer, never clicked (n01b-created).
 using System.Text.Json;
+using FlaUI.Core.AutomationElements;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
@@ -50,11 +51,13 @@ public partial class Phase7aRealWindowPass
         Assert.Equal(PartN.DialogTitle, form.Name);
         app.WaitForText("PullRequestHead", PartN.Topic, StepTimeout);
         app.WaitForText("PullRequestBase", PartN.OriginMain, NetworkTimeout);
+        // The form's own box: the left panel's pull-request rows name their titles PullRequestTitle too.
+        string TitleBoxText() => app.FindIn(form, "PullRequestTitle").AsTextBox().Text;
         WaitTelling(
             app,
-            () => app.HasFocusOnScreen("PullRequestTitle") && app.BoxText("PullRequestTitle") == PartN.TopicTitle,
+            () => RealApp.HasKeyboardFocus(app.FindIn(form, "PullRequestTitle")) && TitleBoxText() == PartN.TopicTitle,
             $"the focused title box to hold \"{PartN.TopicTitle}\"",
-            () => $"It holds \"{app.BoxText("PullRequestTitle")}\"; the focus is on {app.FocusedAutomationId() ?? "nothing"}.");
+            () => $"It holds \"{TitleBoxText()}\"; the focus is on {app.FocusedAutomationId() ?? "nothing"}.");
         Assert.Empty(app.ShownElements("PullRequestHeadNote"));
         var create = app.FindIn(form, "ConfirmButton");
         Assert.Equal((PartN.Create, true), (create.Name, create.IsEnabled));
