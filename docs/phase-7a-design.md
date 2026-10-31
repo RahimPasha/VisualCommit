@@ -3,7 +3,8 @@
 This is phase 7a's design: what the phase builds, how it is cut into work packages, the contracts the
 packages share, and one brief per package for its builder. Once the phase is built it is kept as
 history, as phases 3 to 6's designs are. Its decisions are recorded only in `docs/decisions.md`
-(D243): the design names them by number (D265 to D338) and does not repeat them. Binding inputs:
+(D243): the design names them by number (D265 to D338, and in its as-built sections 19 to 21 D339
+to D343) and does not repeat them. Binding inputs:
 `docs/plan.md`'s "Phase 7a" and "Workflow" sections, D249 to D264, and the lead's 32 rulings of
 2026-10-28 (cited as "ruling n"). Line numbers are those of `cea102c`. Git facts were measured on Git
 2.56.0.windows.4 in isolated folders; where CI's 2.43 or 2.55 may differ, the section says so (D248).
@@ -30,6 +31,10 @@ A builder reads section 0, section 1 and its own section, and nothing else.
 - 15 Open points
 - 16 As built: wave 1
 - 17 As built: wave 2
+- 18 As built: wave 3
+- 19 As built: the review before the gate
+- 20 As built: the live run
+- 21 As built: the gate
 
 ## 0. Scope, packages and parts
 

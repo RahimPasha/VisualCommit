@@ -742,13 +742,15 @@ into `FETCH_HEAD`.
 
 **Git versions** that the code handles. The development machine runs Git 2.56.0.windows.4 since
 2026-10-28 (D248); it ran 2.36.0.windows.1 before, on which phases 3 to 6 derived their facts. CI
-runs Git 2.56.0.windows.2 (Windows, since 2026-10-15), 2.56.0 (macOS), 2.55.0 (`ubuntu-latest`)
-and 2.43.0 (the two containers); Git 2.55 is also on the development machine, inside Visual Studio
-(phase 5's research used it). Phase 4 found Git 2.55's differences: at a conflict stop
-`rebase-merge/message` ends with a `# Conflicts:` block, left out of the message the stage panel
-fills; `done` and `git-rebase-todo` write each subject as a comment (`pick <sha> # Subject`), and
-the app reads only the command and the SHA; an autostash that conflicts is told in other words, so
-the app tells it by the conflicted files left after an exit 0; a rescheduled pick has no
+runs Git 2.56.0.windows.2 (Windows, since 2026-10-15), 2.56.0 (macOS, and `ubuntu-latest` since
+2026-10-29; 2.55.0 before) and 2.43.0 (the two containers), so since then no CI job runs 2.55;
+Git 2.55 is still on the development machine, inside Visual
+Studio (phase 5's research used it; a trimmed one, plan risk 28). Phase 4 found Git 2.55's
+differences: at a conflict stop `rebase-merge/message` ends with a `# Conflicts:` block, left out
+of the message the stage panel fills; `done` and `git-rebase-todo` write each subject as a comment
+(`pick <sha> # Subject`), and the app reads only the command and the SHA; an autostash that
+conflicts is told in other words, so the app tells it by the conflicted files left after an
+exit 0; a rescheduled pick has no
 `stopped-sha` and is recognised by `done` ending with the same command; a reftable repository can
 exist (Git 2.45 and later). Phase 5 found: Git 2.55.0's `--no-walk` ignores a path (the Files
 search above); from Git 2.34 `read-tree -m -u` overwrites or deletes ignored files without a word
@@ -4939,7 +4941,7 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 | `ManualTimeProvider` | same | A clock that moves only when the test moves it (`Advance`), with timers that fire against it in order: the watcher's quiet period (D160) |
 | `HeadlessInputClock` | `tests/VisualCommit.Testing/Headless` | Stops a headless window's input clock (Avalonia.Headless's internal `Stopwatch`, which stamps every pointer and key event in real time) while `ShellDriver.DoubleClick` presses twice: Avalonia counts a second press as a double-click only within 500 ms of the first, and under the default run's load the work between the presses took longer (P25's double-click came as two clicks). `Read` gives the clock's time, which `DoubleClick` waits on after a press at its spot, and throws while the clock is paused, where such a wait would never end. Throws when the window is not a headless one or an Avalonia upgrade moved the clock |
 | `HangWatchdogAttribute`, `HangClock` | `tests/VisualCommit.Testing` | `[assembly: HangWatchdog]` in each default test assembly. If a test runs for more than 3 minutes, or nothing starts or finishes for that long, it prints which tests were running and stops the test process. `VISUALCOMMIT_TEST_HANG_SECONDS` changes the limit. A test's wait for a shared preparation (`SharedPreparationAsync`: a scenario template, the 100k-commit repo, the pull-parity templates) and for its turn on the headless UI thread (`WaitingForTurn`) is left out of its time; a preparation is held to a limit of its own, since phase 6's gate 10 minutes (`SharedPreparationLimit`, D237: the reflog scenario's template, 18 s alone, ran past 180 s with nine projects side by side; D132). Since phase 5 so is a test's wait for git's merge tool to start (`WaitingForSlowProgram`, D185): `git mergetool` is a shell script of over a hundred process starts, about 3 s alone and 32 to 64 s with the default run's projects side by side; the wait has its own limit of 120 s (`Scenarios.MergeToolTimeout`). Since phase 6 such a wait may name a limit of its own in place of the run's (`WaitingForSlowProgram(what, limit)`, for `git mergetool --tool-help`, over 180 s under the default run's load), and while it is within it the "nothing starts or finishes" rule waits for it. `HangClock` holds these rules apart from the watchdog, so they are tested with a clock moved by hand |
-| `GitIsoDates` | same | Reads git's strict ISO dates as instants: Git 2.36 writes `+00:00` for UTC, CI's Git 2.55 `Z` |
+| `GitIsoDates` | same | Reads git's strict ISO dates as instants: Git 2.36 writes `+00:00` for UTC, Git 2.55 (CI's `ubuntu-latest` until 2026-10-28) `Z` |
 | `FakeGitHub`, `FakeGitHubHandler`, `LoopbackOnlyHandler`, `TokenTripwire`; `FakeTokenStore` | `tests/VisualCommit.Testing/Hosting`; `FakeTokenStore` in `Headless` | Phase 7a: the fake of GitHub (on a port or in process), the harness's network tripwire, the token's tripwire over files and git calls, and the harness's keychain; see "The fake of GitHub" |
 | `GitCallBudget`, `RefreshForm` | `tests/VisualCommit.Testing/Headless` | Phase 7a's S8 (D280, D281, design 5.3): with a live watcher a count of git calls is marked and read with the watchers quiet (`ShellDriver.QuietCallMarkAsync()`, `QuietCallsSinceAsync`; App.Tests' `OperationsHarness` has the same pair over `WaitForWatcherQuietAsync`, and `WaitForOpeningCleanUpReadAsync` for a mark right after opening), and a refresh the watcher started for a change reported late is set aside only whole. `RefreshForms`: the refs read's five forms and the status read, moved from phase 6's part S helpers, and, optional (counted 0 times or as often as the others), the URL-rewrites read a signed-in tab makes after each refs read (`git config --null --get-regexp ^url\.`). `NotWholeRefreshes` says what keeps calls from being whole refreshes (a call of a form inside an operation, a required form less often than another); `AssertOnlyWholeRefreshes` fails printing the calls; `AssertAtMost(calls, budget, what, setAsideWholeRefreshes)` holds a count that is a cost to a budget. Three counts that are a cost became budgets (`IgnoredInTheWayTests`, `RefReadingTests`, `Phase6ScenarioTests`); seven with a live watcher are marked and read quiet with whole refreshes set aside; counts that are a test's meaning stay exact (D280). 7a's checks count git calls only through it |
 | `RecordingCredentialSource` | `tests/VisualCommit.Testing` | Phase 7a: a credential source for the app's helper that answers every `get` with `Token` (null: none) and records each `get` and refusal by account, never showing the token (see "Prompts and credentials") |
@@ -5087,12 +5089,14 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   differences the code handles are under "Git versions" in "Git layer". With that Git 2.55
   first on `PATH` the tests against `AuthRemoteServer` fail: it is a trimmed distribution without
   `git http-backend`, which the server runs, and since phase 6 the server says so when it starts
-  (plan risk 28); every CI job passes them, `ubuntu-latest`'s Git 2.55 included. Phase 6 checked Git
-  2.56 behaviours locally with MinGit 2.56.0.windows.2 first on `PATH`. Since 2026-10-28 the
-  development machine itself runs Git 2.56 (D248), so no machine runs 2.36: the word-for-word
+  (plan risk 28); every CI job passes them, as `ubuntu-latest`'s Git 2.55 did until that job moved
+  to 2.56.0 on 2026-10-29 (run 40848974456). Phase 6 checked Git 2.56 behaviours locally with
+  MinGit 2.56.0.windows.2 first on `PATH`. Since 2026-10-28 the development machine itself runs
+  Git 2.56 (D248), so no machine runs 2.36: the word-for-word
   assertions that `IsReportGitAsync()` keeps for 2.36 run nowhere, and the classifying parts run on
   every git; a design's git facts are taken on 2.56, with 2.43 and 2.55 from CI where versions
-  differ.
+  differ (D248; since 2026-10-29 no CI job runs 2.55, so only the containers' 2.43
+  differs).
 - xunit runs the tests of one class (or of one `[Collection]`) one after another and different
   ones side by side, so big test classes are split by subject: `ScenarioTests` and
   `Phase3ScenarioTests`, the pull parity classes by group of settings, and
@@ -5715,9 +5719,13 @@ allowlist: a CI runner's network is open. The first way exists for that reason, 
 default allowlist names Ubuntu's package servers but not the server Microsoft's installer
 downloads from.
 
-CI's gits: since 2026-10-15 Windows runs 2.56.0.windows.2, macOS 2.56.0, `ubuntu-latest` 2.55.0
-and the two containers 2.43.0 (Ubuntu 24.04's). The development machine runs 2.56.0.windows.4
-since 2026-10-28 (D248; 2.36 before). Tests must work on all of them; CI is the only check on 2.43.
+CI's gits: since 2026-10-15 Windows runs 2.56.0.windows.2 and macOS 2.56.0, and the two containers
+2.43.0 (Ubuntu 24.04's); `ubuntu-latest` ran 2.55.0 until 2026-10-28 (run 40679200453) and runs
+2.56.0 on its `ubuntu-24.04` image from 2026-10-29 (run 40848974456 on, the gate's 41190572421
+among them). So no CI run of phase 7a ran 2.55, and only the containers' 2.43 differs from 2.56
+(plan risk 26). The development machine runs
+2.56.0.windows.4 since 2026-10-28 (D248; 2.36 before). Tests must work on all of them; CI is the
+only check on 2.43.
 
 ### Package versions
 

@@ -13,6 +13,10 @@ contracts, 2 to 14 one brief per work package, 15 the open points, 16 to 21 what
 review, the live run and the gate settled ("design N.N" below). The report,
 [test-reports/phase-7a.md](../test-reports/phase-7a.md), holds the 52 checks (A1 to A11, B1 to B9,
 P1 to P15, G1 to G7, N1 to N10), the live command's runs and the lead's rulings on its open points.
+"The design's ruling n" below is one of the lead's 32 rulings of 2026-10-28 on the design's research
+questions, which the design applies and cites as "ruling n" (their text is in
+`D:/Projects/Personal/phase7a-work/lead-rulings.md`, outside the repo); the report numbers its own
+open points, each with the lead's ruling on it ("the report's open point n").
 
 ## Result
 
@@ -30,8 +34,8 @@ is the longer form of this table.
 | The opt-in live command (D250) | `tests/VisualCommit.LiveHostingTests` (the file); its runs with the owner's token, 80 of 80 and 112 of 112 (the report's "Live command"); `LiveSafetyTests`, 109 offline cases |
 | From phase 3: "Create pull request…" in `ForLocalBranch`, `ForRemoteBranch` and `ForDrop`; the section's menu | P11, P12, N1, N5, N6, N8; `RepositoryMenusHostingTests` |
 | From phase 3: a provider's token reaches git | A9, B6, P13, N2; WP-C's classes above. D255 settled it: the app's own helper, in place of the user's helpers for github.com |
-| From phase 6: the push guard and `pr/*` | N2, N7 (the guard's read before Create's push); `PushGuardGitHubTests` (ruling 8: `refs/pull/<digits>/head` counts; the two-namespace refusal stays) |
-| From phase 6: the prompt group per account | `PromptGroupAccountTests` (ruling 9: kept answers keyed by account and prompt text) |
+| From phase 6: the push guard and `pr/*` | N2, N7 (the guard's read before Create's push); `PushGuardGitHubTests` (the design's ruling 8: `refs/pull/<digits>/head` counts; the two-namespace refusal stays) |
+| From phase 6: the prompt group per account | `PromptGroupAccountTests` (the design's ruling 9: kept answers keyed by account and prompt text) |
 | From phase 6: the wheel test | `ShellDriverTests`' wheel test through `ShellDriver.WaitForControlAtAsync` (L1, `f1dc80e`) |
 | From phase 6: the real-window csproj's comment | The file (L1) |
 | From the review: W1, S8, R8 (D254), and G23's split (D264) | WP1 (`a4a388e`): W1 on a held read clock (design 5.4); `GitCallBudget` and `GitCallBudgetTests` (D280, D281); the watcher lag `VISUALCOMMIT_WATCHER_LAG_MS` (D262, D282), whose lagged list (design 0.4) passed at every merge that named it; G23's three tests (D283), their pictures the same files but for `g23i`'s seven pixels that vary by nature (design 16.9) |
@@ -83,9 +87,10 @@ fix `ccd1ebe`, WP-V `8810136`, the macOS races `33313ef`, G1's fix `5219eae`, WP
 `5c20ee6` and `c6491cb`. Between the fixers and the live run: `1d297a0` (two test races, part P's
 `End`), `745ce9a` (D341) and `7015753` (the create test's fence). After the live run: `f926b86` and
 `a140017`, the gate's splits `939e9fa` to `377d354`, Check_N `723f2d3`, D343 `391f7f2` and the torn
-reads `a9d02c1`, the real-window harness's `TitleOf` `a2c312a`; status.md's Progress names the
-rest. Merged into `master`: not yet, awaiting the owner's acceptance ("Phase 7a accepted" merges
-it with `--no-ff`).
+reads `a9d02c1`, the real-window harness's `TitleOf` `a2c312a`; the phase's Progress checklist
+names the rest (`git show origin/phase/7a-hosting-github:docs/status.md`, since the acceptance resets
+status.md's). Merged into `master`: not yet, awaiting the owner's acceptance ("Phase 7a accepted"
+merges it with `--no-ff`).
 
 - **Default run, counted round** (`a9d02c1`'s code): 2026-10-31, 00:51 to 02:06, after a 10-minute
   rest, at most four projects at once (D343): 5,948 of 5,952 passed and 4 were skipped in 1 h 12 min
@@ -121,7 +126,13 @@ it with `--no-ff`).
   ones, 190 captures and 185 difference pictures (8, 30, 26, 90, 56, 96, 51 and 18). 16 Opus
   inspectors judged them in batches of at most 150 (D247), with 45 of CI's pictures: every one
   passed (the report's "Run"; workflow `wnj6v5kts`).
-  The references for the earlier pictures are in `D:/Projects/Personal/gate7a-reference/` (outside the repo; status.md's Notes).
+  The references for the earlier pictures are in `D:/Projects/Personal/gate7a-reference/`, outside
+  the repo: phases 0 to 6's walk-throughs on `master` (`5fe9148`) with git 2.56, 972 scripted
+  pictures (`scripted-pictures.sha256`; the inspectors' verdicts on the 40 that differ from phase
+  6's gate beyond the status bar's git box in `reference-verdicts.md`), and phase 6's gate's 364
+  real-window files (round 4, `b561b7c`). The counted round's own copy, also outside the repo, is
+  `D:/Projects/Personal/phase7a-work/gate/round-a2c312a/`: its `artifacts/visual` (as `visual/`),
+  its list `phase-7a-pictures.sha256` and the pass's log `real-window-a2c312a.log`.
 - **Live command**: run 1 (step 16, `0ffbcc2`'s build of `7015753`'s code) 80 of 80 in 33 s; run 2,
   the gate's run before its pictures (`f926b86`), 112 of 112 in 63 s with its build, every probe
   "the fake: same". The counted round's run, on `a2c312a`: 112 of 112 in 29.9 s (46 s with its
@@ -148,7 +159,7 @@ it with `--no-ff`).
 |---|---|
 | Machine | Windows 11 Pro 10.0.26300 on an Intel Core i7-8650U laptop; screen 3000×2000 at 200% scaling (1500×952 logical work area). The whole phase was built on this machine, partly by sub-agents in worktrees (`D:/Projects/Personal/vc-wt/p7a-<key>` and `.claude/worktrees/`, all removed); no cloud session worked on it |
 | .NET SDK | 10.0.303 (`global.json` stays at 10.0.100 with `latestFeature`) |
-| Git | 2.56.0.windows.4 since 2026-10-28 (D248), first on `PATH`, with `core.fsmonitor=true` in the owner's global configuration and `credential.helper=manager` in the new install's system configuration (Waiting on the owner). Visual Studio's 2.55.0.windows.5 is there too (plan risk 28). On CI: Windows 2.56.0.windows.2, macOS 2.56.0, `ubuntu-latest` 2.55.0, the two containers 2.43.0 |
+| Git | 2.56.0.windows.4 since 2026-10-28 (D248), first on `PATH`, with `core.fsmonitor=true` in the owner's global configuration and `credential.helper=manager` in the new install's system configuration (Waiting on the owner). Visual Studio's 2.55.0.windows.5 is there too (plan risk 28). On CI, in the gate's run 41190572421: Windows 2.56.0.windows.2, macOS 2.56.0, `ubuntu-latest` 2.56.0 (image `ubuntu-24.04`; 2.55.0 until master's run 40679200453 of 2026-10-28, 2.56.0 in every run of this branch from 40848974456 on 2026-10-29), the two containers 2.43.0. No CI run of 7a ran 2.55, and only the containers' 2.43 differs from 2.56 (plan risk 26) |
 | Packages | Avalonia 12.1.3, Avalonia.AvaloniaEdit 12.0.0, TextMateSharp and TextMateSharp.Grammars 2.0.4, CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2 (pinned, D24), FlaUI.UIA3 5.0.0; new: Tmds.DBus.Protocol 0.94.1, a direct reference pinned to the version Avalonia 12.1.3 brings, for the Secret Service. New Lucide icon: git-pull-request (from Feather), in `THIRD-PARTY-NOTICES.md` with the package |
 | New projects | `src/VisualCommit.Hosting`; `tests/VisualCommit.Hosting.Tests` and `tests/VisualCommit.VisualTests.Phase7a` (eleven test processes in the default run); `tests/VisualCommit.LiveHostingTests` (`net10.0-windows`, not in the solution; CI's Windows job builds it, D337) |
 | Ports | 47395 for 7a's walk-through and its real-window part (D265; a class falls back to a free port when it is taken); 47396 reserved for a second 7a walk-through project; 47391 to 47394 as before |
@@ -188,7 +199,9 @@ bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Relea
   command's process alone, never printed, in PowerShell:
   `$env:VISUALCOMMIT_LIVE_GITHUB_TOKEN = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_TOKEN','User'); $env:VISUALCOMMIT_LIVE_GITHUB_REPO = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_REPO','User'); & 'C:\Program Files\Git\bin\bash.exe' scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`.
   Its findings land in `artifacts/live/github/run.txt`, which the next run overwrites: copy it out
-  of the repo (status.md's Notes name the folder used).
+  of the repo. 7a's copies: runs 1 and 2 in `D:/Projects/Personal/phase7a-work/live/`
+  (`run-1-step16.txt`, `run-1c-check1-alone.txt`, `run-2-after-d342.txt`), the counted round's in
+  `D:/Projects/Personal/phase7a-work/gate/live-run-gate-a2c312a.txt`.
 - To run the app without touching the real keychain, besides CLAUDE.md's `VISUALCOMMIT_DATA_DIR`
   and git variables: `VISUALCOMMIT_KEYCHAIN=memory`; `VISUALCOMMIT_GITHUB_URL=none` turns GitHub off
   and `http://127.0.0.1:<port>/` points it at a fake (architecture.md gives the rules).
@@ -234,14 +247,19 @@ As in phase 6's handoff, with the live command, D246's two runs and D343 (design
    `artifacts/visual/` and its list out of the repo before anything runs again.
 
 Screenshots land under `artifacts/visual/phase-7a/{scripted,real-window,timings}`. 7b makes its own
-references on `master` once 7a is merged, if its checks change earlier pictures in many places.
+references on `master` once 7a is merged, if its checks change earlier pictures in many places. For
+the real-window files, 7a's counted round's copy
+(`D:/Projects/Personal/phase7a-work/gate/round-a2c312a/`, "State of the repo") is 7b's reference, as
+phase 6's gate's files were 7a's, beside `D:/Projects/Personal/gate7a-reference/`.
 
 ## What changed in the code
 
 architecture.md describes each part under the section named here; this table says where to start.
 Unless a project is named, a path is in `src/VisualCommit.Hosting/` in the first four rows and in
 the avatars' row after its semicolon, and in `src/VisualCommit.App/` elsewhere
-(`RepositoryOperations.*` and `OperationTexts.*` in its `ViewModels/Operations/`).
+(`RepositoryOperations.*` and `OperationTexts.*` in its `ViewModels/Operations/`). A project's name
+before a path (Core, Git, AskPass) puts it in that project's folder: Core `Git/UrlRewrites.cs` is
+`src/VisualCommit.Core/Git/UrlRewrites.cs`.
 
 | To do this | Start here |
 |---|---|
@@ -249,7 +267,7 @@ the avatars' row after its semicolon, and in `src/VisualCommit.App/` elsewhere
 | GitHub's REST API | `GitHub/GitHubProvider.cs` (A1 to A6, `Recognise`, `SourceCanExist`), `GitHub/GitHubClient.cs` (one request at a time, kept answers, redirects, paging, classification), `GitHub/GitHubUrls.cs`, `GitHub/GitHubJson.cs`, `GitHub/GitHubApi.cs` (the pinned version) |
 | The session, the account and a tab's hosting | `IHostingSession.cs` (`IHostingSession`, `IRepositoryHosting`, `HostingRemoteOrder`, `NullHostingSession`), `HostingSession.cs`, `JsonAccountStore.cs` (`accounts.json`, `AccountsFile.GitHubOn`), `RepositoryHosting.cs`; the App's `AppSession.cs` (`AppSession.Start`, `HostingStarted`), `TabServices.Hosting`, `RepositoryViewModel.Hosting.cs`. Section "Hosting: the session and the account" |
 | Tokens and the keychains | `Tokens/`: `ITokenStore.cs` (`TokenKey`, `ITokenStore`, `TokenStores`, `MemoryTokenStore`), `WindowsCredentialStore.cs` with `WindowsCredentialNative.cs`, `MacKeychainStore.cs` with `TokenProcessRunner.cs`, `SecretServiceStore.cs` with `SecretServiceAddress.cs` and `SecretServiceCalls.cs`, `TokenEntryNames.cs`, `TokenStoreReasons.cs`, `TokenVault.cs`; CI's keychain steps in `.github/workflows/ci.yml`; `scripts/setup-linux.sh` (dbus, gnome-keyring). Section "Tokens and the keychains" |
-| The token reaching git | Core `Operations/CredentialBinding.cs` (`CredentialBinding.Select`, D278; `IGitCredentialSource`), `Git/UrlRewrites.cs`, `Git/RemoteUrl.cs`; AskPass `CredentialMode.cs` and `AskPassProtocol.cs` (`--vc-credential`); Git `Prompts/AskPassBroker.cs` (the three `GIT_CONFIG_COUNT` pairs per binding, D340; `GIT_CONFIG_PARAMETERS` removed, D329; the keeper instance on macOS and Linux); the push guard's `RefuseIfPushStopsFetchAsync` in `RepositoryOperations.Remotes.cs`; a bulk run's kept answers keyed by account in `Services/PromptDialogs.cs` (ruling 9). Section "The account's credentials in git" |
+| The token reaching git | Core `Operations/CredentialBinding.cs` (`CredentialBinding.Select`, D278; `IGitCredentialSource`), Core `Git/UrlRewrites.cs` and Core `Git/RemoteUrl.cs`; AskPass `CredentialMode.cs` and `AskPassProtocol.cs` (`--vc-credential`); Git `Prompts/AskPassBroker.cs` (the three `GIT_CONFIG_COUNT` pairs per binding, D340; `GIT_CONFIG_PARAMETERS` removed, D329; the keeper instance on macOS and Linux); the push guard's `RefuseIfPushStopsFetchAsync` in `RepositoryOperations.Remotes.cs`; a bulk run's kept answers keyed by account in `Services/PromptDialogs.cs` (the design's ruling 9). Section "The account's credentials in git" |
 | Sign-in and the Accounts section | `ViewModels/Settings/AccountsSettingsViewModel.cs`, `ViewModels/Dialogs/SignInDialogViewModel.cs`, `Views/Dialogs/SignInDialogView.axaml`, the settings screen's `SettingsAccounts` in `Views/Dialogs/SettingsDialogView.axaml`, the window's entry in `MainWindowViewModel.Hosting.cs`, `AccountTexts` in `OperationTexts.Hosting.Accounts.cs` |
 | Browse and clone | `ViewModels/Dialogs/CloneFromGitHubDialogViewModel.cs`, `Views/Dialogs/CloneFromGitHubDialogView.axaml`, the clone form's "From GitHub…" on the welcome page (`WelcomeViewModel.cs`, `Views/Shell/WelcomeView.axaml`), `AppCommand.CloneFromGitHub` (`ViewModels/Commands/AppCommands.Palette.cs`, D299), `CloneTexts`; `ViewModels/Hosting/HostingTexts.Describe.cs` (D338), the one wording of GitHub's failures. Section "Clone from GitHub" |
 | The pull requests' section, menus and checkout | `ViewModels/Panels/PullRequestRows.cs`, `LeftPanelViewModel.cs` and `.Actions.cs`, `Views/Shell/LeftPanelView.axaml` (the section and the branch rows' `#n`), `ViewModels/Menus/RepositoryMenus.Hosting.cs`, `ViewModels/Hosting/PullRequestCheckout.cs`, `RepositoryOperations.PullRequests.cs`, Git `GitRepository.PullRequests.cs` (the fetch into `FETCH_HEAD`, D305). Section "Pull requests" |
@@ -302,12 +320,12 @@ Rules worth keeping:
 | What | Decision |
 |---|---|
 | Phase 7 split into 7a and 7b; the phase planned within the weekly allowance | D241 |
-| How the phase was built: bounded agents with self-contained briefs, a design of about 150 to 200 KB (7a's grew to about 345 KB, accepted by the lead: status.md's Notes), checks written per part, test classes during the build and whole runs through the lock, D246's real-window rounds, inspectors' batches | D242 to D247 |
+| How the phase was built: bounded agents with self-contained briefs, a design of about 150 to 200 KB (7a's was about 345 KB before its as-built sections 16 to 21, the size the lead accepted on 2026-10-29, and is about 431 KB with them), checks written per part, test classes during the build and whole runs through the lock, D246's real-window rounds, inspectors' batches | D242 to D247 |
 | Sign-in by a personal access token, no device flow; a fake of GitHub's API in the default run and CI and an opt-in live command; the list in the left panel's section with a menu (amends D92); avatars from GitHub only; the session where no keychain can be reached; github.com only; one account | D249 to D253, D258, D263, D307 |
 | Accounts in the settings screen acting at once (an exception to D216); no request to GitHub while signed out; "From GitHub…" only while signed in | D256, D257, D261, D302 |
-| The app's own credential helper for github.com in place of the user's helpers (an exception to Q5), bound only on git 2.31 and later (ruling 3's fallback withdrawn), with `GIT_CONFIG_PARAMETERS` removed in a bound scope, `erase` marking the account only after `GET /user` answers 401, clones bound after `insteadOf`, dashboard rows bound as tabs | D255, D273 to D278, D329 to D332 |
+| The app's own credential helper for github.com in place of the user's helpers (an exception to Q5), bound only on git 2.31 and later (the fallback of the design's ruling 3 withdrawn), with `GIT_CONFIG_PARAMETERS` removed in a bound scope, `erase` marking the account only after `GET /user` answers 401, clones bound after `insteadOf`, dashboard rows bound as tabs | D255, D273 to D278, D329 to D332 |
 | From git 2.46 on, `http.<url>.proactiveAuth=basic` per binding, so no netrc answers before the app's helper | D340 |
-| The push guard counts `refs/pull/<digits>/head` on a GitHub remote, recognised by its configured URL; the prompt group keyed by account | D279; rulings 8 and 9 (design 0.2) |
+| The push guard counts `refs/pull/<digits>/head` on a GitHub remote, recognised by its configured URL; the prompt group keyed by account | D279; the design's rulings 8 and 9 (design 0.2) |
 | The first package: W1, S8, R8 (the lag local only) and G23's split | D254, D262, D264, D280 to D283 |
 | The harness: port 47395 (amends D97, as D150, D229 and D238 did); the fake as `AuthRemoteServer`'s host mode; the six app-starting classes in `VisualCommit.Hosting.Tests`; camelCase JSON; Windows' real store tried on CI | D265 to D267, D333, D334, D336 |
 | The live command at the gate before the pictures and on the counted round, a fix to its project alone re-running only it (extends D246); CI's Windows job builds it, never runs it | D328, D335, D337 |
@@ -321,24 +339,25 @@ Rules worth keeping:
 
 | Issue | How much it matters | Where |
 |---|---|---|
-| A bound tab whose account the session refuses through the API, or signs out of, after an operation bound its git calls and before git's credential request shows git's "Sign in to <host>" dialog, where ruling 9 has a bound repository never prompt | Low; a window of under about a second; the user can cancel. For the owner | plan risk 39, design 19.8, D273, D340 |
+| A bound tab whose account the session refuses through the API, or signs out of, after an operation bound its git calls and before git's credential request shows git's "Sign in to <host>" dialog, where the design's ruling 9 has a bound repository never prompt | Low; a window of under about a second; the user can cancel. For the owner | plan risk 39, design 19.8, D273, D340 |
 | A refresh that straddles a terminal merge's index shows "Conflicts resolved: commit to finish the merge." for about 0.3 s and one refresh, Continue enabled (git refuses to commit). Besides, a stop whose message tidies to nothing reads it at every status (one `git config --get core.commentChar` each) | Cosmetic, brief; removing it needs a status read before and after; for the owner to weigh | plan risk 40, design 21 item 4 |
 | A user's netrc answers a bound call before the app's helper on git 2.31 to 2.45 (the containers' 2.43 among them); git-lfs asks HOME's netrc first on every version | Low; whether the Accounts section says so is open | plan risk 35, design 19.4 |
 | A fork whose renamed parent is reached through an `upstream` remote under the old name is not mapped (badges, checkout and the create form's base can miss); a transfer to another owner is not in the fake | Low until a report | plan risk 36, design 19.2 |
 | Test runners outside TempRepo's and a session's environment still see the machine's HOME, so a machine netrc entry for 127.0.0.1 could answer their loopback calls | Only on a machine with such an entry | plan risk 37 |
 | GitHub answers an unknown SHA beside `author` with an empty 500; such an address is asked again at every run, and 20 of them at the head of the newest-first list keep the later authors waiting | Low; the live command's probes show a change of GitHub's | plan risk 38, design 20.3, 20.6 |
-| macOS's token item, made by `/usr/bin/security`, can be read by any process of the user without a prompt | Accepted until phase 8 signs the app | plan risk 34, ruling 20 |
+| macOS's token item, made by `/usr/bin/security`, can be read by any process of the user without a prompt | Accepted until phase 8 signs the app | plan risk 34, the design's ruling 20 |
 | No run uses a real keychain in the app's own process: a sign-in kept across a real restart, macOS's locked-keychain prompt and the Secret Service's prompts on a Linux desktop are tried by no machine; Linux providers other than gnome-keyring are untried | Until phase 8's checks by hand | plan risk 41, design 3.9, 0.5 |
 | Local operations in a bound tab keep an inherited `GIT_CONFIG_PARAMETERS`; a hook or git-lfs filter they run asks the user's helpers in D82's order | By design (only network operations carry bindings) | design 19.4's git-2 |
 | An exit of the process during a sign-out's keychain delete can leave the record and its entry, or `avatars/` without a record; a sign-out in a run whose keychain probe found none leaves the entry, which a Warning names for removal by hand; a losing overlapping avatar decode is disposed, but no test produces it | Rare | design 19.2's life-1 and tokens-1, 19.3's leak-2 |
 | Not measured on GitHub: the empty repository's 409, a retired version's status, the `ServerError` fault's body, a repository the token cannot read answering a lookup 404, git with a select-only token on a public repository outside its selection (the fake's are from memory, marked so); the create form's "any other 422" arm is untested | Low | plan risk 42, design 20.1, 20.8, 15 point 1, 17.13 |
 | After "Choose" closes the repository browser no control of the clone form has the focus; a loading diff takes the focus when its text arrives | Keyboard users; phase 8's keyboard pass | design 17.5, 17.11 |
-| Cosmetic notes of the inspections: `g02a`'s tooltip wraps after a hyphen; the badge's 1-px strokes on fractional x draw as two half-intensity pixels; `#1`'s title starts 2 px left of the others; the create form's card grows with its note and error line | Cosmetic | status.md's Notes (WP-V's and WP-N's merges) |
+| Cosmetic notes of the inspections: `g02a`'s tooltip wraps after a hyphen; the badge's 1-px strokes on fractional x draw as two half-intensity pixels; `#1`'s title starts 2 px left of the others; the create form's card grows with its note and error line | Cosmetic | the inspections of WP-V's merge run (on `adc2a3a`, after the merge `8810136`; design 11.6) and of WP-N's (on `93e3410`; design 12.9), noted in the Notes of `git show origin/phase/7a-hosting-github:docs/status.md` |
 | Undo is enabled after a create that pushed, from the push's entry; the create itself is not undone | By design | D314, the report's open point 54 |
-| When the walk-through's classes run side by side, one may serve the fake on a free port instead of 47395 (`b06a` showed 59807 once) | Expected variance in a later comparison | status.md's Notes, D265 |
+| When the walk-through's classes run side by side, one may serve the fake on a free port instead of 47395 (`ServeHostingAsync`'s fallback, `PortWasTaken`), so `b06a`'s clone URL shows another port: 59807 at WP-V's merge, 54297 in the counted round, 50098 in CI's macOS job on the gate's commit | Ordinary: a comparison expects `b06a`'s port to vary | D265; the report's "Run" (the fourth default run) and "Other platforms" |
 | Kept undo chains of 30 to 40 s in `VisualCommit.Git.Tests` and `VisualCommit.App.Tests` (`UndoStepBranchTests`, `UndoStepFileTests`, `UndoStepTests`, `UndoRecordingTests`) lie near the watchdog's 180 s under load; no split shortens them | D343 keeps them off the limit on the laptop; a stop again is the owner's call | plan risk 12, D237, D264 |
 | Phase 1's in-memory layout of 100k commits took 2,620 ms against its 2 s once under the run's load (WP-B's merge run), and passed alone three times | A flaky timing under load | `GraphLayoutTests`; plan risk 12 |
 | The run time: the default run 1 h 12 min 18 s for 5,952 tests at four projects (the counted round; the third run on `391f7f2`: 1 h 8 min 39 s, 5,950 tests), the real-window pass 31 min 6 s for 72 checks; CI's Test steps during the phase up to 35 min 21 s on Windows (`8810136`) and 37 min 57 s on macOS (`fdb1986`), against D232's 55 and the 44 at which the lead raises it | Every full run, the gate and CI | plan risks 8, 12, 18; D232, D343 |
+| `scripts/heavy-run.sh`'s header comment (its line 4) still says the default run takes about 55 minutes on the laptop; at 7a's gate it took 1 h 12 min 18 s, four projects at once (D343) | A stale comment; a script, so after the Gate commit it waits for 7b's first code commit | `scripts/heavy-run.sh` |
 | Q1 within the counted pass: 1,400 ms after a 10-minute rest; 2,456 ms in the round's first pass at 02:18, while other programs' scheduled tasks ran | A hot or busy laptop fails a gate by itself: run the pass rested and away from the night's scheduled tasks | plan risk 10; the report's "Found by the gate" item 5 |
 | Phase 6's known issues still stand, but for the wheel test, the csproj's comment, the timing script, the push guard's `pr/*` refusal and the prompt group, which 7a fixed | As there | [phase 6's handoff](phase-6.md) |
 
@@ -403,23 +422,53 @@ Reuse:
 
 Do first:
 
-1. The start-of-session steps; read plan.md's phase 7b and its risks 4 and 5, 34 to 42, 8, 10, 12,
-   18, 22 and 26; the Known issues above and phase 6's; CI's run on `master` after the merge.
+1. The start-of-session steps. CLAUDE.md's step 4 names `architecture.md` and `decisions.md` whole
+   (about 622 and 262 KB; whether to read them by an index instead, the review's P6, is the owner's,
+   status.md's "Waiting on the owner"). What 7b needs of them, about 255 KB in the sections named
+   and 93 KB (D241 to D343 alone about 74): in
+   `architecture.md` "Design", "Solution layout", the opening of "As built (after phase 7a)",
+   "Start-up and composition", "Phase 7a's repository members", "Prompts and credentials" with "The
+   account's credentials in git", "The settings screen", "Hosting: the provider and GitHub's API",
+   "Hosting: the session and the account", "Hosting: a repository's pull requests and avatars",
+   "Tokens and the keychains", "Clone from GitHub", "Pull requests", "Tests", "The fake of GitHub",
+   "The live command" and "CI", and the parts of other sections that name phase 7a or GitHub; in
+   `decisions.md` D241 to D343 and the decisions that plan.md's
+   phase 7b and this handoff cite, any other looked up by its number where a section cites it.
+   Then plan.md's phase 7b and its risks 4 and 5, 34 to 42, 8, 10, 12, 18, 22 and 26; the Known
+   issues above and phase 6's; CI's run on `master` after the merge. On the Windows machine push
+   with `git -c credential.helper= -c 'credential.helper=!gh auth git-credential' push -u origin <branch>`
+   (later pushes without `-u`; `master` the same way) until the owner settles Git Credential
+   Manager: since git 2.56 its system setting opens a sign-in window on a plain `git push`, which
+   then waits (Things that cost time; status.md's "Waiting on the owner").
 2. Before the design, the owner's answers, each recorded as a decision and carried into plan.md and
    requirements.md (status.md's "Waiting on the owner" says Azure DevOps' and GitLab's accounts and
    sign-in are asked then): sign-in and test accounts or tokens for Azure DevOps and GitLab (risks 4
    and 5), and whether each gets a live command; and the questions 7a's decisions leave open for 7b:
    avatars, which D252 and O4 give to GitHub only while plan.md's 7b lists "author avatars, as 7a
-   built them for GitHub"; how a self-hosted GitLab's host is given and recognised, where 7a knows
-   one fixed host per provider (D258, `HostingOptions`); whether D263's one account is one per
-   provider or one in all; D255's exception to Q5 and D257's "no request signed out" for the new
-   hosts.
+   built them for GitHub"; whether self-hosted GitLab is in scope, which plan.md's 7b includes while
+   requirements.md's providers line names GitLab alone, and if so how its host is given and
+   recognised, where 7a knows one fixed host per provider (D258, `HostingOptions`); which Azure
+   DevOps hosts are in scope (dev.azure.com, the older `*.visualstudio.com`, Azure DevOps Server on
+   premises); whether D263's one account is one per provider or one in all; D255's exception to Q5
+   and D257's "no request signed out" for the new hosts; whether GitLab's screens say "merge
+   request"; how 7a's GitHub-worded screens and commands ("Add GitHub account", "Sign in to
+   GitHub…", "From GitHub…", "Clone from GitHub…", the Accounts section's rows) take the new
+   providers, which changes 7a's pictures (risk 32); and where 7b's live checks and their variables
+   live, since D335's exception for the live command's project (CLAUDE.md's "Phase N accepted" row
+   and closing step 6) names only `tests/VisualCommit.LiveHostingTests`.
 3. Check that no worktree, `wip/*` branch or fsmonitor daemon is left and that C: and D: have room.
    A baseline whole run only as D245 allows (the machine changed, or code not pushed), through
    `bash scripts/heavy-run.sh`.
 4. The design: 7a's is the model (sections 0 and 1, then a brief per package); keep within D243's
-   size where the scope allows, and split 7b per provider if its design outgrows a week of the
-   allowance (plan.md's phase 7b, D241). Estimate what it adds to the default run
+   size (150 to 200 KB) where the scope allows (7a's design was about 345 KB before its as-built
+   sections 16 to 21 and is about 431 KB with them), and split 7b per
+   provider if its design outgrows a week of the allowance (plan.md's phase 7b, D241), judged from
+   the share the owner gives (plan.md's Workflow): such a split is a decision that amends D241 and
+   names the phases and their branches, with CLAUDE.md's counting of the phases ("Start of every
+   session", step 5) changed in the same commit. D262's lagged runs at each wave's merge take a
+   list of tests: 7a's is design 0.4 with 16.1's extra class, which names neither 7b's walk-through
+   nor its app-starting classes; 7b's design names its own list, as 7a's design 0.4 did.
+   Estimate what it adds to the default run
    (1 h 12 min 18 s for 5,952 tests at four projects at 7a's gate) and to the real-window pass (31
    min 6 s for 72 checks) before writing the checks.
 
@@ -430,7 +479,9 @@ Risks to watch:
   at which the lead raises D232's limit.
 - The kept undo chains near the watchdog (Known issues) and Q1 on a warm laptop (risk 10).
 - Git's versions (risk 26): D340 holds from 2.46 only, and the containers' 2.43 runs the older
-  branches.
+  branches; since 2026-10-29 no CI job runs 2.55 (no run of 7a did; `ubuntu-latest` runs 2.56.0),
+  so only the
+  containers' 2.43 differs from 2.56.
 - The prompt channel on macOS and Linux (design 16.11), which every provider's credentials go
   through, and the real keychains, which only CI's steps touch (D270).
 - Risks 34 to 42; the live token expires on 2026-11-29.
@@ -449,7 +500,8 @@ Risks to watch:
   and the questions under "Do first", step 2. The live command's token for GitHub expires on
   2026-11-29; a later live run needs a new one.
 - **Decisions made during 7a without the owner**, which the owner may want to look at: the design's
-  D265 to D338 beyond the eight questions the owner answered on 2026-10-29 (status.md lists them);
+  D265 to D338 beyond the eight questions the owner answered on 2026-10-29 (their reasons in
+  decisions.md say so: D277, D291 with D311, D296, D299, D313, D317, D321 and D335);
   D339 to D341 from the review and the runs after it, and D342 from the live run; and the lead's
   rulings in the design's sections 16 to 21 and the report.
 - **When you have a Mac at hand**: the eight-step checklist at the end of the
