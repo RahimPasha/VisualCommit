@@ -158,20 +158,30 @@ Checks, live trial and review:
 
 Closing (`CLAUDE.md`, "Closing a phase"):
 
-- [ ] 18. The visual test gate: the scripted walk-through's pictures on this machine, then the new
+- [x] 18. The visual test gate: the scripted walk-through's pictures on this machine, then the new
   real-window checks twice on their own with the owner told and present (D246); `dotnet test` and
   the real-window pass on one commit; every picture inspected, in batches of at most about 150
-  (D247); `docs/test-reports/phase-7a.md` completed.
+  (D247); `docs/test-reports/phase-7a.md` completed. (Done 2026-10-31: the counted round's default
+  run on `a9d02c1`'s code passed 5,948 of 5,952 (4 skipped) in 1 h 12 min 18 s; the real-window
+  pass on `a2c312a`, which changes only the real-window harness (D246), 72 of 72 in 31 min 6 s, Q1
+  1,400 ms; the live command 112 of 112; 16 Opus inspectors passed all 1,432 files of
+  `docs/test-reports/phase-7a-pictures.sha256` and 45 of CI's pictures; the report's "Run", "Found
+  by the gate" items 1 to 5 and design 21 give the rounds.)
 - [x] 19. `docs/architecture.md` describes what is built. (Done 2026-10-30, before the gate: four
   Opus writers by area, one integrator, four reviewers each checking an area it did not write
   against the code, one fixer; "As built (after phase 7a)". Three passages say what holds before the
   gate and are found by "phase 7a's gate": the fake's texts not yet checked against GitHub, the live
   command run only without its variables, 7a's real-window part not yet run; the gate's session
   brings them up to date.)
-- [ ] 20. `docs/plan.md`: what 7a did not deliver moved to the phase that owns it; risks updated.
-- [ ] 21. `docs/handoffs/phase-7a.md` written from the template.
+- [x] 20. `docs/plan.md`: what 7a did not deliver moved to the phase that owns it; risks updated.
+  (Done 2026-10-31: 7a's outcome, phase 8's five "From phase 7a" items, 7b's open questions, the
+  backlog, risks 4 to 39 updated and 40 to 42 new; drafted by an Opus agent, checked by another,
+  corrected, and filled in after the gate.)
+- [x] 21. `docs/handoffs/phase-7a.md` written from the template. (Done 2026-10-31: drafted by an
+  Opus agent, checked by another against its sources, corrected, and filled in after the gate.)
 - [ ] 22. Cold-read check by a fresh agent; every gap fixed.
-- [ ] 23. The CI run of the gate's commit read, with each job's result.
+- [x] 23. The CI run of the gate's commit read, with each job's result. (Done 2026-10-31: run
+  41190572421 on `47506ca`, the gate's commit `a2c312a`: all five jobs green; the CI section.)
 - [ ] 24. `docs/status.md`: links, the CI run, the "Gate commit", and "Awaiting acceptance" only if
   the whole gate passed; the owner told what passed and what needs a decision.
 
@@ -645,17 +655,20 @@ skipped, 1 h 12 min 18 s; CI's run 41181591519 green on all five jobs), and its 
 the owner told, 70 of 72: W1 met the harness reading a closing dialog's title, now read through
 `RealApp.TitleOf`, and Q1 measured 2,456 ms while other programs' scheduled tasks ran at 2 am (the
 report's "Found by the gate", item 5); the round's files are kept in `phase7a-work/gate/round-a9d02c1/`.
-By D246 only the pass ran again, on `a2c312a` (the branch at `47506ca`), after a 10-minute rest, the
-owner told: 72 of 72 in 31 min 6 s, Q1 1,400 ms; every scripted picture of the round's list was the
-same file, and the new list (1,432 files) was written at once; the live command then passed 112 of 112
-(the report's "Run" and "Live command", run 3); CI's run 41190572421 on it is green on all five jobs.
-The round's files are in `phase7a-work/gate/round-a2c312a/`, the comparison with the references in
-`compare-a2c312a/` (899 the same file, 430 changed, 103 new) and CI's macOS and Linux pictures in
-`ci-41190572421/`. Next: the inspection (step 6; D247), 16 Opus inspectors on the batches in
-`phase7a-work/gate/inspection/` (7a's scripted pictures by part, its real-window files, phases 0 to
-6's scripted and real-window files against the references, 45 of CI's pictures), each picture not
-passed checked by a skeptic; then the list `docs/test-reports/phase-7a-pictures.sha256` committed,
-the report's results filled in, and closing steps 22 to 24 (the gate's commit `a2c312a`). Each of
+The counted round passed: by D246 only the pass ran again, on `a2c312a` (the branch at `47506ca`),
+after a 10-minute rest, the owner told: 72 of 72 in 31 min 6 s, Q1 1,400 ms; every scripted picture of
+the round's list was the same file, and the new list (1,432 files) was written at once; the live command
+then passed 112 of 112 (the report's "Run" and "Live command", run 3); CI's run 41190572421 on it is
+green on all five jobs. 16 Opus inspectors opened every file of the list and 45 of CI's pictures, in
+batches of at most 150 (D247), and passed every one; the report's Checks table reads Pass in every
+check's Scripted column and the eleven repeated checks' Real window column. The round's files are in
+`phase7a-work/gate/round-a2c312a/`, the comparison in `compare-a2c312a/`, CI's pictures in
+`ci-41190572421/` and the inspection's batches, scratch and result in `inspection/`. Steps 18, 20 and
+21 are done, and `docs/architecture.md`, the plan, the handoff and CLAUDE.md carry the gate's numbers.
+Next: closing step 22, the cold-read check (a fresh Opus agent given only the repo, told that 7a is
+accepted and merged; every gap it hits fixed in the docs), then step 23 (CI's run of the gate's commit
+`a2c312a`, 41190572421, read: done, all five jobs green) and step 24 (status: the Gate commit
+`a2c312a`, "Awaiting acceptance", the owner told). Each of
 parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to

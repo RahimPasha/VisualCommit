@@ -5357,3 +5357,16 @@ runs and their counts.
      so it is left for the owner to weigh (the handoff).
    Fixed in `a9d02c1`; both new tests failed on the old code and pass on the new, the held rebase's
    three times more on the laptop.
+5. **The counted round** (2026-10-31; the report's "Run", "Found by the gate" item 5). The default
+   run on `a9d02c1`'s code passed 5,948 of 5,952 in 1 h 12 min 18 s at four projects. Its first
+   real-window pass, at 02:18, failed two of 72: W1's wait for the folder dialog to close read the
+   title of each of the app's modal windows, and the closing dialog no longer gave its name, so
+   FlaUI threw `PropertyNotSupportedException` (`RealApp.TitleOf` now reads a title as the token
+   check reads names, null for a window that gives none or is gone, `a2c312a`); and Q1 measured
+   2,456 ms while other programs' scheduled tasks ran (Disk Cleanup, Office's and Visual Studio's
+   updates, Zoom's updater), risk 10's warm or busy laptop. By D246 only the pass ran again, on
+   `a2c312a` at 03:04 after a rest: 72 of 72 in 31 min 6 s, Q1 1,400 ms. The live command then passed
+   112 of 112, and 16 Opus inspectors opened every one of the list's 1,432 files and 45 of CI's
+   pictures (two real-window batches judged their changes against the references by a pixel count
+   inside the comparison's boxes and by sheets of those boxes): all passed. The Gate commit is
+   `a2c312a`; CI's run 41190572421 on it is green on all five jobs.

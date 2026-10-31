@@ -38,8 +38,10 @@ is the longer form of this table.
 
 The plan's "Done when": sign-in, clone, the list and a create work for GitHub against the fake (A,
 B, P and N) and against real GitHub (the live command's `Check_2` signs in, clones, lists and
-creates a draft, which it closes again); the visual gate:
-<TO FILL AT THE GATE'S END: passed on which commit, in which round>.
+creates a draft, which it closes again); the visual gate passed on its fourth counted round: the
+default run on `a9d02c1`'s code and the real-window pass on `a2c312a`, which changes only the
+real-window harness (D246), with every one of its 1,432 files and 45 of CI's pictures inspected
+(the report's "Run").
 
 Not delivered, and where each item went:
 
@@ -67,9 +69,10 @@ Not delivered, and where each item went:
 ## State of the repo
 
 Branch `phase/7a-hosting-github`, started on 2026-10-28 from `master` at `5fe9148` and built on the
-Windows machine to 2026-10-31. The last commit that changes code is `a9d02c1` (2026-10-31); the
-branch's head at this writing is `8dd323d`, which changes docs only.
-<TO FILL AT THE GATE'S END: the branch's last commit, the number of commits on top of `5fe9148`, and the Gate commit>.
+Windows machine to 2026-10-31. The Gate commit is `a2c312a` (2026-10-31; the real-window harness's
+`TitleOf` on top of `a9d02c1`, the last commit that changes the app or its other tests), 262
+commits on top of `5fe9148` (238 without the merges); every commit after it changes docs only, the
+last one the one that sets the phase to "Awaiting acceptance" (status.md).
 
 Before the merges: L1 `f1dc80e` and WP0 `d3cd314` to `8bfdd6b`, commits on the branch. The merges
 (`git log --oneline --merges phase/7a-hosting-github ^master`): wave 1 WP-K `2582e53`, WP-F
@@ -80,12 +83,17 @@ fix `ccd1ebe`, WP-V `8810136`, the macOS races `33313ef`, G1's fix `5219eae`, WP
 `5c20ee6` and `c6491cb`. Between the fixers and the live run: `1d297a0` (two test races, part P's
 `End`), `745ce9a` (D341) and `7015753` (the create test's fence). After the live run: `f926b86` and
 `a140017`, the gate's splits `939e9fa` to `377d354`, Check_N `723f2d3`, D343 `391f7f2` and the torn
-reads `a9d02c1`; status.md's Progress names the rest. Merged into `master`:
-<TO FILL AT THE GATE'S END: merge>.
+reads `a9d02c1`, the real-window harness's `TitleOf` `a2c312a`; status.md's Progress names the
+rest. Merged into `master`: not yet, awaiting the owner's acceptance ("Phase 7a accepted" merges
+it with `--no-ff`).
 
-- **Default run, counted round** (`a9d02c1`'s code):
-  <TO FILL AT THE GATE'S END: date, tests passed of how many and skipped, time, each project's end>.
-  The round's third run before it, on
+- **Default run, counted round** (`a9d02c1`'s code): 2026-10-31, 00:51 to 02:06, after a 10-minute
+  rest, at most four projects at once (D343): 5,948 of 5,952 passed and 4 were skipped in 1 h 12 min
+  18 s (4,486 s with the build); the projects ended after: `VisualCommit.Hosting.Tests` 12 min 44 s,
+  phase 7a's walk-through 14 min 2 s, phases 0 to 2's 24 min 4 s, phase 6's 30 min 50 s,
+  `VisualCommit.Git.Tests` 41 min 5 s, phase 5's 43 min 25 s, part L's 46 min 35 s, phase 4's 58 min
+  29 s, phase 5's undo walk-through 59 min 0 s, phase 3's 69 min 38 s and `VisualCommit.App.Tests`
+  72 min 15 s (59 min 31 s of its own). The round's third run before it, on
   `391f7f2` (2026-10-30, 22:41 to 23:51, rested, at most four projects at once, D343): 5,946 of
   5,950 passed and 4 were skipped (the three real keychains' tests and
   `WindowsCredentialStoreTests`' Off-Windows test, D270) in 1 h 8 min 39 s; the projects ended
@@ -99,22 +107,37 @@ reads `a9d02c1`; status.md's Progress names the rest. Merged into `master`:
 - **Real-window pass**: D246's two runs of `Phase7aRealWindowPass` (5 methods, one launch per part,
   D319), the owner present: 4 of 5 on `8271c8e` (Check_N, "Found by the gate" item 3), then 5 of 5
   on `723f2d3` in 2 min 55 s (3 min 17 s with its build), every capture within 1.15 percent of its
-  scripted twin (2.59 compared in place only; the limit is 3). The whole pass on the counted round:
-  <TO FILL AT THE GATE'S END: tests passed, time with and without its build, Q1 within the pass, the largest difference of a capture from its twin>.
+  scripted twin (2.59 compared in place only; the limit is 3). The whole pass on the counted round,
+  on `a2c312a` (2026-10-31, 03:04 to 03:36, after a 10-minute rest): 72 of 72 in 31 min 6 s (1,920 s
+  with its build), Q1 1,400 ms, 185 captures compared, each within 2.35 percent of its twin (phase
+  5's `a2f-log-closed-page-kept`; phase 7a's nine within 1.15). The round's first pass, on `a9d02c1`
+  at 02:18, passed 70 of 72 ("Found by the gate" item 5): W1 met the harness reading a closing
+  dialog's title (`a2c312a`), and Q1 measured 2,456 ms while other programs' scheduled tasks ran.
   Phase 6's gate: 67 in 27 min 39 s; design 0.6 estimated 31 to 33 minutes.
 - **Pictures**: 7a's walk-through (classes `Phase7aChecksA`, `B`, `P`, `G`, `N`: 27 check methods
   and about 20 classes of expectation, view-model, menu and view tests, 205 tests in 3 min 9 s on
-  `a140017`) saves 85 scripted pictures. `docs/test-reports/phase-7a-pictures.sha256`:
-  <TO FILL AT THE GATE'S END: the number of files (scripted, real-window, difference pictures) by phase, the inspectors and their batches, what they found>.
+  `a140017`) saves 85 scripted pictures. `docs/test-reports/phase-7a-pictures.sha256` lists 1,432
+  files: 1,057 scripted (phases 0 to 7a: 14, 43, 66, 265, 122, 264, 198 and 85) and 375 real-window
+  ones, 190 captures and 185 difference pictures (8, 30, 26, 90, 56, 96, 51 and 18). 16 Opus
+  inspectors judged them in batches of at most 150 (D247), with 45 of CI's pictures: every one
+  passed (the report's "Run"; workflow `wnj6v5kts`).
   The references for the earlier pictures are in `D:/Projects/Personal/gate7a-reference/` (outside the repo; status.md's Notes).
 - **Live command**: run 1 (step 16, `0ffbcc2`'s build of `7015753`'s code) 80 of 80 in 33 s; run 2,
   the gate's run before its pictures (`f926b86`), 112 of 112 in 63 s with its build, every probe
-  "the fake: same". The counted round's run: <TO FILL AT THE GATE'S END: commit, result, findings>.
-- **CI**: the last run recorded is 41172878322 on `391f7f2`: its first attempt failed two tests on
-  `windows-latest` ("Found by the gate" item 4, fixed in `a9d02c1`), the other four jobs passed, and
-  the Windows job passed on attempt 2 (Test step 31 min 56 s of 55). The run of the gate's commit:
-  <TO FILL AT THE GATE'S END: run link, each job's result, time and Test step, the keychain steps>.
-- **Gate**: <TO FILL AT THE GATE'S END: passed or not; what could not run>. The real window at
+  "the fake: same". The counted round's run, on `a2c312a`: 112 of 112 in 29.9 s (46 s with its
+  build), draft #3 made and removed, every probe "the fake: same" (the report's "Live command",
+  run 3).
+- **CI**: the run of the gate's commit is
+  [41190572421](https://github.com/RahimPasha/VisualCommit/actions/runs/41190572421), on `47506ca`:
+  all five jobs green, Windows 5,952 tests with 4 skipped and the others 5,949 with 3:
+  `windows-latest` 24 min 6 s (Test step 21 min 48 s of 55), `macos-latest` 34 min 11 s (32 min 16
+  s), `ubuntu-latest` 6 min 26 s (4 min 54 s), the containers 6 min 28 s and 6 min 6 s (4 min 43 s
+  and 4 min 21 s); every keychain step green (the Credential Manager's, macOS's and both
+  containers' Secret Service's). Before it, 41172878322 on `391f7f2`: its first attempt failed two
+  tests on `windows-latest` ("Found by the gate" item 4, fixed in `a9d02c1`), and the Windows job
+  passed on attempt 2.
+- **Gate**: passed, both passes in full on the Windows machine and every picture inspected; nothing
+  could not run but what the plan makes conditional. The real window at
   1920×1080 cannot run on this screen, as the plan allows: G3's Author column with its avatars is
   pictured scripted only (design 17.6), and no pass touches a real keychain (design 0.5; CI's
   keychain steps do).
@@ -190,7 +213,7 @@ As in phase 6's handoff, with the live command, D246's two runs and D343 (design
 5. **The counted round**: rest the laptop 10 minutes, `bash scripts/heavy-run.sh` (about 1 h 10
    min), rest, tell the owner, then
    `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release` (never
-   `--no-build`; <TO FILL AT THE GATE'S END: its time>), then at once the list
+   `--no-build`; 31 min 6 s at 7a's gate, 1,920 s with its build), then at once the list
    `find artifacts/visual -name '*.png' | sort | xargs sha256sum > docs/test-reports/phase-7a-pictures.sha256`,
    then the live command again; it writes nothing under `artifacts/visual`.
 6. **Inspection** (D247, batches of at most about 150): 7a's scripted pictures by part against the
@@ -201,8 +224,10 @@ As in phase 6's handoff, with the live command, D246's two runs and D343 (design
    elsewhere; and CI's macOS and Linux pictures of the gate's commit, fetched with
    `gh run download <run id> -D <folder>` (CLAUDE.md), which the report's "Other platforms" names.
    The references are phases 0 to 6's walk-throughs on `master` (`5fe9148`, git 2.56) and phase 6's
-   gate's 364 real-window files (`reference-verdicts.md` there). 7a's gate:
-   <TO FILL AT THE GATE'S END: inspectors, batches, verdicts>.
+   gate's 364 real-window files (`reference-verdicts.md` there). 7a's gate: 16 Opus inspectors
+   (7a's scripted pictures in three batches by part, its real-window files in one, phases 0 to 6's
+   scripted pictures in eight and their real-window files in three, CI's 45 in one), every picture
+   passed, so no skeptic ran; the batch files are in `D:/Projects/Personal/phase7a-work/gate/inspection/`.
 7. **After a fix**: one that changes only `tests/VisualCommit.RealWindowTests` re-runs only the pass
    (D246); one that changes only `tests/VisualCommit.LiveHostingTests` only the live command (D335);
    any other, a correction to the fake among them, starts a new counted round. Copy a round's
@@ -313,8 +338,8 @@ Rules worth keeping:
 | When the walk-through's classes run side by side, one may serve the fake on a free port instead of 47395 (`b06a` showed 59807 once) | Expected variance in a later comparison | status.md's Notes, D265 |
 | Kept undo chains of 30 to 40 s in `VisualCommit.Git.Tests` and `VisualCommit.App.Tests` (`UndoStepBranchTests`, `UndoStepFileTests`, `UndoStepTests`, `UndoRecordingTests`) lie near the watchdog's 180 s under load; no split shortens them | D343 keeps them off the limit on the laptop; a stop again is the owner's call | plan risk 12, D237, D264 |
 | Phase 1's in-memory layout of 100k commits took 2,620 ms against its 2 s once under the run's load (WP-B's merge run), and passed alone three times | A flaky timing under load | `GraphLayoutTests`; plan risk 12 |
-| The run time: the default run <TO FILL AT THE GATE'S END: the counted round's time and tests> (the third run on `391f7f2`: 1 h 8 min 39 s at four projects, 5,950 tests), the real-window pass <TO FILL AT THE GATE'S END: time>; CI's Test steps during the phase up to 35 min 21 s on Windows (`8810136`) and 37 min 57 s on macOS (`fdb1986`), against D232's 55 and the 44 at which the lead raises it | Every full run, the gate and CI | plan risks 8, 12, 18; D232, D343 |
-| Q1 within the counted pass: <TO FILL AT THE GATE'S END: ms> | A hot laptop fails a gate by itself | plan risk 10 |
+| The run time: the default run 1 h 12 min 18 s for 5,952 tests at four projects (the counted round; the third run on `391f7f2`: 1 h 8 min 39 s, 5,950 tests), the real-window pass 31 min 6 s for 72 checks; CI's Test steps during the phase up to 35 min 21 s on Windows (`8810136`) and 37 min 57 s on macOS (`fdb1986`), against D232's 55 and the 44 at which the lead raises it | Every full run, the gate and CI | plan risks 8, 12, 18; D232, D343 |
+| Q1 within the counted pass: 1,400 ms after a 10-minute rest; 2,456 ms in the round's first pass at 02:18, while other programs' scheduled tasks ran | A hot or busy laptop fails a gate by itself: run the pass rested and away from the night's scheduled tasks | plan risk 10; the report's "Found by the gate" item 5 |
 | Phase 6's known issues still stand, but for the wheel test, the csproj's comment, the timing script, the push guard's `pr/*` refusal and the prompt group, which 7a fixed | As there | [phase 6's handoff](phase-6.md) |
 
 ## Things that cost time
@@ -395,9 +420,8 @@ Do first:
 4. The design: 7a's is the model (sections 0 and 1, then a brief per package); keep within D243's
    size where the scope allows, and split 7b per provider if its design outgrows a week of the
    allowance (plan.md's phase 7b, D241). Estimate what it adds to the default run
-   (<TO FILL AT THE GATE'S END: the counted round's time and tests>; the third run on `391f7f2`: 1 h 8
-   min 39 s at four projects, 5,950 tests) and to the real-window pass
-   (<TO FILL AT THE GATE'S END: its time>) before writing the checks.
+   (1 h 12 min 18 s for 5,952 tests at four projects at 7a's gate) and to the real-window pass (31
+   min 6 s for 72 checks) before writing the checks.
 
 Risks to watch:
 
@@ -413,7 +437,9 @@ Risks to watch:
 
 ## Waiting on the owner
 
-- **Acceptance of phase 7a**: <TO FILL AT THE GATE'S END: acceptance>.
+- **Acceptance of phase 7a**: the phase is "Awaiting acceptance" on the Gate commit `a2c312a`;
+  "Phase 7a accepted" merges it into `master`. The macOS checklist in the report is the owner's,
+  by hand on a Mac, whenever one is at hand.
 - **A sign-in dialog in a bound tab** (plan risk 39, design 19.8): should the broker refuse such a
   prompt without a dialog, from what the session knows (amending D273 and D340)?
 - **The banner's brief torn state** (plan risk 40, design 21 item 4): leave it, or have the refresh read the

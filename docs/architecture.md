@@ -5123,7 +5123,10 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   39 s (67 tests). Phase 7a adds two projects, `VisualCommit.VisualTests.Phase7a` and
   `VisualCommit.Hosting.Tests`, so eleven run side by side (D334). The lead's rested whole run on
   `7015753` (2026-10-30, the review's last code commit before the gate) passed 5,891 of 5,895 tests,
-  4 skipped (the keychains' real stores, D270), in 1 h 12 min 6 s.
+  4 skipped (the keychains' real stores, D270), in 1 h 12 min 6 s. Since D343, at phase 7a's gate,
+  the laptop's whole run through `scripts/heavy-run.sh` runs at most four projects at once: the
+  gate's counted run (`a9d02c1`'s code) passed 5,948 of 5,952 in 1 h 12 min 18 s, and the
+  real-window pass of phases 0 to 7a 72 tests in 31 min 6 s (`a2c312a`).
 - **Wait limits** (D341, phase 7a). D237's 60 s applies to every wait of the default run whose
   condition holds only once git, a refresh the watcher starts, a scenario's git or work that slows
   with the machine's load has finished, also where a call site, a helper's default, a field or a
@@ -5288,9 +5291,11 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   Accounts section and the sign-in dialog, the browser's and the left panel's rows) and
   `RealApp.Phase6.Settings.cs` (Accounts in the section list) drive it. Every launch's git
   environment has, since phase 7a, its own empty `HOME` (`GitIsolation.SessionGitEnvironment`,
-  D340). Until phase 7a's gate it has been built in Release, with no warning, and not run: its first
-  runs are D246's two of the 7a class alone (`--filter-class "*Phase7aRealWindowPass"`), with the
-  owner present, and its time is measured at the gate (ruling 30, CLAUDE.md).
+  D340). Its first runs were D246's two of the 7a class alone (`--filter-class
+  "*Phase7aRealWindowPass"`) at phase 7a's gate, with the owner present: the first failed only
+  `Check_N`'s lookup of the title box, which now looks inside the form, and the second passed 5 of 5
+  in 2 min 55 s; the whole pass of phases 0 to 7a passed 72 of 72 in 31 min 6 s on `a2c312a`, whose
+  `RealApp.TitleOf` reads a closing dialog's title without throwing (ruling 30, CLAUDE.md).
 - The whole pass, phases 0 to 7a, runs 72 tests: 68 test methods of the pass (phase 0 1, phase 1 5,
   phase 2 8, phase 3 15, phase 4 10, phase 5 16, phase 6 8, phase 7a 5) and the 4 of
   `Phase3ExpectationsTests`,
@@ -5400,7 +5405,7 @@ the `type` 422, the create's 422s (whose `errors` items carry `resource` first) 
 Avatars and pages are answered before any check; an avatar request that carries `Authorization` is
 answered and recorded `TokenPresent`, which the checks assert never happens. The texts of the
 version, `type`, unknown-SHA and duplicate-create answers are GitHub's own, as the live command
-recorded them on 2026-10-30 (D342); the empty repository's 409, `ApiVersionGone`'s 410 and the
+recorded them on 2026-10-30 (D342), and its runs at phase 7a's gate found every probe the same; the empty repository's 409, `ApiVersionGone`'s 410 and the
 `ServerError` fault's body are still from memory (its sandbox has a commit, and GitHub's one 500 had
 no body). A fine-grained token reaches every repository its login owns or may push to: GitHub's "Only
 select repositories" is not modelled.
@@ -5693,7 +5698,8 @@ Phase 7a's two projects and its walk-through lengthened the Test steps: the long
 which the limit is raised. On the review's last code commit before the gate (`7015753`, run
 41111820880) the Test step took 29 min 9 s on Windows, 30 min 58 s on macOS and 6 min 1 s on
 `ubuntu-latest`, the containers' jobs 7 min 25 s and 7 min 19 s in all, and "Build the opt-in
-projects" 22 s.
+projects" 22 s. On the gate's commit (`a2c312a`, run 41190572421) it took 21 min 48 s on Windows,
+32 min 16 s on macOS and 4 min 54 s on `ubuntu-latest`.
 
 Two more jobs, both named "bare ubuntu container", start from an empty `ubuntu:24.04`
 container, run `scripts/setup-linux.sh` in it twice (the second run has to find everything in

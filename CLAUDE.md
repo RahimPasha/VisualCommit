@@ -304,9 +304,9 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 7a when left out, which runs `VisualCommit.VisualTests.Phase7a`; a phase it does not know exits 2 before anything is built; for phase 6, given as `6`, it runs `VisualCommit.VisualTests.Phase6`, or `VisualCommit.VisualTests.Phase6Look` when the filter names part L, such as `"*Check_L27*"`; for phase 5, given as `5`, it runs `VisualCommit.VisualTests.Phase5Undo` when the filter names part U, such as `"*Check_U16*"`, and `VisualCommit.VisualTests.Phase5` otherwise) |
 | Tests with the watcher's events held back (R8, D262; the lead's lagged runs at a wave's merges) | `VISUALCOMMIT_WATCHER_LAG_MS=1500` in front of a test command: every repository watcher then holds each file-system event for 1.5 s (0 to 10,000 ms; the app logs it at Info). The list of tests the lead runs so is `docs/phase-7a-design.md` 0.4 (first run at WP1's merge, `a4a388e`, with plain `dotnet test`), for example `VISUALCOMMIT_WATCHER_LAG_MS=1500 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests --filter-class "*Phase2Checks"` |
 | The real keychains' own tests (D270): on Windows and macOS only CI's steps "Keychain (…)" run them, because they write in the machine's real store, so never on the owner's laptop; on Linux the Secret Service's under a private bus with a throwaway keyring, safe on any machine (run so far only in CI's two containers, first on `8b02805`) | `export XDG_DATA_HOME="$(mktemp -d)"; mkdir -p -m 700 "$XDG_DATA_HOME/keyrings"; VISUALCOMMIT_KEYCHAIN_TESTS=secret-service dbus-run-session -- sh -c 'echo throwaway \| gnome-keyring-daemon --unlock --components=secrets >/dev/null && dotnet test --project tests/VisualCommit.Hosting.Tests --filter-class "*SecretServiceTokenStoreRealTests"'` (needs `dbus` and `gnome-keyring`, which `scripts/setup-linux.sh` installs; a container needs `--cap-add=IPC_LOCK`). CI's Windows and macOS steps run `--filter-class "*WindowsTokenStoreRealTests"` with `VISUALCOMMIT_KEYCHAIN_TESTS=windows` and `"*MacKeychainTokenStoreRealTests"` with `macos` |
-| Real-window pass (Windows only) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`: the pass is a whole-project run, so on the laptop it runs under the heavy-run lock (D245) and no other heavy run starts beside it; without the lock it is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (the script has not run the pass yet) |
+| Real-window pass (Windows only) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`: the pass is a whole-project run, so on the laptop it runs under the heavy-run lock (D245) and no other heavy run starts beside it; without the lock it is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (run through the script at phase 7a's gate, 2026-10-31: 72 tests in 31 min 6 s) |
 | One real-window check alone (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*<test name>*"`, for example `--filter-method "*Check_S14*"` (run so at phase 6's gate for S14) |
-| A phase's own real-window checks alone (Windows only; D246's two runs) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`: it takes the mouse like the pass and empties `artifacts/visual/phase-7a/real-window/` (not run yet: phase 7a's gate runs it first) |
+| A phase's own real-window checks alone (Windows only; D246's two runs) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`: it takes the mouse like the pass and empties `artifacts/visual/phase-7a/real-window/` (first run for D246's two runs at phase 7a's gate, 2026-10-30: 2 min 55 s, 3 min 17 s with the build) |
 | The opt-in live command against real GitHub (Windows only; the owner's sandbox token, D250, D260) | `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`: about a minute with its build (63 s on 2026-10-30, 33 s with the build up to date); its findings in `artifacts/live/github/run.txt`; without the variables its three live tests fail at once by design (a session started before the owner set them: "What to know") |
 | The live command's offline safety tests (Windows; no variables, no network) | `dotnet test --project tests/VisualCommit.LiveHostingTests -c Release --filter-class "*LiveSafetyTests"`: the token search, the request log and the clean-up's selection with made-up tokens, in process |
 | Compare pictures with reference pictures (a gate's inspection; needs Python with Pillow and NumPy) | `python scripts/compare-pictures.py <reference folder> artifacts/visual <output folder>`: a difference picture per changed picture and `summary.md`, grouped by the window regions the changes lie in |
@@ -323,8 +323,10 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take about 55 minutes on the Windows machine with nothing else running (56 min
-  25 s at phase 6's gate on 2026-10-24, rested, 5,037 tests; 43 min 22 s at phase 5's, 3,233 tests).
+- The default tests take about 1 h 10 min on the Windows machine with nothing else running (1 h 12
+  min 18 s at phase 7a's gate on 2026-10-31, rested, 5,952 tests at four projects at once through
+  the script, D343; 56 min 25 s at phase 6's gate on 2026-10-24, 5,037 tests; 43 min 22 s at phase
+  5's, 3,233 tests).
   Since D343 (phase 7a's gate) the whole run through `scripts/heavy-run.sh` runs at most four of
   the eleven test projects side by side; plain `dotnet test` and CI run as many as the machine has
   processors (eight on the laptop). Before that,
@@ -385,7 +387,7 @@ What to know about them:
   (`tr -d '\r' < docs/test-reports/phase-N-pictures.sha256 | grep '/scripted/' | sha256sum -c --quiet`
   prints nothing); it writes the list again after that pass.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
-  app on the desktop and moves the real mouse for about 28 minutes (phases 0 to 6; 27 min 39 s at phase 6's gate): tell the
+  app on the desktop and moves the real mouse for about 31 minutes (phases 0 to 7a; 31 min 6 s at phase 7a's gate, 27 min 39 s for phases 0 to 6 at phase 6's): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop,
   Windows' high contrast off and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
   pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so
@@ -398,7 +400,9 @@ What to know about them:
 - Phase 7a's part of the pass starts the fake of GitHub (`FakeGitHub`) on port 47395 in the test
   process, so phase 7a's walk-through never runs beside it. Near its end it opens one tab in the
   owner's default browser, on the fake's page (D321); the owner closes it before the next run of
-  the pass. The time the part adds is measured at phase 7a's gate.
+  the pass. The part adds about 3 minutes (2 min 55 s alone in D246's second run). Run the pass
+  rested and away from the night's scheduled tasks of other programs: at phase 7a's gate a pass at
+  02:18 measured Q1 at 2,456 ms while they ran, and 1,400 ms an hour later (plan.md's risk 10).
 - The live command (`tests/VisualCommit.LiveHostingTests`, D250) acts on the owner's GitHub
   account: it signs in, clones, lists pull requests and creates one in a private sandbox
   repository, with a fine-grained token for that repository alone. It reads two Windows user
