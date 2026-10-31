@@ -592,13 +592,15 @@ in, in `UndoEffectTests.Renames_configuration_remotes_and_tags_go_forth_and_back
 project-alone run (41, in 20 files) was judged by six Opus fixers in worktrees, each change reviewed
 by an agent that did not write it (workflow `wcvkskdxp`; design 21 item 1): 11 are split, 30 kept
 with their reasons, at `939e9fa` to `377d354`, and the project alone on them passed 2,523 of 2,523.
-Next: the counted round's default run again on `377d354`'s code (`bash scripts/heavy-run.sh`, after
-a 10-minute rest), and, with the owner told and present, D246's two runs of
-`--filter-class "*Phase7aRealWindowPass"` one after the other (step 4), then the whole real-window
-pass (step 5), at once the pictures' list, the live command again, and the inspection (step 6). The
-default run comes before D246's two runs here only to use the time until the owner is at the
-machine: if those runs need a fix outside `tests/VisualCommit.RealWindowTests`, the default run is
-made again. Each of
+The second rested run, on `377d354`'s code, stopped `VisualCommit.App.Tests` the same way, in a single
+undo chain (`UndoRecordingTests`' hard reset); the owner, at the machine, chose fewer projects side by
+side: D343, the laptop's whole run through `scripts/heavy-run.sh` at most four projects at once. The
+lead stopped that run to make D246's two runs with the owner present (step 4): the first failed only
+`Check_N_new_pull_request` on the test's own lookup, fixed at `723f2d3`, and the second passed 5 of 5
+(the report's "Run"; design 21 items 2 and 3). Next: the counted round's default run on the branch's
+code (`bash scripts/heavy-run.sh`, after a 10-minute rest, now four projects at once), then, the owner
+told, the whole real-window pass (step 5), at once the pictures' list, the live command again, and
+the inspection (step 6). Each of
 parts B, P, G and N
 gets its checks there just before its package (D244). The first steps of 7a, and the order to take
 them in, are in the [phase 6 handoff](handoffs/phase-6.md) under "For the next phase", read with the note at its start: D241 to

@@ -295,7 +295,7 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Run the app (needs a desktop) | `dotnet run --project src/VisualCommit.App` |
 | Default tests: unit, integration, headless UI and the scripted visual walk-through | `dotnet test` |
 | One test project | `dotnet test --project tests/VisualCommit.Git.Tests` |
-| A heavy run under the lock, one at a time on the laptop (D245): a whole project or the whole default run | `bash scripts/heavy-run.sh` followed by `dotnet test`'s own arguments, which it runs at the repo root from any folder of the repo, for example `bash scripts/heavy-run.sh --project tests/VisualCommit.Git.Tests --filter-class "*HangClockTests"` or `bash scripts/heavy-run.sh --project tests/VisualCommit.Git.Tests`; with no arguments it is the whole default run (run so far only with a stand-in `dotnet`). `VISUALCOMMIT_HEAVY_RUN_WAIT_SECONDS=12 bash scripts/heavy-run.sh …` gives up after 12 seconds of waiting with exit code 75 (`0`: at once) |
+| A heavy run under the lock, one at a time on the laptop (D245): a whole project or the whole default run | `bash scripts/heavy-run.sh` followed by `dotnet test`'s own arguments, which it runs at the repo root from any folder of the repo, for example `bash scripts/heavy-run.sh --project tests/VisualCommit.Git.Tests --filter-class "*HangClockTests"` or `bash scripts/heavy-run.sh --project tests/VisualCommit.Git.Tests`; with no arguments it is the whole default run, which the script runs with at most four projects side by side (`--max-parallel-test-modules 4`, added when no project, solution or such limit is named; D343). `VISUALCOMMIT_HEAVY_RUN_WAIT_SECONDS=12 bash scripts/heavy-run.sh …` gives up after 12 seconds of waiting with exit code 75 (`0`: at once) |
 | Each test's time in a project run alone (xUnit's report; a heavy run, D245) | `bash scripts/heavy-run.sh --project tests/VisualCommit.Git.Tests --report-xunit --report-xunit-filename timing.xml --results-directory <folder>`: `<folder>/timing.xml` gives every test's `time` in seconds, a shared template's wait included (first run at phase 7a's gate, 2026-10-30: 2,495 tests in 22 min 30 s) |
 | Who holds the heavy-run lock, and stopping that run (Git Bash) | `cat "$(cygpath -u "$TMP")/VisualCommit.Tests/heavy-run.lock/holder"`; then `kill -TERM <pid>` (or `-INT`, `-HUP`), with the file's `pid=` (not its `windows_pid=`), stops that run's `dotnet test` and frees the lock |
 | Tests chosen by name | `dotnet test --project tests/VisualCommit.Git.Tests --filter-method "*Linear*"` |
@@ -325,7 +325,10 @@ What to know about them:
   while the Windows machine and most CI jobs use newer ones.
 - The default tests take about 55 minutes on the Windows machine with nothing else running (56 min
   25 s at phase 6's gate on 2026-10-24, rested, 5,037 tests; 43 min 22 s at phase 5's, 3,233 tests).
-  Nine test projects run side by side since phase 6 added two walk-throughs (`VisualCommit.VisualTests.Phase6`
+  Since D343 (phase 7a's gate) the whole run through `scripts/heavy-run.sh` runs at most four of
+  the eleven test projects side by side; plain `dotnet test` and CI run as many as the machine has
+  processors (eight on the laptop). Before that,
+  nine test projects ran side by side since phase 6 added two walk-throughs (`VisualCommit.VisualTests.Phase6`
   and `.Phase6Look`), and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
   it, and other load or a hot laptop lengthens it (a git call took 10 to 15 times as long as alone

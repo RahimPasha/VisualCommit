@@ -5322,3 +5322,16 @@ runs and their counts.
    2,523, the new tests at 2.2 to 20.4 s. Left near the limit: the kept undo chains of 30 to 40 s
    alone in the project; a limit of their own, or fewer projects side by side, is the owner's call
    (D237, D264; plan.md's risk 12). The splits are `939e9fa` to `377d354`.
+2. **The second stop, and D343.** The counted round's next rested run, on `377d354`'s code, stopped
+   `VisualCommit.App.Tests` in `UndoRecordingTests`' hard reset undone and redone, 180 s counted, a
+   single chain. The stops move with the load from project to project (phase 6's G23 and
+   `VisualCommit.Git.Tests`, 7a's `Phase6Look` and `Phase4` at the merge run, now `Git.Tests` and
+   `App.Tests`), so the lead put the remedy to the owner, who was at the machine: D343 runs the
+   laptop's whole default run with at most four projects at once. The script adds the limit only
+   when no project, solution or limit of its own is named (checked with a stand-in `dotnet`: none
+   for `--project`, `--solution=` or `--max-parallel-test-modules=2`, added before a
+   `--filter-class`). The run's length with it is measured at the counted round.
+3. **D246's two runs** (the owner present, 2026-10-30 22:16 and 22:24): the first failed only
+   `Check_N_new_pull_request`, whose step 3 read the title box by a search of the whole window and
+   found the left panel's row title of the same automation id first; read inside the form since
+   `723f2d3`, the second run passed all five checks. Only the real-window project changed (D246).

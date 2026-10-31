@@ -65,6 +65,7 @@ The gate runs on the Windows machine from 2026-10-30; times are Pacific (the mac
 | Machine | Windows 11 Pro 10.0.26300, Intel Core i7-8650U laptop, 3000x2000 screen at 200 percent scaling; Git 2.56.0.windows.4; .NET SDK 10.0.303 |
 | Before the gate: 7a's walk-through (`a140017`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7a`, 2026-10-30, ended 18:08: 205 of 205 in 3 min 9 s; 80 of its 85 pictures the same files as on `7015753` |
 | Counted round, first default run (`a140017`'s code, the branch at `a9326a5`) | `bash scripts/heavy-run.sh`, 2026-10-30 18:20 to 19:24, after a 10-minute rest: 3,918 of the 3,922 tests that ran passed and 4 were skipped (the three real keychains' tests and `WindowsCredentialStoreTests`' Off-Windows test, D270), in 1 h 2 min 5 s; exit 127: the hang watchdog stopped `VisualCommit.Git.Tests` 1,306 s in, in `UndoEffectTests.Renames_configuration_remotes_and_tags_go_forth_and_back` after its 180 s counted, so that project's other tests did not run ("Found by the gate", item 1). The projects' own times: phase 6's part L 13 min 21 s, phases 0 to 2's 12 min 39 s, phase 7a's 15 min 47 s, `VisualCommit.Git.Tests` 21 min 53 s (stopped), `VisualCommit.Hosting.Tests` 25 min 1 s, phase 5's 25 min 23 s, phase 4's 26 min 50 s, phase 6's 31 min 5 s, phase 3's 43 min 12 s, phase 5's undo walk-through 46 min 20 s and `VisualCommit.App.Tests` 1 h 2 min 3 s |
+| Counted round, second default run (`377d354`'s code, the branch at `8271c8e`) | `bash scripts/heavy-run.sh`, 2026-10-30 from 21:32, after a 10-minute rest, eight projects at once as before: the hang watchdog stopped `VisualCommit.App.Tests` 1,898 s in, in `UndoRecordingTests.A_hard_reset_is_undone_with_its_files_and_index_from_the_snapshot_and_redone_with_a_new_one` after its 180 s counted ("Found by the gate", item 2), with phases 0 to 2's walk-through (14 min 55 s), `VisualCommit.Hosting.Tests` (24 min 31 s), phase 5's (30 min 46 s) and part L's (10 min 17 s) passed by then. The lead stopped the run at 22:11, with the owner's agreement, to make D246's two runs while the owner was at the machine || Before the gate: 7a's walk-through again (`8271c8e`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7a`, 22:12 to 22:16: 205 of 205 in 3 min 24 s, its pictures complete again after the stopped run || Before the gate: D246's first run (`8271c8e`) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`, 22:16 to 22:20, the owner told and present: 4 of 5 passed; `Check_N_new_pull_request` failed in its step 3 on the test's own lookup ("Found by the gate", item 3) || Before the gate: D246's second run (`723f2d3`) | the same command, 22:24 to 22:28, the owner present: 5 of 5 passed in 2 min 55 s (3 min 17 s with the build); every capture within 1.15 percent of its scripted twin (2.59 compared in place only; the limit is 3); part P's check opened the fake's page in the owner's browser, as D321 allows |
 
 ## Live command
 
@@ -1439,6 +1440,21 @@ Faults the gate found, and the commit that fixed each.
    alone in the project (`UndoStepBranchTests`' automatic stash 40.3 s, `UndoStepFileTests`' popped
    stash 34.1 s, `UndoStepTests`' hard reset 32.8 s): D237's rule cannot shorten them, and a limit of
    their own is the owner's call (D264; plan.md's risk 12). Commits `939e9fa` to `377d354`.
+
+2. **The hang watchdog in `VisualCommit.App.Tests`** (the counted round's second default run, on
+   `377d354`'s code): it stopped `UndoRecordingTests.A_hard_reset_is_undone_with_its_files_and_index_from_the_snapshot_and_redone_with_a_new_one`
+   after 180 s counted, one action undone and redone, which D237's rule cannot split (D181). With
+   two rested runs in a row stopped by load alone, in two projects, the lead put the remedy to the
+   owner, who chose fewer projects side by side over a limit of their own or running again as it
+   was: D343, `scripts/heavy-run.sh`'s whole default run with at most four projects at once
+   (`--max-parallel-test-modules 4`), where `dotnet test` ran eight. Tests, limits and CI unchanged.
+3. **`Check_N_new_pull_request`'s lookup of the title box** (D246's first run): it read
+   `PullRequestTitle` with a search of the whole window, which found the left panel's first
+   pull-request row first, a text element of that name (`LeftPanelView.axaml`'s `TextBlock
+   Name="PullRequestTitle"`, #5 "Fix a typo in the greeting"), so FlaUI found no Value pattern. The
+   check now reads the box inside the form (`FindIn`, as it finds the form's Create button), at
+   `723f2d3`; the second run passed it. A fault of the test alone: the app's two elements are in
+   different layers, as phase 6's `ConfirmButton`s are.
 
 ## Could not run
 
