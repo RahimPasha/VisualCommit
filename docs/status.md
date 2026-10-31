@@ -17,7 +17,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 5. History, traceability and undo | Done | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
 | 6. Multi-repo and productivity | Done | `phase/6-multi-repo` | [phase-6](handoffs/phase-6.md) | [phase-6](test-reports/phase-6.md) |
 | 7a. Hosting foundation and GitHub | Done | `phase/7a-hosting-github` | [phase-7a](handoffs/phase-7a.md) | [phase-7a](test-reports/phase-7a.md) |
-| 7b. Azure DevOps and GitLab | Not started | `phase/7b-hosting-azure-gitlab` | | |
+| 7b. Azure DevOps and GitLab | In progress | `phase/7b-hosting-azure-gitlab` | | |
 | 8. Public release | Not started | `phase/8-release` | | |
 
 States: Not started, In progress, Blocked (cannot continue or close without the owner, or without
@@ -26,12 +26,16 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-None in progress. Phase 7a was accepted by the owner on 2026-10-31 and merged into `master` (merge
+Phase 7b, Azure DevOps and GitLab: in progress since 2026-10-31, on `phase/7b-hosting-azure-gitlab`,
+made from `master` at `a29379f`. Its design will be `docs/phase-7b-design.md`, its report
+`docs/test-reports/phase-7b.md`.
+
+Phase 7a was accepted by the owner on 2026-10-31 and merged into `master` (merge
 commit `019e68a`); its gate ran on `a2c312a`. Phase 6 was accepted on 2026-10-24 (merge commit
 `3f34c87`), phase 5 on 2026-10-17 (merge commit `c299939`), phase 4 on 2026-10-12 (merge commit
 `ce5f337`), phase 3 on 2026-10-11 (merge commit `8b33745`), phase 2 on 2026-10-10 (merge commit
 `e039070`), phase 1 on 2026-10-10 (merge commit `b5eb1ed`) and phase 0 on 2026-10-06 (merge commit
-`b5f4723`). The next phase to start is phase 7b, the second half of phase 7 (D241).
+`b5f4723`). Phase 7b is the second half of phase 7 (D241).
 
 Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
 that both passes of the gate ran on (or, by D246, the real-window pass's commit when it changes
@@ -40,18 +44,97 @@ nothing but docs changed after it.
 
 ### Progress
 
-Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
-"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
-steps from `CLAUDE.md` and a step for reading the CI run of the gate's commit. Each item is ticked
-in the commit that completes it, and each tick, like the start of each stage, records the share
-of the plan's weekly allowance used at that point, as `/usage` or the status line's seven-day
-percentage shows it (D241): a phase or a stage starts only when the share left covers it
-(`plan.md`, "Workflow"), except in phase 7b until the reset of 2026-11-05, whose stages start
-without that check and whose checkpoints record the share the owner gives, or "share not read"
-(D344; drop this exception when 7b's acceptance resets this paragraph). The allowance resets on Thursdays at 2:00; a session cannot read `/usage`
-itself, so it asks the owner for the share. Number the steps plainly; do not label them C1, C2 and
-so on, which are requirement numbers. Phase 7a's checklist, with a note on each step, is in this
-file as of `019e68a`'s second parent (`git show 3a3cc71:docs/status.md`).
+Each item is ticked in the commit that completes it, and each tick, like the start of each stage,
+records the share of the plan's weekly allowance used at that point (D241). Until the reset of
+Thursday 2026-11-05 at 2:00 the stages start without that check (D344), and a checkpoint records
+the share the owner gives, or "share not read". The numbers are plain step numbers, not requirement
+numbers. The design (step 3) splits the steps below into work packages and says how they map onto
+them. Phase 7a's checklist, with a note on each step, is in this file as of `019e68a`'s second
+parent (`git show 3a3cc71:docs/status.md`).
+
+Start:
+
+- [x] 1. Phase branch created from `master` at `a29379f`, phase set to "In progress", this
+  checklist; the owner's answer to D346's question recorded (D352: the Azure DevOps organization
+  holds other work, and the owner accepts the token's wider reach). The owner's answers before the
+  design were given before the start (D344 to D351). No baseline run (D245: the machine has not
+  changed since 7a's gate, and the tree held no unpushed code); CI's run 41243213784 on the merge
+  stands for it, and `dotnet build` passed on `a29379f` (1 min 38 s). (2026-10-31. Week: 50 % used.)
+
+Design:
+
+- [ ] 2. Research, each fact taken where it lives: Azure DevOps' and GitLab's REST APIs (sign-in's
+  check of a token, an organization's or account's repositories, a repository's pull requests or
+  merge requests, creating one, their web pages, errors, paging, versions), their token pages,
+  kinds and scopes (D345), their remotes' URL forms (D347), and git 2.56's credential facts for
+  them (dev.azure.com's `<organization>@` user, a binding per organization on a shared host, each
+  provider's user name; D350), with 2.43 from CI where versions differ (D248); 7a's code mapped
+  where it names GitHub. Questions of taste the research raises go to the owner before drafting
+  (D243).
+- [ ] 3. Design in `docs/phase-7b-design.md` (D243: about 150 to 200 KB, its decisions only in
+  `decisions.md`): the provider model for three providers, both providers' clients and fakes, the
+  credential path for their hosts, the texts and layouts that name the provider (D351), the live
+  command's extension and its sandbox guard (D346, D352), how the code and the harness name 7b, its
+  lagged list (D262), an estimate of what the phase adds to the default run (1 h 12 min 18 s at
+  7a's gate) and to the real-window pass (31 min 6 s), and the work packages, each section a
+  builder's brief of at most about 25 KB (D242). Whether 7b is split per provider is judged here
+  (`plan.md`'s phase 7b). Its review: 3 or 4 lenses, git safety and tests/gate among them, a
+  verifier only for each blocker and major; its decisions recorded.
+
+Build:
+
+- [ ] 4. First package: what the design gives it, with `scripts/heavy-run.sh`'s header comment
+  (still 55 minutes; the 7a handoff's Known issues) and the contracts and stubs the packages build
+  on.
+- [ ] 5. Harness: 7b's walk-through project, the fakes of Azure DevOps' and GitLab's APIs (their
+  ports amending D97, as D265 did), the timing script's 7b case and CLAUDE.md's Commands, the
+  real-window project's link to 7b's expectations.
+- [ ] 6. The provider model for three providers: one account per provider (D348), Azure DevOps'
+  and GitLab's remotes recognised from their URLs (D347), their tokens in the OS keychain (R3).
+  Tests.
+- [ ] 7. Azure DevOps' API: a token checked at sign-in, the organization's repositories, a
+  repository's pull requests, creating one; against its fake. Tests.
+- [ ] 8. GitLab's API: a token of either kind checked at sign-in (D345), the account's projects, a
+  project's merge requests, creating one; against its fake. Tests.
+- [ ] 9. The account's token on the app's git calls to the remotes it covers (D350): gitlab.com's,
+  and Azure DevOps' signed-in organization's alone; the push guard and the prompt group for the new
+  hosts, as the design decides. Tests.
+- [ ] 10. Sign-in dialog and the Accounts section with an account of each provider (D345, D348).
+- [ ] 11. Browse and clone the repositories of an Azure DevOps and a GitLab account.
+- [ ] 12. The left panel's section for each provider (GitLab's merge requests, D351), its menu,
+  checkout, the badge on branches, open in browser.
+- [ ] 13. Create a pull request or merge request from the branch menus and the drop menu, and its
+  form, for each provider.
+- [ ] 14. 7a's screens and commands that name GitHub name the provider they act on (D351); the
+  earlier checks whose pictures change updated in the same commits, under "Changes to expected
+  results".
+
+Checks, live trial and review:
+
+- [ ] 15. Each part's visual checks written into `docs/test-reports/phase-7b.md` just before its
+  package is built (D244), by one writer and one reviewer, each marked for the real-window pass or
+  not, committed before the UI they test.
+- [ ] 16. The owner's sandboxes and tokens for Azure DevOps and GitLab made as the design says
+  (D346, D352), and the live command extended to both, run with them; what it finds goes into the
+  fakes (D342).
+- [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
+  tests.
+
+Closing (`CLAUDE.md`, "Closing a phase"):
+
+- [ ] 18. The visual test gate: references for the earlier pictures made on `master` if 7b changes
+  them in many places (plan risk 32); the live command before the pictures (D335); the scripted
+  walk-through's pictures on this machine, then the new real-window checks twice on their own with
+  the owner told and present (D246); `dotnet test` and the real-window pass on one commit; the live
+  command on the counted round; every picture inspected, in batches of at most about 150 (D247);
+  `docs/test-reports/phase-7b.md` completed.
+- [ ] 19. `docs/architecture.md` describes what is built.
+- [ ] 20. `docs/plan.md`: what 7b did not deliver moved to the phase that owns it; risks updated.
+- [ ] 21. `docs/handoffs/phase-7b.md` written from the template.
+- [ ] 22. Cold-read check by a fresh agent; every gap fixed.
+- [ ] 23. The CI run of the gate's commit read, with each job's result.
+- [ ] 24. `docs/status.md`: links, the CI run, the "Gate commit", and "Awaiting acceptance" only if
+  the whole gate passed; the owner told what passed and what needs a decision.
 
 ### CI
 
@@ -212,16 +295,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner's "Start phase 7b". The [phase 7a handoff](handoffs/phase-7a.md), "For the next
-phase", says what to reuse, what to do first and which risks to watch. The owner's answers before
-7b's design are given: D344 to D351 (2026-10-31; "Waiting on the owner", "For phase 7b, answered
-on 2026-10-31"), already carried into `plan.md` and `requirements.md`, so the start steps go on to
-the design without asking them again; one question is left, for D346, and is asked before the
-owner makes the Azure DevOps token: whether the owner's organization holds anything besides the
-sandbox ("Waiting on the owner"). Until the reset of 2026-11-05 the phase may use all that is left
-of the week's allowance and wait for the reset if it runs out; after it, D241's check applies
-again unless the owner extends D344. The phase's branch is
-`phase/7b-hosting-azure-gitlab` (Phases above).
+Step 2, the design's research: Azure DevOps' and GitLab's APIs and tokens, their remotes' URL
+forms and git 2.56's credential facts for them, and a map of where 7a's code names GitHub. Its
+notes go to `D:/Projects/Personal/phase7b-work/research/`, outside the repository, as phase 7a's
+did. The [phase 7a handoff](handoffs/phase-7a.md), "For the next phase", says what to reuse and
+which risks to watch; the owner's answers are D344 to D352, and no question is open for the
+design's start. Until the reset of 2026-11-05 the phase may use all that is left of the week's
+allowance and waits for the reset if it runs out (D344).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -407,15 +487,12 @@ every commit.
     7. GitLab's screens say "merge request", GitHub's and Azure DevOps' "pull request". 7a's
        GitHub-worded screens and commands name the provider of the account or remote they act on,
        as the design settles, and every 7a picture that changes is inspected again (risk 32).
-- **The Azure DevOps sandbox's organization** (D346), asked before the owner makes the Azure DevOps
-  token: does the organization the owner named on 2026-10-31 hold anything besides the sandbox
-  (other projects or repositories)? An Azure DevOps token cannot be limited to a project or a
-  repository: it reaches everything the owner can reach in its organization, while D260 accepts a
-  token in a user variable only because it reaches the sandbox alone. If the organization holds
-  nothing else, the sandbox goes into it and D346 is met as it stands. If it holds other work, the
-  sandbox goes into a new, free organization that holds only the sandbox (D346), unless the owner
-  accepts the token's wider reach; that acceptance is recorded as a new decision, since it sets
-  D260's reason aside.
+- **The Azure DevOps sandbox's organization** (D346): answered at 7b's start on 2026-10-31. The
+  organization the owner named holds other work, and the owner accepts that the token reaches it
+  (D352, which sets D260's reason aside for that token alone); the live command keeps to the
+  sandbox by its own guard, the token's scopes and a short expiry, as the design names them. The
+  owner makes the Azure DevOps token, the GitLab account and its token when the design names their
+  scopes and variables (step 16).
 - **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
   (the review before the gate and the runs after it: the avatars' lookup per author, git's
@@ -423,7 +500,8 @@ every commit.
   the client and the fake); and the lead's rulings in the design (its 32 of 2026-10-28) and in the
   report's "Open points and the lead's rulings". D343 is the owner's choice. D344 to D351 are the
   owner's answers for 7b, three of them (D345, D346, D350) with the lead's refinements made after
-  the owner's acceptance (above); the next decision number is D352.
+  the owner's acceptance (above); D352 is the owner's answer at 7b's start. The next decision
+  number is D353.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -455,9 +533,9 @@ every commit.
   the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D352 on, since D239 to D248 went to the review before
+  owner"; each answer becomes a decision, D353 on, since D239 to D248 went to the review before
   phase 7, D249 to D264 to phase 7a's start, D265 to D338 to its design, D339 to D343 to its build
-  and gate and D344 to D351 to 7b's start): design 17.5's reading of "ten repos can be checked and
+  and gate and D344 to D352 to 7b's start): design 17.5's reading of "ten repos can be checked and
   updated from one screen" (one dashboard of the ten, one Fetch all and one Pull all deciding every
   row); the report's by-hand System step (switch Windows' app mode while the app runs with System
   chosen, D224); and the move of the text boxes' placeholder contrast (Fluent's watermark opacity,
@@ -488,7 +566,7 @@ every commit.
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D352 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D353 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,
