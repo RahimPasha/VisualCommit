@@ -648,13 +648,19 @@ public class ConflictBannerTests
         Assert.False(app.FindByAutomationId("ConflictBanner").IsEffectivelyVisible);
 
         Assert.Equal(1, (await repo.GitAllowingFailureAsync("merge", "feature/conflict")).ExitCode);
-        await app.WaitForAsync(() => repository.Banner.IsVisible, "the banner");
+
+        // A refresh reads git status before MERGE_HEAD: one whose status came before the merge's
+        // conflicted index and whose MERGE_HEAD came after it shows "Conflicts resolved" until the
+        // watcher's next refresh (the first attempt of CI run 41172878322). So the wait is for the
+        // merge's own text.
+        const string merging = "Merging: \"Merge branch 'feature/conflict'\". 1 file has conflicts.";
+        await app.WaitForAsync(() => repository.Banner.IsVisible && repository.Banner.Text == merging, "the banner with the merge's conflict");
         app.Settle();
 
         // In a wide window the text fits on one line with Continue and Abort beside it: the banner
         // is 36 high (section 5; phase 4 design 5.2).
         Assert.Equal(36, app.BoundsOf(app.FindByAutomationId("ConflictBanner")).Height, 0.5);
-        Assert.Equal("Merging: \"Merge branch 'feature/conflict'\". 1 file has conflicts.", ((TextBlock)app.FindByAutomationId("BannerText")).Text);
+        Assert.Equal(merging, ((TextBlock)app.FindByAutomationId("BannerText")).Text);
         Assert.False(app.Find<Views.Shell.BannerLayoutPanel>("BannerLayout").ButtonsBelow);
         Assert.True(app.BoundsOf(app.FindByAutomationId("BannerContinueButton")).Left >= app.BoundsOf(app.FindByAutomationId("BannerText")).Right - 0.5);
 
@@ -663,6 +669,51 @@ public class ConflictBannerTests
         app.Settle();
         Assert.False(app.FindByAutomationId("ConflictBanner").IsEffectivelyVisible);
         Assert.Equal("Working changes", repository.WorkingRowText);
+    }
+
+    [AvaloniaFact]
+    public async Task A_rebase_stopped_in_a_terminal_fills_the_stage_panels_message_also_after_a_refresh_saw_the_stop_before_its_message()
+    {
+        // Git names the stopped pick in rebase-merge/done before it merges and writes the message
+        // (the first attempt of CI run 41172878322). A merge driver that waits for a file holds git
+        // there until the app has read the stop; its loop ends by itself after 1,200 short sleeps,
+        // a minute on Linux and macOS and about two on Windows, where each sleep starts a process.
+        using var repo = await Scenarios.ConflictsAsync();
+        using var held = new TempDirectory("held");
+        var go = Path.Combine(held.Path, "go").Replace('\\', '/');
+        Directory.CreateDirectory(Path.Combine(repo.Path, ".git", "info"));
+        File.WriteAllText(Path.Combine(repo.Path, ".git", "info", "attributes"), "notes.txt merge=held\n");
+        await repo.GitAsync("config", "merge.held.driver", $"i=0; while [ ! -f '{go}' ] && [ $i -lt 1200 ]; do sleep 0.05; i=$((i+1)); done; exit 1");
+        await repo.GitAsync("switch", "feature/picks");
+        var conflicting = (await repo.GitAsync("rev-parse", "feature/picks~1")).StandardOutput.Trim();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        await app.WaitForAsync(() => repository.Graph.IsComplete && repository.Graph.Count > 0, "the graph");
+
+        var rebase = repo.GitAllowingFailureAsync("rebase", "main");
+        GitResult rebased;
+        try
+        {
+            await app.WaitForAsync(
+                () => repository.Status.InProgress is { Kind: InProgressKind.Rebase } stop && stop.Commit == conflicting && !repository.Changes.IsFillingMessage,
+                "a refresh that sees the rebase at \"Pick conflicting\"");
+            Assert.False(File.Exists(Path.Combine(repo.Path, ".git", "rebase-merge", "message")));
+            Assert.Equal((string.Empty, string.Empty), (repository.Changes.Summary, repository.Changes.Description));
+        }
+        finally
+        {
+            File.WriteAllText(go, string.Empty);
+            rebased = await rebase;
+        }
+
+        Assert.Equal(1, rebased.ExitCode);
+
+        // Git writes the message, the watcher's refresh follows, and the panel reads it again.
+        await app.WaitForAsync(() => repository.Changes.Summary == "Pick conflicting", "the stage panel's summary \"Pick conflicting\"");
+        Assert.Equal(string.Empty, repository.Changes.Description);
+        Assert.Equal(conflicting, repository.Status.InProgress.Commit);
     }
 
     private static async Task<RepositoryViewModel> BannerShownAsync(ShellDriver app)

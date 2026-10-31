@@ -314,9 +314,10 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     /// or revert, or a rebase stops on a commit, or the stage panel first sees the stop, and the
     /// summary and description are empty, they are filled with
     /// <see cref="IWorkingChangesHost.ReadOperationMessageAsync"/>'s message (<c>MERGE_MSG</c> less
-    /// git's comment block, a rebase's own message, a group's). Done once per stopped commit, so a
-    /// message the user cleared stays clear. When the operation goes on or ends, a message still as
-    /// it was filled in is cleared. A list paused between commits fills nothing (8).
+    /// git's comment block, a rebase's own message, a group's). Done once per stopped commit whose
+    /// message was found, so a message the user cleared stays clear. When the operation goes on or
+    /// ends, a message still as it was filled in is cleared. A list paused between commits fills
+    /// nothing (8).
     /// </summary>
     private async Task FollowOperationMessageAsync(InProgressState state)
     {
@@ -340,7 +341,20 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
         }
 
         var text = await _host.ReadOperationMessageAsync(state);
-        if (text is null || _messageKey != key || Summary.Length > 0 || Description.Length > 0 || IsAmend)
+        if (text is null)
+        {
+            // Git names the stopped commit (rebase-merge/done, MERGE_HEAD) before it writes the
+            // message: a status read in between finds none. Nothing was filled, so the next status
+            // of the same stop reads it again (the first attempt of CI run 41172878322).
+            if (_messageKey == key)
+            {
+                _messageKey = null;
+            }
+
+            return;
+        }
+
+        if (_messageKey != key || Summary.Length > 0 || Description.Length > 0 || IsAmend)
         {
             return;
         }
