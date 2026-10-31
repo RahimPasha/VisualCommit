@@ -137,11 +137,6 @@ public class Phase6ScenarioTests
         Assert.Contains("Counting objects: 100% (4/4)", docs.StandardError, StringComparison.Ordinal);
         Assert.Contains("Counting objects: 100% (4/4)", mobile.StandardError, StringComparison.Ordinal);
         Assert.Contains("Counting objects: 100% (11/11)", design.StandardError, StringComparison.Ordinal);
-        foreach (var name in new[] { "api", "web-app", "billing", "infra", "scratch" })
-        {
-            var quiet = await FetchAsync(copy, name);
-            Assert.True(string.IsNullOrWhiteSpace(quiet.StandardError), $"{name}'s fetch printed:\n{quiet.StandardError}");
-        }
 
         Assert.Equal(["# branch.head main", "# branch.upstream origin/main", "# branch.ab +0 -4"], await StatusAsync(copy, "docs"));
         Assert.Equal(["# branch.head main", "# branch.upstream origin/main", "# branch.ab +1 -3"], await StatusAsync(copy, "mobile"));
@@ -152,6 +147,24 @@ public class Phase6ScenarioTests
 
         // The template's own refs did not move.
         Assert.Equal(["ec855ba refs/heads/main", "23e2ad1 refs/remotes/origin/main"], await RefsAsync(template, "docs"));
+        Assert.Equal(built, template.Calls.Snapshot().Count);
+    }
+
+    [Fact]
+    public async Task A_copy_of_the_workspace_fetches_nothing_into_the_repositories_whose_remote_holds_nothing_new()
+    {
+        var template = await Scenarios.WorkspaceTemplateAsync();
+        var built = template.Calls.Snapshot().Count;
+        using var copy = await template.CopyAsync();
+
+        // These five remotes hold no commit their repository lacks: each fetch, from the copy's own
+        // remotes/, prints nothing.
+        foreach (var name in new[] { "api", "web-app", "billing", "infra", "scratch" })
+        {
+            var quiet = await FetchAsync(copy, name);
+            Assert.True(string.IsNullOrWhiteSpace(quiet.StandardError), $"{name}'s fetch printed:\n{quiet.StandardError}");
+        }
+
         Assert.Equal(built, template.Calls.Snapshot().Count);
     }
 

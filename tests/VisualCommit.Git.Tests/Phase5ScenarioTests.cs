@@ -660,57 +660,64 @@ public class Phase5ScenarioTests
         Assert.False(File.Exists(Path.Combine(repo.Path, "settings.local.json")), "The way back kept the file the old commit tracked.");
     }
 
-    [Fact]
-    public async Task Protect_merge_and_cherry_pick_of_others_work_are_refused_over_a_changed_or_a_staged_file()
+    [Theory]
+    [InlineData("merge")]
+    [InlineData("cherry-pick")]
+    public async Task Protect_merge_and_cherry_pick_of_others_work_are_refused_over_a_changed_file(string operation)
     {
         // A change to a file other changes: git's "by merge" block, for a merge and a pick alike (check P27).
-        foreach (var operation in new[] { new[] { "merge", "--no-edit", "refs/heads/other" }, ["cherry-pick", "refs/heads/other~1"] })
-        {
-            using var repo = await Scenarios.ProtectAsync();
-            repo.WriteFile("src/app.txt", "app\nlocal\n");
-            var before = await repo.ExactStateAsync();
-            var reflog = HeadLogFile(repo);
-            var refused = await repo.GitAllowingFailureAsync(operation);
-            Assert.False(refused.Succeeded, $"git {operation[0]} was not refused.");
-            Assert.Equal(["src/app.txt"], BlockedPaths(refused.StandardError, "error: Your local changes to the following files would be overwritten by merge:"));
-            Assert.Equal(before, await repo.ExactStateAsync());
-            Assert.Equal(reflog, HeadLogFile(repo));
-            Assert.Empty(InProgressFiles(repo));
-        }
+        using var repo = await Scenarios.ProtectAsync();
+        string[] arguments = operation == "merge" ? ["merge", "--no-edit", "refs/heads/other"] : ["cherry-pick", "refs/heads/other~1"];
+        repo.WriteFile("src/app.txt", "app\nlocal\n");
+        var before = await repo.ExactStateAsync();
+        var reflog = HeadLogFile(repo);
+        var refused = await repo.GitAllowingFailureAsync(arguments);
+        Assert.False(refused.Succeeded, $"git {operation} was not refused.");
+        Assert.Equal(["src/app.txt"], BlockedPaths(refused.StandardError, "error: Your local changes to the following files would be overwritten by merge:"));
+        Assert.Equal(before, await repo.ExactStateAsync());
+        Assert.Equal(reflog, HeadLogFile(repo));
+        Assert.Empty(InProgressFiles(repo));
+    }
 
-        // A staged change to a file other does not touch refuses them too, git naming no conflict.
+    [Fact]
+    public async Task Protect_merge_of_others_work_is_refused_over_a_staged_file_other_does_not_touch()
+    {
+        // A staged change to a file other does not touch refuses a merge too, git naming no conflict.
         // Git from 2.38 on (2.38.0, 2.39.0, 2.43, 2.55 and 2.56 seen) writes a no-op entry into
         // HEAD's reflog for the refused merge, its old and new value HEAD's commit; 2.32.0, 2.34.1,
         // 2.36.0 and 2.37.3 write none (design 15.9).
-        using (var merge = await Scenarios.ProtectAsync())
+        using var merge = await Scenarios.ProtectAsync();
+        await merge.WriteFile("README.md", "# Protect\n\nStaged.\n").GitAsync("add", "--", "README.md");
+        var before = await merge.ExactStateAsync();
+        var head = Subject(await merge.GitAsync("rev-parse", "HEAD"));
+        var reflog = HeadLogFile(merge);
+        var refused = await merge.GitAllowingFailureAsync("merge", "--no-edit", "refs/heads/other");
+        Assert.False(refused.Succeeded, "git merge was not refused.");
+        Assert.Contains("Your local changes to the following files would be overwritten by merge:", refused.StandardError + refused.StandardOutput, StringComparison.Ordinal);
+        Assert.Equal(before, await merge.ExactStateAsync());
+        Assert.Empty(InProgressFiles(merge));
+        if (await SequenceTestSupport.GitVersionAsync(merge) < new GitVersion(2, 38, 0))
         {
-            await merge.WriteFile("README.md", "# Protect\n\nStaged.\n").GitAsync("add", "--", "README.md");
-            var before = await merge.ExactStateAsync();
-            var head = Subject(await merge.GitAsync("rev-parse", "HEAD"));
-            var reflog = HeadLogFile(merge);
-            var refused = await merge.GitAllowingFailureAsync("merge", "--no-edit", "refs/heads/other");
-            Assert.False(refused.Succeeded, "git merge was not refused.");
-            Assert.Contains("Your local changes to the following files would be overwritten by merge:", refused.StandardError + refused.StandardOutput, StringComparison.Ordinal);
-            Assert.Equal(before, await merge.ExactStateAsync());
-            Assert.Empty(InProgressFiles(merge));
-            if (await SequenceTestSupport.GitVersionAsync(merge) < new GitVersion(2, 38, 0))
-            {
-                Assert.Equal(reflog, HeadLogFile(merge));
-            }
-            else
-            {
-                string[] expected = [$"{head} {head} merge refs/heads/other: updating HEAD", .. reflog];
-                Assert.Equal(expected, HeadLogFile(merge));
-            }
+            Assert.Equal(reflog, HeadLogFile(merge));
         }
+        else
+        {
+            string[] expected = [$"{head} {head} merge refs/heads/other: updating HEAD", .. reflog];
+            Assert.Equal(expected, HeadLogFile(merge));
+        }
+    }
 
+    [Fact]
+    public async Task Protect_cherry_pick_of_others_work_is_refused_over_a_staged_file_other_does_not_touch()
+    {
+        // A staged change to a file other does not touch refuses a pick too, git naming no conflict.
         using var pick = await Scenarios.ProtectAsync();
         await pick.WriteFile("README.md", "# Protect\n\nStaged.\n").GitAsync("add", "--", "README.md");
-        var pickBefore = await pick.ExactStateAsync();
-        var pickRefused = await pick.GitAllowingFailureAsync("cherry-pick", "refs/heads/other~1");
-        Assert.False(pickRefused.Succeeded, "git cherry-pick was not refused.");
-        Assert.Contains("error: your local changes would be overwritten by cherry-pick.", pickRefused.StandardError, StringComparison.Ordinal);
-        Assert.Equal(pickBefore, await pick.ExactStateAsync());
+        var before = await pick.ExactStateAsync();
+        var refused = await pick.GitAllowingFailureAsync("cherry-pick", "refs/heads/other~1");
+        Assert.False(refused.Succeeded, "git cherry-pick was not refused.");
+        Assert.Contains("error: your local changes would be overwritten by cherry-pick.", refused.StandardError, StringComparison.Ordinal);
+        Assert.Equal(before, await pick.ExactStateAsync());
         Assert.Empty(InProgressFiles(pick));
     }
 
