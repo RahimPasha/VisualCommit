@@ -175,4 +175,98 @@ public sealed class GitLabRecognitionTests
     {
         Assert.Null(GitLabUrls.SplitPathWithNamespace(path));
     }
+
+    [Fact]
+    public void The_provider_recognises_by_its_endpoints_and_names_its_kind_host_and_web_base()
+    {
+        using var com = Provider(GitLabEndpoints.GitLabCom);
+        using var fake = Provider(Fake);
+
+        Assert.Equal((HostingProvider.GitLab, "gitlab.com", "https://gitlab.com/"), (com.Kind, com.Host, com.WebBase.AbsoluteUri));
+        Assert.Equal(("127.0.0.1:47398", "http://127.0.0.1:47398/"), (fake.Host, fake.WebBase.AbsoluteUri));
+        Assert.Equal(new HostedRepository(HostingProvider.GitLab, "gitlab.com", "northfield/platform", "web-app"), com.Recognise("git@gitlab.com:northfield/platform/web-app.git"));
+        Assert.Null(com.Recognise("http://127.0.0.1:47398/northfield/platform/web-app.git"));
+        Assert.Equal("127.0.0.1:47398", fake.Recognise("http://127.0.0.1:47398/northfield/platform/web-app.git")!.Host);
+        Assert.Null(fake.Recognise("https://gitlab.com/northfield/platform/web-app.git"));
+    }
+
+    [Theory]
+    [InlineData("refs/merge-requests/21/head")]
+    [InlineData("refs/merge-requests/21/merge")]
+    [InlineData("refs/merge-requests/21/train")]
+    [InlineData("refs/merge-requests/foo")]
+    [InlineData("refs/merge-requests/fix/typo")]
+    [InlineData("refs/merge-requests/-1/head")]
+    [InlineData("refs/merge-requests//head")]
+    [InlineData("refs/pull/fix/head")]
+    [InlineData("refs/pull/12/head")]
+    [InlineData("refs/heads/feature/search")]
+    [InlineData("main")]
+    public void The_push_guard_is_PullRequestRefs_rule_for_GitLab(string remoteRef)
+    {
+        using var provider = Provider(GitLabEndpoints.GitLabCom);
+
+        Assert.Equal(PullRequestRefs.SourceCanExist(HostingProvider.GitLab, remoteRef), provider.SourceCanExist(remoteRef));
+        Assert.Equal(remoteRef is not ("refs/merge-requests/fix/typo" or "refs/merge-requests/-1/head" or "refs/merge-requests//head"), provider.SourceCanExist(remoteRef));
+    }
+
+    [Fact]
+    public void A_requests_head_ref_is_refs_merge_requests_iid_head_in_the_target_for_a_fork_too()
+    {
+        using var provider = Provider(GitLabEndpoints.GitLabCom);
+        var target = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "northfield/platform", "web-app");
+        var fork = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "ada", "web-app");
+        PullRequest Pull(int iid, HostedRepository? head) =>
+            new(iid, "T", "ada", false, new Uri("https://gitlab.com/x"), "fix-typo", "", head, "main", target, DateTimeOffset.MinValue);
+
+        Assert.Equal("refs/merge-requests/21/head", provider.PullRequestHeadRef(Pull(21, target)));
+        Assert.Equal("refs/merge-requests/23/head", provider.PullRequestHeadRef(Pull(23, fork)));
+        Assert.Equal("refs/merge-requests/24/head", provider.PullRequestHeadRef(Pull(24, null)));
+        Assert.Equal(PullRequestRefs.HeadOf(HostingProvider.GitLab, 7), provider.PullRequestHeadRef(Pull(7, target)));
+    }
+
+    [Fact]
+    public void Coverage_is_the_web_bases_origin_with_the_git_twin_and_the_helpers_user_and_covers_the_accounts_host_alone()
+    {
+        using var com = Provider(GitLabEndpoints.GitLabCom);
+        using var fake = Provider(Fake);
+        var ada = new AccountKey(HostingProvider.GitLab, "gitlab.com", "Ada");
+
+        var coverage = com.CoverageOf(ada);
+
+        Assert.Equal((ada, "https://gitlab.com/", true, true, (string?)null, false),
+            (coverage.Account, coverage.Origin.AbsoluteUri, coverage.GitTwin, coverage.HelperUserIsAccounts, coverage.Organization, coverage.OrganizationHost));
+        Assert.Equal("http://127.0.0.1:47398/", fake.CoverageOf(new AccountKey(HostingProvider.GitLab, "127.0.0.1:47398", "ada")).Origin.AbsoluteUri);
+
+        var nested = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "northfield/platform/services", "billing");
+        Assert.True(com.Covers(nested, ada));
+        Assert.True(com.Covers(nested with { Host = "GitLab.com" }, ada));
+        Assert.False(com.Covers(nested with { Host = "gitlab.example.com" }, ada));
+        Assert.False(com.Covers(nested with { Provider = HostingProvider.GitHub }, ada));
+        Assert.False(com.Covers(nested, new AccountKey(HostingProvider.GitHub, "gitlab.com", "ada")));
+        Assert.False(com.Covers(nested with { Host = "127.0.0.1:47398" }, new AccountKey(HostingProvider.GitLab, "127.0.0.1:47398", "ada")));
+        Assert.True(fake.Covers(nested with { Host = "127.0.0.1:47398" }, new AccountKey(HostingProvider.GitLab, "127.0.0.1:47398", "ada")));
+        Assert.False(fake.Covers(nested, ada));
+    }
+
+    [Fact]
+    public void The_token_pages_and_a_nested_projects_merge_requests_page_are_on_the_web_base()
+    {
+        using var com = Provider(GitLabEndpoints.GitLabCom);
+        using var fake = Provider(Fake);
+        var nested = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "northfield/platform/services/billing", "invoice-generation-and-reconciliation");
+
+        Assert.Equal("https://gitlab.com/-/user_settings/personal_access_tokens/granular/new", com.TokenPage(null).AbsoluteUri);
+        Assert.Equal("https://gitlab.com/-/user_settings/personal_access_tokens/granular/new", com.TokenPage("ignored").AbsoluteUri);
+        Assert.Equal("https://gitlab.com/-/user_settings/personal_access_tokens?name=VisualCommit&scopes=api", com.LegacyTokenPage.AbsoluteUri);
+        Assert.Equal("https://gitlab.com/northfield/platform/services/billing/invoice-generation-and-reconciliation/-/merge_requests", com.PullRequestsPage(nested).AbsoluteUri);
+        Assert.Equal("https://gitlab.com/Ada.Lovelace/web_app/-/merge_requests", com.PullRequestsPage(nested with { Owner = "Ada.Lovelace", Name = "web_app" }).AbsoluteUri);
+        Assert.Equal("http://127.0.0.1:47398/-/user_settings/personal_access_tokens/granular/new", fake.TokenPage(null).AbsoluteUri);
+        Assert.Equal("http://127.0.0.1:47398/-/user_settings/personal_access_tokens?name=VisualCommit&scopes=api", fake.LegacyTokenPage.AbsoluteUri);
+        Assert.Equal("http://127.0.0.1:47398/ada/web-app/-/merge_requests", fake.PullRequestsPage(nested with { Host = "127.0.0.1:47398", Owner = "ada", Name = "web-app" }).AbsoluteUri);
+    }
+
+    /// <summary>A provider that sends nothing: every test here is without the network.</summary>
+    private static GitLabProvider Provider(GitLabEndpoints endpoints) =>
+        new(endpoints, () => new RecordingHttpHandler(_ => throw new InvalidOperationException("No request is sent here.")), new ListLog(), TimeProvider.System);
 }
