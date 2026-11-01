@@ -42,7 +42,8 @@ public sealed partial class FakeAzureDevOps
 {
     private const int DefaultTop = 101;
 
-    private static readonly Regex VersionPattern = new(@"^(\d+)\.(\d+)(-preview(\.(\d+))?)?$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    /// <summary>An api-version's form, ASCII digits only (<c>\d</c> would take any Unicode digit, which <c>int</c> does not read).</summary>
+    private static readonly Regex VersionPattern = new(@"^([0-9]+)\.([0-9]+)(-preview(\.([0-9]+))?)?\z", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     private enum Kind
     {
@@ -224,9 +225,10 @@ public sealed partial class FakeAzureDevOps
         }
 
         var (org, project) = (prefix[0], prefix[1]);
+        var projectKey = ProjectKeyName(org, project);
         if (rest.Length == 3 && Is(1, "pullrequests") && method == "GET" && Number(rest[2]) is { } byId)
         {
-            return new Route(Kind.Pull, org, project, null, byId, Key("pull", org, project, byId.ToString(CultureInfo.InvariantCulture)));
+            return new Route(Kind.Pull, org, project, null, byId, Key("pull", org, projectKey, byId.ToString(CultureInfo.InvariantCulture)));
         }
 
         if (!Is(1, "repositories"))
@@ -236,22 +238,37 @@ public sealed partial class FakeAzureDevOps
 
         if (rest.Length == 2)
         {
-            return method == "GET" ? new Route(Kind.Repos, org, project, null, 0, Key("repos", org, project)) : none;
+            return method == "GET" ? new Route(Kind.Repos, org, project, null, 0, Key("repos", org, projectKey)) : none;
         }
 
         var repository = rest[2];
         var named = RepositoryKeyName(org, project, repository);
         return (rest.Length, method) switch
         {
-            (3, "GET") => new Route(Kind.Repo, org, project, repository, 0, Key("repo", org, project, named)),
-            (4, "GET") when Is(3, "pullrequests") => new Route(Kind.Pulls, org, project, repository, 0, Key("pulls", org, project, named)),
-            (4, "POST") when Is(3, "pullrequests") => new Route(Kind.Create, org, project, repository, 0, Key("create", org, project, named)),
-            (5, "GET") when Is(3, "pullrequests") && Number(rest[4]) is { } n => new Route(Kind.Pull, org, project, repository, n, Key("pull", org, project, rest[4])),
-            (5, "PATCH") when Is(3, "pullrequests") && Number(rest[4]) is { } n => new Route(Kind.Update, org, project, repository, n, Key("update", org, project, rest[4])),
-            (4, "GET") when Is(3, "refs") => new Route(Kind.Refs, org, project, repository, 0, Key("refs", org, project, named)),
-            (4, "POST") when Is(3, "refs") => new Route(Kind.RefUpdates, org, project, repository, 0, Key("refs", org, project, named)),
+            (3, "GET") => new Route(Kind.Repo, org, project, repository, 0, Key("repo", org, projectKey, named)),
+            (4, "GET") when Is(3, "pullrequests") => new Route(Kind.Pulls, org, project, repository, 0, Key("pulls", org, projectKey, named)),
+            (4, "POST") when Is(3, "pullrequests") => new Route(Kind.Create, org, project, repository, 0, Key("create", org, projectKey, named)),
+            (5, "GET") when Is(3, "pullrequests") && Number(rest[4]) is { } n => new Route(Kind.Pull, org, project, repository, n, Key("pull", org, projectKey, rest[4])),
+            (5, "PATCH") when Is(3, "pullrequests") && Number(rest[4]) is { } n => new Route(Kind.Update, org, project, repository, n, Key("update", org, projectKey, rest[4])),
+            (4, "GET") when Is(3, "refs") => new Route(Kind.Refs, org, project, repository, 0, Key("refs", org, projectKey, named)),
+            (4, "POST") when Is(3, "refs") => new Route(Kind.RefUpdates, org, project, repository, 0, Key("refs", org, projectKey, named)),
             _ => none,
         };
+    }
+
+    /// <summary>A project's name in a key: the stored name when the segment is its GUID (the fake's own addresses name it so), else the segment.</summary>
+    private string ProjectKeyName(string organization, string project)
+    {
+        if (!Guid.TryParse(project, out _))
+        {
+            return project;
+        }
+
+        lock (Gate)
+        {
+            var owner = OrganizationLocked(organization);
+            return (owner is null ? null : ProjectLocked(owner, project))?.Name ?? project;
+        }
     }
 
     /// <summary>A repository's name in a key: the stored name when the segment is its GUID, else the segment.</summary>
@@ -308,14 +325,17 @@ public sealed partial class FakeAzureDevOps
             return (null, VersionError("VssInvalidApiResourceVersionException", "The fake of Azure DevOps needs an api-version (D370): the request sent none. Api version string must be in the format: {Major}.{Minor}[-preview[.{ResourceVersion}]]."));
         }
 
+        // Malformed, or a part beyond an int: that typeKey in the service's words (MEASURED r5 1.4).
         var match = VersionPattern.Match(raw);
-        if (!match.Success)
+        var revision = 1;
+        if (!match.Success
+            || !int.TryParse(match.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var major)
+            || !int.TryParse(match.Groups[2].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var minor)
+            || match.Groups[5].Success && !int.TryParse(match.Groups[5].Value, NumberStyles.None, CultureInfo.InvariantCulture, out revision))
         {
             return (null, VersionError("VssInvalidApiResourceVersionException", $"Invalid api version string: \"{raw}\". Api version string must be in the format: {{Major}}.{{Minor}}[-preview[.{{ResourceVersion}}]]."));
         }
 
-        var major = int.Parse(match.Groups[1].Value, CultureInfo.InvariantCulture);
-        var minor = int.Parse(match.Groups[2].Value, CultureInfo.InvariantCulture);
         var version = string.Create(CultureInfo.InvariantCulture, $"{major}.{minor}");
         if (major > 7 || major == 7 && minor > 2)
         {
@@ -323,7 +343,6 @@ public sealed partial class FakeAzureDevOps
         }
 
         var preview = match.Groups[3].Success;
-        var revision = match.Groups[5].Success ? int.Parse(match.Groups[5].Value, CultureInfo.InvariantCulture) : 1;
         var previewOnly = kind is Kind.Connection or Kind.Areas;
         if (!preview && (previewOnly || major == 7 && minor == 2))
         {
@@ -494,8 +513,8 @@ public sealed partial class FakeAzureDevOps
     /// <summary>
     /// <c>pulls:</c> after the ref sync: <c>searchCriteria.status</c> (<c>active</c> by default,
     /// <c>abandoned</c>, <c>completed</c>, <c>all</c>; READ; any other value <c>active</c>, ASSUMED),
-    /// <c>$skip</c>, <c>$top</c> (absent 101, READ community; capped at <see cref="FakeHostingService.MaxPerPage"/>,
-    /// ASSUMED); id descending and <c>count</c> the page's (MEASURED r5 3.1).
+    /// <c>$skip</c>, <c>$top</c> (absent 101, READ community, whatever <see cref="FakeHostingService.MaxPerPage"/> is;
+    /// one sent capped at <see cref="FakeHostingService.MaxPerPage"/>, ASSUMED); id descending and <c>count</c> the page's (MEASURED r5 3.1).
     /// </summary>
     private async Task<AuthRemoteResponse> PullsAsync(FakeServiceCall call, Route route, FakeAzureOrganization organization, FakeAzureToken? caller, string served, CancellationToken ct)
     {
@@ -509,8 +528,9 @@ public sealed partial class FakeAzureDevOps
         var query = call.Request.Query;
         var status = QueryValue(query, "searchCriteria.status")?.ToLowerInvariant();
         var skip = Math.Max(0, IntOf(QueryValue(query, "$skip")) ?? 0);
-        var top = IntOf(QueryValue(query, "$top")) is { } asked and >= 0 ? asked : DefaultTop;
-        top = Math.Min(top, MaxPerPage);
+        // MaxPerPage caps a $top the request sends; with none the page is 101 rows whatever MaxPerPage
+        // is, so that a client that forgets $top and expects pages of 100 is caught (design 3.3).
+        var top = IntOf(QueryValue(query, "$top")) is { } asked and >= 0 ? Math.Min(asked, MaxPerPage) : DefaultTop;
         List<FakeAzurePullRequest> page;
         lock (Gate)
         {
@@ -803,9 +823,10 @@ public sealed partial class FakeAzureDevOps
     private AuthRemoteResponse SinglePull(FakeAzurePullRequest pull, FakeAzureToken? caller, string served, int status)
     {
         var forkFacts = pull.Fork is null ? default : FolderFacts(pull.Fork);
+        var facts = FolderFacts(pull.Repository);
         lock (Gate)
         {
-            return Json(status, PullRequestJsonLocked(pull, caller is null, single: true, forkFacts), served);
+            return Json(status, PullRequestJsonLocked(pull, caller is null, single: true, forkFacts, facts), served);
         }
     }
 
@@ -860,7 +881,9 @@ public sealed partial class FakeAzureDevOps
 
         if (fault == FakeAzureDevOpsFault.Throttled)
         {
-            return Json(429, ErrorJson("TF400733: The request has been canceled: Request was blocked due to exceeding usage of resource 'Core' in namespace 'User'.", "Microsoft.TeamFoundation.Framework.Server.RequestBlockedException, Microsoft.TeamFoundation.Framework.Server", "RequestBlockedException"), served, RateLimitHeaders(retryAfter: "30", remaining: "0", delay: null));
+            // r5 7's words (READ), its placeholders <resource name> and <namespace ID> filled in with
+            // Core and User, without quotes (the names ASSUMED, as the typeKey).
+            return Json(429, ErrorJson("TF400733: The request has been canceled: Request was blocked due to exceeding usage of resource Core in namespace User.", "Microsoft.TeamFoundation.Framework.Server.RequestBlockedException, Microsoft.TeamFoundation.Framework.Server", "RequestBlockedException"), served, RateLimitHeaders(retryAfter: "30", remaining: "0", delay: null));
         }
 
         if (fault == FakeAzureDevOpsFault.VersionRefused)

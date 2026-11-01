@@ -91,23 +91,17 @@ public sealed class FakeAzureDevOpsGitTests
         Assert.Contains(fake.GitRequests, request => request.Status == 401 && request.UserName is null);
         Assert.All(fake.GitRequests, request => Assert.StartsWith("/Fernhill-Labs/Mobile%20App/_git/mobile-app/", request.Path, StringComparison.Ordinal));
 
-        // The organization as the user (the service's own remote URL), the names in another case.
-        var asOrganization = await copy.GitAllowingFailureAsync("ls-remote", $"http://Fernhill-Labs:{token}@127.0.0.1:{fake.Port}/fernhill-labs/mobile%20app/_git/MOBILE-APP");
-        Assert.True(asOrganization.Succeeded, asOrganization.StandardError);
-        Assert.Equal((200, adaLogin, "Fernhill-Labs"), (fake.GitRequests[^1].Status, fake.GitRequests[^1].UserName, fake.GitRequests[^1].GivenUserName));
+        // The organization as the user (the service's own remote URL), the names in another case: a
+        // whole clone, its pack fetched as Ada.
+        await AssertClonedAsync(copy, fake, $"http://Fernhill-Labs:{token}@127.0.0.1:{fake.Port}/fernhill-labs/mobile%20app/_git/MOBILE-APP", "/fernhill-labs/mobile%20app/_git/MOBILE-APP/", "as-organization", adaLogin, "Fernhill-Labs");
 
-        // A repository named as its project is served at {o}/_git/{r} too (MEASURED r5 6.1).
+        // A repository named as its project is served at {o}/_git/{r} too (MEASURED r5 6.1), cloned
+        // whole through that path; and listed at its own.
         await fake.AddRepositoryAsync("Fernhill-Labs", "Mobile App", "Mobile App", sourceRepository: mobile.BarePath, ct: Cancelled);
-        foreach (var url in new[]
-        {
-            $"http://x-access-token:{token}@127.0.0.1:{fake.Port}/Fernhill-Labs/_git/Mobile%20App",
-            Url(fake, "x-access-token", token, "Fernhill-Labs", "Mobile App", "Mobile App"),
-        })
-        {
-            var listed = await copy.GitAllowingFailureAsync("ls-remote", url, "refs/heads/main");
-            Assert.True(listed.Succeeded, listed.StandardError);
-            Assert.StartsWith(await RevAsync(copy, mobile.BarePath, "refs/heads/main"), listed.StandardOutput, StringComparison.Ordinal);
-        }
+        await AssertClonedAsync(copy, fake, $"http://x-access-token:{token}@127.0.0.1:{fake.Port}/Fernhill-Labs/_git/Mobile%20App", "/Fernhill-Labs/_git/Mobile%20App/", "short-path", adaLogin, "x-access-token");
+        var listed = await copy.GitAllowingFailureAsync("ls-remote", Url(fake, "x-access-token", token, "Fernhill-Labs", "Mobile App", "Mobile App"), "refs/heads/main");
+        Assert.True(listed.Succeeded, listed.StandardError);
+        Assert.StartsWith(await RevAsync(copy, mobile.BarePath, "refs/heads/main"), listed.StandardOutput, StringComparison.Ordinal);
 
         // Azure DevOps strips no final .git (MEASURED r5 6.1).
         var suffixed = await copy.GitAllowingFailureAsync("ls-remote", Url(fake, "x-access-token", token, "Fernhill-Labs", "Mobile App", "mobile-app.git"));
@@ -229,6 +223,52 @@ public sealed class FakeAzureDevOpsGitTests
         Assert.False(anonymousPush.Succeeded);
         Assert.Contains(fake.GitRequests, request => request.Path.Contains("/Open%20Source/", StringComparison.Ordinal) && request.Query.Contains("service=git-receive-pack", StringComparison.Ordinal) && request.Status == 401);
         Assert.Empty(fake.Errors);
+    }
+
+    [Fact]
+    public async Task A_repository_named_with_a_final_dot_git_is_public_pushed_to_and_given_its_merge_ref()
+    {
+        var copy = await Scenarios.Hosting7bAsync();
+        await using var served = await Scenarios.ServeHosting7bAsync(copy, 0, 0, 0, ownsCopy: true, ct: Cancelled);
+        var fake = served.AzureDevOps;
+        var mobile = fake.Repository("Fernhill-Labs", "Mobile App", "mobile-app");
+        var ada = fake.User("Fernhill-Labs", "Ada Lovelace");
+
+        // Azure DevOps takes a final .git in a name (r5 6.1); git's server names it without (AuthRemoteServer).
+        fake.AddProject("Fernhill-Labs", "Open Source", isPublic: true);
+        var tools = await fake.AddRepositoryAsync("Fernhill-Labs", "Open Source", "tools.git", sourceRepository: mobile.BarePath, ct: Cancelled);
+        var pull = fake.AddPullRequest(tools, "Add the sign-in page", ada, "feature/sign-in", "main");
+        await Assert.ThrowsAsync<ArgumentException>(() => fake.AddRepositoryAsync("Fernhill-Labs", "Open Source", "TOOLS", ct: Cancelled));
+
+        // Cloned with no credential, as a public project's.
+        var anonymousUrl = $"http://127.0.0.1:{fake.Port}/Fernhill-Labs/Open%20Source/_git/tools.git";
+        var cloned = await copy.GitAllowingFailureAsync("clone", "--quiet", anonymousUrl, copy.SiblingPath("tools-anonymous"));
+        Assert.True(cloned.Succeeded, cloned.StandardError);
+
+        // Listed signed in with its merge ref, which the sync wrote.
+        var url = Url(fake, "x-access-token", served.AzureDevOpsToken, "Fernhill-Labs", "Open Source", "tools.git");
+        var listing = await copy.GitAllowingFailureAsync("ls-remote", url);
+        Assert.True(listing.Succeeded, listing.StandardError);
+        Assert.Contains($"refs/pull/{pull.Id}/merge", RefNames(listing.StandardOutput));
+        Assert.Equal(await RevAsync(copy, tools.BarePath, "refs/heads/feature/sign-in"), await RevAsync(copy, tools.BarePath, $"refs/pull/{pull.Id}/merge^2"));
+
+        // A contributor's write token pushes.
+        var push = await copy.GitAllowingFailureAsync("push", "--quiet", url, "local-work:refs/heads/local-work");
+        Assert.True(push.Succeeded, push.StandardError);
+        Assert.NotNull(await RevAsync(copy, tools.BarePath, "refs/heads/local-work"));
+        Assert.Empty(fake.Errors);
+    }
+
+    /// <summary>Clones <paramref name="url"/> into a new folder: its head is main's last commit, a pack was fetched, and every 200 git request on <paramref name="path"/> signed in as <paramref name="login"/> with <paramref name="givenUser"/>.</summary>
+    private static async Task AssertClonedAsync(TempRepo copy, FakeAzureDevOps fake, string url, string path, string folder, string login, string givenUser)
+    {
+        var clone = copy.SiblingPath(folder);
+        var cloned = await copy.GitAllowingFailureAsync("clone", "--quiet", url, clone);
+        Assert.True(cloned.Succeeded, cloned.StandardError);
+        Assert.Equal("Add the docs folder", await GitInAsync(copy, clone, "log", "-1", "--format=%s"));
+        var signedIn = fake.GitRequests.Where(request => request.Status == 200 && request.Path.StartsWith(path, StringComparison.Ordinal)).ToList();
+        Assert.Contains(signedIn, request => request.Method == "POST" && request.Path.EndsWith("/git-upload-pack", StringComparison.Ordinal));
+        Assert.All(signedIn, request => Assert.Equal((login, givenUser), (request.UserName, request.GivenUserName)));
     }
 
     private static async Task AssertRefusedAsync(TempRepo copy, FakeAzureDevOps fake, string url, string givenUser = "x-access-token")

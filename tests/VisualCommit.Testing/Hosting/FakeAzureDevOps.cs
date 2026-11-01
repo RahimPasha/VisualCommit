@@ -285,8 +285,14 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
     private FakeAzureOrganization? OrganizationLocked(string name) =>
         _organizations.Find(organization => string.Equals(organization.Name, name, StringComparison.OrdinalIgnoreCase));
 
-    private FakeAzureProject? ProjectLocked(FakeAzureOrganization organization, string name) =>
-        _projects.Find(project => project.Organization == organization && string.Equals(project.Name, name, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// A project of <paramref name="organization"/> by name, without case (MEASURED r5 2.1), or by its
+    /// GUID, as the fake's own <c>url</c> and <c>_links</c> name it (the API's addresses name the project
+    /// by GUID, MEASURED r5 2.1; that the API takes the GUID in the path READ r5 6.1, MEASURED there on git).
+    /// </summary>
+    private FakeAzureProject? ProjectLocked(FakeAzureOrganization organization, string nameOrId) =>
+        _projects.Find(project => project.Organization == organization && string.Equals(project.Name, nameOrId, StringComparison.OrdinalIgnoreCase))
+        ?? (Guid.TryParse(nameOrId, out var id) ? _projects.Find(project => project.Organization == organization && project.Id == id) : null);
 
     /// <summary>A repository of <paramref name="project"/> by name or GUID, without case (MEASURED r5 2.1).</summary>
     private FakeAzureRepository? RepositoryLocked(FakeAzureProject project, string nameOrId) =>
@@ -294,9 +300,17 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
             && (string.Equals(repository.Name, nameOrId, StringComparison.OrdinalIgnoreCase)
                 || Guid.TryParse(nameOrId, out var id) && repository.Id == id));
 
-    /// <summary>A repository by its folder's name (<c>{o}/{p}/_git/{r}</c>), without case.</summary>
-    private FakeAzureRepository? RepositoryByFolderLocked(string folder) =>
-        _repositories.Find(repository => string.Equals(repository.FolderName, folder, StringComparison.OrdinalIgnoreCase));
+    /// <summary>
+    /// A repository by the name <see cref="AuthRemoteServer"/>'s callbacks give it: its folder's name
+    /// (<c>{o}/{p}/_git/{r}</c>) less one final <c>.git</c>, cut as the server cuts it (ordinal), so that
+    /// a repository named <c>tools.git</c> is found as <c>…/_git/tools</c>; without case.
+    /// </summary>
+    private FakeAzureRepository? RepositoryByFolderLocked(string served) =>
+        _repositories.Find(repository => string.Equals(ServedName(repository.FolderName), served, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>A folder's name less one final <c>.git</c> (ordinal), as <see cref="AuthRemoteServer"/> names a served repository to its callbacks.</summary>
+    private static string ServedName(string folder) =>
+        folder.EndsWith(".git", StringComparison.Ordinal) && folder.Length > 4 ? folder[..^4] : folder;
 
     /// <summary>A made-up GUID of <paramref name="kind"/> (1 organizations, 2 projects, 3 users, 4 repositories, 5 merge ids), fixed by the order things are added in.</summary>
     private Guid MadeUpLocked(int kind) => MadeUp(kind, ++_madeUp);

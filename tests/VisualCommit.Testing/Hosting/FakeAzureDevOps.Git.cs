@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IO.Enumeration;
 using System.Text;
 using VisualCommit.Core;
 
@@ -39,6 +40,12 @@ public sealed partial class FakeAzureDevOps
             if (RepositoryLocked(owner, name) is not null)
             {
                 throw new ArgumentException($"{owner} has the repository {name} already.", nameof(name));
+            }
+
+            // x beside x.git: git's callbacks would get one name for both (ServedName).
+            if (_repositories.Find(other => other.Project == owner && string.Equals(ServedName(other.Name), ServedName(name), StringComparison.OrdinalIgnoreCase)) is { } twin)
+            {
+                throw new ArgumentException($"{owner} has the repository {twin.Name}, which git's server would name as {name}.", nameof(name));
             }
 
             if (forkOf is not null && !_repositories.Contains(forkOf))
@@ -380,9 +387,50 @@ public sealed partial class FakeAzureDevOps
         const string Prefix = "ref: refs/heads/";
         var head = File.ReadAllText(Path.Combine(bare, "HEAD")).Trim();
         var branch = head.StartsWith(Prefix, StringComparison.Ordinal) ? head[Prefix.Length..] : "main";
-        var objects = Path.Combine(bare, "objects");
-        var size = Directory.Exists(objects) ? Directory.EnumerateFiles(objects, "*", SearchOption.AllDirectories).Sum(file => new FileInfo(file).Length) : 0;
-        return ("refs/heads/" + branch, size);
+        return ("refs/heads/" + branch, ObjectsSize(Path.Combine(bare, "objects")));
+    }
+
+    /// <summary>
+    /// The bytes of the files under <paramref name="objects"/>, read outside any lock while git may be
+    /// writing there: each file's length comes from the directory listing itself (no second look that a
+    /// file git renamed or deleted in between could fail), a file that vanished counts 0, and a listing
+    /// git disturbs ends the count with what it has (the value only fills <c>size</c>, which nothing reads).
+    /// </summary>
+    private static long ObjectsSize(string objects)
+    {
+        if (!Directory.Exists(objects))
+        {
+            return 0;
+        }
+
+        var options = new EnumerationOptions { RecurseSubdirectories = true, IgnoreInaccessible = true, AttributesToSkip = 0 };
+        var files = new FileSystemEnumerable<long>(objects, LengthOf, options) { ShouldIncludePredicate = (ref FileSystemEntry entry) => !entry.IsDirectory };
+        long size = 0;
+        try
+        {
+            foreach (var length in files)
+            {
+                size += length;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // A folder git removed while it was listed: the count so far.
+        }
+
+        return size;
+
+        static long LengthOf(ref FileSystemEntry entry)
+        {
+            try
+            {
+                return entry.Length;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                return 0;
+            }
+        }
     }
 
     /// <summary>Whether a bare repository has no branch, read from its files.</summary>

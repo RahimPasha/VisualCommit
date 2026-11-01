@@ -252,32 +252,40 @@ public sealed partial class FakeAzureDevOps
     }
 
     /// <summary>
-    /// A pull request (MEASURED r5 3.1, member order as served): <c>repository</c> with its project
-    /// <c>"unchanged"</c> and the zero date; <c>createdBy</c>; no web address. In a list the description
-    /// is cut to 400 characters (MEASURED r5 0.8); one alone adds <c>artifactId</c> and <c>_links</c>
-    /// (MEASURED). A fork's: <c>sourceRefName</c> <c>refs/pull/&lt;n&gt;/source</c> and
-    /// <c>forkSource {name, objectId: null, repository}</c> (READ g1 G2.6). <paramref name="anonymous"/>:
-    /// <c>uniqueName</c> and <c>imageUrl</c> null (MEASURED r5 3.1). Under <see cref="FakeHostingService.Gate"/>.
+    /// A pull request (MEASURED r5 3.1, member order as served; the single's from r5's single GET,
+    /// MEASURED, as r1's and r4's appended notes read it). In a list: <c>repository</c> trimmed to
+    /// <c>id, name, url, project</c>, its project <c>"unchanged"</c> with the zero date (MEASURED g4 D4 §3),
+    /// the description cut to 400 characters (MEASURED r5 0.8), and the tail <c>reviewers, url,
+    /// supportsIterations</c>. Alone (<paramref name="single"/>: <c>pull:</c>, create, update):
+    /// <c>repository</c> whole, its project with its own state, visibility and dated
+    /// <c>lastUpdateTime</c>, then <c>size</c> to <c>isInMaintenance</c> without <c>defaultBranch</c> (as
+    /// served), and the tail <c>reviewers, url, _links, supportsIterations, artifactId</c>. Both:
+    /// <c>createdBy</c>; no web address. A fork's: <c>sourceRefName</c> <c>refs/pull/&lt;n&gt;/source</c> and
+    /// <c>forkSource {name, objectId: null, repository}</c> after <c>reviewers</c> (READ g1 G2.6).
+    /// <paramref name="anonymous"/>: <c>uniqueName</c> and <c>imageUrl</c> null (MEASURED r5 3.1). Under
+    /// <see cref="FakeHostingService.Gate"/>; <paramref name="facts"/> are the target's when single.
     /// </summary>
-    private JsonObject PullRequestJsonLocked(FakeAzurePullRequest pull, bool anonymous, bool single, (string? DefaultBranch, long Size) forkFacts)
+    private JsonObject PullRequestJsonLocked(FakeAzurePullRequest pull, bool anonymous, bool single, (string? DefaultBranch, long Size) forkFacts, (string? DefaultBranch, long Size) facts = default)
     {
         var repository = pull.Repository;
         var json = new JsonObject
         {
-            ["repository"] = new JsonObject
-            {
-                ["id"] = repository.Id.ToString("D", CultureInfo.InvariantCulture),
-                ["name"] = repository.Name,
-                ["url"] = ApiUrl(repository),
-                ["project"] = new JsonObject
+            ["repository"] = single
+                ? RepositoryJson(repository, (null, facts.Size), single: false)
+                : new JsonObject
                 {
-                    ["id"] = repository.Project.Id.ToString("D", CultureInfo.InvariantCulture),
-                    ["name"] = repository.Project.Name,
-                    ["state"] = "unchanged",
-                    ["visibility"] = "unchanged",
-                    ["lastUpdateTime"] = ZeroDate,
+                    ["id"] = repository.Id.ToString("D", CultureInfo.InvariantCulture),
+                    ["name"] = repository.Name,
+                    ["url"] = ApiUrl(repository),
+                    ["project"] = new JsonObject
+                    {
+                        ["id"] = repository.Project.Id.ToString("D", CultureInfo.InvariantCulture),
+                        ["name"] = repository.Project.Name,
+                        ["state"] = "unchanged",
+                        ["visibility"] = "unchanged",
+                        ["lastUpdateTime"] = ZeroDate,
+                    },
                 },
-            },
             ["pullRequestId"] = pull.Id,
             ["codeReviewId"] = pull.Id,
             ["status"] = pull.Status switch
@@ -333,10 +341,8 @@ public sealed partial class FakeAzureDevOps
 
         var url = ApiUrl(repository, string.Create(CultureInfo.InvariantCulture, $"/pullRequests/{pull.Id}"));
         json["url"] = url;
-        json["supportsIterations"] = true;
         if (single)
         {
-            json["artifactId"] = string.Create(CultureInfo.InvariantCulture, $"vstfs:///Git/PullRequestId/{repository.Project.Id:D}/{repository.Id:D}/{pull.Id}");
             json["_links"] = new JsonObject
             {
                 ["self"] = Link(url),
@@ -350,6 +356,12 @@ public sealed partial class FakeAzureDevOps
                 ["createdBy"] = Link(IdentityUrl(pull.Creator)),
                 ["iterations"] = Link(url + "/iterations"),
             };
+        }
+
+        json["supportsIterations"] = true;
+        if (single)
+        {
+            json["artifactId"] = string.Create(CultureInfo.InvariantCulture, $"vstfs:///Git/PullRequestId/{repository.Project.Id:D}/{repository.Id:D}/{pull.Id}");
         }
 
         return json;

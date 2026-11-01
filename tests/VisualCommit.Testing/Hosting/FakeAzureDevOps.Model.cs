@@ -312,7 +312,7 @@ public sealed class FakeAzureDevOpsFault : FakeServiceFault
     /// <summary>The token ignored: <c>connectionData</c> answers the Anonymous identity, any other route as to no credential (g1 G0.3, READ).</summary>
     public static FakeAzureDevOpsFault AnonymousIdentity { get; } = new(nameof(AnonymousIdentity));
 
-    /// <summary>429 TF400733 with <c>Retry-After</c> and <c>X-RateLimit-*</c> (READ r5 7; the typeKey ASSUMED).</summary>
+    /// <summary>429 TF400733 with <c>Retry-After</c> and <c>X-RateLimit-*</c> (READ r5 7: "…usage of resource &lt;resource name&gt; in namespace &lt;namespace ID&gt;."; the names filled in, <c>Core</c> and <c>User</c>, and the typeKey ASSUMED).</summary>
     public static FakeAzureDevOpsFault Throttled { get; } = new(nameof(Throttled));
 
     /// <summary>The normal answer with <c>Retry-After</c> and <c>X-RateLimit-Delay</c> (READ r5 7: "still returns HTTP 200").</summary>

@@ -144,6 +144,13 @@ public sealed class FakeAzureDevOpsTests
             "The fake of Azure DevOps needs an api-version (D370): the request sent none. Api version string must be in the format: {Major}.{Minor}[-preview[.{ResourceVersion}]].");
         AssertError(await SendAsync(fake, HttpMethod.Get, "Fernhill-Labs/_apis/git/repositories?api-version=abc", fixture.AdaToken), 400, "VssInvalidApiResourceVersionException",
             "Invalid api version string: \"abc\". Api version string must be in the format: {Major}.{Minor}[-preview[.{ResourceVersion}]].");
+
+        // A part beyond an int, or digits that are not ASCII (Arabic-Indic seven and one), is malformed too.
+        foreach (var (sent, raw) in new[] { ("99999999999.0", "99999999999.0"), ("7.1-preview.99999999999", "7.1-preview.99999999999"), ("%D9%A7.%D9%A1", "٧.١") })
+        {
+            AssertError(await SendAsync(fake, HttpMethod.Get, "Fernhill-Labs/_apis/git/repositories?api-version=" + sent, fixture.AdaToken), 400, "VssInvalidApiResourceVersionException",
+                $"Invalid api version string: \"{raw}\". Api version string must be in the format: {{Major}}.{{Minor}}[-preview[.{{ResourceVersion}}]].");
+        }
         AssertError(await SendAsync(fake, HttpMethod.Get, "Fernhill-Labs/_apis/git/repositories?api-version=7.3", fixture.AdaToken), 400, "VssVersionOutOfRangeException",
             "The requested REST API version of 7.3 is out of range for this server. The latest REST API version this server supports is 7.2.");
         AssertError(await SendAsync(fake, HttpMethod.Get, "Fernhill-Labs/_apis/connectionData?api-version=7.1", fixture.AdaToken), 400, "VssInvalidPreviewVersionException",
@@ -234,6 +241,18 @@ public sealed class FakeAzureDevOpsTests
         Assert.False(parent.TryGetProperty("webUrl", out _));
         var byId = await SendAsync(fake, HttpMethod.Get, $"{Project}/_apis/git/repositories/{fixture.MobileApp.Id}?api-version=7.1", fixture.AdaToken);
         Assert.Equal(("mobile-app", "repo:fernhill-labs/mobile app/mobile-app"), (byId.Json.GetProperty("name").GetString(), fake.Requests[^1].Route));
+
+        // The fake's own addresses, the project as its GUID, are answered, keyed by the stored names.
+        foreach (var (address, key) in new[]
+        {
+            (mobile.GetProperty("url").GetString()!, "repo:fernhill-labs/mobile app/mobile-app"),
+            (byName.Json.GetProperty("_links").GetProperty("self").GetProperty("href").GetString()!, "repo:fernhill-labs/mobile app/mobile-app-fork"),
+        })
+        {
+            Assert.Contains($"/{fixture.MobileApp.Project.Id}/", address, StringComparison.Ordinal);
+            var followed = await SendAsync(fake, HttpMethod.Get, address + "?api-version=7.1", fixture.AdaToken);
+            Assert.Equal((200, key), (followed.Status, fake.Requests[^1].Route));
+        }
         AssertError(await SendAsync(fake, HttpMethod.Get, Project + "/_apis/git/repositories/missing?api-version=7.1", fixture.AdaToken), 404, "GitRepositoryNotFoundException",
             "TF401019: The Git repository with name or identifier missing does not exist or you do not have permissions for the operation you are attempting.");
         AssertError(await SendAsync(fake, HttpMethod.Get, "Fernhill-Labs/Nowhere/_apis/git/repositories?api-version=7.1", fixture.AdaToken), 404, "ProjectDoesNotExistWithNameException", null);
@@ -299,7 +318,27 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal((401, "pull:fernhill-labs/mobile app/14"), (alone.Json.GetProperty("description").GetString()!.Length, fake.Requests[^1].Route));
         Assert.Equal($"vstfs:///Git/PullRequestId/{fixture.MobileApp.Project.Id}/{fixture.MobileApp.Id}/14", alone.Json.GetProperty("artifactId").GetString());
         Assert.Equal(["self", "repository", "workItems", "sourceBranch", "targetBranch", "statuses", "sourceCommit", "targetCommit", "createdBy", "iterations"], alone.Json.GetProperty("_links").EnumerateObject().Select(property => property.Name));
-        Assert.Equal(11, (await SendAsync(fake, HttpMethod.Get, Project + "/_apis/git/pullrequests/11?api-version=7.1", fixture.AdaToken)).Json.GetProperty("pullRequestId").GetInt32());
+
+        // Alone, the member order as served and the repository whole: its project with its own state,
+        // visibility and date, not the list's "unchanged" and zero date (r5's single GET).
+        Assert.Equal(
+            ["repository", "pullRequestId", "codeReviewId", "status", "createdBy", "creationDate", "title", "description", "sourceRefName", "targetRefName", "mergeStatus", "isDraft", "mergeId", "lastMergeSourceCommit", "lastMergeTargetCommit", "lastMergeCommit", "reviewers", "url", "_links", "supportsIterations", "artifactId"],
+            alone.Json.EnumerateObject().Select(property => property.Name));
+        var aloneRepository = alone.Json.GetProperty("repository");
+        Assert.Equal(
+            ["id", "name", "url", "project", "size", "remoteUrl", "sshUrl", "webUrl", "isDisabled", "isInMaintenance"],
+            aloneRepository.EnumerateObject().Select(property => property.Name));
+        var aloneProject = aloneRepository.GetProperty("project");
+        Assert.Equal(
+            ("The mobile app.", "wellFormed", "private", "2026-01-02T09:00:00.0000000Z"),
+            (aloneProject.GetProperty("description").GetString(), aloneProject.GetProperty("state").GetString(), aloneProject.GetProperty("visibility").GetString(), aloneProject.GetProperty("lastUpdateTime").GetString()));
+
+        // Its own url, the project as its GUID, is answered.
+        var selfUrl = alone.Json.GetProperty("url").GetString()!;
+        Assert.Contains($"/{fixture.MobileApp.Project.Id}/", selfUrl, StringComparison.Ordinal);
+        var self = await SendAsync(fake, HttpMethod.Get, selfUrl + "?api-version=7.1", fixture.AdaToken);
+        Assert.Equal((200, 14, "pull:fernhill-labs/mobile app/14"), (self.Status, self.Json.GetProperty("pullRequestId").GetInt32(), fake.Requests[^1].Route));
+        Assert.Equal(11,(await SendAsync(fake, HttpMethod.Get, Project + "/_apis/git/pullrequests/11?api-version=7.1", fixture.AdaToken)).Json.GetProperty("pullRequestId").GetInt32());
         AssertError(await SendAsync(fake, HttpMethod.Get, Pulls + "/99?api-version=7.1", fixture.AdaToken), 404, "GitPullRequestNotFoundException", "TF401180: The requested pull request was not found.");
 
         // Statuses, pages and the page's cap.
@@ -312,7 +351,7 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal(1, page.Json.GetProperty("count").GetInt32());
         fake.MaxPerPage = 2;
         Assert.Equal([13, 12], Numbers(await SendAsync(fake, HttpMethod.Get, Pulls + "?$top=50&api-version=7.1", fixture.AdaToken)));
-        Assert.Equal([13, 12], Numbers(await SendAsync(fake, HttpMethod.Get, Pulls + "?api-version=7.1", fixture.AdaToken)));
+        Assert.Equal([13, 12, 11], Numbers(await SendAsync(fake, HttpMethod.Get, Pulls + "?api-version=7.1", fixture.AdaToken)));
 
         // A public project's pull request read without a credential has no address or image.
         fake.AddPullRequest(fixture.Manifest, Scenarios.Hosting7bManifestRequestTitle, fixture.Author, "update-manifest", "main", id: 5);
@@ -320,6 +359,85 @@ public sealed class FakeAzureDevOpsTests
         var anonymousCreator = anonymous.Json.GetProperty("value")[0].GetProperty("createdBy");
         Assert.Equal((JsonValueKind.Null, JsonValueKind.Null, "Test Author"), (anonymousCreator.GetProperty("uniqueName").ValueKind, anonymousCreator.GetProperty("imageUrl").ValueKind, anonymousCreator.GetProperty("displayName").GetString()));
         Assert.Equal("queued", anonymous.Json.GetProperty("value")[0].GetProperty("mergeStatus").GetString());
+        Assert.Empty(fake.Errors);
+    }
+
+    [Fact]
+    public async Task Without_top_a_page_holds_101_pull_requests_whatever_max_per_page_is_and_a_top_sent_is_capped()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var fake = fixture.Fake;
+        var sandbox = fake.Repository(Organization, "Mobile App", "sandbox");
+
+        // 102 pull requests marked Conflicts: no merge commit for any (design 3.5's cost rule).
+        for (var n = 0; n < 102; n++)
+        {
+            fake.AddPullRequest(sandbox, "Try idea " + n, fixture.Octo, "topic-" + n, "main").Conflicts = true;
+        }
+
+        const string SandboxPulls = Project + "/_apis/git/repositories/sandbox/pullrequests";
+        Assert.Equal(100, fake.MaxPerPage);
+        var whole = await SendAsync(fake, HttpMethod.Get, SandboxPulls + "?api-version=7.1", fixture.AdaToken);
+        Assert.Equal((200, 101), (whole.Status, whole.Json.GetProperty("count").GetInt32()));
+        Assert.Equal(Enumerable.Range(2, 101).Reverse(), Numbers(whole));
+        var asked = await SendAsync(fake, HttpMethod.Get, SandboxPulls + "?$top=150&api-version=7.1", fixture.AdaToken);
+        Assert.Equal(100, asked.Json.GetProperty("count").GetInt32());
+        Assert.Empty(fake.Errors);
+    }
+
+    [Fact]
+    public async Task A_repositorys_answer_survives_files_vanishing_under_its_objects_while_they_are_counted()
+    {
+        await using var fixture = await Fixture.CreateAsync();
+        var fake = fixture.Fake;
+
+        // As git's object writes and receive-pack's quarantine do: files made and removed under objects/.
+        var churn = Path.Combine(fixture.MobileApp.BarePath, "objects", "incoming-churn");
+        Directory.CreateDirectory(churn);
+        var names = Enumerable.Range(0, 32).Select(n => Path.Combine(churn, $"tmp_obj_{n}")).ToArray();
+        using var stop = new CancellationTokenSource();
+        var churner = Task.Run(() =>
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                foreach (var name in names)
+                {
+                    try
+                    {
+                        File.WriteAllBytes(name, [1]);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                    }
+                }
+
+                foreach (var name in names)
+                {
+                    try
+                    {
+                        File.Delete(name);
+                    }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                    {
+                    }
+                }
+            }
+        }, Cancelled);
+
+        try
+        {
+            for (var i = 0; i < 200; i++)
+            {
+                var answer = await SendAsync(fake, HttpMethod.Get, Project + "/_apis/git/repositories/mobile-app?api-version=7.1", fixture.AdaToken);
+                Assert.Equal(200, answer.Status);
+            }
+        }
+        finally
+        {
+            await stop.CancelAsync();
+            await churner;
+        }
+
         Assert.Empty(fake.Errors);
     }
 
@@ -452,8 +570,7 @@ public sealed class FakeAzureDevOpsTests
         var anonymous = await FailOnceAsync(FakeAzureDevOpsFault.AnonymousIdentity);
         Assert.Equal((200, AnonymousId), (anonymous.Status, anonymous.Json.GetProperty("authenticatedUser").GetProperty("id").GetString()));
         var throttled = await FailOnceAsync(FakeAzureDevOpsFault.Throttled);
-        AssertError(throttled, 429, "RequestBlockedException", null);
-        Assert.StartsWith("TF400733: ", throttled.Json.GetProperty("message").GetString(), StringComparison.Ordinal);
+        AssertError(throttled, 429, "RequestBlockedException", "TF400733: The request has been canceled: Request was blocked due to exceeding usage of resource Core in namespace User.");
         Assert.Equal(("30", "0", null), (throttled.Header("Retry-After"), throttled.Header("X-RateLimit-Remaining"), throttled.Header("X-RateLimit-Delay")));
         var delayed = await FailOnceAsync(FakeAzureDevOpsFault.Delayed);
         Assert.Equal((200, "0.500", "1"), (delayed.Status, delayed.Header("X-RateLimit-Delay"), delayed.Header("Retry-After")));
