@@ -166,7 +166,9 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
         return options with
         {
             AzureDevOps = AzureDevOps is null ? null : _azureDevOpsEndpoints ?? AzureDevOps.Endpoints,
-            CreateAzureDevOpsHandler = AzureDevOps is { } azure ? () => Recorded(HostingProvider.AzureDevOps, azure.CreateHandler()) : null,
+            CreateAzureDevOpsHandler = AzureDevOps is { } azure
+                ? () => Recorded(HostingProvider.AzureDevOps, _azureDevOpsEndpoints is { } service && service != azure.Endpoints ? new ServiceAnswers(azure.CreateHandler(), service.WebBase) : azure.CreateHandler())
+                : null,
             GitLab = GitLab?.Endpoints,
             CreateGitLabHandler = GitLab is { } gitLab ? () => Recorded(HostingProvider.GitLab, gitLab.CreateHandler()) : null,
         };
@@ -280,6 +282,40 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
         }
 
         return recorder;
+    }
+
+    /// <summary>
+    /// The in-process fake of Azure DevOps reached under other endpoints (such as
+    /// <see cref="AzureDevOpsEndpoints.Service"/>): its answers name its own <c>Local(2)</c> base
+    /// (<c>remoteUrl</c>, <c>webUrl</c>, <c>locationUrl</c>), which the provider reads only as its own
+    /// origin's (WP-AZ's As built), so each such address is written on <paramref name="webBase"/>'s
+    /// origin, its user kept, as the service names its own.
+    /// </summary>
+    private sealed class ServiceAnswers(HttpMessageHandler inner, Uri webBase) : DelegatingHandler(inner)
+    {
+        private static readonly System.Text.RegularExpressions.Regex LocalBase = new(@"http://([^/""@\s]*@)?127\.0\.0\.1:2/", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = await base.SendAsync(request, cancellationToken);
+            if (response.Content is not { } content || content.Headers.ContentType?.MediaType != "application/json")
+            {
+                return response;
+            }
+
+            var text = await content.ReadAsStringAsync(cancellationToken);
+            var origin = webBase.GetLeftPart(UriPartial.Authority);
+            var rewritten = LocalBase.Replace(text, match => origin.Insert(origin.IndexOf("//", StringComparison.Ordinal) + 2, match.Groups[1].Value) + "/");
+            var replaced = new StringContent(rewritten, System.Text.Encoding.UTF8, "application/json");
+            foreach (var header in content.Headers.Where(header => !header.Key.StartsWith("Content-", StringComparison.OrdinalIgnoreCase)))
+            {
+                replaced.Headers.TryAddWithoutValidation(header.Key, header.Value);
+            }
+
+            response.Content = replaced;
+            content.Dispose();
+            return response;
+        }
     }
 
     // One source with main and feature/sign-in, then each fake's repository with an open request.
