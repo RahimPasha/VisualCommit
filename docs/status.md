@@ -396,8 +396,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 Wave 2 (design 0.4) is merged (WP-FL `7780908`, WP-FA `e995fc4`, WP-GL `e8a5abf`, WP-AZ `767d9b9`
 with the lead's `df365e5` to `b65d0d9`); its whole default run passed (Notes) and CI's run on
-`c0af1be` is green in all five jobs (CI section). Next is wave 3: WP-S (section 9), built, reviewed
-and hunted in its worktree as wave 2's packages were; before its merge the owner's 15.8 steps
+`c0af1be` is green in all five jobs (CI section). Wave 3: WP-S (section 9) is being built, reviewed
+and hunted as wave 2's packages were, on `wip/p7b-session` in a worktree made from `7087d6c` under
+`D:/Projects/Personal/vc-wt/p7b-session` (a session that finds it after a break reads
+`git log 7087d6c..` there first); before its merge the owner's 15.8 steps
 (Waiting on the owner) and stage 1 of the live command (15.9), the owner told and present; then
 WP-LF. Until the reset of 2026-11-05 the phase may use all that is left of the week's allowance and
 waits for the reset if it runs out (D344).
