@@ -220,6 +220,17 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
         }
     }
 
+    /// <summary>The user of <paramref name="organization"/> named <paramref name="displayName"/>, both without case (the scenario's Ada Lovelace, Octo Cat).</summary>
+    /// <exception cref="ArgumentException">The fake has no such user.</exception>
+    public FakeAzureUser User(string organization, string displayName)
+    {
+        lock (Gate)
+        {
+            return _users.Find(user => string.Equals(user.Organization.Name, organization, StringComparison.OrdinalIgnoreCase) && string.Equals(user.DisplayName, displayName, StringComparison.OrdinalIgnoreCase))
+                ?? throw new ArgumentException($"The fake of Azure DevOps has no user {displayName} in {organization}.", nameof(displayName));
+        }
+    }
+
     /// <summary>The pull requests into <paramref name="repository"/>, by id.</summary>
     public IReadOnlyList<FakeAzurePullRequest> PullRequests(FakeAzureRepository repository)
     {

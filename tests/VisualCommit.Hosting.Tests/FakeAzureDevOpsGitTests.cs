@@ -166,7 +166,8 @@ public sealed class FakeAzureDevOpsGitTests
         var copy = await Scenarios.Hosting7bAsync();
         await using var served = await Scenarios.ServeHosting7bAsync(copy, 0, 0, 0, ownsCopy: true, ct: Cancelled);
         var fake = served.AzureDevOps;
-        var ada = fake.PullRequests(fake.Repository("Fernhill-Labs", "Mobile App", "mobile-app"))[0].Creator;
+        var ada = fake.User("fernhill-labs", "ADA LOVELACE");
+        Assert.Same(fake.PullRequests(fake.Repository("Fernhill-Labs", "Mobile App", "mobile-app"))[0].Creator, ada);
 
         // harbor-co's token reads harbor-co's manifest, not Fernhill-Labs' mobile-app.
         var harborToken = fake.AddToken("harbor-co", fake.AddUser("harbor-co", "Dock Hand"));
