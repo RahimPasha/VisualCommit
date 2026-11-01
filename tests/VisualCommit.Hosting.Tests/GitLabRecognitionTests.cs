@@ -6,7 +6,8 @@ namespace VisualCommit.Hosting.Tests;
 
 /// <summary>
 /// Which remote URLs are GitLab's (docs/phase-7b-design.md 7.2, 7.6): every form on gitlab.com and
-/// on the fake's endpoints, a namespace of 21 segments but not 22, and the refusals (other hosts and
+/// on the fake's endpoints, an empty port as the scheme's default, a namespace of 21 segments but
+/// not 22, and the refusals (other hosts and
 /// ports, one segment, a web address's <c>/-/</c>, <c>..</c>, <c>%2F</c>, a query, <c>git://</c>,
 /// GitHub's URLs, and an authority whose last <c>@</c> is not the host git contacts).
 /// </summary>
@@ -38,6 +39,13 @@ public sealed class GitLabRecognitionTests
     // gives hostname gitlab.com, MEASURED by WP-GL's third review), so git's ssh reaches gitlab.com.
     [InlineData("ssh://a@evil.example@gitlab.com/ada/web-app.git", "ada", "web-app")]
     [InlineData("a@evil.example@gitlab.com:ada/web-app.git", "ada", "web-app")]
+    // An empty port is the scheme's default: git and curl read it so, and reach gitlab.com there.
+    [InlineData("https://gitlab.com:/ada/web-app", "ada", "web-app")]
+    [InlineData("https://gitlab.com:/ada/web-app.git", "ada", "web-app")]
+    [InlineData("http://gitlab.com:/ada/web-app", "ada", "web-app")]
+    [InlineData("http://gitlab.com:/ada/web-app.git", "ada", "web-app")]
+    [InlineData("ssh://git@gitlab.com:/ada/web-app", "ada", "web-app")]
+    [InlineData("ssh://git@gitlab.com:/ada/web-app.git", "ada", "web-app")]
     [InlineData("https://gitlab.com/northfield/platform/services/billing/invoice-generation-and-reconciliation.git", "northfield/platform/services/billing", "invoice-generation-and-reconciliation")]
     [InlineData("https://gitlab.com/a_b.c-d/my.project_name-1", "a_b.c-d", "my.project_name-1")]
     [InlineData("https://gitlab.com/ada/web-app.git.git", "ada", "web-app.git")]
@@ -85,7 +93,8 @@ public sealed class GitLabRecognitionTests
     [InlineData("https://gitlab.com/ada/web+app")]
     [InlineData("https://gitlab.com/ada/wéb-app")]
     [InlineData("https://gitlab.com:8443/ada/web-app")]
-    [InlineData("https://gitlab.com:/ada/web-app")]
+    // An empty port is the scheme's default: ssh's 22, on which altssh.gitlab.com is refused.
+    [InlineData("ssh://git@altssh.gitlab.com:/ada/web-app")]
     [InlineData("https://@gitlab.com/ada/web-app")]
     [InlineData("http://ada:secret@gitlab.com/ada/web-app")]
     [InlineData("http://gitlab.com:443/ada/web-app")]
@@ -162,6 +171,8 @@ public sealed class GitLabRecognitionTests
     [InlineData("http://127.0.0.1:47397/ada/web-app")]
     [InlineData("http://127.0.0.1:47399/ada/web-app")]
     [InlineData("http://127.0.0.1/ada/web-app")]
+    // An empty port is http's 80, not the fake's.
+    [InlineData("http://127.0.0.1:/ada/web-app")]
     [InlineData("http://localhost:47398/ada/web-app")]
     [InlineData("http://127.0.0.2:47398/ada/web-app")]
     [InlineData("http://ada@127.0.0.1:47398/ada/web-app")]

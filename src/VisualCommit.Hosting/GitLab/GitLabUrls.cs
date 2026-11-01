@@ -23,7 +23,8 @@ internal static partial class GitLabUrls
     /// <c>www.gitlab.com</c> (which 308s, r6 6.1 MEASURED) in
     /// <c>https://[user[:pw]@]host[:443]/p</c>, <c>http://[user@]host[:80]/p</c>,
     /// <c>ssh://[user@]host[:22]/p</c> and scp-like <c>user@host:p</c>, and
-    /// <c>ssh://[user@]altssh.gitlab.com:443/p</c>; no <c>git://</c>. On any other endpoints (the
+    /// <c>ssh://[user@]altssh.gitlab.com:443/p</c>; no <c>git://</c>. An empty port (<c>host:/p</c>) is
+    /// the scheme's default, as git and curl read it. On any other endpoints (the
     /// fake, <see cref="GitLabEndpoints.Local"/>) only <see cref="GitLabEndpoints.WebBase"/>'s
     /// scheme, host and port, <c>http://127.0.0.1:&lt;port&gt;/p</c>, with no user part. The path
     /// <c>p</c> loses one final <c>/</c> and then one final <c>.git</c>; it has 2 to
@@ -106,9 +107,10 @@ internal static partial class GitLabUrls
     }
 
     /// <summary>
-    /// An URL of the form <c>scheme://[user@]host[:port]/path</c>: its scheme in lower case, its
-    /// user part (null when none), host, port (null when none) and path after the first <c>/</c>;
-    /// null for anything else.
+    /// An URL of the form <c>scheme://[user@]host[:[port]]/path</c>: its scheme in lower case, its
+    /// user part (null when none), host, port (null when none or empty, the scheme's default, as git
+    /// and curl read <c>host:</c>; else 1 to 5 digits) and path after the first <c>/</c>; null for
+    /// anything else.
     /// </summary>
     private static (string Scheme, string? User, string Host, int? Port, string Path)? Parts(string url)
     {
@@ -144,11 +146,11 @@ internal static partial class GitLabUrls
         var hostAndPort = authority[(at + 1)..];
         var colon = hostAndPort.IndexOf(':');
         var host = colon < 0 ? hostAndPort : hostAndPort[..colon];
+        var digits = colon < 0 ? string.Empty : hostAndPort[(colon + 1)..];
         int? port = null;
-        if (colon >= 0)
+        if (digits.Length > 0)
         {
-            var digits = hostAndPort[(colon + 1)..];
-            if (digits.Length is 0 or > 5 || !digits.All(char.IsAsciiDigit))
+            if (digits.Length > 5 || !digits.All(char.IsAsciiDigit))
             {
                 return null;
             }
@@ -191,6 +193,14 @@ internal static partial class GitLabUrls
         return Segments(path);
     }
 
+    /// <summary>
+    /// Whether <paramref name="segment"/> is one path segment under 7.2's rules: one or more of
+    /// <c>[A-Za-z0-9_.-]</c>, and not <c>.</c>, <c>..</c> or <c>-</c>. So no <c>/</c>, <c>@</c>, space,
+    /// line break or other character; A1 and A4 read a username by it.
+    /// </summary>
+    public static bool IsSegment(string? segment) =>
+        segment is not null && SegmentPattern().IsMatch(segment) && segment is not ("." or ".." or "-");
+
     /// <summary>The namespace path and the last segment of <paramref name="path"/>, when it has 2 to <see cref="MaxSegments"/> segments that GitLab allows.</summary>
     private static (string Owner, string Name)? Segments(string path)
     {
@@ -200,7 +210,7 @@ internal static partial class GitLabUrls
         }
 
         var segments = path.Split('/');
-        if (segments.Length is < 2 or > MaxSegments || !segments.All(segment => SegmentPattern().IsMatch(segment) && segment is not ("." or ".." or "-")))
+        if (segments.Length is < 2 or > MaxSegments || !segments.All(IsSegment))
         {
             return null;
         }

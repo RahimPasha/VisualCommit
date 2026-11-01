@@ -13,7 +13,9 @@ namespace VisualCommit.Hosting.GitLab;
 /// shared HTTP core with <see cref="GitLabProfile"/>, each with the account's token, which the
 /// provider never keeps. Paths are relative to the API's address, a project's id its path escaped
 /// whole (<c>%2F</c> between segments, r6 6.2) or its number. A token that is empty, holds anything
-/// but visible ASCII or has another provider's form (D378) is refused without a request.
+/// but visible ASCII or has another provider's form (D378) is refused without a request. A failure
+/// the provider builds on an answer that succeeded goes to the core with the request's token, which
+/// is screened there as in the core's own (a project's path can hold it).
 /// </summary>
 public sealed class GitLabProvider : IHostingProvider, IDisposable
 {
@@ -26,14 +28,20 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
     /// <summary>The <see cref="HostingFailure.Detail"/> prefix of a token of another provider's form, before that provider's id (D378).</summary>
     public const string OtherProviderDetail = "other-provider:";
 
-    /// <summary>A2's cap: 10 pages of 100 projects (ruling 18).</summary>
+    /// <summary>The rows A2 and A4 ask for a page: GitLab's most, at which it clamps <c>per_page</c> (r6 4.3, MEASURED).</summary>
+    public const int PerPage = 100;
+
+    /// <summary>A2's cap: 10 pages of <see cref="PerPage"/> projects (ruling 18), and at most so many rows kept.</summary>
     public const int RepositoryPages = 10;
 
-    /// <summary>A4's cap: 3 pages of 100 merge requests (ruling 18).</summary>
+    /// <summary>A4's cap: 3 pages of <see cref="PerPage"/> merge requests (ruling 18), and at most so many rows kept.</summary>
     public const int RequestPages = 3;
 
     /// <summary>A4's lookups of a fork's project per call, at most, in list order.</summary>
     public const int MaxForkLookups = 20;
+
+    /// <summary>The forks A4 keeps at most, of every token together; the oldest kept goes first, as the core's answers do.</summary>
+    public const int MaxKeptForks = 512;
 
     /// <summary>The least access level that may push: Developer (30; ASSUMED, r6 3.1).</summary>
     public const int DeveloperAccess = 30;
@@ -51,8 +59,10 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
     // Under _forksGate: each fork's project looked up by A4, by the token's fingerprint and the
     // fork's numeric id; null when GitLab answered 403 or 404 (a fork that token cannot read). Kept
-    // until ForgetKept; a lookup made with one token is never shown to another.
+    // until ForgetKept, at most MaxKeptForks of them, the oldest stored going first (their keys in
+    // _forksOrder, oldest first); a lookup made with one token is never shown to another.
     private readonly Dictionary<(string Fingerprint, long Id), HostedRepository?> _forks = [];
+    private readonly Queue<(string Fingerprint, long Id)> _forksOrder = new();
 
     public GitLabProvider(GitLabEndpoints endpoints, Func<HttpMessageHandler> createHandler, IAppLog log, TimeProvider clock)
     {
@@ -138,7 +148,10 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
     /// <summary>
     /// A1: <c>GET user</c> for both token kinds, never <c>personal_access_tokens/self</c> (ruling 17):
     /// the key (GitLab, <see cref="Host"/>, <c>username</c>), <c>id</c>, <c>name</c> unless it is
-    /// e-mail-shaped (D368's run; then null), no avatar (D349), "Use for git over HTTPS" on.
+    /// e-mail-shaped (D368's run; then null), no avatar (D349), "Use for git over HTTPS" on. A
+    /// <c>username</c> that is not one 7.2 path segment (<see cref="GitLabUrls.IsSegment"/>; an
+    /// address, a line break, a <c>/</c>) is <see cref="HostingFailureKind.Malformed"/>: it would reach
+    /// the account's key, its keychain entry's name and the session's log lines.
     /// <paramref name="organization"/> is ignored.
     /// </summary>
     public async Task<HostingResult<HostingAccount>> CheckTokenAsync(string token, string? organization, CancellationToken ct)
@@ -155,9 +168,9 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             return HostingResult<HostingAccount>.Fail(failure);
         }
 
-        if (reply.Value is not { Username: { Length: > 0 } username } user || string.IsNullOrWhiteSpace(username))
+        if (reply.Value is not { Username: { } username } user || !GitLabUrls.IsSegment(username))
         {
-            return HostingResult<HostingAccount>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId));
+            return HostingResult<HostingAccount>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId, token));
         }
 
         var name = user.Name is { Length: > 0 } given && !string.IsNullOrWhiteSpace(given) && HostingHttpClient.ScreenEmail(given) == given ? given : null;
@@ -167,10 +180,12 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
     /// <summary>
     /// A2: <c>GET projects?membership=true&amp;archived=false&amp;order_by=last_activity_at&amp;sort=desc&amp;per_page=100</c>,
-    /// never <c>simple</c>, up to <see cref="RepositoryPages"/> pages (ruling 18), in GitLab's order.
-    /// A row whose path or addresses cannot be read is left out, with one warning naming its id; a
-    /// null row too, with a warning that says so. <paramref name="account"/> is not read: the list
-    /// is the token's.
+    /// never <c>simple</c>, up to <see cref="RepositoryPages"/> pages (ruling 18), in GitLab's order:
+    /// the first row of each <c>id</c> alone, and at most <see cref="RepositoryPages"/> times
+    /// <see cref="PerPage"/> rows, more existing when rows were cut (<see cref="Kept{T}"/>). A row
+    /// whose path or addresses cannot be read is left out, with one warning naming its id; a null
+    /// row too, with a warning that says so. <paramref name="account"/> is not read: the list is the
+    /// token's.
     /// </summary>
     public async Task<HostingResult<RepositoryList>> ListRepositoriesAsync(string token, HostingAccount account, CancellationToken ct)
     {
@@ -179,7 +194,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             return HostingResult<RepositoryList>.Fail(refused);
         }
 
-        var url = _profile.Url("projects?membership=true&archived=false&order_by=last_activity_at&sort=desc&per_page=100");
+        var url = _profile.Url(FormattableString.Invariant($"projects?membership=true&archived=false&order_by=last_activity_at&sort=desc&per_page={PerPage}"));
         var reply = await _client.GetPagesAsync(token, url, GitLabJsonContext.Default.ListGitLabProjectJson, RepositoryPages, ct).ConfigureAwait(false);
         if (reply.Failure is { } failure)
         {
@@ -188,11 +203,12 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
         if (reply.Value is null)
         {
-            return HostingResult<RepositoryList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId));
+            return HostingResult<RepositoryList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId, token));
         }
 
+        var (rows, cut) = Kept(reply.Value, json => json?.Id, RepositoryPages * PerPage);
         var repositories = new List<RepositoryInfo>();
-        foreach (var json in reply.Value)
+        foreach (var json in rows)
         {
             // System.Text.Json refuses no null item in a list of a non-nullable type.
             if (json is null)
@@ -209,7 +225,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             }
         }
 
-        return HostingResult<RepositoryList>.Ok(new RepositoryList(repositories, reply.Next is not null, SomeHiddenBySso: false));
+        return HostingResult<RepositoryList>.Ok(new RepositoryList(repositories, reply.Next is not null || cut, SomeHiddenBySso: false));
     }
 
     /// <summary>
@@ -233,20 +249,22 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
         return Info(json!, withParent: true) is { } info
             ? HostingResult<RepositoryInfo>.Ok(info)
-            : HostingResult<RepositoryInfo>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, requestId));
+            : HostingResult<RepositoryInfo>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, requestId, token));
     }
 
     /// <summary>
     /// A4: <c>GET projects/&lt;id&gt;/merge_requests?state=opened&amp;per_page=100</c> (<c>open</c> is a
     /// 400, r6 4.1), up to <see cref="RequestPages"/> pages, <paramref name="repository"/> as each
-    /// one's base. A request's head is in the base when its <c>source_project_id</c> is its
-    /// <c>target_project_id</c>, with no request; else in the fork that <c>GET projects/&lt;source id&gt;</c>
-    /// names, asked once per id and kept until <see cref="ForgetKept"/>, at most
-    /// <see cref="MaxForkLookups"/> a call in list order. A fork answered 403 or 404 (one the token
-    /// cannot read), or past the cap, gives a null head repository, which the App takes as a deleted
-    /// fork's (its head ref is still the base's, r6 4.2); any other failure fails the call. A list
-    /// with a request it cannot read (null, numbered below 1 or without an absolute web address)
-    /// fails whole, <see cref="HostingFailureKind.Malformed"/>.
+    /// one's base: the first row of each <c>iid</c> alone, and at most <see cref="RequestPages"/> times
+    /// <see cref="PerPage"/> rows, more existing when rows were cut (<see cref="Kept{T}"/>). A
+    /// request's head is in the base when its <c>source_project_id</c> is its <c>target_project_id</c>,
+    /// with no request; else in the fork that <c>GET projects/&lt;source id&gt;</c> names, asked once
+    /// per id and kept until <see cref="ForgetKept"/> (at most <see cref="MaxKeptForks"/>, the oldest
+    /// dropped first), at most <see cref="MaxForkLookups"/> a call in list order. A fork answered 403
+    /// or 404 (one the token cannot read), or past the cap, gives a null head repository, which the
+    /// App takes as a deleted fork's (its head ref is still the base's, r6 4.2); any other failure
+    /// fails the call. A list with a request it cannot read (null, numbered below 1 or without an
+    /// absolute web address) among the rows kept fails whole, <see cref="HostingFailureKind.Malformed"/>.
     /// </summary>
     public async Task<HostingResult<PullRequestList>> ListPullRequestsAsync(string token, HostedRepository repository, CancellationToken ct)
     {
@@ -256,22 +274,28 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             return HostingResult<PullRequestList>.Fail(refused);
         }
 
-        var url = _profile.Url($"projects/{GitLabProfile.ProjectId(repository.FullName)}/merge_requests?state=opened&per_page=100");
+        var url = _profile.Url(FormattableString.Invariant($"projects/{GitLabProfile.ProjectId(repository.FullName)}/merge_requests?state=opened&per_page={PerPage}"));
         var reply = await _client.GetPagesAsync(token, url, GitLabJsonContext.Default.ListGitLabMergeRequestJson, RequestPages, ct).ConfigureAwait(false);
         if (reply.Failure is { } failure)
         {
             return HostingResult<PullRequestList>.Fail(failure);
         }
 
-        if (reply.Value is null || reply.Value.Any(json => !IsReadable(json)))
+        if (reply.Value is null)
         {
-            return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId));
+            return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId, token));
+        }
+
+        var (requests, cut) = Kept(reply.Value, json => json?.Iid, RequestPages * PerPage);
+        if (requests.Any(json => !IsReadable(json)))
+        {
+            return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId, token));
         }
 
         var heads = new Dictionary<long, HostedRepository?>();
         var lookups = 0;
         var fingerprint = Fingerprint(token);
-        foreach (var sourceId in reply.Value.Where(json => json.SourceProjectId != json.TargetProjectId).Select(json => json.SourceProjectId).Distinct())
+        foreach (var sourceId in requests.Where(json => json.SourceProjectId != json.TargetProjectId).Select(json => json.SourceProjectId).Distinct())
         {
             if (KnownFork(fingerprint, sourceId, out var known))
             {
@@ -300,16 +324,16 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
             if (Hosted(fork!.PathWithNamespace) is not { } head)
             {
-                return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, lookupUrl, lookupId));
+                return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, lookupUrl, lookupId, token));
             }
 
             heads[sourceId] = Remember(fingerprint, sourceId, head);
         }
 
-        var pulls = reply.Value
+        var pulls = requests
             .Select(json => Pull(json, repository, json.SourceProjectId == json.TargetProjectId ? repository : heads[json.SourceProjectId]))
             .ToList();
-        return HostingResult<PullRequestList>.Ok(new PullRequestList(pulls, reply.Next is not null));
+        return HostingResult<PullRequestList>.Ok(new PullRequestList(pulls, reply.Next is not null || cut));
     }
 
     /// <summary>
@@ -356,7 +380,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
         var across = source!.Id != target.Id;
         if ((across ? Hosted(source.PathWithNamespace) : baseRepository) is not { } head)
         {
-            return HostingResult<PullRequest>.Fail(_client.MalformedAnswer(HttpMethod.Get, sourceUrl, sourceRequestId));
+            return HostingResult<PullRequest>.Fail(_client.MalformedAnswer(HttpMethod.Get, sourceUrl, sourceRequestId, token));
         }
 
         var body = new GitLabNewMergeRequestJson
@@ -377,7 +401,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
         return IsReadable(reply.Value)
             ? HostingResult<PullRequest>.Ok(Pull(reply.Value, baseRepository, head))
-            : HostingResult<PullRequest>.Fail(_client.MalformedAnswer(HttpMethod.Post, url, reply.RequestId));
+            : HostingResult<PullRequest>.Fail(_client.MalformedAnswer(HttpMethod.Post, url, reply.RequestId, token));
     }
 
     public void Dispose() => _client.Dispose();
@@ -393,6 +417,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
         lock (_forksGate)
         {
             _forks.Clear();
+            _forksOrder.Clear();
         }
     }
 
@@ -460,7 +485,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
         return reply.Value is { } json
             ? (json, null, url, reply.RequestId)
-            : (null, _client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId), url, reply.RequestId);
+            : (null, _client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId, token), url, reply.RequestId);
     }
 
     /// <summary>
@@ -477,14 +502,62 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
         }
     }
 
+    // A fork stored is the newest kept, an earlier lookup of it dropped (two calls can both miss it);
+    // the oldest go first while MaxKeptForks would be passed, as HostingHttpClient keeps its answers.
     private HostedRepository? Remember(string fingerprint, long id, HostedRepository? repository)
     {
+        var key = (fingerprint, id);
         lock (_forksGate)
         {
-            _forks[(fingerprint, id)] = repository;
+            if (_forks.Remove(key))
+            {
+                var others = _forksOrder.Where(kept => kept != key).ToList();
+                _forksOrder.Clear();
+                foreach (var other in others)
+                {
+                    _forksOrder.Enqueue(other);
+                }
+            }
+
+            while (_forks.Count >= MaxKeptForks && _forksOrder.TryDequeue(out var oldest))
+            {
+                _forks.Remove(oldest);
+            }
+
+            _forksOrder.Enqueue(key);
+            _forks[key] = repository;
         }
 
         return repository;
+    }
+
+    /// <summary>
+    /// <paramref name="rows"/> in order with the first row of each <paramref name="key"/> alone (a
+    /// null row, whose key is null, kept each time), at most <paramref name="max"/> of them; with
+    /// whether rows were cut. A repeated page (a <c>Link</c> that loops, offset pages that shift
+    /// between reads) gives no row twice, and a page of more than <see cref="PerPage"/> rows, which
+    /// gitlab.com never sends, no more rows, and so no more warnings, than the pages asked hold.
+    /// </summary>
+    private static (List<T> Rows, bool Cut) Kept<T>(List<T> rows, Func<T, long?> key, int max)
+    {
+        var seen = new HashSet<long>();
+        var kept = new List<T>();
+        foreach (var row in rows)
+        {
+            if (key(row) is { } id && !seen.Add(id))
+            {
+                continue;
+            }
+
+            if (kept.Count == max)
+            {
+                return (kept, true);
+            }
+
+            kept.Add(row);
+        }
+
+        return (kept, false);
     }
 
     private HostedRepository? Hosted(string pathWithNamespace) =>
@@ -524,12 +597,15 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             parent is null ? null : json.ForkedFromProject!.DefaultBranch);
     }
 
-    /// <summary>A merge request of A4 or A5 into <paramref name="baseRepository"/>, its head in <paramref name="head"/>.</summary>
+    /// <summary>
+    /// A merge request of A4 or A5 into <paramref name="baseRepository"/>, its head in <paramref name="head"/>;
+    /// its author null unless <c>author.username</c> is one 7.2 path segment (<see cref="GitLabUrls.IsSegment"/>).
+    /// </summary>
     private static PullRequest Pull(GitLabMergeRequestJson json, HostedRepository baseRepository, HostedRepository? head) =>
         new(
             json.Iid,
             json.Title,
-            json.Author?.Username is { Length: > 0 } author ? author : null,
+            json.Author?.Username is { } author && GitLabUrls.IsSegment(author) ? author : null,
             json.Draft,
             ReadableWebUrl(json.WebUrl)!,
             json.SourceBranch,

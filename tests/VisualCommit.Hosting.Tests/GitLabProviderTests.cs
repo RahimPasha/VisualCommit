@@ -16,7 +16,9 @@ namespace VisualCommit.Hosting.Tests;
 /// cap and the forks' lookups (none for a project's own requests, one per fork, a hidden fork null, a
 /// failing lookup failing, 20 a call, kept until <see cref="GitLabProvider.ForgetKept"/>); A5 in one
 /// project and across forks, its draft titles, its description as typed, each refusal, one POST a
-/// call, none after a failed GET, and a moved source.
+/// call, none after a failed GET, and a moved source. A broken server's: a username that is not one
+/// path segment, rows past the pages asked cut, a row repeated kept once, the forks kept bounded,
+/// and a project's path that holds the token screened in the failures the provider builds.
 /// </summary>
 public sealed class GitLabProviderTests
 {
@@ -656,6 +658,217 @@ public sealed class GitLabProviderTests
         Assert.All(new[] { nullRequest.Failure, mixedRequests.Failure }, failure =>
             Assert.Equal((HostingFailureKind.Malformed, "https://gitlab.com/api/v4/projects/g%2Fp/merge_requests"), (failure!.Kind, failure.Url!.AbsoluteUri)));
         Assert.Empty(answers);
+    }
+
+    // Made up, a broken or hostile server's: a project whose path holds the account's own token (a
+    // made-up glpat- value). A failure the provider builds on a request to it screens the token in
+    // its address and its warning, as the core's own failure on the same address does (D382).
+    [Fact]
+    public async Task A_failure_the_provider_builds_on_a_path_that_holds_the_token_screens_it_as_the_core_screens_its_own()
+    {
+        const string Token = "glpat-FAKE-ada-1";
+        var recorder = new RecordingHttpHandler(request => (request.Method.Method, request.RequestUri!.AbsolutePath) switch
+        {
+            ("GET", "/api/v4/projects") => RecordingHttpHandler.Json(HttpStatusCode.OK,
+                $$"""[{"id": 9001, "path_with_namespace": "{{Token}}/p", "http_url_to_repo": "https://gitlab.com/x/p.git", "web_url": "https://gitlab.com/x/p"}]"""),
+            ("GET", "/api/v4/projects/glpat-FAKE-ada-1%2Fp/merge_requests") => RecordingHttpHandler.Json(HttpStatusCode.OK, "[null]"),
+            ("GET", "/api/v4/projects/glpat-FAKE-ada-1%2Fp") => RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"id\": 9001, \"path_with_namespace\": \"noslash\"}"),
+            ("GET", "/api/v4/projects/g%2Fp") => RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"id\": 5001, \"path_with_namespace\": \"g/p\"}"),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.NotFound, "{\"message\":\"404 Not Found\"}"),
+        });
+        var log = new ListLog();
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, log, TimeProvider.System);
+
+        var listed = await provider.ListRepositoriesAsync(Token, null!, Cancelled);
+        var held = listed.Value!.Repositories.Single().Repository;
+        var requests = await provider.ListPullRequestsAsync(Token, held, Cancelled);
+        var read = await provider.ReadRepositoryAsync(Token, held, Cancelled);
+        var created = await provider.CreatePullRequestAsync(Token, new HostedRepository(HostingProvider.GitLab, "gitlab.com", "g", "p"),
+            new NewPullRequest("T", "", "fix", null, "main", false) { HeadRepository = held }, Cancelled);
+
+        Assert.Equal(
+            [
+                (HostingFailureKind.Malformed, "https://gitlab.com/api/v4/projects/%3Ctoken%3E/merge_requests"),
+                (HostingFailureKind.Malformed, "https://gitlab.com/api/v4/projects/%3Ctoken%3E"),
+                (HostingFailureKind.Malformed, "https://gitlab.com/api/v4/projects/%3Ctoken%3E"),
+            ],
+            new[] { requests.Failure, read.Failure, created.Failure }.Select(failure => (failure!.Kind, failure.Url!.AbsoluteUri)));
+        Assert.Equal(
+            [
+                "GitLab: GET /api/v4/projects/<token>/merge_requests failed: Malformed.",
+                "GitLab: GET /api/v4/projects/<token> failed: Malformed.",
+                "GitLab: GET /api/v4/projects/<token> failed: Malformed.",
+            ],
+            log.Lines.Select(line => line.Message));
+        Assert.DoesNotContain("glpat-", log.Written, StringComparison.Ordinal);
+        Assert.All(new[] { requests.Failure, read.Failure, created.Failure }, failure => Assert.DoesNotContain("glpat-", failure!.Url!.AbsoluteUri, StringComparison.Ordinal));
+        Assert.DoesNotContain(recorder.Sent, sent => sent.Method == "POST");
+    }
+
+    // Made up, a broken or hostile server's: a username that is no one path segment (7.2's rule)
+    // would reach the account's key, accounts.json, the keychain entry's name and the session's lines.
+    [Theory]
+    [InlineData("ada@example.com")]
+    [InlineData("ada＠example.com")]
+    [InlineData("ada\nWarning: forged")]
+    [InlineData("ada/../octo")]
+    [InlineData("..")]
+    public async Task A1_is_Malformed_for_a_username_that_is_not_one_path_segment(string username)
+    {
+        var log = new ListLog();
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.OK,
+            "{\"id\": 2001, \"username\": " + System.Text.Json.JsonSerializer.Serialize(username) + ", \"name\": \"Ada\"}", ("x-request-id", "01JFAKEUSER00000000000000")));
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, log, TimeProvider.System);
+
+        var checkedToken = await provider.CheckTokenAsync("glpat-FAKE-ada-1", null, Cancelled);
+
+        Assert.Null(checkedToken.Value);
+        Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", "https://gitlab.com/api/v4/user", "01JFAKEUSER00000000000000"),
+            (checkedToken.Failure!.Kind, checkedToken.Failure.Message, checkedToken.Failure.Url!.AbsoluteUri, checkedToken.Failure.RequestId));
+        Assert.Equal("GitLab: GET /api/v4/user failed: Malformed (request 01JFAKEUSER00000000000000).", Assert.Single(log.Lines).Message);
+    }
+
+    // Made up, a broken server's: an author whose username is no one path segment is named by no one.
+    [Fact]
+    public async Task A4_gives_an_author_whose_username_is_not_one_path_segment_as_none_and_keeps_the_request()
+    {
+        static string By(int iid, string username) => MergeRequestJson(iid, 5001, 5001).Replace("\"username\": \"ada\"", "\"username\": " + System.Text.Json.JsonSerializer.Serialize(username), StringComparison.Ordinal);
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.OK,
+            "[" + string.Join(",", By(1, "ada@example.com"), By(2, "ada\nWarning: forged"), By(3, "ada/../octo"), By(4, "Ada.Love_1-x")) + "]"));
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, new ListLog(), TimeProvider.System);
+
+        var listed = await provider.ListPullRequestsAsync("glpat-FAKE-ada-1", new HostedRepository(HostingProvider.GitLab, "gitlab.com", "g", "p"), Cancelled);
+
+        Assert.Equal([(1, (string?)null), (2, null), (3, null), (4, "Ada.Love_1-x")], listed.Value!.PullRequests.Select(pull => (pull.Number, pull.Author)));
+    }
+
+    // Made up, a broken server's: GitLab clamps per_page at 100 (r6 4.3, MEASURED), so a page of more
+    // rows is no answer of gitlab.com's. A2 keeps at most 10 pages of 100 rows and A4 3, cut before
+    // the rows are read, so that the warnings are bounded too, and say more exist when rows were cut.
+    [Fact]
+    public async Task A2_and_A4_keep_at_most_their_pages_of_100_rows_and_say_more_exist_when_rows_were_cut()
+    {
+        static string Project(int id, bool readable) => readable
+            ? string.Create(CultureInfo.InvariantCulture, $$"""{"id": {{id}}, "path_with_namespace": "g/p{{id}}", "http_url_to_repo": "https://gitlab.com/g/p{{id}}.git", "web_url": "https://gitlab.com/g/p{{id}}"}""")
+            : string.Create(CultureInfo.InvariantCulture, $$"""{"id": {{id}}, "path_with_namespace": "g/p{{id}}"}""");
+        static string Page(IEnumerable<string> rows) => "[" + string.Join(",", rows) + "]";
+        var answers = new Queue<HttpResponseMessage>(
+        [
+            RecordingHttpHandler.Json(HttpStatusCode.OK, Page(Enumerable.Range(1, 1000).Select(id => Project(id, readable: true)))),
+            RecordingHttpHandler.Json(HttpStatusCode.OK, Page(Enumerable.Range(1, 1500).Select(id => Project(id, readable: true)))),
+            RecordingHttpHandler.Json(HttpStatusCode.OK, Page(Enumerable.Range(1, 1500).Select(id => Project(id, readable: false)))),
+            RecordingHttpHandler.Json(HttpStatusCode.OK, Page(Enumerable.Range(1, 1000).Select(iid => MergeRequestJson(iid, 5001, 5001)))),
+        ]);
+        var log = new ListLog();
+        var recorder = new RecordingHttpHandler(_ => answers.Dequeue());
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, log, TimeProvider.System);
+
+        var whole = await provider.ListRepositoriesAsync("glpat-FAKE-ada-1", null!, Cancelled);
+        var cut = await provider.ListRepositoriesAsync("glpat-FAKE-ada-1", null!, Cancelled);
+        var unreadable = await provider.ListRepositoriesAsync("glpat-FAKE-ada-1", null!, Cancelled);
+        var requests = await provider.ListPullRequestsAsync("glpat-FAKE-ada-1", new HostedRepository(HostingProvider.GitLab, "gitlab.com", "g", "p"), Cancelled);
+
+        Assert.Equal((1000, false), (whole.Value!.Repositories.Count, whole.Value.MoreExist));
+        Assert.Equal((1000, true), (cut.Value!.Repositories.Count, cut.Value.MoreExist));
+        Assert.Equal(Enumerable.Range(1, 1000).Select(id => "g/p" + id.ToString(CultureInfo.InvariantCulture)), cut.Value.Repositories.Select(info => info.Repository.FullName));
+        Assert.Equal((0, true), (unreadable.Value!.Repositories.Count, unreadable.Value.MoreExist));
+        Assert.Equal(1000, log.Lines.Count);
+        Assert.Equal((300, true), (requests.Value!.PullRequests.Count, requests.Value.MoreExist));
+        Assert.Equal(Enumerable.Range(1, 300), requests.Value.PullRequests.Select(pull => pull.Number));
+        Assert.Empty(answers);
+    }
+
+    // Made up, a broken server's: a Link that names the page it is on, and offset pages that shift
+    // between reads. A2 keeps the first row of each id and A4 the first of each iid, in order.
+    [Fact]
+    public async Task A2_and_A4_keep_the_first_row_of_each_id_across_a_Link_loop_and_overlapping_pages()
+    {
+        static string Project(int id, string name) => string.Create(CultureInfo.InvariantCulture,
+            $$"""{"id": {{id}}, "path_with_namespace": "g/{{name}}", "http_url_to_repo": "https://gitlab.com/g/{{name}}.git", "web_url": "https://gitlab.com/g/{{name}}"}""");
+        static string Request(int iid, string title) => MergeRequestJson(iid, 5001, 5001).Replace($"\"Request {iid}\"", "\"" + title + "\"", StringComparison.Ordinal);
+        var loop = true;
+        var recorder = new RecordingHttpHandler(request =>
+        {
+            var url = request.RequestUri!;
+            var second = url.Query.Contains("page=2", StringComparison.Ordinal);
+            var next = ("Link", $"<{url.GetLeftPart(UriPartial.Path)}?page=2>; rel=\"next\"");
+            var self = ("Link", $"<{url.AbsoluteUri}>; rel=\"next\"");
+            return (url.AbsolutePath.EndsWith("/merge_requests", StringComparison.Ordinal), loop, second) switch
+            {
+                (false, true, _) => RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Project(1, "one") + "," + Project(2, "two") + "]", self),
+                (false, false, false) => RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Project(1, "one") + "," + Project(2, "two") + "]", next),
+                (false, false, true) => RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Project(2, "two-again") + "," + Project(3, "three") + "]"),
+                (true, true, _) => RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Request(1, "One") + "," + Request(2, "Two") + "]", self),
+                (true, false, false) => RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Request(1, "One") + "," + Request(2, "Two") + "]", next),
+                (true, false, true) => RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Request(2, "Two again") + "," + Request(3, "Three") + "]"),
+            };
+        });
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, new ListLog(), TimeProvider.System);
+        var p = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "g", "p");
+
+        var loopedProjects = await provider.ListRepositoriesAsync("glpat-FAKE-ada-1", null!, Cancelled);
+        var loopedRequests = await provider.ListPullRequestsAsync("glpat-FAKE-ada-1", p, Cancelled);
+        var looped = recorder.Sent.Count;
+        loop = false;
+        var overlappingProjects = await provider.ListRepositoriesAsync("glpat-FAKE-ada-1", null!, Cancelled);
+        var overlappingRequests = await provider.ListPullRequestsAsync("glpat-FAKE-ada-1", p, Cancelled);
+
+        Assert.Equal(GitLabProvider.RepositoryPages + GitLabProvider.RequestPages, looped);
+        Assert.Equal(["g/one", "g/two"], loopedProjects.Value!.Repositories.Select(info => info.Repository.FullName));
+        Assert.Equal([(1, "One"), (2, "Two")], loopedRequests.Value!.PullRequests.Select(pull => (pull.Number, pull.Title)));
+        Assert.Equal(["g/one", "g/two", "g/three"], overlappingProjects.Value!.Repositories.Select(info => info.Repository.FullName));
+        Assert.Equal([(1, "One"), (2, "Two"), (3, "Three")], overlappingRequests.Value!.PullRequests.Select(pull => (pull.Number, pull.Title)));
+    }
+
+    // Made up: forks enough to pass the bound. A4 keeps at most 512 forks, the oldest dropped first,
+    // as the core keeps its answers; one kept recently is found without a request.
+    [Fact]
+    public async Task A4_keeps_at_most_512_forks_the_oldest_dropped_first_and_finds_a_recent_one_without_a_request()
+    {
+        var sources = new List<long>();
+        var lookups = new List<long>();
+        var recorder = new RecordingHttpHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            lock (lookups)
+            {
+                if (path.EndsWith("/merge_requests", StringComparison.Ordinal))
+                {
+                    return RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + string.Join(",", sources.Select((source, i) => MergeRequestJson(i + 1, source, 5001))) + "]");
+                }
+
+                var id = long.Parse(path["/api/v4/projects/".Length..], CultureInfo.InvariantCulture);
+                lookups.Add(id);
+                return RecordingHttpHandler.Json(HttpStatusCode.OK, string.Create(CultureInfo.InvariantCulture, $"{{\"id\": {id}, \"path_with_namespace\": \"fork{id}/p\"}}"));
+            }
+        });
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, new ListLog(), TimeProvider.System);
+        var p = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "g", "p");
+        async Task<List<long>> List(IEnumerable<long> forks)
+        {
+            lock (lookups)
+            {
+                sources.Clear();
+                sources.AddRange(forks);
+                lookups.Clear();
+            }
+
+            Assert.True((await provider.ListPullRequestsAsync("glpat-FAKE-ada-1", p, Cancelled)).Succeeded);
+            lock (lookups)
+            {
+                return [.. lookups];
+            }
+        }
+
+        var looked = new List<long>();
+        for (var call = 0; call < 30; call++)
+        {
+            looked.AddRange(await List(Enumerable.Range(10001 + 20 * call, 20).Select(id => (long)id)));
+        }
+
+        // 600 forks looked up once each; the 512 newest kept, 10089 to 10600; 10088 dropped.
+        Assert.Equal(Enumerable.Range(10001, 600).Select(id => (long)id), looked);
+        Assert.Equal([10088L], await List([10600, 10089, 10088]));
     }
 
     /// <summary>One merge request's JSON with every member A4 needs (r6 4.1's members, MEASURED; made-up values).</summary>

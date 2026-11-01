@@ -15,7 +15,8 @@ namespace VisualCommit.Hosting.Tests;
 /// GitLab's profile on the shared HTTP core (docs/phase-7b-design.md 7.3, 7.6), against the fake in
 /// process and scripted answers: <c>Bearer</c> alone and GitLab's headers on every hop; <c>%2F</c> to
 /// the request line; a moved project's GET followed with the token and a POST there refused; another
-/// origin, a fourth hop and a <c>Link</c> elsewhere refused with nothing sent there; pages; kept
+/// origin, a fourth hop, a GET redirected outside the API and a <c>Link</c> elsewhere refused with
+/// nothing sent there; pages; kept
 /// answers per token; 7.3's kinds and words, from the status and shape F's code alone; a refusal's
 /// reason on the create's POST alone; the four sources of a rate limit's end; warnings that name
 /// GitLab and no query, token or address.
@@ -443,6 +444,32 @@ public sealed class GitLabClientTests
         Assert.Equal(("POST", "/api/v4/projects/5001/merge_requests"), (Assert.Single(recorder.Sent).Method, recorder.Sent[0].Url.AbsolutePath));
         Assert.Equal(
             string.Create(CultureInfo.InvariantCulture, $"GitLab: POST /api/v4/projects/5001/merge_requests failed: {status}, a redirected POST (request 01JFAKEREDIRECT000000000)."),
+            Assert.Single(log.Lines).Message);
+    }
+
+    // Made up, a broken or hostile server's: 7.3 names one redirect to follow, a moved project's 301
+    // to /api/v4/projects/<id> on the same origin (r6 3.2, MEASURED). A GET redirected outside the
+    // API (a token page, the OAuth endpoint, either named through ..) is not followed with the token.
+    [Theory]
+    [InlineData(301, "/-/user_settings/personal_access_tokens")]
+    [InlineData(302, "/oauth/token")]
+    [InlineData(307, "https://gitlab.com/oauth/token")]
+    [InlineData(308, "/api/v4/../oauth/token")]
+    public async Task A_GET_redirected_outside_the_API_is_Malformed_and_nothing_is_sent_there(int status, string location)
+    {
+        var log = new ListLog();
+        var recorder = new RecordingHttpHandler(request => request.RequestUri!.AbsolutePath == "/api/v4/user"
+            ? RecordingHttpHandler.Json((HttpStatusCode)status, "{}", ("Location", location), ("x-request-id", "01JFAKEREDIRECT000000000"))
+            : RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"id\": 2001, \"username\": \"ada\"}"));
+        using var client = GitLabClient.Create(GitLabEndpoints.GitLabCom, () => recorder, log, new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Get, "glpat-FAKE-ada-1", new Uri("https://gitlab.com/api/v4/user"), null, GitLabJsonContext.Default.GitLabUserJson, Cancelled);
+
+        Assert.Equal(("GET", "/api/v4/user"), (Assert.Single(recorder.Sent).Method, recorder.Sent[0].Url.AbsolutePath));
+        Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", "https://gitlab.com/api/v4/user", "01JFAKEREDIRECT000000000"),
+            (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Url!.AbsoluteUri, reply.Failure.RequestId));
+        Assert.Equal(
+            string.Create(CultureInfo.InvariantCulture, $"GitLab: GET /api/v4/user failed: {status}, redirected outside the API (request 01JFAKEREDIRECT000000000)."),
             Assert.Single(log.Lines).Message);
     }
 

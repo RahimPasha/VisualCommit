@@ -29,7 +29,8 @@ internal static class GitLabClient
 /// since a 304 has no body (r6 8); <c>x-request-id</c>; GitLab's words for a failure (r6 10, g2 G2);
 /// and kinds from the status and shape F's <c>error</c> code alone, never from a sentence or the
 /// <c>scope</c> list, whose members vary by route (g2 G0.4). A moved project's GET is 301 to
-/// <c>projects/&lt;id&gt;</c> on the same origin (r6 3.2, MEASURED), which the core follows; a 304
+/// <c>projects/&lt;id&gt;</c> on the same origin (r6 3.2, MEASURED), which the core follows; any other
+/// method's redirect, and a GET's outside the API's path, is refused (<see cref="RefuseRedirect"/>); a 304
 /// counts against GitLab's limit (r6 8, MEASURED): kept answers save bytes, not budget.
 /// </summary>
 internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider clock) : HostingHttpProfile
@@ -87,15 +88,24 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
     /// nothing is sent to its <c>Location</c>: GitLab answers a non-GET to a moved project 405 (r6
     /// 3.2, READ) and redirects none, so a redirected POST is a broken server's, and repeating it
     /// would make a second request, or send its body to a path 7.4 does not name (an issue's, say).
+    /// A GET's is refused alike when its <c>Location</c>'s path is not under the API's
+    /// (<see cref="GitLabEndpoints.ApiBase"/>'s, ordinal): 7.3 follows a moved project's 301 to
+    /// <c>/api/v4/projects/&lt;id&gt;</c> alone, and the core would send the token on to any path of
+    /// the origin (a token page, <c>/oauth/token</c>).
     /// </summary>
     public override HostingFailure? RefuseRedirect(HostingExchange exchange, Uri location) =>
-        exchange.Method == HttpMethod.Get ? null : new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(Provider));
+        exchange.Method == HttpMethod.Get && location.AbsolutePath.StartsWith(Endpoints.ApiBase.AbsolutePath, StringComparison.Ordinal)
+            ? null
+            : new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(Provider));
 
-    /// <summary>The status, and for a refused redirect of a non-GET <c>&lt;status&gt;, a redirected &lt;method&gt;</c>.</summary>
+    /// <summary>
+    /// The status; for a refused redirect of a non-GET <c>&lt;status&gt;, a redirected &lt;method&gt;</c>,
+    /// and of a GET <c>&lt;status&gt;, redirected outside the API</c>.
+    /// </summary>
     public override string WarningOf(HostingExchange exchange, HostingFailure failure) =>
-        exchange.Method != HttpMethod.Get && HostingHttpClient.IsRedirect(exchange.Status)
-            ? string.Create(CultureInfo.InvariantCulture, $"{exchange.Status}, a redirected {exchange.Method.Method}")
-            : base.WarningOf(exchange, failure);
+        !HostingHttpClient.IsRedirect(exchange.Status) ? base.WarningOf(exchange, failure)
+        : exchange.Method != HttpMethod.Get ? string.Create(CultureInfo.InvariantCulture, $"{exchange.Status}, a redirected {exchange.Method.Method}")
+        : string.Create(CultureInfo.InvariantCulture, $"{exchange.Status}, redirected outside the API");
 
     /// <summary>
     /// The failure an answer stands for (7.3's table, in order). The message is GitLab's words
