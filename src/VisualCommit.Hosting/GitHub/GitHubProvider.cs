@@ -115,7 +115,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (reply.Value is not { Login: { Length: > 0 } login } user)
         {
-            return HostingResult<HostingAccount>.Fail(Malformed("GET", url, reply.RequestId));
+            return HostingResult<HostingAccount>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
         }
 
         var key = new AccountKey(HostingProvider.GitHub, Endpoints.Host, login);
@@ -139,7 +139,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (reply.Value is null)
         {
-            return HostingResult<RepositoryList>.Fail(Malformed("GET", url, reply.RequestId));
+            return HostingResult<RepositoryList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
         }
 
         var repositories = new List<RepositoryInfo>();
@@ -147,7 +147,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         {
             if (Info(json, withParent: false) is not { } info)
             {
-                return HostingResult<RepositoryList>.Fail(Malformed("GET", url, reply.RequestId));
+                return HostingResult<RepositoryList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
             }
 
             repositories.Add(info);
@@ -175,7 +175,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         return reply.Value is not null && Info(reply.Value, withParent: true) is { } info
             ? HostingResult<RepositoryInfo>.Ok(info)
-            : HostingResult<RepositoryInfo>.Fail(Malformed("GET", url, reply.RequestId));
+            : HostingResult<RepositoryInfo>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
     }
 
     /// <summary>A4: <c>GET repos/{o}/{r}/pulls?state=open&amp;per_page=100</c>, up to 3 pages.</summary>
@@ -196,7 +196,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (reply.Value is null)
         {
-            return HostingResult<PullRequestList>.Fail(Malformed("GET", url, reply.RequestId));
+            return HostingResult<PullRequestList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
         }
 
         var pulls = new List<PullRequest>();
@@ -204,7 +204,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         {
             if (Pull(json, repository) is not { } pull)
             {
-                return HostingResult<PullRequestList>.Fail(Malformed("GET", url, reply.RequestId));
+                return HostingResult<PullRequestList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
             }
 
             pulls.Add(pull);
@@ -246,7 +246,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         return reply.Value is not null && Pull(reply.Value, baseRepository) is { } pull
             ? HostingResult<PullRequest>.Ok(pull)
-            : HostingResult<PullRequest>.Fail(Malformed("POST", url, reply.RequestId));
+            : HostingResult<PullRequest>.Fail(Malformed(HttpMethod.Post, url, reply.RequestId));
     }
 
     /// <summary>
@@ -292,7 +292,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
             if (reply.Value is null)
             {
-                return HostingResult<AuthorMap>.Fail(Malformed("GET", url, reply.RequestId));
+                return HostingResult<AuthorMap>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
             }
 
             foreach (var item in reply.Value)
@@ -468,11 +468,6 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         return null;
     }
 
-    /// <summary>An answer that succeeded but lacks what the app needs: the client's text, and the warning the client would write.</summary>
-    private HostingFailure Malformed(string method, Uri url, string? requestId)
-    {
-        var request = requestId is { Length: > 0 } ? $" (request {requestId})" : string.Empty;
-        _log.Warning($"GitHub: {method} {url.AbsolutePath} failed: Malformed{request}.");
-        return new HostingFailure(HostingFailureKind.Malformed, GitHubClient.MalformedText, Url: new Uri(url.GetLeftPart(UriPartial.Path)), RequestId: requestId);
-    }
+    /// <summary>An answer that succeeded but lacks what the app needs: the core's <see cref="Http.HostingHttpClient.MalformedAnswer"/>, its text and its warning.</summary>
+    private HostingFailure Malformed(HttpMethod method, Uri url, string? requestId) => _client.MalformedAnswer(method, url, requestId);
 }
