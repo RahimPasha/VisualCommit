@@ -578,8 +578,8 @@ every commit.
   owner's answers for 7b, three of them (D345, D346, D350) with the lead's refinements made after
   the owner's acceptance (above); D352 is the owner's answer at 7b's start, and D353 to D356 the
   owner's rulings on the research's questions of taste; D357 to D372 the design's (2026-10-31);
-  D373 to D376 the owner's answers of 2026-11-01, D377 and D378 the design review's. The next
-  decision number is D379.
+  D373 to D376 the owner's answers of 2026-11-01, D377 and D378 the design review's, D379 and
+  D380 the lead's rulings on wave 1's adversarial check. The next decision number is D381.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -611,9 +611,10 @@ every commit.
   the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D379 on, since D239 to D248 went to the review before
+  owner"; each answer becomes a decision, D381 on, since D239 to D248 went to the review before
   phase 7, D249 to D264 to phase 7a's start, D265 to D338 to its design, D339 to D343 to its build
-  and gate and D344 to D356 to 7b's start and its research): design 17.5's reading of "ten repos can be checked and
+  and gate D344 to D356 to 7b's start and its research, D357 to D378 to its design and D379 on to its
+  build): design 17.5's reading of "ten repos can be checked and
   updated from one screen" (one dashboard of the ten, one Fetch all and one Pull all deciding every
   row); the report's by-hand System step (switch Windows' app mode while the app runs with System
   chosen, D224); and the move of the text boxes' placeholder contrast (Fluent's watermark opacity,
@@ -644,7 +645,7 @@ every commit.
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D379 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D381 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,
