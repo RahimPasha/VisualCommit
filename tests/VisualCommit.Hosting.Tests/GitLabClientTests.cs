@@ -385,6 +385,19 @@ public sealed class GitLabClientTests
             ("the reset time", [("RateLimit-ResetTime", resetTime)], now.AddMinutes(9), HostingFailureKind.RateLimited),
             ("none", [], now.AddSeconds(60), HostingFailureKind.RateLimited),
             ("a reset past year 9999", [("ratelimit-reset", "253402300800")], null, HostingFailureKind.Malformed),
+            // Made up, a broken server's (gitlab.com sends whole seconds, r6 8): text that is neither
+            // seconds nor an HTTP-date gives way to the next source, and every end lies between now
+            // and a day from now.
+            ("a fraction, then the reset", [("Retry-After", "1.5"), ("ratelimit-reset", reset)], DateTimeOffset.FromUnixTimeSeconds(long.Parse(reset, CultureInfo.InvariantCulture)), HostingFailureKind.RateLimited),
+            ("a slash, then the reset", [("Retry-After", "3/4"), ("ratelimit-reset", reset)], DateTimeOffset.FromUnixTimeSeconds(long.Parse(reset, CultureInfo.InvariantCulture)), HostingFailureKind.RateLimited),
+            ("a time of day, then the reset", [("Retry-After", "10:30"), ("ratelimit-reset", reset)], DateTimeOffset.FromUnixTimeSeconds(long.Parse(reset, CultureInfo.InvariantCulture)), HostingFailureKind.RateLimited),
+            ("another fraction, then the reset", [("Retry-After", "2.25"), ("ratelimit-reset", reset)], DateTimeOffset.FromUnixTimeSeconds(long.Parse(reset, CultureInfo.InvariantCulture)), HostingFailureKind.RateLimited),
+            ("a date in the past", [("Retry-After", "Thu, 01 Jan 1970 00:00:00 GMT"), ("ratelimit-reset", reset)], now, HostingFailureKind.RateLimited),
+            ("a date beyond a day", [("Retry-After", "Fri, 31 Dec 9999 23:59:59 GMT"), ("ratelimit-reset", reset)], now.AddDays(1), HostingFailureKind.RateLimited),
+            ("a reset in the past", [("ratelimit-reset", "0")], now, HostingFailureKind.RateLimited),
+            ("a reset beyond a day", [("ratelimit-reset", now.AddDays(3).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture))], now.AddDays(1), HostingFailureKind.RateLimited),
+            ("a reset time not a date", [("RateLimit-ResetTime", "1.5")], now.AddSeconds(60), HostingFailureKind.RateLimited),
+            ("a reset time in the past", [("RateLimit-ResetTime", "Thu, 01 Jan 1970 00:00:00 GMT")], now, HostingFailureKind.RateLimited),
         };
         foreach (var (name, headers, retryAt, kind) in cases)
         {
@@ -400,6 +413,37 @@ public sealed class GitLabClientTests
                 Assert.Equal("GitLab: GET /api/v4/projects failed: Malformed (OverflowException).", Assert.Single(log.Lines).Message);
             }
         }
+    }
+
+    // Made up: GitLab answers a POST to a moved project 405 (READ r6 3.2) and redirects none, so a
+    // redirected POST is a broken or hostile server's, on gitlab.com's own origin.
+    [Theory]
+    [InlineData(307, "/api/v4/projects/5001/merge_requests")]
+    [InlineData(308, "https://gitlab.com/api/v4/projects/5001/merge_requests")]
+    [InlineData(302, "/api/v4/projects/5001/issues")]
+    [InlineData(301, "https://gitlab.com/api/v4/projects/5001/merge_requests/9")]
+    public async Task A_redirected_POST_is_Malformed_and_nothing_is_sent_to_its_Location(int status, string location)
+    {
+        const string MergeRequestJson = """
+            {"iid": 9, "title": "T", "web_url": "https://gitlab.com/g/p/-/merge_requests/9", "source_branch": "fix", "target_branch": "main",
+             "created_at": "2026-01-02T03:04:05.678Z", "source_project_id": 5001, "target_project_id": 5001}
+            """;
+        var log = new ListLog();
+        var answered = 0;
+        var recorder = new RecordingHttpHandler(_ => answered++ == 0
+            ? RecordingHttpHandler.Json((HttpStatusCode)status, "{}", ("Location", location), ("x-request-id", "01JFAKEREDIRECT000000000"))
+            : RecordingHttpHandler.Json(HttpStatusCode.Created, MergeRequestJson));
+        using var client = GitLabClient.Create(GitLabEndpoints.GitLabCom, () => recorder, log, new ManualTimeProvider());
+        var body = new GitLabNewMergeRequestJson { SourceBranch = "fix", TargetBranch = "main", Title = "T", Description = "/close" };
+
+        var reply = await client.SendAsync(HttpMethod.Post, "glpat-FAKE-ada-1", new Uri("https://gitlab.com/api/v4/projects/5001/merge_requests"), body, GitLabJsonContext.Default.GitLabMergeRequestJson, Cancelled);
+
+        Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", PullRequestRefusal.None, "01JFAKEREDIRECT000000000"),
+            (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Refusal, reply.Failure.RequestId));
+        Assert.Equal(("POST", "/api/v4/projects/5001/merge_requests"), (Assert.Single(recorder.Sent).Method, recorder.Sent[0].Url.AbsolutePath));
+        Assert.Equal(
+            string.Create(CultureInfo.InvariantCulture, $"GitLab: POST /api/v4/projects/5001/merge_requests failed: {status}, a redirected POST (request 01JFAKEREDIRECT000000000)."),
+            Assert.Single(log.Lines).Message);
     }
 
     [Fact]

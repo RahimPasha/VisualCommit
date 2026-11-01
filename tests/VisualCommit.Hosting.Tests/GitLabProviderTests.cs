@@ -588,6 +588,76 @@ public sealed class GitLabProviderTests
         Assert.Equal(["GET", "GET"], recorder.Sent.Select(sent => sent.Method));
     }
 
+    // Made up, a broken server's: a request numbered below 1, which has no head ref
+    // (PullRequestRefs.HeadOf throws below 1).
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-5)]
+    public async Task A4_and_A5_fail_on_a_request_numbered_below_1(int iid)
+    {
+        var recorder = new RecordingHttpHandler(request => (request.Method.Method, request.RequestUri!.AbsolutePath) switch
+        {
+            ("GET", "/api/v4/projects/g%2Fp/merge_requests") => RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + MergeRequestJson(1, 5001, 5001) + "," + MergeRequestJson(iid, 5001, 5001) + "]", ("x-request-id", "01JFAKELIST00000000000000")),
+            ("GET", "/api/v4/projects/g%2Fp") => RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"id\": 5001, \"path_with_namespace\": \"g/p\"}"),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.Created, MergeRequestJson(iid, 5001, 5001), ("x-request-id", "01JFAKECREATE000000000000")),
+        });
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, new ListLog(), TimeProvider.System);
+        var p = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "g", "p");
+
+        var listed = await provider.ListPullRequestsAsync("glpat-FAKE-ada-1", p, Cancelled);
+        var created = await provider.CreatePullRequestAsync("glpat-FAKE-ada-1", p, new NewPullRequest("T", "", "fix", null, "main", false), Cancelled);
+
+        Assert.Equal((HostingFailureKind.Malformed, "https://gitlab.com/api/v4/projects/g%2Fp/merge_requests", "01JFAKELIST00000000000000"),
+            (listed.Failure!.Kind, listed.Failure.Url!.AbsoluteUri, listed.Failure.RequestId));
+        Assert.Equal((HostingFailureKind.Malformed, "https://gitlab.com/api/v4/projects/5001/merge_requests", "01JFAKECREATE000000000000"),
+            (created.Failure!.Kind, created.Failure.Url!.AbsoluteUri, created.Failure.RequestId));
+        Assert.Equal(["GET", "GET", "POST"], recorder.Sent.Select(sent => sent.Method));
+    }
+
+    // Made up, a broken server's: a list whose row is null. A2 leaves it out with a warning, as a
+    // row it cannot read; A4 fails whole, as on a request whose address it cannot read.
+    [Fact]
+    public async Task A2_leaves_out_a_null_row_with_a_warning_and_A4_fails_on_one()
+    {
+        const string Row = """{"id": 2, "path_with_namespace": "g/q", "http_url_to_repo": "https://gitlab.com/g/q.git", "web_url": "https://gitlab.com/g/q"}""";
+        var page2 = new Uri("https://gitlab.com/api/v4/projects?membership=true&page=2");
+        var answers = new Queue<HttpResponseMessage>(
+        [
+            RecordingHttpHandler.Json(HttpStatusCode.OK, "[null]"),
+            RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Row + ",null]"),
+            RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Row + "]", ("Link", $"<{page2.AbsoluteUri}>; rel=\"next\"")),
+            RecordingHttpHandler.Json(HttpStatusCode.OK, "[null]"),
+            RecordingHttpHandler.Json(HttpStatusCode.OK, "[null]"),
+            RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + MergeRequestJson(1, 5001, 5001) + ",null]"),
+        ]);
+        var log = new ListLog();
+        var recorder = new RecordingHttpHandler(_ => answers.Dequeue());
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, log, TimeProvider.System);
+        var p = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "g", "p");
+
+        var none = await provider.ListRepositoriesAsync("glpat-FAKE-ada-1", null!, Cancelled);
+        var mixed = await provider.ListRepositoriesAsync("glpat-FAKE-ada-1", null!, Cancelled);
+        var paged = await provider.ListRepositoriesAsync("glpat-FAKE-ada-1", null!, Cancelled);
+        var nullRequest = await provider.ListPullRequestsAsync("glpat-FAKE-ada-1", p, Cancelled);
+        var mixedRequests = await provider.ListPullRequestsAsync("glpat-FAKE-ada-1", p, Cancelled);
+
+        Assert.Empty(none.Value!.Repositories);
+        Assert.Equal(["g/q"], mixed.Value!.Repositories.Select(info => info.Repository.FullName));
+        Assert.Equal(["g/q"], paged.Value!.Repositories.Select(info => info.Repository.FullName));
+        Assert.Equal(
+            [
+                "GitLab listed a project as null: it is left out of the list.",
+                "GitLab listed a project as null: it is left out of the list.",
+                "GitLab listed a project as null: it is left out of the list.",
+                "GitLab: GET /api/v4/projects/g%2Fp/merge_requests failed: Malformed.",
+                "GitLab: GET /api/v4/projects/g%2Fp/merge_requests failed: Malformed.",
+            ],
+            log.Lines.Select(line => line.Message));
+        Assert.All(new[] { nullRequest.Failure, mixedRequests.Failure }, failure =>
+            Assert.Equal((HostingFailureKind.Malformed, "https://gitlab.com/api/v4/projects/g%2Fp/merge_requests"), (failure!.Kind, failure.Url!.AbsoluteUri)));
+        Assert.Empty(answers);
+    }
+
     /// <summary>One merge request's JSON with every member A4 needs (r6 4.1's members, MEASURED; made-up values).</summary>
     private static string MergeRequestJson(int iid, long source, long target) => string.Create(CultureInfo.InvariantCulture, $$"""
         {"id": {{7000 + iid}}, "iid": {{iid}}, "project_id": {{target}}, "title": "Request {{iid}}", "state": "opened",

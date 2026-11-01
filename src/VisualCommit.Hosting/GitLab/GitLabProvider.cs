@@ -168,8 +168,9 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
     /// <summary>
     /// A2: <c>GET projects?membership=true&amp;archived=false&amp;order_by=last_activity_at&amp;sort=desc&amp;per_page=100</c>,
     /// never <c>simple</c>, up to <see cref="RepositoryPages"/> pages (ruling 18), in GitLab's order.
-    /// A row whose path or addresses cannot be read is left out, with one warning naming its id.
-    /// <paramref name="account"/> is not read: the list is the token's.
+    /// A row whose path or addresses cannot be read is left out, with one warning naming its id; a
+    /// null row too, with a warning that says so. <paramref name="account"/> is not read: the list
+    /// is the token's.
     /// </summary>
     public async Task<HostingResult<RepositoryList>> ListRepositoriesAsync(string token, HostingAccount account, CancellationToken ct)
     {
@@ -193,7 +194,12 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
         var repositories = new List<RepositoryInfo>();
         foreach (var json in reply.Value)
         {
-            if (Info(json, withParent: false) is { } info)
+            // System.Text.Json refuses no null item in a list of a non-nullable type.
+            if (json is null)
+            {
+                _log.Warning("GitLab listed a project as null: it is left out of the list.");
+            }
+            else if (Info(json, withParent: false) is { } info)
             {
                 repositories.Add(info);
             }
@@ -238,7 +244,9 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
     /// names, asked once per id and kept until <see cref="ForgetKept"/>, at most
     /// <see cref="MaxForkLookups"/> a call in list order. A fork answered 403 or 404 (one the token
     /// cannot read), or past the cap, gives a null head repository, which the App takes as a deleted
-    /// fork's (its head ref is still the base's, r6 4.2); any other failure fails the call.
+    /// fork's (its head ref is still the base's, r6 4.2); any other failure fails the call. A list
+    /// with a request it cannot read (null, numbered below 1 or without an absolute web address)
+    /// fails whole, <see cref="HostingFailureKind.Malformed"/>.
     /// </summary>
     public async Task<HostingResult<PullRequestList>> ListPullRequestsAsync(string token, HostedRepository repository, CancellationToken ct)
     {
@@ -255,7 +263,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             return HostingResult<PullRequestList>.Fail(failure);
         }
 
-        if (reply.Value is null || reply.Value.Any(json => ReadableWebUrl(json.WebUrl) is null))
+        if (reply.Value is null || reply.Value.Any(json => !IsReadable(json)))
         {
             return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId));
         }
@@ -367,8 +375,8 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             return HostingResult<PullRequest>.Fail(failure);
         }
 
-        return reply.Value is { } json && ReadableWebUrl(json.WebUrl) is not null
-            ? HostingResult<PullRequest>.Ok(Pull(json, baseRepository, head))
+        return IsReadable(reply.Value)
+            ? HostingResult<PullRequest>.Ok(Pull(reply.Value, baseRepository, head))
             : HostingResult<PullRequest>.Fail(_client.MalformedAnswer(HttpMethod.Post, url, reply.RequestId));
     }
 
@@ -431,6 +439,14 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
         && (url.Scheme == Uri.UriSchemeHttps || url.Scheme == Uri.UriSchemeHttp)
             ? url
             : null;
+
+    /// <summary>
+    /// Whether a merge request A4 or A5 was given can be shown: not null (System.Text.Json refuses no
+    /// null item in a list), numbered 1 or more (its head ref needs it, <see cref="PullRequestRefs.HeadOf"/>)
+    /// and with an absolute web address.
+    /// </summary>
+    private static bool IsReadable([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] GitLabMergeRequestJson? json) =>
+        json is not null && json.Iid >= 1 && ReadableWebUrl(json.WebUrl) is not null;
 
     /// <summary>A3's read of one project by <paramref name="id"/> (its escaped path or its number), a 301 followed; a success without a value is malformed.</summary>
     private async Task<(GitLabProjectJson? Json, HostingFailure? Failure, Uri Url, string? RequestId)> ProjectAsync(string token, string id, CancellationToken ct)

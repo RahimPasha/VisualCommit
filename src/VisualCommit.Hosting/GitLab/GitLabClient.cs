@@ -83,6 +83,21 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
     public override string? RequestIdOf(IReadOnlyDictionary<string, string> headers) => headers.GetValueOrDefault(RequestIdHeader);
 
     /// <summary>
+    /// A redirect of anything but a GET is refused, <see cref="HostingFailureKind.Malformed"/>, and
+    /// nothing is sent to its <c>Location</c>: GitLab answers a non-GET to a moved project 405 (r6
+    /// 3.2, READ) and redirects none, so a redirected POST is a broken server's, and repeating it
+    /// would make a second request, or send its body to a path 7.4 does not name (an issue's, say).
+    /// </summary>
+    public override HostingFailure? RefuseRedirect(HostingExchange exchange, Uri location) =>
+        exchange.Method == HttpMethod.Get ? null : new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(Provider));
+
+    /// <summary>The status, and for a refused redirect of a non-GET <c>&lt;status&gt;, a redirected &lt;method&gt;</c>.</summary>
+    public override string WarningOf(HostingExchange exchange, HostingFailure failure) =>
+        exchange.Method != HttpMethod.Get && HostingHttpClient.IsRedirect(exchange.Status)
+            ? string.Create(CultureInfo.InvariantCulture, $"{exchange.Status}, a redirected {exchange.Method.Method}")
+            : base.WarningOf(exchange, failure);
+
+    /// <summary>
     /// The failure an answer stands for (7.3's table, in order). The message is GitLab's words
     /// (<see cref="GitLabError.Of"/>), else <c>&lt;code&gt; &lt;reason phrase&gt;</c>, and for a server
     /// error without words the core's <see cref="HostingHttpTexts.ServerError"/>. A
@@ -142,9 +157,11 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
         };
 
     /// <summary>
-    /// When a 429 ends (r6 8, READ): now plus <c>Retry-After</c>'s seconds (at most a day) or its
-    /// date; else <c>ratelimit-reset</c> (epoch seconds); else <c>ratelimit-resettime</c> (a date);
-    /// else now plus 60 s. A value that cannot be read gives way to the next. A
+    /// When a 429 ends (r6 8, READ): now plus <c>Retry-After</c>'s seconds or its HTTP-date; else
+    /// <c>ratelimit-reset</c> (epoch seconds); else <c>ratelimit-resettime</c> (an HTTP-date); else
+    /// now plus 60 s. A value that is neither digits nor an HTTP-date (<c>1.5</c>, <c>10:30</c>)
+    /// gives way to the next. Every end lies between now and now plus a day
+    /// (<see cref="MaxRetrySeconds"/>): one in the past is now, one later is a day from now. A
     /// <c>ratelimit-reset</c> of digits past the last second a <see cref="DateTimeOffset"/> holds throws
     /// <see cref="OverflowException"/>, which the core turns into <see cref="HostingFailureKind.Malformed"/>
     /// (D380), as GitHub's <c>X-RateLimit-Reset</c> past year 9999 is.
@@ -152,6 +169,8 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
     private DateTimeOffset RetryAt(IReadOnlyDictionary<string, string> headers)
     {
         var now = clock.GetUtcNow();
+        var latest = now.AddSeconds(MaxRetrySeconds);
+        DateTimeOffset Bounded(DateTimeOffset at) => at < now ? now : at > latest ? latest : at;
         if (headers.GetValueOrDefault("Retry-After")?.Trim() is { Length: > 0 } retry)
         {
             if (retry.All(char.IsAsciiDigit))
@@ -159,9 +178,9 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
                 return now + TimeSpan.FromSeconds(long.TryParse(retry, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds) ? Math.Min(seconds, MaxRetrySeconds) : MaxRetrySeconds);
             }
 
-            if (Date(retry) is { } date)
+            if (HttpDate(retry) is { } date)
             {
-                return date;
+                return Bounded(date);
             }
         }
 
@@ -172,12 +191,13 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
                 throw new OverflowException("ratelimit-reset is past the last second a DateTimeOffset holds.");
             }
 
-            return DateTimeOffset.FromUnixTimeSeconds(epoch);
+            return Bounded(DateTimeOffset.FromUnixTimeSeconds(epoch));
         }
 
-        return headers.GetValueOrDefault("ratelimit-resettime") is { Length: > 0 } resetTime && Date(resetTime) is { } at ? at : now + DefaultRetry;
+        return headers.GetValueOrDefault("ratelimit-resettime") is { Length: > 0 } resetTime && HttpDate(resetTime) is { } at ? Bounded(at) : now + DefaultRetry;
     }
 
-    private static DateTimeOffset? Date(string text) =>
-        DateTimeOffset.TryParse(text.Trim(), CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date) ? date : null;
+    /// <summary>An HTTP-date in its one current form (RFC 9110 5.6.7's IMF-fixdate, .NET's <c>"r"</c>), such as <c>Sun, 06 Nov 1994 08:49:37 GMT</c>; null for any other text.</summary>
+    private static DateTimeOffset? HttpDate(string text) =>
+        DateTimeOffset.TryParseExact(text.Trim(), "r", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var date) ? date : null;
 }

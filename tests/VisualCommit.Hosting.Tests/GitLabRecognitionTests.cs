@@ -8,7 +8,7 @@ namespace VisualCommit.Hosting.Tests;
 /// Which remote URLs are GitLab's (docs/phase-7b-design.md 7.2, 7.6): every form on gitlab.com and
 /// on the fake's endpoints, a namespace of 21 segments but not 22, and the refusals (other hosts and
 /// ports, one segment, a web address's <c>/-/</c>, <c>..</c>, <c>%2F</c>, a query, <c>git://</c>,
-/// GitHub's URLs).
+/// GitHub's URLs, and an authority whose last <c>@</c> is not the host git contacts).
 /// </summary>
 public sealed class GitLabRecognitionTests
 {
@@ -111,6 +111,23 @@ public sealed class GitLabRecognitionTests
     [InlineData("evil.example#@gitlab.com:ada/web-app.git")]
     [InlineData("git?x@gitlab.com:ada/web-app.git")]
     [InlineData("git\\x@gitlab.com:ada/web-app.git")]
+    // Git url-decodes an ssh:// URL before it finds the host, and unwraps [...] at the host's start
+    // or after @[: git sends these to evil.example over ssh (MEASURED by WP-GL's review, git
+    // 2.56.0.windows.4 with a GIT_SSH_COMMAND that recorded its arguments; the other altssh and
+    // www forms and the scp-like %2F refused alike, fail closed).
+    [InlineData("[evil.example]@gitlab.com:ada/web-app.git")]
+    [InlineData("a@[evil.example]@gitlab.com:ada/web-app.git")]
+    [InlineData("git@[evil.example]@www.gitlab.com:ada/web-app.git")]
+    [InlineData("git@evil.example%2F@gitlab.com:ada/web-app.git")]
+    [InlineData("ssh://[evil.example]@gitlab.com/ada/web-app.git")]
+    [InlineData("ssh://a@[evil.example]@gitlab.com/ada/web-app.git")]
+    [InlineData("ssh://git@[evil.example]@altssh.gitlab.com:443/ada/web-app.git")]
+    [InlineData("ssh://[evil.example]@altssh.gitlab.com:443/ada/web-app.git")]
+    [InlineData("ssh://git@[evil.example]@www.gitlab.com/ada/web-app.git")]
+    [InlineData("ssh://%5Bevil.example%5D@gitlab.com/ada/web-app.git")]
+    [InlineData("ssh://evil.example%2F@gitlab.com/ada/web-app.git")]
+    [InlineData("ssh://git%40evil.example%2F@gitlab.com/ada/web-app.git")]
+    [InlineData("ssh://evil.example%2F@altssh.gitlab.com:443/ada/web-app.git")]
     public void Gitlab_com_refuses_other_hosts_ports_forms_and_paths(string url)
     {
         Assert.Null(GitLabUrls.Recognise(GitLabEndpoints.GitLabCom, url));

@@ -31,7 +31,10 @@ internal static partial class GitLabUrls
     /// <c>..</c> or <c>-</c> (a web address's <c>/-/</c>), and no <c>%</c>, <c>?</c>, <c>#</c>,
     /// <c>\</c>, space or control character. The owner is the namespace path and the name the last
     /// segment, both as written; the user part is never kept. An authority with <c>?</c>, <c>#</c>
-    /// or <c>\</c> is refused: git and curl end it there, so its last <c>@</c> names no host.
+    /// or <c>\</c> is refused: git and curl end it there, so its last <c>@</c> names no host. An
+    /// ssh or scp-like one with <c>%</c>, <c>[</c> or <c>]</c> is refused too: git url-decodes an
+    /// <c>ssh://</c> URL before it finds the host, and unwraps <c>[…]</c> at the host's start or after
+    /// <c>@[</c>, so there too its last <c>@</c> names no host.
     /// </summary>
     public static HostedRepository? Recognise(GitLabEndpoints endpoints, string? url)
     {
@@ -122,7 +125,7 @@ internal static partial class GitLabUrls
         }
 
         var authority = rest[..slash];
-        if (EndsAnAuthority(authority))
+        if (EndsAnAuthority(authority) || (scheme == "ssh" && GitReadsAnotherHost(authority)))
         {
             return null;
         }
@@ -163,7 +166,7 @@ internal static partial class GitLabUrls
 
         var authority = url[..colon];
         var at = authority.LastIndexOf('@');
-        return at > 0 && !EndsAnAuthority(authority) && IsWebHost(authority[(at + 1)..]) && !HasPassword(authority[..at])
+        return at > 0 && !EndsAnAuthority(authority) && !GitReadsAnotherHost(authority) && IsWebHost(authority[(at + 1)..]) && !HasPassword(authority[..at])
             ? url[(colon + 1)..]
             : null;
     }
@@ -210,6 +213,18 @@ internal static partial class GitLabUrls
     /// such a URL is no one's; an scp-like one is refused alike.
     /// </summary>
     private static bool EndsAnAuthority(string authority) => authority.AsSpan().IndexOfAny("?#\\") >= 0;
+
+    /// <summary>
+    /// Whether git may read another host in an ssh or scp-like <paramref name="authority"/> than its
+    /// text after the last <c>@</c>: one with <c>%</c>, which git url-decodes in an <c>ssh://</c> URL
+    /// before it splits the host from the path (<c>ssh://evil.example%2F@gitlab.com/g/p.git</c> goes
+    /// to evil.example), or with <c>[</c> or <c>]</c>, which git unwraps at the host's start or after
+    /// <c>@[</c> (<c>git@[evil.example]@gitlab.com:g/p.git</c> goes to evil.example). MEASURED by
+    /// WP-GL's review with git 2.56.0.windows.4 and a recording <c>GIT_SSH_COMMAND</c>. https and
+    /// http keep the rule of <see cref="EndsAnAuthority"/> alone: curl neither decodes nor unwraps
+    /// there (the review's proxy saw <c>CONNECT gitlab.com:443</c>).
+    /// </summary>
+    private static bool GitReadsAnotherHost(string authority) => authority.AsSpan().IndexOfAny("%[]") >= 0;
 
     private static bool IsWebHost(string host) => IsHost(host, "gitlab.com") || IsHost(host, "www.gitlab.com");
 
