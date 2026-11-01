@@ -2126,13 +2126,14 @@ the merge that closes wave 2, whichever of WP-FA, WP-FL, WP-AZ and WP-GL is last
 three classes pass; the token goes to no other origin or header; no kind rests on GitLab's English or `scope`;
 recognition takes no other host or port; 1.4's signatures hold; CI's five jobs are green.
 
-**As built** (WP-GL, `f77a34f` to `3765433`, the reviews' fixes `2c7f4cb` and `0309c38`, 2026-11-01). Where the build settles what 7.2 to 7.6 left open:
+**As built** (WP-GL, `f77a34f` to `3765433`, the reviews' fixes `2c7f4cb`, `0309c38`, `c076f58`, 2026-11-01). Where the build settles what 7.2 to 7.6 left open:
 - `GitLabClient.cs` holds `GitLabProfile` (`ProjectId`, `Url`) and a static `Create`;
   `GitLabUrls.SplitPathWithNamespace` reads an answer's path by 7.2's rules.
-- 7.2: an authority with `?`, `#` or `\` is refused, and an ssh or scp-like one with `%`, `[` or `]`:
-  git sends `https://evil.example#@gitlab.com/g/p.git`, `ssh://evil.example%2F@gitlab.com/g/p.git`
-  and `git@[evil.example]@gitlab.com:g/p.git` to evil.example (the reviews MEASURED it). 7a's
-  `GitHubUrls` has both gaps: the lead's, for 16.3.
+- 7.2 refuses an authority with `?`, `#` or `\`, an ssh or scp-like one with `%`, `[` or `]`, and an
+  https or http one with two `@`: git sends `https://evil.example#@gitlab.com/g/p.git` and
+  `ssh://evil.example%2F@gitlab.com/g/p.git` to evil.example, and curl rejects
+  `https://a@evil.example@gitlab.com/g/p.git`'s host (MEASURED); ssh keeps the last `@`. 7a's
+  `GitHubUrls` has the three gaps: the lead's, for 16.3.
 - Words: a 408 or 5xx without GitLab's takes the core's `ServerError` text, another status
   `<code> <reason>`. `Detail` is the code for shape F alone. A body not UTF-8 holds no words. A
   refusal needs a POST to `…/merge_requests`. A non-GET's redirect is `Malformed`, nothing sent on
