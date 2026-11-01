@@ -34,6 +34,10 @@ public sealed class GitLabRecognitionTests
     [InlineData("ssh://git@altssh.gitlab.com:443/northfield/platform/web-app.git", "northfield/platform", "web-app")]
     [InlineData("git@gitlab.com:northfield/platform/web-app.git", "northfield/platform", "web-app")]
     [InlineData("git@www.gitlab.com:ada/web-app", "ada", "web-app")]
+    // OpenSSH splits its destination's user at the last @ (ssh -G 'a@evil.example@gitlab.com'
+    // gives hostname gitlab.com, MEASURED by WP-GL's third review), so git's ssh reaches gitlab.com.
+    [InlineData("ssh://a@evil.example@gitlab.com/ada/web-app.git", "ada", "web-app")]
+    [InlineData("a@evil.example@gitlab.com:ada/web-app.git", "ada", "web-app")]
     [InlineData("https://gitlab.com/northfield/platform/services/billing/invoice-generation-and-reconciliation.git", "northfield/platform/services/billing", "invoice-generation-and-reconciliation")]
     [InlineData("https://gitlab.com/a_b.c-d/my.project_name-1", "a_b.c-d", "my.project_name-1")]
     [InlineData("https://gitlab.com/ada/web-app.git.git", "ada", "web-app.git")]
@@ -106,6 +110,13 @@ public sealed class GitLabRecognitionTests
     [InlineData("http://evil.example#@gitlab.com/ada/web-app.git")]
     [InlineData("http://evil.example?@gitlab.com/ada/web-app.git")]
     [InlineData("http://evil.example\\@gitlab.com/ada/web-app.git")]
+    // Curl splits the user at the first @ and takes the rest as the host, which it rejects: git
+    // reaches no host for these four ("URL rejected: Bad hostname", MEASURED by WP-GL's third
+    // review, git 2.56.0.windows.4 through a local recording proxy that saw no CONNECT).
+    [InlineData("https://a@evil.example@gitlab.com/ada/web-app.git")]
+    [InlineData("http://a@evil.example@gitlab.com/ada/web-app")]
+    [InlineData("https://a:b@evil.example@gitlab.com/ada/web-app.git")]
+    [InlineData("https://Ada@evil.example@gitlab.com/ada/web-app.git")]
     // The same characters before an ssh or scp-like host are refused alike (fail closed).
     [InlineData("ssh://evil.example#@gitlab.com/ada/web-app.git")]
     [InlineData("evil.example#@gitlab.com:ada/web-app.git")]

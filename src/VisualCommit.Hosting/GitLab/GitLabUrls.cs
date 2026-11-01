@@ -34,7 +34,9 @@ internal static partial class GitLabUrls
     /// or <c>\</c> is refused: git and curl end it there, so its last <c>@</c> names no host. An
     /// ssh or scp-like one with <c>%</c>, <c>[</c> or <c>]</c> is refused too: git url-decodes an
     /// <c>ssh://</c> URL before it finds the host, and unwraps <c>[…]</c> at the host's start or after
-    /// <c>@[</c>, so there too its last <c>@</c> names no host.
+    /// <c>@[</c>, so there too its last <c>@</c> names no host. An https or http one with two or
+    /// more <c>@</c> is refused: curl ends its user at the first <c>@</c> and rejects the rest as a
+    /// host, while ssh's user ends at the last <c>@</c>, so ssh and scp-like keep that reading.
     /// </summary>
     public static HostedRepository? Recognise(GitLabEndpoints endpoints, string? url)
     {
@@ -125,7 +127,9 @@ internal static partial class GitLabUrls
         }
 
         var authority = rest[..slash];
-        if (EndsAnAuthority(authority) || (scheme == "ssh" && GitReadsAnotherHost(authority)))
+        if (EndsAnAuthority(authority)
+            || (scheme == "ssh" && GitReadsAnotherHost(authority))
+            || (scheme is "http" or "https" && CurlReadsAnotherHost(authority)))
         {
             return null;
         }
@@ -225,6 +229,18 @@ internal static partial class GitLabUrls
     /// there (the review's proxy saw <c>CONNECT gitlab.com:443</c>).
     /// </summary>
     private static bool GitReadsAnotherHost(string authority) => authority.AsSpan().IndexOfAny("%[]") >= 0;
+
+    /// <summary>
+    /// Whether curl reads another host in an https or http <paramref name="authority"/> than its
+    /// text after the last <c>@</c>: one with two or more <c>@</c>, whose user curl ends at the first
+    /// <c>@</c>, so that it takes <c>evil.example@gitlab.com</c> as the host of
+    /// <c>https://a@evil.example@gitlab.com/g/p.git</c> and rejects it ("URL rejected: Bad
+    /// hostname"; MEASURED by WP-GL's third review with git 2.56.0.windows.4 through a local
+    /// recording proxy, which saw no CONNECT). Git then reaches no host, so such a URL is no
+    /// one's. ssh and scp-like keep the last <c>@</c>: OpenSSH splits its destination's user there
+    /// (<c>ssh -G 'a@evil.example@gitlab.com'</c> gives hostname gitlab.com).
+    /// </summary>
+    private static bool CurlReadsAnotherHost(string authority) => authority.IndexOf('@') != authority.LastIndexOf('@');
 
     private static bool IsWebHost(string host) => IsHost(host, "gitlab.com") || IsHost(host, "www.gitlab.com");
 
