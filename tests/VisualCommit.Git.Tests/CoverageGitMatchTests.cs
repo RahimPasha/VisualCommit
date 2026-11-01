@@ -324,6 +324,74 @@ public sealed class CoverageGitMatchTests
         Assert.Empty(www.Errors);
     }
 
+    /// <summary>
+    /// The remote helper prefixes that run git's remote-curl on the address after <c>::</c> on
+    /// every git of this platform: <c>git-remote-http.exe</c> on Windows (MinGit has no ftp
+    /// helper), the ftp and ftps aliases that every other git built with curl installs.
+    /// </summary>
+    public static TheoryData<string> CurlHelperPrefixes => OperatingSystem.IsWindows()
+        ? new() { "http.exe::", "HTTP.EXE::" }
+        : new() { "ftp::", "ftps::" };
+
+    /// <summary>
+    /// The hunt on the fixed code, its third finding (2026-11-01), over a transport: git reads
+    /// <c>&lt;helper&gt;::&lt;address&gt;</c> as the address over <c>git-remote-&lt;helper&gt;</c>,
+    /// here remote-curl. Bob's <c>.git</c>-less URL so written reaches the local host, whose 301
+    /// leads <c>/g/p/info/refs</c> into <c>/g/p.git/info/refs</c> as gitlab.com's does (r6 6.1);
+    /// git builds the credential again from the target without bob's name, and the binding Select
+    /// gave beside it before the fix answers bob's fetch with the account's token, the user's own
+    /// helper unasked (MEASURED by the hunt on 2.56.0.windows.4 and 2.43.0.windows.1). Select
+    /// now binds nothing beside a URL in that grammar, and the user's own helper is asked (D82).
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(CurlHelperPrefixes))]
+    public async Task Another_users_url_through_a_remote_helper_prefix_that_a_redirect_leads_into_a_binding_takes_the_token_so_Select_binds_nothing(string prefix)
+    {
+        using var repo = await TempRepo.CreateAsync("helper");
+        await repo.CommitFileAsync("README.md", "first\n", "First");
+        var folder = repo.SiblingPath("gitlab");
+        await repo.GitAsync("clone", "--quiet", "--bare", "--no-hardlinks", repo.Path, Path.Combine(folder, "g", "p.git"));
+        await using var host = await AuthRemoteServer.StartForHostAsync(
+            folder,
+            new AuthRemoteHostOptions(
+                new RedirectRoutes(path => path == "/g/p/info/refs", 301, request => "/g/p.git/info/refs?" + request.Query),
+                token => token == Token ? "ada" : null,
+                _ => false,
+                (_, _) => false,
+                Realm: "GitLab"));
+        host.Serve("g/p");
+        var coverage = new GitCoverage(new AccountKey(HostingProvider.GitLab, $"127.0.0.1:{host.Port}", "ada"), new Uri($"http://127.0.0.1:{host.Port}/"))
+        {
+            GitTwin = true,
+            HelperUserIsAccounts = true,
+        };
+        var origin = $"http://127.0.0.1:{host.Port}/g/p.git";
+        var bob = $"{prefix}http://bob@127.0.0.1:{host.Port}/g/p";
+        var own = await OwnHelperAsync(repo);
+
+        // What Select gave beside bob's URL before the fix: the origin's binding.
+        var before = new CredentialBinding(origin, coverage.Account);
+        Assert.Equal([before], CredentialBinding.Select([new RemoteEffectiveUrls("origin", [origin], [origin])], coverage));
+        var taken = await LsRemoteAsync(repo, [before], bob);
+
+        Assert.True(taken.Asked, $"{bob} did not reach the app's helper through {origin}: {taken.Error}");
+        Assert.False(taken.AskedOtherUser);
+        Assert.Contains(host.Requests, request => request.Path == "/g/p/info/refs" && request.Status == 301);
+        Assert.Contains(host.Requests, request => request.Path == "/g/p.git/info/refs" && request.UserName == "ada" && request.GivenUserName == GitCredential.UserName);
+        Assert.False(File.Exists(own), "The user's own helper was asked through the origin's key.");
+
+        var bindings = CredentialBinding.Select([new RemoteEffectiveUrls("origin", [origin], [origin]), new RemoteEffectiveUrls("bob", [bob], [bob])], coverage);
+        Assert.Empty(bindings);
+        Assert.Empty(CredentialBinding.Select([new RemoteEffectiveUrls("bob", [bob], [bob]), new RemoteEffectiveUrls("origin", [origin], [origin])], coverage));
+        var signedIn = host.Requests.Count(request => request.UserName == "ada");
+        var kept = await LsRemoteAsync(repo, bindings, bob);
+
+        Assert.False(kept.Asked);
+        Assert.Equal(signedIn, host.Requests.Count(request => request.UserName == "ada"));
+        Assert.True(File.Exists(own), "The user's own helper was not asked without the origin's key.");
+        Assert.Empty(host.Errors);
+    }
+
     [Theory]
     [InlineData("GitLab", "https://evil@gitlab．com/g/p", "https://gitlab.com/g/p", "gitlab．com")]
     [InlineData("GitLab", "https://evil@ｇｉｔｌａｂ.com/g/p", "https://gitlab.com/g/p", "ｇｉｔｌａｂ.com")]

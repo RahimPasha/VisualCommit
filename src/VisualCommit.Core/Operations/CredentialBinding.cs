@@ -53,7 +53,8 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     /// g3 G3.4's form on the URL's text (docs/phase-7b-design.md 8.2 step 2, D369): the one rule
     /// that <see cref="Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/> and Azure DevOps'
     /// recognition both apply. The text holds only U+0021 to U+007E and no <c>\</c>, <c>?</c> or
-    /// <c>#</c>, and has a scheme before <c>://</c>; after <c>://</c> a <c>%</c> stands only before two
+    /// <c>#</c>, and has a scheme in RFC 3986's grammar (<c>[A-Za-z][A-Za-z0-9+.-]*</c>, so not git's
+    /// <c>ftp::https</c>) before <c>://</c>; after <c>://</c> a <c>%</c> stands only before two
     /// hex digits that encode none of <c>2E</c>, <c>2F</c>, <c>5C</c>, <c>25</c>, <c>00</c> to <c>1F</c>
     /// and <c>7F</c>; the path (the text from the first <c>/</c> after <c>://</c>) is empty or
     /// <c>/</c>-separated segments, none <c>.</c> or <c>..</c>, none empty but one trailing, each of
@@ -71,7 +72,7 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
         }
 
         var schemeEnd = url.IndexOf(SchemeSeparator, StringComparison.Ordinal);
-        if (schemeEnd <= 0)
+        if (schemeEnd <= 0 || !IsScheme(url.AsSpan(0, schemeEnd)))
         {
             return false;
         }
@@ -97,7 +98,10 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     /// without case or, with <see cref="GitCoverage.HelperUserIsAccounts"/>, <c>x-access-token</c>,
     /// with no password. With <see cref="GitCoverage.GitTwin"/> a <c>.git</c>-less URL of two or more
     /// segments is followed by its <c>.git</c> twin, and a URL whose path holds a raw reserved
-    /// character by its credential twin. An <c>http</c> or <c>https</c> URL that cannot be read
+    /// character by its credential twin. A URL in git's remote helper grammar
+    /// (<c>&lt;helper&gt;::&lt;address&gt;</c>: <c>ftp::https://…</c>, <c>http.exe::http://…</c>),
+    /// whatever its address, leaves nothing on any covered host bound, as R1's does (D379); an
+    /// <c>http</c> or <c>https</c> URL that cannot be read
     /// leaves nothing on any covered host bound (D379), and so does one whose host, as .NET or
     /// git's credential code reads it, holds a character outside U+0021 to U+007E (a fullwidth
     /// <c>dev.azure.com</c>, <c>gitlab&lt;U+FF0E&gt;com</c>), which git's curl may map into a covered host.
@@ -200,6 +204,18 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     private static readonly SearchValues<byte> KeptInCredentialView =
         SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~/"u8);
 
+    /// <summary>The characters after a scheme's first, RFC 3986's <c>ALPHA / DIGIT / "+" / "-" / "."</c>.</summary>
+    private static readonly SearchValues<char> SchemeCharacters =
+        SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+-.");
+
+    /// <summary>
+    /// RFC 3986's scheme, <c>[A-Za-z][A-Za-z0-9+.-]*</c>: no <c>:</c>, so git's remote helper
+    /// grammar (<c>ftp::https://…</c>) is not in <see cref="InPlainForm"/>'s form (the hunt on the
+    /// fixed code, its third finding).
+    /// </summary>
+    private static bool IsScheme(ReadOnlySpan<char> scheme) =>
+        scheme.Length > 0 && char.IsAsciiLetter(scheme[0]) && !scheme[1..].ContainsAnyExcept(SchemeCharacters);
+
     /// <summary>Azure DevOps' organization grammar's characters (D360).</summary>
     private static readonly SearchValues<char> OrganizationCharacters =
         SearchValues.Create("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-");
@@ -221,6 +237,27 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
         var candidates = new List<(CoveredHost Host, UrlParts Url)>();
         foreach (var text in remotes.SelectMany(remote => remote.Fetch.Concat(remote.Push)))
         {
+            // The hunt on the fixed code, its third finding (2026-11-01): git reads a URL in its
+            // remote helper grammar, <helper>::<address>, as the address over git-remote-<helper>
+            // before any other reading (transport.c's transport_get), and for ftp, ftps and, on
+            // Windows, http.exe or https.exe that helper is remote-curl on the address: a binding's
+            // key answers an http or https address there, another user's or one out of the form,
+            // while the app reads no such URL (.NET refuses ftp::https://…, reads https.exe::… with
+            // an empty host), so its user and path never reached the drop or the fail. Another
+            // helper may run git again on its address (gcrypt::ftp::https://…). As for R1's
+            // unreadable URL (D379), any URL in that grammar leaves nothing on any covered host
+            // bound, whatever its address, and is never bound; so no later rule, HasHttpScheme's
+            // among them, sees one.
+            if (IsRemoteHelperUrl(text))
+            {
+                foreach (var host in hosts)
+                {
+                    host.Failed = true;
+                }
+
+                continue;
+            }
+
             if (UrlParts.Of(text) is not { } url)
             {
                 // D379 (R1): .NET cannot read it, while git's credential code and curl decode what
@@ -524,7 +561,28 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     /// <summary>Where git's credential code ends a URL's authority (<c>strcspn(cp, "/?#")</c>).</summary>
     private static readonly SearchValues<char> EndsGitsAuthority = SearchValues.Create("/?#");
 
-    /// <summary>D379 (R1): whether a URL's scheme, the text before its first <c>:</c>, is <c>http</c> or <c>https</c> without case.</summary>
+    /// <summary>
+    /// Whether git reads <paramref name="text"/> in its remote helper grammar,
+    /// <c>&lt;helper&gt;::&lt;address&gt;</c> (transport.c's <c>transport_get</c>): a name of the
+    /// characters <c>url.c</c>'s <c>is_urlschemechar</c> takes, <c>[A-Za-z0-9][A-Za-z0-9+.-]*</c>
+    /// (ASCII; a digit first too, looser than RFC 3986), or an empty one, then <c>::</c>.
+    /// </summary>
+    private static bool IsRemoteHelperUrl(string text)
+    {
+        var end = 0;
+        while (end < text.Length && (char.IsAsciiLetterOrDigit(text[end]) || (end > 0 && text[end] is '+' or '-' or '.')))
+        {
+            end++;
+        }
+
+        return text.AsSpan(end).StartsWith("::", StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// D379 (R1): whether a URL's scheme, the text before its first <c>:</c>, is <c>http</c> or
+    /// <c>https</c> without case. Its caller has already refused a URL in git's remote helper
+    /// grammar (<see cref="IsRemoteHelperUrl"/>), whose text before the first <c>:</c> is no scheme.
+    /// </summary>
     private static bool HasHttpScheme(string text)
     {
         var colon = text.IndexOf(':', StringComparison.Ordinal);

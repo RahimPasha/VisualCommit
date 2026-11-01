@@ -485,6 +485,87 @@ public class CredentialBindingSelectTests
         Assert.Empty(CredentialBinding.Select([Fetch("origin", "http://127.0.0.1:2/Fernhill-Labs/p/_git/r"), Fetch("other", url)], FakeAzureCoverage()));
     }
 
+    /// <summary>
+    /// The hunt on the fixed code, its third finding (2026-11-01): URLs in git's remote helper
+    /// grammar, <c>&lt;helper&gt;::&lt;address&gt;</c>, which git reads as the address over
+    /// <c>git-remote-&lt;helper&gt;</c> (for ftp, ftps and Windows' http.exe or https.exe, remote-curl
+    /// on the address; <see cref="CoverageGitMatchTests"/> shows the token taken over a transport).
+    /// Before the fix the app read the text before the first <c>:</c> as the scheme, so R1's and the
+    /// non-ASCII rule never ran, and the URL reached no covered host: the bindings stayed beside
+    /// another user's or an out-of-form address. Now any URL in that grammar, whatever its address,
+    /// leaves every covered host unbound, as R1's unreadable one does (D379).
+    /// </summary>
+    public static TheoryData<string> RemoteHelperUrls => new()
+    {
+        "ftp::https://evil@dev.azure.com/myorg/p/_git/r",
+        "ftps::https://dev.azure.com/myorg/p/_git/r/..%5C..%5Cotherorg/p/_git/r",
+        "https.exe::https://evil@dev.azure.com/myorg/p/_git/r",
+        "HTTP.EXE::http://dev.azure.com/myorg/p/_git/r/..%5C..%5C..%5C..%5Cotherorg/p/_git/r",
+        "ftp::https://evil@myorg.visualstudio.com/p/_git/r",
+        "ftp::https://evil@%64ev.azure.com/myorg/p/_git/r",
+        "ftp::https://evil@ｄｅｖ.azure.com/myorg/p/_git/r",
+        "ftp::https://bob@gitlab.com/g/p",
+        "ftp::http://bob@gitlab.com/g/p.git",
+        "https.exe::https://bob@gitlab.com/g/p",
+        "ftp::http://bob@127.0.0.1:2/g/p",
+        "http.exe::http://127.0.0.1:2/Fernhill-Labs/p/_git/r/..%5Cq",
+        "ftp::https://dev.azure.com/myorg/p/_git/r",
+        "ftp::https://gitlab.com/g/p.git",
+        "gcrypt::ftp::https://evil@dev.azure.com/myorg/p/_git/r",
+        "1x::https://evil@dev.azure.com/myorg/p/_git/r",
+        "a+b.c-d::https://bob@gitlab.com/g/p",
+        "::https://evil@dev.azure.com/myorg/p/_git/r",
+        "hg::ssh://hg.example/r",
+        "dev.azure.com::myorg/p/_git/r",
+    };
+
+    [Theory]
+    [MemberData(nameof(RemoteHelperUrls))]
+    public void A_url_in_gits_remote_helper_grammar_leaves_every_covered_host_unbound_whatever_its_address(string url)
+    {
+        var azure = AzureDevOpsCoverageVectors.Coverage;
+
+        Assert.False(CredentialBinding.InPlainForm(url), $"{url} is in the form.");
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", V1), Fetch("vs", VisualStudio), Fetch("other", url)], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", url), Fetch("vs", VisualStudio)], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p.git"), Fetch("other", url)], GitLab));
+        Assert.Empty(CredentialBinding.Select([new RemoteEffectiveUrls("origin", ["https://gitlab.com/g/p"], [url])], GitLab));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", "http://127.0.0.1:2/Fernhill-Labs/p/_git/r"), Fetch("other", url)], FakeAzureCoverage()));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", "http://127.0.0.1:2/g/p.git"), Fetch("other", url)], FakeGitLabCoverage()));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", url)], GitLab));
+    }
+
+    [Theory]
+    [InlineData("+x::https://evil@dev.azure.com/myorg/p/_git/r")]
+    [InlineData("x_y::https://evil@dev.azure.com/myorg/p/_git/r")]
+    [InlineData("ftp:/:https://evil@dev.azure.com/myorg/p/_git/r")]
+    [InlineData("https://dev.azure.com/otherorg/p/_git/r::x")]
+    [InlineData("https://[::1]:8080/myorg/p/_git/r")]
+    [InlineData("ftp://evil@dev.azure.com/myorg/p/_git/r")]
+    public void A_url_outside_gits_remote_helper_grammar_with_a_double_colon_fails_nothing(string url)
+    {
+        // git's transport_get takes a helper only from a name of is_urlschemechar's characters,
+        // the first alphanumeric, right before "::"; here git reads a local path, an http URL
+        // or curl's ftp, which no binding's key answers.
+        Assert.Equal([V1], CredentialBinding.Select([Fetch("origin", V1), Fetch("other", url)], AzureDevOpsCoverageVectors.Coverage).Select(binding => binding.Url));
+    }
+
+    [Theory]
+    [InlineData("https://gitlab.com/g/p.git", true)]
+    [InlineData("HTTPS://gitlab.com/g/p.git", true)]
+    [InlineData("git+ssh://gitlab.com/g/p.git", true)]
+    [InlineData("a1+b.c-d://gitlab.com/g/p.git", true)]
+    [InlineData("ftp::https://gitlab.com/g/p.git", false)]
+    [InlineData("http.exe::https://gitlab.com/g/p.git", false)]
+    [InlineData("::https://gitlab.com/g/p.git", false)]
+    [InlineData("1x://gitlab.com/g/p.git", false)]
+    [InlineData("-x://gitlab.com/g/p.git", false)]
+    [InlineData("x_y://gitlab.com/g/p.git", false)]
+    public void The_form_needs_a_scheme_in_rfc_3986s_grammar_before_its_double_slash(string url, bool inForm)
+    {
+        Assert.Equal(inForm, CredentialBinding.InPlainForm(url));
+    }
+
     [Theory]
     [InlineData("git@ssh.dev.azure.com:v3/myorg/p/r")]
     [InlineData("dev.azure.com:myorg/p/_git/r")]
