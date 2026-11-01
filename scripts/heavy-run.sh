@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Runs `dotnet test` with the arguments it is given, under a lock that lets only one such run use
 # the machine at a time (D245). Whole-project runs and the run at the root are the heavy ones: the
-# default run takes about 55 minutes on the laptop and keeps every processor busy, and two at once
-# make both slower and fail tests that only fail under load (a git call 10 to 15 times as slow as
-# alone, D237). During a phase only the lead starts them, through this script, so that a second
-# heavy run waits for the first instead of running beside it. Builders and fixers run the test
-# classes they touch with plain `dotnet test`, which needs no lock.
+# default run's length on the laptop is in CLAUDE.md's "What to know"; it keeps every processor
+# busy, and two at once make both slower and fail tests that only fail under load (a git call 10 to
+# 15 times as slow as alone, D237). During a phase only the lead starts them, through this script,
+# so that a second heavy run waits for the first instead of running beside it. Builders and fixers
+# run the test classes they touch with plain `dotnet test`, which needs no lock.
 #
 # Usage, from anywhere in the repository (Git Bash on Windows, bash on Linux and macOS). The
 # arguments go to `dotnet test` unchanged, and it runs at the repository's root:

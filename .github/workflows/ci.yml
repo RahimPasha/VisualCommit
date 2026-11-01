@@ -29,7 +29,7 @@ jobs:
   build-and-test:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 65
+    timeout-minutes: 80
     strategy:
       fail-fast: false
       matrix:
@@ -61,9 +61,10 @@ jobs:
       # it); phase 4 a fifth test process, and Windows passed 12 of the old 14 minutes (D152);
       # phase 5 two more and the undo history's reads in every operation, and Windows reached
       # the 24-minute limit (run 38853641791, D184); phase 6 two more walk-through projects, and
-      # macOS passed 32 of the 40 minutes (run 39943973579, D232).
+      # macOS passed 32 of the 40 minutes (run 39943973579, D232); phase 7b two more providers, whose
+      # tests were projected to bring macOS's worst run past 44 of the 55 minutes (D377).
       - name: Test
-        timeout-minutes: 55
+        timeout-minutes: 70
         run: dotnet test --configuration Release --no-build
 
       # The keychain's own tests (D259, D270): each runs the platform's real store against an entry

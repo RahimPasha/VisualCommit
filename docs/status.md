@@ -180,7 +180,9 @@ docs only, which start no run. Before it, run 41172878322 on `391f7f2` failed tw
 Windows attempt, both a status read in the middle of a terminal's git (phase 7a's report, "Found by
 the gate", item 4; fixed in `a9d02c1`, whose run 41181591519 had all five jobs green). During phase
 7a the Windows Test step took up to 35 min 21 s and macOS's up to 37 min 57 s, under the 44 minutes
-at which the lead raises D232's limit of 55 (D186's rule). Each of the phase's runs, with what it
+at which the lead raised D232's limit of 55 (D186's rule). Phase 7b's first code commit raised the
+limits to 70 and 80 (D377): the lead raises one when a Test step passes 56 minutes, at a merge before
+the counted round. Each of the phase's runs, with what it
 found, is in this file as of the merge's second parent (`git show 3a3cc71:docs/status.md`).
 
 The run for the review's changes on `master` (the build trim `32b238c`, the heavy-run lock
@@ -211,8 +213,8 @@ its first failed `ShellDriverTests.Wheel_reaches_the_control_under_the_mouse_wit
 test did on `master`. The commits after it change docs only, which start no run. The gate's earlier
 rounds had runs 40027897278 (`774464d`), 40044430603 (`b7da110`) and 40051904024 (`639db4a`), all five
 jobs green; macOS's Test step reached 43 min 12 s in run 40019921605 on `a937ca6`, near D232's 44.
-CI's Test step on Windows, macOS and Linux has a limit of 55 minutes and each of their jobs 65
-(D232); the containers keep 14 and 25. The owner looks again at CI's duration when the project is
+CI's Test step on Windows, macOS and Linux had a limit of 55 minutes and each of their jobs 65
+(D232) until phase 7b's first code commit set 70 and 80 (D377); the containers keep 14 and 25. The owner looks again at CI's duration when the project is
 over (D134). The runs of the phase before the gate, and what each found, are in "Notes for whoever
 resumes".
 

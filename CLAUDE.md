@@ -362,9 +362,11 @@ What to know about them:
   step 21 min 48 s), 34 min 11 s on macOS (Test step 32 min 16 s), 6 min 26 s on Linux (Test
   step 4 min 54 s) and 6 min 28 s and 6 min 6 s in the containers (Test steps 4 min 43 s and
   4 min 21 s); during phase 7a the Windows Test step took up to 35 min 21 s and macOS's up to
-  37 min 57 s (`docs/plan.md`'s risk 8). The Test steps of Windows, macOS and Linux have a limit of 55 minutes and their jobs
-  65 (D232, amending D184); the containers' limits stay. The lead raises that limit when the
-  Windows or macOS Test step passes 44 minutes, four fifths of it (D232, D186's rule). Phase 1's checks load and clone a 100k-commit repo,
+  37 min 57 s (`docs/plan.md`'s risk 8). The Test steps of Windows, macOS and Linux have a limit of 70 minutes and their jobs
+  80 (D377, amending D232); the containers' limits stay (14 and 25). The lead raises a limit when a
+  Test step passes four fifths of it, 56 minutes, or 11 min 12 s in a container, and records it,
+  but only at a merge before the counted round: no CI limit changes after the counted round's
+  commit (D377, amending D186's rule). Phase 1's checks load and clone a 100k-commit repo,
   built once into `%TEMP%/VisualCommit.Tests/shared/` and reused. They use real git and a temporary folder for
   every repo and data folder; they never open a window or touch the user's settings.
 - During a phase, builders and fixers run only the test classes they touch, with plain
