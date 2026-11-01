@@ -107,13 +107,15 @@ public static class AppLogFile
     /// The Debug line a repository's hosting logs on the UI thread once a list of open pull requests
     /// is applied (docs/phase-7a-design.md 1.9, 7.8, D322):
     /// <c>&lt;repo&gt;: listed &lt;n&gt; open pull requests of &lt;owner/name&gt;</c>, the count in
-    /// the group <c>count</c> and the repository listed in <c>repository</c>.
+    /// the group <c>count</c> and the repository listed in <c>repository</c>. Since phase 7b
+    /// (docs/phase-7b-design.md 1.9, 2.4) the listed repository's name has any depth and may hold
+    /// spaces (<c>group/sub/project</c>, <c>Fernhill-Labs/Mobile App/mobile-app</c>); 7a's lines match as before.
     /// </summary>
     public static Regex PullRequestsListed(string repository)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repository);
         return new Regex(
-            string.Create(CultureInfo.InvariantCulture, $@"\] {Regex.Escape(repository)}: listed (?<count>\d+) open pull requests of (?<repository>[^/\s]+/[^/\s]+)$"),
+            string.Create(CultureInfo.InvariantCulture, $@"\] {Regex.Escape(repository)}: listed (?<count>\d+) open pull requests of (?<repository>[^/]+(?:/[^/]+)+)$"),
             RegexOptions.CultureInvariant);
     }
 

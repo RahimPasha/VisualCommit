@@ -34,59 +34,24 @@ public sealed partial class FakeGitHub
         var route = RouteOf(request.Method, request.Path);
         if (route is not null)
         {
-            await WaitAtHoldAsync(route.Key, ct).ConfigureAwait(false);
+            await _core.WaitAtHoldAsync(route.Key, ct).ConfigureAwait(false);
         }
 
         var call = new Call(request, route);
         var response = await AnswerAsync(call, ct).ConfigureAwait(false);
         var body = request.Method is "POST" or "PATCH" ? Encoding.UTF8.GetString(request.Body) : null;
-        lock (_gate)
-        {
-            _requests.Add(new FakeGitHubRequest(
-                request.Method,
-                request.Host,
-                request.Path,
-                request.Query,
-                route?.Key,
-                request.Headers.ContainsKey("Authorization"),
-                call.Login,
-                request.Headers.ContainsKey("If-None-Match"),
-                response.Status,
-                body));
-        }
-
+        _core.Record(new FakeGitHubRequest(
+            request.Method,
+            request.Host,
+            request.Path,
+            request.Query,
+            route?.Key,
+            request.Headers.ContainsKey("Authorization"),
+            call.Login,
+            request.Headers.ContainsKey("If-None-Match"),
+            response.Status,
+            body));
         return response;
-    }
-
-    private async Task WaitAtHoldAsync(string key, CancellationToken ct)
-    {
-        PendingHold? hold;
-        lock (_gate)
-        {
-            _holds.Remove(key, out hold);
-        }
-
-        if (hold is null)
-        {
-            return;
-        }
-
-        hold.Arrived.TrySetResult();
-        try
-        {
-            await hold.Released.Task.WaitAsync(HoldLimit, ct).ConfigureAwait(false);
-        }
-        catch (TimeoutException)
-        {
-            RecordError($"The hold on {key} was not released within {HoldLimit.TotalSeconds:F0} s; the request went on.");
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            // Given up by its sender in process (over a server ct is only the server's stop): neither
-            // answered nor recorded, so a test waiting for this looks at once.
-            hold.Abandoned.TrySetResult();
-            throw;
-        }
     }
 
     private async Task<AuthRemoteResponse> AnswerAsync(Call call, CancellationToken ct)
@@ -126,14 +91,7 @@ public sealed partial class FakeGitHub
             return Error(call, 415, "Unsupported 'Accept' header.");
         }
 
-        FakeGitHubFault? fault = null;
-        if (route is not null)
-        {
-            lock (_gate)
-            {
-                _faults.Remove(route.Key, out fault);
-            }
-        }
+        var fault = route is null ? null : _core.TakeFault(route.Key);
 
         if (fault is not null && fault.Kind is not (FakeGitHubFaultKind.SsoPartialResults or FakeGitHubFaultKind.CreatedThenDropped))
         {

@@ -65,11 +65,15 @@ public sealed partial class ShellDriver : IDisposable
         FakeTokenStore tokens,
         FakeGitHub? gitHub,
         HostingOptions hosting,
-        RefusedRequests refusedRequests)
+        RefusedRequests refusedRequests,
+        FakeAzureDevOps? azureDevOps,
+        FakeGitLab? gitLab)
     {
         Session = session;
         Tokens = tokens;
         GitHub = gitHub;
+        AzureDevOps = azureDevOps;
+        GitLab = gitLab;
         Hosting = hosting;
         RefusedRequests = refusedRequests;
         Folders = folders;
@@ -141,8 +145,13 @@ public sealed partial class ShellDriver : IDisposable
     /// account and token (<see cref="AppSession.HostingStarted"/>), at most
     /// <see cref="DefaultWaitTimeout"/>, and rethrows what that start threw.
     /// </para>
+    /// <para>
+    /// Phase 7b (docs/phase-7b-design.md 1.9, 2.4): Azure DevOps and GitLab are off likewise unless
+    /// <paramref name="azureDevOps"/> or <paramref name="gitLab"/> (a fake on a port) says where they
+    /// are; all three providers' handlers are the loopback tripwire.
+    /// </para>
     /// </summary>
-    /// <exception cref="ArgumentException">Both <paramref name="gitHub"/> and <paramref name="hosting"/> are given, or <paramref name="gitHub"/> is in process (<see cref="FakeGitHub.InProcess"/>: it goes in <paramref name="hosting"/>).</exception>
+    /// <exception cref="ArgumentException">A fake and <paramref name="hosting"/> are both given, or a fake is in process (<see cref="FakeGitHub.InProcess"/>, <see cref="FakeAzureDevOps.InProcess"/>, <see cref="FakeGitLab.InProcess"/>: its handler goes in <paramref name="hosting"/>).</exception>
     public static ShellDriver Start(
         string dataDirectory,
         int? width = 1100,
@@ -153,7 +162,9 @@ public sealed partial class ShellDriver : IDisposable
         ToolCatalogues? tools = null,
         FakeGitHub? gitHub = null,
         FakeTokenStore? tokens = null,
-        HostingOptions? hosting = null)
+        HostingOptions? hosting = null,
+        FakeAzureDevOps? azureDevOps = null,
+        FakeGitLab? gitLab = null)
     {
         if (gitHub is not null && hosting is not null)
         {
@@ -161,6 +172,9 @@ public sealed partial class ShellDriver : IDisposable
         }
 
         RefuseInProcess(gitHub, nameof(gitHub));
+        RefuseWithHosting(azureDevOps, gitLab, hosting);
+        RefuseInProcess(azureDevOps, FakeAzureDevOps.InProcessPort, nameof(azureDevOps));
+        RefuseInProcess(gitLab, FakeGitLab.InProcessPort, nameof(gitLab));
 
         var application = Application.Current
             ?? throw new InvalidOperationException("No Avalonia application is running. Is the test an [AvaloniaFact]?");
@@ -174,7 +188,7 @@ public sealed partial class ShellDriver : IDisposable
         var systemTheme = new FakeSystemTheme(systemDark);
         var refused = new RefusedRequests();
         var store = tokens ?? new FakeTokenStore();
-        var options = hosting ?? HarnessHosting(gitHub, refused);
+        var options = hosting ?? HarnessHosting(gitHub, azureDevOps, gitLab, refused);
 
         // The activity log's times read 09:00:00 and its durations 0 ms, and the backups get the
         // same names in every run, still in order (docs/phase-5-design.md 2.3).
@@ -205,7 +219,7 @@ public sealed partial class ShellDriver : IDisposable
 
         session.MainWindow.Show();
 
-        var driver = new ShellDriver(session, folders, launcher, clipboard, systemTheme, readClock, store, gitHub, options, refused);
+        var driver = new ShellDriver(session, folders, launcher, clipboard, systemTheme, readClock, store, gitHub, options, refused, azureDevOps, gitLab);
         try
         {
             driver.PumpUntilHostingStarted();
@@ -237,7 +251,9 @@ public sealed partial class ShellDriver : IDisposable
         ToolCatalogues? tools = null,
         FakeGitHub? gitHub = null,
         FakeTokenStore? tokens = null,
-        HostingOptions? hosting = null)
+        HostingOptions? hosting = null,
+        FakeAzureDevOps? azureDevOps = null,
+        FakeGitLab? gitLab = null)
     {
         ArgumentNullException.ThrowIfNull(tabs);
         if (gitHub is not null && hosting is not null)
@@ -246,11 +262,14 @@ public sealed partial class ShellDriver : IDisposable
         }
 
         RefuseInProcess(gitHub, nameof(gitHub));
+        RefuseWithHosting(azureDevOps, gitLab, hosting);
+        RefuseInProcess(azureDevOps, FakeAzureDevOps.InProcessPort, nameof(azureDevOps));
+        RefuseInProcess(gitLab, FakeGitLab.InProcessPort, nameof(gitLab));
 
         WriteSession(
             dataDirectory,
             new SessionState { Tabs = tabs.Select(path => new TabState(path)).ToList(), ActiveTab = activeTab });
-        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools, gitHub, tokens, hosting);
+        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools, gitHub, tokens, hosting, azureDevOps, gitLab);
     }
 
     /// <summary>

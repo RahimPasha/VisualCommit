@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using VisualCommit.Core;
 using VisualCommit.Git;
@@ -23,47 +22,39 @@ namespace VisualCommit.Testing.Hosting;
 /// <para>
 /// <see cref="Requests"/> never holds a token; checks assert <see cref="Errors"/> empty.
 /// </para>
+/// <para>
+/// Since phase 7b (docs/phase-7b-design.md 2.3) what no provider owns (the lock, git's home and
+/// runner, holds, faults, the request log, <see cref="Errors"/>, the repositories' locks, the
+/// server's start and the dispose) is the fakes' shared core, <see cref="FakeServiceCore{TFault, TRequest}"/>;
+/// this class keeps its tables, types and answers.
+/// </para>
 /// </summary>
 public sealed partial class FakeGitHub : IAsyncDisposable
 {
     /// <summary>The port of <see cref="InProcess"/>'s endpoints, <c>Local(1)</c>: never listened on.</summary>
     public const int InProcessPort = 1;
 
-    /// <summary>How long a held request (<see cref="HoldNext"/>) waits at most before it goes on with an <see cref="Errors"/> line.</summary>
-    private static readonly TimeSpan HoldLimit = TimeSpan.FromSeconds(120);
-
-    private readonly Lock _gate = new();
+    private readonly FakeServiceCore<FakeGitHubFault, FakeGitHubRequest> _core;
+    private readonly Lock _gate;
     private readonly string _root;
-    private readonly TempDirectory _home;
-    private readonly GitRunner _runner;
-    private readonly IReadOnlyDictionary<string, string?> _environment;
     private readonly Dictionary<string, FakeUser> _users = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, FakeToken> _tokens = new(StringComparer.Ordinal);
     private readonly List<FakeRepository> _repositories = [];
     private readonly Dictionary<string, FakeRepository> _byName = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<FakePullRequest> _pulls = [];
     private readonly Dictionary<string, string> _emails = new(StringComparer.OrdinalIgnoreCase);
-    private readonly Dictionary<string, PendingHold> _holds = new(StringComparer.Ordinal);
-    private readonly Dictionary<string, FakeGitHubFault> _faults = new(StringComparer.Ordinal);
     private readonly Dictionary<string, int> _used = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, IReadOnlyDictionary<string, string>> _branches = new(StringComparer.OrdinalIgnoreCase);
-    private readonly ConcurrentDictionary<string, SemaphoreSlim> _repositoryLocks = new(StringComparer.OrdinalIgnoreCase);
-    private readonly List<FakeGitHubRequest> _requests = [];
-    private readonly List<string> _errors = [];
-    private AuthRemoteServer? _server;
     private long _nextRepositoryId = 3001;
     private int _tokenCount;
     private int _requestCount;
     private int _maxPerPage = 100;
-    private int _disposed;
 
     private FakeGitHub(string root)
     {
-        _root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(root));
-        Directory.CreateDirectory(_root);
-        _home = new TempDirectory("fake-github");
-        _runner = new GitRunner(TempRepo.GitPath);
-        _environment = TempRepo.IsolatedEnvironment(_home.Combine("home"));
+        _core = new FakeServiceCore<FakeGitHubFault, FakeGitHubRequest>(root, "fake-github");
+        _gate = _core.Gate;
+        _root = _core.Root;
         Endpoints = GitHubEndpoints.Local(InProcessPort);
         Port = InProcessPort;
     }
@@ -105,9 +96,9 @@ public sealed partial class FakeGitHub : IAsyncDisposable
         try
         {
             var options = new AuthRemoteHostOptions(new Routes(fake), fake.LoginOfToken, fake.IsPublic, fake.MayPush, BeforeRefsAsync: fake.SyncBeforeGitAsync);
-            fake._server = await AuthRemoteServer.StartForHostAsync(fake._root, options, port, fallBackToFreePort).ConfigureAwait(false);
-            fake.Port = fake._server.Port;
-            fake.PortWasTaken = fake._server.PortWasTaken;
+            var server = await fake._core.StartServerAsync(options, port, fallBackToFreePort).ConfigureAwait(false);
+            fake.Port = server.Port;
+            fake.PortWasTaken = server.PortWasTaken;
             fake.Endpoints = GitHubEndpoints.Local(fake.Port);
             return fake;
         }
@@ -304,32 +295,14 @@ public sealed partial class FakeGitHub : IAsyncDisposable
     }
 
     /// <summary>Every API, avatar and page request so far, in the order their answers were decided. Safe from another thread.</summary>
-    public IReadOnlyList<FakeGitHubRequest> Requests
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return [.. _requests];
-            }
-        }
-    }
+    public IReadOnlyList<FakeGitHubRequest> Requests => _core.Requests;
 
     /// <summary>Every git request the server served (none in process). Safe from another thread.</summary>
     public IReadOnlyList<AuthRemoteRequest> GitRequests =>
-        _server is null ? [] : [.. _server.Requests.Where(request => !Claims(request.Method, request.Path))];
+        _core.Server is not { } server ? [] : [.. server.Requests.Where(request => !Claims(request.Method, request.Path))];
 
     /// <summary>What went wrong in the fake or its server, ref syncs included: empty when all is well.</summary>
-    public IReadOnlyList<string> Errors
-    {
-        get
-        {
-            lock (_gate)
-            {
-                return [.. _errors, .. _server?.Errors ?? []];
-            }
-        }
-    }
+    public IReadOnlyList<string> Errors => _core.Errors;
 
     /// <summary>
     /// Holds the next request of <paramref name="route"/> (a key of 2.4's table: <c>user</c>,
@@ -344,34 +317,13 @@ public sealed partial class FakeGitHub : IAsyncDisposable
         var key = KeyOf(route);
         if (key.StartsWith("git:", StringComparison.Ordinal))
         {
-            var server = _server ?? throw new InvalidOperationException("The fake in process serves no git: git:<owner>/<name> is held on a server only.");
+            var server = _core.Server ?? throw new InvalidOperationException("The fake in process serves no git: git:<owner>/<name> is held on a server only.");
             var name = key[4..];
             return new FakeGitHubHold(key, server.HoldNextRequest(name), new TaskCompletionSource().Task, () => server.ReleaseRequest(name));
         }
 
-        var hold = new PendingHold();
-        lock (_gate)
-        {
-            ObjectDisposedException.ThrowIf(_disposed != 0, this);
-            if (!_holds.TryAdd(key, hold))
-            {
-                throw new InvalidOperationException($"The route {key} is held already.");
-            }
-        }
-
-        return new FakeGitHubHold(key, hold.Arrived.Task, hold.Abandoned.Task, () =>
-        {
-            lock (_gate)
-            {
-                if (_holds.TryGetValue(key, out var pending) && pending == hold)
-                {
-                    _holds.Remove(key);
-                }
-            }
-
-            hold.Arrived.TrySetCanceled();
-            hold.Released.TrySetResult();
-        });
+        var hold = _core.AddHold(key, this);
+        return new FakeGitHubHold(key, hold.Arrived, hold.Abandoned, hold.Release);
     }
 
     /// <summary>Answers the next request of <paramref name="route"/> with <paramref name="fault"/> once, after the header checks and before auth; the one after it is normal.</summary>
@@ -390,40 +342,11 @@ public sealed partial class FakeGitHub : IAsyncDisposable
             throw new NotSupportedException("The fake fails API routes only; an avatar or a page is answered before any fault.");
         }
 
-        lock (_gate)
-        {
-            _faults[key] = fault;
-        }
+        _core.SetFault(key, fault);
     }
 
     /// <summary>Releases every hold, then stops the server. The repositories stay.</summary>
-    public async ValueTask DisposeAsync()
-    {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-        {
-            return;
-        }
-
-        List<PendingHold> holds;
-        lock (_gate)
-        {
-            holds = [.. _holds.Values];
-            _holds.Clear();
-        }
-
-        foreach (var hold in holds)
-        {
-            hold.Arrived.TrySetCanceled();
-            hold.Released.TrySetResult();
-        }
-
-        if (_server is not null)
-        {
-            await _server.DisposeAsync().ConfigureAwait(false);
-        }
-
-        _home.Dispose();
-    }
+    public ValueTask DisposeAsync() => _core.DisposeAsync();
 
     private static string KeyOf(string route)
     {
@@ -488,13 +411,7 @@ public sealed partial class FakeGitHub : IAsyncDisposable
         }
     }
 
-    private void RecordError(string error)
-    {
-        lock (_gate)
-        {
-            _errors.Add(error);
-        }
-    }
+    private void RecordError(string error) => _core.RecordError(error);
 
     /// <summary>A token the fake made: never shown, never recorded.</summary>
     private sealed class FakeToken(string login, FakeTokenKind kind, IReadOnlyList<string> scopes, DateTimeOffset? expires)
@@ -510,17 +427,6 @@ public sealed partial class FakeGitHub : IAsyncDisposable
         public bool Revoked { get; set; }
 
         public override string ToString() => $"FakeToken({Login}, {Kind}, ***)";
-    }
-
-    /// <summary>A hold that no request has reached yet, or the one a request waits at.</summary>
-    private sealed class PendingHold
-    {
-        public TaskCompletionSource Arrived { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        public TaskCompletionSource Released { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-
-        /// <summary>Completed when the wait here is cancelled before its release: by its sender in process, by the server's stop over TCP (<see cref="FakeGitHubHold.Abandoned"/>).</summary>
-        public TaskCompletionSource Abandoned { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     /// <summary>The fake's routes as the server's hook (<see cref="IAuthRemoteRoutes"/>).</summary>
