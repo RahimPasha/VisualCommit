@@ -204,7 +204,17 @@ pull requests" line as soon as it saw the list loaded, while the line, posted af
 (D322), still waited in the dispatcher's queue: a race in the test since 7a, which now waits for the
 line as the walk-throughs do. Test steps: `windows-latest` 35 min 32 s, `macos-latest` 23 min 29 s,
 `ubuntu-latest` 5 min 13 s, the containers 6 min 11 s and 5 min 51 s, each under four fifths. The
-fix is the commit after `b0151bb`; its run is read in Next step.
+fix is `08fa49b`.
+
+[41328744135](https://github.com/RahimPasha/VisualCommit/actions/runs/41328744135) on `3218919`
+(that fix and WP-FL's merge `7780908`): four jobs green, the wiring test among them; `windows-latest`
+failed phase 6's check W3, which expected a Folder cell 632.475 px wide in a room of 632 whole: W3
+and K10 allowed half a pixel beyond the room, though phase 6's checks say cut exactly when wider and
+the cell cuts so (`DashboardViewTests` asserts it exactly on every platform), and the scenario's
+random folder name landed within that half pixel. Both now assert exactly. Test steps:
+`windows-latest` 30 min 9 s, `macos-latest` 32 min 38 s, `ubuntu-latest` 4 min 28 s, the containers
+6 min 34 s and 5 min 2 s, each under four fifths; the keychain steps green. The fix is the commit
+after `07ba34f`; its run is read in Next step.
 
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
@@ -363,9 +373,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 ### Next step
 
 Wave 1 is merged (WP-F `564dad4`, WP-H `3591dc4`, WP-C `6586066`; its whole default run passed,
-Notes). `b0151bb` fixed the two faults CI's run 41311809889 found, and the commit after it the race
-its run 41321215497 met in a test of 7a's (CI section); read the run that commit's push starts, each
-job and each Test step against four fifths (0.6).
+Notes). `b0151bb` fixed the two faults CI's run 41311809889 found, `08fa49b` the race its run
+41321215497 met in a test of 7a's, and the commit after `07ba34f` the half pixel its run
+41328744135 met in phase 6's W3 (CI section); read the run that commit's push starts, each job and
+each Test step against four fifths (0.6).
 
 Wave 2 (design 0.4) is being built beside it: WP-FL (the fake of GitLab, section 4) is merged at
 `7780908` and WP-FA (the fake of Azure DevOps, section 3) at `e995fc4`; WP-GL (`wip/p7b-gitlab`,

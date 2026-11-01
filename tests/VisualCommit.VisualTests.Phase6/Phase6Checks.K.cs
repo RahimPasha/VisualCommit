@@ -517,8 +517,8 @@ public sealed partial class Phase6ChecksK : Phase6Checks
         var room = app.BoundsOf(detail).Width;
         var full = new FormattedText(folder, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(detail.FontFamily, detail.FontStyle, detail.FontWeight), detail.FontSize, null).WidthIncludingTrailingWhitespace;
         Assert.True(
-            detail.IsTrimmed == (full > room + 0.5),
-            System.FormattableString.Invariant($"The folder is {full} px wide in a room of {room}: it should {(full > room + 0.5 ? "be cut with \"…\"" : "show whole")}, and it is {(detail.IsTrimmed ? "cut" : "whole")}."));
+            detail.IsTrimmed == (full > room),
+            System.FormattableString.Invariant($"The folder is {full} px wide in a room of {room}: it should {(full > room ? "be cut with \"…\"" : "show whole")}, and it is {(detail.IsTrimmed ? "cut" : "whole")}."));
         AssertNear(PartK.ContentRight, app.BoundsOf(detail).Right, PartK.Tolerance, "The detail's right (no key column)");
     }
 
