@@ -78,23 +78,42 @@ public sealed partial class ShellDriver
     }
 
     /// <summary>
-    /// The harness's hosting options (2.5): with a fake, its endpoints through a
-    /// <see cref="LoopbackOnlyHandler"/> over the default handler; without one, GitHub off with the
-    /// tripwire over a handler that uses no proxy and follows no redirect.
+    /// The harness's hosting options (2.5; docs/phase-7b-design.md 2.4): with a fake, its endpoints
+    /// through a <see cref="LoopbackOnlyHandler"/> over the default handler; without one, that
+    /// provider off with the tripwire over a handler that uses no proxy and follows no redirect.
+    /// GitHub's slot is 7a's as it was; Azure DevOps' and GitLab's handlers are the tripwire too
+    /// (over <c>DefaultHandler(WebBase)</c> and <c>DefaultHandler(ApiBase)</c> with a fake), so that
+    /// all three providers' slots refuse every address but a loopback one.
     /// </summary>
-    private static HostingOptions HarnessHosting(FakeGitHub? gitHub, RefusedRequests refused)
+    private static HostingOptions HarnessHosting(FakeGitHub? gitHub, FakeAzureDevOps? azureDevOps, FakeGitLab? gitLab, RefusedRequests refused)
     {
+        HostingOptions options;
         if (gitHub is not null)
         {
             var endpoints = gitHub.Endpoints;
             var inner = HostingOptions.DefaultHandler(endpoints);
-            return new HostingOptions(endpoints, () => new LoopbackOnlyHandler(inner(), refused));
+            options = new HostingOptions(endpoints, () => new LoopbackOnlyHandler(inner(), refused));
+        }
+        else
+        {
+            options = HostingOptions.Off with
+            {
+                CreateHandler = () => new LoopbackOnlyHandler(Offline(), refused),
+            };
         }
 
-        return HostingOptions.Off with
+        var azureDevOpsInner = azureDevOps is null ? Offline : HostingOptions.DefaultHandler(azureDevOps.Endpoints.WebBase);
+        var gitLabInner = gitLab is null ? Offline : HostingOptions.DefaultHandler(gitLab.Endpoints.ApiBase);
+        return options with
         {
-            CreateHandler = () => new LoopbackOnlyHandler(new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false, AutomaticDecompression = DecompressionMethods.All }, refused),
+            AzureDevOps = azureDevOps?.Endpoints,
+            CreateAzureDevOpsHandler = () => new LoopbackOnlyHandler(azureDevOpsInner(), refused),
+            GitLab = gitLab?.Endpoints,
+            CreateGitLabHandler = () => new LoopbackOnlyHandler(gitLabInner(), refused),
         };
+
+        // 7a's handler of a provider that is off: no proxy, no redirect followed.
+        static HttpMessageHandler Offline() => new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false, AutomaticDecompression = DecompressionMethods.All };
     }
 
     /// <summary>

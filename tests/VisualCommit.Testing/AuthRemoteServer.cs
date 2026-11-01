@@ -82,6 +82,22 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// </summary>
     public const int Phase7aVisualChecksPort = 47395;
 
+    /// <summary>
+    /// The port of phase 7b's fake of Azure DevOps in <c>VisualCommit.VisualTests.Phase7b</c> and its
+    /// real-window twin (docs/phase-7b-design.md 1.8, 2.5, D363), whose URLs the pictures show; with
+    /// <see cref="Phase7bGitLabPort"/> and <see cref="Phase7bGitHubPort"/> 7b's own fakes, so that no
+    /// 7b picture depends on <see cref="Phase7aVisualChecksPort"/> in the process beside it. 47396
+    /// stays reserved for a second 7a walk-through project. Every other test uses port 0 or a fake in
+    /// process.
+    /// </summary>
+    public const int Phase7bAzureDevOpsPort = 47397;
+
+    /// <summary>The port of phase 7b's fake of GitLab (docs/phase-7b-design.md 1.8, 2.5, D363), as <see cref="Phase7bAzureDevOpsPort"/>.</summary>
+    public const int Phase7bGitLabPort = 47398;
+
+    /// <summary>The port of phase 7b's own fake of GitHub (docs/phase-7b-design.md 1.8, 2.5, D363), as <see cref="Phase7bAzureDevOpsPort"/>.</summary>
+    public const int Phase7bGitHubPort = 47399;
+
     /// <summary>The folder name of the served repository, and the last part of <see cref="Url"/>.</summary>
     public const string RepositoryName = "remote.git";
 
@@ -108,6 +124,12 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     /// <summary>A host's options (<see cref="StartForHostAsync"/>); null for the other servers.</summary>
     private readonly AuthRemoteHostOptions? _host;
+
+    /// <summary>
+    /// A host's repositories served at a path of any depth (<see cref="ServeAt"/>, docs/phase-7b-design.md
+    /// 2.2), looked up only when the two-level lookup of <see cref="_served"/> finds nothing. Under <see cref="_gate"/>.
+    /// </summary>
+    private readonly List<ServedPath> _servedAt = [];
 
     /// <summary>The folder name of the one repository a server of one repository serves; null for a folder server.</summary>
     private readonly string? _single;
@@ -165,7 +187,8 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     public bool ServesFolder => _single is null;
 
     /// <summary>The served repositories' names, in ordinal order: their folder names without a final <c>.git</c> (<c>docs</c> for <c>docs.git</c>).</summary>
-    public IReadOnlyList<string> ServedRepositories => [.. _served.Keys.Order(StringComparer.Ordinal)];
+    public IReadOnlyList<string> ServedRepositories =>
+        [.. _served.Keys.Concat(ServedPaths().Select(served => NameOf(served.Folder))).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal)];
 
     /// <summary>
     /// The served repository's folder name, which is also the last part of <see cref="Url"/>:
@@ -189,11 +212,24 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>
     /// The URL of the served repository <paramref name="repository"/>, named by its folder name
     /// (<c>docs.git</c>) or without its final <c>.git</c> (<c>docs</c>):
-    /// <c>http://127.0.0.1:&lt;port&gt;/docs.git</c>, the folder name as the URL's path.
+    /// <c>http://127.0.0.1:&lt;port&gt;/docs.git</c>, the folder name as the URL's path. A path a host
+    /// serves at (<see cref="ServeAt"/>), named as registered without case when no repository has
+    /// that name, gives <c>http://127.0.0.1:&lt;port&gt;/</c> and its segments, each
+    /// <see cref="Uri.EscapeDataString"/>d, plus <c>.git</c> when it was registered with
+    /// <c>gitSuffix</c>: <c>http://127.0.0.1:&lt;port&gt;/Fernhill-Labs/Mobile%20App/_git/mobile-app</c>.
     /// </summary>
     /// <exception cref="ArgumentException">The server serves no such repository.</exception>
-    public string UrlOf(string repository) =>
-        string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{Port}/{FolderOf(repository)}");
+    public string UrlOf(string repository)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(repository);
+        if (TryFolderOf(repository) is null && ServedPaths().Find(served => SamePath(served.Segments, repository.Split('/'))) is { } at)
+        {
+            var path = string.Join('/', at.Segments.Select(Uri.EscapeDataString)) + (at.GitSuffix ? ".git" : string.Empty);
+            return string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{Port}/{path}");
+        }
+
+        return string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{Port}/{FolderOf(repository)}");
+    }
 
     /// <summary>Whether every request must carry <see cref="Credentials"/>. True at first.</summary>
     public bool RequireAuth
@@ -454,6 +490,90 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         _served.TryAdd(name, name + ".git");
     }
 
+    /// <summary>
+    /// Registers a host's bare repository at a URL path of any depth (docs/phase-7b-design.md 2.2,
+    /// g4 D3.4): <paramref name="folder"/>, relative to the host's folder with <c>/</c> between its
+    /// segments and holding <c>HEAD</c> and <c>objects</c>, served at <paramref name="urlPath"/>,
+    /// decoded (<c>Fernhill-Labs/Mobile App/_git/mobile-app</c>), at once, also while the server runs.
+    /// With <paramref name="gitSuffix"/> the last segment followed by <c>.git</c> names it too
+    /// (GitLab's; never Azure DevOps', which keeps <c>.git</c> in a name). It runs no git.
+    /// <para>
+    /// A request's raw path is decoded segment by segment, each percent-decoded as strict UTF-8, and
+    /// matched without case: the longest registration whose segments equal the path's first ones,
+    /// with a segment after it, is the repository, and git's <c>PATH_INFO</c> is <c>/</c>, the folder
+    /// and the rest. A segment that decodes to hold <c>/</c>, <c>\</c> or a control character, to
+    /// <c>.</c> or <c>..</c>, or to invalid UTF-8 puts the path in no repository (404), and so does
+    /// a segment of the rest that needs decoding at all (git escapes none there), so that the push
+    /// guard, which reads the raw path, and http-backend see the same rest. A registration is looked up only when <see cref="Serve"/>'s two levels find nothing, so
+    /// 7a's answers stay as they were. Callbacks, holds and gates name it by its folder without a
+    /// final <c>.git</c> (<c>northfield/platform/web-app</c>). Registering a path again with its
+    /// folder changes nothing; two paths may share a folder.
+    /// </para>
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The server is not a host's.</exception>
+    /// <exception cref="ArgumentException">A segment of the path or of the folder is empty, <c>.</c> or <c>..</c>, or holds <c>\</c> or a control character; the folder is no bare repository; or the path is served from another folder already.</exception>
+    public void ServeAt(string urlPath, string folder, bool gitSuffix)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(urlPath);
+        ArgumentException.ThrowIfNullOrWhiteSpace(folder);
+        if (_host is null)
+        {
+            throw new InvalidOperationException("Only a host's server (StartForHostAsync) serves repositories at a path.");
+        }
+
+        if (!IsServablePath(urlPath))
+        {
+            throw new ArgumentException($"A path to serve at is of segments that are not empty, '.' or '..' and hold no '\\' or control character: '{urlPath}'.", nameof(urlPath));
+        }
+
+        if (!IsServablePath(folder))
+        {
+            throw new ArgumentException($"A folder to serve is of segments that are not empty, '.' or '..' and hold no '\\' or control character: '{folder}'.", nameof(folder));
+        }
+
+        var full = Path.Combine([_projectRoot, .. folder.Split('/')]);
+        if (!File.Exists(Path.Combine(full, "HEAD")) || !Directory.Exists(Path.Combine(full, "objects")))
+        {
+            throw new ArgumentException($"{full} is not a bare repository: it has no HEAD and objects folder.", nameof(folder));
+        }
+
+        var segments = urlPath.Split('/');
+        lock (_gate)
+        {
+            if (_servedAt.Find(served => SamePath(served.Segments, segments)) is { } existing)
+            {
+                if (existing.Folder == folder && existing.GitSuffix == gitSuffix)
+                {
+                    return;
+                }
+
+                throw new ArgumentException($"The path {urlPath} is served from {existing.Folder} already.", nameof(urlPath));
+            }
+
+            _servedAt.Add(new ServedPath(segments, folder, gitSuffix));
+        }
+    }
+
+    /// <summary>
+    /// Whether every <c>/</c>-separated segment of <paramref name="path"/> is one a host may serve at
+    /// (<see cref="ServeAt"/>): not empty, <c>.</c> or <c>..</c>, without <c>\</c> or a control character.
+    /// </summary>
+    internal static bool IsServablePath(string path) =>
+        path.Split('/').All(segment => segment.Length > 0 && segment is not ("." or "..") && !segment.Any(c => c == '\\' || char.IsControl(c)));
+
+    /// <summary>A snapshot of the paths a host serves at (<see cref="ServeAt"/>).</summary>
+    private List<ServedPath> ServedPaths()
+    {
+        lock (_gate)
+        {
+            return [.. _servedAt];
+        }
+    }
+
+    /// <summary>Whether two paths' segments are equal without case.</summary>
+    private static bool SamePath(IReadOnlyList<string> a, IReadOnlyList<string> b) =>
+        a.Count == b.Count && a.Zip(b).All(pair => string.Equals(pair.First, pair.Second, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Whether a path segment needs no escaping in a URL and names no folder above (<c>.</c>, <c>..</c>).</summary>
     private static bool IsPlainSegment(string segment) =>
         segment.Length > 0 && segment is not ("." or "..") && segment.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
@@ -466,13 +586,27 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     private string FolderOf(string repository)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repository);
-        if (_served.TryGetValue(repository, out var folder) || _served.TryGetValue(NameOf(repository), out folder) && folder == repository)
+        if (TryFolderOf(repository) is { } folder)
         {
             return folder;
         }
 
+        // A repository a host serves at a path (ServeAt), named by its folder, with or without a
+        // final .git, or by a path it is served at, without case.
+        if (ServedPaths().Find(served =>
+            string.Equals(served.Folder, repository, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(NameOf(served.Folder), repository, StringComparison.OrdinalIgnoreCase)
+            || SamePath(served.Segments, repository.Split('/'))) is { } at)
+        {
+            return at.Folder;
+        }
+
         throw new ArgumentException($"The server serves no repository {repository}; it serves {string.Join(", ", ServedRepositories)}.", nameof(repository));
     }
+
+    /// <summary>7a's lookup of <see cref="FolderOf"/>: the folder of a repository of <see cref="_served"/> by its name or its folder name; null when none.</summary>
+    private string? TryFolderOf(string repository) =>
+        _served.TryGetValue(repository, out var folder) || _served.TryGetValue(NameOf(repository), out folder) && folder == repository ? folder : null;
 
     /// <summary>
     /// Starts a server for a visual check: on <paramref name="port"/>, <see cref="VisualChecksPort"/>
@@ -847,7 +981,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         string? user;
         string? givenUserName = null;
         bool authorized;
-        string? pushRefusal = null;
+        string? forbidden = null;
         if (_host is null)
         {
             user = AuthenticatedUser(head);
@@ -855,13 +989,13 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         }
         else
         {
-            (user, givenUserName, authorized, pushRefusal) = HostAccess(head, path, query);
+            (user, givenUserName, authorized, forbidden) = HostAccess(head, path, query);
         }
 
         // A client that waits for "100 Continue" sends no body to a refused request.
         var expectsContinue = string.Equals(head.Header("Expect"), "100-continue", StringComparison.OrdinalIgnoreCase);
         byte[] body = [];
-        if (authorized && pushRefusal is null || !expectsContinue)
+        if (authorized && forbidden is null || !expectsContinue)
         {
             if (expectsContinue)
             {
@@ -876,10 +1010,10 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
         var command = V2Command(protocol, body, compressed);
         var request = new AuthRemoteRequest(head.Method, path, query, protocol, command, user, 0, Held: false, head.IsChunked, compressed, givenUserName);
 
-        if (pushRefusal is not null)
+        if (forbidden is not null)
         {
             Record(request with { Status = 403 });
-            await WriteSimpleAsync(stream, 403, "Forbidden", string.Empty, pushRefusal + "\n", stopping).ConfigureAwait(false);
+            await WriteSimpleAsync(stream, 403, "Forbidden", string.Empty, forbidden + "\n", stopping).ConfigureAwait(false);
             return;
         }
 
@@ -906,7 +1040,7 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             await beforeRefs(NameOf(listed), stopping).ConfigureAwait(false);
         }
 
-        var cgi = await RunBackendAsync(head, path, query, user, body, stopping).ConfigureAwait(false);
+        var cgi = await RunBackendAsync(head, BackendPathOf(path), query, user, body, stopping).ConfigureAwait(false);
         var response = ParseCgi(cgi.Output);
         if (response is null)
         {
@@ -1020,7 +1154,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// Who a git request to a host signs in as, and whether it may go on (<see cref="StartForHostAsync"/>):
     /// Basic with any non-empty user name and a known token, the token's login; no header, anonymous
     /// for an upload-pack of a public repository; else refused (401). A receive-pack also needs a
-    /// login that may push: a refusal's text when it has none. A header that cannot be read, or whose
+    /// login that may push: a refusal's text when it has none (<see cref="AuthRemoteHostOptions.PushRefusal"/>'s,
+    /// or 7a's), and a signed-in fetch the host refuses (<see cref="AuthRemoteHostOptions.FetchRefusal"/>)
+    /// gets that text, both as a 403. A header that cannot be read, or whose
     /// token is unknown, gets 401 on every path, as on the plain server and on GitHub; a path in no
     /// served repository goes on to its 404 only without a header or with a known token. A readable
     /// header keeps its user name, also when its token is refused.
@@ -1041,8 +1177,12 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             }
 
             // A token the host does not know (a revoked one) is refused, and the request still
-            // records the user name given with it: whose answer git sent shows so (D255).
-            if (host.LoginOfToken(password) is not { } known)
+            // records the user name given with it: whose answer git sent shows so (D255). A host
+            // may know a token in one repository and not in another (LoginOfTokenIn).
+            var known = repository is not null && host.LoginOfTokenIn is { } inRepository
+                ? inRepository(repository, password)
+                : host.LoginOfToken(password);
+            if (known is null)
             {
                 return (null, userName, false, null);
             }
@@ -1067,7 +1207,13 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
         if (receivePack && !host.MayPush(repository, login))
         {
-            return (login, given, false, $"Permission to {repository}.git denied to {login}.");
+            return (login, given, false, host.PushRefusal?.Invoke(repository, login) ?? $"Permission to {repository}.git denied to {login}.");
+        }
+
+        // A host may refuse a signed-in fetch before http-backend runs (docs/phase-7b-design.md 1.9).
+        if (!receivePack && host.FetchRefusal?.Invoke(repository, login) is { } fetchRefusal)
+        {
+            return (login, given, false, fetchRefusal);
         }
 
         return (login, given, true, null);
@@ -1235,7 +1381,133 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// levels, named with or without <c>.git</c>: <c>/octo/hello.git/info/refs</c> and
     /// <c>/octo/hello/info/refs</c> both lie in <c>octo/hello.git</c>.
     /// </summary>
-    private string? RepositoryOf(string path)
+    private string? RepositoryOf(string path) => TwoLevelRepositoryOf(path) ?? ServedAtOf(path)?.Folder;
+
+    /// <summary>
+    /// The path git's <c>http-backend</c> gets as <c>PATH_INFO</c>: the request's path for a repository
+    /// <see cref="TwoLevelRepositoryOf"/> finds, as before; for one served at a path
+    /// (<see cref="ServeAt"/>), <c>/</c>, its folder and the rest, which needs no decoding.
+    /// </summary>
+    private string BackendPathOf(string path) =>
+        TwoLevelRepositoryOf(path) is null && ServedAtOf(path) is { } at ? at.PathInfo : path;
+
+    /// <summary>
+    /// The repository that a path a host serves at (<see cref="ServeAt"/>) lies in, and git's
+    /// <c>PATH_INFO</c> for it (<c>/</c>, the folder and the rest); null when it lies in none, a
+    /// segment does not decode to a plain one, or one after the registration's needs decoding.
+    /// </summary>
+    private (string Folder, string PathInfo)? ServedAtOf(string path)
+    {
+        var registrations = ServedPaths();
+        if (registrations.Count == 0 || !path.StartsWith('/'))
+        {
+            return null;
+        }
+
+        var raw = path[1..].Split('/');
+        var decoded = new string[raw.Length];
+        for (var i = 0; i < raw.Length; i++)
+        {
+            if (DecodedSegment(raw[i]) is not { } segment)
+            {
+                return null;
+            }
+
+            decoded[i] = segment;
+        }
+
+        ServedPath? best = null;
+        foreach (var served in registrations)
+        {
+            var length = served.Segments.Length;
+            if (length < decoded.Length && (best is null || length > best.Segments.Length) && Names(served, decoded))
+            {
+                best = served;
+            }
+        }
+
+        if (best is null)
+        {
+            return null;
+        }
+
+        // The rest goes to http-backend as it came, and the push guard and the info/refs and pack
+        // checks read the raw path: a segment there that needs decoding (git escapes none) is in no
+        // repository, so that no escape can make the backend see a path those checks did not.
+        for (var i = best.Segments.Length; i < raw.Length; i++)
+        {
+            if (!string.Equals(decoded[i], raw[i], StringComparison.Ordinal))
+            {
+                return null;
+            }
+        }
+
+        return (best.Folder, "/" + best.Folder + "/" + string.Join('/', raw[best.Segments.Length..]));
+    }
+
+    /// <summary>Whether a decoded path's first segments are a registration's, without case; its last one also with <c>.git</c> after it when registered with <c>gitSuffix</c>.</summary>
+    private static bool Names(ServedPath served, string[] decoded)
+    {
+        var last = served.Segments.Length - 1;
+        for (var i = 0; i <= last; i++)
+        {
+            if (!string.Equals(served.Segments[i], decoded[i], StringComparison.OrdinalIgnoreCase)
+                && !(i == last && served.GitSuffix && string.Equals(served.Segments[i] + ".git", decoded[i], StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static readonly UTF8Encoding StrictUtf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
+    /// <summary>
+    /// One raw path segment percent-decoded as strict UTF-8; null when it is empty, holds a character
+    /// beyond ASCII or a <c>%</c> without two hex digits after it, is not valid UTF-8, or decodes to
+    /// hold <c>/</c>, <c>\</c> or a control character, or to <c>.</c> or <c>..</c>.
+    /// </summary>
+    private static string? DecodedSegment(string raw)
+    {
+        var bytes = new List<byte>(raw.Length);
+        for (var i = 0; i < raw.Length; i++)
+        {
+            if (raw[i] != '%')
+            {
+                if (raw[i] > 0x7F)
+                {
+                    return null;
+                }
+
+                bytes.Add((byte)raw[i]);
+                continue;
+            }
+
+            if (i + 2 >= raw.Length || !byte.TryParse(raw.AsSpan(i + 1, 2), NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var value))
+            {
+                return null;
+            }
+
+            bytes.Add(value);
+            i += 2;
+        }
+
+        string text;
+        try
+        {
+            text = StrictUtf8.GetString([.. bytes]);
+        }
+        catch (DecoderFallbackException)
+        {
+            return null;
+        }
+
+        return text.Length == 0 || text is "." or ".." || text.Any(c => c is '/' or '\\' || char.IsControl(c)) ? null : text;
+    }
+
+    /// <summary>7a's lookup: a repository of <see cref="Serve"/>'s two levels, or of a folder server; null when none.</summary>
+    private string? TwoLevelRepositoryOf(string path)
     {
         if (path.Contains("..", StringComparison.Ordinal) || !path.StartsWith('/'))
         {
@@ -1572,6 +1844,9 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
 
     private sealed record CgiResponse(int Status, string Reason, string Headers, byte[] Body);
 
+    /// <summary>A path a host serves at (<see cref="ServeAt"/>): its decoded segments, its folder (relative to the host's folder, with <c>/</c>) and whether <c>&lt;last&gt;.git</c> names it too.</summary>
+    private sealed record ServedPath(string[] Segments, string Folder, bool GitSuffix);
+
     /// <summary>One hold: begun when the first part of the response is sent, ended by <see cref="Release()"/> or <see cref="Release(string)"/>.</summary>
     private sealed class Hold(string folder, int atPercent)
     {
@@ -1821,10 +2096,16 @@ public sealed record AuthRemoteResponse(int Status, string Reason, IReadOnlyList
 /// <param name="MayPush">Whether a login may push to a repository: (<c>octo/hello</c>, <c>ada</c>).</param>
 /// <param name="Realm">The realm of a 401's <c>WWW-Authenticate</c> header.</param>
 /// <param name="BeforeRefsAsync">Called with a repository's name (<c>octo/hello</c>) before git lists its refs (<c>info/refs</c>, a protocol v2 <c>ls-refs</c>), after auth; null for none.</param>
+/// <param name="PushRefusal">The text of the 403 to a push that <paramref name="MayPush"/> refuses, from (repository, login); null: 7a's <c>Permission to octo/hello.git denied to ada.</c> (docs/phase-7b-design.md 1.9).</param>
+/// <param name="LoginOfTokenIn">A Basic password's login in a served repository, from (repository, token), in place of <paramref name="LoginOfToken"/> for a path in one; null for a token it does not know there. Null: <paramref name="LoginOfToken"/> everywhere.</param>
+/// <param name="FetchRefusal">The text of a 403 <c>text/plain</c> to a signed-in request that is no push, after auth and before <c>http-backend</c>, from (repository, login); null from it, or no callback, refuses nothing.</param>
 public sealed record AuthRemoteHostOptions(
     IAuthRemoteRoutes Routes,
     Func<string, string?> LoginOfToken,
     Func<string, bool> IsPublic,
     Func<string, string, bool> MayPush,
     string Realm = "GitHub",
-    Func<string, CancellationToken, Task>? BeforeRefsAsync = null);
+    Func<string, CancellationToken, Task>? BeforeRefsAsync = null,
+    Func<string, string, string>? PushRefusal = null,
+    Func<string, string, string?>? LoginOfTokenIn = null,
+    Func<string, string, string?>? FetchRefusal = null);

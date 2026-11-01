@@ -53,7 +53,7 @@ public sealed partial class FakeGitHub
             AddRepositoryLocked(repository);
         }
 
-        _server?.Serve(repository.FullName);
+        _core.Server?.Serve(repository.FullName);
         return repository;
     }
 
@@ -102,7 +102,7 @@ public sealed partial class FakeGitHub
     }
 
     /// <summary>The lock of one repository's ref sync and creates, so that two never interleave.</summary>
-    private SemaphoreSlim LockOf(FakeRepository repository) => _repositoryLocks.GetOrAdd(repository.FullName, _ => new SemaphoreSlim(1, 1));
+    private SemaphoreSlim LockOf(FakeRepository repository) => _core.LockOf(repository.FullName);
 
     /// <summary><see cref="SyncRefsAsync"/> under the repository's lock; returns its refs as read before the sync.</summary>
     private async Task<IReadOnlyDictionary<string, string>> SyncLockedAsync(FakeRepository repository, CancellationToken ct)
@@ -285,13 +285,10 @@ public sealed partial class FakeGitHub
         segment is not ("." or "..") && segment.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_');
 
     private Task<GitResult> GitAsync(string folder, string? input, CancellationToken ct, params string[] arguments) =>
-        _runner.RunAsync(new GitCommand(arguments) { WorkingDirectory = folder, Environment = _environment, StandardInput = input }, ct);
+        _core.GitAsync(folder, input, null, ct, arguments);
 
-    private async Task<string> GitOkAsync(string folder, string? input, CancellationToken ct, params string[] arguments)
-    {
-        var command = new GitCommand(arguments) { WorkingDirectory = folder, Environment = _environment, StandardInput = input };
-        return (await _runner.RunAsync(command, ct).ConfigureAwait(false)).EnsureSuccess(command).StandardOutput;
-    }
+    private Task<string> GitOkAsync(string folder, string? input, CancellationToken ct, params string[] arguments) =>
+        _core.GitOkAsync(folder, input, null, ct, arguments);
 
     /// <summary>One commit of <see cref="LogAsync"/>.</summary>
     private sealed record FakeCommit(string Sha, string AuthorName, string AuthorEmail, DateTimeOffset AuthorDate, string CommitterName, string CommitterEmail, DateTimeOffset CommitterDate, string Subject);
