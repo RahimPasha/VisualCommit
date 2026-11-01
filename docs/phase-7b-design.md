@@ -1375,33 +1375,31 @@ research's captures.
 
 **As built** (WP-FA, `70ff3d4` to its last commit, 2026-11-01). Where the build differs from the text
 above or settles what it left open:
-- Beyond 1.9: `User(organization, displayName)` and `TfsRealm` (every 401's realm, git's too). Made-up
-  GUIDs `7b0a<kind>-<n>-4a00-8000-00000000fa4e` in the order things are added; a user's address is its
-  words joined by `.` at example.com (`ada.lovelace@example.com`), a display name with `@` its own.
-  Tokens count per organization. A read-only token's login is `{o}/<user id>#read`, since `MayPush`
-  gets the login alone.
-- Keys: decoded names, lower-cased (`pulls:fernhill-labs/mobile app/mobile-app`); a repository named by
-  GUID keys by its name; `pull:` and `update:` are `{o}/{p}/{n}`; both refs methods share `refs:`.
-  `api-version` from the query or `Accept`. An `_apis` path no route serves is 404 "Page not found"
-  after check 1; pages pass no check but a fault.
+- Beyond 1.9: `User(organization, displayName)` and `TfsRealm`, which replaces 2.3's skeleton realm
+  "Azure DevOps" on every 401, git's included. A user's address is its words joined by `.` at
+  example.com. A read-only token's login is `{o}/<user id>#read`, since `MayPush` gets the login alone.
+- Keys: decoded names, lower-cased; a project (as the fake's own `url` names it) or repository named by
+  GUID keys by its name; `pull:` and `update:` are `{o}/{p}/{n}`; both refs methods share `refs:`. `api-version` from the query or `Accept`, ASCII digits within an int. An
+  `_apis` path no route serves is 404 "Page not found" after check 1; pages pass no check but a fault.
 - Check 4: `areas` checks nothing; no credential reads only a public project's `repos:{o}/{p}`, `repo`,
   `pulls`, `pull` and `refs` GET; `AnonymousIdentity` off `connection` is no credential. `Unauthorized`
   names the token's user, else Anonymous; `NotFound` the route's repository, else project, else
-  organization.
-- Shapes settled: `ActivityId` from a counter; `size` the objects' bytes; `sshUrl` the service's form;
-  refs' `creator` the TFS identity on every ref (ASSUMED for branches); `closedDate` on a closed one; a
-  create's `lastMergeSourceCommit` and `…TargetCommit` are the tips at the create.
-- Writes: update takes `status` (active, abandoned, completed), `title`, `description`; refs POST
-  deletes under `refs/heads/` and `refs/tags/` (`succeeded`, `staleOldObjectId`, else
-  `invalidRefName`), a non-zero `newObjectId` 400; a non-contributor's update and refs POST are 403
-  TF401027 (`PullRequestContribute`, `GenericContribute`).
-- Sync: one `commit-tree` per merge, not the hash-object batch (three merges here); also before `refs`
-  GET; a missing branch keeps its ref. A disabled repository is not public to git; no `FetchRefusal`
-  (git ignores `Members`).
-- Scenario: harbor-co's user is Test Author, without a token; !5 "Update the manifest"
-  (`Hosting7bManifestRequestTitle`) is from `update-manifest`, which WP-F's template lacks, so it never
-  gets a merge ref. Ada's token stays `azdo_FAKE-Fernhill-Labs-1`; `Phase7bSupportTests` passes
-  unchanged. No file outside 3.1's list changed.
+  organization. A hidden project's list is 404 TF200016, as an unknown one's; a create's unknown or
+  other organization's `forkSource.repository.id` 404 TF401019.
+- `$top`: `MaxPerPage` caps one sent; none gives 101 rows whatever `MaxPerPage` is.
+- Shapes: `ActivityId` from a counter; `size` the objects' bytes from the folder's listing; refs'
+  `creator` the TFS identity; `closedDate` on a closed one; a create's `lastMerge…Commit`s the tips at
+  the create. A PR alone (`pull:`, create, update) has its `repository` whole but `defaultBranch` and
+  ends `url, _links, supportsIterations, artifactId` (r5's single GET); a list keeps the trimmed form.
+- Writes: update takes `status`, `title`, `description`; refs POST deletes under `refs/heads/` and
+  `refs/tags/` (`succeeded`, `staleOldObjectId`, else `invalidRefName`), a non-zero `newObjectId` 400;
+  a non-contributor's update and refs POST 403 TF401027.
+- Git: git's callbacks find a repository `x.git` as `x`; `x` beside it is refused. Sync: one
+  `commit-tree` per merge, not the hash-object batch; also before `refs` GET; a missing branch keeps
+  its ref. A disabled repository is not public to git; no `FetchRefusal`.
+- Scenario: harbor-co's user is Test Author, without a token; !5 is from `update-manifest`, which
+  WP-F's template lacks, so it never gets a merge ref. Ada's token stays `azdo_FAKE-Fernhill-Labs-1`.
+  No file outside 3.1's list changed.
 
 ## 4. WP-FL: the fake of GitLab
 
