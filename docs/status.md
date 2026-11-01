@@ -230,7 +230,13 @@ green. Jobs and Test steps: `windows-latest` 41 min 0 s (37 min 49 s), `macos-la
 (WP-GL's merge `e8a5abf`): all five jobs green, none failed a test, the keychain steps green. Jobs
 and Test steps: `windows-latest` 40 min 20 s (37 min 6 s), `macos-latest` 32 min 49 s (30 min 53
 s), `ubuntu-latest` 6 min 5 s (4 min 44 s), the containers 8 min 28 s and 8 min 26 s (6 min 11 s and
-6 min 9 s), each under four fifths. The next run is that of WP-AZ's merge, read in Next step.
+6 min 9 s), each under four fifths.
+
+[41354931421](https://github.com/RahimPasha/VisualCommit/actions/runs/41354931421) on `c0af1be`
+(WP-AZ's merge `767d9b9` with the lead's `df365e5` to `b65d0d9`, wave 2's last code): all five jobs
+green, none failed a test, the keychain steps green. Jobs and Test steps: `windows-latest` 40 min 52 s
+(37 min 39 s), `macos-latest` 40 min 21 s (37 min 4 s), `ubuntu-latest` 6 min 22 s (4 min 55 s), the
+containers 8 min 48 s and 6 min 18 s (6 min 31 s and 4 min 33 s), each under four fifths.
 
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
@@ -388,15 +394,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wave 2 (design 0.4) is merged: WP-FL `7780908`, WP-FA `e995fc4`, WP-GL `e8a5abf` and WP-AZ `767d9b9`,
-with the lead's commits at WP-AZ's merge (`df365e5` to `b65d0d9`). The whole default run comes now,
-through `bash scripts/heavy-run.sh` with nothing else running (design 0.6's estimate grows with
-wave 2's Hosting.Tests: each minute it adds there adds one to the run, 16.2); then read the CI run
-the push of `b65d0d9`'s status commit started, each job and each Test step against four fifths
-(0.6), and record both. No wave 2 section names a lagged list. Then wave 3: WP-S (section 9), the
-owner's 15.8 steps and stage 1 of the live command before WP-S's merge, then WP-LF. Until the reset
-of 2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if
-it runs out (D344).
+Wave 2 (design 0.4) is merged (WP-FL `7780908`, WP-FA `e995fc4`, WP-GL `e8a5abf`, WP-AZ `767d9b9`
+with the lead's `df365e5` to `b65d0d9`); its whole default run passed (Notes) and CI's run on
+`c0af1be` is green in all five jobs (CI section). Next is wave 3: WP-S (section 9), built, reviewed
+and hunted in its worktree as wave 2's packages were; before its merge the owner's 15.8 steps
+(Waiting on the owner) and stage 1 of the live command (15.9), the owner told and present; then
+WP-LF. Until the reset of 2026-11-05 the phase may use all that is left of the week's allowance and
+waits for the reset if it runs out (D344).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -414,6 +418,15 @@ every commit.
   too (`wp-gl-*`, `wp-az-*`, `wp-fa-correctness`); what they found and the lead's rulings on the
   clients' third hunts are in sections 6's and 7's As built, which end with the lead's items for
   the review before the gate (7a's GitHub gaps the same inputs show, and the core's).
+- **Wave 2's whole default run** (2026-11-01, 15:01 to 16:17, on `c0af1be`, through
+  `bash scripts/heavy-run.sh`, four projects at once): 7,494 tests, 7,490 passed, 4 skipped (as
+  wave 1's), none failed, 1 h 14 min 20 s. MTP started App.Tests, Phase7a, Git.Tests and
+  Hosting.Tests first this time (16.2: the order is not fixed). Projects ended after (from each
+  one's own time and the order they started in): Phase7a 15 min 26 s, Hosting.Tests 17 min 12 s
+  (+1 min 38 s on wave 1), Phase7b 17 min 58 s (2 min 32 s), phases 0 to 2's 28 min 54 s, Phase5
+  42 min 52 s, Git.Tests 50 min 7 s, Phase4 60 min 15 s, Phase3 65 min 18 s, App.Tests 67 min 28 s
+  (all its own), Phase6 68 min 35 s, Phase6Look 69 min 15 s, Phase5Undo 74 min 12 s. The log is
+  `$TMP/p7b-runs/full-w2.txt`.
 - **Wave 1's whole default run** (2026-11-01, 06:49 to 08:07, on `6586066` with `e14c3ab`'s docs,
   through `bash scripts/heavy-run.sh`, four projects at once): 6,862 tests, 6,858 passed, 4 skipped
   (the real keychains' three and `Off_Windows_…`), none failed, 1 h 16 min 56 s. MTP started
@@ -654,7 +667,12 @@ every commit.
   (D352, which sets D260's reason aside for that token alone); the live command keeps to the
   sandbox by its own guard, the token's scopes and a short expiry, as the design names them. The
   owner makes the Azure DevOps token, the GitLab account and its token when the design names their
-  scopes and variables (step 16).
+  scopes and variables (step 16). The design names them in 15.8 (D364): the Azure DevOps project
+  and token, the GitLab account, project and fine-grained token, and the four Windows user
+  variables `VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN`, `…_AZURE_DEVOPS_REPO`, `…_GITLAB_TOKEN` and
+  `…_GITLAB_REPO`, then VS Code quit and started again. Needed before WP-S's merge (wave 3), since
+  stage 1 of the live command runs then; on 2026-11-01 none of the four was set (checked by name
+  alone). Each token's expiry date goes here once it is made.
 - **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
   (the review before the gate and the runs after it: the avatars' lookup per author, git's

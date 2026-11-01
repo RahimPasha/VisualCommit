@@ -3889,7 +3889,12 @@ Each point names what settles it and who meets it.
   Git.Tests, Phase6 and Hosting.Tests, and App.Tests (61 min 20 s of its own) takes the first free
   lane, Hosting.Tests' at 15 min 34 s; the 7b project takes Phase6's, after App.Tests has started, so
   r4 5.2's +15 does not arise. The run ends at Hosting.Tests' time plus App.Tests' own: each minute
-  wave 2 adds to Hosting.Tests (0.6's 5 to 9) adds one to the run (status.md's Notes).
+  wave 2 adds to Hosting.Tests (0.6's 5 to 9) adds one to the run (status.md's Notes). Wave 2's
+  run (2026-11-01, 1 h 14 min 20 s, 7,494 tests) shows the order is not fixed: MTP started
+  App.Tests, Phase7a, Git.Tests and Hosting.Tests, App.Tests ran from the start (67 min 28 s of its
+  own) and the run ended with Phase5Undo at about 74 min; Hosting.Tests took 17 min 12 s (+1 min 38
+  s, under 0.6's 5 to 9). With App.Tests first the run is bound by App.Tests and the last lane's
+  three or four walk-throughs, not by Hosting.Tests; either order stays under 80 min.
 - FETCH_HEAD's line for `refs/merge-requests/<iid>/head` (ASSUMED): WP-P's test on 2.56, CI on 2.43. The
   GitLab twin over HTTP before 2.46: WP-B's `CloneFromAccountTests` on CI's 2.43 containers (4.5's 301).
 - Up to three keychain reads at start (9.4) on a slow macOS store, against git's 10 s wait: CI, the gate.
