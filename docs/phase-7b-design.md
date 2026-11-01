@@ -1607,6 +1607,35 @@ wave 1, whichever of WP-F, WP-H and WP-C is last (0.4). Done when the three clas
 `HostingProviders`; no token, header, body or query reaches a log; `AvatarCache.cs` is unchanged; CI's
 five jobs are green.
 
+**As built** (WP-H, `2ed2447`, `549ec8d`, `43bcb65`, 2026-11-01). Where it differs from 5.1 to 5.5 or
+settles what they left open:
+- `HostingHttpProfile` gains `virtual string WarningOf(HostingExchange, HostingFailure)`: the `<status
+  or kind>` of the warning for a failure the profile gave (`Classify`, `RefuseSuccess`,
+  `RefuseRedirect`), the status unless overridden; WP-AZ's "redirected outside the organization"
+  overrides it. `HostingLinks` is in `HostingHttpProfile.cs` and finds `Link` in any case.
+- An answer's order: the core's own stops (no answer, the time, a redirect, 10 MB), `RefuseSuccess`
+  (2xx, 304), `SucceedsEmpty` (any status, so a 204 can be one), then the parse or `Classify`.
+  `RefuseRedirect` is asked of every redirect with a `Location`, a fourth too, before 7a's rule; its
+  exchange's `Url` is the request's (query kept), its `Body` empty. One without `Location` is 7a's.
+- `SendAsync`'s `Next` is always null; only `GetPagesAsync` pages. `pageHeaders` sees each page that
+  gave a value, before the next is asked. A next page off the origin warns `Link to <origin>`.
+- E-mail screening replaces the whole run of non-blank characters around an `@` (`\S+@\S+`), quotes
+  and punctuation next to it included, in every failure's `Message` and `Detail`, the profile's and
+  `MalformedAnswer`'s too (`HostingHttpClient.ScreenEmail`). `Url` (the answering address without
+  its query) and `RequestId` are set only where null.
+- The core's statics are `public` on the internal class (`SameOrigin`, `OriginOf`, `IsRedirect`,
+  `Resolve`, `ReadBoundedAsync`, `WithoutQuery`, `ScreenEmail`, the constants); `Profile` and `Clock`
+  are properties. The 30 s run on real time, not on `clock` (7a's tests time out under a manual
+  clock); a profile reads its own clock for `RetryAt`. `HostingReply<T>` has `Succeeded`. Bodies go
+  as `application/json; charset=utf-8`; a type outside `Json` is "<type> is not one of
+  <possessive> shapes."
+- `GitHubClient` adds `internal MalformedAnswer`, which `GitHubProvider`'s unreadable answers use. A
+  list's `OAuthScopes` and `Sso` come from the observer when the reply is of a page it saw, else from
+  that answer's own headers: 7a's in every case.
+- `GitHubProvider`: `public const string OtherProviderDetail = "other-provider:"` and `internal static
+  RefusalOf(detail)`; the token refusal guards every method, as 7a's `Refusal` does.
+- No file outside 5.1's list; `AvatarCache.cs` unchanged; nothing under `Http/` names a provider.
+
 ## 6. WP-AZ: Azure DevOps' client and provider
 
 ### 6.1 Goal and files

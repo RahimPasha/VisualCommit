@@ -338,7 +338,7 @@ public sealed class HostingHttpClientTests
     {
         using var setup = Setup.Scripted(request => RecordingHttpHandler.Json(
             request.RequestUri!.AbsolutePath.EndsWith("/ok", StringComparison.Ordinal) ? HttpStatusCode.OK : HttpStatusCode.Forbidden, "{}"));
-        setup.Profile.OnClassify = _ => new HostingFailure(HostingFailureKind.Forbidden, "The identity 'Ada Lovelace <ada@example.com>' may not push; ask eff@example.org.", "ada@example.com and git@example.com");
+        setup.Profile.OnClassify = _ => new HostingFailure(HostingFailureKind.Forbidden, "The identity 'Ada Lovelace <ada@example.com>' may not push; ask eff@example.com.", "ada@example.com and git@example.com");
         setup.Profile.OnSuccess = _ => new HostingFailure(HostingFailureKind.BadCredentials, "Signed in as ada@example.com.", "No address here.");
 
         var classified = (await setup.GetAsync("push")).Failure!;
