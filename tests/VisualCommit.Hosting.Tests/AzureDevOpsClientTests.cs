@@ -160,7 +160,7 @@ public sealed class AzureDevOpsClientTests
     }
 
     [Fact]
-    public async Task A_429_names_when_it_ends_by_retry_after_then_the_reset_then_a_minute_a_day_at_most()
+    public async Task A_429_names_when_it_ends_by_retry_after_then_the_reset_then_a_minute_never_before_now_and_a_day_at_most()
     {
         var clock = new ManualTimeProvider();
         var now = clock.GetUtcNow();
@@ -168,6 +168,11 @@ public sealed class AzureDevOpsClientTests
         {
             ("Retry-After", "30", now.AddSeconds(30)),
             ("Retry-After", "999999", now.AddDays(1)),
+            ("Retry-After", now.AddHours(2).ToString("R", System.Globalization.CultureInfo.InvariantCulture), now.AddHours(2)),
+
+            // A date or a reset in the past is now, never a time already gone (the app shows it as when to try again).
+            ("Retry-After", "Wed, 21 Oct 2015 07:28:00 GMT", now),
+            ("X-RateLimit-Reset", "1", now),
             ("X-RateLimit-Reset", now.AddMinutes(5).ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture), now.AddMinutes(5)),
             ("X-RateLimit-Reset", "99999999999999999", now.AddSeconds(60)),
             ("X-Other", "1", now.AddSeconds(60)),
@@ -506,6 +511,30 @@ public sealed class AzureDevOpsClientTests
             var url = new Uri(Service.WebBase, "Fernhill-Labs/Mobile%20App/_apis/git/repositories/mobile-app/pullrequests?searchCriteria.status=active&api-version=7.1");
             var failed = await failing.GetPagesAsync(Token, url, AzureDevOpsJsonContext.Default.PullRequestList, row => row.PullRequestId.ToString(System.Globalization.CultureInfo.InvariantCulture), 3, Cancelled);
             Assert.Equal((null, HostingFailureKind.ServerError), (failed.Value, failed.Failure!.Kind));
+        }
+    }
+
+    [Fact]
+    public async Task A_page_holding_more_rows_than_its_top_gives_a_pages_worth_and_the_cap_still_holds()
+    {
+        // A server that ignores $top and answers 250 requests from $skip on (ids skip+1 to skip+250).
+        var (client, recorder) = Scripted(request =>
+        {
+            var skip = int.Parse(HttpUtility.ParseQueryString(request.RequestUri!.Query)["$skip"]!, System.Globalization.CultureInfo.InvariantCulture);
+            var rows = Enumerable.Range(skip + 1, 250).Select(id => $$"""{"pullRequestId":{{id}},"title":"Request {{id}}","sourceRefName":"refs/heads/b{{id}}","targetRefName":"refs/heads/main"}""");
+            return Answer(HttpStatusCode.OK, $$"""{"value":[{{string.Join(',', rows)}}],"count":250}""", "application/json");
+        });
+        using (client)
+        {
+            var url = new Uri(Service.WebBase, "Fernhill-Labs/Mobile%20App/_apis/git/repositories/mobile-app/pullrequests?searchCriteria.status=active&api-version=7.1");
+
+            var rows = await client.GetPagesAsync(Token, url, AzureDevOpsJsonContext.Default.PullRequestList, row => row.PullRequestId.ToString(System.Globalization.CultureInfo.InvariantCulture), 3, Cancelled);
+
+            Assert.Equal(Enumerable.Range(1, 300), rows.Value!.Select(row => row.PullRequestId));
+            Assert.True(rows.MoreExist);
+            Assert.Equal(
+                ["$top=100&$skip=0", "$top=100&$skip=100", "$top=100&$skip=200", "$top=1&$skip=300"],
+                recorder.Sent.Select(sent => sent.Url.Query[(sent.Url.Query.IndexOf("$top", StringComparison.Ordinal))..]));
         }
     }
 

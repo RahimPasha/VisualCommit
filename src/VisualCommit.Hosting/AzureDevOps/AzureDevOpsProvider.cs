@@ -420,16 +420,25 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
         return typed;
     }
 
-    /// <summary>A repository as A2 and A3 describe it, in <paramref name="organization"/>; null when its addresses or names cannot be used.</summary>
+    /// <summary>
+    /// A repository as A2 and A3 describe it, in <paramref name="organization"/>; null when its names
+    /// or addresses cannot be used. The answer's <c>remoteUrl</c> and <c>webUrl</c> reach the record
+    /// (and from it git's command line and the log, D372) only when each is an <c>http</c> or
+    /// <c>https</c> address that <see cref="AzureDevOpsUrls.Recognise(AzureDevOpsEndpoints, string?, out string?)"/>
+    /// reads as this very repository on this service (so no other host, path, name or echoed text),
+    /// <c>remoteUrl</c> with no user or the organization as its user (without case; ruling 15) and
+    /// <c>webUrl</c> with none: no e-mail, token or other account rides into the record.
+    /// </summary>
     private RepositoryInfo? Info(AzureDevOpsRepositoryJson json, string organization)
     {
-        if (WebAddress(json.RemoteUrl) is not { } cloneUrl || WebAddress(json.WebUrl) is not { } htmlUrl)
-        {
-            return null;
-        }
-
         var repository = new HostedRepository(HostingProvider.AzureDevOps, Host, organization + "/" + json.Project.Name, json.Name);
-        if (AzureDevOpsUrls.NamesOf(repository) is null)
+        if (AzureDevOpsUrls.NamesOf(repository) is null
+            || WebAddress(json.RemoteUrl) is not { } cloneUrl
+            || AzureDevOpsUrls.Recognise(Endpoints, json.RemoteUrl, out var cloneUser) != repository
+            || (cloneUser is not null && !string.Equals(cloneUser, organization, StringComparison.OrdinalIgnoreCase))
+            || WebAddress(json.WebUrl) is not { } htmlUrl
+            || AzureDevOpsUrls.Recognise(Endpoints, json.WebUrl, out var webUser) != repository
+            || webUser is not null)
         {
             return null;
         }

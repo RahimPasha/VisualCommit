@@ -1,4 +1,5 @@
 using System.Globalization;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Operations;
 
@@ -7,8 +8,11 @@ namespace VisualCommit.Hosting.AzureDevOps;
 /// <summary>
 /// Which remote URLs are Azure DevOps' (docs/phase-7b-design.md 6.2), without the network and of any
 /// organization; the organization a typed text names (ruling 16, D360); and the web and API
-/// addresses of a repository. URLs are read by hand, as <c>GitHubUrls</c> reads them, never by
-/// <see cref="Uri"/>, which would unescape, normalise and guess where git does not.
+/// addresses of a repository. URLs are read by hand, as <c>GitHubUrls</c> reads them, except an
+/// <c>http</c> or <c>https</c> URL's host and port, which are read as .NET reads them, as
+/// <see cref="CredentialBinding"/>'s <c>Select</c> does, so that recognition and the binding agree
+/// on which host a URL names; the path is never read by <see cref="Uri"/>, which would unescape,
+/// normalise and guess where git does not.
 /// </summary>
 internal static class AzureDevOpsUrls
 {
@@ -40,20 +44,35 @@ internal static class AzureDevOpsUrls
     /// never kept. The organization (the first segment, or the label) matches <c>^[A-Za-z0-9-]+$</c>
     /// (D360) and is kept as written; <c>DefaultCollection</c> is no organization of dev.azure.com's;
     /// a project starting with <c>_</c> is refused; project and repository are percent-decoded as UTF-8.
-    /// The host is <see cref="AzureDevOpsEndpoints.Host"/> for every form (r5 6.2).
+    /// The host is <see cref="AzureDevOpsEndpoints.Host"/> for every form (r5 6.2). An <c>http</c> or
+    /// <c>https</c> URL's host and port are read as .NET reads them, as
+    /// <see cref="CredentialBinding.Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/>
+    /// does, so that a URL is recognised wherever it is bound: an empty user is none, an empty port
+    /// the scheme's, a port's leading zeros are read by value, and the fake's <c>127.1</c> (or any
+    /// other form .NET reads as <c>127.0.0.1</c>) is its host.
     /// </summary>
-    public static HostedRepository? Recognise(AzureDevOpsEndpoints endpoints, string? url)
+    public static HostedRepository? Recognise(AzureDevOpsEndpoints endpoints, string? url) => Recognise(endpoints, url, out _);
+
+    /// <summary>
+    /// <see cref="Recognise(AzureDevOpsEndpoints, string?)"/>, with the URL's user part as written
+    /// (null when it has none or an empty one): A2 and A3 hold an answer's <c>remoteUrl</c> to it.
+    /// </summary>
+    public static HostedRepository? Recognise(AzureDevOpsEndpoints endpoints, string? url, out string? user)
     {
         ArgumentNullException.ThrowIfNull(endpoints);
+        user = null;
         if (string.IsNullOrEmpty(url))
         {
             return null;
         }
 
-        var found = HttpForm(endpoints, url) ?? (endpoints.OrganizationHosts ? SshForm(url) : null);
-        return found is { } named
-            ? new HostedRepository(HostingProvider.AzureDevOps, endpoints.Host, named.Organization + "/" + named.Project, named.Repository)
-            : null;
+        if ((HttpForm(endpoints, url) ?? (endpoints.OrganizationHosts ? SshForm(url) : null)) is not { } found)
+        {
+            return null;
+        }
+
+        user = found.User;
+        return new HostedRepository(HostingProvider.AzureDevOps, endpoints.Host, found.Named.Organization + "/" + found.Named.Project, found.Named.Repository);
     }
 
     /// <summary>
@@ -62,7 +81,9 @@ internal static class AzureDevOpsUrls
     /// part ignored, gives its first path segment on <see cref="AzureDevOpsEndpoints.WebBase"/>'s host
     /// and port, or with <see cref="AzureDevOpsEndpoints.OrganizationHosts"/> the label of
     /// <c>https://&lt;label&gt;.visualstudio.com</c> (the host without case). The result must match
-    /// <c>^[A-Za-z0-9-]+$</c> (D360), else null; it is kept as written.
+    /// <c>^[A-Za-z0-9-]+$</c> (D360), else null; it is kept as written. The host and port are read as
+    /// <see cref="Recognise(AzureDevOpsEndpoints, string?)"/> reads them; a URL holding <c>\</c>, which
+    /// .NET reads as <c>/</c> where the text has none, names nothing.
     /// </summary>
     public static string? OrganizationOf(string? text, AzureDevOpsEndpoints endpoints)
     {
@@ -79,20 +100,19 @@ internal static class AzureDevOpsUrls
         }
 
         var end = trimmed.AsSpan().IndexOfAny('?', '#');
-        if (Parts(end < 0 ? trimmed : trimmed[..end], passwordAllowed: true) is not { } parts)
+        if (trimmed.Contains('\\', StringComparison.Ordinal) || Parts(end < 0 ? trimmed : trimmed[..end], passwordAllowed: true) is not { } parts)
         {
             return null;
         }
 
-        var (scheme, host, port, path) = parts;
-        if (OnWebBase(endpoints, host, port ?? DefaultPort(scheme), sameScheme: null))
+        if (OnWebBase(endpoints, parts.Host, parts.Port, sameScheme: null))
         {
-            var slash = path.IndexOf('/', StringComparison.Ordinal);
-            var first = slash < 0 ? path : path[..slash];
+            var slash = parts.Path.IndexOf('/', StringComparison.Ordinal);
+            var first = slash < 0 ? parts.Path : parts.Path[..slash];
             return IsOrganizationName(first) ? first : null;
         }
 
-        return endpoints.OrganizationHosts && scheme == Uri.UriSchemeHttps && (port ?? 443) == 443 ? OrganizationLabel(host) : null;
+        return endpoints.OrganizationHosts ? OrganizationOfHost(parts) : null;
     }
 
     /// <summary>
@@ -154,33 +174,45 @@ internal static class AzureDevOpsUrls
     /// <summary>A path segment escaped for an address (<see cref="Uri.EscapeDataString(string)"/>).</summary>
     public static string Escape(string name) => Uri.EscapeDataString(name);
 
-    /// <summary>An <c>http</c> or <c>https</c> URL in one of the web base's or the organization host's forms.</summary>
-    private static (string Organization, string Project, string Repository)? HttpForm(AzureDevOpsEndpoints endpoints, string url)
+    /// <summary>An <c>http</c> or <c>https</c> URL in one of the web base's or the organization host's forms, with its user.</summary>
+    private static ((string Organization, string Project, string Repository) Named, string? User)? HttpForm(AzureDevOpsEndpoints endpoints, string url)
     {
         if (!CredentialBinding.InPlainForm(url) || Parts(url, passwordAllowed: false) is not { } parts)
         {
             return null;
         }
 
-        var (scheme, host, port, path) = parts;
-        var segments = Segments(path);
-        if (OnWebBase(endpoints, host, port ?? DefaultPort(scheme), sameScheme: scheme))
+        var segments = Segments(parts.Path);
+        (string Organization, string Project, string Repository)? named = null;
+        if (OnWebBase(endpoints, parts.Host, parts.Port, sameScheme: parts.Scheme))
         {
-            return segments is [var organization, .. var rest] && IsOrganizationName(organization) && !IsDefaultCollection(organization)
-                ? Below(organization, rest)
-                : null;
+            if (segments is [var organization, .. var rest] && IsOrganizationName(organization) && !IsDefaultCollection(organization))
+            {
+                named = Below(organization, rest);
+            }
+        }
+        else if (endpoints.OrganizationHosts && OrganizationOfHost(parts) is { } label)
+        {
+            named = Below(label, segments is [var first, .. var rest] && IsDefaultCollection(first) ? rest : segments);
         }
 
-        if (endpoints.OrganizationHosts && scheme == Uri.UriSchemeHttps && (port ?? 443) == 443 && OrganizationLabel(host) is { } label)
-        {
-            return Below(label, segments is [var first, .. var rest] && IsDefaultCollection(first) ? rest : segments);
-        }
-
-        return null;
+        return named is { } found ? (found, parts.User) : null;
     }
 
-    /// <summary>One of the SSH forms on the service, its path after <c>v3/</c> <c>&lt;org&gt;/&lt;project&gt;/&lt;repo&gt;</c>.</summary>
-    private static (string Organization, string Project, string Repository)? SshForm(string url)
+    /// <summary>
+    /// The organization of <c>https://&lt;label&gt;.visualstudio.com</c> on port 443, the host as .NET
+    /// reads it (as <see cref="CredentialBinding.Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/>
+    /// does) and the label in the spelling written (the host as written equal to .NET's without case); else null.
+    /// </summary>
+    private static string? OrganizationOfHost((string Scheme, string Host, int Port, string WrittenHost, string? User, string Path) parts) =>
+        parts.Scheme == Uri.UriSchemeHttps
+        && parts.Port == 443
+        && string.Equals(parts.WrittenHost, parts.Host, StringComparison.OrdinalIgnoreCase)
+            ? OrganizationLabel(parts.WrittenHost)
+            : null;
+
+    /// <summary>One of the SSH forms on the service, its path after <c>v3/</c> <c>&lt;org&gt;/&lt;project&gt;/&lt;repo&gt;</c>, with its user.</summary>
+    private static ((string Organization, string Project, string Repository) Named, string? User)? SshForm(string url)
     {
         if (url.AsSpan().ContainsAnyExceptInRange('!', '~') || url.AsSpan().IndexOfAny('\\', '?', '#') >= 0)
         {
@@ -223,8 +255,8 @@ internal static class AzureDevOpsUrls
             (authority, path) = (url[..colon], url[(colon + 1)..]);
         }
 
-        if (WithoutUser(authority, passwordAllowed: false) is not { } host
-            || !(IsHost(host, SshHost) || IsHost(host, OrganizationSshHost))
+        if (SplitUser(authority, passwordAllowed: false) is not { } split
+            || !(IsHost(split.HostAndPort, SshHost) || IsHost(split.HostAndPort, OrganizationSshHost))
             || (port ?? 22) != 22
             || !path.StartsWith(SshVersion, StringComparison.Ordinal))
         {
@@ -237,8 +269,8 @@ internal static class AzureDevOpsUrls
             return null;
         }
 
-        return Segments(path) is [var organization, var project, var repository] && IsOrganizationName(organization)
-            ? Named(organization, project, repository)
+        return Segments(path) is [var organization, var project, var repository] && IsOrganizationName(organization) && Named(organization, project, repository) is { } named
+            ? (named, split.User)
             : null;
     }
 
@@ -282,11 +314,15 @@ internal static class AzureDevOpsUrls
 
     /// <summary>
     /// <c>scheme://[user@]host[:port][/path]</c> with scheme <c>http</c> or <c>https</c> (in lower
-    /// case), its host, port (null when none) and path after the first <c>/</c> (empty when none);
-    /// null for anything else, and for an empty user, two <c>@</c> or, unless
+    /// case): its host and port as .NET reads them (<see cref="Uri.Host"/>, <see cref="Uri.Port"/>), as
+    /// <see cref="CredentialBinding.Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/>
+    /// reads them (an empty port the scheme's, leading zeros by value, any form of an IPv4 address
+    /// in its dotted form, the host in lower case); and by hand the host as written, the user as
+    /// written (null when none or empty) and the path after the first <c>/</c> (empty when none).
+    /// Null for anything else, for a URL .NET does not read, for two <c>@</c> or, unless
     /// <paramref name="passwordAllowed"/>, a password.
     /// </summary>
-    private static (string Scheme, string Host, int? Port, string Path)? Parts(string url, bool passwordAllowed)
+    private static (string Scheme, string Host, int Port, string WrittenHost, string? User, string Path)? Parts(string url, bool passwordAllowed)
     {
         var separator = url.IndexOf("://", StringComparison.Ordinal);
         if (separator <= 0)
@@ -304,53 +340,56 @@ internal static class AzureDevOpsUrls
         var slash = rest.IndexOf('/', StringComparison.Ordinal);
         var authority = slash < 0 ? rest : rest[..slash];
         var path = slash < 0 ? string.Empty : rest[(slash + 1)..];
-        if (WithoutUser(authority, passwordAllowed) is not { } hostAndPort)
+        if (SplitUser(authority, passwordAllowed) is not { } split
+            || !Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || !string.Equals(uri.Scheme, scheme, StringComparison.Ordinal)
+            || uri.Host.Length == 0)
         {
             return null;
         }
 
-        var colon = hostAndPort.IndexOf(':', StringComparison.Ordinal);
-        var host = colon < 0 ? hostAndPort : hostAndPort[..colon];
-        int? port = null;
-        if (colon >= 0)
-        {
-            if (PortOf(hostAndPort[(colon + 1)..]) is not { } given)
-            {
-                return null;
-            }
-
-            port = given;
-        }
-
-        return host.Length == 0 ? null : (scheme, host, port, path);
+        var colon = split.HostAndPort.IndexOf(':', StringComparison.Ordinal);
+        var writtenHost = colon < 0 ? split.HostAndPort : split.HostAndPort[..colon];
+        return writtenHost.Length == 0 ? null : (scheme, uri.Host, uri.Port, writtenHost, split.User, path);
     }
 
-    /// <summary>The authority without its <c>user@</c>; null for an empty user, a second <c>@</c> or a password not allowed.</summary>
-    private static string? WithoutUser(string authority, bool passwordAllowed)
+    /// <summary>
+    /// The authority's user as written, null when it has none or an empty one (which .NET and git
+    /// read as none: <c>https://@dev.azure.com/…</c> is bound as without a user), and the rest; null
+    /// for a second <c>@</c> or a password not allowed.
+    /// </summary>
+    private static (string? User, string HostAndPort)? SplitUser(string authority, bool passwordAllowed)
     {
         var at = authority.IndexOf('@', StringComparison.Ordinal);
         if (at < 0)
         {
-            return authority;
+            return (null, authority);
         }
 
         var user = authority[..at];
-        return user.Length == 0 || authority.IndexOf('@', at + 1) >= 0 || (!passwordAllowed && user.Contains(':', StringComparison.Ordinal))
+        return authority.IndexOf('@', at + 1) >= 0 || (!passwordAllowed && user.Contains(':', StringComparison.Ordinal))
             ? null
-            : authority[(at + 1)..];
+            : (user.Length == 0 ? null : user, authority[(at + 1)..]);
     }
 
-    private static int? PortOf(string digits) =>
-        digits.Length is > 0 and <= 5 && digits.All(char.IsAsciiDigit) && int.Parse(digits, CultureInfo.InvariantCulture) is var port and <= 65535
+    /// <summary>An SSH port: digits, read by value whatever their leading zeros, up to 65535.</summary>
+    private static int? PortOf(string digits)
+    {
+        if (digits.Length == 0 || !digits.All(char.IsAsciiDigit))
+        {
+            return null;
+        }
+
+        var significant = digits.TrimStart('0');
+        return significant.Length <= 5 && (significant.Length == 0 ? 0 : int.Parse(significant, CultureInfo.InvariantCulture)) is var port and <= 65535
             ? port
             : null;
+    }
 
-    private static int DefaultPort(string scheme) => scheme == Uri.UriSchemeHttps ? 443 : 80;
-
-    /// <summary>Whether a host and port are the web base's (the host without case), and its scheme when <paramref name="sameScheme"/> names one.</summary>
+    /// <summary>Whether a host and port, as .NET reads them, are the web base's (the host without case), and its scheme when <paramref name="sameScheme"/> names one.</summary>
     private static bool OnWebBase(AzureDevOpsEndpoints endpoints, string host, int port, string? sameScheme) =>
         (sameScheme is null || string.Equals(sameScheme, endpoints.WebBase.Scheme, StringComparison.OrdinalIgnoreCase))
-        && string.Equals(host, endpoints.WebBase.IdnHost, StringComparison.OrdinalIgnoreCase)
+        && string.Equals(host, endpoints.WebBase.Host, StringComparison.OrdinalIgnoreCase)
         && port == endpoints.WebBase.Port;
 
     /// <summary>The organization of <c>&lt;label&gt;.visualstudio.com</c>: one label in the grammar, none of the service's own; else null.</summary>

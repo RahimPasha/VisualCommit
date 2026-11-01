@@ -1,3 +1,4 @@
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Operations;
 using VisualCommit.Hosting.AzureDevOps;
@@ -108,7 +109,8 @@ public sealed class AzureDevOpsRecognitionTests
         { $"{D}/my.org/p/_git/r", null, null },
         { $"{D}/my_org/p/_git/r", null, null },
         { "https://user:secret@dev.azure.com/myorg/p/_git/r", null, null },
-        { "https://@dev.azure.com/myorg/p/_git/r", null, null },
+        // An empty user is none, as .NET and git read it (and Select binds it).
+        { "https://@dev.azure.com/myorg/p/_git/r", "myorg/p", "r" },
         { "https://a@b@dev.azure.com/myorg/p/_git/r", null, null },
         { "http://dev.azure.com/myorg/p/_git/r", null, null },
         { "https://dev.azure.com:8443/myorg/p/_git/r", null, null },
@@ -199,6 +201,75 @@ public sealed class AzureDevOpsRecognitionTests
         Assert.Equal(owner is null ? null : $"{owner}|{name}|127.0.0.1:47397", Described(recognised));
     }
 
+    /// <summary>
+    /// URLs that .NET (and so <see cref="CredentialBinding.Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/>)
+    /// and git read as the service's or the fake's host and port, written another way: an empty user,
+    /// an empty port, a port's leading zeros, the fake's 127.0.0.1 in another IPv4 form; and some
+    /// near them that name another host or port, or none .NET reads. The owner and name recognised, or null.
+    /// </summary>
+    public static TheoryData<string, string, string?, string?> AuthorityForms => new()
+    {
+        { "service", "https://@dev.azure.com/myorg/p/_git/r", "myorg/p", "r" },
+        { "service", "https://@myorg.visualstudio.com/p/_git/r", "myorg/p", "r" },
+        { "service", "https://dev.azure.com:/myorg/p/_git/r", "myorg/p", "r" },
+        { "service", "https://myorg@dev.azure.com:/myorg/p/_git/r", "myorg/p", "r" },
+        { "service", "https://myorg.visualstudio.com:/p/_git/r", "myorg/p", "r" },
+        { "service", "https://dev.azure.com:0443/myorg/p/_git/r", "myorg/p", "r" },
+        { "service", "https://dev.azure.com:000443/myorg/p/_git/r", "myorg/p", "r" },
+        { "service", "https://dev.azure.com:0000000000443/myorg/p/_git/r", "myorg/p", "r" },
+        { "service", "https://myorg.visualstudio.com:000443/p/_git/r", "myorg/p", "r" },
+        { "service", "https://dev.azure.com:0000000000444/myorg/p/_git/r", null, null },
+        { "service", "https://dev.azure.com:99999/myorg/p/_git/r", null, null },
+        { "service", "https://myorg.visualstudio.com:0080/p/_git/r", null, null },
+        { "local", "http://127.1:47397/fake-org/p/_git/r", "fake-org/p", "r" },
+        { "local", "http://2130706433:47397/fake-org/p/_git/r", "fake-org/p", "r" },
+        { "local", "http://0x7f000001:47397/fake-org/p/_git/r", "fake-org/p", "r" },
+        { "local", "http://0177.0.0.1:47397/fake-org/p/_git/r", "fake-org/p", "r" },
+        { "local", "http://127.000.000.001:47397/fake-org/p/_git/r", "fake-org/p", "r" },
+        { "local", "http://@127.0.0.1:47397/fake-org/p/_git/r", "fake-org/p", "r" },
+        { "local", "http://127.0.0.1:047397/fake-org/p/_git/r", "fake-org/p", "r" },
+        { "local", "http://127.0.0.1:/fake-org/p/_git/r", null, null },
+        { "local", "http://127.2:47397/fake-org/p/_git/r", null, null },
+        { "local", "http://127.0.0.1:47398/fake-org/p/_git/r", null, null },
+    };
+
+    [Theory]
+    [MemberData(nameof(AuthorityForms))]
+    public void A_host_and_port_are_read_as_dotnet_reads_them_so_recognition_is_where_select_binds(string endpoints, string url, string? owner, string? name)
+    {
+        var (on, organization) = endpoints == "local" ? (Local, "fake-org") : (Service, "myorg");
+
+        var recognised = AzureDevOpsUrls.Recognise(on, url);
+
+        Assert.Equal(owner is null ? null : $"{owner}|{name}|{on.Host}", Described(recognised));
+
+        // Recognised exactly where git gets the account's token: else the repository would show no
+        // provider while git is answered with the token, and Azure DevOps' push guard would be skipped.
+        Assert.Equal(recognised is not null, Bound(on, organization, url));
+        Assert.Equal(owner is null ? null : organization, AzureDevOpsUrls.OrganizationOf(url, on));
+    }
+
+    [Theory]
+    [MemberData(nameof(G32Rows))]
+    public void G32s_rows_are_recognised_exactly_where_select_binds_them_but_for_another_users(string id, string url, string? owner, string? name)
+    {
+        _ = name;
+        var recognised = AzureDevOpsUrls.Recognise(Service, url) is not null;
+
+        Assert.Equal(owner is not null, recognised);
+        Assert.Equal(id != "V11" && recognised, Bound(Service, "myorg", url));
+    }
+
+    /// <summary>Whether <see cref="CredentialBinding.Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/> binds <paramref name="url"/> under the provider's coverage of <paramref name="organization"/>'s account.</summary>
+    private static bool Bound(AzureDevOpsEndpoints endpoints, string organization, string url)
+    {
+        using var provider = new AzureDevOpsProvider(endpoints, () => new RecordingHttpHandler(_ => throw new InvalidOperationException("No request is made.")), new ListLog(), TimeProvider.System);
+        var coverage = provider.CoverageOf(new AccountKey(HostingProvider.AzureDevOps, endpoints.Host, organization));
+
+        // One URL, as fetch and push: any binding is of it (a binding is the URL without its user).
+        return CredentialBinding.Select([new RemoteEffectiveUrls("origin", [url], [url])], coverage).Count > 0;
+    }
+
     private static string? Described(HostedRepository? repository) =>
         repository is null ? null : $"{repository.Owner}|{repository.Name}|{repository.Host}";
 
@@ -253,6 +324,10 @@ public sealed class AzureDevOpsRecognitionTests
         { "https://example.com/myorg", null },
         { "ftp://dev.azure.com/myorg", null },
         { "http://127.0.0.1:47397/myorg", null },
+
+        // A backslash, which .NET reads as a slash where the text has none, names nothing either way round.
+        { "https://dev.azure.com\\@evil.example/myorg", null },
+        { "https://evil.example\\@dev.azure.com/myorg", null },
     };
 
     [Theory]

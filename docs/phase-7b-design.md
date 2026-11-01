@@ -2000,31 +2000,31 @@ leaves the account's organization (at A1, the typed one); no e-mail reaches a re
 failure; no Azure DevOps sentence is parsed; no value from the research's captures; CI's five jobs are
 green.
 
-**As built** (WP-AZ, `e83bfb0`, `0bb5087`, `b340942`, `6bac3b4`, `b03bbc5`, the review's fixes `1b6204a`
+**As built** (WP-AZ, `e83bfb0`, `0bb5087`, `b340942`, `6bac3b4`, `b03bbc5`, the reviews' fixes `1b6204a`
 and this paragraph's commit, 2026-11-01). Where the build differs from the text or settles what it left
 open:
-- `AzureDevOpsUrls` (internal): `Recognise`, `OrganizationOf`, `WebUrlOf`, `ApiPath`, `NamesOf` and
-  `IsName`: an owner of two segments, the organization in the grammar, project and name neither empty,
-  `.`, `..` nor holding `/` or `\`. A2 leaves out rows that fail it and refuses such a `ListProject`, A3
-  to A5 refuse such repositories without a request, and A4's fork source of such names is no head.
-  Recognition keeps the organization as written (V16), reads `_git` and `DefaultCollection` without
-  case, skips `_full`/`_optimized` only before a name, and on SSH takes port 22 alone. `OrganizationOf`
-  cuts at `?` or `#`, ignores a user with a password too, and takes `<label>.visualstudio.com` on
-  https:443 alone.
-- `AzureDevOpsClient` (internal) returns `AzureDevOpsReply<T>` (`MoreExist`); the walk is
-  `GetPagesAsync<T>(token, url, type, idOf, maxPages, ct)`, appending `&$top=…&$skip=…`: a failing probe
-  fails it, a probe row already seen counts as none, and a null row in a page or the probe is
-  `Malformed` (in A2's answer too, D380). `SignInPageText` answers every redirect of connectionData, a
-  sign-in redirect, a 203 and a 2xx typed `text/html` or whose first non-blank byte is `<`. A
-  same-origin redirect whose path, as .NET sends it, fails `InPlainForm` (`%2F`, `%5C`, `%2E`, `%25`) is
-  `Malformed` as one into another organization. `Detail` is null on every classified failure.
-  `Retry-After` dates and `X-RateLimit-Reset` are capped at a day too; a 5xx without words takes the
-  reason phrase before `ServerError`'s text.
-- Provider: public text constants `EmptyTokenText`, `TokenCharactersText`, `OtherProviderText`,
-  `NotAnOrganizationText`, `AnonymousText`, `NotThisServiceText`, `OtherOrganizationText`, and
-  `PullRequestPages` (3); `OtherProviderDetail` is GitHub's. D378's token refusal guards A1 to A5, as
-  GitHub's. A2 refuses another provider's or host's account, or a login outside the grammar, without a
-  request. `Covers` also checks the account key's provider and host.
+- `AzureDevOpsUrls` (internal): `Recognise` (also with an `out` user), `OrganizationOf`, `WebUrlOf`,
+  `ApiPath`, `NamesOf` and `IsName` (project and name neither empty, `.`, `..` nor holding
+  `/` or `\`: A2 drops such rows and refuses such a `ListProject`, A3 to A5 refuse them unsent, A4's
+  fork source of such names is no head). An http(s) URL's host and port are .NET's, as `Select` reads
+  them (an empty user or port, leading zeros, `127.1`), so a URL is recognised exactly where `Select`
+  binds it (V11 and SSH aside); its path is read by hand, the organization as written (V16), `_git`
+  and `DefaultCollection` without case, `_full`/`_optimized` only before a name; SSH takes port 22
+  alone. `OrganizationOf` cuts at `?` or `#`, refuses a `\`, ignores a user with a password, and takes
+  `<label>.visualstudio.com` on https:443 alone.
+- `AzureDevOpsClient` (internal) returns `AzureDevOpsReply<T>` (`MoreExist`);
+  `GetPagesAsync<T>(token, url, type, idOf, maxPages, ct)` takes at most `PageSize` rows of a page
+  (also when a server ignores `$top`), a failing probe fails it, a probe row already seen counts
+  as none, a null row is `Malformed` (in A2 too, D380). `SignInPageText` answers every connectionData
+  redirect, a sign-in redirect, a 203 and an HTML 2xx; a same-origin redirect whose path fails
+  `InPlainForm` is `Malformed` as one into another organization. `Detail` is null on every classified
+  failure; `RetryAt` lies between now and a day ahead. A 401 or 203 over 10 MB stays the core's
+  `Malformed` (design 5's order of stops).
+- Provider: public text constants for its own refusals, `PullRequestPages` (3); D378's refusal guards A1
+  to A5. A2 refuses a foreign account or a login outside the grammar unsent. A row's `remoteUrl` and
+  `webUrl` reach the record only when `Recognise` reads each as that repository, `remoteUrl` without a
+  user or with the organization, `webUrl` without one; else A2 drops the row and A3 is `Malformed`.
+  `Covers` also checks the account key's provider and host.
 - For WP-S: construct with `HostingOptions`' handler; `ForgetKept` is internal. For WP-A: `TokenPage`
   throws `ArgumentException` where `OrganizationOf` gives null. For WP-LF: the ASSUMED answers are in
   the provider tests' comment; no fake fix was needed and no file outside 6.1's list changed.

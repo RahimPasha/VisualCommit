@@ -290,6 +290,63 @@ public sealed class AzureDevOpsProviderTests
     }
 
     [Fact]
+    public async Task A2_and_A3_take_a_rows_addresses_only_when_they_name_that_repository_with_no_other_user()
+    {
+        const string Token = "azdo_FAKE-fake-org-1";
+        const string Web = "https://dev.azure.com/fake-org/proj/_git/repo";
+        var account = new HostingAccount(new AccountKey(HostingProvider.AzureDevOps, "dev.azure.com", "fake-org"), "fake-org", 0, null, null, true, "7b0a1111-0000-4a00-8000-000000000001");
+        var repository = new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", "fake-org/proj", "repo");
+        var refused = new (string RemoteUrl, string WebUrl)[]
+        {
+            // An e-mail as the user, another host with an e-mail in the path, the request's token echoed in the name.
+            ("https://ada%40example.com@dev.azure.com/fake-org/proj/_git/repo", Web),
+            ("https://fake-org@other.example/x.git", "https://other.example/ada@example.com"),
+            ($"https://fake-org@dev.azure.com/fake-org/proj/_git/repo-{Token}", Web),
+
+            // Another repository, project or organization; a user on the web address; a password.
+            ("https://fake-org@dev.azure.com/fake-org/proj/_git/other", Web),
+            ("https://fake-org@dev.azure.com/fake-org/other/_git/repo", Web),
+            ("https://other-org@dev.azure.com/other-org/proj/_git/repo", Web),
+            ("https://fake-org@dev.azure.com/fake-org/proj/_git/repo", "https://ada@dev.azure.com/fake-org/proj/_git/repo"),
+            ("https://fake-org@dev.azure.com/fake-org/proj/_git/repo", "https://dev.azure.com/fake-org/proj/_git/repo-other"),
+            ("https://fake-org:x@dev.azure.com/fake-org/proj/_git/repo", Web),
+            ("https://x-access-token@dev.azure.com/fake-org/proj/_git/repo", Web),
+            ("ssh://fake-org@ssh.dev.azure.com/v3/fake-org/proj/repo", Web),
+        };
+        var kept = new (string RemoteUrl, string WebUrl)[]
+        {
+            ("https://fake-org@dev.azure.com/fake-org/proj/_git/repo", Web),
+            ("https://FAKE-ORG@dev.azure.com/Fake-Org/proj/_git/repo", "https://dev.azure.com/fake-org/proj/_git/repo/"),
+            ("https://dev.azure.com/fake-org/proj/_git/repo", "https://fake-org.visualstudio.com/DefaultCollection/proj/_git/repo"),
+        };
+        foreach (var (remoteUrl, webUrl, keep) in refused.Select(row => (row.RemoteUrl, row.WebUrl, false)).Concat(kept.Select(row => (row.RemoteUrl, row.WebUrl, true))))
+        {
+            var row = $$"""{"id":"r1","name":"repo","project":{"name":"proj"},"remoteUrl":"{{remoteUrl}}","webUrl":"{{webUrl}}"}""";
+            var recorder = new RecordingHttpHandler(request => Answer(HttpStatusCode.OK, request.RequestUri!.AbsolutePath.EndsWith("/_apis/git/repositories", StringComparison.Ordinal) ? $$"""{"count":1,"value":[{{row}}]}""" : row, "application/json"));
+            using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, new ListLog(), new ManualTimeProvider());
+
+            var list = (await provider.ListRepositoriesAsync(Token, account, Cancelled)).Value!.Repositories;
+            var read = await provider.ReadRepositoryAsync(Token, repository, Cancelled);
+
+            Assert.Equal(2, recorder.Sent.Count);
+            if (keep)
+            {
+                var info = Assert.Single(list);
+                Assert.Equal((repository, remoteUrl, webUrl), (info.Repository, info.CloneUrl.OriginalString, info.HtmlUrl.OriginalString));
+                Assert.Equal(info, read.Value);
+            }
+            else
+            {
+                Assert.True(list.Count == 0, remoteUrl + " " + webUrl);
+                Assert.Equal((HostingFailureKind.Malformed, HostingProvider.AzureDevOps), (read.Failure!.Kind, read.Failure.Provider));
+            }
+
+            Assert.DoesNotContain("example.com", string.Join(' ', list) + read.Value, StringComparison.Ordinal);
+            Assert.DoesNotContain(Token, string.Join(' ', list) + read.Value, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public async Task A2_and_A4_refuse_a_null_row_as_malformed_and_nothing_throws()
     {
         // System.Text.Json does not hold a list's elements to their annotations, so a null row parses.

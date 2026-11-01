@@ -90,8 +90,10 @@ internal sealed class AzureDevOpsClient : IDisposable
     /// The rows of a list from <paramref name="url"/> (6.3): pages of <c>$top=&lt;page size&gt;&amp;$skip=&lt;rows so far&gt;</c>
     /// until a short one, at most <paramref name="maxPages"/>; after that many full pages one
     /// <c>$top=1</c> request says whether more exist (<see cref="AzureDevOpsReply{T}.MoreExist"/>).
-    /// A row is kept once by <paramref name="idOf"/>, since a new one between pages shifts the next
-    /// page by one. A failing page fails the whole list.
+    /// A page's first <see cref="PageSize"/> rows are taken, whatever it holds, so the walk keeps at
+    /// most <paramref name="maxPages"/> × <see cref="PageSize"/> rows. A row is kept once by
+    /// <paramref name="idOf"/>, since a new one between pages shifts the next page by one. A failing
+    /// page fails the whole list.
     /// </summary>
     public async Task<AzureDevOpsReply<List<T>>> GetPagesAsync<T>(string token, Uri url, JsonTypeInfo<AzureDevOpsListJson<T>> type, Func<T, string> idOf, int maxPages, CancellationToken ct)
     {
@@ -117,7 +119,11 @@ internal sealed class AzureDevOpsClient : IDisposable
                 return Malformed(pageUrl, reply);
             }
 
-            foreach (var row in reply.Value.Value)
+            // At most a page's worth of rows is taken from each page, and the next page starts after
+            // them: a server that ignores $top (a page may hold up to 10 MB of rows) cannot carry
+            // the walk past maxPages × PageSize rows. A page of at least PageSize rows is full.
+            var taken = Math.Min(reply.Value.Value.Count, PageSize);
+            foreach (var row in reply.Value.Value.Take(taken))
             {
                 if (seen.Add(idOf(row)))
                 {
@@ -125,8 +131,8 @@ internal sealed class AzureDevOpsClient : IDisposable
                 }
             }
 
-            skip += reply.Value.Value.Count;
-            if (reply.Value.Value.Count < PageSize)
+            skip += taken;
+            if (taken < PageSize)
             {
                 return new AzureDevOpsReply<List<T>>(rows, null, reply.Status, false, reply.RequestId);
             }
@@ -343,7 +349,7 @@ internal sealed class AzureDevOpsClient : IDisposable
                 : string.Create(CultureInfo.InvariantCulture, $"HTTP {exchange.Status}");
         }
 
-        /// <summary>When a rate limit ends: now plus <c>Retry-After</c> (seconds or a date), else <c>X-RateLimit-Reset</c> (Unix seconds), else 60 s; a day ahead at most.</summary>
+        /// <summary>When a rate limit ends: now plus <c>Retry-After</c> (seconds or a date), else <c>X-RateLimit-Reset</c> (Unix seconds), else 60 s; not before now and a day ahead at most.</summary>
         private DateTimeOffset RetryAt(IReadOnlyDictionary<string, string> headers)
         {
             var now = clock.GetUtcNow();
@@ -368,8 +374,10 @@ internal sealed class AzureDevOpsClient : IDisposable
                 at = DateTimeOffset.FromUnixTimeSeconds(unix);
             }
 
+            // Between now and a day ahead: a date or a reset in the past (a server's clock behind,
+            // or a stale header) means "now", never a time the app would show as already gone.
             var retry = at ?? now + DefaultRetry;
-            return retry > now + LongestRetry ? now + LongestRetry : retry;
+            return retry < now ? now : retry > now + LongestRetry ? now + LongestRetry : retry;
         }
     }
 }
