@@ -123,9 +123,11 @@ Build:
   repository's pull requests, creating one; against its fake. Tests. Under way: the shared HTTP
   core (WP-H, section 5) merged at `3591dc4`, with wave 1's adversarial fixes (D380, D382), and
   WP-FA's fake at `e995fc4`; WP-AZ (section 6) is being built from `e995fc4`.
-- [ ] 8. GitLab's API: a token of either kind checked at sign-in (D345), the account's projects, a
-  project's merge requests, creating one; against its fake. Tests. Under way: on WP-H's core and
-  WP-FL's fake; WP-GL (section 7) is being built from `7780908`.
+- [x] 8. GitLab's API: a token of either kind checked at sign-in (D345), the account's projects, a
+  project's merge requests, creating one; against its fake. Tests. WP-GL (GitLab's client and
+  provider, section 7) merged at `e8a5abf`, with its reviews', hunts' and the lead's fixes; the
+  core's `MalformedAnswer` and `Failed` take the request's token since (section 7's As built).
+  (2026-11-01. Week: share not read.)
 - [ ] 9. The account's token on the app's git calls to the remotes it covers (D350): gitlab.com's,
   and Azure DevOps' signed-in organization's alone; the push guard and the prompt group for the new
   hosts, as the design decides. Tests. Under way: WP-C (`Select` with a coverage, the push guard
@@ -382,11 +384,13 @@ Notes). `b0151bb` fixed the two faults CI's run 41311809889 found, `08fa49b` the
 41321215497 met in a test of 7a's, and `ca52c5d` the half pixel its run 41328744135 met in phase 6's
 W3; CI's run 41332176199 on `ca52c5d` is green in all five jobs (CI section).
 
-Wave 2 (design 0.4) is being built beside it: WP-FL (the fake of GitLab, section 4) is merged at
-`7780908` and WP-FA (the fake of Azure DevOps, section 3) at `e995fc4`; WP-GL (`wip/p7b-gitlab`,
-section 7, in a worktree made from `7780908` under `D:/Projects/Personal/vc-wt/p7b-gitlab`) and
-WP-AZ (`wip/p7b-azure`, section 6, made from `e995fc4` under `D:/Projects/Personal/vc-wt/p7b-azure`)
-are being built. Each is built, reviewed and fixed in its worktree (the
+Wave 2 (design 0.4): WP-FL (the fake of GitLab, section 4) is merged at `7780908`, WP-FA (the fake
+of Azure DevOps, section 3) at `e995fc4` and WP-GL (GitLab's client, section 7) at `e8a5abf`; WP-AZ
+(`wip/p7b-azure`, section 6, in a worktree made from `e995fc4` under
+`D:/Projects/Personal/vc-wt/p7b-azure`) is in the lead's last round of fixes on its third hunt (Z1
+to Z4). At its merge the lead makes its calls of `MalformedAnswer` and `Failed` pass the request's
+token, as WP-GL's do (WP-GL's R1), has that verified, and checks WP-AZ for WP-GL's other rulings.
+Each is built, reviewed and fixed in its worktree (the
 clients also hunted adversarially) before the lead merges it with `--no-ff`, builds, runs its
 classes, removes the worktree and stops its fsmonitor daemon; the `wip/` branches are not pushed.
 No wave 2 section names a lagged list. CI is read after each push. At the last of the four merges
@@ -405,11 +409,14 @@ every commit.
   `review/` (`findings.md`, one file per finding in `f/`, `review-raw.json`) and `fix/` (the
   design split per section, the fixers' and checkers' reports). Nothing there is needed to build:
   the design and its decisions hold what the builders need. Wave 1's worktrees and `wip/` branches
-  were removed at its merges, and so were WP-FL's and WP-FA's at theirs. Wave 2's others exist from
+  were removed at its merges, and so were WP-FL's, WP-FA's and WP-GL's at theirs. Wave 2's others exist from
   2026-11-01 (Next step); a session that finds them after a break reads each branch's
   `git log <its base>..` (the base Next step names for it) before going on. Wave 1's adversarial findings and the lead's
   rulings on them lie in `D:/Projects/Personal/phase7b-work/verify/` (`findings-wave1.md`,
-  `rulings-wave1.md`); D379 to D382 hold what they settled.
+  `rulings-wave1.md`); D379 to D382 hold what they settled. Wave 2's hunters' harnesses lie there
+  too (`wp-gl-*`, `wp-az-*`, `wp-fa-correctness`); what they found and the lead's rulings on the
+  clients' third hunts are in sections 6's and 7's As built, which end with the lead's items for
+  the review before the gate (7a's GitHub gaps the same inputs show, and the core's).
 - **Wave 1's whole default run** (2026-11-01, 06:49 to 08:07, on `6586066` with `e14c3ab`'s docs,
   through `bash scripts/heavy-run.sh`, four projects at once): 6,862 tests, 6,858 passed, 4 skipped
   (the real keychains' three and `Off_Windows_…`), none failed, 1 h 16 min 56 s. MTP started
