@@ -597,6 +597,8 @@ internal abstract class HostingHttpProfile
     public virtual Uri? NextPage(HostingExchange exchange) => null;             // GitHub, GitLab: HostingLinks.Next
     public virtual string? RequestIdOf(IReadOnlyDictionary<string, string> headers) => null;
     public virtual IReadOnlyCollection<string> KeptHeaderNames => [];           // kept with an answer, served under a 304's own
+    public virtual string WarningOf(HostingExchange exchange, HostingFailure failure) => exchange.Status.ToString(CultureInfo.InvariantCulture);
+        // <status or kind> of the core's warning for a failure the profile gave (Classify, RefuseSuccess, RefuseRedirect)
 }
 internal sealed class HostingHttpClient(HostingHttpProfile profile, Func<HttpMessageHandler> createHandler, IAppLog log,
     TimeProvider clock, TimeSpan? timeout = null, long? keptBytes = null) : IDisposable
@@ -605,6 +607,7 @@ internal sealed class HostingHttpClient(HostingHttpProfile profile, Func<HttpMes
     public Task<HostingReply<List<T>>> GetPagesAsync<T>(string token, Uri first, JsonTypeInfo<List<T>> type, int maxPages, CancellationToken ct,
         Action<IReadOnlyDictionary<string, string>>? pageHeaders = null);
     public HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId);   // a success lacking what the app needs, with its warning
+    public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId);   // a client's own failure from a success, finished, warned by its kind
     public void ForgetKept();
 }
 internal static class HostingHttpTexts   // "Could not reach {name}.", "{name} did not answer within 30 seconds.", "{possessive} answer could not be read.", "{name} had a problem: HTTP {status}."
@@ -614,7 +617,11 @@ internal static class HostingLinks { public static Uri? Next(IReadOnlyDictionary
 
 GitHub's results equal 7a's `GitHubClient.NetworkText`, `TimeoutText` and `MalformedText`
 (`GitHubClient.cs:44-50`) and its 5xx text (`:453`). The core sets `Provider` on every failure, and
-`Url` and `RequestId` where the profile left them null, and screens e-mail addresses (D368). `GitHubClient` becomes GitHub's profile on the core with
+`Url` and `RequestId` where the profile left them null, and screens e-mail addresses (D368); a failure a
+client builds itself from a reply that succeeded goes through `Failed` to get the same. `RefuseRedirect`
+is asked of every redirect with a `Location`, one to another origin and a fourth one included, before
+7a's rule; the redirect's exchange has an empty `Body` and the request's `Url`, query kept (WP-H's
+as built, 5). `GitHubClient` becomes GitHub's profile on the core with
 `GitHubClientTests` unchanged (5). Azure DevOps' `{"count", "value"}` pages, by `$top` and `$skip`,
 are walked by its own client through `SendAsync`.
 
@@ -1607,34 +1614,35 @@ wave 1, whichever of WP-F, WP-H and WP-C is last (0.4). Done when the three clas
 `HostingProviders`; no token, header, body or query reaches a log; `AvatarCache.cs` is unchanged; CI's
 five jobs are green.
 
-**As built** (WP-H, `2ed2447`, `549ec8d`, `43bcb65`, 2026-11-01). Where it differs from 5.1 to 5.5 or
-settles what they left open:
-- `HostingHttpProfile` gains `virtual string WarningOf(HostingExchange, HostingFailure)`: the `<status
-  or kind>` of the warning for a failure the profile gave (`Classify`, `RefuseSuccess`,
-  `RefuseRedirect`), the status unless overridden; WP-AZ's "redirected outside the organization"
-  overrides it. `HostingLinks` is in `HostingHttpProfile.cs` and finds `Link` in any case.
+**As built** (WP-H, `2ed2447`, `549ec8d`, `43bcb65`, review fixes `4bb76fe`, 2026-11-01). Where it
+differs from 5.1 to 5.5 or settles what they left open:
+- Beyond 1.4, now written there: `HostingHttpProfile.WarningOf`, the `<status or kind>` of the
+  warning for a failure the profile gave, the status unless overridden (6.3's "redirected outside the
+  organization"); and `HostingHttpClient.Failed(method, url, failure, requestId)`, which gives a
+  failure a client builds from a reply that succeeded (6.4's anonymous connectionData) the provider,
+  the address without its query, the request id, D368's screen and a warning by its kind;
+  `MalformedAnswer` is one. A failure built without the core sets `Provider` itself (the default is
+  GitHub). `HostingLinks` is in `HostingHttpProfile.cs`.
 - An answer's order: the core's own stops (no answer, the time, a redirect, 10 MB), `RefuseSuccess`
   (2xx, 304), `SucceedsEmpty` (any status, so a 204 can be one), then the parse or `Classify`.
   `RefuseRedirect` is asked of every redirect with a `Location`, a fourth too, before 7a's rule; its
-  exchange's `Url` is the request's (query kept), its `Body` empty. One without `Location` is 7a's.
+  exchange's `Url` is the request's (query kept), its `Body` empty (1.4 says so now).
 - `SendAsync`'s `Next` is always null; only `GetPagesAsync` pages. `pageHeaders` sees each page that
-  gave a value, before the next is asked. A next page off the origin warns `Link to <origin>`.
-- E-mail screening replaces the whole run of non-blank characters around an `@` (`\S+@\S+`), quotes
-  and punctuation next to it included, in every failure's `Message` and `Detail`, the profile's and
-  `MalformedAnswer`'s too (`HostingHttpClient.ScreenEmail`). `Url` (the answering address without
-  its query) and `RequestId` are set only where null.
-- The core's statics are `public` on the internal class (`SameOrigin`, `OriginOf`, `IsRedirect`,
-  `Resolve`, `ReadBoundedAsync`, `WithoutQuery`, `ScreenEmail`, the constants); `Profile` and `Clock`
-  are properties. The 30 s run on real time, not on `clock` (7a's tests time out under a manual
-  clock); a profile reads its own clock for `RetryAt`. `HostingReply<T>` has `Succeeded`. Bodies go
-  as `application/json; charset=utf-8`; a type outside `Json` is "<type> is not one of
-  <possessive> shapes."
-- `GitHubClient` adds `internal MalformedAnswer`, which `GitHubProvider`'s unreadable answers use. A
-  list's `OAuthScopes` and `Sso` come from the observer when the reply is of a page it saw, else from
-  that answer's own headers: 7a's in every case.
-- `GitHubProvider`: `public const string OtherProviderDetail = "other-provider:"` and `internal static
-  RefusalOf(detail)`; the token refusal guards every method, as 7a's `Refusal` does.
-- No file outside 5.1's list; `AvatarCache.cs` unchanged; nothing under `Http/` names a provider.
+  gave a value, before the next is asked.
+- The screen replaces the whole non-blank run around an `@` (`\S+@\S+`, `ScreenEmail`) in every
+  failure the core finishes. A branch name with an `@` goes too, GitHub's words included ("… already
+  exists for <e-mail>"; `Refusal` still holds), so 5.2's "changes no GitHub text" holds only for
+  branches without one, and the App's D316 fallback shows `<e-mail>` there: the lead decides whether
+  to put it to the owner.
+- Statics are `public` on the internal class; `Profile` and `Clock` are properties. The 30 s run on
+  real time, not `clock`; a profile reads its own clock for `RetryAt`. `HostingReply<T>.Succeeded`.
+  Bodies go as `application/json; charset=utf-8`.
+- `GitHubClient` adds `internal MalformedAnswer`. A list's `OAuthScopes` and `Sso` are the
+  observer's when the reply is of a page it saw, else that answer's own: 7a's in every case.
+- `GitHubProvider`: `public const OtherProviderDetail = "other-provider:"`, `internal static
+  RefusalOf(detail)`; the token refusal guards every method.
+- Outside section 5, only 1.4 and 6.3's lines above (the review's finding). `AvatarCache.cs`
+  unchanged; nothing under `Http/` names a provider.
 
 ## 6. WP-AZ: Azure DevOps' client and provider
 
@@ -1702,7 +1710,7 @@ The profile: `TokenOrigin` `WebBase`; `Authorize` `Basic` of UTF-8 `":" + token`
 `SucceedsEmpty` or kept headers (no `ETag`, r5 7, MEASURED); `Json` `AzureDevOpsJsonContext`.
 `RefuseRedirect`: on A1's connectionData every redirect is `BadCredentials` (D360). Elsewhere,
 `BadCredentials` for a `Location` whose path is `/_signin` or whose host ends `.vssps.visualstudio.com`,
-and `Malformed` (warning `redirected outside the organization`) for a same-origin `Location` whose first
+and `Malformed`, with `WarningOf` giving `redirected outside the organization`, for a same-origin `Location` whose first
 path segment differs, without case, from the request's. None is followed. `RefuseSuccess`: `BadCredentials` for a 203, or a 2xx whose
 `Content-Type` is `text/html` or body starts `<` (g1 G0.1). `Classify` by status and `typeKey`, never
 the English (ruling 20; r5 1.4, g1 G2):

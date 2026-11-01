@@ -131,8 +131,8 @@ internal sealed partial class HostingHttpClient : IDisposable
         Failed(method, url, new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), requestId);
 
     /// <summary>
-    /// A failure the profile's client built itself from a reply that succeeded (Azure DevOps'
-    /// anonymous connectionData, say), finished as the core finishes its own: the profile's
+    /// A failure the profile's client built itself from a reply that succeeded (an answer that
+    /// names an anonymous user, say), finished as the core finishes its own: the profile's
     /// provider; the address without its query and <paramref name="requestId"/> where
     /// <paramref name="failure"/> left them null; each e-mail-shaped run of its message and detail
     /// as <see cref="ScreenedEmail"/> (D368); and one warning that names its kind.
