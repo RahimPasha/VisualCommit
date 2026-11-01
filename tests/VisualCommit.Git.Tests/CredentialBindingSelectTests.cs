@@ -255,20 +255,23 @@ public class CredentialBindingSelectTests
     }
 
     [Theory]
-    [InlineData("https://alice@gitlab.com/g/p.git", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p" })]
+    [InlineData("https://alice@gitlab.com/g/p.git", "https://gitlab.com/g/p", new string[0])]
     [InlineData("https://alice@gitlab.com/g/%70.git", "https://gitlab.com/g/p.git", new string[0])]
-    [InlineData("https://bob@gitlab.com/g/p", "https://gitlab.com/g/p/", new[] { "https://gitlab.com/g/p.git" })]
+    [InlineData("https://bob@gitlab.com/g/p", "https://gitlab.com/g/p/", new string[0])]
     [InlineData("https://alice@gitlab.com/g/x/../p.git", "https://gitlab.com/g/p", new string[0])]
     [InlineData("https://evil.example\\@gitlab.com/g/p.git", "https://gitlab.com/g/p", new string[0])]
     [InlineData("https://alice@gitlab.com/g/p.git?x=1", "https://gitlab.com/g/p", new string[0])]
     [InlineData("https://alice@gitlab.com/h/p.git", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p", "https://gitlab.com/g/p.git" })]
     [InlineData("https://bob@gitlab.com/john.doe/p.git", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p", "https://gitlab.com/g/p.git" })]
     [InlineData("https://bob@gitlab.com/g/p", "https://gitlab.com/g/pq", new[] { "https://gitlab.com/g/pq", "https://gitlab.com/g/pq.git" })]
-    [InlineData("https://bob@gitlab.com/g/p/sub", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p.git" })]
+    [InlineData("https://bob@gitlab.com/g/p/sub", "https://gitlab.com/g/p", new string[0])]
     [InlineData("https://bob@github.com/g/p.git", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p", "https://gitlab.com/g/p.git" })]
-    [InlineData("http://bob@gitlab.com/g/p.git", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p", "https://gitlab.com/g/p.git" })]
+    [InlineData("http://bob@gitlab.com/g/p.git", "https://gitlab.com/g/p", new string[0])]
     public void On_GitLab_another_users_url_drops_in_gits_credential_view_or_leaves_the_host_unbound(string other, string url, string[] bound)
     {
+        // D379 changed four rows: alice@…/g/p.git and bob@…/g/p now drop their project's every
+        // spelling (R3), bob@…/g/p/sub the twin under its project too, and http://bob@ counts as on
+        // gitlab.com (R2), which 301s it into https://.
         // Either order of the remotes gives the same bindings: the other users are read first.
         Assert.Equal(bound, CredentialBinding.Select([Fetch("other", other), Fetch("origin", url)], GitLab).Select(binding => binding.Url));
         Assert.Equal(bound, CredentialBinding.Select([Fetch("origin", url), Fetch("other", other)], GitLab).Select(binding => binding.Url));
@@ -306,7 +309,6 @@ public class CredentialBindingSelectTests
     [InlineData("https://otherorg@dev.azure.com")]
     [InlineData("https://evil@dev.azure.com/my_org/p/_git/r")]
     [InlineData("https://evil@dev.azure.com/myorg/p/_git/./r")]
-    [InlineData("https://evil.example\\@dev.azure.com/myorg/p/_git/r")]
     public void On_Azure_DevOps_another_users_url_out_of_the_form_leaves_the_host_unbound(string other)
     {
         var coverage = AzureDevOpsCoverageVectors.Coverage;
@@ -390,9 +392,8 @@ public class CredentialBindingSelectTests
         Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("dot", $"https://{user}dev.azure.com./myorg/p/_git/r")], azure));
         Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("dot", $"https://{user}dev.azure.com./myorg/p/_git/./r")], azure));
         Assert.Empty(CredentialBinding.Select([Fetch("vs", "https://myorg.visualstudio.com/p/_git/r"), Fetch("dot", $"https://{user}myorg.visualstudio.com./p/_git/r")], azure));
-        Assert.Equal(
-            ["https://gitlab.com/g/p.git"],
-            CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p"), Fetch("dot", $"https://{gitLabUser}gitlab.com./g/p")], GitLab).Select(binding => binding.Url));
+        // Since D379 (R3) on GitLab it drops its project's every spelling, the twin included.
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p"), Fetch("dot", $"https://{gitLabUser}gitlab.com./g/p")], GitLab));
         Assert.Empty(CredentialBinding.Select([Fetch("dot", $"https://{user}dev.azure.com./myorg/p/_git/r")], azure));
         Assert.Empty(CredentialBinding.Select([Fetch("dot", $"https://{gitLabUser}gitlab.com./g/p")], GitLab));
 
@@ -438,6 +439,161 @@ public class CredentialBindingSelectTests
         Assert.Equal(
             [new CredentialBinding("http://127.0.0.1:2/Fernhill-Labs/Mobile%20App/_git/mobile-app", coverage.Account) { SharedOriginOwner = "Fernhill-Labs" }],
             bindings);
+    }
+
+    private const string V1 = "https://dev.azure.com/myorg/p/_git/r";
+    private const string VisualStudio = "https://myorg.visualstudio.com/p/_git/r";
+
+    /// <summary>
+    /// D379 (R1): http and https URLs that .NET cannot read, wave 1's percent-encoded hosts among them,
+    /// which git's credential code and curl decode into a covered host (<see cref="CoverageGitMatchTests"/>
+    /// shows the key match), and one that names no covered host at all. V26's spelling was in
+    /// <see cref="On_Azure_DevOps_another_users_url_out_of_the_form_leaves_the_host_unbound"/>, which
+    /// kept <c>myorg.visualstudio.com</c> bound beside it; since D379 no covered host stays bound.
+    /// </summary>
+    public static TheoryData<string> UnreadableHttpUrls => new()
+    {
+        "https://evil.example\\@dev.azure.com/myorg/p/_git/r",
+        "https://%64ev.azure.com/myorg/p/_git/r/..%5C..%5C..%5C..%5Cotherorg/p/_git/r",
+        "https://%64%65%76.azure.com/myorg/p/_git/r/%C0%AE%C0%AE/%C0%AE%C0%AE/%C0%AE%C0%AE/%C0%AE%C0%AE/otherorg/p/_git/r",
+        "https://dev.azure%2Ecom/myorg/p/_git/r/..%5C..%5C..%5C..%5Cotherorg/p/_git/r",
+        "https://myorg%2Evisualstudio.com/p/_git/r/..%5Cq",
+        "https://evil@%64ev.azure.com/myorg/p/_git/r",
+        "https://evil@dev%2Eazure.com/myorg/p/_git/r",
+        "https://evil@myorg.visualstudio%2Ecom/p/_git/r",
+        "https://myorg@%64ev.azure.com/myorg/p/_git/r",
+        "https://evil@%67itlab.com/g/p.git",
+        "https://%67itlab.com/g/p.git",
+        "HTTPS://%64ev.azure.com/myorg/p/_git/r",
+        "http://%64ev.azure.com/myorg/p/_git/r",
+        "Http://%31%32%37.0.0.1:2/Fernhill-Labs/p/_git/r",
+        "https://%65vil.example/x",
+    };
+
+    [Theory]
+    [MemberData(nameof(UnreadableHttpUrls))]
+    public void An_http_or_https_url_that_cannot_be_read_leaves_every_covered_host_unbound_whatever_its_text(string url)
+    {
+        Assert.False(Uri.TryCreate(url, UriKind.Absolute, out _), $"{url} is readable.");
+        var azure = AzureDevOpsCoverageVectors.Coverage;
+
+        Assert.Equal([V1, VisualStudio], CredentialBinding.Select([Fetch("origin", V1), Fetch("vs", VisualStudio)], azure).Select(binding => binding.Url));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", V1), Fetch("vs", VisualStudio), Fetch("other", url)], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", url), Fetch("vs", VisualStudio)], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p.git"), Fetch("other", url)], GitLab));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", "http://127.0.0.1:2/Fernhill-Labs/p/_git/r"), Fetch("other", url)], FakeAzureCoverage()));
+    }
+
+    [Theory]
+    [InlineData("git@ssh.dev.azure.com:v3/myorg/p/r")]
+    [InlineData("dev.azure.com:myorg/p/_git/r")]
+    [InlineData("/local/%64ev.azure.com/r")]
+    public void A_url_of_no_http_scheme_that_cannot_be_read_fails_nothing(string url)
+    {
+        Assert.Equal([V1], CredentialBinding.Select([Fetch("origin", V1), Fetch("other", url)], AzureDevOpsCoverageVectors.Coverage).Select(binding => binding.Url));
+    }
+
+    /// <summary>
+    /// D379 (R2): beside a bound URL, a URL that a measured redirect leads into the covered origin
+    /// (http:// and www. on gitlab.com, r6 6.1; http:// on dev.azure.com, r5), and lookalikes that
+    /// none leads there. Another user's drops by path or fails the host; no user or the account's
+    /// fails it only out of the form on an origin with an organization.
+    /// </summary>
+    public static TheoryData<string, string, string, string[]> RedirectedUrls => new()
+    {
+        { "GitLab", "http://bob@gitlab.com/g/p.git", "https://gitlab.com/g/p.git", [] },
+        { "GitLab", "https://bob@www.gitlab.com/g/p.git", "https://gitlab.com/g/p.git", [] },
+        { "GitLab", "http://bob@www.gitlab.com/g/p", "https://gitlab.com/g/p.git", [] },
+        { "GitLab", "https://bob@WWW.GitLab.COM./g/p.git", "https://gitlab.com/g/p.git", [] },
+        { "GitLab", "https://bob@gitlab.com:8443/g/p.git", "https://gitlab.com/g/p.git", [] },
+        { "GitLab", "https://Ada:secret@www.gitlab.com/g/p.git?x=1", "https://gitlab.com/g/p.git", ["https://gitlab.com/g/p.git"] },
+        { "GitLab", "https://bob@www.gitlab.com/g/p.git?x=1", "https://gitlab.com/h/q.git", [] },
+        { "GitLab", "http://bob@gitlab.com/h/p.git", "https://gitlab.com/g/p.git", ["https://gitlab.com/g/p.git"] },
+        { "GitLab", "http://gitlab.com/g/p.git", "https://gitlab.com/g/p.git", ["https://gitlab.com/g/p.git"] },
+        { "GitLab", "https://Ada@www.gitlab.com/g/p.git", "https://gitlab.com/g/p.git", ["https://gitlab.com/g/p.git"] },
+        { "GitLab", "http://x-access-token@gitlab.com/g/p", "https://gitlab.com/g/p", ["https://gitlab.com/g/p", "https://gitlab.com/g/p.git"] },
+        { "GitLab", "https://www.gitlab.com/g/p/..%5C..%5Cq", "https://gitlab.com/g/p", ["https://gitlab.com/g/p", "https://gitlab.com/g/p.git"] },
+        { "GitLab", "https://bob@wwwgitlab.com/g/p.git", "https://gitlab.com/g/p.git", ["https://gitlab.com/g/p.git"] },
+        { "GitLab", "https://bob@www.www.gitlab.com/g/p.git", "https://gitlab.com/g/p.git", ["https://gitlab.com/g/p.git"] },
+        { "GitLab", "https://bob@gitlab.com.evil.example/g/p.git", "https://gitlab.com/g/p.git", ["https://gitlab.com/g/p.git"] },
+        { "GitLab", "ftp://bob@gitlab.com/g/p.git", "https://gitlab.com/g/p.git", ["https://gitlab.com/g/p.git"] },
+        { "AzureDevOps", "http://evil@dev.azure.com/myorg/p/_git/r", V1, [] },
+        { "AzureDevOps", "https://evil@www.dev.azure.com/myorg/p/_git/r", V1, [] },
+        { "AzureDevOps", "https://evil@dev.azure.com:8443/myorg/p/_git/r", V1, [] },
+        { "AzureDevOps", "http://evil@dev.azure.com/my_org/p/_git/r", V1, [] },
+        { "AzureDevOps", "http://dev.azure.com/myorg/p/_git/r/..%5C..%5C..%5C..%5Cotherorg/p/_git/r", V1, [] },
+        { "AzureDevOps", "http://myorg@www.dev.azure.com/myorg/p/_git/r/%C0%AE%C0%AE/otherorg/p/_git/r", V1, [] },
+        { "AzureDevOps", "http://dev.azure.com/myorg/p/_git/r", V1, [V1] },
+        { "AzureDevOps", "http://myorg@dev.azure.com/myorg/p/_git/r", V1, [V1] },
+        { "AzureDevOps", "http://evil@dev.azure.com/otherorg/p/_git/r", V1, [V1] },
+        { "AzureDevOps", "http://evil@myorg.visualstudio.com/p/_git/r", VisualStudio, [] },
+        { "AzureDevOps", "https://evil@www.myorg.visualstudio.com.:444/p/_git/r", VisualStudio, [] },
+        { "AzureDevOps", "http://myorg.visualstudio.com/p/_git/r/..%5Cq", VisualStudio, [VisualStudio] },
+    };
+
+    [Theory]
+    [MemberData(nameof(RedirectedUrls))]
+    public void A_url_a_redirect_leads_into_a_covered_origin_counts_as_on_it_and_is_never_bound(string provider, string other, string url, string[] bound)
+    {
+        var coverage = CoverageOf(provider);
+
+        Assert.Equal(bound, CredentialBinding.Select([Fetch("other", other), Fetch("origin", url)], coverage).Select(binding => binding.Url));
+        Assert.Equal(bound, CredentialBinding.Select([Fetch("origin", url), Fetch("other", other)], coverage).Select(binding => binding.Url));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", other)], coverage));
+    }
+
+    [Fact]
+    public void On_the_fakes_origin_another_users_url_on_another_port_drops_what_lies_over_it()
+    {
+        const string Bound = "http://127.0.0.1:2/Fernhill-Labs/Mobile%20App/_git/mobile-app";
+
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", Bound), Fetch("evil", "http://evil@127.0.0.1:3/Fernhill-Labs/Mobile%20App/_git/mobile-app")], FakeAzureCoverage()));
+        Assert.Equal([Bound], CredentialBinding.Select([Fetch("origin", Bound), Fetch("evil", "http://evil@127.0.0.1:3/Fernhill-Labs/p/_git/r")], FakeAzureCoverage()).Select(binding => binding.Url));
+    }
+
+    /// <summary>D379 (R3): GitLab's four spellings of one project, <c>…/g/p</c>, <c>…/g/p/</c>, <c>…/g/p.git</c> and <c>…/g/p.git/</c>, each as another user's beside each bound.</summary>
+    public static TheoryData<string, string> GitLabProjectSpellings
+    {
+        get
+        {
+            string[] paths = ["/g/p", "/g/p/", "/g/p.git", "/g/p.git/"];
+            var rows = new TheoryData<string, string>();
+            foreach (var other in paths)
+            {
+                foreach (var bound in paths)
+                {
+                    rows.Add("https://bob@gitlab.com" + other, GitLabWeb + bound);
+                }
+            }
+
+            return rows;
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(GitLabProjectSpellings))]
+    public void On_GitLab_another_users_url_drops_every_spelling_of_its_project(string other, string url)
+    {
+        // gitlab.com answers …/p with 301 and …/p.git/ with 308 into …/p.git/info/refs (r6 6.1), so
+        // each spelling's key answers the others' requests once git has followed the redirect.
+        Assert.NotEmpty(CredentialBinding.Select([Fetch("origin", url)], GitLab));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", other), Fetch("origin", url)], GitLab));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", url), Fetch("other", other)], GitLab));
+    }
+
+    [Theory]
+    [InlineData("GitLab", "https://bob@gitlab.com/g/pq.git", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p", "https://gitlab.com/g/p.git" })]
+    [InlineData("GitLab", "https://bob@gitlab.com/g/p.gitx", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p", "https://gitlab.com/g/p.git" })]
+    [InlineData("GitLab", "https://bob@gitlab.com/g/p.git.git", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p", "https://gitlab.com/g/p.git" })]
+    [InlineData("GitLab", "https://bob@gitlab.com/g/.git", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p", "https://gitlab.com/g/p.git" })]
+    [InlineData("GitLab", "https://bob@gitlab.com/g/p.git/x", "https://gitlab.com/g/p", new[] { "https://gitlab.com/g/p" })]
+    [InlineData("AzureDevOps", "https://evil@dev.azure.com/myorg/p/_git/r.git", V1, new[] { V1 })]
+    [InlineData("AzureDevOps", "https://evil@dev.azure.com/myorg/p/_git/r", V1 + ".git", new[] { V1 + ".git" })]
+    public void Another_users_url_of_another_project_and_Azure_DevOps_git_suffix_drop_by_path_alone(string provider, string other, string url, string[] bound)
+    {
+        var coverage = CoverageOf(provider);
+
+        Assert.Equal(bound, CredentialBinding.Select([Fetch("origin", url), Fetch("other", other)], coverage).Select(binding => binding.Url));
     }
 
     private static GitCoverage FakeAzureCoverage() =>

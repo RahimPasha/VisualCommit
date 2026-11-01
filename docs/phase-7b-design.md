@@ -2038,13 +2038,26 @@ is that. With any other member set:
    2.31.1, 2.43.0 and 2.56 by the design review: raw only, APP 0 and the user's helper answers; with
    the twin, APP 1). A raw `"`, `<`, `>`, `^`, `` ` ``, `{`, `|` or `}` needs no twin: `url_normalize`
    escapes it on both sides.
-5. **Drop.** Other users' URLs: fetch and push URLs on a covered host with a user outside 3's set, and
-   URLs with the covered scheme whose text names a covered host without case but that `UrlParts.Of` cannot
-   read (V26: .NET refuses it, git reads user `evil.example\`). If one cannot be read or is not in 2's
+5. **Drop.** (D379) An `http` or `https` URL (the scheme in any case) that `UrlParts.Of` cannot read
+   leaves no URL on any covered host bound, whatever its text, and is never bound: .NET refuses a
+   percent-encoded host (`%64ev.azure.com`, `dev%2Eazure.com`), which git's credential code and curl
+   decode, so the app cannot know which host and path git uses (V26: git reads user `evil.example\`).
+   (D379) For this step a URL also counts as on a covered host when a measured redirect may lead it
+   into the covered origin: scheme `http` or `https`, any port, a host that, without case and with one
+   trailing `.` removed, is the covered host or `www.` followed by it (gitlab.com answers `http://`
+   with 301 and `www.` with 308, r6 6.1; dev.azure.com `http://` with 302, r5; git follows and builds
+   the credential again from the target, without the URL's user). Such a variant is never bound; with
+   no user or the account's it fails the host closed when out of the form on an origin with
+   `Organization` (the review's amendment, As built), else it drops nothing. Other users' URLs: fetch
+   and push URLs on a covered host with a user outside 3's set. If one is not in 2's
    form (on `Origin` with `Organization` a first segment is still required, so an empty path fails, but
    it needs only the grammar, not equality; elsewhere 2's form alone), no URL on that host is bound
    (fail closed, ruling 10). Else a binding, twins of both kinds included, is dropped when another
-   user's path equals its path or lies under it at a `/` (ordinal, case kept), both put in git's
+   user's path equals its path or lies under it at a `/` (ordinal, case kept), and with `GitTwin` also
+   when their projects do, each view without one final `.git` (D379: gitlab.com answers `…/p` with 301
+   and `…/p.git/` with 308 into `…/p.git/info/refs`, r6 6.1, so another user's `…/g/p`, `…/g/p/`,
+   `…/g/p.git` and `…/g/p.git/` each drop all four; Azure DevOps serves `…/r/` itself and keeps `.git`,
+   r5, so its path rule stays), both put in git's
    credential view: every `%XX` decoded (2's form leaves none that forms `/`, a dot segment, `%`, `\`
    or a control character), the trailing `/` removed (the form allows one), then every byte outside
    `A-Z a-z 0-9 - . _ ~ /` written `%XX` in upper-case hex. git matches a `credential.<url>` key against
@@ -2154,8 +2167,8 @@ Y2, U3 (13); 35 not. Account `(AzureDevOps, dev.azure.com, myorg)`, `Origin` `ht
 | Class (project) | Proves |
 |---|---|
 | `AzureDevOpsCoverageVectorsTests` (Git) | each row's answer, `Url` and twin, `SharedOriginOwner` (`myorg`; null on V15, V16, P5), and `InPlainForm` per row by 8.2 step 2's rule alone, which has no user, host or organization clause (the first-segment clause on `Origin` with `Organization` is `Select`'s): true, though unbound, on P1 to P4, on V6, X9 and X10, which only the organization's grammar refuses (6.2), and on V11, V17 and V23, refused for their user or host; an organization outside the grammar binds nothing; the two `ArgumentException`s |
-| `CoverageGitMatchTests` (Git; offline `git credential fill` in the broker's scope) | per row: the per-URL key in the three pairs reaches the helper as APP says (the broker's Debug line), Y1's and Y2's only with the twin; P1 to P4's key reaches it for `…/otherorg/p/_git/r` without a user (why `Select` refuses them), P5's not for otherorg.visualstudio.com; for each credential-view case of `CredentialBindingSelectTests`, dropped or not, the binding's pairs ask the helper with the other user exactly where `Select` drops; prefix keys for `myorg`, `otherorg`, `MyOrg`, `myorg.visualstudio.com` give G3.2's two views (`fatal` too); a bound row returns the token; G0.5's three spellings reach the helper beside `…/myorg/P/_git/R` and `Select` binds nothing on the host; GitLab: `…/g/p` alone misses `…/g/p.git/info/refs`, with its twin both reach it; `…/otherorg/p/_git/r` gives `Username for 'https://dev.azure.com': ` without an account, the path form with `-c credential.https://dev.azure.com.useHttpPath=true`; `…/myorg/…` without a token carries the account only with it on. CI's 2.43 too |
-| `CredentialBindingSelectTests` (Git) | 7a's cases through both overloads; GitLab (`Ada`): `.git` one binding, `…/p` and `…/p/` two, `…/g/p.git/` one and no twin, `Ada@` and `x-access-token@` bound, `oauth2@`, lookalikes, `http`, ssh, `/../`, `//`, `?`, `%2E%2E` not; `alice@…/g/p.git` drops the twin alone, `alice@…/g/%70.git` drops `…/g/p.git`, `bob@…/g/p` drops `…/g/p/` and keeps its twin `…/g/p.git`, `alice@…/g/x/../p.git` or V26's form leaves the host unbound, `alice@…/h/p.git` and `bob@…/john.doe/p.git` (in the form) drop nothing; Azure DevOps (`myorg`), dropped in the credential view: `…/r%28x%29` beside `evil@…/r(x)`, `…/r(x)` with its twin beside `evil@…/r%28x%29` and `evil@…/r(x%29`, `…/r^x` beside `evil@…/r%5Ex` and `…/r%5Ex` beside `evil@…/r^x`, `…/r%5ex` beside `evil@…/r%5Ex`, `…/r{x}` beside `evil@…/r%7Bx%7D`, `…/r/` beside `evil@…/r`; not dropped: `…/r(x)` beside `evil@…/R(x)`, `otherorg@…/otherorg/My%20Project/_git/r` and `evil@…/myorg/p/_git/R` beside `…/r`; an `otherorg@` `https://dev.azure.com/` beside `…/myorg/p/_git/r` leaves the host unbound; the fake's `http://127.0.0.1:<port>/` is not bound |
+| `CoverageGitMatchTests` (Git; offline `git credential fill` in the broker's scope) | per row: the per-URL key in the three pairs reaches the helper as APP says (the broker's Debug line), Y1's and Y2's only with the twin; P1 to P4's key reaches it for `…/otherorg/p/_git/r` without a user (why `Select` refuses them), P5's not for otherorg.visualstudio.com; for each credential-view case of `CredentialBindingSelectTests`, dropped or not, the binding's pairs ask the helper with the other user exactly where `Select` drops; prefix keys for `myorg`, `otherorg`, `MyOrg`, `myorg.visualstudio.com` give G3.2's two views (`fatal` too); a bound row returns the token; G0.5's three spellings reach the helper beside `…/myorg/P/_git/R` and `Select` binds nothing on the host; GitLab: `…/g/p` alone misses `…/g/p.git/info/refs`, with its twin both reach it; `…/otherorg/p/_git/r` gives `Username for 'https://dev.azure.com': ` without an account, the path form with `-c credential.https://dev.azure.com.useHttpPath=true`; `…/myorg/…` without a token carries the account only with it on; wave 1's percent-encoded hosts reach the app's helper through the host's key, the user's helper unasked, and `Select` binds nothing beside them (D379); not offline, against two local host servers: another user's URL that a 301 (`…/g/p` to `…/g/p.git`) or another port's 308 leads into a binding takes the token through its key in `ls-remote`, and `Select` drops it (D379). CI's 2.43 too |
+| `CredentialBindingSelectTests` (Git) | 7a's cases through both overloads; GitLab (`Ada`): `.git` one binding, `…/p` and `…/p/` two, `…/g/p.git/` one and no twin, `Ada@` and `x-access-token@` bound, `oauth2@`, lookalikes, `http`, ssh, `/../`, `//`, `?`, `%2E%2E` not; `alice@…/g/p.git` drops `…/g/p` and its twin (D379), `alice@…/g/%70.git` drops `…/g/p.git`, `bob@…/g/p` drops `…/g/p/` and its twin `…/g/p.git` (D379: each of `…/g/p`, `…/g/p/`, `…/g/p.git`, `…/g/p.git/` as another user's drops each of them bound; `…/g/pq.git`, `…/g/p.gitx`, `…/g/p.git.git` drop by path alone), `alice@…/g/x/../p.git` leaves the host unbound, an `http` or `https` URL .NET cannot read (V26's form, wave 1's percent-encoded hosts, one naming no covered host) leaves every covered host unbound and another scheme's fails nothing (D379), `alice@…/h/p.git` and `bob@…/john.doe/p.git` (in the form) drop nothing; another user's `http://`, `www.`, other-port or `www.…com.` URL drops or fails as on the covered host, one with no user drops nothing, none is bound, `wwwgitlab.com`, `www.www.` and `ftp://` count as other hosts (D379); Azure DevOps (`myorg`), dropped in the credential view: `…/r%28x%29` beside `evil@…/r(x)`, `…/r(x)` with its twin beside `evil@…/r%28x%29` and `evil@…/r(x%29`, `…/r^x` beside `evil@…/r%5Ex` and `…/r%5Ex` beside `evil@…/r^x`, `…/r%5ex` beside `evil@…/r%5Ex`, `…/r{x}` beside `evil@…/r%7Bx%7D`, `…/r/` beside `evil@…/r`; not dropped: `…/r(x)` beside `evil@…/R(x)`, `otherorg@…/otherorg/My%20Project/_git/r` and `evil@…/myorg/p/_git/R` beside `…/r`; an `otherorg@` `https://dev.azure.com/` beside `…/myorg/p/_git/r` leaves the host unbound; the fake's `http://127.0.0.1:<port>/` is not bound |
 | `AskPassBrokerBindingTests` (Git) | the warning; three providers' bindings in one scope: 3 pairs per URL, 6 with a twin of either kind, 12 with both, no key with `usehttppath`, `GIT_TRACE_REDACT=1`; at 2.30.0 today's environment; `get` with `MyOrg`, `x-access-token` or no user answered, `otherorg`, `oauth2` not, each by its origin's account; `AccountOf` through `AskPassRunner.RunAsync` for 8.3's forms, an escaped segment, a `…/myorg/../otherorg/…` prompt (no account), an `x-access-token@dev.azure.com` prompt (the account's), visualstudio.com and gitlab.com (7a's rule); after a refusal the organization's Password prompt never reaches the handler, the path-less Username prompt does |
 | `PullRequestRefsTests` (WP0's) | 8.4's heads; GitHub's 14 vectors and true `refs/merge-requests/foo/head`; GitLab false `…/foo/head`, `…/a/b/head`, `…/x/train`, `…//head`, true `…/5/head`, `…/5/train`, `refs/merge-requests/foo`, `refs/pull/fix/head`; Azure DevOps false `refs/pull/fix/merge`, `refs/pull/7/head`, true `refs/pull/7/merge`, `refs/pull/fix` |
 | `PushGuardProvidersTests` (App; bare remotes) | only r7 9's rows that push (the refusals and the ref rules are `PullRequestRefsTests`' on strings; App.Tests ends the run, 0.6): with GitLab's `merge-requests/*/head` line `merge-requests/foo` pushed and the next fetch exiting 0 (r7 9's F3); with Azure DevOps' `pull/*/merge` line `pr/fix` pushed, on the account's remote and on one without an account (D279); with a `pull/*/head` line `pr/7` pushed |
@@ -2187,8 +2200,9 @@ is in an argument, URL, config value, log or file.
 **As built** (WP-C, `67546a3` to `9d7d037` and the review's fixes, 2026-11-01). Where the build settles what 8.2 to 8.7 left open:
 - `InPlainForm` needs a scheme before `://`; its `%` rule covers all the text after `://`, its UTF-8
   rule each path segment; the path starts at the first `/` after `://`.
-- An unreadable URL names a covered host when it starts with its scheme and holds its name anywhere,
-  without case: wider than git (V25 fails dev.azure.com closed too).
+- D379 (R1, the lead's rulings on wave 1's findings): `NamedIn` is gone (every covered host is `http`
+  or `https`); its literal test was narrower than git, not wider: `git credential fill` decodes
+  `%64ev.azure.com` as curl does (MEASURED on 2.56).
 - `x-access-token@` compares ordinal, as `IsAccountUser`. The account's user with a password is
   neither bound nor another user's (7a).
 - The credential view keeps the leading `/`, so an empty-path binding (`https://gitlab.com`, P5) drops
@@ -2201,6 +2215,16 @@ is in an argument, URL, config value, log or file.
   trailing dot (`dev.azure.com.`, git's `match_host`) counts as another user's there whatever its
   user, never bound (V23): the key would ask only the app's helper, which binds no such host
   (MEASURED). 7a's frozen github.com rule has the same gap, which 16.3 does not list yet.
+- D379 (R2): `CoveredHost.IsRedirectedFrom`. A trailing dot on the covered scheme and port keeps
+  V23's rule above (git's `match_host` reads the key there, no redirect); every other variant takes
+  R2's. 7a's github.com rule keeps the `http://` and `www.` gap too (for 16.3).
+- D379 (R3): with `GitTwin` a binding drops when the two views meet as before or their projects do
+  (one final `.git` after a non-empty segment removed, ordinal): `bob@…/g/p/sub` drops the twin
+  `…/g/p.git` too. These drops reach beyond git's key view, so the credential-view cases' git check
+  takes a case's dropped bindings together.
+- 62 of D379's new and changed tests failed before it (the 12 in git at `Select`, their git half
+  holding). R1's TLS transport (`http.curloptResolve`) is not in the harness, which has no TLS
+  server; `credential fill` shows the key match. R4: no change (16.3, risk 39: the lead's).
 - `AccountOf`: a prompt path of `/` alone or with a trailing `/` holds an empty segment: no account.
 - MEASURED on 2.56 by `CoverageGitMatchTests` (CI's 2.43 to confirm; the vectors' marks say so): U1
   to U3's git columns are X6's; P1 to P4's views `none`, P5's `vs-myorg`.
@@ -2208,7 +2232,7 @@ is in an argument, URL, config value, log or file.
   lower-cases it); `SourceCanExist` asks `GitHubUrls`, then `RecognisedUrls`, via `PullRequestRefs`.
   `PushGuardProvidersTests` proves the App's guard alone (local remotes, nothing bound): recognition
   with no account is WP-S's (9.6, 9.10).
-- 8.5's texts were WP0's (`e8a275d`). `CoverageGitMatchTests`: 129 tests, 48 s alone.
+- 8.5's texts were WP0's (`e8a275d`). `CoverageGitMatchTests`: 141 tests, 90 s alone (129 took 48 s).
 - For the lead: `docs/architecture.md:2257` quotes the old warning; `GitRepository.PullRequests.cs:30`
   names `refs/pull` alone (WP-P). For WP-AZ and WP-GL (and WP-S, which unions them): `Select` throws
   on `OrganizationHost` without `Organization` and on `GitTwin` with it.

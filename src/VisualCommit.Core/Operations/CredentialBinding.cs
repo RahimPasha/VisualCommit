@@ -97,13 +97,18 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     /// without case or, with <see cref="GitCoverage.HelperUserIsAccounts"/>, <c>x-access-token</c>,
     /// with no password. With <see cref="GitCoverage.GitTwin"/> a <c>.git</c>-less URL of two or more
     /// segments is followed by its <c>.git</c> twin, and a URL whose path holds a raw reserved
-    /// character by its credential twin. Another user's URL on a covered host that cannot be read
-    /// or is not in the form leaves nothing on that host bound, and so, on the origin with an
+    /// character by its credential twin. An <c>http</c> or <c>https</c> URL that cannot be read
+    /// leaves nothing on any covered host bound (D379). Another user's URL on a covered host that
+    /// is not in the form leaves nothing on that host bound, and so, on the origin with an
     /// organization, does any URL without a password that is not in the form or has no first
     /// segment in the organization's grammar, whatever its user; else a binding is dropped when
     /// another user's path, in git's credential view, equals its path or lies under it at a
-    /// <c>/</c>. A URL on a covered host written with one trailing dot (git's <c>match_host</c>)
-    /// counts as another user's there, whatever its user. Distinct by <see cref="Url"/> (ordinal), in the remotes' order;
+    /// <c>/</c>, and with <see cref="GitCoverage.GitTwin"/> also when their projects (one final
+    /// <c>.git</c> removed) do (D379). A URL on a covered host written with one trailing dot (git's
+    /// <c>match_host</c>) counts as another user's there, whatever its user; one that a redirect may
+    /// lead into a covered origin (<c>http</c> or <c>https</c>, any port, the host or <c>www.</c>
+    /// followed by it, one trailing dot removed) counts as on that host, never bound (D379).
+    /// Distinct by <see cref="Url"/> (ordinal), in the remotes' order;
     /// <see cref="SharedOriginOwner"/> is the organization on the origin.
     /// </summary>
     /// <exception cref="ArgumentException"><see cref="GitCoverage.OrganizationHost"/> without <see cref="GitCoverage.Organization"/>, or <see cref="GitCoverage.GitTwin"/> with it.</exception>
@@ -214,31 +219,50 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
         {
             if (UrlParts.Of(text) is not { } url)
             {
-                // V26: .NET cannot read it, git may read a covered host in it; nothing there is bound.
-                foreach (var unread in hosts.Where(host => host.NamedIn(text)))
+                // D379 (R1): .NET cannot read it, while git's credential code and curl decode what
+                // .NET refuses (a percent-encoded host, %64ev.azure.com, dev%2Eazure.com) and may
+                // reach any covered host and path in it, so the app cannot know which (V26, D369):
+                // an http or https URL that cannot be read leaves nothing on any covered host bound.
+                if (HasHttpScheme(text))
                 {
-                    unread.Failed = true;
+                    foreach (var host in hosts)
+                    {
+                        host.Failed = true;
+                    }
                 }
 
                 continue;
             }
 
             var otherUser = url.User is { Length: > 0 } user && !IsAccountsUser(user, coverage);
+            var exact = true;
             var covered = hosts.FirstOrDefault(host => host.Covers(url.Uri));
             if (covered is null)
             {
+                exact = false;
+
                 // git's match_host takes a host with one trailing dot as the host (urlmatch.c), so a
                 // binding's key answers a URL there too, whatever its user, while the broker binds
                 // no such host: git would ask the app's helper alone, which answers nothing, and
                 // D82's order would be lost. Such a URL counts as another user's on the host it
                 // names, for the drop or the fail alone, never bound (V23).
                 covered = hosts.FirstOrDefault(host => host.CoversWithTrailingDot(url.Uri));
-                if (covered is null)
+                if (covered is not null)
                 {
-                    continue;
+                    otherUser = true;
                 }
-
-                otherUser = true;
+                else
+                {
+                    // D379 (R2): a measured redirect leads http:// and www. into the origin (gitlab.com
+                    // 301 and 308, dev.azure.com 302), and git builds the credential again from the
+                    // target without the URL's user, so the binding's key answers it there. Such a
+                    // URL counts as on the covered host for the drop and the fail, never bound.
+                    covered = hosts.FirstOrDefault(host => host.IsRedirectedFrom(url.Uri));
+                    if (covered is null)
+                    {
+                        continue;
+                    }
+                }
             }
 
             var inForm = InPlainForm(url.Text) && (covered.Organization is null || IsOrganizationName(FirstSegment(url.Path)));
@@ -271,7 +295,7 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
                 continue;
             }
 
-            if (covered.Organization is not { } organization || FirstSegment(url.Path).Equals(organization, StringComparison.OrdinalIgnoreCase))
+            if (exact && (covered.Organization is not { } organization || FirstSegment(url.Path).Equals(organization, StringComparison.OrdinalIgnoreCase)))
             {
                 candidates.Add((covered, url));
             }
@@ -283,7 +307,7 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
             foreach (var bound in WithTwins(url.WithoutUser, coverage.GitTwin))
             {
                 var view = CredentialView(PathOf(bound));
-                if (host.OtherUsersPaths.Any(other => IsAtOrUnder(other, view))
+                if (host.OtherUsersPaths.Any(other => IsAtOrUnder(other, view) || (coverage.GitTwin && IsAtOrUnder(ProjectOf(other), ProjectOf(view))))
                     || bindings.Any(binding => string.Equals(binding.Url, bound, StringComparison.Ordinal)))
                 {
                     continue;
@@ -408,6 +432,28 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     private static bool IsAtOrUnder(string other, string view) =>
         string.Equals(other, view, StringComparison.Ordinal) || other.StartsWith(view + "/", StringComparison.Ordinal);
 
+    /// <summary>
+    /// D379 (R3): GitLab's project of a path in git's credential view (whose one trailing <c>/</c> is
+    /// already gone): without one final <c>.git</c> (ordinal) after a non-empty segment. gitlab.com
+    /// answers <c>…/p</c> with 301 and <c>…/p.git/</c> with 308 into <c>…/p.git/info/refs</c>, so
+    /// another user's URL of the project reaches every spelling's key (r6 6.1).
+    /// </summary>
+    private static string ProjectOf(string view) =>
+        view.Length > GitSuffix.Length + 1 && view[^(GitSuffix.Length + 1)] != '/' && view.EndsWith(GitSuffix, StringComparison.Ordinal)
+            ? view[..^GitSuffix.Length]
+            : view;
+
+    private const string GitSuffix = ".git";
+
+    /// <summary>D379 (R1): whether a URL's scheme, the text before its first <c>:</c>, is <c>http</c> or <c>https</c> without case.</summary>
+    private static bool HasHttpScheme(string text)
+    {
+        var colon = text.IndexOf(':', StringComparison.Ordinal);
+        return colon > 0
+            && (text.AsSpan(0, colon).Equals(Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                || text.AsSpan(0, colon).Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>The text after the authority of a URL that has no <c>?</c> or <c>#</c>: empty, or from the first <c>/</c> after <c>://</c>.</summary>
     private static string PathOf(string url)
     {
@@ -504,7 +550,7 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
         /// <summary>On the origin with an organization: the first segment it requires, and the bindings' owner; null elsewhere.</summary>
         public string? Organization { get; } = organization;
 
-        /// <summary>Another user's URL here could not be read or is not in the form: nothing here is bound (ruling 10).</summary>
+        /// <summary>An http or https URL could not be read (D379), or a URL here is not in the form as step 5 says: nothing here is bound (ruling 10).</summary>
         public bool Failed { get; set; }
 
         /// <summary>Other users' paths here, in git's credential view.</summary>
@@ -522,10 +568,30 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
             && uri.Host.AsSpan(0, uri.Host.Length - 1).Equals(host, StringComparison.OrdinalIgnoreCase)
             && uri.Port == port;
 
-        /// <summary>A URL .NET cannot read names this host when it starts with its scheme and holds the host's name anywhere, without case.</summary>
-        public bool NamedIn(string text) =>
-            text.StartsWith(scheme + SchemeSeparator, StringComparison.OrdinalIgnoreCase)
-            && text.Contains(host, StringComparison.OrdinalIgnoreCase);
+        /// <summary>
+        /// D379 (R2): a URL a measured redirect may lead into this host's origin: scheme <c>http</c>
+        /// or <c>https</c>, any port, and a host that, without case and with one trailing <c>.</c>
+        /// removed, is this host or <c>www.</c> followed by it.
+        /// </summary>
+        public bool IsRedirectedFrom(Uri uri)
+        {
+            if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var name = uri.Host.AsSpan();
+            if (name.EndsWith('.'))
+            {
+                name = name[..^1];
+            }
+
+            return name.Equals(host, StringComparison.OrdinalIgnoreCase)
+                || (name.StartsWith(WwwPrefix, StringComparison.OrdinalIgnoreCase) && name[WwwPrefix.Length..].Equals(host, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private const string WwwPrefix = "www.";
     }
 
     /// <summary>What <see cref="Select"/> reads of one URL: its parts as written, the path's case kept.</summary>

@@ -1,4 +1,5 @@
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Git.Prompts;
@@ -16,7 +17,9 @@ namespace VisualCommit.Git.Tests;
 /// credential.c and http.c apply), and <c>git config --get-urlmatch</c> of the per-URL
 /// <c>http.&lt;url&gt;.proactiveAuth</c> pair, and the prompt git shows on dev.azure.com when the
 /// app's helper has nothing (8.3). Nothing here depends on a git feature newer than 2.31 (D277);
-/// CI's containers run these on 2.43.
+/// CI's containers run these on 2.43. One theory (D379's redirects) is not offline in that sense:
+/// it runs <c>git ls-remote</c> against two local host servers on 127.0.0.1, because
+/// <c>git credential fill</c> follows no redirect.
 /// </summary>
 public sealed class CoverageGitMatchTests
 {
@@ -187,6 +190,108 @@ public sealed class CoverageGitMatchTests
     }
 
     [Theory]
+    [InlineData("AzureDevOps", "https://%64ev.azure.com/myorg/p/_git/r/..%5C..%5C..%5C..%5Cotherorg/p/_git/r", "https://dev.azure.com/myorg/p/_git/r", false)]
+    [InlineData("AzureDevOps", "https://%64%65%76.azure.com/myorg/p/_git/r/%C0%AE%C0%AE/%C0%AE%C0%AE/%C0%AE%C0%AE/%C0%AE%C0%AE/otherorg/p/_git/r", "https://dev.azure.com/myorg/p/_git/r", false)]
+    [InlineData("AzureDevOps", "https://dev.azure%2Ecom/myorg/p/_git/r/..%5C..%5C..%5C..%5Cotherorg/p/_git/r", "https://dev.azure.com/myorg/p/_git/r", false)]
+    [InlineData("AzureDevOps", "https://myorg%2Evisualstudio.com/p/_git/r/..%5Cq", "https://myorg.visualstudio.com/p/_git/r", false)]
+    [InlineData("AzureDevOps", "https://evil@%64ev.azure.com/myorg/p/_git/r", "https://dev.azure.com/myorg/p/_git/r", true)]
+    [InlineData("AzureDevOps", "https://evil@dev%2Eazure.com/myorg/p/_git/r", "https://dev.azure.com/myorg/p/_git/r", true)]
+    [InlineData("AzureDevOps", "https://evil@myorg.visualstudio%2Ecom/p/_git/r", "https://myorg.visualstudio.com/p/_git/r", true)]
+    [InlineData("GitLab", "https://evil@%67itlab.com/g/p.git", "https://gitlab.com/g/p.git", true)]
+    public async Task A_percent_encoded_covered_host_reaches_the_apps_helper_through_the_hosts_key_so_Select_binds_nothing_beside_it(
+        string provider, string url, string key, bool otherUser)
+    {
+        // D379 (R1): .NET cannot read the URL, git's credential side decodes its host (as curl
+        // does, wave 1's finding): through the key the token answers a user-less one on a path the
+        // server may read as another organization's, and another user's loses D82's order.
+        var coverage = CredentialBindingSelectTests.CoverageOf(provider);
+        using var repo = await TempRepo.CreateAsync();
+        var own = await OwnHelperAsync(repo);
+
+        var bound = await FillAsync(repo, [new CredentialBinding(key, coverage.Account)], url);
+
+        Assert.True(bound.Asked, $"{url} did not reach the app's helper through {key}.");
+        Assert.Equal(otherUser, bound.AskedOtherUser);
+        Assert.Equal(otherUser ? null : Token, CredentialValue(bound.Output, "password"));
+        Assert.False(File.Exists(own), "The user's own helper was asked through the host's key.");
+
+        var bindings = CredentialBinding.Select([new RemoteEffectiveUrls("origin", [key], [key]), new RemoteEffectiveUrls("other", [url], [url])], coverage);
+        Assert.Empty(bindings);
+        var unbound = await FillAsync(repo, bindings, url);
+        Assert.False(unbound.Asked);
+        Assert.True(File.Exists(own), "The user's own helper was not asked without the host's key.");
+    }
+
+    /// <summary>
+    /// D379 (R2, R3) over a transport, as wave 1's finding showed it: a local host serves
+    /// <c>g/p.git</c> and answers <c>/g/p/info/refs</c> with gitlab.com's 301 into
+    /// <c>/g/p.git/info/refs</c>, and a second port 308s every request into the first, in the role
+    /// of <c>http://</c> and <c>www.</c> (r6 6.1). git follows them and builds the credential again
+    /// from the target, without bob's name, so the binding Select gave before D379 answers bob's
+    /// fetch with the account's token; Select now drops it, and the user's own helper is asked
+    /// (D82). <c>git credential fill</c> cannot show this: it follows no redirect.
+    /// </summary>
+    [Theory]
+    [InlineData(false, "/g/p")]
+    [InlineData(false, "/g/p/")]
+    [InlineData(true, "/g/p.git")]
+    [InlineData(true, "/g/p")]
+    public async Task Another_users_url_that_a_redirect_leads_into_a_binding_takes_the_token_through_its_key_so_Select_drops_it(bool otherPort, string path)
+    {
+        using var repo = await TempRepo.CreateAsync("redirect");
+        await repo.CommitFileAsync("README.md", "first\n", "First");
+        var folder = repo.SiblingPath("gitlab");
+        await repo.GitAsync("clone", "--quiet", "--bare", "--no-hardlinks", repo.Path, Path.Combine(folder, "g", "p.git"));
+        var empty = Directory.CreateDirectory(repo.SiblingPath("www")).FullName;
+        await using var host = await AuthRemoteServer.StartForHostAsync(
+            folder,
+            new AuthRemoteHostOptions(
+                new RedirectRoutes(path => path == "/g/p/info/refs", 301, request => "/g/p.git/info/refs?" + request.Query),
+                token => token == Token ? "ada" : null,
+                _ => false,
+                (_, _) => false,
+                Realm: "GitLab"));
+        host.Serve("g/p");
+        await using var www = await AuthRemoteServer.StartForHostAsync(
+            empty,
+            new AuthRemoteHostOptions(
+                new RedirectRoutes(_ => true, 308, request => $"http://127.0.0.1:{host.Port}{request.Path}?{request.Query}"),
+                _ => null,
+                _ => false,
+                (_, _) => false));
+        var coverage = new GitCoverage(new AccountKey(HostingProvider.GitLab, $"127.0.0.1:{host.Port}", "ada"), new Uri($"http://127.0.0.1:{host.Port}/"))
+        {
+            GitTwin = true,
+            HelperUserIsAccounts = true,
+        };
+        var origin = $"http://127.0.0.1:{host.Port}/g/p.git";
+        var bob = $"http://bob@127.0.0.1:{(otherPort ? www.Port : host.Port)}{path}";
+        var own = await OwnHelperAsync(repo);
+
+        // What Select gave beside bob's URL before D379: the origin's binding.
+        var before = new CredentialBinding(origin, coverage.Account);
+        Assert.Equal([before], CredentialBinding.Select([new RemoteEffectiveUrls("origin", [origin], [origin])], coverage));
+        var taken = await LsRemoteAsync(repo, [before], bob);
+
+        Assert.True(taken.Asked, $"{bob} did not reach the app's helper through {origin}: {taken.Error}");
+        Assert.False(taken.AskedOtherUser);
+        Assert.Contains(host.Requests, request => request.Path == "/g/p.git/info/refs" && request.UserName == "ada" && request.GivenUserName == GitCredential.UserName);
+        Assert.False(File.Exists(own), "The user's own helper was asked through the origin's key.");
+
+        var bindings = CredentialBinding.Select([new RemoteEffectiveUrls("origin", [origin], [origin]), new RemoteEffectiveUrls("bob", [bob], [bob])], coverage);
+        Assert.Empty(bindings);
+        Assert.Empty(CredentialBinding.Select([new RemoteEffectiveUrls("bob", [bob], [bob]), new RemoteEffectiveUrls("origin", [origin], [origin])], coverage));
+        var signedIn = host.Requests.Count(request => request.UserName == "ada");
+        var kept = await LsRemoteAsync(repo, bindings, bob);
+
+        Assert.False(kept.Asked);
+        Assert.Equal(signedIn, host.Requests.Count(request => request.UserName == "ada"));
+        Assert.True(File.Exists(own), "The user's own helper was not asked without the origin's key.");
+        Assert.Empty(host.Errors);
+        Assert.Empty(www.Errors);
+    }
+
+    [Theory]
     [InlineData("https://dev.azure.com/otherorg/p/_git/r", false, "Username for 'https://dev.azure.com': ", false)]
     [InlineData("https://dev.azure.com/otherorg/p/_git/r", true, "Username for 'https://dev.azure.com/otherorg/p/_git/r': ", false)]
     [InlineData("https://dev.azure.com/myorg/p/_git/r", false, "Username for 'https://dev.azure.com': ", false)]
@@ -220,6 +325,28 @@ public sealed class CoverageGitMatchTests
 
         var asked = log.Entries.Where(entry => entry.Level == LogLevel.Debug && entry.Message.StartsWith(Asked, StringComparison.Ordinal)).Select(entry => entry.Message).ToList();
         return (asked.Count > 0, asked.Any(line => line.EndsWith(" names another user.", StringComparison.Ordinal)), result.StandardOutput, asked);
+    }
+
+    /// <summary>What <c>git ls-remote <paramref name="url"/></c> did in a deny scope bound to <paramref name="bindings"/>: as <see cref="FillAsync"/>, with git's error output.</summary>
+    private static async Task<(bool Asked, bool AskedOtherUser, string Error)> LsRemoteAsync(TempRepo repo, IReadOnlyList<CredentialBinding> bindings, string url)
+    {
+        var log = new ListLog();
+        using var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource(Token), null, null, _ => null);
+        using var scope = broker.Begin("Fetch", "repo", PromptMode.Deny, "op-" + Guid.NewGuid().ToString("N"), bindings: bindings);
+
+        var result = await GitAsync(repo, scope.Environment, ["ls-remote", url]);
+
+        var asked = log.Entries.Where(entry => entry.Level == LogLevel.Debug && entry.Message.StartsWith(Asked, StringComparison.Ordinal)).Select(entry => entry.Message).ToList();
+        return (asked.Count > 0, asked.Any(line => line.EndsWith(" names another user.", StringComparison.Ordinal)), result.StandardError);
+    }
+
+    /// <summary>A host's routes that answer the paths <paramref name="claims"/> picks with <paramref name="status"/> to <paramref name="location"/>.</summary>
+    private sealed class RedirectRoutes(Func<string, bool> claims, int status, Func<AuthRemoteRouteRequest, string> location) : IAuthRemoteRoutes
+    {
+        public bool Claims(string method, string path) => claims(path);
+
+        public Task<AuthRemoteResponse> ServeAsync(AuthRemoteRouteRequest request, CancellationToken cancellationToken) =>
+            Task.FromResult(new AuthRemoteResponse(status, status == 301 ? "Moved Permanently" : "Permanent Redirect", [new("Location", location(request))], []));
     }
 
     /// <summary>Configures the repository's own <c>credential.helper</c> as a recorder that answers nothing; returns the file it writes when git asks it.</summary>
