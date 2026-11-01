@@ -312,13 +312,25 @@ every commit.
 
 ### Notes for whoever resumes
 
-- **In flight (2026-11-01): the design's review.** The draft, `docs/phase-7b-design.md` (225 KB,
-  sections 0 to 16), was assembled by run `wf_4982af69-706` (an architect, nine drafters and an
-  integrator, 4.55M tokens) and committed with its decisions D357 to D372. Its drafts and the lead's
-  31 rulings are in `D:/Projects/Personal/phase7b-work/design/`. Its review (Progress step 3) comes
-  next; the review's findings go to `D:/Projects/Personal/phase7b-work/review/`. If a session finds
-  fixes to the design uncommitted, it reads them against those findings before committing. No
-  worktree or `wip/*` branch exists yet.
+- **In flight (2026-11-01): the design's fixes.** The draft (`d3d5070`, 225 KB, D357 to D372) was
+  reviewed by run `wf_1792f36a-eb9` (four lenses: git, token, tests, conform; a verifier for each
+  blocker and major; 4.52M tokens): no blocker, 14 majors, 42 minors, none refuted. The findings
+  are in `D:/Projects/Personal/phase7b-work/review/` (`findings.md`, one file per finding in `f/`,
+  `review-raw.json`). The owner's answers of 2026-11-01, to become decisions in the fixes:
+  made-up credentials may be sent to the sandboxes to record the refusals (D373); the Azure DevOps
+  token may go in one connectionData read to a made-up organization (D374, against the lead's
+  advice; the fixes send it only after an anonymous 404); no fork and no legacy GitLab token
+  (D375); the section's menu keeps "Open pull requests in browser" for another organization's
+  remote (D376); none of the scenario's made-up names matches the owner's organization; F1:
+  D367 accepted as amending D252 and D349. The lead's rulings: F10 names only, F13 one prepared
+  state, F14 the scripted list, D377 for F11 (CI limits), D378 for F20. Run `wf_1371fd83-9fa`
+  applies the fixes to the design split per section in `D:/Projects/Personal/phase7b-work/fix/`
+  (`order.txt` gives the join order; `d.md` holds the rows from D357; `design-d3d5070.md` is the
+  reviewed text). The lead then joins the files, has the fixes checked, and commits. If a session
+  finds the split files changed but not joined, it joins them in `order.txt`'s order into
+  `docs/phase-7b-design.md`, puts `d.md` in place of the rows from D357 in `docs/decisions.md`,
+  and has the result checked against the findings before committing. No worktree or `wip/*`
+  branch exists yet.
 - `master` holds 7a; the working tree was clean, and no worktree,
   `wip/*` or `worktree-*` branch was left, when phase 7a was merged (`019e68a`). Phase 7a's gate
   references and work lie outside the repository: `D:/Projects/Personal/gate7a-reference/` (phases
