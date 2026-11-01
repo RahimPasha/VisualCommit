@@ -182,15 +182,23 @@ public sealed class GitLabClientTests
     }
 
     [Theory]
+    // Marks (the design's header): where each answer comes from, for WP-LF's corrections.
+    // 401 shape A: MEASURED r6 1.2. Shape F's expired token: READ g2 G2.2, kept READ by 15.7. An empty
+    // text/plain 401: made up, for 7.3's "401, any body".
     [InlineData(401, "application/json", "{\"message\":\"401 Unauthorized\"}", HostingFailureKind.BadCredentials, "401 Unauthorized", null)]
     [InlineData(401, "application/json", "{\"error\":\"invalid_token\",\"error_description\":\"Token is expired. You can either do re-authorization or token refresh.\"}", HostingFailureKind.BadCredentials, "Token is expired. You can either do re-authorization or token refresh.", null)]
     [InlineData(401, "text/plain", "", HostingFailureKind.BadCredentials, "401 Unauthorized", null)]
+    // 403 shape F: READ g2 G2.3 (insufficient_scope; its scope list ASSUMED) and g2 G2.4 (granular).
+    // 403 shape A: READ r6 5.2.
     [InlineData(403, "application/json", "{\"error\":\"insufficient_scope\",\"error_description\":\"The request requires higher privileges than provided by the access token.\",\"scope\":\"read_user ai_workflows api read_api\"}", HostingFailureKind.Forbidden, "The request requires higher privileges than provided by the access token.", "insufficient_scope")]
     [InlineData(403, "application/json", "{\"error\":\"insufficient_granular_scope\",\"error_description\":\"Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read].\"}", HostingFailureKind.Forbidden, "Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read].", "insufficient_granular_scope")]
     [InlineData(403, "application/json", "{\"message\":\"403 Forbidden\"}", HostingFailureKind.Forbidden, "403 Forbidden", null)]
+    // 404s: a project's A and an MR's "404 Not found" MEASURED r6 3.2 and g2 G4; a route's E MEASURED r6 3.2, 13.1.
     [InlineData(404, "application/json", "{\"message\":\"404 Project Not Found\"}", HostingFailureKind.NotFound, "404 Project Not Found", null)]
     [InlineData(404, "application/json", "{\"message\":\"404 Not found\"}", HostingFailureKind.NotFound, "404 Not found", null)]
     [InlineData(404, "application/json", "{\"error\":\"404 Not Found\"}", HostingFailureKind.NotFound, "404 Not Found", null)]
+    // 409 B and 400 C: READ g2 G1.1. 400 E "state does not have a valid value": MEASURED r6 4.1;
+    // 400 E "<name> is missing": READ g2 G1.1. 405 A: READ (r6 3.2). 422 B: READ g2 G1.1.
     [InlineData(409, "application/json", "{\"message\":[\"Another open merge request already exists for this source branch: !21\"]}", HostingFailureKind.Validation, "Another open merge request already exists for this source branch: !21", null)]
     [InlineData(400, "application/json", "{\"message\":{\"source_branch\":[\"does not exist\"]}}", HostingFailureKind.Validation, "source_branch does not exist", null)]
     [InlineData(400, "application/json", "{\"message\":{\"source_branch\":[\"does not exist\",\"is invalid\"],\"target_branch\":[\"does not exist\"]}}", HostingFailureKind.Validation, "source_branch does not exist; target_branch does not exist", null)]
@@ -198,17 +206,21 @@ public sealed class GitLabClientTests
     [InlineData(400, "application/json", "{\"error\":\"title is missing, source_branch is missing\"}", HostingFailureKind.Validation, "title is missing, source_branch is missing", null)]
     [InlineData(405, "application/json", "{\"message\":\"Non GET methods are not allowed for moved projects\"}", HostingFailureKind.Validation, "Non GET methods are not allowed for moved projects", null)]
     [InlineData(422, "application/json", "{\"message\":[\"You can't use same project/branch for source and target\"]}", HostingFailureKind.Validation, "You can't use same project/branch for source and target", null)]
+    // 429 shape G (text/plain) and D, 408 D: READ r6 8 (and 5.2). 500 A and 502 HTML: ASSUMED (4.4).
     [InlineData(429, "text/plain", "Retry later\n", HostingFailureKind.RateLimited, "429 Too Many Requests", null)]
     [InlineData(429, "application/json", "{\"message\":{\"error\":\"This endpoint has been requested too many times. Try again later.\"}}", HostingFailureKind.RateLimited, "This endpoint has been requested too many times. Try again later.", null)]
     [InlineData(408, "application/json", "{\"message\":{\"error\":\"Request timed out\"}}", HostingFailureKind.ServerError, "Request timed out", null)]
     [InlineData(500, "application/json", "{\"message\":\"500 Internal Server Error\"}", HostingFailureKind.ServerError, "500 Internal Server Error", null)]
     [InlineData(502, "text/html", "<html><body><h1>502 Bad Gateway</h1></body></html>", HostingFailureKind.ServerError, "GitLab had a problem: HTTP 502.", null)]
+    // Made up, the rule's edges: words that are none, a status 7.3 does not name, bodies of no shape.
     [InlineData(503, "application/json", "{\"message\":[]}", HostingFailureKind.ServerError, "GitLab had a problem: HTTP 503.", null)]
     [InlineData(418, "application/json", "{\"message\":\"I'm a teapot\"}", HostingFailureKind.Malformed, "GitLab's answer could not be read.", null)]
     [InlineData(404, "text/html", "<html>Not here</html>", HostingFailureKind.NotFound, "404 Not Found", null)]
     [InlineData(400, "application/json", "[\"not an object\"]", HostingFailureKind.Validation, "400 Bad Request", null)]
     [InlineData(400, "application/json", "{\"message\":42,\"error\":7}", HostingFailureKind.Validation, "400 Bad Request", null)]
     [InlineData(400, "application/json", "{\"message\":", HostingFailureKind.Validation, "400 Bad Request", null)]
+    [InlineData(401, "application/json", "{\"message\":\"\\uD800\"}", HostingFailureKind.BadCredentials, "401 Unauthorized", null)]
+    [InlineData(409, "application/json", "{\"message\":[\"\\uDC00 !21\"]}", HostingFailureKind.Validation, "409 Conflict", null)]
     public async Task GitLabs_answers_give_its_kinds_and_its_words(int status, string contentType, string body, HostingFailureKind kind, string message, string? detail)
     {
         var log = new ListLog();
@@ -226,7 +238,38 @@ public sealed class GitLabClientTests
             Assert.Single(log.Lines).Message);
     }
 
+    [Fact]
+    public async Task A_body_whose_strings_are_not_UTF_8_holds_no_words_and_its_status_still_gives_the_kind()
+    {
+        // Made up: JsonDocument.Parse takes these bytes, GetString and a property's Name refuse them.
+        static byte[] Bytes(string before, string after) => [.. Encoding.UTF8.GetBytes(before), 0xFF, 0xFE, .. Encoding.UTF8.GetBytes(after)];
+        var cases = new (HttpStatusCode Status, byte[] Body, HttpMethod Method, HostingFailureKind Kind, string Message, PullRequestRefusal Refusal)[]
+        {
+            (HttpStatusCode.Unauthorized, Bytes("{\"message\":\"", "\"}"), HttpMethod.Get, HostingFailureKind.BadCredentials, "401 Unauthorized", PullRequestRefusal.None),
+            (HttpStatusCode.Forbidden, Bytes("{\"error\":\"insufficient_scope\",\"error_description\":\"", "\"}"), HttpMethod.Get, HostingFailureKind.Forbidden, "403 Forbidden", PullRequestRefusal.None),
+            (HttpStatusCode.Conflict, Bytes("{\"message\":[\"", " !21\"]}"), HttpMethod.Post, HostingFailureKind.Validation, "409 Conflict", PullRequestRefusal.AlreadyExists),
+            (HttpStatusCode.BadRequest, Bytes("{\"message\":{\"", "\":[\"does not exist\"]}}"), HttpMethod.Post, HostingFailureKind.Validation, "400 Bad Request", PullRequestRefusal.None),
+        };
+        var body = new GitLabNewMergeRequestJson { SourceBranch = "a", TargetBranch = "b", Title = "c", Description = "" };
+
+        foreach (var (status, bytes, method, kind, message, refusal) in cases)
+        {
+            var log = new ListLog();
+            var recorder = new RecordingHttpHandler(_ => Answer(status, "application/json", bytes));
+            using var client = GitLabClient.Create(GitLabEndpoints.GitLabCom, () => recorder, log, new ManualTimeProvider());
+
+            var reply = await client.SendAsync(method, "glpat-FAKE-ada-1", new Uri("https://gitlab.com/api/v4/projects/5001/merge_requests"), method == HttpMethod.Get ? null : body, GitLabJsonContext.Default.GitLabMergeRequestJson, Cancelled);
+
+            Assert.Equal((kind, message, (string?)null, refusal), (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Detail, reply.Failure.Refusal));
+            Assert.Equal(string.Create(CultureInfo.InvariantCulture, $"GitLab: {method} /api/v4/projects/5001/merge_requests failed: {(int)status}."), Assert.Single(log.Lines).Message);
+        }
+    }
+
     [Theory]
+    // The fake's faults (4.4), marked as the fake marks them: Unauthorized MEASURED r6 1.2; Expired and
+    // Revoked READ g2 G2.2 (kept READ, 15.7); InsufficientScope READ g2 G2.3; InsufficientGranular READ
+    // g2 G2.4; Forbidden READ r6 5.2; NotFound READ r6 1.2; both rate limits READ r6 8; Timeout READ
+    // r6 5.2, 8; ServerError and BadGateway ASSUMED; Malformed the fake's own.
     [InlineData("Unauthorized", HostingFailureKind.BadCredentials, "401 Unauthorized", null, null)]
     [InlineData("Expired", HostingFailureKind.BadCredentials, "Token is expired. You can either do re-authorization or token refresh.", null, null)]
     [InlineData("Revoked", HostingFailureKind.BadCredentials, "Token was revoked. You have to re-authorize from the user.", null, null)]
@@ -259,6 +302,8 @@ public sealed class GitLabClientTests
     }
 
     [Theory]
+    // Create's answers (4.3): 409 B, 400 C and 400 E READ g2 G1.1; 422 B READ g2 G1.1 (this body
+    // ASSUMED); 403 A READ g2 G1.2. "is too long": made-up words in C's shape.
     [InlineData("POST", "projects/5001/merge_requests", 409, "{\"message\":[\"Another open merge request already exists for this source branch: !21\"]}", PullRequestRefusal.AlreadyExists)]
     [InlineData("POST", "projects/5001/merge_requests", 400, "{\"message\":{\"source_branch\":[\"does not exist\"]}}", PullRequestRefusal.HeadMissing)]
     [InlineData("POST", "projects/5001/merge_requests", 400, "{\"message\":{\"target_branch\":[\"does not exist\"]}}", PullRequestRefusal.BaseMissing)]
@@ -282,6 +327,8 @@ public sealed class GitLabClientTests
         Assert.Equal(refusal, reply.Failure!.Refusal);
     }
 
+    // Made-up words in GitLab's shapes (B, C, A, F; READ g2 G1.1, G2.3, G2.4); ratelimit-remaining
+    // on a 403: READ r6 8 (a 403 is never a rate limit).
     [Fact]
     public async Task Made_up_words_are_classified_alike_and_a_403_naming_a_rate_limit_or_api_stays_Forbidden()
     {
@@ -321,6 +368,7 @@ public sealed class GitLabClientTests
             failures.Select(failure => (failure.Kind, failure.Refusal, failure.Message, failure.Detail, failure.RetryAt)));
     }
 
+    // The headers' names and forms: READ r6 8; their values made up.
     [Fact]
     public async Task A_rate_limits_end_comes_from_Retry_After_then_ratelimit_reset_then_ratelimit_resettime_then_60_seconds()
     {
@@ -425,9 +473,12 @@ public sealed class GitLabClientTests
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, null),
     };
 
-    internal static HttpResponseMessage Answer(HttpStatusCode status, string contentType, string body, params (string Name, string Value)[] headers)
+    internal static HttpResponseMessage Answer(HttpStatusCode status, string contentType, string body, params (string Name, string Value)[] headers) =>
+        Answer(status, contentType, Encoding.UTF8.GetBytes(body), headers);
+
+    internal static HttpResponseMessage Answer(HttpStatusCode status, string contentType, byte[] body, params (string Name, string Value)[] headers)
     {
-        var response = new HttpResponseMessage(status) { Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body)) };
+        var response = new HttpResponseMessage(status) { Content = new ByteArrayContent(body) };
         response.Content.Headers.TryAddWithoutValidation("Content-Type", contentType);
         foreach (var (name, value) in headers)
         {

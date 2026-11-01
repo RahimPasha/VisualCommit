@@ -76,6 +76,8 @@ public sealed class GitLabProviderTests
         var expired = await provider.CheckTokenAsync(lab.Bob, null, Cancelled);
         var noUser = await provider.CheckTokenAsync(projectsOnly, null, Cancelled);
 
+        // The fake's answers (4.3, 4.4): an unknown token's 401 A MEASURED r6 1.2; the revoked and
+        // expired 401 F READ g2 G2.2, kept READ by 15.7; the granular 403 F READ g2 G2.4.
         Assert.Equal(
             [
                 (HostingFailureKind.BadCredentials, "401 Unauthorized", (string?)null),
@@ -190,7 +192,7 @@ public sealed class GitLabProviderTests
               {"id": 14, "path_with_namespace": "noslash", "http_url_to_repo": "https://gitlab.com/noslash.git", "web_url": "https://gitlab.com/noslash"},
               {"id": 15, "path_with_namespace": "g/nourl"},
               {"id": 16, "path_with_namespace": "g/full", "default_branch": "trunk", "visibility": "public", "archived": false,
-               "http_url_to_repo": "http://gitlab.com/g/full.git", "web_url": "https://gitlab.com/g/full", "last_activity_at": "2026-10-31T22:32:34.827Z",
+               "http_url_to_repo": "http://gitlab.com/g/full.git", "web_url": "https://gitlab.com/g/full", "last_activity_at": "2026-01-02T03:04:05.678Z",
                "permissions": {"project_access": null, "group_access": {"access_level": 20, "notification_level": 3}}, "unknown": {"x": [1]}}
             ]
             """;
@@ -204,7 +206,7 @@ public sealed class GitLabProviderTests
         var ok = listed.Value.Repositories[0];
         Assert.Equal(("", true, false, false, DateTimeOffset.MinValue, true), (ok.DefaultBranch, ok.IsPrivate, ok.IsFork, ok.IsArchived, ok.UpdatedAt, ok.CanPush));
         var full = listed.Value.Repositories[1];
-        Assert.Equal(("trunk", false, new DateTimeOffset(2026, 10, 31, 22, 32, 34, 827, TimeSpan.Zero), false, "http://gitlab.com/g/full.git"),
+        Assert.Equal(("trunk", false, new DateTimeOffset(2026, 1, 2, 3, 4, 5, 678, TimeSpan.Zero), false, "http://gitlab.com/g/full.git"),
             (full.DefaultBranch, full.IsPrivate, full.UpdatedAt, full.CanPush, full.CloneUrl.AbsoluteUri));
         Assert.Equal(
             [12, 13, 14, 15],
@@ -249,6 +251,7 @@ public sealed class GitLabProviderTests
 
         Assert.Equal((p, (HostedRepository?)null, (string?)null, "main", false), (read.Value!.Repository, read.Value.Parent, read.Value.ParentDefaultBranch, read.Value.DefaultBranch, read.Value.IsFork));
         Assert.Equal((fork, true, p, "main"), (forked.Value!.Repository, forked.Value.IsFork, forked.Value.Parent, forked.Value.ParentDefaultBranch));
+        // A hidden project's 404 A and the moved one's 301: MEASURED r6 3.2.
         Assert.Equal((HostingFailureKind.NotFound, "404 Project Not Found"), (secret.Failure!.Kind, secret.Failure.Message));
         Assert.Equal(new HostedRepository(HostingProvider.GitLab, Host, "g/renamed", "web"), moved.Value!.Repository);
         Assert.Equal("http://127.0.0.1:3/g/renamed/web.git", moved.Value.CloneUrl.AbsoluteUri);
@@ -317,6 +320,7 @@ public sealed class GitLabProviderTests
         fake.FailNext("project:ada/p", FakeGitLabFault.ServerError);
         var failed = await provider.ListPullRequestsAsync(lab.Ada, p, Cancelled);
 
+        // The fake's 500 A: ASSUMED (4.4).
         Assert.Equal((HostingFailureKind.ServerError, "500 Internal Server Error", "http://127.0.0.1:3/api/v4/projects/5002"), (failed.Failure!.Kind, failed.Failure.Message, failed.Failure.Url!.AbsoluteUri));
     }
 
@@ -467,6 +471,8 @@ public sealed class GitLabProviderTests
         using var provider = lab.Provider();
         var p = new HostedRepository(HostingProvider.GitLab, Host, "g/s", "p");
         NewPullRequest New(string head, string @base) => new("T", "", head, null, @base, false);
+        // Create's answers (4.3): 409 B, 400 C and 422 B READ g2 G1.1; 403 A READ g2 G1.2. The 409
+        // names the open request !<iid> alone (READ, 4's As built: to_reference).
         var cases = new (HostedRepository Base, NewPullRequest Request, HostingFailureKind Kind, PullRequestRefusal Refusal)[]
         {
             (p, New("feature/one", "main"), HostingFailureKind.Validation, PullRequestRefusal.AlreadyExists),
@@ -520,11 +526,73 @@ public sealed class GitLabProviderTests
             fake.Requests.TakeLast(4).Select(sent => (sent.Method, sent.Path, sent.Status)));
     }
 
-    /// <summary>One merge request's JSON with every member A4 needs (r6 4.1's shape, made-up values).</summary>
+    [Fact]
+    public async Task A4_fails_on_a_fork_whose_path_it_cannot_read_naming_the_lookups_address_and_request_id()
+    {
+        var recorder = new RecordingHttpHandler(request => request.RequestUri!.AbsolutePath.EndsWith("/merge_requests", StringComparison.Ordinal)
+            ? RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + MergeRequestJson(1, 9001, 5001) + "]", ("x-request-id", "01JFAKELIST00000000000000"))
+            : RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"id\": 9001, \"path_with_namespace\": \"noslash\"}", ("x-request-id", "01JFAKELOOKUP000000000000")));
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, new ListLog(), TimeProvider.System);
+
+        var listed = await provider.ListPullRequestsAsync("glpat-FAKE-ada-1", new HostedRepository(HostingProvider.GitLab, "gitlab.com", "g", "p"), Cancelled);
+
+        Assert.Equal((HostingFailureKind.Malformed, "https://gitlab.com/api/v4/projects/9001", "01JFAKELOOKUP000000000000"),
+            (listed.Failure!.Kind, listed.Failure.Url!.AbsoluteUri, listed.Failure.RequestId));
+    }
+
+    [Fact]
+    public async Task A4_keeps_a_forks_lookup_for_its_token_alone()
+    {
+        await using var lab = await GitLabLab.CreateAsync();
+        var fake = lab.Fake;
+        var octoFork = await fake.AddProjectAsync("octo/p", lab.SourcePath, forkOf: lab.Project, ct: Cancelled);
+        fake.AddMergeRequest(lab.Project, "From octo's private fork", "octo", "fix", "main", source: octoFork);
+        using var provider = lab.Provider();
+        var p = new HostedRepository(HostingProvider.GitLab, Host, "g/s", "p");
+        var octoP = new HostedRepository(HostingProvider.GitLab, Host, "octo", "p");
+        var lookup = "/api/v4/projects/" + octoFork.Id.ToString(CultureInfo.InvariantCulture);
+        int Lookups() => fake.Requests.Count(request => request.Path == lookup);
+
+        // Ada cannot read octo's fork: her null is hers alone, and octo still finds his fork.
+        var adaFirst = await provider.ListPullRequestsAsync(lab.Ada, p, Cancelled);
+        var octoNext = await provider.ListPullRequestsAsync(lab.Octo, p, Cancelled);
+        var adaAgain = await provider.ListPullRequestsAsync(lab.Ada, p, Cancelled);
+        Assert.Equal(((HostedRepository?)null, (HostedRepository?)octoP, (HostedRepository?)null, 2),
+            (adaFirst.Value!.PullRequests.Single().HeadRepository, octoNext.Value!.PullRequests.Single().HeadRepository, adaAgain.Value!.PullRequests.Single().HeadRepository, Lookups()));
+
+        // Octo's found fork is his alone: ada's own lookup answers 404, and she is shown nothing.
+        provider.ForgetKept();
+        var octoFirst = await provider.ListPullRequestsAsync(lab.Octo, p, Cancelled);
+        var adaAfter = await provider.ListPullRequestsAsync(lab.Ada, p, Cancelled);
+        Assert.Equal(((HostedRepository?)octoP, (HostedRepository?)null, 4),
+            (octoFirst.Value!.PullRequests.Single().HeadRepository, adaAfter.Value!.PullRequests.Single().HeadRepository, Lookups()));
+        Assert.Equal([404, 200, 200, 404], fake.Requests.Where(request => request.Path == lookup).Select(request => request.Status));
+    }
+
+    [Fact]
+    public async Task A5_posts_nothing_when_the_sources_path_cannot_be_read()
+    {
+        var recorder = new RecordingHttpHandler(request => (request.Method.Method, request.RequestUri!.AbsolutePath) switch
+        {
+            ("GET", "/api/v4/projects/ada%2Fp") => RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"id\": 9002, \"path_with_namespace\": \"noslash\", \"visibility\": \"public\"}", ("x-request-id", "01JFAKESOURCE000000000000")),
+            ("GET", "/api/v4/projects/g%2Fp") => RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"id\": 5001, \"path_with_namespace\": \"g/p\"}"),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.Created, MergeRequestJson(1, 9002, 5001)),
+        });
+        using var provider = new GitLabProvider(GitLabEndpoints.GitLabCom, () => recorder, new ListLog(), TimeProvider.System);
+        var request = new NewPullRequest("From the fork", "", "fix", null, "main", false) { HeadRepository = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "ada", "p") };
+
+        var created = await provider.CreatePullRequestAsync("glpat-FAKE-ada-1", new HostedRepository(HostingProvider.GitLab, "gitlab.com", "g", "p"), request, Cancelled);
+
+        Assert.Equal((HostingFailureKind.Malformed, "https://gitlab.com/api/v4/projects/ada%2Fp", "01JFAKESOURCE000000000000"),
+            (created.Failure!.Kind, created.Failure.Url!.AbsoluteUri, created.Failure.RequestId));
+        Assert.Equal(["GET", "GET"], recorder.Sent.Select(sent => sent.Method));
+    }
+
+    /// <summary>One merge request's JSON with every member A4 needs (r6 4.1's members, MEASURED; made-up values).</summary>
     private static string MergeRequestJson(int iid, long source, long target) => string.Create(CultureInfo.InvariantCulture, $$"""
         {"id": {{7000 + iid}}, "iid": {{iid}}, "project_id": {{target}}, "title": "Request {{iid}}", "state": "opened",
          "author": {"id": 2001, "username": "ada", "public_email": "ada@example.com"}, "draft": false,
          "web_url": "https://gitlab.com/g/p/-/merge_requests/{{iid}}", "source_branch": "b{{iid}}", "target_branch": "main",
-         "sha": null, "created_at": "2026-10-31T22:32:34.827Z", "source_project_id": {{source}}, "target_project_id": {{target}}}
+         "sha": null, "created_at": "2026-01-02T03:04:05.678Z", "source_project_id": {{source}}, "target_project_id": {{target}}}
         """);
 }

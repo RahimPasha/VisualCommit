@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
@@ -47,9 +49,10 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
     private readonly IAppLog _log;
     private readonly Lock _forksGate = new();
 
-    // Under _forksGate: each fork's project looked up by A4, by its numeric id; null when GitLab
-    // answered 403 or 404 (a fork the token cannot read). Kept until ForgetKept.
-    private readonly Dictionary<long, HostedRepository?> _forks = [];
+    // Under _forksGate: each fork's project looked up by A4, by the token's fingerprint and the
+    // fork's numeric id; null when GitLab answered 403 or 404 (a fork that token cannot read). Kept
+    // until ForgetKept; a lookup made with one token is never shown to another.
+    private readonly Dictionary<(string Fingerprint, long Id), HostedRepository?> _forks = [];
 
     public GitLabProvider(GitLabEndpoints endpoints, Func<HttpMessageHandler> createHandler, IAppLog log, TimeProvider clock)
     {
@@ -259,9 +262,10 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
         var heads = new Dictionary<long, HostedRepository?>();
         var lookups = 0;
+        var fingerprint = Fingerprint(token);
         foreach (var sourceId in reply.Value.Where(json => json.SourceProjectId != json.TargetProjectId).Select(json => json.SourceProjectId).Distinct())
         {
-            if (KnownFork(sourceId, out var known))
+            if (KnownFork(fingerprint, sourceId, out var known))
             {
                 heads[sourceId] = known;
                 continue;
@@ -274,10 +278,10 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             }
 
             lookups++;
-            var (fork, lookupFailure, _, _) = await ProjectAsync(token, sourceId.ToString(System.Globalization.CultureInfo.InvariantCulture), ct).ConfigureAwait(false);
+            var (fork, lookupFailure, lookupUrl, lookupId) = await ProjectAsync(token, sourceId.ToString(System.Globalization.CultureInfo.InvariantCulture), ct).ConfigureAwait(false);
             if (lookupFailure is { Kind: HostingFailureKind.Forbidden or HostingFailureKind.NotFound })
             {
-                heads[sourceId] = Remember(sourceId, null);
+                heads[sourceId] = Remember(fingerprint, sourceId, null);
                 continue;
             }
 
@@ -288,10 +292,10 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
             if (Hosted(fork!.PathWithNamespace) is not { } head)
             {
-                return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, _profile.Url("projects/" + sourceId.ToString(System.Globalization.CultureInfo.InvariantCulture)), null));
+                return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, lookupUrl, lookupId));
             }
 
-            heads[sourceId] = Remember(sourceId, head);
+            heads[sourceId] = Remember(fingerprint, sourceId, head);
         }
 
         var pulls = reply.Value
@@ -321,7 +325,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
         }
 
         var sourceRepository = request.HeadRepository ?? baseRepository;
-        var (source, sourceFailure, _, _) = await ProjectAsync(token, GitLabProfile.ProjectId(sourceRepository.FullName), ct).ConfigureAwait(false);
+        var (source, sourceFailure, sourceUrl, sourceRequestId) = await ProjectAsync(token, GitLabProfile.ProjectId(sourceRepository.FullName), ct).ConfigureAwait(false);
         if (sourceFailure is not null)
         {
             return HostingResult<PullRequest>.Fail(sourceFailure);
@@ -339,7 +343,14 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             target = based!;
         }
 
+        // The head is read before anything is posted: a source whose path cannot be read fails
+        // the call with nothing made, as a failed GET does (7.4).
         var across = source!.Id != target.Id;
+        if ((across ? Hosted(source.PathWithNamespace) : baseRepository) is not { } head)
+        {
+            return HostingResult<PullRequest>.Fail(_client.MalformedAnswer(HttpMethod.Get, sourceUrl, sourceRequestId));
+        }
+
         var body = new GitLabNewMergeRequestJson
         {
             SourceBranch = request.Head,
@@ -356,8 +367,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             return HostingResult<PullRequest>.Fail(failure);
         }
 
-        var head = across ? Hosted(source.PathWithNamespace) : baseRepository;
-        return reply.Value is { } json && ReadableWebUrl(json.WebUrl) is not null && head is not null
+        return reply.Value is { } json && ReadableWebUrl(json.WebUrl) is not null
             ? HostingResult<PullRequest>.Ok(Pull(json, baseRepository, head))
             : HostingResult<PullRequest>.Fail(_client.MalformedAnswer(HttpMethod.Post, url, reply.RequestId));
     }
@@ -365,8 +375,9 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
     public void Dispose() => _client.Dispose();
 
     /// <summary>
-    /// Forgets the client's kept answers and A4's forks (a sign-out). An answer a request still in
-    /// flight brings is kept under its token's fingerprint, which no other token's request finds.
+    /// Forgets the client's kept answers and A4's forks (a sign-out). An answer or a fork that a
+    /// request still in flight brings is kept under its token's fingerprint, which no other token's
+    /// request finds.
     /// </summary>
     internal void ForgetKept()
     {
@@ -436,19 +447,25 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             : (null, _client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId), url, reply.RequestId);
     }
 
-    private bool KnownFork(long id, out HostedRepository? repository)
+    /// <summary>
+    /// The key A4's forks are kept under for <paramref name="token"/>: its SHA-256 in hex, as the
+    /// core keys its kept answers, so that no token is shown a lookup another token made.
+    /// </summary>
+    private static string Fingerprint(string token) => Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+    private bool KnownFork(string fingerprint, long id, out HostedRepository? repository)
     {
         lock (_forksGate)
         {
-            return _forks.TryGetValue(id, out repository);
+            return _forks.TryGetValue((fingerprint, id), out repository);
         }
     }
 
-    private HostedRepository? Remember(long id, HostedRepository? repository)
+    private HostedRepository? Remember(string fingerprint, long id, HostedRepository? repository)
     {
         lock (_forksGate)
         {
-            _forks[id] = repository;
+            _forks[(fingerprint, id)] = repository;
         }
 
         return repository;

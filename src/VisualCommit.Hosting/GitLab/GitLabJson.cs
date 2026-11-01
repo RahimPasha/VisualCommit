@@ -134,7 +134,8 @@ internal sealed record GitLabError(string? Text, string? Code, IReadOnlyList<str
     /// <summary>
     /// Reads <paramref name="body"/>: <c>error_description</c> (F) ?? <c>message</c> as a string (A)
     /// ?? its first item (B) ?? each field and its first message, <c>"; "</c> between (C) ??
-    /// <c>message.error</c> (D) ?? <c>error</c> (E). Any other body (not JSON, another shape) holds none.
+    /// <c>message.error</c> (D) ?? <c>error</c> (E). Any other body (not JSON, another shape, a string
+    /// that is not valid UTF-8 or holds a lone surrogate) holds none.
     /// </summary>
     public static GitLabError Of(byte[] body)
     {
@@ -168,8 +169,11 @@ internal sealed record GitLabError(string? Text, string? Code, IReadOnlyList<str
 
             return new GitLabError(text ?? StringOf(root, "error"), code, fields);
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
         {
+            // JsonDocument.Parse leaves a string's UTF-8 and escapes unchecked; GetString and a
+            // property's Name check them and throw InvalidOperationException. Such a body holds no
+            // words, so its kind still comes from the status alone (7.3).
             return None;
         }
     }

@@ -98,6 +98,19 @@ public sealed class GitLabRecognitionTests
     [InlineData("http://127.0.0.1:47398/ada/web-app")]
     [InlineData("/srv/git/ada/web-app.git")]
     [InlineData("C:/git/ada/web-app")]
+    // Git and curl end the authority at ? and #, curl on Windows at \ too: git sends these six to
+    // evil.example (MEASURED by WP-GL's review, git 2.56.0.windows.4 through a local proxy).
+    [InlineData("https://evil.example#@gitlab.com/ada/web-app.git")]
+    [InlineData("https://evil.example?@gitlab.com/ada/web-app.git")]
+    [InlineData("https://evil.example\\@gitlab.com/ada/web-app.git")]
+    [InlineData("http://evil.example#@gitlab.com/ada/web-app.git")]
+    [InlineData("http://evil.example?@gitlab.com/ada/web-app.git")]
+    [InlineData("http://evil.example\\@gitlab.com/ada/web-app.git")]
+    // The same characters before an ssh or scp-like host are refused alike (fail closed).
+    [InlineData("ssh://evil.example#@gitlab.com/ada/web-app.git")]
+    [InlineData("evil.example#@gitlab.com:ada/web-app.git")]
+    [InlineData("git?x@gitlab.com:ada/web-app.git")]
+    [InlineData("git\\x@gitlab.com:ada/web-app.git")]
     public void Gitlab_com_refuses_other_hosts_ports_forms_and_paths(string url)
     {
         Assert.Null(GitLabUrls.Recognise(GitLabEndpoints.GitLabCom, url));

@@ -30,7 +30,8 @@ internal static partial class GitLabUrls
     /// <see cref="MaxSegments"/> segments, each of <c>[A-Za-z0-9_.-]</c> and none <c>.</c>,
     /// <c>..</c> or <c>-</c> (a web address's <c>/-/</c>), and no <c>%</c>, <c>?</c>, <c>#</c>,
     /// <c>\</c>, space or control character. The owner is the namespace path and the name the last
-    /// segment, both as written; the user part is never kept.
+    /// segment, both as written; the user part is never kept. An authority with <c>?</c>, <c>#</c>
+    /// or <c>\</c> is refused: git and curl end it there, so its last <c>@</c> names no host.
     /// </summary>
     public static HostedRepository? Recognise(GitLabEndpoints endpoints, string? url)
     {
@@ -121,6 +122,11 @@ internal static partial class GitLabUrls
         }
 
         var authority = rest[..slash];
+        if (EndsAnAuthority(authority))
+        {
+            return null;
+        }
+
         var at = authority.LastIndexOf('@');
         var user = at < 0 ? null : authority[..at];
         if (user is { Length: 0 })
@@ -157,7 +163,7 @@ internal static partial class GitLabUrls
 
         var authority = url[..colon];
         var at = authority.LastIndexOf('@');
-        return at > 0 && IsWebHost(authority[(at + 1)..]) && !HasPassword(authority[..at])
+        return at > 0 && !EndsAnAuthority(authority) && IsWebHost(authority[(at + 1)..]) && !HasPassword(authority[..at])
             ? url[(colon + 1)..]
             : null;
     }
@@ -195,6 +201,15 @@ internal static partial class GitLabUrls
         var last = path.LastIndexOf('/');
         return (path[..last], path[(last + 1)..]);
     }
+
+    /// <summary>
+    /// Whether <paramref name="authority"/> holds a character at which git or curl end an
+    /// authority before its last <c>@</c>: <c>?</c> and <c>#</c>, and <c>\</c> for curl on Windows.
+    /// Git sends <c>https://evil.example#@gitlab.com/g/p.git</c> to evil.example (MEASURED by WP-GL's
+    /// review with git 2.56.0.windows.4 through a local proxy, the ?@ and \@ forms and http too), so
+    /// such a URL is no one's; an scp-like one is refused alike.
+    /// </summary>
+    private static bool EndsAnAuthority(string authority) => authority.AsSpan().IndexOfAny("?#\\") >= 0;
 
     private static bool IsWebHost(string host) => IsHost(host, "gitlab.com") || IsHost(host, "www.gitlab.com");
 
