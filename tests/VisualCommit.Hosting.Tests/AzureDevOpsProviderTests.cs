@@ -117,32 +117,36 @@ public sealed class AzureDevOpsProviderTests
         Assert.DoesNotContain(fixture.Recorder.Sent, sent => sent.Url.AbsolutePath.Contains("resourceAreas", StringComparison.Ordinal));
     }
 
-    /// <summary>connectionData answers the fake does not give, each refused after that one request.</summary>
-    public static TheoryData<string, string?> ScriptedConnections => new()
+    /// <summary>
+    /// connectionData answers the fake does not give, each refused after that one request: the
+    /// anonymous shapes with <see cref="AzureDevOpsProvider.AnonymousDetail"/> (6.4; WP-A words its
+    /// text by it), the HTML 200 by the client's refusal of a success, without a detail.
+    /// </summary>
+    public static TheoryData<string, string?, string?> ScriptedConnections => new()
     {
         // The Anonymous descriptor with another id (r5 1.2's descriptor, MEASURED).
-        { """{"authenticatedUser":{"id":"7b0a1111-0000-4a00-8000-000000000009","descriptor":"System:PublicAccess;7b0a1111-0000-4a00-8000-000000000009","providerDisplayName":"Visitor","properties":{"Account":{"$type":"System.String","$value":"Visitor"}}}}""", "application/json" },
-        { """{"authenticatedUser":{"id":"7b0a1111-0000-4a00-8000-000000000009","descriptor":"system:publicaccess;x","providerDisplayName":"Visitor"}}""", "application/json" },
+        { """{"authenticatedUser":{"id":"7b0a1111-0000-4a00-8000-000000000009","descriptor":"System:PublicAccess;7b0a1111-0000-4a00-8000-000000000009","providerDisplayName":"Visitor","properties":{"Account":{"$type":"System.String","$value":"Visitor"}}}}""", "application/json", AzureDevOpsProvider.AnonymousDetail },
+        { """{"authenticatedUser":{"id":"7b0a1111-0000-4a00-8000-000000000009","descriptor":"system:publicaccess;x","providerDisplayName":"Visitor"}}""", "application/json", AzureDevOpsProvider.AnonymousDetail },
         // Account.$value Anonymous with another id and descriptor.
-        { """{"authenticatedUser":{"id":"7b0a1111-0000-4a00-8000-000000000009","descriptor":"Microsoft.Fake;x","providerDisplayName":"Visitor","properties":{"Account":{"$type":"System.String","$value":"Anonymous"}}}}""", "application/json" },
-        { """{"authenticatedUser":{"id":"AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA","descriptor":"Microsoft.Fake;x"}}""", "application/json" },
-        { """{"authenticatedUser":{"descriptor":"Microsoft.Fake;x"}}""", "application/json" },
-        { """{"authenticatedUser":{"id":"not-a-guid","descriptor":"Microsoft.Fake;x"}}""", "application/json" },
-        { """{"authorizedUser":{"id":"7b0a1111-0000-4a00-8000-000000000009"}}""", "application/json" },
+        { """{"authenticatedUser":{"id":"7b0a1111-0000-4a00-8000-000000000009","descriptor":"Microsoft.Fake;x","providerDisplayName":"Visitor","properties":{"Account":{"$type":"System.String","$value":"Anonymous"}}}}""", "application/json", AzureDevOpsProvider.AnonymousDetail },
+        { """{"authenticatedUser":{"id":"AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA","descriptor":"Microsoft.Fake;x"}}""", "application/json", AzureDevOpsProvider.AnonymousDetail },
+        { """{"authenticatedUser":{"descriptor":"Microsoft.Fake;x"}}""", "application/json", AzureDevOpsProvider.AnonymousDetail },
+        { """{"authenticatedUser":{"id":"not-a-guid","descriptor":"Microsoft.Fake;x"}}""", "application/json", AzureDevOpsProvider.AnonymousDetail },
+        { """{"authorizedUser":{"id":"7b0a1111-0000-4a00-8000-000000000009"}}""", "application/json", AzureDevOpsProvider.AnonymousDetail },
         // An HTML 200 (g1 G0.1).
-        { "<!DOCTYPE html><html><head><title>Sign in</title></head></html>", "text/html" },
+        { "<!DOCTYPE html><html><head><title>Sign in</title></head></html>", "text/html", null },
     };
 
     [Theory]
     [MemberData(nameof(ScriptedConnections))]
-    public async Task A1_refuses_an_anonymous_or_html_connection_after_that_one_request(string body, string? contentType)
+    public async Task A1_refuses_an_anonymous_or_html_connection_after_that_one_request(string body, string? contentType, string? detail)
     {
         var recorder = new RecordingHttpHandler(_ => Answer(HttpStatusCode.OK, body, contentType));
         using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, new ListLog(), new ManualTimeProvider());
 
         var failure = (await provider.CheckTokenAsync("azdo_FAKE-Fernhill-Labs-1", "myorg", Cancelled)).Failure!;
 
-        Assert.Equal((HostingFailureKind.BadCredentials, HostingProvider.AzureDevOps), (failure.Kind, failure.Provider));
+        Assert.Equal((HostingFailureKind.BadCredentials, detail, HostingProvider.AzureDevOps), (failure.Kind, failure.Detail, failure.Provider));
         Assert.Single(recorder.Sent);
     }
 
@@ -250,8 +254,10 @@ public sealed class AzureDevOpsProviderTests
               {"id":"4","name":"filed","project":{"name":"p"},"remoteUrl":"https://myorg@dev.azure.com/myorg/p/_git/filed","webUrl":"file:///myorg/p/_git/filed"},
               {"id":"5","name":"..","project":{"name":"p"},"remoteUrl":"https://dev.azure.com/myorg/p/_git/x","webUrl":"https://dev.azure.com/myorg/p/_git/x"},
               {"id":"6","name":"disabled","project":{"name":"p"},"remoteUrl":"https://dev.azure.com/myorg/p/_git/disabled","webUrl":"https://dev.azure.com/myorg/p/_git/disabled","isDisabled":true},
-              {"id":"7","name":"bare","project":{"name":"p"}}
-            ],"count":7}
+              {"id":"7","name":"bare","project":{"name":"p"}},
+              {"id":"8","name":"a/b","project":{"name":"p"},"remoteUrl":"https://dev.azure.com/myorg/p/_git/a%2Fb","webUrl":"https://dev.azure.com/myorg/p/_git/a%2Fb"},
+              {"id":"9","name":"x","project":{"name":"p\\q"},"remoteUrl":"https://dev.azure.com/myorg/p%5Cq/_git/x","webUrl":"https://dev.azure.com/myorg/p%5Cq/_git/x"}
+            ],"count":9}
             """;
         var recorder = new RecordingHttpHandler(_ => Answer(HttpStatusCode.OK, Rows, "application/json"));
         using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, new ListLog(), new ManualTimeProvider());
@@ -281,6 +287,47 @@ public sealed class AzureDevOpsProviderTests
         }
 
         Assert.Single(recorder.Sent);
+    }
+
+    [Fact]
+    public async Task A2_and_A4_refuse_a_null_row_as_malformed_and_nothing_throws()
+    {
+        // System.Text.Json does not hold a list's elements to their annotations, so a null row parses.
+        var recorder = new RecordingHttpHandler(_ => Answer(HttpStatusCode.OK, """{"value":[null],"count":1}""", "application/json"));
+        using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, new ListLog(), new ManualTimeProvider());
+        var account = new HostingAccount(new AccountKey(HostingProvider.AzureDevOps, "dev.azure.com", "myorg"), "MyOrg", 0, null, null, true, "7b0a1111-0000-4a00-8000-000000000001");
+
+        var repositories = (await provider.ListRepositoriesAsync("azdo_FAKE-myorg-1", account, Cancelled)).Failure!;
+        var pulls = (await provider.ListPullRequestsAsync("azdo_FAKE-myorg-1", new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", "MyOrg/p", "app"), Cancelled)).Failure!;
+
+        Assert.Equal((HostingFailureKind.Malformed, HostingProvider.AzureDevOps), (repositories.Kind, repositories.Provider));
+        Assert.Equal((HostingFailureKind.Malformed, HostingProvider.AzureDevOps), (pulls.Kind, pulls.Provider));
+        Assert.Equal(2, recorder.Sent.Count);
+    }
+
+    [Fact]
+    public async Task A2_refuses_a_list_project_that_is_no_single_name_and_A4_drops_a_fork_source_of_such_a_name()
+    {
+        var recorder = new RecordingHttpHandler(_ => Answer(HttpStatusCode.OK, """
+            {"value":[
+              {"pullRequestId":3,"title":"Fix a typo","sourceRefName":"refs/pull/3/source","targetRefName":"refs/heads/main","forkSource":{"name":"refs/heads/fix-typo","repository":{"id":"9","name":"a/b","project":{"name":"p"}}}},
+              {"pullRequestId":2,"title":"Fix another","sourceRefName":"refs/pull/2/source","targetRefName":"refs/heads/main","forkSource":{"name":"refs/heads/fix-more","repository":{"id":"8","name":"fork","project":{"name":"p\\q"}}}},
+              {"pullRequestId":1,"title":"Fix a third","sourceRefName":"refs/pull/1/source","targetRefName":"refs/heads/main","forkSource":{"name":"refs/heads/fix-last","repository":{"id":"7","name":"fork","project":{"name":"p"}}}}
+            ],"count":3}
+            """, "application/json"));
+        var account = new HostingAccount(new AccountKey(HostingProvider.AzureDevOps, "dev.azure.com", "myorg"), "MyOrg", 0, null, null, true, "7b0a1111-0000-4a00-8000-000000000001");
+        foreach (var project in new[] { string.Empty, ".", "..", "a/b", "a\\b" })
+        {
+            using var inProject = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service with { ListProject = project }, () => recorder, new ListLog(), new ManualTimeProvider());
+            var failure = (await inProject.ListRepositoriesAsync("azdo_FAKE-myorg-1", account, Cancelled)).Failure!;
+            Assert.Equal((HostingFailureKind.Validation, HostingProvider.AzureDevOps), (failure.Kind, failure.Provider));
+        }
+
+        Assert.Empty(recorder.Sent);
+        using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, new ListLog(), new ManualTimeProvider());
+        var pulls = (await provider.ListPullRequestsAsync("azdo_FAKE-myorg-1", new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", "MyOrg/p", "app"), Cancelled)).Value!.PullRequests;
+
+        Assert.Equal([("fix-typo", (HostedRepository?)null), ("fix-more", null), ("fix-last", new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", "MyOrg/p", "fork"))], pulls.Select(pull => (pull.HeadRef, pull.HeadRepository)));
     }
 
     [Fact]

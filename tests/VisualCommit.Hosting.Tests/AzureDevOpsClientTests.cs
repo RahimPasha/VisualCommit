@@ -189,7 +189,7 @@ public sealed class AzureDevOpsClientTests
         var cases = new (Uri Url, string Location)[]
         {
             (connection, "https://spsprodfake.vssps.visualstudio.com/_signin?realm=dev.azure.com&reply_to=x"),
-            (repositories, "https://spsprodcus1.vssps.visualstudio.com/_signin?realm=dev.azure.com"),
+            (repositories, "https://spsprodfake2.vssps.visualstudio.com/_signin?realm=dev.azure.com"),
             (repositories, "https://app.vssps.visualstudio.com/elsewhere"),
             (repositories, "https://dev.azure.com/_signin?realm=dev.azure.com"),
             // Every redirect of connectionData, the same origin's in the same organization too (D360).
@@ -252,12 +252,67 @@ public sealed class AzureDevOpsClientTests
     }
 
     [Fact]
+    public async Task A_redirect_on_the_origin_whose_path_leaves_the_plain_form_is_malformed_and_not_followed()
+    {
+        // .NET sends /fake-org/%2E%2E%2Fother-org/… as /fake-org/..%2Fother-org/…: its first segment
+        // stays fake-org, but a server that decodes %2F before resolving dot segments serves other-org.
+        foreach (var location in new[]
+        {
+            "/fake-org/%2E%2E%2Fother-org/_apis/git/repositories?api-version=7.1",
+            "/fake-org/%2e%2e%5Cother-org/_apis/git/repositories?api-version=7.1",
+            "https://dev.azure.com/fake-org/p%2Fq/_apis/git/repositories?api-version=7.1",
+            "/fake-org/%252E%252E/other-org/_apis/git/repositories?api-version=7.1",
+        })
+        {
+            var log = new ListLog();
+            var (client, recorder) = Scripted(request => request.RequestUri!.AbsolutePath == "/fake-org/_apis/git/repositories"
+                ? Answer(HttpStatusCode.Found, string.Empty, null, ("Location", location))
+                : Answer(HttpStatusCode.OK, """{"count":0,"value":[]}""", "application/json"), log);
+            using (client)
+            {
+                var failure = (await client.SendAsync(HttpMethod.Get, Token, new Uri(Service.WebBase, "fake-org/_apis/git/repositories?api-version=7.1"), null, AzureDevOpsJsonContext.Default.RepositoryList, Cancelled)).Failure;
+                Assert.True(failure is { Kind: HostingFailureKind.Malformed, Provider: HostingProvider.AzureDevOps }, location);
+                Assert.Single(recorder.Sent);
+                Assert.Contains(AzureDevOpsClient.OutsideOrganization, log.Lines[^1].Message, StringComparison.Ordinal);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task A_null_row_on_a_page_or_in_the_probe_is_malformed_and_nothing_throws()
+    {
+        var url = new Uri(Service.WebBase, "Fernhill-Labs/Mobile%20App/_apis/git/repositories/mobile-app/pullrequests?searchCriteria.status=active&api-version=7.1");
+        static string IdOf(AzureDevOpsPullRequestJson row) => row.PullRequestId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        // System.Text.Json does not hold a list's elements to their annotations, so a null row parses.
+        var (onPage, pageRecorder) = Scripted(_ => Answer(HttpStatusCode.OK, """{"value":[{"pullRequestId":2,"title":"Request 2","sourceRefName":"refs/heads/b2","targetRefName":"refs/heads/main"},null],"count":2}""", "application/json"));
+        using (onPage)
+        {
+            var failed = await onPage.GetPagesAsync(Token, url, AzureDevOpsJsonContext.Default.PullRequestList, IdOf, 3, Cancelled);
+            Assert.Equal(((List<AzureDevOpsPullRequestJson>?)null, HostingFailureKind.Malformed, HostingProvider.AzureDevOps), (failed.Value, failed.Failure!.Kind, failed.Failure.Provider));
+            Assert.Single(pageRecorder.Sent);
+        }
+
+        var (inProbe, probeRecorder) = Scripted(request => request.RequestUri!.Query.Contains("$top=1&", StringComparison.Ordinal)
+            ? Answer(HttpStatusCode.OK, """{"value":[null],"count":1}""", "application/json")
+            : Page(request, [3, 2, 1]), pageSize: 2);
+        using (inProbe)
+        {
+            var failed = await inProbe.GetPagesAsync(Token, url, AzureDevOpsJsonContext.Default.PullRequestList, IdOf, 1, Cancelled);
+            Assert.Equal(((List<AzureDevOpsPullRequestJson>?)null, HostingFailureKind.Malformed), (failed.Value, failed.Failure!.Kind));
+            Assert.Equal(2, probeRecorder.Sent.Count);
+        }
+    }
+
+    [Fact]
     public async Task A_203_and_an_html_success_are_refused_credentials_and_a_boms_json_is_read()
     {
         var cases = new Func<HttpResponseMessage>[]
         {
             () => Answer(HttpStatusCode.NonAuthoritativeInformation, """{"count":0,"value":[]}""", "application/json"),
             () => Answer(HttpStatusCode.OK, "<!DOCTYPE html><html><head><title>Sign in</title></head></html>", "text/html"),
+            // Typed text/html though its body does not start with '<': the Content-Type alone refuses it.
+            () => Answer(HttpStatusCode.OK, "Sign in to continue", "text/html"),
             () => Answer(HttpStatusCode.OK, "  <html></html>", "application/json"),
             () => AnswerBytes(HttpStatusCode.OK, [0xEF, 0xBB, 0xBF, .. "<html></html>"u8.ToArray()]),
         };

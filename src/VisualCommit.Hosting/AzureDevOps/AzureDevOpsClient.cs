@@ -5,6 +5,7 @@ using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 using VisualCommit.Hosting.Http;
 
 namespace VisualCommit.Hosting.AzureDevOps;
@@ -104,10 +105,16 @@ internal sealed class AzureDevOpsClient : IDisposable
         AzureDevOpsReply<List<T>> Failed(AzureDevOpsReply<AzureDevOpsListJson<T>> reply) => new(default, reply.Failure, reply.Status, false, reply.RequestId);
         for (var page = 0; page < maxPages; page++)
         {
-            var reply = await SendAsync(HttpMethod.Get, token, WithQuery(url, Invariant($"$top={PageSize}&$skip={skip}")), null, type, ct).ConfigureAwait(false);
+            var pageUrl = WithQuery(url, Invariant($"$top={PageSize}&$skip={skip}"));
+            var reply = await SendAsync(HttpMethod.Get, token, pageUrl, null, type, ct).ConfigureAwait(false);
             if (reply.Failure is not null || reply.Value is null)
             {
                 return Failed(reply);
+            }
+
+            if (HasNullRow(reply.Value))
+            {
+                return Malformed(pageUrl, reply);
             }
 
             foreach (var row in reply.Value.Value)
@@ -125,13 +132,26 @@ internal sealed class AzureDevOpsClient : IDisposable
             }
         }
 
-        var probe = await SendAsync(HttpMethod.Get, token, WithQuery(url, Invariant($"$top=1&$skip={skip}")), null, type, ct).ConfigureAwait(false);
+        var probeUrl = WithQuery(url, Invariant($"$top=1&$skip={skip}"));
+        var probe = await SendAsync(HttpMethod.Get, token, probeUrl, null, type, ct).ConfigureAwait(false);
         if (probe.Failure is not null || probe.Value is null)
         {
             return Failed(probe);
         }
 
+        if (HasNullRow(probe.Value))
+        {
+            return Malformed(probeUrl, probe);
+        }
+
         return new AzureDevOpsReply<List<T>>(rows, null, probe.Status, probe.Value.Value.Exists(row => !seen.Contains(idOf(row))), probe.RequestId);
+
+        // A null row parses (System.Text.Json does not hold a list's elements to their annotations):
+        // the page is malformed, as one whose row lacks a member it must have, and nothing throws (D380).
+        static bool HasNullRow(AzureDevOpsListJson<T> list) => list.Value.Exists(row => row is null);
+
+        AzureDevOpsReply<List<T>> Malformed(Uri pageUrl, AzureDevOpsReply<AzureDevOpsListJson<T>> reply) =>
+            new(default, MalformedAnswer(HttpMethod.Get, pageUrl, reply.RequestId), reply.Status, false, reply.RequestId);
     }
 
     /// <summary>An answer that succeeded but lacks what the app needs: the core's <see cref="HostingHttpClient.MalformedAnswer"/>, with its warning.</summary>
@@ -243,7 +263,14 @@ internal sealed class AzureDevOpsClient : IDisposable
                 return new HostingFailure(HostingFailureKind.BadCredentials, SignInPageText);
             }
 
-            return HostingHttpClient.SameOrigin(location, TokenOrigin) && !string.Equals(FirstSegment(location), FirstSegment(exchange.Url), StringComparison.OrdinalIgnoreCase)
+            // On the token's origin the path as .NET will send it must stay in g3 G3.4's form
+            // (InPlainForm): .NET keeps an encoded slash or backslash (Location
+            // /<org>/%2E%2E%2F<other>/… is sent as /<org>/..%2F<other>/…, its first segment still
+            // <org>), and a server that decodes it before resolving dot segments would serve another
+            // organization with this one's token.
+            return HostingHttpClient.SameOrigin(location, TokenOrigin)
+                && (!string.Equals(FirstSegment(location), FirstSegment(exchange.Url), StringComparison.OrdinalIgnoreCase)
+                    || !CredentialBinding.InPlainForm(location.GetLeftPart(UriPartial.Path)))
                 ? new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(Provider))
                 : null;
         }

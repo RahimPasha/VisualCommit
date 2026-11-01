@@ -185,7 +185,7 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
         }
 
         var organization = account.Login;
-        if (!IsOurs(account.Key) || !AzureDevOpsUrls.IsOrganizationName(organization) || Endpoints.ListProject is "" or "." or "..")
+        if (!IsOurs(account.Key) || !AzureDevOpsUrls.IsOrganizationName(organization) || (Endpoints.ListProject is { } listed && !AzureDevOpsUrls.IsName(listed)))
         {
             return HostingResult<RepositoryList>.Fail(Own(HostingFailureKind.Validation, NotThisServiceText));
         }
@@ -198,7 +198,14 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
             return HostingResult<RepositoryList>.Fail(failure);
         }
 
-        var repositories = reply.Value!.Value
+        // A null row parses (the elements of a list are not held to their annotations): the answer
+        // is malformed, as one whose row lacks a member it must have, and nothing throws (D380).
+        if (reply.Value!.Value.Exists(json => json is null))
+        {
+            return HostingResult<RepositoryList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId));
+        }
+
+        var repositories = reply.Value.Value
             .Where(json => !json.IsDisabled)
             .Select(json => Info(json, organization))
             .OfType<RepositoryInfo>()
@@ -461,6 +468,7 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
             head = fork.Repository is { Name: { Length: > 0 } forkName, Project.Name: { Length: > 0 } forkProject }
                 ? new HostedRepository(HostingProvider.AzureDevOps, Host, baseRepository.OwnerRoot + "/" + forkProject, forkName)
                 : null;
+            head = head is not null && AzureDevOpsUrls.NamesOf(head) is not null ? head : null;
         }
         else
         {

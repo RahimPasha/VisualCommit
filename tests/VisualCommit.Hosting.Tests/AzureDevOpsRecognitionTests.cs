@@ -286,7 +286,9 @@ public sealed class AzureDevOpsRecognitionTests
         Assert.Equal("http://127.0.0.1:47397/Fernhill-Labs/Mobile%20App/_git/mobile%20app%231", AzureDevOpsUrls.WebUrlOf(Local, repository).AbsoluteUri);
 
         // A name that would leave the organization once resolved, or an owner of another shape, is refused.
-        foreach (var (owner, name) in new[] { ("Fernhill-Labs/..", "r"), ("Fernhill-Labs/p", ".."), ("Fernhill-Labs/p", "."), ("Fernhill-Labs", "r"), ("Fernhill-Labs/p/x", "r"), ("../x", "r"), ("my.org/p", "r"), ("/p", "r") })
+        // A name holding / or \ (which no Azure DevOps name holds) is refused too: escaped as %2F or
+        // %5C, a server that decodes it before resolving dot segments would read a separator.
+        foreach (var (owner, name) in new[] { ("Fernhill-Labs/..", "r"), ("Fernhill-Labs/p", ".."), ("Fernhill-Labs/p", "."), ("Fernhill-Labs", "r"), ("Fernhill-Labs/p/x", "r"), ("../x", "r"), ("my.org/p", "r"), ("/p", "r"), ("Fernhill-Labs/p", "a/b"), ("Fernhill-Labs/p", "a\\b"), ("Fernhill-Labs/p\\..", "r"), ("Fernhill-Labs/p", "..\\..\\x") })
         {
             var refused = new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", owner, name);
             Assert.Null(AzureDevOpsUrls.NamesOf(refused));

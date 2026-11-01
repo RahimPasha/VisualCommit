@@ -121,9 +121,8 @@ internal static class AzureDevOpsUrls
 
     /// <summary>
     /// A repository's organization, project and name when its owner is two segments: an
-    /// organization in the grammar (D360), and a project and a name that are neither empty, <c>.</c>
-    /// nor <c>..</c> (an escaped name stays one segment, but a dot segment would leave the
-    /// organization once the address is resolved); else null.
+    /// organization in the grammar (D360), and a project and a name in <see cref="IsName"/>'s
+    /// form; else null.
     /// </summary>
     public static (string Organization, string Project, string Name)? NamesOf(HostedRepository repository)
     {
@@ -135,9 +134,18 @@ internal static class AzureDevOpsUrls
             && IsName(repository.Name)
             ? (organization, project, repository.Name)
             : null;
-
-        static bool IsName(string name) => name.Length > 0 && name is not ("." or "..");
     }
+
+    /// <summary>
+    /// A project's or a repository's name that stays one segment of the organization's addresses:
+    /// not empty, <c>.</c> or <c>..</c> (a dot segment would leave the organization once the address
+    /// is resolved), and without <c>/</c> or <c>\</c>, which no Azure DevOps name holds and which a
+    /// server that decodes <c>%2F</c> or <c>%5C</c> before it resolves dot segments would read as
+    /// separators. A2's rows, A3's parent and A4's fork source come from the server, so they are
+    /// held to it too.
+    /// </summary>
+    public static bool IsName(string? name) =>
+        !string.IsNullOrEmpty(name) && name is not ("." or "..") && name.AsSpan().IndexOfAny('/', '\\') < 0;
 
     /// <summary>Azure DevOps' organization grammar, <c>^[A-Za-z0-9-]+$</c> (D360).</summary>
     public static bool IsOrganizationName(string? name) =>
