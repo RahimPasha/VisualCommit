@@ -690,7 +690,8 @@ still refuses (a terminal push still works).
 
 Left out of phase 7b by the owner's answers of 2026-10-31: Azure DevOps Server on premises and
 self-managed GitLab (D347); several accounts of one provider at once (D348); author avatars from
-Azure DevOps and GitLab (D349).
+Azure DevOps and GitLab (D349). Left out by the owner's answer of 2026-11-01: GitHub avatars for a
+repository whose listed remote is another provider's but which also has a GitHub remote (D367).
 
 Left out of phase 4 on purpose (design 14.4, D143, D148): an interactive rebase that includes the
 root commit (`--root`); syntax colours in the resolver's editable result; a splitter between the

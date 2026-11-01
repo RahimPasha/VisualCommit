@@ -3,20 +3,24 @@
 This is phase 7b's design: what the phase builds, how it is cut into work packages, the contracts the
 packages share, and one brief per package for its builder. Once the phase is built it is kept as
 history, as phases 3 to 7a's designs are. Its decisions are recorded only in `docs/decisions.md`
-(D243): the design names them by number (D357 to D372) and does not repeat them. The phase's report,
+(D243): the design names them by number (D357 to D378) and does not repeat them. The phase's report,
 handoff and status cite its sections as "design N.N". Binding inputs: `docs/plan.md`'s "Phase 7b" and
 "Workflow" sections and its risks; D344 to D356 and the decisions they leave standing; the 7a handoff's
 "For the next phase", "Known issues" and "Things that cost time"; the lead's 31 rulings of 2026-10-31
 ("ruling n"). The research is outside the repository, in
 `D:/Projects/Personal/phase7b-work/research/`: notes r1 to r8 ("r5 4.2") and their gap rounds ("g1
 G0.3": g1 at the end of r5, g2 of r6, g3 of r7, g4 of r4, g4's D4 at the end of r1). A fact keeps its
-mark, MEASURED, READ or ASSUMED, wherever a fake or a test copies it, and a fake that copies an ASSUMED
-answer names it for the live command to confirm (D342). Line numbers are those of `5057892` (7a's code
-as merged); 7a's design is cited "7a design N.N".
+mark, MEASURED, READ or ASSUMED, wherever a fake or a test copies it. A fake that copies an ASSUMED
+answer names it for the live command to confirm (D342); an answer the live command does not reach,
+outside the requests D371 and D374 admit, needing a token D364 does not make (a read-only write, a selected-projects token's list) or left so by D375 (an Azure DevOps fork's pull-request
+shapes, a legacy GitLab token's sign-in), keeps its READ or ASSUMED mark and is named as kept. Line
+numbers are those of `5057892` (7a's code as merged); 7a's design is cited "7a design N.N".
 
-A builder reads section 0, section 1 and its own section, and nothing else. No token, no e-mail address
-of the owner's and no name of the owner's Azure DevOps organization goes into anything a package
-writes (D346, D352); examples use `<organization>` or the fakes' made-up names.
+A builder reads section 0, section 1 and its own section, and nothing else. Nothing a package writes
+holds a token, or an e-mail address, name, GUID or organization of the owner's or of any real person
+or organization in the research's samples and captures (section 1; D346, D352): examples use
+`<organization>` or the fakes' made-up names, and a copy of a captured answer keeps its member names
+and shape with made-up values, the services' published constants aside (section 1).
 
 ## Contents
 
@@ -42,68 +46,71 @@ writes (D346, D352); examples use `<organization>` or the fakes' made-up names.
 
 ### 0.1 Scope against the Delivers list
 
-| Delivers item (`plan.md`) | Where |
-|---|---|
-| Azure DevOps and gitlab.com on 7a's provider model (D347, D348) | WP0, WP-AZ, WP-GL, WP-S |
-| Sign-in with a personal access token (D345); tokens in the keychain (R3) | WP-AZ, WP-GL (the check), WP-S, WP-A |
-| The account's token on git calls to the remotes it covers (D350) | WP-C, WP-S |
-| Browse and clone | WP-AZ, WP-GL (A2), WP-B |
-| The request list (D351), its menu, checkout, the badge, open in browser | WP-AZ, WP-GL (A4), WP-P |
-| Create from the branch menus and the drop menu | WP-AZ, WP-GL (A5), WP-N |
-| Avatars stay GitHub's alone (D349) | WP-S |
-| 7a's screens name the provider they act on (D351) | WP0, WP-A, WP-B, WP-P, WP-N, WP-C |
-| A local fake of each provider's API (D346) | WP-F, WP-FA, WP-FL |
-| The live command for Azure DevOps and GitLab (D346, D352) | WP-LIVE |
-| The 7a handoff's Known issue: `scripts/heavy-run.sh`'s header comment | L1 |
+| Delivers item (`plan.md`) | Where | Proven by |
+|---|---|---|
+| Azure DevOps and gitlab.com on 7a's provider model (D347, D348) | WP0, WP-AZ, WP-GL, WP-S | The recognition classes (6.8, 7.6), `HostingSessionProvidersTests` and `RepositoryHostingProvidersTests` (9.10); parts A to N |
+| Sign-in with a personal access token (D345); tokens in the keychain (R3) | WP-AZ, WP-GL (the check), WP-S, WP-A | Part A; `SignInDialogProvidersTests` (10.8); `HostingSessionProvidersTests` (9.10) and `TokenEntryNamesTests`' cases for the new providers' entry names (1.10); the live `Check_2` and `Check_3` |
+| The account's token on git calls to the remotes it covers (D350) | WP-C, WP-S | `CoverageGitMatchTests`, `CredentialBindingSelectTests` and `PushGuardProvidersTests` (8.7); `HostingSessionCredentialTests` (9.10); part B's clones; the live `Check_2` |
+| Browse and clone | WP-AZ, WP-GL (A2), WP-B | Part B; `CloneFromAccountTests` (11.6); the live `Check_2` to `Check_4` |
+| The request list (D351), its menu, checkout, the badge, open in browser | WP-AZ, WP-GL (A4), WP-P | Part P; 12.7's classes; `RepositoryHostingProvidersTests`' `<organization>.visualstudio.com` remote listed in process (9.10); the live `Check_2` and `Check_4` |
+| Create from the branch menus and the drop menu | WP-AZ, WP-GL (A5), WP-N | Part N; 13.7's classes; the live `Check_2` and `Check_3` |
+| Avatars stay GitHub's alone (D349) | WP-S | `RepositoryAvatarsTests` (9.10); 7a's part G pictures unchanged |
+| 7a's screens name the provider they act on (D351) | WP0, WP-A, WP-B, WP-P, WP-N, WP-C | Parts A to N; `HostingTextsProviderTests` (1.10); 7a's pictures as 0.7 says |
+| A local fake of each provider's API (D346) | WP-F, WP-FA, WP-FL | `FakeAzureDevOpsTests`, `FakeGitLabTests` and their git classes (3.6, 4.6); `Phase7bSupportTests` (2.8) |
+| The live command for Azure DevOps and GitLab (D346, D352) | WP-LIVE | `LiveSafetyTests` and `LiveScreenTests` offline; its runs with the owner's tokens (15.9) |
+| The 7a handoff's Known issue: `scripts/heavy-run.sh`'s header comment | L1 | The file |
 
-The owner's decisions D344 to D356 bind and are not restated. The lead's rulings are carried by
-D357 (the session), D358 (records and HTTP), D359 (credentials), D360 (Azure
-DevOps' sign-in), D361 (checkout), D362 (texts), D363 (harness), D364 (the live
-command) and D365 (one phase), and the packages' own choices by the decisions their sections cite.
+Plan.md's "Done when" is judged in three places. Against the fakes: parts A, B, P and N and the five
+`ShellDriver` classes of 0.4's lagged list, on the laptop and in CI's five jobs. Against the services:
+the live command's `Check_2` (stage 1) and `Check_3` (stage 2) per provider, on the Windows machine
+with the owner's tokens, and again at the gate (D335). The visual gate: WP-R's five launches and the
+inspection, on the Windows machine.
+
+The owner's decisions D344 to D356 and their answers of 2026-11-01 (the acceptance of D367, amending
+D252 and D349, and D373 to D376) bind and are not restated. The lead's rulings are carried by D357
+(the session), D358 (records and HTTP), D359 (credentials), D360 (Azure DevOps' sign-in), D361
+(checkout), D362 (texts), D363 (harness), D364 (the live command) and D365 (one phase), the design
+review's by D377 (CI's limits, 0.6) and D378 (another provider's token form refused at sign-in, 10.4),
+and the packages' own choices by the decisions their sections cite.
 
 Out of scope: Azure DevOps Server and self-managed GitLab (D347); several accounts of one provider
-(D348); the new providers' avatars (D349); a browser sign-in or an app registration (D345); a request
-while no account of its provider is signed in, an anonymous one included (D257, D350, D360);
-Azure DevOps' global tokens ("All accessible organizations", which stop working on 2026-12-01, r5 0.6);
-binding SSH remotes (recognised, never bound, as 7a's); checking out an Azure DevOps fork's pull
-request whose fork is no remote here (D361); interpreting GitLab's quick actions (sent as
+(D348); the new providers' avatars (D349), and GitHub avatars for a repository whose listed remote is
+another provider's but which also has a GitHub remote (D367, amending D252 and D349); a browser sign-in or an
+app registration (D345); a request while no account of its provider is signed in, an anonymous one
+included (D257, D350, D360); Azure DevOps' global tokens ("All accessible organizations", which stop
+working on 2026-12-01, r5 0.6); binding SSH remotes (recognised, never bound, as 7a's); checking out an
+Azure DevOps fork's pull request whose fork is no remote here (D361); a live proof of an Azure DevOps
+fork's pull request or of a legacy GitLab token (D375); interpreting GitLab's quick actions (sent as
 typed, ruling 20); an answer to plan risk 39, which stays the owner's (16.4).
 
 ### 0.2 Design statements that shape the whole phase
 
-The decisions are cited, not restated; these are the mechanisms every package builds on.
+The decisions are cited, not restated (D243); each line names a mechanism every package builds on
+and the sections that build it.
 
-- **Provider model** (D357, D358; rulings 1 to 6). One `HostingSession`, a slot per provider
-  with 7a's invariants each (r1 P1); one vault, keychain probe and `IGitCredentialSource`. Azure DevOps'
-  key is (`AzureDevOps`, `dev.azure.com`, the organization in the server's spelling), so `<organization>@`
-  URLs are the account's under 7a's rules (`CredentialBinding.cs:44`, `AskPassBroker.cs:602-608`);
-  GitLab's (`GitLab`, `gitlab.com`, the username). `HostedRepository.Owner` is the namespace path;
-  records compare as 7a's (`HostingRecords.cs:18-29`), never by `FullName` (`HostingRules.cs:102,121`).
-  The listed remote is the first recognised one of any provider; `OtherOrganization` sends nothing
-  (D356, D366); avatars stay GitHub's while the listed remote is GitHub's (D367).
-- **HTTP** (D358, D368; ruling 4). `GitHubClient`'s rules move into one internal
-  core with a profile per provider (1.4, 5); it strips a leading BOM (g1 G0.8, MEASURED) and screens
-  e-mail addresses out of every failure.
-- **Credentials** (D359, D369; rulings 8 to 15). Bindings stay one per remote URL
-  (r7 0.1, MEASURED); the provider's `GitCoverage` says which are the account's; the new providers' URLs
-  bind only in g3 G3.4's form, D278's drop compares normalised paths and fails closed (g3 G0.3, G0.5,
-  MEASURED); GitLab's `.git` twin (g3 G2); `username=x-access-token` for all three; no `useHttpPath` pair.
-- **Requests** (D360, D361; rulings 16 to 20). Sign-in: connectionData with the token and
-  the core resource area for the spelling; GitLab's `GET /user`. Checkout: GitLab's
-  `refs/merge-requests/<iid>/head`; Azure DevOps through a remote's branch alone (r5 0.4, MEASURED). A
-  refusal reaches the App as a `PullRequestRefusal`, never a service's sentence (today GitHub's 422 is
-  read, `RepositoryOperations.CreatePullRequest.cs:374,419,421,423`).
-- **Texts and entries** (D362; rulings 7, 21 to 24). GitHub's texts stay word for word; the others
-  come from `HostingProviders` (Core) and `HostingTexts` (App), 1.2 and 1.7. The new providers are off in
-  both harnesses unless a check gives a fake, so earlier pictures keep all but 0.7's changes.
-- **Harness** (D363, D370; rulings 25 to 29). One fakes' core out of `FakeGitHub`; host mode
-  by URL path (g4 D3.4; `PATH_INFO` is raw today, `AuthRemoteServer.cs:1155-1175`); no fake of
-  `<organization>.visualstudio.com` (r5 0.10); the tripwire at three base64 alignments (g4 D1.6).
-- **Live command** (D364, D371, D372; ruling 30). Its first stage runs once the session
-  exists, so the fakes are corrected before the parts' checks copy them (the 7a handoff, "Things that
-  cost time").
-- **One phase** (D365; ruling 31): the design stage about 20 to 23 points of the week, the build
-  and gate 45 to 55; the design before the reset of 2026-11-05 (D344), the build and gate after.
+- **Provider model** (D357, D358, D366, D367; rulings 1 to 6; 1.4, 1.5, 9): one `HostingSession`, a slot
+  per provider; Azure DevOps' key holds the organization, which `AccountKey` lower-cases
+  (`HostingAccount.Login` keeps the server's spelling), GitLab's the username; the listed remote is the
+  first recognised one of any provider; `OtherOrganization` sends nothing (D356, D376); avatars stay
+  GitHub's while the listed remote is GitHub's.
+- **HTTP** (D358, D368; ruling 4; 1.4, 5): one core with a profile per provider, which strips a leading
+  BOM and screens e-mail addresses out of every failure.
+- **Credentials** (D359, D369; rulings 8 to 15; 1.2, 8): one binding per remote URL, the new providers'
+  only in g3 G3.4's form, with the `.git` and credential twins (8.2 steps 4, 4b); D278's drop compares
+  both paths in git's credential view and fails closed; `username=x-access-token` for all three.
+- **Requests** (D360, D361; rulings 16 to 20; 5, 6, 7, 12, 13): sign-in by connectionData and
+  `GET /user`; GitLab's checkout by `refs/merge-requests/<iid>/head`, Azure DevOps' through a remote's
+  branch alone; a refusal reaches the App as a `PullRequestRefusal`, never a service's sentence (today
+  GitHub's 422 is read, `RepositoryOperations.CreatePullRequest.cs:374`, `:419`, `:421`, `:423`).
+- **Texts and entries** (D362; rulings 7, 21 to 24; 1.2, 1.7): GitHub's texts word for word, the
+  others' from `HostingProviders` and `HostingTexts`; the new providers off in both harnesses unless a
+  check gives a fake (0.7).
+- **Harness** (D363, D370; rulings 25 to 29; 2 to 4): one fakes' core out of `FakeGitHub`, host mode by
+  URL path, no fake of `<organization>.visualstudio.com`, the tripwire at three base64 alignments.
+- **Live command** (D364, D371 to D375; ruling 30; 15): stage 1 runs once WP-S has merged, so the fakes
+  are corrected before the parts' checks copy them (0.4).
+- **One phase** (D365; ruling 31): the design stage about 20 to 23 points of the week, the build and
+  gate 45 to 55; the design before the reset of 2026-11-05 (D344), the build and gate after.
 
 ### 0.3 How 7b is named
 
@@ -117,7 +124,10 @@ The decisions are cited, not restated; these are the mechanisms every package bu
   becomes `7b` in the commit that creates the project, not before.
 - Real window: `Phase7bRealWindowPass.cs` with `.Accounts.cs`, `.AzureDevOps.cs`, `.GitLab.cs`, and
   `RealApp.Phase7b.cs`; the csproj links `..\VisualCommit.VisualTests.Phase7b*\Phase7bExpectations*.cs`
-  as `Phase7b\%(Filename)%(Extension)`.
+  as `Phase7b\%(Filename)%(Extension)`. The 7b project's tests of the expectations are
+  `Phase7bExpectationTests.<part>.cs` and `Phase7bSupportTests.cs`, which the link's pattern does not
+  match; a `Phase7bExpectations` file uses nothing of the 7b project (no `RequestTestData`, no
+  `Phase7bChecks`).
 - Part letters avoid C, O, Q, R and T (D230): **A** accounts and sign-in, **B** browse and clone,
   **P** requests in the left panel and the graph, **N** a new request. Picture names match
   `^[abpn]?\d{1,2}[a-z0-9]{0,3}-[a-z0-9]+(-[a-z0-9]+)*$` and name the provider in their words
@@ -134,24 +144,46 @@ at a merge, in the order below. Builders run the test classes they touch with pl
 whole-project and full runs are the lead's, through `scripts/heavy-run.sh`.
 
 - **L1, the lead's first code commit.** `scripts/heavy-run.sh`'s header comment (its line 4 says about
-  55 minutes): 1 h 12 min 18 s at 7a's gate, four projects at once (D343).
+  55 minutes) carries no measured time any more: "the default run's length on the laptop is in
+  CLAUDE.md's What to know", as the real-window csproj's comment says for its pass. And
+  `.github/workflows/ci.yml`'s matrix limits (D377): Test step 55 to 70 minutes, job 65 to 80, with a
+  sentence for 7b in the comment above the Test step (`ci.yml:59-64`). In the same commit the lead
+  updates the docs that state the limits: CLAUDE.md's "What to know" (55 and 65 to 70 and 80, 44 to
+  56, and D377's rule: every Test step, a container's past 11 min 12 s of its 14, no raise after the
+  counted round's commit), plan risk 8 and status.md's CI section.
 - **WP0, the lead's contracts and stubs.** Section 1's list (1.10), in the main checkout, with no
-  change of behaviour or pictures. The 14 packages are sections 2 to 15.
+  change of behaviour or pictures. The 14 packages are sections 2 to 15; WP-LF (after WP-S's merge and
+  stage 1, before wave 4), a fix package like the review's fixes, has no section and is not counted
+  among them.
 
 **Waves.**
 1. L1, then WP0 (lead, main checkout).
 2. Wave 1: WP-F, WP-H and WP-C, side by side (no file in common).
-3. Wave 2: WP-FA and WP-FL after WP-F's merge; WP-AZ after WP-FA's and WP-H's, WP-GL after WP-FL's and
-   WP-H's (each client is tested against its fake in process); at most three at once.
-4. Wave 3: WP-S after WP-AZ, WP-GL and WP-C; from its merge the desktop app has the new providers. Then
-   WP-LIVE's first stage, run by the lead with the owner's tokens (status step 16); what it finds goes
-   into the fakes by a fix package before part A's checks are written (D342).
+3. Wave 2: WP-FA and WP-FL after WP-F's merge; WP-AZ after WP-FA's, WP-H's and WP-C's (its recognition
+   calls WP-C's `CredentialBinding.InPlainForm`, which WP0 leaves throwing `NotSupportedException`,
+   1.2), WP-GL after WP-FL's and WP-H's (each client is tested against its fake in process); at most
+   three at once.
+4. Wave 3: WP-S after WP-AZ, WP-GL and WP-C; from its merge the desktop app has the new providers. The
+   owner's steps of 15.8 are done before that merge (16.4). Then WP-LIVE's first stage, run by the lead
+   with the owner's tokens (status step 16); what it finds goes into the fakes by WP-LF before part A's
+   checks are written (D342).
+
+   **WP-LF, the fix package** (branch `wip/p7b-live-fix`, the lead or one fixer): takes stage 1's
+   run.txt files, D373's and D374's probes' answers among them; may change `FakeAzureDevOps*.cs`,
+   `FakeGitLab*.cs`, `src/VisualCommit.Hosting/AzureDevOps/*.cs` and `GitLab/*.cs`, and the test classes
+   it runs where they pin a corrected answer, all free after their packages' merges; marks each
+   corrected answer MEASURED with its date in its doc comment; runs `FakeAzureDevOpsTests`,
+   `FakeAzureDevOpsGitTests`, `FakeGitLabTests`, `FakeGitLabGitTests`, the clients' and providers'
+   classes (6.8, 7.6), 9.10's classes over the fakes and the lagged list below; merges before part A's
+   checks are written, its CI run read as at any merge (the wave's whole default run stays WP-S's, 9.11).
 5. Wave 4, one after another, each after its part's checks are committed (D244): WP-A; WP-B; WP-P
    (`AppCommands.Palette.cs` passes from WP-B); WP-N (part N clicks WP-P's menu items, and its
    pictures after a create show WP-P's badge). Part B takes no picture of an opened repository of a new
-   provider, which WP-P's merge would change; part A's are of the settings screen.
-6. Wave 5: WP-LIVE's second stage (the app-driven check per provider) after WP-N; WP-R on the Windows
-   machine after every part.
+   provider, which WP-P's merge would change; part A's are of the settings screen, but for the Azure
+   DevOps dialog prefilled from mobile-app's tab, whose region behind is WP-P's (12.9 runs it again).
+6. Wave 5: WP-LIVE's second stage (the app-driven check per provider) after WP-N; then the review
+   before the gate (status step 17) and its fixes; WP-R, built on the Windows machine after every part,
+   merges after them.
 
 Shims (ruling 1): 7a's GitHub-named members of `IHostingSession` (1.5) stay while a caller uses them;
 WP-A, WP-B and WP-P move their callers, and WP-N (to which `IHostingSession.cs` passes from WP-S)
@@ -159,14 +191,14 @@ removes what is left; its "done when" says none is. 7a's tests keep their GitHub
 `HostingSessionGitHubForms` (1.9).
 
 Files that pass at a merge: the skeletons `FakeAzureDevOps.cs` and `FakeGitLab.cs` and the seeding
-stubs `Scenarios.Phase7b.AzureDevOps.cs` and `.GitLab.cs` (WP-F to WP-FA and WP-FL); `IHostingSession.cs`
-(WP-S to WP-N); `RepositoryViewModel.Hosting.cs` (WP-S to WP-P); `AppCommands.Palette.cs` (WP-B to
-WP-P); `OperationTexts.Hosting.Credentials.cs` (WP-C to WP-N); `HostingTexts.Describe.cs` (WP-B to the
-lead); `RepositoryOperations.Run.cs` (WP-C to the lead).
+stubs `Scenarios.Phase7b.AzureDevOps.cs` and `.GitLab.cs` (WP-F to WP-FA and WP-FL);
+`IHostingSession.cs` (WP-S to WP-N); `RepositoryViewModel.Hosting.cs` (WP-S to WP-P);
+`AppCommands.Palette.cs` (WP-B to WP-P); `HostingTexts.Describe.cs` (WP-B to the lead);
+`RepositoryOperations.Run.cs` (WP-C to the lead).
 
 **The lagged list** (D262). At WP-F's merge and at each later merge whose section names it, in Git
 Bash, one at a time, with `VISUALCOMMIT_WATCHER_LAG_MS=1500` exported: 7a's list as 7a design 0.4 gives
-it (with 16.1's class), then 7b's walk-through once it has checks and the classes that start the app
+it (with 7a design 16.1's `GitRepositoryProviderTests`), then 7b's walk-through once it has checks and the classes that start the app
 through `ShellDriver` with real git, each once it exists, in one command of one filter kind (xunit v3
 ANDs kinds):
 
@@ -177,7 +209,15 @@ bash scripts/heavy-run.sh --project tests/VisualCommit.Hosting.Tests --filter-cl
 
 A failure under the lag is the fault class R8 imitates: it gets a fix, never a looser test.
 
-**Progress steps 4 to 14** (`docs/status.md`):
+At the last merge of each wave the lead runs the whole default run through `bash scripts/heavy-run.sh`
+with no arguments (D245), after the lagged list when that merge's section names one (in waves 1 and 2
+only WP-F's does): wave 1 at whichever of WP-F, WP-H and WP-C merges last (this run also measures
+16.2's order of twelve projects at four lanes and App.Tests' own time, 0.6); wave 2 at the last of
+WP-FA, WP-FL, WP-AZ and WP-GL; wave 3 at WP-S, whose merge closes it (WP-LF, merged after it, runs only
+the classes and the lagged list its paragraph names); wave 4 at WP-N (13.9). Each run
+records the projects' ends and CI's Test steps against four fifths of their limits (0.6).
+
+**Progress steps 4 to 24** (`docs/status.md`):
 
 | Step | Packages |
 |---|---|
@@ -192,49 +232,74 @@ A failure under the lag is the fault class R8 imitates: it gets a fix, never a l
 | 12 Section, menu, checkout, badge, open in browser | WP-P |
 | 13 Create | WP-N (WP-P's menu items) |
 | 14 7a's screens name the provider (D351) | WP-A, WP-B, WP-P, WP-N for their surfaces; WP-C for the credential texts |
-
-Step 15 is the writers' before WP-A, WP-B, WP-P and WP-N (no package); step 16 is WP-LIVE's two
-stages; WP-R serves step 18.
+| 15 Each part's checks written | The writers, before WP-A, WP-B, WP-P and WP-N (no package) |
+| 16 The sandboxes and the live command | The owner's steps (15.8); WP-LIVE's two stages; WP-LF |
+| 17 The review before the gate | The lead's, no package: after WP-N's merge and WP-LIVE's stage 2, before WP-R's merge and D246's two runs; its fixers by area, each fix with its tests |
+| 18 The gate | WP-R and the lead (7a design 13.7; 14.5) |
+| 19 to 24 Closing | The lead's closing steps (CLAUDE.md), no package |
 
 ### 0.5 The visual checks' parts
 
 Written per part just before its package, by one writer and one reviewer (D244), each check marked
 for the real-window pass or not. One project, `VisualCommit.VisualTests.Phase7b`, about 22 to 27
-methods (under D230's 40). Theme dark unless a check names light; 1100×700 unless it names 1920×1080.
-Every part uses WP-F's scenario "hosting7b" (2.6): an Azure DevOps repository, one of another
-organization (D356), a GitLab repository under a nested group whose `upstream` is GitHub's (ruling 5),
-and GitHub's fake for three accounts; made-up names only.
+methods (under D230's 40). A check method serves one provider, unless it shows the providers side by
+side (part A's blocks, part B's palette), and stays under about 40 s alone, timed with
+`bash scripts/time-scripted-check.sh "<method>" 7b` before its part's merge. Theme dark unless a check
+names light; 1100×700 unless it names 1920×1080. Every part uses WP-F's scenario "hosting7b" (2.6):
+an Azure DevOps repository, one of another organization (D356), a GitLab repository under a nested
+group whose `upstream` is GitHub's (ruling 5), and GitHub's fake for three accounts; made-up names
+only.
 
 | Part | Package | What its checks cover (the section's list) | Real window repeats |
 |---|---|---|---|
 | A Accounts and sign-in | WP-A | The three blocks in D353's order, signed out to three signed in (scrolled), an off one hidden; both new dialogs in each state, Azure DevOps' refusals among them; the organization bold over the user; sign-out and switches per provider; the intro (10.7) | Both dialogs with the organization and a masked token; three accounts |
-| B Browse and clone | WP-B | D354's button and switch; each provider's browser, long names cut; its failure; clones through the app's helper; the palette's three commands (11.7) | Each provider's list; a clone in the real process |
+| B Browse and clone | WP-B | D354's button and switch; each provider's browser, long names cut; its failure; clones through the app's helper; the palette's three commands (11.7) | Each provider's list; a clone of `web-app` and of `mobile-app` in the real process (11.7) |
 | P Requests | WP-P | "Merge requests" and "Pull requests" in each state, D356's row, ruling 5's listed remote; menus; checkouts with git's state; copy link and open in browser; the badge and branch rows (12.8) | The section and its menu per provider; the badge |
 | N New request | WP-N | The menus' items; each provider's form, GitLab's Draft and note; the push first; refusals in the App's words; the request listed and the offer; long names cut (13.8) | Each provider's form; the status after creating |
 
 Every real-window step keeps 7a design 0.5's rules: its picture's name and asserted texts are
-constants in `Phase7bExpectations.<part>.cs`; its state is built only by code both projects compile;
-it is taken signed in with the scenario's tokens. Part P's and N's pictures wait for D322's first
-Debug line (the new providers write no avatars line, D349). No 7b step opens the browser (ruling 29).
-Only the real window, CI or the live command prove the real process's start with two more variables,
-the helper run by Git for Windows' `sh` for the new hosts from a folder with a space, the native
-window, and the services' answers and their acceptance of `x-access-token`.
+constants in `Phase7bExpectations.<part>.cs`; its state is built only by code both projects compile
+(part P's R methods, part N's checks and WP-R's two "Requests and create" launches share one prepared state,
+WP-F's `Phase7bExpectations.PrepareRequestsAsync(copy, provider)` in `Phase7bExpectations.Common.cs`,
+2.7, 12.8, 13.8, 14.2); it is taken signed in with the scenario's tokens. Part P's and N's pictures
+wait for D322's first Debug line (the new providers write no avatars line, D349). No 7b step opens
+the browser (ruling 29). Only the real window, CI or the live command prove the real process's start with two
+more variables, the helper run by Git for Windows' `sh` for the new hosts from a folder with a space,
+the native window, and the services' answers and their acceptance of `x-access-token`.
 
 ### 0.6 Cost in time
 
 - **Default run** (1 h 12 min 18 s at 7a's gate). The 7b project's 150 to 250 tests take 3 to 5 minutes
   alone, 10 to 18 beside the others; `VisualCommit.Hosting.Tests` gains 5 to 9 minutes, `Git.Tests`
   under one. `VisualCommit.App.Tests` (59 min 31 s of its own) ends the run, so no hosting view-model
-  test goes there. **+6 to +12 minutes, about 78 to 85**; up to +15 if the new project takes a lane
-  before App.Tests starts (r4 5.2). CLAUDE.md and `heavy-run.sh` take the gate's times.
-- **CI.** The Windows Test step reached 35 min 21 s and macOS's 37 min 57 s during 7a: +15 to 25 %
-  brings macOS's near D232's 44 minutes. The lead reads each merge's run against four fifths of each
-  limit (44 of 55; 11 min 12 s of the containers' 14) and raises it by D232's rule (D134 for a
-  container).
-- **Real-window pass** (31 min 6 s for 72 checks; 7a's five launches took about 41 s each): 7b's five
-  (ruling 29) add **3 to 4 minutes, about 34 to 36**; D246's run of the 7b class alone 3 to 4 minutes.
+  test goes there; it still gains WP-C's `PushGuardProvidersTests`, four cases, each with a push
+  (8.7), and the extended `RefusedTokenDisplayTests`, `PromptGroupAccountTests` and
+  `AppShortcutsTests`, whose own time adds directly to the run's end; wave 1's full run measures it
+  (0.4). **+6 to +12 minutes, about 78 to 85**; up to +15 if the new project takes a lane before App.Tests starts (r4 5.2). At WP-N's
+  full run the lead takes xUnit's timing report (`--report-xunit`, CLAUDE.md's Commands) for the 7b
+  project and Hosting.Tests, and splits by D237's rule any test of 25 s or more alone before the gate.
+  CLAUDE.md takes the gate's times; no script or project file carries one.
+- **CI.** During 7a the Windows Test step reached 35 min 21 s and macOS's 37 min 57 s; in phase 6
+  macOS's reached 43 min 12 s once. r4 5.2's +15 to 25 % brings macOS's worst to 43 min 39 s to 47 min
+  26 s, past D232's 44 minutes from +16 %, and Windows' to 40 min 39 s to 44 min 11 s. A raise first
+  triggered by the gate commit's own run would be a non-docs change after the Gate commit, which
+  CLAUDE.md allows only with both passes run again, so L1 raises the limits first (D377): in
+  `.github/workflows/ci.yml` the build-and-test matrix's Test step goes from 55 to 70 minutes
+  (`ci.yml:66`; Windows, macOS and Linux share it) and its job from 65 to 80 (`:32`); the containers
+  keep 14 and 25. The lead reads each merge's run against four fifths of each limit (56 of 70; 11 min
+  12 s of the containers' 14) and raises by D377's rule, which covers the containers' limits too (kept since D134), but only at a merge
+  before the counted round. No CI limit changes after the counted round's commit; if that commit's run
+  passes four fifths, the handoff records it under Known issues and "For the next phase", and the next
+  phase's first code commit raises the limit.
+- **Real-window pass** (31 min 6 s for 72 checks; 7a's five launches took about 41 s each, its part
+  +3 min 27 s for 9 captures, 5 sign-ins, 1 clone and 1 create, r4 5.1): 7b's five (ruling 29) hold 13
+  captures, 7 typed sign-ins, 2 clones and 2 creates, about 1.4 to 1.6 times 7a's part, so **+4.5 to 6
+  minutes, about 36 to 37**, and D246's runs of the 7b class 4 to 6 minutes each.
+- **Pictures**: about 55 to 70 scripted (r4 5.2) and 26 real-window files; the gate's list about 1,520
+  files in about 11 batches of at most 150 (D247); 0.7's references on `master` about an hour of the
+  laptop (phases 0 to 7a's eight walk-throughs).
 - **Live command**: about a minute per provider with its build; twice per gate (D335). GitHub's token
-  expires on 2026-11-29 (risk 42; 16.2).
+  expires on 2026-11-29 (risk 42; 15.8, 16.4).
 
 ### 0.7 Earlier pictures
 
@@ -264,10 +329,15 @@ Rules for every package: 7a design 1's (no token in an argument, URL, config val
 variable, log, message, picture, automation value or file; `ToString()` hides it; no
 `HttpRequestMessage` or `HttpResponseMessage` logged; 30 s and the caller's cancellation on every
 network call; the UI thread never waits on the network, a keychain or a file, Q2). New: no e-mail
-address or organization name of the owner's in a test, a fake, a picture or a doc; no offset-less
-Azure DevOps date read as `DateTimeOffset` (g4 D4 §3: a `JsonException` east of UTC only); a JSON
-member `required` only where every answer has it (g4 D4 §4: one empty repository without
-`defaultBranch` would make the whole list `Malformed`).
+address, name, GUID or organization of the owner's, or of any real person or organization in the
+research's samples and captures (g1 G3.2's samples, the research folder's `scratch-*` captures), in a
+test, a fake, a picture or a doc: a copy keeps member names, order and shapes, with made-up values
+(addresses at `example.com`, made-up GUIDs), while the services' published constants stay as they are
+(the Anonymous identity's `aaaaaaaa-…`, `AzureDevOpsApi.CoreAreaId` and the other resource-area ids;
+1.4, 6.3, 15.4, 15.9); no offset-less Azure DevOps date read as
+`DateTimeOffset` (g4 D4 §3: a `JsonException` east of UTC only); a JSON member `required` only where
+every answer has it (g4 D4 §4: one empty repository without `defaultBranch` would make the whole list
+`Malformed`).
 
 ### 1.1 Projects
 
@@ -288,8 +358,8 @@ No package reference is added.
 public enum HostingProvider { GitHub, AzureDevOps, GitLab }   // appended: 7a's value keeps its ordinal
 public sealed record AccountKey(HostingProvider Provider, string Host, string Login)   // unchanged otherwise
 {
-    public string ProviderId { get; }   // "github", "azure-devops", "gitlab": HostingProviders.Id
-    public string Id { get; }           // "gitlab:gitlab.com:ada", "azure-devops:dev.azure.com:<organization>"
+    public string ProviderId => HostingProviders.Id(Provider);
+    public string Id => $"{ProviderId}:{Host}:{Login}";   // "gitlab:gitlab.com:ada", "azure-devops:dev.azure.com:<organization>"
 }
 ```
 
@@ -302,10 +372,18 @@ public static class HostingProviders
     public static IReadOnlyList<HostingProvider> InAccountsOrder { get; }   // GitHub, GitLab, AzureDevOps (D353)
     public static string DisplayName(HostingProvider provider);             // "GitHub", "GitLab", "Azure DevOps"
     public static string Possessive(HostingProvider provider);              // "GitHub's", "GitLab's", "Azure DevOps'"
-    public static string Id(HostingProvider provider);                      // as ProviderId
+    public static string Id(HostingProvider provider);                      // "github", "azure-devops", "gitlab"
     public static HostingProvider? FromId(string? id);                      // without case; null for another
+    public static HostingProvider? TokenFormOf(string token);               // the provider whose token form it has (D378)
 }
 ```
+
+`TokenFormOf` reads only a prefix and the length: GitHub for a token that starts (ordinal, case kept)
+with `github_pat_`, `ghp_`, `gho_`, `ghu_`, `ghs_` or `ghr_` (`LiveSettings.cs:20`); GitLab for `glpat-`
+(r6 2.4, READ); Azure DevOps for exactly 84 characters whose 0-based characters 76 to 79 are `AZDO`
+(r5 5, READ); null otherwise (GitHub's 40-hex classic tokens, Azure DevOps' 52-character legacy ones,
+anything unprefixed). The sign-in dialogs (10.4) and each provider's local refusal (5.4, 6.4, 7.4)
+refuse another provider's form without a request; none requires its own.
 
 **`src/VisualCommit.Core/Hosting/PullRequestRefs.cs`** (WP0 with 7a's GitHub rule moved here from
 `GitHub/GitHubUrls.cs:46-63`, which then calls it; then WP-C):
@@ -314,6 +392,7 @@ public static class HostingProviders
 public static class PullRequestRefs
 {
     // A request's head ref that D305's fetch takes: refs/pull/<n>/head, refs/merge-requests/<n>/head; null on Azure DevOps (D361).
+    // WP0 builds it whole, as 8.4 says.
     public static string? HeadOf(HostingProvider provider, int number);
     // refs/pull/<digits>/head or refs/merge-requests/<digits>/head (WP0: the first form only, 7a's).
     public static bool IsFetchableHead(string sourceRef);
@@ -334,17 +413,19 @@ three, ruling 8). New, beside them:
 // What one account's token covers for git (D359): the provider builds it, Select applies it.
 public sealed record GitCoverage(AccountKey Account, Uri Origin)   // Origin: scheme, host and port the binding is on
 {
-    public string? Organization { get; init; }   // Azure DevOps: the first path segment on Origin must be it (G3.4); null: any path
+    public string? Organization { get; init; }   // Azure DevOps: the first path segment on Origin must exist and be it (G3.4); null: any path
     public bool OrganizationHost { get; init; }  // Azure DevOps on the service: https://<Organization>.visualstudio.com, any path, covered too
     public bool GitTwin { get; init; }           // GitLab: a URL whose path lacks .git is bound with its .git twin (ruling 12)
     public bool HelperUserIsAccounts { get; init; }   // x-access-token@ counts as the account's user (ruling 11; Azure DevOps and GitLab)
 }
 public sealed record CredentialBinding(string Url, AccountKey Account)
 {
-    // On an origin that serves other accounts (dev.azure.com): the organization a prompt must name
-    // (its URL's first path segment or its user, without case) to be this account's; null: the origin is the account's alone.
+    // On an origin that serves other accounts (dev.azure.com): the organization a prompt must name to be this account's
+    // (its raw path's first segment, or with an empty path its user, without case; a path-less x-access-token prompt
+    // is the account's too; 8.3); null: the origin is the account's alone.
     public string? SharedOriginOwner { get; init; }
-    public static IReadOnlyList<CredentialBinding> Select(IReadOnlyList<RemoteEffectiveUrls> remotes, GitCoverage coverage);   // WP-C (8)
+    // WP-C (8.2): G3.4's form, the .git and credential twins (steps 4, 4b), the drop in git's credential view (step 5).
+    public static IReadOnlyList<CredentialBinding> Select(IReadOnlyList<RemoteEffectiveUrls> remotes, GitCoverage coverage);
     public static IReadOnlyList<CredentialBinding> Select(IReadOnlyList<RemoteEffectiveUrls> remotes, Uri webBase, AccountKey account);   // 7a's; = Select(remotes, new GitCoverage(account, webBase))
     // g3 G3.4's form on the URL's text (8.2 step 2): the one rule WP-C's Select and WP-AZ's recognition both apply.
     public static bool InPlainForm(string url);
@@ -353,7 +434,8 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
 
 WP0's body of the coverage form applies 7a's rules on `Origin` and throws `NotSupportedException`
 when `Organization`, `OrganizationHost` or `GitTwin` is set, as `InPlainForm` does; WP-C builds them,
-G3.4's rule and the fail-closed drop. With only `Origin` set, `Select` stays 7a's, byte for byte.
+G3.4's rule, the credential twin and the fail-closed drop. With only `Origin` set, `Select` stays 7a's,
+byte for byte.
 
 ### 1.3 Git layer
 
@@ -361,7 +443,9 @@ G3.4's rule and the fail-closed drop. With only `Origin` set, `Select` stays 7a'
   (`GitRepository.PullRequests.cs:30-33`, WP0; then WP-P) calls `PullRequestRefs.IsFetchableHead`, so
   a GitLab head is fetched once WP-C widens the rule; its exception text names both forms (WP-P).
 - `AskPassBroker` (WP-C): `AccountOf` (`AskPassBroker.cs:831-841`) attaches a prompt to a binding with
-  a `SharedOriginOwner` only when the prompt's URL names that organization; the warning at `:144`
+  a `SharedOriginOwner` only when the prompt's raw URL path, with no segment empty, `.` or `..` or
+  holding `%` or `\`, begins with that organization without case, or the path is empty and its user is
+  the organization without case or `x-access-token` (8.3); the warning at `:144`
   ("GitHub's token is not given to git.") names no provider. `IsAccountUser` (`:602-608`) is unchanged:
   the Azure DevOps login is the organization. The helper and the protocol are unchanged.
 - No new git call; `ReadUrlRewritesAsync` and every count of git calls stay 7a's.
@@ -378,17 +462,24 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
     public const string AzureDevOpsVariable = "VISUALCOMMIT_AZURE_DEVOPS_URL";
     public const string GitLabVariable = "VISUALCOMMIT_GITLAB_URL";
     public AzureDevOpsEndpoints? AzureDevOps { get; init; }                  // null: off
-    public Func<HttpMessageHandler>? CreateAzureDevOpsHandler { get; init; }  // null: DefaultHandler(AzureDevOps.WebBase)
+    public Func<HttpMessageHandler>? CreateAzureDevOpsHandler { get; init; }  // null: every request refused (Off's RefusingHandler)
     public GitLabEndpoints? GitLab { get; init; }
-    public Func<HttpMessageHandler>? CreateGitLabHandler { get; init; }       // null: DefaultHandler(GitLab.ApiBase)
-    public bool AllOff { get; }
+    public Func<HttpMessageHandler>? CreateGitLabHandler { get; init; }       // null: every request refused (Off's RefusingHandler)
+    public bool AllOff => GitHub is null && AzureDevOps is null && GitLab is null;
     public static HostingOptions Off { get; }   // the three off (the harnesses' default)
     // Each variable as 7a's: unset, the service; "none", off; http://127.0.0.1:<port>/, Local(port); else off and a warning naming the variable.
+    // Each provider it turns on gets its handler set explicitly: DefaultHandler(AzureDevOps.WebBase), DefaultHandler(GitLab.ApiBase).
     public static HostingOptions FromEnvironment(Func<string, string?> readEnvironment, IAppLog log);
     public static Func<HttpMessageHandler> DefaultHandler(GitHubEndpoints endpoints);   // 7a's
     public static Func<HttpMessageHandler> DefaultHandler(Uri apiBase);                 // the same rules for any API
 }
 ```
+
+A new provider's handler is never a real one by default: `Off with { AzureDevOps =
+AzureDevOpsEndpoints.Service }` without its handler reaches no service. Members computed from others
+(`AllOff`; the endpoints' `Host`; `FullName`, `OwnerRoot`; 1.2's `ProviderId` and `Id`; 1.5's
+`RequestRemotes`) are expression-bodied, never stored, since the records are copied with `with`
+(15.5; `ShellDriver.Phase7a.cs:94`).
 
 **`AzureDevOps/AzureDevOpsEndpoints.cs`** (WP0; then WP-AZ) and **`GitLab/GitLabEndpoints.cs`** (WP0;
 then WP-GL); `GitHubEndpoints` is unchanged:
@@ -398,7 +489,7 @@ public sealed record AzureDevOpsEndpoints(Uri WebBase, bool OrganizationHosts)  
 {
     public static AzureDevOpsEndpoints Service { get; }   // https://dev.azure.com/, OrganizationHosts true
     public static AzureDevOpsEndpoints Local(int port);   // http://127.0.0.1:<port>/, OrganizationHosts false (D363)
-    public string Host { get; }                           // "dev.azure.com" or "127.0.0.1:<port>"
+    public string Host => WebBase.Authority;              // "dev.azure.com" or "127.0.0.1:<port>"
     public Uri ApiOf(string organization);                // WebBase + the escaped organization + "/"
     public string? ListProject { get; init; }             // the live command's sandbox project (D352); null: the organization's list
 }
@@ -406,7 +497,7 @@ public sealed record GitLabEndpoints(Uri WebBase, Uri ApiBase)
 {
     public static GitLabEndpoints GitLabCom { get; }      // https://gitlab.com/ and its api/v4/
     public static GitLabEndpoints Local(int port);        // http://127.0.0.1:<port>/ and its api/v4/
-    public string Host { get; }
+    public string Host => WebBase.Authority;              // "gitlab.com" or "127.0.0.1:<port>"
 }
 ```
 
@@ -433,10 +524,19 @@ public interface IHostingProvider
 ```
 
 WP0 gives `GitHubProvider` these members with 7a's behaviour: `CoverageOf` 7a's rule on its web base,
-`Covers` by host, `TokenPage` D295's link (moved from `SignInDialogViewModel.cs:188` and its texts,
-which WP-A then removes), `PullRequestsPage` `{web}/{owner}/{name}/pulls` (moved from
-`RepositoryOperations.PullRequests.cs:125-131`, which WP-P then removes); `organization` and `account`
-ignored. WP-AZ builds `public sealed class AzureDevOpsProvider(AzureDevOpsEndpoints endpoints,
+`Covers` by host, `TokenPage` D295's link (moved from `SignInDialogViewModel.cs:188`; the text
+`TokenPage`, `OperationTexts.Hosting.Accounts.cs:60`, stays, 7a's checks read it), `PullRequestsPage`
+`{web}/{owner}/{name}/pulls` (moved from `RepositoryOperations.PullRequests.cs:125-131`); WP0 points
+those two callers at `TokenPage(null)` and `PullRequestsPage(repository)`, so that nothing reads
+`Endpoints` through the interface; `organization` and `account` ignored. `GitHubProvider` keeps 7a's
+public `CheckTokenAsync(string token, CancellationToken ct)` and `ListRepositoriesAsync(string token,
+CancellationToken ct)` unchanged for the whole phase: they are not 1.5's shims, and WP-N does not remove
+them. The interface's A1 and A2 are public overloads beside them that call them. So 7a's
+`GitHubProviderTests`, `HostingOptionsTests.cs:134`, the live project's `GitHubLiveTests.cs:643` and
+`LiveSafetyTests.cs:784`, and WP0's `HostingSession` (`HostingSession.cs:205`, `:314`, `:751`, which holds a
+`GitHubProvider` until WP-S calls through the interface) compile unchanged.
+
+WP-AZ builds `public sealed class AzureDevOpsProvider(AzureDevOpsEndpoints endpoints,
 Func<HttpMessageHandler> createHandler, IAppLog log, TimeProvider clock) : IHostingProvider, IDisposable`,
 WP-GL `GitLabProvider(GitLabEndpoints endpoints, …)` likewise; WP-S constructs both. Their members
 beyond the interface, which other packages call:
@@ -461,8 +561,8 @@ internal void ForgetKept();
 ```csharp
 public sealed record HostedRepository(HostingProvider Provider, string Host, string Owner, string Name)   // Owner: the namespace path
 {
-    public string FullName { get; }    // Owner/Name: what the App shows ("group/sub/project", "<organization>/<project>/<repository>")
-    public string OwnerRoot { get; }   // Owner's first segment: GitHub's owner, GitLab's top namespace, Azure DevOps' organization
+    public string FullName => $"{Owner}/{Name}";        // what the App shows ("group/sub/project", "<organization>/<project>/<repository>")
+    public string OwnerRoot => Owner.Split('/')[0];     // GitHub's owner, GitLab's top namespace, Azure DevOps' organization
 }   // equality as 7a's: provider, host, owner and name, without case
 public sealed record HostingAccount(AccountKey Key, string Login, long Id, string? Name, Uri? AvatarUrl, bool UseForGit,
     string? UserId = null);            // Azure DevOps' user GUID (Id 0 there); GitLab's numeric id is Id
@@ -525,7 +625,7 @@ are walked by its own client through `SendAsync`.
 `HostingSessionStub` and the test stubs implement them too; then WP-N, which removes the shims):
 
 ```csharp
-public sealed class HostingAccountChangedEventArgs(HostingProvider provider) : EventArgs { public HostingProvider Provider { get; } }
+public sealed class HostingAccountChangedEventArgs(HostingProvider provider) : EventArgs { public HostingProvider Provider { get; } = provider; }
 public sealed record SignInRequest(HostingProvider Provider, string Token, string? Organization = null);   // ToString hides the token
 
 public interface IHostingSession : IGitCredentialSource, IDisposable   // events through the post delegate (UI thread)
@@ -563,8 +663,9 @@ public sealed record RepositoryHostingState(/* 7a's six */)
 {
     public static RepositoryHostingState NoHostedRemote { get; }   // 7a's NotGitHub
     // Remotes of Repository's provider and host (on Azure DevOps of its OwnerRoot, without case): where a request can go;
-    // empty without Repository and while PullRequests is OtherOrganization.
-    public IReadOnlyDictionary<string, HostedRepository> RequestRemotes { get; }
+    // empty without Repository and while PullRequests is OtherOrganization. Computed from Remotes, Repository and
+    // PullRequests, never stored, since the record is copied with `with` (1.4).
+    public IReadOnlyDictionary<string, HostedRepository> RequestRemotes => …;
 }
 ```
 
@@ -580,12 +681,13 @@ failure without a request); WP-S builds it for three providers with 7a's constru
 
 ### 1.6 Hosting: tokens
 
-No new store, vault member or variable: `TokenKey.Of(AccountKey)` carries provider and host
-(`ITokenStore.cs:11-14`). `TokenEntryNames.ProviderNames` (`Tokens/TokenEntryNames.cs:23-26`, WP0)
+No new store, vault member or variable: `TokenKey.Of(AccountKey)` carries provider, host and login,
+each lower-cased (`ITokenStore.cs:11-14`). `TokenEntryNames.ProviderNames` (`Tokens/TokenEntryNames.cs:23-26`, WP0)
 takes `HostingProviders.DisplayName` for `azure-devops` and `gitlab`: entries
 `VisualCommit:gitlab:gitlab.com:<login>` and `VisualCommit:azure-devops:dev.azure.com:<organization>`,
 labels `VisualCommit: Azure DevOps (<organization>)`, whose space is safe in `security -i`'s quotes
-(r8 S11). The vault reads each account's token once per run (WP-S).
+(r8 S11, READ; 1.10's tests and CI's macOS real-store step pin it). The vault reads each account's
+token once per run (WP-S).
 
 ### 1.7 App
 
@@ -616,22 +718,27 @@ labels `VisualCommit: Azure DevOps (<organization>)`, whose space is safe in `se
 - **`HostingTexts.Describe(HostingFailure failure, string? login)`** keeps its signature and reads
   `failure.Provider`; WP-B words it for the three providers (GitHub's results unchanged; `SsoRequired`
   stays GitHub's).
-- **`OperationTexts.Hosting.Credentials.cs`** (WP0; then WP-C; then WP-N): `TokenRefused(HostingProvider
+- **`OperationTexts.Hosting.Credentials.cs`** (WP0; then WP-C): `TokenRefused(HostingProvider
   provider, string login)` and `GitCredentialsRefused(HostingProvider provider, string login)`, GitHub's
-  output word for word. 7a's one-argument forms delegate with GitHub; WP-A, WP-B and WP-N move the
-  callers in their own files, and WP-N removes the forms.
+  output word for word. 7a's one-argument forms stay, delegating with GitHub, so that 7a's tests keep
+  them unchanged. The callers in src/ move to the provider forms in their owners' files: WP-B's
+  `HostingTexts.Describe.cs:53`, WP-C's `RefusedDisplay` (`RepositoryOperations.Run.cs:749`) and WP-N's
+  `RepositoryOperations.CreatePullRequest.cs:454`.
 - **Texts the live command composes** (15.6): `OperationTexts.MenuTexts.CreateRequest(p)` (WP-P, 12.2)
   and `OperationTexts.CreatePullRequestTexts.Created(p, n, draft)` (WP-N, 13.2) are public.
 - **Accounts' ids** (WP-A): containers `AccountsGitHub`, `AccountsGitLab`, `AccountsAzureDevOps`;
   GitHub's block keeps 7a's ids; the others' end in the provider, `AccountsSignInButtonGitLab`,
-  `AccountLoginAzureDevOps`; the sign-in dialog's new box is `SignInOrganization`. Every other
-  surface keeps 7a's ids (`CloneFromGitHub*`, `PullRequest*`).
+  `AccountLoginAzureDevOps`; the sign-in dialog's new box is `SignInOrganization`. The repository
+  browser's provider switch (WP-B, 11.4) has one id per provider, `CloneFromGitHubProviderGitHub`,
+  `…GitLab`, `…AzureDevOps` (D362). Every other surface keeps 7a's ids (`CloneFromGitHub*`,
+  `PullRequest*`).
 - **Owners after WP0**: `RepositoryOperations.Run.cs` (`RefusedDisplay` alone) and the guard's comment
   in `RepositoryOperations.Remotes.cs` WP-C, in wave 1; `RepositoryViewModel.Hosting.cs` (then WP-P),
   `RepositoryViewModel.Avatars.cs` WP-S; `AccountsSettingsViewModel.cs`, `SignInDialog*`,
   `SettingsDialogView.axaml`, `SettingsDialogViewModel.cs`, `MainWindowViewModel.Hosting.cs`,
-  `MainWindowViewModel.Settings.cs` WP-A; `AppCommands*.cs` (then WP-P), `AppCommand.cs`,
-  `MainWindowViewModel.Commands.cs`, `WelcomeViewModel.cs`, `WelcomeView.axaml`, `CloneFromGitHubDialog*`,
+  `MainWindowViewModel.Settings.cs` WP-A; `AppCommands.Palette.cs` (then WP-P), the other
+  `AppCommands*.cs`, `AppCommand.cs`, `MainWindowViewModel.Commands.cs`, `WelcomeViewModel.cs`,
+  `WelcomeView.axaml`, `CloneFromGitHubDialog*`,
   `HostingTexts.Describe.cs`, App.Tests' `AppShortcutsTests.cs`, Hosting.Tests' 7a classes
   `WelcomeCloneFromGitHubTests` and `PaletteCloneFromGitHubTests` WP-B; `LeftPanelViewModel*`,
   `LeftPanelView.axaml`, `PullRequestRows.cs`, `RefListRows.cs`, `PullRequestCheckout.cs`,
@@ -683,7 +790,9 @@ Test infrastructure other packages use (owner WP-F unless named; members in the 
 - **The fakes' core** (2.3, `Testing/Hosting/FakeHostingService*.cs`), the base of `FakeAzureDevOps` and
   `FakeGitLab`; `FakeGitHub`'s public API (7a design 2.3) is unchanged. A repository is named by its
   folder under `Root` without a final `.git` (`Fernhill-Labs/Mobile App/_git/mobile-app`, `g/s/p`) in
-  every callback, hold and gate, whichever registered path reached it:
+  every callback, hold and gate, whichever registered path reached it. Route keys (`RouteOf`'s, of holds
+  and faults) are lower-case; a git hold's key is `git:` and the folder's name in the folder's case
+  (`git:Fernhill-Labs/Mobile App/_git/mobile-app`, `_git` included), matched without case (3.5, 4.5):
 
 ```csharp
 public enum FakeAuthorizationForm { None, Bearer, Basic, BasicEmptyUser, PrivateToken, Query, Other }   // BasicEmptyUser ":" + token; Query a private_token parameter; two headers Other
@@ -762,7 +871,8 @@ public sealed partial class FakeGitLab : FakeHostingService
         string targetBranch, FakeGitLabProject? source = null, string? description = null, int? iid = null);
     public FakeGitLabProject Project(string path);                      // without case
     public IReadOnlyList<FakeMergeRequest> MergeRequests(FakeGitLabProject target);
-    public void Move(string path, string newPath);                     // the API's and git's 301
+    public void Move(string path, string newPath);   // the API's GET 301 to projects/<id> (405 for other methods) and the web
+        // pages' 301 to the new path (4.3); git keeps serving the old path, fetch and push, 200 with no redirect (MEASURED r6 6.1, READ g2 G3)
     public Task SyncRefsAsync(FakeGitLabProject target, CancellationToken ct = default);
 }
 public enum FakeGitLabTokenKind { Legacy, FineGrained }
@@ -793,11 +903,18 @@ public enum FakeGitLabTokenKind { Legacy, FineGrained }
   remotes written with the ports (port 0 for each in `VisualCommit.Hosting.Tests`). Its two halves are
   seeded by `SeedHosting7bAzureDevOpsAsync` and `SeedHosting7bGitLabAsync`: WP-F's stubs, returning the
   tokens, which WP-FA and WP-FL fill (3.5, 4.5).
-- **`HostingSessionGitHubForms`** (WP-S, `Testing/Hosting/`): C# 14 extension members on
-  `IHostingSession` (`GitHub`, `Account`, `SignInAsync(string, CancellationToken)`,
+- **`HostingSessionGitHubForms`** (WP-S, `tests/VisualCommit.Testing/Hosting/HostingSessionGitHubForms.cs`,
+  declared in namespace `VisualCommit.Hosting`, not the folder's `VisualCommit.Testing.Hosting`, so no
+  caller gains a `using`): C# 14 extension members on `IHostingSession` (`GitHub`, `Account`,
+  `SignInAsync(string, CancellationToken)`,
   `SignOutAsync(CancellationToken)`, `SetUseForGit(bool)`, `ListRepositoriesAsync(CancellationToken)`)
   delegating with `HostingProvider.GitHub`, for tests alone: 7a's tests compile through them once
-  `HostingSession` declares no GitHub-named member, and after WP-N removes 1.5's shims.
+  `HostingSession` declares no GitHub-named member, and after WP-N removes 1.5's shims. Hosting.Tests'
+  files find it through their enclosing namespace `VisualCommit.Hosting.Tests`; the Testing project's,
+  Phase7a's and the live project's files through the `using VisualCommit.Hosting;` they already have
+  (`ShellDriver.Phase7a.Accounts.cs` and `Phase7aChecks.P.Menus.cs` among them). Until WP-N a call on an
+  `IHostingSession`-typed receiver takes the interface's default body, and one on a
+  `HostingSession`-typed receiver the extension. Only tests see it: src/ references no test project.
 - **The app's log** (`tests/VisualCommit.Testing/AppLogFile.cs`): WP-F widens `PullRequestsListed` to any
   path depth. The session writes D322's `{repo}: listed {n} open pull requests of {full name}` for every
   provider (a log line, not a screen) and the avatars line for GitHub alone, and at its construction one
@@ -814,10 +931,36 @@ In the main checkout after L1, every item marked WP0 in 1.1 to 1.9, with no beha
 changed; the build and the classes it touches pass. Beyond the marks: 7a's `HostingSession` ignores
 the new endpoints until WP-S; `NoHostedRemote` replaces 32 hits; `RecordingActions`' and two 7a test
 files' names follow `SignInToHostAsync`; the App's reads of `IsOff` that mean GitHub
-(`AppCommands.cs:170`, `MainWindowViewModel.Hosting.cs:27`) become `IsOn(HostingProvider.GitHub)`. Tests: `HostingProvidersTests` (names, possessives, ids, order),
-`HostingTextsProviderTests` (GitHub's word for word, the others' words and numbers), `HostingOptionsTests`
-cases for the two variables, `PullRequestRefsTests` (Git.Tests) for 7a's GitHub vectors; compile fixes
-in `HostingSessionStub` and the 7a project's stubs.
+(`AppCommands.cs:170`, `MainWindowViewModel.Hosting.cs:27`, `AccountsSettingsViewModel.cs:56`) become
+`IsOn(HostingProvider.GitHub)`.
+
+The callers WP0's own changes force it to move: `SignInDialogViewModel.cs:188` opens the provider's
+`TokenPage(null)` and `RepositoryOperations.PullRequests.cs:125-131` its `PullRequestsPage(repository)`, so
+nothing reads `Endpoints` through the interface (1.4); `MainWindowViewModel.Settings.cs:74` sets
+`SignIn = () => SignInAsync(HostingProvider.GitHub)` until WP-A; the four test assignments of
+`Services.SignInToGitHub` (`PaletteCloneFromGitHubTests.cs:72`, `:104`, `:148`, `SignInEntryTests.cs:100`)
+become `SignIn = _ => …`; `PullRequestRefs.HeadOf` is built whole (8.4's rule). Compile fixes in
+`HostingSessionStub` and the 7a project's stubs; no fix in `GitHubProviderTests`, `HostingOptionsTests`'
+7a cases, `HostingSession`'s A1 and A2 calls or the live project's GitHub files, which keep 7a's
+two-argument forms (1.4). The live project is in no solution, so WP0's checks also run
+`dotnet build tests/VisualCommit.LiveHostingTests -c Release` (no warnings) before the push that wave 1
+branches from.
+
+Tests, in `tests/VisualCommit.Hosting.Tests` (it references App and Core, and holds `HostingRulesTests`)
+unless named:
+- `HostingProvidersTests`: names, possessives, ids, order; `TokenFormOf` (1.2, D378): each form, 83 and 85
+  characters, `AZDO` at index 75 and at 77, `GLPAT-x` and `GHP_x` (null: case), and the fakes' tokens
+  `github_pat_FAKE-octo-1` (GitHub), `glpat-FAKE-ada-1` (GitLab) and `azdo_FAKE-Fernhill-Labs-1` (null).
+- `HostingTextsProviderTests`: GitHub's word for word, the others' words and numbers.
+- `HostingOptionsTests`: cases for the two variables.
+- `TokenEntryNamesTests`: the keys `TokenKey.Of` gives for (GitLab, `gitlab.com`, `ada`) and (Azure DevOps,
+  `dev.azure.com`, `Fernhill-Labs`): `Entry`, `WindowsComment`, `MacService`, `MacLabel`
+  (`VisualCommit: GitLab (ada)`, `VisualCommit: Azure DevOps (fernhill-labs)`), `SecretServiceLabel` and
+  the attributes. `MacKeychainStoreTests`: the Azure DevOps key's `security -i` line, its label
+  `-l 'VisualCommit: Azure DevOps (fernhill-labs)'` within its quotes. `RealTokenStoreSteps.RunAsync`,
+  which CI's three real-store steps run (D270), also saves, reads and deletes one `azure-devops` key on
+  `dev.azure.com`, so macOS' spaced label goes through `security -i` once (`ci.yml` unchanged).
+- `PullRequestRefsTests` (Git.Tests): 7a's GitHub vectors.
 
 Files that stay the lead's throughout: `AppSession.cs`, `TabServices.cs`, `MainWindowViewModel.cs`,
 `IRepositoryActions.cs`, `IGitRepository.cs`, `FakeRepositoryBase.cs`, `IHostingProvider.cs`,
@@ -840,7 +983,8 @@ The harness every later package tests against. Status step 5; rulings 25 to 28; 
   `FakeAzureDevOps.cs`, `FakeGitLab.cs` (2.3), passed to WP-FA and WP-FL at the merge (0.4).
 - `Testing/`: `AuthRemoteServer.cs`, `AppLogFile.cs`, `GitIsolation.cs` (WP0's names), `Scenarios.Phase7b.cs`
   with stubs `Scenarios.Phase7b.AzureDevOps.cs` and `.GitLab.cs` (passed likewise), `Headless/ShellDriver.cs`,
-  new `Headless/ShellDriver.Phase7b.cs`.
+  `Headless/ShellDriver.Phase7a.cs` (`HarnessHosting`; 7a's `SignInAsync`, its messages GitHub's word for
+  word), new `Headless/ShellDriver.Phase7b.cs`.
 - The 7b project and its slnx line after `VisualCommit.slnx:33`; the timing script; the real-window
   csproj's link; 7a's `Phase7aChecks.cs`, `.Support.cs`, `Phase7aSupportTests.cs`.
 
@@ -894,11 +1038,11 @@ FakeGitHubRequest>`, `FakeGitHubHandler` its type and message over `.Handler.cs`
 ### 2.4 `ShellDriver`, `AppLogFile`
 
 - 1.9's `Start`, `StartWithTabs` (`ShellDriver.cs:146-156`, `:228-253`) keep the fakes as `AzureDevOps` and
-  `GitLab`. `HarnessHosting`
-  (`ShellDriver.Phase7a.cs:85-98`) sets each given fake's endpoints and puts a `LoopbackOnlyHandler` in
-  all three handler slots.
-- 1.9's `SignInAsync(provider, token, organization)`: a `SignInRequest` with 7a's wait (`:39-62`),
-  messages naming `HostingProviders.DisplayName`, never the token or the organization.
+  `GitLab`. `HarnessHosting` (`ShellDriver.Phase7a.cs:85-98`) sets each given fake's endpoints and puts a
+  `LoopbackOnlyHandler` in all three handler slots.
+- 1.9's `SignInAsync(provider, token, organization)`, in `ShellDriver.Phase7b.cs`: a `SignInRequest` with
+  7a's wait (`ShellDriver.Phase7a.cs:39-62`), messages naming `HostingProviders.DisplayName`, never the
+  token or the organization.
 - `AppLogFile.PullRequestsListed` (`AppLogFile.cs:112-117`): `(?<repository>[^/]+(?:/[^/]+)+)`, any depth,
   spaces allowed; 7a's lines match as before.
 
@@ -931,7 +1075,8 @@ Clones on `main`, remotes written last on 1.8's ports: `mobile-app/` origin
 `<organization>@` form, r5 0.5, MEASURED; `%20` ASSUMED, r5 6.1), `feature/sign-in` tracking, local-only
 `local-work`; `manifest/` origin `http://harbor-co@127.0.0.1:47397/harbor-co/Docks/_git/manifest`
 (D356); `web-app/` origin `http://127.0.0.1:47398/northfield/platform/web-app.git`, upstream
-`http://127.0.0.1:47399/octo/web-app.git` (ruling 5), `feature/search` tracking.
+`http://127.0.0.1:47399/octo/web-app.git` (ruling 5), `feature/search` tracking, local-only `local-work`
+12:26 "Local change" (Test Author), in no bare folder (13.7 and 13.8 push it first).
 
 `ServeHosting7bAsync(TempRepo copy, int azureDevOpsPort = 47397, int gitLabPort = 47398, int gitHubPort =
 47399, bool ownsCopy = false, CancellationToken ct = default)` → `ServedHosting7b : IAsyncDisposable`
@@ -939,7 +1084,10 @@ Clones on `main`, remotes written last on 1.8's ports: `mobile-app/` origin
 fallback; GitHub's octo 1001, `github_pat_FAKE-octo-1`, public `octo/web-app`; then
 `SeedHosting7bAzureDevOpsAsync` and `SeedHosting7bGitLabAsync` (`Scenarios.Phase7b.AzureDevOps.cs`,
 `.GitLab.cs`), stubs returning the tokens, which WP-FA and WP-FL fill with the halves 3.5 and 4.5 list
-(`!11` to `!13` and `!5`; `!21` to `!23`). Only a fake that fell back gets its remotes rewritten (D265).
+(`!11` to `!13` and `!5`; `!21` to `!23`). It starts every fake on a port, none in process; one on any
+port other than its fixed one (it fell back, or was asked for port 0, as in Hosting.Tests) gets its
+clones' remotes rewritten with `git remote set-url`, keeping `<organization>@` and `%20` (D265, 7a's
+rule).
 
 ### 2.7 The project, the script, the link
 
@@ -950,7 +1098,11 @@ fallback; GitHub's octo 1001, `github_pat_FAKE-octo-1`, public `octo/web-app`; t
   height, theme, systemDark)`: one tab, the three fakes, a sign-in to each provider named (default the
   repository's; `[]` none), then `WaitForWatchersQuietAsync`; `Phase7bExpectations.Common.cs` (the pass
   compiles it: BCL, Avalonia, Xunit, Core, Git, Testing only): `Phase = "7b"`, sizes, the ports,
-  `WithPorts(text, served)`, `WebBase(port)`, the scenario's names, the palette.
+  `WithPorts(text, served)`, `WebBase(port)`, the scenario's names, the palette, and
+  `PrepareRequestsAsync(TempRepo copy, HostingProvider provider)`: `git branch --track topic/no-request
+  origin/topic/no-request` in the provider's clone (`web-app/`, `copy.OpenSibling("web-app")`, for
+  GitLab; `copy`'s `mobile-app/` for Azure DevOps), the one prepared state that part P's R methods,
+  part N's checks and WP-R's "Requests and create" share (12.8, 13.8, 14.2).
 - `time-scripted-check.sh:37-43`: `7b)` before `7a)`, usage and default `7b` in the project's commit;
   the real-window csproj after `:70`: 0.3's link in 7a's comment shape.
 
@@ -968,15 +1120,30 @@ fallback; GitHub's octo 1001, `github_pat_FAKE-octo-1`, public `octo/web-app`; t
   `oauth2:` and alone, with and without a trailing newline: found, named by offset.
 - `Phase7bSupportTests`: ruling 27's names pinned; a start without fakes off; the three on port 0, their
   endpoints and the tripwire's refusal of `https://example.com/`; `hosting:` with a new fake and an
-  in-process one refused; 2.6's layout, URLs and authors; every remote rewritten on port 0; the log
-  pattern; `WithPorts`; the picture pattern.
+  in-process one refused; 2.6's layout, URLs and authors, `mobile-app/`'s and `web-app/`'s `local-work`
+  in no bare folder;
+  every remote rewritten on port 0; the log pattern; `WithPorts`; the picture pattern.
+- `Phase7bExpectationTests.Common.cs` (7b project; as 7a's `Phase7aExpectationTests.N.cs:42` pins
+  `PrepareAsync`): after `PrepareRequestsAsync` on `Scenarios.Hosting7bAsync()`,
+  `branch.topic/no-request.remote` is `origin` and `branch.topic/no-request.merge`
+  `refs/heads/topic/no-request`, in `web-app/` for GitLab and `mobile-app/` for Azure DevOps.
 
 ### 2.9 At the merge; done when
 
-The lead adds CLAUDE.md's 7b rows and runs 0.4's lagged list. Done when these five classes,
-`FakeGitHubTests`, `FakeGitHubGitTests` and `Phase7aSupportTests` pass, the real-window project builds,
-the 7b project is in the solution, the script defaults to `7b` and refuses `7`, no earlier picture
-changed, and CI's five jobs are green.
+The lead changes CLAUDE.md's rows: "One phase's scripted checks" and "Scripted visual walk-through
+only" gain `tests/VisualCommit.VisualTests.Phase7b`; "Time scripted checks alone" defaults to `7b`; the
+lagged-list row points at this design's 0.4; the note on running the app without the real settings
+gains `VISUALCOMMIT_AZURE_DEVOPS_URL=none` and `VISUALCOMMIT_GITLAB_URL=none`, every test process
+starting with all four; "What to know" says 7b's walk-through binds 47397 to 47399 (1.8; 14.5 adds the
+real-window part). `docs/test-reports/TEMPLATE.md`'s "Live command" section is written per provider
+(`artifacts/live/<provider>/run.txt`); the live command's rows are stage 1's (15.9). The lead runs 0.4's
+lagged list; the whole default run follows the merge that closes wave 1, whichever of WP-F, WP-H and
+WP-C is last (0.4).
+
+Done when these six classes, `FakeGitHubTests`, `FakeGitHubGitTests` and `Phase7aSupportTests` pass, the
+real-window project builds, the 7b project is in the solution, the script defaults to `7b` and refuses
+`7`, no earlier picture changed, and CI's five jobs are green, each Test step under four fifths of its
+limit (0.6).
 
 ## 3. WP-FA: the fake of Azure DevOps
 
@@ -1004,7 +1171,7 @@ and a repository's `Contributors` (empty: everyone), `IsDisabled`, a PR's `Statu
 
 ### 3.3 Routes and checks
 
-Below `Endpoints.WebBase`, names without case (MEASURED); in keys `…` is `{o}/{p}`, keys lower-case.
+Below `Endpoints.WebBase`, names without case (MEASURED); in keys `…` is `{o}/{p}`, route keys lower-case.
 Claimed: a path with an `_apis` segment, and every GET but git's `…/info/refs`. In process any host is
 served by path and git's paths get 404, as 7a's.
 
@@ -1023,7 +1190,8 @@ served by path and git's paths get 404, as 7a's.
 
 **Checks**, in order (ASSUMED but for 1):
 1. Unknown organization: 404 `text/plain` "The resource cannot be found.", `X-TFS-ServiceError`, no
-   `ActivityId` (MEASURED r5 1.3).
+   `ActivityId` (MEASURED r5 1.3 without a credential; with a token the same, ASSUMED until D374's
+   probe, 3.7).
 2. `api-version`, r5 1.4's words (MEASURED): absent, 400 `VssInvalidApiResourceVersionException` in
    the fake's words (D370); malformed, that typeKey; above 7.2, `VssVersionOutOfRangeException`;
    no `-preview` on `connection` and `areas`, or `7.2` elsewhere, `VssInvalidPreviewVersionException`;
@@ -1052,9 +1220,10 @@ token's user as `createdBy`; nothing ahead is created (ASSUMED).
 
 ### 3.4 Shapes, headers, faults
 
-camelCase; dates `HarnessTime`, 7 fractional digits and `Z`. Identity r5 1.2's for Anonymous and g1
-G3.2 sample 1's for a member (the address as `Account.$value`); repositories r5 2.1's, `remoteUrl`
-`http://{o}@127.0.0.1:<port>/{o}/{p}/_git/{r}` (a space `%20`, ASSUMED); PRs r5 3.1's, `createdBy.url`
+camelCase; dates `HarnessTime`, 7 fractional digits and `Z`. Identity r5 1.2's for Anonymous (the
+instance and deployment ids the fake's own) and, for a member, g1 G3.2 sample 1's member names and
+nesting, with the fake user's own GUID, name and a made-up example.com address (as `Account.$value`);
+repositories r5 2.1's, `remoteUrl` `http://{o}@127.0.0.1:<port>/{o}/{p}/_git/{r}` (a space `%20`, ASSUMED); PRs r5 3.1's, `createdBy.url`
 on `spsprodfake.vssps.visualstudio.com`; errors r5 1.4's with `$id`. What a client must survive
 (MEASURED unless marked): `properties.Account` with a capital `A` (g4 D4 §1); `defaultBranch` absent
 when empty; `isFork` absent unless true; `parentRepository` in `repo:` only (READ; the list's ASSUMED);
@@ -1088,8 +1257,16 @@ status ASSUMED); `BadGateway` (503 HTML, ASSUMED); `Malformed`; `CreatedThenDrop
   committer; a fork's source fetched first into `refs/fake/source/<n>`. One `update-ref --stdin` writes
   them and deletes `refs/fake/source/*` and the refs of abandoned, completed and conflicted PRs
   (completed MEASURED). Never `/head` (MEASURED) or `/source` (ASSUMED). `mergeStatus` is `queued` until
-  the first sync after a create (READ sample). `HoldNext("git:{o}/{p}/{r}")` holds the repository's
-  next git request through host mode.
+  the first sync after a create (READ sample). `HoldNext("git:{o}/{p}/_git/{r}")`, the folder name as
+  1.9 gives it and matched without case, holds the repository's next git request through host mode.
+- **Cost**: each merge commit is one git process, about 0.1 s alone (MEASURED at the design's review:
+  301 `commit-tree` calls in 31.4 s with 2.56 on the laptop); it runs inside the request's 30 s (5.2)
+  and slower under the default run's load (D237). So no test or check gives one fake repository more
+  than 20 active PRs without `Conflicts`; larger lists are scripted (6.8's 301 rows), or made with
+  `Conflicts` set (no merge commit, only a delete line, which `update-ref --stdin` accepts for a
+  missing ref). WP-FA's choice: one sync may write all its merge commits with one `git hash-object -t
+  commit -w --stdin-paths` over files holding the texts `commit-tree` would write (MEASURED at the
+  review: the same SHAs; 301 objects in 0.5 s), the trees from one `git rev-parse <source>^{tree} …`.
 - **The scenario's half** (`SeedHosting7bAzureDevOpsAsync`, WP-F's stub, 1.9): organization
   `Fernhill-Labs` with project `Mobile App` and users Ada Lovelace and Octo Cat (the scenario's authors),
   Ada's token returned; `harbor-co` with project `Docks` and a user of its own, neither Ada nor Octo; WP-F's bare folders served in
@@ -1115,18 +1292,23 @@ status ASSUMED); `BadGateway` (503 HTML, ASSUMED); `Malformed`; `CreatedThenDrop
 
 ### 3.7 ASSUMED answers for the live command (D342)
 
-WP-LIVE's probes (r5 9, g1 G6) settle, before part A's checks (0.4): a member's connectionData, a
-Code-only token; made-up PAT-shaped and short values, with and without Suppress; `areas` with a token;
-create (status, `queued`, the merge ref, `isDraft`); the 409 and 400, no title, nothing ahead; abandon;
-the refs delete; `createdBy`; the sandbox's row (`ListProject`); any BOM. Optional: a
-read-only write, `parentRepository`, fork shapes, `/source`, the expired body. Kept ASSUMED (outside
-D352): another organization's token, an unknown project, TF401027's statuses, 429's typeKey, 5xx
-bodies, `$top`'s default and cap.
+WP-LIVE's probes (r5 9, g1 G6) settle, before part A's checks (0.4), each mark MEASURED once the fix
+package has copied it: a member's connectionData, a Code-only token; a made-up short value and a
+made-up 84-character PAT-shaped one, each with and without Suppress, to the sandbox organization's
+connectionData and the sandbox repository's `info/refs` (D373; check 4's short password and unknown
+PAT-shaped value, and git's 401); check 1 with a token (D374's probe of a made-up organization, the
+token sent only after its read without a credential answers 404); `areas` with a token; create (status, `queued`, the merge ref,
+`isDraft`); the 409 and 400, no title, nothing ahead; abandon; the refs delete; `createdBy`; the
+sandbox's row (`ListProject`); any BOM. Kept READ or ASSUMED: a read-only write and the expired body,
+which need a token D364 does not make (15.7, 16.1); with no fork in the sandbox (D375),
+`parentRepository`, the fork shapes and `/source`; outside D352 and D374, another organization's token, an unknown project,
+TF401027's statuses, 429's typeKey, 5xx bodies, `$top`'s default and cap.
 
 ### 3.8 Done when
 
 Both classes pass; each answer's mark is in its doc comment and 3.7 heads `.Router.cs`; no 7a test or
-picture changes; no token, address or organization of the owner's in the files.
+picture changes; no token, address or organization of the owner's in the files; no value from the
+research's captures.
 
 ## 4. WP-FL: the fake of GitLab
 
@@ -1222,10 +1404,10 @@ page headers, `x-next-page` "" on the last; past the end `[]`.
 
 ### 4.5 Git, refs and the scenario's half
 
-- Host mode serves each project at its path with `gitSuffix: true`, and a moved one's old path too
-  (MEASURED r6 6.1). A claimed `GET <path>/info/refs` without `.git` answers 301 to
-  `/<path>.git/info/refs?<query>` (MEASURED r6 6.1), which git follows (MEASURED r7 6). Paths match
-  without case, as gitlab.com's do (MEASURED; host mode, 1.9).
+- Host mode serves each project at its path with `gitSuffix: true`, and a moved one's old path too:
+  fetch and push 200, no redirect (MEASURED r6 6.1, push READ g2 G3). A claimed `GET <path>/info/refs`
+  without `.git` answers 301 to `/<path>.git/info/refs?<query>` (MEASURED r6 6.1), which git follows
+  (MEASURED r7 6). Paths match without case, as gitlab.com's do (MEASURED; host mode, 1.9).
 - `LoginOfToken` the username for a live token under any non-empty user (READ r6 11), else 401 with
   realm `GitLab` (MEASURED; expired and revoked READ g2 G3); `IsPublic` `public` alone; `MayPush`
   Developer or above with `api`, `write_repository` or Code: Push, else 403 `text/plain` "You are not
@@ -1254,22 +1436,28 @@ page headers, `x-next-page` "" on the last; past the end `[]`.
 - `FakeGitLabGitTests` (port 0, real git): `g/s/p.git` cloned with `x-access-token`, the username and
   through the 301; `ls-remote` shows a same-project and a fork MR's head, no `/merge`; its fetch writes
   only `FETCH_HEAD`; unknown, revoked and expired 401; a `read_user` fetch and a Code: Download push
-  403; an anonymous clone of a public project, its push asking; a moved project at its old path; a
-  path in another case; the scenario's half (4.5).
+  403; an anonymous clone of a public project, its push asking; a moved project at its old path: clone,
+  fetch and push answer 200 with the token and no 301 (on CI's 2.43 too); a path in another case; the
+  scenario's half (4.5).
 
 ### 4.7 ASSUMED answers for the live command (D342)
 
-WP-LIVE's probes (r6 14, g2) settle, before part A's checks (0.4): `user` and `self` of both kinds; a
-selected-projects token's list; the 403 bodies and `scope` lists; create (201, the 409, the
-missing-branch 400, `Draft:`, nothing ahead); a made-up token's 401, an expired or revoked one's; git
-(user names, the head ref, D340's Basic, the 403s); `ratelimit-*` and a 304 with a token; a non-simple
-row; the clean-up's PUT, DELETE and branch delete. Kept ASSUMED: the moved project's query order, an
-empty repository's `default_branch`, an unknown `target_project_id`, the 5xx bodies.
+WP-LIVE's probes (r6 14, g2, 15.7) settle, before part A's checks (0.4), for the fine-grained kind
+alone (D375): `user`, and `self`, which D364's token may not read (no Personal Access Token: Read,
+r6 2.2), so check 5's 403 and its text; create (201, the 409, the
+missing-branch 400, `Draft:`, nothing ahead); a made-up `glpat-` value's 401 on `GET user` (D373); git
+(user names, the head ref, D340's Basic); `ratelimit-*` and a 304 with a token; a non-simple
+row; the clean-up's PUT, DELETE and branch delete. Kept as marked: a legacy token's sign-in (`user`,
+`self`) and check 4's 403 with its `scope` lists, on GitLab's docs and source (READ, the lists
+ASSUMED; D375); a selected-projects token's list (ASSUMED, as 7.5) and git's 403s (READ g2 G3, as 4.5 marks them),
+which need a token D364 does not make; the expired and revoked 401s (READ, 15.7). Kept ASSUMED: the moved project's query
+order, an empty repository's `default_branch`, an unknown `target_project_id`, the 5xx bodies.
 
 ### 4.8 Done when
 
 Both classes pass; each answer's mark is in its doc comment and 4.7 heads `.Router.cs`; no 7a test or
-picture changes; no token or address of the owner's in the files.
+picture changes; no token or address of the owner's, and no value from the research's captures
+(section 1), in the files.
 
 ## 5. WP-H: the shared HTTP core
 
@@ -1278,12 +1466,13 @@ picture changes; no token or address of the owner's in the files.
 Status steps 7 and 8. `GitHubClient`'s rules (7a design 6.2; D284, D285) move into one internal core
 that every provider's client drives through a profile (D358, ruling 4, r1 P7); GitHub's behaviour
 does not change, and `GitHubClientTests` pass as they are. GitHub's 422 details become a
-`PullRequestRefusal` (r1 P8). Wave 1, branch `wip/p7b-http`; no git, no UI, no picture.
+`PullRequestRefusal` (r1 P8), and another provider's token is refused without a request (D378). Wave 1,
+branch `wip/p7b-http`; no git, no UI, no picture.
 
 | File (under `src/VisualCommit.Hosting/` or `tests/VisualCommit.Hosting.Tests/`) | Change |
 |---|---|
 | `Http/HostingHttpClient.cs`, `HostingHttpProfile.cs`, `HostingExchange.cs` (with `HostingReply<T>`), `HostingHttpTexts.cs` | new (5.2) |
-| `GitHub/GitHubClient.cs`; `GitHub/GitHubProvider.cs` | GitHub's profile (5.3); A5's refusal (5.4) |
+| `GitHub/GitHubClient.cs`; `GitHub/GitHubProvider.cs` | GitHub's profile (5.3); A5's refusal and another provider's token (5.4) |
 | `GitHub/GitHubJson.cs`; `HostingRecords.cs` | doc comments only (`Detail`, `RequestId`, `Owner` for three providers) |
 | `HostingHttpClientTests.cs` new; `GitHubClientTests.cs`, `GitHubProviderTests.cs` | 5.5 |
 
@@ -1359,6 +1548,12 @@ exists" `AlreadyExists`; starts with "No commits between" `NoCommits`; "head is 
 "base is invalid" `BaseMissing`; else `None`. `Message` and `Detail` stay as they are, so GitHub's words
 are still shown. GitHub never gives `BranchesMissing`.
 
+The private `Refusal(token)` that every method asks before its request (`GitHubProvider.cs:322-330`)
+gains a third case after 7a's two (D378, amending D298): a token whose `HostingProviders.TokenFormOf`
+(1.2) is GitLab or Azure DevOps is `BadCredentials` with 7a's `Message` "Bad credentials" and
+`Detail = "other-provider:" + HostingProviders.Id(form)`, without a request. A token of GitHub's form, or
+of none, goes on as in 7a.
+
 ### 5.5 Tests (the builder runs these classes only)
 
 - `HostingHttpClientTests`, a test profile naming GitLab over `RecordingHttpHandler` scripts: the
@@ -1372,14 +1567,17 @@ are still shown. GitHub never gives `BranchesMissing`.
   `GitHubClient`'s constants; no query, token or header in a log line; a body type outside `Json`.
 - `GitHubClientTests`: unchanged; one method: every failure of the fault table names GitHub.
 - `GitHubProviderTests`: one theory, A5 against `FakeGitHub` for the four forms and an other 422
-  (`None`), and a 403 (`None`).
+  (`None`), and a 403 (`None`); one theory, `CheckTokenAsync` with `glpat-FAKE-ada-1` and with
+  `new string('a', 76) + "AZDO" + "abcd"` is `BadCredentials` with `Detail` `other-provider:gitlab` and
+  `other-provider:azure-devops`, and `Fake.Requests` stays empty.
 
 Commits: (1) the core and its tests; (2) `GitHubClient` on it; (3) the refusals and the doc comments.
 
 ### 5.6 At the merge; done when
 
 The lead runs `VisualCommit.Hosting.Tests` and the 7a walk-through (every GitHub request now passes the
-core); no lagged list, no CLAUDE.md row, no picture. Done when the three classes pass with
+core); no lagged list, no CLAUDE.md row, no picture. The whole default run follows the merge that closes
+wave 1, whichever of WP-F, WP-H and WP-C is last (0.4). Done when the three classes pass with
 `GitHubClientTests`' 7a cases untouched; nothing under `Http/` names a provider but through
 `HostingProviders`; no token, header, body or query reaches a log; `AvatarCache.cs` is unchanged; CI's
 five jobs are green.
@@ -1390,8 +1588,9 @@ five jobs are green.
 
 Status steps 6 and 7: `AzureDevOpsProvider : IHostingProvider` (1.4) on WP-H's core, tested against
 `FakeAzureDevOps.InProcess(root).CreateHandler()` (1.9) and `RecordingHttpHandler` scripts; rulings 2, 3,
-9, 14 to 20. Out: bindings (WP-C), the session (WP-S), screens. Wave 2 after WP-H and WP-FA, branch
-`wip/p7b-azure`; no git. Copied facts keep their marks; 6.9 lists the ASSUMED (D342).
+9, 14 to 20. Out: bindings (WP-C), the session (WP-S), screens. Wave 2 after WP-H, WP-FA and WP-C
+(6.2 calls WP-C's `InPlainForm`), branch `wip/p7b-azure`; no git. Copied facts keep their marks; 6.8
+lists the ASSUMED (D342).
 
 | File (`src/VisualCommit.Hosting/AzureDevOps/`, `tests/VisualCommit.Hosting.Tests/`) | Change |
 |---|---|
@@ -1410,13 +1609,20 @@ and `[DefaultCollection/]_git/<repo>`, one label before `.visualstudio.com`, nev
 `vs-ssh` or a trailing dot (r7 0.9; G3.2 V17, V23); SSH, never bound: `[user@]ssh.dev.azure.com:v3/<org>/<project>/<repo>`,
 its `ssh://…[:22]/v3/…` form, and both on `vs-ssh.visualstudio.com` (r5 6.1; `_ssh`, ASSUMED there, is
 not taken). After `_git/` an optional `_full/` or `_optimized/` is skipped; one trailing `/` is allowed;
-`.git` belongs to the name (not stripped, r5 6.1, MEASURED). The URL passes `CredentialBinding.InPlainForm`
-(1.2, WP-C's: g3 G3.4's steps 2 to 4) on every form, so a recognised URL names what git reaches; `DefaultCollection` on dev.azure.com and a
+`.git` belongs to the name (not stripped, r5 6.1, MEASURED). An `http` or `https` URL passes `CredentialBinding.InPlainForm`
+(1.2, WP-C's: g3 G3.4's steps 2 to 4), so a recognised URL names what git reaches; an SSH form passes the
+same character, segment and escape rules on its path after `v3/` (it is never bound, so this keeps
+recognition's one table). The organization (the first path segment, after `v3/` on SSH, or the label
+before `.visualstudio.com`) matches `^[A-Za-z0-9-]+$` (D360's grammar); `DefaultCollection` on dev.azure.com and a
 project starting `_` are refused; project and repository are percent-decoded as UTF-8. Result:
 `HostedRepository(AzureDevOps, endpoints.Host, "<org>/<project>", <repo>)`, `Host` `dev.azure.com` for
 both families (r5 6.2). With `Local(port)`: only `http://[user@]127.0.0.1:<that port>/` in the
-dev.azure.com forms. G3.2's 38 vectors are the table: refused where G3.4 refuses, but V11 (another
-user), V15 and V16 recognised.
+dev.azure.com forms. G3.2's 38 rows are the table, each with its own recognition answer: a row is
+recognised when it has one of the forms above, passes `InPlainForm` (which has no organization clause,
+since recognition takes any organization) and names its organization in the grammar. V15 and V16 are
+recognised and bound; V11 (another user) is recognised though never bound; V6, X9 and X10, which G3.4
+refuses only for the organization's grammar, are not recognised; every other row is recognised exactly
+where G3.4 binds it.
 
 **`AzureDevOpsProvider.OrganizationOf(string? text, AzureDevOpsEndpoints endpoints)`** (1.4; ruling 16,
 the one rule WP-A's box uses), trimmed: a text without `://` is the name; an `http` or `https` URL, its
@@ -1440,8 +1646,10 @@ The profile: `TokenOrigin` `WebBase`; `Authorize` `Basic` of UTF-8 `":" + token`
 `AddHeaders` `X-TFS-FedAuthRedirect: Suppress` (the sign-in 302 becomes a 401, r5 1.3, MEASURED) and
 `Accept: application/json`; `RequestIdOf` `ActivityId`, else `X-VSS-E2EID`; no `NextPage`,
 `SucceedsEmpty` or kept headers (no `ETag`, r5 7, MEASURED); `Json` `AzureDevOpsJsonContext`.
-`RefuseRedirect`: `BadCredentials` for a `Location` whose path is `/_signin` or host ends
-`.vssps.visualstudio.com`, never followed. `RefuseSuccess`: `BadCredentials` for a 203, or a 2xx whose
+`RefuseRedirect`: on A1's connectionData every redirect is `BadCredentials` (D360). Elsewhere,
+`BadCredentials` for a `Location` whose path is `/_signin` or whose host ends `.vssps.visualstudio.com`,
+and `Malformed` (warning `redirected outside the organization`) for a same-origin `Location` whose first
+path segment differs, without case, from the request's. None is followed. `RefuseSuccess`: `BadCredentials` for a 203, or a 2xx whose
 `Content-Type` is `text/html` or body starts `<` (g1 G0.1). `Classify` by status and `typeKey`, never
 the English (ruling 20; r5 1.4, g1 G2):
 
@@ -1465,22 +1673,29 @@ is kept once by its id (a new one between pages shifts them).
 ### 6.4 A1 `CheckTokenAsync(token, organization, ct)` (D360)
 
 An empty token, or one with more than visible ASCII, is `BadCredentials` without a request (7a's rule,
-`GitHubProvider.cs:322-330`); an organization `OrganizationOf` rejects is `Validation` without one (WP-A
-checks first). Then, with the token, never anonymously (D257, D350):
+`GitHubProvider.cs:322-330`), and so is one whose `HostingProviders.TokenFormOf` (1.2) is GitHub or
+GitLab, with `Detail = "other-provider:" + HostingProviders.Id(form)` (D378); an organization
+`OrganizationOf` rejects is `Validation` without one (WP-A checks first). Then, with the token, never
+anonymously (D257, D350):
 1. `GET <org>/_apis/connectionData?api-version=7.1-preview.1`. A 404 is `NotFound`, which at A1 means
-   no such organization (connectionData is in every one, r5 1.3, MEASURED); WP-A words it so. A 200 is
+   no such organization (connectionData is in every one, r5 1.3, MEASURED without a credential; with a
+   token ASSUMED until D374's probe of a made-up organization, 6.8); WP-A words it so. A 200 is
    `BadCredentials` with `Detail = AnonymousDetail` (the token ignored, g1 G0.3) when `authenticatedUser` or a GUID `id` is missing, the
    `id` is `AnonymousId`, the `descriptor` starts `AnonymousDescriptor` (without case) or
    `properties.Account.$value` is `Anonymous` (r5 1.2, MEASURED); never by `metaTypeId` (g1 G0.4).
-2. `GET <org>/_apis/resourceAreas/<CoreAreaId>?api-version=7.1-preview.1`: `locationUrl`, on `WebBase`'s
+2. Only after step 1's 200 has passed those checks (any other answer or failure of step 1 ends A1
+   with no second request): `GET <org>/_apis/resourceAreas/<CoreAreaId>?api-version=7.1-preview.1`: `locationUrl`, on `WebBase`'s
    origin with one segment equal to the typed name without case, gives the spelling (MEASURED
    anonymously, g1 G4.2; with a token ASSUMED). Any other answer or failure but the caller's
    cancellation keeps the typed name, with one warning; the sign-in goes on.
 
-These two are the reads WP-LIVE's guard lets through (D352). The account: key (AzureDevOps,
-`endpoints.Host`, `<org>`), `Login` that spelling, `Id` 0, `Name` `customDisplayName ??
-providerDisplayName` (g1 G3.3), no avatar, `UseForGit` true, `UserId` the `id` as lower-case text.
-`Account.$value`, the sign-in name (an e-mail), serves step 1 alone and is never kept or logged (D346).
+These two are the reads WP-LIVE's guard lets through (D352, D371). The account: key (AzureDevOps,
+`endpoints.Host`, `<org>`), `Login` that spelling, `Id` 0, no avatar, `UseForGit` true, `UserId` the `id`
+as lower-case text, and `Name` the first of `customDisplayName` and `providerDisplayName` that is
+neither e-mail-shaped (D368's test: an `@` with a non-blank character on each side, anywhere in the
+text) nor equal to `Account.$value` without case; if neither qualifies, null, and the Accounts block
+shows the organization alone (10.3). Both can be addresses (g1 G3.3). `Account.$value`, the sign-in
+name (an e-mail), serves step 1 and this comparison alone, and is never kept or logged (D346).
 
 ### 6.5 A2 and A3
 
@@ -1503,8 +1718,8 @@ providerDisplayName` (g1 G3.3), no avatar, `UseForGit` true, `UserId` the `id` a
 ### 6.6 A4, A5 and the other members
 
 - **A4** `ApiPath(repository, "/pullrequests?searchCriteria.status=active")` through the walk, 3 pages
-  of 100 (7a's 300). `Number` `pullRequestId`; `Author` `createdBy.displayName`, never `uniqueName` (an
-  e-mail, r5 3.1); `IsDraft` `isDraft`; `HtmlUrl` `WebUrlOf(base)/pullrequest/<id>` (the answer has none;
+  of 100 (7a's 300). `Number` `pullRequestId`; `Author` `createdBy.displayName`, null when it is
+  e-mail-shaped (6.4's test), never `uniqueName` (an e-mail, r5 3.1); `IsDraft` `isDraft`; `HtmlUrl` `WebUrlOf(base)/pullrequest/<id>` (the answer has none;
   MEASURED on both hosts, r5 3.2); `BaseRef` `targetRefName` without `refs/heads/`; `BaseRepository`
   the one asked; `CreatedAt` `creationDate`; `HeadSha` `lastMergeSourceCommit.commitId` or empty.
   Without `forkSource` (MEASURED): `HeadRef` `sourceRefName` without `refs/heads/`, the head the base.
@@ -1538,39 +1753,52 @@ D4 §1, MEASURED: camelCase misses `Account` silently); `$id` skipped. Dates are
 ### 6.8 Tests (the builder runs these four classes only)
 
 The fake serves 1.9's and 3.3's answers (`MetaTypeId`, `SignInRedirect` and `NonAuthoritative`
-included). Scripted: the HTML 401 with a BOM, the Anonymous descriptor with another id,
-`parentRepository` in a list.
-- `AzureDevOpsRecognitionTests`: 6.2's forms under `Service` and `Local`, G3.2's 38 vectors, other
-  ports; `OrganizationOf`'s forms and refusals.
+included). Scripted through `RecordingHttpHandler`: the HTML 401 with a BOM, the Anonymous descriptor
+with another id, an HTML 200 on connectionData, `parentRepository` in a list, and A4's 301 rows with no
+fake (its ref sync would make 301 merge commits, 3.5): pages at `$top=100&$skip=0`, `100` and `200`
+with 100 rows each, then the `$top=1&$skip=300` probe with one row, give 300 rows and `MoreExist` true
+in exactly four requests, each below `ApiPath(repository, "/pullrequests…")`.
+- `AzureDevOpsRecognitionTests`: 6.2's forms under `Service` and `Local`, the SSH forms' path rules,
+  G3.2's 38 rows (V1 to V26 and X1 to X12; the ten rows 8.7 adds, P1 to P5, Y1, Y2 and U1 to U3, are
+  `Select`'s and `InPlainForm`'s alone) with 6.2's answers, other ports; `OrganizationOf`'s forms and refusals.
 - `AzureDevOpsClientTests`: the headers of 6.3 on every request (`Basic` decoded to `:` and the
   token), the token on `WebBase` alone; each row of 6.3's table, with the 401's four bodies, a 302 to
-  `spsprod<x>.vssps.visualstudio.com/_signin` and to the fake's `/_signin` (nothing sent there), 203,
-  an HTML 200, a BOM'd error, `X-TFS-ServiceError`, a TF401027 text's e-mail screened; `RequestId`; the
-  warning `Azure DevOps: GET /<org>/_apis/… failed: 401 (request <id>).`; the walk at `pageSize` 2.
+  `spsprod<x>.vssps.visualstudio.com/_signin` and to the fake's `/_signin` (nothing sent there), a
+  same-origin 302 from connectionData `BadCredentials`, a 302 from `/fake-org/_apis/…` to
+  `/other-org/_apis/…` `Malformed` with nothing sent to `other-org`, 203, an HTML 200, a BOM'd error,
+  `X-TFS-ServiceError`, a TF401027 text's e-mail screened; `RequestId`; the warning
+  `Azure DevOps: GET /<org>/_apis/… failed: 401 (request <id>).`; the walk at `pageSize` 2.
 - `AzureDevOpsProviderTests`, against the fake: A1 (the account; the Anonymous id, its descriptor with
-  another id, `metaTypeId` 255 on a member accepted; an unknown organization `NotFound` with no second
-  request; the spelling read failing or differing; exactly 6.4's two paths; no request for an empty
-  token or a bad organization); A2 (order, `ListProject`, an empty repository, a disabled one left out,
-  a fork's parent); A3's parent; A4 (a draft, a fork, the URL, no `uniqueName`, 301 rows `MoreExist`);
-  A5 (the body, a fork after one GET, 200 and 201, the three refusals, one POST, another organization);
-  the other members, `Covers` without case; `Provider` on every failure.
+  another id, `metaTypeId` 255 on a member accepted; an unknown organization `NotFound`, and a 401, the
+  Anonymous 200, a 203 and an HTML 200, each with exactly one request; the spelling read failing or
+  differing; exactly 6.4's two paths; `Name` null for a member added with a made-up example.com address
+  as display name and no `CustomDisplayName`, "Ada" when its `CustomDisplayName` is "Ada", null when both
+  are addresses; no request for an empty token, a bad organization, or `github_pat_FAKE-octo-1` and
+  `glpat-FAKE-ada-1`, which give `BadCredentials` with `Detail` `other-provider:github` and
+  `other-provider:gitlab`); A2 (order, `ListProject`, an empty repository, a disabled one left out, a
+  fork's parent); A3's parent; A4 (a draft, a fork, the URL, no `uniqueName`, a null `Author` for
+  an e-mail-shaped `displayName`); A5 (the body, a fork after one GET, 200 and 201, the three refusals,
+  one POST, another organization); the other members, `Covers` without case; `Provider` on every failure.
 - `AzureDevOpsJsonTests`: made-up copies of r5's and g1's shapes with their marks (anonymous
   connectionData MEASURED, a member's READ, errors with `$id` and TF400677's `value`, a repository
   without `defaultBranch` MEASURED, the zero date MEASURED); `DateOf`; no `DateTimeOffset` member.
 
+**ASSUMED answers the fake copies, for WP-LIVE's first stage** (D342): 3.7's (D373's made-up values
+among them, and D374's made-up organization read with a token, on which 6.4 step 1's `NotFound`
+rests), and the client's own: the resource area with a token, the POST by name, messages naming an
+e-mail. Each answer found goes into the fake before part A's checks (0.4). Kept as marked, with no fork
+in the sandbox (D375): A5's fork body (ASSUMED), and the fork shapes A2 and A4 read, as 3.7 keeps them.
+
 Commits: (1) `AzureDevOpsUrls`; (2) the client and the JSON; (3) the provider; each with its tests.
 
-### 6.9 ASSUMED answers the fake copies, for WP-LIVE's first stage
+### 6.9 At the merge; done when
 
-3.7's, and the client's own: the resource area with a token, the POST by name, the fork body, messages
-naming an e-mail. Each answer found goes into the fake before part A's checks (0.4).
-
-### 6.10 At the merge; done when
-
-No lagged list (nothing wired until WP-S), no CLAUDE.md row, no picture. Done when the four classes
-pass; no request goes without a token or to an origin but `WebBase`'s; no redirect is followed off it;
-no e-mail reaches a record, a log line or a failure; no Azure DevOps sentence is parsed; CI's five jobs
-are green.
+No lagged list (nothing wired until WP-S), no CLAUDE.md row, no picture. If WP-AZ's is the last of wave
+2's merges, the lead's whole default run follows it (0.4, D245). Done when the four classes pass; no
+request goes without a token or to an origin but `WebBase`'s; no redirect is followed off it; no request
+leaves the account's organization (at A1, the typed one); no e-mail reaches a record, a log line or a
+failure; no Azure DevOps sentence is parsed; no value from the research's captures; CI's five jobs are
+green.
 
 ## 7. WP-GL: GitLab's client and provider
 
@@ -1651,9 +1879,12 @@ kept answers and the forks' paths.
   Read (A2, A3, lookups), Merge Request: Read (A4) and Create (A5), Code: Download and Push (git; Push
   alone cannot fetch). An empty token, or one with anything but visible ASCII, is refused without a
   request, as `GitHubProvider.cs:322-330` ("401 Unauthorized" for the second): a list without a token
-  is 200 `[]` (r6 1.2 MEASURED).
+  is 200 `[]` (r6 1.2 MEASURED). A token whose `HostingProviders.TokenFormOf` (1.2) is GitHub or Azure
+  DevOps is refused so too (D378): `BadCredentials`, "401 Unauthorized", `Detail = "other-provider:" +
+  HostingProviders.Id(form)`; a `glpat-` token, or one of no form, goes on.
 - **A1** `GET user` for both kinds, never `personal_access_tokens/self` (ruling 17): key (GitLab, `Host`,
-  `username`), `id`, `name`, no avatar, `UseForGit` true; the shape has no address member.
+  `username`), `id`, `name` unless it is e-mail-shaped (6.4's test; then null), no avatar, `UseForGit`
+  true; the shape has no address member.
 - **A2** `GET projects?membership=true&archived=false&order_by=last_activity_at&sort=desc&per_page=100`,
   never `simple`, 10 pages. Rows: `path_with_namespace`; `default_branch` or `""` (empty project);
   `IsPrivate` unless `public`; `IsFork` `forked_from_project` present; `http_url_to_repo`, `web_url`;
@@ -1683,9 +1914,11 @@ kept answers and the forks' paths.
 ### 7.5 The fake's answers these tests rest on
 
 MEASURED: shape A's 401, an MR's `404 Not found`, the 301, `Link`, `x-request-id`, ETags, 304s, a
-fork MR's ids. READ, for the live command to confirm (D342): Bearer for both kinds, `GET user` and its
-403 without User: Read, F's 401s, 405, create's 409 B, 400 C, 400 E, 422 B and 403 (g2 G1), `draft`
-for a `Draft:` title. ASSUMED: `CanPush`'s levels, an empty project's `default_branch`, a token limited
+fork MR's ids. READ, for the live command to confirm (D342) with the fine-grained token alone (D375):
+Bearer, `GET user` and its 403 without User: Read (4.3's check 5, whose shape `self` shows), a made-up
+`glpat-` value's 401 (D373), 405, create's 409 B, 400 C, 400 E, 422 B and 403 (g2 G1), `draft` for a
+`Draft:` title. Kept READ: a legacy token's Bearer, `GET user` and 403s, on GitLab's docs (D375), and
+F's 401s (15.7). ASSUMED: `CanPush`'s levels, an empty project's `default_branch`, a token limited
 to some projects listing all (r6 14). Scripts serve shape D, both 429s, HTML, a 403 with
 `ratelimit-remaining: 0`.
 
@@ -1702,8 +1935,11 @@ to some projects listing all (r6 14). Scripts serve shape D, both 429s, HTML, a 
   body in made-up words classified alike, a 403 naming a rate limit or `api` unchanged; `RetryAt`'s four
   sources; a warning names GitLab, no query, token or the fake user's address.
 - `GitLabProviderTests`: A1 for both kinds (one `GET /api/v4/user`), refused when unknown, revoked,
-  expired, without User: Read, empty, non-ASCII; A2's query, cap, rows (nested, `internal`, fork,
-  levels 20, 30, 40, empty, no archived); A3 by path, moved, fork; A4's fields and cap, no lookup for
+  expired, without User: Read, empty, non-ASCII; a user whose name is a made-up `example.com` address
+  gives `Name` null; `github_pat_FAKE-octo-1` and `new string('a', 76) + "AZDO" + "abcd"` are
+  `BadCredentials` with `Detail` `other-provider:github` and `other-provider:azure-devops`, and the fake's
+  `Requests` stays empty; A2's query, cap, rows (nested, `internal`, fork, levels 20, 30, 40, empty, no
+  archived); A3 by path, moved, fork; A4's fields and cap, no lookup for
   its own MRs, one for a fork's two, a hidden fork null, a failing lookup failing, 25 forks 20
   lookups, none next call, again after `ForgetKept`; A5 in one project and across forks (GETs, POST
   path and body by a recording handler), Draft titles, `/close` sent as typed, each refusal, one POST a
@@ -1713,8 +1949,9 @@ Commits: (1) `GitLabUrls`; (2) `GitLabJson`, `GitLabProfile`; (3) `GitLabProvide
 
 ### 7.7 At the merge; done when
 
-No lagged list (nothing starts the app), no CLAUDE.md row, no picture. Done when the three classes
-pass; the token goes to no other origin or header; no kind rests on GitLab's English or `scope`;
+No lagged list (nothing starts the app), no CLAUDE.md row, no picture. The whole default run follows
+the merge that closes wave 2, whichever of WP-FA, WP-FL, WP-AZ and WP-GL is last (0.4). Done when the
+three classes pass; the token goes to no other origin or header; no kind rests on GitLab's English or `scope`;
 recognition takes no other host or port; 1.4's signatures hold; CI's five jobs are green.
 
 ## 8. WP-C: credentials, push guard and prompts on the new hosts
@@ -1748,24 +1985,59 @@ is that. With any other member set:
    DevOps hosts and GitLab. The text holds only U+0021 to
    U+007E and no `\`, `?` or `#` (rule 2, narrowed to printable ASCII); the path is empty or
    `/`-separated segments, none `.` or `..`, none empty but one trailing; a `%` only before two hex
-   digits encoding none of `2E`, `2F`, `5C`, `25`, `00`-`1F`, `7F`, `C0`, `C1` (`%20` and UTF-8 escapes
-   pass). On `Origin` with `Organization` the first segment matches the grammar and equals
-   `Organization` without case.
+   digits encoding none of `2E`, `2F`, `5C`, `25`, `00`-`1F`, `7F`; each segment, its escapes decoded,
+   is valid UTF-8 (no overlong form, no surrogate, nothing above U+10FFFF), which covers `C0` and `C1`
+   (`%20` and UTF-8 escapes of names pass). On `Origin` with `Organization`, `Select` (not `InPlainForm`, which takes no coverage, 1.2) also
+   requires a first segment, non-empty, that matches the grammar and equals `Organization` without case. A URL whose
+   path is empty or `/` alone is never bound there: `https://dev.azure.com`, `https://dev.azure.com/`,
+   `https://dev.azure.com:443`, the same with a user (`myorg` or any other), and the fake's
+   `http://127.0.0.1:<port>/`. Its per-URL key would make git ask the app's helper for every
+   organization's URL on the host, a user-less one answered with the token (MEASURED on 2.31.1, 2.43.0
+   and 2.56 by the design review). `InPlainForm` stays true for an empty path (GitLab,
+   `<organization>.visualstudio.com`): the refusal is `Select`'s, not the form's.
 3. **Users.** None, `Login` without case (the organization, GitLab's username; 0.2), and with
    `HelperUserIsAccounts` `x-access-token` (ruling 11). `oauth2@` or any other is another user (D275);
    no password.
-4. **Twin.** With `GitTwin`, a bound URL of two or more segments whose path does not end in `.git`
-   (ordinal) adds, right after it, its text without `user@`, one trailing `/` removed, plus `.git`.
+4. **Twin.** With `GitTwin`, a bound URL of two or more segments whose path, one trailing `/` removed,
+   does not end in `.git` (ordinal) adds, right after it, its text without `user@` and without that
+   `/`, plus `.git`.
+
+   4b. **Credential twin.** A bound URL, step 4's twins included, whose path (the text after the
+   authority) holds a raw `!`, `$`, `&`, `'`, `(`, `)`, `*`, `+`, `,`, `;`, `=`, `:`, `@`, `[` or `]`
+   adds, right after it, its `Url` with each such character of the path written `%XX` (upper-case
+   hex), other escapes and characters kept. git's credential side decodes the whole path and re-encodes
+   these characters (`credential.c:674-682`, `:223-238`), while `url_normalize` keeps a key's raw
+   reserved character raw: the raw form's `credential.<url>.*` pairs never match their own URL, and its
+   `http.<url>.proactiveAuth` pair does. The raw form's http pair gives 2.46 and later the proactive
+   request; the twin's credential pairs give the reset and the app's helper on every git (MEASURED on
+   2.31.1, 2.43.0 and 2.56 by the design review: raw only, APP 0 and the user's helper answers; with
+   the twin, APP 1). A raw `"`, `<`, `>`, `^`, `` ` ``, `{`, `|` or `}` needs no twin: `url_normalize`
+   escapes it on both sides.
 5. **Drop.** Other users' URLs: fetch and push URLs on a covered host with a user outside 3's set, and
    URLs with the covered scheme whose text names a covered host without case but that `UrlParts.Of` cannot
    read (V26: .NET refuses it, git reads user `evil.example\`). If one cannot be read or is not in 2's
-   form (its first segment needing only the grammar), no URL on that host is bound (ruling 10). Else a
-   binding, twins included, is dropped when another user's path equals or lies under its path at a `/`
-   (ordinal) after both are normalised as `url_normalize` does: `%XX` of an unreserved character
-   (`A-Z a-z 0-9 - . _ ~`) decoded, other escapes' hex upper-cased (g3 G3.2, READ). 7a's raw compare
-   (`:100-102`) misses G0.5's `…/_git/%52` (MEASURED on 2.31.1 and 2.56); its `./R` and `x/../` fail 2.
-6. **Result.** `Url` is 7a's (D278); distinct by `Url`, in the remotes' order; `SharedOriginOwner` is
-   `Organization` on bindings on `Origin` when it is set (dev.azure.com and the fake), else null.
+   form (on `Origin` with `Organization` a first segment is still required, so an empty path fails, but
+   it needs only the grammar, not equality; elsewhere 2's form alone), no URL on that host is bound
+   (fail closed, ruling 10). Else a binding, twins of both kinds included, is dropped when another
+   user's path equals its path or lies under it at a `/` (ordinal, case kept), both put in git's
+   credential view: every `%XX` decoded (2's form leaves none that forms `/`, a dot segment, `%`, `\`
+   or a control character), the trailing `/` removed (the form allows one), then every byte outside
+   `A-Z a-z 0-9 - . _ ~ /` written `%XX` in upper-case hex. git matches a `credential.<url>` key against
+   the request in that view (`credential_from_url` decodes the path and trims its slashes,
+   `credential_format` re-encodes it; g3 G3.2's READ notes). On the key, `url_normalize` decodes only
+   unreserved escapes, upper-cases the other hex, escapes raw unsafe characters and keeps raw reserved
+   ones, and the prefix match ignores one trailing `/`. The credential view on both sides is coarser
+   than git's key view, so it never drops too little; what it drops beyond git (a key with a raw
+   reserved character, which git never matches) only leaves that URL to the user's helpers (D82). A
+   binding and its 4b twin have one view, so they drop together. MEASURED on 2.31.1, 2.43.0 and 2.56
+   by the design review: a key `…/r%28x%29` answers `evil@…/r(x)` and `evil@…/r(x%29`; `…/r^x` and
+   `…/r%5Ex` answer each other's `evil@` spelling; `…/r%5ex` answers `evil@…/r%5Ex`; `…/r{x}` answers
+   `evil@…/r%7Bx%7D`; `…/r/` answers `evil@…/r`, on gitlab.com too (and on github.com, whose `Select`
+   stays 7a's, 16.3). 7a's raw compare (`:100-102`) misses G0.5's `…/_git/%52` (MEASURED on 2.31.1 and
+   2.56); its `./R` and `x/../` fail 2.
+6. **Result.** `Url` is 7a's (D278), a twin's as step 4 or 4b writes it; distinct by `Url`, in the
+   remotes' order; `SharedOriginOwner` is `Organization` on bindings on `Origin` when it is set
+   (dev.azure.com and the fake), else null.
 
 `<organization>@` URLs bind because the login is the organization, and git's `get` with
 `username=<organization>` passes `IsAccountUser` (`AskPassBroker.cs:602-608`) unchanged. The helper
@@ -1775,15 +2047,20 @@ without case (ASSUMED, r6; harmless, git sends `x-access-token`).
 ### 8.3 The broker and the prompt group
 
 - `:144` becomes `GIT_CONFIG_COUNT is not a number git accepts; no account's token is given to git.`
-- `AccountOf`: the binding is the first on the prompt's origin, as now (one account per origin, 1.8).
-  With a `SharedOriginOwner` the prompt must name it, without case, as its URL's first path segment
-  (one holding `%` never does) or as its user; else null; then `IsAccountUser` as now. With
-  `useHttpPath` off (macOS, Linux, every test run) `Username for 'https://dev.azure.com': ` carries no
-  account and `Password for 'https://<organization>@dev.azure.com': ` does; with it on (Git for Windows'
-  system file, r7 5) the path names it. `AnswerCredentialAsync` (`:653-740`) is unchanged (r2 7.4).
+- `AccountOf`: the binding is the first on the prompt's origin, as now (one account per origin, 9.2).
+  With a `SharedOriginOwner` the prompt carries the account only when (a) its URL's raw path (as the
+  prompt writes it, never .NET's `AbsolutePath`, which resolves `..`, g3 G0.4), split at `/` after its
+  leading one, has no segment that is empty, `.` or `..` or holds `%` or `\`, and its first segment
+  equals the owner without case, or (b) the path is empty and its user is the owner without case or
+  `x-access-token`; else null; then `IsAccountUser` as now. With `useHttpPath` off (macOS, Linux,
+  every test run) `Username for 'https://dev.azure.com': ` carries no account, and
+  `Password for 'https://<organization>@dev.azure.com': ` and
+  `Password for 'https://x-access-token@dev.azure.com': ` do; with it on (Git for Windows' system
+  file, r7 5) the path names it. `AnswerCredentialAsync` (`:653-740`) is unchanged (r2 7.4).
 - Accepted: after a refusal in a scope, a path-less dev.azure.com Username prompt shows git's dialog
-  (plan risk 39, wider there); typing the organization as user name there makes the next Password
-  prompt the account's, refused without a dialog (D273), and the operation ends with 8.5's text.
+  (plan risk 39, wider there); typing the organization or `x-access-token` as user name there makes
+  the next Password prompt the account's, refused without a dialog (D273), and the operation ends
+  with 8.5's text.
 - `PromptDialogs`' group rule (`:300`) stays: a shared origin's Username prompt carries the account only
   when its path names the organization, as the Password prompt after it then does; in the accepted case
   a group asks for that password once more.
@@ -1811,10 +2088,11 @@ public static string TokenRefused(HostingProvider provider, string login) =>
 
 GitHub's equal 7a's word for word (D351); the login is the account's `Login` in its own case, the
 organization on Azure DevOps. `RefusedDisplay` reads `Services?.Hosting.AccountOf(refused.Provider)`
-in place of `Account` (`:745`). 7a's one-argument forms stay, delegating with GitHub, until WP-A (its
-part A files), WP-B (`HostingTexts.Describe.cs:53` and its tests) and WP-N
-(`RepositoryOperations.CreatePullRequest.cs:454`, `:470-471`) have moved their callers; WP-N then
-removes them (1.7).
+in place of `Account` (`:745`) and calls `GitCredentialsRefused(refused.Provider, login)` (`:749`).
+7a's one-argument forms stay, delegating with GitHub, for 7a's tests (1.7). WP-B moves
+`HostingTexts.Describe.cs:53` and WP-N moves `RepositoryOperations.CreatePullRequest.cs:454`.
+`RefusedTokenDisplayTests` keeps 7a's assertions of the one-argument forms and adds the per-provider
+ones.
 
 ### 8.6 What each git does (accepted; g3 G2, MEASURED on 2.31.1, 2.43.0, 2.56)
 
@@ -1823,29 +2101,40 @@ removes them (1.7).
 | A bound URL's first request | anonymous, 401, the helper, the token; `<organization>@` sends `<organization>:` first (H2) | the token |
 | A netrc entry for the host | answers the first 401, user-less URLs too (N3; plan risk 35) | never |
 | gitlab.com's 301 to `.git` | the token through the twin (C3; without, the user's helpers) | the token |
-| Another same-host redirect (a moved project) | the user's helpers (C1') | the token |
+| A moved GitLab project's old path (served directly, 200, MEASURED r6 6.1) | as the first row | the token |
+| A same-host redirect of a git URL out of a binding (none known: gitlab.com serves a moved project's old path, MEASURED r6 6.1; Azure DevOps redirects none of its git URLs, r7 10.1 ASSUMED, visualstudio.com 200 MEASURED r5; a dot segment, which old git treats as a redirect, g3 G2, is never bound, 8.2) | the user's helpers (C1') | the token (C1) |
 
-Pairs: 3 per binding (D340), 6 for a `.git`-less GitLab URL, no `useHttpPath` pair (ruling 13);
-`GIT_TRACE_REDACT=1`; none below 2.31 (D277). Azure DevOps redirects none of its git URLs (r7 10.1,
-ASSUMED; visualstudio.com answers 200, r5, MEASURED). git-lfs asks the user's helpers, sending no path
+Pairs: 3 per bound URL, twins of either kind (8.2 steps 4 and 4b) counted (D340): 6 for a
+`.git`-less GitLab URL or a URL with a credential twin, 12 for both; no `useHttpPath` pair (ruling 13);
+`GIT_TRACE_REDACT=1`; none below 2.31 (D277). git-lfs asks the user's helpers, sending no path
 without `useHttpPath` (g3 G4): accepted, as for 7a's bindings; never another organization's.
 
 ### 8.7 Tests
 
-`AzureDevOpsCoverageVectors`: G3.2's V1 to V26 and X1 to X12 (MEASURED) with G3.4's answer (bound: V1,
-V2, V10, V12 to V16, X1; 29 not), the bound text and owner, git's two views and the APP column; account
-`(AzureDevOps, dev.azure.com, myorg)`, `Origin` `https://dev.azure.com/`, `OrganizationHost`,
-`HelperUserIsAccounts`.
+`AzureDevOpsCoverageVectors`: 48 rows with G3.4's answer, the bound text, its twin and owner, git's two
+views and the APP column. G3.2's V1 to V26 and X1 to X12 (MEASURED); then the design review's, not
+G3.2's: P1 `https://dev.azure.com`, P2 `https://dev.azure.com/`, P3 `https://dev.azure.com:443` and
+P4 `https://myorg@dev.azure.com/` (in the form, not bound; their key, were it bound, reaches the app's
+helper for `D/otherorg/p/_git/r` with no user and for its `otherorg@` form with `username=otherorg`)
+and P5 `https://myorg.visualstudio.com` (bound as written, owner null; its key does not reach
+`https://otherorg.visualstudio.com/p/_git/r`); Y1 `D/myorg/p/_git/r(x)`, twin `…/r%28x%29`, and Y2
+`D/myorg/My%20P/_git/a&b`, twin `…/a%26b` (bound; the raw key alone APP 0, with the twin APP 1;
+urlmatch basic; both views `myorg`), P and Y MEASURED by the design review; U1
+`D/myorg/%E0%80%AE%E0%80%AE/otherorg/p/_git/r` and U2 `D/myorg/p/_git/r%ED%A0%80` (not valid UTF-8,
+not bound) and U3 `D/myorg/p/_git/r%C3%A9` (bound), their git columns ASSUMED as X6's (APP 1, both
+views `myorg`) until `CoverageGitMatchTests` first runs. Bound: V1, V2, V10, V12 to V16, X1, P5, Y1,
+Y2, U3 (13); 35 not. Account `(AzureDevOps, dev.azure.com, myorg)`, `Origin` `https://dev.azure.com/`,
+`OrganizationHost`, `HelperUserIsAccounts`.
 
 | Class (project) | Proves |
 |---|---|
-| `AzureDevOpsCoverageVectorsTests` (Git) | each row's answer, `Url`, `SharedOriginOwner` (`myorg`; null on V15, V16), and `InPlainForm` per row; an organization outside the grammar binds nothing; the two `ArgumentException`s |
-| `CoverageGitMatchTests` (Git; offline `git credential fill` in the broker's scope) | per row: the per-URL key in the three pairs reaches the helper as APP says (the broker's Debug line); prefix keys for `myorg`, `otherorg`, `MyOrg`, `myorg.visualstudio.com` give G3.2's two views (`fatal` too); a bound row returns the token; G0.5's three spellings reach the helper beside `…/myorg/P/_git/R` and `Select` binds nothing on the host; GitLab: `…/g/p` alone misses `…/g/p.git/info/refs`, with its twin both reach it; `…/otherorg/p/_git/r` gives `Username for 'https://dev.azure.com': ` without an account, the path form with `-c credential.https://dev.azure.com.useHttpPath=true`; `…/myorg/…` without a token carries the account only with it on. CI's 2.43 too |
-| `CredentialBindingSelectTests` (Git) | 7a's cases through both overloads; GitLab: `.git` one binding, `…/p` and `…/p/` two, `Ada@` and `x-access-token@` bound, `oauth2@`, lookalikes, `http`, ssh, `/../`, `//`, `?`, `%2E%2E` not; `alice@…/g/p.git` drops the twin alone, `alice@…/g/%70.git` drops `…/g/p.git`, `alice@…/g/x/../p.git` or V26's form leaves the host unbound, `alice@…/h/p.git` drops nothing; Azure DevOps: `otherorg@…/otherorg/My%20Project/_git/r` and `evil@…/myorg/p/_git/R` beside `…/r` drop nothing |
-| `AskPassBrokerBindingTests` (Git) | the warning; three providers' bindings in one scope: 3 pairs each, 6 for a twin, no key with `usehttppath`, `GIT_TRACE_REDACT=1`; at 2.30.0 today's environment; `get` with `MyOrg`, `x-access-token` or no user answered, `otherorg`, `oauth2` not, each by its origin's account; `AccountOf` through `AskPassRunner.RunAsync` for 8.3's forms, an escaped segment, visualstudio.com and gitlab.com (7a's rule); after a refusal the organization's Password prompt never reaches the handler, the path-less Username prompt does |
-| `PullRequestRefsTests` (WP0's) | 8.4's heads; GitHub's 14 vectors; GitLab false `…/foo/head`, `…/a/b/head`, `…/x/train`, `…//head`, true `…/5/head`, `…/5/train`, `refs/merge-requests/foo`, `refs/pull/fix/head`; Azure DevOps false `refs/pull/fix/merge`, `refs/pull/7/head`, true `refs/pull/7/merge`, `refs/pull/fix` |
-| `PushGuardProvidersTests` (App; bare remotes) | r7 9's table: with GitLab's `merge-requests/*/head` line, `merge-requests/foo` and `…/a/b` pushed and the next fetch exits 0 (F3), `merge-requests/5` refused with phase 6's text and, pushed by plain git, failing the next fetch with `Cannot fetch both` (F2); with Azure DevOps' `pull/*/merge` line `pr/fix` pushed, `pr/7` refused; with a `pull/*/head` line `pr/7` pushed; GitLab's line on a GitHub remote refused; an Azure DevOps remote without an account under its rule |
-| `RefusedTokenDisplayTests`, `PromptGroupAccountTests` (App) | the texts per provider; a refused GitLab or Azure DevOps fetch names its provider and login; a group keys an organization's prompts by the account, a path-less one by none |
+| `AzureDevOpsCoverageVectorsTests` (Git) | each row's answer, `Url` and twin, `SharedOriginOwner` (`myorg`; null on V15, V16, P5), and `InPlainForm` per row by 8.2 step 2's rule alone, which has no user, host or organization clause (the first-segment clause on `Origin` with `Organization` is `Select`'s): true, though unbound, on P1 to P4, on V6, X9 and X10, which only the organization's grammar refuses (6.2), and on V11, V17 and V23, refused for their user or host; an organization outside the grammar binds nothing; the two `ArgumentException`s |
+| `CoverageGitMatchTests` (Git; offline `git credential fill` in the broker's scope) | per row: the per-URL key in the three pairs reaches the helper as APP says (the broker's Debug line), Y1's and Y2's only with the twin; P1 to P4's key reaches it for `…/otherorg/p/_git/r` without a user (why `Select` refuses them), P5's not for otherorg.visualstudio.com; for each credential-view case of `CredentialBindingSelectTests`, dropped or not, the binding's pairs ask the helper with the other user exactly where `Select` drops; prefix keys for `myorg`, `otherorg`, `MyOrg`, `myorg.visualstudio.com` give G3.2's two views (`fatal` too); a bound row returns the token; G0.5's three spellings reach the helper beside `…/myorg/P/_git/R` and `Select` binds nothing on the host; GitLab: `…/g/p` alone misses `…/g/p.git/info/refs`, with its twin both reach it; `…/otherorg/p/_git/r` gives `Username for 'https://dev.azure.com': ` without an account, the path form with `-c credential.https://dev.azure.com.useHttpPath=true`; `…/myorg/…` without a token carries the account only with it on. CI's 2.43 too |
+| `CredentialBindingSelectTests` (Git) | 7a's cases through both overloads; GitLab (`Ada`): `.git` one binding, `…/p` and `…/p/` two, `…/g/p.git/` one and no twin, `Ada@` and `x-access-token@` bound, `oauth2@`, lookalikes, `http`, ssh, `/../`, `//`, `?`, `%2E%2E` not; `alice@…/g/p.git` drops the twin alone, `alice@…/g/%70.git` drops `…/g/p.git`, `bob@…/g/p` drops `…/g/p/` and keeps its twin `…/g/p.git`, `alice@…/g/x/../p.git` or V26's form leaves the host unbound, `alice@…/h/p.git` and `bob@…/john.doe/p.git` (in the form) drop nothing; Azure DevOps (`myorg`), dropped in the credential view: `…/r%28x%29` beside `evil@…/r(x)`, `…/r(x)` with its twin beside `evil@…/r%28x%29` and `evil@…/r(x%29`, `…/r^x` beside `evil@…/r%5Ex` and `…/r%5Ex` beside `evil@…/r^x`, `…/r%5ex` beside `evil@…/r%5Ex`, `…/r{x}` beside `evil@…/r%7Bx%7D`, `…/r/` beside `evil@…/r`; not dropped: `…/r(x)` beside `evil@…/R(x)`, `otherorg@…/otherorg/My%20Project/_git/r` and `evil@…/myorg/p/_git/R` beside `…/r`; an `otherorg@` `https://dev.azure.com/` beside `…/myorg/p/_git/r` leaves the host unbound; the fake's `http://127.0.0.1:<port>/` is not bound |
+| `AskPassBrokerBindingTests` (Git) | the warning; three providers' bindings in one scope: 3 pairs per URL, 6 with a twin of either kind, 12 with both, no key with `usehttppath`, `GIT_TRACE_REDACT=1`; at 2.30.0 today's environment; `get` with `MyOrg`, `x-access-token` or no user answered, `otherorg`, `oauth2` not, each by its origin's account; `AccountOf` through `AskPassRunner.RunAsync` for 8.3's forms, an escaped segment, a `…/myorg/../otherorg/…` prompt (no account), an `x-access-token@dev.azure.com` prompt (the account's), visualstudio.com and gitlab.com (7a's rule); after a refusal the organization's Password prompt never reaches the handler, the path-less Username prompt does |
+| `PullRequestRefsTests` (WP0's) | 8.4's heads; GitHub's 14 vectors and true `refs/merge-requests/foo/head`; GitLab false `…/foo/head`, `…/a/b/head`, `…/x/train`, `…//head`, true `…/5/head`, `…/5/train`, `refs/merge-requests/foo`, `refs/pull/fix/head`; Azure DevOps false `refs/pull/fix/merge`, `refs/pull/7/head`, true `refs/pull/7/merge`, `refs/pull/fix` |
+| `PushGuardProvidersTests` (App; bare remotes) | only r7 9's rows that push (the refusals and the ref rules are `PullRequestRefsTests`' on strings; App.Tests ends the run, 0.6): with GitLab's `merge-requests/*/head` line `merge-requests/foo` pushed and the next fetch exiting 0 (r7 9's F3); with Azure DevOps' `pull/*/merge` line `pr/fix` pushed, on the account's remote and on one without an account (D279); with a `pull/*/head` line `pr/7` pushed |
+| `RefusedTokenDisplayTests`, `PromptGroupAccountTests` (App) | 7a's assertions of the one-argument texts kept; the texts per provider; a refused GitLab or Azure DevOps fetch names its provider and login; a group keys an organization's prompts by the account, a path-less one by none |
 
 `HostingSessionStub` gains `HostingSessionStub(GitCoverage coverage, string? token)` (7a's constructor
 stays, with GitHub's coverage), `Coverage` and `RecognisedUrls` (`Dictionary<string, HostingProvider>`, ordinal) beside
@@ -1860,12 +2149,15 @@ clones through the helper (0.5); no earlier picture changes.
 ### 8.8 Merge; done when
 
 Commits: `PullRequestRefs`; `Select` and the Git classes; the broker; the texts, `RefusedDisplay`, the
-stub and the App classes. The lead merges WP-C before WP-S and at closing writes the twin, the drop and
-8.6 into `docs/architecture.md`'s "Prompts and credentials" and widens plan risks 35 and 39. Done when
-every class passes on the laptop and in CI on Windows, macOS, Linux (2.56) and both containers (2.43);
-7a's tests pass unchanged but for the warning's two pins (`AskPassBrokerBindingTests.cs:97`, `:123`);
-G3.2's 38 rows give G3.4's answer on strings and in git; no token is in an argument, URL, config value,
-log or file.
+stub and the App classes. The lead merges WP-C before WP-AZ's worktree is made and before WP-S; when
+WP-C's merge is the last of wave 1 (WP-F, WP-H, WP-C), the whole default run follows it (0.4, D245),
+which also measures App.Tests' new time (0.6). At closing the lead writes both twins, git's credential
+view, the drop and 8.6 into `docs/architecture.md`'s "Prompts and credentials" and widens plan risks
+35 and 39. Done when every class passes on the laptop and in CI on Windows, macOS, Linux (2.56) and
+both containers (2.43); 7a's tests pass unchanged but for the warning's two pins
+(`AskPassBrokerBindingTests.cs:97`, `:123`); `AzureDevOpsCoverageVectors`' 48 rows (G3.2's 38 and the
+ten 8.7 adds, P1 to P5 among them) give G3.4's answer as 8.2 words it, on strings and in git; no token
+is in an argument, URL, config value, log or file.
 
 ## 9. WP-S: the session for three providers
 
@@ -1880,14 +2172,15 @@ Files: `HostingSession.cs`, `JsonAccountStore.cs`, `RepositoryHosting.cs` and `.
 `HostingRules.cs`, `IHostingSession.cs` (bodies only; to WP-N at the merge), `HostingOptions.cs` (the off
 handler's message names no provider), `AccountKey.cs` (docs), `RepositoryViewModel.Hosting.cs` (to
 WP-P at the merge) and `.Avatars.cs`; 9.10's test classes, `ProvidersSessionSetup.cs` and
-`tests/VisualCommit.Testing/Hosting/HostingSessionGitHubForms.cs` (1.9).
+`tests/VisualCommit.Testing/Hosting/HostingSessionGitHubForms.cs` (namespace `VisualCommit.Hosting`, 1.9).
 
 ### 9.2 The session object
 
 7a's constructor (7a design 7.3).
-- **Providers**: one per endpoint `options` give, with its handler (1.4's default when null), disposed
-  with the session. Two on one web origin throw `ArgumentException` (the broker answers from the first
-  binding on an origin, `AskPassBroker.cs:658`). The vault exists when any provider is on; `AvatarCache`
+- **Providers**: one per endpoint `options` give, with its handler (a null one refuses every request;
+  `FromEnvironment` gives each provider it turns on its `DefaultHandler`, 1.4), disposed with the
+  session. Two on one web origin throw `ArgumentException` (the broker answers from the first binding
+  on an origin, `AskPassBroker.cs:658`). The vault exists when any provider is on; `AvatarCache`
   and `AuthorMapStore` only when GitHub is (`HostingSession.cs:74-81`).
 - **Construction lines** in `HostingProviders.InAccountsOrder`: `{Name}: {provider.Host}.` or
   `{Name}: off.`, GitHub's byte for byte (`:80,84`).
@@ -1912,7 +2205,8 @@ record is kept, an off or unknown provider's too (D292). `AccountRecord` gains `
 last, `[JsonIgnore(Condition = WhenWritingNull)]`), so GitHub's and GitLab's records keep 7a's eight
 names (`JsonAccountStoreTests.cs:42-43`). `Id` stays a JSON number, 0 for Azure DevOps (1.8; g4 D4 §6,
 MEASURED; `JsonAccountStore.cs:50-55`); a 7a save drops `userId`, which 7b takes again at the next check
-(9.5). The new providers' `avatarUrl` is null (D349); no field holds an e-mail address.
+(9.5). The new providers' `avatarUrl` is null (D349); no field of a GitLab or Azure DevOps record holds an
+e-mail address (6.4, 7.4). GitHub's record is 7a's, unchanged.
 
 The key for all three is `new AccountKey(provider.Kind, provider.Host, account.Login)` (D357).
 
@@ -2006,31 +2300,46 @@ slot. The avatars go (`StopAvatars`, `None`) when the candidate becomes none or 
 
 `ProvidersSessionSetup` is 7a's `HostingSessionSetup` over the three fakes in process, each optional;
 organizations `fake-org` and `other-org`, user `ada`, group `fake-group/sub`.
-- **`HostingSessionProvidersTests`**: the construction lines; `FromEnvironment` with nothing set: three
-  on, each host's remotes recognised (`<organization>.visualstudio.com` too), no request; `none`: three
-  off; one origin twice throws. Start: no record, no store call; three records, three reads, events in
-  D353's order; an off provider's record kept unread. Sign-in per provider: one A1 to its fake, 9.3's
-  record (`id` the number 0, `userId`), others untouched; a second GitLab user forgets the first's
-  entry; off fails without a request; two at once keep both records. GitLab's sign-out keeps
+- **`HostingSessionProvidersTests`**: the construction lines; `HostingOptions.FromEnvironment(_ => null,
+  log) with { CreateHandler = refusing, CreateAzureDevOpsHandler = refusing, CreateGitLabHandler =
+  refusing }`, `refusing` giving a `RecordingHttpHandler` whose script fails every request (no socket):
+  three on, each host's remotes recognised (`<organization>.visualstudio.com` too), the handlers'
+  record empty; `none`: three off; one origin twice throws. Start: no record, no store call; three
+  records, three reads, events in D353's order; an off provider's record kept unread. Sign-in per
+  provider: one A1 to its fake, 9.3's record (`id` the number 0, `userId`), others untouched; a user
+  whose display name (Azure DevOps, no `CustomDisplayName`) or name (GitLab) is a made-up `example.com`
+  address: the `accounts.json` written holds no `@`; a second GitLab user forgets the first's entry;
+  off fails without a request; two at once keep both records. GitLab's sign-out keeps
   `avatars/` and GitHub's slot; GitHub's deletes them, keeping GitLab's. `SourceCanExist`:
   `refs/merge-requests/x/head` refused on a GitLab remote, allowed on GitHub's; `refs/pull/x/merge`
   refused on Azure DevOps'.
 - **`HostingSessionCredentialTests`** (extended): `GetAsync` by provider and key; GitLab's 401 marks
   GitLab alone; two providers' checks at once; Azure DevOps' check names the organization; another
   user's `userId` or `id` ends refused; a record without `userId` takes it; `BindingsFor` over GitHub,
-  GitLab, `fake-org` and `other-org` remotes binds the first three, GitLab's twin too.
+  GitLab, `fake-org` and `other-org` remotes binds the first three, GitLab's twin too; with `AzureDevOps`
+  `Service`, `https://fake-org.visualstudio.com/P/_git/r` is bound to `fake-org`'s account
+  (`OrganizationHost`, 8.2), its `SharedOriginOwner` null.
 - **`HostingRulesTests`** (extended): `origin` GitLab and `upstream` GitHub list GitLab's; `ByRef` by
   records (the mirror, both Azure DevOps hosts, a nested path without case).
 - **`RepositoryHostingProvidersTests`**: each state per provider; a GitLab candidate with GitHub alone
   signed in asks neither fake; `OtherOrganization`: refresh, `ReadRepositoryAsync` and create leave the
   fake's count, `RequestRemotes` empty; a sign-in to `other-org` swaps two tabs' states; GitHub's
   sign-in refreshes no GitLab-listed tab; a three-segment Debug line; GitHub's sign-out keeps GitLab's
-  bindings; avatars as 9.8.
+  bindings; avatars as 9.8. With `AzureDevOps = AzureDevOpsEndpoints.Service` and
+  `CreateAzureDevOpsHandler = fake.CreateHandler` (in process, 3.3), a remote
+  `https://fake-org.visualstudio.com/P/_git/r`: recognised, `Covers` true for `fake-org`, A4 in the
+  fake's `Requests` with `Host` `dev.azure.com` and the path
+  `/fake-org/P/_apis/git/repositories/r/pullrequests` (6.3), the state `Loaded`, `ByRef` mapped.
 - **`RepositoryHostingProvidersWiringTests`** (`[AvaloniaFact]`, `ShellDriver.Start` with
   `ServeHosting7bAsync`'s fakes on port 0, 1.9; lagged list): Azure DevOps `origin`
   and GitLab `upstream` both bound, one `^url\.` per refresh, one Debug line per list; GitLab alone
   signed in, the Azure DevOps fake gets nothing; `OtherOrganization`, no request after the sign-in's,
-  the remote unbound; a succeeded fetch refreshes the listed provider's list alone.
+  the remote unbound, and a fetch in `manifest/` with Fernhill-Labs signed in sends the fake no request
+  with Fernhill-Labs' token: until git's credentials dialog is cancelled, each of its `GitRequests`
+  (`AuthRemoteRequest`s, `FakeGitHub.cs:319`) for `harbor-co/Docks/_git/manifest` has no `UserName`
+  and a `GivenUserName` null or `harbor-co` (git's empty-password retry, r7 H4b), never
+  `x-access-token`, and the log has no "… answered from the account." line (`AskPassBroker.cs:738`,
+  D277), as for 11.6's typed URL; a succeeded fetch refreshes the listed provider's list alone.
 - **`JsonAccountStoreTests`** (extended): a three-record round trip with exact names; `For`, `With`,
   `Without`; **a copy of 7a's `AccountRecord`, `AccountsFile` and `AccountsJsonContext` (word for word at
   `5057892`) reads a file 7b wrote**, GitHub's record equal; that copy's save, read by 7b, has `UserId`
@@ -2040,9 +2349,10 @@ organizations `fake-org` and `other-org`, user `ada`, group `fake-group/sub`.
 
 ### 9.11 Commits, merge, risks, done when
 
-Commits, each with its tests: store and rules; session; hosting; App; wiring. The lead at the merge,
-through `scripts/heavy-run.sh`: `VisualCommit.Hosting.Tests` whole, the lagged list (0.4),
-`Phase6ChecksS` and 7a's walk-through (counts and pictures unchanged); `AppSessionTests`' two off lines.
+Commits, each with its tests: store and rules; session; hosting; App; wiring. WP-S's merge closes wave
+3, so the lead, through `scripts/heavy-run.sh`, runs the lagged list, then the whole default run (0.4,
+D245): `VisualCommit.Hosting.Tests` passes whole, `Phase6ChecksS` and 7a's walk-through keep their
+counts and pictures, and `AppSessionTests`' two off lines hold.
 
 Risks: plan risk 39 holds per account; risk 34's items become three; until WP-P's merge a hand run
 shows 7a's GitHub words for a new provider's repository (no harness run sees it).
@@ -2057,9 +2367,9 @@ limit (0.6).
 ### 10.1 Goal and files
 
 D353's three blocks, a sign-in dialog per provider, the window's entry for any provider, and part A's
-checks (status steps 10, 14). Wave 4, after WP-S's merge, the fix package of WP-LIVE's first stage and
-part A's checks (D244); branch `wip/p7b-accounts`. GitHub's block and dialog keep 7a's texts, ids and
-layout (D351, D362); 7a's pictures change in the intro only (0.7).
+checks (status steps 10, 14). Wave 4, after WP-S's merge, WP-LF's (the fix package of WP-LIVE's first
+stage, 0.4) and part A's checks (D244); branch `wip/p7b-accounts`. GitHub's block and dialog keep 7a's
+texts, ids and layout (D351, D362); 7a's pictures change in the intro only (0.7).
 
 Owns 1.7's WP-A files, 7a's and 7b's part A files and `ShellDriver.Phase7a.Accounts.cs`; creates
 `ViewModels/Settings/AccountBlockViewModel.cs` and 10.8's classes. In `SettingsDialogViewModel.cs`,
@@ -2084,10 +2394,16 @@ pull requests (merge requests on GitLab) and clones your repositories."
 | `LegacyTokenLink`; tip | "Or create a legacy token, filled in"; "Opens GitLab's form for a legacy token with the api scope in your browser." | — |
 | `OrganizationLabel`; `SignInNotAnOrganization` | — | "Organization"; "Type the organization's name, of letters, digits and hyphens, or its address on dev.azure.com or visualstudio.com." |
 | `SignInFailedOf(failure, org)`; `SignInUnreachableOf` | 7a's with "GitLab" ("GitLab refused the token: {message}."); "Could not reach GitLab." | `NotFound` "Azure DevOps has no organization named {org}."; anonymous "Azure DevOps did not take the token as a sign-in and answered as it does for a visitor. Paste the whole token, made for {org}."; other `BadCredentials` "Azure DevOps refused the token for {org}. Check that it was made for this organization and has not expired."; other kinds 7a's with "Azure DevOps" |
+| `SignInOtherProviderTokenOf(p, other, org)` (D378) | "This looks like a {other} token. Paste a token made on GitLab." | "This looks like a {other} token. Paste a token made for {org} on Azure DevOps." |
 
+`SignInOtherProviderTokenOf` serves GitHub's dialog too, with "on GitHub"; its `org` is the dialog's
+organization, read only by Azure DevOps' text (null for the others); before "Azure DevOps" its "a" is
+"an". It names no Settings, Accounts, since a provider that is off has no block there (D362).
 Azure DevOps' refusals are fixed texts, since its 401 bodies are empty, HTML or a GUID's (g1 G0.2).
 "Anonymous" is `failure.Detail == AzureDevOpsProvider.AnonymousDetail` and an unknown organization is
-A1's `NotFound`, connectionData's 404 (1.4, 6.4), so the App reads no service sentence (r1). GitLab's permission
+A1's `NotFound`, connectionData's 404 (1.4, 6.4), so the App reads no service sentence (r1). The
+`NotFound` text rests on that 404, MEASURED without a token (r5 1.3) and with one by D374's read of a
+made-up organization, which WP-LF copies into the fake (0.4, 3.7). GitLab's permission
 names (r6 2.2, g2 G5.3) and Azure DevOps' scope (r5 5) are READ; the texts follow the forms the owner
 sees when making the live tokens (status step 16). Log lines take the provider's name.
 
@@ -2124,7 +2440,10 @@ IAppLog log, string? organization = null)` keeps 7a design 8.4's behaviour for e
 - **The organization** is `AzureDevOpsProvider.OrganizationOf(Organization, provider.Endpoints)` (1.4,
   6.2), the one rule, of the provider `ProviderOf(AzureDevOps)` gives; the dialog parses nothing itself.
 - **Sign in**: Azure DevOps' needs both boxes; a null organization gives `SignInNotAnOrganization`
-  without a request; then D298; then `SignInAsync(new SignInRequest(provider, token, organization))`.
+  without a request; then D298; then a token whose `HostingProviders.TokenFormOf` (1.2) is a provider
+  other than the dialog's is refused without a request, with `SignInOtherProviderTokenOf(provider,
+  form, organization)` (D378). A token of the dialog's own form, or of none, goes on: no dialog requires its own
+  provider's form (r5 5, r6 2.4). Then `SignInAsync(new SignInRequest(provider, token, organization))`.
   `NotFound` selects `SignInOrganization`'s text; other failures `SignInToken`'s.
 - **Links**: `ProviderOf(provider).TokenPage(organization)`, Azure DevOps' enabled only with an
   organization (with the fake `http://127.0.0.1:47397/Fernhill-Labs/_usersSettings/tokens`);
@@ -2144,18 +2463,18 @@ Failures are logged and give false. WP-B, WP-P and WP-N move their own entries.
 ### 10.6 Earlier tests and pictures (0.7)
 
 `Phase7aExpectations.A.cs`' `Intro` and its pin take the new sentence; 7a's tests read `model.GitHub`
-and pass the provider, and call the provider forms of the credential texts (1.7);
-`ShellDriver.Phase7a.Accounts.cs` gains 1.9's provider forms beside 7a's. For the 7b report's "Changes to expected results": "Phase 7a's `a01a` to `a11a`
-but `a09b` (23), and the real window's `a01a`, `a02b` and `a05a`, change in the intro's two lines only;
-nothing below moves. Reason: D353's one sentence; the new providers are off in 7a's walk-through, so
+and pass the provider; `ShellDriver.Phase7a.Accounts.cs` gains 1.9's provider forms beside 7a's. For
+the 7b report's "Changes to expected results": "Phase 7a's `a01a` to `a11a` but `a09b` (23), and the
+real window's `a01a`, `a02b` and `a05a`, change in the intro's two lines only; nothing below moves. Reason: D353's one sentence; the new providers are off in 7a's walk-through, so
 only GitHub's block shows. The gate compares them by region (plan risk 32)."
 
 ### 10.7 Part A's checks
 
 `Phase7bChecksA` over `ServeHosting7bAsync` (2.6) and a `FakeTokenStore`:
 the intro's height equal to 7a's sentence in the same width; three blocks signed out; one, two and three
-signed in, the last at the top and scrolled; GitLab off, its block gone; `Fernhill-Labs` bold over Ada's
-name; GitLab's dialog with both links' launcher records; Azure DevOps' dialog empty, prefilled from
+signed in, the last at the top and at the section's end (its largest offset: `ShellDriver.Wheel` turned
+over `SettingsSection` until the offset stops changing, asserted before the capture); GitLab off, its
+block gone; `Fernhill-Labs` bold over Ada's name; GitLab's dialog with both links' launcher records; Azure DevOps' dialog empty, prefilled from
 `mobile-app`'s tab (the region behind is WP-P's, as in 7a design 8.7 item 9),
 checking, refused by a 401, by the Anonymous 200 and for an unknown organization, and refused locally;
 session only; one sign-out leaving the other blocks and records; each switch saved alone. Every method
@@ -2163,7 +2482,8 @@ ends with `TokenTripwire.AssertAbsent`; every picture passes `LayoutAudit.FindCl
 both dialogs with the organization typed on an empty tab and a masked token; three accounts. For WP-R,
 `Phase7bExpectations.A.cs` holds each provider's sign-in requests (route keys, in order), the
 organization text typed, the box that has the focus, the R pictures' names and the three-account
-picture's scroll position.
+picture's position as "the end", not a pixel value (the real window turns the real wheel until UI
+Automation's `VerticalScrollPercent` is 100 and asserts it, 14.3).
 
 ### 10.8 Tests besides the checks
 
@@ -2173,7 +2493,11 @@ picture's scroll position.
 - `SignInDialogProvidersTests` (7b project, real session over the fakes in process): the box through
   `OrganizationOf` on names, both URL forms, `<organization>@`, the fake's base, `app.vssps.visualstudio.com`, `%`, a
   space, an empty segment, another host; enablement; each failure's text (the fake's 404 and Anonymous
-  answers MEASURED without a token, r5 1.3, 1.2, ASSUMED with one, D342); the login in the server's
+  answers MEASURED without a token, r5 1.3, 1.2; with one, the 404 by D374's read of a made-up
+  organization and the refusals of made-up values by D373's probes, MEASURED as WP-LF copied them from
+  stage 1, 3.7); each dialog given the other two providers' forms (`github_pat_FAKE-octo-1`,
+  `glpat-FAKE-ada-1`, `new string('a', 76) + "AZDO" + "abcd"`) shows `SignInOtherProviderTokenOf` and
+  no fake logs a request, while its own form goes on to its fake (D378); the login in the server's
   spelling after `fernhill-labs` is typed; the links' URLs and enablement.
 - `SignInEntryProvidersTests` (Hosting.Tests, `ShellDriver`, fakes on port 0; lagged list): each title;
   off false, signed in true; GitLab's call under GitHub's open dialog opens none; one provider's two calls
@@ -2203,8 +2527,9 @@ the new providers off, no earlier picture changes (0.7).
 
 Owns 1.7's WP-B files (with `AppCommand.cs`'s two values, `AppShortcutsTests.cs`, and the 7a classes
 `WelcomeCloneFromGitHubTests` and `PaletteCloneFromGitHubTests` for the renamed members) and 7a's and
-7b's part B files, whose callers of 7a's one-argument credential texts it moves (1.7). At the merge
-`AppCommands.Palette.cs` passes to WP-P and `HostingTexts.Describe.cs` to the lead.
+7b's part B files; it moves `HostingTexts.Describe.cs:53` to the provider form, and 7a's part B tests
+keep the one-argument forms (1.7). At the merge `AppCommands.Palette.cs` passes to WP-P and
+`HostingTexts.Describe.cs` to the lead.
 
 ### 11.2 Texts
 
@@ -2290,9 +2615,14 @@ Func<HostingProvider, string?>? login = null)`; 7a's constructor (`:79`) stays, 
   sign-outs; clones of `northfield/platform/web-app` and of `mobile-app` (`Mobile%20App`) through the
   app's helper with no credentials dialog, `remote.origin.url` as chosen (`Fernhill-Labs@` kept), no
   `credential` key, the tripwire; a typed `.git`-less GitLab URL bound with its twin (on CI's 2.43
-  containers through the fake's 301, 4.5, which proves g3 G2's twin over HTTP); `harbor-co`'s
-  typed URL asks git's credentials dialog (D350); each palette command listed with its fake alone,
-  signing in first (false leaves the tabs), its browser on its provider.
+  containers through the fake's 301, 4.5, which proves g3 G2's twin over HTTP); with Fernhill-Labs
+  signed in, `harbor-co`'s typed URL asks git's credentials dialog (D350), and until the dialog is
+  answered no token goes there: each of the Azure DevOps fake's `GitRequests` for
+  `harbor-co/Docks/_git/manifest` has no `UserName` and a `GivenUserName` null or `harbor-co` (git's
+  empty-password retry with the URL's user, r7 H4b, g3 G2.3), never `x-access-token`, and the log has
+  no "… answered from the account." line (`AskPassBroker.cs:738`, the one place the app gives git a
+  token, D277); each palette command listed with its fake alone, signing in first (false leaves the
+  tabs), its browser on its provider.
 
 The builder also runs 7a's part B classes, `AppShortcutsTests`, `PaletteEntriesTests`,
 `CommandPaletteViewTests`, `PickDialogViewModelTests`; `"*Phase1Checks.Check_13*"`, `"*Check_14*"`; in
@@ -2306,10 +2636,13 @@ words, with `customer-onboarding-and-identity-verification-service` and
 `invoice-generation-and-reconciliation` cut and their tooltips; the clones above; the palette's three
 commands, one signed out signing in first. No picture shows an opened repository of a new provider
 (WP-P's merge changes it): a clone is asserted through git, the call log and the tripwire. Real window:
-GitLab's and Azure DevOps' lists, and `mobile-app` cloned in the real process (Git for Windows' `sh`
-runs the helper for `<organization>@` and `%20`). For WP-R, `Phase7bExpectations.B.cs` holds each
-provider's button text, row list, the row to choose, the clone URL (through `WithPorts`) and the R
-pictures' names.
+GitLab's and Azure DevOps' lists, and a clone of `web-app` (`northfield/platform`, a nested path) and
+of `mobile-app` (`<organization>@`, `%20`) in the real process, Git for Windows' `sh` running the helper
+(14.4). Each R list picture is taken with that provider alone signed in: no switch, the filter empty,
+nothing selected. It is reached from the welcome page's "From GitLab…" or "From Azure DevOps…" after a
+sign-in through Settings closed by Esc, as 14.4 reaches it. The switch pictures are not R. For WP-R,
+`Phase7bExpectations.B.cs` holds, for GitLab and Azure DevOps each, the button text, the row list, the
+row to choose (`web-app`, `mobile-app`), its clone URL (through `WithPorts`) and the R pictures' names.
 
 ### 11.8 Risks; merge; done when
 
@@ -2348,7 +2681,7 @@ records; WP-N reads it), 12.7's classes and part P's files; Hosting.Tests' `Requ
 | `SignInToSee`, `LoadingRequests`, `NoOpenRequests`, `MoreRequests` | `Sign in to {P} to see {Rs}…`; `Loading {Rs}…`; `No open {Rs}`; `More than 300 open {Rs}` |
 | `RequestHeader`, `RequestOfBranch`, `RequestToolTip` | `{N} {title}`; `{RT} {N}: {title}`; 7a's with `{N}` |
 | `FetchRequest(p, n, remote)`, `FetchedRequest` | `Fetch {R} {N}` / `Fetching {R} {N} from {remote}…` / `{RT} not fetched` / `Git could not fetch {R} {N} from {remote}.`; `Fetched {N} into {branch}` |
-| `OtherOrganization(repo, account)` and `…ToolTip` (D356) | `In {repo}; signed in to {account}`; `This repository is in the Azure DevOps organization {repo}; the signed-in account is in {account}, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to {repo} in Settings, Accounts.` |
+| `OtherOrganization(repo, account)` and `…ToolTip` (D356) | `In {repo}; signed in to {account}`; `This repository is in the {Name(AzureDevOps)} organization {repo}; the signed-in account is in {account}, so nothing is asked of {Name(AzureDevOps)} for it. To see its {Requests(AzureDevOps)}, sign out and sign in to {repo} in Settings, Accounts.` |
 | `MenuTexts`: `RefreshRequests`, `OpenRequestsInBrowser`, `CreateRequest`, `OpenRequest`, `RequestsLoading`, `AddRemoteFor` | `Refresh {Rs}`; `Open {Rs} in browser`; `Create {R}…`; `Open {R} {N}`; `{RsT} are loading`; `Add a remote for {fullName} to check out this {R}` |
 | `MenuTexts.HeadNotNamed(p)`, `NotFetchedBy(remote, branch)` | `{P} names no repository for this {R}'s branch`; `{remote} does not fetch {branch}` |
 
@@ -2364,7 +2697,7 @@ item is `HostingTexts.SignInToItemOf(p)`.
   `PullRequestMessageKind.OtherOrganization` (no click) naming the remote's `Repository.OwnerRoot` as
   written and the account's login in its own case: `UpdatePullRequests` gains `string? accountLogin =
   null` after `account`, passed at `RepositoryViewModel.Hosting.cs:161` as
-  `AccountOf(provider)?.Account.Login` (else the key's). No list, no sign-in (D356); `_keptList` goes as
+  `AccountOf(provider)?.Account.Login` (else the key's, which `AccountKey` lower-cases). No list, no sign-in (D356); `_keptList` goes as
   for `NoHostedRemote` (`:126`).
 - **Rows** take `{N}` (`PullRequestRows.cs:37,48`). The filter (`LeftPanelViewModel.cs:313-317`) matches
   `{N}` (`!21` and `21` on GitLab, never `#21`), title, author and head label.
@@ -2388,8 +2721,9 @@ not empty, a drop only onto such a base (`IsGitHubBase` becomes `IsRequestBase`)
 makes it empty): no menu offers a create there (D350).
 - `ForPullRequest` (`:24-47`): 12.2's header, a gone one's `{N}` (`:32`).
 - Section (`:54-70`): header `{RsT}`; signed out `SignInToItemOf` and `OpenRequestsInBrowser`;
-  `OtherOrganization` `OpenRequestsInBrowser` alone (no request of the app's); else
-  `RefreshRequests`, disabled with `RequestsLoading` while loading, and `OpenRequestsInBrowser`.
+  `OtherOrganization` `OpenRequestsInBrowser` alone (D376: the user's own browser; the app sends
+  nothing); else `RefreshRequests`, disabled with `RequestsLoading` while loading, and
+  `OpenRequestsInBrowser`.
 - Branch and drop items: `OpenRequest(p, n)` or `CreateRequest(p)` (WP-N). The palette's request items
   come through `ForPullRequest` (`AppCommands.Palette.cs:219-222`).
 
@@ -2408,9 +2742,10 @@ makes it empty): no menu offers a create there (D350).
    (`RepositoryViewModel.Menus.cs:433-437`) starts only a plan without a reason.
 
 `RepositoryOperations.PullRequests.cs`: `FetchPullRequestAsync` fetches `PullRequestRefs.HeadOf(p, n)`
-(`:156`) with 12.2's texts. `OpenPullRequestsInBrowserAsync` (`:115-133`) opens
+(`:156`) with 12.2's texts. `OpenPullRequestsInBrowserAsync` (`:115-133`), whose `:125-131` WP0 points
+at GitHub's `PullRequestsPage(repository)` (1.10), opens
 `ProviderOf(repository.Provider)?.PullRequestsPage(repository)` of `Repository`, else of
-`RequestRemotes`' first; 7a's URL and its shim (`:125-131`) go, and `:127`'s log line says "no hosted
+`RequestRemotes`' first, in place of WP0's GitHub-only call; `:127`'s log line says "no hosted
 remote". `SignInToHostAsync` (`:135-145`): nothing
 for `NoHostedRemote` or `OtherOrganization`, else `Services?.SignIn?.Invoke(state.Repository.Provider)`.
 
@@ -2432,8 +2767,8 @@ carries each request's provider: no property or binding is added.
 - `RequestSectionProvidersTests` (7b project, over `RequestTestData`): each state's title and rows per
   provider; `NoHostedRemote` 7a's line; `!21`, a draft, fork labels; 300 and "More than 300 open merge
   requests"; the filter on `!21`, `21`, not `#21`; a branch row's `!21`; D356's row with `harbor-co` and
-  `Fernhill-Labs` (the key's spelling without the argument), no click, count 0, no kept list; open or
-  closed kept from GitHub's state to GitLab's.
+  `Fernhill-Labs` (without the argument the key's lower-case login, `fernhill-labs`), no click, count 0,
+  no kept list; open or closed kept from GitHub's state to GitLab's.
 - `RequestCheckoutProvidersTests` (7b): 12.5's cases; Azure DevOps never `FetchHead`; `mr-23`, a nested owner.
 - `RepositoryMenusProvidersTests` (7b, `RecordingActions`): exact lines of `ForPullRequest`, the section
   (in, out, loading, `OtherOrganization`), `ForLocalBranch`, `ForRemoteBranch`, `ForDrop` per provider;
@@ -2458,12 +2793,19 @@ carries each request's provider: no property or binding is added.
 
 Scenario 2.6 on 1.8's ports (`web-app/`, `mobile-app/`, `manifest/`). They show (R: real window): per
 provider the title and rows with `!n`, a draft and a fork, the badge in view (R); signed out; loading
-(`HoldNext`); failed in `Describe`'s words; none; past 300; the filter; D356's row, nothing asked; ruling
-5's listed remote; the section's menu (R) and a request's; checkout of !21, !23, !11 with git's state,
-!13's reason; copy link; open in browser through `FakeFileLauncher` (ruling 29); a branch row's `!21`.
-A picture without a list waits for its state (7a design 17 item 3). About 6 to 8 methods. For WP-R,
-`Phase7bExpectations.P.cs` holds per provider the repository, the section's title and rows, the
-section's and a row's menu lines and the R pictures' names.
+(`HoldNext`); failed in `Describe`'s words; none; past 300 (on GitLab's `web-app/`, whose "More than 300
+open merge requests" is the new sentence; Azure DevOps' is 7a's GitHub sentence word for word, and an
+Azure DevOps list, if one is used, has its pull requests made with `Conflicts` set, 3.5); the filter;
+D356's row, nothing asked; ruling 5's listed remote; the section's menu (R) and a request's; checkout of
+!21, !23, !11 with git's state, !13's reason; copy link; open in browser through `FakeFileLauncher`
+(ruling 29); a branch row's `!21`. A picture without a list waits for its state (7a design 17 item 3).
+About 6 to 8 methods. Every part P method that takes an R picture (the section with its rows and badge
+per provider, the section's menu) first calls `Phase7bExpectations.PrepareRequestsAsync(copy, provider)`
+(2.7) before `OpenAsync`, and its R pictures are taken in that state (Local branches holds
+`topic/no-request`, the graph its local label), the one that part N's checks and WP-R's launch share
+(13.8, 14.2); the other part P methods are not prepared. For WP-R, `Phase7bExpectations.P.cs` holds per
+provider the repository, the section's title and rows, the section's and a row's menu lines (none of
+them changed by the prepare) and the R pictures' names.
 
 ### 12.9 Merge, risks, done when
 
@@ -2471,12 +2813,14 @@ Commits: the guard; texts and the section; plan and operations; menus; the badge
 At the merge the lead runs the lagged list (0.4), `Phase7aChecksP` and `Phase7aChecksG` through
 `scripts/heavy-run.sh` with their pictures checked against `phase-7a-pictures.sha256` (those 7a's gate
 found to vary by nature, by region against 0.7's references), phase 3's `*Check_03_other_menus*`, and
-part P.
+part P; part A's prefilled Azure DevOps picture (10.7), whose region behind is WP-P's, is run and
+inspected again, and a change there is recorded under the report's "Changes to expected results".
 
 Risks, accepted: Azure DevOps' `HeadSha` is the source at the last merge and may lag (r5 3.1), so a
 click may select an older commit; GitLab drops a head ref 14 days after a request closes (r6 4.2), and
-its fetch fails in git's words. For the live command (D342): `forkSource.name` (READ, g1 G0.6), the
-remote's `%20` (ASSUMED, r5 6.1).
+its fetch fails in git's words. The remote's `%20` stays ASSUMED (r5 6.1): the sandbox's names hold no
+space, so the live command does not settle it and the fake's answer stands (16.2).
+`forkSource.name` stays READ (g1 G0.6): the sandbox has no fork (D375).
 
 Done when these classes pass, 7a's unchanged; part P passes with every picture inspected; 7a's P and G
 pictures are the same files; no `refs/merge-requests` or `refs/pull` fetch line or remote-tracking ref
@@ -2495,8 +2839,7 @@ texts and pictures stay 7a's.
 
 Files: `RepositoryOperations.CreatePullRequest.cs`; `ViewModels/Dialogs/CreatePullRequestDialogViewModel.cs`;
 `Views/Dialogs/CreatePullRequestDialogView.axaml(.cs)`; `OperationTexts.Hosting.Create.cs`;
-`src/VisualCommit.Hosting/IHostingSession.cs` (from WP-S, the shims alone);
-`OperationTexts.Hosting.Credentials.cs` (from WP-C, 7a's one-argument forms alone); 7a's part N files, which
+`src/VisualCommit.Hosting/IHostingSession.cs` (from WP-S, the shims alone); 7a's part N files, which
 pass unchanged; in the 7b project `CreateRequestDialogProvidersTests.cs` and part N's files;
 Hosting.Tests' `CreateRequestOperationProvidersTests.cs`. The status bar's offer ("Open in browser") and
 WP-C's guards are used as they are.
@@ -2516,7 +2859,7 @@ as 12.2.
 | `HeadUnknown(p, branch, repo)` | `{P} has no branch {branch} in {repo} to merge from. Fetch, then try again.` |
 | `BranchesUnknown(p, head, base)` | `{P} cannot find {head} or {base}. Fetch, then try again.` |
 | `Refused(p, repo, permission)` | `{P} refused to create a {R} in {repo} with this token.`; with `Detail` GitHub's 7a sentence, GitLab's ` It needs the api scope, or Merge Request: Create.` (r6 2.2, READ) |
-| `SentTitle(p, title)`; `QuickActionsNote` | `Title on {P}: {title}`; `GitLab runs quick actions in the description, such as /close.` |
+| `SentTitle(p, title)`; `QuickActionsNote` | `Title on {P}: {title}`; `{Name(GitLab)} runs quick actions in the description, such as /close.` |
 
 `From`, `Into`, the placeholders, `Draft`, `Create`, `Creating…`, the reasons, `SameBranch`, `NoCommits`,
 `GonePushedFirst`, `PushFailed` and `OpenInBrowser` name no provider. `HeadNotAccepted` and
@@ -2528,7 +2871,7 @@ as 12.2.
 `NoHostedRemote` or `OtherOrganization` logs "not started" (`:41`'s line says "no hosted remote"; D350,
 D356; WP-P offers no item there);
 `SignedOut` awaits `Services.SignIn(p)` (1.7) first. In `PullRequestForm` every `Remotes` read becomes
-`RequestRemotes` (`:118`, `:133`, `:152-219`, `:498`, `:527`, `:533`, `:560`): head and base are on the
+`RequestRemotes` (`:123`, `:140`, `:161-194`, `:514`, `:528`, `:538-540`, `:563`): head and base are on the
 listed provider, on Azure DevOps in its organization, so a GitLab head never meets a GitHub base (r3
 0.12). An `owner:branch` text is WP-P's `PullRequestRow.BranchLabelOf`.
 `PullRequestEnd` gains `HostedRepository? Hosted { get; init; }`, set wherever an end is made;
@@ -2590,9 +2933,9 @@ Ids, names and the tab order stay.
 With WP-A's, WP-B's and WP-P's callers moved and `:112`, `:470-471` here, WP-N deletes 1.5's six
 default-bodied members (`GitHub`, `Account`, `SignInAsync(string, …)`, `SignOutAsync(CancellationToken)`,
 `SetUseForGit(bool)`, `ListRepositoriesAsync(CancellationToken)`) and any member of `NullHostingSession`
-that served only them, and 7a's one-argument `TokenRefused` and `GitCredentialsRefused` once its own
-callers (`:454`, `:470-471`) use the provider forms. `src/` builds without them; tests keep 7a's session
-forms through `HostingSessionGitHubForms` (1.9).
+that served only them. `:454` calls `GitCredentialsRefused(refused.Provider, LoginOf(refused))`; 7a's
+one-argument credential texts stay (1.7). `src/` builds without the shims; tests keep 7a's session forms
+through `HostingSessionGitHubForms` (1.9); no using is added to a 7a file or to another package's file.
 
 ### 13.7 Tests
 
@@ -2617,8 +2960,10 @@ unchanged.
 
 ### 13.8 Part N's checks
 
-Scenario 2.6 on 1.8's ports, `web-app/` and `mobile-app/` signed in, each prepared as 7a design 12.8 (a
-local branch tracking `origin/topic/no-request`). They show (R: real window): "Create merge request…"
+Scenario 2.6 on 1.8's ports, `web-app/` and `mobile-app/` signed in; every check first calls
+`Phase7bExpectations.PrepareRequestsAsync(copy, provider)` before `OpenAsync` (a local branch tracking
+`origin/topic/no-request`, as 7a design 12.8), and its R pictures are taken in that state, the one part
+P's R methods share (12.8, 14.2). They show (R: real window): "Create merge request…"
 and "Create pull request…" from a branch's menu and a drop's; each provider's form (R); GitLab's Draft
 with its sent title and the note; `local-work` pushed first; already open and a missing branch in the
 App's words; the request listed with its badge, "Created … !n" and the offer (R: the status after
@@ -2630,20 +2975,23 @@ the create's route key, the status text and the R pictures' names.
 
 ### 13.9 Merge, risks, done when
 
-Commits: texts and the form; the operation; the shims' removal; each with its class. At the merge, wave
-4's end, the lead runs the whole default run through `scripts/heavy-run.sh` (D245), the lagged list, and
-7a's part N and phase 3's walk-through with their form and status-bar pictures compared by region with
-0.7's references, then part N; WP-LIVE's second stage and WP-R may then start.
+Commits: texts and the form; the operation; the shims' removal; each with its class. WP-N's merge
+closes wave 4, so the lead, through `scripts/heavy-run.sh`, runs the lagged list, then the whole default
+run (0.4, D245), and 7a's part N and phase 3's walk-through with their form and status-bar pictures
+compared by region with 0.7's references, then part N; WP-LIVE's second stage and WP-R may then start.
 
-Risks, for the live command (D342): Azure DevOps' create status, its fork body (ASSUMED, g1 G1.2) and a
-create with nothing ahead (unknown, r5 4); GitLab's 409 and 400 forms (READ, g2 G1.1) and `draft` for a
-`Draft:` title (READ). Quick actions run as typed, the note their only guard (ruling 20).
+Risks, for the live command (D342): Azure DevOps' create status and a create with nothing ahead
+(unknown, r5 4); GitLab's 409 and 400 forms (READ, g2 G1.1) and `draft` for a `Draft:` title (READ).
+Azure DevOps' fork body (`forkSource`) stays ASSUMED (g1 G1.2): the sandbox has no fork (D375), so the
+live command does not confirm it and only the fake holds it. Quick actions run as typed, the note their
+only guard (ruling 20).
 
 Done when these classes pass, 7a's part N classes unchanged; part N passes with every picture inspected;
 7a's N pictures and phase 3's status bar are as 0.7 says; no App code compares a service's sentence
 (`StartsWith("A pull request`, `"head is invalid"` and the like are gone from `src/VisualCommit.App`);
 `IHostingSession.cs` declares none of 7a's GitHub-named members and `src/` calls none, nor a one-argument
-credential text; the tripwire is clean; CI's five jobs are green.
+credential text (outside `OperationTexts.Hosting.Credentials.cs`, which keeps them, 1.7); the tripwire
+is clean; CI's five jobs are green, each Test step under four fifths of its limit (0.6).
 
 ## 14. WP-R: the real-window pass
 
@@ -2658,8 +3006,8 @@ browser (ruling 29), restarts, the real keychains, `<organization>.visualstudio.
 
 Files, in `tests/VisualCommit.RealWindowTests/`: `Phase7bRealWindowPass.cs` (what is where, `Phase7bRun`,
 `Phase7bOrder`, the helpers), `.Accounts.cs`, `.GitLab.cs`, `.AzureDevOps.cs`, `RealApp.Phase7b.cs` (the csproj is not WP-R's). It uses 7a's `RealApp.Phase7a.cs:61-286` as it is, the
-parts' constants in `Phase7bExpectations.<part>.cs` (10.7, 11.7, 12.8, 13.8) with their `PrepareAsync`,
-2.6's scenario and 1.7's ids, and holds only the fakes' tokens.
+parts' constants in `Phase7bExpectations.<part>.cs` (10.7, 11.7, 12.8, 13.8) and `PrepareRequestsAsync`
+(`Phase7bExpectations.Common.cs`, 2.7), 2.6's scenario and 1.7's ids, and holds only the fakes' tokens.
 
 ### 14.2 Conventions (7a design 13.2's, plus these)
 
@@ -2667,8 +3015,9 @@ parts' constants in `Phase7bExpectations.<part>.cs` (10.7, 11.7, 12.8, 13.8) wit
   `Check_GitLab_sign_in_browse_and_clone`, `Check_GitLab_requests_and_create`, then Azure DevOps' two
   (two per provider and one for three accounts, ruling 29, in place of D319's one per part).
 - Declared so that the app stops first: `using var copy = await Scenarios.Hosting7bAsync();`, `await
-  using var served = await Scenarios.ServeHosting7bAsync(copy, ownsCopy: true);`, a part's
-  `PrepareAsync` only where its twin calls it, then the app.
+  using var served = await Scenarios.ServeHosting7bAsync(copy, ownsCopy: true);`, the prepare that
+  every twin the launch compares calls (`PrepareRequestsAsync` for "Requests and create", none for the
+  others), then the app. The twins of one launch share one prepared state.
 - The three providers are on in every launch, as in every twin (2.7). Each sign-in types the scenario's
   token into the real dialog (D320's form), and for Azure DevOps the organization as part A gives it, or
   finds it prefilled from the tab's remote (ruling 16).
@@ -2698,6 +3047,7 @@ public sealed partial class RealApp
     public static IReadOnlyDictionary<string, string?> Hosting7bEnvironment(ServedHosting7b served);   // three URL variables, keychain memory (as RealApp.Phase7a.cs:46-50)
     public static string AccountsSuffix(HostingProvider provider);       // "", "GitLab", "AzureDevOps" (1.7)
     public void ScrollAccountsTo(HostingProvider provider, TimeSpan timeout);   // real wheel turns over SettingsSection until the block shows
+    public void ScrollAccountsToEnd(TimeSpan timeout);                    // real wheel turns over SettingsSection until UI Automation's VerticalScrollPercent is 100; asserted before the capture
     public AutomationElement OpenSignInDialog(HostingProvider provider, TimeSpan timeout);   // Accounts, scroll, a click on AccountsSignInButton<suffix>, SignInDialog shown
     public void TypeOrganization(string organization);                   // a click on SignInOrganization, Ctrl+A, typing; its Value read back
     public void SignInThroughSettings(HostingProvider provider, string token, string? organization, string login, TimeSpan timeout, bool keepOpen = false);
@@ -2708,9 +3058,10 @@ public sealed partial class RealApp
 
 **A. Three accounts** (an empty tab). No fake request at the launch (D257, D350). `SignInThroughSettings`
 with `keepOpen` for GitHub, GitLab and Azure DevOps (D353's order); each fake has part A's check
-requests, in order, with `Bearer` (GitLab) or `BasicEmptyUser` (Azure DevOps), 200. `ScrollAccountsTo`
-part A's three-account picture's position; `Compare`. Esc; `accounts.json` holds three records, `userId`
-on Azure DevOps' alone, no token. `AssertCleanEnd`.
+requests, in order, with `Bearer` (GitLab) or `BasicEmptyUser` (Azure DevOps), 200.
+`ScrollAccountsToEnd`: part A's three-account picture is taken at the section's end, its largest offset,
+as its twin's, which turns `ShellDriver`'s wheel until the offset stops changing (10.7); `Compare`. Esc;
+`accounts.json` holds three records, `userId` on Azure DevOps' alone, no token. `AssertCleanEnd`.
 
 **Sign-in, browse, clone**, GitLab's then Azure DevOps' (an empty tab; `clones` a `TempDirectory` first).
 1. `OpenSignInDialog`; for Azure DevOps `TypeOrganization`; a click on `SignInToken`, `TypeToken`.
@@ -2726,6 +3077,7 @@ on Azure DevOps' alone, no token. `AssertCleanEnd`.
    `AssertCleanEnd(app, served, clones.Path)`.
 
 **Requests and create**, GitLab's then Azure DevOps' (a tab on `web-app` or `mobile-app`).
+`PrepareRequestsAsync(copy, provider)` before the launch, as both parts' twins.
 1. `SignInThroughSettings` (Azure DevOps' organization prefilled); `WaitForListed`;
    `PullRequestRowNames()` is part P's rows; GitHub's fake has no request (web-app's upstream, D257).
    `Compare` with part P's section picture, the badge in it.
@@ -2745,25 +3097,27 @@ warnings) and the parts' expectation classes, never the pass. At the merge the l
 for `--filter-class "*Phase7bRealWindowPass"` (it empties `artifacts/visual/phase-7b/real-window/`) and,
 in "What to know", that 7b's part binds 47397 to 47399 in the test process, so 7b's walk-through never
 runs beside it, and opens no browser. The gate runs as 7a design 13.7, with the live command for the
-three providers (D335) and 7b's 13 captures in a batch.
+three providers (D335), each run after the offline classes pass alone (15.9), and 7b's 13 captures in a
+batch.
 
 Done when the project builds in Release with the five methods in `Phase7bOrder`; each R step of the four
-parts has its step and its comparison under its twin's name; each launch's state comes from its twin's
-`PrepareAsync`; no browser or "Copy …" click; and, at the gate, D246's two runs and the counted pass are
-green, every capture within 3 % and inspected.
+parts has its step and its comparison under its twin's name; each launch's state is the one prepared
+state that all the twins it compares share; no browser or "Copy …" click; and, at the gate, D246's two
+runs and the counted pass are green, every capture within 3 % and inspected.
 
 ## 15. WP-LIVE: the live command for Azure DevOps and GitLab
 
 ### 15.1 Goal, stages, files
 
 D346 extends 7a's command (7a design 14, 20) to the two new providers: per provider, sign-in, clone,
-the request list and a create in the owner's sandbox, as far as D352 and D371 allow (D364;
+the request list and a create in the owner's sandbox, as far as D352, D371 and D374 allow (D364;
 status step 16).
 
-**Stage 1** (`wip/p7b-live1`, right after WP-S's merge) is `Check_1` and `Check_2` of each class. The
-lead runs it with the owner's tokens. A fix package then puts its findings into the fakes, marked
-MEASURED with the date, before part A's checks are written (0.4). **Stage 2** (`wip/p7b-live2`, after
-WP-N) is `Check_3` and Azure DevOps' `Check_4`. The gate runs the whole project (D335).
+**Stage 1** (`wip/p7b-live1`, right after WP-S's merge) is `Check_1` (with `Check_1b_probes` where
+15.5's sums need it), `Check_2` and Azure DevOps' `Check_4`. The lead runs it with the owner's tokens.
+WP-LF, the fix package (0.4), then puts its findings into the fakes, marked MEASURED with the date,
+before part A's checks are written. **Stage 2** (`wip/p7b-live2`, after WP-N) is `Check_3`. The gate
+runs the whole project (D335).
 
 Files in `tests/VisualCommit.LiveHostingTests/`: new `AzureDevOpsLiveTests.cs`, `AzureDevOpsLiveApi.cs`,
 `GitLabLiveTests.cs`, `GitLabLiveApi.cs`, `LiveScreen.cs`; changed `LiveSettings.cs`, `LiveRun.cs`,
@@ -2782,23 +3136,50 @@ without `/`. `KindOf` reads only a prefix or a length (r5 5).
 
 ### 15.3 The screen (D372, g4 D1.7)
 
-`LiveScreen` has `AddOrganization`, `AddAddress`, `Learn(JsonElement)`, `LearnFromGit`, `Apply` and
-`SurvivorIn`.
+`LiveScreen` has `AddOrganization`, `AddAddress`, `Learn(JsonElement)`,
+`LearnFromAnswer(IEnumerable<KeyValuePair<string, IEnumerable<string>>> headers, string? body)` (the ids
+in an Azure DevOps answer's headers, every value of a repeated one, such as r5 1.3's three `WWW-Authenticate`,
+and in a body that is not JSON), `LearnFromGit`, `Apply` and `SurvivorIn`.
 
 **Learning.** The organization comes from the variable. Addresses come from every body the test's own
 API reads, before that body is noted: `Account.$value`, `descriptor`, `createdBy.uniqueName`, `/user`'s
 `email`, `commit_email` and `public_email`, `author.public_email`, and the clone's `git log --all
---format=%ae%n%ce`. Each method's first call is the identity read (connectionData, `GET user`), once
-per run.
+--format=%ae%n%ce`. Ids come from every Azure DevOps answer that API reads, headers and body, before it
+is noted: connectionData's `instanceId` (the organization's host id, which is the sign-in URL's `hid=`;
+MEASURED r5 1.3, p15 and p16), `authenticatedUser.id` and `subjectDescriptor` (never the Anonymous
+`aaaaaaaa-…`, g1 G0.3); the tenant in `X-VSS-ResourceTenant` and after `login.microsoftonline.com/` in
+`WWW-Authenticate`; every `hid=` in a `Location`, an `X-TFS-FedAuthRedirect` or a body; and the `hid`
+of a sign-in URL's `context=`, base64 of JSON `{"ht":2,"hid":"<a second host id>",…}` (MEASURED r5
+p03, p15). An organization's id gives back its name without authentication (D372). Each method's first
+call is the identity read (connectionData, `GET user`), once per run.
 
-**`Apply`** replaces the organization in any case at a boundary (a text end, a character outside
-`[A-Za-z0-9-]`, a `%XX` escape); each address, as written and URL-escaped; and any other address-shaped
-string but D325's and `example.com` ones.
+**Addresses.** An address-shaped string is D368's run (an `@` between non-blank characters), unless its
+`@` ends a URL's user information (`<scheme>://<user>@`, git's `***@` included) or it is git's scp-like
+`git@<host>:`. The exception is judged on the text before the organization is replaced (the
+organization rule screens those user parts); `SurvivorIn`, which reads screened text, also takes an `@`
+right after one of the screen's placeholders as such an end.
+
+**`Apply`** replaces, learned values first: each learned address, as written and URL-escaped; each
+learned id anywhere, inside vssps' `A<id>` path segment too, in any case, with and without hyphens, as
+written and URL-escaped, by `<the organization's id>` (either host id), `<the tenant>` or `<the user's
+id>`; the query and `#ctx=` fragment of any URL whose path ends `/_signin`, in a `Location`, an
+`X-TFS-FedAuthRedirect` or an "Object moved" body's `href` (with `&amp;` as written), by `<the sign-in
+query>`, so that `reply_to`, `hid` and `context` are never shown; then the organization in any case at
+a boundary (a text end, a character outside `[A-Za-z0-9-]`, a `%XX` escape); and any other
+address-shaped string except D325's and `example.com` ones.
 
 It runs in `Note`, `Screen` and run.txt after the token search; in `FailureOf`, rethrowing the screened
 text as an `XunitException`; and in `Check(bool, Func<string>)`, the only assertion given values (g4
-D1.4). `SurvivorIn` searches run.txt, raw and percent-decoded, and `accounts.json` and the log for
-addresses; a survivor fails the run (D323).
+D1.4).
+
+**`SurvivorIn`** searches run.txt raw, then percent-decoded again until a pass changes nothing
+(`Uri.UnescapeDataString` leaves an invalid escape such as `%C0%AE` as it is, so the loop stops on no
+change, never on "no `%XX` left"). It looks for the organization at `Apply`'s boundaries, for each
+learned address and each learned id in every form `Apply` replaces, and for any address-shaped string
+`Apply` would replace. D374's made-up organization (15.4) is no secret: run.txt names it, and it is no
+survivor. The data folder's `accounts.json` and log are searched only for the learned addresses, as
+written and URL-escaped: both name the organization (the login, the clone's command line), and the log
+holds git's `https://***@…` URLs. A survivor withholds run.txt and fails the run (D323).
 
 **`LiveRun`** loses `sealed`, GitHub's constructor and render unchanged; `LiveRun(HostingProvider)`
 gives the fixtures `AzureDevOpsLiveRun` and `GitLabLiveRun` their token, `artifacts/live/<id>/run.txt`
@@ -2809,7 +3190,12 @@ and screen. `LiveTokenForms.FoundIn` adds the three base64 alignments (g4 D1.6).
 `LiveRequest` gains init-only `Provider`, `Form` (none, Basic, Bearer, another scheme,
 `PRIVATE-TOKEN`, `JOB-TOKEN`, a query token) and `Headers` (rate-limit, expiry, `api-version`).
 `RequestId` reads `ActivityId` or `x-request-id`. `LiveRequestLog(inner, store, LiveReach)` sits beside
-7a's constructor, and both live APIs send through it. A refusal names the origin, never the path;
+7a's constructor. `AzureDevOpsLiveApi` and `GitLabLiveApi` send through it, each over an inner handler
+of its own built as GitHub's public constructor builds its one (`GitHubLiveApi.cs:237-242`:
+`SocketsHttpHandler` with `AllowAutoRedirect = false`, `AutomaticDecompression = All`, no cookies, a
+10 s `ConnectTimeout`), so `GitHubLiveApi.cs` stays unchanged (15.1). A redirect is recorded as the answer and never followed:
+a hop the handler followed by itself would pass neither the guard nor the store, and the probe would
+record the target's answer instead of the 302. A refusal names the origin, never the path;
 `ReachProblems` and `PerHost` print through the screen.
 
 **`LiveReach.AzureDevOps`** admits only `https://dev.azure.com:443`, with Basic or no credential. It
@@ -2818,18 +3204,29 @@ without case, it admits only:
 1. `{o}/_apis/connectionData`.
 2. `_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf` with `organizationName={o}`, or that id
    under `{o}/` (D360).
-3. `{o}/{p}/_apis/git/repositories` alone.
-4. Anything below `{o}/{p}/_apis/git/repositories/{r or id}`.
+3. `{o}/{p}/_apis/git/repositories` alone (`ListProject`'s list).
+4. `{o}/{p}/_apis/git/repositories/{r}` itself, and anything below it.
 5. Anything below `{o}/{p}/_git/{r}`.
+6. `{x}/_apis/connectionData`, where `{x}` is the one made-up organization the run draws, `vc-none-`
+   and 12 random lower-case hex digits (D374, amending D352 and D371): without a credential, and with
+   Basic only after that path answered 404 without one in this run.
 
-In these, `{p}` may be the project's id. Everything else is refused, the project-level
-`pullrequests/{n}` among it; the app's own requests stay inside (6.5). The probes send
+Here `{o}`, `{p}` and `{r}` are the names `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO` gives (15.2), compared
+without case. A project or repository named by an id is refused, since no request of the app's (6.5:
+every A3 to A5 path is `ApiPath`, built from names) or of the command's own names one by id. Everything
+else is refused, `{o}/_apis/git/repositories`, `_apis/projects`, any other organization and the
+project-level `pullrequests/{n}` among them; the app's own requests stay inside (6.5). The probes send
 `AzureDevOpsApi`'s versions and area id (1.4), as the client does.
 
 **`LiveReach.GitLab`** admits only `https://gitlab.com:443/api/v4/`, with Bearer or no credential, and
 no other host (D349).
 
 ### 15.5 Stage 1
+
+Each method's call limits are summed as 7a's are (`AssemblyInfo.cs`'s comment) and kept under the
+watchdog's 600 s, with five leftovers at full limits. Azure DevOps' probes go into a method of their
+own, `Check_1b_probes`, after `Check_1` in the order, when `Check_1`'s sum passes it, as D373's and
+D374's calls make likely; GitLab's likewise. The module initializer's comment gives the new sums.
 
 **`Check_1_the_sandbox_and_its_leftovers`** (`[Fact]`; ordered as `GitHubLiveTests.cs:35`):
 1. `Require` (the variables gone), the identity read, and the sandbox: 200, private (D326), its
@@ -2840,15 +3237,18 @@ no other host (D349).
      one `POST …/refs` with zero `newObjectId`s.
    - **GitLab.** Close each merge request, then delete it; on a 403, note "closed, kept" (g2 G1.6).
      Delete each `search=^visualcommit-live/` branch; a 404 means gone (g2 G1.7).
-3. Run 15.7's probes.
+3. Run 15.7's `Check_1` probes, unless `Check_1b_probes` takes them.
 
 **`Check_2_the_providers_and_the_session`** (`[AvaloniaFact]`, as 7a 14.4):
-1. **Start.** `ShellDriver.StartWithTabs(…, hosting:)` with `HostingOptions.Off`, `AzureDevOps =
-   Service with { ListProject = sandbox.Project }` (GitLab: `GitLabCom`) and a `LiveRequestLog`
-   handler; no request.
+1. **Start.** `ShellDriver.StartWithTabs(…, hosting:)` with `HostingOptions.Off with { AzureDevOps =
+   AzureDevOpsEndpoints.Service with { ListProject = sandbox.Project }, CreateAzureDevOpsHandler = … }`
+   (GitLab: `GitLab = GitLabEndpoints.GitLabCom`, `CreateGitLabHandler`), the handler a `LiveRequestLog`
+   over `HostingOptions.DefaultHandler(…)` with the provider's `LiveReach` (a null one refuses every
+   request, 1.4); no request.
 2. **Sign in** with `app.SignInAsync(provider, token, organization)` (1.9). Only the sign-in's reads
-   leave, each 200; the login is the organization or the namespace's first segment, without case;
-   `accounts.json` is as 1.8.
+   leave, each 200 and each in the `LiveRequestLog` store (a provider whose requests bypass it fails the
+   run, as `GitHubLiveTests.cs:646`); the login is the organization or the namespace's first segment,
+   without case; `accounts.json` is as 1.8.
 3. **List.** The session lists the sandbox. On Azure DevOps, `CloneUrl` keeps `<organization>@`
    (ruling 15).
 4. **Clone** through `CloneUrlBox`, with 7a 14.4 step 4's checks; the app's helper answers git.
@@ -2860,10 +3260,17 @@ no other host (D349).
 10. **Tripwires.** `TokenTripwire.AssertAbsent` and `ReachProblems` find nothing, and no request came
     before the sign-in.
 
+**`Check_4_a_clone_through_the_organization_host`** (Azure DevOps) starts and signs in as `Check_2`'s
+steps 1 and 2 do, then clones `https://<organization>.visualstudio.com/<project>/_git/<repository>`
+with no credentials dialog, then lists from `dev.azure.com`. It is the only test of `OrganizationHost`
+against the service (D363), and it runs in stage 1 so that a refusal of git's user name on that host
+brings ruling 8's fallback before part B (16.1).
+
 ### 15.6 Stage 2
 
 **`Check_3_the_app_signs_in_clones_lists_pushes_and_creates`** is 7a 14.4's `Check_2`, run on 7b's
-surfaces:
+surfaces. It starts the app as `Check_2`'s step 1 does: without `ListProject`, A2's
+`{o}/_apis/git/repositories` would meet the guard's refusal and fail the run. Then:
 1. Sign in through the provider's dialog, on Azure DevOps with the Organization box (1.9's `ShellDriver`
    provider forms, WP-A's).
 2. Pick the row by `FullName`, without case, in "From Azure DevOps…" or "From GitLab…" (1.7).
@@ -2871,11 +3278,6 @@ surfaces:
    ticked (GitLab's title shows `Draft: …`) ends with the status `CreatePullRequestTexts.Created(p, n,
    true)` (1.7).
 4. Read back, clean up and the tripwires as `Check_2`.
-
-**`Check_4_a_clone_through_the_organization_host`** (Azure DevOps) clones
-`https://<organization>.visualstudio.com/<project>/_git/<repository>` with no credentials dialog, then
-lists from `dev.azure.com`. It is the only test of `OrganizationHost` against the service
-(D363).
 
 ### 15.7 Probes, premises, the fake beside, run.txt
 
@@ -2888,33 +3290,59 @@ A to F, `scope` as a set, r6 10), `WWW-Authenticate` and a 2xx's top-level names
 fake: same" or what differs; a non-2xx body is shown screened, a 2xx by shape.
 
 **Azure DevOps probes** (r5 9, g1 G6, 3.7). `Check_1`: connectionData with and without Suppress and at
-`7.1`; the core area, anonymous and with the token; made-up values, with the owner's leave (g1 G0.7,
-G5); the project list. `Check_2`: the create's status, `mergeStatus` and `isDraft`; when the merge ref
-appears; `createdBy`; a duplicate, a missing branch, an empty title, nothing ahead; the abandon and the
-merge ref's removal; the refs delete.
+`7.1`; the core area, anonymous and with the token; D373's made-up values, a short string and an
+84-character PAT-shaped one, each with and without Suppress, to connectionData and the sandbox
+repository's `info/refs` (g1 G0.7, G5); D374's made-up organization; the sandbox project's repository
+list (`{o}/{p}/_apis/git/repositories`, `ListProject`; 3.7's "the sandbox's row"). `Check_2`: the
+create's status, `mergeStatus` and `isDraft`; when the merge ref appears; `createdBy`; a duplicate, a
+missing branch, an empty title, nothing ahead; the abandon and the merge ref's removal; the refs delete.
 
-**GitLab probes** (r6 14, g2, 4.7). `Check_1`: `user`, then `personal_access_tokens/self`; a made-up
-value (likewise); the projects with `permissions`; the merge requests; `ratelimit-*` across a 304.
-`Check_2`: `draft`, `references`; a duplicate, a missing branch, nothing ahead.
+**D374's probe** sends `{x}/_apis/connectionData` (15.4) first without a credential. Only when that
+answers 404, the unknown organization's answer (MEASURED r5 1.3), does it send the token's read;
+otherwise it notes the skip and sends nothing with the token. The fake beside gets both reads.
+
+**GitLab probes** (r6 14, g2, 4.7). `Check_1`: `user`, then `personal_access_tokens/self`, whose 403
+`insufficient_granular_scope` is expected and noted, not a premise (D364's token has no Personal Access
+Token: Read, r6 2.2; it shows 4.3's check 5); a made-up
+`glpat-` value on `GET user` (D373); the projects with `permissions`; the merge requests;
+`ratelimit-*` across a 304. `Check_2`: `draft`, `references`; a duplicate, a missing branch, nothing
+ahead.
+
+**Made-up values** (D373) go through the guard as the token does (D371). The token-shaped ones are drawn
+at run time, so no such literal is committed: the 84-character one letters and digits with `AZDO` at
+0-based characters 76 to 79, the Azure DevOps form of `HostingProviders.TokenFormOf` (1.2, D378; r5 5),
+GitLab's `glpat-` and 20 letters and digits (the older length, r6 2.4); each is drawn
+again while `LiveTokenForms.FoundIn` finds the token in it. The short one is a fixed plain string (g1
+G5). Notes and run.txt name each by its kind and length, never as written, so neither 7a's token search
+nor 15.2's "looks like a token" rule meets one.
 
 **Premises** fail the run after their note (D342). Azure DevOps: the identity's `id` is a GUID other
 than `aaaaaaaa-…` (g1 G0.3); the organization is `locationUrl`'s first segment and `remoteUrl`'s user;
-no made-up value earns a 2xx (ruling 16); a duplicate is 409 `GitPullRequestExistsException`, a missing
-branch 400 `GitPullRequestCannotBeActivated`; the create 200 or 201; `createdBy.id` is `UserId`.
-GitLab: `user` is 200 with the login; every request is Bearer; a made-up value gets 401; a duplicate
-409; a missing branch 400 with `source_branch` (7.3); `draft` follows `Draft:`.
+no made-up value earns a 2xx but one ruling 16 refuses (a 203, an HTML body, the Anonymous id); D374's
+token read, when sent, answers 404 as the read without a credential did (A1's `NotFound`, 6.4); a
+duplicate is 409 `GitPullRequestExistsException`, a missing branch 400
+`GitPullRequestCannotBeActivated`; the create 200 or 201; `createdBy.id` is `UserId`. GitLab: `user` is
+200 with the login; every request is Bearer; a made-up value gets 401; a duplicate 409; a missing branch
+400 with `source_branch` (7.3); `draft` follows `Draft:`.
 
-What 3.7 and 4.7 keep ASSUMED stays so, as do the expired and revoked bodies.
+What 3.7 and 4.7 keep READ or ASSUMED stays so, as do the expired and revoked bodies. With no fork in
+the Azure DevOps sandbox and no legacy GitLab token (D375), the fork shapes and `/source` stay as 3.7
+marks them and a legacy token's sign-in rests on GitLab's docs (READ): the live command proves the
+fine-grained GitLab token alone.
 
-**run.txt** holds each provider's notes in order: 7a 14.5's items, the probes, the identity's member
-names, and whether the server spells the organization as the variable does.
+**run.txt** holds each provider's notes in order: 7a 14.5's items, the probes (D374's made-up name and
+any skip among them), the identity's member names, and whether the server spells the organization as
+the variable does.
 
 ### 15.8 The owner's steps (D364)
 
-Once, before stage 1; the variables as 7a design 14.6 sets them.
+Once, before WP-S's merge (0.4, 16.4), so before stage 1. The owner sets the four variables in Windows'
+Environment Variables dialog, as 7a design 14.6 step 3 does, then quits VS Code entirely and starts it
+again: a new Claude Code session inside a running VS Code does not inherit them (7a design 20.1; status
+Notes, 2026-10-30).
 
 **Azure DevOps**, in D352's organization:
-1. A private project `visualcommit-sandbox`, with a README.
+1. A private project `visualcommit-sandbox`, with a README, and no fork of its repository (D375).
 2. A token "VisualCommit live test" for that organization alone, never "All accessible organizations"
    (r5 5); at most 30 days; Code "Read & write" alone.
 3. `VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN`, and `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO` =
@@ -2928,88 +3356,137 @@ The token's date goes under "Waiting on the owner" (no header carries it).
 2. A private project `visualcommit-sandbox`, with a README.
 3. A fine-grained token (g2 G5.3), named and described, at most 30 days, "Only my personal projects",
    with (r6 2.2) User: Read; Project: Read; Merge Request: Read, Create, Update, Delete; Branch: Read,
-   Delete; Code: Download, Push.
+   Delete; Code: Download, Push. No second, legacy token is made (D375).
 4. `VISUALCOMMIT_LIVE_GITLAB_TOKEN`, and `VISUALCOMMIT_LIVE_GITLAB_REPO` =
    `<username>/visualcommit-sandbox`.
 
-GitHub's token expires on 2026-11-29 (risk 42): the gate's runs fall before, or a new one is made.
+GitHub's token expires on 2026-11-29 (risk 42), and the two new ones at most 30 days after they are
+made: the gate's live runs fall before the earliest, or the owner makes a new one.
+
+**The lead's check and the command's process.** The lead checks the six live variables by name, and
+each but `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO` by length. Beyond that it prints only true or false for: GitHub's token starts `github_pat_`; GitLab's
+starts `glpat-` (r6 2.4); Azure DevOps' is 84 characters long and contains `AZDO` (r5 5; no index is
+tested); `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO` matches
+`^[A-Za-z0-9-]+/visualcommit-sandbox/visualcommit-sandbox$` (D364); `VISUALCOMMIT_LIVE_GITLAB_REPO` ends
+`/visualcommit-sandbox`. No character of `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO` is printed, whole or in
+part, nor its length: its first segment is the organization's name (D346, D352). No part of a token is printed beyond
+the fixed prefixes `github_pat_` and `glpat-`. GitHub's repository variable keeps 7a's rules. A session
+whose shells lack the variables gives all six to the command's own process from the Windows user scope,
+never printed, in PowerShell:
+`foreach ($n in 'VISUALCOMMIT_LIVE_GITHUB_TOKEN','VISUALCOMMIT_LIVE_GITHUB_REPO','VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN','VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO','VISUALCOMMIT_LIVE_GITLAB_TOKEN','VISUALCOMMIT_LIVE_GITLAB_REPO') { [Environment]::SetEnvironmentVariable($n, [Environment]::GetEnvironmentVariable($n,'User'), 'Process') }; & 'C:\Program Files\Git\bin\bash.exe' scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`,
+followed by a stage's `--filter-class` arguments (15.9). A missing user variable leaves its name unset,
+and that class then fails at once. CLAUDE.md's filter `env | grep -v '^VISUALCOMMIT_LIVE_'` covers all
+six (D346).
 
 ### 15.9 Tests, the lead's steps, done when
 
 **`LiveScreenTests`:** the organization at each boundary, in any case, never inside `orgx` or `org-x`;
-addresses and `%40`; learning from r5 1.2 and g1 G3.2; kept addresses; encoded survivors; withholding;
-`FailureOf`; GitHub unchanged.
+addresses and `%40`; learning from made-up copies of r5 1.2's and g1 G3.2's answers (their member names and nesting, with
+made-up values, section 1); kept addresses; encoded survivors; withholding;
+`FailureOf`; GitHub unchanged. And: a log holding `git clone --progress --
+https://***@dev.azure.com/o/p/_git/r r` has no survivor, nor an `accounts.json` whose login is the
+organization; a note holding `https://o@dev.azure.com/o/p/_git/r` comes out with both `o`s screened and
+the rest kept, and run.txt holding that has no survivor; run.txt holding the organization (raw,
+`%2F`-escaped or double-escaped) or a learned address (raw or with `%40`) has one, and D325's address or
+D374's made-up organization none; `%C0%AE` ends the decoding; a made-up `instanceId` as `hid=` in a
+302's `Location` and in its "Object moved" body (`&amp;hid=`); the same id in a vssps URL
+`https://spsprodfake.vssps.visualstudio.com/A<id>/_apis/Identities/…`, in upper case, without hyphens
+and URL-escaped; a `context=` whose base64 JSON holds another `hid`; a tenant in `X-VSS-ResourceTenant`
+and in a `Bearer` `WWW-Authenticate` after a `Basic` one; the Anonymous `aaaaaaaa-…` id and the area ids `79134c72-…` and `4e080c62-…`
+left untouched.
 
 **`LiveSafetyTests`** keeps 7a's cases and adds: the variables; the token after `:`, `oauth2:`,
 `x-access-token:` and 4- to 6-character organizations; each `Form` and request id; the guard's
-admissions, and its refusals of another organization, project or repository, `_apis/projects`,
-`pullrequests/{n}`, `..`, `%2E%2E`, `%2F`, `%5C`, an empty segment, the organization host, `vssps`,
-`http`, another port and another area; GitLab's refusals of another host, a web path, `PRIVATE-TOKEN`
-and a query token; the clean-up's selection.
+admissions, the repository path itself with nothing after it among them, and its refusals of another
+organization, project or repository, a GUID as `{p}` or `{r}`, `{o}/_apis/git/repositories`,
+`_apis/projects`, `pullrequests/{n}`, `..`, `%2E%2E`, `%2F`, `%5C`, an empty segment, the organization
+host, `vssps`, `http`, another port and another area; D374's path, admitted for the run's made-up
+organization without a credential and with Basic only after its 404 in that run (refused before it and
+after a 200, a 302 or a 401), and refused for another made-up name and for any other path under the
+run's (`{x}/_apis/git/repositories`, `{x}/{p}/_git/{r}`); D374's probe over a stub that answers the read
+without a credential 200 sends nothing with the token and notes the skip; GitLab's refusals of another host, a web path, `PRIVATE-TOKEN` and a query token; each new live
+API follows no redirect (the handler its public constructor builds has `AllowAutoRedirect` off, and
+over a stub's 302 the API records a 302, one request in the store); D373's made-up values: their
+shapes, none holding 16 of the token's characters in a row, none noted as written; the clean-up's
+selection.
 
 Without the variables, every live test fails at once; none is skipped (7a design 14.8).
 
-**The lead**, the owner told, runs stage 1 (about a minute per provider): `bash scripts/heavy-run.sh
---project tests/VisualCommit.LiveHostingTests -c Release --filter-class "*AzureDevOpsLiveTests"
---filter-class "*GitLabLiveTests" --filter-class "*LiveSafetyTests"`; then the fix package and the
-fakes' and clients' classes; stage 2 likewise; CLAUDE.md's rows and the csproj's comment; step 16.
+**The lead**, before each run with the tokens (stage 1, stage 2, the gate's two runs, a D335 re-run),
+first runs the offline classes alone on the same commit; they need no variable and make no request:
+`bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release --filter-class
+"*LiveSafetyTests" --filter-class "*LiveScreenTests"`. It goes on only when they pass: in one process a
+failed class stops nothing, and xunit v3 runs the collections in a random order, so the live run itself
+cannot gate on them. Then, the owner told, it runs stage 1 (status step 16; about a minute per
+provider): `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release
+--filter-class "*AzureDevOpsLiveTests" --filter-class "*GitLabLiveTests"`; then WP-LF (0.4); stage 2
+likewise. The gate's runs stay the whole project (D335), each after that offline run.
 
-**Done when** the project builds outside any solution (D337); the offline classes pass; with the tokens
-every live test passes, each request read back and cleaned up, only `visualcommit-live/` branches
-touched; no run.txt holds a token, the organization or an address; the tripwire and `ReachProblems`
-find nothing.
+**CLAUDE.md.** Before stage 1's first run, in the commit that records the tokens' dates under "Waiting
+on the owner", the lead rewrites "What to know"'s paragraph on the live command: the six variables,
+15.8's check (which replaces "by name, length and prefix only" for the new ones), 15.8's PowerShell line
+in place of the two-variable one, and the offline run that comes first, whose failure stops the run with
+the tokens. At stage 1's merge: the live command's row with the per-class filters, the run.txt
+folders `artifacts/live/azure-devops/` and `artifacts/live/gitlab/`, and the sentence that the offline
+run comes first and that its failure stops the run with the tokens; the offline row, which becomes
+`dotnet test --project tests/VisualCommit.LiveHostingTests -c Release --filter-class "*LiveSafetyTests"
+--filter-class "*LiveScreenTests"` and adds the screen of the organization's name and the addresses
+(D372); the csproj's comment (1.10). After stage 2: the live command's row with the measured times. 2.9
+has the other rows.
+
+**Done when** the project builds outside any solution (D337); the offline classes pass, alone before
+each run with the tokens; with the tokens every live test passes, each request read back and cleaned
+up, only `visualcommit-live/` branches touched; no run.txt holds a token, the organization, its ids or
+an address; no value from the research's captures is in the files (section 1); the tripwire and `ReachProblems` find nothing.
 
 ## 16. Open points
 
 Each point names what settles it and who meets it.
 
-### 16.1 Settled by the live command (WP-LIVE; stage 1 before part A's checks, then the fix package)
+### 16.1 Settled by the live command (WP-LIVE; stage 1 before part A's checks, then WP-LF)
 
-- The answers copied as READ or ASSUMED: 3.7, 4.7, 6.9, 7.5, 13.9's risks and 15.7's premises; among
-  them the core area read with a token (WP-AZ falls back to the typed name), GitLab's shape C 400 (an
-  invalid branch name may give it too, so part N's words claim no more than "cannot find") and `draft`
-  for a `Draft:` title, which 13.5's "Created draft" reads.
-- `x-access-token` for git on both services (READ), measured by stage 1's `Check_2` before part B; a
-  refusal brings ruling 8's fallback, a user name per provider (WP-C).
-- WP-C's ASSUMED facts (8.2, 8.6); `%20` and raw non-ASCII in `remoteUrl` (ASSUMED escaped, r5 6.1),
-  confirmed only if the sandbox's names hold such a character, else a fake-only case.
-- Fork shapes and a fetchable `refs/pull/<n>/source` (g1 G0.6): only with a fork in the sandbox (16.4); a
-  fetchable `/source` would let a decision revisit D361's disabled checkout.
-- Made-up credential values and an unknown organization with the token (15.7): only with the owner's
-  leave (16.4). 3.7's and 4.7's "kept" items and the expired and revoked bodies stay as marked unless
-  the owner widens D352's sandbox or makes extra tokens.
+- The ASSUMED and READ answers listed in 3.7, 4.7, 6.8, 7.5, 8.2, 8.6, 13.9's risks and 15.7's
+  premises, D373's made-up values and D374's made-up organization among them, settled by WP-LIVE's
+  stage 1 and WP-LF (0.4). What 3.7 and 4.7 keep READ or ASSUMED stays so (D375; g1 G0.6's
+  `refs/pull/<n>/source` among them), as do the expired and revoked bodies (15.7).
+- `x-access-token` for git on both services (READ, 8.2), measured by stage 1's `Check_2`, and by
+  `Check_4` on `<organization>.visualstudio.com`, before part B; a refusal brings ruling 8's fallback, a
+  user name per provider (WP-C).
 
 ### 16.2 Settled by a measurement, a CI run or the lead
 
-- MTP's order of twelve projects at four lanes (0.6): the lead's run at WP-F's merge. CI's macOS Test
-  step near D232's 44 minutes: the lead at each merge.
+- MTP's order of twelve projects at four lanes (0.6): wave 1's full run (0.4). CI's Test steps against
+  four fifths of the new limits (D377; 56 of 70): the lead at each merge before the counted round (0.6).
 - FETCH_HEAD's line for `refs/merge-requests/<iid>/head` (ASSUMED): WP-P's test on 2.56, CI on 2.43. The
   GitLab twin over HTTP before 2.46: WP-B's `CloneFromAccountTests` on CI's 2.43 containers (4.5's 301).
 - Up to three keychain reads at start (9.4) on a slow macOS store, against git's 10 s wait: CI, the gate.
 - The intro's two lines (10.3), the `DockPanel` rows (13.4, a `MaxWidth` fallback), the leading ellipsis
   (11.4): their classes and the lead's region comparison (0.7); part A's prefilled Azure DevOps picture
   again at WP-P's merge.
-- The scenario's made-up names (2.6): the lead confirms before WP-F's merge that none is the owner's
-  organization (D346, D352). The research folder is outside the repository, so WP-FA, WP-FL and WP-AZ are
-  built on the laptop.
-- One recognition parser for the three providers after wave 2 (`GitHubUrls.cs:126-186` is copied); the
-  fix package after stage 1; `Check_4` in stage 1 or 2 (15.6): the lead's choices.
-- The tokens' dates (30 days from wave 3; GitHub's 2026-11-29, plan risk 42) under status's "Waiting on
-  the owner"; the gate's live runs before the earliest, or the owner renews (7a design 14.6).
-- At closing the lead widens plan risks 35 (g3 N3) and 39 (8.3) and writes the twin, the drop and 8.6
-  into `docs/architecture.md`.
+- How Azure DevOps' `remoteUrl` writes a name's space, non-ASCII and reserved characters (`& @ ! ( )`,
+  and `'` in a repository's; r5 6.1, READ): space and non-ASCII ASSUMED escaped, the reserved ones
+  ASSUMED either way. The live command settles it only where the sandbox's names hold one, which
+  `visualcommit-sandbox` does not, so the fake's API answer stands; 8.2 step 4b's credential twin makes
+  either spelling of a reserved character work.
+- The research folder is outside the repository, so WP-FA, WP-FL and WP-AZ are built on the laptop; the
+  scenario's made-up names (2.6) stay (16.4).
+- One recognition parser for the three providers after wave 2 (`GitHubUrls.cs:126-186` is copied): the
+  lead's choice.
+- At closing the lead widens plan risks 35 (g3 N3) and 39 (8.3) and writes both twins, git's credential
+  view, the drop and 8.6 into `docs/architecture.md` (8.8).
 
 ### 16.3 Accepted, with what would reopen them
 
-- GitHub's D278 drop keeps its raw comparison (g3 G0.5); extending D369 changes 7a's frozen
-  `Select`, which only the lead reopens.
-- A list past 10 MB (about 8,480 Azure DevOps rows) is `Malformed`; a name with a literal `%` is neither
-  recognised nor bound; an expired Azure DevOps token is plain `BadCredentials`; disabled repositories
-  are left out; `$top`/`$skip` may shift a row; GitLab namespaces of up to 21 segments.
-- The fake's merge ref has the source's tree; host mode's 401 is short with one Basic challenge (g1
-  G4.1); Azure DevOps' `\`, `%5C`, `%252E`, `%C0%AE` are unmeasured (g3 G6) and refused.
-- A 7a save drops `userId` until the next D330 check; between WP-S's and WP-P's merges a hand run shows
-  GitHub's words for a new provider (9.11); the log names the organization (screened by 15.3).
+- GitHub's D278 drop keeps its raw comparison, which misses an unreserved escape (`%52`, g3 G0.5), an
+  unsafe character raw on one side and escaped on the other, a reserved character escaped in the
+  binding and raw in the other URL, and a binding with a trailing `/` beside another user's URL without
+  one (`https://github.com/o/r/` beside `https://bob@github.com/o/r`; MEASURED on 2.31.1, 2.43.0 and
+  2.56 by the design review). Extending D369 changes 7a's frozen `Select`, which only the lead reopens.
+- A name with a literal `%` is neither recognised nor bound (8.2 step 2 refuses `%25`); Azure DevOps'
+  `\`, `%5C`, `%252E`, `%C0%AE` are unmeasured (g3 G6) and refused.
+- The app's log and `accounts.json` name the organization (the login, the clone's command line); in the
+  live command they stay in its temporary data folder (`%TEMP%`) and are only searched for the learned
+  addresses (15.3), and what reaches a note goes through the screen.
 - D356's row is cut at 260 px, its tooltip whole; a GitLab fork's label is `{Owner}:{branch}`: part P's
   writer records how both read. The live screen over-screens an organization named by a common word.
 
@@ -3018,8 +3495,14 @@ Each point names what settles it and who meets it.
 - Plan risk 39, carried from 7a: whether the broker refuses git's sign-in prompt without a dialog in a
   bound tab whose account was just refused or signed out (amending D273 and D340), now for three
   providers. Until answered 7b keeps 7a's behaviour.
-- Leave to send made-up, non-secret credential values to the real services (15.7), and the sandbox
-  token to connectionData of a made-up organization (outside D352's reads).
-- Optional: a fork in the Azure DevOps sandbox made in the web UI; a second, legacy `api` GitLab token.
-- Whether D356's section menu still offers "Open pull requests in browser" (12.4 offers it until
-  answered).
+- Before WP-S's merge (wave 3): 15.8's steps for Azure DevOps and GitLab, the six user variables set,
+  and VS Code quit entirely and started again (a new Claude Code session inside a running VS Code does
+  not inherit them). The tokens' dates go under status's "Waiting on the owner"; their 30 days must
+  cover the gate's two live runs, or the owner renews before them (as for GitHub's token, 2026-11-29,
+  plan risk 42; 7a design 14.6).
+
+The owner's answers of 2026-11-01 settled the rest of what this section asked: D367 (amending D252 and
+D349; 0.1, 9.8 to 9.10), D373 (15.7), D374 (15.4, 15.7), D375 (16.1, 15.8), D376 (12.4), and the
+scenario's made-up names (Fernhill-Labs, harbor-co, northfield, Mobile App; 2.6), none of which matches
+the owner's organization, so they stay (D346, D352).
+

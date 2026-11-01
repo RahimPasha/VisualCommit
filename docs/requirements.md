@@ -88,7 +88,7 @@ Every object has a context menu. Every common action takes two clicks at most.
 | O1 | Interactive rebase (drag to reorder, squash, fixup, reword, drop) | Included |
 | O2 | Undo / redo of git actions, many steps back within a session (D154) | Included |
 | O3 | Multi-repo dashboard: status of all repos at a glance, bulk fetch/pull | Included |
-| O4 | Hosting integration (GitHub, Azure DevOps, GitLab): clone from account, view and create pull requests. Sign-in with a personal access token (D249, D345), one account per provider (D348); a repository's pull requests listed in the left panel (D251), GitLab's called merge requests (D351); author avatars from GitHub only, other authors as before (D252, D349) | Included |
+| O4 | Hosting integration (GitHub, Azure DevOps, GitLab): clone from account, view and create pull requests. Sign-in with a personal access token (D249, D345), one account per provider (D348); a repository's pull requests listed in the left panel (D251), GitLab's called merge requests (D351); author avatars from GitHub only, other authors, and the authors of a repository whose listed remote is another provider's, as before (D252, D349, D367) | Included |
 | O5 | Command palette (Ctrl+Shift+P, D191) and keyboard shortcuts, a fixed set (D192) | Included |
 | O6 | Compare any two commits or branches | Included |
 | O7 | Search inside changes (find the commit that added or removed a piece of text) | Included |

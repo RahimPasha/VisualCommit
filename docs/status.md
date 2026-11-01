@@ -27,7 +27,7 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 ## Current phase
 
 Phase 7b, Azure DevOps and GitLab: in progress since 2026-10-31, on `phase/7b-hosting-azure-gitlab`,
-made from `master` at `a29379f`. Its design will be `docs/phase-7b-design.md`, its report
+made from `master` at `a29379f`. Its design is `docs/phase-7b-design.md`, its report
 `docs/test-reports/phase-7b.md`.
 
 Phase 7a was accepted by the owner on 2026-10-31 and merged into `master` (merge
@@ -74,7 +74,7 @@ Design:
   (r1 to r8 in `D:/Projects/Personal/phase7b-work/research/`, outside the repository, about 660
   KB); git 2.31.1 and 2.43.0 (MinGit, hashes checked) were run beside 2.56 for the credential
   facts, so no CI step was needed for them; only anonymous requests went to the two services.
-- [ ] 3. Design in `docs/phase-7b-design.md` (D243: about 150 to 200 KB, its decisions only in
+- [x] 3. Design in `docs/phase-7b-design.md` (D243: about 150 to 200 KB, its decisions only in
   `decisions.md`): the provider model for three providers, both providers' clients and fakes, the
   credential path for their hosts, the texts and layouts that name the provider (D351), the live
   command's extension and its sandbox guard (D346, D352), how the code and the harness name 7b, its
@@ -83,6 +83,18 @@ Design:
   builder's brief of at most about 25 KB (D242). Whether 7b is split per provider is judged here
   (`plan.md`'s phase 7b). Its review: 3 or 4 lenses, git safety and tests/gate among them, a
   verifier only for each blocker and major; its decisions recorded.
+  Done 2026-11-01: drafted by run `wf_4982af69-706` (an architect, nine drafters, an integrator;
+  4.55M tokens; D357 to D372), reviewed by run `wf_1792f36a-eb9` (lenses git, token, tests and
+  conform, a verifier for each blocker and major; 4.52M tokens: no blocker, 14 majors, 42 minors,
+  none refuted), fixed by runs `wf_1371fd83-9fa` (a fixer per section; 3.33M), `wf_0602650a-596`
+  (six checkers, 45 residual edits; 2.84M) and `wf_388f074f-240` (two checkers, 12 more; 0.82M).
+  The owner's answers of 2026-11-01 are D373 to D376 and D367's amendment of D252 and D349; the
+  review's own rows D377 (CI limits) and D378 (another provider's token refused locally). One
+  phase, not split (D365). The design is 274.6 KB against D243's 150 to 200: two providers'
+  contracts and the review's fixes, accepted by the lead; no package section is over 25 KB
+  (section 15, 24.8 KB, the largest), section 1, WP0's brief, is 49.7 KB. Drafts, findings and
+  the fix stage's files are in `D:/Projects/Personal/phase7b-work/` (`design/`, `review/`,
+  `fix/`). (Week: under 80 % used.)
 
 Build:
 
@@ -298,39 +310,26 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 3, the design: `docs/phase-7b-design.md`, with the owner's rulings on the research's
-questions of taste (D353 to D356, 2026-10-31; the week was then under 65 % used), drafted from
-the research notes in `D:/Projects/Personal/phase7b-work/research/` (r1 to r8; where a later
-note or a gap round contradicts an earlier one, the later holds, as r8's section 5 lists), and
-reviewed. The
-[phase 7a handoff](handoffs/phase-7a.md), "For the next phase", says what to reuse and which risks
-to watch. Until the reset of 2026-11-05 the phase may use all that is left of the week's allowance
-and waits for the reset if it runs out (D344).
+Step 4, the first package, as `docs/phase-7b-design.md` 0.4 gives it: L1, the lead's first code
+commit (`scripts/heavy-run.sh`'s header without a measured time; `.github/workflows/ci.yml`'s Test
+step 55 to 70 minutes and job 65 to 80, D377; CLAUDE.md's "What to know", plan risk 8 and this
+file's CI section in the same commit), then WP0 in the main checkout: section 1's list (1.10), the
+contracts and stubs, with no change of behaviour or pictures. Wave 1 (WP-F, WP-H, WP-C, side by
+side in worktrees on `wip/p7b-<name>` branches) follows WP0's commit. Until the reset of
+2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if
+it runs out (D344).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
 
 ### Notes for whoever resumes
 
-- **In flight (2026-11-01): the design's fixes.** The draft (`d3d5070`, 225 KB, D357 to D372) was
-  reviewed by run `wf_1792f36a-eb9` (four lenses: git, token, tests, conform; a verifier for each
-  blocker and major; 4.52M tokens): no blocker, 14 majors, 42 minors, none refuted. The findings
-  are in `D:/Projects/Personal/phase7b-work/review/` (`findings.md`, one file per finding in `f/`,
-  `review-raw.json`). The owner's answers of 2026-11-01, to become decisions in the fixes:
-  made-up credentials may be sent to the sandboxes to record the refusals (D373); the Azure DevOps
-  token may go in one connectionData read to a made-up organization (D374, against the lead's
-  advice; the fixes send it only after an anonymous 404); no fork and no legacy GitLab token
-  (D375); the section's menu keeps "Open pull requests in browser" for another organization's
-  remote (D376); none of the scenario's made-up names matches the owner's organization; F1:
-  D367 accepted as amending D252 and D349. The lead's rulings: F10 names only, F13 one prepared
-  state, F14 the scripted list, D377 for F11 (CI limits), D378 for F20. Run `wf_1371fd83-9fa`
-  applies the fixes to the design split per section in `D:/Projects/Personal/phase7b-work/fix/`
-  (`order.txt` gives the join order; `d.md` holds the rows from D357; `design-d3d5070.md` is the
-  reviewed text). The lead then joins the files, has the fixes checked, and commits. If a session
-  finds the split files changed but not joined, it joins them in `order.txt`'s order into
-  `docs/phase-7b-design.md`, puts `d.md` in place of the rows from D357 in `docs/decisions.md`,
-  and has the result checked against the findings before committing. No worktree or `wip/*`
-  branch exists yet.
+- **The design stage's files** lie outside the repository, in `D:/Projects/Personal/phase7b-work/`:
+  `research/` (r1 to r8 with the gap rounds), `design/` (the drafts and the lead's 31 rulings),
+  `review/` (`findings.md`, one file per finding in `f/`, `review-raw.json`) and `fix/` (the
+  design split per section, the fixers' and checkers' reports). Nothing there is needed to build:
+  the design and its decisions hold what the builders need. No worktree or `wip/*` branch exists
+  yet.
 - `master` holds 7a; the working tree was clean, and no worktree,
   `wip/*` or `worktree-*` branch was left, when phase 7a was merged (`019e68a`). Phase 7a's gate
   references and work lie outside the repository: `D:/Projects/Personal/gate7a-reference/` (phases
@@ -524,8 +523,9 @@ every commit.
   report's "Open points and the lead's rulings". D343 is the owner's choice. D344 to D351 are the
   owner's answers for 7b, three of them (D345, D346, D350) with the lead's refinements made after
   the owner's acceptance (above); D352 is the owner's answer at 7b's start, and D353 to D356 the
-  owner's rulings on the research's questions of taste; D357 to D372 the design's (2026-10-31).
-  The next decision number is D373.
+  owner's rulings on the research's questions of taste; D357 to D372 the design's (2026-10-31);
+  D373 to D376 the owner's answers of 2026-11-01, D377 and D378 the design review's. The next
+  decision number is D379.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -557,7 +557,7 @@ every commit.
   the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D373 on, since D239 to D248 went to the review before
+  owner"; each answer becomes a decision, D379 on, since D239 to D248 went to the review before
   phase 7, D249 to D264 to phase 7a's start, D265 to D338 to its design, D339 to D343 to its build
   and gate and D344 to D356 to 7b's start and its research): design 17.5's reading of "ten repos can be checked and
   updated from one screen" (one dashboard of the ten, one Fetch all and one Pull all deciding every
@@ -590,7 +590,7 @@ every commit.
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D373 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D379 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,
