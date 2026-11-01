@@ -213,8 +213,13 @@ and K10 allowed half a pixel beyond the room, though phase 6's checks say cut ex
 the cell cuts so (`DashboardViewTests` asserts it exactly on every platform), and the scenario's
 random folder name landed within that half pixel. Both now assert exactly. Test steps:
 `windows-latest` 30 min 9 s, `macos-latest` 32 min 38 s, `ubuntu-latest` 4 min 28 s, the containers
-6 min 34 s and 5 min 2 s, each under four fifths; the keychain steps green. The fix is the commit
-after `07ba34f`; its run is read in Next step.
+6 min 34 s and 5 min 2 s, each under four fifths; the keychain steps green. The fix is `ca52c5d`.
+
+[41332176199](https://github.com/RahimPasha/VisualCommit/actions/runs/41332176199) on `ca52c5d`
+(that fix and WP-FA's merge `e995fc4`): all five jobs green, none failed a test, the keychain steps
+green. Jobs and Test steps: `windows-latest` 41 min 0 s (37 min 49 s), `macos-latest` 32 min 21 s
+(30 min 18 s), `ubuntu-latest` 6 min 37 s (5 min 1 s), the containers 6 min 31 s and 7 min 4 s
+(4 min 39 s and 4 min 53 s), each under four fifths.
 
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
@@ -374,9 +379,8 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 Wave 1 is merged (WP-F `564dad4`, WP-H `3591dc4`, WP-C `6586066`; its whole default run passed,
 Notes). `b0151bb` fixed the two faults CI's run 41311809889 found, `08fa49b` the race its run
-41321215497 met in a test of 7a's, and the commit after `07ba34f` the half pixel its run
-41328744135 met in phase 6's W3 (CI section); read the run that commit's push starts, each job and
-each Test step against four fifths (0.6).
+41321215497 met in a test of 7a's, and `ca52c5d` the half pixel its run 41328744135 met in phase 6's
+W3; CI's run 41332176199 on `ca52c5d` is green in all five jobs (CI section).
 
 Wave 2 (design 0.4) is being built beside it: WP-FL (the fake of GitLab, section 4) is merged at
 `7780908` and WP-FA (the fake of Azure DevOps, section 3) at `e995fc4`; WP-GL (`wip/p7b-gitlab`,
