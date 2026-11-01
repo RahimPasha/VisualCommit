@@ -178,7 +178,7 @@ public sealed class TokenVault
         }
         catch (Exception exception)
         {
-            _log.Warning($"{_store.Name}: saving the token for {TokenEntryNames.ForLog(key)} failed.", exception);
+            _log.Warning($"{_store.Name}: saving the token for {TokenEntryNames.ForLog(key)} failed ({Http.HostingHttpClient.Describe(exception)}).");
             result = new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.Refused);
         }
 
@@ -200,7 +200,7 @@ public sealed class TokenVault
         }
         catch (Exception exception)
         {
-            _log.Warning($"{_store.Name}: deleting the token for {TokenEntryNames.ForLog(key)} failed.", exception);
+            _log.Warning($"{_store.Name}: deleting the token for {TokenEntryNames.ForLog(key)} failed ({Http.HostingHttpClient.Describe(exception)}).");
             result = new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.Refused);
         }
 
@@ -224,7 +224,7 @@ public sealed class TokenVault
         }
         catch (Exception exception)
         {
-            _log.Warning($"{_store.Name}: the probe failed.", exception);
+            _log.Warning($"{_store.Name}: the probe failed ({Http.HostingHttpClient.Describe(exception)}).");
             probe = new TokenStoreProbe(false, TokenStoreReasons.NoKeychain);
         }
 
@@ -254,7 +254,7 @@ public sealed class TokenVault
             }
             catch (Exception exception)
             {
-                _log.Warning($"{_store.Name}: reading the token for {TokenEntryNames.ForLog(key)} failed.", exception);
+                _log.Warning($"{_store.Name}: reading the token for {TokenEntryNames.ForLog(key)} failed ({Http.HostingHttpClient.Describe(exception)}).");
                 read = new TokenRead(TokenStoreOutcome.Failed, null, TokenStoreReasons.Refused);
             }
         }
