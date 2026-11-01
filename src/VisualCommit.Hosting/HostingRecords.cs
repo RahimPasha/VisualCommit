@@ -10,8 +10,9 @@ namespace VisualCommit.Hosting;
 /// <param name="Provider">The hosting service.</param>
 /// <param name="Host">Its host, as the provider's <see cref="IHostingProvider.Host"/>.</param>
 /// <param name="Owner">
-/// The namespace path: GitHub's owner (a user or an organisation), GitLab's group path
-/// (<c>group/sub</c>), Azure DevOps' <c>&lt;organization&gt;/&lt;project&gt;</c>.
+/// The namespace path, everything before the repository's own name (D358): GitHub's owner (a user
+/// or an organisation), GitLab's group path of up to 20 levels (<c>group/sub</c>), Azure DevOps'
+/// <c>&lt;organization&gt;/&lt;project&gt;</c>, neither of which holds a <c>/</c> of its own.
 /// </param>
 /// <param name="Name">The repository's name.</param>
 public sealed record HostedRepository(HostingProvider Provider, string Host, string Owner, string Name)
@@ -148,11 +149,23 @@ public enum PullRequestRefusal
 
 /// <summary>A failed request (docs/phase-7a-design.md 1.4, docs/phase-7b-design.md 1.4).</summary>
 /// <param name="Kind">What went wrong.</param>
-/// <param name="Message">The service's own words (ruling 15), or for a network failure or time-out the client's fixed texts (D284).</param>
-/// <param name="Detail">A 422's form (6.3, A5) or <c>X-Accepted-GitHub-Permissions</c>.</param>
+/// <param name="Message">
+/// The service's own words (ruling 15), or the client's fixed texts naming the provider for no
+/// answer, a time-out, an unreadable answer or a server error without words (D284; the shared
+/// core's <c>HostingHttpTexts</c>); every e-mail address in it is <c>&lt;e-mail&gt;</c> (D368).
+/// </param>
+/// <param name="Detail">
+/// What the provider's client adds, e-mail addresses screened likewise: GitHub's 422 form (6.3,
+/// A5), <c>X-Accepted-GitHub-Permissions</c> or single sign-on's address; for a token of another
+/// provider's form, refused without a request, <c>other-provider:&lt;id&gt;</c> (D378); Azure
+/// DevOps' and GitLab's as their clients give it (docs/phase-7b-design.md 6, 7).
+/// </param>
 /// <param name="RetryAt">When a rate limit ends.</param>
-/// <param name="Url">The address the failure names.</param>
-/// <param name="RequestId"><c>X-GitHub-Request-Id</c>, for the log.</param>
+/// <param name="Url">The address the failure names, without its query.</param>
+/// <param name="RequestId">
+/// The answer's request id, for the log: GitHub's <c>X-GitHub-Request-Id</c>, Azure DevOps'
+/// <c>ActivityId</c> (else <c>X-VSS-E2EID</c>), GitLab's <c>x-request-id</c>; null when no answer came.
+/// </param>
 public sealed record HostingFailure(
     HostingFailureKind Kind,
     string Message,
@@ -164,7 +177,11 @@ public sealed record HostingFailure(
     /// <summary>The provider that failed; every client sets it (GitHub's by default, as in 7a).</summary>
     public HostingProvider Provider { get; init; } = HostingProvider.GitHub;
 
-    /// <summary>A5's reason for a refusal; <see cref="PullRequestRefusal.None"/> for any other failure.</summary>
+    /// <summary>
+    /// A5's reason for a refusal, which the provider reads from its service's answer (GitHub's from
+    /// a 422's detail, docs/phase-7b-design.md 5.4); <see cref="PullRequestRefusal.None"/> for any
+    /// other failure and for a refusal of no known reason.
+    /// </summary>
     public PullRequestRefusal Refusal { get; init; }
 }
 

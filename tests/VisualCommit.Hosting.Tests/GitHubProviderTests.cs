@@ -222,6 +222,51 @@ public sealed class GitHubProviderTests
         Assert.DoesNotContain(setup.Fake.PullRequests("octo/hello"), pull => pull.Number > 5);
     }
 
+    [Theory]
+    [InlineData("A title", "feature/login", "main", false, HostingFailureKind.Validation, "A pull request already exists for octo:feature/login.", PullRequestRefusal.AlreadyExists)]
+    [InlineData("A title", "main", "main", false, HostingFailureKind.Validation, "No commits between main and main", PullRequestRefusal.NoCommits)]
+    [InlineData("A title", "nope", "main", false, HostingFailureKind.Validation, "head is invalid", PullRequestRefusal.HeadMissing)]
+    [InlineData("A title", "topic/no-pr", "nope", false, HostingFailureKind.Validation, "base is invalid", PullRequestRefusal.BaseMissing)]
+    [InlineData("", "topic/no-pr", "main", false, HostingFailureKind.Validation, "title is missing", PullRequestRefusal.None)]
+    [InlineData("A title", "fix-typo", "main", true, HostingFailureKind.Forbidden, "pull_requests=write", PullRequestRefusal.None)]
+    public async Task A5s_refusal_is_the_reason_githubs_detail_stands_for_and_its_words_stay_githubs(
+        string title, string head, string @base, bool adaOnTool, HostingFailureKind kind, string detail, PullRequestRefusal refusal)
+    {
+        await using var setup = await Setup.StartAsync();
+        var (token, repository) = adaOnTool ? (setup.Served.AdaToken, Repository("octo", "tool")) : (setup.Served.OctoToken, Repository("octo", "hello"));
+
+        var refused = await setup.Provider.CreatePullRequestAsync(token, repository, new NewPullRequest(title, "", head, null, @base, false), Cancelled);
+
+        var failure = refused.Failure!;
+        Assert.Equal((kind, detail, refusal, HostingProvider.GitHub), (failure.Kind, failure.Detail, failure.Refusal, failure.Provider));
+        Assert.Equal(adaOnTool ? "Resource not accessible by personal access token" : "Validation Failed", failure.Message);
+        Assert.Single(setup.Fake.Requests);
+    }
+
+    /// <summary>GitLab's form and Azure DevOps' (84 characters, <c>AZDO</c> at 76), each with the detail that names it (D378).</summary>
+    public static TheoryData<string, string> OtherProvidersTokens => new()
+    {
+        { "glpat-FAKE-ada-1", "other-provider:gitlab" },
+        { new string('a', 76) + "AZDO" + "abcd", "other-provider:azure-devops" },
+    };
+
+    [Theory]
+    [MemberData(nameof(OtherProvidersTokens))]
+    public async Task A1_refuses_another_providers_token_without_a_request(string token, string detail)
+    {
+        await using var setup = await Setup.StartAsync();
+
+        var refused = await setup.Provider.CheckTokenAsync(token, Cancelled);
+        var throughTheInterface = await ((IHostingProvider)setup.Provider).CheckTokenAsync(token, null, Cancelled);
+
+        foreach (var failure in new[] { refused.Failure!, throughTheInterface.Failure! })
+        {
+            Assert.Equal((HostingFailureKind.BadCredentials, "Bad credentials", detail, HostingProvider.GitHub), (failure.Kind, failure.Message, failure.Detail, failure.Provider));
+        }
+
+        Assert.Empty(setup.Fake.Requests);
+    }
+
     [Fact]
     public async Task A6_maps_the_branchs_authors_then_looks_up_the_others_once_each()
     {

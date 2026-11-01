@@ -355,6 +355,31 @@ public sealed class GitHubClientTests
         Assert.Equal("GitHub: GET /api/v3/user failed: Network.", setup.Log.Lines[^1].Message);
     }
 
+    [Fact]
+    public async Task Every_failure_of_the_fault_table_names_github()
+    {
+        // The shared core sets the provider on every failure (docs/phase-7b-design.md 5.2, 5.5).
+        await using var setup = Setup.Start();
+        FakeGitHubFault[] faults =
+        [
+            FakeGitHubFault.BadCredentials, FakeGitHubFault.PrimaryRateLimit, FakeGitHubFault.SecondaryRateLimit, FakeGitHubFault.SsoRequired,
+            FakeGitHubFault.Forbidden, FakeGitHubFault.NotFound, FakeGitHubFault.ApiVersionGone, FakeGitHubFault.ServerError,
+            FakeGitHubFault.BadGateway, FakeGitHubFault.Malformed, FakeGitHubFault.CreatedThenDropped,
+            FakeGitHubFault.MovedTo(new Uri("https://elsewhere.example/api/v3/user")),
+        ];
+
+        foreach (var fault in faults)
+        {
+            setup.Fake.FailNext("user", fault);
+            var reply = await setup.Client.SendAsync(HttpMethod.Get, setup.Octo, setup.Api("user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+            Assert.Equal(Core.Hosting.HostingProvider.GitHub, reply.Failure!.Provider);
+        }
+
+        Assert.Equal(faults.Length, setup.Log.Lines.Count);
+        Assert.All(setup.Log.Lines, line => Assert.StartsWith("GitHub: GET /api/v3/user failed: ", line.Message, StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData(429, "30", "{\"message\":\"Too many\"}", HostingFailureKind.RateLimited, 30, "Too many")]
     [InlineData(429, null, "{\"message\":\"Too many\"}", HostingFailureKind.Malformed, null, GitHubClient.MalformedText)]

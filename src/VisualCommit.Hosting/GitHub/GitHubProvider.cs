@@ -9,12 +9,17 @@ namespace VisualCommit.Hosting.GitHub;
 /// the push guard without the network, and A1 to A6 through <see cref="GitHubClient"/>, each with
 /// the account's token, which the provider never keeps. Paths are relative to the API's address,
 /// each segment escaped. An avatar is kept only on GitHub's own avatar host (github.com) or on the
-/// fake's web address; any other counts as none, with one warning per provider.
+/// fake's web address; any other counts as none, with one warning per provider. A token of another
+/// provider's form is refused without a request (D378), and A5's refusal carries the
+/// <see cref="PullRequestRefusal"/> its detail stands for (docs/phase-7b-design.md 5.4).
 /// </summary>
 public sealed class GitHubProvider : IHostingProvider, IDisposable
 {
     /// <summary>A1's text for a token that is empty or blank: no request is made.</summary>
     public const string EmptyTokenText = "The token is empty.";
+
+    /// <summary>The <see cref="HostingFailure.Detail"/> prefix of a token of another provider's form, before that provider's id (D378).</summary>
+    public const string OtherProviderDetail = "other-provider:";
 
     /// <summary>A2's cap: 10 pages of 100 repositories (ruling 14).</summary>
     public const int RepositoryPages = 10;
@@ -216,7 +221,8 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// <summary>
     /// A5: <c>POST repos/{o}/{r}/pulls</c> on the base repository, once (never retried): <c>head</c>
     /// the branch, or <c>owner:branch</c> across forks with <c>maintainer_can_modify: true</c>.
-    /// A 422's detail is the client's (6.3's forms).
+    /// A 422's detail is the client's (6.3's forms), and its <see cref="HostingFailure.Refusal"/>
+    /// the reason that detail stands for (<see cref="RefusalOf"/>); its message and detail stay GitHub's.
     /// </summary>
     public async Task<HostingResult<PullRequest>> CreatePullRequestAsync(string token, HostedRepository baseRepository, NewPullRequest request, CancellationToken ct)
     {
@@ -241,7 +247,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         var reply = await _client.SendAsync(HttpMethod.Post, token, url, body, GitHubJsonContext.Default.GitHubPullRequestJson, ct).ConfigureAwait(false);
         if (reply.Failure is { } failure)
         {
-            return HostingResult<PullRequest>.Fail(failure);
+            return HostingResult<PullRequest>.Fail(failure.Kind == HostingFailureKind.Validation ? failure with { Refusal = RefusalOf(failure.Detail) } : failure);
         }
 
         return reply.Value is not null && Pull(reply.Value, baseRepository) is { } pull
@@ -366,9 +372,12 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         $"repos/{Uri.EscapeDataString(repository.Owner)}/{Uri.EscapeDataString(repository.Name)}";
 
     /// <summary>
-    /// Why a token is refused without a request: empty or blank (<see cref="EmptyTokenText"/>), or
+    /// Why a token is refused without a request: empty or blank (<see cref="EmptyTokenText"/>);
     /// holding anything but visible ASCII, which no GitHub token does and no header may carry
-    /// (GitHub's own "Bad credentials"); null when it may be sent.
+    /// (GitHub's own "Bad credentials"); or of GitLab's or Azure DevOps' form
+    /// (<see cref="HostingProviders.TokenFormOf"/>; D378, amending D298), "Bad credentials" with the
+    /// detail <c>other-provider:&lt;id&gt;</c>, so that it is disclosed to no other service. A token
+    /// of GitHub's form, or of none, may be sent: null.
     /// </summary>
     private static HostingFailure? Refusal(string? token)
     {
@@ -377,8 +386,34 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             return new HostingFailure(HostingFailureKind.BadCredentials, EmptyTokenText);
         }
 
-        return token.All(c => c is > ' ' and < '\u007F') ? null : new HostingFailure(HostingFailureKind.BadCredentials, "Bad credentials");
+        if (!token.All(c => c is > ' ' and < '\u007F'))
+        {
+            return new HostingFailure(HostingFailureKind.BadCredentials, "Bad credentials");
+        }
+
+        return HostingProviders.TokenFormOf(token) is { } form && form != HostingProvider.GitHub
+            ? new HostingFailure(HostingFailureKind.BadCredentials, "Bad credentials", OtherProviderDetail + HostingProviders.Id(form))
+            : null;
     }
+
+    /// <summary>
+    /// The reason a 422's detail (<see cref="GitHubClient"/>'s forms) stands for, as the create
+    /// form matched it in 7a: starting "A pull request already exists"
+    /// <see cref="PullRequestRefusal.AlreadyExists"/>, starting "No commits between"
+    /// <see cref="PullRequestRefusal.NoCommits"/>, "head is invalid"
+    /// <see cref="PullRequestRefusal.HeadMissing"/>, "base is invalid"
+    /// <see cref="PullRequestRefusal.BaseMissing"/>; else <see cref="PullRequestRefusal.None"/>.
+    /// GitHub never gives <see cref="PullRequestRefusal.BranchesMissing"/>.
+    /// </summary>
+    internal static PullRequestRefusal RefusalOf(string? detail) => detail switch
+    {
+        null => PullRequestRefusal.None,
+        _ when detail.StartsWith("A pull request already exists", StringComparison.Ordinal) => PullRequestRefusal.AlreadyExists,
+        _ when detail.StartsWith("No commits between", StringComparison.Ordinal) => PullRequestRefusal.NoCommits,
+        "head is invalid" => PullRequestRefusal.HeadMissing,
+        "base is invalid" => PullRequestRefusal.BaseMissing,
+        _ => PullRequestRefusal.None,
+    };
 
     private Uri Api(string relative) => new(Endpoints.ApiBase, relative);
 
