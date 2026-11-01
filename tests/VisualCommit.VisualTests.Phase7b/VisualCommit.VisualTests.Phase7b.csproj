@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The scripted walk-through of the visual test gate (docs/plan.md) for phase 7b: its parts A
+       (accounts and sign-in), B (browse and clone), P (requests in the left panel and the graph) and
+       N (a new request), one class per part, each written just before its package (D244), with their
+       expected values (docs/phase-7b-design.md 0.3, 0.5, 2.7). It drives the whole app in Avalonia's
+       headless mode against the fakes of Azure DevOps, GitLab and GitHub on ports 47397 to 47399
+       (D363) and saves a screenshot after every step under artifacts/visual/phase-7b/ (VisualRun, in
+       VisualCommit.Testing). A project of its own, as phases 3 to 7a's are: a test assembly has one
+       headless UI thread, and a second assembly is a second test process that "dotnet test" runs
+       beside the others. It links App.Tests' recorders, as 7a's project does. The real-window pass
+       compiles the Phase7bExpectations files. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Hosting\VisualCommit.Hosting.csproj" />
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+  </ItemGroup>
+
+  <!-- App.Tests' recording actions and log, internal there and here (docs/phase-7a-design.md 2.8, as 7a's project). -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.App.Tests\RecordingActions.cs" Link="AppTests\%(Filename)%(Extension)" />
+    <Compile Include="..\VisualCommit.App.Tests\RecordingLog.cs" Link="AppTests\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

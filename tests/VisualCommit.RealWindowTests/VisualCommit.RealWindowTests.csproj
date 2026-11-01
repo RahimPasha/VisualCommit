@@ -70,6 +70,13 @@
     <Compile Include="..\VisualCommit.VisualTests.Phase7a*\Phase7aExpectations*.cs" Link="Phase7a\%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- Phase 7b's expectations, likewise (docs/phase-7b-design.md 0.3, 2.7); their own tests,
+       Phase7bExpectationTests.<part>.cs and Phase7bSupportTests.cs, are left out by their names,
+       which the pattern does not match. -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.VisualTests.Phase7b*\Phase7bExpectations*.cs" Link="Phase7b\%(Filename)%(Extension)" />
+  </ItemGroup>
+
   <ItemGroup>
     <AssemblyMetadata Include="RepoRoot" Value="$(RepoRoot)" />
     <AssemblyMetadata Include="AppExecutable" Value="$(RepoRoot)src\VisualCommit.App\bin\$(Configuration)\net10.0\VisualCommit.exe" />
