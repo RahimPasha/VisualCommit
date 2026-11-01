@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using VisualCommit.Core.Hosting;
+using VisualCommit.Hosting.Http;
 
 namespace VisualCommit.Hosting.GitHub;
 
@@ -47,14 +48,17 @@ internal static partial class GitHubUrls
     /// <summary>Whether <paramref name="endpoints"/> are github.com's own.</summary>
     public static bool IsGitHubCom(GitHubEndpoints endpoints) => endpoints == GitHubEndpoints.GitHubCom;
 
-    /// <summary>Whether two addresses have the same scheme, host and port (ruling 23's match, D285's).</summary>
-    public static bool SameOrigin(Uri a, Uri b) =>
-        string.Equals(a.Scheme, b.Scheme, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(a.IdnHost, b.IdnHost, StringComparison.OrdinalIgnoreCase)
-        && a.Port == b.Port;
+    /// <summary>
+    /// Whether two addresses have the same scheme, host and port (ruling 23's match, D285's): the
+    /// core's <see cref="HostingHttpClient.SameOrigin"/>, so a host without an IDN form is on no origin (D380).
+    /// </summary>
+    public static bool SameOrigin(Uri a, Uri b) => HostingHttpClient.SameOrigin(a, b);
 
-    /// <summary><c>&lt;scheme&gt;://&lt;host&gt;:&lt;port&gt;</c> of <paramref name="uri"/>, for a log line: never its path or query.</summary>
-    public static string OriginOf(Uri uri) => FormattableString.Invariant($"{uri.Scheme}://{uri.IdnHost}:{uri.Port}");
+    /// <summary>
+    /// <c>&lt;scheme&gt;://&lt;host&gt;:&lt;port&gt;</c> of <paramref name="uri"/>, for a log line: never its path or query;
+    /// the core's <see cref="HostingHttpClient.OriginOf"/>.
+    /// </summary>
+    public static string OriginOf(Uri uri) => HostingHttpClient.OriginOf(uri);
 
     /// <summary>The path of a github.com URL in one of its forms, or null.</summary>
     private static string? GitHubComPath(string url)

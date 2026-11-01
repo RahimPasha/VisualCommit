@@ -9,12 +9,17 @@ namespace VisualCommit.Hosting.GitHub;
 /// the push guard without the network, and A1 to A6 through <see cref="GitHubClient"/>, each with
 /// the account's token, which the provider never keeps. Paths are relative to the API's address,
 /// each segment escaped. An avatar is kept only on GitHub's own avatar host (github.com) or on the
-/// fake's web address; any other counts as none, with one warning per provider.
+/// fake's web address; any other counts as none, with one warning per provider. A token of another
+/// provider's form is refused without a request (D378), and A5's refusal carries the
+/// <see cref="PullRequestRefusal"/> its detail stands for (docs/phase-7b-design.md 5.4).
 /// </summary>
 public sealed class GitHubProvider : IHostingProvider, IDisposable
 {
     /// <summary>A1's text for a token that is empty or blank: no request is made.</summary>
     public const string EmptyTokenText = "The token is empty.";
+
+    /// <summary>The <see cref="HostingFailure.Detail"/> prefix of a token of another provider's form, before that provider's id (D378).</summary>
+    public const string OtherProviderDetail = "other-provider:";
 
     /// <summary>A2's cap: 10 pages of 100 repositories (ruling 14).</summary>
     public const int RepositoryPages = 10;
@@ -115,7 +120,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (reply.Value is not { Login: { Length: > 0 } login } user)
         {
-            return HostingResult<HostingAccount>.Fail(Malformed("GET", url, reply.RequestId));
+            return HostingResult<HostingAccount>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
         }
 
         var key = new AccountKey(HostingProvider.GitHub, Endpoints.Host, login);
@@ -139,7 +144,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (reply.Value is null)
         {
-            return HostingResult<RepositoryList>.Fail(Malformed("GET", url, reply.RequestId));
+            return HostingResult<RepositoryList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
         }
 
         var repositories = new List<RepositoryInfo>();
@@ -147,7 +152,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         {
             if (Info(json, withParent: false) is not { } info)
             {
-                return HostingResult<RepositoryList>.Fail(Malformed("GET", url, reply.RequestId));
+                return HostingResult<RepositoryList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
             }
 
             repositories.Add(info);
@@ -175,7 +180,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         return reply.Value is not null && Info(reply.Value, withParent: true) is { } info
             ? HostingResult<RepositoryInfo>.Ok(info)
-            : HostingResult<RepositoryInfo>.Fail(Malformed("GET", url, reply.RequestId));
+            : HostingResult<RepositoryInfo>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
     }
 
     /// <summary>A4: <c>GET repos/{o}/{r}/pulls?state=open&amp;per_page=100</c>, up to 3 pages.</summary>
@@ -196,7 +201,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (reply.Value is null)
         {
-            return HostingResult<PullRequestList>.Fail(Malformed("GET", url, reply.RequestId));
+            return HostingResult<PullRequestList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
         }
 
         var pulls = new List<PullRequest>();
@@ -204,7 +209,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         {
             if (Pull(json, repository) is not { } pull)
             {
-                return HostingResult<PullRequestList>.Fail(Malformed("GET", url, reply.RequestId));
+                return HostingResult<PullRequestList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
             }
 
             pulls.Add(pull);
@@ -216,7 +221,8 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// <summary>
     /// A5: <c>POST repos/{o}/{r}/pulls</c> on the base repository, once (never retried): <c>head</c>
     /// the branch, or <c>owner:branch</c> across forks with <c>maintainer_can_modify: true</c>.
-    /// A 422's detail is the client's (6.3's forms).
+    /// A 422's detail is the client's (6.3's forms), and its <see cref="HostingFailure.Refusal"/>
+    /// the reason that detail stands for (<see cref="RefusalOf"/>); its message and detail stay GitHub's.
     /// </summary>
     public async Task<HostingResult<PullRequest>> CreatePullRequestAsync(string token, HostedRepository baseRepository, NewPullRequest request, CancellationToken ct)
     {
@@ -241,12 +247,12 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         var reply = await _client.SendAsync(HttpMethod.Post, token, url, body, GitHubJsonContext.Default.GitHubPullRequestJson, ct).ConfigureAwait(false);
         if (reply.Failure is { } failure)
         {
-            return HostingResult<PullRequest>.Fail(failure);
+            return HostingResult<PullRequest>.Fail(failure.Kind == HostingFailureKind.Validation ? failure with { Refusal = RefusalOf(failure.Detail) } : failure);
         }
 
         return reply.Value is not null && Pull(reply.Value, baseRepository) is { } pull
             ? HostingResult<PullRequest>.Ok(pull)
-            : HostingResult<PullRequest>.Fail(Malformed("POST", url, reply.RequestId));
+            : HostingResult<PullRequest>.Fail(Malformed(HttpMethod.Post, url, reply.RequestId));
     }
 
     /// <summary>
@@ -292,7 +298,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
             if (reply.Value is null)
             {
-                return HostingResult<AuthorMap>.Fail(Malformed("GET", url, reply.RequestId));
+                return HostingResult<AuthorMap>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
             }
 
             foreach (var item in reply.Value)
@@ -366,9 +372,12 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         $"repos/{Uri.EscapeDataString(repository.Owner)}/{Uri.EscapeDataString(repository.Name)}";
 
     /// <summary>
-    /// Why a token is refused without a request: empty or blank (<see cref="EmptyTokenText"/>), or
+    /// Why a token is refused without a request: empty or blank (<see cref="EmptyTokenText"/>);
     /// holding anything but visible ASCII, which no GitHub token does and no header may carry
-    /// (GitHub's own "Bad credentials"); null when it may be sent.
+    /// (GitHub's own "Bad credentials"); or of GitLab's or Azure DevOps' form
+    /// (<see cref="HostingProviders.TokenFormOf"/>; D378, amending D298), "Bad credentials" with the
+    /// detail <c>other-provider:&lt;id&gt;</c>, so that it is disclosed to no other service. A token
+    /// of GitHub's form, or of none, may be sent: null.
     /// </summary>
     private static HostingFailure? Refusal(string? token)
     {
@@ -377,8 +386,34 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             return new HostingFailure(HostingFailureKind.BadCredentials, EmptyTokenText);
         }
 
-        return token.All(c => c is > ' ' and < '\u007F') ? null : new HostingFailure(HostingFailureKind.BadCredentials, "Bad credentials");
+        if (!token.All(c => c is > ' ' and < '\u007F'))
+        {
+            return new HostingFailure(HostingFailureKind.BadCredentials, "Bad credentials");
+        }
+
+        return HostingProviders.TokenFormOf(token) is { } form && form != HostingProvider.GitHub
+            ? new HostingFailure(HostingFailureKind.BadCredentials, "Bad credentials", OtherProviderDetail + HostingProviders.Id(form))
+            : null;
     }
+
+    /// <summary>
+    /// The reason a 422's detail (<see cref="GitHubClient"/>'s forms) stands for, as the create
+    /// form matched it in 7a: starting "A pull request already exists"
+    /// <see cref="PullRequestRefusal.AlreadyExists"/>, starting "No commits between"
+    /// <see cref="PullRequestRefusal.NoCommits"/>, "head is invalid"
+    /// <see cref="PullRequestRefusal.HeadMissing"/>, "base is invalid"
+    /// <see cref="PullRequestRefusal.BaseMissing"/>; else <see cref="PullRequestRefusal.None"/>.
+    /// GitHub never gives <see cref="PullRequestRefusal.BranchesMissing"/>.
+    /// </summary>
+    internal static PullRequestRefusal RefusalOf(string? detail) => detail switch
+    {
+        null => PullRequestRefusal.None,
+        _ when detail.StartsWith("A pull request already exists", StringComparison.Ordinal) => PullRequestRefusal.AlreadyExists,
+        _ when detail.StartsWith("No commits between", StringComparison.Ordinal) => PullRequestRefusal.NoCommits,
+        "head is invalid" => PullRequestRefusal.HeadMissing,
+        "base is invalid" => PullRequestRefusal.BaseMissing,
+        _ => PullRequestRefusal.None,
+    };
 
     private Uri Api(string relative) => new(Endpoints.ApiBase, relative);
 
@@ -442,7 +477,8 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// <summary>
     /// The avatar's address when it is <c>https</c> on <c>avatars.githubusercontent.com</c>
     /// (github.com) or on the web address's scheme, host and port (the fake, D252, D286); else null,
-    /// with one warning per provider that names the host only.
+    /// with one warning per provider that names the host only (a host without an IDN form is on
+    /// neither and named <see cref="Http.HostingHttpClient.UnreadableHost"/>, D380).
     /// </summary>
     private Uri? AvatarOf(string? avatarUrl)
     {
@@ -453,7 +489,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (Uri.TryCreate(avatarUrl, UriKind.Absolute, out var url)
             && (GitHubUrls.IsGitHubCom(Endpoints)
-                ? url.Scheme == Uri.UriSchemeHttps && string.Equals(url.IdnHost, AvatarHost, StringComparison.OrdinalIgnoreCase) && url.Port == 443
+                ? url.Scheme == Uri.UriSchemeHttps && string.Equals(Http.HostingHttpClient.IdnHostOf(url), AvatarHost, StringComparison.OrdinalIgnoreCase) && url.Port == 443
                 : GitHubUrls.SameOrigin(url, Endpoints.WebBase)))
         {
             return url;
@@ -468,11 +504,6 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         return null;
     }
 
-    /// <summary>An answer that succeeded but lacks what the app needs: the client's text, and the warning the client would write.</summary>
-    private HostingFailure Malformed(string method, Uri url, string? requestId)
-    {
-        var request = requestId is { Length: > 0 } ? $" (request {requestId})" : string.Empty;
-        _log.Warning($"GitHub: {method} {url.AbsolutePath} failed: Malformed{request}.");
-        return new HostingFailure(HostingFailureKind.Malformed, GitHubClient.MalformedText, Url: new Uri(url.GetLeftPart(UriPartial.Path)), RequestId: requestId);
-    }
+    /// <summary>An answer that succeeded but lacks what the app needs: the core's <see cref="Http.HostingHttpClient.MalformedAnswer"/>, its text and its warning.</summary>
+    private HostingFailure Malformed(HttpMethod method, Uri url, string? requestId) => _client.MalformedAnswer(method, url, requestId);
 }

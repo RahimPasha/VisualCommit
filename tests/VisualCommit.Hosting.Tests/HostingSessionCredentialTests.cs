@@ -95,7 +95,7 @@ public sealed class HostingSessionCredentialTests
         Assert.NotSame(valid, setup.Session.RefusalCheck);
         await CheckedAsync(setup);
         setup.NetworkDown = false;
-        Assert.Equal("GitHub: GET /api/v3/user failed: Network.", setup.Warnings[^2]);
+        Assert.Equal("GitHub: GET /api/v3/user failed: Network (HttpRequestException).", setup.Warnings[^2]);
         Assert.StartsWith("GitHub account octo on 127.0.0.1:1: git was refused; the token could not be checked: ", setup.Warnings[^1], StringComparison.Ordinal);
         Assert.Equal(AccountState.SignedIn, setup.Session.Account!.State);
         Assert.Equal((written, file), (File.GetLastWriteTimeUtc(setup.Paths.AccountsFile), File.ReadAllText(setup.Paths.AccountsFile)));
@@ -115,6 +115,24 @@ public sealed class HostingSessionCredentialTests
         Assert.Equal(AccountTokenStates.Refused, Load(setup).TokenState);
         Assert.Contains("GitHub account octo on 127.0.0.1:1: GitHub refused the token (git); it needs signing in again.", setup.Warnings);
         Assert.Equal(requests + 1, setup.UserRequests);
+    }
+
+    [Fact]
+    public async Task An_exception_the_check_lets_through_is_logged_by_its_type_alone_and_the_account_stays()
+    {
+        // D382 (H4): the check's catch-all names the exception by its type and codes alone.
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var octo = HostingSessionStartTests.OctoKey(setup);
+        setup.Fault = request => request.RequestUri!.AbsolutePath == "/api/v3/user" ? new InvalidOperationException(setup.ThrownText) : null;
+
+        setup.Session.Refused(octo);
+        await CheckedAsync(setup);
+        setup.Fault = null;
+
+        Assert.Equal("GitHub account octo on 127.0.0.1:1: git was refused; the token could not be checked (InvalidOperationException).", setup.Warnings[^1]);
+        Assert.Equal(AccountState.SignedIn, setup.Session.Account!.State);
+        setup.AssertNothingThrownLogged();
     }
 
     [Fact]

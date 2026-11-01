@@ -82,6 +82,30 @@ public sealed class TokenVaultTests
         AssertNoTokenInTheLog();
     }
 
+    [Theory]
+    [InlineData("probe", "throwing: the probe failed (IOException).")]
+    [InlineData("save", "throwing: saving the token for github.com/octocat failed (IOException).")]
+    [InlineData("read", "throwing: reading the token for github.com/octocat failed (IOException).")]
+    [InlineData("delete", "throwing: deleting the token for github.com/octocat failed (IOException).")]
+    public async Task A_store_call_that_throws_is_named_by_its_type_alone_and_nothing_it_said_is_logged(string call, string warning)
+    {
+        // D382's H4 for the vault's four catch-alls: a store's exception can quote the token or what
+        // the keychain said, and the app's log file writes an exception's ToString() after its line.
+        var store = new ThrowingStore(call);
+        var vault = new TokenVault(store, _log);
+
+        await vault.KeepAsync(Octocat, Token, _ct);
+        await new TokenVault(store, _log).ReadAsync(Octocat, _ct);
+        await vault.ForgetAsync(Octocat, _ct);
+
+        Assert.Contains((LogLevel.Warning, warning), _log.Lines);
+        Assert.All(_log.Entries, entry => Assert.Null(entry.Exception));
+        foreach (var secret in new[] { Token, ThrowingStore.Secret })
+        {
+            Assert.DoesNotContain(secret, _log.Written, StringComparison.Ordinal);
+        }
+    }
+
     [Fact]
     public async Task Memory_is_asked_before_the_store()
     {
@@ -452,22 +476,31 @@ public sealed class TokenVaultTests
         }
     }
 
-    /// <summary>A store whose save throws, as no store should.</summary>
-    private sealed class ThrowingStore : ITokenStore
+    /// <summary>
+    /// A store whose one call (<c>probe</c>, <c>save</c>, <c>read</c> or <c>delete</c>; the save
+    /// unless given) throws, as no store should, with a message that quotes the token and a made-up
+    /// secret; its other calls answer as a keychain without the entry does.
+    /// </summary>
+    private sealed class ThrowingStore(string throwOn = "save") : ITokenStore
     {
+        public const string Secret = "MADE-UP-SECRET-42";
+
         public string Name => "throwing";
 
         public bool KeepsTokensAcrossRestarts => true;
 
-        public Task<TokenStoreProbe> ProbeAsync(CancellationToken ct) => Task.FromResult(new TokenStoreProbe(true, null));
+        public Task<TokenStoreProbe> ProbeAsync(CancellationToken ct) =>
+            throwOn == "probe" ? throw Broke() : Task.FromResult(new TokenStoreProbe(true, null));
 
         public Task<TokenStoreResult> SaveAsync(TokenKey key, string token, CancellationToken ct) =>
-            throw new InvalidOperationException("The store broke.");
+            throwOn == "save" ? throw Broke() : Task.FromResult(new TokenStoreResult(TokenStoreOutcome.Done));
 
         public Task<TokenRead> ReadAsync(TokenKey key, CancellationToken ct) =>
-            Task.FromResult(new TokenRead(TokenStoreOutcome.NotFound, null, null));
+            throwOn == "read" ? throw Broke() : Task.FromResult(new TokenRead(TokenStoreOutcome.NotFound, null, null));
 
         public Task<TokenStoreResult> DeleteAsync(TokenKey key, CancellationToken ct) =>
-            Task.FromResult(new TokenStoreResult(TokenStoreOutcome.NotFound));
+            throwOn == "delete" ? throw Broke() : Task.FromResult(new TokenStoreResult(TokenStoreOutcome.NotFound));
+
+        private static IOException Broke() => new($"The store broke on {Token}: {Secret}.");
     }
 }

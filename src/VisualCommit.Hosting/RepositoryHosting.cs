@@ -369,9 +369,12 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             }
             catch (Exception ex)
             {
-                // Shown as the run's failure, so that the section does not stay loading.
-                _session.Log.Warning($"{_name}: the pull requests could not be read: {ex.Message}");
-                result = HostingResult<PullRequestList>.Fail(new HostingFailure(HostingFailureKind.Network, ex.Message));
+                // Shown as the run's failure, so that the section does not stay loading. Neither the
+                // line nor the failure holds the exception's text, which can quote what the server
+                // or a proxy sent: the line names it by its type and codes alone (D382, H1's rule),
+                // the failure has the provider's text for no answer.
+                _session.Log.Warning($"{_name}: the pull requests could not be read ({Http.HostingHttpClient.Describe(ex)}).");
+                result = HostingResult<PullRequestList>.Fail(new HostingFailure(HostingFailureKind.Network, Http.HostingHttpTexts.Network(candidate.Provider)) { Provider = candidate.Provider });
             }
 
             _session.Post(() => Finish(candidate, listed, result, done));

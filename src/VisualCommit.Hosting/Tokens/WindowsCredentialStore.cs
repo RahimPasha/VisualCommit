@@ -113,7 +113,7 @@ public sealed class WindowsCredentialStore(IAppLog log, string application = Tok
         }
         catch (Exception exception)
         {
-            log.Warning($"{Name}: the probe failed.", exception);
+            log.Warning($"{Name}: the probe failed ({Http.HostingHttpClient.Describe(exception)}).");
             return new TokenStoreProbe(false, TokenStoreReasons.CannotUse);
         }
     }
@@ -153,7 +153,7 @@ public sealed class WindowsCredentialStore(IAppLog log, string application = Tok
         }
         catch (Exception exception)
         {
-            log.Warning($"{Name}: saving the token for {key.Host}/{key.Account} failed.", exception);
+            log.Warning($"{Name}: saving the token for {key.Host}/{key.Account} failed ({Http.HostingHttpClient.Describe(exception)}).");
             return new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.Refused);
         }
         finally
@@ -227,7 +227,7 @@ public sealed class WindowsCredentialStore(IAppLog log, string application = Tok
         }
         catch (Exception exception)
         {
-            log.Warning($"{Name}: reading the token for {key.Host}/{key.Account} failed.", exception);
+            log.Warning($"{Name}: reading the token for {key.Host}/{key.Account} failed ({Http.HostingHttpClient.Describe(exception)}).");
             return new TokenRead(TokenStoreOutcome.Failed, null, TokenStoreReasons.Refused);
         }
     }
@@ -254,7 +254,7 @@ public sealed class WindowsCredentialStore(IAppLog log, string application = Tok
         }
         catch (Exception exception)
         {
-            log.Warning($"{Name}: deleting the token for {key.Host}/{key.Account} failed.", exception);
+            log.Warning($"{Name}: deleting the token for {key.Host}/{key.Account} failed ({Http.HostingHttpClient.Describe(exception)}).");
             return new TokenStoreResult(TokenStoreOutcome.Failed, TokenStoreReasons.Refused);
         }
     }

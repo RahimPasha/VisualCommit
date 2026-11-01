@@ -2,6 +2,7 @@ using System.Net;
 using VisualCommit.Core;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting.GitHub;
+using VisualCommit.Hosting.Http;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Hosting;
 using Xunit;
@@ -222,6 +223,62 @@ public sealed class GitHubProviderTests
         Assert.DoesNotContain(setup.Fake.PullRequests("octo/hello"), pull => pull.Number > 5);
     }
 
+    [Theory]
+    [InlineData("A title", "feature/login", "main", false, HostingFailureKind.Validation, "A pull request already exists for octo:feature/login.", PullRequestRefusal.AlreadyExists)]
+    [InlineData("A title", "main", "main", false, HostingFailureKind.Validation, "No commits between main and main", PullRequestRefusal.NoCommits)]
+    [InlineData("A title", "nope", "main", false, HostingFailureKind.Validation, "head is invalid", PullRequestRefusal.HeadMissing)]
+    [InlineData("A title", "topic/no-pr", "nope", false, HostingFailureKind.Validation, "base is invalid", PullRequestRefusal.BaseMissing)]
+    [InlineData("", "topic/no-pr", "main", false, HostingFailureKind.Validation, "title is missing", PullRequestRefusal.None)]
+    [InlineData("A title", "fix-typo", "main", true, HostingFailureKind.Forbidden, "pull_requests=write", PullRequestRefusal.None)]
+    public async Task A5s_refusal_is_the_reason_githubs_detail_stands_for_and_its_words_stay_githubs(
+        string title, string head, string @base, bool adaOnTool, HostingFailureKind kind, string detail, PullRequestRefusal refusal)
+    {
+        await using var setup = await Setup.StartAsync();
+        var (token, repository) = adaOnTool ? (setup.Served.AdaToken, Repository("octo", "tool")) : (setup.Served.OctoToken, Repository("octo", "hello"));
+
+        var refused = await setup.Provider.CreatePullRequestAsync(token, repository, new NewPullRequest(title, "", head, null, @base, false), Cancelled);
+
+        var failure = refused.Failure!;
+        Assert.Equal((kind, detail, refusal, HostingProvider.GitHub), (failure.Kind, failure.Detail, failure.Refusal, failure.Provider));
+        Assert.Equal(adaOnTool ? "Resource not accessible by personal access token" : "Validation Failed", failure.Message);
+        Assert.Single(setup.Fake.Requests);
+    }
+
+    [Theory]
+    [InlineData("A pull request already exists for octo:user@fix.", "A pull request already exists for <e-mail>", PullRequestRefusal.AlreadyExists)]
+    [InlineData("No commits between main and user@fix", "No commits between main and <e-mail>", PullRequestRefusal.NoCommits)]
+    public void A5s_refusal_holds_when_the_e_mail_screen_took_a_branch_name_with_an_at_sign(string githubs, string screened, PullRequestRefusal refusal)
+    {
+        // The core screens every failure's detail (D368) before the provider reads it.
+        var detail = HostingHttpClient.ScreenEmail(githubs);
+
+        Assert.Equal((screened, refusal), (detail, GitHubProvider.RefusalOf(detail)));
+    }
+
+    /// <summary>GitLab's form and Azure DevOps' (84 characters, <c>AZDO</c> at 76), each with the detail that names it (D378).</summary>
+    public static TheoryData<string, string> OtherProvidersTokens => new()
+    {
+        { "glpat-FAKE-ada-1", "other-provider:gitlab" },
+        { new string('a', 76) + "AZDO" + "abcd", "other-provider:azure-devops" },
+    };
+
+    [Theory]
+    [MemberData(nameof(OtherProvidersTokens))]
+    public async Task A1_refuses_another_providers_token_without_a_request(string token, string detail)
+    {
+        await using var setup = await Setup.StartAsync();
+
+        var refused = await setup.Provider.CheckTokenAsync(token, Cancelled);
+        var throughTheInterface = await ((IHostingProvider)setup.Provider).CheckTokenAsync(token, null, Cancelled);
+
+        foreach (var failure in new[] { refused.Failure!, throughTheInterface.Failure! })
+        {
+            Assert.Equal((HostingFailureKind.BadCredentials, "Bad credentials", detail, HostingProvider.GitHub), (failure.Kind, failure.Message, failure.Detail, failure.Provider));
+        }
+
+        Assert.Empty(setup.Fake.Requests);
+    }
+
     [Fact]
     public async Task A6_maps_the_branchs_authors_then_looks_up_the_others_once_each()
     {
@@ -417,6 +474,24 @@ public sealed class GitHubProviderTests
         Assert.Equal("https://api.github.com/repos/octo/hello/commits?sha=main&per_page=100", Assert.Single(recorder.Sent).Url.AbsoluteUri);
         Assert.Equal(
             "GitHub named an avatar on https://evil.example:443, which is not GitHub's avatar host: such authors are shown without one.",
+            Assert.Single(log.Lines).Message);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_avatar_whose_host_has_no_idn_form_is_dropped_with_one_warning_and_nothing_throws(bool local)
+    {
+        // D380: Uri.IdnHost throws on such a host (measured), on github.com's rule and on the fake's.
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"login\":\"ada\",\"id\":1003,\"avatar_url\":\"https://a\u200Db.example/u/1003\"}"));
+        var log = new ListLog();
+        using var provider = new GitHubProvider(local ? GitHubEndpoints.Local(47395) : GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+
+        var account = await provider.CheckTokenAsync("github_pat_FAKE-ada-1", Cancelled);
+
+        Assert.Equal(("ada", (Uri?)null), (account.Value!.Login, account.Value.AvatarUrl));
+        Assert.Equal(
+            "GitHub named an avatar on https://(an unreadable host):443, which is not GitHub's avatar host: such authors are shown without one.",
             Assert.Single(log.Lines).Message);
     }
 

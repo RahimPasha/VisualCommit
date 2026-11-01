@@ -76,7 +76,9 @@ public sealed partial class RepositoryHosting
             }
             catch (Exception ex)
             {
-                _session.Log.Warning($"{_name}: the authors' avatars could not be read: {ex.Message}");
+                // AvatarCache's body read can still throw from the HTTP stack (a body that does not
+                // decompress): the exception by its type and codes alone, never its text (D382).
+                _session.Log.Warning($"{_name}: the authors' avatars could not be read ({Http.HostingHttpClient.Describe(ex)}).");
             }
 
             _session.Post(() => FinishAvatars(generation, avatars));

@@ -21,6 +21,7 @@ internal sealed class HostingSessionSetup : IAsyncDisposable
     private readonly List<RecordingHttpHandler> _recorders = [];
     private readonly List<HostingSession> _sessions = [];
     private bool _networkDown;
+    private Func<HttpRequestMessage, Exception?>? _fault;
 
     private HostingSessionSetup(ServedHosting served, ITokenStore tokens)
     {
@@ -60,6 +61,36 @@ internal sealed class HostingSessionSetup : IAsyncDisposable
         set => Volatile.Write(ref _networkDown, value);
     }
 
+    /// <summary>
+    /// A made-up exception's text as .NET's can quote what a server or a proxy sent (D380, D382): the
+    /// token echoed back, a proxy's user and password, an address. None of <see cref="ThrownSecrets"/>
+    /// may reach the log.
+    /// </summary>
+    public string ThrownText => $"Received an invalid header line: 'X-Echo: Bearer {OctoToken}'; proxy 'http://proxyuser:PROXY-SECRET@127.0.0.1:9/'; ada@example.com";
+
+    /// <summary>The parts of <see cref="ThrownText"/> that no log line, nor an exception given to the log, may hold.</summary>
+    public IReadOnlyList<string> ThrownSecrets => [OctoToken, "X-Echo", "PROXY-SECRET", "proxyuser", "ada@example.com", "invalid header line"];
+
+    /// <summary>Asserts that nothing logged so far, an exception given to the log included, holds a part of <see cref="ThrownText"/>.</summary>
+    public void AssertNothingThrownLogged()
+    {
+        var written = Log.Written;
+        foreach (var secret in ThrownSecrets)
+        {
+            Assert.DoesNotContain(secret, written, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// While set, a request for which it gives an exception throws that exception before it reaches
+    /// the fake (D382: one the core does not catch reaches the catch-alls of the session and the tabs).
+    /// </summary>
+    public Func<HttpRequestMessage, Exception?>? Fault
+    {
+        get => Volatile.Read(ref _fault);
+        set => Volatile.Write(ref _fault, value);
+    }
+
     /// <summary>Every request the sessions sent, in order.</summary>
     public IReadOnlyList<RecordingHttpHandler.SentRequest> Sent
     {
@@ -95,11 +126,16 @@ internal sealed class HostingSessionSetup : IAsyncDisposable
     {
         var options = off ?? new HostingOptions(Fake.Endpoints, () =>
         {
-            var recorder = new RecordingHttpHandler(Fake.CreateHandler(), _ =>
+            var recorder = new RecordingHttpHandler(Fake.CreateHandler(), request =>
             {
                 if (NetworkDown)
                 {
                     throw new HttpRequestException("No connection could be made.");
+                }
+
+                if (Fault?.Invoke(request) is { } fault)
+                {
+                    throw fault;
                 }
             });
             lock (_gate)
