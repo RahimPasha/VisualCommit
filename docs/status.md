@@ -109,19 +109,20 @@ Build:
   checklist and "Next step". The root build and the live project's Release build have no
   warnings, and the classes WP0 touched pass (Notes). WP0 was pushed on 2026-11-01 (`e3a8999`).
   (2026-11-01. Week: share not read.)
-- [ ] 5. Harness: 7b's walk-through project, the fakes of Azure DevOps' and GitLab's APIs (their
+- [x] 5. Harness: 7b's walk-through project, the fakes of Azure DevOps' and GitLab's APIs (their
   ports amending D97, as D265 did), the timing script's 7b case and CLAUDE.md's Commands, the
-  real-window project's link to 7b's expectations. Under way: WP-F (the fakes' shared core, the
-  walk-through project, the timing script's case, section 2) merged at `564dad4` and its CLAUDE.md
-  rows at `900ad1a`; WP-FL (the fake of GitLab, section 4) merged at `7780908`, with its review's
-  fixes; WP-FA (the fake of Azure DevOps, section 3) is wave 2's.
+  real-window project's link to 7b's expectations. WP-F (the fakes' shared core, the walk-through
+  project, the timing script's case, the real-window project's link, section 2) merged at
+  `564dad4` and its CLAUDE.md rows at `900ad1a`; WP-FL (the fake of GitLab, section 4) merged at
+  `7780908` and WP-FA (the fake of Azure DevOps, section 3) at `e995fc4`, each with its review's
+  fixes. (2026-11-01. Week: share not read.)
 - [ ] 6. The provider model for three providers: one account per provider (D348), Azure DevOps'
   and GitLab's remotes recognised from their URLs (D347), their tokens in the OS keychain (R3).
   Tests.
 - [ ] 7. Azure DevOps' API: a token checked at sign-in, the organization's repositories, a
   repository's pull requests, creating one; against its fake. Tests. Under way: the shared HTTP
-  core (WP-H, section 5) merged at `3591dc4`, with wave 1's adversarial fixes (D380, D382); WP-AZ
-  (section 6) is wave 2's.
+  core (WP-H, section 5) merged at `3591dc4`, with wave 1's adversarial fixes (D380, D382), and
+  WP-FA's fake at `e995fc4`; WP-AZ (section 6) is being built from `e995fc4`.
 - [ ] 8. GitLab's API: a token of either kind checked at sign-in (D345), the account's projects, a
   project's merge requests, creating one; against its fake. Tests. Under way: on WP-H's core and
   WP-FL's fake; WP-GL (section 7) is being built from `7780908`.
@@ -367,11 +368,10 @@ its run 41321215497 met in a test of 7a's (CI section); read the run that commit
 job and each Test step against four fifths (0.6).
 
 Wave 2 (design 0.4) is being built beside it: WP-FL (the fake of GitLab, section 4) is merged at
-`7780908`; WP-FA (`wip/p7b-fake-azure`, section 3, in a worktree made from `b0151bb` under
-`D:/Projects/Personal/vc-wt/p7b-fake-azure`) and WP-GL (`wip/p7b-gitlab`, section 7, made from
-`7780908` under `D:/Projects/Personal/vc-wt/p7b-gitlab`) are being built, and WP-AZ
-(`wip/p7b-azure`, section 6, `p7b-azure`) follows once WP-FA is merged, at most three at once. Each
-is built, reviewed and fixed in its worktree (the
+`7780908` and WP-FA (the fake of Azure DevOps, section 3) at `e995fc4`; WP-GL (`wip/p7b-gitlab`,
+section 7, in a worktree made from `7780908` under `D:/Projects/Personal/vc-wt/p7b-gitlab`) and
+WP-AZ (`wip/p7b-azure`, section 6, made from `e995fc4` under `D:/Projects/Personal/vc-wt/p7b-azure`)
+are being built. Each is built, reviewed and fixed in its worktree (the
 clients also hunted adversarially) before the lead merges it with `--no-ff`, builds, runs its
 classes, removes the worktree and stops its fsmonitor daemon; the `wip/` branches are not pushed.
 No wave 2 section names a lagged list. CI is read after each push. At the last of the four merges
@@ -390,7 +390,7 @@ every commit.
   `review/` (`findings.md`, one file per finding in `f/`, `review-raw.json`) and `fix/` (the
   design split per section, the fixers' and checkers' reports). Nothing there is needed to build:
   the design and its decisions hold what the builders need. Wave 1's worktrees and `wip/` branches
-  were removed at its merges, and so were WP-FL's at its merge. Wave 2's others exist from
+  were removed at its merges, and so were WP-FL's and WP-FA's at theirs. Wave 2's others exist from
   2026-11-01 (Next step); a session that finds them after a break reads each branch's
   `git log <its base>..` (the base Next step names for it) before going on. Wave 1's adversarial findings and the lead's
   rulings on them lie in `D:/Projects/Personal/phase7b-work/verify/` (`findings-wave1.md`,
