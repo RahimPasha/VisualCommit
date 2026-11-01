@@ -1522,6 +1522,34 @@ Both classes pass; each answer's mark is in its doc comment and 4.7 heads `.Rout
 picture changes; no token or address of the owner's, and no value from the research's captures
 (section 1), in the files.
 
+**As built** (WP-FL, `4937997`, `33e3a0a`, the review's fixes `56218ae`, 2026-11-01). Where the build settles what 4.2 to 4.5 left open:
+- `AddToken`'s n counts per user. The fine-grained default is D364's list (no Personal Access Token:
+  Read); `FakeGitLabPermissions` holds the labels, scopes and defaults. Expiry is read on `HarnessTime`'s
+  date. Grants are by path, a project's own moving with `Move`; `order_by=name` and `path` sort by the
+  last segment. Public beyond 1.9: settable `Visibility`, `Description`, `LastActivityAt`;
+  `FakeMergeRequest.State`, `HeadSha`. `AddListedProjects`' projects are private and git-less
+  (`empty_repo`, `main`), listed through a grant or the user's own namespace alone.
+- Check 3 without a token: `user`, `self` and writes 401; a project's reads go on, an unknown or hidden
+  one 404 "404 Project Not Found" (MEASURED r6 3.2). Check 4's lists: G2.3's three, `api read_api` on
+  other reads, `api` on writes (ASSUMED); check 5 names `user` on `user`, `self`, `projects`. A route miss
+  is 404 E before any check; a non-digit iid's 400 E after them.
+- Create: (a) joins in Grape's declared order, title, source_branch, target_branch (ASSUMED); (e) takes
+  the whole fork network (READ `validate_fork`); (f) names `!<iid>`, a fork's too (READ `to_reference`,
+  not r6 5.2's `path!iid`). The build's other ASSUMED choices head `.Router.cs` for WP-LIVE.
+- `author.public_email` and `email` are the made-up address. An open MR whose source branch is gone
+  keeps its head ref, no `Errors` line (7a's records one). The ref sync reads each state once.
+- Git: the `.git`-less `info/refs` 301 has key `page` and an absolute `Location`; the 401 body is the
+  server's "Authentication required.", realm GitLab. Refusals keep `GitAccess#check`'s order: a legacy
+  token's missing ability, then a hidden project's 404 text (as a 403), then a fine-grained label. The
+  token reaches `MayPush`, `PushRefusal` and `FetchRefusal` through a `[ThreadStatic]` set by
+  `LoginOfToken`: `AuthRemoteServer.HostAccess` asks the four callbacks in one synchronous call, which a
+  change there must keep.
+- Outside 4.1's list: `Phase7bSupportTests`' loopback probe (WP-F's) takes `/nothing/here.git/info/refs`,
+  since the fake answers 4.5's 301 to `<path>.git/info/refs` for a `.git`-less path;
+  `Scenarios.Hosting7bGitLabGroup` is new.
+- Git 2.43 was not run here: the research's MinGit lacks `git-http-backend`; the moved-project test uses
+  nothing version-bound, and CI's containers run it.
+
 ## 5. WP-H: the shared HTTP core
 
 ### 5.1 Goal and files

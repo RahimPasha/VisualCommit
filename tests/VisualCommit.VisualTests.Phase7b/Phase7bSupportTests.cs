@@ -125,8 +125,9 @@ public sealed class Phase7bSupportTests : Phase7bChecks
             using var client = new HttpClient(create!());
             await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync(new Uri("https://example.com/"), Cancelled));
 
-            // A loopback request goes through to the fake (the skeletons claim nothing yet: git's 404).
-            using var passed = await client.GetAsync(new Uri($"http://127.0.0.1:{port}/nothing/here/info/refs"), Cancelled);
+            // A loopback request goes through to the fake: git's 404 for a repository none serves (a
+            // .git-less info/refs would be the fake of GitLab's 301, design 4.5).
+            using var passed = await client.GetAsync(new Uri($"http://127.0.0.1:{port}/nothing/here.git/info/refs"), Cancelled);
             Assert.Equal(HttpStatusCode.NotFound, passed.StatusCode);
         }
 
