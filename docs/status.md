@@ -111,17 +111,24 @@ Build:
   (2026-11-01. Week: share not read.)
 - [ ] 5. Harness: 7b's walk-through project, the fakes of Azure DevOps' and GitLab's APIs (their
   ports amending D97, as D265 did), the timing script's 7b case and CLAUDE.md's Commands, the
-  real-window project's link to 7b's expectations.
+  real-window project's link to 7b's expectations. Under way: WP-F (the fakes' shared core, the
+  walk-through project, the timing script's case, section 2) merged at `564dad4` and its CLAUDE.md
+  rows at `900ad1a`; WP-FA and WP-FL (the two fakes, sections 3 and 4) are wave 2's.
 - [ ] 6. The provider model for three providers: one account per provider (D348), Azure DevOps'
   and GitLab's remotes recognised from their URLs (D347), their tokens in the OS keychain (R3).
   Tests.
 - [ ] 7. Azure DevOps' API: a token checked at sign-in, the organization's repositories, a
-  repository's pull requests, creating one; against its fake. Tests.
+  repository's pull requests, creating one; against its fake. Tests. Under way: the shared HTTP
+  core (WP-H, section 5) merged at `3591dc4`, with wave 1's adversarial fixes (D380, D382); WP-AZ
+  (section 6) is wave 2's.
 - [ ] 8. GitLab's API: a token of either kind checked at sign-in (D345), the account's projects, a
-  project's merge requests, creating one; against its fake. Tests.
+  project's merge requests, creating one; against its fake. Tests. Under way: on WP-H's core;
+  WP-GL (section 7) is wave 2's.
 - [ ] 9. The account's token on the app's git calls to the remotes it covers (D350): gitlab.com's,
   and Azure DevOps' signed-in organization's alone; the push guard and the prompt group for the new
-  hosts, as the design decides. Tests.
+  hosts, as the design decides. Tests. Under way: WP-C (`Select` with a coverage, the push guard
+  and the prompts, section 8) merged at `6586066`, with wave 1's adversarial fixes (D379, D381);
+  the session's union of the coverages is WP-S's (section 9, wave 3).
 - [ ] 10. Sign-in dialog and the Accounts section with an account of each provider (D345, D348).
 - [ ] 11. Browse and clone the repositories of an Azure DevOps and a GitLab account.
 - [ ] 12. The left panel's section for each provider (GitLab's merge requests, D351), its menu,
@@ -177,6 +184,15 @@ s, `macos-latest` 29 min 22 s, `ubuntu-latest` 4 min 4 s (job 5 min 16 s), the c
 and 5 min 56 s (jobs 6 min 43 s and 8 min 18 s). The jobs API gives the Windows and macOS jobs of
 that run an end before their start (the night of 2026-11-01's clock change; read an hour later, 22
 min 59 s and 31 min 44 s).
+
+[41311809889](https://github.com/RahimPasha/VisualCommit/actions/runs/41311809889) on WP-C's merge
+`6586066` failed in all five jobs: `HostingLinks.Next`'s relative-link row on Linux, macOS and both
+containers (off Windows .NET reads `/p?page=2` as a file address), and five of
+`CoverageGitMatchTests`' redirect cases on Windows (2.56.0.windows.2, libcurl 8.22.0) and macOS
+(Homebrew's 2.56.0), whose curl keeps another user's name behind the test host's relative 301; both
+are in the design's As built for sections 5 and 8. Its Test steps: `windows-latest` 26 min 25 s,
+`macos-latest` 22 min 37 s, `ubuntu-latest` 5 min 59 s, the containers 4 min 36 s and 6 min 12 s,
+each under four fifths. The fix is the commit after `e14c3ab`; its run is read in Next step.
 
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
@@ -334,18 +350,21 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wave 1 (design 0.4) is being built: WP-F (`wip/p7b-fake`, section 2), WP-H (`wip/p7b-http`,
-section 5) and WP-C (`wip/p7b-credentials`, section 8), side by side, each in a worktree made from
-`e3a8999` (the pushed phase branch), under `D:/Projects/Personal/vc-wt/p7b-fake`, `p7b-http` and
-`p7b-credentials`; each builder is briefed with sections 0, 1 and its own, and each package is
-reviewed and fixed in its worktree before the lead merges it. The `wip/` branches are not pushed.
-The lead then merges each back with `--no-ff`, removing its worktree and stopping its fsmonitor
-daemon at once: at WP-H's merge `VisualCommit.Hosting.Tests` and 7a's walk-through (5.6); at WP-F's
-the CLAUDE.md rows of 2.9 and the lagged list (0.4); at the last of the three the whole default run
-through `bash scripts/heavy-run.sh`, which also measures 16.2's order of twelve projects at four
-lanes and App.Tests' own time (0.6). WP0's push (`e3a8999`) started CI run 41282019992, read before
-the first merge, each Test step against four fifths of its limit (0.6). Until the reset of
-2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if
+Wave 1 is merged (WP-F `564dad4`, WP-H `3591dc4`, WP-C `6586066`; its whole default run passed,
+Notes). The commit that records this fixes the two faults CI's run 41311809889 found (CI section);
+read the run its push starts, each job and each Test step against four fifths (0.6).
+
+Wave 2 (design 0.4) is being built beside it: WP-FA (`wip/p7b-fake-azure`, section 3) and WP-FL
+(`wip/p7b-fake-gitlab`, section 4), each in a worktree made from that commit under
+`D:/Projects/Personal/vc-wt/p7b-fake-azure` and `p7b-fake-gitlab`, then WP-AZ (`wip/p7b-azure`,
+section 6, `p7b-azure`) once WP-FA is merged and WP-GL (`wip/p7b-gitlab`, section 7, `p7b-gitlab`)
+once WP-FL is, at most three at once. Each is built, reviewed and fixed in its worktree (the
+clients also hunted adversarially) before the lead merges it with `--no-ff`, builds, runs its
+classes, removes the worktree and stops its fsmonitor daemon; the `wip/` branches are not pushed.
+No wave 2 section names a lagged list. CI is read after each push. At the last of the four merges
+the lead runs the whole default run through `bash scripts/heavy-run.sh`. Then wave 3: WP-S, the
+owner's 15.8 steps and stage 1 of the live command before WP-S's merge, then WP-LF. Until the reset
+of 2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if
 it runs out (D344).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
@@ -357,9 +376,30 @@ every commit.
   `research/` (r1 to r8 with the gap rounds), `design/` (the drafts and the lead's 31 rulings),
   `review/` (`findings.md`, one file per finding in `f/`, `review-raw.json`) and `fix/` (the
   design split per section, the fixers' and checkers' reports). Nothing there is needed to build:
-  the design and its decisions hold what the builders need. Wave 1's three worktrees and their
-  `wip/p7b-*` branches exist from 2026-11-01 (Next step); a session that finds them after a break
-  reads each branch's `git log e3a8999..` before going on.
+  the design and its decisions hold what the builders need. Wave 1's worktrees and `wip/` branches
+  were removed at its merges. Wave 2's exist from 2026-11-01 (Next step); a session that finds
+  them after a break reads each branch's `git log <its base>..` (the base is the phase branch's
+  commit that recorded wave 1's run) before going on. Wave 1's adversarial findings and the lead's
+  rulings on them lie in `D:/Projects/Personal/phase7b-work/verify/` (`findings-wave1.md`,
+  `rulings-wave1.md`); D379 to D382 hold what they settled.
+- **Wave 1's whole default run** (2026-11-01, 06:49 to 08:07, on `6586066` with `e14c3ab`'s docs,
+  through `bash scripts/heavy-run.sh`, four projects at once): 6,862 tests, 6,858 passed, 4 skipped
+  (the real keychains' three and `Off_Windows_…`), none failed, 1 h 16 min 56 s. MTP started
+  Phase5Undo, Git.Tests, Phase6 and Hosting.Tests first, and App.Tests when Hosting.Tests ended, so
+  the run ends at Hosting.Tests' time plus App.Tests' own (16.2). Projects ended after: Hosting.Tests
+  15 min 34 s, Phase6 37 min 49 s, Phase7b 41 min 24 s (3 min 35 s of its own, WP-F's tests),
+  Phase5Undo 45 min 49 s, Git.Tests 47 min 52 s, phases 0 to 2's 55 min 22 s, Phase4 56 min 4 s,
+  Phase6Look 62 min 6 s, Phase5 69 min 57 s, Phase7a 71 min 2 s, Phase3 74 min 21 s, App.Tests
+  76 min 53 s (61 min 20 s of its own, 59 min 31 s at 7a's gate). Before it the lead ran
+  Hosting.Tests (724 passed, 4 skipped, 3 min 52 s), 7a's walk-through (205 of 205, its pictures
+  differing from 7a's list only where they vary by nature: n02b and n07a's progress bar, b09a and
+  n06b's caret, b06a's fallback port) and the lagged list with `VISUALCOMMIT_WATCHER_LAG_MS=1500`
+  (all passed, 06:32 to 06:49). The log is `$TMP/p7b-runs/full-w1.txt`.
+- **CI found what the laptop could not** (run 41311809889): .NET off Windows and other git and curl
+  builds. MinGit 2.56.0.windows.2, CI's Windows git, lies in
+  `D:/Projects/Personal/phase7b-work/research/scratch-g3-git/git-2.56.0.2/`, given the install's
+  `git-http-backend.exe` so that `AuthRemoteServer` runs under it: put its `cmd` first on `PATH`
+  for one class run (plain `dotnet test`) to see CI's Windows git here.
 - **WP0** (`e8a275d` and its review's fixes) was built in the main checkout. The readings that
   differ from the design's text, or settle a choice it left open, are in the design's 1.10, "As
   built". The review accepted these other readings:

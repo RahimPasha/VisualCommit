@@ -253,7 +253,7 @@ public sealed class CoverageGitMatchTests
 
     /// <summary>
     /// D379 (R2, R3) over a transport, as wave 1's finding showed it: a local host serves
-    /// <c>g/p.git</c> and answers <c>/g/p/info/refs</c> with gitlab.com's 301 into
+    /// <c>g/p.git</c> and answers <c>/g/p/info/refs</c> with gitlab.com's absolute 301 into
     /// <c>/g/p.git/info/refs</c>, and a second port 308s every request into the first, in the role
     /// of <c>http://</c> and <c>www.</c> (r6 6.1). git follows them and builds the credential again
     /// from the target, without bob's name, so the binding Select gave before D379 answers bob's
@@ -261,6 +261,12 @@ public sealed class CoverageGitMatchTests
     /// (D82). <c>git credential fill</c> cannot show this: it follows no redirect. The hunt on the
     /// fixed code added bob's name with a no-break space (<c>bob&lt;U+00A0&gt;</c>), which git reads
     /// as a user and the app's reading did not: Select now leaves the host unbound beside it.
+    /// gitlab.com's <c>Location</c> names the whole address
+    /// (<c>https://gitlab.com/gitlab-org/cli.git/info/refs?service=git-upload-pack</c>, MEASURED
+    /// 2026-11-01). A relative one curl resolves against bob's URL, his name kept, and whether git's
+    /// credential then has it differs by curl: 2.56.0.windows.2 (libcurl 8.22.0) and CI's macOS
+    /// 2.56.0 keep it, so the app's helper refuses him, while 2.56.0.windows.4 (8.23.0), CI's
+    /// Ubuntu 2.56.0 and 2.43 drop it (CI's run 41311809889, MEASURED on the laptop).
     /// </summary>
     [Theory]
     [InlineData(false, "/g/p", "bob")]
@@ -276,14 +282,16 @@ public sealed class CoverageGitMatchTests
         var folder = repo.SiblingPath("gitlab");
         await repo.GitAsync("clone", "--quiet", "--bare", "--no-hardlinks", repo.Path, Path.Combine(folder, "g", "p.git"));
         var empty = Directory.CreateDirectory(repo.SiblingPath("www")).FullName;
+        AuthRemoteServer? self = null;
         await using var host = await AuthRemoteServer.StartForHostAsync(
             folder,
             new AuthRemoteHostOptions(
-                new RedirectRoutes(path => path == "/g/p/info/refs", 301, request => "/g/p.git/info/refs?" + request.Query),
+                new RedirectRoutes(path => path == "/g/p/info/refs", 301, request => $"http://127.0.0.1:{self!.Port}/g/p.git/info/refs?{request.Query}"),
                 token => token == Token ? "ada" : null,
                 _ => false,
                 (_, _) => false,
                 Realm: "GitLab"));
+        self = host;
         host.Serve("g/p");
         await using var www = await AuthRemoteServer.StartForHostAsync(
             empty,
@@ -336,12 +344,13 @@ public sealed class CoverageGitMatchTests
     /// <summary>
     /// The hunt on the fixed code, its third finding (2026-11-01), over a transport: git reads
     /// <c>&lt;helper&gt;::&lt;address&gt;</c> as the address over <c>git-remote-&lt;helper&gt;</c>,
-    /// here remote-curl. Bob's <c>.git</c>-less URL so written reaches the local host, whose 301
-    /// leads <c>/g/p/info/refs</c> into <c>/g/p.git/info/refs</c> as gitlab.com's does (r6 6.1);
-    /// git builds the credential again from the target without bob's name, and the binding Select
-    /// gave beside it before the fix answers bob's fetch with the account's token, the user's own
-    /// helper unasked (MEASURED by the hunt on 2.56.0.windows.4 and 2.43.0.windows.1). Select
-    /// now binds nothing beside a URL in that grammar, and the user's own helper is asked (D82).
+    /// here remote-curl. Bob's <c>.git</c>-less URL so written reaches the local host, whose
+    /// absolute 301 leads <c>/g/p/info/refs</c> into <c>/g/p.git/info/refs</c> as gitlab.com's does
+    /// (r6 6.1; its <c>Location</c> form, and why a relative one differs by curl, are with the test
+    /// above); git builds the credential again from the target without bob's name, and the binding
+    /// Select gave beside it before the fix answers bob's fetch with the account's token, the
+    /// user's own helper unasked (MEASURED by the hunt on 2.56.0.windows.4 and 2.43.0.windows.1).
+    /// Select now binds nothing beside a URL in that grammar, and the user's own helper is asked (D82).
     /// </summary>
     [Theory]
     [MemberData(nameof(CurlHelperPrefixes))]
@@ -351,14 +360,16 @@ public sealed class CoverageGitMatchTests
         await repo.CommitFileAsync("README.md", "first\n", "First");
         var folder = repo.SiblingPath("gitlab");
         await repo.GitAsync("clone", "--quiet", "--bare", "--no-hardlinks", repo.Path, Path.Combine(folder, "g", "p.git"));
+        AuthRemoteServer? self = null;
         await using var host = await AuthRemoteServer.StartForHostAsync(
             folder,
             new AuthRemoteHostOptions(
-                new RedirectRoutes(path => path == "/g/p/info/refs", 301, request => "/g/p.git/info/refs?" + request.Query),
+                new RedirectRoutes(path => path == "/g/p/info/refs", 301, request => $"http://127.0.0.1:{self!.Port}/g/p.git/info/refs?{request.Query}"),
                 token => token == Token ? "ada" : null,
                 _ => false,
                 (_, _) => false,
                 Realm: "GitLab"));
+        self = host;
         host.Serve("g/p");
         var coverage = new GitCoverage(new AccountKey(HostingProvider.GitLab, $"127.0.0.1:{host.Port}", "ada"), new Uri($"http://127.0.0.1:{host.Port}/"))
         {

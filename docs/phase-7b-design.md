@@ -1717,6 +1717,14 @@ differs from 5.1 to 5.5 or settles what they left open:
   finishes (`Message`, `Detail`, `Url`'s path) and its warning, and no id holding one. `Failed` and
   `MalformedAnswer` are given no token. An `ETag` beyond `!` to `~` is not kept (D380). No 7a
   assertion changed; `HostingSessionSetup.Fault` throws a given exception.
+- CI at WP-C's merge (run 41311809889 on `6586066`): off Windows `Uri.TryCreate("/p?page=2",
+  UriKind.Absolute)` gives `file:///p%3Fpage=2`, so `HostingLinks.Next` gave a relative link as a next
+  page on Linux and macOS (on Windows `//host/p` reads as a share). It now takes only a text that
+  begins with an RFC 3986 scheme; two more rows of its theory. A redirect's `Location` is read by
+  .NET's header parser, which keeps a relative one relative on every platform (the relative-redirect
+  tests passed there). Wave 2's clients check the scheme of every address they read from an answer;
+  7a's `GitHubProvider.Info` (`clone_url`, `html_url`) and `AuthorMapStore`'s avatar do not: the
+  review before the gate weighs them.
 
 ## 6. WP-AZ: Azure DevOps' client and provider
 
@@ -2432,6 +2440,17 @@ is in an argument, URL, config value, log or file.
 - For the lead: `docs/architecture.md:2257` quotes the old warning; `GitRepository.PullRequests.cs:30`
   names `refs/pull` alone (WP-P). For WP-AZ and WP-GL (and WP-S, which unions them): `Select` throws
   on `OrganizationHost` without `Organization` and on `GitTwin` with it.
+- CI at WP-C's merge (run 41311809889 on `6586066`): the same-port cases of the redirect theory and
+  the two `<helper>::` transport tests failed on Windows (2.56.0.windows.2, libcurl 8.22.0) and
+  macOS (Homebrew's 2.56.0), at their "before" half: git asked the app's helper for bob, so no
+  token went. The local host's 301 gave a relative `Location`, which curl resolves against bob's
+  URL, his name kept, and whether git's rebuilt credential has it differs by curl: those two keep
+  it, 2.56.0.windows.4 (8.23.0), CI's Ubuntu 2.56.0 and 2.43 drop it (MEASURED on the laptop with
+  MinGit 2.56.0.windows.2 given the install's `git-http-backend`). gitlab.com's 301 names the
+  whole address (`Location: https://gitlab.com/gitlab-org/cli.git/info/refs?service=git-upload-pack`,
+  MEASURED 2026-11-01), so the tests' host now sends it absolute, as the IDN test's did, and the
+  token is taken on both gits; no assertion changed. Behind a host that redirects relatively, such
+  a curl keeps another user's name and D82's order is lost instead; `Select`'s drop holds either way.
 
 ## 9. WP-S: the session for three providers
 
@@ -3735,6 +3754,11 @@ Each point names what settles it and who meets it.
 
 - MTP's order of twelve projects at four lanes (0.6): wave 1's full run (0.4). CI's Test steps against
   four fifths of the new limits (D377; 56 of 70): the lead at each merge before the counted round (0.6).
+  Settled by wave 1's run (2026-11-01, 1 h 16 min 56 s, 6,862 tests): MTP starts Phase5Undo,
+  Git.Tests, Phase6 and Hosting.Tests, and App.Tests (61 min 20 s of its own) takes the first free
+  lane, Hosting.Tests' at 15 min 34 s; the 7b project takes Phase6's, after App.Tests has started, so
+  r4 5.2's +15 does not arise. The run ends at Hosting.Tests' time plus App.Tests' own: each minute
+  wave 2 adds to Hosting.Tests (0.6's 5 to 9) adds one to the run (status.md's Notes).
 - FETCH_HEAD's line for `refs/merge-requests/<iid>/head` (ASSUMED): WP-P's test on 2.56, CI on 2.43. The
   GitLab twin over HTTP before 2.46: WP-B's `CloneFromAccountTests` on CI's 2.43 containers (4.5's 301).
 - Up to three keychain reads at start (9.4) on a slow macOS store, against git's 10 s wait: CI, the gate.

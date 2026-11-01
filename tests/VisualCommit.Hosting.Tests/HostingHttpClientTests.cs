@@ -775,6 +775,8 @@ public sealed class HostingHttpClientTests
     [InlineData("<https://a.example/p?page=9>; rel=\"last\", <https://a.example/p?page=3>; rel=\"prev next\"", "https://a.example/p?page=3")]
     [InlineData("<https://a.example/p?page=2>;rel=\"NEXT\"", "https://a.example/p?page=2")]
     [InlineData("</p?page=2>; rel=\"next\"", null)]
+    [InlineData("<//a.example/p?page=2>; rel=\"next\"", null)]
+    [InlineData("<\\\\a.example\\p?page=2>; rel=\"next\"", null)]
     [InlineData("<https://a.example/p?page=1>; rel=\"prev\"", null)]
     [InlineData("", null)]
     public void HostingLinks_reads_the_next_page_of_a_link_header_as_given(string link, string? next)

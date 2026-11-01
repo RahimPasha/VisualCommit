@@ -76,7 +76,9 @@ internal static partial class HostingLinks
 {
     /// <summary>
     /// The URL of <c>rel="next"</c> in <paramref name="headers"/>' <c>Link</c>, as given; null when
-    /// there is none or it is not an absolute address. One whose host has no IDN form is given too:
+    /// there is none or it is not an absolute address, one that begins with a scheme (RFC 3986):
+    /// off Windows .NET reads <c>/p?page=2</c> as <c>file:///p%3Fpage=2</c> (CI's run 41311809889),
+    /// and on Windows <c>//host/p</c> as a share. One whose host has no IDN form is given too:
     /// the core's origin check refuses it, so its list is <see cref="HostingFailureKind.Malformed"/> (D380).
     /// </summary>
     public static Uri? Next(IReadOnlyDictionary<string, string> headers)
@@ -93,7 +95,8 @@ internal static partial class HostingLinks
         {
             if (match.Groups["rel"].Value.Split(' ', StringSplitOptions.RemoveEmptyEntries).Contains("next", StringComparer.OrdinalIgnoreCase))
             {
-                return Uri.TryCreate(match.Groups["url"].Value, UriKind.Absolute, out var next) ? next : null;
+                var url = match.Groups["url"].Value;
+                return SchemePattern().IsMatch(url) && Uri.TryCreate(url, UriKind.Absolute, out var next) ? next : null;
             }
         }
 
@@ -102,4 +105,7 @@ internal static partial class HostingLinks
 
     [GeneratedRegex("<(?<url>[^>]*)>\\s*;\\s*rel=\"(?<rel>[^\"]*)\"", RegexOptions.CultureInvariant)]
     private static partial Regex LinkPattern();
+
+    [GeneratedRegex("^[A-Za-z][A-Za-z0-9+.-]*:", RegexOptions.CultureInvariant)]
+    private static partial Regex SchemePattern();
 }
