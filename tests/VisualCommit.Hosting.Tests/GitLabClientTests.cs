@@ -449,12 +449,19 @@ public sealed class GitLabClientTests
 
     // Made up, a broken or hostile server's: 7.3 names one redirect to follow, a moved project's 301
     // to /api/v4/projects/<id> on the same origin (r6 3.2, MEASURED). A GET redirected outside the
-    // API (a token page, the OAuth endpoint, either named through ..) is not followed with the token.
+    // API (a token page, the OAuth endpoint, either named through .., plain or escaped, which .NET
+    // leaves as written once a slash is escaped) is not followed with the token.
     [Theory]
     [InlineData(301, "/-/user_settings/personal_access_tokens")]
     [InlineData(302, "/oauth/token")]
     [InlineData(307, "https://gitlab.com/oauth/token")]
     [InlineData(308, "/api/v4/../oauth/token")]
+    [InlineData(301, "/api/v4/..%2F..%2Foauth%2Ftoken")]
+    [InlineData(301, "/api/v4/%2e%2e%2f%2e%2e%2foauth/token")]
+    [InlineData(302, "/api/v4/projects/5001%2F..%2F..%2F..%2Foauth/token")]
+    [InlineData(302, "/api/v4/.%2Fprojects/5001")]
+    [InlineData(307, "/api/v4/..%5C..%5Coauth/token")]
+    [InlineData(308, "/api/v4/projects%5C5001")]
     public async Task A_GET_redirected_outside_the_API_is_Malformed_and_nothing_is_sent_there(int status, string location)
     {
         var log = new ListLog();

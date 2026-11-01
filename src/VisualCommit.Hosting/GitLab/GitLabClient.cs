@@ -91,12 +91,23 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
     /// A GET's is refused alike when its <c>Location</c>'s path is not under the API's
     /// (<see cref="GitLabEndpoints.ApiBase"/>'s, ordinal): 7.3 follows a moved project's 301 to
     /// <c>/api/v4/projects/&lt;id&gt;</c> alone, and the core would send the token on to any path of
-    /// the origin (a token page, <c>/oauth/token</c>).
+    /// the origin (a token page, <c>/oauth/token</c>). The path is read as a server that decodes
+    /// <c>%2F</c>, <c>%2E</c> and <c>%5C</c> reads it: .NET removes a plain or <c>%2E</c> dot
+    /// segment but leaves <c>/api/v4/..%2F..%2Foauth%2Ftoken</c> as written, so a decoded path with a
+    /// dot segment or a backslash is outside too.
     /// </summary>
     public override HostingFailure? RefuseRedirect(HostingExchange exchange, Uri location) =>
-        exchange.Method == HttpMethod.Get && location.AbsolutePath.StartsWith(Endpoints.ApiBase.AbsolutePath, StringComparison.Ordinal)
+        exchange.Method == HttpMethod.Get && InApi(location)
             ? null
             : new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(Provider));
+
+    private bool InApi(Uri location)
+    {
+        var path = Uri.UnescapeDataString(location.AbsolutePath);
+        return path.StartsWith(Endpoints.ApiBase.AbsolutePath, StringComparison.Ordinal)
+            && !path.Contains('\\', StringComparison.Ordinal)
+            && !path.Split('/').Any(segment => segment is "." or "..");
+    }
 
     /// <summary>
     /// The status; for a refused redirect of a non-GET <c>&lt;status&gt;, a redirected &lt;method&gt;</c>,

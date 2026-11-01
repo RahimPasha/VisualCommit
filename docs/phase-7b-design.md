@@ -2139,8 +2139,9 @@ recognition takes no other host or port; 1.4's signatures hold; CI's five jobs a
 - Words: a 408 or 5xx without GitLab's gives the shared "GitLab had a problem: HTTP <n>.", as
   GitHub's and 6.3's (WP-B's `Describe` shows its own `ServerError` text); another status `<code>
   <reason>`. `Detail` is shape F's code alone. A body not UTF-8 holds no words. A refusal needs a
-  POST to `…/merge_requests`. Only a GET's redirect under the API's path is followed; another is
-  `Malformed`, nothing sent on (`<status>, a redirected POST`, `…, redirected outside the API`).
+  POST to `…/merge_requests`. Only a GET's redirect under the API's path, read decoded with no dot
+  segment or backslash (`..%2F`), is followed; another is `Malformed`, nothing sent on
+  (`<status>, a redirected POST`, `…, redirected outside the API`).
 - `RetryAt`: `Retry-After`'s seconds or IMF-fixdate, else the next source, within a day of now; a
   `ratelimit-reset` past 9999 is `Malformed` (D380).
 - Local refusals set `Provider` GitLab; `OtherProviderDetail` equals GitHub's. A1: a `username` not
