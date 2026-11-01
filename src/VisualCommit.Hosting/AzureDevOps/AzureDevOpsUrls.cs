@@ -45,7 +45,8 @@ internal static class AzureDevOpsUrls
     /// (D360) and is kept as written; <c>DefaultCollection</c> is no organization of dev.azure.com's;
     /// <c>_git</c>, <c>_full</c>, <c>_optimized</c> and <c>DefaultCollection</c> match without case and
     /// with their escapes decoded (<c>%5Fgit</c> is <c>_git</c>, as git and .NET read it);
-    /// a project starting with <c>_</c> is refused; project and repository are percent-decoded as UTF-8.
+    /// a project or a repository starting with <c>_</c> once decoded is refused, in every form (no
+    /// Azure DevOps name starts so); project and repository are percent-decoded as UTF-8.
     /// The host is <see cref="AzureDevOpsEndpoints.Host"/> for every form (r5 6.2). An <c>http</c> or
     /// <c>https</c> URL's host and port are read as .NET reads them, as
     /// <see cref="CredentialBinding.Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/>
@@ -304,12 +305,16 @@ internal static class AzureDevOpsUrls
         return rest is [var repository] ? Named(organization, project ?? repository, repository) : null;
     }
 
-    /// <summary>The names decoded; null when one is empty or the project starts with <c>_</c>.</summary>
+    /// <summary>
+    /// The names decoded; null when one is empty or either starts with <c>_</c>: Azure DevOps lets no
+    /// project's or repository's name start so, while its own segments (<c>_git</c>, <c>_full</c>,
+    /// <c>_optimized</c>) do, so <c>…/p/_git/_full/</c> names no repository.
+    /// </summary>
     private static (string Organization, string Project, string Repository)? Named(string organization, string projectText, string repositoryText)
     {
         var project = Uri.UnescapeDataString(projectText);
         var repository = Uri.UnescapeDataString(repositoryText);
-        return project.Length > 0 && repository.Length > 0 && !project.StartsWith('_')
+        return project.Length > 0 && repository.Length > 0 && !project.StartsWith('_') && !repository.StartsWith('_')
             ? (organization, project, repository)
             : null;
     }

@@ -134,7 +134,8 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
 
     /// <summary>
     /// A1 (6.4, D360): with the token, <c>GET &lt;org&gt;/_apis/connectionData</c> at the preview
-    /// version; a 404 is <see cref="HostingFailureKind.NotFound"/> (no such organization); a 200
+    /// version; a 404 is <see cref="HostingFailureKind.NotFound"/> (no such organization); a 3xx that
+    /// fails (every redirect, whatever its status) is <see cref="HostingFailureKind.BadCredentials"/>, never followed; a 200
     /// naming the Anonymous identity is <see cref="HostingFailureKind.BadCredentials"/> with
     /// <see cref="AnonymousDetail"/>. Only then the organization's core resource area, whose
     /// <c>locationUrl</c> gives the organization's spelling; when it gives none, the typed name, with
@@ -157,7 +158,12 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
         var reply = await _client.SendAsync(HttpMethod.Get, token, url, null, AzureDevOpsJsonContext.Default.AzureDevOpsConnectionJson, ct).ConfigureAwait(false);
         if (reply.Failure is { } failure)
         {
-            return HostingResult<HostingAccount>.Fail(failure);
+            // Every redirect of connectionData is refused credentials, whatever its status (D360): the
+            // client's profile refuses each one it is asked of, and this the 3xx the core stops itself
+            // (a Location missing or unreadable). Nothing was followed; no second request is made.
+            return HostingResult<HostingAccount>.Fail(reply.Status is >= 300 and < 400 && failure.Kind != HostingFailureKind.BadCredentials
+                ? _client.Failed(HttpMethod.Get, url, new HostingFailure(HostingFailureKind.BadCredentials, AzureDevOpsClient.SignInPageText), reply.RequestId)
+                : failure);
         }
 
         if (MemberOf(reply.Value?.AuthenticatedUser) is not { } member)

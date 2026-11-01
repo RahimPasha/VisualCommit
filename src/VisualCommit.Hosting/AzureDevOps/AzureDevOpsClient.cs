@@ -29,9 +29,9 @@ internal sealed record AzureDevOpsReply<T>(T? Value, HostingFailure? Failure, in
 /// of <c>":" + token</c> on the web base's origin alone (web, git and the API on one origin, D285;
 /// the API is there for <c>&lt;organization&gt;.visualstudio.com</c> remotes too, MEASURED r5 6.2),
 /// asks for no sign-in redirect (<c>X-TFS-FedAuthRedirect: Suppress</c>), refuses the sign-in's
-/// redirects, a 203 and an HTML success as refused credentials, refuses a redirect into another
-/// organization, and classifies every other answer by its status and <c>typeKey</c>, never by its
-/// words (ruling 20). Lists of <c>{"count", "value"}</c> are walked by <c>$top</c> and <c>$skip</c>
+/// redirects (whatever their status), a 203 and an HTML success as refused credentials, refuses a
+/// redirect into another organization or out of the API onto a web page, and classifies every
+/// other answer by its status and <c>typeKey</c>, never by its words (ruling 20). Lists of <c>{"count", "value"}</c> are walked by <c>$top</c> and <c>$skip</c>
 /// (<see cref="GetPagesAsync{T}"/>); nothing is kept between answers (no <c>ETag</c>, MEASURED r5 7).
 /// </summary>
 internal sealed class AzureDevOpsClient : IDisposable
@@ -44,6 +44,9 @@ internal sealed class AzureDevOpsClient : IDisposable
 
     /// <summary>The warning's <c>&lt;status or kind&gt;</c> of a redirect into another organization on the same origin.</summary>
     public const string OutsideOrganization = "redirected outside the organization";
+
+    /// <summary>What follows <c>&lt;status&gt;, </c> in the warning of a redirect on the same origin, in the organization, to a path with no <c>_apis</c> segment (a web page).</summary>
+    public const string OutsideApi = "redirected outside the API";
 
     /// <summary>The message of an answer that is the sign-in's instead of the API's: a redirect to it, a 203 or an HTML success.</summary>
     public const string SignInPageText = "Azure DevOps answered with its sign-in page.";
@@ -212,12 +215,91 @@ internal sealed class AzureDevOpsClient : IDisposable
 
     private static bool IsWeb(Uri url) => url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps;
 
+    /// <summary>A1's first read, whose every redirect is refused credentials (D360).</summary>
+    private static bool IsConnectionData(Uri url) => url.AbsolutePath.EndsWith("/_apis/connectionData", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>The sign-in's address (6.3): an <c>http</c> or <c>https</c> one whose path is <c>/_signin</c> or whose host (its IDN form) ends <c>.vssps.visualstudio.com</c>.</summary>
+    private static bool IsSignIn(Uri location) =>
+        IsWeb(location)
+        && (string.Equals(location.AbsolutePath, "/_signin", StringComparison.OrdinalIgnoreCase)
+            || HostingHttpClient.IdnHostOf(location)?.EndsWith(".vssps.visualstudio.com", StringComparison.OrdinalIgnoreCase) == true);
+
+    /// <summary>Whether a path holds a segment that is <c>_apis</c> once decoded, without case: the API's, not a web page's.</summary>
+    private static bool IsApi(Uri location) =>
+        location.AbsolutePath.Split('/').Any(segment => string.Equals(Uri.UnescapeDataString(segment), "_apis", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>
+    /// The address an answer's <c>Location</c> names, read as the core reads a redirect's (.NET's own
+    /// reading of the header) and resolved against the answer's address; null when it names none
+    /// .NET reads. A 3xx the core does not repeat (300, 303, 305) reaches <c>Classify</c> with its
+    /// <c>Location</c> in its headers alone, and <c>WarningOf</c> is not handed the one refused.
+    /// </summary>
+    private static Uri? LocationOf(HostingExchange exchange)
+    {
+        if (exchange.Headers.GetValueOrDefault("Location") is not { Length: > 0 } value)
+        {
+            return null;
+        }
+
+        using var read = new HttpResponseMessage();
+        return read.Headers.TryAddWithoutValidation("Location", value) ? HostingHttpClient.Resolve(exchange.Url, read.Headers.Location) : null;
+    }
+
+    /// <summary>What the profile does with a redirect from <c>Url</c> to <c>Location</c> (6.3).</summary>
+    private enum RedirectRule
+    {
+        /// <summary>The core's rule: followed on the token's origin, else stopped.</summary>
+        Core,
+
+        /// <summary>Refused credentials: any of connectionData's, or one to the sign-in.</summary>
+        SignIn,
+
+        /// <summary>"Could not be read": on the origin into another organization, or out of g3 G3.4's form.</summary>
+        OutsideOrganization,
+
+        /// <summary>"Could not be read": on the origin in the organization, to a path with no <c>_apis</c> segment.</summary>
+        OutsideApi,
+    }
+
+    /// <summary>
+    /// 6.3's rule for a redirect, in its order: from connectionData or to the sign-in, refused
+    /// credentials; on the token's origin into another organization (the first segment another,
+    /// without case) or to a path that leaves g3 G3.4's form, or in the organization to a path with
+    /// no <c>_apis</c> segment (a web page, which dev.azure.com serves on the API's origin), not
+    /// followed; any other, the core's.
+    /// </summary>
+    private static RedirectRule RuleOf(Uri url, Uri location, Uri tokenOrigin)
+    {
+        if (IsConnectionData(url) || IsSignIn(location))
+        {
+            return RedirectRule.SignIn;
+        }
+
+        if (!IsWeb(location) || !HostingHttpClient.SameOrigin(location, tokenOrigin))
+        {
+            return RedirectRule.Core;
+        }
+
+        // On the token's origin the path as .NET will send it must stay in g3 G3.4's form
+        // (InPlainForm): .NET keeps an encoded slash or backslash (Location
+        // /<org>/%2E%2E%2F<other>/… is sent as /<org>/..%2F<other>/…, its first segment still
+        // <org>), and a server that decodes it before resolving dot segments would serve another
+        // organization with this one's token.
+        if (!string.Equals(FirstSegment(location), FirstSegment(url), StringComparison.OrdinalIgnoreCase)
+            || !CredentialBinding.InPlainForm(location.GetLeftPart(UriPartial.Path)))
+        {
+            return RedirectRule.OutsideOrganization;
+        }
+
+        return IsApi(location) ? RedirectRule.Core : RedirectRule.OutsideApi;
+    }
+
     /// <summary>
     /// Azure DevOps' profile (6.3): the web base as the token's origin, <c>Basic</c> of
     /// <c>":" + token</c> (r5 0.6, READ), <c>X-TFS-FedAuthRedirect: Suppress</c> (the sign-in's 302
     /// becomes a 401, MEASURED r5 1.3) and <c>Accept: application/json</c>, <c>ActivityId</c> (else
     /// <c>X-VSS-E2EID</c>) as the request id, the sign-in's answers refused as credentials, a
-    /// redirect into another organization refused, and 6.3's table.
+    /// redirect into another organization or onto a web page refused, and 6.3's table.
     /// </summary>
     private sealed class AzureDevOpsProfile(AzureDevOpsEndpoints endpoints, TimeProvider clock) : HostingHttpProfile
     {
@@ -251,39 +333,18 @@ internal sealed class AzureDevOpsClient : IDisposable
         /// <summary>
         /// On A1's <c>connectionData</c> every redirect is <see cref="HostingFailureKind.BadCredentials"/>
         /// (D360). Elsewhere a redirect to the sign-in (a path <c>/_signin</c>, or a host under
-        /// <c>.vssps.visualstudio.com</c>) is too, and one on the same origin into another organization
-        /// (its first segment another, without case) is <see cref="HostingFailureKind.Malformed"/>.
+        /// <c>.vssps.visualstudio.com</c>) is too; one on the same origin into another organization
+        /// (its first segment another, without case), or in the organization to a path with no
+        /// <c>_apis</c> segment (a web page, served on the API's origin: the token's page, a
+        /// repository's), is <see cref="HostingFailureKind.Malformed"/> (<see cref="RuleOf"/>).
         /// None of them is followed; any other is left to the core's rule.
         /// </summary>
-        public override HostingFailure? RefuseRedirect(HostingExchange exchange, Uri location)
+        public override HostingFailure? RefuseRedirect(HostingExchange exchange, Uri location) => RuleOf(exchange.Url, location, TokenOrigin) switch
         {
-            if (exchange.Url.AbsolutePath.EndsWith("/_apis/connectionData", StringComparison.OrdinalIgnoreCase))
-            {
-                return new HostingFailure(HostingFailureKind.BadCredentials, SignInPageText);
-            }
-
-            if (!IsWeb(location))
-            {
-                return null;
-            }
-
-            if (string.Equals(location.AbsolutePath, "/_signin", StringComparison.OrdinalIgnoreCase)
-                || HostingHttpClient.IdnHostOf(location)?.EndsWith(".vssps.visualstudio.com", StringComparison.OrdinalIgnoreCase) == true)
-            {
-                return new HostingFailure(HostingFailureKind.BadCredentials, SignInPageText);
-            }
-
-            // On the token's origin the path as .NET will send it must stay in g3 G3.4's form
-            // (InPlainForm): .NET keeps an encoded slash or backslash (Location
-            // /<org>/%2E%2E%2F<other>/… is sent as /<org>/..%2F<other>/…, its first segment still
-            // <org>), and a server that decodes it before resolving dot segments would serve another
-            // organization with this one's token.
-            return HostingHttpClient.SameOrigin(location, TokenOrigin)
-                && (!string.Equals(FirstSegment(location), FirstSegment(exchange.Url), StringComparison.OrdinalIgnoreCase)
-                    || !CredentialBinding.InPlainForm(location.GetLeftPart(UriPartial.Path)))
-                ? new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(Provider))
-                : null;
-        }
+            RedirectRule.SignIn => new HostingFailure(HostingFailureKind.BadCredentials, SignInPageText),
+            RedirectRule.OutsideOrganization or RedirectRule.OutsideApi => new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(Provider)),
+            _ => null,
+        };
 
         /// <summary>A 203, or a success whose <c>Content-Type</c> is HTML or whose body starts with <c>&lt;</c>: the sign-in's page, not the API's (g1 G0.1).</summary>
         public override HostingFailure? RefuseSuccess(HostingExchange exchange)
@@ -293,15 +354,32 @@ internal sealed class AzureDevOpsClient : IDisposable
             return exchange.Status == 203 || html ? new HostingFailure(HostingFailureKind.BadCredentials, SignInPageText) : null;
         }
 
+        /// <summary>
+        /// A redirect refused as <see cref="HostingFailureKind.Malformed"/>: <c>&lt;status&gt;, </c><see cref="OutsideApi"/>
+        /// for one to a web page of the organization, else <see cref="OutsideOrganization"/>; any
+        /// other failure, its status. Never the <c>Location</c> itself.
+        /// </summary>
         public override string WarningOf(HostingExchange exchange, HostingFailure failure) =>
             HostingHttpClient.IsRedirect(exchange.Status) && failure.Kind == HostingFailureKind.Malformed
-                ? OutsideOrganization
+                ? LocationOf(exchange) is { } location && RuleOf(exchange.Url, location, TokenOrigin) == RedirectRule.OutsideApi
+                    ? string.Create(CultureInfo.InvariantCulture, $"{exchange.Status}, {OutsideApi}")
+                    : OutsideOrganization
                 : base.WarningOf(exchange, failure);
 
-        /// <summary>6.3's table, by status and <c>typeKey</c> (ruling 20; r5 1.4, g1 G2).</summary>
+        /// <summary>
+        /// 6.3's table, by status and <c>typeKey</c> (ruling 20; r5 1.4, g1 G2). Before it, a 3xx the
+        /// core does not repeat (300, 303, 305 and the rest) is <see cref="HostingFailureKind.BadCredentials"/>
+        /// with <see cref="SignInPageText"/> when it answers connectionData (D360: every redirect of
+        /// it, whatever its status) or its <c>Location</c> is the sign-in's, as a 302 there is; nothing is followed.
+        /// </summary>
         public override HostingFailure Classify(HostingExchange exchange)
         {
             var status = exchange.Status;
+            if (status is >= 300 and < 400 && (IsConnectionData(exchange.Url) || (LocationOf(exchange) is { } location && IsSignIn(location))))
+            {
+                return new HostingFailure(HostingFailureKind.BadCredentials, SignInPageText);
+            }
+
             var error = ErrorOf(exchange.Body);
             var typeKey = error?.TypeKey;
             var message = MessageOf(exchange, error);

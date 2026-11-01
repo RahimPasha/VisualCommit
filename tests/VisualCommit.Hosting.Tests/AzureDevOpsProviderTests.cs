@@ -211,6 +211,97 @@ public sealed class AzureDevOpsProviderTests
         Assert.Empty(fixture.Fake.Requests);
     }
 
+    /// <summary>
+    /// Every redirect of connectionData is refused credentials, whatever its status (D360): a 303
+    /// and a 300, which the core does not follow (the profile's table, one warning), and a 302
+    /// without a Location, which the core stops (A1 then, a second warning). Elsewhere a 303 or a
+    /// 305 to the sign-in is refused credentials as a 302 to it is, and one to nowhere else stays
+    /// the core's "could not be read". Each after that one request; nothing is followed.
+    /// </summary>
+    [Fact]
+    public async Task Every_redirect_of_A1_and_A3s_303_to_the_sign_in_are_refused_credentials_after_one_request()
+    {
+        var connection = "/myorg/_apis/connectionData failed: ";
+        var answers = new (Func<HttpResponseMessage> Answer, string[] Warnings)[]
+        {
+            (() => Redirect((HttpStatusCode)303, "https://dev.azure.com/myorg/_apis/connectionData?api-version=7.1-preview.1&again=1"), [connection + "303"]),
+            (() => Redirect((HttpStatusCode)300, "/myorg/_apis/connectionData?api-version=7.1-preview.1&again=1"), [connection + "300"]),
+            (() => Redirect((HttpStatusCode)303, null), [connection + "303"]),
+            (() => Redirect(HttpStatusCode.Found, null), [connection + "302 without Location", connection + "BadCredentials"]),
+            (() => Redirect(HttpStatusCode.TemporaryRedirect, null), [connection + "307 without Location", connection + "BadCredentials"]),
+        };
+        foreach (var (answer, warnings) in answers)
+        {
+            var log = new ListLog();
+            var recorder = new RecordingHttpHandler(_ => answer());
+            using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, log, new ManualTimeProvider());
+
+            var failure = (await provider.CheckTokenAsync("azdo_FAKE-myorg-1", "myorg", Cancelled)).Failure!;
+
+            Assert.Equal((HostingFailureKind.BadCredentials, AzureDevOpsClient.SignInPageText, HostingProvider.AzureDevOps, (string?)null), (failure.Kind, failure.Message, failure.Provider, failure.Detail));
+            Assert.Equal(("https://dev.azure.com/myorg/_apis/connectionData", "7b0aac71-0000-4a00-8000-0000000000ff"), (failure.Url!.AbsoluteUri, failure.RequestId));
+            Assert.Single(recorder.Sent);
+            Assert.Equal(warnings.Select(warning => "Azure DevOps: GET " + warning + " (request 7b0aac71-0000-4a00-8000-0000000000ff)."), log.Lines.Select(line => line.Message));
+        }
+
+        var repository = new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", "fake-org/proj", "repo");
+        var cases = new (HttpStatusCode Status, string? Location, HostingFailureKind Kind)[]
+        {
+            ((HttpStatusCode)303, "https://spsprodfake.vssps.visualstudio.com/_signin?realm=dev.azure.com&reply_to=x", HostingFailureKind.BadCredentials),
+            ((HttpStatusCode)303, "https://app.vssps.visualstudio.com/elsewhere", HostingFailureKind.BadCredentials),
+            ((HttpStatusCode)305, "/_signin?realm=dev.azure.com", HostingFailureKind.BadCredentials),
+            ((HttpStatusCode)300, "https://dev.azure.com/_signin", HostingFailureKind.BadCredentials),
+            ((HttpStatusCode)303, "/fake-org/proj/_apis/git/repositories/repo?api-version=7.1&again=1", HostingFailureKind.Malformed),
+            ((HttpStatusCode)303, null, HostingFailureKind.Malformed),
+            (HttpStatusCode.Found, null, HostingFailureKind.Malformed),
+        };
+        foreach (var (status, location, kind) in cases)
+        {
+            var recorder = new RecordingHttpHandler(_ => Redirect(status, location));
+            using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, new ListLog(), new ManualTimeProvider());
+
+            var failure = (await provider.ReadRepositoryAsync("azdo_FAKE-fake-org-1", repository, Cancelled)).Failure!;
+
+            Assert.True((kind, HostingProvider.AzureDevOps) == (failure.Kind, failure.Provider), $"{(int)status} {location}");
+            Assert.Equal(kind == HostingFailureKind.BadCredentials ? AzureDevOpsClient.SignInPageText : "Azure DevOps' answer could not be read.", failure.Message);
+            Assert.Single(recorder.Sent);
+        }
+    }
+
+    /// <summary>
+    /// A redirect on the API's origin, in the request's organization, to a page of the web (a path
+    /// with no <c>_apis</c> segment: the token page, a repository's web page) is "could not be read"
+    /// and nothing is sent there, for A3 and A4 alike; the warning says why.
+    /// </summary>
+    [Fact]
+    public async Task A3_and_A4_refuse_a_redirect_to_the_organizations_web_pages_and_send_nothing_there()
+    {
+        var repository = new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", "fake-org/proj", "repo");
+        const string Row = """{"id":"r1","name":"repo","project":{"name":"proj"},"remoteUrl":"https://dev.azure.com/fake-org/proj/_git/repo","webUrl":"https://dev.azure.com/fake-org/proj/_git/repo"}""";
+        foreach (var location in new[] { "/fake-org/_usersSettings/tokens", "https://dev.azure.com/fake-org/proj/_git/repo", "/FAKE-ORG/proj/_git/repo/pullrequests?_a=active" })
+        {
+            var log = new ListLog();
+            var recorder = new RecordingHttpHandler(request => request.RequestUri!.AbsolutePath.Contains("/_apis/", StringComparison.Ordinal)
+                ? Redirect(HttpStatusCode.Found, location)
+                : Answer(HttpStatusCode.OK, Row, "application/json"));
+            using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, log, new ManualTimeProvider());
+
+            var read = (await provider.ReadRepositoryAsync("azdo_FAKE-fake-org-1", repository, Cancelled)).Failure;
+            var pulls = (await provider.ListPullRequestsAsync("azdo_FAKE-fake-org-1", repository, Cancelled)).Failure;
+
+            Assert.True(read is { Kind: HostingFailureKind.Malformed, Provider: HostingProvider.AzureDevOps }, location);
+            Assert.True(pulls is { Kind: HostingFailureKind.Malformed, Provider: HostingProvider.AzureDevOps }, location);
+            Assert.Equal(2, recorder.Sent.Count);
+            Assert.All(recorder.Sent, sent => Assert.StartsWith("/fake-org/proj/_apis/git/repositories/repo", sent.Url.AbsolutePath, StringComparison.Ordinal));
+            Assert.Equal(
+                [
+                    "Azure DevOps: GET /fake-org/proj/_apis/git/repositories/repo failed: 302, redirected outside the API (request 7b0aac71-0000-4a00-8000-0000000000ff).",
+                    "Azure DevOps: GET /fake-org/proj/_apis/git/repositories/repo/pullrequests failed: 302, redirected outside the API (request 7b0aac71-0000-4a00-8000-0000000000ff).",
+                ],
+                log.Lines.Select(line => line.Message));
+        }
+    }
+
     [Fact]
     public async Task A2_lists_by_name_reads_an_empty_repository_and_leaves_a_disabled_one_out()
     {
@@ -612,6 +703,18 @@ public sealed class AzureDevOpsProviderTests
         }
 
         response.Headers.TryAddWithoutValidation("ActivityId", "7b0aac71-0000-4a00-8000-0000000000ff");
+        return response;
+    }
+
+    /// <summary>A redirect of <paramref name="status"/> with an HTML body (as Azure DevOps' "Object moved"), to <paramref name="location"/> when given.</summary>
+    private static HttpResponseMessage Redirect(HttpStatusCode status, string? location)
+    {
+        var response = Answer(status, "<html><body>Object moved</body></html>", "text/html");
+        if (location is not null)
+        {
+            response.Headers.TryAddWithoutValidation("Location", location);
+        }
+
         return response;
     }
 

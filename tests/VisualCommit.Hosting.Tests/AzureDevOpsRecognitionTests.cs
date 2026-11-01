@@ -97,7 +97,18 @@ public sealed class AzureDevOpsRecognitionTests
         { $"{D}/myorg/p/_git", null, null },
         { $"{D}/myorg/p/_git/", null, null },
         { $"{D}/myorg/p/_git/r/extra", null, null },
-        { $"{D}/myorg/p/_git/_full", "myorg/p", "_full" },
+        // No repository's name starts with _ (Azure DevOps refuses one), in any form, as no project's:
+        // a _full or _optimized with no name after it names none, nor does an escaped one.
+        { $"{D}/myorg/p/_git/_full", null, null },
+        { $"{D}/myorg/p/_git/_full/", null, null },
+        { $"{D}/myorg/p/_git/_optimized", null, null },
+        { $"{D}/myorg/p/_git/_x", null, null },
+        { $"{D}/myorg/p/_git/%5Ffull", null, null },
+        { $"{D}/myorg/p/_git/%5Fx", null, null },
+        { $"{D}/myorg/p/_git/_full/_x", null, null },
+        { "https://myorg.visualstudio.com/p/_git/_x", null, null },
+        { "https://myorg.visualstudio.com/DefaultCollection/_git/_x", null, null },
+        { "git@ssh.dev.azure.com:v3/myorg/p/_x", null, null },
         { $"{D}/myorg/p", null, null },
         { $"{D}/myorg", null, null },
         { D, null, null },
@@ -271,8 +282,6 @@ public sealed class AzureDevOpsRecognitionTests
         { "https://myorg.visualstudio.com/p/%5Fgit/r", "myorg/p", "r" },
         { "https://myorg.visualstudio.com/%44efaultCollection/_git/r", "myorg/r", "r" },
         { "https://myorg.visualstudio.com/%44efaultCollection/%5Fgit/r", "myorg/r", "r" },
-        // An escaped _full with no name after it is the name, as the plain one is.
-        { $"{D}/myorg/p/_git/%5Ffull", "myorg/p", "_full" },
         // dev.azure.com has no DefaultCollection: an escaped one is a project there.
         { $"{D}/myorg/%44efaultCollection/_git/r", "myorg/DefaultCollection", "r" },
         // The organization is read raw on both sides (D360's grammar; Select's first segment).
