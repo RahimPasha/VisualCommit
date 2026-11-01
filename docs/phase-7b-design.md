@@ -1670,6 +1670,17 @@ differs from 5.1 to 5.5 or settles what they left open:
   `No_answer_…` and `A_cancellation_…` (renamed; `Network (HttpRequestException)`,
   `(TaskCanceledException)`, no exception), `HostingSessionCredentialTests`' Network line and
   `AvatarCacheTests`' `(TaskCanceledException)`; `ListLog` keeps exceptions (`Entries`, `Written`).
+- After the hunt on the fixed code (D380's H3): `Uri.IdnHost` throws `UriFormatException` on hosts
+  `Uri.TryCreate` takes (U+200D, U+FF20, U+2488, U+FF0F, U+FF1A in the host; MEASURED on .NET 10),
+  which a server's `Location` or `Link` can name. The core reads a host through
+  `HostingHttpClient.IdnHostOf`, null for such a host: `SameOrigin` is false for it (its own address
+  included) and `OriginOf` names it `(an unreadable host)` (`UnreadableHost`), never the host as sent.
+  So a redirect or a next page there is `Malformed` with 7a's warnings (`redirected to
+  https://(an unreadable host):443`, `Link to …`), nothing is sent there, and nothing throws;
+  `HostingLinks.Next` still gives such an address as it is (a null would end the list as a success).
+  `GitHubUrls.SameOrigin` and `OriginOf` forward to the core's, and `GitHubProvider`'s avatar check
+  reads `IdnHostOf`, so such an avatar in the sign-in check or A6 is dropped with the one warning and
+  `AvatarCache.cs` stays as it was.
 
 ## 6. WP-AZ: Azure DevOps' client and provider
 

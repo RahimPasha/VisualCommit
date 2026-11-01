@@ -120,6 +120,8 @@ public sealed class HostingHttpClientTests
     [InlineData("https://elsewhere.example/api/v4/user", "redirected to https://elsewhere.example:443")]
     [InlineData("http://gitlab.example/api/v4/user", "redirected to http://gitlab.example:80")]
     [InlineData("https://gitlab.example:8443/api/v4/user", "redirected to https://gitlab.example:8443")]
+    [InlineData("https://a\u200Db.example/api/v4/user", "redirected to https://(an unreadable host):443")]
+    [InlineData("https://ada\uFF20example.com/api/v4/user", "redirected to https://(an unreadable host):443")]
     public async Task A_redirect_without_a_location_or_off_the_origin_is_malformed_and_nothing_is_sent_there(string? location, string warning)
     {
         using var setup = Setup.Scripted(_ => location is null
@@ -496,6 +498,8 @@ public sealed class HostingHttpClientTests
     [InlineData("https://elsewhere.example/api/v4/items?page=2", "https://elsewhere.example:443")]
     [InlineData("http://gitlab.example/api/v4/items?page=2", "http://gitlab.example:80")]
     [InlineData("https://gitlab.example/other/items?page=2", "https://gitlab.example:443")]
+    [InlineData("https://a\u200Db.example/api/v4/items?page=2", "https://(an unreadable host):443")]
+    [InlineData("https://ada\uFF20example.com/api/v4/items?page=2", "https://(an unreadable host):443")]
     public async Task A_next_page_off_the_origin_or_its_path_is_malformed_and_not_asked_for(string next, string origin)
     {
         using var setup = Setup.Scripted(_ => RecordingHttpHandler.Json(HttpStatusCode.OK, "[{\"number\":1}]", ("Link", $"<{next}>; rel=\"next\""), ("X-Request-Id", "R-1")));
@@ -865,6 +869,24 @@ public sealed class HostingHttpClientTests
     }
 
     [Fact]
+    public async Task A_location_on_the_wire_whose_host_has_no_idn_form_is_malformed_and_nothing_throws()
+    {
+        // D380, the hunt's host: Location's bytes are the UTF-8 of https://a<U+200D>b.example/..., which
+        // .NET reads as that host; its IdnHost throws, and the core takes it as on no origin.
+        var location = Encoding.Latin1.GetString(Encoding.UTF8.GetBytes("https://a\u200Db.example/api/v4/user"));
+        await using var server = new RawHttpServer(_ => RawHttpServer.Bytes(
+            $"HTTP/1.1 302 Found\r\nLocation: {location}\r\nX-Request-Id: R-8\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
+        var origin = new Uri(server.Base, "api/v4/");
+        using var setup = new WireSetup(origin, HostingOptions.DefaultHandler(origin));
+
+        var reply = await setup.GetAsync("user");
+
+        Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", "R-8", 302), (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.RequestId, reply.Status));
+        Assert.Equal("GitLab: GET /api/v4/user failed: redirected to https://(an unreadable host):443 (request R-8).", Assert.Single(setup.Log.Lines).Message);
+        Assert.Single(server.Heads);
+    }
+
+    [Fact]
     public async Task A_body_of_a_type_outside_the_profiles_json_is_an_argument_exception_and_nothing_is_sent()
     {
         using var setup = Setup.Scripted(_ => RecordingHttpHandler.Json(HttpStatusCode.OK, "{}"));
@@ -883,6 +905,23 @@ public sealed class HostingHttpClientTests
         Assert.False(HostingHttpClient.SameOrigin(new Uri("https://gitlab.example/"), new Uri("http://gitlab.example/")));
         Assert.False(HostingHttpClient.SameOrigin(new Uri("https://gitlab.example/"), new Uri("https://gitlab.example:8443/")));
         Assert.Equal("https://gitlab.example:443", HostingHttpClient.OriginOf(new Uri("https://gitlab.example/secret?q=1")));
+        Assert.Equal("xn--bcher-kva.example", HostingHttpClient.IdnHostOf(new Uri("https://b\u00FCcher.example/")));
+
+        // D380: hosts Uri.TryCreate takes whose IdnHost throws (measured) are on no origin, their own
+        // included, and named without the host as sent.
+        foreach (var unreadable in new[] { "https://ada\uFF20example.com/x", "https://a\u200Db.example/x", "https://\u2488.example/x", "https://a\uFF0Fb.example/x", "https://a\uFF1A80.example/x" })
+        {
+            Assert.True(Uri.TryCreate(unreadable, UriKind.Absolute, out var url), unreadable);
+            Assert.Throws<UriFormatException>(() => url.IdnHost);
+            Assert.Null(HostingHttpClient.IdnHostOf(url));
+            Assert.False(HostingHttpClient.SameOrigin(url, Origin));
+            Assert.False(HostingHttpClient.SameOrigin(Origin, url));
+            Assert.False(HostingHttpClient.SameOrigin(url, url));
+            Assert.Equal("https://(an unreadable host):443", HostingHttpClient.OriginOf(url));
+            Assert.Equal(HostingHttpClient.OriginOf(url), GitHubUrls.OriginOf(url));
+            Assert.False(GitHubUrls.SameOrigin(url, url));
+        }
+
         Assert.Equal(new[] { 301, 302, 307, 308 }, Enumerable.Range(300, 10).Where(HostingHttpClient.IsRedirect));
         Assert.Equal("https://gitlab.example/api/v4/b", HostingHttpClient.Resolve(new Uri("https://gitlab.example/api/v4/a"), new Uri("b", UriKind.Relative))!.AbsoluteUri);
         Assert.Null(HostingHttpClient.Resolve(new Uri("https://gitlab.example/"), null));

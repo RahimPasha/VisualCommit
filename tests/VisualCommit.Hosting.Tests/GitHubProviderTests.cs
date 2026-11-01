@@ -477,6 +477,24 @@ public sealed class GitHubProviderTests
             Assert.Single(log.Lines).Message);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task An_avatar_whose_host_has_no_idn_form_is_dropped_with_one_warning_and_nothing_throws(bool local)
+    {
+        // D380: Uri.IdnHost throws on such a host (measured), on github.com's rule and on the fake's.
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"login\":\"ada\",\"id\":1003,\"avatar_url\":\"https://a\u200Db.example/u/1003\"}"));
+        var log = new ListLog();
+        using var provider = new GitHubProvider(local ? GitHubEndpoints.Local(47395) : GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+
+        var account = await provider.CheckTokenAsync("github_pat_FAKE-ada-1", Cancelled);
+
+        Assert.Equal(("ada", (Uri?)null), (account.Value!.Login, account.Value.AvatarUrl));
+        Assert.Equal(
+            "GitHub named an avatar on https://(an unreadable host):443, which is not GitHub's avatar host: such authors are shown without one.",
+            Assert.Single(log.Lines).Message);
+    }
+
     [Fact]
     public async Task Avatars_off_the_web_address_are_dropped_with_one_warning()
     {

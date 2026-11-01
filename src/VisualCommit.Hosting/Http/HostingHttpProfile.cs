@@ -76,7 +76,8 @@ internal static partial class HostingLinks
 {
     /// <summary>
     /// The URL of <c>rel="next"</c> in <paramref name="headers"/>' <c>Link</c>, as given; null when
-    /// there is none or it is not an absolute address.
+    /// there is none or it is not an absolute address. One whose host has no IDN form is given too:
+    /// the core's origin check refuses it, so its list is <see cref="HostingFailureKind.Malformed"/> (D380).
     /// </summary>
     public static Uri? Next(IReadOnlyDictionary<string, string> headers)
     {

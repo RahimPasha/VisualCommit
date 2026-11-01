@@ -477,7 +477,8 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// <summary>
     /// The avatar's address when it is <c>https</c> on <c>avatars.githubusercontent.com</c>
     /// (github.com) or on the web address's scheme, host and port (the fake, D252, D286); else null,
-    /// with one warning per provider that names the host only.
+    /// with one warning per provider that names the host only (a host without an IDN form is on
+    /// neither and named <see cref="Http.HostingHttpClient.UnreadableHost"/>, D380).
     /// </summary>
     private Uri? AvatarOf(string? avatarUrl)
     {
@@ -488,7 +489,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (Uri.TryCreate(avatarUrl, UriKind.Absolute, out var url)
             && (GitHubUrls.IsGitHubCom(Endpoints)
-                ? url.Scheme == Uri.UriSchemeHttps && string.Equals(url.IdnHost, AvatarHost, StringComparison.OrdinalIgnoreCase) && url.Port == 443
+                ? url.Scheme == Uri.UriSchemeHttps && string.Equals(Http.HostingHttpClient.IdnHostOf(url), AvatarHost, StringComparison.OrdinalIgnoreCase) && url.Port == 443
                 : GitHubUrls.SameOrigin(url, Endpoints.WebBase)))
         {
             return url;

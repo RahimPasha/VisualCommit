@@ -28,7 +28,8 @@ namespace VisualCommit.Hosting.Http;
 /// message and detail, and writes one warning that names neither a header, a body, a query, a token
 /// nor an exception's text: an exception is named by <see cref="Describe"/> alone, and none is
 /// passed to the log (D380). Nothing an answer holds throws out of the core: a body that cannot be
-/// decompressed, and a profile's hook that throws on what the server sent, are
+/// decompressed, a profile's hook that throws on what the server sent, and a redirect or a next
+/// page to a host without an IDN form (on no origin, <see cref="SameOrigin"/>), are
 /// <see cref="HostingFailureKind.Malformed"/> (D380).
 /// </summary>
 internal sealed partial class HostingHttpClient : IDisposable
@@ -47,6 +48,9 @@ internal sealed partial class HostingHttpClient : IDisposable
 
     /// <summary>What each e-mail-shaped run of a failure's message and detail becomes (D368).</summary>
     public const string ScreenedEmail = "<e-mail>";
+
+    /// <summary>What <see cref="OriginOf"/> names for a host that has no IDN form (D380).</summary>
+    public const string UnreadableHost = "(an unreadable host)";
 
     /// <summary>How long a request has once sent, unless the constructor says otherwise.</summary>
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
@@ -168,21 +172,47 @@ internal sealed partial class HostingHttpClient : IDisposable
 
     public void Dispose() => _http.Dispose();
 
-    /// <summary>Whether two addresses have the same scheme, host and port.</summary>
+    /// <summary>
+    /// Whether two addresses have the same scheme, host and port. An address whose host has no
+    /// IDN form (<see cref="IdnHostOf"/> null) is on no origin, its own included: never throws (D380).
+    /// </summary>
     public static bool SameOrigin(Uri a, Uri b)
     {
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
         return string.Equals(a.Scheme, b.Scheme, StringComparison.OrdinalIgnoreCase)
-            && string.Equals(a.IdnHost, b.IdnHost, StringComparison.OrdinalIgnoreCase)
+            && IdnHostOf(a) is { } host
+            && string.Equals(host, IdnHostOf(b), StringComparison.OrdinalIgnoreCase)
             && a.Port == b.Port;
     }
 
-    /// <summary><c>&lt;scheme&gt;://&lt;host&gt;:&lt;port&gt;</c> of <paramref name="uri"/>, for a log line: never its path or query.</summary>
+    /// <summary>
+    /// <c>&lt;scheme&gt;://&lt;host&gt;:&lt;port&gt;</c> of <paramref name="uri"/>, for a log line: never its path or query,
+    /// and <see cref="UnreadableHost"/> for a host without an IDN form, never the host as sent (D380).
+    /// </summary>
     public static string OriginOf(Uri uri)
     {
         ArgumentNullException.ThrowIfNull(uri);
-        return FormattableString.Invariant($"{uri.Scheme}://{uri.IdnHost}:{uri.Port}");
+        return FormattableString.Invariant($"{uri.Scheme}://{IdnHostOf(uri) ?? UnreadableHost}:{uri.Port}");
+    }
+
+    /// <summary>
+    /// <paramref name="uri"/>'s <see cref="Uri.IdnHost"/>; null when it has none. <see cref="Uri.IdnHost"/>
+    /// throws <see cref="UriFormatException"/> on hosts <see cref="Uri.TryCreate(string, UriKind, out Uri)"/>
+    /// takes (U+200D, U+FF20, U+2488, U+FF0F, U+FF1A in the host, MEASURED on .NET 10), as a server's
+    /// <c>Location</c> or <c>Link</c> can name them (D380).
+    /// </summary>
+    public static string? IdnHostOf(Uri uri)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        try
+        {
+            return uri.IdnHost;
+        }
+        catch (UriFormatException)
+        {
+            return null;
+        }
     }
 
     /// <summary>Whether <paramref name="status"/> is a redirect the client repeats: 301, 302, 307 or 308.</summary>
