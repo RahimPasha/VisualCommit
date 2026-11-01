@@ -208,7 +208,7 @@ public sealed class AvatarCache : IDisposable
                 {
                     // A cancellation that is neither the caller's nor the 30 s (the handler's connect
                     // time-out, a cache disposed mid-download) is no answer.
-                    _log.Warning($"The avatar of user {id} could not be fetched.", ex);
+                    _log.Warning($"The avatar of user {id} could not be fetched ({Http.HostingHttpClient.Describe(ex)}).");
                     return null;
                 }
             }

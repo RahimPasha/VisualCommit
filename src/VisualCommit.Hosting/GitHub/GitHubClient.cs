@@ -34,7 +34,7 @@ internal sealed record GitHubReply<T>(T? Value, HostingFailure? Failure, int Sta
 /// (which throws <see cref="OperationCanceledException"/>), redirects repeated by hand on the API's
 /// address only, the 10 MB bound, ETags kept in memory per token fingerprint and URL (at most 512 and
 /// 32 MB of bodies, forgotten at a sign-out, <see cref="ForgetKept"/>), and one warning per failure
-/// that names neither a header, a body, a query nor a token.
+/// that names neither a header, a body, a query, a token nor an exception's text (D380).
 /// </summary>
 internal sealed class GitHubClient : IDisposable
 {
@@ -215,6 +215,9 @@ internal sealed class GitHubClient : IDisposable
         /// </summary>
         private static readonly string[] Kept = ["Link", SsoHeader, ScopesHeader];
 
+        /// <summary>The last <c>X-RateLimit-Reset</c> a <see cref="DateTimeOffset"/> holds: 9999-12-31 23:59:59 UTC.</summary>
+        private static readonly long MaxResetSeconds = DateTimeOffset.MaxValue.ToUnixTimeSeconds();
+
         public override HostingProvider Provider => HostingProvider.GitHub;
 
         public override Uri TokenOrigin => endpoints.ApiBase;
@@ -264,9 +267,20 @@ internal sealed class GitHubClient : IDisposable
 
             if (limited && Of("X-RateLimit-Remaining")?.Trim() == "0")
             {
-                var reset = long.TryParse(Of("X-RateLimit-Reset"), NumberStyles.None, CultureInfo.InvariantCulture, out var seconds)
-                    ? DateTimeOffset.FromUnixTimeSeconds(seconds)
-                    : (DateTimeOffset?)null;
+                // A reset of digits past the last second DateTimeOffset holds (year 9999), or past
+                // a long, cannot be read (D380): an answer that could not be read, not an exception
+                // out of the core. One that is no number gives no time, as in 7a.
+                DateTimeOffset? reset = null;
+                if (Of("X-RateLimit-Reset") is { Length: > 0 } text && text.All(char.IsAsciiDigit))
+                {
+                    if (!long.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out var seconds) || seconds > MaxResetSeconds)
+                    {
+                        return Fail(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(Provider));
+                    }
+
+                    reset = DateTimeOffset.FromUnixTimeSeconds(seconds);
+                }
+
                 return Fail(HostingFailureKind.RateLimited, message ?? fallback, retryAt: reset);
             }
 

@@ -352,7 +352,9 @@ public sealed class GitHubClientTests
         }
 
         Assert.Equal(cases.Length, setup.Log.Lines.Count);
-        Assert.Equal("GitHub: GET /api/v3/user failed: Network.", setup.Log.Lines[^1].Message);
+
+        // D380: the exception is named by its type alone (the fake's drop is an HttpRequestException).
+        Assert.Equal("GitHub: GET /api/v3/user failed: Network (HttpRequestException).", setup.Log.Lines[^1].Message);
     }
 
     [Fact]
@@ -494,7 +496,7 @@ public sealed class GitHubClientTests
     }
 
     [Fact]
-    public async Task No_answer_is_a_network_failure_with_the_exception_in_the_log_only()
+    public async Task No_answer_is_a_network_failure_whose_exception_the_log_alone_names_by_its_type()
     {
         var recorder = new RecordingHttpHandler(_ => throw new HttpRequestException("No such host is known. (api.github.com:443)"));
         var log = new ListLog();
@@ -502,24 +504,87 @@ public sealed class GitHubClientTests
 
         var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
 
+        // D380 (amending 7a design 6.2 and 7.12): the type, never the message, and no exception object.
         Assert.Equal((HostingFailureKind.Network, "Could not reach GitHub.", 0), (reply.Failure!.Kind, reply.Failure.Message, reply.Status));
-        Assert.Equal("GitHub: GET /user failed: Network.", Assert.Single(log.Lines).Message);
+        var (_, message, exception) = Assert.Single(log.Entries);
+        Assert.Equal("GitHub: GET /user failed: Network (HttpRequestException).", message);
+        Assert.Null(exception);
     }
 
     [Fact]
-    public async Task A_cancellation_neither_the_callers_nor_the_time_limits_is_no_answer_with_its_exception_in_the_log()
+    public async Task A_cancellation_neither_the_callers_nor_the_time_limits_is_no_answer_with_its_exceptions_type_in_the_log()
     {
         // As the handler's 10 s connect time-out throws it: a TaskCanceledException around a TimeoutException.
         var recorder = new RecordingHttpHandler(_ => throw new TaskCanceledException("The operation was canceled.", new TimeoutException("A connection could not be made within 10 seconds.")));
-        var log = new ExceptionLog();
+        var log = new ListLog();
         using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
 
         var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
 
         Assert.Equal((HostingFailureKind.Network, "Could not reach GitHub.", 0), (reply.Failure!.Kind, reply.Failure.Message, reply.Status));
-        var (message, exception) = Assert.Single(log.Lines);
-        Assert.Equal("GitHub: GET /user failed: Network.", message);
-        Assert.IsAssignableFrom<OperationCanceledException>(exception);
+        var (_, message, exception) = Assert.Single(log.Entries);
+        Assert.Equal("GitHub: GET /user failed: Network (TaskCanceledException).", message);
+        Assert.Null(exception);
+    }
+
+    [Theory]
+    [InlineData("99999999999999", HostingFailureKind.Malformed, null)]
+    [InlineData("253402300800", HostingFailureKind.Malformed, null)]
+    [InlineData("99999999999999999999", HostingFailureKind.Malformed, null)]
+    [InlineData("253402300799", HostingFailureKind.RateLimited, 253402300799L)]
+    [InlineData("1700000000", HostingFailureKind.RateLimited, 1700000000L)]
+    [InlineData("soon", HostingFailureKind.RateLimited, null)]
+    public async Task A_rate_limits_reset_past_year_9999_is_malformed_and_nothing_throws(string reset, HostingFailureKind kind, long? retrySeconds)
+    {
+        // D380: DateTimeOffset holds no second after 9999-12-31 23:59:59 UTC; a reset that is no number stays 7a's (no time).
+        var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, "{\"message\":\"API rate limit exceeded for user ID 1001.\"}",
+            ("X-RateLimit-Remaining", "0"), ("X-RateLimit-Reset", reset), ("X-GitHub-Request-Id", "R-1")));
+        var log = new ListLog();
+        using var client = new GitHubClient(GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(Script, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        var message = kind == HostingFailureKind.Malformed ? GitHubClient.MalformedText : "API rate limit exceeded for user ID 1001.";
+        DateTimeOffset? retryAt = retrySeconds is { } seconds ? DateTimeOffset.FromUnixTimeSeconds(seconds) : null;
+        Assert.Equal((kind, message, retryAt, "R-1"), (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.RetryAt, reply.Failure.RequestId));
+        Assert.Equal("GitHub: GET /user failed: 403 (request R-1).", Assert.Single(log.Lines).Message);
+    }
+
+    [Fact]
+    public async Task A_rate_limits_reset_past_year_9999_on_the_wire_is_malformed()
+    {
+        // D380, the finding's answer over the real handler and GitHubEndpoints.Local.
+        const string Body = "{\"message\":\"API rate limit exceeded for user ID 1001.\"}";
+        await using var server = new RawHttpServer(_ => RawHttpServer.Bytes(
+            $"HTTP/1.1 403 Forbidden\r\nContent-Type: application/json\r\nX-RateLimit-Remaining: 0\r\nX-RateLimit-Reset: 99999999999999\r\nContent-Length: {Body.Length}\r\nConnection: close\r\n\r\n{Body}"));
+        var endpoints = GitHubEndpoints.Local(server.Port);
+        var log = new ListLog();
+        using var client = new GitHubClient(endpoints, HostingOptions.DefaultHandler(endpoints), log, new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(endpoints.ApiBase, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal((HostingFailureKind.Malformed, GitHubClient.MalformedText, (DateTimeOffset?)null), (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.RetryAt));
+        Assert.Equal("GitHub: GET /api/v3/user failed: 403.", Assert.Single(log.Lines).Message);
+    }
+
+    [Fact]
+    public async Task A_same_origin_redirects_user_and_password_stay_out_of_the_failures_address()
+    {
+        // D380, the finding: 302 to http://user:hunter2@<the API's origin>/api/v3/next, which answers 404.
+        await using var server = new RawHttpServer(head => RawHttpServer.Bytes(head.StartsWith("GET /api/v3/user ", StringComparison.Ordinal)
+            ? $"HTTP/1.1 302 Found\r\nLocation: http://user:hunter2@{RawHttpServer.HeaderOf(head, "Host")}/api/v3/next\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            : "HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: 23\r\nConnection: close\r\n\r\n{\"message\":\"Not Found\"}"));
+        var endpoints = GitHubEndpoints.Local(server.Port);
+        var log = new ListLog();
+        using var client = new GitHubClient(endpoints, HostingOptions.DefaultHandler(endpoints), log, new ManualTimeProvider());
+
+        var reply = await client.SendAsync(HttpMethod.Get, "github_pat_FAKE-octo-1", new Uri(endpoints.ApiBase, "user"), null, GitHubJsonContext.Default.GitHubUserJson, Cancelled);
+
+        Assert.Equal((HostingFailureKind.NotFound, "Not Found", $"http://127.0.0.1:{server.Port}/api/v3/next"), (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Url!.AbsoluteUri));
+        Assert.Equal("GitHub: GET /api/v3/next failed: 404.", Assert.Single(log.Lines).Message);
+        Assert.Equal(2, server.Heads.Count);
+        Assert.All(server.Heads, head => Assert.Equal("Bearer github_pat_FAKE-octo-1", RawHttpServer.HeaderOf(head, "Authorization")));
+        Assert.DoesNotContain("hunter2", log.Written, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -626,31 +691,6 @@ public sealed class GitHubClientTests
         var reply = await client.SendAsync(HttpMethod.Post, "github_pat_FAKE-octo-1", new Uri(Script, "repos/octo/hello/pulls"), new GitHubNewPullRequestJson { Title = "t", Body = "b", Head = "h", Base = "main" }, GitHubJsonContext.Default.GitHubPullRequestJson, Cancelled);
 
         return (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Detail);
-    }
-
-    /// <summary>A log that keeps each line's message with its exception.</summary>
-    private sealed class ExceptionLog : IAppLog
-    {
-        private readonly List<(string Message, Exception? Exception)> _lines = [];
-
-        public IReadOnlyList<(string Message, Exception? Exception)> Lines
-        {
-            get
-            {
-                lock (_lines)
-                {
-                    return [.. _lines];
-                }
-            }
-        }
-
-        public void Write(LogLevel level, string message, Exception? exception = null)
-        {
-            lock (_lines)
-            {
-                _lines.Add((message, exception));
-            }
-        }
     }
 
     /// <summary>The fake in process with octo (1001) and ada (1003), a token each, and 25 listed repositories of octo; a client over a recording handler.</summary>

@@ -95,7 +95,7 @@ public sealed class HostingSessionCredentialTests
         Assert.NotSame(valid, setup.Session.RefusalCheck);
         await CheckedAsync(setup);
         setup.NetworkDown = false;
-        Assert.Equal("GitHub: GET /api/v3/user failed: Network.", setup.Warnings[^2]);
+        Assert.Equal("GitHub: GET /api/v3/user failed: Network (HttpRequestException).", setup.Warnings[^2]);
         Assert.StartsWith("GitHub account octo on 127.0.0.1:1: git was refused; the token could not be checked: ", setup.Warnings[^1], StringComparison.Ordinal);
         Assert.Equal(AccountState.SignedIn, setup.Session.Account!.State);
         Assert.Equal((written, file), (File.GetLastWriteTimeUtc(setup.Paths.AccountsFile), File.ReadAllText(setup.Paths.AccountsFile)));

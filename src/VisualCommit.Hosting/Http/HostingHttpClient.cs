@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Headers;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
@@ -23,8 +24,12 @@ namespace VisualCommit.Hosting.Http;
 /// forgotten by <see cref="ForgetKept"/>; pages followed while they stay under the origin's path.
 /// Every failure it finishes (each one an answer or no answer gives, and those a client passes to
 /// <see cref="Failed"/> or <see cref="MalformedAnswer"/>) names the profile's provider, its address
-/// without the query and its request id, with e-mail addresses screened out of its message and
-/// detail, and writes one warning that names neither a header, a body, a query nor a token.
+/// without the userinfo and the query and its request id, with e-mail addresses screened out of its
+/// message and detail, and writes one warning that names neither a header, a body, a query, a token
+/// nor an exception's text: an exception is named by <see cref="Describe"/> alone, and none is
+/// passed to the log (D380). Nothing an answer holds throws out of the core: a body that cannot be
+/// decompressed, and a profile's hook that throws on what the server sent, are
+/// <see cref="HostingFailureKind.Malformed"/> (D380).
 /// </summary>
 internal sealed partial class HostingHttpClient : IDisposable
 {
@@ -228,11 +233,52 @@ internal sealed partial class HostingHttpClient : IDisposable
         return text.Contains('@', StringComparison.Ordinal) ? EmailPattern().Replace(text, ScreenedEmail) : text;
     }
 
-    /// <summary>The address without its query and fragment.</summary>
+    /// <summary>The address without its userinfo, query and fragment (D380): its scheme, host, port and path.</summary>
     public static Uri WithoutQuery(Uri url)
     {
         ArgumentNullException.ThrowIfNull(url);
-        return new Uri(url.GetLeftPart(UriPartial.Path));
+        return new Uri(url.GetComponents(UriComponents.SchemeAndServer | UriComponents.Path, UriFormat.UriEscaped));
+    }
+
+    /// <summary>
+    /// What a log line says of <paramref name="exception"/> (D380): its type's name, with its
+    /// <see cref="HttpRequestError"/> when it has one other than <see cref="HttpRequestError.Unknown"/>,
+    /// and the first <see cref="SocketException"/> inside it with its <see cref="SocketError"/>, such as
+    /// <c>HttpRequestException ConnectionError, SocketException ConnectionRefused</c>. Never its
+    /// message, nor an inner one's: .NET's messages quote what a proxy or a server sent (a proxy's
+    /// userinfo, a header line with a token echoed back, a cookie, an address, body bytes).
+    /// </summary>
+    public static string Describe(Exception exception)
+    {
+        ArgumentNullException.ThrowIfNull(exception);
+        var described = Named(exception);
+        if (exception is SocketException)
+        {
+            return described;
+        }
+
+        for (var inner = exception.InnerException; inner is not null; inner = inner.InnerException)
+        {
+            if (inner is SocketException)
+            {
+                return described + ", " + Named(inner);
+            }
+        }
+
+        return described;
+
+        static string Named(Exception given)
+        {
+            var name = given.GetType().Name;
+            var code = given switch
+            {
+                HttpRequestException { HttpRequestError: not HttpRequestError.Unknown } request => request.HttpRequestError.ToString(),
+                HttpIOException { HttpRequestError: not HttpRequestError.Unknown } io => io.HttpRequestError.ToString(),
+                SocketException socket => socket.SocketErrorCode.ToString(),
+                _ => null,
+            };
+            return code is null ? name : name + " " + code;
+        }
     }
 
     private static string VersionOf(Assembly assembly)
@@ -259,7 +305,16 @@ internal sealed partial class HostingHttpClient : IDisposable
 
             pageHeaders?.Invoke(reply.Headers);
             items.AddRange(reply.Value);
-            var next = _profile.NextPage(exchange);
+            Uri? next;
+            try
+            {
+                next = _profile.NextPage(exchange);
+            }
+            catch (Exception ex)
+            {
+                return reply with { Value = default, Failure = Unreadable(exchange, ex) };
+            }
+
             if (next is null)
             {
                 return reply with { Value = items };
@@ -288,7 +343,7 @@ internal sealed partial class HostingHttpClient : IDisposable
         var content = body is null ? null : JsonSerializer.SerializeToUtf8Bytes(body, _profile.Json.GetTypeInfo(body.GetType())
             ?? throw new ArgumentException($"{body.GetType().Name} is not one of {HostingProviders.Possessive(_profile.Provider)} shapes.", nameof(body)));
         var (exchange, early) = await ExchangeAsync(method, token, Fingerprint(token), url, content, ct).ConfigureAwait(false);
-        var requestId = _profile.RequestIdOf(exchange.Headers);
+        var requestId = RequestIdOf(exchange.Headers);
         HostingReply<T> Reply(T? value, HostingFailure? failure) => new(value, failure, exchange.Status, null, exchange.Headers, requestId);
 
         if (early is not null)
@@ -296,26 +351,35 @@ internal sealed partial class HostingHttpClient : IDisposable
             return (Reply(default, early), exchange);
         }
 
-        var status = exchange.Status;
-        var success = status is >= 200 and < 300 || status == 304;
-        if (success && _profile.RefuseSuccess(exchange) is { } refused)
+        try
         {
-            return (Reply(default, Refused(exchange, refused, requestId)), exchange);
-        }
+            var status = exchange.Status;
+            var success = status is >= 200 and < 300 || status == 304;
+            if (success && _profile.RefuseSuccess(exchange) is { } refused)
+            {
+                return (Reply(default, Refused(exchange, refused, requestId)), exchange);
+            }
 
-        if (_profile.SucceedsEmpty(status))
-        {
-            return (Reply(default, null), exchange);
-        }
+            if (_profile.SucceedsEmpty(status))
+            {
+                return (Reply(default, null), exchange);
+            }
 
-        if (!success)
-        {
-            return (Reply(default, Refused(exchange, _profile.Classify(exchange), requestId)), exchange);
-        }
+            if (!success)
+            {
+                return (Reply(default, Refused(exchange, _profile.Classify(exchange), requestId)), exchange);
+            }
 
-        if (Parse(exchange.Body, type) is { } value)
+            if (Parse(exchange.Body, type) is { } value)
+            {
+                return (Reply(value, null), exchange);
+            }
+        }
+        catch (Exception ex)
         {
-            return (Reply(value, null), exchange);
+            // A hook that throws on what the server sent (a header value out of range, say) does
+            // not throw out of the core (D380): the answer could not be read.
+            return (Reply(default, Unreadable(exchange, ex)), exchange);
         }
 
         var malformed = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, requestId);
@@ -350,9 +414,19 @@ internal sealed partial class HostingHttpClient : IDisposable
                     {
                         var redirect = Answer([]);
                         var location = Resolve(current, response.Headers.Location);
-                        if (location is not null && _profile.RefuseRedirect(redirect, location) is { } refused)
+                        HostingFailure? refused;
+                        try
                         {
-                            return (redirect, Refused(redirect, refused, _profile.RequestIdOf(headers)));
+                            refused = location is null ? null : _profile.RefuseRedirect(redirect, location);
+                        }
+                        catch (Exception ex)
+                        {
+                            return (redirect, Unreadable(redirect, ex));
+                        }
+
+                        if (refused is not null)
+                        {
+                            return (redirect, Refused(redirect, refused, RequestIdOf(headers)));
                         }
 
                         var refusal = location is null ? $"{status} without Location"
@@ -368,7 +442,19 @@ internal sealed partial class HostingHttpClient : IDisposable
                         continue;
                     }
 
-                    var read = await ReadBoundedAsync(response.Content, MaxBodyBytes, limit.Token).ConfigureAwait(false);
+                    byte[]? read;
+                    try
+                    {
+                        read = await ReadBoundedAsync(response.Content, MaxBodyBytes, limit.Token).ConfigureAwait(false);
+                    }
+                    catch (Exception ex) when (ex is InvalidDataException or InvalidOperationException)
+                    {
+                        // A body that its Content-Encoding (gzip, deflate, br) does not decode: .NET's
+                        // decoders throw these (D380, measured), and they are no network failure.
+                        var undecoded = Answer([]);
+                        return (undecoded, Stopped(undecoded, $"a body that could not be decompressed ({Describe(ex)})"));
+                    }
+
                     if (read is null)
                     {
                         var oversized = Answer([]);
@@ -406,8 +492,9 @@ internal sealed partial class HostingHttpClient : IDisposable
                 catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
                 {
                     // A cancellation that is neither the caller's nor the time limit (the handler's
-                    // connect time-out, a client disposed mid-request) is no answer.
-                    Warn(method.Method, current, "Network", null, ex);
+                    // connect time-out, a client disposed mid-request) is no answer. The exception
+                    // is named by its type and codes alone, and not passed to the log (D380).
+                    Warn(method.Method, current, $"Network ({Describe(ex)})", null);
                     return Unanswered(method, current, HostingHttpTexts.Network(_profile.Provider));
                 }
             }
@@ -446,16 +533,48 @@ internal sealed partial class HostingHttpClient : IDisposable
     private HostingFailure Refused(HostingExchange exchange, HostingFailure failure, string? requestId)
     {
         var finished = Finish(failure, exchange.Url, requestId);
-        Warn(exchange.Method.Method, exchange.Url, _profile.WarningOf(exchange, finished), finished.RequestId);
+        string warning;
+        try
+        {
+            warning = _profile.WarningOf(exchange, finished);
+        }
+        catch (Exception ex)
+        {
+            warning = $"{finished.Kind} ({Describe(ex)})";
+        }
+
+        Warn(exchange.Method.Method, exchange.Url, warning, finished.RequestId);
         return finished;
     }
 
-    /// <summary>The core's own refusal of an answer (a redirect it does not follow, a body over 10 MB): <see cref="HostingFailureKind.Malformed"/>, with its warning.</summary>
+    /// <summary>
+    /// The core's own refusal of an answer (a redirect it does not follow, a body over 10 MB or one
+    /// that could not be decompressed): <see cref="HostingFailureKind.Malformed"/>, with its warning.
+    /// </summary>
     private HostingFailure Stopped(HostingExchange exchange, string warning)
     {
-        var failure = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, _profile.RequestIdOf(exchange.Headers));
+        var failure = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, RequestIdOf(exchange.Headers));
         Warn(exchange.Method.Method, exchange.Url, warning, failure.RequestId);
         return failure;
+    }
+
+    /// <summary>
+    /// An answer a profile's hook threw on (D380): <see cref="HostingFailureKind.Malformed"/>, with
+    /// the warning <c>Malformed (&lt;the exception, described&gt;)</c>.
+    /// </summary>
+    private HostingFailure Unreadable(HostingExchange exchange, Exception exception) => Stopped(exchange, $"Malformed ({Describe(exception)})");
+
+    /// <summary>The profile's request id of an answer's headers; null when its hook throws on them (D380).</summary>
+    private string? RequestIdOf(IReadOnlyDictionary<string, string> headers)
+    {
+        try
+        {
+            return _profile.RequestIdOf(headers);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 
     private (HostingExchange Exchange, HostingFailure Failure) Unanswered(HttpMethod method, Uri url, string message) =>
@@ -463,14 +582,14 @@ internal sealed partial class HostingHttpClient : IDisposable
          Finish(new HostingFailure(HostingFailureKind.Network, message), url, null));
 
     /// <summary>
-    /// What every failure gets (5.2): the profile's provider; the address without its query and
-    /// the request id where the failure left them null; e-mail addresses screened out of its
-    /// message and detail (D368).
+    /// What every failure gets (5.2): the profile's provider; the address, the failure's own or
+    /// else the request's, without its userinfo and query (D380); the request id where the failure
+    /// left it null; e-mail addresses screened out of its message and detail (D368).
     /// </summary>
     private HostingFailure Finish(HostingFailure failure, Uri url, string? requestId) => failure with
     {
         Provider = _profile.Provider,
-        Url = failure.Url ?? WithoutQuery(url),
+        Url = WithoutQuery(failure.Url ?? url),
         RequestId = failure.RequestId ?? requestId,
         Message = ScreenEmail(failure.Message),
         Detail = failure.Detail is null ? null : ScreenEmail(failure.Detail),
@@ -478,12 +597,13 @@ internal sealed partial class HostingHttpClient : IDisposable
 
     /// <summary>
     /// The one warning of a failure: <c>&lt;name&gt;: &lt;method&gt; &lt;path&gt; failed: &lt;status or kind&gt; (request &lt;id&gt;).</c>,
-    /// the path without its query; the exception of a request that got no answer.
+    /// the path without its query. No exception is passed to the log (D380): the log's own text of
+    /// one (its <c>ToString()</c>) would quote what the server or the proxy sent.
     /// </summary>
-    private void Warn(string method, Uri url, string statusOrKind, string? requestId, Exception? exception = null)
+    private void Warn(string method, Uri url, string statusOrKind, string? requestId)
     {
         var request = requestId is { Length: > 0 } ? $" (request {requestId})" : string.Empty;
-        _log.Warning($"{Name}: {method} {url.AbsolutePath} failed: {statusOrKind}{request}.", exception);
+        _log.Warning($"{Name}: {method} {url.AbsolutePath} failed: {statusOrKind}{request}.");
     }
 
     private static T? Parse<T>(byte[] body, JsonTypeInfo<T> type)

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Net;
+using System.Net.Sockets;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -333,7 +334,7 @@ public sealed class HostingHttpClientTests
         Assert.Equal(
             new[]
             {
-                "GitLab: GET /api/v4/unreachable failed: Network.",
+                "GitLab: GET /api/v4/unreachable failed: Network (HttpRequestException).",
                 "GitLab: GET /api/v4/classified failed: 404 (request R-classified).",
                 "GitLab: GET /api/v4/refused-success failed: 200 (request R-refused-success).",
                 "GitLab: GET /api/v4/refused-redirect failed: 301 (request R-refused-redirect).",
@@ -596,7 +597,7 @@ public sealed class HostingHttpClientTests
 
         Assert.Equal((HostingFailureKind.Network, "GitLab did not answer within 30 seconds.", 0), (slow.Failure!.Kind, slow.Failure.Message, slow.Status));
         Assert.Equal((HostingFailureKind.Network, "Could not reach GitLab.", 0), (gone.Failure!.Kind, gone.Failure.Message, gone.Status));
-        Assert.Equal(new[] { "GitLab: GET /api/v4/slow failed: time-out.", "GitLab: GET /api/v4/gone failed: Network." }, setup.Log.Lines.Select(line => line.Message));
+        Assert.Equal(new[] { "GitLab: GET /api/v4/slow failed: time-out.", "GitLab: GET /api/v4/gone failed: Network (HttpRequestException)." }, setup.Log.Lines.Select(line => line.Message));
         Assert.Empty(slow.Headers);
     }
 
@@ -622,24 +623,245 @@ public sealed class HostingHttpClientTests
     [Fact]
     public async Task No_log_line_holds_a_query_a_token_a_header_or_a_body()
     {
-        using var setup = Setup.Scripted(request => request.RequestUri!.AbsolutePath.EndsWith("/moved", StringComparison.Ordinal)
-            ? RecordingHttpHandler.Json(HttpStatusCode.Found, "{\"secret\":\"BODY-SECRET\"}", ("Location", "https://elsewhere.example/HEADER-SECRET?q=QUERY-SECRET"), ("X-Secret", "HEADER-SECRET"))
-            : RecordingHttpHandler.Json(HttpStatusCode.Forbidden, "{\"message\":\"BODY-SECRET ada@example.com\"}", ("X-Secret", "HEADER-SECRET"), ("X-Request-Id", "R-1")));
+        using var setup = Setup.Scripted(request => request.RequestUri!.AbsolutePath switch
+        {
+            var path when path.EndsWith("/moved", StringComparison.Ordinal) =>
+                RecordingHttpHandler.Json(HttpStatusCode.Found, "{\"secret\":\"BODY-SECRET\"}", ("Location", "https://elsewhere.example/HEADER-SECRET?q=QUERY-SECRET"), ("X-Secret", "HEADER-SECRET")),
+
+            // D380: .NET's own messages quote what a proxy or a server sent; none reaches the log.
+            var path when path.EndsWith("/thrown", StringComparison.Ordinal) => throw new HttpRequestException(
+                HttpRequestError.InvalidResponse,
+                $"Received an invalid header line: 'X-Echo Bearer {Token}'; proxy 'http://proxyuser:PROXY-SECRET@127.0.0.1:9/'; ada@example.com",
+                new IOException("BODY-SECRET " + Token)),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, "{\"message\":\"BODY-SECRET ada@example.com\"}", ("X-Secret", "HEADER-SECRET"), ("X-Request-Id", "R-1")),
+        });
 
         await setup.GetAsync("projects/7?private_token=QUERY-SECRET&author=ada%40example.com");
         await setup.GetAsync("moved?private_token=QUERY-SECRET");
         await setup.Client.GetPagesAsync(Token, new Uri(Origin, "items?private_token=QUERY-SECRET"), CoreTestJsonContext.Default.ListCoreTestJson, 3, Cancelled);
         setup.Client.MalformedAnswer(HttpMethod.Get, new Uri(Origin, "answer?private_token=QUERY-SECRET"), null);
+        var thrown = await setup.GetAsync("thrown?private_token=QUERY-SECRET");
 
-        Assert.Equal(4, setup.Log.Lines.Count);
+        Assert.Equal((HostingFailureKind.Network, "Could not reach GitLab."), (thrown.Failure!.Kind, thrown.Failure.Message));
+        Assert.Equal("GitLab: GET /api/v4/thrown failed: Network (HttpRequestException InvalidResponse).", setup.Log.Lines[^1].Message);
+        Assert.Equal(5, setup.Log.Lines.Count);
+        Assert.All(setup.Log.Entries, entry => Assert.Null(entry.Exception));
         foreach (var line in setup.Log.Lines)
         {
             Assert.Equal(LogLevel.Warning, line.Level);
-            foreach (var secret in new[] { Token, "QUERY-SECRET", "HEADER-SECRET", "BODY-SECRET", "private_token", "?", "ada", "example.com", TestProfile.HeaderValue, HostingHttpClient.UserAgent })
-            {
-                Assert.DoesNotContain(secret, line.Message, StringComparison.Ordinal);
-            }
         }
+
+        foreach (var secret in new[] { Token, "QUERY-SECRET", "HEADER-SECRET", "BODY-SECRET", "PROXY-SECRET", "proxyuser", "private_token", "?", "ada", "example.com", TestProfile.HeaderValue, HostingHttpClient.UserAgent })
+        {
+            Assert.DoesNotContain(secret, setup.Log.Written, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void An_exception_is_described_by_its_type_its_http_error_and_an_inner_sockets_code_alone()
+    {
+        // D380: the findings' messages, as .NET wrote them (measured on 10.0), and what the log says of each.
+        const string Echoed = "Bearer " + Token;
+        (Exception Exception, string Described)[] rows =
+        [
+            (new HttpRequestException(HttpRequestError.ProxyTunnelError, "The proxy tunnel request to proxy 'http://proxyuser:PROXY-SECRET@127.0.0.1:50637/' failed with status code '407'."),
+                "HttpRequestException ProxyTunnelError"),
+            (new HttpRequestException(HttpRequestError.InvalidResponse, $"Received an invalid header line: 'X-Echo {Echoed}'."), "HttpRequestException InvalidResponse"),
+            (new HttpRequestException(HttpRequestError.InvalidResponse, "Received an invalid header line: 'Set-Cookie session=SECRET-COOKIE-123'."), "HttpRequestException InvalidResponse"),
+            (new HttpRequestException(HttpRequestError.InvalidResponse, "Received an invalid header name: 'ada@example.com x'."), "HttpRequestException InvalidResponse"),
+            (new HttpIOException(HttpRequestError.InvalidResponse, "Received chunk header length could not be parsed: '7B-22-6C-6F-67-69-6E-22'."), "HttpIOException InvalidResponse"),
+            (new HttpIOException(HttpRequestError.ResponseEnded, "The response ended prematurely. ada@example.com"), "HttpIOException ResponseEnded"),
+            (new HttpRequestException(HttpRequestError.ConnectionError, "No connection could be made (127.0.0.1:9)", new SocketException((int)SocketError.ConnectionRefused)),
+                "HttpRequestException ConnectionError, SocketException ConnectionRefused"),
+            (new HttpRequestException(HttpRequestError.NameResolutionError, "No such host is known. (gitlab.example:443)", new IOException("ada@example.com", new SocketException((int)SocketError.HostNotFound))),
+                "HttpRequestException NameResolutionError, SocketException HostNotFound"),
+            (new HttpRequestException("No such host is known. (gitlab.example:443)"), "HttpRequestException"),
+            (new TaskCanceledException("The operation was canceled.", new TimeoutException("A connection could not be made within 10 seconds.")), "TaskCanceledException"),
+            (new IOException("Unable to read data: " + Token, new SocketException((int)SocketError.ConnectionReset)), "IOException, SocketException ConnectionReset"),
+            (new SocketException((int)SocketError.ConnectionAborted), "SocketException ConnectionAborted"),
+        ];
+
+        Assert.Equal(rows.Select(row => row.Described), rows.Select(row => HostingHttpClient.Describe(row.Exception)));
+    }
+
+    [Theory]
+    [InlineData("echo")]
+    [InlineData("cookie")]
+    [InlineData("address")]
+    [InlineData("chunk")]
+    public async Task An_answer_that_breaks_http_on_the_wire_is_no_answer_and_the_log_holds_nothing_it_sent(string answer)
+    {
+        // D380, the finding's (b) to (e) over the real handler: .NET's exception quotes the line.
+        await using var server = new RawHttpServer(head => RawHttpServer.Bytes(answer switch
+        {
+            "echo" => $"HTTP/1.1 200 OK\r\nX-Echo {RawHttpServer.HeaderOf(head, "Authorization")}\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}",
+            "cookie" => "HTTP/1.1 200 OK\r\nSet-Cookie session=SECRET-COOKIE-123\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+            "address" => "HTTP/1.1 200 OK\r\nada@example.com x: y\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
+            _ => "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n{\"login\":\"ada\",\"email\":\"ada@example.com\"}\r\n",
+        }));
+        var origin = new Uri(server.Base, "api/v4/");
+        var handler = HostingOptions.DefaultHandler(origin);
+        using var setup = new WireSetup(origin, handler);
+
+        var premise = await ThrownReadingAsync(handler(), new Uri(origin, "user"));
+        var reply = await setup.GetAsync("user");
+
+        Assert.Equal((HostingFailureKind.Network, "Could not reach GitLab.", 0), (reply.Failure!.Kind, reply.Failure.Message, reply.Status));
+        Assert.Equal(2, server.Heads.Count);
+        Assert.All(server.Heads, head => Assert.Equal("Bearer " + Token, RawHttpServer.HeaderOf(head, "Authorization")));
+        var secret = answer switch { "echo" => Token, "cookie" => "SECRET-COOKIE-123", "address" => "ada@example.com", _ => "7B-22" };
+        Assert.Contains(secret, premise, StringComparison.Ordinal);
+        var (level, message, exception) = Assert.Single(setup.Log.Entries);
+        Assert.Equal(LogLevel.Warning, level);
+        Assert.Null(exception);
+        Assert.Matches(@"^GitLab: GET /api/v4/user failed: Network \(Http(Request|IO)Exception( [A-Za-z]+)?(, SocketException [A-Za-z]+)?\)\.$", message);
+        foreach (var held in new[] { Token, "SECRET-COOKIE-123", "ada", "example.com", "7B-22", "Received" })
+        {
+            Assert.DoesNotContain(held, setup.Log.Written, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task A_proxy_that_refuses_its_password_leaves_the_password_out_of_the_log()
+    {
+        // D380, the finding's (a): a proxy that keeps answering 407 (no Proxy-Authenticate), whose
+        // address holds its user and password, as HTTPS_PROXY gives them.
+        await using var proxy = new RawHttpServer(_ => RawHttpServer.Bytes("HTTP/1.1 407 Proxy Authentication Required\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"));
+        var proxyAddress = new Uri($"http://proxyuser:PROXY-SECRET@127.0.0.1:{proxy.Port}/");
+        var origin = new Uri("https://127.0.0.2:9/api/v4/");
+        HttpMessageHandler Handler() => new SocketsHttpHandler
+        {
+            AllowAutoRedirect = false,
+            AutomaticDecompression = DecompressionMethods.All,
+            UseCookies = false,
+            ConnectTimeout = TimeSpan.FromSeconds(10),
+            UseProxy = true,
+            Proxy = new FixedProxy(proxyAddress),
+        };
+        using var setup = new WireSetup(origin, Handler);
+
+        var premise = await ThrownReadingAsync(Handler(), new Uri(origin, "user"));
+        var reply = await setup.GetAsync("user");
+
+        Assert.Equal((HostingFailureKind.Network, "Could not reach GitLab."), (reply.Failure!.Kind, reply.Failure.Message));
+        Assert.NotEmpty(proxy.Heads);
+        Assert.All(proxy.Heads, head => Assert.StartsWith("CONNECT 127.0.0.2:9 ", head, StringComparison.Ordinal));
+        Assert.All(proxy.Heads, head => Assert.Null(RawHttpServer.HeaderOf(head, "Authorization")));
+        Assert.Contains("PROXY-SECRET", premise, StringComparison.Ordinal);
+        var (_, message, exception) = Assert.Single(setup.Log.Entries);
+        Assert.Null(exception);
+        Assert.Equal("GitLab: GET /api/v4/user failed: Network (HttpRequestException ProxyTunnelError).", message);
+        foreach (var held in new[] { "PROXY-SECRET", "proxyuser", Token, "127.0.0.1" })
+        {
+            Assert.DoesNotContain(held, setup.Log.Written, StringComparison.Ordinal);
+        }
+    }
+
+    [Theory]
+    [InlineData("http://user:hunter2@127.0.0.1:5000/api/v3/next", "http://127.0.0.1:5000/api/v3/next")]
+    [InlineData("https://user:hunter2@gitlab.example/api/v4/next?private_token=x#f", "https://gitlab.example/api/v4/next")]
+    [InlineData("https://user@gitlab.example:443/api/v4/a", "https://gitlab.example/api/v4/a")]
+    [InlineData("https://:hunter2@gitlab.example:8443/a%20b?q", "https://gitlab.example:8443/a%20b")]
+    [InlineData("https://gitlab.example/a?private_token=x#f", "https://gitlab.example/a")]
+    [InlineData("https://gitlab.example/", "https://gitlab.example/")]
+    public void An_address_without_its_query_keeps_no_userinfo(string url, string without)
+    {
+        Assert.Equal(without, HostingHttpClient.WithoutQuery(new Uri(url)).AbsoluteUri);
+    }
+
+    [Fact]
+    public async Task A_failures_address_keeps_no_userinfo_a_same_origin_redirects_location_and_the_profiles_own_included()
+    {
+        // D380, the finding's 302 with a user and password in Location, then a 404.
+        using var setup = Setup.Scripted(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/v4/user" => RecordingHttpHandler.Json(HttpStatusCode.Found, "{}", ("Location", "https://user:hunter2@gitlab.example/api/v4/next?private_token=x")),
+            "/api/v4/kept" => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, "{}"),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}"),
+        });
+        setup.Profile.OnClassify = exchange => exchange.Status == 403
+            ? new HostingFailure(HostingFailureKind.Forbidden, "Kept.", Url: new Uri("https://user:hunter2@gitlab.example/kept?private_token=x"))
+            : null;
+
+        var redirected = (await setup.GetAsync("user")).Failure!;
+        var kept = (await setup.GetAsync("kept")).Failure!;
+        var built = setup.Client.Failed(HttpMethod.Get, new Uri("https://user:hunter2@gitlab.example/api/v4/built?private_token=x"), new HostingFailure(HostingFailureKind.BadCredentials, "Anonymous."), null);
+
+        Assert.Equal((HostingFailureKind.Validation, "Not Found", "https://gitlab.example/api/v4/next"), (redirected.Kind, redirected.Message, redirected.Url!.AbsoluteUri));
+        Assert.Equal("https://gitlab.example/kept", kept.Url!.AbsoluteUri);
+        Assert.Equal("https://gitlab.example/api/v4/built", built.Url!.AbsoluteUri);
+        Assert.Equal("Bearer " + Token, setup.Recorder.Sent[1].Header("Authorization"));
+        Assert.DoesNotContain("hunter2", setup.Log.Written, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("InvalidDataException")]
+    [InlineData("InvalidOperationException")]
+    public async Task A_body_that_cannot_be_decompressed_is_malformed_and_nothing_throws(string thrown)
+    {
+        // D380: .NET's gzip and deflate decoders throw InvalidDataException, its brotli decoder
+        // InvalidOperationException, as the body is read (measured).
+        using var setup = Setup.Scripted(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new ThrowingContent(thrown == "InvalidDataException"
+                ? new InvalidDataException("The archive entry was compressed using an unsupported compression method. ada@example.com")
+                : new InvalidOperationException("Decoder ran into invalid data. " + Token)),
+            Headers = { { "X-Request-Id", "R-7" } },
+        });
+
+        var reply = await setup.GetAsync("user?private_token=x");
+
+        Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", HostingProvider.GitLab, "https://gitlab.example/api/v4/user", "R-7", 200),
+            (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Provider, reply.Failure.Url!.AbsoluteUri, reply.Failure.RequestId, reply.Status));
+        Assert.Equal($"GitLab: GET /api/v4/user failed: a body that could not be decompressed ({thrown}) (request R-7).", Assert.Single(setup.Log.Lines).Message);
+        Assert.All(setup.Log.Entries, entry => Assert.Null(entry.Exception));
+    }
+
+    [Theory]
+    [InlineData("gzip")]
+    [InlineData("deflate")]
+    [InlineData("br")]
+    public async Task A_body_its_content_encoding_does_not_decode_on_the_wire_is_malformed_and_nothing_throws(string encoding)
+    {
+        // D380, the finding's answers: a 200 whose Content-Encoding names a coding its body is not in.
+        const string Body = "{\"login\":\"ada\",\"email\":\"ada@example.com\"}";
+        await using var server = new RawHttpServer(_ => RawHttpServer.Bytes(
+            $"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Encoding: {encoding}\r\nContent-Length: {Body.Length}\r\nX-Request-Id: R-7\r\nConnection: close\r\n\r\n{Body}"));
+        var origin = new Uri(server.Base, "api/v4/");
+        using var setup = new WireSetup(origin, HostingOptions.DefaultHandler(origin));
+
+        var reply = await setup.GetAsync("user");
+
+        Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", "R-7", 200), (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.RequestId, reply.Status));
+        Assert.Matches(@"^GitLab: GET /api/v4/user failed: a body that could not be decompressed \(Invalid(Data|Operation)Exception\) \(request R-7\)\.$", Assert.Single(setup.Log.Lines).Message);
+        Assert.All(setup.Log.Entries, entry => Assert.Null(entry.Exception));
+    }
+
+    [Theory]
+    [InlineData("classify")]
+    [InlineData("success")]
+    [InlineData("redirect")]
+    public async Task A_profile_hook_that_throws_on_an_answer_gives_malformed_and_nothing_throws(string hook)
+    {
+        // D380: a header value out of range, say, read by a profile's hook.
+        using var setup = Setup.Scripted(_ => hook switch
+        {
+            "classify" => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, "{}", ("X-Request-Id", "R-6")),
+            "success" => RecordingHttpHandler.Json(HttpStatusCode.OK, "{}", ("X-Request-Id", "R-6")),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.Found, "{}", ("Location", "/api/v4/next"), ("X-Request-Id", "R-6")),
+        });
+        setup.Profile.OnClassify = _ => throw new ArgumentOutOfRangeException("seconds", "Valid values are between -62135596800 and 253402300799. ada@example.com");
+        setup.Profile.OnSuccess = _ => throw new FormatException("Not a date: " + Token);
+        setup.Profile.OnRedirect = (_, _) => throw new OverflowException("Too large.");
+
+        var reply = await setup.GetAsync("user?private_token=x");
+
+        Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", "https://gitlab.example/api/v4/user", "R-6"),
+            (reply.Failure!.Kind, reply.Failure.Message, reply.Failure.Url!.AbsoluteUri, reply.Failure.RequestId));
+        var thrown = hook switch { "classify" => "ArgumentOutOfRangeException", "success" => "FormatException", _ => "OverflowException" };
+        Assert.Equal($"GitLab: GET /api/v4/user failed: Malformed ({thrown}) (request R-6).", Assert.Single(setup.Log.Lines).Message);
+        Assert.All(setup.Log.Entries, entry => Assert.Null(entry.Exception));
+        Assert.Single(setup.Recorder.Sent);
     }
 
     [Fact]
@@ -690,12 +912,75 @@ public sealed class HostingHttpClientTests
         }
     }
 
+    /// <summary>What .NET's own exception says when <paramref name="url"/> is read with the token over <paramref name="handler"/>, without the core: the finding's premise (D380).</summary>
+    private static async Task<string> ThrownReadingAsync(HttpMessageHandler handler, Uri url)
+    {
+        using var http = new HttpClient(handler);
+        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + Token);
+        try
+        {
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, Cancelled);
+            await response.Content.ReadAsByteArrayAsync(Cancelled);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            return ex.ToString();
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>A body whose reading throws <c>thrown</c>, as .NET's decoders do on a body their coding does not hold.</summary>
+    private sealed class ThrowingContent(Exception thrown) : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, System.Net.TransportContext? context) => Task.FromException(thrown);
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
+    }
+
+    /// <summary>A proxy for every address, with the user and password its address holds, as <c>HTTPS_PROXY</c> gives them.</summary>
+    private sealed class FixedProxy(Uri address) : IWebProxy
+    {
+        public ICredentials? Credentials { get; set; } = new NetworkCredential(
+            Uri.UnescapeDataString(address.UserInfo.Split(':')[0]), Uri.UnescapeDataString(address.UserInfo.Split(':')[1]));
+
+        public Uri GetProxy(Uri destination) => address;
+
+        public bool IsBypassed(Uri host) => false;
+    }
+
+    /// <summary>A client over <see cref="TestProfile"/> on another origin and a real handler, with its log.</summary>
+    private sealed class WireSetup : IDisposable
+    {
+        public WireSetup(Uri origin, Func<HttpMessageHandler> createHandler)
+        {
+            Origin = origin;
+            Client = new HostingHttpClient(new TestProfile(origin), createHandler, Log, new ManualTimeProvider(AppClocks.HarnessTime));
+        }
+
+        public Uri Origin { get; }
+
+        public ListLog Log { get; } = new();
+
+        public HostingHttpClient Client { get; }
+
+        public Task<HostingReply<CoreTestJson>> GetAsync(string relative) =>
+            Client.SendAsync(HttpMethod.Get, Token, new Uri(Origin, relative), null, CoreTestJsonContext.Default.CoreTestJson, Cancelled);
+
+        public void Dispose() => Client.Dispose();
+    }
+
     /// <summary>
-    /// A profile naming GitLab on <see cref="Origin"/>: <c>Bearer</c>, one header of its own, 409 as
-    /// empty success, <c>Link</c> pages, <c>X-Request-Id</c>, and <c>Link</c> and <c>X-Kept</c>
-    /// kept; each hook settable, and every exchange it is given recorded.
+    /// A profile naming GitLab on <see cref="Origin"/>, or on the origin given: <c>Bearer</c>, one
+    /// header of its own, 409 as empty success, <c>Link</c> pages, <c>X-Request-Id</c>, and
+    /// <c>Link</c> and <c>X-Kept</c> kept; each hook settable, and every exchange it is given recorded.
     /// </summary>
-    private sealed class TestProfile : HostingHttpProfile
+    private sealed class TestProfile(Uri? origin = null) : HostingHttpProfile
     {
         public const string HeaderName = "X-Profile";
 
@@ -706,7 +991,7 @@ public sealed class HostingHttpClientTests
 
         public override HostingProvider Provider => HostingProvider.GitLab;
 
-        public override Uri TokenOrigin => Origin;
+        public override Uri TokenOrigin => origin ?? Origin;
 
         public override JsonSerializerContext Json => CoreTestJsonContext.Default;
 

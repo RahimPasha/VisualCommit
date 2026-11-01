@@ -617,7 +617,8 @@ internal static class HostingLinks { public static Uri? Next(IReadOnlyDictionary
 
 GitHub's results equal 7a's `GitHubClient.NetworkText`, `TimeoutText` and `MalformedText`
 (`GitHubClient.cs:44-50`) and its 5xx text (`:453`). The core sets `Provider` on every failure, and
-`Url` and `RequestId` where the profile left them null, and screens e-mail addresses (D368); a failure a
+`Url` and `RequestId` where the profile left them null (every `Url` without its userinfo and query,
+D380), and screens e-mail addresses (D368); a failure a
 client builds itself from a reply that succeeded goes through `Failed` to get the same. `RefuseRedirect`
 is asked of every redirect with a `Location`, one to another origin and a fourth one included, before
 7a's rule; the redirect's exchange has an empty `Body` and the request's `Url`, query kept (WP-H's
@@ -1497,7 +1498,8 @@ picture changes; no token or address of the owner's, and no value from the resea
 
 Status steps 7 and 8. `GitHubClient`'s rules (7a design 6.2; D284, D285) move into one internal core
 that every provider's client drives through a profile (D358, ruling 4, r1 P7); GitHub's behaviour
-does not change, and `GitHubClientTests` pass as they are. GitHub's 422 details become a
+does not change, and `GitHubClientTests` pass as they are, but for D380 (5.2's Logging, Bodies and
+Answers; 5.3's reset). GitHub's 422 details become a
 `PullRequestRefusal` (r1 P8), and another provider's token is refused without a request (D378). Wave 1,
 branch `wip/p7b-http`; no git, no UI, no picture.
 
@@ -1527,14 +1529,19 @@ branch `wip/p7b-http`; no git, no UI, no picture.
 - **Bodies.** At most `MaxBodyBytes` (10 MB) by `Content-Length` or by reading, else `Malformed` ("an
   answer over 10 MB"). A leading `EF BB BF` is removed before anything reads the body, for every
   provider (g1 G0.8 and G7, MEASURED: System.Text.Json refuses it); `HostingExchange.Body` is without it.
+  A body its `Content-Encoding` does not decode (gzip, deflate, br: .NET throws `InvalidDataException`
+  or `InvalidOperationException`, MEASURED) is `Malformed`, warning `a body that could not be
+  decompressed (<type>)`, never an exception out of the core (D380).
 - **Answers.** A 2xx or 304 is offered to `RefuseSuccess(exchange)` (Azure DevOps' 203 and HTML, 6.3),
   then parsed with the caller's type: no value is `Malformed`. A 304 to a kept answer
   gives the kept body, the kept headers under the 304's own. `SucceedsEmpty(status)` is success without
-  a value (GitHub's 409). Anything else goes to `Classify`. On every failure the core sets `Provider` to
-  the profile's, and `Url` (without its query) and `RequestId` (`RequestIdOf`) where the profile left
-  them null; it replaces each e-mail-shaped run in `Message` and `Detail` with `<e-mail>`
-  (D368: Azure DevOps' messages name identities, g1 G2, and reach the log), which changes
-  no GitHub text.
+  a value (GitHub's 409). Anything else goes to `Classify`. A hook that throws on an answer (a header
+  value out of range) is `Malformed`, warning `Malformed (<type>)` (D380). On every failure the core
+  sets `Provider` to the profile's, `Url` (the profile's own, else the request's) without its userinfo
+  and query (D380: a same-origin `Location` can hold a user and password), and `RequestId`
+  (`RequestIdOf`) where the profile left it null; it replaces each e-mail-shaped run in `Message`
+  and `Detail` with `<e-mail>` (D368: Azure DevOps' messages name identities, g1 G2, and reach the
+  log), which changes no GitHub text.
 - **Kept answers.** 7a's: a GET's 200 with an `ETag`, per (SHA-256 of the token, URL), at most 512 and
   `keptBytes` (32 MB) of bodies, oldest first; `If-None-Match` on the next GET; never on disk;
   `ForgetKept()`. The headers kept are `profile.KeptHeaderNames` (7a's three for GitHub,
@@ -1546,7 +1553,13 @@ branch `wip/p7b-http`; no git, no UI, no picture.
   list. `pageHeaders` is called with each page's headers (GitHub's 5.3). `HostingLinks.Next` reads
   `Link`'s `rel="next"` for GitHub's and GitLab's `NextPage` (`GitHubClient.cs:527-546`, moved).
 - **Logging.** One warning per failure, `<name>: <method> <path> failed: <status or kind> (request <id>).`;
-  never a header, body, query or token; GitHub's lines are 7a's.
+  never a header, body, query, token or an exception's text (D380): no exception object reaches the
+  log, and one is named by `Describe`, its type with its `HttpRequestError` and an inner
+  `SocketException`'s code, as in `Network (HttpRequestException ConnectionError, SocketException
+  ConnectionRefused)`, since .NET's messages quote what a proxy or server sent (MEASURED: a proxy's
+  password, a token echoed back, a cookie, an address, body bytes). This amends 7a design 6.2's "a
+  network failure passes the exception" and 7.12's "by message only" for every such log call in
+  `src/VisualCommit.Hosting/` (`AvatarCache`'s one included); GitHub's lines are 7a's otherwise.
 - **Helpers.** `SameOrigin`, `OriginOf`, `IsRedirect`, `Resolve`, `ReadBoundedAsync` and the constants
   are internal statics here; `GitHubClient`'s forward to them, so `AvatarCache.cs:152-183` compiles
   unchanged. `MalformedAnswer` gives a provider's
@@ -1564,7 +1577,8 @@ branch `wip/p7b-http`; no git, no UI, no picture.
 `SendAsync`, `GetPagesAsync`, `GitHubReply<T>`, `ForgetKept` and the statics. It holds one
 `HostingHttpClient` and a private `GitHubProfile`: `Provider` GitHub; `TokenOrigin` `ApiBase`;
 `Authorize` `Bearer`; `AddHeaders` `Accept` and `X-GitHub-Api-Version` (`:384-386`); `Classify` 7a's
-table (`:407-456`) on `HostingExchange`, its clock for `RetryAt`; `SucceedsEmpty` 409; `NextPage` the
+table (`:407-456`) on `HostingExchange`, its clock for `RetryAt`, an `X-RateLimit-Reset` of digits past
+9999-12-31 23:59:59 UTC `Malformed` with 7a's `MalformedText` (D380); `SucceedsEmpty` 409; `NextPage` the
 `HostingLinks.Next`; `RequestIdOf` `X-GitHub-Request-Id`; `KeptHeaderNames` `Link`,
 `X-GitHub-SSO`, `X-OAuth-Scopes`; `Json` `GitHubJsonContext.Default`. `GitHubReply` from the core's
 reply: `MoreExist` is `Next` not null; for pages, through the overload, `OAuthScopes` the first page's
@@ -1596,8 +1610,10 @@ of none, goes on as in 7a.
   screening; kept answers (304 with body and kept headers, another token's and a POST not
   conditional, the budget, `ForgetKept`); headers without case and joined; `HostingLinks.Next`; pages
   (cap and `Next`, off origin or path, a failing page, the observer); one at a time and a waiting call cancelled; the texts, GitHub's equal to
-  `GitHubClient`'s constants; no query, token or header in a log line; a body type outside `Json`.
-- `GitHubClientTests`: unchanged; one method: every failure of the fault table names GitHub.
+  `GitHubClient`'s constants; no query, token or header in a log line; a body type outside `Json`;
+  D380's rows, on strings and over a raw socket on 127.0.0.1 with the real handler.
+- `GitHubClientTests`: unchanged; one method: every failure of the fault table names GitHub. D380
+  changes three Network lines and one exception assertion, and adds the reset and a redirect's userinfo.
 - `GitHubProviderTests`: one theory, A5 against `FakeGitHub` for the four forms and an other 422
   (`None`), and a 403 (`None`); one theory, `CheckTokenAsync` with `glpat-FAKE-ada-1` and with
   `new string('a', 76) + "AZDO" + "abcd"` is `BadCredentials` with `Detail` `other-provider:gitlab` and
@@ -1610,9 +1626,10 @@ Commits: (1) the core and its tests; (2) `GitHubClient` on it; (3) the refusals 
 The lead runs `VisualCommit.Hosting.Tests` and the 7a walk-through (every GitHub request now passes the
 core); no lagged list, no CLAUDE.md row, no picture. The whole default run follows the merge that closes
 wave 1, whichever of WP-F, WP-H and WP-C is last (0.4). Done when the three classes pass with
-`GitHubClientTests`' 7a cases untouched; nothing under `Http/` names a provider but through
-`HostingProviders`; no token, header, body or query reaches a log; `AvatarCache.cs` is unchanged; CI's
-five jobs are green.
+`GitHubClientTests`' 7a cases untouched but for D380's Network lines and exception assertion;
+nothing under `Http/` names a provider but through `HostingProviders`; no token, header, body, query
+or exception's text reaches a log (D380); `AvatarCache.cs` is unchanged but for its one log call on an
+HTTP-stack exception (D380); CI's five jobs are green.
 
 **As built** (WP-H, `2ed2447`, `549ec8d`, `43bcb65`, review fixes `4bb76fe`, 2026-11-01). Where it
 differs from 5.1 to 5.5 or settles what they left open:
@@ -1642,7 +1659,17 @@ differs from 5.1 to 5.5 or settles what they left open:
 - `GitHubProvider`: `public const OtherProviderDetail = "other-provider:"`, `internal static
   RefusalOf(detail)`; the token refusal guards every method.
 - Outside section 5, only 1.4 and 6.3's lines above (the review's finding). `AvatarCache.cs`
-  unchanged; nothing under `Http/` names a provider.
+  unchanged but for D380's log call; nothing under `Http/` names a provider.
+- The lead's rulings H1 to H3 (D380, wave 1's verification): no exception object reaches the log;
+  `HostingHttpClient.Describe` names one by its type, its `HttpRequestError` when not `Unknown` and
+  the first inner `SocketException`'s code, and `AvatarCache`'s one such call uses it. `WithoutQuery`
+  keeps scheme, host, port and path, so every failure's `Url`, a profile's own too, drops the
+  userinfo. A body that cannot be decompressed is `Malformed`; so is an answer any profile hook
+  throws on (`RequestIdOf`'s then gives no id, `WarningOf`'s the kind), and GitHub's reset of digits
+  past year 9999 or a `long`. 7a assertions changed: `GitHubClientTests`' fault table's last line,
+  `No_answer_…` and `A_cancellation_…` (renamed; `Network (HttpRequestException)`,
+  `(TaskCanceledException)`, no exception), `HostingSessionCredentialTests`' Network line and
+  `AvatarCacheTests`' `(TaskCanceledException)`; `ListLog` keeps exceptions (`Entries`, `Written`).
 
 ## 6. WP-AZ: Azure DevOps' client and provider
 
