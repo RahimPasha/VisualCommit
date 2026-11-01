@@ -2001,27 +2001,28 @@ failure; no Azure DevOps sentence is parsed; no value from the research's captur
 green.
 
 **As built** (WP-AZ, `e83bfb0`, `0bb5087`, `b340942`, `6bac3b4`, `b03bbc5`, the reviews' fixes `1b6204a`,
-`e852cf8`, `fb4aa0b`, `d9cb180` and this paragraph's commit, 2026-11-01). Where the build differs from
-the text or settles what it left open:
+`e852cf8`, `fb4aa0b`, `d9cb180`, `b95e496` and this paragraph's commit, 2026-11-01). Where the build
+differs from the text or settles what it left open:
 - `AzureDevOpsUrls` (internal): `Recognise` (also with an `out` user), `OrganizationOf`, `WebUrlOf`,
   `ApiPath`, `NamesOf` and `IsName` (no empty, `.` or `..` name, none with `/` or `\`: A2 drops such
   rows and refuses such a `ListProject`, A3 to A5 refuse them unsent, A4's fork source is no head).
   An http(s) URL's host and port are .NET's, as `Select` reads them (empty user or port, leading
   zeros, `127.1`), so a repository form is recognised exactly where `Select` binds it (V11, SSH and a
-  project or repository starting with `_` aside: `…/_git/_full/` names none); the path is read by
-  hand, the organization as written (V16), `_git`, `DefaultCollection` and `_full`/`_optimized` (only
-  before a name) without case, escapes decoded (`%5Fgit`); SSH takes port 22 alone. `OrganizationOf` cuts at `?` or `#`, refuses a `\`,
-  ignores a user with a password, and takes `<label>.visualstudio.com` on https:443 alone.
-- `AzureDevOpsClient` (internal) returns `AzureDevOpsReply<T>` (`MoreExist`);
-  `GetPagesAsync<T>(token, url, type, idOf, maxPages, ct)` takes at most `PageSize` rows of a page
-  (if `$top` is ignored); a failing probe fails it, any probe row sets `MoreExist`, also one already
-  seen; a null row is `Malformed` (in A2 too, D380). `SignInPageText` answers every 3xx of
-  connectionData (300, 303 and 305 by `Classify`, a missing or unreadable `Location` by A1), a 3xx to
-  the sign-in whatever its status, a 203 and an HTML 2xx; none is followed. A same-origin redirect
-  whose path fails `InPlainForm` is `Malformed` as one into another organization, and so is one in
-  it to a path with no `_apis` segment (a web page; `<status>, redirected outside the API`). `Detail`
-  is null on every classified failure; `RetryAt` lies between now and a day ahead. A 401 or 203 over 10 MB stays the core's
-  `Malformed` (design 5's order of stops).
+  project or repository starting with `_`, as `_full`, aside); the path is read by hand, the
+  organization as written (V16), `_git`, `DefaultCollection` and `_full`/`_optimized` (only before a
+  name) without case, escapes decoded (`%5Fgit`); SSH takes port 22 alone. `OrganizationOf` cuts at
+  `?` or `#`, refuses a `\`, ignores a user with a password, and takes `<label>.visualstudio.com` on
+  https:443 alone.
+- `AzureDevOpsClient` (internal) returns `AzureDevOpsReply<T>` (`MoreExist`); `GetPagesAsync<T>`
+  takes at most `PageSize` rows of a page (if `$top` is ignored); a failing probe fails it, any probe
+  row sets `MoreExist`, also one already seen; a null row is `Malformed` (in A2 too, D380).
+  `SignInPageText` answers every 3xx of connectionData (300, 303, 305 by `Classify`, no readable
+  `Location` by A1), a 3xx to the sign-in (also its host with a trailing dot) whatever its status, a
+  203 and an HTML 2xx; none is followed. A same-origin redirect out of `InPlainForm` is `Malformed`
+  as one into another organization, and so is one in it to a web page (the first `_` segment after
+  the organization not `_apis`, as `_git/<repo>/_apis`; `<status>, redirected outside the API`).
+  `Detail` is null on every classified failure; `RetryAt` lies between now and a day ahead. A 401 or
+  203 over 10 MB stays the core's `Malformed` (design 5's order of stops).
 - Provider: public texts for its own refusals, `PullRequestPages` (3); D378's refusal guards A1 to A5.
   A2 refuses a foreign account or a login outside the grammar unsent. A row's `remoteUrl` and
   `webUrl` reach the record only when `Recognise` reads each as that repository, `remoteUrl` without
