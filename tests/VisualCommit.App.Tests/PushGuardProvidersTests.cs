@@ -11,7 +11,10 @@ namespace VisualCommit.App.Tests;
 /// that cannot exist on the provider counts as no source, so a branch whose tracking ref a request
 /// line could also fill is pushed, and the next fetch still succeeds (r7 9's F3). The refusals and
 /// the ref rules themselves are <c>PullRequestRefsTests</c>' on strings; 7a's GitHub rows are
-/// <see cref="PushGuardGitHubTests"/>'.
+/// <see cref="PushGuardGitHubTests"/>'. The remotes are local bare ones, so no push here is bound
+/// to an account: the class proves the App's guard alone, with the stub's recognition. That the
+/// session recognises another organization's dev.azure.com URL with no account, and gives its
+/// <c>SourceCanExist</c>, is WP-S's to prove (docs/phase-7b-design.md 9.6, 9.10).
 /// </summary>
 public sealed class PushGuardProvidersTests
 {
@@ -36,18 +39,17 @@ public sealed class PushGuardProvidersTests
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public async Task On_Azure_DevOps_a_branch_named_pr_slash_a_word_beside_the_merge_line_is_pushed_on_the_accounts_remote_and_another_organizations(bool accounts)
+    public async Task On_Azure_DevOps_a_branch_named_pr_slash_a_word_beside_the_merge_line_is_pushed_with_and_without_an_Azure_DevOps_account(bool account)
     {
-        // Recognising the remote makes no request and needs no account (D279): another
-        // organization's remote, which no binding covers, has the same rule.
+        // The App's guard follows the provider that recognises the remote's first URL, not an
+        // account (D279): without one (here GitLab's alone is signed in) the rule is the same.
         using var repo = await RemoteWithLineAsync("+refs/pull/*/merge:refs/remotes/origin/pr/*", "pr/fix", "refs/pull/7/merge");
-        var stub = new HostingSessionStub(new GitCoverage(MyOrg, new Uri("https://dev.azure.com/")) { Organization = "myorg", OrganizationHost = true, HelperUserIsAccounts = true }, null);
-        if (accounts)
-        {
-            stub.RepositoryBindings = [new CredentialBinding("https://dev.azure.com/myorg/p/_git/r", MyOrg) { SharedOriginOwner = "myorg" }];
-        }
-
+        var stub = account
+            ? new HostingSessionStub(new GitCoverage(MyOrg, new Uri("https://dev.azure.com/")) { Organization = "myorg", OrganizationHost = true, HelperUserIsAccounts = true }, null)
+            : new HostingSessionStub(new GitCoverage(new AccountKey(HostingProvider.GitLab, "gitlab.com", "ada"), new Uri("https://gitlab.com/")) { GitTwin = true, HelperUserIsAccounts = true }, null);
         stub.RecognisedUrls.Add(await UrlOfAsync(repo, "origin"), HostingProvider.AzureDevOps);
+        Assert.Equal(account, stub.AccountOf(HostingProvider.AzureDevOps) is not null);
+        Assert.Equal(account, stub.IsOn(HostingProvider.AzureDevOps));
 
         await PushesAsync(repo, stub, "origin", "pr/fix");
 

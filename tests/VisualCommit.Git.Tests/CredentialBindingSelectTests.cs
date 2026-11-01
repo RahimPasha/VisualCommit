@@ -319,6 +319,77 @@ public class CredentialBindingSelectTests
             CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("vs", "https://myorg.visualstudio.com/p/_git/r"), Fetch("other", other)], coverage).Select(binding => binding.Url));
     }
 
+    /// <summary>
+    /// URLs under <c>…/myorg/p/_git/r</c> in git's credential view that the server may read as
+    /// another organization's (g3 G3.2's sent column: X4, X6, V21's spellings): <c>%5C</c>, a raw
+    /// <c>\</c>, overlong dots. <see cref="CoverageGitMatchTests"/> shows that the binding's key
+    /// answers them with no user, which is why 8.2 step 5, as WP-C's review amended it, leaves the
+    /// origin unbound beside them whatever their user.
+    /// </summary>
+    public static TheoryData<string> OutOfFormUnderTheBinding => new()
+    {
+        $"{AzureRepos}/r/..%5C..%5C..%5C..%5Cotherorg/p/_git/r",
+        $"{AzureRepos}/r/..\\..\\..\\..\\otherorg/p/_git/r",
+        $"{AzureRepos}/r/%C0%AE%C0%AE/%C0%AE%C0%AE/%C0%AE%C0%AE/%C0%AE%C0%AE/otherorg/p/_git/r",
+    };
+
+    [Theory]
+    [MemberData(nameof(OutOfFormUnderTheBinding))]
+    public void On_Azure_DevOps_a_url_out_of_the_form_with_no_user_or_the_accounts_leaves_the_origin_unbound(string url)
+    {
+        var coverage = AzureDevOpsCoverageVectors.Coverage;
+        foreach (var spelled in new[] { url, url.Replace("https://", "https://myorg@", StringComparison.Ordinal), url.Replace("https://", "https://x-access-token@", StringComparison.Ordinal) })
+        {
+            Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("other", spelled)], coverage));
+            Assert.Equal(
+                ["https://myorg.visualstudio.com/p/_git/r"],
+                CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("vs", "https://myorg.visualstudio.com/p/_git/r"), Fetch("other", spelled)], coverage).Select(binding => binding.Url));
+        }
+    }
+
+    [Fact]
+    public void On_Azure_DevOps_a_url_with_no_first_segment_in_the_grammar_leaves_the_origin_unbound_and_another_organizations_does_not()
+    {
+        var coverage = AzureDevOpsCoverageVectors.Coverage;
+
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("root", "https://dev.azure.com/")], coverage));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("other", "https://dev.azure.com/my_org/p/_git/r")], coverage));
+        Assert.Equal([$"{AzureRepos}/r"], CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("other", "https://dev.azure.com/otherorg/p/_git/r")], coverage).Select(binding => binding.Url));
+
+        // A password is git's own credential: never bound, and it fails nothing (7a's rule).
+        Assert.Equal([$"{AzureRepos}/r"], CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("pw", "https://myorg:secret@dev.azure.com/myorg/p/_git/r/..%5Cx")], coverage).Select(binding => binding.Url));
+    }
+
+    [Fact]
+    public void On_GitLab_and_the_organizations_own_host_a_user_less_url_out_of_the_form_fails_nothing()
+    {
+        // Their token reaches no other account there (WP-C's review on 8.2 step 5).
+        Assert.Equal(
+            ["https://gitlab.com/g/p", "https://gitlab.com/g/p.git"],
+            CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p"), Fetch("other", "https://gitlab.com/g/p/..%5C..%5Cq")], GitLab).Select(binding => binding.Url));
+        Assert.Equal(
+            ["https://myorg.visualstudio.com/p/_git/r"],
+            CredentialBinding.Select([Fetch("vs", "https://myorg.visualstudio.com/p/_git/r"), Fetch("other", "https://myorg.visualstudio.com/p/_git/r/..%5Cq")], AzureDevOpsCoverageVectors.Coverage).Select(binding => binding.Url));
+    }
+
+    [Fact]
+    public void Another_users_url_on_a_covered_host_with_one_trailing_dot_drops_as_on_that_host()
+    {
+        // git's match_host reads dev.azure.com. as dev.azure.com, .NET's Host keeps the dot.
+        var azure = AzureDevOpsCoverageVectors.Coverage;
+
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("evil", "https://evil@dev.azure.com./myorg/p/_git/r")], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("evil", "https://evil@dev.azure.com./myorg/p/_git/./r")], azure));
+        Assert.Equal(
+            ["https://gitlab.com/g/p.git"],
+            CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p"), Fetch("evil", "https://evil@gitlab.com./g/p")], GitLab).Select(binding => binding.Url));
+        Assert.Empty(CredentialBinding.Select([Fetch("vs", "https://myorg.visualstudio.com/p/_git/r"), Fetch("evil", "https://evil@myorg.visualstudio.com./p/_git/r")], azure));
+
+        // Not bound itself with no user or the account's (V23), and it drops nothing then.
+        Assert.Equal([$"{AzureRepos}/r"], CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("dot", "https://dev.azure.com./myorg/p/_git/r")], azure).Select(binding => binding.Url));
+        Assert.Equal([$"{AzureRepos}/r"], CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("dot", "https://myorg@dev.azure.com./myorg/p/_git/r")], azure).Select(binding => binding.Url));
+    }
+
     [Fact]
     public void On_Azure_DevOps_another_organizations_url_in_the_form_drops_nothing()
     {

@@ -137,6 +137,50 @@ public sealed class CoverageGitMatchTests
     }
 
     [Theory]
+    [MemberData(nameof(CredentialBindingSelectTests.OutOfFormUnderTheBinding), MemberType = typeof(CredentialBindingSelectTests))]
+    public async Task A_user_less_url_out_of_the_form_under_V1_gets_the_token_through_V1s_key_so_Select_binds_nothing_beside_it(string url)
+    {
+        // git's credential view keeps such a path under V1's (it re-encodes \ and resolves no dot
+        // segment), while the server decides what it reads in it (g3 G3.2's sent column).
+        var v1 = AzureDevOpsCoverageVectors.Row("V1").Bound!;
+        using var repo = await TempRepo.CreateAsync();
+
+        var fill = await FillAsync(repo, [new CredentialBinding(v1, AzureDevOpsCoverageVectors.Account) { SharedOriginOwner = "myorg" }], url);
+
+        Assert.True(fill.Asked, $"{url} did not reach the app's helper through {v1}.");
+        Assert.False(fill.AskedOtherUser);
+        Assert.Equal(Token, CredentialValue(fill.Output, "password"));
+        Assert.Empty(CredentialBinding.Select(
+            [new RemoteEffectiveUrls("origin", [v1], [v1]), new RemoteEffectiveUrls("other", [url], [url])],
+            AzureDevOpsCoverageVectors.Coverage));
+    }
+
+    [Fact]
+    public async Task Another_users_url_on_dev_azure_com_with_a_trailing_dot_reaches_the_apps_helper_through_V1s_key_in_place_of_its_own()
+    {
+        // git's match_host reads dev.azure.com. as dev.azure.com: V1's empty helper resets the
+        // user's own, so only the app's is asked (for host dev.azure.com., which the broker does not
+        // bind), and D82's order is lost. Select therefore drops V1 beside it.
+        const string Evil = "https://evil@dev.azure.com./myorg/p/_git/r";
+        var v1 = AzureDevOpsCoverageVectors.Row("V1").Bound!;
+        using var repo = await TempRepo.CreateAsync();
+        var own = await OwnHelperAsync(repo);
+
+        var bound = await FillAsync(repo, [new CredentialBinding(v1, AzureDevOpsCoverageVectors.Account) { SharedOriginOwner = "myorg" }], Evil);
+
+        Assert.Equal([$"{Asked}dev.azure.com. is not bound."], bound.Lines);
+        Assert.False(File.Exists(own), "The user's own helper was asked through V1's key.");
+
+        var unbound = await FillAsync(repo, [new CredentialBinding("https://dev.azure.com/otherorg/p/_git/r", AzureDevOpsCoverageVectors.Account)], Evil);
+
+        Assert.False(unbound.Asked);
+        Assert.True(File.Exists(own), "The user's own helper was not asked without V1's key.");
+        Assert.Empty(CredentialBinding.Select(
+            [new RemoteEffectiveUrls("origin", [v1], [v1]), new RemoteEffectiveUrls("evil", [Evil], [Evil])],
+            AzureDevOpsCoverageVectors.Coverage));
+    }
+
+    [Theory]
     [InlineData("https://dev.azure.com/otherorg/p/_git/r", false, "Username for 'https://dev.azure.com': ", false)]
     [InlineData("https://dev.azure.com/otherorg/p/_git/r", true, "Username for 'https://dev.azure.com/otherorg/p/_git/r': ", false)]
     [InlineData("https://dev.azure.com/myorg/p/_git/r", false, "Username for 'https://dev.azure.com': ", false)]
@@ -160,7 +204,7 @@ public sealed class CoverageGitMatchTests
     }
 
     /// <summary>What <c>git credential fill</c> for <paramref name="url"/> did in a deny scope bound to <paramref name="bindings"/>.</summary>
-    private static async Task<(bool Asked, bool AskedOtherUser, string Output)> FillAsync(TempRepo repo, IReadOnlyList<CredentialBinding> bindings, string url)
+    private static async Task<(bool Asked, bool AskedOtherUser, string Output, IReadOnlyList<string> Lines)> FillAsync(TempRepo repo, IReadOnlyList<CredentialBinding> bindings, string url)
     {
         var log = new ListLog();
         using var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource(Token), null, null, _ => null);
@@ -168,8 +212,17 @@ public sealed class CoverageGitMatchTests
 
         var result = await GitAsync(repo, scope.Environment, ["credential", "fill"], $"url={url}\n\n");
 
-        var asked = log.Entries.Where(entry => entry.Level == LogLevel.Debug && entry.Message.StartsWith(Asked, StringComparison.Ordinal)).ToList();
-        return (asked.Count > 0, asked.Any(entry => entry.Message.EndsWith(" names another user.", StringComparison.Ordinal)), result.StandardOutput);
+        var asked = log.Entries.Where(entry => entry.Level == LogLevel.Debug && entry.Message.StartsWith(Asked, StringComparison.Ordinal)).Select(entry => entry.Message).ToList();
+        return (asked.Count > 0, asked.Any(line => line.EndsWith(" names another user.", StringComparison.Ordinal)), result.StandardOutput, asked);
+    }
+
+    /// <summary>Configures the repository's own <c>credential.helper</c> as a recorder that answers nothing; returns the file it writes when git asks it.</summary>
+    private static async Task<string> OwnHelperAsync(TempRepo repo)
+    {
+        var record = repo.SiblingPath("own-helper-" + Guid.NewGuid().ToString("N") + ".txt");
+        var quoted = "'" + record.Replace('\\', '/').Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+        await repo.GitAsync("config", "credential.helper", $"!f() {{ cat >/dev/null; echo own >> {quoted}; }}; f");
+        return record;
     }
 
     /// <summary><c>git config --get-urlmatch <paramref name="name"/> <paramref name="url"/></c> with one pair: its value, <c>none</c> or <c>fatal</c>.</summary>

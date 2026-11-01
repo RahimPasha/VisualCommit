@@ -98,9 +98,12 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     /// with no password. With <see cref="GitCoverage.GitTwin"/> a <c>.git</c>-less URL of two or more
     /// segments is followed by its <c>.git</c> twin, and a URL whose path holds a raw reserved
     /// character by its credential twin. Another user's URL on a covered host that cannot be read
-    /// or is not in the form leaves nothing on that host bound; else a binding is dropped when
+    /// or is not in the form leaves nothing on that host bound, and so, on the origin with an
+    /// organization, does any URL without a password that is not in the form or has no first
+    /// segment in the organization's grammar, whatever its user; else a binding is dropped when
     /// another user's path, in git's credential view, equals its path or lies under it at a
-    /// <c>/</c>. Distinct by <see cref="Url"/> (ordinal), in the remotes' order;
+    /// <c>/</c>, another user's URL on a covered host written with one trailing dot (git's
+    /// <c>match_host</c>) included. Distinct by <see cref="Url"/> (ordinal), in the remotes' order;
     /// <see cref="SharedOriginOwner"/> is the organization on the origin.
     /// </summary>
     /// <exception cref="ArgumentException"><see cref="GitCoverage.OrganizationHost"/> without <see cref="GitCoverage.Organization"/>, or <see cref="GitCoverage.GitTwin"/> with it.</exception>
@@ -220,28 +223,48 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
                 continue;
             }
 
-            if (hosts.FirstOrDefault(host => host.Covers(url.Uri)) is not { } covered)
+            var otherUser = url.User is { Length: > 0 } user && !IsAccountsUser(user, coverage);
+
+            // git's match_host takes a host with one trailing dot as the host (urlmatch.c), so a
+            // binding's key answers another user's URL there too: on the host for the drop alone,
+            // never bound (V23).
+            if ((hosts.FirstOrDefault(host => host.Covers(url.Uri))
+                    ?? (otherUser ? hosts.FirstOrDefault(host => host.CoversWithTrailingDot(url.Uri)) : null)) is not { } covered)
             {
                 continue;
             }
 
-            if (url.User is { Length: > 0 } user && !IsAccountsUser(user, coverage))
+            var inForm = InPlainForm(url.Text) && (covered.Organization is null || IsOrganizationName(FirstSegment(url.Path)));
+            if (otherUser)
             {
-                if (!InPlainForm(url.Text) || (covered.Organization is not null && !IsOrganizationName(FirstSegment(url.Path))))
-                {
-                    covered.Failed = true;
-                }
-                else
+                if (inForm)
                 {
                     covered.OtherUsersPaths.Add(CredentialView(url.Path));
                 }
+                else
+                {
+                    covered.Failed = true;
+                }
 
                 continue;
             }
 
-            if (!url.HasPassword
-                && InPlainForm(url.Text)
-                && (covered.Organization is not { } organization || FirstSegment(url.Path).Equals(organization, StringComparison.OrdinalIgnoreCase)))
+            if (url.HasPassword)
+            {
+                continue;
+            }
+
+            if (!inForm)
+            {
+                // Step 5 as WP-C's review amended it: on an origin that serves other organizations, a
+                // URL out of the form with no user or the account's may lie under a binding in
+                // git's credential view while the server reads another organization in it (X4,
+                // X6, V21); the binding's key would answer it with the token, so nothing there is bound.
+                covered.Failed |= covered.Organization is not null;
+                continue;
+            }
+
+            if (covered.Organization is not { } organization || FirstSegment(url.Path).Equals(organization, StringComparison.OrdinalIgnoreCase))
             {
                 candidates.Add((covered, url));
             }
@@ -483,6 +506,13 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
         public bool Covers(Uri uri) =>
             string.Equals(uri.Scheme, scheme, StringComparison.OrdinalIgnoreCase)
             && string.Equals(uri.Host, host, StringComparison.OrdinalIgnoreCase)
+            && uri.Port == port;
+
+        /// <summary>The host as git's <c>match_host</c> reads it in a URL whose host has one trailing dot (<c>dev.azure.com.</c>), which .NET keeps.</summary>
+        public bool CoversWithTrailingDot(Uri uri) =>
+            string.Equals(uri.Scheme, scheme, StringComparison.OrdinalIgnoreCase)
+            && uri.Host.EndsWith('.')
+            && uri.Host.AsSpan(0, uri.Host.Length - 1).Equals(host, StringComparison.OrdinalIgnoreCase)
             && uri.Port == port;
 
         /// <summary>A URL .NET cannot read names this host when it starts with its scheme and holds the host's name anywhere, without case.</summary>

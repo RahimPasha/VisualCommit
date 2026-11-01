@@ -20,7 +20,7 @@ namespace VisualCommit.Git.Tests;
 /// <param name="Urlmatch"><c>git config --get-urlmatch http.proactiveAuth</c> with the key's pair: <c>basic</c>, or <c>fatal</c> when git cannot normalise the URL.</param>
 /// <param name="CredentialView">The organization prefix key git's credential side applies (<c>myorg</c>, <c>MyOrg</c>, <c>otherorg</c>, <c>vs-myorg</c> or <c>none</c>).</param>
 /// <param name="HttpView">The one its http side applies (the same names, or <c>fatal</c>).</param>
-/// <param name="Mark">Where the git columns come from: G3.2's or the design review's measurements, or the U rows' "MEASURED by CoverageGitMatchTests".</param>
+/// <param name="Mark">Where the git columns come from: G3.2's or the design review's measurements, or <see cref="CoverageGitMatchTests"/>' on 2.56 (the P rows' urlmatch and views, the U rows' columns).</param>
 public sealed record CoverageVector(
     string Id,
     string Url,
@@ -46,16 +46,19 @@ public sealed record CoverageVector(
 
 /// <summary>
 /// The 48 rows of docs/phase-7b-design.md 8.7: g3 G3.2's V1 to V26 and X1 to X12 (MEASURED on
-/// 2.31.1, 2.43.0 and 2.56), then the design review's P1 to P5 and Y1, Y2 (MEASURED by it) and U1
-/// to U3 (their git columns ASSUMED as X6's until <see cref="CoverageGitMatchTests"/> first ran;
-/// MEASURED by it since, on 2.56). 13 rows bound, 35 not.
+/// 2.31.1, 2.43.0 and 2.56); the design review's Y1 and Y2 (MEASURED by it); P1 to P5, whose APP
+/// column, probes and binding the design review MEASURED and whose urlmatch and two views
+/// <see cref="CoverageGitMatchTests"/> MEASURED first, on 2.56; and U1 to U3, whose git columns
+/// were ASSUMED as X6's until <see cref="CoverageGitMatchTests"/> MEASURED them, on 2.56. CI's
+/// 2.43 (the containers) is still to confirm what that class measured. 13 rows bound, 35 not.
 /// </summary>
 public static class AzureDevOpsCoverageVectors
 {
     private const string D = "https://dev.azure.com";
     private const string G32 = "MEASURED, g3 G3.2";
     private const string Review = "MEASURED, the design review";
-    private const string Ours = "MEASURED, CoverageGitMatchTests (ASSUMED as X6's before)";
+    private const string ReviewAndOurs = "APP, probes and binding MEASURED by the design review; urlmatch and both views MEASURED by CoverageGitMatchTests on 2.56 (CI's 2.43 to confirm)";
+    private const string Ours = "MEASURED, CoverageGitMatchTests on 2.56 (CI's 2.43 to confirm; ASSUMED as X6's before)";
 
     /// <summary>
     /// What P1 to P4's key would answer, were it bound (design 8.7): another organization's URL
@@ -117,11 +120,11 @@ public static class AzureDevOpsCoverageVectors
         Unbound("X10", $"{D}/myorg%20/p/_git/r", true, true, "none", "none"),
         Unbound("X11", $"{D}/myorg/p/_git/r%2F..%2F..%2F..%2F..%2Fotherorg", false, false, "otherorg", "myorg"),
         Unbound("X12", $"{D}/myorg/.%2E/otherorg/p/_git/r", false, true, "otherorg", "otherorg"),
-        Unbound("P1", D, true, true, "none", "none", mark: Review) with { Probes = OtherOrganizationProbes },
-        Unbound("P2", $"{D}/", true, true, "none", "none", mark: Review) with { Probes = OtherOrganizationProbes },
-        Unbound("P3", "https://dev.azure.com:443", true, true, "none", "none", mark: Review) with { Probes = OtherOrganizationProbes },
-        Unbound("P4", "https://myorg@dev.azure.com/", true, true, "none", "none", mark: Review) with { Probes = OtherOrganizationProbes },
-        Bound("P5", "https://myorg.visualstudio.com", null, "vs-myorg", "vs-myorg", mark: Review) with { Probes = [("https://otherorg.visualstudio.com/p/_git/r", false)] },
+        Unbound("P1", D, true, true, "none", "none", mark: ReviewAndOurs) with { Probes = OtherOrganizationProbes },
+        Unbound("P2", $"{D}/", true, true, "none", "none", mark: ReviewAndOurs) with { Probes = OtherOrganizationProbes },
+        Unbound("P3", "https://dev.azure.com:443", true, true, "none", "none", mark: ReviewAndOurs) with { Probes = OtherOrganizationProbes },
+        Unbound("P4", "https://myorg@dev.azure.com/", true, true, "none", "none", mark: ReviewAndOurs) with { Probes = OtherOrganizationProbes },
+        Bound("P5", "https://myorg.visualstudio.com", null, "vs-myorg", "vs-myorg", mark: ReviewAndOurs) with { Probes = [("https://otherorg.visualstudio.com/p/_git/r", false)] },
         Bound("Y1", $"{D}/myorg/p/_git/r(x)", "myorg", "myorg", "myorg", twin: $"{D}/myorg/p/_git/r%28x%29", mark: Review) with { RawKeyApp = false },
         Bound("Y2", $"{D}/myorg/My%20P/_git/a&b", "myorg", "myorg", "myorg", twin: $"{D}/myorg/My%20P/_git/a%26b", mark: Review) with { RawKeyApp = false },
         Unbound("U1", $"{D}/myorg/%E0%80%AE%E0%80%AE/otherorg/p/_git/r", false, true, "myorg", "myorg", mark: Ours),
