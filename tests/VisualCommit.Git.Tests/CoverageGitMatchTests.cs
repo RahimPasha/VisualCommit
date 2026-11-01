@@ -155,29 +155,35 @@ public sealed class CoverageGitMatchTests
             AzureDevOpsCoverageVectors.Coverage));
     }
 
-    [Fact]
-    public async Task Another_users_url_on_dev_azure_com_with_a_trailing_dot_reaches_the_apps_helper_through_V1s_key_in_place_of_its_own()
+    [Theory]
+    [InlineData("AzureDevOps", "https://evil@dev.azure.com./myorg/p/_git/r", "https://dev.azure.com/myorg/p/_git/r", "dev.azure.com.")]
+    [InlineData("AzureDevOps", "https://dev.azure.com./myorg/p/_git/r", "https://dev.azure.com/myorg/p/_git/r", "dev.azure.com.")]
+    [InlineData("AzureDevOps", "https://myorg@dev.azure.com./myorg/p/_git/r", "https://dev.azure.com/myorg/p/_git/r", "dev.azure.com.")]
+    [InlineData("AzureDevOps", "https://myorg.visualstudio.com./p/_git/r", "https://myorg.visualstudio.com/p/_git/r", "myorg.visualstudio.com.")]
+    [InlineData("GitLab", "https://gitlab.com./g/p", "https://gitlab.com/g/p", "gitlab.com.")]
+    public async Task A_url_on_a_covered_host_with_a_trailing_dot_reaches_the_apps_helper_through_the_hosts_key_in_place_of_its_own_whatever_its_user(
+        string provider, string dotted, string key, string host)
     {
-        // git's match_host reads dev.azure.com. as dev.azure.com: V1's empty helper resets the
-        // user's own, so only the app's is asked (for host dev.azure.com., which the broker does not
-        // bind), and D82's order is lost. Select therefore drops V1 beside it.
-        const string Evil = "https://evil@dev.azure.com./myorg/p/_git/r";
-        var v1 = AzureDevOpsCoverageVectors.Row("V1").Bound!;
+        // git's match_host reads dev.azure.com. as dev.azure.com, whatever the URL's user: the
+        // key's empty helper resets the user's own, so only the app's is asked (for host
+        // dev.azure.com., which the broker does not bind), and D82's order is lost. Select
+        // therefore drops the key beside it.
+        var coverage = CredentialBindingSelectTests.CoverageOf(provider);
         using var repo = await TempRepo.CreateAsync();
         var own = await OwnHelperAsync(repo);
 
-        var bound = await FillAsync(repo, [new CredentialBinding(v1, AzureDevOpsCoverageVectors.Account) { SharedOriginOwner = "myorg" }], Evil);
+        var bound = await FillAsync(repo, [new CredentialBinding(key, coverage.Account)], dotted);
 
-        Assert.Equal([$"{Asked}dev.azure.com. is not bound."], bound.Lines);
-        Assert.False(File.Exists(own), "The user's own helper was asked through V1's key.");
+        Assert.Equal([$"{Asked}{host} is not bound."], bound.Lines);
+        Assert.False(File.Exists(own), "The user's own helper was asked through the host's key.");
 
-        var unbound = await FillAsync(repo, [new CredentialBinding("https://dev.azure.com/otherorg/p/_git/r", AzureDevOpsCoverageVectors.Account)], Evil);
+        var unbound = await FillAsync(repo, [new CredentialBinding(key.Replace("/p", "/q", StringComparison.Ordinal), coverage.Account)], dotted);
 
         Assert.False(unbound.Asked);
-        Assert.True(File.Exists(own), "The user's own helper was not asked without V1's key.");
-        Assert.Empty(CredentialBinding.Select(
-            [new RemoteEffectiveUrls("origin", [v1], [v1]), new RemoteEffectiveUrls("evil", [Evil], [Evil])],
-            AzureDevOpsCoverageVectors.Coverage));
+        Assert.True(File.Exists(own), "The user's own helper was not asked without the host's key.");
+        Assert.DoesNotContain(
+            CredentialBinding.Select([new RemoteEffectiveUrls("origin", [key], [key]), new RemoteEffectiveUrls("dot", [dotted], [dotted])], coverage),
+            binding => binding.Url == key);
     }
 
     [Theory]

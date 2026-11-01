@@ -372,22 +372,34 @@ public class CredentialBindingSelectTests
             CredentialBinding.Select([Fetch("vs", "https://myorg.visualstudio.com/p/_git/r"), Fetch("other", "https://myorg.visualstudio.com/p/_git/r/..%5Cq")], AzureDevOpsCoverageVectors.Coverage).Select(binding => binding.Url));
     }
 
-    [Fact]
-    public void Another_users_url_on_a_covered_host_with_one_trailing_dot_drops_as_on_that_host()
+    [Theory]
+    [InlineData("evil@")]
+    [InlineData("")]
+    [InlineData("myorg@")]
+    [InlineData("x-access-token@")]
+    [InlineData("myorg:secret@")]
+    public void A_url_on_a_covered_host_with_one_trailing_dot_counts_as_another_users_whatever_its_user(string user)
     {
-        // git's match_host reads dev.azure.com. as dev.azure.com, .NET's Host keeps the dot.
+        // git's match_host reads dev.azure.com. as dev.azure.com, .NET's Host keeps the dot: a
+        // binding's key would answer the URL with the app's helper alone, and the broker binds no
+        // such host, so the URL drops what lies over it as another user's would on that host, and
+        // is never bound itself (V23).
         var azure = AzureDevOpsCoverageVectors.Coverage;
+        var gitLabUser = user.Replace("myorg", "Ada", StringComparison.Ordinal);
 
-        Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("evil", "https://evil@dev.azure.com./myorg/p/_git/r")], azure));
-        Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("evil", "https://evil@dev.azure.com./myorg/p/_git/./r")], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("dot", $"https://{user}dev.azure.com./myorg/p/_git/r")], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("dot", $"https://{user}dev.azure.com./myorg/p/_git/./r")], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("vs", "https://myorg.visualstudio.com/p/_git/r"), Fetch("dot", $"https://{user}myorg.visualstudio.com./p/_git/r")], azure));
         Assert.Equal(
             ["https://gitlab.com/g/p.git"],
-            CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p"), Fetch("evil", "https://evil@gitlab.com./g/p")], GitLab).Select(binding => binding.Url));
-        Assert.Empty(CredentialBinding.Select([Fetch("vs", "https://myorg.visualstudio.com/p/_git/r"), Fetch("evil", "https://evil@myorg.visualstudio.com./p/_git/r")], azure));
+            CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p"), Fetch("dot", $"https://{gitLabUser}gitlab.com./g/p")], GitLab).Select(binding => binding.Url));
+        Assert.Empty(CredentialBinding.Select([Fetch("dot", $"https://{user}dev.azure.com./myorg/p/_git/r")], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("dot", $"https://{gitLabUser}gitlab.com./g/p")], GitLab));
 
-        // Not bound itself with no user or the account's (V23), and it drops nothing then.
-        Assert.Equal([$"{AzureRepos}/r"], CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("dot", "https://dev.azure.com./myorg/p/_git/r")], azure).Select(binding => binding.Url));
-        Assert.Equal([$"{AzureRepos}/r"], CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("dot", "https://myorg@dev.azure.com./myorg/p/_git/r")], azure).Select(binding => binding.Url));
+        // Where it lies over nothing bound, nothing drops.
+        Assert.Equal(
+            [$"{AzureRepos}/r"],
+            CredentialBinding.Select([Fetch("origin", $"{AzureRepos}/r"), Fetch("dot", $"https://{user}dev.azure.com./myorg/p/_git/q")], azure).Select(binding => binding.Url));
     }
 
     [Fact]

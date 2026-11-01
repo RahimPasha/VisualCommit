@@ -2197,19 +2197,18 @@ is in an argument, URL, config value, log or file.
 - Step 5 as the review amended it (for the lead to confirm): on an origin with `Organization`
   (dev.azure.com, the fake) a URL without a password, out of the form or with no first segment in the
   grammar, fails the host closed whatever its user: `…/r/..%5C…`, a raw `\` or `%C0%AE` under V1 get
-  the token through V1's key with no user (MEASURED on 2.56, `CoverageGitMatchTests`). Another user's URL on a
-  covered host with one trailing dot (`dev.azure.com.`, git's `match_host`) counts as on it for the
-  drop, never bound (V23); 7a's github.com rule has the same gap (16.3).
-- `AccountOf`: a prompt path of `/` alone or with a trailing `/` holds an empty segment, so no
-  account (git trims them anyway).
+  the token through V1's key with no user (MEASURED on 2.56). Any URL on a covered host with one
+  trailing dot (`dev.azure.com.`, git's `match_host`) counts as another user's there whatever its
+  user, never bound (V23): the key would ask only the app's helper, which binds no such host
+  (MEASURED). 7a's frozen github.com rule has the same gap, which 16.3 does not list yet.
+- `AccountOf`: a prompt path of `/` alone or with a trailing `/` holds an empty segment: no account.
 - MEASURED on 2.56 by `CoverageGitMatchTests` (CI's 2.43 to confirm; the vectors' marks say so): U1
   to U3's git columns are X6's; P1 to P4's views `none`, P5's `vs-myorg`.
 - `HostingSessionStub`: 7a's constructor keeps the login's case through a private one (`AccountKey`
   lower-cases it); `SourceCanExist` asks `GitHubUrls`, then `RecognisedUrls`, via `PullRequestRefs`.
-  `PushGuardProvidersTests` proves the App's guard alone (local remotes, nothing bound): recognising
-  another organization's URL with no account, and its `SourceCanExist`, is WP-S's (9.6, 9.10).
-- 8.5's texts were WP0's (`e8a275d`), so commit 4 holds no text change. `CoverageGitMatchTests`: 125
-  tests, 45 s alone.
+  `PushGuardProvidersTests` proves the App's guard alone (local remotes, nothing bound): recognition
+  with no account is WP-S's (9.6, 9.10).
+- 8.5's texts were WP0's (`e8a275d`). `CoverageGitMatchTests`: 129 tests, 48 s alone.
 - For the lead: `docs/architecture.md:2257` quotes the old warning; `GitRepository.PullRequests.cs:30`
   names `refs/pull` alone (WP-P). For WP-AZ and WP-GL (and WP-S, which unions them): `Select` throws
   on `OrganizationHost` without `Organization` and on `GitTwin` with it.

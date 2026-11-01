@@ -102,8 +102,8 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     /// organization, does any URL without a password that is not in the form or has no first
     /// segment in the organization's grammar, whatever its user; else a binding is dropped when
     /// another user's path, in git's credential view, equals its path or lies under it at a
-    /// <c>/</c>, another user's URL on a covered host written with one trailing dot (git's
-    /// <c>match_host</c>) included. Distinct by <see cref="Url"/> (ordinal), in the remotes' order;
+    /// <c>/</c>. A URL on a covered host written with one trailing dot (git's <c>match_host</c>)
+    /// counts as another user's there, whatever its user. Distinct by <see cref="Url"/> (ordinal), in the remotes' order;
     /// <see cref="SharedOriginOwner"/> is the organization on the origin.
     /// </summary>
     /// <exception cref="ArgumentException"><see cref="GitCoverage.OrganizationHost"/> without <see cref="GitCoverage.Organization"/>, or <see cref="GitCoverage.GitTwin"/> with it.</exception>
@@ -224,14 +224,21 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
             }
 
             var otherUser = url.User is { Length: > 0 } user && !IsAccountsUser(user, coverage);
-
-            // git's match_host takes a host with one trailing dot as the host (urlmatch.c), so a
-            // binding's key answers another user's URL there too: on the host for the drop alone,
-            // never bound (V23).
-            if ((hosts.FirstOrDefault(host => host.Covers(url.Uri))
-                    ?? (otherUser ? hosts.FirstOrDefault(host => host.CoversWithTrailingDot(url.Uri)) : null)) is not { } covered)
+            var covered = hosts.FirstOrDefault(host => host.Covers(url.Uri));
+            if (covered is null)
             {
-                continue;
+                // git's match_host takes a host with one trailing dot as the host (urlmatch.c), so a
+                // binding's key answers a URL there too, whatever its user, while the broker binds
+                // no such host: git would ask the app's helper alone, which answers nothing, and
+                // D82's order would be lost. Such a URL counts as another user's on the host it
+                // names, for the drop or the fail alone, never bound (V23).
+                covered = hosts.FirstOrDefault(host => host.CoversWithTrailingDot(url.Uri));
+                if (covered is null)
+                {
+                    continue;
+                }
+
+                otherUser = true;
             }
 
             var inForm = InPlainForm(url.Text) && (covered.Organization is null || IsOrganizationName(FirstSegment(url.Path)));
