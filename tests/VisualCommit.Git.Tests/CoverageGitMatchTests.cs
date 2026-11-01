@@ -14,8 +14,9 @@ namespace VisualCommit.Git.Tests;
 /// <c>git credential fill</c> for a URL, and whether git asks the app's helper (the broker's Debug
 /// line). Also the two views git takes of a URL (g3 G3.1: which organization prefix key
 /// credential.c and http.c apply), and <c>git config --get-urlmatch</c> of the per-URL
-/// <c>http.&lt;url&gt;.proactiveAuth</c> pair. Nothing here depends on a git feature newer than
-/// 2.31 (D277); CI's containers run these on 2.43.
+/// <c>http.&lt;url&gt;.proactiveAuth</c> pair, and the prompt git shows on dev.azure.com when the
+/// app's helper has nothing (8.3). Nothing here depends on a git feature newer than 2.31 (D277);
+/// CI's containers run these on 2.43.
 /// </summary>
 public sealed class CoverageGitMatchTests
 {
@@ -133,6 +134,29 @@ public sealed class CoverageGitMatchTests
         var twinned = await FillAsync(repo, withTwin, "https://gitlab.com/g/p.git/info/refs");
         Assert.True(twinned.Asked);
         Assert.Equal(Token, CredentialValue(twinned.Output, "password"));
+    }
+
+    [Theory]
+    [InlineData("https://dev.azure.com/otherorg/p/_git/r", false, "Username for 'https://dev.azure.com': ", false)]
+    [InlineData("https://dev.azure.com/otherorg/p/_git/r", true, "Username for 'https://dev.azure.com/otherorg/p/_git/r': ", false)]
+    [InlineData("https://dev.azure.com/myorg/p/_git/r", false, "Username for 'https://dev.azure.com': ", false)]
+    [InlineData("https://dev.azure.com/myorg/p/_git/r", true, "Username for 'https://dev.azure.com/myorg/p/_git/r': ", true)]
+    public async Task Gits_prompt_on_dev_azure_com_carries_the_account_only_when_its_path_names_the_organization(string url, bool useHttpPath, string prompt, bool carries)
+    {
+        // Without a token the app's helper answers nothing, so git asks; useHttpPath off is
+        // macOS', Linux's and every test run's, on is Git for Windows' system file's (8.3).
+        var handler = new RecordingPromptHandler(PromptAnswer.Refused);
+        using var broker = new AskPassBroker(handler, new ListLog(), null, new RecordingCredentialSource(), null, null, _ => null);
+        var binding = CredentialBinding.Select([new RemoteEffectiveUrls("origin", ["https://dev.azure.com/myorg/p/_git/r"], ["https://dev.azure.com/myorg/p/_git/r"])], AzureDevOpsCoverageVectors.Coverage);
+        using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: binding);
+        using var repo = await TempRepo.CreateAsync();
+        string[] fill = useHttpPath ? ["-c", "credential.https://dev.azure.com.useHttpPath=true", "credential", "fill"] : ["credential", "fill"];
+
+        var result = await GitAsync(repo, scope.Environment, fill, $"url={url}\n\n");
+
+        Assert.False(result.Succeeded);
+        var asked = Assert.Single(handler.Prompts);
+        Assert.Equal((prompt, carries ? AzureDevOpsCoverageVectors.Account : null), (asked.Text, asked.Account));
     }
 
     /// <summary>What <c>git credential fill</c> for <paramref name="url"/> did in a deny scope bound to <paramref name="bindings"/>.</summary>
