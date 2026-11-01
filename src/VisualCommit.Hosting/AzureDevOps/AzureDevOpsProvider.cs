@@ -160,15 +160,17 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
         {
             // Every redirect of connectionData is refused credentials, whatever its status (D360): the
             // client's profile refuses each one it is asked of, and this the 3xx the core stops itself
-            // (a Location missing or unreadable). Nothing was followed; no second request is made.
+            // (a Location missing or unreadable, a body over 10 MB). The core has finished that failure
+            // and written its one warning, which says why (5.2's Logging): only its kind and message
+            // change here, and no second warning is written. Nothing was followed; no second request is made.
             return HostingResult<HostingAccount>.Fail(reply.Status is >= 300 and < 400 && failure.Kind != HostingFailureKind.BadCredentials
-                ? _client.Failed(HttpMethod.Get, url, new HostingFailure(HostingFailureKind.BadCredentials, AzureDevOpsClient.SignInPageText), reply.RequestId)
+                ? failure with { Kind = HostingFailureKind.BadCredentials, Message = AzureDevOpsClient.SignInPageText }
                 : failure);
         }
 
         if (MemberOf(reply.Value?.AuthenticatedUser) is not { } member)
         {
-            return HostingResult<HostingAccount>.Fail(_client.Failed(HttpMethod.Get, url, new HostingFailure(HostingFailureKind.BadCredentials, AnonymousText, AnonymousDetail), reply.RequestId));
+            return HostingResult<HostingAccount>.Fail(_client.Failed(HttpMethod.Get, url, new HostingFailure(HostingFailureKind.BadCredentials, AnonymousText, AnonymousDetail), reply.RequestId, token));
         }
 
         var spelling = await SpellingAsync(token, typed, ct).ConfigureAwait(false);
@@ -208,7 +210,7 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
         // is malformed, as one whose row lacks a member it must have, and nothing throws (D380).
         if (reply.Value!.Value.Exists(json => json is null))
         {
-            return HostingResult<RepositoryList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId));
+            return HostingResult<RepositoryList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId, token));
         }
 
         var repositories = reply.Value.Value
@@ -239,7 +241,7 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
 
         if (Info(reply.Value!, repository.OwnerRoot) is not { } info)
         {
-            return HostingResult<RepositoryInfo>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId));
+            return HostingResult<RepositoryInfo>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId, token));
         }
 
         if (info.Parent is { } parent)
@@ -280,7 +282,7 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
         {
             if (Pull(json, repository) is not { } pull)
             {
-                return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId));
+                return HostingResult<PullRequestList>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId, token));
             }
 
             pulls.Add(pull);
@@ -345,7 +347,7 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
 
         return Pull(reply.Value!, baseRepository) is { } pull
             ? HostingResult<PullRequest>.Ok(pull)
-            : HostingResult<PullRequest>.Fail(_client.MalformedAnswer(HttpMethod.Post, url, reply.RequestId));
+            : HostingResult<PullRequest>.Fail(_client.MalformedAnswer(HttpMethod.Post, url, reply.RequestId, token));
     }
 
     public void Dispose() => _client.Dispose();

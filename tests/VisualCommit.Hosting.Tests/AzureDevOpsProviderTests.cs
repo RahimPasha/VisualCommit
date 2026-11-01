@@ -95,7 +95,8 @@ public sealed class AzureDevOpsProviderTests
         var anonymous = (await fixture.Provider.CheckTokenAsync(fixture.AdaToken, Organization, Cancelled)).Failure!;
         Assert.Equal((HostingFailureKind.BadCredentials, AzureDevOpsProvider.AnonymousDetail, HostingProvider.AzureDevOps), (anonymous.Kind, anonymous.Detail, anonymous.Provider));
         Assert.Equal(["GET /Fernhill-Labs/_apis/connectionData?api-version=7.1-preview.1"], fixture.Sent());
-        Assert.Equal("Azure DevOps: GET /Fernhill-Labs/_apis/connectionData failed: BadCredentials (request " + anonymous.RequestId + ").", fixture.Log.Lines[^1].Message);
+        // The one warning the provider's own failure needs, and no other.
+        Assert.Equal(["Azure DevOps: GET /Fernhill-Labs/_apis/connectionData failed: BadCredentials (request " + anonymous.RequestId + ")."], fixture.Log.Lines.Select(line => line.Message));
 
         // An unknown organization: connectionData's 404 (MEASURED r5 1.3 without a credential; with one ASSUMED until D374's probe).
         var nowhere = (await fixture.Provider.CheckTokenAsync(fixture.AdaToken, "vc-none-0123456789ab", Cancelled)).Failure!;
@@ -142,12 +143,17 @@ public sealed class AzureDevOpsProviderTests
     public async Task A1_refuses_an_anonymous_or_html_connection_after_that_one_request(string body, string? contentType, string? detail)
     {
         var recorder = new RecordingHttpHandler(_ => Answer(HttpStatusCode.OK, body, contentType));
-        using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, new ListLog(), new ManualTimeProvider());
+        var log = new ListLog();
+        using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, log, new ManualTimeProvider());
 
         var failure = (await provider.CheckTokenAsync("azdo_FAKE-Fernhill-Labs-1", "myorg", Cancelled)).Failure!;
 
         Assert.Equal((HostingFailureKind.BadCredentials, detail, HostingProvider.AzureDevOps), (failure.Kind, failure.Detail, failure.Provider));
         Assert.Single(recorder.Sent);
+
+        // One warning: the provider's (its kind) for the anonymous shapes, the core's (the status) for the HTML 200.
+        var warned = detail is null ? "200" : "BadCredentials";
+        Assert.Equal([$"Azure DevOps: GET /myorg/_apis/connectionData failed: {warned} (request 7b0aac71-0000-4a00-8000-0000000000ff)."], log.Lines.Select(line => line.Message));
     }
 
     [Fact]
@@ -214,7 +220,8 @@ public sealed class AzureDevOpsProviderTests
     /// <summary>
     /// Every redirect of connectionData is refused credentials, whatever its status (D360): a 303
     /// and a 300, which the core does not follow (the profile's table, one warning), and a 302
-    /// without a Location, which the core stops (A1 then, a second warning). Elsewhere a 303 or a
+    /// without a Location, which the core stops with its one warning, A1 changing only the failure's
+    /// kind and message (one warning per failure, design 5.2). Elsewhere a 303 or a
     /// 305 to the sign-in is refused credentials as a 302 to it is (its host also with DNS's
     /// trailing dot), and one to nowhere else stays
     /// the core's "could not be read". Each after that one request; nothing is followed.
@@ -228,8 +235,8 @@ public sealed class AzureDevOpsProviderTests
             (() => Redirect((HttpStatusCode)303, "https://dev.azure.com/myorg/_apis/connectionData?api-version=7.1-preview.1&again=1"), [connection + "303"]),
             (() => Redirect((HttpStatusCode)300, "/myorg/_apis/connectionData?api-version=7.1-preview.1&again=1"), [connection + "300"]),
             (() => Redirect((HttpStatusCode)303, null), [connection + "303"]),
-            (() => Redirect(HttpStatusCode.Found, null), [connection + "302 without Location", connection + "BadCredentials"]),
-            (() => Redirect(HttpStatusCode.TemporaryRedirect, null), [connection + "307 without Location", connection + "BadCredentials"]),
+            (() => Redirect(HttpStatusCode.Found, null), [connection + "302 without Location"]),
+            (() => Redirect(HttpStatusCode.TemporaryRedirect, null), [connection + "307 without Location"]),
         };
         foreach (var (answer, warnings) in answers)
         {
@@ -488,6 +495,66 @@ public sealed class AzureDevOpsProviderTests
         Assert.Equal((HostingFailureKind.Malformed, HostingProvider.AzureDevOps), (repositories.Kind, repositories.Provider));
         Assert.Equal((HostingFailureKind.Malformed, HostingProvider.AzureDevOps), (pulls.Kind, pulls.Provider));
         Assert.Equal(2, recorder.Sent.Count);
+    }
+
+    // Made up, a broken or hostile server's: a repository whose name holds the account's own token (a
+    // made-up azdo_FAKE- value; Azure DevOps' names admit a token's characters), which A2 lists and
+    // keeps as named (records are not screened, the known limit of design 6's and 7's As built). A
+    // failure the provider builds on a request below it (A3's unreadable answer, A4's null row and bad
+    // page, A5's unreadable created request) screens the token in its address and its warning, as the
+    // core's own failure on the same address does (WP-GL's R1, D382).
+    [Fact]
+    public async Task A_failure_the_provider_builds_on_a_repository_that_holds_the_token_screens_it_as_the_core_screens_its_own()
+    {
+        const string Token = "azdo_FAKE-fake-org-1";
+        const string Name = "repo-" + Token;
+        const string Held = "/fake-org/proj/_apis/git/repositories/" + Name;
+        var row = $$"""{"id":"r1","name":"{{Name}}","project":{"name":"proj"},"remoteUrl":"https://fake-org@dev.azure.com/fake-org/proj/_git/{{Name}}","webUrl":"https://dev.azure.com/fake-org/proj/_git/{{Name}}"}""";
+        var pages = new Queue<string>(["""{"value":[null],"count":1}""", """{"value":[{"pullRequestId":0,"title":"T","sourceRefName":"refs/heads/fix","targetRefName":"refs/heads/main"}],"count":1}"""]);
+        var recorder = new RecordingHttpHandler(request => (request.Method.Method, request.RequestUri!.AbsolutePath) switch
+        {
+            ("GET", "/fake-org/_apis/git/repositories") => Answer(HttpStatusCode.OK, $$"""{"count":1,"value":[{{row}}]}""", "application/json"),
+            ("GET", Held) => Answer(HttpStatusCode.OK, """{"id":"r1","name":"other","project":{"name":"proj"}}""", "application/json"),
+            ("GET", Held + "/pullrequests") => Answer(HttpStatusCode.OK, pages.Dequeue(), "application/json"),
+            ("POST", Held + "/pullrequests") => Answer(HttpStatusCode.Created, """{"pullRequestId":0,"title":"T","sourceRefName":"refs/heads/fix","targetRefName":"refs/heads/main"}""", "application/json"),
+            _ => Answer(HttpStatusCode.NotFound, """{"message":"Not found.","typeKey":"GitRepositoryNotFoundException"}""", "application/json"),
+        });
+        var log = new ListLog();
+        using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, log, new ManualTimeProvider());
+        var account = new HostingAccount(new AccountKey(HostingProvider.AzureDevOps, "dev.azure.com", "fake-org"), "fake-org", 0, null, null, true, "7b0a1111-0000-4a00-8000-000000000001");
+
+        var held = (await provider.ListRepositoriesAsync(Token, account, Cancelled)).Value!.Repositories.Single().Repository;
+        Assert.Equal(new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", "fake-org/proj", Name), held);
+        var failures = new[]
+        {
+            (await provider.ReadRepositoryAsync(Token, held, Cancelled)).Failure!,
+            (await provider.ListPullRequestsAsync(Token, held, Cancelled)).Failure!,
+            (await provider.ListPullRequestsAsync(Token, held, Cancelled)).Failure!,
+            (await provider.CreatePullRequestAsync(Token, held, NewRequest("fix"), Cancelled)).Failure!,
+        };
+
+        const string Screened = "https://dev.azure.com/fake-org/proj/_apis/git/repositories/%3Ctoken%3E";
+        Assert.Equal(
+            [
+                (HostingFailureKind.Malformed, Screened),
+                (HostingFailureKind.Malformed, Screened + "/pullrequests"),
+                (HostingFailureKind.Malformed, Screened + "/pullrequests"),
+                (HostingFailureKind.Malformed, Screened + "/pullrequests"),
+            ],
+            failures.Select(failure => (failure.Kind, failure.Url!.AbsoluteUri)));
+        const string Request = " (request 7b0aac71-0000-4a00-8000-0000000000ff).";
+        Assert.Equal(
+            [
+                "Azure DevOps: GET /fake-org/proj/_apis/git/repositories/<token> failed: Malformed" + Request,
+                "Azure DevOps: GET /fake-org/proj/_apis/git/repositories/<token>/pullrequests failed: Malformed" + Request,
+                "Azure DevOps: GET /fake-org/proj/_apis/git/repositories/<token>/pullrequests failed: Malformed" + Request,
+                "Azure DevOps: POST /fake-org/proj/_apis/git/repositories/<token>/pullrequests failed: Malformed" + Request,
+            ],
+            log.Lines.Select(line => line.Message));
+        Assert.DoesNotContain("azdo_", log.Written, StringComparison.OrdinalIgnoreCase);
+        Assert.All(failures, failure => Assert.DoesNotContain("azdo_", $"{failure.Url} {failure.Message} {failure.Detail} {failure.RequestId}", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(5, recorder.Sent.Count);
+        Assert.Empty(pages);
     }
 
     [Fact]

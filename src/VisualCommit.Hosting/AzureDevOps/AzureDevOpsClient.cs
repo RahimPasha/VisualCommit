@@ -164,14 +164,30 @@ internal sealed class AzureDevOpsClient : IDisposable
         static bool HasNullRow(AzureDevOpsListJson<T> list) => list.Value.Exists(row => row is null);
 
         AzureDevOpsReply<List<T>> Malformed(Uri pageUrl, AzureDevOpsReply<AzureDevOpsListJson<T>> reply) =>
-            new(default, MalformedAnswer(HttpMethod.Get, pageUrl, reply.RequestId), reply.Status, false, reply.RequestId);
+            new(default, MalformedAnswer(HttpMethod.Get, pageUrl, reply.RequestId, token), reply.Status, false, reply.RequestId);
     }
 
-    /// <summary>An answer that succeeded but lacks what the app needs: the core's <see cref="HostingHttpClient.MalformedAnswer"/>, with its warning.</summary>
-    public HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId) => _core.MalformedAnswer(method, url, requestId);
+    /// <summary>
+    /// An answer that succeeded but lacks what the app needs: the core's <see cref="HostingHttpClient.MalformedAnswer"/>,
+    /// with its warning, the request's <paramref name="token"/> screened as in the core's own failures
+    /// (D382): a repository's name may hold it.
+    /// </summary>
+    public HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId, string token)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        return _core.MalformedAnswer(method, url, requestId, token);
+    }
 
-    /// <summary>A failure the provider builds from an answer that succeeded, finished as the core's (<see cref="HostingHttpClient.Failed"/>), with its warning.</summary>
-    public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId) => _core.Failed(method, url, failure, requestId);
+    /// <summary>
+    /// A failure the provider builds from an answer that succeeded, finished as the core's
+    /// (<see cref="HostingHttpClient.Failed"/>), with its warning, the request's <paramref name="token"/>
+    /// screened. The token is required: every caller has it, and none may fall back to no screening.
+    /// </summary>
+    public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId, string token)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        return _core.Failed(method, url, failure, requestId, token);
+    }
 
     /// <summary>Forgets the core's kept answers (a sign-out); Azure DevOps sends no <c>ETag</c>, so there are none in practice.</summary>
     public void ForgetKept() => _core.ForgetKept();
