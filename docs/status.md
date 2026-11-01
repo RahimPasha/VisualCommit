@@ -312,7 +312,15 @@ every commit.
 
 ### Notes for whoever resumes
 
-- Nothing is in flight. `master` holds everything; the working tree was clean, and no worktree,
+- **In flight (2026-10-31): the design's drafting.** One workflow (run `wf_4982af69-706`) has an
+  architect write sections 0 and 1 into `D:/Projects/Personal/phase7b-work/design/s00-s01.md`,
+  up to nine drafters one file per package section there, and an integrator assemble
+  `docs/phase-7b-design.md` and append its decisions to `docs/decisions.md` from D357, uncommitted.
+  The lead's 31 rulings that the drafters follow are in that folder's `lead-rulings.md`. If a
+  session finds the design
+  uncommitted, it reads it and the drafts before committing; if it finds no design, it drafts again
+  from the research notes. No worktree or `wip/*` branch exists yet.
+- `master` holds 7a; the working tree was clean, and no worktree,
   `wip/*` or `worktree-*` branch was left, when phase 7a was merged (`019e68a`). Phase 7a's gate
   references and work lie outside the repository: `D:/Projects/Personal/gate7a-reference/` (phases
   0 to 6's pictures on `master` with git 2.56, the earlier pictures' references) and
