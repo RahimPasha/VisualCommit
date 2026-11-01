@@ -11,8 +11,9 @@ namespace VisualCommit.Hosting;
 /// <param name="Host">Its host, as the provider's <see cref="IHostingProvider.Host"/>.</param>
 /// <param name="Owner">
 /// The namespace path, everything before the repository's own name (D358): GitHub's owner (a user
-/// or an organisation), GitLab's group path of up to 20 levels (<c>group/sub</c>), Azure DevOps'
-/// <c>&lt;organization&gt;/&lt;project&gt;</c>, neither of which holds a <c>/</c> of its own.
+/// or an organisation), GitLab's group path of up to 20 levels (<c>group/sub</c>), or Azure DevOps'
+/// <c>&lt;organization&gt;/&lt;project&gt;</c>, where neither the organization nor the project name
+/// holds a <c>/</c> (D358).
 /// </param>
 /// <param name="Name">The repository's name.</param>
 public sealed record HostedRepository(HostingProvider Provider, string Host, string Owner, string Name)
@@ -152,13 +153,18 @@ public enum PullRequestRefusal
 /// <param name="Message">
 /// The service's own words (ruling 15), or the client's fixed texts naming the provider for no
 /// answer, a time-out, an unreadable answer or a server error without words (D284; the shared
-/// core's <c>HostingHttpTexts</c>); every e-mail address in it is <c>&lt;e-mail&gt;</c> (D368).
+/// core's <c>HostingHttpTexts</c>). In a failure the shared HTTP core finishes (every answer of a
+/// provider's API, and what a client passes to its <c>Failed</c> or <c>MalformedAnswer</c>), each
+/// e-mail-shaped run is <c>&lt;e-mail&gt;</c> (D368); a client that builds a failure from an
+/// answer's content without the core screens it with <c>HostingHttpClient.ScreenEmail</c>. A
+/// failure a provider or the session builds from no answer (a refused token, a validation of its
+/// own) is not screened.
 /// </param>
 /// <param name="Detail">
-/// What the provider's client adds, e-mail addresses screened likewise: GitHub's 422 form (6.3,
-/// A5), <c>X-Accepted-GitHub-Permissions</c> or single sign-on's address; for a token of another
-/// provider's form, refused without a request, <c>other-provider:&lt;id&gt;</c> (D378); Azure
-/// DevOps' and GitLab's as their clients give it (docs/phase-7b-design.md 6, 7).
+/// What the provider's client adds, screened as <paramref name="Message"/> is: GitHub's 422 form
+/// (6.3, A5), <c>X-Accepted-GitHub-Permissions</c> or single sign-on's address; for a token of
+/// another provider's form, refused without a request, <c>other-provider:&lt;id&gt;</c> (D378);
+/// Azure DevOps' and GitLab's as their clients give it (docs/phase-7b-design.md 6, 7).
 /// </param>
 /// <param name="RetryAt">When a rate limit ends.</param>
 /// <param name="Url">The address the failure names, without its query.</param>

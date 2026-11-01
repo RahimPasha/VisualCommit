@@ -21,9 +21,10 @@ namespace VisualCommit.Hosting.Http;
 /// byte order mark removed; ETags kept in memory per token fingerprint and URL, with the body and
 /// the profile's headers, at most 512 of them and 32 MB of bodies, the oldest going first, and all
 /// forgotten by <see cref="ForgetKept"/>; pages followed while they stay under the origin's path.
-/// Every failure names the profile's provider, its address without the query and its request id,
-/// with e-mail addresses screened out of its message and detail, and writes one warning that
-/// names neither a header, a body, a query nor a token.
+/// Every failure it finishes (each one an answer or no answer gives, and those a client passes to
+/// <see cref="Failed"/> or <see cref="MalformedAnswer"/>) names the profile's provider, its address
+/// without the query and its request id, with e-mail addresses screened out of its message and
+/// detail, and writes one warning that names neither a header, a body, a query nor a token.
 /// </summary>
 internal sealed partial class HostingHttpClient : IDisposable
 {
@@ -126,13 +127,24 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// An answer that succeeded but lacks what the app needs: <see cref="HostingFailureKind.Malformed"/>
     /// with the provider's text, the address without its query, and the warning the core writes for one.
     /// </summary>
-    public HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId)
+    public HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId) =>
+        Failed(method, url, new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), requestId);
+
+    /// <summary>
+    /// A failure the profile's client built itself from a reply that succeeded (Azure DevOps'
+    /// anonymous connectionData, say), finished as the core finishes its own: the profile's
+    /// provider; the address without its query and <paramref name="requestId"/> where
+    /// <paramref name="failure"/> left them null; each e-mail-shaped run of its message and detail
+    /// as <see cref="ScreenedEmail"/> (D368); and one warning that names its kind.
+    /// </summary>
+    public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId)
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(url);
-        var failure = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), url, requestId);
-        Warn(method.Method, url, "Malformed", failure.RequestId);
-        return failure;
+        ArgumentNullException.ThrowIfNull(failure);
+        var finished = Finish(failure, url, requestId);
+        Warn(method.Method, url, finished.Kind.ToString(), finished.RequestId);
+        return finished;
     }
 
     /// <summary>

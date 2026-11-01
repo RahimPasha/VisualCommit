@@ -2,6 +2,7 @@ using System.Net;
 using VisualCommit.Core;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting.GitHub;
+using VisualCommit.Hosting.Http;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Hosting;
 using Xunit;
@@ -241,6 +242,17 @@ public sealed class GitHubProviderTests
         Assert.Equal((kind, detail, refusal, HostingProvider.GitHub), (failure.Kind, failure.Detail, failure.Refusal, failure.Provider));
         Assert.Equal(adaOnTool ? "Resource not accessible by personal access token" : "Validation Failed", failure.Message);
         Assert.Single(setup.Fake.Requests);
+    }
+
+    [Theory]
+    [InlineData("A pull request already exists for octo:user@fix.", "A pull request already exists for <e-mail>", PullRequestRefusal.AlreadyExists)]
+    [InlineData("No commits between main and user@fix", "No commits between main and <e-mail>", PullRequestRefusal.NoCommits)]
+    public void A5s_refusal_holds_when_the_e_mail_screen_took_a_branch_name_with_an_at_sign(string githubs, string screened, PullRequestRefusal refusal)
+    {
+        // The core screens every failure's detail (D368) before the provider reads it.
+        var detail = HostingHttpClient.ScreenEmail(githubs);
+
+        Assert.Equal((screened, refusal), (detail, GitHubProvider.RefusalOf(detail)));
     }
 
     /// <summary>GitLab's form and Azure DevOps' (84 characters, <c>AZDO</c> at 76), each with the detail that names it (D378).</summary>

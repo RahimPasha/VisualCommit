@@ -253,15 +253,26 @@ public sealed class HostingHttpClientTests
     [Fact]
     public async Task Every_failure_names_the_provider_its_address_without_the_query_and_its_request_id()
     {
-        using var setup = new Setup(async (request, ct) =>
+        // The time-out alone has a short limit: every other request has the default 30 s, so a
+        // slow machine cannot turn one of them into a time-out.
+        using (var held = new Setup(async (_, ct) =>
+        {
+            await Task.Delay(Timeout.InfiniteTimeSpan, ct);
+            throw new InvalidOperationException("Not reached.");
+        }, timeout: TimeSpan.FromSeconds(1)))
+        {
+            var timedOut = (await held.GetAsync("hold?private_token=x&page=1").WaitAsync(TimeSpan.FromSeconds(60), Cancelled)).Failure!;
+            Assert.Equal((HostingFailureKind.Network, HostingProvider.GitLab, "https://gitlab.example/api/v4/hold", (string?)null),
+                (timedOut.Kind, timedOut.Provider, timedOut.Url!.AbsoluteUri, timedOut.RequestId));
+            Assert.Equal(new[] { "GitLab: GET /api/v4/hold failed: time-out." }, held.Log.Lines.Select(line => line.Message));
+        }
+
+        using var setup = Setup.Scripted(request =>
         {
             var path = request.RequestUri!.AbsolutePath["/api/v4/".Length..];
             var id = ("X-Request-Id", "R-" + path);
             switch (path)
             {
-                case "hold":
-                    await Task.Delay(Timeout.InfiniteTimeSpan, ct);
-                    throw new InvalidOperationException("Not reached.");
                 case "unreachable":
                     throw new HttpRequestException("No such host is known.");
                 case "classified":
@@ -281,7 +292,7 @@ public sealed class HostingHttpClientTests
                 default:
                     return RecordingHttpHandler.Json(HttpStatusCode.OK, "[{\"name\":\"a\"}]", ("Link", "<https://elsewhere.example/api/v4/pages?page=2>; rel=\"next\""), id);
             }
-        }, timeout: TimeSpan.FromSeconds(1));
+        });
         setup.Profile.OnSuccess = exchange => exchange.Url.AbsolutePath.EndsWith("/refused-success", StringComparison.Ordinal) ? new HostingFailure(HostingFailureKind.BadCredentials, "Refused.") : null;
         setup.Profile.OnRedirect = (_, location) => location.AbsolutePath == "/refuse" ? new HostingFailure(HostingFailureKind.BadCredentials, "Refused.") : null;
         setup.Profile.OnClassify = exchange => exchange.Status == 403
@@ -289,7 +300,6 @@ public sealed class HostingHttpClientTests
             : null;
         (string Path, HostingFailureKind Kind, string? RequestId)[] cases =
         [
-            ("hold", HostingFailureKind.Network, null),
             ("unreachable", HostingFailureKind.Network, null),
             ("classified", HostingFailureKind.Validation, "R-classified"),
             ("refused-success", HostingFailureKind.BadCredentials, "R-refused-success"),
@@ -311,6 +321,11 @@ public sealed class HostingHttpClientTests
         Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", HostingProvider.GitLab, "https://gitlab.example/api/v4/answer", "R-9"),
             (answer.Kind, answer.Message, answer.Provider, answer.Url!.AbsoluteUri, answer.RequestId));
 
+        // A failure the profile's client built from a reply that succeeded is finished alike.
+        var built = setup.Client.Failed(HttpMethod.Get, new Uri(Origin, "built?private_token=x"), new HostingFailure(HostingFailureKind.BadCredentials, "Anonymous."), "R-8");
+        Assert.Equal((HostingFailureKind.BadCredentials, "Anonymous.", HostingProvider.GitLab, "https://gitlab.example/api/v4/built", "R-8"),
+            (built.Kind, built.Message, built.Provider, built.Url!.AbsoluteUri, built.RequestId));
+
         // What the profile set itself is kept.
         var kept = (await setup.GetAsync("kept-by-the-profile?private_token=x")).Failure!;
         Assert.Equal((HostingProvider.GitLab, "https://gitlab.example/kept", "kept"), (kept.Provider, kept.Url!.AbsoluteUri, kept.RequestId));
@@ -318,7 +333,6 @@ public sealed class HostingHttpClientTests
         Assert.Equal(
             new[]
             {
-                "GitLab: GET /api/v4/hold failed: time-out.",
                 "GitLab: GET /api/v4/unreachable failed: Network.",
                 "GitLab: GET /api/v4/classified failed: 404 (request R-classified).",
                 "GitLab: GET /api/v4/refused-success failed: 200 (request R-refused-success).",
@@ -328,6 +342,7 @@ public sealed class HostingHttpClientTests
                 "GitLab: GET /api/v4/unreadable failed: Malformed (request R-unreadable).",
                 "GitLab: GET /api/v4/pages failed: Link to https://elsewhere.example:443 (request R-pages).",
                 "GitLab: POST /api/v4/answer failed: Malformed (request R-9).",
+                "GitLab: GET /api/v4/built failed: BadCredentials (request R-8).",
                 "GitLab: GET /api/v4/kept-by-the-profile failed: 403 (request kept).",
             },
             setup.Log.Lines.Select(line => line.Message));
@@ -343,9 +358,11 @@ public sealed class HostingHttpClientTests
 
         var classified = (await setup.GetAsync("push")).Failure!;
         var refused = (await setup.GetAsync("ok")).Failure!;
+        var built = setup.Client.Failed(HttpMethod.Get, new Uri(Origin, "built"), new HostingFailure(HostingFailureKind.BadCredentials, "Anonymous, not ada@example.com.", "ada@example.com"), null);
 
         Assert.Equal(("The identity 'Ada Lovelace <e-mail> may not push; ask <e-mail>", "<e-mail> and <e-mail>"), (classified.Message, classified.Detail));
         Assert.Equal(("Signed in as <e-mail>", "No address here."), (refused.Message, refused.Detail));
+        Assert.Equal(("Anonymous, not <e-mail>", "<e-mail>"), (built.Message, built.Detail));
         Assert.All(setup.Log.Lines, line => Assert.DoesNotContain("@", line.Message, StringComparison.Ordinal));
     }
 
@@ -355,6 +372,9 @@ public sealed class HostingHttpClientTests
     [InlineData("a@b@c and d@e", "<e-mail> and <e-mail>")]
     [InlineData("an @ alone, @start and end@", "an @ alone, @start and end@")]
     [InlineData("A pull request already exists for octo:feature/login.", "A pull request already exists for octo:feature/login.")]
+    // A branch name with an '@' is screened too, GitHub's words included (D368's rule as written).
+    [InlineData("A pull request already exists for octo:user@fix.", "A pull request already exists for <e-mail>")]
+    [InlineData("No commits between main and user@fix", "No commits between main and <e-mail>")]
     [InlineData("", "")]
     public void An_e_mail_shaped_run_is_an_at_sign_between_non_blank_characters(string text, string screened)
     {
