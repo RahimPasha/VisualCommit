@@ -118,11 +118,14 @@ Build:
   fixes. (2026-11-01. Week: share not read.)
 - [ ] 6. The provider model for three providers: one account per provider (D348), Azure DevOps'
   and GitLab's remotes recognised from their URLs (D347), their tokens in the OS keychain (R3).
-  Tests.
-- [ ] 7. Azure DevOps' API: a token checked at sign-in, the organization's repositories, a
-  repository's pull requests, creating one; against its fake. Tests. Under way: the shared HTTP
-  core (WP-H, section 5) merged at `3591dc4`, with wave 1's adversarial fixes (D380, D382), and
-  WP-FA's fake at `e995fc4`; WP-AZ (section 6) is being built from `e995fc4`.
+  Tests. Under way: recognition is WP-AZ's and WP-GL's (merged, steps 7 and 8); the session's
+  accounts and keychain entries per provider are WP-S's (section 9, wave 3).
+- [x] 7. Azure DevOps' API: a token checked at sign-in, the organization's repositories, a
+  repository's pull requests, creating one; against its fake. Tests. WP-AZ (Azure DevOps' client and
+  provider, section 6) merged at `767d9b9` on WP-H's core (`3591dc4`) and WP-FA's fake (`e995fc4`),
+  with its reviews', hunts' and the lead's fixes, and at its merge (`df365e5` to `b65d0d9`) the
+  request's token on its own failures (WP-GL's R1), one warning per failure at A1.
+  (2026-11-01. Week: share not read.)
 - [x] 8. GitLab's API: a token of either kind checked at sign-in (D345), the account's projects, a
   project's merge requests, creating one; against its fake. Tests. WP-GL (GitLab's client and
   provider, section 7) merged at `e8a5abf`, with its reviews', hunts' and the lead's fixes; the
@@ -222,6 +225,12 @@ random folder name landed within that half pixel. Both now assert exactly. Test 
 green. Jobs and Test steps: `windows-latest` 41 min 0 s (37 min 49 s), `macos-latest` 32 min 21 s
 (30 min 18 s), `ubuntu-latest` 6 min 37 s (5 min 1 s), the containers 6 min 31 s and 7 min 4 s
 (4 min 39 s and 4 min 53 s), each under four fifths.
+
+[41349169942](https://github.com/RahimPasha/VisualCommit/actions/runs/41349169942) on `ea66780`
+(WP-GL's merge `e8a5abf`): all five jobs green, none failed a test, the keychain steps green. Jobs
+and Test steps: `windows-latest` 40 min 20 s (37 min 6 s), `macos-latest` 32 min 49 s (30 min 53
+s), `ubuntu-latest` 6 min 5 s (4 min 44 s), the containers 8 min 28 s and 8 min 26 s (6 min 11 s and
+6 min 9 s), each under four fifths. The next run is that of WP-AZ's merge, read in Next step.
 
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
@@ -379,22 +388,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wave 1 is merged (WP-F `564dad4`, WP-H `3591dc4`, WP-C `6586066`; its whole default run passed,
-Notes). `b0151bb` fixed the two faults CI's run 41311809889 found, `08fa49b` the race its run
-41321215497 met in a test of 7a's, and `ca52c5d` the half pixel its run 41328744135 met in phase 6's
-W3; CI's run 41332176199 on `ca52c5d` is green in all five jobs (CI section).
-
-Wave 2 (design 0.4): WP-FL (the fake of GitLab, section 4) is merged at `7780908`, WP-FA (the fake
-of Azure DevOps, section 3) at `e995fc4` and WP-GL (GitLab's client, section 7) at `e8a5abf`; WP-AZ
-(`wip/p7b-azure`, section 6, in a worktree made from `e995fc4` under
-`D:/Projects/Personal/vc-wt/p7b-azure`) is in the lead's last round of fixes on its third hunt (Z1
-to Z4). At its merge the lead makes its calls of `MalformedAnswer` and `Failed` pass the request's
-token, as WP-GL's do (WP-GL's R1), has that verified, and checks WP-AZ for WP-GL's other rulings.
-Each is built, reviewed and fixed in its worktree (the
-clients also hunted adversarially) before the lead merges it with `--no-ff`, builds, runs its
-classes, removes the worktree and stops its fsmonitor daemon; the `wip/` branches are not pushed.
-No wave 2 section names a lagged list. CI is read after each push. At the last of the four merges
-the lead runs the whole default run through `bash scripts/heavy-run.sh`. Then wave 3: WP-S, the
+Wave 2 (design 0.4) is merged: WP-FL `7780908`, WP-FA `e995fc4`, WP-GL `e8a5abf` and WP-AZ `767d9b9`,
+with the lead's commits at WP-AZ's merge (`df365e5` to `b65d0d9`). The whole default run comes now,
+through `bash scripts/heavy-run.sh` with nothing else running (design 0.6's estimate grows with
+wave 2's Hosting.Tests: each minute it adds there adds one to the run, 16.2); then read the CI run
+the push of `b65d0d9`'s status commit started, each job and each Test step against four fifths
+(0.6), and record both. No wave 2 section names a lagged list. Then wave 3: WP-S (section 9), the
 owner's 15.8 steps and stage 1 of the live command before WP-S's merge, then WP-LF. Until the reset
 of 2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if
 it runs out (D344).
@@ -409,10 +408,8 @@ every commit.
   `review/` (`findings.md`, one file per finding in `f/`, `review-raw.json`) and `fix/` (the
   design split per section, the fixers' and checkers' reports). Nothing there is needed to build:
   the design and its decisions hold what the builders need. Wave 1's worktrees and `wip/` branches
-  were removed at its merges, and so were WP-FL's, WP-FA's and WP-GL's at theirs. Wave 2's others exist from
-  2026-11-01 (Next step); a session that finds them after a break reads each branch's
-  `git log <its base>..` (the base Next step names for it) before going on. Wave 1's adversarial findings and the lead's
-  rulings on them lie in `D:/Projects/Personal/phase7b-work/verify/` (`findings-wave1.md`,
+  were removed at its merges, and wave 2's at theirs (2026-11-01). Wave 1's adversarial findings
+  and the lead's rulings on them lie in `D:/Projects/Personal/phase7b-work/verify/` (`findings-wave1.md`,
   `rulings-wave1.md`); D379 to D382 hold what they settled. Wave 2's hunters' harnesses lie there
   too (`wp-gl-*`, `wp-az-*`, `wp-fa-correctness`); what they found and the lead's rulings on the
   clients' third hunts are in sections 6's and 7's As built, which end with the lead's items for
