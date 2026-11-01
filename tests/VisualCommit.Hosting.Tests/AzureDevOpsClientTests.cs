@@ -74,8 +74,9 @@ public sealed class AzureDevOpsClientTests
         {
             // Empty, as for an unknown token (READ g1 G2).
             () => Answer(HttpStatusCode.Unauthorized, string.Empty, null, ("WWW-Authenticate", "Basic realm=\"https://tfsprodfake.app.visualstudio.com/\""), ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),
-            // HTML (g1 G0.2).
+            // HTML (g1 G0.2), and the same led by a BOM.
             () => Answer(HttpStatusCode.Unauthorized, "<html><body>Sign in</body></html>", "text/html", ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),
+            () => AnswerBytes(HttpStatusCode.Unauthorized, [0xEF, 0xBB, 0xBF, .. "<html><body>Sign in</body></html>"u8.ToArray()], ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),
             // UnauthorizedRequestException TF400813 (MEASURED r5 1.3).
             () => Answer(HttpStatusCode.Unauthorized, Error("TF400813: The user 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' is not authorized to access this resource.", "UnauthorizedRequestException"), "application/json", ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),
             // AccessCheckException, led by a BOM (READ g1 G2).
@@ -98,7 +99,7 @@ public sealed class AzureDevOpsClientTests
             }
         }
 
-        Assert.Equal(["Unauthorized", "Unauthorized", "TF400813: The user 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' is not authorized to access this resource.", "Access Denied: The Personal Access Token used has expired."], messages);
+        Assert.Equal(["Unauthorized", "Unauthorized", "Unauthorized", "TF400813: The user 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' is not authorized to access this resource.", "Access Denied: The Personal Access Token used has expired."], messages);
     }
 
     /// <summary>One row of 6.3's table, scripted.</summary>

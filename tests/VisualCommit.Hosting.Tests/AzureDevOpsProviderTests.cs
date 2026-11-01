@@ -224,6 +224,10 @@ public sealed class AzureDevOpsProviderTests
         Assert.True(list.Repositories[2].IsFork);
         Assert.Equal("GET /Fernhill-Labs/_apis/git/repositories?api-version=7.1", fixture.Sent()[^1]);
 
+        fixture.Fake.FailNext("repos:fernhill-labs", FakeAzureDevOpsFault.ServerError);
+        var failed = (await fixture.Provider.ListRepositoriesAsync(fixture.AdaToken, account, Cancelled)).Failure!;
+        Assert.Equal((HostingFailureKind.ServerError, HostingProvider.AzureDevOps), (failed.Kind, failed.Provider));
+
         // The live command's project alone (D352).
         var projectRecorder = new RecordingHttpHandler(fixture.Fake.CreateHandler());
         using var inProject = new AzureDevOpsProvider(fixture.Fake.Endpoints with { ListProject = Project }, () => projectRecorder, new ListLog(), new ManualTimeProvider());

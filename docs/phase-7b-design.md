@@ -2000,6 +2000,35 @@ leaves the account's organization (at A1, the typed one); no e-mail reaches a re
 failure; no Azure DevOps sentence is parsed; no value from the research's captures; CI's five jobs are
 green.
 
+**As built** (WP-AZ, `e83bfb0`, `0bb5087`, `b340942` and the commit of this paragraph, 2026-11-01).
+Where the build differs from the text above or settles what it left open:
+- `AzureDevOpsUrls` (internal) holds `Recognise`, `OrganizationOf` (the provider's static forwards to
+  it), `WebUrlOf`, `ApiPath` and `NamesOf`: an owner of two segments, the organization in the grammar,
+  project and name neither empty, `.` nor `..` (an escaped `..` stays a dot segment, which `new Uri`
+  resolves out of the organization); A3 to A5, `WebUrlOf` and `PullRequestsPage` refuse others.
+  Recognition keeps the organization as written (V16's `MYORG`), reads `_git` and `DefaultCollection`
+  without case, skips `_full`/`_optimized` only before a name, and on SSH takes port 22 alone.
+  `OrganizationOf` cuts the text at `?` or `#`, ignores a user with a password too, and takes
+  `<label>.visualstudio.com` on https:443 alone, with recognition's label rule.
+- `AzureDevOpsClient` (internal) returns `AzureDevOpsReply<T>` (`MoreExist`); its walk is
+  `GetPagesAsync<T>(token, url, type, idOf, maxPages, ct)`, appends `&$top=…&$skip=…`, fails with a
+  failing probe, and a probe row already seen counts as none. Its own refusals' message is
+  `SignInPageText` (a sign-in redirect, a 203, a 2xx typed `text/html` or whose first non-blank byte
+  is `<`). `Detail` is null on every classified failure. A `Retry-After` date and `X-RateLimit-Reset`
+  are capped at a day too; a reset past year 9999 gives 60 s. A 5xx without words takes the reason
+  phrase before `ServerError`'s text (6.3's order read literally).
+- Provider: its fixed texts are public constants (`EmptyTokenText`, `OtherProviderText`,
+  `NotAnOrganizationText`, `AnonymousText`, `NotThisServiceText`, `OtherOrganizationText`), and
+  `OtherProviderDetail` is GitHub's. A1's Anonymous refusal goes through the core's `Failed` (`…
+  failed: BadCredentials (request <id>).`); the spelling's own warning names no organization. A2
+  refuses another provider's or host's account, or a login outside the grammar, without a request,
+  takes the organization from `account.Login` and leaves out rows that fail `NamesOf`; A3 keeps the
+  asked organization and the answer's project and name. A5 sends `Body` as `description` as given.
+- For WP-S: construct with `HostingOptions`' handler; `ForgetKept` is internal. For WP-A: `TokenPage`
+  throws `ArgumentException` where `OrganizationOf` gives null. For WP-LF: the client's ASSUMED answers
+  are in the tests' comments (the resource area with a token, the POST by name, an e-mail in a
+  message); no fake fix was needed and no file outside 6.1's list changed.
+
 ## 7. WP-GL: GitLab's client and provider
 
 ### 7.1 Goal and files
