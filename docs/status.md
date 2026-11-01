@@ -192,7 +192,17 @@ containers (off Windows .NET reads `/p?page=2` as a file address), and five of
 (Homebrew's 2.56.0), whose curl keeps another user's name behind the test host's relative 301; both
 are in the design's As built for sections 5 and 8. Its Test steps: `windows-latest` 26 min 25 s,
 `macos-latest` 22 min 37 s, `ubuntu-latest` 5 min 59 s, the containers 4 min 36 s and 6 min 12 s,
-each under four fifths. The fix is the commit after `e14c3ab`; its run is read in Next step.
+each under four fifths. The fix is `b0151bb`.
+
+[41321215497](https://github.com/RahimPasha/VisualCommit/actions/runs/41321215497) on `b0151bb`:
+the two faults are gone (every `HostingLinks` and `CoverageGitMatchTests` row passed on all five),
+and four jobs are green; `ubuntu-latest` failed one test of 7a's,
+`RepositoryHostingWiringTests.Signed_out_reads_no_rules_…`, which asserted the tab's "listed 4 open
+pull requests" line as soon as it saw the list loaded, while the line, posted after the state
+(D322), still waited in the dispatcher's queue: a race in the test since 7a, which now waits for the
+line as the walk-throughs do. Test steps: `windows-latest` 35 min 32 s, `macos-latest` 23 min 29 s,
+`ubuntu-latest` 5 min 13 s, the containers 6 min 11 s and 5 min 51 s, each under four fifths. The
+fix is the commit after `b0151bb`; its run is read in Next step.
 
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
@@ -351,8 +361,9 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 ### Next step
 
 Wave 1 is merged (WP-F `564dad4`, WP-H `3591dc4`, WP-C `6586066`; its whole default run passed,
-Notes). The commit that records this fixes the two faults CI's run 41311809889 found (CI section);
-read the run its push starts, each job and each Test step against four fifths (0.6).
+Notes). `b0151bb` fixed the two faults CI's run 41311809889 found, and the commit after it the race
+its run 41321215497 met in a test of 7a's (CI section); read the run that commit's push starts, each
+job and each Test step against four fifths (0.6).
 
 Wave 2 (design 0.4) is being built beside it: WP-FA (`wip/p7b-fake-azure`, section 3) and WP-FL
 (`wip/p7b-fake-gitlab`, section 4), each in a worktree made from that commit under
