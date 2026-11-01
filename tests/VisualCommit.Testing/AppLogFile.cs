@@ -115,7 +115,7 @@ public static class AppLogFile
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(repository);
         return new Regex(
-            string.Create(CultureInfo.InvariantCulture, $@"\] {Regex.Escape(repository)}: listed (?<count>\d+) open pull requests of (?<repository>[^/]+(?:/[^/]+)+)$"),
+            string.Create(CultureInfo.InvariantCulture, $@"\] {Regex.Escape(repository)}: listed (?<count>\d+) open pull requests of (?<repository>[^/\r\n]+(?:/[^/\r\n]+)+)$"),
             RegexOptions.CultureInvariant);
     }
 
