@@ -606,8 +606,9 @@ internal sealed class HostingHttpClient(HostingHttpProfile profile, Func<HttpMes
     public Task<HostingReply<T>> SendAsync<T>(HttpMethod method, string token, Uri url, object? body, JsonTypeInfo<T> type, CancellationToken ct);
     public Task<HostingReply<List<T>>> GetPagesAsync<T>(string token, Uri first, JsonTypeInfo<List<T>> type, int maxPages, CancellationToken ct,
         Action<IReadOnlyDictionary<string, string>>? pageHeaders = null);
-    public HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId);   // a success lacking what the app needs, with its warning
-    public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId);   // a client's own failure from a success, finished, warned by its kind
+    public HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId, string? token = null);   // a success lacking what the app needs, with its warning
+    public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId, string? token = null);   // a client's own failure from a success, finished, warned by its kind
+        // token: the request's, screened as in the core's own failures (WP-GL's hunt 3, R1); 7a's GitHub passes none
     public void ForgetKept();
 }
 internal static class HostingHttpTexts   // "Could not reach {name}.", "{name} did not answer within 30 seconds.", "{possessive} answer could not be read.", "{name} had a problem: HTTP {status}."
@@ -1743,7 +1744,8 @@ differs from 5.1 to 5.5 or settles what they left open:
   core also screens the request's token, and the credential `Authorize` sends when it differs (a
   `Basic` in Base64), in any case (hosts are read in lower case): `<token>` in each failure it
   finishes (`Message`, `Detail`, `Url`'s path) and its warning, and no id holding one. `Failed` and
-  `MalformedAnswer` are given no token. An `ETag` beyond `!` to `~` is not kept (D380). No 7a
+  `MalformedAnswer` screen a token only when a client passes the request's (GitLab does since
+  WP-GL's hunt 3; 7a's GitHub passes none). An `ETag` beyond `!` to `~` is not kept (D380). No 7a
   assertion changed; `HostingSessionSetup.Fault` throws a given exception.
 - CI at WP-C's merge (run 41311809889 on `6586066`): off Windows `Uri.TryCreate("/p?page=2",
   UriKind.Absolute)` gives `file:///p%3Fpage=2`, so `HostingLinks.Next` gave a relative link as a next
@@ -2126,7 +2128,7 @@ the merge that closes wave 2, whichever of WP-FA, WP-FL, WP-AZ and WP-GL is last
 three classes pass; the token goes to no other origin or header; no kind rests on GitLab's English or `scope`;
 recognition takes no other host or port; 1.4's signatures hold; CI's five jobs are green.
 
-**As built** (WP-GL, `f77a34f` to `3765433`; the reviews' and hunts' fixes `2c7f4cb`, `0309c38`, `c076f58`, `b47e015`, 2026-11-01):
+**As built** (WP-GL, `f77a34f` to `3765433`; the reviews' and hunts' fixes `2c7f4cb`, `0309c38`, `c076f58`, `b47e015`, `570520a`, 2026-11-01):
 - `GitLabClient.cs` holds `GitLabProfile` (`ProjectId`, `Url`) and a static `Create`; `GitLabUrls`'
   `SplitPathWithNamespace` reads an answer's path and `IsSegment` a segment by 7.2's rules.
 - 7.2 refuses an authority with `?`, `#` or `\`, an ssh or scp-like one with `%`, `[` or `]`, and an
@@ -2142,11 +2144,11 @@ recognition takes no other host or port; 1.4's signatures hold; CI's five jobs a
 - `RetryAt`: `Retry-After`'s seconds or IMF-fixdate, else the next source, within a day of now; a
   `ratelimit-reset` past 9999 is `Malformed` (D380).
 - Local refusals set `Provider` GitLab; `OtherProviderDetail` equals GitHub's. A1: a `username` not
-  one segment is `Malformed`, a name e-mail-shaped when `ScreenEmail` changes it; `Login` keeps its
-  case. A4's author is null unless one segment.
-- The provider's own failures reach `MalformedAnswer` with the token, screened as the core's are.
-  A known limit: records (`RepositoryInfo`, rows, authors) are not (gitlab.com would have to name a
-  project by the account's token).
+  one segment, or holding the token in any case, is `Malformed`; `Name` is null when `ScreenEmail`
+  changes it; `Login` keeps its case. A4's author is null unless one segment.
+- The provider's own failures reach `MalformedAnswer` with the token (1.4's optional `token`, as
+  `Failed`'s), screened as the core's are. A known limit: records (`RepositoryInfo`, rows, authors)
+  are not (gitlab.com would have to name a project by the account's token).
 - An answer's address is read only as absolute `http` or `https`. A2 and A4 keep the first row of
   each id (iid), at most their pages of `PerPage` (100), `MoreExist` when cut. A2 leaves out a row
   it cannot read, or a null one, with a warning each; `CanPush` true without `permissions`. A4 fails
