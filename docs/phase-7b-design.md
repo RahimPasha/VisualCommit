@@ -2355,7 +2355,11 @@ The key for all three is `new AccountKey(provider.Kind, provider.Host, account.L
 - **`SignInAsync(SignInRequest r, ct)`** (7a design 7.5 per provider): `r.Provider` off, `Validation`
   "{Name} is turned off." (GitHub's 7a's, `:28`) without a request. Else `CheckTokenAsync(r.Token,
   r.Organization, linked)` outside the gate; a failure changes nothing. Then 7a's steps on that provider's record: another key forgotten (D348),
-  `UseForGit` kept or true, record, slot, event. Other providers are untouched.
+  `UseForGit` kept or true, record, slot, event. Other providers are untouched. A check whose answer
+  names the token itself (ignoring case) in the login, the display name, the organization or the
+  avatar's host is a malformed answer, with the provider's malformed text, before anything is kept or
+  logged, so no sign-in line carries an echoed token (D382; the core already screens it out of its
+  own warnings and failures).
 - **`SignOutAsync(provider, ct)`**: 7a's steps for that slot, then its provider's `ForgetKept()`
   (`GitHubProvider.cs:311`; the others' `internal ForgetKept`, 1.4). Only GitHub's runs `ForgetAvatarsAsync`
   (`:661-713`; D291, D349).
@@ -3622,7 +3626,8 @@ Each point names what settles it and who meets it.
   Wave 1's adversarial check found more of 7a's github.com rule's gaps, which the new coverages close
   for themselves (D379, D381): beside a bound github.com remote, another user's URL spelt with a
   trailing dot on the host, with `www.`, with `http://`, with white space or a control character in
-  its user part, or with a host outside printable ASCII can lose D82's order, because git reaches
+  its user part, with a host outside printable ASCII, or behind a remote helper's `<name>::` prefix
+  can lose D82's order, because git reaches
   github.com and asks for the credential without that user (the token reaches github.com only).
   Reopened by the owner or a later phase that moves GitHub onto `SelectCovered`.
 - Submodules (D379's R4): the scope's `GIT_CONFIG_COUNT` pairs reach a submodule's fetch through git's
