@@ -495,6 +495,65 @@ public class CredentialBindingSelectTests
     }
 
     /// <summary>
+    /// The hunt on the fixed code (2026-11-01): http and https URLs that .NET reads whose host holds
+    /// a character outside U+0021 to U+007E. .NET keeps such a host as written (its <c>IdnHost</c>
+    /// is <c>gitlab.com</c> or <c>dev.azure.com</c> for most of these), git's curl may map it into a
+    /// covered host (2.56's did, 2.43's did not) and, after a redirect into the origin, git builds
+    /// the credential again from the ASCII target without the URL's user
+    /// (<see cref="CoverageGitMatchTests"/> shows it over a transport). Before the fix
+    /// <c>Select</c> kept the bindings beside them; now, as for R1's unreadable URL (D379), every
+    /// covered host is left unbound, whatever the URL's user, and one naming no covered host too.
+    /// </summary>
+    public static TheoryData<string> HostsOutsideAscii => new()
+    {
+        "https://evil@gitlab．com/g/p",
+        "https://evil@ｇｉｔｌａｂ.com/g/p",
+        "https://evil@gitlab。com/g/p",
+        "https://evil@ｄｅｖ.azure.com/myorg/p/_git/r",
+        "http://evil@ｄｅｖ.azure.com/myorg/p/_git/r",
+        "https://ｄｅｖ.azure.com/myorg/p/_git/r",
+        "https://myorg@ｄｅｖ.azure.com/myorg/p/_git/r",
+        "https://evil@myorg.visualstudio．com/p/_git/r",
+        "https://gitlab．com/g/p.git",
+        "https://Ada@gitlab．com/g/p.git",
+        "https://evil@git­lab.com/g/p",
+        "https://evil@gitlab.com​/g/p",
+        "https://evil@gitlab.com．/g/p",
+        "https://gitlab.com /g/p",
+        "HTTPS://evil@gitlab．com/g/p",
+        "http://bob@127．0．0．1:2/g/p",
+        "http://bob@１２７．０．０．１:2/Fernhill-Labs/p/_git/r",
+        "https://bücher.example/x",
+    };
+
+    [Theory]
+    [MemberData(nameof(HostsOutsideAscii))]
+    public void An_http_or_https_url_whose_host_is_outside_printable_ascii_leaves_every_covered_host_unbound(string url)
+    {
+        Assert.True(Uri.TryCreate(url, UriKind.Absolute, out _), $"{url} is unreadable, so R1's.");
+        var azure = AzureDevOpsCoverageVectors.Coverage;
+
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", V1), Fetch("vs", VisualStudio), Fetch("other", url)], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", url), Fetch("vs", VisualStudio)], azure));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p"), Fetch("other", url)], GitLab));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", url), Fetch("origin", "https://gitlab.com/g/p.git")], GitLab));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", "http://127.0.0.1:2/Fernhill-Labs/p/_git/r"), Fetch("other", url)], FakeAzureCoverage()));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", "http://127.0.0.1:2/g/p.git"), Fetch("other", url)], FakeGitLabCoverage()));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", url)], GitLab));
+    }
+
+    [Theory]
+    [InlineData("ssh://git@ｄｅｖ.azure.com/v3/myorg/p/r")]
+    [InlineData("https://xn--bcher-kva.example/x")]
+    [InlineData("https://other.example/g/p．")]
+    [InlineData("https://other.example/x?．@dev.azure.com")]
+    public void Another_scheme_a_punycode_host_or_a_character_outside_ascii_after_the_host_fails_nothing(string url)
+    {
+        // Only the host counts: after the first /, ? or # nothing is in it, for git as for .NET.
+        Assert.Equal([V1], CredentialBinding.Select([Fetch("origin", V1), Fetch("other", url)], AzureDevOpsCoverageVectors.Coverage).Select(binding => binding.Url));
+    }
+
+    /// <summary>
     /// D379 (R2): beside a bound URL, a URL that a measured redirect leads into the covered origin
     /// (http:// and www. on gitlab.com, r6 6.1; http:// on dev.azure.com, r5), and lookalikes that
     /// none leads there. Another user's drops by path or fails the host; no user or the account's

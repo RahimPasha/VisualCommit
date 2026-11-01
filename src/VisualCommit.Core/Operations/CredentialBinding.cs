@@ -98,7 +98,10 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     /// with no password. With <see cref="GitCoverage.GitTwin"/> a <c>.git</c>-less URL of two or more
     /// segments is followed by its <c>.git</c> twin, and a URL whose path holds a raw reserved
     /// character by its credential twin. An <c>http</c> or <c>https</c> URL that cannot be read
-    /// leaves nothing on any covered host bound (D379). Another user's URL on a covered host that
+    /// leaves nothing on any covered host bound (D379), and so does one whose host, as .NET or
+    /// git's credential code reads it, holds a character outside U+0021 to U+007E (a fullwidth
+    /// <c>dev.azure.com</c>, <c>gitlab&lt;U+FF0E&gt;com</c>), which git's curl may map into a covered host.
+    /// Another user's URL on a covered host that
     /// is not in the form leaves nothing on that host bound (a URL whose user git's credential code
     /// reads otherwise, through white space or a control character, counts as one), and so, on the
     /// origin with an organization, does any URL without a password that is not in the form or has no first
@@ -230,6 +233,23 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
                     {
                         host.Failed = true;
                     }
+                }
+
+                continue;
+            }
+
+            // The hunt on the fixed code (2026-11-01): .NET reads a host outside printable ASCII
+            // (gitlab<U+FF0E>com, a fullwidth dev.azure.com, U+3002 or U+200B in it) as written, while
+            // git's curl may map it into a covered host (2.56's did, 2.43's did not) and, after a
+            // redirect into the origin (gitlab.com's 301, dev.azure.com's 302 for http://), git
+            // builds the credential again from the ASCII target without the URL's user, so a
+            // binding's key answers it with the token. The app cannot know which host git reaches:
+            // as for R1's unreadable URL (D379), nothing on any covered host is bound.
+            if (HasHttpScheme(text) && (!InPrintableAscii(url.Uri.Host) || !InPrintableAscii(GitHostOf(text))))
+            {
+                foreach (var host in hosts)
+                {
+                    host.Failed = true;
                 }
 
                 continue;
@@ -480,6 +500,27 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
         return Uri.UnescapeDataString((colon >= 0 ? userInfo[..colon] : userInfo).ToString());
     }
 
+    /// <summary>
+    /// The host (with its port) git's credential code reads in a URL that has <c>://</c>
+    /// (<c>credential_from_url</c>): the text after <c>://</c>, or after the first <c>@</c> when one
+    /// comes before the first <c>/</c>, <c>?</c> or <c>#</c>, up to that character; as written.
+    /// </summary>
+    private static ReadOnlySpan<char> GitHostOf(string text)
+    {
+        var authority = text.AsSpan(text.IndexOf(SchemeSeparator, StringComparison.Ordinal) + SchemeSeparator.Length);
+        var end = authority.IndexOfAny(EndsGitsAuthority);
+        var at = authority.IndexOf('@');
+        if (end >= 0 && at > end)
+        {
+            at = -1;
+        }
+
+        return authority[(at + 1)..(end >= 0 ? end : authority.Length)];
+    }
+
+    /// <summary>Whether <paramref name="text"/> holds only U+0021 to U+007E.</summary>
+    private static bool InPrintableAscii(ReadOnlySpan<char> text) => !text.ContainsAnyExceptInRange('!', '~');
+
     /// <summary>Where git's credential code ends a URL's authority (<c>strcspn(cp, "/?#")</c>).</summary>
     private static readonly SearchValues<char> EndsGitsAuthority = SearchValues.Create("/?#");
 
@@ -588,7 +629,7 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
         /// <summary>On the origin with an organization: the first segment it requires, and the bindings' owner; null elsewhere.</summary>
         public string? Organization { get; } = organization;
 
-        /// <summary>An http or https URL could not be read (D379), or a URL here is not in the form as step 5 says: nothing here is bound (ruling 10).</summary>
+        /// <summary>An http or https URL could not be read (D379) or has a host outside printable ASCII, or a URL here is not in the form as step 5 says: nothing here is bound (ruling 10).</summary>
         public bool Failed { get; set; }
 
         /// <summary>Other users' paths here, in git's credential view.</summary>

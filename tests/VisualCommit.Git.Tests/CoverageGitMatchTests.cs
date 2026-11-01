@@ -325,6 +325,100 @@ public sealed class CoverageGitMatchTests
     }
 
     [Theory]
+    [InlineData("GitLab", "https://evil@gitlab．com/g/p", "https://gitlab.com/g/p", "gitlab．com")]
+    [InlineData("GitLab", "https://evil@ｇｉｔｌａｂ.com/g/p", "https://gitlab.com/g/p", "ｇｉｔｌａｂ.com")]
+    [InlineData("AzureDevOps", "https://evil@ｄｅｖ.azure.com/myorg/p/_git/r", "https://dev.azure.com/myorg/p/_git/r", "ｄｅｖ.azure.com")]
+    public async Task Gits_credential_side_reads_a_host_outside_ascii_as_written_so_the_users_helper_is_asked_and_Select_binds_nothing_beside_it(
+        string provider, string url, string key, string host)
+    {
+        // The hunt on the fixed code: given the URL in UTF-8, as the app gives git every URL, git's
+        // credential code keeps the host's bytes, the key does not match, and the user's own helper
+        // is asked with evil's name (MEASURED on 2.56 and 2.43). The token reaches such a URL only
+        // through curl and a redirect (the next test); Select refuses the host either way.
+        var coverage = CredentialBindingSelectTests.CoverageOf(provider);
+        using var repo = await TempRepo.CreateAsync();
+        var own = await OwnHelperAsync(repo, recordInput: true);
+
+        var bound = await FillAsync(repo, [new CredentialBinding(key, coverage.Account)], url);
+
+        Assert.False(bound.Asked, $"{url} reached the app's helper through {key}.");
+        var given = File.ReadAllText(own).Replace("\r", string.Empty, StringComparison.Ordinal);
+        Assert.Contains($"host={host}\n", given, StringComparison.Ordinal);
+        Assert.Contains("username=evil\n", given, StringComparison.Ordinal);
+        Assert.Empty(CredentialBinding.Select([new RemoteEffectiveUrls("origin", [key], [key]), new RemoteEffectiveUrls("other", [url], [url])], coverage));
+    }
+
+    /// <summary>
+    /// The hunt on the fixed code (2026-11-01) over a transport: another user's URL on a host .NET
+    /// keeps outside printable ASCII (fullwidth digits and full stops, U+3002, a zero-width space)
+    /// that git's curl maps to 127.0.0.1, whose host answers <c>/g/p/info/refs</c> with an absolute
+    /// 301 into <c>/g/p.git/info/refs</c>, as gitlab.com does (r6 6.1). git builds the credential
+    /// again from the ASCII target without bob's name, so the binding Select gave before the fix
+    /// answers bob's fetch with the account's token, the user's own helper unasked (MEASURED on
+    /// 2.56.0.windows.4, whose curl maps all four; the hunt's 2.43 refused fullwidth letters,
+    /// "URL using bad/illegal format", and so never reaches the host, which leaves no token to
+    /// take). Select now binds nothing beside such a URL, and the user's own helper is asked.
+    /// </summary>
+    [Theory]
+    [InlineData("１２７．０．０．１")]
+    [InlineData("127．0．0．1")]
+    [InlineData("127。0。0。1")]
+    [InlineData("127.0.0.1​")]
+    public async Task Another_users_url_on_a_host_outside_ascii_that_a_redirect_leads_into_a_binding_takes_the_token_where_curl_maps_it_so_Select_binds_nothing(string spelled)
+    {
+        using var repo = await TempRepo.CreateAsync("idn");
+        await repo.CommitFileAsync("README.md", "first\n", "First");
+        var folder = repo.SiblingPath("gitlab");
+        await repo.GitAsync("clone", "--quiet", "--bare", "--no-hardlinks", repo.Path, Path.Combine(folder, "g", "p.git"));
+        AuthRemoteServer? self = null;
+        await using var host = await AuthRemoteServer.StartForHostAsync(
+            folder,
+            new AuthRemoteHostOptions(
+                new RedirectRoutes(path => path == "/g/p/info/refs", 301, request => $"http://127.0.0.1:{self!.Port}/g/p.git/info/refs?{request.Query}"),
+                token => token == Token ? "ada" : null,
+                _ => false,
+                (_, _) => false,
+                Realm: "GitLab"));
+        self = host;
+        host.Serve("g/p");
+        var coverage = new GitCoverage(new AccountKey(HostingProvider.GitLab, $"127.0.0.1:{host.Port}", "ada"), new Uri($"http://127.0.0.1:{host.Port}/"))
+        {
+            GitTwin = true,
+            HelperUserIsAccounts = true,
+        };
+        var origin = $"http://127.0.0.1:{host.Port}/g/p.git";
+        var bob = $"http://bob@{spelled}:{host.Port}/g/p";
+        var own = await OwnHelperAsync(repo);
+
+        // What Select gave beside bob's URL before the fix: the origin's binding.
+        var before = new CredentialBinding(origin, coverage.Account);
+        var taken = await LsRemoteAsync(repo, [before], bob);
+        var reached = host.Requests.Count > 0;
+        if (reached)
+        {
+            Assert.True(taken.Asked, $"{bob} did not reach the app's helper through {origin}: {taken.Error}");
+            Assert.False(taken.AskedOtherUser);
+            Assert.Contains(host.Requests, request => request.Path == "/g/p.git/info/refs" && request.UserName == "ada" && request.GivenUserName == GitCredential.UserName);
+            Assert.False(File.Exists(own), "The user's own helper was asked through the origin's key.");
+        }
+        else
+        {
+            Assert.False(taken.Asked, $"{bob} reached the app's helper through {origin} though git never reached the host.");
+        }
+
+        var bindings = CredentialBinding.Select([new RemoteEffectiveUrls("origin", [origin], [origin]), new RemoteEffectiveUrls("bob", [bob], [bob])], coverage);
+        Assert.Empty(bindings);
+        Assert.Empty(CredentialBinding.Select([new RemoteEffectiveUrls("bob", [bob], [bob]), new RemoteEffectiveUrls("origin", [origin], [origin])], coverage));
+        var signedIn = host.Requests.Count(request => request.UserName == "ada");
+        var kept = await LsRemoteAsync(repo, bindings, bob);
+
+        Assert.False(kept.Asked);
+        Assert.Equal(signedIn, host.Requests.Count(request => request.UserName == "ada"));
+        Assert.Equal(reached, File.Exists(own));
+        Assert.Empty(host.Errors);
+    }
+
+    [Theory]
     [InlineData("https://dev.azure.com/otherorg/p/_git/r", false, "Username for 'https://dev.azure.com': ", false)]
     [InlineData("https://dev.azure.com/otherorg/p/_git/r", true, "Username for 'https://dev.azure.com/otherorg/p/_git/r': ", false)]
     [InlineData("https://dev.azure.com/myorg/p/_git/r", false, "Username for 'https://dev.azure.com': ", false)]
