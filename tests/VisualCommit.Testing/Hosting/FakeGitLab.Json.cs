@@ -222,6 +222,8 @@ public sealed partial class FakeGitLab
     /// <c>work_in_progress</c> alike, <c>source_project_id</c> and <c>target_project_id</c> but no source
     /// path (MEASURED), a fork's <c>allow_collaboration</c>; with <paramref name="single"/> the single MR's
     /// <c>diff_refs</c>, <c>changes_count</c> and the rest (MEASURED r6 4.1; values ASSUMED).
+    /// <c>merge_status</c> is always <c>can_be_merged</c> and <c>detailed_merge_status</c>
+    /// <c>mergeable</c> (ASSUMED: the fake computes no merge).
     /// </summary>
     private JsonObject MergeRequestJsonLocked(FakeMergeRequest request, bool single)
     {
@@ -289,7 +291,7 @@ public sealed partial class FakeGitLab
         return json;
     }
 
-    /// <summary>A branch (r6 13.3, READ: <c>name</c>, <c>commit</c>, <c>merged</c>, <c>protected</c>, <c>default</c>, <c>web_url</c> and the rest).</summary>
+    /// <summary>A branch (r6 13.3, READ: <c>name</c>, <c>commit</c>, <c>merged</c>, <c>protected</c>, <c>default</c>, <c>web_url</c> and the rest); <c>protected</c> for the default branch alone (ASSUMED: gitlab.com's default protection).</summary>
     private JsonObject BranchJson(FakeGitLabProject project, (string Name, string Sha, string Subject) branch, string defaultBranch, bool canPush) => new()
     {
         ["name"] = branch.Name,

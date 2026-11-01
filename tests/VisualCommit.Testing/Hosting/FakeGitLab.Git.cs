@@ -43,14 +43,17 @@ public sealed partial class FakeGitLab
     {
         var bare = target.BarePath!;
         var refs = await ReadRefsAsync(bare, ct, "refs/heads/", "refs/merge-requests/").ConfigureAwait(false);
-        List<FakeMergeRequest> requests;
+        // Each request's state is read once, under the lock: a PUT or DELETE that lands while git runs
+        // (they take the lock alone, not the target's) waits for the next sync instead of meeting a
+        // fork whose heads were never read.
+        List<(FakeMergeRequest Request, bool Open, bool Deleted)> requests;
         lock (Gate)
         {
-            requests = [.. _mergeRequests.Where(request => request.Target == target)];
+            requests = [.. _mergeRequests.Where(request => request.Target == target).Select(request => (request, request.State == "opened", request.Deleted))];
         }
 
         var forkHeads = new Dictionary<FakeGitLabProject, IReadOnlyDictionary<string, string>>();
-        foreach (var fork in requests.Where(request => !request.Deleted && request.State == "opened" && request.Source != target).Select(request => request.Source).Distinct())
+        foreach (var fork in requests.Where(entry => !entry.Deleted && entry.Open && entry.Request.Source != target).Select(entry => entry.Request.Source).Distinct())
         {
             forkHeads[fork] = fork.BarePath is { } forkBare ? await ReadRefsAsync(forkBare, ct, "refs/heads/").ConfigureAwait(false) : new Dictionary<string, string>();
         }
@@ -58,11 +61,11 @@ public sealed partial class FakeGitLab
         var updates = new StringBuilder();
         var fetches = new Dictionary<FakeGitLabProject, List<string>>();
         var gone = new List<FakeMergeRequest>();
-        foreach (var request in requests)
+        foreach (var (request, open, deleted) in requests)
         {
             var headRef = HeadRef(request.Iid);
             refs.TryGetValue(headRef, out var existing);
-            if (request.Deleted)
+            if (deleted)
             {
                 if (existing is not null)
                 {
@@ -75,7 +78,7 @@ public sealed partial class FakeGitLab
 
             refs.TryGetValue("refs/heads/" + request.TargetBranch, out var targetTip);
             string? head = null;
-            if (request.State == "opened")
+            if (open)
             {
                 var heads = request.Source == target ? refs : forkHeads[request.Source];
                 heads.TryGetValue("refs/heads/" + request.SourceBranch, out head);

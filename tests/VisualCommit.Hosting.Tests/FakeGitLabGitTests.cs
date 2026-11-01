@@ -114,13 +114,58 @@ public sealed class FakeGitLabGitTests
         var push = await GitResultInAsync(lab.Source, clone, "push", "--quiet", "origin", "try-push");
         Assert.False(push.Succeeded);
         Assert.Contains(fake.GitRequests, request => request.Status == 403 && request.UserName == "ada" && request.Query.Contains("git-receive-pack", StringComparison.Ordinal));
+        Assert.Contains(Granular("Code: Push"), push.StandardError, StringComparison.Ordinal);
         Assert.Null(await lab.RefAsync(lab.Project, "refs/heads/try-push"));
+
+        // A fine-grained Code: Push one alone cannot fetch (READ g2 G3).
+        var pushOnly = await lab.Source.GitAllowingFailureAsync("ls-remote", lab.Url("g/s/p.git", "x-access-token", lab.PushOnly));
+        Assert.False(pushOnly.Succeeded);
+        Assert.Equal((403, "ada"), (fake.GitRequests[^1].Status, fake.GitRequests[^1].UserName));
+        Assert.Contains(Granular("Code: Download"), pushOnly.StandardError, StringComparison.Ordinal);
 
         // The same push with the full fine-grained token goes through.
         await GitInAsync(lab.Source, clone, "remote", "set-url", "origin", lab.Url("g/s/p.git", "x-access-token", lab.Ada));
         var allowed = await GitResultInAsync(lab.Source, clone, "push", "--quiet", "origin", "try-push");
         Assert.True(allowed.Succeeded, allowed.StandardError);
         Assert.NotNull(await lab.RefAsync(lab.Project, "refs/heads/try-push"));
+        Assert.Empty(fake.Errors);
+    }
+
+    [Fact]
+    public async Task A_project_hidden_from_the_user_is_refused_in_GitAccess_order_a_legacy_tokens_missing_ability_first()
+    {
+        await using var lab = await GitLab.CreateAsync();
+        var fake = lab.Fake;
+        const string NotFound = "The project you were looking for could not be found or you don't have permission to view it.";
+        string Secret(string token) => lab.Url("octo/secret.git", "x-access-token", token);
+
+        // lib/gitlab/git_access.rb:77-98: check_authentication_abilities! before the project's (READ g2 G3).
+        var readUser = await lab.Source.GitAllowingFailureAsync("ls-remote", Secret(lab.ReadUser));
+        Assert.False(readUser.Succeeded);
+        Assert.Contains("You are not allowed to download code.", readUser.StandardError, StringComparison.Ordinal);
+        foreach (var token in new[] { lab.Ada, lab.AdaLegacyApi, lab.DownloadOnly })
+        {
+            var fetch = await lab.Source.GitAllowingFailureAsync("ls-remote", Secret(token));
+            Assert.False(fetch.Succeeded);
+            Assert.Equal((403, "ada"), (fake.GitRequests[^1].Status, fake.GitRequests[^1].UserName));
+            Assert.Contains(NotFound, fetch.StandardError, StringComparison.Ordinal);
+        }
+
+        // A push: a legacy token without push ability says so first; any other token meets the hidden project.
+        var readUserPush = await lab.Source.GitAllowingFailureAsync("push", "--quiet", Secret(lab.ReadUser), "main:refs/heads/hidden");
+        Assert.False(readUserPush.Succeeded);
+        Assert.Contains("You are not allowed to upload code.", readUserPush.StandardError, StringComparison.Ordinal);
+        foreach (var token in new[] { lab.Ada, lab.AdaLegacyApi, lab.DownloadOnly })
+        {
+            var push = await lab.Source.GitAllowingFailureAsync("push", "--quiet", Secret(token), "main:refs/heads/hidden");
+            Assert.False(push.Succeeded);
+            Assert.Equal((403, "ada"), (fake.GitRequests[^1].Status, fake.GitRequests[^1].UserName));
+            Assert.Contains(NotFound, push.StandardError, StringComparison.Ordinal);
+            Assert.DoesNotContain("upload code", push.StandardError, StringComparison.Ordinal);
+        }
+
+        Assert.Null(await lab.RefAsync(lab.Secret, "refs/heads/hidden"));
+        Assert.True((await lab.Source.GitAllowingFailureAsync("ls-remote", lab.Url("octo/secret.git", "x-access-token", lab.Octo))).Succeeded);
         Assert.Empty(fake.Errors);
     }
 
@@ -184,6 +229,22 @@ public sealed class FakeGitLabGitTests
             fake.MergeRequests(webApp).Select(request => (request.Iid, request.Title, request.Author, request.SourceBranch, request.Draft, request.Source)));
         Assert.All(fake.MergeRequests(webApp), request => Assert.Equal("main", request.TargetBranch));
 
+        // Its users, ada 2001 and octo 2002, both Developers (30) of northfield (4.5), as the API shows them.
+        using var api = new HttpClient(fake.CreateHandler());
+        var octoToken = fake.AddToken("octo");
+        foreach (var (token, id, username, name) in new[] { (served.GitLabToken, 2001L, "ada", "Ada Lovelace"), (octoToken, 2002L, "octo", "Octo Cat") })
+        {
+            var user = await GetJsonAsync(api, fake, "api/v4/user", token);
+            Assert.Equal((id, username, name), ((long)user["id"]!, (string)user["username"]!, (string)user["name"]!));
+            foreach (var path in new[] { Scenarios.Hosting7bWebApp, Scenarios.Hosting7bLongProject })
+            {
+                var project = await GetJsonAsync(api, fake, "api/v4/projects/" + Uri.EscapeDataString(path), token);
+                Assert.Equal(30, (int)project["permissions"]!["group_access"]!["access_level"]!);
+            }
+        }
+
+        Assert.Equal(Scenarios.Hosting7bGitLabGroup, Scenarios.Hosting7bWebApp.Split('/')[0]);
+
         var url = $"http://x-access-token:{served.GitLabToken}@127.0.0.1:{fake.Port}/{Scenarios.Hosting7bWebApp}.git";
         Assert.Equal(url.Replace($"x-access-token:{served.GitLabToken}@", string.Empty, StringComparison.Ordinal), (await served.WebApp.GitAsync("remote", "get-url", "origin")).StandardOutput.Trim());
         var listed = await served.WebApp.GitAllowingFailureAsync("ls-remote", url, "refs/merge-requests/*");
@@ -204,6 +265,21 @@ public sealed class FakeGitLabGitTests
         Assert.Empty(fake.Errors);
     }
 
+    /// <summary>A GET through the fake's handler with a Bearer token; its 200 JSON.</summary>
+    private static async Task<System.Text.Json.Nodes.JsonNode> GetJsonAsync(HttpClient api, FakeGitLab fake, string path, string token)
+    {
+        using var message = new HttpRequestMessage(HttpMethod.Get, new Uri(fake.Endpoints.WebBase.AbsoluteUri + path));
+        message.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+        using var response = await api.SendAsync(message, Cancelled);
+        var body = await response.Content.ReadAsStringAsync(Cancelled);
+        Assert.True(response.IsSuccessStatusCode, body);
+        return System.Text.Json.Nodes.JsonNode.Parse(body)!;
+    }
+
+    /// <summary>GitLab's fine-grained refusal naming one project permission (READ g2 G3).</summary>
+    private static string Granular(string label) =>
+        $"Access denied: This operation requires a fine-grained personal access token with the following project permissions: [{label}].";
+
     private static async Task<string> BareTipAsync(TempRepo repo, FakeGitLabProject project, string branch) =>
         (await repo.GitAsync("--git-dir", project.BarePath!, "rev-parse", "refs/heads/" + branch)).StandardOutput.Trim();
 
@@ -216,9 +292,10 @@ public sealed class FakeGitLabGitTests
     /// <summary>
     /// The fake on port 0 with a source repository (main; feature/one and fix a commit each), ada
     /// Developer (30) of the group g, octo too; g/s/p cloned from the source, ada's fork ada/p with a
-    /// fork-fix branch, the public pub/open; g/s/p's !1 from feature/one and !2 from the fork's fork-fix.
-    /// Tokens: ada's fine-grained (default), a legacy <c>read_user</c> one, a fine-grained Code:
-    /// Download one, one to expire; octo's.
+    /// fork-fix branch, the public pub/open, octo's private octo/secret that ada cannot see; g/s/p's !1
+    /// from feature/one and !2 from the fork's fork-fix. Tokens: ada's fine-grained (default), a legacy
+    /// <c>read_user</c> one, a legacy <c>api</c> one, a fine-grained Code: Download one, a fine-grained
+    /// Code: Push one, one to expire; octo's.
     /// </summary>
     private sealed class GitLab : IAsyncDisposable
     {
@@ -241,7 +318,13 @@ public sealed class FakeGitLabGitTests
 
         public FakeGitLabProject Public { get; private set; } = null!;
 
+        public FakeGitLabProject Secret { get; private set; } = null!;
+
         public string Ada { get; private set; } = string.Empty;
+
+        public string AdaLegacyApi { get; private set; } = string.Empty;
+
+        public string PushOnly { get; private set; } = string.Empty;
 
         public string AdaExpiring { get; private set; } = string.Empty;
 
@@ -272,12 +355,15 @@ public sealed class FakeGitLabGitTests
             lab.ReadUser = fake.AddToken("ada", FakeGitLabTokenKind.Legacy, [FakeGitLabPermissions.ReadUser]);
             lab.DownloadOnly = fake.AddToken("ada", permissions: [FakeGitLabPermissions.CodeDownload]);
             lab.AdaExpiring = fake.AddToken("ada");
+            lab.AdaLegacyApi = fake.AddToken("ada", FakeGitLabTokenKind.Legacy);
+            lab.PushOnly = fake.AddToken("ada", permissions: [FakeGitLabPermissions.CodePush]);
             lab.Octo = fake.AddToken("octo");
             fake.Grant("g", "ada", 30);
             fake.Grant("g", "octo", 30);
             lab.Project = await fake.AddProjectAsync("g/s/p", source.Path, ct: Cancelled);
             lab.Fork = await fake.AddProjectAsync("ada/p", source.Path, forkOf: lab.Project, ct: Cancelled);
             lab.Public = await fake.AddProjectAsync("pub/open", source.Path, "public", ct: Cancelled);
+            lab.Secret = await fake.AddProjectAsync("octo/secret", source.Path, ct: Cancelled);
             await source.GitAsync("push", "--quiet", lab.Fork.BarePath!, "fix:refs/heads/fork-fix");
             fake.AddMergeRequest(lab.Project, "Add feature one", "ada", "feature/one", "main");
             fake.AddMergeRequest(lab.Project, "Fix it from the fork", "ada", "fork-fix", "main", source: lab.Fork);

@@ -9,6 +9,13 @@
 // (ASSUMED, as 7.5) and git's 403s (READ g2 G3, as 4.5 marks them), which need a token D364 does not
 // make; the expired and revoked 401s (READ, 15.7). Kept ASSUMED: the moved project's query order, an
 // empty repository's `default_branch`, an unknown `target_project_id`, the 5xx bodies.
+// Kept ASSUMED too (4.3, 4.4 and the build's own choices, D370): create's (a) before (b), its missing
+// parameters joined by ", " in Grape's declared order (title, source_branch, target_branch) and (e)'s
+// "not a fork" body; a fine-grained token's `scopes: ["granular"]`; the 400 texts for an invalid
+// `order_by`, `sort`, `target_project_id` and `state_event`; PUT for the author or a Developer;
+// `EndpointRateLimited`'s `RateLimit-Name: projects_api` on every route; `merge_status`
+// `can_be_merged` and `detailed_merge_status` `mergeable`; a branch's `protected` for the default
+// branch alone; a 204's `Cache-Control: no-cache`.
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
@@ -138,9 +145,11 @@ public sealed partial class FakeGitLab
             visible = project is not null && VisibleLocked(project, login);
         }
 
-        // Check 3, no token: 401 shape A without WWW-Authenticate, but the project list and a public
-        // project's reads answer anonymously (MEASURED r6 1.2).
-        if (token is null && !(route.Kind == RouteKind.Projects || need.Read && project is { Visibility: "public" }))
+        // Check 3, no token: 401 shape A without WWW-Authenticate (MEASURED r6 1.2: user, self, and a
+        // POST, PUT or DELETE), but the project list and a project's reads go on (MEASURED r6 3.2): a
+        // public one answers, an unknown or hidden one is check 6's 404 "404 Project Not Found", as
+        // gitlab.com answered anonymously for a missing project, its .git form and its double escape.
+        if (token is null && !(route.Kind == RouteKind.Projects || need.Read && route.Id is not null))
         {
             return Unauthorized(call);
         }
@@ -234,6 +243,8 @@ public sealed partial class FakeGitLab
     /// empty without a token (MEASURED r6 1.2); else the public and the user's (and the internal ones
     /// for a signed-in user); <c>archived</c>; <c>simple</c> (always without a token, READ r6 3.1);
     /// <c>order_by</c> (default <c>created_at</c>) and <c>sort</c> (default <c>desc</c>), READ; paged.
+    /// Another <c>order_by</c> or <c>sort</c> 400 shape E "&lt;name&gt; does not have a valid value"
+    /// (ASSUMED: Grape's text, MEASURED for <c>state</c>, r6 4.1).
     /// </summary>
     private AuthRemoteResponse Projects(FakeServiceCall call)
     {
@@ -362,18 +373,23 @@ public sealed partial class FakeGitLab
 
     /// <summary>
     /// <c>POST projects/:id/merge_requests</c>, <c>:id</c> the source (READ g2 G1.1; (a)'s place ASSUMED):
-    /// (a) a missing parameter 400 shape E; (b) below Developer on the source, or its merge requests off,
-    /// 403 (READ g2 G1.2); (c) an unknown <c>target_project_id</c> 404 "404 Not found" (READ, ASSUMED);
-    /// (d) a target unreadable or with merge requests off 403; (e) 422 shape B, the same project and
-    /// branch, or a source that is not a fork of the target (that body ASSUMED); (f) 409 shape B for an
-    /// open one with the same projects and branches; (g) 400 shape C for a missing branch, the source's
-    /// first; (h) 201, the iid next in the target, the title and description as sent, <c>draft</c> from
-    /// the title, nothing ahead needed, the head ref written.
+    /// (a) a missing parameter 400 shape E "&lt;name&gt; is missing" (READ g2 G1.1), several joined by
+    /// ", " in the order the route declares them, title, source_branch, target_branch (ASSUMED: Grape's
+    /// join, r6 5.2's example; lib/api/merge_requests.rb:423-425); (b) below Developer on the source, or
+    /// its merge requests off, 403 (READ g2 G1.2); (c) an unknown <c>target_project_id</c> 404 "404 Not
+    /// found" (READ, ASSUMED), one that is no number 400 shape E "target_project_id is invalid"
+    /// (ASSUMED: Grape's text); (d) a target unreadable or with merge requests off 403; (e) 422 shape B,
+    /// the same project and branch, or a source outside the target's fork network (that body ASSUMED);
+    /// (f) 409 shape B for an open one with the same projects and branches, naming it <c>!&lt;iid&gt;</c>
+    /// for a fork's too (READ: <c>conflicting_mr.to_reference</c> with no <c>from</c>,
+    /// app/models/merge_request.rb:1441-1446, :1055-1058); (g) 400 shape C for a missing branch, the
+    /// source's first; (h) 201, the iid next in the target, the title and description as sent,
+    /// <c>draft</c> from the title, nothing ahead needed, the head ref written.
     /// </summary>
     private async Task<AuthRemoteResponse> CreateAsync(FakeServiceCall call, FakeGitLabProject source, CancellationToken ct)
     {
         var parameters = ParametersOf(call.Request);
-        var missing = new[] { "source_branch", "target_branch", "title" }.Where(name => string.IsNullOrEmpty(parameters.GetValueOrDefault(name))).ToList();
+        var missing = new[] { "title", "source_branch", "target_branch" }.Where(name => string.IsNullOrEmpty(parameters.GetValueOrDefault(name))).ToList();
         if (missing.Count > 0)
         {
             return ErrorJson(call, 400, new JsonObject { ["error"] = string.Join(", ", missing.Select(name => name + " is missing")) });
@@ -419,7 +435,7 @@ public sealed partial class FakeGitLab
             return ErrorJson(call, 422, new JsonObject { ["message"] = new JsonArray("You can't use same project/branch for source and target") });
         }
 
-        if (source != target && !IsForkOf(source, target))
+        if (source != target && !InOneForkNetwork(source, target))
         {
             return ErrorJson(call, 422, new JsonObject { ["message"] = new JsonArray("Source project is not a fork of the target project") });
         }
@@ -443,7 +459,7 @@ public sealed partial class FakeGitLab
 
             if (open is not null)
             {
-                var reference = (source == target ? string.Empty : target.Path) + "!" + open.Iid.ToString(CultureInfo.InvariantCulture);
+                var reference = "!" + open.Iid.ToString(CultureInfo.InvariantCulture);
                 return ErrorJson(call, 409, new JsonObject { ["message"] = new JsonArray("Another open merge request already exists for this source branch: " + reference) });
             }
 
@@ -491,7 +507,9 @@ public sealed partial class FakeGitLab
 
     /// <summary>
     /// <c>PUT …/merge_requests/:iid</c> with <c>state_event</c> <c>close</c> or <c>reopen</c> (READ g2 G1.5):
-    /// 200 with the state; unknown 404 "404 Not found"; neither its author nor a Developer 403.
+    /// 200 with the state; unknown 404 "404 Not found" (READ g2 G1.5); neither its author nor a Developer
+    /// 403 (ASSUMED: who may update); another <c>state_event</c> 400 shape E "state_event does not have a
+    /// valid value" (ASSUMED: Grape's text).
     /// </summary>
     private AuthRemoteResponse UpdateMergeRequest(FakeServiceCall call, FakeGitLabProject project, string iidText)
     {
@@ -693,6 +711,7 @@ public sealed partial class FakeGitLab
 
         if (fault == FakeGitLabFault.EndpointRateLimited)
         {
+            // READ r6 8; its RateLimit-Name projects_api on every route ASSUMED.
             var headers = new List<KeyValuePair<string, string>>
             {
                 KeyValuePair.Create("Content-Type", "application/json"),
@@ -838,6 +857,7 @@ public sealed partial class FakeGitLab
         return new AuthRemoteResponse(status, ReasonOf(status), headers, Serialize(node));
     }
 
+    /// <summary>A 204 with no body (READ g2 G1.6, G1.7); its <c>Cache-Control: no-cache</c> ASSUMED.</summary>
     private AuthRemoteResponse NoContent(FakeServiceCall call)
     {
         var headers = new List<KeyValuePair<string, string>> { KeyValuePair.Create("Cache-Control", "no-cache") };
@@ -948,18 +968,26 @@ public sealed partial class FakeGitLab
     private FakeMergeRequest? MergeRequestLocked(FakeGitLabProject project, int iid) =>
         _mergeRequests.FirstOrDefault(request => request.Target == project && request.Iid == iid && !request.Deleted);
 
-    /// <summary>Whether <paramref name="source"/> is a fork of <paramref name="target"/>, at any depth (READ r6 5.2).</summary>
-    private static bool IsForkOf(FakeGitLabProject source, FakeGitLabProject target)
+    /// <summary>
+    /// Whether <paramref name="source"/> and <paramref name="target"/> are in one fork network, the same
+    /// root at the top of their <see cref="FakeGitLabProject.ForkOf"/>: a fork into its parent, the parent
+    /// into its fork and one sibling into another pass (READ: <c>validate_fork</c> refuses only when
+    /// <c>source_project_missing?</c>, <c>!source_project.in_fork_network_of?(target_project)</c>,
+    /// app/models/merge_request.rb:1481-1487, :1508-1513).
+    /// </summary>
+    private static bool InOneForkNetwork(FakeGitLabProject source, FakeGitLabProject target)
     {
-        for (var parent = source.ForkOf; parent is not null; parent = parent.ForkOf)
+        static FakeGitLabProject Root(FakeGitLabProject project)
         {
-            if (parent == target)
+            while (project.ForkOf is { } parent)
             {
-                return true;
+                project = parent;
             }
+
+            return project;
         }
 
-        return false;
+        return Root(source) == Root(target);
     }
 
     private static bool TryIid(string text, out int iid) =>

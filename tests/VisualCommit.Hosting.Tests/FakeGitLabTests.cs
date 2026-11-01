@@ -57,7 +57,7 @@ public sealed class FakeGitLabTests
     }
 
     [Fact]
-    public async Task No_token_PRIVATE_TOKEN_private_token_and_Basic_are_401_but_the_list_and_a_public_projects_reads_answer()
+    public async Task No_token_PRIVATE_TOKEN_private_token_and_Basic_are_401_but_the_list_and_a_projects_reads_go_on_to_200_or_404()
     {
         await using var lab = await Lab.CreateAsync();
         const string Unauthorized = "{\"message\":\"401 Unauthorized\"}";
@@ -84,8 +84,18 @@ public sealed class FakeGitLabTests
         Assert.Equal(20, listed.Json[0]!.AsObject().Count);
         Assert.Equal(200, (await lab.SendAsync(HttpMethod.Get, "api/v4/projects/pub%2Fopen")).Status);
         Assert.Equal(200, (await lab.SendAsync(HttpMethod.Get, "api/v4/projects/pub%2Fopen/merge_requests")).Status);
-        Assert.Equal((401, Unauthorized), await lab.StatusAndBodyAsync(HttpMethod.Get, "api/v4/projects/g%2Fs%2Fp"));
+        // A project's reads go on without a token: a private, unknown, .git or double-escaped one is 404
+        // "404 Project Not Found", as gitlab.com answered anonymously (MEASURED r6 3.2); writes are 401.
+        const string ProjectNotFound = "{\"message\":\"404 Project Not Found\"}";
+        foreach (var id in new[] { "g%2Fs%2Fp", "g%2Fs%2Fp/merge_requests", "g%2Fs%2Fp/merge_requests/1", "g%2Fs%2Fp/repository/branches", "99999", "pub%2Fopen.git", "pub%252Fopen" })
+        {
+            Assert.Equal((404, ProjectNotFound), await lab.StatusAndBodyAsync(HttpMethod.Get, "api/v4/projects/" + id));
+        }
+
         Assert.Equal((401, Unauthorized), await lab.StatusAndBodyAsync(HttpMethod.Post, "api/v4/projects/pub%2Fopen/merge_requests"));
+        Assert.Equal((401, Unauthorized), await lab.StatusAndBodyAsync(HttpMethod.Put, "api/v4/projects/pub%2Fopen/merge_requests/1"));
+        Assert.Equal((401, Unauthorized), await lab.StatusAndBodyAsync(HttpMethod.Delete, "api/v4/projects/pub%2Fopen/repository/branches/fix"));
+        Assert.Equal((401, Unauthorized), await lab.StatusAndBodyAsync(HttpMethod.Get, "api/v4/personal_access_tokens/self"));
         lab.AssertNoToken();
     }
 
@@ -302,15 +312,28 @@ public sealed class FakeGitLabTests
         const string Path = "api/v4/projects/g%2Fs%2Fp/merge_requests";
         var forkPath = $"api/v4/projects/{lab.Fork.Id}/merge_requests";
 
-        Assert.Equal((400, "{\"error\":\"source_branch is missing, target_branch is missing, title is missing\"}"), (await lab.CreateAsync(Path, lab.Ada)).StatusAndBody);
+        const string Forbidden = "{\"message\":\"403 Forbidden\"}";
+        const string SameBranch = "{\"message\":[\"You can't use same project/branch for source and target\"]}";
+
+        // Grape names the missing parameters in the order the route declares them (lib/api/merge_requests.rb:423-425).
+        Assert.Equal((400, "{\"error\":\"title is missing, source_branch is missing, target_branch is missing\"}"), (await lab.CreateAsync(Path, lab.Ada)).StatusAndBody);
+        Assert.Equal((400, "{\"error\":\"title is missing, target_branch is missing\"}"), (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "feature/two"))).StatusAndBody);
         Assert.Equal((400, "{\"error\":\"title is missing\"}"), (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "feature/two"), ("target_branch", "main"))).StatusAndBody);
-        Assert.Equal((403, "{\"message\":\"403 Forbidden\"}"), (await lab.CreateAsync(Path, lab.Bob, ("source_branch", "feature/two"), ("target_branch", "main"), ("title", "Two"))).StatusAndBody);
+
+        // Where two refusals apply, the earlier one answers: (a) before (b), bob a Reporter with no title;
+        // (b) before (c), bob with an unknown target.
+        Assert.Equal((400, "{\"error\":\"title is missing\"}"), (await lab.CreateAsync(Path, lab.Bob, ("source_branch", "feature/two"), ("target_branch", "main"))).StatusAndBody);
+        Assert.Equal((403, Forbidden), (await lab.CreateAsync(Path, lab.Bob, ("source_branch", "feature/two"), ("target_branch", "main"), ("title", "Two"))).StatusAndBody);
+        Assert.Equal((403, Forbidden), (await lab.CreateAsync(Path, lab.Bob, ("source_branch", "feature/two"), ("target_branch", "main"), ("title", "Two"), ("target_project_id", "99999"))).StatusAndBody);
         lab.Project.MergeRequestsEnabled = false;
         Assert.Equal(403, (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "feature/two"), ("target_branch", "main"), ("title", "Two"))).Status);
         lab.Project.MergeRequestsEnabled = true;
         Assert.Equal((404, "{\"message\":\"404 Not found\"}"), (await lab.CreateAsync(forkPath, lab.Ada, ("source_branch", "fix"), ("target_branch", "main"), ("title", "Fix"), ("target_project_id", "99999"))).StatusAndBody);
         Assert.Equal(403, (await lab.CreateAsync(forkPath, lab.Ada, ("source_branch", "fix"), ("target_branch", "main"), ("title", "Fix"), ("target_project_id", Id(lab.Secret)))).Status);
-        Assert.Equal((422, "{\"message\":[\"You can't use same project/branch for source and target\"]}"), (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "main"), ("target_branch", "main"), ("title", "Same"))).StatusAndBody);
+        Assert.Equal((422, SameBranch), (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "main"), ("target_branch", "main"), ("title", "Same"))).StatusAndBody);
+
+        // (e) before (g): a branch the project lacks, into itself.
+        Assert.Equal((422, SameBranch), (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "gone"), ("target_branch", "gone"), ("title", "Gone"))).StatusAndBody);
         Assert.Equal((422, "{\"message\":[\"Source project is not a fork of the target project\"]}"), (await lab.CreateAsync(forkPath, lab.Ada, ("source_branch", "fix"), ("target_branch", "main"), ("title", "Fix"), ("target_project_id", Id(lab.Public)))).StatusAndBody);
         Assert.Equal((409, "{\"message\":[\"Another open merge request already exists for this source branch: !1\"]}"), (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "feature/one"), ("target_branch", "main"), ("title", "Again"))).StatusAndBody);
         Assert.Equal((400, "{\"message\":{\"source_branch\":[\"does not exist\"]}}"), (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "gone"), ("target_branch", "main"), ("title", "Gone"))).StatusAndBody);
@@ -330,11 +353,74 @@ public sealed class FakeGitLabTests
         Assert.Equal((201, 5, false), (fork.Status, (int)fork.Json["iid"]!, (bool)fork.Json["draft"]!));
         Assert.Equal((lab.Project.Id, lab.Fork.Id, lab.Project.Id, true), ((long)fork.Json["project_id"]!, (long)fork.Json["source_project_id"]!, (long)fork.Json["target_project_id"]!, (bool)fork.Json["allow_collaboration"]!));
         Assert.Equal("ada", (string)fork.Json["author"]!["username"]!);
+
+        // A fork's duplicate names the open one !<iid> alone, as a project's own does (READ: to_reference
+        // with no from, app/models/merge_request.rb:1441-1446).
+        Assert.Equal((409, "{\"message\":[\"Another open merge request already exists for this source branch: !5\"]}"), (await lab.CreateAsync(forkPath, lab.Ada, ("source_branch", "fix"), ("target_branch", "main"), ("title", "Fix it again"), ("target_project_id", Id(lab.Project)))).StatusAndBody);
+
+        // The parent into its fork is in one fork network (READ: validate_fork, app/models/merge_request.rb:1481-1487, :1508-1513).
+        var intoFork = await lab.CreateAsync(Path, lab.Ada, ("source_branch", "feature/two"), ("target_branch", "main"), ("title", "Two in the fork"), ("target_project_id", Id(lab.Fork)));
+        Assert.Equal((201, 1), (intoFork.Status, (int)intoFork.Json["iid"]!));
+        Assert.Equal((lab.Fork.Id, lab.Project.Id, lab.Fork.Id), ((long)intoFork.Json["project_id"]!, (long)intoFork.Json["source_project_id"]!, (long)intoFork.Json["target_project_id"]!));
+        Assert.Equal(await lab.TipAsync("feature/two"), await lab.RefAsync(lab.Fork, "refs/merge-requests/1/head"));
+
         Assert.Equal(await lab.TipAsync("feature/two"), await lab.RefAsync(lab.Project, "refs/merge-requests/2/head"));
         Assert.Equal(await lab.TipAsync("fix"), await lab.RefAsync(lab.Project, "refs/merge-requests/5/head"));
         Assert.Null(await lab.RefAsync(lab.Project, "refs/merge-requests/5/merge"));
         Assert.Contains(lab.Fake.Requests, request => request.Route == "create:g/s/p" && request.Status == 201 && request.Body!.Contains("source_branch=feature%2Ftwo", StringComparison.Ordinal));
+
+        // (f) before (g): !1's branch gone from the project, its open request still answers 409.
+        await lab.DeleteRefAsync(lab.Project, "refs/heads/feature/one");
+        Assert.Equal((409, "{\"message\":[\"Another open merge request already exists for this source branch: !1\"]}"), (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "feature/one"), ("target_branch", "main"), ("title", "Again"))).StatusAndBody);
+
+        // (e) before (f): an open request from a branch into itself (the model takes one) still meets the 422.
+        lab.Fake.AddMergeRequest(lab.Project, "Level with itself", "ada", "level", "level");
+        Assert.Equal((422, SameBranch), (await lab.CreateAsync(Path, lab.Ada, ("source_branch", "level"), ("target_branch", "level"), ("title", "Level"))).StatusAndBody);
         Assert.Empty(lab.Fake.Errors);
+        lab.AssertNoToken();
+    }
+
+    [Fact]
+    public async Task A_fork_request_reopened_while_the_ref_sync_reads_another_fork_waits_for_the_next_sync()
+    {
+        await using var lab = await Lab.CreateAsync();
+
+        // octo's fork's request comes before ada's fork's: a sync that finds it closed reads ada/p's heads
+        // alone, while PUTs close and reopen it without the target's lock (they take the fake's alone).
+        var octoFork = await lab.AddForkAsync("octo/p");
+        lab.Fake.AddMergeRequest(lab.Project, "From octo's fork", "octo", "fix", "main", source: octoFork);
+        lab.Fake.AddMergeRequest(lab.Project, "From ada's fork", "ada", "fix", "main", source: lab.Fork);
+        const string Two = "api/v4/projects/g%2Fs%2Fp/merge_requests/2";
+        Assert.Equal("closed", (string)(await lab.SendAsync(HttpMethod.Put, Two, lab.Octo, form: [("state_event", "close")])).Json["state"]!);
+
+        using var stop = new CancellationTokenSource();
+        var toggles = new List<int>();
+        var toggling = Task.Run(
+            async () =>
+            {
+                for (var reopen = true; !stop.IsCancellationRequested; reopen = !reopen)
+                {
+                    toggles.Add((await lab.SendAsync(HttpMethod.Put, Two, lab.Octo, form: [("state_event", reopen ? "reopen" : "close")])).Status);
+                }
+            },
+            Cancelled);
+        var lists = new List<int>();
+        for (var i = 0; i < 12; i++)
+        {
+            lists.Add((await lab.SendAsync(HttpMethod.Get, "api/v4/projects/g%2Fs%2Fp/merge_requests", lab.Ada)).Status);
+        }
+
+        await stop.CancelAsync();
+        await toggling;
+        Assert.All(lists, status => Assert.Equal(200, status));
+        Assert.True(toggles.Count > lists.Count, $"{toggles.Count} toggles");
+        Assert.All(toggles, status => Assert.Equal(200, status));
+        Assert.Empty(lab.Fake.Errors);
+
+        // Left open, the next sync writes its head from octo's fork.
+        Assert.Equal("opened", (string)(await lab.SendAsync(HttpMethod.Put, Two, lab.Octo, form: [("state_event", "reopen")])).Json["state"]!);
+        Assert.Equal(200, (await lab.SendAsync(HttpMethod.Get, Two, lab.Ada)).Status);
+        Assert.Equal(await lab.TipAsync("fix"), await lab.RefAsync(lab.Project, "refs/merge-requests/2/head"));
         lab.AssertNoToken();
     }
 
@@ -640,6 +726,13 @@ public sealed class FakeGitLabTests
             var result = await _source.GitAllowingFailureAsync("--git-dir", project.BarePath!, "rev-parse", "--verify", "--quiet", name);
             return result.Succeeded ? result.StandardOutput.Trim() : null;
         }
+
+        /// <summary>A fork of g/s/p at <paramref name="path"/>, cloned from the source repository.</summary>
+        public Task<FakeGitLabProject> AddForkAsync(string path) => Fake.AddProjectAsync(path, _source.Path, forkOf: Project, ct: Cancelled);
+
+        /// <summary>Deletes a ref in a project's bare repository, behind the fake's back.</summary>
+        public async Task DeleteRefAsync(FakeGitLabProject project, string name) =>
+            await _source.GitAsync("--git-dir", project.BarePath!, "update-ref", "-d", name);
 
         /// <summary>No request record holds a token: not its path, query, body or login.</summary>
         public void AssertNoToken() =>

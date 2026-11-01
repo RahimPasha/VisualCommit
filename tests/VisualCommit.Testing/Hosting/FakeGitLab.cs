@@ -31,7 +31,7 @@ public sealed partial class FakeGitLab : FakeHostingService
     private const long FirstTokenId = 8001;
     private const long FirstGroupId = 9001;
 
-    /// <summary>The token of the git request being decided on this thread (<see cref="LoginOfToken"/>, read by <see cref="MayPush"/> and <see cref="FetchRefusal"/>): the server asks all three in one synchronous call per request.</summary>
+    /// <summary>The token of the git request being decided on this thread (<see cref="LoginOfToken"/>, read by <see cref="MayPush"/>, <see cref="PushRefusal"/> and <see cref="FetchRefusal"/>): the server asks all four in one synchronous call per request (AuthRemoteServer.HostAccess), which a change there must keep.</summary>
     [ThreadStatic]
     private static (FakeGitLab Fake, GitLabToken Token)? t_gitToken;
 
@@ -354,45 +354,70 @@ public sealed partial class FakeGitLab : FakeHostingService
     }
 
     /// <summary>
-    /// A refused push's 403 <c>text/plain</c>: "You are not allowed to upload code." (READ r6 11, g2 G3),
-    /// or a fine-grained token's without Code: Push, "Access denied: This operation requires a
-    /// fine-grained personal access token with the following project permissions: [Code: Push]." (READ g2 G3).
+    /// A refused push's 403 <c>text/plain</c>, in <c>Gitlab::GitAccess#check</c>'s order (READ g2 G3;
+    /// lib/gitlab/git_access.rb:77-98, :230-262, :290-312): a legacy token without <c>api</c> or
+    /// <c>write_repository</c> "You are not allowed to upload code." first, whatever the project; then a
+    /// project the user cannot see GitLab's 404 text, a fine-grained token's too; then a fine-grained
+    /// token without Code: Push "Access denied: This operation requires a fine-grained personal access
+    /// token with the following project permissions: [Code: Push]."; else "You are not allowed to upload
+    /// code." (READ r6 11, g2 G3).
     /// </summary>
-    protected override string PushRefusal(string repository, string login) =>
-        GitToken() is { Kind: FakeGitLabTokenKind.FineGrained } token && !token.Has(FakeGitLabPermissions.CodePush)
+    protected override string PushRefusal(string repository, string login)
+    {
+        var token = GitToken();
+        if (token is { Kind: FakeGitLabTokenKind.Legacy } && !token.Has(FakeGitLabPermissions.Api) && !token.Has(FakeGitLabPermissions.WriteRepository))
+        {
+            return UploadText;
+        }
+
+        if (!ProjectVisible(repository, login))
+        {
+            return ProjectNotFoundText;
+        }
+
+        return token is { Kind: FakeGitLabTokenKind.FineGrained } && !token.Has(FakeGitLabPermissions.CodePush)
             ? GranularText("project", FakeGitLabPermissions.CodePush)
-            : "You are not allowed to upload code.";
+            : UploadText;
+    }
 
     /// <summary>
-    /// A signed-in fetch's 403 <c>text/plain</c> (4.5, READ g2 G3): without <c>api</c>, <c>read_api</c>,
-    /// <c>read_repository</c> or <c>write_repository</c> "You are not allowed to download code.", a
-    /// fine-grained token without Code: Download its granular text. A project the user cannot see gets
-    /// GitLab's 404 text (READ r6 11, g2 G3) as a 403, since the server's refusal is a 403.
+    /// A signed-in fetch's 403 <c>text/plain</c> (4.5), in <c>Gitlab::GitAccess#check</c>'s order (READ
+    /// g2 G3; lib/gitlab/git_access.rb:77-98, :230-262, :290-312): a legacy token without <c>api</c>,
+    /// <c>read_api</c>, <c>read_repository</c> or <c>write_repository</c> "You are not allowed to download
+    /// code." first, whatever the project; then a project the user cannot see GitLab's 404 text (READ r6
+    /// 11, g2 G3), a fine-grained token's too, as a 403, since the server's refusal is a 403; then a
+    /// fine-grained token without Code: Download its granular text.
     /// </summary>
     protected override string? FetchRefusal(string repository, string login)
     {
         var token = GitToken();
+        if (token is { Kind: FakeGitLabTokenKind.Legacy }
+            && !(token.Has(FakeGitLabPermissions.Api) || token.Has(FakeGitLabPermissions.ReadApi) || token.Has(FakeGitLabPermissions.ReadRepository) || token.Has(FakeGitLabPermissions.WriteRepository)))
+        {
+            return "You are not allowed to download code.";
+        }
+
+        if (!ProjectVisible(repository, login))
+        {
+            return ProjectNotFoundText;
+        }
+
+        return token is { Kind: FakeGitLabTokenKind.FineGrained } && !token.Has(FakeGitLabPermissions.CodeDownload)
+            ? GranularText("project", FakeGitLabPermissions.CodeDownload)
+            : null;
+    }
+
+    private const string UploadText = "You are not allowed to upload code.";
+
+    private const string ProjectNotFoundText = "The project you were looking for could not be found or you don't have permission to view it.";
+
+    /// <summary>Whether the served folder's project is one <paramref name="login"/> may see.</summary>
+    private bool ProjectVisible(string repository, string login)
+    {
         lock (Gate)
         {
-            if (_byFolder.GetValueOrDefault(repository) is not { } project || !VisibleLocked(project, login))
-            {
-                return "The project you were looking for could not be found or you don't have permission to view it.";
-            }
+            return _byFolder.GetValueOrDefault(repository) is { } project && VisibleLocked(project, login);
         }
-
-        if (token is null)
-        {
-            return null;
-        }
-
-        if (token.Kind == FakeGitLabTokenKind.FineGrained)
-        {
-            return token.Has(FakeGitLabPermissions.CodeDownload) ? null : GranularText("project", FakeGitLabPermissions.CodeDownload);
-        }
-
-        return token.Has(FakeGitLabPermissions.Api) || token.Has(FakeGitLabPermissions.ReadApi) || token.Has(FakeGitLabPermissions.ReadRepository) || token.Has(FakeGitLabPermissions.WriteRepository)
-            ? null
-            : "You are not allowed to download code.";
     }
 
     /// <summary>
