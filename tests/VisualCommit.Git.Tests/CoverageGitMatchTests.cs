@@ -222,6 +222,35 @@ public sealed class CoverageGitMatchTests
         Assert.True(File.Exists(own), "The user's own helper was not asked without the host's key.");
     }
 
+    [Theory]
+    [InlineData("GitLab", "https://bob\u00A0@gitlab.com/g/p.git", "https://gitlab.com/g/p.git", "bob\u00A0")]
+    [InlineData("GitLab", "https://\u3000bob@gitlab.com/g/p.git", "https://gitlab.com/g/p.git", "\u3000bob")]
+    [InlineData("GitLab", "https://bob\u0085@gitlab.com/g/p.git", "https://gitlab.com/g/p.git", "bob\u0085")]
+    [InlineData("GitLab", "https://bob\t@gitlab.com/g/p", "https://gitlab.com/g/p", "bob\t")]
+    [InlineData("AzureDevOps", "https://evil\u00A0@myorg.visualstudio.com/p/_git/r", "https://myorg.visualstudio.com/p/_git/r", "evil\u00A0")]
+    public async Task A_user_with_white_space_or_a_control_character_reaches_the_apps_helper_alone_through_the_key_so_Select_binds_nothing_beside_it(
+        string provider, string url, string key, string user)
+    {
+        // The hunt on the fixed code: git's credential code reads the user up to the first @ before
+        // the first /, ? or # (bob<U+00A0>), where the app's reading once ended at the white space
+        // and found no user, so the key stayed bound beside it: the key's empty helper resets the
+        // user's own, the app's refuses another user, and D82's order is lost.
+        var coverage = CredentialBindingSelectTests.CoverageOf(provider);
+        using var repo = await TempRepo.CreateAsync();
+        var own = await OwnHelperAsync(repo, recordInput: true);
+
+        var bound = await FillAsync(repo, [new CredentialBinding(key, coverage.Account)], url);
+
+        Assert.True(bound.AskedOtherUser, $"{url} did not reach the app's helper as another user through {key}.");
+        Assert.False(File.Exists(own), "The user's own helper was asked through the key.");
+
+        var bindings = CredentialBinding.Select([new RemoteEffectiveUrls("origin", [key], [key]), new RemoteEffectiveUrls("other", [url], [url])], coverage);
+        Assert.Empty(bindings);
+        var unbound = await FillAsync(repo, bindings, url);
+        Assert.False(unbound.Asked);
+        Assert.Contains($"username={user}\n", File.ReadAllText(own).Replace("\r", string.Empty, StringComparison.Ordinal), StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// D379 (R2, R3) over a transport, as wave 1's finding showed it: a local host serves
     /// <c>g/p.git</c> and answers <c>/g/p/info/refs</c> with gitlab.com's 301 into
@@ -229,14 +258,18 @@ public sealed class CoverageGitMatchTests
     /// of <c>http://</c> and <c>www.</c> (r6 6.1). git follows them and builds the credential again
     /// from the target, without bob's name, so the binding Select gave before D379 answers bob's
     /// fetch with the account's token; Select now drops it, and the user's own helper is asked
-    /// (D82). <c>git credential fill</c> cannot show this: it follows no redirect.
+    /// (D82). <c>git credential fill</c> cannot show this: it follows no redirect. The hunt on the
+    /// fixed code added bob's name with a no-break space (<c>bob&lt;U+00A0&gt;</c>), which git reads
+    /// as a user and the app's reading did not: Select now leaves the host unbound beside it.
     /// </summary>
     [Theory]
-    [InlineData(false, "/g/p")]
-    [InlineData(false, "/g/p/")]
-    [InlineData(true, "/g/p.git")]
-    [InlineData(true, "/g/p")]
-    public async Task Another_users_url_that_a_redirect_leads_into_a_binding_takes_the_token_through_its_key_so_Select_drops_it(bool otherPort, string path)
+    [InlineData(false, "/g/p", "bob")]
+    [InlineData(false, "/g/p/", "bob")]
+    [InlineData(true, "/g/p.git", "bob")]
+    [InlineData(true, "/g/p", "bob")]
+    [InlineData(false, "/g/p", "bob\u00A0")]
+    [InlineData(true, "/g/p.git", "bob\u00A0")]
+    public async Task Another_users_url_that_a_redirect_leads_into_a_binding_takes_the_token_through_its_key_so_Select_drops_it(bool otherPort, string path, string user)
     {
         using var repo = await TempRepo.CreateAsync("redirect");
         await repo.CommitFileAsync("README.md", "first\n", "First");
@@ -265,7 +298,7 @@ public sealed class CoverageGitMatchTests
             HelperUserIsAccounts = true,
         };
         var origin = $"http://127.0.0.1:{host.Port}/g/p.git";
-        var bob = $"http://bob@127.0.0.1:{(otherPort ? www.Port : host.Port)}{path}";
+        var bob = $"http://{user}@127.0.0.1:{(otherPort ? www.Port : host.Port)}{path}";
         var own = await OwnHelperAsync(repo);
 
         // What Select gave beside bob's URL before D379: the origin's binding.
@@ -349,12 +382,17 @@ public sealed class CoverageGitMatchTests
             Task.FromResult(new AuthRemoteResponse(status, status == 301 ? "Moved Permanently" : "Permanent Redirect", [new("Location", location(request))], []));
     }
 
-    /// <summary>Configures the repository's own <c>credential.helper</c> as a recorder that answers nothing; returns the file it writes when git asks it.</summary>
-    private static async Task<string> OwnHelperAsync(TempRepo repo)
+    /// <summary>
+    /// Configures the repository's own <c>credential.helper</c> as a recorder that answers nothing;
+    /// returns the file it writes when git asks it: <c>own</c>, or with <paramref name="recordInput"/>
+    /// what git gave it.
+    /// </summary>
+    private static async Task<string> OwnHelperAsync(TempRepo repo, bool recordInput = false)
     {
         var record = repo.SiblingPath("own-helper-" + Guid.NewGuid().ToString("N") + ".txt");
         var quoted = "'" + record.Replace('\\', '/').Replace("'", "'\\''", StringComparison.Ordinal) + "'";
-        await repo.GitAsync("config", "credential.helper", $"!f() {{ cat >/dev/null; echo own >> {quoted}; }}; f");
+        var body = recordInput ? $"cat >> {quoted}" : $"cat >/dev/null; echo own >> {quoted}";
+        await repo.GitAsync("config", "credential.helper", $"!f() {{ {body}; }}; f");
         return record;
     }
 

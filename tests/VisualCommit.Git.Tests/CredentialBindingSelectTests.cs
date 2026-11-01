@@ -177,11 +177,12 @@ public class CredentialBindingSelectTests
         new[] { "https://evil@github.com/o/r/%52", "https://github.com/o/r/R", "https://github.com/o/r/./R", "https://github.com/x/../o/r" },
     };
 
-    /// <summary>The coverage a <see cref="CredentialViewCases"/> row names.</summary>
+    /// <summary>The coverage a <see cref="CredentialViewCases"/> row names (and <c>FakeGitLab</c>, the GitLab fake's on <c>http://127.0.0.1:2/</c>).</summary>
     public static GitCoverage CoverageOf(string provider) => provider switch
     {
         "AzureDevOps" => AzureDevOpsCoverageVectors.Coverage,
         "GitLab" => GitLab,
+        "FakeGitLab" => FakeGitLabCoverage(),
         _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, null),
     };
 
@@ -596,10 +597,84 @@ public class CredentialBindingSelectTests
         Assert.Equal(bound, CredentialBinding.Select([Fetch("origin", url), Fetch("other", other)], coverage).Select(binding => binding.Url));
     }
 
+    /// <summary>
+    /// Another user's URL whose user holds white space or a control character, before, inside or
+    /// after the name (the hunt on the fixed code, 2026-11-01): git's credential code reads the user
+    /// up to the first <c>@</c> before the first <c>/</c>, <c>?</c> or <c>#</c>, through them
+    /// (<c>bob&lt;U+00A0&gt;</c>), and .NET reads it too (<c>bob%C2%A0</c>), where
+    /// <see cref="GitCommand.EndsAuthority"/> ends the authority before the <c>@</c>. Out of the form,
+    /// so nothing on its host is bound; <see cref="CoverageGitMatchTests"/> shows a binding's key
+    /// asking the app's helper alone with that user. Each row: the coverage, the URL, a URL bound alone.
+    /// </summary>
+    public static TheoryData<string, string, string> UsersWithWhiteSpace => new()
+    {
+        { "GitLab", "https://bob\u00A0@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://bob @gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://bob\t@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://bob\u000B@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://bob\u0001@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://bob\u0085@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://bob\u2028@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://bob\u3000@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://\u00A0bob@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://\u3000bob@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://b\u00A0ob@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://bob\u00A0@gitlab.com/h/q.git", "https://gitlab.com/g/p" },
+        { "GitLab", "https://bob\u00A0:pw@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://Ada\u00A0@gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "https://bob\u00A0@www.gitlab.com/g/p.git", "https://gitlab.com/g/p.git" },
+        { "GitLab", "http://bob\u00A0@gitlab.com/g/p", "https://gitlab.com/g/p" },
+        { "AzureDevOps", "https://evil\u00A0@myorg.visualstudio.com/p/_git/r", VisualStudio },
+        { "AzureDevOps", "https://\u00A0evil@myorg.visualstudio.com/q/_git/s", VisualStudio },
+        { "AzureDevOps", "https://evil\u00A0@dev.azure.com/myorg/p/_git/r", V1 },
+        { "FakeGitLab", "http://bob\u00A0@127.0.0.1:2/g/p.git", "http://127.0.0.1:2/g/p.git" },
+        { "FakeGitLab", "http://bob\u00A0@127.0.0.1:2/g/p", "http://127.0.0.1:2/g/p.git" },
+    };
+
+    [Theory]
+    [MemberData(nameof(UsersWithWhiteSpace))]
+    public void Another_users_url_with_white_space_or_a_control_character_in_its_user_leaves_its_host_unbound(string provider, string other, string url)
+    {
+        // .NET reads the URL, so it is not R1's unreadable one (D379).
+        Assert.True(Uri.TryCreate(other, UriKind.Absolute, out var read), $"{other} is unreadable.");
+        Assert.NotEqual(string.Empty, read.UserInfo);
+        var coverage = CoverageOf(provider);
+
+        Assert.NotEmpty(CredentialBinding.Select([Fetch("origin", url)], coverage));
+        Assert.Empty(CredentialBinding.Select([Fetch("origin", url), Fetch("other", other)], coverage));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", other), Fetch("origin", url)], coverage));
+        Assert.Empty(CredentialBinding.Select([Fetch("other", other)], coverage));
+    }
+
+    [Fact]
+    public void White_space_in_another_users_name_fails_its_own_host_alone_and_white_space_after_the_authority_is_no_user()
+    {
+        // The organization's own host is another host than dev.azure.com: V1 stays bound.
+        Assert.Equal(
+            [V1],
+            CredentialBinding.Select([Fetch("origin", V1), Fetch("vs", VisualStudio), Fetch("evil", "https://evil\u00A0@myorg.visualstudio.com/p/_git/r")], AzureDevOpsCoverageVectors.Coverage).Select(binding => binding.Url));
+
+        // An @ after the first / or ? is in no user, for git as for .NET: a user-less URL out of the
+        // form, which fails nothing on GitLab (WP-C's review on 8.2 step 5).
+        foreach (var other in new[] { "https://gitlab.com/g/p\u00A0@x.git", "https://gitlab.com?\u00A0@x/g/p.git" })
+        {
+            Assert.Equal(
+                ["https://gitlab.com/g/p", "https://gitlab.com/g/p.git"],
+                CredentialBinding.Select([Fetch("origin", "https://gitlab.com/g/p"), Fetch("other", other)], GitLab).Select(binding => binding.Url));
+        }
+    }
+
     private static GitCoverage FakeAzureCoverage() =>
         new(new AccountKey(HostingProvider.AzureDevOps, "127.0.0.1:2", "fernhill-labs"), new Uri("http://127.0.0.1:2/"))
         {
             Organization = "Fernhill-Labs",
+            HelperUserIsAccounts = true,
+        };
+
+    private static GitCoverage FakeGitLabCoverage() =>
+        new(new AccountKey(HostingProvider.GitLab, "127.0.0.1:2", "ada"), new Uri("http://127.0.0.1:2/"))
+        {
+            GitTwin = true,
             HelperUserIsAccounts = true,
         };
 

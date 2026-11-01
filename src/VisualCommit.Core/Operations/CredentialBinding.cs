@@ -99,8 +99,9 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
     /// segments is followed by its <c>.git</c> twin, and a URL whose path holds a raw reserved
     /// character by its credential twin. An <c>http</c> or <c>https</c> URL that cannot be read
     /// leaves nothing on any covered host bound (D379). Another user's URL on a covered host that
-    /// is not in the form leaves nothing on that host bound, and so, on the origin with an
-    /// organization, does any URL without a password that is not in the form or has no first
+    /// is not in the form leaves nothing on that host bound (a URL whose user git's credential code
+    /// reads otherwise, through white space or a control character, counts as one), and so, on the
+    /// origin with an organization, does any URL without a password that is not in the form or has no first
     /// segment in the organization's grammar, whatever its user; else a binding is dropped when
     /// another user's path, in git's credential view, equals its path or lies under it at a
     /// <c>/</c>, and with <see cref="GitCoverage.GitTwin"/> also when their projects (one final
@@ -234,7 +235,14 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
                 continue;
             }
 
-            var otherUser = url.User is { Length: > 0 } user && !IsAccountsUser(user, coverage);
+            // git's credential code reads the user up to the first @ before the first /, ? or #
+            // (credential_from_url), through the white space and control characters that end
+            // UrlParts' authority (GitCommand.EndsAuthority, for the prose it hides credentials in):
+            // in bob<U+00A0>@gitlab.com git reads the user bob<U+00A0>, UrlParts none. A URL git
+            // reads another user in counts as another user's out of the form, whatever UrlParts
+            // read, so nothing on its host is bound (8.2 step 5, ruling 10, D369).
+            var readOtherwise = !string.Equals(GitUserOf(url.Text), url.User, StringComparison.Ordinal);
+            var otherUser = readOtherwise || (url.User is { Length: > 0 } user && !IsAccountsUser(user, coverage));
             var exact = true;
             var covered = hosts.FirstOrDefault(host => host.Covers(url.Uri));
             if (covered is null)
@@ -265,7 +273,7 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
                 }
             }
 
-            var inForm = InPlainForm(url.Text) && (covered.Organization is null || IsOrganizationName(FirstSegment(url.Path)));
+            var inForm = !readOtherwise && InPlainForm(url.Text) && (covered.Organization is null || IsOrganizationName(FirstSegment(url.Path)));
             if (otherUser)
             {
                 if (inForm)
@@ -444,6 +452,36 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
             : view;
 
     private const string GitSuffix = ".git";
+
+    /// <summary>
+    /// The user git's credential code reads in a URL that has <c>://</c> (<c>credential_from_url</c>):
+    /// the text after <c>://</c> up to the first <c>@</c> that comes before the first <c>/</c>,
+    /// <c>?</c> or <c>#</c>, cut at a <c>:</c> before that <c>@</c>, its escapes decoded as
+    /// <see cref="UrlParts"/> decodes its own; null without such an <c>@</c>. Unlike
+    /// <see cref="UrlParts"/>' authority, it does not end at white space or a control character.
+    /// </summary>
+    private static string? GitUserOf(string text)
+    {
+        var authority = text.AsSpan(text.IndexOf(SchemeSeparator, StringComparison.Ordinal) + SchemeSeparator.Length);
+        var end = authority.IndexOfAny(EndsGitsAuthority);
+        if (end >= 0)
+        {
+            authority = authority[..end];
+        }
+
+        var at = authority.IndexOf('@');
+        if (at < 0)
+        {
+            return null;
+        }
+
+        var userInfo = authority[..at];
+        var colon = userInfo.IndexOf(':');
+        return Uri.UnescapeDataString((colon >= 0 ? userInfo[..colon] : userInfo).ToString());
+    }
+
+    /// <summary>Where git's credential code ends a URL's authority (<c>strcspn(cp, "/?#")</c>).</summary>
+    private static readonly SearchValues<char> EndsGitsAuthority = SearchValues.Create("/?#");
 
     /// <summary>D379 (R1): whether a URL's scheme, the text before its first <c>:</c>, is <c>http</c> or <c>https</c> without case.</summary>
     private static bool HasHttpScheme(string text)
