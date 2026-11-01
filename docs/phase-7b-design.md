@@ -2024,8 +2024,9 @@ rulings, 2026-11-01). Where the build differs from the text or settles what it l
   is followed. A same-origin redirect out of `InPlainForm` is `Malformed` as one into another
   organization, and so is one in it to a web page (the first `_` segment after the organization not
   `_apis`, as `_git/<repo>/_apis`; `<status>, redirected outside the API`). `Detail` is null on every
-  classified failure; `RetryAt` lies between now and a day ahead; a 401 or 203 over 10 MB stays
-  `Malformed`.
+  classified failure; `RetryAt` lies between now and a day ahead; outside A1's 3xx, an answer the
+  core stops first (over 10 MB, or not to be decompressed) stays `Malformed`, a 203 or a 3xx to the
+  sign-in too; a 301, 302, 307 or 308's body is not read.
 - Provider: public texts for its own refusals, `PullRequestPages` (3); D378's refusal guards A1 to A5.
   A2 refuses a foreign account or a login outside the grammar unsent. A row's `remoteUrl` and
   `webUrl` reach the record only when `Recognise` reads each as that repository, `remoteUrl` without

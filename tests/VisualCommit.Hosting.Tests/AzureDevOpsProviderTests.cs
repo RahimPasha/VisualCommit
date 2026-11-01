@@ -566,6 +566,48 @@ public sealed class AzureDevOpsProviderTests
         Assert.Empty(pages);
     }
 
+    // The same for the provider's two other failures, on names the caller gives: A1's Anonymous
+    // identity on a typed organization that holds the token (a made-up one of no provider's form, so
+    // that it is in the organization's grammar) and A2's null row on a ListProject that holds it.
+    [Fact]
+    public async Task A1s_anonymous_failure_and_A2s_null_row_on_a_name_that_holds_the_token_screen_it()
+    {
+        const string Token = "azdoFAKE-org-1";
+        var recorder = new RecordingHttpHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/x-" + Token + "/_apis/connectionData" => Answer(HttpStatusCode.OK, """{"authenticatedUser":{"id":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","descriptor":"Microsoft.Fake;x"}}""", "application/json"),
+            "/fake-org/lp-" + Token + "/_apis/git/repositories" => Answer(HttpStatusCode.OK, """{"count":1,"value":[null]}""", "application/json"),
+            _ => Answer(HttpStatusCode.NotFound, """{"message":"Not found.","typeKey":"GitRepositoryNotFoundException"}""", "application/json"),
+        });
+        var log = new ListLog();
+        using var signIn = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, log, new ManualTimeProvider());
+        using var inProject = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service with { ListProject = "lp-" + Token }, () => recorder, log, new ManualTimeProvider());
+        var account = new HostingAccount(new AccountKey(HostingProvider.AzureDevOps, "dev.azure.com", "fake-org"), "fake-org", 0, null, null, true, "7b0a1111-0000-4a00-8000-000000000001");
+
+        var failures = new[]
+        {
+            (await signIn.CheckTokenAsync(Token, "x-" + Token, Cancelled)).Failure!,
+            (await inProject.ListRepositoriesAsync(Token, account, Cancelled)).Failure!,
+        };
+
+        Assert.Equal(
+            [
+                (HostingFailureKind.BadCredentials, "https://dev.azure.com/%3Ctoken%3E/_apis/connectionData"),
+                (HostingFailureKind.Malformed, "https://dev.azure.com/fake-org/%3Ctoken%3E/_apis/git/repositories"),
+            ],
+            failures.Select(failure => (failure.Kind, failure.Url!.AbsoluteUri)));
+        const string Request = " (request 7b0aac71-0000-4a00-8000-0000000000ff).";
+        Assert.Equal(
+            [
+                "Azure DevOps: GET /<token>/_apis/connectionData failed: BadCredentials" + Request,
+                "Azure DevOps: GET /fake-org/<token>/_apis/git/repositories failed: Malformed" + Request,
+            ],
+            log.Lines.Select(line => line.Message));
+        Assert.DoesNotContain("azdoFAKE", log.Written, StringComparison.OrdinalIgnoreCase);
+        Assert.All(failures, failure => Assert.DoesNotContain("azdoFAKE", $"{failure.Url} {failure.Message} {failure.Detail} {failure.RequestId}", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(2, recorder.Sent.Count);
+    }
+
     [Fact]
     public async Task A2_refuses_a_list_project_that_is_no_single_name_and_A4_drops_a_fork_source_of_such_a_name()
     {
