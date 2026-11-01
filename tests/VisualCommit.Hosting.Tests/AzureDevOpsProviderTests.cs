@@ -5,6 +5,7 @@ using VisualCommit.Core;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting.AzureDevOps;
+using VisualCommit.Hosting.Http;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Hosting;
 using Xunit;
@@ -219,9 +220,12 @@ public sealed class AzureDevOpsProviderTests
 
     /// <summary>
     /// Every redirect of connectionData is refused credentials, whatever its status (D360): a 303
-    /// and a 300, which the core does not follow (the profile's table, one warning), and a 302
-    /// without a Location, which the core stops with its one warning, A1 changing only the failure's
-    /// kind and message (one warning per failure, design 5.2). Elsewhere a 303 or a
+    /// and a 300, which the core does not follow (the profile's table, one warning), and each 3xx the
+    /// core stops (a 302 or 307 without a Location or with one it cannot read, a 300 over 10 MB, a 303
+    /// whose body could not be decompressed) with its one warning, A1 changing only the failure's
+    /// kind and message (one warning per failure, design 5.2). A 304, the core's success, which the
+    /// client never asks for: an HTML one by the HTML rule, one whose body does not parse by A1 as
+    /// those stops. Elsewhere a 303 or a
     /// 305 to the sign-in is refused credentials as a 302 to it is (its host also with DNS's
     /// trailing dot), and one to nowhere else stays
     /// the core's "could not be read". Each after that one request; nothing is followed.
@@ -237,6 +241,11 @@ public sealed class AzureDevOpsProviderTests
             (() => Redirect((HttpStatusCode)303, null), [connection + "303"]),
             (() => Redirect(HttpStatusCode.Found, null), [connection + "302 without Location"]),
             (() => Redirect(HttpStatusCode.TemporaryRedirect, null), [connection + "307 without Location"]),
+            (() => Redirect(HttpStatusCode.Found, "http://[bad"), [connection + "302 without Location"]),
+            (() => WithBody(Redirect((HttpStatusCode)300, "/myorg/_apis/connectionData?api-version=7.1-preview.1&again=1"), new ByteArrayContent(new byte[HostingHttpClient.MaxBodyBytes + 1])), [connection + "an answer over 10 MB"]),
+            (() => WithBody(Redirect((HttpStatusCode)303, null), new UndecodableContent()), [connection + "a body that could not be decompressed (InvalidDataException)"]),
+            (() => Answer(HttpStatusCode.NotModified, string.Empty, "application/json"), [connection + "Malformed"]),
+            (() => Answer(HttpStatusCode.NotModified, "<html><body>Sign in</body></html>", "text/html"), [connection + "304"]),
         };
         foreach (var (answer, warnings) in answers)
         {
@@ -820,6 +829,27 @@ public sealed class AzureDevOpsProviderTests
         }
 
         return response;
+    }
+
+    /// <summary><paramref name="response"/> with <paramref name="body"/> in place of its own (its headers kept, its content's dropped).</summary>
+    private static HttpResponseMessage WithBody(HttpResponseMessage response, HttpContent body)
+    {
+        response.Content.Dispose();
+        response.Content = body;
+        return response;
+    }
+
+    /// <summary>A body whose reading throws as .NET's gzip and deflate decoders do on one their coding does not hold (D380, measured).</summary>
+    private sealed class UndecodableContent : HttpContent
+    {
+        protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context) =>
+            Task.FromException(new InvalidDataException("The archive entry was compressed using an unsupported compression method."));
+
+        protected override bool TryComputeLength(out long length)
+        {
+            length = 0;
+            return false;
+        }
     }
 
     /// <summary>The fake of Azure DevOps in process on a copy of "hosting7b"'s bare folders, seeded as the scenario's half (design 3.5), and the provider over it.</summary>

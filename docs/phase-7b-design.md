@@ -2002,8 +2002,8 @@ leaves the account's organization (at A1, the typed one); no e-mail reaches a re
 failure; no Azure DevOps sentence is parsed; no value from the research's captures; CI's five jobs are
 green.
 
-**As built** (WP-AZ, `e83bfb0` to `b03bbc5`, the reviews' fixes `1b6204a` to `b95e496`, the lead's
-rulings at its merge, 2026-11-01). Where the build differs from the text or settles what it left open:
+**As built** (WP-AZ, `e83bfb0` to `b03bbc5`, the reviews' fixes `1b6204a` to `b95e496`, the merge's
+rulings, 2026-11-01). Where the build differs from the text or settles what it left open:
 - `AzureDevOpsUrls` (internal): `Recognise` (also with an `out` user), `OrganizationOf`, `WebUrlOf`,
   `ApiPath`, `NamesOf` and `IsName` (no empty, `.` or `..` name, none with `/` or `\`: A2 drops such
   rows and refuses such a `ListProject`, A3 to A5 refuse them unsent, A4's fork source is no head).
@@ -2017,14 +2017,15 @@ rulings at its merge, 2026-11-01). Where the build differs from the text or sett
 - `AzureDevOpsClient` (internal) returns `AzureDevOpsReply<T>` (`MoreExist`); `GetPagesAsync<T>`
   takes at most `PageSize` rows of a page (if `$top` is ignored); a failing probe fails it, any probe
   row sets `MoreExist`, also one already seen; a null row is `Malformed` (in A2 too, D380).
-  `SignInPageText` answers every 3xx of connectionData (300, 303, 305 by `Classify`; no readable
-  `Location` by A1, keeping the core's one warning), a 3xx to the sign-in (also its host with a
-  trailing dot) whatever its status, a 203 and an HTML 2xx; none is followed. Neither 3xx rule meets
-  a 304 (the core's success; the client asks for none). A same-origin redirect out of `InPlainForm`
-  is `Malformed` as one into another organization, and so is one in it to a web page (the first `_`
-  segment after the organization not `_apis`, as `_git/<repo>/_apis`; `<status>, redirected outside
-  the API`). `Detail` is null on every classified failure; `RetryAt` lies between now and a day
-  ahead. A 401 or 203 over 10 MB stays the core's `Malformed` (5's order of stops).
+  `SignInPageText` answers a 3xx of connectionData (300, 303, 305 by `Classify`; by A1, keeping the
+  core's one warning, one the core stops, with no readable `Location`, a body over 10 MB or one that
+  could not be decompressed, and a 304 it cannot parse), any 3xx but 304 (the core's success, never
+  asked for) to the sign-in (also its host with a trailing dot), a 203 and an HTML 2xx or 304; none
+  is followed. A same-origin redirect out of `InPlainForm` is `Malformed` as one into another
+  organization, and so is one in it to a web page (the first `_` segment after the organization not
+  `_apis`, as `_git/<repo>/_apis`; `<status>, redirected outside the API`). `Detail` is null on every
+  classified failure; `RetryAt` lies between now and a day ahead; a 401 or 203 over 10 MB stays
+  `Malformed`.
 - Provider: public texts for its own refusals, `PullRequestPages` (3); D378's refusal guards A1 to A5.
   A2 refuses a foreign account or a login outside the grammar unsent. A row's `remoteUrl` and
   `webUrl` reach the record only when `Recognise` reads each as that repository, `remoteUrl` without

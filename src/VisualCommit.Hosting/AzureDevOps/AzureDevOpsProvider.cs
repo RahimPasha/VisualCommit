@@ -160,9 +160,11 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
         {
             // Every redirect of connectionData is refused credentials, whatever its status (D360): the
             // client's profile refuses each one it is asked of, and this the 3xx the core stops itself
-            // (a Location missing or unreadable, a body over 10 MB). The core has finished that failure
-            // and written its one warning, which says why (5.2's Logging): only its kind and message
-            // change here, and no second warning is written. Nothing was followed; no second request is made.
+            // (a Location missing or unreadable, a body over 10 MB or one that could not be decompressed)
+            // and a 304 whose body it cannot parse (the core's success; never asked for, as no answer is
+            // kept). The core has finished that failure and written its one warning, which says why
+            // (5.2's Logging): only its kind and message change here, and no second warning is written.
+            // Nothing was followed; no second request is made.
             return HostingResult<HostingAccount>.Fail(reply.Status is >= 300 and < 400 && failure.Kind != HostingFailureKind.BadCredentials
                 ? failure with { Kind = HostingFailureKind.BadCredentials, Message = AzureDevOpsClient.SignInPageText }
                 : failure);
