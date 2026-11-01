@@ -57,7 +57,7 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
     public const string GitLabVariable = "VISUALCOMMIT_GITLAB_URL";
 
     /// <summary>The three providers off: nothing is recognised and no request is made (the harnesses' default). Its handler refuses every request.</summary>
-    public static HostingOptions Off { get; } = new(null, static () => new RefusingHandler());
+    public static HostingOptions Off { get; } = new(null, RefusingHandler);
 
     /// <summary>Azure DevOps' endpoints; null: off.</summary>
     public AzureDevOpsEndpoints? AzureDevOps { get; init; }
@@ -173,10 +173,17 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
             ? uri.Port
             : null;
 
-    /// <summary>The handler of <see cref="Off"/>: every request fails, so that no request leaves the app while GitHub is off.</summary>
-    private sealed class RefusingHandler : HttpMessageHandler
+    /// <summary>
+    /// Makes the handler of <see cref="Off"/>, which the session also gives a provider on without a
+    /// handler of its own (docs/phase-7b-design.md 9.2): every request fails, so that no request
+    /// leaves the app. Its message names no provider, since every provider's client may hold one.
+    /// </summary>
+    internal static HttpMessageHandler RefusingHandler() => new Refusing();
+
+    /// <summary><see cref="RefusingHandler"/>'s handler: every request fails before it is sent.</summary>
+    private sealed class Refusing : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromException<HttpResponseMessage>(new InvalidOperationException("GitHub is off: the app makes no request."));
+            Task.FromException<HttpResponseMessage>(new InvalidOperationException("The provider is off: the app makes no request."));
     }
 }

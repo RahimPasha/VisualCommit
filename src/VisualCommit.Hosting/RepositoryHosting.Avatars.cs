@@ -1,3 +1,4 @@
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 
 namespace VisualCommit.Hosting;
@@ -5,8 +6,9 @@ namespace VisualCommit.Hosting;
 // The authors' avatars of one repository tab (docs/phase-7a-design.md 7.9; D252, D291, D311,
 // ruling 22): the e-mails the graph gives, matched through the repository's map, each looked up
 // through a commit of its own when the map lacks it (D339), then the images from the session's
-// cache. One run at a time; a call during a run folds into one more with the latest set. Signed
-// out, nothing is read or asked.
+// cache. One run at a time; a call during a run folds into one more with the latest set. GitHub's
+// alone (D349, D367; docs/phase-7b-design.md 9.8): only while the listed repository is GitHub's and
+// GitHub's account is signed in, of GitHub remotes' authors; else nothing is read or asked.
 public sealed partial class RepositoryHosting
 {
     // On the UI thread.
@@ -20,18 +22,20 @@ public sealed partial class RepositoryHosting
     /// <summary>
     /// On the UI thread: the authors of graph commits that a GitHub remote's branch reaches (D311),
     /// each with the newest such commit and that remote's repository (D339), copied, lower-cased and
-    /// one per e-mail (the first); GitHub is asked about no other address. Signed out, nothing happens.
+    /// one per e-mail (the first); an author whose repository is another provider's is left out, and
+    /// GitHub is asked about no other address. Unless the listed repository is GitHub's and GitHub's
+    /// account is signed in, nothing happens (docs/phase-7b-design.md 9.8).
     /// </summary>
     public void ShowAvatarsFor(IReadOnlyCollection<AuthorCommit> authors)
     {
         ArgumentNullException.ThrowIfNull(authors);
-        if (_disposed || !IsSignedIn)
+        if (_disposed || !AvatarsWanted)
         {
             return;
         }
 
         IReadOnlyList<AuthorCommit> set = [.. authors
-            .Where(author => author is not null && !string.IsNullOrWhiteSpace(author.Email))
+            .Where(author => author is not null && !string.IsNullOrWhiteSpace(author.Email) && author.Repository?.Provider == HostingProvider.GitHub)
             .Select(author => author with { Email = author.Email.ToLowerInvariant() })
             .DistinctBy(author => author.Email, StringComparer.Ordinal)];
         if (_avatarRun is not null)
@@ -43,8 +47,11 @@ public sealed partial class RepositoryHosting
         StartAvatars(set);
     }
 
-    // On the UI thread: a sign-out (the session cancels the run itself) or no GitHub remote left;
-    // what a run still brings is dropped.
+    /// <summary>The listed repository is GitHub's and GitHub's account is signed in (9.8).</summary>
+    private bool AvatarsWanted => _candidate?.Provider == HostingProvider.GitHub && GitHubSignedIn;
+
+    // On the UI thread: GitHub's sign-out (the session cancels the run itself), or no GitHub
+    // repository listed any more; what a run still brings is dropped.
     private void StopAvatars()
     {
         _avatarGeneration++;
@@ -94,7 +101,7 @@ public sealed partial class RepositoryHosting
             return;
         }
 
-        if (avatars is not null && generation == _avatarGeneration && IsSignedIn)
+        if (avatars is not null && generation == _avatarGeneration && AvatarsWanted)
         {
             Apply(avatars);
         }
@@ -102,7 +109,7 @@ public sealed partial class RepositoryHosting
         if (_avatarNext is { } next)
         {
             _avatarNext = null;
-            if (IsSignedIn)
+            if (AvatarsWanted)
             {
                 StartAvatars(next);
             }
@@ -134,8 +141,9 @@ public sealed partial class RepositoryHosting
             HostingResult<AuthorMap>? answer = null;
             try
             {
-                answer = await _session.CallAsync(
+                answer = await _session.CallGitHubAsync(
                     $"reading the authors of {listed.FullName}",
+                    null,
                     (provider, token, linked) => provider.ReadAuthorsAsync(token, listed, commitsDue ? branch : null, lookups, linked),
                     ct).ConfigureAwait(false);
             }

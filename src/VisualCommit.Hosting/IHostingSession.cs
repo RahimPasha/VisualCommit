@@ -351,12 +351,12 @@ public sealed class NullHostingSession : IHostingSession
 
 /// <summary>
 /// The hosting of a repository without a remote on a known service, and of every repository while
-/// the service is off or in a dashboard's summary row (docs/phase-7a-design.md 1.5, 1.7): not
-/// GitHub, no bindings, no avatars, no URL rewrites wanted, never changed; disposing it does nothing.
+/// every provider is off or in a dashboard's summary row (docs/phase-7a-design.md 1.5, 1.7): no hosted
+/// remote, no bindings, no avatars, no URL rewrites wanted, never changed; disposing it does nothing.
 /// </summary>
 public sealed class NullRepositoryHosting : IRepositoryHosting
 {
-    private static readonly HostingFailure NoRemoteFailure = new(HostingFailureKind.NotFound, "This repository has no GitHub remote.");
+    private static readonly HostingFailure NoRemoteFailure = new(HostingFailureKind.NotFound, "This repository has no hosted remote.");
 
     private NullRepositoryHosting()
     {

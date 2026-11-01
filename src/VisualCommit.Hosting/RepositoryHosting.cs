@@ -1,13 +1,16 @@
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 
 namespace VisualCommit.Hosting;
 
 /// <summary>
-/// The hosting of one repository tab (docs/phase-7a-design.md 7.8; D251, D289, D290, D293): its
-/// remotes on GitHub, the repository whose pull requests are listed and the list, the bindings of
-/// git's credentials to the account, and the refs' pull requests. Its state changes on the UI
+/// The hosting of one repository tab (docs/phase-7a-design.md 7.8; D251, D289, D290, D293;
+/// docs/phase-7b-design.md 9.7): its remotes recognised by any provider on, the repository whose pull
+/// requests are listed (the first recognised remote's, ruling 5) and the list, whose provider's account
+/// decides the state, the requests and the refresh, the union of the accounts' bindings of git's
+/// credentials, and the refs' pull requests. Its state changes on the UI
 /// thread (<see cref="Update"/>, the account's changes, the refreshes' answers through the post
 /// delegate); network work runs off it under the hosting's lifetime, which <see cref="Dispose"/>
 /// ends. <see cref="State"/>, <see cref="Bindings"/> and <see cref="Avatars"/> are swapped whole and
@@ -16,7 +19,7 @@ namespace VisualCommit.Hosting;
 /// </summary>
 public sealed partial class RepositoryHosting : IRepositoryHosting
 {
-    private static readonly HostingFailure NoRemote = new(HostingFailureKind.NotFound, "This repository has no GitHub remote.");
+    private static readonly HostingFailure NoRemote = new(HostingFailureKind.NotFound, "This repository has no hosted remote.");
 
     private static readonly IReadOnlyDictionary<string, PullRequest> NoPullRequests = new Dictionary<string, PullRequest>(StringComparer.Ordinal);
 
@@ -64,12 +67,19 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
 
     public AuthorAvatars Avatars => Volatile.Read(ref _avatars);
 
-    /// <summary>The account is signed in (with or without "Use for git over HTTPS"): the tab reads the URL rewrites with its refs.</summary>
-    public bool WantsUrlRewrites => IsSignedIn;
+    /// <summary>
+    /// Some provider's account is signed in (with or without "Use for git over HTTPS"): the tab reads
+    /// the URL rewrites with its refs, since the rules decide every provider's recognition (D290).
+    /// </summary>
+    public bool WantsUrlRewrites => _session.AnySignedIn;
 
     public event EventHandler? Changed;
 
-    private bool IsSignedIn => _session.Slot is { IsSignedIn: true };
+    /// <summary>The candidate's provider's account is signed in and covers it (docs/phase-7b-design.md 9.7): its list can be asked for.</summary>
+    private bool CanList => _candidate is { } candidate && CanListFor(candidate);
+
+    /// <summary>GitHub's account is signed in: the only one avatars are read with (D349).</summary>
+    private bool GitHubSignedIn => _session.SlotOf(HostingProvider.GitHub) is { IsSignedIn: true };
 
     /// <summary>
     /// After each refs read, on the UI thread (7.8): the remotes recognised, the candidate, the
@@ -99,11 +109,12 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             _failure = null;
         }
 
-        if (changed && candidate is null)
+        if (changed && candidate?.Provider != HostingProvider.GitHub)
         {
-            // No GitHub remote left (D252, 11.3): the avatars go, and a run in flight brings none.
-            // A change to another GitHub repository keeps them: the tab sends the same set again
-            // only after NoHostedRemote or a sign-out, so dropping them there would leave none.
+            // No GitHub repository listed any more (D252, 11.3, D367): none, or another provider's.
+            // The avatars go, and a run in flight brings none. A change to another GitHub repository
+            // keeps them: the tab sends the same set again only after NoHostedRemote or a sign-out,
+            // so dropping them there would leave none.
             StopAvatars();
             Apply(AuthorAvatars.None);
         }
@@ -112,7 +123,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             Apply();
         }
 
-        if (changed && candidate is not null && IsSignedIn)
+        if (changed && CanList)
         {
             _ = RefreshPullRequestsAsync(CancellationToken.None);
         }
@@ -121,12 +132,13 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// <summary>
     /// Reads the listed repository's open pull requests (7.8): A3 of the candidate once, then A4 of
     /// it or of its parent. One run at a time; a call during a run asks for one more, whose applied
-    /// answer completes its task. <paramref name="ct"/> ends only the caller's wait. Signed out or
-    /// without a candidate, nothing is asked (D257).
+    /// answer completes its task. <paramref name="ct"/> ends only the caller's wait. Without a
+    /// candidate, or unless its provider's account is signed in and covers it, nothing is asked
+    /// (D257, D356).
     /// </summary>
     public Task RefreshPullRequestsAsync(CancellationToken ct)
     {
-        if (_disposed || _candidate is null || !IsSignedIn)
+        if (_disposed || !CanList)
         {
             return Task.CompletedTask;
         }
@@ -152,8 +164,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         ArgumentNullException.ThrowIfNull(baseRepository);
         ArgumentNullException.ThrowIfNull(request);
         var result = await _session.CallAsync(
+            baseRepository.Provider,
             $"creating a pull request on {baseRepository.FullName}",
-            (provider, token, linked) => provider.CreatePullRequestAsync(token, baseRepository, request, linked),
+            baseRepository,
+            (provider, token, _, linked) => provider.CreatePullRequestAsync(token, baseRepository, request, linked),
             ct).ConfigureAwait(false);
         if (result.Value is { } created)
         {
@@ -180,33 +194,45 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     }
 
     /// <summary>
-    /// The account changed, on the UI thread (7.8): signed in, the bindings and the state again and
-    /// a refresh; else the list, its failure, the refs' pull requests, the avatars and the bindings
-    /// go, and the rewrites count as unknown until the next <see cref="Update"/> that wants them.
+    /// <paramref name="provider"/>'s account changed, on the UI thread (7.8; docs/phase-7b-design.md
+    /// 9.7): with no account signed in, the rewrites count as unknown until the next
+    /// <see cref="Update"/> that wants them. The candidate's provider: listable, the state and the
+    /// bindings again and a refresh; else its list, failure and refs' pull requests go. Another
+    /// provider: the state and the bindings again alone. GitHub not signed in: the avatars go (9.8).
     /// </summary>
-    internal void OnAccountChanged()
+    internal void OnAccountChanged(HostingProvider provider)
     {
         if (_disposed)
         {
             return;
         }
 
-        if (IsSignedIn)
+        if (!WantsUrlRewrites)
         {
-            Apply();
-            if (_candidate is not null)
-            {
-                _ = RefreshPullRequestsAsync(CancellationToken.None);
-            }
-
-            return;
+            _rulesKnown = false;
         }
 
-        _list = null;
-        _failure = null;
-        _rulesKnown = false;
-        StopAvatars();
-        Apply(AuthorAvatars.None);
+        AuthorAvatars? avatars = null;
+        if (provider == HostingProvider.GitHub && !GitHubSignedIn)
+        {
+            StopAvatars();
+            avatars = AuthorAvatars.None;
+        }
+
+        if (_candidate is { } candidate && candidate.Provider == provider)
+        {
+            if (CanList)
+            {
+                Apply(avatars);
+                _ = RefreshPullRequestsAsync(CancellationToken.None);
+                return;
+            }
+
+            _list = null;
+            _failure = null;
+        }
+
+        Apply(avatars);
     }
 
     private static bool SameState(RepositoryHostingState a, RepositoryHostingState b) =>
@@ -279,9 +305,8 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     // else (a remote GitHub's only through the user's insteadOf) still starts the tab's rules read.
     private void Apply(AuthorAvatars? avatars = null)
     {
-        var slot = _session.Slot;
-        var state = StateOf(slot);
-        var bindings = HostingRules.Bindings(slot?.Status, slot?.IsSignedIn == true, _rulesKnown, _effective, _session.Endpoints.WebBase);
+        var state = StateOf();
+        var bindings = _session.BindingsOf(_effective, _rulesKnown);
         var changed = false;
         if (WantsUrlRewrites != _wantsRewrites)
         {
@@ -319,11 +344,27 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         }
     }
 
-    private RepositoryHostingState StateOf(AccountSlot? slot)
+    // The state (7.8; docs/phase-7b-design.md 9.7): no candidate, NoHostedRemote; an account of the
+    // candidate's provider held, signed in or needing sign-in, that does not cover it, on Azure
+    // DevOps OtherOrganization (D356, D366): the candidate, no list, failure or ByRef, nothing
+    // asked; else 7a's by that provider's account.
+    private RepositoryHostingState StateOf()
     {
         if (_candidate is not { } candidate || _refs is not { } refs)
         {
             return RepositoryHostingState.NoHostedRemote;
+        }
+
+        var slot = _session.SlotOf(candidate.Provider);
+        if (slot is not null && _session.ProviderOf(candidate.Provider) is { } provider && !provider.Covers(candidate, slot.Key))
+        {
+            return new(
+                candidate.Provider == HostingProvider.AzureDevOps ? PullRequestsState.OtherOrganization : PullRequestsState.SignedOut,
+                _remotes,
+                candidate,
+                null,
+                null,
+                NoPullRequests);
         }
 
         var info = InfoOf(candidate);
@@ -358,8 +399,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                 {
                     listed = ListedOf(candidate, info.Value);
                     result = await _session.CallAsync(
+                        candidate.Provider,
                         $"listing the pull requests of {listed.FullName}",
-                        (provider, token, linked) => provider.ListPullRequestsAsync(token, listed, linked),
+                        listed,
+                        (provider, token, _, linked) => provider.ListPullRequestsAsync(token, listed, linked),
                         _lifetime).ConfigureAwait(false);
                 }
             }
@@ -381,11 +424,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         });
     }
 
-    // On the UI thread: the run's answer applied when it is still the candidate's and the account
-    // is signed in; then the run asked for meanwhile, if any.
+    // On the UI thread: the run's answer applied when it is still the candidate's and its
+    // provider's account can list it; then the run asked for meanwhile, if any.
     private void Finish(HostedRepository candidate, HostedRepository? listed, HostingResult<PullRequestList>? result, TaskCompletionSource done)
     {
-        if (!_disposed && result is not null && Equals(candidate, _candidate) && IsSignedIn)
+        if (!_disposed && result is not null && Equals(candidate, _candidate) && CanList)
         {
             _list = result.Value;
             _failure = result.Failure;
@@ -402,7 +445,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         if (_again is { } again)
         {
             _again = null;
-            if (!_disposed && _candidate is not null && IsSignedIn)
+            if (!_disposed && CanList)
             {
                 StartRun(again);
             }
@@ -443,8 +486,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         try
         {
             result = await _session.CallAsync(
+                candidate.Provider,
                 $"reading {candidate.FullName}",
-                (provider, token, linked) => provider.ReadRepositoryAsync(token, candidate, linked),
+                candidate,
+                (provider, token, _, linked) => provider.ReadRepositoryAsync(token, candidate, linked),
                 _lifetime).ConfigureAwait(false);
             return result;
         }
@@ -464,6 +509,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             }
         }
     }
+
+    private bool CanListFor(HostedRepository candidate) =>
+        _session.SlotOf(candidate.Provider) is { IsSignedIn: true } slot
+        && _session.ProviderOf(candidate.Provider) is { } provider
+        && provider.Covers(candidate, slot.Key);
 
     // On the UI thread: a created pull request on top of the held list of its base (D293).
     private void AddCreated(HostedRepository baseRepository, PullRequest created)
