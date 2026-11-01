@@ -63,14 +63,17 @@ Start:
 
 Design:
 
-- [ ] 2. Research, each fact taken where it lives: Azure DevOps' and GitLab's REST APIs (sign-in's
+- [x] 2. Research, each fact taken where it lives: Azure DevOps' and GitLab's REST APIs (sign-in's
   check of a token, an organization's or account's repositories, a repository's pull requests or
   merge requests, creating one, their web pages, errors, paging, versions), their token pages,
   kinds and scopes (D345), their remotes' URL forms (D347), and git 2.56's credential facts for
   them (dev.azure.com's `<organization>@` user, a binding per organization on a shared host, each
   provider's user name; D350), with 2.43 from CI where versions differ (D248); 7a's code mapped
   where it names GitHub. Questions of taste the research raises go to the owner before drafting
-  (D243).
+  (D243). Done 2026-10-31 by one workflow of 12 agents: seven notes, a critic and four gap rounds
+  (r1 to r8 in `D:/Projects/Personal/phase7b-work/research/`, outside the repository, about 660
+  KB); git 2.31.1 and 2.43.0 (MinGit, hashes checked) were run beside 2.56 for the credential
+  facts, so no CI step was needed for them; only anonymous requests went to the two services.
 - [ ] 3. Design in `docs/phase-7b-design.md` (D243: about 150 to 200 KB, its decisions only in
   `decisions.md`): the provider model for three providers, both providers' clients and fakes, the
   credential path for their hosts, the texts and layouts that name the provider (D351), the live
@@ -295,13 +298,15 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 2, the design's research: Azure DevOps' and GitLab's APIs and tokens, their remotes' URL
-forms and git 2.56's credential facts for them, and a map of where 7a's code names GitHub. Its
-notes go to `D:/Projects/Personal/phase7b-work/research/`, outside the repository, as phase 7a's
-did. The [phase 7a handoff](handoffs/phase-7a.md), "For the next phase", says what to reuse and
-which risks to watch; the owner's answers are D344 to D352, and no question is open for the
-design's start. Until the reset of 2026-11-05 the phase may use all that is left of the week's
-allowance and waits for the reset if it runs out (D344).
+Step 3, the design: first the owner's rulings on the questions of taste the research raised
+(D243: the Accounts section's layout, the clone form's and the palette's entries per provider,
+each provider's request number, an Azure DevOps remote of another organization), recorded as
+decisions from D353; then `docs/phase-7b-design.md` drafted from the research notes in
+`D:/Projects/Personal/phase7b-work/research/` (r1 to r8; where a later note or a gap round
+contradicts an earlier one, the later holds, as r8's section 5 lists), and reviewed. The
+[phase 7a handoff](handoffs/phase-7a.md), "For the next phase", says what to reuse and which risks
+to watch. Until the reset of 2026-11-05 the phase may use all that is left of the week's allowance
+and waits for the reset if it runs out (D344).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
