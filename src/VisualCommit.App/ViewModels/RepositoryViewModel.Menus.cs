@@ -65,7 +65,7 @@ public sealed partial class RepositoryViewModel
         MergeTool = _mergeTool,
         Filters = Filters,
         HasEditor = IsEditorChosen(),
-        Hosting = HostingState.PullRequests == PullRequestsState.NotGitHub ? null : HostingState,
+        Hosting = HostingState.PullRequests == PullRequestsState.NoHostedRemote ? null : HostingState,
     };
 
     /// <summary>
@@ -431,7 +431,7 @@ public sealed partial class RepositoryViewModel
                 Start(MenuActions.ApplyStashAsync(stash), "applying the stash");
                 break;
             case RefRowTarget.PullRequest when row is PullRequestRow pullRequest
-                && HostingState.PullRequests != PullRequestsState.NotGitHub
+                && HostingState.PullRequests != PullRequestsState.NoHostedRemote
                 && PullRequestCheckout.Plan(HostingState, Refs, pullRequest.PullRequest).DisabledReason is null:
                 // Its checkout (D304, 10.5), as the menu's item, unless the item would be disabled.
                 Start(MenuActions.CheckOutPullRequestAsync(pullRequest.PullRequest), "checking out a pull request");
@@ -455,7 +455,7 @@ public sealed partial class RepositoryViewModel
         switch (row.Kind)
         {
             case PullRequestMessageKind.SignIn:
-                Start(MenuActions.SignInToGitHubAsync(), "signing in to GitHub");
+                Start(MenuActions.SignInToHostAsync(), "signing in to GitHub");
                 break;
             case PullRequestMessageKind.More:
                 Start(MenuActions.OpenPullRequestsInBrowserAsync(), "opening the pull requests in the browser");

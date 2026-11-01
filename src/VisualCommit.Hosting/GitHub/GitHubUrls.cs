@@ -10,8 +10,6 @@ namespace VisualCommit.Hosting.GitHub;
 /// </summary>
 internal static partial class GitHubUrls
 {
-    private const string PullPrefix = "refs/pull/";
-
     /// <summary>
     /// The repository <paramref name="url"/> names on <paramref name="endpoints"/>, or null. On
     /// github.com (<see cref="GitHubEndpoints.GitHubCom"/>), the host <c>github.com</c> or
@@ -41,26 +39,10 @@ internal static partial class GitHubUrls
     /// <summary>
     /// The push guard's rule (ruling 8): false only for <c>refs/pull/&lt;x&gt;/head</c> or
     /// <c>refs/pull/&lt;x&gt;/merge</c> whose <c>&lt;x&gt;</c> is not one or more ASCII digits
-    /// (<c>refs/pull/fix/typo/head</c> included), which GitHub never has; true otherwise.
+    /// (<c>refs/pull/fix/typo/head</c> included), which GitHub never has; true otherwise. The rule
+    /// is <see cref="PullRequestRefs.SourceCanExist"/>'s for GitHub (docs/phase-7b-design.md 1.2).
     /// </summary>
-    public static bool SourceCanExist(string remoteRef)
-    {
-        ArgumentNullException.ThrowIfNull(remoteRef);
-        if (!remoteRef.StartsWith(PullPrefix, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        var rest = remoteRef[PullPrefix.Length..];
-        var slash = rest.LastIndexOf('/');
-        if (slash < 0 || rest[(slash + 1)..] is not ("head" or "merge"))
-        {
-            return true;
-        }
-
-        var number = rest[..slash];
-        return number.Length > 0 && number.All(char.IsAsciiDigit);
-    }
+    public static bool SourceCanExist(string remoteRef) => PullRequestRefs.SourceCanExist(HostingProvider.GitHub, remoteRef);
 
     /// <summary>Whether <paramref name="endpoints"/> are github.com's own.</summary>
     public static bool IsGitHubCom(GitHubEndpoints endpoints) => endpoints == GitHubEndpoints.GitHubCom;

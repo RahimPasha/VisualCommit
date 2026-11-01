@@ -4,6 +4,7 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Session;
@@ -195,10 +196,11 @@ public sealed class TabServices
     public IHostingSession Hosting { get; }
 
     /// <summary>
-    /// Signs in to GitHub (1.7): set by the window, answers whether an account is signed in
-    /// afterwards; null without a window.
+    /// Signs in to a provider (docs/phase-7a-design.md 1.7, docs/phase-7b-design.md 1.7): set by
+    /// the window, answers whether that provider's account is signed in afterwards; null without a
+    /// window.
     /// </summary>
-    public Func<Task<bool>>? SignInToGitHub { get; set; }
+    public Func<HostingProvider, Task<bool>>? SignIn { get; set; }
 
     /// <summary>
     /// Whether a file exists on disk, called off the UI thread only (D59): Open in editor's check of

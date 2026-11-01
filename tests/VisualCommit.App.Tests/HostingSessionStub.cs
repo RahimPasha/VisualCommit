@@ -69,17 +69,39 @@ internal sealed class HostingSessionStub : IHostingSession
 
     public bool IsOff => false;
 
+    public IReadOnlyList<HostingProvider> Providers => [HostingProvider.GitHub];
+
     public IHostingProvider? GitHub => null;
 
     public AccountStatus? Account { get; set; }
 
     public bool BindsGit { get; set; }
 
-    public event EventHandler? AccountChanged
+    public event EventHandler<HostingAccountChangedEventArgs>? AccountChanged
     {
         add { }
         remove { }
     }
+
+    public bool IsOn(HostingProvider provider) => provider == HostingProvider.GitHub;
+
+    public IHostingProvider? ProviderOf(HostingProvider provider) => null;
+
+    public AccountStatus? AccountOf(HostingProvider provider) => provider == HostingProvider.GitHub ? Account : null;
+
+    public Task<SignInResult> SignInAsync(SignInRequest request, CancellationToken ct) => throw new NotSupportedException("The stub signs nobody in.");
+
+    public Task<string?> SignOutAsync(HostingProvider provider, CancellationToken ct) => throw new NotSupportedException("The stub signs nobody out.");
+
+    public void SetUseForGit(HostingProvider provider, bool useForGit)
+    {
+        if (provider == HostingProvider.GitHub)
+        {
+            SetUseForGit(useForGit);
+        }
+    }
+
+    public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(HostingProvider provider, CancellationToken ct) => throw new NotSupportedException("The stub lists nothing.");
 
     public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
 
@@ -147,7 +169,7 @@ internal sealed class HostingSessionStub : IHostingSession
     /// </summary>
     internal sealed class StubRepositoryHosting : IRepositoryHosting
     {
-        private RepositoryHostingState _state = RepositoryHostingState.NotGitHub;
+        private RepositoryHostingState _state = RepositoryHostingState.NoHostedRemote;
         private EventHandler? _changed;
 
         public RepositoryHostingState State

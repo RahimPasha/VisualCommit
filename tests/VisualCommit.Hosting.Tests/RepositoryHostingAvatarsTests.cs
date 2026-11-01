@@ -215,7 +215,7 @@ public sealed class RepositoryHostingAvatarsTests
         await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.Refs(("origin", "https://gitlab.example/octo/hello.git")), UrlRewrites.None));
         await setup.Thread.IdleAsync();
 
-        Assert.Same(RepositoryHostingState.NotGitHub, hosting.State);
+        Assert.Same(RepositoryHostingState.NoHostedRemote, hosting.State);
         Assert.Same(AuthorAvatars.None, hosting.Avatars);
         Assert.Equal(1, changed);
 
@@ -249,7 +249,7 @@ public sealed class RepositoryHostingAvatarsTests
         await setup.Thread.IdleAsync();
         await setup.Thread.IdleAsync();
 
-        Assert.Same(RepositoryHostingState.NotGitHub, hosting.State);
+        Assert.Same(RepositoryHostingState.NoHostedRemote, hosting.State);
         Assert.Same(AuthorAvatars.None, hosting.Avatars);
     }
 
@@ -262,7 +262,7 @@ public sealed class RepositoryHostingAvatarsTests
         await ShowAsync(setup, hosting, Scenarios.OctoEmail, Scenarios.AdaEmail);
         var avatars = hosting.Avatars;
 
-        // The tab sends its set again only after NotGitHub or a sign-out (11.3): avatars dropped
+        // The tab sends its set again only after NoHostedRemote or a sign-out (11.3): avatars dropped
         // here would not come back until its authors change.
         await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.Refs(("origin", "http://127.0.0.1:1/octo/tool.git")), UrlRewrites.None));
         await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "acme/tool's list");

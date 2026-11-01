@@ -41,7 +41,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     private (HostedRepository Candidate, RepositoryInfo Info)? _info;
     private (HostedRepository Candidate, Task<HostingResult<RepositoryInfo>> Read)? _reading;
 
-    private RepositoryHostingState _state = RepositoryHostingState.NotGitHub;
+    private RepositoryHostingState _state = RepositoryHostingState.NoHostedRemote;
     private IReadOnlyList<CredentialBinding> _bindings = [];
     private AuthorAvatars _avatars = AuthorAvatars.None;
 
@@ -103,7 +103,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         {
             // No GitHub remote left (D252, 11.3): the avatars go, and a run in flight brings none.
             // A change to another GitHub repository keeps them: the tab sends the same set again
-            // only after NotGitHub or a sign-out, so dropping them there would leave none.
+            // only after NoHostedRemote or a sign-out, so dropping them there would leave none.
             StopAvatars();
             Apply(AuthorAvatars.None);
         }
@@ -323,7 +323,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     {
         if (_candidate is not { } candidate || _refs is not { } refs)
         {
-            return RepositoryHostingState.NotGitHub;
+            return RepositoryHostingState.NoHostedRemote;
         }
 
         var info = InfoOf(candidate);

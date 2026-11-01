@@ -6,6 +6,7 @@
 using System.Globalization;
 using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Undo;
@@ -122,26 +123,26 @@ public sealed partial class RepositoryOperations
         var state = Repository.HostingState;
         var repository = state.Repository
             ?? HostingRemoteOrder.Of(state.Remotes.Keys).Select(remote => state.Remotes[remote]).FirstOrDefault();
-        if (repository is null || Services?.Hosting.GitHub?.Endpoints.WebBase is not { } webBase)
+        if (repository is null || Services?.Hosting.ProviderOf(repository.Provider) is not { } provider)
         {
             Log.Info($"{Repository.Name}: {OperationTexts.MenuTexts.OpenPullRequestsInBrowser}: the repository has no GitHub remote.");
             return Task.CompletedTask;
         }
 
-        var pulls = new Uri(webBase, $"{repository.Owner}/{repository.Name}/pulls");
+        var pulls = provider.PullRequestsPage(repository);
         return LaunchAsync(OperationTexts.MenuTexts.OpenPullRequestsInBrowser, launcher => launcher.OpenUrlAsync(pulls));
     }
 
-    /// <inheritdoc cref="IRepositoryActions.SignInToGitHubAsync"/>
+    /// <inheritdoc cref="IRepositoryActions.SignInToHostAsync"/>
     /// <remarks>The window's entry (8.5): "Add GitHub account" unless signed in; the session refreshes the pull requests at sign-in.</remarks>
-    public async Task SignInToGitHubAsync()
+    public async Task SignInToHostAsync()
     {
-        if (IsClosed || Services?.SignInToGitHub is not { } signIn)
+        if (IsClosed || Services?.SignIn is not { } signIn)
         {
             return;
         }
 
-        await signIn();
+        await signIn(HostingProvider.GitHub);
     }
 
     /// <summary>

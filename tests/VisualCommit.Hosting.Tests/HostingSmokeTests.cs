@@ -16,7 +16,11 @@ public sealed class HostingSmokeTests
     {
         var log = new ListLog();
 
-        var options = HostingOptions.FromEnvironment(Variable(HostingOptions.GitHubVariable, "none"), log);
+        // The three providers' variables at none, as every test process has them (7b's 1.8): unset,
+        // Azure DevOps and GitLab would be their services.
+        var options = HostingOptions.FromEnvironment(
+            name => name is HostingOptions.GitHubVariable or HostingOptions.AzureDevOpsVariable or HostingOptions.GitLabVariable ? "none" : null,
+            log);
 
         Assert.Same(HostingOptions.Off, options);
         Assert.Null(options.GitHub);
@@ -69,7 +73,7 @@ public sealed class HostingSmokeTests
         Assert.Null(session.Recognise("https://github.com/octocat/hello.git"));
         Assert.Empty(session.BindingsForClone("https://github.com/octocat/hello.git"));
         Assert.Same(NullRepositoryHosting.Instance, session.ForRepository(Path.GetTempPath()));
-        Assert.Equal(PullRequestsState.NotGitHub, NullRepositoryHosting.Instance.State.PullRequests);
+        Assert.Equal(PullRequestsState.NoHostedRemote, NullRepositoryHosting.Instance.State.PullRequests);
     }
 
     private static Func<string, string?> Variable(string name, string value) =>

@@ -27,6 +27,10 @@ public sealed class HostingSession : IHostingSession
 
     private static readonly HostingFailure TurnedOff = new(HostingFailureKind.Validation, "GitHub is turned off.");
 
+    /// <summary>A provider this session does not hold yet (until WP-S): no account, not on, nothing sent.</summary>
+    private static HostingFailure NotOn(HostingProvider provider) =>
+        new(HostingFailureKind.Validation, $"{HostingProviders.DisplayName(provider)} is turned off.") { Provider = provider };
+
     private readonly AppPaths _paths;
     private readonly HostingOptions _options;
     private readonly IAppLog _log;
@@ -85,13 +89,23 @@ public sealed class HostingSession : IHostingSession
         }
     }
 
+    /// <summary>GitHub is off: until WP-S the session holds GitHub alone and ignores the other providers' endpoints (docs/phase-7b-design.md 1.10).</summary>
     public bool IsOff => _provider is null;
+
+    /// <summary>GitHub while it is on; until WP-S no other provider.</summary>
+    public IReadOnlyList<HostingProvider> Providers => _provider is null ? [] : [HostingProvider.GitHub];
 
     public IHostingProvider? GitHub => _provider;
 
     public AccountStatus? Account => Volatile.Read(ref _slot)?.Status;
 
-    public event EventHandler? AccountChanged;
+    public event EventHandler<HostingAccountChangedEventArgs>? AccountChanged;
+
+    public bool IsOn(HostingProvider provider) => provider == HostingProvider.GitHub && _provider is not null;
+
+    public IHostingProvider? ProviderOf(HostingProvider provider) => provider == HostingProvider.GitHub ? _provider : null;
+
+    public AccountStatus? AccountOf(HostingProvider provider) => provider == HostingProvider.GitHub ? Account : null;
 
     public bool BindsGit => _provider is not null && Volatile.Read(ref _slot) is { BindsGit: true };
 
@@ -285,6 +299,34 @@ public sealed class HostingSession : IHostingSession
             _switching = Task.Run(() => SwitchAfterAsync(earlier, useForGit), CancellationToken.None);
         }
     }
+
+    /// <summary>GitHub's sign-in (<see cref="SignInAsync(string, CancellationToken)"/>); another provider's is a <see cref="HostingFailureKind.Validation"/> failure without a request until WP-S.</summary>
+    public Task<SignInResult> SignInAsync(SignInRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        return request.Provider == HostingProvider.GitHub
+            ? SignInAsync(request.Token, ct)
+            : Task.FromResult(new SignInResult(null, NotOn(request.Provider), null));
+    }
+
+    /// <summary>GitHub's sign-out (<see cref="SignOutAsync(CancellationToken)"/>); another provider has no account until WP-S.</summary>
+    public Task<string?> SignOutAsync(HostingProvider provider, CancellationToken ct) =>
+        provider == HostingProvider.GitHub ? SignOutAsync(ct) : Task.FromResult<string?>(null);
+
+    /// <summary>GitHub's switch (<see cref="SetUseForGit(bool)"/>); another provider has no account until WP-S.</summary>
+    public void SetUseForGit(HostingProvider provider, bool useForGit)
+    {
+        if (provider == HostingProvider.GitHub)
+        {
+            SetUseForGit(useForGit);
+        }
+    }
+
+    /// <summary>GitHub's A2 (<see cref="ListRepositoriesAsync(CancellationToken)"/>); another provider's is a failure without a request until WP-S.</summary>
+    public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(HostingProvider provider, CancellationToken ct) =>
+        provider == HostingProvider.GitHub
+            ? ListRepositoriesAsync(ct)
+            : Task.FromResult(HostingResult<RepositoryList>.Fail(NotOn(provider)));
 
     public HostedRepository? Recognise(string url) => _provider?.Recognise(url);
 
@@ -585,7 +627,7 @@ public sealed class HostingSession : IHostingSession
     private void PostAccountChanged() =>
         Post(() =>
         {
-            AccountChanged?.Invoke(this, EventArgs.Empty);
+            AccountChanged?.Invoke(this, new HostingAccountChangedEventArgs(HostingProvider.GitHub));
             foreach (var hosting in Hostings())
             {
                 hosting.OnAccountChanged();

@@ -1,6 +1,7 @@
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Hosting;
@@ -191,7 +192,7 @@ public partial class MainWindowViewModel
     public async Task CloneFromGitHubAsync()
     {
         if (_tabServices.Hosting.Account is not { State: AccountState.SignedIn }
-            && (_tabServices.SignInToGitHub is not { } signIn || !await signIn()))
+            && (_tabServices.SignIn is not { } signIn || !await signIn(HostingProvider.GitHub)))
         {
             return;
         }

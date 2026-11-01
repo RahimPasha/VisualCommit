@@ -60,7 +60,7 @@ public static partial class RepositoryMenus
 
         var browse = Item(actions, OpenPullRequestsInBrowser, actions.OpenPullRequestsInBrowserAsync);
         return hosting.PullRequests == PullRequestsState.SignedOut
-            ? Build(Header(LeftPanelViewModel.PullRequestsTitle), [Item(actions, HostingTexts.SignInToGitHubItem, actions.SignInToGitHubAsync), browse])
+            ? Build(Header(LeftPanelViewModel.PullRequestsTitle), [Item(actions, HostingTexts.SignInToGitHubItem, actions.SignInToHostAsync), browse])
             : Build(
                 Header(LeftPanelViewModel.PullRequestsTitle),
                 [

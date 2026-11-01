@@ -238,7 +238,7 @@ public sealed partial class Phase7aChecksG : Phase7aChecks
                     await SelectAsync(app, G.Row, G.OctoAuthorLine, withAvatar: false);
                     off = ShotG(app, G.G05a);
                     var hello = HelloOf(app);
-                    Assert.Equal(PullRequestsState.NotGitHub, hello.HostingState.PullRequests);
+                    Assert.Equal(PullRequestsState.NoHostedRemote, hello.HostingState.PullRequests);
                     AssertPlaceholderSection(app);
                     AssertLabels(app, G.TodayLabels);
                     labels = Labels(app);
@@ -268,7 +268,7 @@ public sealed partial class Phase7aChecksG : Phase7aChecks
                     var hello = HelloOf(app);
                     Assert.Equal(AccountState.SignedIn, app.Session.Services.Hosting.Account?.State);
                     Assert.Equal(["user 200"], RequestsSince(served, requests).Select(request => $"{request.Route} {request.Status}"));
-                    Assert.Equal(PullRequestsState.NotGitHub, hello.HostingState.PullRequests);
+                    Assert.Equal(PullRequestsState.NoHostedRemote, hello.HostingState.PullRequests);
                     AssertPlaceholderSection(app);
                     Assert.Empty(hello.HostingState.Remotes);
                     Assert.Empty(hello.HostingState.ByRef);

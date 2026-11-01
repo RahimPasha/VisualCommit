@@ -1,5 +1,6 @@
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 
 namespace VisualCommit.Hosting.GitHub;
 
@@ -39,13 +40,63 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         _client = new GitHubClient(endpoints, createHandler, log, clock);
     }
 
+    /// <summary>GitHub's page for a new fine-grained token, relative to the web base (D295): the App's <c>TokenPage</c> text.</summary>
+    public const string TokenPagePath = "settings/personal-access-tokens/new?name=VisualCommit&contents=write&pull_requests=write";
+
     public HostingProvider Kind => HostingProvider.GitHub;
 
     public GitHubEndpoints Endpoints { get; }
 
+    /// <summary><see cref="GitHubEndpoints.Host"/>.</summary>
+    public string Host => Endpoints.Host;
+
+    /// <summary><see cref="GitHubEndpoints.WebBase"/>.</summary>
+    public Uri WebBase => Endpoints.WebBase;
+
     public HostedRepository? Recognise(string url) => GitHubUrls.Recognise(Endpoints, url);
 
     public bool SourceCanExist(string remoteRef) => GitHubUrls.SourceCanExist(remoteRef);
+
+    /// <summary>7a's rule (D278): the web base's scheme, host and port, any path.</summary>
+    public GitCoverage CoverageOf(AccountKey account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        return new GitCoverage(account, Endpoints.WebBase);
+    }
+
+    /// <summary>By host: a GitHub repository on the account's host, which is this provider's.</summary>
+    public bool Covers(HostedRepository repository, AccountKey account)
+    {
+        ArgumentNullException.ThrowIfNull(repository);
+        ArgumentNullException.ThrowIfNull(account);
+        return repository.Provider == HostingProvider.GitHub
+            && account.Provider == HostingProvider.GitHub
+            && string.Equals(repository.Host, Host, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(account.Host, Host, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>D295's page for a new fine-grained token (<see cref="TokenPagePath"/>); <paramref name="organization"/> is ignored.</summary>
+    public Uri TokenPage(string? organization) => new(Endpoints.WebBase, TokenPagePath);
+
+    /// <summary><c>{web base}{owner}/{name}/pulls</c>.</summary>
+    public Uri PullRequestsPage(HostedRepository repository)
+    {
+        ArgumentNullException.ThrowIfNull(repository);
+        return new Uri(Endpoints.WebBase, $"{repository.Owner}/{repository.Name}/pulls");
+    }
+
+    /// <summary><c>refs/pull/&lt;n&gt;/head</c>.</summary>
+    public string? PullRequestHeadRef(PullRequest pull)
+    {
+        ArgumentNullException.ThrowIfNull(pull);
+        return PullRequestRefs.HeadOf(Kind, pull.Number);
+    }
+
+    /// <summary>A1 through the interface: 7a's <see cref="CheckTokenAsync(string, CancellationToken)"/>; <paramref name="organization"/> is ignored.</summary>
+    public Task<HostingResult<HostingAccount>> CheckTokenAsync(string token, string? organization, CancellationToken ct) => CheckTokenAsync(token, ct);
+
+    /// <summary>A2 through the interface: 7a's <see cref="ListRepositoriesAsync(string, CancellationToken)"/>; <paramref name="account"/> is ignored.</summary>
+    public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(string token, HostingAccount account, CancellationToken ct) => ListRepositoriesAsync(token, ct);
 
     /// <summary>A1: <c>GET user</c>. An empty token is refused without a request.</summary>
     public async Task<HostingResult<HostingAccount>> CheckTokenAsync(string token, CancellationToken ct)

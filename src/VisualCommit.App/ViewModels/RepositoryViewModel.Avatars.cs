@@ -49,7 +49,7 @@ public sealed partial class RepositoryViewModel
                 UpdateAuthors();
                 break;
             case nameof(HostingState):
-                if (HostingState.PullRequests is PullRequestsState.SignedOut or PullRequestsState.NotGitHub)
+                if (HostingState.PullRequests is PullRequestsState.SignedOut or PullRequestsState.NoHostedRemote)
                 {
                     _authorsSent = null;
                 }

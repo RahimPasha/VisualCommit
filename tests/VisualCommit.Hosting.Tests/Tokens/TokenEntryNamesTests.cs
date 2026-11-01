@@ -62,6 +62,59 @@ public sealed class TokenEntryNamesTests
     }
 
     [Fact]
+    public void A_GitLab_key_is_named_with_GitLabs_display_name()
+    {
+        // docs/phase-7b-design.md 1.6, 1.10: TokenEntryNames takes HostingProviders.DisplayName.
+        var key = TokenKey.Of(new AccountKey(HostingProvider.GitLab, "gitlab.com", "ada"));
+
+        var names = TokenEntryNames.For(key);
+
+        Assert.Equal(new TokenKey("gitlab", "gitlab.com", "ada"), key);
+        Assert.Equal("VisualCommit:gitlab:gitlab.com:ada", names.Entry);
+        Assert.Equal("GitLab token for ada, kept by VisualCommit", names.WindowsComment);
+        Assert.Equal("VisualCommit:gitlab:gitlab.com", names.MacService);
+        Assert.Equal("ada", names.MacAccount);
+        Assert.Equal("VisualCommit: GitLab (ada)", names.MacLabel);
+        Assert.Equal("VisualCommit: GitLab token for ada", names.SecretServiceLabel);
+        Assert.Equal(
+            [
+                new("application", "VisualCommit"),
+                new("provider", "gitlab"),
+                new("host", "gitlab.com"),
+                new("account", "ada"),
+                new("xdg:schema", "io.github.rahimpasha.VisualCommit.Token"),
+            ],
+            names.SecretServiceAttributes);
+    }
+
+    [Fact]
+    public void An_Azure_DevOps_key_is_named_by_its_organization_in_lower_case()
+    {
+        // The Azure DevOps key's login is the organization (docs/phase-7b-design.md 0.2, 1.6).
+        var key = TokenKey.Of(new AccountKey(HostingProvider.AzureDevOps, "dev.azure.com", "Fernhill-Labs"));
+
+        var names = TokenEntryNames.For(key);
+
+        Assert.Equal(new TokenKey("azure-devops", "dev.azure.com", "fernhill-labs"), key);
+        Assert.Equal("VisualCommit:azure-devops:dev.azure.com:fernhill-labs", names.Entry);
+        Assert.Equal(names.Entry, names.WindowsTarget);
+        Assert.Equal("Azure DevOps token for fernhill-labs, kept by VisualCommit", names.WindowsComment);
+        Assert.Equal("VisualCommit:azure-devops:dev.azure.com", names.MacService);
+        Assert.Equal("fernhill-labs", names.MacAccount);
+        Assert.Equal("VisualCommit: Azure DevOps (fernhill-labs)", names.MacLabel);
+        Assert.Equal("VisualCommit: Azure DevOps token for fernhill-labs", names.SecretServiceLabel);
+        Assert.Equal(
+            [
+                new("application", "VisualCommit"),
+                new("provider", "azure-devops"),
+                new("host", "dev.azure.com"),
+                new("account", "fernhill-labs"),
+                new("xdg:schema", "io.github.rahimpasha.VisualCommit.Token"),
+            ],
+            names.SecretServiceAttributes);
+    }
+
+    [Fact]
     public void The_fake_host_keeps_its_port_in_every_name()
     {
         var names = TokenEntryNames.For(new TokenKey("github", "127.0.0.1:47395", "octocat"));

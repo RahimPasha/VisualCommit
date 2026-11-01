@@ -85,7 +85,7 @@ public sealed class RepositoryHostingWiringTests
         await wiring.Served.Hello.GitAsync("config", $"url.{wiring.Fake.Endpoints.WebBase}.insteadOf", "gh:");
         await wiring.Served.Hello.GitAsync("remote", "set-url", "origin", "gh:octo/hello.git");
         using var viewModel = await wiring.OpenAsync();
-        Assert.Same(RepositoryHostingState.NotGitHub, viewModel.HostingState);
+        Assert.Same(RepositoryHostingState.NoHostedRemote, viewModel.HostingState);
         Assert.Equal(0, wiring.RulesReads());
 
         // Nothing but the wish for the rules changes at the sign-in; that alone starts their read.

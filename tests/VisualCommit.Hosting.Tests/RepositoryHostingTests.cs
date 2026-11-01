@@ -29,7 +29,7 @@ public sealed class RepositoryHostingTests
         var hosting = await OpenAsync(setup, out var changed);
 
         await setup.Thread.RunAsync(() => hosting.Update(Refs(("origin", "https://example.com/octo/hello.git")), UrlRewrites.None));
-        Assert.Same(RepositoryHostingState.NotGitHub, hosting.State);
+        Assert.Same(RepositoryHostingState.NoHostedRemote, hosting.State);
 
         await setup.Thread.RunAsync(() => hosting.Update(HelloRefs(), UrlRewrites.None));
         Assert.Equal((PullRequestsState.SignedOut, "octo/hello", "origin"), (hosting.State.PullRequests, hosting.State.Repository!.FullName, Assert.Single(hosting.State.Remotes).Key));

@@ -160,7 +160,7 @@ public sealed partial class Phase7aChecksP : Phase7aChecks
             app.Click(app.TabStrip().Tabs[1].Bounds.Center);
             var opsTab = await app.WaitForRepositoryAsync();
             await app.WaitForWatchersQuietAsync();
-            Assert.Equal(PullRequestsState.NotGitHub, opsTab.HostingState.PullRequests);
+            Assert.Equal(PullRequestsState.NoHostedRemote, opsTab.HostingState.PullRequests);
             Assert.Empty(opsTab.HostingState.Remotes);
             Assert.Empty(opsTab.Hosting.Bindings);
             Assert.Equal(["> Pull requests 0"], Section(app));

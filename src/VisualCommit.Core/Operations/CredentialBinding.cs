@@ -4,6 +4,31 @@ using VisualCommit.Core.Hosting;
 namespace VisualCommit.Core.Operations;
 
 /// <summary>
+/// What one account's token covers for git (D359, docs/phase-7b-design.md 1.2): the provider
+/// builds it, <see cref="CredentialBinding.Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/>
+/// applies it. With only <see cref="Origin"/> set it is 7a's rule (GitHub's coverage).
+/// </summary>
+/// <param name="Account">The account the bound URLs are bound to.</param>
+/// <param name="Origin">The scheme, host and port the bindings are on.</param>
+public sealed record GitCoverage(AccountKey Account, Uri Origin)
+{
+    /// <summary>Azure DevOps: the first path segment on <see cref="Origin"/> must exist and be it (g3 G3.4); null: any path.</summary>
+    public string? Organization { get; init; }
+
+    /// <summary>Azure DevOps on the service: <c>https://&lt;Organization&gt;.visualstudio.com</c>, any path, covered too.</summary>
+    public bool OrganizationHost { get; init; }
+
+    /// <summary>GitLab: a URL whose path lacks <c>.git</c> is bound with its <c>.git</c> twin (ruling 12).</summary>
+    public bool GitTwin { get; init; }
+
+    /// <summary><c>x-access-token@</c> counts as the account's user (ruling 11; Azure DevOps and GitLab).</summary>
+    public bool HelperUserIsAccounts { get; init; }
+
+    /// <summary>Whether a member beyond <see cref="Origin"/> is set, so that 7b's rules apply (docs/phase-7b-design.md 8.2).</summary>
+    internal bool IsBeyondOrigin => Organization is not null || OrganizationHost || GitTwin || HelperUserIsAccounts;
+}
+
+/// <summary>
 /// A URL whose credentials come from a hosting account (D255, docs/phase-7a-design.md 0.2): git's
 /// URL after <c>insteadOf</c>, without <c>user@</c>. A network operation's prompt scope carries its
 /// bindings, and git asks the app's helper for that URL's credentials.
@@ -12,6 +37,44 @@ namespace VisualCommit.Core.Operations;
 /// <param name="Account">The account whose token answers it.</param>
 public sealed record CredentialBinding(string Url, AccountKey Account)
 {
+    /// <summary>
+    /// On an origin that serves other accounts (<c>dev.azure.com</c>): the organization a prompt must
+    /// name to be this account's (its raw path's first segment, or with an empty path its user,
+    /// without case; a path-less <c>x-access-token</c> prompt is the account's too;
+    /// docs/phase-7b-design.md 8.3); null: the origin is the account's alone.
+    /// </summary>
+    public string? SharedOriginOwner { get; init; }
+
+    /// <summary>
+    /// g3 G3.4's form on the URL's text (docs/phase-7b-design.md 8.2 step 2): the one rule that
+    /// <see cref="Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/> and Azure DevOps'
+    /// recognition both apply. WP-C builds it.
+    /// </summary>
+    /// <exception cref="NotSupportedException">Always, until WP-C.</exception>
+    public static bool InPlainForm(string url)
+    {
+        ArgumentNullException.ThrowIfNull(url);
+        throw new NotSupportedException("G3.4's form is WP-C's (docs/phase-7b-design.md 8.2).");
+    }
+
+    /// <summary>
+    /// The bound URLs of the remotes' fetch and push URLs under <paramref name="coverage"/>
+    /// (D359, docs/phase-7b-design.md 8.2). With only <see cref="GitCoverage.Origin"/> set, 7a's
+    /// rules on it, byte for byte: see <see cref="Select(IReadOnlyList{RemoteEffectiveUrls}, Uri, AccountKey)"/>.
+    /// </summary>
+    /// <exception cref="NotSupportedException">A member beyond <see cref="GitCoverage.Origin"/> is set: 7b's rules are WP-C's.</exception>
+    public static IReadOnlyList<CredentialBinding> Select(IReadOnlyList<RemoteEffectiveUrls> remotes, GitCoverage coverage)
+    {
+        ArgumentNullException.ThrowIfNull(remotes);
+        ArgumentNullException.ThrowIfNull(coverage);
+        if (coverage.IsBeyondOrigin)
+        {
+            throw new NotSupportedException("A coverage beyond its origin is WP-C's (docs/phase-7b-design.md 8.2).");
+        }
+
+        return SelectOnOrigin(remotes, coverage.Origin, coverage.Account);
+    }
+
     /// <summary>
     /// The bound URLs of the remotes' fetch and push URLs, by D278's rules (docs/phase-7a-design.md
     /// 4.4): every URL, in order, that parses as an absolute URI with <paramref name="webBase"/>'s
@@ -31,6 +94,12 @@ public sealed record CredentialBinding(string Url, AccountKey Account)
         ArgumentNullException.ThrowIfNull(remotes);
         ArgumentNullException.ThrowIfNull(webBase);
         ArgumentNullException.ThrowIfNull(account);
+        return Select(remotes, new GitCoverage(account, webBase));
+    }
+
+    /// <summary>7a's rules (D278, docs/phase-7a-design.md 4.4) on <paramref name="webBase"/>'s scheme, host and port.</summary>
+    private static List<CredentialBinding> SelectOnOrigin(IReadOnlyList<RemoteEffectiveUrls> remotes, Uri webBase, AccountKey account)
+    {
         var urls = remotes.SelectMany(remote => remote.Fetch.Concat(remote.Push))
             .Select(UrlParts.Of)
             .OfType<UrlParts>()

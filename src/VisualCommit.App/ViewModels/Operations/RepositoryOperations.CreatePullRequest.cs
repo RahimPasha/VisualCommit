@@ -36,14 +36,14 @@ public sealed partial class RepositoryOperations
                 return;
             }
 
-            if (Repository.HostingState.PullRequests == PullRequestsState.NotGitHub)
+            if (Repository.HostingState.PullRequests == PullRequestsState.NoHostedRemote)
             {
                 Log.Info($"{Repository.Name}: Create pull request for {ShortName(headRef)}: not started, the repository has no GitHub remote.");
                 return;
             }
 
             if (Repository.HostingState.PullRequests == PullRequestsState.SignedOut
-                && (Services?.SignInToGitHub is not { } signIn || !await signIn()))
+                && (Services?.SignIn is not { } signIn || !await signIn(HostingProvider.GitHub)))
             {
                 return;
             }

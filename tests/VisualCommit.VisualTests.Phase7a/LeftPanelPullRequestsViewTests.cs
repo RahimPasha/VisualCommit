@@ -181,7 +181,7 @@ public sealed class LeftPanelPullRequestsViewTests
 
         app.Click(await RowAsync(app, row => row is PullRequestMessageRow));
 
-        Assert.Equal(["SignInToGitHubAsync"], recorder.Calls.Select(call => call.Method));
+        Assert.Equal(["SignInToHostAsync"], recorder.Calls.Select(call => call.Method));
 
         await app.SignInAsync(served.OctoToken, TestContext.Current.CancellationToken);
         await app.WaitForAsync(() => repository.HostingState.List is not null, "the list");

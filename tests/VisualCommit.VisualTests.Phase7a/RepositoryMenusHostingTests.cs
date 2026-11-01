@@ -76,7 +76,7 @@ public sealed class RepositoryMenusHostingTests
         }
 
         RepositoryMenus.ForSection(Context(Loaded()), RefSection.PullRequests, actions)!.Items.First().Invoke();
-        Assert.Equal(["SignInToGitHubAsync", "OpenPullRequestsInBrowserAsync", "RefreshPullRequestsAsync"], recorder.Calls.Select(call => call.Method));
+        Assert.Equal(["SignInToHostAsync", "OpenPullRequestsInBrowserAsync", "RefreshPullRequestsAsync"], recorder.Calls.Select(call => call.Method));
     }
 
     [Fact]

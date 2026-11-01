@@ -184,7 +184,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
     {
         using var viewModel = await OpenAsync(_repo!.Path);
         var hosting = _session.Hostings.Single();
-        hosting.Raise(RepositoryHostingState.NotGitHub);
+        hosting.Raise(RepositoryHostingState.NoHostedRemote);
         hosting.Raise(State(PullRequestsState.SignedOut));
         Assert.Empty(hosting.Sent);
 
@@ -205,7 +205,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         Assert.Equal(hosting.Sent[0], hosting.Sent[1]);
 
         // A repository whose remote is no longer GitHub's forgets it too.
-        hosting.Raise(RepositoryHostingState.NotGitHub);
+        hosting.Raise(RepositoryHostingState.NoHostedRemote);
         hosting.Raise(State(PullRequestsState.Loaded));
         Assert.Equal(3, hosting.Sent.Count);
     }
@@ -332,17 +332,35 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
 
         public bool IsOff => false;
 
+        public IReadOnlyList<HostingProvider> Providers => [HostingProvider.GitHub];
+
         public IHostingProvider? GitHub => null;
 
         public AccountStatus? Account => null;
 
         public bool BindsGit => false;
 
-        public event EventHandler? AccountChanged
+        public event EventHandler<HostingAccountChangedEventArgs>? AccountChanged
         {
             add { }
             remove { }
         }
+
+        public bool IsOn(HostingProvider provider) => provider == HostingProvider.GitHub;
+
+        public IHostingProvider? ProviderOf(HostingProvider provider) => null;
+
+        public AccountStatus? AccountOf(HostingProvider provider) => null;
+
+        public Task<SignInResult> SignInAsync(SignInRequest request, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<string?> SignOutAsync(HostingProvider provider, CancellationToken ct) => throw new NotSupportedException();
+
+        public void SetUseForGit(HostingProvider provider, bool useForGit)
+        {
+        }
+
+        public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(HostingProvider provider, CancellationToken ct) => throw new NotSupportedException();
 
         public IRepositoryHosting ForRepository(string workingDirectory)
         {
@@ -391,7 +409,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
     /// <summary>A repository's fake hosting: its state and avatars set by the test and announced through <see cref="Changed"/>; the sets it is told, recorded.</summary>
     private sealed class FakeHosting(RepositoryHostingState? stateOnUpdate) : IRepositoryHosting
     {
-        public RepositoryHostingState State { get; private set; } = RepositoryHostingState.NotGitHub;
+        public RepositoryHostingState State { get; private set; } = RepositoryHostingState.NoHostedRemote;
 
         public IReadOnlyList<CredentialBinding> Bindings => [];
 

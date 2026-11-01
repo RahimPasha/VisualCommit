@@ -67,8 +67,9 @@ public partial class MainWindowViewModel : ObservableObject
         // The welcome page's Open takes Open repository…'s first step too (5.10, D215).
         _tabServices.ActivateTabShowing = ActivateTabShowing;
 
-        // "Sign in to GitHub…" opens the sign-in through the window (docs/phase-7a-design.md 1.7).
-        _tabServices.SignInToGitHub = SignInToGitHubAsync;
+        // "Sign in to GitHub…" opens the sign-in through the window (docs/phase-7a-design.md 1.7,
+        // docs/phase-7b-design.md 1.7).
+        _tabServices.SignIn = SignInAsync;
 
         // The theme shown follows the service: the user's choice, or the system's mode (11.6).
         FollowThemeService();

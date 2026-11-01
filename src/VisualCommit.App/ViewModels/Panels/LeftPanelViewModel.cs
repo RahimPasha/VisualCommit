@@ -101,10 +101,10 @@ public partial class LeftPanelViewModel : ObservableObject
 
     /// <summary>
     /// The repository's hosting as last applied (docs/phase-7a-design.md 1.7, 10): what the "Pull
-    /// requests" section and the branch rows' pull requests show. <see cref="RepositoryHostingState.NotGitHub"/>
+    /// requests" section and the branch rows' pull requests show. <see cref="RepositoryHostingState.NoHostedRemote"/>
     /// until the first <see cref="UpdatePullRequests"/>, so a panel without hosting is phase 1's.
     /// </summary>
-    public RepositoryHostingState HostingState { get; private set; } = RepositoryHostingState.NotGitHub;
+    public RepositoryHostingState HostingState { get; private set; } = RepositoryHostingState.NoHostedRemote;
 
     /// <summary>
     /// Shows the repository's hosting (docs/phase-7a-design.md 10.3; D303, D308): the "Pull
@@ -123,7 +123,7 @@ public partial class LeftPanelViewModel : ObservableObject
     {
         ArgumentNullException.ThrowIfNull(state);
         HostingState = state;
-        if (state.PullRequests is PullRequestsState.NotGitHub or PullRequestsState.SignedOut || state.Repository is null)
+        if (state.PullRequests is PullRequestsState.NoHostedRemote or PullRequestsState.SignedOut || state.Repository is null)
         {
             _keptList = null;
         }
@@ -416,7 +416,7 @@ public partial class LeftPanelViewModel : ObservableObject
     private void AddPullRequests(List<RefListRow> rows)
     {
         var state = HostingState;
-        if (state.PullRequests == PullRequestsState.NotGitHub)
+        if (state.PullRequests == PullRequestsState.NoHostedRemote)
         {
             rows.Add(new RefSectionRow(RefSection.PullRequests, PullRequestsTitle, 0, isOpen: false, canToggle: false, Activate));
             return;

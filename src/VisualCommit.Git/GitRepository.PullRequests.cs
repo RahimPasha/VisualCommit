@@ -1,13 +1,11 @@
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 
 namespace VisualCommit.Git;
 
 /// <summary>A pull request's head fetched for its checkout (docs/phase-7a-design.md 1.3, 10.5; D305).</summary>
 public sealed partial class GitRepository
 {
-    private const string PullRefPrefix = "refs/pull/";
-    private const string PullHeadSuffix = "/head";
-
     /// <summary>
     /// Fetches <paramref name="sourceRef"/> of <paramref name="remote"/> into <c>FETCH_HEAD</c>
     /// only, with no ref and no configuration written, and returns the commit's SHA from
@@ -19,15 +17,15 @@ public sealed partial class GitRepository
     /// from writing a ref, <c>--no-tags</c> its <c>tagOpt</c> from fetching tags, and no
     /// <c>--prune</c> is given, so a <c>fetch.prune</c> deletes nothing (D99). The file is read here,
     /// never by a <c>rev-parse FETCH_HEAD</c> of its own: another fetch in the same worktree can
-    /// rewrite it in between (plan risk 33). <paramref name="sourceRef"/> must be
-    /// <c>refs/pull/&lt;digits&gt;/head</c>; a missing one makes git fail (<see cref="GitException"/>).
+    /// rewrite it in between (plan risk 33). <paramref name="sourceRef"/> must be a head
+    /// <see cref="PullRequestRefs.IsFetchableHead"/> takes; a missing one makes git fail (<see cref="GitException"/>).
     /// </remarks>
     public async Task<string?> FetchToFetchHeadAsync(string remote, string sourceRef, NetworkOptions options, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(remote);
         ArgumentNullException.ThrowIfNull(sourceRef);
         ArgumentNullException.ThrowIfNull(options);
-        if (!IsPullRequestHead(sourceRef))
+        if (!PullRequestRefs.IsFetchableHead(sourceRef))
         {
             throw new ArgumentException($"Only a pull request's head (refs/pull/<number>/head) is fetched into FETCH_HEAD, not {sourceRef}.", nameof(sourceRef));
         }
@@ -36,18 +34,6 @@ public sealed partial class GitRepository
 
         // The file is this worktree's (GitDirectory, not the common directory's).
         return FetchHeadShaOf(ReadGitFile("FETCH_HEAD"), sourceRef);
-    }
-
-    /// <summary>Whether <paramref name="sourceRef"/> is <c>refs/pull/&lt;digits&gt;/head</c>.</summary>
-    internal static bool IsPullRequestHead(string sourceRef)
-    {
-        if (!sourceRef.StartsWith(PullRefPrefix, StringComparison.Ordinal) || !sourceRef.EndsWith(PullHeadSuffix, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var number = sourceRef.AsSpan(PullRefPrefix.Length, sourceRef.Length - PullRefPrefix.Length - PullHeadSuffix.Length);
-        return number.Length > 0 && !number.ContainsAnyExceptInRange('0', '9');
     }
 
     /// <summary>

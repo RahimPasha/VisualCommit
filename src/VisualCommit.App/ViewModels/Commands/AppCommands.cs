@@ -2,6 +2,7 @@ using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.ViewModels.Workspaces;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Settings;
 using static VisualCommit.App.ViewModels.Operations.OperationTexts.MenuTexts;
@@ -167,7 +168,7 @@ public sealed partial class AppCommands
             case AppCommand.CloneFromGitHub:
                 // Listed while GitHub is not off (D299); signed out it signs in first (9.5, D300).
                 return new(
-                    new(!shell.Services.Hosting.IsOff, true, OperationTexts.CloneTexts.PaletteCommand, null, null),
+                    new(shell.Services.Hosting.IsOn(HostingProvider.GitHub), true, OperationTexts.CloneTexts.PaletteCommand, null, null),
                     () => Start(shell.CloneFromGitHubAsync(), OperationTexts.CloneTexts.PaletteCommand));
 
             case AppCommand.InitRepository:

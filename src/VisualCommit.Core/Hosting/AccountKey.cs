@@ -1,9 +1,14 @@
 namespace VisualCommit.Core.Hosting;
 
-/// <summary>The hosting services the app knows (docs/phase-7a-design.md 1.2). Phase 7b adds Azure DevOps and GitLab.</summary>
+/// <summary>
+/// The hosting services the app knows (docs/phase-7a-design.md 1.2, docs/phase-7b-design.md 1.2):
+/// 7b's are appended, so GitHub keeps its ordinal. Their names and ids are in <see cref="HostingProviders"/>.
+/// </summary>
 public enum HostingProvider
 {
     GitHub,
+    AzureDevOps,
+    GitLab,
 }
 
 /// <summary>
@@ -12,8 +17,8 @@ public enum HostingProvider
 /// own case is <c>HostingAccount.Login</c>.
 /// </summary>
 /// <param name="Provider">The hosting service.</param>
-/// <param name="Host">The host: <c>github.com</c>, or <c>127.0.0.1:47395</c> for the test harness's fake.</param>
-/// <param name="Login">The account's login.</param>
+/// <param name="Host">The host: <c>github.com</c>, <c>dev.azure.com</c>, <c>gitlab.com</c>, or <c>127.0.0.1:&lt;port&gt;</c> for a test harness's fake.</param>
+/// <param name="Login">The account's login: GitHub's and GitLab's username, Azure DevOps' organization.</param>
 public sealed record AccountKey(HostingProvider Provider, string Host, string Login)
 {
     /// <summary>The host in lower case.</summary>
@@ -22,14 +27,13 @@ public sealed record AccountKey(HostingProvider Provider, string Host, string Lo
     /// <summary>The login in lower case.</summary>
     public string Login { get; } = Normalise(Login);
 
-    /// <summary>The provider's id in files and keys: <c>github</c>.</summary>
-    public string ProviderId => Provider switch
-    {
-        HostingProvider.GitHub => "github",
-        _ => throw new InvalidOperationException($"Unknown hosting provider {Provider}."),
-    };
+    /// <summary>The provider's id in files and keys: <c>github</c>, <c>azure-devops</c>, <c>gitlab</c> (<see cref="HostingProviders.Id"/>).</summary>
+    public string ProviderId => HostingProviders.Id(Provider);
 
-    /// <summary>The account's id: <c>github:github.com:octocat</c>.</summary>
+    /// <summary>
+    /// The account's id: <c>github:github.com:octocat</c>, <c>gitlab:gitlab.com:ada</c>,
+    /// <c>azure-devops:dev.azure.com:&lt;organization&gt;</c> (an Azure DevOps key's login is the organization).
+    /// </summary>
     public string Id => $"{ProviderId}:{Host}:{Login}";
 
     public override string ToString() => Id;

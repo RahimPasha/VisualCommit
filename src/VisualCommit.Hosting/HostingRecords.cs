@@ -3,17 +3,24 @@ using VisualCommit.Core.Hosting;
 namespace VisualCommit.Hosting;
 
 /// <summary>
-/// A repository on a hosting service (docs/phase-7a-design.md 1.4). Two are equal when their
-/// provider is and their host, owner and name are, ignoring case, as GitHub compares them.
+/// A repository on a hosting service (docs/phase-7a-design.md 1.4, docs/phase-7b-design.md 1.4).
+/// Two are equal when their provider is and their host, owner and name are, ignoring case, as
+/// GitHub compares them.
 /// </summary>
 /// <param name="Provider">The hosting service.</param>
-/// <param name="Host">Its host, as <see cref="GitHubEndpoints.Host"/>.</param>
-/// <param name="Owner">The owner's login: a user or an organisation.</param>
+/// <param name="Host">Its host, as the provider's <see cref="IHostingProvider.Host"/>.</param>
+/// <param name="Owner">
+/// The namespace path: GitHub's owner (a user or an organisation), GitLab's group path
+/// (<c>group/sub</c>), Azure DevOps' <c>&lt;organization&gt;/&lt;project&gt;</c>.
+/// </param>
 /// <param name="Name">The repository's name.</param>
 public sealed record HostedRepository(HostingProvider Provider, string Host, string Owner, string Name)
 {
-    /// <summary><c>owner/name</c>.</summary>
+    /// <summary>What the App shows: <c>owner/name</c>, <c>group/sub/project</c>, <c>&lt;organization&gt;/&lt;project&gt;/&lt;repository&gt;</c>.</summary>
     public string FullName => $"{Owner}/{Name}";
+
+    /// <summary>The owner's first segment: GitHub's owner, GitLab's top namespace, Azure DevOps' organization.</summary>
+    public string OwnerRoot => Owner.Split('/')[0];
 
     public bool Equals(HostedRepository? other) =>
         other is not null
@@ -36,7 +43,9 @@ public sealed record HostedRepository(HostingProvider Provider, string Host, str
 /// <param name="Name">The user's name, when they gave one.</param>
 /// <param name="AvatarUrl">The user's avatar, when the service names one.</param>
 /// <param name="UseForGit">"Use for git over HTTPS" (D255).</param>
-public sealed record HostingAccount(AccountKey Key, string Login, long Id, string? Name, Uri? AvatarUrl, bool UseForGit);
+/// <param name="UserId">Azure DevOps' user GUID (its <paramref name="Id"/> is 0); GitLab's numeric id is <paramref name="Id"/>.</param>
+public sealed record HostingAccount(AccountKey Key, string Login, long Id, string? Name, Uri? AvatarUrl, bool UseForGit,
+    string? UserId = null);
 
 /// <summary>One repository as the service describes it (A2, A3).</summary>
 /// <param name="Parent">For a fork, the repository it was forked from.</param>
@@ -86,8 +95,12 @@ public sealed record PullRequest(
 public sealed record PullRequestList(IReadOnlyList<PullRequest> PullRequests, bool MoreExist);
 
 /// <summary>A pull request to create (A5).</summary>
-/// <param name="HeadOwner">The head's owner, only across forks.</param>
-public sealed record NewPullRequest(string Title, string Body, string Head, string? HeadOwner, string Base, bool Draft);
+/// <param name="HeadOwner">The head's owner, only across forks (GitHub's).</param>
+public sealed record NewPullRequest(string Title, string Body, string Head, string? HeadOwner, string Base, bool Draft)
+{
+    /// <summary>The head's repository across forks (docs/phase-7b-design.md 1.4); GitHub keeps <see cref="HeadOwner"/>.</summary>
+    public HostedRepository? HeadRepository { get; init; }
+}
 
 /// <summary>A commit author's account on the service (A6).</summary>
 public sealed record AuthorAvatar(long UserId, string Login, Uri AvatarUrl);
@@ -122,7 +135,18 @@ public enum HostingFailureKind
     Malformed,
 }
 
-/// <summary>A failed request (docs/phase-7a-design.md 1.4).</summary>
+/// <summary>Why a service refused to create a request (A5; docs/phase-7b-design.md 1.4): the App words it, never the service's sentence.</summary>
+public enum PullRequestRefusal
+{
+    None,
+    AlreadyExists,
+    NoCommits,
+    HeadMissing,
+    BaseMissing,
+    BranchesMissing,
+}
+
+/// <summary>A failed request (docs/phase-7a-design.md 1.4, docs/phase-7b-design.md 1.4).</summary>
 /// <param name="Kind">What went wrong.</param>
 /// <param name="Message">The service's own words (ruling 15), or for a network failure or time-out the client's fixed texts (D284).</param>
 /// <param name="Detail">A 422's form (6.3, A5) or <c>X-Accepted-GitHub-Permissions</c>.</param>
@@ -135,7 +159,14 @@ public sealed record HostingFailure(
     string? Detail = null,
     DateTimeOffset? RetryAt = null,
     Uri? Url = null,
-    string? RequestId = null);
+    string? RequestId = null)
+{
+    /// <summary>The provider that failed; every client sets it (GitHub's by default, as in 7a).</summary>
+    public HostingProvider Provider { get; init; } = HostingProvider.GitHub;
+
+    /// <summary>A5's reason for a refusal; <see cref="PullRequestRefusal.None"/> for any other failure.</summary>
+    public PullRequestRefusal Refusal { get; init; }
+}
 
 /// <summary>The result of a request: its value, or why it failed.</summary>
 public sealed record HostingResult<T>(T? Value, HostingFailure? Failure)

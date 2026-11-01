@@ -1,5 +1,6 @@
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using VisualCommit.Testing.Hosting;
@@ -8,7 +9,7 @@ using Xunit;
 namespace VisualCommit.Hosting.Tests;
 
 /// <summary>
-/// The window's sign-in entry, <c>TabServices.SignInToGitHub</c> (docs/phase-7a-design.md 8.5,
+/// The window's sign-in entry, <c>TabServices.SignIn</c> (docs/phase-7a-design.md 8.5,
 /// 8.8; D104, D334): GitHub off answers false without a dialog; signed in answers true without one;
 /// signed out stacks "Add GitHub account" over a dialog already open; two calls share one dialog.
 /// The app starts through <see cref="ShellDriver"/> with the fake of GitHub in process.
@@ -96,8 +97,11 @@ public sealed class SignInEntryTests
         await EndAsync(app, data, served);
     }
 
-    private static Func<Task<bool>> EntryOf(ShellDriver app) =>
-        app.Session.Services.SignInToGitHub ?? throw new InvalidOperationException("The window set no sign-in entry.");
+    private static Func<Task<bool>> EntryOf(ShellDriver app)
+    {
+        var signIn = app.Session.Services.SignIn ?? throw new InvalidOperationException("The window set no sign-in entry.");
+        return () => signIn(HostingProvider.GitHub);
+    }
 
     /// <summary>The scenario "hosting" served in process (D265: no port in this project).</summary>
     private static async Task<ServedHosting> ServeAsync()

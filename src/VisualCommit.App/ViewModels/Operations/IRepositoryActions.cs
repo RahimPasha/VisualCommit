@@ -364,6 +364,6 @@ public interface IRepositoryActions
     /// <summary>The "Pull requests" section's page of open pull requests in the browser (10).</summary>
     Task OpenPullRequestsInBrowserAsync();
 
-    /// <summary>"Sign in to GitHub…" (8.5): runs <see cref="TabServices.SignInToGitHub"/>.</summary>
-    Task SignInToGitHubAsync();
+    /// <summary>"Sign in to GitHub…" (8.5): signs in to the listed repository's provider through <see cref="TabServices.SignIn"/>.</summary>
+    Task SignInToHostAsync();
 }

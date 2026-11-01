@@ -33,7 +33,7 @@ public sealed partial class RepositoryViewModel
 
     /// <summary>The hosting's state as last applied: the "Pull requests" section and the branches' pull requests.</summary>
     [ObservableProperty]
-    public partial RepositoryHostingState HostingState { get; private set; } = RepositoryHostingState.NotGitHub;
+    public partial RepositoryHostingState HostingState { get; private set; } = RepositoryHostingState.NoHostedRemote;
 
     /// <summary>The authors' avatars as last applied (D252).</summary>
     [ObservableProperty]

@@ -315,7 +315,7 @@ public sealed class AccountsSettingsViewModelTests
     /// <summary>A hosting session whose account the test sets; it counts sign-outs, switches and subscribers.</summary>
     internal sealed class StubSession : IHostingSession
     {
-        private EventHandler? _accountChanged;
+        private EventHandler<HostingAccountChangedEventArgs>? _accountChanged;
 
         public bool Off { get; init; }
 
@@ -331,21 +331,44 @@ public sealed class AccountsSettingsViewModelTests
 
         public bool IsOff => Off;
 
+        public IReadOnlyList<HostingProvider> Providers => Off ? [] : [HostingProvider.GitHub];
+
         public IHostingProvider? GitHub => null;
 
         public bool BindsGit => false;
 
-        public event EventHandler? AccountChanged
+        public event EventHandler<HostingAccountChangedEventArgs>? AccountChanged
         {
             add => _accountChanged += value;
             remove => _accountChanged -= value;
         }
 
+        public bool IsOn(HostingProvider provider) => !Off && provider == HostingProvider.GitHub;
+
+        public IHostingProvider? ProviderOf(HostingProvider provider) => null;
+
+        public AccountStatus? AccountOf(HostingProvider provider) => provider == HostingProvider.GitHub ? Account : null;
+
+        public Task<SignInResult> SignInAsync(SignInRequest request, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<string?> SignOutAsync(HostingProvider provider, CancellationToken ct) =>
+            provider == HostingProvider.GitHub ? SignOutAsync(ct) : Task.FromResult<string?>(null);
+
+        public void SetUseForGit(HostingProvider provider, bool useForGit)
+        {
+            if (provider == HostingProvider.GitHub)
+            {
+                SetUseForGit(useForGit);
+            }
+        }
+
+        public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(HostingProvider provider, CancellationToken ct) => throw new NotSupportedException();
+
         /// <summary>Sets the account and raises <c>AccountChanged</c>, as the session's post does on the UI thread.</summary>
         public void Change(AccountStatus? account)
         {
             Account = account;
-            _accountChanged?.Invoke(this, EventArgs.Empty);
+            _accountChanged?.Invoke(this, new HostingAccountChangedEventArgs(HostingProvider.GitHub));
         }
 
         public Task StartAsync(CancellationToken ct) => Task.CompletedTask;

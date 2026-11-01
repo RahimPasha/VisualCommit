@@ -304,8 +304,10 @@ public static class GitIsolation
 
     /// <summary>
     /// The variables through which the machine could hand the app or a tool a hosting service's
-    /// token or host (docs/phase-7a-design.md 1.8, ruling 24): the GitHub CLI's and the live
-    /// command's (D260), removed from every test process and from the app the real-window pass starts.
+    /// token or host (docs/phase-7a-design.md 1.8, ruling 24; docs/phase-7b-design.md 1.8, ruling
+    /// 27): the GitHub CLI's, GitLab's tools', Azure DevOps' and Git Credential Manager's for Azure
+    /// Repos, and the live command's (D260, D346), removed from every test process and from the app
+    /// the real-window pass starts.
     /// </summary>
     public static IReadOnlyList<string> HostingTokenVariables { get; } =
     [
@@ -316,6 +318,23 @@ public static class GitIsolation
         "GH_HOST",
         "VISUALCOMMIT_LIVE_GITHUB_TOKEN",
         "VISUALCOMMIT_LIVE_GITHUB_REPO",
+        "GITLAB_TOKEN",
+        "GITLAB_ACCESS_TOKEN",
+        "OAUTH_TOKEN",
+        "GITLAB_HOST",
+        "GITLAB_URI",
+        "GL_HOST",
+        "GITLAB_API_HOST",
+        "GL_TOKEN",
+        "CI_JOB_TOKEN",
+        "AZURE_DEVOPS_EXT_PAT",
+        "SYSTEM_ACCESSTOKEN",
+        "GCM_AZREPOS_SP_SECRET",
+        "GCM_AZREPOS_WIF_ASSERTION",
+        "VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN",
+        "VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO",
+        "VISUALCOMMIT_LIVE_GITLAB_TOKEN",
+        "VISUALCOMMIT_LIVE_GITLAB_REPO",
     ];
 
     /// <summary>
@@ -335,7 +354,8 @@ public static class GitIsolation
     /// (null), <c>no_proxy</c> and <c>NO_PROXY</c> set to <see cref="NoProxyHosts"/>, auto-fetch
     /// turned off (<see cref="AutoFetchMinutesVariable"/>
     /// 0), <c>PATHEXT</c> fixed (<see cref="PathExtensionsVariable"/>), and since phase 7a GitHub off
-    /// (<c>VISUALCOMMIT_GITHUB_URL=none</c>), tokens in memory (<c>VISUALCOMMIT_KEYCHAIN=memory</c>)
+    /// (<c>VISUALCOMMIT_GITHUB_URL=none</c>; since 7b also <c>VISUALCOMMIT_AZURE_DEVOPS_URL</c> and
+    /// <c>VISUALCOMMIT_GITLAB_URL</c>), tokens in memory (<c>VISUALCOMMIT_KEYCHAIN=memory</c>)
     /// and <see cref="HostingTokenVariables"/> removed (docs/phase-7a-design.md 1.8, ruling 24); a
     /// check's own variables override them. Applied to the test
     /// process (<see cref="IsolateThisProcess"/>), to the app the real-window pass starts
@@ -356,6 +376,8 @@ public static class GitIsolation
         new(PathExtensionsVariable, Core.ToolCatalogues.DefaultWindowsPathExtensions),
         .. HostingTokenVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
         new(HostingOptions.GitHubVariable, "none"),
+        new(HostingOptions.AzureDevOpsVariable, "none"),
+        new(HostingOptions.GitLabVariable, "none"),
         new(TokenStores.Variable, "memory"),
     ];
 

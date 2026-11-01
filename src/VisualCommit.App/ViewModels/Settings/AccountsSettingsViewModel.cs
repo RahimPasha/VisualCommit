@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting;
 using Texts = VisualCommit.App.ViewModels.Operations.OperationTexts.AccountTexts;
@@ -53,7 +54,7 @@ public sealed partial class AccountsSettingsViewModel : ObservableObject, IDispo
     }
 
     /// <summary>GitHub is off for this session (<c>AccountsOff</c>, no button).</summary>
-    public bool IsOff => _hosting is null || _hosting.IsOff;
+    public bool IsOff => _hosting is null || !_hosting.IsOn(HostingProvider.GitHub);
 
     /// <summary>No account (<c>AccountsSignedOut</c>).</summary>
     public bool IsSignedOut => !IsOff && _account is null;

@@ -185,7 +185,7 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
 
         try
         {
-            await _launcher.OpenUrlAsync(new Uri(gitHub.Endpoints.WebBase, Texts.TokenPage));
+            await _launcher.OpenUrlAsync(gitHub.TokenPage(null));
         }
         catch (Exception ex)
         {
