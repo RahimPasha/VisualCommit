@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-10-31
+Last updated: 2026-11-01
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -98,9 +98,17 @@ Design:
 
 Build:
 
-- [ ] 4. First package: what the design gives it, with `scripts/heavy-run.sh`'s header comment
+- [x] 4. First package: what the design gives it, with `scripts/heavy-run.sh`'s header comment
   (still 55 minutes; the 7a handoff's Known issues) and the contracts and stubs the packages build
-  on.
+  on. Done 2026-11-01: L1 (`a88b84d`, pushed; CI run 41277720820 green in all five jobs, Test
+  steps `windows-latest` 27 min 30 s and `macos-latest` 22 min 35 s of 70, `ubuntu-latest` 4 min
+  32 s, the containers 6 min 0 s and 5 min 5 s of 14) and WP0 (`e8a275d`, section 1's list,
+  1.10). The review of WP0 found no blocker or major and three minors, all fixed in the commit
+  that ticks this step: `HostingOptions`' warning takes the names from `HostingProviders`; the
+  three 7a tests whose inputs changed are recorded in the design's 1.10, "As built"; this
+  checklist and "Next step". The root build and the live project's Release build have no
+  warnings, and the classes WP0 touched pass (Notes). WP0 is not pushed yet (Next step).
+  (2026-11-01. Week: share not read.)
 - [ ] 5. Harness: 7b's walk-through project, the fakes of Azure DevOps' and GitLab's APIs (their
   ports amending D97, as D265 did), the timing script's 7b case and CLAUDE.md's Commands, the
   real-window project's link to 7b's expectations.
@@ -312,12 +320,15 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Step 4, the first package, as `docs/phase-7b-design.md` 0.4 gives it: L1, the lead's first code
-commit (`scripts/heavy-run.sh`'s header without a measured time; `.github/workflows/ci.yml`'s Test
-step 55 to 70 minutes and job 65 to 80, D377; CLAUDE.md's "What to know", plan risk 8 and this
-file's CI section in the same commit), then WP0 in the main checkout: section 1's list (1.10), the
-contracts and stubs, with no change of behaviour or pictures. Wave 1 (WP-F, WP-H, WP-C, side by
-side in worktrees on `wip/p7b-<name>` branches) follows WP0's commit. Until the reset of
+The lead pushes the phase branch with WP0 and its review's fixes (`e8a275d` and the commit after
+it) and reads that push's CI run, each Test step against four fifths of its limit
+(`docs/phase-7b-design.md` 0.6). Then wave 1 (design 0.4): WP-F (`wip/p7b-fake`, section 2),
+WP-H (`wip/p7b-http`, section 5) and WP-C (`wip/p7b-credentials`, section 8) side by side, each
+in a git worktree on a branch made from that pushed `phase/7b-hosting-azure-gitlab`, never from
+`master`, and each builder briefed with sections 0, 1 and its own; each merged back with
+`--no-ff`. At WP-F's merge the lead runs the lagged list (0.4). At the last of the three merges
+the lead runs the whole default run through `bash scripts/heavy-run.sh`, which also measures 16.2's
+order of twelve projects at four lanes and App.Tests' own time (0.6). Until the reset of
 2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if
 it runs out (D344).
 
@@ -332,6 +343,44 @@ every commit.
   design split per section, the fixers' and checkers' reports). Nothing there is needed to build:
   the design and its decisions hold what the builders need. No worktree or `wip/*` branch exists
   yet.
+- **WP0** (`e8a275d` and its review's fixes) was built in the main checkout. The readings that
+  differ from the design's text, or settle a choice it left open, are in the design's 1.10, "As
+  built". The review accepted these other readings:
+  - Only 7a's GitHub forms are wired. `TabServices.SignIn` is the method group
+    `MainWindowViewModel.SignInAsync`, which answers false for any provider but GitHub until WP-A.
+    The settings screen's `SettingsScreenServices.SignIn` stays a `Func<Task<bool>>` set to
+    `() => SignInAsync(HostingProvider.GitHub)`. `SignInToHostAsync`'s body still signs in to
+    GitHub, and WP-P owns it.
+  - `OpenPullRequestsInBrowserAsync` goes through `ProviderOf(repository.Provider)`, which is
+    GitHub's for every 7a repository. `GitHubProvider.Covers` is by provider and host, without case,
+    and ignores the owner.
+  - `NullHostingSession` declares no GitHub-named member: the interface's default bodies answer for
+    them. Its off failure is 7a's "GitHub is off." for GitHub and "{Name} is off." for the others,
+    with `Provider` set.
+  - `SignInEntryTests`' `EntryOf` wraps `SignIn(HostingProvider.GitHub)` in a `Func<Task<bool>>`,
+    so its callers are unchanged.
+  - `PullRequestRefs.IsFetchableHead` guards the length. For `refs/pull/head` 7a's check threw
+    `ArgumentOutOfRangeException`, which is an `ArgumentException`, so the fetch still refuses it
+    the same way.
+  - `TokenFormOf` keeps case, so a lower-case `azdo` mark gives null.
+  - `PullRequestRefsTests` and `HostingContractsTests` pin nothing WP-C changes: no new providers'
+    `SourceCanExist`, no `refs/merge-requests` head, no stub.
+
+  Tests run (plain `dotnet test`, the classes WP0 touched): in Hosting.Tests the builder's 18
+  classes passed, 273 and 67 tests. In the first of four runs of the 67, one test failed, and which
+  one was not kept. It did not come back in the next three runs, nor in the review's run of the
+  session, sign-in, palette and wiring classes (340 tests). WP0 changes no timing, so if a test of
+  those classes fails in wave 1's default run, suspect a flake under load that was there before.
+  Git.Tests' `PullRequestRefsTests`, `CredentialBindingSelectTests`,
+  `GitRepositoryPullRequestsTests` and `GitIsolationTests` passed, 87 tests. Seven App.Tests
+  classes passed, 27 tests, and six classes of the Phase7a project passed, 67 tests, none of
+  which saves a picture. `Phase7aChecksP` and `Phase7aChecksG` (the rename alone) passed, 8 of 8,
+  and their 31 pictures are byte for byte those of `docs/test-reports/phase-7a-pictures.sha256`.
+  That run emptied `artifacts/visual/phase-7a/scripted/`, which now holds only those 31; the next
+  run of 7a's walk-through writes it again. `RealTokenStoreSteps`' new Azure DevOps key is written
+  but not run: only CI's real-store steps run it. After the review's fixes, `HostingOptionsTests`
+  and `HostingSmokeTests` passed (36 tests), and the root build and the live project's Release
+  build had no warnings.
 - `master` holds 7a; the working tree was clean, and no worktree,
   `wip/*` or `worktree-*` branch was left, when phase 7a was merged (`019e68a`). Phase 7a's gate
   references and work lie outside the repository: `D:/Projects/Personal/gate7a-reference/` (phases

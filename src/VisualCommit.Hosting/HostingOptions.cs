@@ -1,4 +1,5 @@
 using System.Net;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting.AzureDevOps;
 using VisualCommit.Hosting.GitLab;
@@ -85,9 +86,9 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
     {
         ArgumentNullException.ThrowIfNull(readEnvironment);
         ArgumentNullException.ThrowIfNull(log);
-        var gitHub = Read(readEnvironment, log, GitHubVariable, "GitHub", GitHubEndpoints.GitHubCom, GitHubEndpoints.Local);
-        var azureDevOps = Read(readEnvironment, log, AzureDevOpsVariable, "Azure DevOps", AzureDevOpsEndpoints.Service, AzureDevOpsEndpoints.Local);
-        var gitLab = Read(readEnvironment, log, GitLabVariable, "GitLab", GitLabEndpoints.GitLabCom, GitLabEndpoints.Local);
+        var gitHub = Read(readEnvironment, log, GitHubVariable, HostingProvider.GitHub, GitHubEndpoints.GitHubCom, GitHubEndpoints.Local);
+        var azureDevOps = Read(readEnvironment, log, AzureDevOpsVariable, HostingProvider.AzureDevOps, AzureDevOpsEndpoints.Service, AzureDevOpsEndpoints.Local);
+        var gitLab = Read(readEnvironment, log, GitLabVariable, HostingProvider.GitLab, GitLabEndpoints.GitLabCom, GitLabEndpoints.Local);
         if (gitHub is null && azureDevOps is null && gitLab is null)
         {
             return Off;
@@ -134,7 +135,7 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
     }
 
     /// <summary>One provider's variable: its service, its <c>Local(port)</c>, or null (off), with a warning for a value that is neither.</summary>
-    private static T? Read<T>(Func<string, string?> readEnvironment, IAppLog log, string variable, string name, T service, Func<int, T> local)
+    private static T? Read<T>(Func<string, string?> readEnvironment, IAppLog log, string variable, HostingProvider provider, T service, Func<int, T> local)
         where T : class
     {
         var value = readEnvironment(variable)?.Trim();
@@ -155,7 +156,7 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
 
         // The value is left out: whatever it holds (a user part, a token typed by mistake) never
         // reaches the log (docs/phase-7a-design.md 1).
-        log.Warning($"{variable} is neither none nor http://127.0.0.1:<port>/: {name} is off.");
+        log.Warning($"{variable} is neither none nor http://127.0.0.1:<port>/: {HostingProviders.DisplayName(provider)} is off.");
         return null;
     }
 

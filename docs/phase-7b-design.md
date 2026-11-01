@@ -969,6 +969,31 @@ Files that stay the lead's throughout: `AppSession.cs`, `TabServices.cs`, `MainW
 comment at stage 1's merge), `.github/workflows/ci.yml`, `CLAUDE.md`, the docs and
 `THIRD-PARTY-NOTICES.md`.
 
+**As built** (WP0, `e8a275d`, and its review's fixes, 2026-11-01). Where WP0 differs from the text
+above, a later package compares with WP0's commit, not with `5057892`:
+- Three 7a tests give the two new variables `none`: `HostingOptionsTests`'
+  `None_is_off_without_a_log_line` and
+  `A_value_that_is_not_accepted_turns_GitHub_off_and_stays_out_of_the_warning` (through its
+  `GitHubAlone` helper) and `HostingSmokeTests`' `None_turns_GitHub_off_without_a_word_in_the_log`.
+  Under 1.8 an unset new variable means the service, so GitHub's variable alone at `none` is no
+  longer `Off`. Their assertions are 7a's. "No fix in `HostingOptionsTests`' 7a cases" above and
+  9.11's "unchanged" are read from WP0's commit.
+- `Select(remotes, GitCoverage)` also throws `NotSupportedException` when `HelperUserIsAccounts`
+  alone is set (8.2: any member beyond `Origin`), not only for 1.2's three; with `Origin` alone it
+  is 7a's.
+- With nothing set, `FromEnvironment` carries `dev.azure.com` and gitlab.com with their default
+  handlers. 7a's `HostingSession` ignores them until WP-S, so nothing reaches them. From WP-S's merge
+  a hand run also needs the two new variables at `none`, and the harnesses start with four hosting
+  variables. The lead updates CLAUDE.md's "What to know" by that merge.
+- `FromEnvironment`'s warning takes the provider's name from `HostingProviders.DisplayName`;
+  GitHub's text is 7a's byte for byte.
+- `GitHubProvider.TokenPagePath`, a public constant, holds D295's path, since Hosting does not
+  reference the App; `HostingContractsTests` pins it equal to the App's `TokenPage` text.
+- `HostingContractsTests` (Hosting.Tests, beyond 1.10's list) pins the moved members, `HostingSession`
+  answering the provider members for GitHub alone (another provider: a `Validation` failure, "{Name}
+  is turned off.", with `Provider` set, as 9.4 and 9.6 keep), the null session's shims, the records'
+  defaults and `RequestRemotes`. It passes to WP-S, whose session it tests.
+
 ## 2. WP-F: the fakes' shared core and the harness
 
 ### 2.1 Goal and files
