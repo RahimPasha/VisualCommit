@@ -215,7 +215,8 @@ public sealed class AzureDevOpsProviderTests
     /// Every redirect of connectionData is refused credentials, whatever its status (D360): a 303
     /// and a 300, which the core does not follow (the profile's table, one warning), and a 302
     /// without a Location, which the core stops (A1 then, a second warning). Elsewhere a 303 or a
-    /// 305 to the sign-in is refused credentials as a 302 to it is, and one to nowhere else stays
+    /// 305 to the sign-in is refused credentials as a 302 to it is (its host also with DNS's
+    /// trailing dot), and one to nowhere else stays
     /// the core's "could not be read". Each after that one request; nothing is followed.
     /// </summary>
     [Fact]
@@ -249,6 +250,12 @@ public sealed class AzureDevOpsProviderTests
         {
             ((HttpStatusCode)303, "https://spsprodfake.vssps.visualstudio.com/_signin?realm=dev.azure.com&reply_to=x", HostingFailureKind.BadCredentials),
             ((HttpStatusCode)303, "https://app.vssps.visualstudio.com/elsewhere", HostingFailureKind.BadCredentials),
+            // The same host written with DNS's trailing dot, which Uri.IdnHost keeps, is the sign-in too.
+            ((HttpStatusCode)303, "https://spsprodfake.vssps.visualstudio.com./x", HostingFailureKind.BadCredentials),
+            (HttpStatusCode.Found, "https://spsprodfake.vssps.visualstudio.com./x", HostingFailureKind.BadCredentials),
+            (HttpStatusCode.PermanentRedirect, "https://SPSPRODFAKE.VSSPS.VISUALSTUDIO.COM./x", HostingFailureKind.BadCredentials),
+            ((HttpStatusCode)303, "https://spsprodfake.vssps.visualstudio.com./_signin", HostingFailureKind.BadCredentials),
+            (HttpStatusCode.Found, "https://spsprodfake.vssps.visualstudio.com./_signin", HostingFailureKind.BadCredentials),
             ((HttpStatusCode)305, "/_signin?realm=dev.azure.com", HostingFailureKind.BadCredentials),
             ((HttpStatusCode)300, "https://dev.azure.com/_signin", HostingFailureKind.BadCredentials),
             ((HttpStatusCode)303, "/fake-org/proj/_apis/git/repositories/repo?api-version=7.1&again=1", HostingFailureKind.Malformed),
@@ -270,18 +277,29 @@ public sealed class AzureDevOpsProviderTests
 
     /// <summary>
     /// A redirect on the API's origin, in the request's organization, to a page of the web (a path
-    /// with no <c>_apis</c> segment: the token page, a repository's web page) is "could not be read"
-    /// and nothing is sent there, for A3 and A4 alike; the warning says why.
+    /// whose first segment after the organization that starts with <c>_</c> is not <c>_apis</c>:
+    /// the token page, a repository's web page, also with an <c>_apis</c> segment further on) is
+    /// "could not be read" and nothing is sent there, for A3 and A4 alike; the warning says why.
+    /// One to the API's routes (<c>_apis</c> right after the organization, the project or a team)
+    /// is still followed.
     /// </summary>
     [Fact]
     public async Task A3_and_A4_refuse_a_redirect_to_the_organizations_web_pages_and_send_nothing_there()
     {
         var repository = new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", "fake-org/proj", "repo");
         const string Row = """{"id":"r1","name":"repo","project":{"name":"proj"},"remoteUrl":"https://dev.azure.com/fake-org/proj/_git/repo","webUrl":"https://dev.azure.com/fake-org/proj/_git/repo"}""";
-        foreach (var location in new[] { "/fake-org/_usersSettings/tokens", "https://dev.azure.com/fake-org/proj/_git/repo", "/FAKE-ORG/proj/_git/repo/pullrequests?_a=active" })
+        var pages = new[]
+        {
+            "/fake-org/_usersSettings/tokens", "https://dev.azure.com/fake-org/proj/_git/repo", "/FAKE-ORG/proj/_git/repo/pullrequests?_a=active",
+            "/fake-org/proj/_git/repo/_apis", "/fake-org/_usersSettings/_apis/tokens", "/fake-org/proj/%5Fgit/repo/_apis/git",
+        };
+        foreach (var location in pages)
         {
             var log = new ListLog();
-            var recorder = new RecordingHttpHandler(request => request.RequestUri!.AbsolutePath.Contains("/_apis/", StringComparison.Ordinal)
+
+            // Only the two requests' own addresses are redirected; anything followed is answered with
+            // the repository's row, so a followed redirect would read as a success.
+            var recorder = new RecordingHttpHandler(request => request.RequestUri!.AbsolutePath.StartsWith("/fake-org/proj/_apis/git/repositories/repo", StringComparison.Ordinal)
                 ? Redirect(HttpStatusCode.Found, location)
                 : Answer(HttpStatusCode.OK, Row, "application/json"));
             using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, log, new ManualTimeProvider());
@@ -299,6 +317,25 @@ public sealed class AzureDevOpsProviderTests
                     "Azure DevOps: GET /fake-org/proj/_apis/git/repositories/repo/pullrequests failed: 302, redirected outside the API (request 7b0aac71-0000-4a00-8000-0000000000ff).",
                 ],
                 log.Lines.Select(line => line.Message));
+        }
+
+        var routes = new[]
+        {
+            "/fake-org/proj/_apis/git/repositories/repo?api-version=7.1&again=1", "/fake-org/_apis/git/repositories/repo?again=1",
+            "/fake-org/proj/team/_apis/git/repositories/repo?again=1", "/FAKE-ORG/proj/%5FAPIS/git/repositories/repo?again=1",
+        };
+        foreach (var location in routes)
+        {
+            var recorder = new RecordingHttpHandler(request => request.RequestUri!.Query.Contains("again=1", StringComparison.Ordinal)
+                ? Answer(HttpStatusCode.OK, Row, "application/json")
+                : Redirect(HttpStatusCode.Found, location));
+            using var provider = new AzureDevOpsProvider(AzureDevOpsEndpoints.Service, () => recorder, new ListLog(), new ManualTimeProvider());
+
+            var read = await provider.ReadRepositoryAsync("azdo_FAKE-fake-org-1", repository, Cancelled);
+
+            Assert.True(read.Failure is null, location);
+            Assert.Equal(2, recorder.Sent.Count);
+            Assert.Equal(new Uri(new Uri("https://dev.azure.com/"), location).AbsolutePath, recorder.Sent[1].Url.AbsolutePath);
         }
     }
 

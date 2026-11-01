@@ -45,7 +45,7 @@ internal sealed class AzureDevOpsClient : IDisposable
     /// <summary>The warning's <c>&lt;status or kind&gt;</c> of a redirect into another organization on the same origin.</summary>
     public const string OutsideOrganization = "redirected outside the organization";
 
-    /// <summary>What follows <c>&lt;status&gt;, </c> in the warning of a redirect on the same origin, in the organization, to a path with no <c>_apis</c> segment (a web page).</summary>
+    /// <summary>What follows <c>&lt;status&gt;, </c> in the warning of a redirect on the same origin, in the organization, to a path that is not the API's (a web page, <see cref="IsApi"/>).</summary>
     public const string OutsideApi = "redirected outside the API";
 
     /// <summary>The message of an answer that is the sign-in's instead of the API's: a redirect to it, a 203 or an HTML success.</summary>
@@ -218,15 +218,26 @@ internal sealed class AzureDevOpsClient : IDisposable
     /// <summary>A1's first read, whose every redirect is refused credentials (D360).</summary>
     private static bool IsConnectionData(Uri url) => url.AbsolutePath.EndsWith("/_apis/connectionData", StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>The sign-in's address (6.3): an <c>http</c> or <c>https</c> one whose path is <c>/_signin</c> or whose host (its IDN form) ends <c>.vssps.visualstudio.com</c>.</summary>
+    /// <summary>
+    /// The sign-in's address (6.3): an <c>http</c> or <c>https</c> one whose path is <c>/_signin</c>
+    /// or whose host (its IDN form, without DNS's trailing dot, which <see cref="Uri.IdnHost"/>
+    /// keeps) ends <c>.vssps.visualstudio.com</c>.
+    /// </summary>
     private static bool IsSignIn(Uri location) =>
         IsWeb(location)
         && (string.Equals(location.AbsolutePath, "/_signin", StringComparison.OrdinalIgnoreCase)
-            || HostingHttpClient.IdnHostOf(location)?.EndsWith(".vssps.visualstudio.com", StringComparison.OrdinalIgnoreCase) == true);
+            || HostingHttpClient.IdnHostOf(location)?.TrimEnd('.').EndsWith(".vssps.visualstudio.com", StringComparison.OrdinalIgnoreCase) == true);
 
-    /// <summary>Whether a path holds a segment that is <c>_apis</c> once decoded, without case: the API's, not a web page's.</summary>
+    /// <summary>
+    /// Whether a path is the API's, not a web page's: the first segment after the organization that
+    /// starts with <c>_</c> once decoded is <c>_apis</c>, without case. The API's routes put it
+    /// right after the organization, a project or a team (<c>/&lt;org&gt;/_apis/…</c>,
+    /// <c>/&lt;org&gt;/&lt;project&gt;/_apis/…</c>, <c>/&lt;org&gt;/&lt;project&gt;/&lt;team&gt;/_apis/…</c>),
+    /// never under a page's <c>_git/&lt;repo&gt;/</c> or <c>_usersSettings/</c>.
+    /// </summary>
     private static bool IsApi(Uri location) =>
-        location.AbsolutePath.Split('/').Any(segment => string.Equals(Uri.UnescapeDataString(segment), "_apis", StringComparison.OrdinalIgnoreCase));
+        location.AbsolutePath.Split('/').Skip(2).Select(Uri.UnescapeDataString).FirstOrDefault(segment => segment.StartsWith('_')) is { } first
+        && string.Equals(first, "_apis", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The address an answer's <c>Location</c> names, read as the core reads a redirect's (.NET's own
@@ -257,16 +268,16 @@ internal sealed class AzureDevOpsClient : IDisposable
         /// <summary>"Could not be read": on the origin into another organization, or out of g3 G3.4's form.</summary>
         OutsideOrganization,
 
-        /// <summary>"Could not be read": on the origin in the organization, to a path with no <c>_apis</c> segment.</summary>
+        /// <summary>"Could not be read": on the origin in the organization, to a path that is not the API's (<see cref="IsApi"/>).</summary>
         OutsideApi,
     }
 
     /// <summary>
     /// 6.3's rule for a redirect, in its order: from connectionData or to the sign-in, refused
     /// credentials; on the token's origin into another organization (the first segment another,
-    /// without case) or to a path that leaves g3 G3.4's form, or in the organization to a path with
-    /// no <c>_apis</c> segment (a web page, which dev.azure.com serves on the API's origin), not
-    /// followed; any other, the core's.
+    /// without case) or to a path that leaves g3 G3.4's form, or in the organization to a path that
+    /// is not the API's (<see cref="IsApi"/>: a web page, which dev.azure.com serves on the API's
+    /// origin), not followed; any other, the core's.
     /// </summary>
     private static RedirectRule RuleOf(Uri url, Uri location, Uri tokenOrigin)
     {
@@ -334,9 +345,9 @@ internal sealed class AzureDevOpsClient : IDisposable
         /// On A1's <c>connectionData</c> every redirect is <see cref="HostingFailureKind.BadCredentials"/>
         /// (D360). Elsewhere a redirect to the sign-in (a path <c>/_signin</c>, or a host under
         /// <c>.vssps.visualstudio.com</c>) is too; one on the same origin into another organization
-        /// (its first segment another, without case), or in the organization to a path with no
-        /// <c>_apis</c> segment (a web page, served on the API's origin: the token's page, a
-        /// repository's), is <see cref="HostingFailureKind.Malformed"/> (<see cref="RuleOf"/>).
+        /// (its first segment another, without case), or in the organization to a path that is not
+        /// the API's (a web page, served on the API's origin: the token's page, a repository's, also
+        /// with an <c>_apis</c> segment further on), is <see cref="HostingFailureKind.Malformed"/> (<see cref="RuleOf"/>).
         /// None of them is followed; any other is left to the core's rule.
         /// </summary>
         public override HostingFailure? RefuseRedirect(HostingExchange exchange, Uri location) => RuleOf(exchange.Url, location, TokenOrigin) switch
