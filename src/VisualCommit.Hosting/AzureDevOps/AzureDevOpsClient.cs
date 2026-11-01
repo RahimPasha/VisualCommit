@@ -89,8 +89,8 @@ internal sealed class AzureDevOpsClient : IDisposable
     /// <summary>
     /// The rows of a list from <paramref name="url"/> (6.3): pages of <c>$top=&lt;page size&gt;&amp;$skip=&lt;rows so far&gt;</c>
     /// until a short one, at most <paramref name="maxPages"/>; after that many full pages one
-    /// <c>$top=1</c> request says whether more exist (<see cref="AzureDevOpsReply{T}.MoreExist"/>).
-    /// A page's first <see cref="PageSize"/> rows are taken, whatever it holds, so the walk keeps at
+    /// <c>$top=1</c> request says whether more exist (<see cref="AzureDevOpsReply{T}.MoreExist"/>):
+    /// any row it finds does, also one already shown. A page's first <see cref="PageSize"/> rows are taken, whatever it holds, so the walk keeps at
     /// most <paramref name="maxPages"/> × <see cref="PageSize"/> rows. A row is kept once by
     /// <paramref name="idOf"/>, since a new one between pages shifts the next page by one. A failing
     /// page fails the whole list.
@@ -150,7 +150,11 @@ internal sealed class AzureDevOpsClient : IDisposable
             return Malformed(probeUrl, probe);
         }
 
-        return new AzureDevOpsReply<List<T>>(rows, null, probe.Status, probe.Value.Value.Exists(row => !seen.Contains(idOf(row))), probe.RequestId);
+        // Any row past the rows walked means the list holds more than were shown, also one already
+        // shown: a request created during the walk (newest first) shifts the list, so the probe finds
+        // the last row shown while the new one never was; a server that ignores $skip answers its
+        // first rows again while the rest were never shown.
+        return new AzureDevOpsReply<List<T>>(rows, null, probe.Status, probe.Value.Value.Count > 0, probe.RequestId);
 
         // A null row parses (System.Text.Json does not hold a list's elements to their annotations):
         // the page is malformed, as one whose row lacks a member it must have, and nothing throws (D380).

@@ -43,6 +43,8 @@ internal static class AzureDevOpsUrls
     /// <c>v3/</c> its character, segment and escape rules; a user part is allowed (no password) and
     /// never kept. The organization (the first segment, or the label) matches <c>^[A-Za-z0-9-]+$</c>
     /// (D360) and is kept as written; <c>DefaultCollection</c> is no organization of dev.azure.com's;
+    /// <c>_git</c>, <c>_full</c>, <c>_optimized</c> and <c>DefaultCollection</c> match without case and
+    /// with their escapes decoded (<c>%5Fgit</c> is <c>_git</c>, as git and .NET read it);
     /// a project starting with <c>_</c> is refused; project and repository are percent-decoded as UTF-8.
     /// The host is <see cref="AzureDevOpsEndpoints.Host"/> for every form (r5 6.2). An <c>http</c> or
     /// <c>https</c> URL's host and port are read as .NET reads them, as
@@ -419,7 +421,14 @@ internal static class AzureDevOpsUrls
 
     private static bool IsDefaultCollection(string segment) => IsSegment(segment, DefaultCollection);
 
-    private static bool IsSegment(string segment, string literal) => string.Equals(segment, literal, StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Whether a path segment is <paramref name="literal"/> without case, its escapes decoded: RFC 3986
+    /// 2.3 makes <c>%5Fgit</c> and <c>_gi%74</c> the same segment as <c>_git</c>, and .NET, git's
+    /// <c>url_normalize</c> and so <see cref="CredentialBinding.Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/>
+    /// read them so. Every caller's URL has passed <see cref="CredentialBinding.InPlainForm"/>, so no
+    /// escape decodes to <c>/</c>, <c>.</c>, <c>\</c>, <c>%</c> or a control.
+    /// </summary>
+    private static bool IsSegment(string segment, string literal) => string.Equals(Uri.UnescapeDataString(segment), literal, StringComparison.OrdinalIgnoreCase);
 
     private static bool IsHost(string host, string expected) => string.Equals(host, expected, StringComparison.OrdinalIgnoreCase);
 }

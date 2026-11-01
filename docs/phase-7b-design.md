@@ -2000,34 +2000,34 @@ leaves the account's organization (at A1, the typed one); no e-mail reaches a re
 failure; no Azure DevOps sentence is parsed; no value from the research's captures; CI's five jobs are
 green.
 
-**As built** (WP-AZ, `e83bfb0`, `0bb5087`, `b340942`, `6bac3b4`, `b03bbc5`, the reviews' fixes `1b6204a`
-and this paragraph's commit, 2026-11-01). Where the build differs from the text or settles what it left
-open:
+**As built** (WP-AZ, `e83bfb0`, `0bb5087`, `b340942`, `6bac3b4`, `b03bbc5`, the reviews' fixes `1b6204a`,
+`e852cf8` and this paragraph's commit, 2026-11-01). Where the build differs from the text or settles
+what it left open:
 - `AzureDevOpsUrls` (internal): `Recognise` (also with an `out` user), `OrganizationOf`, `WebUrlOf`,
-  `ApiPath`, `NamesOf` and `IsName` (project and name neither empty, `.`, `..` nor holding
-  `/` or `\`: A2 drops such rows and refuses such a `ListProject`, A3 to A5 refuse them unsent, A4's
-  fork source of such names is no head). An http(s) URL's host and port are .NET's, as `Select` reads
-  them (an empty user or port, leading zeros, `127.1`), so a URL is recognised exactly where `Select`
-  binds it (V11 and SSH aside); its path is read by hand, the organization as written (V16), `_git`
-  and `DefaultCollection` without case, `_full`/`_optimized` only before a name; SSH takes port 22
-  alone. `OrganizationOf` cuts at `?` or `#`, refuses a `\`, ignores a user with a password, and takes
-  `<label>.visualstudio.com` on https:443 alone.
+  `ApiPath`, `NamesOf` and `IsName` (no empty, `.` or `..` name, none with `/` or `\`: A2 drops such
+  rows and refuses such a `ListProject`, A3 to A5 refuse them unsent, A4's fork source is no head).
+  An http(s) URL's host and port are .NET's, as `Select` reads them (empty user or port, leading
+  zeros, `127.1`), so a repository form is recognised exactly where `Select` binds it (V11, SSH and a
+  project starting with `_` aside); the path is read by hand, the organization as written (V16),
+  `_git`, `DefaultCollection` and `_full`/`_optimized` (only before a name) without case, escapes
+  decoded (`%5Fgit`); SSH takes port 22 alone. `OrganizationOf` cuts at `?` or `#`, refuses a `\`,
+  ignores a user with a password, and takes `<label>.visualstudio.com` on https:443 alone.
 - `AzureDevOpsClient` (internal) returns `AzureDevOpsReply<T>` (`MoreExist`);
   `GetPagesAsync<T>(token, url, type, idOf, maxPages, ct)` takes at most `PageSize` rows of a page
-  (also when a server ignores `$top`), a failing probe fails it, a probe row already seen counts
-  as none, a null row is `Malformed` (in A2 too, D380). `SignInPageText` answers every connectionData
+  (if `$top` is ignored); a failing probe fails it, any probe row sets `MoreExist`, also one already
+  seen; a null row is `Malformed` (in A2 too, D380). `SignInPageText` answers every connectionData
   redirect, a sign-in redirect, a 203 and an HTML 2xx; a same-origin redirect whose path fails
   `InPlainForm` is `Malformed` as one into another organization. `Detail` is null on every classified
   failure; `RetryAt` lies between now and a day ahead. A 401 or 203 over 10 MB stays the core's
   `Malformed` (design 5's order of stops).
-- Provider: public text constants for its own refusals, `PullRequestPages` (3); D378's refusal guards A1
-  to A5. A2 refuses a foreign account or a login outside the grammar unsent. A row's `remoteUrl` and
-  `webUrl` reach the record only when `Recognise` reads each as that repository, `remoteUrl` without a
-  user or with the organization, `webUrl` without one; else A2 drops the row and A3 is `Malformed`.
+- Provider: public texts for its own refusals, `PullRequestPages` (3); D378's refusal guards A1 to A5.
+  A2 refuses a foreign account or a login outside the grammar unsent. A row's `remoteUrl` and
+  `webUrl` reach the record only when `Recognise` reads each as that repository, `remoteUrl` without
+  a user or with the organization, `webUrl` without one; else A2 drops the row and A3 is `Malformed`.
   `Covers` also checks the account key's provider and host.
 - For WP-S: construct with `HostingOptions`' handler; `ForgetKept` is internal. For WP-A: `TokenPage`
   throws `ArgumentException` where `OrganizationOf` gives null. For WP-LF: the ASSUMED answers are in
-  the provider tests' comment; no fake fix was needed and no file outside 6.1's list changed.
+  the provider tests' comment. No fake fix; no file outside 6.1's list changed.
 
 ## 7. WP-GL: GitLab's client and provider
 

@@ -105,6 +105,7 @@ public sealed class AzureDevOpsRecognitionTests
         { $"{D}/defaultcollection/p/_git/r", null, null },
         { $"{D}/myorg/_p/_git/r", null, null },
         { $"{D}/myorg/%5Fp/_git/r", null, null },
+        { $"{D}/myorg/%5Fp/%5Fgit/r", null, null },
         { $"{D}/myorg/_git/_r", null, null },
         { $"{D}/my.org/p/_git/r", null, null },
         { $"{D}/my_org/p/_git/r", null, null },
@@ -247,6 +248,48 @@ public sealed class AzureDevOpsRecognitionTests
         // provider while git is answered with the token, and Azure DevOps' push guard would be skipped.
         Assert.Equal(recognised is not null, Bound(on, organization, url));
         Assert.Equal(owner is null ? null : organization, AzureDevOpsUrls.OrganizationOf(url, on));
+    }
+
+    /// <summary>
+    /// The repository forms with <c>_git</c>, <c>_full</c>, <c>_optimized</c> or <c>DefaultCollection</c>
+    /// written with escapes (RFC 3986 2.3: the same segment), which .NET, git and so <c>Select</c> read
+    /// as the plain ones; and an escaped project or organization, which stay what they were. The owner
+    /// and name recognised, or null.
+    /// </summary>
+    public static TheoryData<string, string?, string?> EscapedLiteralForms => new()
+    {
+        { $"{D}/myorg/p/%5Fgit/r", "myorg/p", "r" },
+        { $"{D}/myorg/p/_gi%74/r", "myorg/p", "r" },
+        { $"{D}/myorg/p/%5f%67it/r", "myorg/p", "r" },
+        { $"{D}/myorg/p/%5FGIT/r", "myorg/p", "r" },
+        { $"{D}/myorg/%5Fgit/r", "myorg/r", "r" },
+        { $"{D}/myorg/p/_git/%5Ffull/r", "myorg/p", "r" },
+        { $"{D}/myorg/p/%5Fgit/_optimiz%65d/r", "myorg/p", "r" },
+        { "https://myorg@dev.azure.com/myorg/p/%5Fgit/r", "myorg/p", "r" },
+        { "https://x-access-token@dev.azure.com/myorg/p/_gi%74/r", "myorg/p", "r" },
+        { "https://myorg.visualstudio.com/Default%43ollection/p/_git/r", "myorg/p", "r" },
+        { "https://myorg.visualstudio.com/p/%5Fgit/r", "myorg/p", "r" },
+        { "https://myorg.visualstudio.com/%44efaultCollection/_git/r", "myorg/r", "r" },
+        { "https://myorg.visualstudio.com/%44efaultCollection/%5Fgit/r", "myorg/r", "r" },
+        // An escaped _full with no name after it is the name, as the plain one is.
+        { $"{D}/myorg/p/_git/%5Ffull", "myorg/p", "_full" },
+        // dev.azure.com has no DefaultCollection: an escaped one is a project there.
+        { $"{D}/myorg/%44efaultCollection/_git/r", "myorg/DefaultCollection", "r" },
+        // The organization is read raw on both sides (D360's grammar; Select's first segment).
+        { $"{D}/my%6Frg/p/%5Fgit/r", null, null },
+        { $"{D}/%44efaultCollection/p/_git/r", null, null },
+    };
+
+    [Theory]
+    [MemberData(nameof(EscapedLiteralForms))]
+    public void An_escaped_literal_segment_is_read_as_the_plain_one_so_recognition_is_where_select_binds(string url, string? owner, string? name)
+    {
+        var recognised = AzureDevOpsUrls.Recognise(Service, url);
+
+        Assert.Equal(owner is null ? null : $"{owner}|{name}|dev.azure.com", Described(recognised));
+
+        // Recognised exactly where git gets the account's token (A3 to A5 then ask for the project git fetches).
+        Assert.Equal(recognised is not null, Bound(Service, "myorg", url));
     }
 
     [Theory]

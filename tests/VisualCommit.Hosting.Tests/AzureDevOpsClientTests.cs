@@ -539,6 +539,49 @@ public sealed class AzureDevOpsClientTests
     }
 
     [Fact]
+    public async Task Any_row_the_probe_finds_means_more_exist_also_one_already_shown()
+    {
+        var url = new Uri(Service.WebBase, "Fernhill-Labs/Mobile%20App/_apis/git/repositories/mobile-app/pullrequests?searchCriteria.status=active&api-version=7.1");
+        static string IdOf(AzureDevOpsPullRequestJson row) => row.PullRequestId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        // Newest first; a request created just before the probe shifts the list by one, so the
+        // probe finds the last row already shown, while the new one was never shown.
+        var shifting = new List<int> { 5, 4, 3, 2, 1 };
+        var (shifted, shiftedRecorder) = Scripted(request =>
+        {
+            if (request.RequestUri!.Query.Contains("$top=1&", StringComparison.Ordinal))
+            {
+                shifting.Insert(0, 6);
+            }
+
+            return Page(request, shifting);
+        }, pageSize: 2);
+        using (shifted)
+        {
+            var rows = await shifted.GetPagesAsync(Token, url, AzureDevOpsJsonContext.Default.PullRequestList, IdOf, 2, Cancelled);
+            Assert.Equal([5, 4, 3, 2], rows.Value!.Select(row => row.PullRequestId));
+            Assert.True(rows.MoreExist);
+            Assert.Equal(3, shiftedRecorder.Sent.Count);
+        }
+
+        // A server that honours $top and ignores $skip answers the first rows on every page: one
+        // page's worth is shown once, and the probe's row, already shown, still says more exist.
+        var (ignoring, ignoringRecorder) = Scripted(request =>
+        {
+            var top = int.Parse(HttpUtility.ParseQueryString(request.RequestUri!.Query)["$top"]!, System.Globalization.CultureInfo.InvariantCulture);
+            var rows = Enumerable.Range(1, top).Select(id => $$"""{"pullRequestId":{{id}},"title":"Request {{id}}","sourceRefName":"refs/heads/b{{id}}","targetRefName":"refs/heads/main"}""");
+            return Answer(HttpStatusCode.OK, $$"""{"value":[{{string.Join(',', rows)}}],"count":{{top}}}""", "application/json");
+        }, pageSize: 2);
+        using (ignoring)
+        {
+            var rows = await ignoring.GetPagesAsync(Token, url, AzureDevOpsJsonContext.Default.PullRequestList, IdOf, 3, Cancelled);
+            Assert.Equal([1, 2], rows.Value!.Select(row => row.PullRequestId));
+            Assert.True(rows.MoreExist);
+            Assert.Equal(4, ignoringRecorder.Sent.Count);
+        }
+    }
+
+    [Fact]
     public async Task A_body_is_camel_case_json_of_the_contexts_shapes_and_another_type_is_refused()
     {
         var (client, recorder) = Scripted(_ => Answer(HttpStatusCode.Created, """{"pullRequestId":14,"title":"Add the login form","sourceRefName":"refs/heads/feature/login","targetRefName":"refs/heads/main"}""", "application/json"));
