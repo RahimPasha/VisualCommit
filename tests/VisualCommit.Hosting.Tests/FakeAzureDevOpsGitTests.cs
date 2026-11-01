@@ -47,8 +47,8 @@ public sealed class FakeAzureDevOpsGitTests
         Assert.Equal((5, Scenarios.Hosting7bManifestRequestTitle, "Test Author", "harbor-co"), (five.Id, five.Title, five.Creator.DisplayName, five.Creator.Organization.Name));
         Assert.Equal("ada.lovelace@example.com", pulls[0].Creator.UniqueName);
 
-        // The API lists Fernhill-Labs' repositories in their order and signs Ada in.
-        using var client = new HttpClient(fake.CreateHandler());
+        // The API, over TCP, lists Fernhill-Labs' repositories in their order and signs Ada in.
+        using var client = Loopback();
         var listed = await GetAsync(client, fake, "Fernhill-Labs/_apis/git/repositories?api-version=7.1", served.AzureDevOpsToken);
         Assert.Contains("\"name\":\"mobile-app\"", listed, StringComparison.Ordinal);
         Assert.True(
@@ -142,8 +142,8 @@ public sealed class FakeAzureDevOpsGitTests
             $"Merge pull request 11 from feature/sign-in into main|Ada Lovelace <ada.lovelace@example.com>|Ada Lovelace|{AppClocks.HarnessTime.ToUnixTimeSeconds()}|{AppClocks.HarnessTime.ToUnixTimeSeconds()}",
             await GitInAsync(copy, bare, "log", "-1", "--format=%s|%an <%ae>|%cn|%at|%ct", "refs/pull/11/merge"));
 
-        // Abandoned through the API, the merge ref goes at git's next listing; the others stay.
-        using var client = new HttpClient(fake.CreateHandler());
+        // Abandoned through the API (over TCP), the merge ref goes at git's next listing; the others stay.
+        using var client = Loopback();
         using var patch = new HttpRequestMessage(HttpMethod.Patch, new Uri(fake.Endpoints.WebBase, "Fernhill-Labs/Mobile%20App/_apis/git/repositories/mobile-app/pullrequests/11?api-version=7.1"))
         {
             Content = new StringContent("{\"status\":\"abandoned\"}", Encoding.UTF8, "application/json"),
@@ -182,6 +182,12 @@ public sealed class FakeAzureDevOpsGitTests
 
         fake.Revoke(served.AzureDevOpsToken);
         await AssertRefusedAsync(copy, fake, Url(fake, "x-access-token", served.AzureDevOpsToken, "Fernhill-Labs", "Mobile App", "mobile-app"));
+
+        // git's 401 carries one Basic challenge with the service's realm (MEASURED g1 G4.1 for git's agent).
+        using var client = Loopback();
+        using var refusal = await client.GetAsync(new Uri($"http://127.0.0.1:{fake.Port}/Fernhill-Labs/Mobile%20App/_git/mobile-app/info/refs?service=git-upload-pack"), Cancelled);
+        Assert.Equal(401, (int)refusal.StatusCode);
+        Assert.Equal(["Basic realm=\"https://tfsprodfake.app.visualstudio.com/\""], refusal.Headers.NonValidated["WWW-Authenticate"]);
         Assert.Empty(fake.Errors);
     }
 
@@ -201,8 +207,12 @@ public sealed class FakeAzureDevOpsGitTests
         Assert.Contains(fake.GitRequests, request => request.Status == 403 && request.UserName == $"Fernhill-Labs/{ada.Id}");
         Assert.Null(await RevAsync(copy, mobile.BarePath, "refs/heads/local-work"));
 
-        // A contributor's push goes through.
+        // A read-only token's push is refused too; a contributor's write token's goes through.
         mobile.Contributors = [];
+        var readOnly = fake.AddToken("Fernhill-Labs", ada, codeWrite: false);
+        var readOnlyPush = await copy.GitAllowingFailureAsync("push", Url(fake, "x-access-token", readOnly, "Fernhill-Labs", "Mobile App", "mobile-app"), "local-work:refs/heads/local-work");
+        Assert.False(readOnlyPush.Succeeded);
+        Assert.Contains(fake.GitRequests, request => request.Status == 403 && request.UserName == $"Fernhill-Labs/{ada.Id}#read");
         var allowed = await copy.GitAllowingFailureAsync("push", "--quiet", Url(fake, "x-access-token", served.AzureDevOpsToken, "Fernhill-Labs", "Mobile App", "mobile-app"), "local-work:refs/heads/local-work");
         Assert.True(allowed.Succeeded, allowed.StandardError);
 
@@ -230,6 +240,9 @@ public sealed class FakeAzureDevOpsGitTests
     /// <summary><c>http://{user}:{token}@127.0.0.1:&lt;port&gt;/{o}/{p}/_git/{r}</c>, the project and repository escaped.</summary>
     private static string Url(FakeAzureDevOps fake, string user, string token, string organization, string project, string repository) =>
         $"http://{user}:{token}@127.0.0.1:{fake.Port}/{organization}/{Uri.EscapeDataString(project)}/_git/{Uri.EscapeDataString(repository)}";
+
+    /// <summary>A client of the fake's TCP port alone: no proxy, no redirect followed.</summary>
+    private static HttpClient Loopback() => new(new SocketsHttpHandler { UseProxy = false, AllowAutoRedirect = false, UseCookies = false });
 
     private static AuthenticationHeaderValue Basic(string token) => new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(":" + token)));
 

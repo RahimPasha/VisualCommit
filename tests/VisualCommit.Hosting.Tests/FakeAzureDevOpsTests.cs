@@ -402,6 +402,12 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal(("refs:fernhill-labs/mobile app/mobile-app", 3), (fake.Requests[^1].Route, pulls.Json.GetProperty("count").GetInt32()));
         Assert.Equal(["refs/pull/11/merge", "refs/pull/12/merge", "refs/pull/13/merge"], pulls.Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()));
         Assert.Equal("Microsoft.VisualStudio.Services.TFS", pulls.Json.GetProperty("value")[0].GetProperty("creator").GetProperty("displayName").GetString());
+        // A conflicting pull request has no merge commit and loses its merge ref at the next sync (READ r5 8.4).
+        fake.PullRequests(fixture.MobileApp)[1].Conflicts = true;
+        var conflicting = await SendAsync(fake, HttpMethod.Get, Pulls + "/12?api-version=7.1", fixture.AdaToken);
+        Assert.Equal("conflicts", conflicting.Json.GetProperty("mergeStatus").GetString());
+        Assert.False(conflicting.Json.TryGetProperty("lastMergeCommit", out _));
+        Assert.Equal(["refs/pull/11/merge", "refs/pull/13/merge"], (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=pull/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()));
         var heads = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().ToDictionary(row => row.GetProperty("name").GetString()!, row => row.GetProperty("objectId").GetString()!);
         Assert.Equal(["refs/heads/docs/guide", "refs/heads/feature/sign-in", "refs/heads/main", "refs/heads/topic/no-request"], heads.Keys);
 
