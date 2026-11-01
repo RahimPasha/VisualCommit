@@ -28,8 +28,9 @@ namespace VisualCommit.Hosting.Http;
 /// (<see cref="ShapedRequestId"/>, D382), with e-mail addresses screened out of its message, its
 /// detail and its address's path (<see cref="ScreenPath"/>, D382), and the request's token as
 /// <see cref="ScreenedToken"/> in all of them (and no request id that holds it), as a server can echo
-/// it there (5.2's "never a token"; the core's own requests only), and writes one warning that
-/// names neither a header, a body, a query, a token, an address nor an exception's text: an
+/// it there (5.2's "never a token"; the core's own requests, and a client's failure given its
+/// request's token), and writes one warning that names neither a header, a body, a query, a token,
+/// an address nor an exception's text: an
 /// exception is named by <see cref="Describe"/> alone, and none is passed to the log (D380).
 /// Nothing an answer holds throws out of the core: a body that cannot be decompressed, a profile's
 /// hook that throws on what the server sent, and a redirect or a next page to a host without an IDN
@@ -143,26 +144,33 @@ internal sealed partial class HostingHttpClient : IDisposable
 
     /// <summary>
     /// An answer that succeeded but lacks what the app needs: <see cref="HostingFailureKind.Malformed"/>
-    /// with the provider's text, the address without its query, and the warning the core writes for one.
+    /// with the provider's text, the address without its query, and the warning the core writes for
+    /// one; <paramref name="token"/>, the request's, screened as in <see cref="Failed"/>.
     /// </summary>
-    public HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId) =>
-        Failed(method, url, new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), requestId);
+    public HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId, string? token = null) =>
+        Failed(method, url, new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), requestId, token);
 
     /// <summary>
     /// A failure the profile's client built itself from a reply that succeeded (an answer that
     /// names an anonymous user, say), finished as the core finishes its own: the profile's
     /// provider; the address without its query and <paramref name="requestId"/> where
     /// <paramref name="failure"/> left them null; each e-mail-shaped run of its message and detail
-    /// as <see cref="ScreenedEmail"/> (D368); and one warning that names its kind. It is given no
-    /// token, so none is screened here: the request id a reply gives is already screened of its token.
+    /// as <see cref="ScreenedEmail"/> (D368); and one warning that names its kind. Given the
+    /// request's <paramref name="token"/>, each segment of the address's path that holds it
+    /// (<see cref="ScreenPath"/>; its userinfo and query are dropped, its host kept as given) and
+    /// each of its occurrences in the message, the detail and the warning is
+    /// <see cref="ScreenedToken"/>, and a request id that holds it is dropped, as in the core's own
+    /// failures (an address a client builds from a record whose path holds the token, D382);
+    /// without one, none is screened, as for 7a's GitHub.
     /// </summary>
-    public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId)
+    public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId, string? token = null)
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(url);
         ArgumentNullException.ThrowIfNull(failure);
-        var finished = Finish(failure, url, requestId, []);
-        Warn(method.Method, url, finished.Kind.ToString(), finished.RequestId, []);
+        var secrets = token is null ? [] : SecretsOf(token);
+        var finished = Finish(failure, url, requestId, secrets);
+        Warn(method.Method, url, finished.Kind.ToString(), finished.RequestId, secrets);
         return finished;
     }
 

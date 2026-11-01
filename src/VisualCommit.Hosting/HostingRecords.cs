@@ -155,8 +155,8 @@ public enum PullRequestRefusal
 /// answer, a time-out, an unreadable answer or a server error without words (D284; the shared
 /// core's <c>HostingHttpTexts</c>). In a failure the shared HTTP core finishes (every answer of a
 /// provider's API, and what a client passes to its <c>Failed</c> or <c>MalformedAnswer</c>), each
-/// e-mail-shaped run is <c>&lt;e-mail&gt;</c> (D368), and in one of the core's own requests each
-/// occurrence of the request's token <c>&lt;token&gt;</c> (5.2); a client that builds a failure from an
+/// e-mail-shaped run is <c>&lt;e-mail&gt;</c> (D368), and in one of the core's own requests, or one a
+/// client passes with its request's token, each occurrence of that token <c>&lt;token&gt;</c> (5.2); a client that builds a failure from an
 /// answer's content without the core screens it with <c>HostingHttpClient.ScreenEmail</c>. A
 /// failure a provider or the session builds from no answer (a refused token, a validation of its
 /// own) is not screened.

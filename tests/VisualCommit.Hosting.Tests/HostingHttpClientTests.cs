@@ -589,6 +589,42 @@ public sealed class HostingHttpClientTests
     }
 
     [Fact]
+    public void A_failure_a_client_builds_screens_the_token_it_is_given_as_the_core_screens_its_own()
+    {
+        // An address a client builds from a record whose path holds the token (a hostile server's
+        // project path, say): given the request's token, MalformedAnswer and Failed screen it in the
+        // address, the message, the detail, the request id and the warning; without one, as before.
+        using var setup = Setup.Scripted(_ => throw new InvalidOperationException("No request is sent here."));
+        var held = new Uri(Origin, $"projects/{Token}%2Fp/merge_requests?private_token=x");
+
+        var malformed = setup.Client.MalformedAnswer(HttpMethod.Get, held, "R-1", Token);
+        var built = setup.Client.Failed(HttpMethod.Post, new Uri(Origin, $"projects/{Token}"),
+            new HostingFailure(HostingFailureKind.BadCredentials, $"Anonymous {Token}.", "Ask for " + Token.ToUpperInvariant()), "R-" + Token, Token);
+        var unscreened = setup.Client.MalformedAnswer(HttpMethod.Get, held, "R-3");
+        var unscreenedBuilt = setup.Client.Failed(HttpMethod.Get, new Uri(Origin, $"projects/{Token}"), new HostingFailure(HostingFailureKind.BadCredentials, "Anonymous."), "R-4");
+
+        Assert.Equal(
+            ("https://gitlab.example/api/v4/projects/%3Ctoken%3E/merge_requests", "R-1", HostingHttpTexts.Malformed(HostingProvider.GitLab)),
+            (malformed.Url!.AbsoluteUri, malformed.RequestId, malformed.Message));
+        Assert.Equal(
+            ("https://gitlab.example/api/v4/projects/%3Ctoken%3E", (string?)null, "Anonymous <token>.", "Ask for <token>"),
+            (built.Url!.AbsoluteUri, built.RequestId, built.Message, built.Detail));
+        Assert.Equal(
+            ($"https://gitlab.example/api/v4/projects/{Token}%2Fp/merge_requests", "R-3", $"https://gitlab.example/api/v4/projects/{Token}", "R-4"),
+            (unscreened.Url!.AbsoluteUri, unscreened.RequestId, unscreenedBuilt.Url!.AbsoluteUri, unscreenedBuilt.RequestId));
+        Assert.Equal(
+            new[]
+            {
+                "GitLab: GET /api/v4/projects/<token>/merge_requests failed: Malformed (request R-1).",
+                "GitLab: POST /api/v4/projects/<token> failed: BadCredentials.",
+                $"GitLab: GET /api/v4/projects/{Token}%2Fp/merge_requests failed: Malformed (request R-3).",
+                $"GitLab: GET /api/v4/projects/{Token} failed: BadCredentials (request R-4).",
+            },
+            setup.Log.Lines.Select(line => line.Message));
+        Assert.Empty(setup.Recorder.Sent);
+    }
+
+    [Fact]
     public async Task A_credential_the_profile_sends_in_another_form_is_screened_as_the_token_is()
     {
         // Azure DevOps' Basic of ":<token>" in Base64, which a server can echo as it is sent.
