@@ -123,6 +123,40 @@ public sealed class FakeHostingServiceTests
     }
 
     [Fact]
+    public async Task Two_Authorization_headers_are_Other_in_process_and_over_TCP()
+    {
+        using var root = new TempDirectory("fake core");
+        await using var fake = await TestService.StartAsync(root.Path);
+        fake.AddToken(AdaToken, "ada");
+
+        // In process the handler joins the two values with ", ", as the server does two lines.
+        using (var client = new HttpClient(fake.CreateHandler()))
+        using (var message = new HttpRequestMessage(HttpMethod.Get, new Uri("http://any.example/api/user")))
+        {
+            message.Headers.TryAddWithoutValidation("Authorization", ["Bearer " + AdaToken, "Bearer " + AdaToken]);
+            using var response = await client.SendAsync(message, Cancelled);
+            Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+            Assert.Equal((FakeAuthorizationForm.Other, (string?)null), (fake.Requests[^1].Authorization, fake.Requests[^1].Login));
+        }
+
+        using (var tcp = new System.Net.Sockets.TcpClient())
+        {
+            await tcp.ConnectAsync(IPAddress.Loopback, fake.Port, Cancelled);
+            var stream = tcp.GetStream();
+            await stream.WriteAsync(Encoding.ASCII.GetBytes(
+                $"GET /api/user HTTP/1.1\r\nHost: 127.0.0.1:{fake.Port}\r\nAuthorization: Bearer {AdaToken}\r\nAuthorization: Bearer {AdaToken}\r\nConnection: close\r\n\r\n"), Cancelled);
+            using var reader = new StreamReader(stream, Encoding.ASCII);
+            Assert.StartsWith("HTTP/1.1 401 ", await reader.ReadLineAsync(Cancelled), StringComparison.Ordinal);
+            await reader.ReadToEndAsync(Cancelled);
+        }
+
+        Assert.Equal((FakeAuthorizationForm.Other, (string?)null), (fake.Requests[^1].Authorization, fake.Requests[^1].Login));
+        Assert.Equal(2, fake.Requests.Count);
+        Assert.Equal(0, fake.Served);
+        Assert.Empty(fake.Errors);
+    }
+
+    [Fact]
     public async Task Revoke_refuses_the_token_on_the_API_and_on_git()
     {
         using var source = await TempRepo.CreateAsync("fake core source");
@@ -163,15 +197,24 @@ public sealed class FakeHostingServiceTests
 
         var hold = fake.HoldNext("GIT:team/sub/repo.git");
         Assert.Equal("git:Team/Sub/Repo", hold.Route);
+        // A second hold would share the first's gate, so it is refused until the first is disposed,
+        // also once a request waits at it.
+        Assert.Throws<InvalidOperationException>(() => fake.HoldNext("git:Team/Sub/Repo"));
         var listing = LsRemoteAsync(source, $"http://x-access-token:{AdaToken}@127.0.0.1:{fake.Port}/team/sub/repo");
         await hold.Arrived.WaitAsync(StepTimeout, Cancelled);
         Assert.False(listing.IsCompleted, "The git request was answered while it was held.");
         Assert.Empty(fake.GitRequests);
+        Assert.Throws<InvalidOperationException>(() => fake.HoldNext("git:team/sub/repo"));
 
         hold.Dispose();
         Assert.True((await listing.WaitAsync(StepTimeout, Cancelled)).Succeeded);
         Assert.True(hold.Released.IsCompletedSuccessfully);
         Assert.Contains(fake.BeforeGit, name => name == "Team/Sub/Repo");
+
+        // Disposed, the route may be held again; disposing the old hold twice changes nothing.
+        using var again = fake.HoldNext("git:Team/Sub/Repo");
+        hold.Dispose();
+        Assert.False(again.Arrived.IsCompleted);
         Assert.Empty(fake.Errors);
     }
 
@@ -206,6 +249,27 @@ public sealed class FakeHostingServiceTests
     }
 
     [Fact]
+    public async Task Disposing_lets_a_held_request_go_on_in_process()
+    {
+        using var root = new TempDirectory("fake core");
+        await using var fake = TestService.InProcess(root.Path);
+        using var client = new HttpClient(fake.CreateHandler());
+        var hold = fake.HoldNext("user");
+        var sent = SendAsync(client, "/api/user", null);
+        await hold.Arrived.WaitAsync(StepTimeout, Cancelled);
+
+        // Well within the hold's 120 s: the dispose released the request, which is answered.
+        await fake.DisposeAsync();
+        Assert.True(hold.Released.IsCompletedSuccessfully);
+        var answered = await sent.WaitAsync(TimeSpan.FromSeconds(10), Cancelled);
+        Assert.Equal(HttpStatusCode.Unauthorized, answered.Status);
+        Assert.False(hold.Abandoned.IsCompleted);
+        Assert.Equal(("user", 401), (fake.Requests.Single().Route, fake.Requests.Single().Status));
+        Assert.Empty(fake.Errors);
+        hold.Dispose();
+    }
+
+    [Fact]
     public async Task Disposing_lets_a_held_request_go_on_stops_the_server_and_refuses_new_holds()
     {
         using var root = new TempDirectory("fake core");
@@ -223,7 +287,9 @@ public sealed class FakeHostingServiceTests
         await fake.DisposeAsync();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.Arrived);
         Assert.Throws<ObjectDisposedException>(() => fake.HoldNext("other"));
-        // The held request goes on into a server that is stopping: answered or cut off, never left waiting.
+        // The held request was released and goes on into a server that is stopping: answered or cut
+        // off, never left waiting.
+        Assert.True(hold.Released.IsCompletedSuccessfully);
         await Task.WhenAny(sent).WaitAsync(StepTimeout, Cancelled);
         Assert.True(sent.IsCompleted);
         await Assert.ThrowsAsync<HttpRequestException>(() => SendAsync(client, $"http://127.0.0.1:{port}/api/user", null));

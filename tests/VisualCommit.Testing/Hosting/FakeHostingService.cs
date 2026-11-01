@@ -32,6 +32,7 @@ public abstract class FakeHostingService : IAsyncDisposable
     private readonly FakeServiceCore<FakeServiceFault, FakeServiceRequest> _core;
     private readonly Dictionary<string, KnownToken> _tokens = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _servedNames = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> _heldGit = new(StringComparer.OrdinalIgnoreCase);
     private int _maxPerPage = 100;
 
     /// <summary>A fake on <paramref name="root"/> (made when missing) named <paramref name="displayName"/>, in process on <paramref name="inProcessPort"/> until <see cref="StartServerAsync"/>.</summary>
@@ -91,9 +92,10 @@ public abstract class FakeHostingService : IAsyncDisposable
     /// is decided about it, until the hold is disposed, at most 120 s (then it goes on with an
     /// <see cref="Errors"/> line). <c>git:&lt;repository&gt;</c> (its folder's name, without case, with or
     /// without a final <c>.git</c>) holds that repository's next git request
-    /// (<see cref="AuthRemoteServer.HoldNextRequest"/>), on a server only.
+    /// (<see cref="AuthRemoteServer.HoldNextRequest"/>), on a server only; it stays held until its
+    /// hold is disposed, since the server's release opens every gate of the repository.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The route is held already, or a git route in process.</exception>
+    /// <exception cref="InvalidOperationException">The route is held already (an API route until a request arrives at it, a git route until its hold is disposed), or a git route in process.</exception>
     /// <exception cref="ArgumentException">A git route names no repository the fake serves.</exception>
     public FakeServiceHold HoldNext(string route)
     {
@@ -103,12 +105,41 @@ public abstract class FakeHostingService : IAsyncDisposable
         {
             var server = _core.Server ?? throw new InvalidOperationException($"The fake of {DisplayName} in process serves no git: git:<repository> is held on a server only.");
             var name = ServedNameOf(trimmed[4..]) ?? throw new ArgumentException($"The fake of {DisplayName} serves no repository {trimmed[4..]}.", nameof(route));
-            var arrived = server.HoldNextRequest(name);
+            lock (Gate)
+            {
+                // A second gate would share the first's release (ReleaseRequest opens them all).
+                if (!_heldGit.Add(name))
+                {
+                    throw new InvalidOperationException($"The route git:{name} is held already.");
+                }
+            }
+
+            Task arrived;
+            try
+            {
+                arrived = server.HoldNextRequest(name);
+            }
+            catch
+            {
+                lock (Gate)
+                {
+                    _heldGit.Remove(name);
+                }
+
+                throw;
+            }
+
             var released = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             return new FakeServiceHold("git:" + name, arrived, released.Task, new TaskCompletionSource().Task, () =>
             {
-                server.ReleaseRequest(name);
-                released.TrySetResult();
+                if (released.TrySetResult())
+                {
+                    server.ReleaseRequest(name);
+                    lock (Gate)
+                    {
+                        _heldGit.Remove(name);
+                    }
+                }
             });
         }
 
@@ -145,7 +176,10 @@ public abstract class FakeHostingService : IAsyncDisposable
         }
     }
 
-    /// <summary>Releases every hold, then stops the server. The repositories stay.</summary>
+    /// <summary>
+    /// Releases every hold, a request already waiting at one included (over TCP it then meets the
+    /// server's stop, so it may be cut off), then stops the server. The repositories stay.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
         await _core.DisposeAsync().ConfigureAwait(false);

@@ -309,9 +309,10 @@ public sealed partial class FakeGitHub : IAsyncDisposable
     /// <c>pulls:octo/hello</c>, <c>avatar:1001</c>) before anything is decided about it, until the
     /// hold is disposed, at most 120 s (then it goes on with an <see cref="Errors"/> line).
     /// <c>git:octo/hello</c> holds the repository's next git request
-    /// (<see cref="AuthRemoteServer.HoldNextRequest"/>), on a server only.
+    /// (<see cref="AuthRemoteServer.HoldNextRequest"/>), on a server only; a second hold of a git
+    /// route before the first is disposed shares its gate, and either's dispose opens it (7a's).
     /// </summary>
-    /// <exception cref="InvalidOperationException">The route is held already, or a git route in process.</exception>
+    /// <exception cref="InvalidOperationException">An API route is held already, or a git route in process.</exception>
     public FakeGitHubHold HoldNext(string route)
     {
         var key = KeyOf(route);

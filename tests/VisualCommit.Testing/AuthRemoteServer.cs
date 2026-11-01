@@ -501,9 +501,10 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// A request's raw path is decoded segment by segment, each percent-decoded as strict UTF-8, and
     /// matched without case: the longest registration whose segments equal the path's first ones,
     /// with a segment after it, is the repository, and git's <c>PATH_INFO</c> is <c>/</c>, the folder
-    /// and the decoded rest. A segment that decodes to hold <c>/</c>, <c>\</c> or a control
-    /// character, to <c>.</c> or <c>..</c>, or to invalid UTF-8 puts the path in no repository
-    /// (404). A registration is looked up only when <see cref="Serve"/>'s two levels find nothing, so
+    /// and the rest. A segment that decodes to hold <c>/</c>, <c>\</c> or a control character, to
+    /// <c>.</c> or <c>..</c>, or to invalid UTF-8 puts the path in no repository (404), and so does
+    /// a segment of the rest that needs decoding at all (git escapes none there), so that the push
+    /// guard, which reads the raw path, and http-backend see the same rest. A registration is looked up only when <see cref="Serve"/>'s two levels find nothing, so
     /// 7a's answers stay as they were. Callbacks, holds and gates name it by its folder without a
     /// final <c>.git</c> (<c>northfield/platform/web-app</c>). Registering a path again with its
     /// folder changes nothing; two paths may share a folder.
@@ -1385,14 +1386,15 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
     /// <summary>
     /// The path git's <c>http-backend</c> gets as <c>PATH_INFO</c>: the request's path for a repository
     /// <see cref="TwoLevelRepositoryOf"/> finds, as before; for one served at a path
-    /// (<see cref="ServeAt"/>), <c>/</c>, its folder and the decoded rest.
+    /// (<see cref="ServeAt"/>), <c>/</c>, its folder and the rest, which needs no decoding.
     /// </summary>
     private string BackendPathOf(string path) =>
         TwoLevelRepositoryOf(path) is null && ServedAtOf(path) is { } at ? at.PathInfo : path;
 
     /// <summary>
     /// The repository that a path a host serves at (<see cref="ServeAt"/>) lies in, and git's
-    /// <c>PATH_INFO</c> for it; null when it lies in none, or a segment does not decode to a plain one.
+    /// <c>PATH_INFO</c> for it (<c>/</c>, the folder and the rest); null when it lies in none, a
+    /// segment does not decode to a plain one, or one after the registration's needs decoding.
     /// </summary>
     private (string Folder, string PathInfo)? ServedAtOf(string path)
     {
@@ -1424,7 +1426,23 @@ public sealed class AuthRemoteServer : IAsyncDisposable, IDisposable
             }
         }
 
-        return best is null ? null : (best.Folder, "/" + best.Folder + "/" + string.Join('/', decoded[best.Segments.Length..]));
+        if (best is null)
+        {
+            return null;
+        }
+
+        // The rest goes to http-backend as it came, and the push guard and the info/refs and pack
+        // checks read the raw path: a segment there that needs decoding (git escapes none) is in no
+        // repository, so that no escape can make the backend see a path those checks did not.
+        for (var i = best.Segments.Length; i < raw.Length; i++)
+        {
+            if (!string.Equals(decoded[i], raw[i], StringComparison.Ordinal))
+            {
+                return null;
+            }
+        }
+
+        return (best.Folder, "/" + best.Folder + "/" + string.Join('/', raw[best.Segments.Length..]));
     }
 
     /// <summary>Whether a decoded path's first segments are a registration's, without case; its last one also with <c>.git</c> after it when registered with <c>gitSuffix</c>.</summary>

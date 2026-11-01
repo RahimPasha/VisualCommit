@@ -1172,33 +1172,32 @@ limit (0.6).
 
 **As built** (WP-F, `3a890f0` to its last commit, 2026-11-01). Where the build differs from the text
 above or settles what it left open:
-- `AuthRemoteServer`: 7a's lookup is `TwoLevelRepositoryOf`, unchanged and first; `ServeAt`'s
-  registrations are a list of their own. A request segment is also in no repository when empty,
-  beyond ASCII or holding `%` without two hex digits. `FolderOf` (gates, holds) and `UrlOf` find a
-  `ServeAt` repository by its folder or path without case; `ServedRepositories` lists its folders'
-  names too. `FetchRefusal` is asked for every signed-in request that is no push, never for an
-  anonymous read. A path registered again with its folder but the other `gitSuffix` throws.
-- The core: `FakeServiceCore` is `FakeHostingService.Core.cs`; `FakeGitHub` keeps its field names
-  over it. `FakeHostingService` adds a protected `ServeAt(urlPath, folder, gitSuffix)` for a second
-  path to one folder (Azure DevOps' `{o}/_git/{r}`, WP-FA). `Dropped` is recorded with status 0;
-  `FakeServiceCall.Fault` is never one of the core's two. A `private_token` value is recorded as
-  `***`. An `Authorization` value with a comma (two headers), an empty token or another scheme is
-  `Other`. In process an unclaimed path gets the core's 404. The bare rule takes a folder holding
-  `HEAD` in place before `source`.
-- The tripwire skips an offset form under 8 characters; the log pattern's segments also exclude
-  `\r` and `\n`.
-- `ShellDriver`: 7a's `SignInAsync(string, …)` is untouched; the provider form screens the token and
-  the organization out of a failure's text. A new fake with `hosting:` throws (`ParamName` `hosting`).
-- Scenario: mobile-app's `local-work` is 12:06; subjects, files and contents are WP-F's
-  (`Phase7bSupportTests` pins them). The stubs seed nothing and return `azdo_FAKE-Fernhill-Labs-1`,
-  `glpat-FAKE-ada-1` and `glpat-FAKE-ada-2`, the forms 3.2's and 4.2's `AddToken` give first; the
-  skeletons claim nothing and refuse pushes, so the new fakes serve nothing until WP-FA and WP-FL.
+- `AuthRemoteServer`: 7a's lookup is `TwoLevelRepositoryOf`, unchanged and first; `ServeAt`'s are a
+  list of their own. A segment is also in no repository when empty, beyond ASCII or holding `%`
+  without two hex digits, and so is one after the registration's that needs decoding at all:
+  `PATH_INFO`'s rest is the raw one, which the push guard reads too. `FolderOf` and `UrlOf` find a
+  `ServeAt` repository by folder or path without case; `ServedRepositories` lists it. `FetchRefusal`
+  is asked of every signed-in request that is no push; `LoginOfTokenIn` only for a path in a served
+  repository, `LoginOfToken` elsewhere (a known token on an unserved path: 404, not 3.5's 401). A
+  path registered again with the other `gitSuffix` throws.
+- The core is `FakeHostingService.Core.cs`. Its dispose also releases a request waiting at a hold
+  (over TCP the stop may still cut it off; 7a's left it waiting in process). `FakeHostingService`
+  adds a protected `ServeAt(urlPath, folder, gitSuffix)` (WP-FA's `{o}/_git/{r}`) and refuses a
+  second `git:` hold until the first is disposed (`FakeGitHub`'s stays shared, as in 7a). `Dropped`
+  is recorded with status 0; `FakeServiceCall.Fault` is never one of the two drops; a
+  `private_token` is recorded as `***`. An `Authorization` with a comma (two headers), an empty token
+  or another scheme is `Other`. The bare rule takes a folder holding `HEAD` before `source`.
+- The tripwire skips an offset form under 8 characters; the log pattern's segments exclude `\r`, `\n`.
+- `ShellDriver`: 7a's `SignInAsync(string, …)` is untouched; the provider form keeps the token and
+  the organization out of a failure's text. A new fake with `hosting:` throws.
+- Scenario: mobile-app's `local-work` is 12:06; `Phase7bSupportTests` pins subjects, authors and
+  times. The stubs seed nothing and return `azdo_FAKE-Fernhill-Labs-1`, `glpat-FAKE-ada-1` and
+  `glpat-FAKE-ada-2`, which `Phase7bExpectations`' constants and `Phase7bSupportTests` pin: WP-FA and
+  WP-FL keep them or change the constants, and run `Phase7bSupportTests` before their merges.
 - 7b support: `OpenAsync` always waits for the watchers; its default sign-in throws until WP-S.
-  `Phase7bExpectationTests` is partial, for the parts' files.
-- 7a paths touched, each keeping 7a's answers: `HarnessHosting` (GitHub's slot as before),
-  `Start`/`StartWithTabs` (two parameters appended), `FakeGitHub*` over the core,
-  `AuthRemoteServer`'s lookup, `HostAccess` and `PATH_INFO`, the tripwire (a new find in a 7a check
-  would be a real trace), the log pattern; the lead's merge runs show the pictures.
+  `Phase7bExpectationTests` is partial.
+- 7a paths touched, keeping 7a's answers: `HarnessHosting`, `Start`/`StartWithTabs`, `FakeGitHub*`,
+  `AuthRemoteServer`'s lookup, `HostAccess` and `PATH_INFO`, the tripwire, the log pattern.
 
 ## 3. WP-FA: the fake of Azure DevOps
 

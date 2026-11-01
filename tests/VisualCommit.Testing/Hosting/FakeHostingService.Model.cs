@@ -60,9 +60,10 @@ public class FakeServiceFault
 
 /// <summary>
 /// A hold on a route's next request (<see cref="FakeHostingService.HoldNext"/>): the request waits,
-/// before anything is decided about it, until the hold is disposed (at most 120 s) or, in process,
-/// the request's own cancellation ends its wait (<see cref="Abandoned"/>). A git route's request
-/// waits at the server's gate (<see cref="AuthRemoteServer.HoldNextRequest"/>).
+/// before anything is decided about it, until the hold or the fake is disposed (at most 120 s) or,
+/// in process, the request's own cancellation ends its wait (<see cref="Abandoned"/>). A git route's
+/// request waits at the server's gate (<see cref="AuthRemoteServer.HoldNextRequest"/>), which the
+/// server's stop opens.
 /// </summary>
 public sealed class FakeServiceHold : IDisposable
 {
@@ -84,7 +85,7 @@ public sealed class FakeServiceHold : IDisposable
     /// <summary>Completes when the request has arrived and waits; cancelled when the hold is disposed first.</summary>
     public Task Arrived { get; }
 
-    /// <summary>Completes when the hold is disposed, which lets the request go on.</summary>
+    /// <summary>Completes when the hold is disposed, an API route's also when the fake is, which lets the request go on.</summary>
     public Task Released { get; }
 
     /// <summary>

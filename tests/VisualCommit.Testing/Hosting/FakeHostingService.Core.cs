@@ -10,7 +10,7 @@ namespace VisualCommit.Testing.Hosting;
 /// and the <see cref="GitRunner"/> its git runs through, holds (at most <see cref="HoldLimit"/>),
 /// faults taken once per route, the request log, <see cref="Errors"/> (with the server's), the
 /// per-repository locks, the start of its <see cref="AuthRemoteServer"/> in host mode, and a dispose
-/// that releases the holds first. <see cref="FakeGitHub"/> keeps its tables and types over one, and
+/// that releases the holds first, those a request waits at included. <see cref="FakeGitHub"/> keeps its tables and types over one, and
 /// <see cref="FakeHostingService"/> is 1.9's surface over another.
 /// </summary>
 /// <typeparam name="TFault">The fake's fault type.</typeparam>
@@ -23,6 +23,7 @@ internal sealed class FakeServiceCore<TFault, TRequest> : IAsyncDisposable
 
     private readonly TempDirectory _home;
     private readonly Dictionary<string, PendingHold> _holds = new(StringComparer.Ordinal);
+    private readonly HashSet<PendingHold> _waiting = [];
     private readonly Dictionary<string, TFault> _faults = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _repositoryLocks = new(StringComparer.OrdinalIgnoreCase);
     private readonly List<TRequest> _requests = [];
@@ -157,16 +158,20 @@ internal sealed class FakeServiceCore<TFault, TRequest> : IAsyncDisposable
     }
 
     /// <summary>
-    /// Waits at the hold on <paramref name="key"/> when there is one, until it is released, at most
-    /// <see cref="HoldLimit"/> (then the request goes on with an <see cref="Errors"/> line). A wait its
-    /// sender cancels (in process) completes the hold's <c>Abandoned</c> and throws.
+    /// Waits at the hold on <paramref name="key"/> when there is one, until it is released or the
+    /// fake is disposed, at most <see cref="HoldLimit"/> (then the request goes on with an
+    /// <see cref="Errors"/> line). A wait its sender cancels (in process) completes the hold's
+    /// <c>Abandoned</c> and throws.
     /// </summary>
     public async Task WaitAtHoldAsync(string key, CancellationToken ct)
     {
         PendingHold? hold;
         lock (Gate)
         {
-            _holds.Remove(key, out hold);
+            if (_holds.Remove(key, out hold))
+            {
+                _waiting.Add(hold);
+            }
         }
 
         if (hold is null)
@@ -190,6 +195,13 @@ internal sealed class FakeServiceCore<TFault, TRequest> : IAsyncDisposable
             hold.Abandoned.TrySetResult();
             throw;
         }
+        finally
+        {
+            lock (Gate)
+            {
+                _waiting.Remove(hold);
+            }
+        }
     }
 
     /// <summary>The lock of one repository's ref sync and creates (<paramref name="repository"/> without case), so that two never interleave.</summary>
@@ -209,18 +221,22 @@ internal sealed class FakeServiceCore<TFault, TRequest> : IAsyncDisposable
         return (await Runner.RunAsync(command, ct).ConfigureAwait(false)).EnsureSuccess(command).StandardOutput;
     }
 
-    /// <summary>Releases every hold, then stops the server and deletes the home. The repositories stay.</summary>
+    /// <summary>
+    /// Releases every hold, a request waiting at one going on (over TCP into a server that then stops,
+    /// so it may be cut off), then stops the server and deletes the home. The repositories stay.
+    /// </summary>
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
-        {
-            return;
-        }
-
         List<PendingHold> holds;
         lock (Gate)
         {
-            holds = [.. _holds.Values];
+            // Under the lock, so that no request takes a hold between the flag and the lists.
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            holds = [.. _holds.Values, .. _waiting];
             _holds.Clear();
         }
 

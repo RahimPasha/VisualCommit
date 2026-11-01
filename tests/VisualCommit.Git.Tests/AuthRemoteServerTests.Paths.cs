@@ -82,6 +82,8 @@ public partial class AuthRemoteServerTests
         foreach (var path in new[]
         {
             "/g%2Fs/p/info/refs?service=git-upload-pack",
+            // In the rest an escaped '/' would reach http-backend as /g/s/p.git/info/refs, a 200.
+            "/g/s/p/info%2Frefs?service=git-upload-pack",
             "/g/s/p/info%5Crefs?service=git-upload-pack",
             "/g/s/p/%2E%2E/p/info/refs?service=git-upload-pack",
             "/g/s/p/./info/refs?service=git-upload-pack",
@@ -92,8 +94,35 @@ public partial class AuthRemoteServerTests
             Assert.Equal(404, await RawStatusAsync(server.Port, path));
         }
 
-        Assert.Equal(6, server.Requests.Count(request => request.Status == 404));
+        Assert.Equal(7, server.Requests.Count(request => request.Status == 404));
         Assert.Equal(["g/s/p"], host.Listed);
+        Assert.Empty(server.Errors);
+    }
+
+    [Fact]
+    public async Task A_push_whose_rest_is_escaped_is_in_no_repository_so_the_push_guard_cannot_be_passed()
+    {
+        using var host = await PathHostAsync(isPublic: true, "g/s/p.git");
+        var bare = Path.Combine(host.Folder, "g", "s", "p.git");
+        var main = (await GitInAsync(host.Repo, bare, "rev-parse", "main")).Trim();
+        await using var server = await AuthRemoteServer.StartForHostAsync(host.Folder, host.Options with { MayPush = (_, login) => login == "octo" });
+        server.ServeAt("g/s/p", "g/s/p.git", gitSuffix: true);
+
+        // The body is a real push of a new branch: octo's, through the plain path, creates it.
+        var octo = "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes("x-access-token:" + OctoToken));
+        Assert.Equal(200, await RawPushStatusAsync(server.Port, "/g/s/p/git-receive-pack", ReceivePackBody(main, "refs/heads/by-octo"), octo));
+        Assert.Equal(main, (await GitInAsync(host.Repo, bare, "rev-parse", "refs/heads/by-octo")).Trim());
+
+        // Anonymous on the public repository: the plain path is a push, refused; an escaped rest
+        // would not end in /git-receive-pack, pass as a read and reach http-backend as one.
+        Assert.Equal(401, await RawPushStatusAsync(server.Port, "/g/s/p/git-receive-pack", ReceivePackBody(main, "refs/heads/anonymous"), null));
+        foreach (var path in new[] { "/g/s/p/git%2Dreceive-pack", "/g/s/p.git/git-%72eceive-pack" })
+        {
+            Assert.Equal(404, await RawPushStatusAsync(server.Port, path, ReceivePackBody(main, "refs/heads/anonymous"), null));
+        }
+
+        Assert.Equal(["refs/heads/by-octo", "refs/heads/main"], Lines(await GitInAsync(host.Repo, bare, "for-each-ref", "--format=%(refname)", "refs/heads")));
+        Assert.Equal(2, server.Requests.Count(request => request.Status == 404));
         Assert.Empty(server.Errors);
     }
 
@@ -257,6 +286,44 @@ public partial class AuthRemoteServerTests
         using var response = await client.SendAsync(message, TestCancelled);
         var contentType = response.Content.Headers.TryGetValues("Content-Type", out var values) ? values.ToList() : [];
         return (response.StatusCode, await response.Content.ReadAsStringAsync(TestCancelled), contentType);
+    }
+
+    /// <summary>
+    /// A receive-pack request that creates <paramref name="reference"/> at <paramref name="commit"/>,
+    /// which the repository holds: one command, a flush and a pack of no objects.
+    /// </summary>
+    private static byte[] ReceivePackBody(string commit, string reference)
+    {
+        var command = Encoding.ASCII.GetBytes($"{new string('0', 40)} {commit} {reference}\0report-status\n");
+        byte[] header = [(byte)'P', (byte)'A', (byte)'C', (byte)'K', 0, 0, 0, 2, 0, 0, 0, 0];
+        return
+        [
+            .. Encoding.ASCII.GetBytes((command.Length + 4).ToString("x4", System.Globalization.CultureInfo.InvariantCulture)),
+            .. command,
+            .. Encoding.ASCII.GetBytes("0000"),
+            .. header,
+            .. System.Security.Cryptography.SHA1.HashData(header),
+        ];
+    }
+
+    /// <summary>The status of a receive-pack POST of <paramref name="target"/> sent byte for byte over a socket, with <paramref name="authorization"/> when given.</summary>
+    private static async Task<int> RawPushStatusAsync(int port, string target, byte[] body, string? authorization)
+    {
+        using var client = new TcpClient();
+        await client.ConnectAsync(IPAddress.Loopback, port, TestCancelled);
+        var stream = client.GetStream();
+        var head = $"POST {target} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nContent-Type: application/x-git-receive-pack-request\r\n"
+            + (authorization is null ? string.Empty : $"Authorization: {authorization}\r\n")
+            + $"Content-Length: {body.Length}\r\nConnection: close\r\n\r\n";
+        await stream.WriteAsync(Encoding.ASCII.GetBytes(head), TestCancelled);
+        await stream.WriteAsync(body, TestCancelled);
+        using var reader = new StreamReader(stream, Encoding.ASCII);
+        var statusLine = await reader.ReadLineAsync(TestCancelled) ?? throw new IOException("The server closed the connection without an answer.");
+        var status = int.Parse(statusLine.Split(' ')[1], System.Globalization.CultureInfo.InvariantCulture);
+
+        // Read the answer to its end, so that a push has finished when the status is returned.
+        await reader.ReadToEndAsync(TestCancelled);
+        return status;
     }
 
     /// <summary>The status of a GET of <paramref name="target"/> sent byte for byte over a socket, so that no client normalises its path.</summary>
