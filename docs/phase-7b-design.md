@@ -1522,6 +1522,28 @@ Both classes pass; each answer's mark is in its doc comment and 4.7 heads `.Rout
 picture changes; no token or address of the owner's, and no value from the research's captures
 (section 1), in the files.
 
+**As built** (WP-FL, `4937997`, `33e3a0a`, 2026-11-01). Where the build settles what 4.2 to 4.5 left open:
+- `AddToken`'s n counts per user. The fine-grained default is D364's list (no Personal Access Token:
+  Read), as constants in `FakeGitLabPermissions`; expiry is read on `HarnessTime`'s date. Grants are by
+  path, a project's own moving with `Move`; `order_by=name` and `path` sort by the last segment.
+- Check 4's lists: G2.3's three (`user`, the MR list, create), `api read_api` on other reads, `api` on
+  writes (ASSUMED). Check 5 names `user` on `user`, `self` and `projects`. A route miss is 404 E before
+  any check; a non-digit iid's 400 E comes after them. `NotFound` is `{"message":"404 Not Found"}`;
+  `EndpointRateLimited` names `projects_api` (ASSUMED). PUT takes the author or a Developer; another
+  `state_event` is 400 E (ASSUMED).
+- `author.public_email` and the user's `email` are the made-up address. `merge_status` is
+  `can_be_merged`; `diff_refs`' base and start are the target branch's tip (ASSUMED). An open MR whose
+  source branch is gone keeps its head ref, with no `Errors` line (7a's records one).
+- The `.git`-less `info/refs` 301 has key `page` and an absolute `Location`. Git's 401 body is the
+  server's "Authentication required.", realm GitLab. A fetch of a project hidden from the user gets
+  GitLab's 404 text as a 403 (the server refuses after auth with 403 only). The token reaches `MayPush`
+  and `FetchRefusal` through a `[ThreadStatic]` set by `LoginOfToken`, since the server asks the three
+  in one synchronous call: a change there must keep that.
+- Outside 4.1's list: `Phase7bSupportTests`' loopback probe (WP-F's) takes `/nothing/here.git/info/refs`,
+  since the fake now answers 4.5's 301 to the old path; `Scenarios.Hosting7bGitLabGroup` is new.
+- Git 2.43 was not run here: the research's MinGit lacks `git-http-backend`, which the fake's server
+  needs; the moved-project test uses nothing version-bound, and CI's containers run it.
+
 ## 5. WP-H: the shared HTTP core
 
 ### 5.1 Goal and files
