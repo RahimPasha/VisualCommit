@@ -9,7 +9,8 @@ namespace VisualCommit.Hosting.Tests;
 /// <summary>
 /// The hosting's rules for one repository (docs/phase-7a-design.md 7.8, 7.13): the remotes
 /// recognised and the listed candidate's order, the URLs bound to the account (D278, D290), and
-/// the refs that have an open pull request (D313).
+/// the refs that have an open pull request (D313); for three providers (docs/phase-7b-design.md 9.7,
+/// 9.10), a GitLab origin listed before a GitHub upstream, and heads keyed by the record.
 /// </summary>
 public sealed class HostingRulesTests
 {
@@ -193,6 +194,64 @@ public sealed class HostingRulesTests
             new Dictionary<string, int> { ["refs/heads/feature"] = 3, ["refs/remotes/origin/feature"] = 3 },
             byRef.ToDictionary(pair => pair.Key, pair => pair.Value.Number));
     }
+
+    [Fact]
+    public void An_origin_on_gitlab_is_listed_before_an_upstream_on_github()
+    {
+        // Ruling 5: the first recognised remote of any provider, in 7a's order.
+        RemoteUrl[] configured =
+        [
+            new("upstream", "https://github.com/octo/web-app.git", false),
+            new("origin", "https://gitlab.com/fake-group/sub/web-app.git", false),
+        ];
+
+        var remotes = HostingRules.Remotes(configured, [], AnyProvider);
+
+        Assert.Equal(new HostedRepository(HostingProvider.GitLab, "gitlab.com", "fake-group/sub", "web-app"), HostingRules.ListedCandidate(remotes));
+        Assert.Equal(Repository("octo", "web-app"), remotes["upstream"]);
+    }
+
+    [Fact]
+    public void ByRef_keys_heads_by_the_record_so_a_mirror_maps_nothing_and_both_azure_devops_hosts_map_one_head()
+    {
+        // docs/phase-7b-design.md 9.7: provider, host, owner and name, without case, never the full name alone.
+        RemoteUrl[] configured =
+        [
+            new("origin", "https://gitlab.com/Fake-Group/Sub/Web-App.git", false),
+            new("mirror", "https://github.com/ada/web-app.git", false),
+            new("azure", "https://fake-org@dev.azure.com/fake-org/P/_git/r", false),
+            new("vs", "https://fake-org.visualstudio.com/P/_git/r", false),
+        ];
+        var remotes = HostingRules.Remotes(configured, [], AnyProvider);
+        var refs = Refs(
+            Local("feature/search", "origin", "refs/heads/feature/search"),
+            Remote("origin/feature/search"),
+            Remote("mirror/fix-typo"),
+            Remote("azure/feature/sign-in"),
+            Remote("vs/feature/sign-in")) with { Remotes = ["azure", "mirror", "origin", "vs"] };
+
+        var gitLab = HostingRules.ByRef(refs, remotes, new PullRequestList(
+            [
+                Pull(21, "feature/search", new HostedRepository(HostingProvider.GitLab, "gitlab.com", "fake-group/sub", "web-app")),
+                Pull(22, "fix-typo", new HostedRepository(HostingProvider.GitLab, "gitlab.com", "ada", "web-app")),
+            ],
+            MoreExist: false));
+        var azure = HostingRules.ByRef(refs, remotes, new PullRequestList(
+            [Pull(11, "feature/sign-in", new HostedRepository(HostingProvider.AzureDevOps, "dev.azure.com", "FAKE-ORG/P", "R"))],
+            MoreExist: false));
+
+        Assert.Equal(
+            new Dictionary<string, int> { ["refs/heads/feature/search"] = 21, ["refs/remotes/origin/feature/search"] = 21 },
+            gitLab.ToDictionary(pair => pair.Key, pair => pair.Value.Number));
+        Assert.Equal(
+            new Dictionary<string, int> { ["refs/remotes/azure/feature/sign-in"] = 11, ["refs/remotes/vs/feature/sign-in"] = 11 },
+            azure.ToDictionary(pair => pair.Key, pair => pair.Value.Number));
+    }
+
+    private static HostedRepository? AnyProvider(string url) =>
+        GitHubUrls.Recognise(GitHubEndpoints.GitHubCom, url)
+        ?? GitLab.GitLabUrls.Recognise(GitLab.GitLabEndpoints.GitLabCom, url)
+        ?? AzureDevOps.AzureDevOpsUrls.Recognise(AzureDevOps.AzureDevOpsEndpoints.Service, url);
 
     private static HostedRepository? Recognise(string url) => GitHubUrls.Recognise(GitHubEndpoints.GitHubCom, url);
 
