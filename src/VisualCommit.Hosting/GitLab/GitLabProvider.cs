@@ -150,7 +150,8 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
     /// the key (GitLab, <see cref="Host"/>, <c>username</c>), <c>id</c>, <c>name</c> unless it is
     /// e-mail-shaped (D368's run; then null), no avatar (D349), "Use for git over HTTPS" on. A
     /// <c>username</c> that is not one 7.2 path segment (<see cref="GitLabUrls.IsSegment"/>; an
-    /// address, a line break, a <c>/</c>) is <see cref="HostingFailureKind.Malformed"/>: it would reach
+    /// address, a line break, a <c>/</c>), or that holds <paramref name="token"/> in any case (5.2:
+    /// never a token in a log line), is <see cref="HostingFailureKind.Malformed"/>: it would reach
     /// the account's key, its keychain entry's name and the session's log lines.
     /// <paramref name="organization"/> is ignored.
     /// </summary>
@@ -168,7 +169,7 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
             return HostingResult<HostingAccount>.Fail(failure);
         }
 
-        if (reply.Value is not { Username: { } username } user || !GitLabUrls.IsSegment(username))
+        if (reply.Value is not { Username: { } username } user || !GitLabUrls.IsSegment(username) || username.Contains(token, StringComparison.OrdinalIgnoreCase))
         {
             return HostingResult<HostingAccount>.Fail(_client.MalformedAnswer(HttpMethod.Get, url, reply.RequestId, token));
         }

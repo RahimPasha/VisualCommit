@@ -156,10 +156,12 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// provider; the address without its query and <paramref name="requestId"/> where
     /// <paramref name="failure"/> left them null; each e-mail-shaped run of its message and detail
     /// as <see cref="ScreenedEmail"/> (D368); and one warning that names its kind. Given the
-    /// request's <paramref name="token"/>, each of its occurrences in the address, the message,
-    /// the detail and the warning is <see cref="ScreenedToken"/>, and a request id that holds it is
-    /// dropped, as in the core's own failures (an address a client builds from a record whose path
-    /// holds the token, D382); without one, none is screened, as for 7a's GitHub.
+    /// request's <paramref name="token"/>, each segment of the address's path that holds it
+    /// (<see cref="ScreenPath"/>; its userinfo and query are dropped, its host kept as given) and
+    /// each of its occurrences in the message, the detail and the warning is
+    /// <see cref="ScreenedToken"/>, and a request id that holds it is dropped, as in the core's own
+    /// failures (an address a client builds from a record whose path holds the token, D382);
+    /// without one, none is screened, as for 7a's GitHub.
     /// </summary>
     public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId, string? token = null)
     {

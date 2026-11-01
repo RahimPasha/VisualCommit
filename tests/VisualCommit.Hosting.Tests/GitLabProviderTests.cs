@@ -705,15 +705,18 @@ public sealed class GitLabProviderTests
         Assert.DoesNotContain(recorder.Sent, sent => sent.Method == "POST");
     }
 
-    // Made up, a broken or hostile server's: a username that is no one path segment (7.2's rule)
-    // would reach the account's key, accounts.json, the keychain entry's name and the session's lines.
+    // Made up, a broken or hostile server's: a username that is no one path segment (7.2's rule),
+    // or one that holds the request's token in any case (5.2: never a token in a log line), would
+    // reach the account's key, accounts.json, the keychain entry's name and the session's lines.
     [Theory]
     [InlineData("ada@example.com")]
     [InlineData("ada＠example.com")]
     [InlineData("ada\nWarning: forged")]
     [InlineData("ada/../octo")]
     [InlineData("..")]
-    public async Task A1_is_Malformed_for_a_username_that_is_not_one_path_segment(string username)
+    [InlineData("glpat-FAKE-ada-1")]
+    [InlineData("xGLPAT-FAKE-ADA-1")]
+    public async Task A1_is_Malformed_for_a_username_that_is_not_one_path_segment_or_holds_the_token(string username)
     {
         var log = new ListLog();
         var recorder = new RecordingHttpHandler(_ => RecordingHttpHandler.Json(HttpStatusCode.OK,
@@ -726,6 +729,7 @@ public sealed class GitLabProviderTests
         Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", "https://gitlab.com/api/v4/user", "01JFAKEUSER00000000000000"),
             (checkedToken.Failure!.Kind, checkedToken.Failure.Message, checkedToken.Failure.Url!.AbsoluteUri, checkedToken.Failure.RequestId));
         Assert.Equal("GitLab: GET /api/v4/user failed: Malformed (request 01JFAKEUSER00000000000000).", Assert.Single(log.Lines).Message);
+        Assert.DoesNotContain("glpat-", log.Written, StringComparison.OrdinalIgnoreCase);
     }
 
     // Made up, a broken server's: an author whose username is no one path segment is named by no one.
