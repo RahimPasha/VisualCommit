@@ -2184,6 +2184,34 @@ both containers (2.43); 7a's tests pass unchanged but for the warning's two pins
 ten 8.7 adds, P1 to P5 among them) give G3.4's answer as 8.2 words it, on strings and in git; no token
 is in an argument, URL, config value, log or file.
 
+**As built** (WP-C, `67546a3` to `9d7d037`, 2026-11-01). Where the build settles what 8.2 to 8.7 left open:
+- `InPlainForm` needs a scheme before `://` (else false); its `%` rule applies to all the text after
+  `://`, the user and host too, its UTF-8 rule to each path segment; the path starts at the first `/`
+  after `://`.
+- An unreadable URL "names a covered host" when it starts with that host's scheme and holds its name
+  anywhere, without case: wider than git's reading (V25 fails dev.azure.com closed too), never narrower.
+- `x-access-token@` compares ordinal, as `IsAccountUser`: `X-Access-Token@` is another user. A URL with
+  the account's user and a password is neither bound nor another user's (7a's rule).
+- The credential view keeps the leading `/`, so an empty-path binding (GitLab's `https://gitlab.com`, P5)
+  drops beside any other user's URL on its host. Order per URL: it, its credential twin, its `.git`
+  twin, that twin's credential twin.
+- `AccountOf`: a path of `/` alone or with a trailing `/` holds an empty segment, so no account (git
+  trims a prompt's slashes, so neither occurs).
+- MEASURED here on 2.56 by `CoverageGitMatchTests` (CI's 2.43 to confirm): U1 to U3's git columns are
+  X6's (APP 1, both views `myorg`; the vectors' mark says so); P1 to P4's views `none`/`none`, P5's
+  `vs-myorg`. `CoverageGitMatchTests` reads the per-URL key of an unbound row as `c3.sh`'s `nouser`.
+- `HostingSessionStub`: 7a's constructor keeps the login's case in its status through a private one
+  (`AccountKey` lower-cases `Login`); with a coverage the status has `Key.Login`, and a test sets
+  `Account` for the server's spelling. `SourceCanExist` asks `GitHubUrls` first, then
+  `RecognisedUrls`, both through `PullRequestRefs` (its GitHub rule replaces the stub's copy).
+- Times alone on the laptop: `CoverageGitMatchTests` 117 tests in 65 s (its three view calls run side by
+  side); `PushGuardProvidersTests` 4 tests, `RefusedTokenDisplayTests` +3, `PromptGroupAccountTests` +2.
+- For the lead: `docs/architecture.md:2257` still quotes the old warning; `GitRepository.PullRequests.cs:30`'s
+  text names `refs/pull` alone (WP-P). For WP-S: `CoverageOf` gives Azure DevOps' service
+  `Organization`, `OrganizationHost` and `HelperUserIsAccounts`, the fake the first and last, GitLab
+  `GitTwin` and `HelperUserIsAccounts`; `Select` throws on `OrganizationHost` without `Organization`
+  and on `GitTwin` with it.
+
 ## 9. WP-S: the session for three providers
 
 ### 9.1 Goal and files
