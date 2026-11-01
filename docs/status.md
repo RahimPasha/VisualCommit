@@ -107,7 +107,7 @@ Build:
   that ticks this step: `HostingOptions`' warning takes the names from `HostingProviders`; the
   three 7a tests whose inputs changed are recorded in the design's 1.10, "As built"; this
   checklist and "Next step". The root build and the live project's Release build have no
-  warnings, and the classes WP0 touched pass (Notes). WP0 is not pushed yet (Next step).
+  warnings, and the classes WP0 touched pass (Notes). WP0 was pushed on 2026-11-01 (`e3a8999`).
   (2026-11-01. Week: share not read.)
 - [ ] 5. Harness: 7b's walk-through project, the fakes of Azure DevOps' and GitLab's APIs (their
   ports amending D97, as D265 did), the timing script's 7b case and CLAUDE.md's Commands, the
@@ -320,15 +320,17 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The lead pushes the phase branch with WP0 and its review's fixes (`e8a275d` and the commit after
-it) and reads that push's CI run, each Test step against four fifths of its limit
-(`docs/phase-7b-design.md` 0.6). Then wave 1 (design 0.4): WP-F (`wip/p7b-fake`, section 2),
-WP-H (`wip/p7b-http`, section 5) and WP-C (`wip/p7b-credentials`, section 8) side by side, each
-in a git worktree on a branch made from that pushed `phase/7b-hosting-azure-gitlab`, never from
-`master`, and each builder briefed with sections 0, 1 and its own; each merged back with
-`--no-ff`. At WP-F's merge the lead runs the lagged list (0.4). At the last of the three merges
-the lead runs the whole default run through `bash scripts/heavy-run.sh`, which also measures 16.2's
-order of twelve projects at four lanes and App.Tests' own time (0.6). Until the reset of
+Wave 1 (design 0.4) is being built: WP-F (`wip/p7b-fake`, section 2), WP-H (`wip/p7b-http`,
+section 5) and WP-C (`wip/p7b-credentials`, section 8), side by side, each in a worktree made from
+`e3a8999` (the pushed phase branch), under `D:/Projects/Personal/vc-wt/p7b-fake`, `p7b-http` and
+`p7b-credentials`; each builder is briefed with sections 0, 1 and its own, and each package is
+reviewed and fixed in its worktree before the lead merges it. The `wip/` branches are not pushed.
+The lead then merges each back with `--no-ff`, removing its worktree and stopping its fsmonitor
+daemon at once: at WP-H's merge `VisualCommit.Hosting.Tests` and 7a's walk-through (5.6); at WP-F's
+the CLAUDE.md rows of 2.9 and the lagged list (0.4); at the last of the three the whole default run
+through `bash scripts/heavy-run.sh`, which also measures 16.2's order of twelve projects at four
+lanes and App.Tests' own time (0.6). WP0's push (`e3a8999`) started CI run 41282019992, read before
+the first merge, each Test step against four fifths of its limit (0.6). Until the reset of
 2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if
 it runs out (D344).
 
@@ -341,8 +343,9 @@ every commit.
   `research/` (r1 to r8 with the gap rounds), `design/` (the drafts and the lead's 31 rulings),
   `review/` (`findings.md`, one file per finding in `f/`, `review-raw.json`) and `fix/` (the
   design split per section, the fixers' and checkers' reports). Nothing there is needed to build:
-  the design and its decisions hold what the builders need. No worktree or `wip/*` branch exists
-  yet.
+  the design and its decisions hold what the builders need. Wave 1's three worktrees and their
+  `wip/p7b-*` branches exist from 2026-11-01 (Next step); a session that finds them after a break
+  reads each branch's `git log e3a8999..` before going on.
 - **WP0** (`e8a275d` and its review's fixes) was built in the main checkout. The readings that
   differ from the design's text, or settle a choice it left open, are in the design's 1.10, "As
   built". The review accepted these other readings:
