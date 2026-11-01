@@ -23,7 +23,10 @@ internal sealed record HostingExchange(HttpMethod Method, Uri Url, int Status, b
 /// <param name="Status">The last answer's status code (304 when the kept body was used); 0 when none came.</param>
 /// <param name="Next">For pages: the next page left when the cap was reached; otherwise null.</param>
 /// <param name="Headers">The last answer's headers, as <see cref="HostingExchange.Headers"/>; empty when none came.</param>
-/// <param name="RequestId">The last answer's request id, as the profile's <see cref="HostingHttpProfile.RequestIdOf"/> reads it.</param>
+/// <param name="RequestId">
+/// The last answer's request id, as the profile's <see cref="HostingHttpProfile.RequestIdOf"/> reads
+/// it, when it has a request id's shape (D382) and does not hold the request's token; else null.
+/// </param>
 internal sealed record HostingReply<T>(T? Value, HostingFailure? Failure, int Status, Uri? Next, IReadOnlyDictionary<string, string> Headers, string? RequestId)
 {
     public bool Succeeded => Failure is null;

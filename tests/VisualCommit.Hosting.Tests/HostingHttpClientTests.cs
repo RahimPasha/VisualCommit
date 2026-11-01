@@ -511,6 +511,199 @@ public sealed class HostingHttpClientTests
     }
 
     [Fact]
+    public async Task A_token_the_server_echoes_reaches_neither_a_failure_nor_the_log()
+    {
+        // 5.2's "never a token": a request id's shape admits every token form (D378), and a
+        // Location's path or host, a message, a reason phrase and a profile's detail can hold it.
+        using var setup = Setup.Scripted(request =>
+        {
+            static HttpResponseMessage Echo(HttpStatusCode status, string json, params (string Name, string Value)[] headers) => RecordingHttpHandler.Json(status, json, headers);
+            switch (request.RequestUri!.AbsolutePath)
+            {
+                case "/api/v4/located":
+                    return Echo(HttpStatusCode.Found, "{}", ("Location", $"/api/v4/echo/{Token}/x"));
+                case "/api/v4/encoded":
+                    return Echo(HttpStatusCode.Found, "{}", ("Location", "/api/v4/echo/glpat%2DFAKE%2Dada%2D1"));
+                case "/api/v4/message":
+                    return Echo(HttpStatusCode.Unauthorized, $"{{\"message\":\"Bad credentials: {Token}\"}}", ("X-Request-Id", "R-" + Token));
+                case "/api/v4/reason":
+                    var reasoned = Echo(HttpStatusCode.Unauthorized, string.Empty);
+                    reasoned.ReasonPhrase = "Bad token " + Token;
+                    return reasoned;
+                case "/api/v4/profile":
+                    return Echo(HttpStatusCode.Forbidden, "{}");
+                case "/api/v4/off":
+                    return Echo(HttpStatusCode.Found, "{}", ("Location", $"https://{Token}.example/x"));
+                default:
+                    return Echo(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}", ("X-Request-Id", Token));
+            }
+        });
+        setup.Profile.OnClassify = exchange => exchange.Url.AbsolutePath == "/api/v4/profile"
+            ? new HostingFailure(HostingFailureKind.Forbidden, "No.", Detail: "Ask for " + Token, RequestId: Token)
+            : null;
+        setup.Profile.OnWarning = (exchange, _) => exchange.Url.AbsolutePath == "/api/v4/profile" ? "403 for " + Token : null;
+
+        var failures = new List<HostingFailure>();
+        foreach (var path in new[] { "id", "located", "encoded", "message", "reason", "profile", "off" })
+        {
+            failures.Add((await setup.GetAsync(path)).Failure!);
+        }
+
+        Assert.Equal(
+            new[]
+            {
+                "https://gitlab.example/api/v4/id",
+                "https://gitlab.example/api/v4/echo/%3Ctoken%3E/x",
+                "https://gitlab.example/api/v4/echo/%3Ctoken%3E",
+                "https://gitlab.example/api/v4/message",
+                "https://gitlab.example/api/v4/reason",
+                "https://gitlab.example/api/v4/profile",
+                "https://gitlab.example/api/v4/off",
+            },
+            failures.Select(failure => failure.Url!.AbsoluteUri));
+        Assert.Equal(
+            new[] { "Not Found", "Not Found", "Not Found", "Bad credentials: <token>", "Bad token <token>", "No.", HostingHttpTexts.Malformed(HostingProvider.GitLab) },
+            failures.Select(failure => failure.Message));
+        Assert.Equal("Ask for <token>", failures[5].Detail);
+        Assert.All(failures, failure => Assert.Null(failure.RequestId));
+        Assert.Equal(
+            new[]
+            {
+                "GitLab: GET /api/v4/id failed: 404.",
+                "GitLab: GET /api/v4/echo/<token>/x failed: 404.",
+                "GitLab: GET /api/v4/echo/<token> failed: 404.",
+                "GitLab: GET /api/v4/message failed: 401.",
+                "GitLab: GET /api/v4/reason failed: 401.",
+                "GitLab: GET /api/v4/profile failed: 403 for <token>.",
+                "GitLab: GET /api/v4/off failed: redirected to https://<token>.example:443.",
+            },
+            setup.Log.Lines.Select(line => line.Message));
+
+        // The premise: the server was given the token, and named it back.
+        Assert.Contains(setup.Recorder.Sent, sent => sent.Url.AbsolutePath == $"/api/v4/echo/{Token}/x" && sent.Header("Authorization") == "Bearer " + Token);
+        foreach (var held in new[] { Token, "FAKE-ada" })
+        {
+            Assert.DoesNotContain(held, setup.Log.Written, StringComparison.OrdinalIgnoreCase);
+            Assert.All(failures, failure => Assert.DoesNotContain(held, $"{failure.Url} {failure.Message} {failure.Detail} {failure.RequestId}", StringComparison.OrdinalIgnoreCase));
+        }
+    }
+
+    [Fact]
+    public async Task A_credential_the_profile_sends_in_another_form_is_screened_as_the_token_is()
+    {
+        // Azure DevOps' Basic of ":<token>" in Base64, which a server can echo as it is sent.
+        var basic = Convert.ToBase64String(Encoding.UTF8.GetBytes(":" + Token));
+        using var setup = Setup.Scripted(request => RecordingHttpHandler.Json(HttpStatusCode.Unauthorized,
+            $"{{\"message\":\"Bad credentials: {request.Headers.Authorization}\"}}"));
+        setup.Profile.AuthorizationOf = token => "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(":" + token));
+
+        var failure = (await setup.GetAsync("user")).Failure!;
+
+        Assert.Equal("Basic " + basic, Assert.Single(setup.Recorder.Sent).Header("Authorization"));
+        Assert.Equal("Bad credentials: Basic <token>", failure.Message);
+        Assert.Equal("GitLab: GET /api/v4/user failed: 401.", Assert.Single(setup.Log.Lines).Message);
+        Assert.DoesNotContain(basic, setup.Log.Written, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("github")]
+    [InlineData("malformed")]
+    [InlineData("located")]
+    [InlineData("message")]
+    [InlineData("reason")]
+    public async Task A_token_echoed_on_the_wire_reaches_no_line_of_the_core_or_the_session_and_no_failure(string echo)
+    {
+        // The hunt's (a) to (f) over the real handler: an API that names back the token it was
+        // given, in GitHub's request id, a same-origin Location, a 401's message or its status line.
+        var token = "ghp_FAKE" + new string('a', 36);
+        await using var server = new RawHttpServer(head =>
+        {
+            var given = RawHttpServer.HeaderOf(head, "Authorization")?.Replace("Bearer ", string.Empty, StringComparison.Ordinal) ?? "none";
+            var path = head.Split(' ')[1];
+            static byte[] Answer(string status, string body, string headers = "") => RawHttpServer.Bytes(
+                $"HTTP/1.1 {status}\r\n{headers}Content-Type: application/json\r\nContent-Length: {body.Length}\r\nConnection: close\r\n\r\n{body}");
+            return echo switch
+            {
+                "github" => Answer("404 Not Found", "{\"message\":\"Not Found\"}", $"X-GitHub-Request-Id: {given}\r\n"),
+                "malformed" => Answer("200 OK", "{}", $"X-GitHub-Request-Id: {given}\r\n"),
+                "located" when path == "/api/v3/user" => Answer("302 Found", string.Empty, $"Location: /api/v3/echo/{given}\r\n"),
+                "located" => Answer("404 Not Found", "{\"message\":\"Not Found\"}"),
+                "message" => Answer("401 Unauthorized", $"{{\"message\":\"Bad credentials: {given}\"}}", $"X-GitHub-Request-Id: {given}\r\n"),
+                _ => Answer($"401 Bad token {given}", string.Empty),
+            };
+        });
+        var endpoints = GitHubEndpoints.Local(server.Port);
+        var log = new ListLog();
+        using var data = new TempDirectory("hosting-echo");
+        using var session = new HostingSession(new AppPaths(data.Path), new HostingOptions(endpoints, HostingOptions.DefaultHandler(endpoints)),
+            new global::VisualCommit.Hosting.Tokens.MemoryTokenStore(), log, action => action(), TimeProvider.System);
+
+        var failure = (await session.SignInAsync(token, Cancelled)).Failure!;
+
+        Assert.All(server.Heads, head => Assert.Equal("Bearer " + token, RawHttpServer.HeaderOf(head, "Authorization")));
+        Assert.Equal(echo == "located" ? 2 : 1, server.Heads.Count);
+        var (kind, message) = echo switch
+        {
+            "github" or "located" => (HostingFailureKind.NotFound, "Not Found"),
+            "malformed" => (HostingFailureKind.Malformed, GitHubClient.MalformedText),
+            "message" => (HostingFailureKind.BadCredentials, "Bad credentials: <token>"),
+            _ => (HostingFailureKind.BadCredentials, "Bad token <token>"),
+        };
+        Assert.Equal((kind, message, (string?)null), (failure.Kind, failure.Message, failure.RequestId));
+        Assert.Equal(echo == "located" ? "/api/v3/echo/%3Ctoken%3E" : "/api/v3/user", failure.Url!.AbsolutePath);
+        Assert.Equal(
+            new[]
+            {
+                $"GitHub: GET {(echo == "located" ? "/api/v3/echo/<token>" : "/api/v3/user")} failed: {(echo == "malformed" ? "Malformed" : echo is "message" or "reason" ? "401" : "404")}.",
+                $"GitHub: signing in on 127.0.0.1:{server.Port} failed: {kind}, {message}",
+            },
+            log.Lines.Where(line => line.Level == LogLevel.Warning).Select(line => line.Message));
+        Assert.DoesNotContain(token, log.Written, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(token, $"{failure.Url} {failure.Message} {failure.Detail}", StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("\"été\"")]
+    [InlineData("\"e 1\"")]
+    [InlineData("\"e\u00011\"")]
+    public async Task An_etag_of_anything_but_visible_ascii_is_not_kept_so_the_next_get_is_a_full_one(string etag)
+    {
+        // RFC 9110 8.8.3's etagc admits obs-text, which .NET refuses to send back (D380: nothing a
+        // server sends breaks the core); W/"…" and "…" of visible ASCII are kept, as every service's are.
+        using var setup = Setup.Scripted(request => request.Headers.Contains("If-None-Match")
+            ? RecordingHttpHandler.Json(HttpStatusCode.NotModified, string.Empty)
+            : RecordingHttpHandler.Json(HttpStatusCode.OK, "{\"name\":\"a\"}", ("ETag", etag)));
+
+        var first = await setup.GetAsync("projects/7");
+        var second = await setup.GetAsync("projects/7");
+
+        Assert.Equal(("a", 200, "a", 200), (first.Value?.Name, first.Status, second.Value?.Name, second.Status));
+        Assert.All(setup.Recorder.Sent, sent => Assert.Null(sent.Header("If-None-Match")));
+        Assert.Empty(setup.Log.Lines);
+    }
+
+    [Fact]
+    public async Task An_etag_in_obs_text_on_the_wire_leaves_the_next_get_of_its_url_sent_and_answered()
+    {
+        // The hunt's run: the kept ETag made every later GET of the URL fail unsent as Network.
+        var answers = 0;
+        await using var server = new RawHttpServer(_ => RawHttpServer.Bytes(Interlocked.Increment(ref answers) == 1
+            ? "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nETag: \"été\"\r\nContent-Length: 12\r\nConnection: close\r\n\r\n{\"name\":\"a\"}"
+            : "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 12\r\nConnection: close\r\n\r\n{\"name\":\"b\"}"));
+        var origin = new Uri(server.Base, "api/v4/");
+        using var setup = new WireSetup(origin, HostingOptions.DefaultHandler(origin));
+
+        var first = await setup.GetAsync("user");
+        var second = await setup.GetAsync("user");
+        var third = await setup.GetAsync("user");
+
+        Assert.Equal(("a", "b", "b"), (first.Value?.Name, second.Value?.Name, third.Value?.Name));
+        Assert.Equal(3, server.Heads.Count);
+        Assert.All(server.Heads, head => Assert.Null(RawHttpServer.HeaderOf(head, "If-None-Match")));
+        Assert.Empty(setup.Log.Lines);
+    }
+
+    [Fact]
     public async Task A_kept_answer_serves_a_304_with_its_body_and_kept_headers_under_the_304s_own()
     {
         using var setup = Setup.Scripted(request => request.Headers.IfNoneMatch.ToString() == "\"v1\""
@@ -1196,7 +1389,11 @@ public sealed class HostingHttpClientTests
             }
         }
 
-        public override void Authorize(HttpRequestMessage request, string token) => request.Headers.TryAddWithoutValidation("Authorization", "Bearer " + token);
+        /// <summary>The <c>Authorization</c> value of a token; <c>Bearer &lt;token&gt;</c> unless set.</summary>
+        public Func<string, string>? AuthorizationOf { get; set; }
+
+        public override void Authorize(HttpRequestMessage request, string token) =>
+            request.Headers.TryAddWithoutValidation("Authorization", AuthorizationOf?.Invoke(token) ?? "Bearer " + token);
 
         public override void AddHeaders(HttpRequestMessage request) => request.Headers.TryAddWithoutValidation(HeaderName, HeaderValue);
 

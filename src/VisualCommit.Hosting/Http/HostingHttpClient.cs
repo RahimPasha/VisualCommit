@@ -26,7 +26,9 @@ namespace VisualCommit.Hosting.Http;
 /// <see cref="Failed"/> or <see cref="MalformedAnswer"/>) names the profile's provider, its address
 /// without the userinfo and the query and its request id when that has a request id's shape
 /// (<see cref="ShapedRequestId"/>, D382), with e-mail addresses screened out of its message, its
-/// detail and its address's path (<see cref="ScreenPath"/>, D382), and writes one warning that
+/// detail and its address's path (<see cref="ScreenPath"/>, D382), and the request's token as
+/// <see cref="ScreenedToken"/> in all of them (and no request id that holds it), as a server can echo
+/// it there (5.2's "never a token"; the core's own requests only), and writes one warning that
 /// names neither a header, a body, a query, a token, an address nor an exception's text: an
 /// exception is named by <see cref="Describe"/> alone, and none is passed to the log (D380).
 /// Nothing an answer holds throws out of the core: a body that cannot be decompressed, a profile's
@@ -49,6 +51,9 @@ internal sealed partial class HostingHttpClient : IDisposable
 
     /// <summary>What each e-mail-shaped run of a failure's message and detail becomes (D368), and each path segment that holds one (D382).</summary>
     public const string ScreenedEmail = "<e-mail>";
+
+    /// <summary>What each of a request's token's occurrences in a failure and its warning becomes, and each path segment that holds one.</summary>
+    public const string ScreenedToken = "<token>";
 
     /// <summary>The full-width at sign (U+FF20), which the screen takes for <c>@</c> (D382).</summary>
     public const char FullWidthAt = '\uFF20';
@@ -148,15 +153,16 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// names an anonymous user, say), finished as the core finishes its own: the profile's
     /// provider; the address without its query and <paramref name="requestId"/> where
     /// <paramref name="failure"/> left them null; each e-mail-shaped run of its message and detail
-    /// as <see cref="ScreenedEmail"/> (D368); and one warning that names its kind.
+    /// as <see cref="ScreenedEmail"/> (D368); and one warning that names its kind. It is given no
+    /// token, so none is screened here: the request id a reply gives is already screened of its token.
     /// </summary>
     public HostingFailure Failed(HttpMethod method, Uri url, HostingFailure failure, string? requestId)
     {
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(url);
         ArgumentNullException.ThrowIfNull(failure);
-        var finished = Finish(failure, url, requestId);
-        Warn(method.Method, url, finished.Kind.ToString(), finished.RequestId);
+        var finished = Finish(failure, url, requestId, []);
+        Warn(method.Method, url, finished.Kind.ToString(), finished.RequestId, []);
         return finished;
     }
 
@@ -276,12 +282,15 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// e-mail-shaped run once percent-decoded (so <c>%40</c> and a full-width at sign, sent as
     /// <c>%EF%BC%A0</c>, count) as <see cref="ScreenedEmail"/>, every other segment as it was
     /// (D382): a <c>Location</c> or a <c>Link</c> the server names can put an address in the path
-    /// the core logs and keeps.
+    /// the core logs and keeps. A segment that holds one of <paramref name="secrets"/> (the request's
+    /// token, in any case), as sent or once percent-decoded, becomes <see cref="ScreenedToken"/>, and a path that
+    /// still holds one across its segments becomes <c>/&lt;token&gt;</c> whole: a server can echo the token there.
     /// </summary>
-    public static string ScreenPath(string path)
+    public static string ScreenPath(string path, params string[] secrets)
     {
         ArgumentNullException.ThrowIfNull(path);
-        if (!HasAt(path) && !path.Contains('%', StringComparison.Ordinal))
+        ArgumentNullException.ThrowIfNull(secrets);
+        if (!HasAt(path) && !path.Contains('%', StringComparison.Ordinal) && !HoldsAny(path, secrets))
         {
             return path;
         }
@@ -294,28 +303,39 @@ internal sealed partial class HostingHttpClient : IDisposable
             {
                 segments[i] = ScreenedEmail;
             }
+            else if (HoldsAny(decoded, secrets) || HoldsAny(segments[i], secrets))
+            {
+                segments[i] = ScreenedToken;
+            }
         }
 
-        return string.Join('/', segments);
+        var screened = string.Join('/', segments);
+        return HoldsAny(Uri.UnescapeDataString(screened), secrets) ? "/" + ScreenedToken : screened;
     }
 
     /// <summary>
     /// The address without its userinfo, query and fragment (D380): its scheme, host, port and
-    /// path, each path segment that holds an address as <see cref="ScreenedEmail"/> (<see cref="ScreenPath"/>, D382).
+    /// path, each path segment that holds an address as <see cref="ScreenedEmail"/> and one that
+    /// holds one of <paramref name="secrets"/> as <see cref="ScreenedToken"/> (<see cref="ScreenPath"/>, D382).
     /// </summary>
-    public static Uri WithoutQuery(Uri url)
+    public static Uri WithoutQuery(Uri url, params string[] secrets)
     {
         ArgumentNullException.ThrowIfNull(url);
-        return new Uri(url.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped) + ScreenPath(url.AbsolutePath));
+        return new Uri(url.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped) + ScreenPath(url.AbsolutePath, secrets));
     }
 
     /// <summary>
-    /// <paramref name="id"/> when it has a request id's shape, else null (D382): 1 to 128 of
-    /// <c>A</c> to <c>Z</c>, <c>a</c> to <c>z</c>, <c>0</c> to <c>9</c>, <c>:</c>, <c>.</c>,
-    /// <c>_</c> and <c>-</c> (GitHub's <c>C0DE:1234:…</c>, Azure DevOps' GUIDs, GitLab's ids). The id
-    /// is the server's and goes into every warning and failure, so one of any other shape is kept nowhere.
+    /// <paramref name="id"/> when it has a request id's shape and holds none of
+    /// <paramref name="secrets"/> (the request's token, which that shape admits), else null (D382):
+    /// 1 to 128 of <c>A</c> to <c>Z</c>, <c>a</c> to <c>z</c>, <c>0</c> to <c>9</c>, <c>:</c>,
+    /// <c>.</c>, <c>_</c> and <c>-</c> (GitHub's <c>C0DE:1234:…</c>, Azure DevOps' GUIDs, GitLab's
+    /// ids). The id is the server's and goes into every warning and failure, so any other is kept nowhere.
     /// </summary>
-    public static string? ShapedRequestId(string? id) => id is not null && RequestIdPattern().IsMatch(id) ? id : null;
+    public static string? ShapedRequestId(string? id, params string[] secrets)
+    {
+        ArgumentNullException.ThrowIfNull(secrets);
+        return id is not null && RequestIdPattern().IsMatch(id) && !HoldsAny(id, secrets) ? id : null;
+    }
 
     /// <summary>
     /// What a log line says of <paramref name="exception"/> (D380): its type's name, with its
@@ -372,6 +392,7 @@ internal sealed partial class HostingHttpClient : IDisposable
     {
         var items = new List<T>();
         var url = first;
+        var secrets = SecretsOf(token);
         for (var page = 1; ; page++)
         {
             var (reply, exchange) = await SendCoreAsync(HttpMethod.Get, token, url, null, type, ct).ConfigureAwait(false);
@@ -389,7 +410,7 @@ internal sealed partial class HostingHttpClient : IDisposable
             }
             catch (Exception ex)
             {
-                return reply with { Value = default, Failure = Unreadable(exchange, ex) };
+                return reply with { Value = default, Failure = Unreadable(exchange, ex, secrets) };
             }
 
             if (next is null)
@@ -400,8 +421,8 @@ internal sealed partial class HostingHttpClient : IDisposable
             var origin = _profile.TokenOrigin;
             if (!SameOrigin(next, origin) || !next.AbsolutePath.StartsWith(origin.AbsolutePath, StringComparison.Ordinal))
             {
-                var failure = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, reply.RequestId);
-                Warn(HttpMethod.Get.Method, exchange.Url, $"Link to {OriginOf(next)}", failure.RequestId);
+                var failure = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, reply.RequestId, secrets);
+                Warn(HttpMethod.Get.Method, exchange.Url, $"Link to {OriginOf(next)}", failure.RequestId, secrets);
                 return reply with { Value = default, Failure = failure };
             }
 
@@ -419,8 +440,9 @@ internal sealed partial class HostingHttpClient : IDisposable
     {
         var content = body is null ? null : JsonSerializer.SerializeToUtf8Bytes(body, _profile.Json.GetTypeInfo(body.GetType())
             ?? throw new ArgumentException($"{body.GetType().Name} is not one of {HostingProviders.Possessive(_profile.Provider)} shapes.", nameof(body)));
-        var (exchange, early) = await ExchangeAsync(method, token, Fingerprint(token), url, content, ct).ConfigureAwait(false);
-        var requestId = RequestIdOf(exchange.Headers);
+        var secrets = SecretsOf(token);
+        var (exchange, early) = await ExchangeAsync(method, token, Fingerprint(token), secrets, url, content, ct).ConfigureAwait(false);
+        var requestId = RequestIdOf(exchange.Headers, secrets);
         HostingReply<T> Reply(T? value, HostingFailure? failure) => new(value, failure, exchange.Status, null, exchange.Headers, requestId);
 
         if (early is not null)
@@ -434,7 +456,7 @@ internal sealed partial class HostingHttpClient : IDisposable
             var success = status is >= 200 and < 300 || status == 304;
             if (success && _profile.RefuseSuccess(exchange) is { } refused)
             {
-                return (Reply(default, Refused(exchange, refused, requestId)), exchange);
+                return (Reply(default, Refused(exchange, refused, requestId, secrets)), exchange);
             }
 
             if (_profile.SucceedsEmpty(status))
@@ -444,7 +466,7 @@ internal sealed partial class HostingHttpClient : IDisposable
 
             if (!success)
             {
-                return (Reply(default, Refused(exchange, _profile.Classify(exchange), requestId)), exchange);
+                return (Reply(default, Refused(exchange, _profile.Classify(exchange), requestId, secrets)), exchange);
             }
 
             if (Parse(exchange.Body, type) is { } value)
@@ -456,11 +478,11 @@ internal sealed partial class HostingHttpClient : IDisposable
         {
             // A hook that throws on what the server sent (a header value out of range, say) does
             // not throw out of the core (D380): the answer could not be read.
-            return (Reply(default, Unreadable(exchange, ex)), exchange);
+            return (Reply(default, Unreadable(exchange, ex, secrets)), exchange);
         }
 
-        var malformed = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, requestId);
-        Warn(method.Method, exchange.Url, "Malformed", malformed.RequestId);
+        var malformed = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, requestId, secrets);
+        Warn(method.Method, exchange.Url, "Malformed", malformed.RequestId, secrets);
         return (Reply(default, malformed), exchange);
     }
 
@@ -469,7 +491,7 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// the answer's body (at most 10 MB). A 304 to a kept answer gives the kept body. One at a
     /// time; the time limit starts once the request is sent. A failure here is finished and warned.
     /// </summary>
-    private async Task<(HostingExchange Exchange, HostingFailure? Failure)> ExchangeAsync(HttpMethod method, string token, string fingerprint, Uri url, byte[]? content, CancellationToken ct)
+    private async Task<(HostingExchange Exchange, HostingFailure? Failure)> ExchangeAsync(HttpMethod method, string token, string fingerprint, string[] secrets, Uri url, byte[]? content, CancellationToken ct)
     {
         await _one.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -498,12 +520,12 @@ internal sealed partial class HostingHttpClient : IDisposable
                         }
                         catch (Exception ex)
                         {
-                            return (redirect, Unreadable(redirect, ex));
+                            return (redirect, Unreadable(redirect, ex, secrets));
                         }
 
                         if (refused is not null)
                         {
-                            return (redirect, Refused(redirect, refused, RequestIdOf(headers)));
+                            return (redirect, Refused(redirect, refused, RequestIdOf(headers, secrets), secrets));
                         }
 
                         var refusal = location is null ? $"{status} without Location"
@@ -512,7 +534,7 @@ internal sealed partial class HostingHttpClient : IDisposable
                             : null;
                         if (refusal is not null)
                         {
-                            return (redirect, Stopped(redirect, refusal));
+                            return (redirect, Stopped(redirect, refusal, secrets));
                         }
 
                         current = location!;
@@ -529,13 +551,13 @@ internal sealed partial class HostingHttpClient : IDisposable
                         // A body that its Content-Encoding (gzip, deflate, br) does not decode: .NET's
                         // decoders throw these (D380, measured), and they are no network failure.
                         var undecoded = Answer([]);
-                        return (undecoded, Stopped(undecoded, $"a body that could not be decompressed ({Describe(ex)})"));
+                        return (undecoded, Stopped(undecoded, $"a body that could not be decompressed ({Describe(ex)})", secrets));
                     }
 
                     if (read is null)
                     {
                         var oversized = Answer([]);
-                        return (oversized, Stopped(oversized, "an answer over 10 MB"));
+                        return (oversized, Stopped(oversized, "an answer over 10 MB", secrets));
                     }
 
                     var body = WithoutByteOrderMark(read);
@@ -550,7 +572,10 @@ internal sealed partial class HostingHttpClient : IDisposable
                         return (Answer(kept.Body), null);
                     }
 
-                    if (method == HttpMethod.Get && status == 200 && headers.GetValueOrDefault("ETag") is { Length: > 0 } etag)
+                    // An ETag of anything but visible ASCII (RFC 9110's obs-text, a control character,
+                    // a space) is not kept: .NET refuses to send it in If-None-Match, so every later
+                    // GET of the URL would fail unsent (D380: nothing a server sends breaks the core).
+                    if (method == HttpMethod.Get && status == 200 && headers.GetValueOrDefault("ETag") is { Length: > 0 } etag && IsVisibleAscii(etag))
                     {
                         Keep(fingerprint, current, new KeptAnswer(etag, body, KeptHeadersOf(headers)));
                     }
@@ -563,16 +588,16 @@ internal sealed partial class HostingHttpClient : IDisposable
                 }
                 catch (OperationCanceledException) when (limit.IsCancellationRequested)
                 {
-                    Warn(method.Method, current, "time-out", null);
-                    return Unanswered(method, current, HostingHttpTexts.Timeout(_profile.Provider));
+                    Warn(method.Method, current, "time-out", null, secrets);
+                    return Unanswered(method, current, HostingHttpTexts.Timeout(_profile.Provider), secrets);
                 }
                 catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException)
                 {
                     // A cancellation that is neither the caller's nor the time limit (the handler's
                     // connect time-out, a client disposed mid-request) is no answer. The exception
                     // is named by its type and codes alone, and not passed to the log (D380).
-                    Warn(method.Method, current, $"Network ({Describe(ex)})", null);
-                    return Unanswered(method, current, HostingHttpTexts.Network(_profile.Provider));
+                    Warn(method.Method, current, $"Network ({Describe(ex)})", null, secrets);
+                    return Unanswered(method, current, HostingHttpTexts.Network(_profile.Provider), secrets);
                 }
             }
         }
@@ -607,9 +632,9 @@ internal sealed partial class HostingHttpClient : IDisposable
     }
 
     /// <summary>A failure the profile gave for <paramref name="exchange"/>, finished, with its warning.</summary>
-    private HostingFailure Refused(HostingExchange exchange, HostingFailure failure, string? requestId)
+    private HostingFailure Refused(HostingExchange exchange, HostingFailure failure, string? requestId, string[] secrets)
     {
-        var finished = Finish(failure, exchange.Url, requestId);
+        var finished = Finish(failure, exchange.Url, requestId, secrets);
         string warning;
         try
         {
@@ -620,7 +645,7 @@ internal sealed partial class HostingHttpClient : IDisposable
             warning = $"{finished.Kind} ({Describe(ex)})";
         }
 
-        Warn(exchange.Method.Method, exchange.Url, warning, finished.RequestId);
+        Warn(exchange.Method.Method, exchange.Url, warning, finished.RequestId, secrets);
         return finished;
     }
 
@@ -628,10 +653,10 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// The core's own refusal of an answer (a redirect it does not follow, a body over 10 MB or one
     /// that could not be decompressed): <see cref="HostingFailureKind.Malformed"/>, with its warning.
     /// </summary>
-    private HostingFailure Stopped(HostingExchange exchange, string warning)
+    private HostingFailure Stopped(HostingExchange exchange, string warning, string[] secrets)
     {
-        var failure = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, RequestIdOf(exchange.Headers));
-        Warn(exchange.Method.Method, exchange.Url, warning, failure.RequestId);
+        var failure = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, RequestIdOf(exchange.Headers, secrets), secrets);
+        Warn(exchange.Method.Method, exchange.Url, warning, failure.RequestId, secrets);
         return failure;
     }
 
@@ -639,17 +664,18 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// An answer a profile's hook threw on (D380): <see cref="HostingFailureKind.Malformed"/>, with
     /// the warning <c>Malformed (&lt;the exception, described&gt;)</c>.
     /// </summary>
-    private HostingFailure Unreadable(HostingExchange exchange, Exception exception) => Stopped(exchange, $"Malformed ({Describe(exception)})");
+    private HostingFailure Unreadable(HostingExchange exchange, Exception exception, string[] secrets) => Stopped(exchange, $"Malformed ({Describe(exception)})", secrets);
 
     /// <summary>
     /// The profile's request id of an answer's headers when it has a request id's shape
-    /// (<see cref="ShapedRequestId"/>, D382); null when it has not, or when the hook throws on them (D380).
+    /// (<see cref="ShapedRequestId"/>, D382) and none of the request's <paramref name="secrets"/> in it;
+    /// null when it has not, or when the hook throws on them (D380).
     /// </summary>
-    private string? RequestIdOf(IReadOnlyDictionary<string, string> headers)
+    private string? RequestIdOf(IReadOnlyDictionary<string, string> headers, string[] secrets)
     {
         try
         {
-            return ShapedRequestId(_profile.RequestIdOf(headers));
+            return ShapedRequestId(_profile.RequestIdOf(headers), secrets);
         }
         catch (Exception)
         {
@@ -657,9 +683,9 @@ internal sealed partial class HostingHttpClient : IDisposable
         }
     }
 
-    private (HostingExchange Exchange, HostingFailure Failure) Unanswered(HttpMethod method, Uri url, string message) =>
+    private (HostingExchange Exchange, HostingFailure Failure) Unanswered(HttpMethod method, Uri url, string message, string[] secrets) =>
         (new HostingExchange(method, url, 0, [], new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)),
-         Finish(new HostingFailure(HostingFailureKind.Network, message), url, null));
+         Finish(new HostingFailure(HostingFailureKind.Network, message), url, null, secrets));
 
     /// <summary>
     /// What every failure gets (5.2): the profile's provider; the address, the failure's own or
@@ -667,26 +693,80 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// holds an address screened (D382); the request id where the failure left it null, kept only
     /// with a request id's shape (D382); e-mail addresses screened out of its message and detail (D368).
     /// </summary>
-    private HostingFailure Finish(HostingFailure failure, Uri url, string? requestId) => failure with
+    private HostingFailure Finish(HostingFailure failure, Uri url, string? requestId, string[] secrets) => failure with
     {
         Provider = _profile.Provider,
-        Url = WithoutQuery(failure.Url ?? url),
-        RequestId = ShapedRequestId(failure.RequestId ?? requestId),
-        Message = ScreenEmail(failure.Message),
-        Detail = failure.Detail is null ? null : ScreenEmail(failure.Detail),
+        Url = WithoutQuery(failure.Url ?? url, secrets),
+        RequestId = ShapedRequestId(failure.RequestId ?? requestId, secrets),
+        Message = ScreenEmail(ScreenSecrets(failure.Message, secrets)),
+        Detail = failure.Detail is null ? null : ScreenEmail(ScreenSecrets(failure.Detail, secrets)),
     };
 
     /// <summary>
     /// The one warning of a failure: <c>&lt;name&gt;: &lt;method&gt; &lt;path&gt; failed: &lt;status or kind&gt; (request &lt;id&gt;).</c>,
     /// the path without its query and with each segment that holds an address screened, the id only
-    /// with a request id's shape (D382). No exception is passed to the log (D380): the log's own
+    /// with a request id's shape (D382), and each of the request's <paramref name="secrets"/> in the
+    /// line as <see cref="ScreenedToken"/>. No exception is passed to the log (D380): the log's own
     /// text of one (its <c>ToString()</c>) would quote what the server or the proxy sent.
     /// </summary>
-    private void Warn(string method, Uri url, string statusOrKind, string? requestId)
+    private void Warn(string method, Uri url, string statusOrKind, string? requestId, string[] secrets)
     {
-        var request = ShapedRequestId(requestId) is { } id ? $" (request {id})" : string.Empty;
-        _log.Warning($"{Name}: {method} {ScreenPath(url.AbsolutePath)} failed: {statusOrKind}{request}.");
+        var request = ShapedRequestId(requestId, secrets) is { } id ? $" (request {id})" : string.Empty;
+        _log.Warning(ScreenSecrets($"{Name}: {method} {ScreenPath(url.AbsolutePath, secrets)} failed: {statusOrKind}{request}.", secrets));
     }
+
+    /// <summary>
+    /// What a request's token is screened as (5.2: never a token in a log line or a failure): the
+    /// token, and the credential <see cref="HostingHttpProfile.Authorize"/> sends in
+    /// <c>Authorization</c> (what follows its scheme) when that does not hold the token as given,
+    /// such as a <c>Basic</c> one in Base64; the longest first. A server can echo either into a
+    /// request id, a <c>Location</c>, a message or a reason phrase.
+    /// </summary>
+    private string[] SecretsOf(string token)
+    {
+        if (token.Length == 0)
+        {
+            return [];
+        }
+
+        var secrets = new List<string> { token };
+        using var probe = new HttpRequestMessage(HttpMethod.Get, _profile.TokenOrigin);
+        _profile.Authorize(probe, token);
+        if (probe.Headers.NonValidated.TryGetValues("Authorization", out var values))
+        {
+            foreach (var value in values)
+            {
+                var space = value.IndexOf(' ', StringComparison.Ordinal);
+                var credential = (space < 0 ? value : value[(space + 1)..]).Trim();
+                if (credential.Length > 0 && !credential.Contains(token, StringComparison.Ordinal) && !secrets.Contains(credential, StringComparer.Ordinal))
+                {
+                    secrets.Add(credential);
+                }
+            }
+        }
+
+        return [.. secrets.OrderByDescending(secret => secret.Length)];
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> with each occurrence of each of <paramref name="secrets"/> as
+    /// <see cref="ScreenedToken"/>, in any case: a host is read in lower case, so a token a server
+    /// puts in a <c>Location</c>'s or a <c>Link</c>'s host reaches the warning so.
+    /// </summary>
+    private static string ScreenSecrets(string text, string[] secrets)
+    {
+        foreach (var secret in secrets)
+        {
+            text = text.Replace(secret, ScreenedToken, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return text;
+    }
+
+    private static bool HoldsAny(string text, string[] secrets) => secrets.Any(secret => text.Contains(secret, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Whether every character of <paramref name="text"/> is visible ASCII, <c>!</c> to <c>~</c>: an ETag the core can send back.</summary>
+    private static bool IsVisibleAscii(string text) => text.All(c => c is >= '!' and <= '~');
 
     private static T? Parse<T>(byte[] body, JsonTypeInfo<T> type)
     {

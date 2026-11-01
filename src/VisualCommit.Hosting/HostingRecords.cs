@@ -155,7 +155,8 @@ public enum PullRequestRefusal
 /// answer, a time-out, an unreadable answer or a server error without words (D284; the shared
 /// core's <c>HostingHttpTexts</c>). In a failure the shared HTTP core finishes (every answer of a
 /// provider's API, and what a client passes to its <c>Failed</c> or <c>MalformedAnswer</c>), each
-/// e-mail-shaped run is <c>&lt;e-mail&gt;</c> (D368); a client that builds a failure from an
+/// e-mail-shaped run is <c>&lt;e-mail&gt;</c> (D368), and in one of the core's own requests each
+/// occurrence of the request's token <c>&lt;token&gt;</c> (5.2); a client that builds a failure from an
 /// answer's content without the core screens it with <c>HostingHttpClient.ScreenEmail</c>. A
 /// failure a provider or the session builds from no answer (a refused token, a validation of its
 /// own) is not screened.
@@ -170,13 +171,14 @@ public enum PullRequestRefusal
 /// <param name="Url">
 /// The address the failure names, without its query; in a failure the shared HTTP core finishes,
 /// also without its userinfo, and with each path segment that holds an address as
-/// <c>&lt;e-mail&gt;</c> (D380, D382).
+/// <c>&lt;e-mail&gt;</c> (D380, D382) or the request's token as <c>&lt;token&gt;</c>.
 /// </param>
 /// <param name="RequestId">
 /// The answer's request id, for the log: GitHub's <c>X-GitHub-Request-Id</c>, Azure DevOps'
 /// <c>ActivityId</c> (else <c>X-VSS-E2EID</c>), GitLab's <c>x-request-id</c>; null when no answer came,
 /// and, in a failure the shared HTTP core finishes, when it is not 1 to 128 of <c>A</c> to <c>Z</c>,
-/// <c>a</c> to <c>z</c>, <c>0</c> to <c>9</c>, <c>:</c>, <c>.</c>, <c>_</c> and <c>-</c> (D382).
+/// <c>a</c> to <c>z</c>, <c>0</c> to <c>9</c>, <c>:</c>, <c>.</c>, <c>_</c> and <c>-</c> (D382), or
+/// when it holds the request's token.
 /// </param>
 public sealed record HostingFailure(
     HostingFailureKind Kind,
