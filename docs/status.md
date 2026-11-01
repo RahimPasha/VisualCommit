@@ -164,6 +164,20 @@ Closing (`CLAUDE.md`, "Closing a phase"):
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+Phase 7b's runs on `phase/7b-hosting-azure-gitlab` so far, every job green, none failed a test (each
+Test step against four fifths of its limit, 56 of 70 minutes and 11 min 12 s of the containers' 14;
+D377): [41277720820](https://github.com/RahimPasha/VisualCommit/actions/runs/41277720820) on L1's
+`a88b84d` (step 4); [41282019992](https://github.com/RahimPasha/VisualCommit/actions/runs/41282019992)
+on WP0's `e3a8999`: `windows-latest` 37 min 54 s (Test step 35 min 1 s), `macos-latest` 27 min 29 s
+(25 min 37 s), `ubuntu-latest` 6 min 32 s (4 min 47 s), the containers 8 min 14 s and 6 min 54 s
+(5 min 57 s and 4 min 57 s); and
+[41290125478](https://github.com/RahimPasha/VisualCommit/actions/runs/41290125478) on `900ad1a`
+(WP-F's merge `564dad4` and the CLAUDE.md rows of design 2.9): Test steps `windows-latest` 20 min 49
+s, `macos-latest` 29 min 22 s, `ubuntu-latest` 4 min 4 s (job 5 min 16 s), the containers 4 min 43 s
+and 5 min 56 s (jobs 6 min 43 s and 8 min 18 s). The jobs API gives the Windows and macOS jobs of
+that run an end before their start (the night of 2026-11-01's clock change; read an hour later, 22
+min 59 s and 31 min 44 s).
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -579,7 +593,8 @@ every commit.
   the owner's acceptance (above); D352 is the owner's answer at 7b's start, and D353 to D356 the
   owner's rulings on the research's questions of taste; D357 to D372 the design's (2026-10-31);
   D373 to D376 the owner's answers of 2026-11-01, D377 and D378 the design review's, D379 and
-  D380 the lead's rulings on wave 1's adversarial check. The next decision number is D381.
+  D380 the lead's rulings on wave 1's adversarial check, D381 and D382 on its second round. The next
+  decision number is D383.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -611,7 +626,7 @@ every commit.
   the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D381 on, since D239 to D248 went to the review before
+  owner"; each answer becomes a decision, D383 on, since D239 to D248 went to the review before
   phase 7, D249 to D264 to phase 7a's start, D265 to D338 to its design, D339 to D343 to its build
   and gate D344 to D356 to 7b's start and its research, D357 to D378 to its design and D379 on to its
   build): design 17.5's reading of "ten repos can be checked and
@@ -645,7 +660,7 @@ every commit.
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D381 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D383 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,

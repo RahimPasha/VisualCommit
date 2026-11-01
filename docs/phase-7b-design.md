@@ -3526,8 +3526,9 @@ Each point names what settles it and who meets it.
   scenario's made-up names (2.6) stay (16.4).
 - One recognition parser for the three providers after wave 2 (`GitHubUrls.cs:126-186` is copied): the
   lead's choice.
-- At closing the lead widens plan risks 35 (g3 N3) and 39 (8.3) and writes both twins, git's credential
-  view, the drop and 8.6 into `docs/architecture.md` (8.8).
+- At closing the lead widens plan risks 35 (g3 N3) and 39 (8.3), adds a risk for what the binding
+  cannot see (16.3's github.com gaps, submodules, the cross-host redirect; D379, D381), and writes both
+  twins, git's credential view, the drop and 8.6 into `docs/architecture.md` (8.8).
 
 ### 16.3 Accepted, with what would reopen them
 
@@ -3536,6 +3537,27 @@ Each point names what settles it and who meets it.
   binding and raw in the other URL, and a binding with a trailing `/` beside another user's URL without
   one (`https://github.com/o/r/` beside `https://bob@github.com/o/r`; MEASURED on 2.31.1, 2.43.0 and
   2.56 by the design review). Extending D369 changes 7a's frozen `Select`, which only the lead reopens.
+  Wave 1's adversarial check found more of 7a's github.com rule's gaps, which the new coverages close
+  for themselves (D379, D381): beside a bound github.com remote, another user's URL spelt with a
+  trailing dot on the host, with `www.`, with `http://`, with white space or a control character in
+  its user part, or with a host outside printable ASCII can lose D82's order, because git reaches
+  github.com and asks for the credential without that user (the token reaches github.com only).
+  Reopened by the owner or a later phase that moves GitHub onto `SelectCovered`.
+- Submodules (D379's R4): the scope's `GIT_CONFIG_COUNT` pairs reach a submodule's fetch through git's
+  on-demand recursion, as in 7a for GitHub; only a submodule URL at or under a bound URL takes the
+  token. Reopened by O10.
+- A cross-host redirect into a bound path (D381's R6): a remote on a host no coverage covers that
+  redirects into an out-of-form path under a binding (X4's `..%5C` shape) gets the account's token
+  there, because git builds the credential again from the redirect's target, which `Select` never
+  sees; MEASURED on 2.43 and 2.56. The token reaches only the covered host. Stopping it
+  (`http.followRedirects=false` with `initial` per bound URL) costs D340's pair count and every
+  unbound remote's redirect in a bound scope. Reopened by a measured case where the target is
+  another service, or by the owner.
+- R2's "any port" (D379) on the fakes' `127.0.0.1` origin (D381's R7): any local server's URL whose
+  first segment is outside the organization's grammar counts as a variant of the Azure DevOps fake's
+  host and fails it closed, so in a test or a hand run pointed at a fake a bound fake remote can lose
+  its binding beside an unrelated local remote; never a token. Reopened by a scenario that puts the
+  two side by side.
 - A name with a literal `%` is neither recognised nor bound (8.2 step 2 refuses `%25`); Azure DevOps'
   `\`, `%5C`, `%252E`, `%C0%AE` are unmeasured (g3 G6) and refused.
 - The app's log and `accounts.json` name the organization (the login, the clone's command line); in the
