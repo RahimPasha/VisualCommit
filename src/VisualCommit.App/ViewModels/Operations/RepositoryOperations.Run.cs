@@ -729,9 +729,10 @@ public sealed partial class RepositoryOperations
     }
 
     /// <summary>
-    /// The dialog of a failure whose credentials GitHub refused through the app's helper (ruling 4,
-    /// D276, D330, docs/phase-7a-design.md 4.7), before any other description: the operation's
-    /// error title, <see cref="OperationTexts.GitCredentialsRefused"/> with the signed-in login in
+    /// The dialog of a failure whose credentials a provider refused through the app's helper (ruling 4,
+    /// D276, D330, docs/phase-7a-design.md 4.7, docs/phase-7b-design.md 8.5), before any other
+    /// description: the operation's error title, <see cref="OperationTexts.GitCredentialsRefused(Core.Hosting.HostingProvider, string)"/>
+    /// naming the refused account's provider, with that provider's signed-in login in
     /// its own case (or the refused key's), and "Open settings…" on Accounts when the window can
     /// open the settings screen. Null for any other result.
     /// </summary>
@@ -742,11 +743,11 @@ public sealed partial class RepositoryOperations
             return null;
         }
 
-        var login = Services?.Hosting.Account is { } status && status.Account.Key == refused ? status.Account.Login : refused.Login;
+        var login = Services?.Hosting.AccountOf(refused.Provider) is { } status && status.Account.Key == refused ? status.Account.Login : refused.Login;
         var extra = Services?.OpenSettings is { } openSettings
             ? new ErrorAction(OperationTexts.OpenSettingsButton, () => openSettings(SettingsSection.Accounts))
             : null;
-        return new FailureDisplay(text.ErrorTitle, OperationTexts.GitCredentialsRefused(login), extra);
+        return new FailureDisplay(text.ErrorTitle, OperationTexts.GitCredentialsRefused(refused.Provider, login), extra);
     }
 
     /// <summary>
