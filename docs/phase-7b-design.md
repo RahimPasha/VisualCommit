@@ -2126,34 +2126,40 @@ the merge that closes wave 2, whichever of WP-FA, WP-FL, WP-AZ and WP-GL is last
 three classes pass; the token goes to no other origin or header; no kind rests on GitLab's English or `scope`;
 recognition takes no other host or port; 1.4's signatures hold; CI's five jobs are green.
 
-**As built** (WP-GL, `f77a34f` to `3765433`, the reviews' fixes `2c7f4cb`, `0309c38`, `c076f58`, 2026-11-01). Where the build settles what 7.2 to 7.6 left open:
-- `GitLabClient.cs` holds `GitLabProfile` (`ProjectId`, `Url`) and a static `Create`;
-  `GitLabUrls.SplitPathWithNamespace` reads an answer's path by 7.2's rules.
+**As built** (WP-GL, `f77a34f` to `3765433`; the reviews' and hunts' fixes `2c7f4cb`, `0309c38`, `c076f58`, `b47e015`, 2026-11-01):
+- `GitLabClient.cs` holds `GitLabProfile` (`ProjectId`, `Url`) and a static `Create`; `GitLabUrls`'
+  `SplitPathWithNamespace` reads an answer's path and `IsSegment` a segment by 7.2's rules.
 - 7.2 refuses an authority with `?`, `#` or `\`, an ssh or scp-like one with `%`, `[` or `]`, and an
-  https or http one with two `@`: git sends `https://evil.example#@gitlab.com/g/p.git` and
-  `ssh://evil.example%2F@gitlab.com/g/p.git` to evil.example, and curl rejects
-  `https://a@evil.example@gitlab.com/g/p.git`'s host (MEASURED); ssh keeps the last `@`. 7a's
-  `GitHubUrls` has the three gaps: the lead's, for 16.3.
-- Words: a 408 or 5xx without GitLab's takes the core's `ServerError` text, another status
-  `<code> <reason>`. `Detail` is the code for shape F alone. A body not UTF-8 holds no words. A
-  refusal needs a POST to `…/merge_requests`. A non-GET's redirect is `Malformed`, nothing sent on
-  (warning `<status>, a redirected POST`); the core follows one for 7a's GitHub and WP-AZ: the lead's.
-- `RetryAt`: `Retry-After`'s seconds or IMF-fixdate (`"r"`), else the next source; every end lies
-  between now and a day on. A `ratelimit-reset` past year 9999 is `Malformed` (D380).
-- Local refusals set `Provider` GitLab; `OtherProviderDetail` equals GitHub's. A1: a name is
-  e-mail-shaped when `ScreenEmail` changes it; `Login` keeps its case.
-- An answer's address is read only as absolute `http` or `https`. A2 leaves out a row it cannot
-  read, or a null one, with a warning each; `CanPush` true without `permissions`. A4 fails whole on a
-  request null, numbered below 1 or without such a `web_url`; A5 on such a created one. 7a's GitHub
-  A2 and A4 throw on `[null]` and take any number: the lead's.
-- A4's forks are kept by the token's SHA-256 and the id; a 403 or 404 is kept as null, one past the
-  cap not kept: 25 forks give 20 lookups, then 5, then none, after `ForgetKept` 20.
-- A5: "differs" is `HostedRepository` equality, across projects the ids differ; the head is read
-  before the POST, and an unreadable one posts nothing.
+  https or http one with two `@`: git then reaches another host than the last `@`'s
+  (`https://evil.example#@gitlab.com/g/p`, `ssh://evil.example%2F@gitlab.com/g/p`) or, curl
+  rejecting it, none (MEASURED); ssh keeps the last `@`. An empty port (`gitlab.com:/g/p`) is the
+  scheme's default, as git and curl read it.
+- Words: a 408 or 5xx without GitLab's gives the shared "GitLab had a problem: HTTP <n>.", as
+  GitHub's and 6.3's (WP-B's `Describe` shows its own `ServerError` text); another status `<code>
+  <reason>`. `Detail` is shape F's code alone. A body not UTF-8 holds no words. A refusal needs a
+  POST to `…/merge_requests`. Only a GET's redirect under the API's path is followed; another is
+  `Malformed`, nothing sent on (`<status>, a redirected POST`, `…, redirected outside the API`).
+- `RetryAt`: `Retry-After`'s seconds or IMF-fixdate, else the next source, within a day of now; a
+  `ratelimit-reset` past 9999 is `Malformed` (D380).
+- Local refusals set `Provider` GitLab; `OtherProviderDetail` equals GitHub's. A1: a `username` not
+  one segment is `Malformed`, a name e-mail-shaped when `ScreenEmail` changes it; `Login` keeps its
+  case. A4's author is null unless one segment.
+- The provider's own failures reach `MalformedAnswer` with the token, screened as the core's are.
+  A known limit: records (`RepositoryInfo`, rows, authors) are not (gitlab.com would have to name a
+  project by the account's token).
+- An answer's address is read only as absolute `http` or `https`. A2 and A4 keep the first row of
+  each id (iid), at most their pages of `PerPage` (100), `MoreExist` when cut. A2 leaves out a row
+  it cannot read, or a null one, with a warning each; `CanPush` true without `permissions`. A4 fails
+  whole on a request null, numbered below 1 or without such a `web_url`; A5 on such a created one.
+- A4 keeps at most 512 forks, oldest out first, by the token's SHA-256 and the id; a 403 or 404 as
+  null, one past the cap not: 25 forks give 20 lookups, then 5, then none, after `ForgetKept` 20.
+- A5: "differs" is `HostedRepository` equality; an unreadable head, read before the POST, posts nothing.
 - For WP-S: the constructor calls `createHandler()` once; `ForgetKept` is internal. For WP-N:
-  `TitleFor` does not trim. For WP-LF: copied answers are marked MEASURED, READ or ASSUMED. No change
-  to the fake. `d6484ae` alone does not build (its fixture names `GitLabProvider`, which `c9301a4`
-  adds); the history is not rewritten.
+  `TitleFor` does not trim. For WP-LF: copied answers are marked MEASURED, READ or ASSUMED. The
+  fake is unchanged. `d6484ae` does not build alone (`c9301a4` adds the provider its fixture names).
+- The lead's, for 16.3: 7a's `GitHubUrls` has the three authority gaps and the empty port's; 7a's
+  GitHub A1 takes any username, its A2 and A4 throw on `[null]` and take any number; the core follows
+  a non-GET's redirect for GitHub and WP-AZ, and a next URL that repeats, to the page cap.
 
 ## 8. WP-C: credentials, push guard and prompts on the new hosts
 
