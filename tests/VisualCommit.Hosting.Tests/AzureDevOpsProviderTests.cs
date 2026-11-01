@@ -19,6 +19,10 @@ namespace VisualCommit.Hosting.Tests;
 /// parent; A3's parent; A4's drafts, forks, addresses and authors, and its walk of 301 rows; A5's
 /// body, a fork after one read, 200 and 201, the refusals, one POST, another organization; the
 /// other members; and Azure DevOps named on every failure. Made-up names only.
+/// ASSUMED answers these tests rest on, for WP-LIVE's first stage (D342, design 6.8): connectionData's
+/// 404 for an unknown organization read with a token (D374's probe), the core resource area read
+/// with a token, the create's POST by the repository's name, and a message naming an e-mail; kept as
+/// marked (D375): a fork's create body and the fork shapes A2 and A4 read.
 /// </summary>
 public sealed class AzureDevOpsProviderTests
 {
