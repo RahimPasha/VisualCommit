@@ -296,7 +296,11 @@ public sealed class PromptDialogs : IGitPromptHandler
             if (prompt.Kind == GitPromptKind.Username && prompt.Url is { } url && answer.Password is { } password)
             {
                 // Under the account git's password prompt will carry, which the broker gives only
-                // when the user typed is the account's (AskPassBroker.IsAccountUser).
+                // when the user typed is the account's (AskPassBroker.IsAccountUser). On a shared
+                // origin (dev.azure.com) a user name prompt carries the account only when its path
+                // names the organization, as the password prompt after it then does; after a
+                // path-less one the broker may give the password prompt the account, and the group
+                // asks for that password once more (docs/phase-7b-design.md 8.3).
                 var account = prompt.Account is { } named && AskPassBroker.IsAccountUser(answer.Text, named) ? named : null;
                 state.Kept[KeyOf(account, GitPromptClassifier.PasswordPromptAfter(url, answer.Text!))] = new Kept(password, until, Version: version);
             }
