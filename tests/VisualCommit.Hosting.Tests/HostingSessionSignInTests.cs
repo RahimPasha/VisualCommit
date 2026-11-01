@@ -289,6 +289,35 @@ public sealed class HostingSessionSignInTests
     }
 
     [Fact]
+    public async Task A_file_the_sign_out_cannot_delete_is_named_and_its_exception_by_its_type_alone()
+    {
+        // D382 (H4): every log call of an exception in the Hosting assembly names it by its type
+        // and codes, never its text.
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await RepositoryHostingAvatarsTests.OpenHelloAsync(setup);
+        await RepositoryHostingAvatarsTests.ShowAsync(setup, hosting, Scenarios.OctoEmail);
+        var image = Path.Combine(setup.Paths.AvatarsDirectory, "1001.png");
+        Assert.True(File.Exists(image));
+        setup.Session.DeleteAvatarFile = file =>
+        {
+            if (string.Equals(Path.GetFileName(file), "1001.png", StringComparison.Ordinal))
+            {
+                throw new IOException(setup.ThrownText);
+            }
+
+            File.Delete(file);
+        };
+
+        Assert.Null(await setup.Session.SignOutAsync(Cancelled));
+
+        Assert.True(File.Exists(image));
+        Assert.Equal([image], Directory.EnumerateFiles(setup.Paths.AvatarsDirectory, "*", SearchOption.AllDirectories));
+        Assert.Contains($"{image} could not be deleted at the sign-out (IOException).", setup.Warnings);
+        setup.AssertNothingThrownLogged();
+    }
+
+    [Fact]
     public async Task The_switch_and_a_sign_out_without_a_keychain_write_off_the_callers_thread()
     {
         await using var setup = await HostingSessionSetup.StartAsync();

@@ -24,13 +24,14 @@ namespace VisualCommit.Hosting.Http;
 /// forgotten by <see cref="ForgetKept"/>; pages followed while they stay under the origin's path.
 /// Every failure it finishes (each one an answer or no answer gives, and those a client passes to
 /// <see cref="Failed"/> or <see cref="MalformedAnswer"/>) names the profile's provider, its address
-/// without the userinfo and the query and its request id, with e-mail addresses screened out of its
-/// message and detail, and writes one warning that names neither a header, a body, a query, a token
-/// nor an exception's text: an exception is named by <see cref="Describe"/> alone, and none is
-/// passed to the log (D380). Nothing an answer holds throws out of the core: a body that cannot be
-/// decompressed, a profile's hook that throws on what the server sent, and a redirect or a next
-/// page to a host without an IDN form (on no origin, <see cref="SameOrigin"/>), are
-/// <see cref="HostingFailureKind.Malformed"/> (D380).
+/// without the userinfo and the query and its request id when that has a request id's shape
+/// (<see cref="ShapedRequestId"/>, D382), with e-mail addresses screened out of its message, its
+/// detail and its address's path (<see cref="ScreenPath"/>, D382), and writes one warning that
+/// names neither a header, a body, a query, a token, an address nor an exception's text: an
+/// exception is named by <see cref="Describe"/> alone, and none is passed to the log (D380).
+/// Nothing an answer holds throws out of the core: a body that cannot be decompressed, a profile's
+/// hook that throws on what the server sent, and a redirect or a next page to a host without an IDN
+/// form (on no origin, <see cref="SameOrigin"/>), are <see cref="HostingFailureKind.Malformed"/> (D380).
 /// </summary>
 internal sealed partial class HostingHttpClient : IDisposable
 {
@@ -46,8 +47,11 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// <summary>The bytes the kept answers' bodies take at most, unless the constructor says otherwise; the oldest go first.</summary>
     public const long DefaultKeptBytes = 32L * 1024 * 1024;
 
-    /// <summary>What each e-mail-shaped run of a failure's message and detail becomes (D368).</summary>
+    /// <summary>What each e-mail-shaped run of a failure's message and detail becomes (D368), and each path segment that holds one (D382).</summary>
     public const string ScreenedEmail = "<e-mail>";
+
+    /// <summary>The full-width at sign (U+FF20), which the screen takes for <c>@</c> (D382).</summary>
+    public const char FullWidthAt = '\uFF20';
 
     /// <summary>What <see cref="OriginOf"/> names for a host that has no IDN form (D380).</summary>
     public const string UnreadableHost = "(an unreadable host)";
@@ -256,19 +260,62 @@ internal sealed partial class HostingHttpClient : IDisposable
         }
     }
 
-    /// <summary><paramref name="text"/> with each e-mail-shaped run (an <c>@</c> between non-blank characters, the whole run of them) as <see cref="ScreenedEmail"/> (D368).</summary>
+    /// <summary>
+    /// <paramref name="text"/> with each e-mail-shaped run (an <c>@</c>, or a full-width one,
+    /// <see cref="FullWidthAt"/>, between non-blank characters, the whole run of them) as
+    /// <see cref="ScreenedEmail"/> (D368, D382).
+    /// </summary>
     public static string ScreenEmail(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        return text.Contains('@', StringComparison.Ordinal) ? EmailPattern().Replace(text, ScreenedEmail) : text;
+        return HasAt(text) ? EmailPattern().Replace(text, ScreenedEmail) : text;
     }
 
-    /// <summary>The address without its userinfo, query and fragment (D380): its scheme, host, port and path.</summary>
+    /// <summary>
+    /// <paramref name="path"/> (an address's escaped path) with each segment that holds an
+    /// e-mail-shaped run once percent-decoded (so <c>%40</c> and a full-width at sign, sent as
+    /// <c>%EF%BC%A0</c>, count) as <see cref="ScreenedEmail"/>, every other segment as it was
+    /// (D382): a <c>Location</c> or a <c>Link</c> the server names can put an address in the path
+    /// the core logs and keeps.
+    /// </summary>
+    public static string ScreenPath(string path)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        if (!HasAt(path) && !path.Contains('%', StringComparison.Ordinal))
+        {
+            return path;
+        }
+
+        var segments = path.Split('/');
+        for (var i = 0; i < segments.Length; i++)
+        {
+            var decoded = Uri.UnescapeDataString(segments[i]);
+            if (HasAt(decoded) && EmailPattern().IsMatch(decoded))
+            {
+                segments[i] = ScreenedEmail;
+            }
+        }
+
+        return string.Join('/', segments);
+    }
+
+    /// <summary>
+    /// The address without its userinfo, query and fragment (D380): its scheme, host, port and
+    /// path, each path segment that holds an address as <see cref="ScreenedEmail"/> (<see cref="ScreenPath"/>, D382).
+    /// </summary>
     public static Uri WithoutQuery(Uri url)
     {
         ArgumentNullException.ThrowIfNull(url);
-        return new Uri(url.GetComponents(UriComponents.SchemeAndServer | UriComponents.Path, UriFormat.UriEscaped));
+        return new Uri(url.GetComponents(UriComponents.SchemeAndServer, UriFormat.UriEscaped) + ScreenPath(url.AbsolutePath));
     }
+
+    /// <summary>
+    /// <paramref name="id"/> when it has a request id's shape, else null (D382): 1 to 128 of
+    /// <c>A</c> to <c>Z</c>, <c>a</c> to <c>z</c>, <c>0</c> to <c>9</c>, <c>:</c>, <c>.</c>,
+    /// <c>_</c> and <c>-</c> (GitHub's <c>C0DE:1234:…</c>, Azure DevOps' GUIDs, GitLab's ids). The id
+    /// is the server's and goes into every warning and failure, so one of any other shape is kept nowhere.
+    /// </summary>
+    public static string? ShapedRequestId(string? id) => id is not null && RequestIdPattern().IsMatch(id) ? id : null;
 
     /// <summary>
     /// What a log line says of <paramref name="exception"/> (D380): its type's name, with its
@@ -594,12 +641,15 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// </summary>
     private HostingFailure Unreadable(HostingExchange exchange, Exception exception) => Stopped(exchange, $"Malformed ({Describe(exception)})");
 
-    /// <summary>The profile's request id of an answer's headers; null when its hook throws on them (D380).</summary>
+    /// <summary>
+    /// The profile's request id of an answer's headers when it has a request id's shape
+    /// (<see cref="ShapedRequestId"/>, D382); null when it has not, or when the hook throws on them (D380).
+    /// </summary>
     private string? RequestIdOf(IReadOnlyDictionary<string, string> headers)
     {
         try
         {
-            return _profile.RequestIdOf(headers);
+            return ShapedRequestId(_profile.RequestIdOf(headers));
         }
         catch (Exception)
         {
@@ -613,27 +663,29 @@ internal sealed partial class HostingHttpClient : IDisposable
 
     /// <summary>
     /// What every failure gets (5.2): the profile's provider; the address, the failure's own or
-    /// else the request's, without its userinfo and query (D380); the request id where the failure
-    /// left it null; e-mail addresses screened out of its message and detail (D368).
+    /// else the request's, without its userinfo and query (D380) and with each path segment that
+    /// holds an address screened (D382); the request id where the failure left it null, kept only
+    /// with a request id's shape (D382); e-mail addresses screened out of its message and detail (D368).
     /// </summary>
     private HostingFailure Finish(HostingFailure failure, Uri url, string? requestId) => failure with
     {
         Provider = _profile.Provider,
         Url = WithoutQuery(failure.Url ?? url),
-        RequestId = failure.RequestId ?? requestId,
+        RequestId = ShapedRequestId(failure.RequestId ?? requestId),
         Message = ScreenEmail(failure.Message),
         Detail = failure.Detail is null ? null : ScreenEmail(failure.Detail),
     };
 
     /// <summary>
     /// The one warning of a failure: <c>&lt;name&gt;: &lt;method&gt; &lt;path&gt; failed: &lt;status or kind&gt; (request &lt;id&gt;).</c>,
-    /// the path without its query. No exception is passed to the log (D380): the log's own text of
-    /// one (its <c>ToString()</c>) would quote what the server or the proxy sent.
+    /// the path without its query and with each segment that holds an address screened, the id only
+    /// with a request id's shape (D382). No exception is passed to the log (D380): the log's own
+    /// text of one (its <c>ToString()</c>) would quote what the server or the proxy sent.
     /// </summary>
     private void Warn(string method, Uri url, string statusOrKind, string? requestId)
     {
-        var request = requestId is { Length: > 0 } ? $" (request {requestId})" : string.Empty;
-        _log.Warning($"{Name}: {method} {url.AbsolutePath} failed: {statusOrKind}{request}.");
+        var request = ShapedRequestId(requestId) is { } id ? $" (request {id})" : string.Empty;
+        _log.Warning($"{Name}: {method} {ScreenPath(url.AbsolutePath)} failed: {statusOrKind}{request}.");
     }
 
     private static T? Parse<T>(byte[] body, JsonTypeInfo<T> type)
@@ -737,8 +789,14 @@ internal sealed partial class HostingHttpClient : IDisposable
         }
     }
 
-    [GeneratedRegex(@"\S+@\S+", RegexOptions.CultureInvariant)]
+    private static bool HasAt(string text) => text.Contains('@', StringComparison.Ordinal) || text.Contains(FullWidthAt, StringComparison.Ordinal);
+
+    [GeneratedRegex(@"\S+[@\uFF20]\S+", RegexOptions.CultureInvariant)]
     private static partial Regex EmailPattern();
+
+    // \z, not $: $ matches before a last line end too.
+    [GeneratedRegex(@"^[A-Za-z0-9:._-]{1,128}\z", RegexOptions.CultureInvariant)]
+    private static partial Regex RequestIdPattern();
 
     /// <summary>The last 200 answer of a URL for one token: its ETag, body and the profile's kept headers, in memory only.</summary>
     private sealed record KeptAnswer(string ETag, byte[] Body, IReadOnlyDictionary<string, string> Headers);

@@ -118,6 +118,24 @@ public sealed class HostingSessionCredentialTests
     }
 
     [Fact]
+    public async Task An_exception_the_check_lets_through_is_logged_by_its_type_alone_and_the_account_stays()
+    {
+        // D382 (H4): the check's catch-all names the exception by its type and codes alone.
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var octo = HostingSessionStartTests.OctoKey(setup);
+        setup.Fault = request => request.RequestUri!.AbsolutePath == "/api/v3/user" ? new InvalidOperationException(setup.ThrownText) : null;
+
+        setup.Session.Refused(octo);
+        await CheckedAsync(setup);
+        setup.Fault = null;
+
+        Assert.Equal("GitHub account octo on 127.0.0.1:1: git was refused; the token could not be checked (InvalidOperationException).", setup.Warnings[^1]);
+        Assert.Equal(AccountState.SignedIn, setup.Session.Account!.State);
+        setup.AssertNothingThrownLogged();
+    }
+
+    [Fact]
     public async Task Two_erases_while_the_check_is_held_make_one_request()
     {
         await using var setup = await HostingSessionSetup.StartAsync();

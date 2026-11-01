@@ -232,6 +232,29 @@ public sealed class RepositoryHostingTests
     }
 
     [Fact]
+    public async Task An_exception_the_core_lets_through_fails_the_run_without_its_text_in_the_log_or_the_failure()
+    {
+        // D382 (H4): the run's catch-all names the exception by its type alone, and the failure
+        // shown has the provider's text for no answer.
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await OpenAsync(setup, out _);
+        await setup.Thread.RunAsync(() => hosting.Update(HelloRefs(), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "the list");
+
+        setup.Fault = request => request.RequestUri!.AbsolutePath.EndsWith("/pulls", StringComparison.Ordinal) ? new InvalidOperationException(setup.ThrownText) : null;
+        await setup.Thread.RunAsync(() => hosting.RefreshPullRequestsAsync(Cancelled));
+        await setup.Thread.IdleAsync();
+        setup.Fault = null;
+
+        var failure = hosting.State.Failure!;
+        Assert.Equal((PullRequestsState.Failed, HostingFailureKind.Network, "Could not reach GitHub.", HostingProvider.GitHub), (hosting.State.PullRequests, failure.Kind, failure.Message, failure.Provider));
+        Assert.Contains("hello: the pull requests could not be read (InvalidOperationException).", setup.Warnings);
+        setup.AssertNothingThrownLogged();
+        Assert.All(setup.ThrownSecrets, secret => Assert.DoesNotContain(secret, failure.Message + failure.Detail, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public async Task A_created_pull_request_goes_on_top_only_of_the_listed_bases_list()
     {
         await using var setup = await HostingSessionSetup.StartAsync();

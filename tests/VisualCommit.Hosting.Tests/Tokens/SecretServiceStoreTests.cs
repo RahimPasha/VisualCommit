@@ -205,6 +205,29 @@ public sealed class SecretServiceStoreTests
     }
 
     [Fact]
+    public async Task An_exception_of_the_probe_is_logged_by_its_type_alone_and_not_given_to_the_log()
+    {
+        // D382 (H4): the probe's catch-all, as every catch-all of the Hosting assembly, names the
+        // exception by its type and codes; the log's text of it would quote its message.
+        var store = new SecretServiceStore(_log, new SecretServiceOptions
+        {
+            ReadEnvironment = Environment(("DBUS_SESSION_BUS_ADDRESS", "unix:path=/run/user/1000/bus")),
+            ConnectionOptions = _ => throw new InvalidOperationException("proxy 'http://proxyuser:PROXY-SECRET@127.0.0.1:9/'; Bearer ghp_FAKE-octocat-1; ada@example.com"),
+            Limits = Short,
+        });
+
+        var probe = await store.ProbeAsync(_ct);
+
+        Assert.Equal(new TokenStoreProbe(false, TokenStoreReasons.NoKeychain), probe);
+        Assert.Equal("Secret Service: connect failed (InvalidOperationException).", Assert.Single(_log.Lines).Message);
+        Assert.All(_log.Entries, entry => Assert.Null(entry.Exception));
+        foreach (var secret in new[] { "PROXY-SECRET", "proxyuser", "FAKE", "ada@example.com" })
+        {
+            Assert.DoesNotContain(secret, _log.Written, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void The_store_names_itself_for_the_log_and_its_constructor_does_nothing()
     {
         var store = new SecretServiceStore(_log, new SecretServiceOptions

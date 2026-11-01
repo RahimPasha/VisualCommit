@@ -20,7 +20,8 @@ namespace VisualCommit.Hosting.Tests;
 /// on every hop, redirects and the profile's refusals of them, the 10 MB bound, a byte order mark,
 /// refused successes and empty ones, the provider, address and request id on every failure, e-mail
 /// screening, kept answers, headers without case, pages, one request at a time, the time limit,
-/// the texts, and log lines that hold no query, token, header or body.
+/// the texts, and log lines that hold no query, token, header or body; D380's rows; D382's screen of
+/// the path and the request id's shape.
 /// </summary>
 public sealed class HostingHttpClientTests
 {
@@ -379,9 +380,134 @@ public sealed class HostingHttpClientTests
     [InlineData("A pull request already exists for octo:user@fix.", "A pull request already exists for <e-mail>")]
     [InlineData("No commits between main and user@fix", "No commits between main and <e-mail>")]
     [InlineData("", "")]
+    // D382: a full-width at sign (U+FF20) is one too.
+    [InlineData("from ada\uFF20example.com, today", "from <e-mail> today")]
+    [InlineData("an \uFF20 alone", "an \uFF20 alone")]
     public void An_e_mail_shaped_run_is_an_at_sign_between_non_blank_characters(string text, string screened)
     {
         Assert.Equal(screened, HostingHttpClient.ScreenEmail(text));
+    }
+
+    [Theory]
+    [InlineData("/api/v4/users/ada@example.com/keys", "/api/v4/users/<e-mail>/keys")]
+    [InlineData("/api/v4/users/ada%40example.com", "/api/v4/users/<e-mail>")]
+    [InlineData("/api/v4/users/ada%EF%BC%A0example.com", "/api/v4/users/<e-mail>")]
+    [InlineData("/api/v4/users/Ada%20Lovelace%20%3Cada%40example.com%3E/x", "/api/v4/users/<e-mail>/x")]
+    [InlineData("/api/v4/a%2Fada%40example.com/x", "/api/v4/<e-mail>/x")]
+    [InlineData("/ada%40example.com/b%40example.com/", "/<e-mail>/<e-mail>/")]
+    [InlineData("/api/v4/projects/7/merge_requests", "/api/v4/projects/7/merge_requests")]
+    [InlineData("/api/v4/a%20b/%40start/end%40", "/api/v4/a%20b/%40start/end%40")]
+    // Decoded once only: %2540 is a "%40" in the server's path, no at sign.
+    [InlineData("/api/v4/x%2540y", "/api/v4/x%2540y")]
+    [InlineData("/api/v4/bad%ZZ%40", "/api/v4/bad%ZZ%40")]
+    [InlineData("/", "/")]
+    public void A_path_segment_that_holds_an_address_once_percent_decoded_is_screened_whole(string path, string screened)
+    {
+        Assert.Equal(screened, HostingHttpClient.ScreenPath(path));
+    }
+
+    [Fact]
+    public async Task An_address_a_redirect_or_a_next_page_puts_in_the_path_reaches_neither_the_warning_nor_the_failures_address()
+    {
+        // D382, the second hunt's finding: the server names the path, so D368's screen covers it.
+        using var setup = Setup.Scripted(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/v4/plain" => RecordingHttpHandler.Json(HttpStatusCode.Found, "{}", ("Location", "/api/v4/users/ada@example.com/x?private_token=x")),
+            "/api/v4/encoded" => RecordingHttpHandler.Json(HttpStatusCode.Found, "{}", ("Location", "/api/v4/users/ada%40example.com/x")),
+            "/api/v4/full-width" => RecordingHttpHandler.Json(HttpStatusCode.Found, "{}", ("Location", "/api/v4/users/ada%EF%BC%A0example.com/x")),
+            "/api/v4/items" => RecordingHttpHandler.Json(HttpStatusCode.OK, "[{\"number\":1}]", ("Link", "<https://gitlab.example/api/v4/users/ada%40example.com/items?page=2>; rel=\"next\"")),
+            "/api/v4/kept" => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, "{}"),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}"),
+        });
+        setup.Profile.OnClassify = exchange => exchange.Status == 403
+            ? new HostingFailure(HostingFailureKind.Forbidden, "Kept.", Url: new Uri("https://gitlab.example/users/ada@example.com/kept"))
+            : null;
+
+        var failures = new List<HostingFailure>();
+        foreach (var path in new[] { "plain", "encoded", "full-width" })
+        {
+            failures.Add((await setup.GetAsync(path)).Failure!);
+        }
+
+        failures.Add((await setup.Client.GetPagesAsync(Token, new Uri(Origin, "items"), CoreTestJsonContext.Default.ListCoreTestJson, 10, Cancelled)).Failure!);
+        failures.Add((await setup.GetAsync("kept")).Failure!);
+        failures.Add(setup.Client.Failed(HttpMethod.Get, new Uri(Origin, "users/ada%40example.com"), new HostingFailure(HostingFailureKind.BadCredentials, "Anonymous."), null));
+
+        Assert.Equal(
+            new[]
+            {
+                "https://gitlab.example/api/v4/users/%3Ce-mail%3E/x",
+                "https://gitlab.example/api/v4/users/%3Ce-mail%3E/x",
+                "https://gitlab.example/api/v4/users/%3Ce-mail%3E/x",
+                "https://gitlab.example/api/v4/users/%3Ce-mail%3E/items",
+                "https://gitlab.example/users/%3Ce-mail%3E/kept",
+                "https://gitlab.example/api/v4/users/%3Ce-mail%3E",
+            },
+            failures.Select(failure => failure.Url!.AbsoluteUri));
+        Assert.Equal(
+            new[]
+            {
+                "GitLab: GET /api/v4/users/<e-mail>/x failed: 404.",
+                "GitLab: GET /api/v4/users/<e-mail>/x failed: 404.",
+                "GitLab: GET /api/v4/users/<e-mail>/x failed: 404.",
+                "GitLab: GET /api/v4/users/<e-mail>/items failed: 404.",
+                "GitLab: GET /api/v4/kept failed: 403.",
+                "GitLab: GET /api/v4/users/<e-mail> failed: BadCredentials.",
+            },
+            setup.Log.Lines.Select(line => line.Message));
+        Assert.Equal("/api/v4/users/ada@example.com/x", setup.Recorder.Sent[1].Url.AbsolutePath);
+        foreach (var secret in new[] { "ada", "example.com", "@", "%40", "\uFF20", "%EF%BC%A0" })
+        {
+            Assert.DoesNotContain(secret, setup.Log.Written, StringComparison.Ordinal);
+            Assert.All(failures, failure => Assert.DoesNotContain(secret, failure.Url!.AbsoluteUri, StringComparison.Ordinal));
+        }
+    }
+
+    [Theory]
+    [InlineData("C0DE:1234:5678ABC:9DEF012:6543210F", true)]
+    [InlineData("0f8fad5b-d9cb-469f-a165-70867728950e", true)]
+    [InlineData("01HV7B4K5Z9X2A3M4N5P6Q7R8S", true)]
+    [InlineData("a.b_c-d:e", true)]
+    [InlineData("", false)]
+    [InlineData("R 1", false)]
+    [InlineData("Bearer glpat-FAKE-ada-1", false)]
+    [InlineData("ada@example.com", false)]
+    [InlineData("R-1/../x", false)]
+    [InlineData("<b>R-1</b>", false)]
+    [InlineData("R-1, R-2", false)]
+    [InlineData("R-\u00E9", false)]
+    public async Task A_request_id_is_kept_only_with_a_request_ids_shape_in_the_reply_the_failure_and_the_log(string id, bool kept)
+    {
+        // D382: the id is the server's, copied raw into every warning and failure before.
+        using var setup = Setup.Scripted(_ => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, "{\"message\":\"No.\"}", ("X-Request-Id", id)));
+
+        var reply = await setup.GetAsync("projects/7");
+
+        var expected = kept ? id : null;
+        Assert.Equal((expected, expected), (reply.RequestId, reply.Failure!.RequestId));
+        Assert.Equal(kept ? $"GitLab: GET /api/v4/projects/7 failed: 403 (request {id})." : "GitLab: GET /api/v4/projects/7 failed: 403.", Assert.Single(setup.Log.Lines).Message);
+    }
+
+    [Fact]
+    public async Task A_request_id_of_up_to_128_characters_of_its_set_is_kept_and_none_other_also_from_the_profile_or_the_client()
+    {
+        Assert.Equal(new string('a', 128), HostingHttpClient.ShapedRequestId(new string('a', 128)));
+        Assert.Null(HostingHttpClient.ShapedRequestId(new string('a', 129)));
+        Assert.Null(HostingHttpClient.ShapedRequestId("R-1\n"));
+        Assert.Null(HostingHttpClient.ShapedRequestId("R-1\r\nX-Injected: 1"));
+        Assert.Null(HostingHttpClient.ShapedRequestId(null));
+
+        // A failure's own id and the one a client passes go through the same shape.
+        using var setup = Setup.Scripted(_ => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, "{}", ("X-Request-Id", "R-1")));
+        setup.Profile.OnClassify = _ => new HostingFailure(HostingFailureKind.Forbidden, "Kept.", RequestId: "id of ada@example.com");
+        var classified = (await setup.GetAsync("kept")).Failure!;
+        var built = setup.Client.Failed(HttpMethod.Get, new Uri(Origin, "built"), new HostingFailure(HostingFailureKind.BadCredentials, "Anonymous."), new string('b', 129));
+        var malformed = setup.Client.MalformedAnswer(HttpMethod.Get, new Uri(Origin, "answer"), "R 9");
+
+        Assert.Equal(((string?)null, (string?)null, (string?)null), (classified.RequestId, built.RequestId, malformed.RequestId));
+        Assert.Equal(
+            new[] { "GitLab: GET /api/v4/kept failed: 403.", "GitLab: GET /api/v4/built failed: BadCredentials.", "GitLab: GET /api/v4/answer failed: Malformed." },
+            setup.Log.Lines.Select(line => line.Message));
     }
 
     [Fact]
@@ -768,6 +894,9 @@ public sealed class HostingHttpClientTests
     [InlineData("https://:hunter2@gitlab.example:8443/a%20b?q", "https://gitlab.example:8443/a%20b")]
     [InlineData("https://gitlab.example/a?private_token=x#f", "https://gitlab.example/a")]
     [InlineData("https://gitlab.example/", "https://gitlab.example/")]
+    // D382: nor an address in its path.
+    [InlineData("https://user:hunter2@gitlab.example/api/v4/users/ada%40example.com/keys?q", "https://gitlab.example/api/v4/users/%3Ce-mail%3E/keys")]
+    [InlineData("https://gitlab.example/api/v4/users/ada@example.com", "https://gitlab.example/api/v4/users/%3Ce-mail%3E")]
     public void An_address_without_its_query_keeps_no_userinfo(string url, string without)
     {
         Assert.Equal(without, HostingHttpClient.WithoutQuery(new Uri(url)).AbsoluteUri);

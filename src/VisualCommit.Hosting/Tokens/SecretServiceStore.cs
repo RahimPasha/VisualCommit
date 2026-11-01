@@ -146,7 +146,9 @@ public sealed class SecretServiceStore(IAppLog log, SecretServiceOptions? option
         }
         catch (Exception exception)
         {
-            log.Warning($"{Name}: {step} failed ({exception.GetType().Name}).", exception);
+            // By its type and codes alone, and not passed to the log, whose text of it would quote
+            // its message (D382: every catch-all of the Hosting assembly, H1's rule).
+            log.Warning($"{Name}: {step} failed ({Http.HostingHttpClient.Describe(exception)}).");
             return unavailable;
         }
     }

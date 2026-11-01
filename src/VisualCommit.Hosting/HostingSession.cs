@@ -152,6 +152,9 @@ public sealed class HostingSession : IHostingSession
         }
     }
 
+    /// <summary>How a sign-out deletes one file of <c>avatars/</c>: <see cref="File.Delete"/>; the tests give one that fails.</summary>
+    internal Action<string> DeleteAvatarFile { get; set; } = File.Delete;
+
     /// <summary>How many repositories' hostings are told of the account's changes, for the tests.</summary>
     internal int HostingCount
     {
@@ -733,11 +736,12 @@ public sealed class HostingSession : IHostingSession
         {
             try
             {
-                File.Delete(file);
+                DeleteAvatarFile(file);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                _log.Warning($"{file} could not be deleted at the sign-out: {ex.Message}");
+                // By its type alone, as every log call of an exception here (D382).
+                _log.Warning($"{file} could not be deleted at the sign-out ({Http.HostingHttpClient.Describe(ex)}).");
             }
         }
 
@@ -810,7 +814,9 @@ public sealed class HostingSession : IHostingSession
         }
         catch (Exception ex)
         {
-            _log.Warning($"GitHub account {login} on {Host}: git was refused; the token could not be checked: {ex.Message}");
+            // The exception by its type and codes alone, never its text, which can quote what the
+            // server or a proxy sent (D382, H1's rule).
+            _log.Warning($"GitHub account {login} on {Host}: git was refused; the token could not be checked ({Http.HostingHttpClient.Describe(ex)}).");
         }
     }
 

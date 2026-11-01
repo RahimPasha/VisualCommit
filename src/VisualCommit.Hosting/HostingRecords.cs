@@ -167,10 +167,16 @@ public enum PullRequestRefusal
 /// Azure DevOps' and GitLab's as their clients give it (docs/phase-7b-design.md 6, 7).
 /// </param>
 /// <param name="RetryAt">When a rate limit ends.</param>
-/// <param name="Url">The address the failure names, without its query.</param>
+/// <param name="Url">
+/// The address the failure names, without its query; in a failure the shared HTTP core finishes,
+/// also without its userinfo, and with each path segment that holds an address as
+/// <c>&lt;e-mail&gt;</c> (D380, D382).
+/// </param>
 /// <param name="RequestId">
 /// The answer's request id, for the log: GitHub's <c>X-GitHub-Request-Id</c>, Azure DevOps'
-/// <c>ActivityId</c> (else <c>X-VSS-E2EID</c>), GitLab's <c>x-request-id</c>; null when no answer came.
+/// <c>ActivityId</c> (else <c>X-VSS-E2EID</c>), GitLab's <c>x-request-id</c>; null when no answer came,
+/// and, in a failure the shared HTTP core finishes, when it is not 1 to 128 of <c>A</c> to <c>Z</c>,
+/// <c>a</c> to <c>z</c>, <c>0</c> to <c>9</c>, <c>:</c>, <c>.</c>, <c>_</c> and <c>-</c> (D382).
 /// </param>
 public sealed record HostingFailure(
     HostingFailureKind Kind,

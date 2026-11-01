@@ -618,7 +618,8 @@ internal static class HostingLinks { public static Uri? Next(IReadOnlyDictionary
 GitHub's results equal 7a's `GitHubClient.NetworkText`, `TimeoutText` and `MalformedText`
 (`GitHubClient.cs:44-50`) and its 5xx text (`:453`). The core sets `Provider` on every failure, and
 `Url` and `RequestId` where the profile left them null (every `Url` without its userinfo and query,
-D380), and screens e-mail addresses (D368); a failure a
+D380, each path segment holding an address `<e-mail>`, and a `RequestId` kept only of 1 to 128 of
+`[A-Za-z0-9:._-]`, D382), and screens e-mail addresses (D368); a failure a
 client builds itself from a reply that succeeded goes through `Failed` to get the same. `RefuseRedirect`
 is asked of every redirect with a `Location`, one to another origin and a fourth one included, before
 7a's rule; the redirect's exchange has an empty `Body` and the request's `Url`, query kept (WP-H's
@@ -1538,8 +1539,11 @@ branch `wip/p7b-http`; no git, no UI, no picture.
   a value (GitHub's 409). Anything else goes to `Classify`. A hook that throws on an answer (a header
   value out of range) is `Malformed`, warning `Malformed (<type>)` (D380). On every failure the core
   sets `Provider` to the profile's, `Url` (the profile's own, else the request's) without its userinfo
-  and query (D380: a same-origin `Location` can hold a user and password), and `RequestId`
-  (`RequestIdOf`) where the profile left it null; it replaces each e-mail-shaped run in `Message`
+  and query (D380: a same-origin `Location` can hold a user and password) and with each path
+  segment that holds an e-mail-shaped run once percent-decoded as `<e-mail>` (D382: the server
+  names a redirect's or a next page's path), and `RequestId` (`RequestIdOf`) where the profile left
+  it null, kept, the profile's own too, only when it matches `^[A-Za-z0-9:._-]{1,128}$` (D382);
+  it replaces each e-mail-shaped run (an `@` or a full-width at sign, U+FF20, D382) in `Message`
   and `Detail` with `<e-mail>` (D368: Azure DevOps' messages name identities, g1 G2, and reach the
   log), which changes no GitHub text.
 - **Kept answers.** 7a's: a GET's 200 with an `ETag`, per (SHA-256 of the token, URL), at most 512 and
@@ -1552,14 +1556,16 @@ branch `wip/p7b-http`; no git, no UI, no picture.
   warning `Link to <origin>`; at `maxPages` with a next page left, `Next` is it. A failing page fails the
   list. `pageHeaders` is called with each page's headers (GitHub's 5.3). `HostingLinks.Next` reads
   `Link`'s `rel="next"` for GitHub's and GitLab's `NextPage` (`GitHubClient.cs:527-546`, moved).
-- **Logging.** One warning per failure, `<name>: <method> <path> failed: <status or kind> (request <id>).`;
+- **Logging.** One warning per failure, `<name>: <method> <path> failed: <status or kind> (request <id>).`,
+  `<path>` screened as the failure's `Url` and `<id>` only of the request id's shape (D382);
   never a header, body, query, token or an exception's text (D380): no exception object reaches the
   log, and one is named by `Describe`, its type with its `HttpRequestError` and an inner
   `SocketException`'s code, as in `Network (HttpRequestException ConnectionError, SocketException
   ConnectionRefused)`, since .NET's messages quote what a proxy or server sent (MEASURED: a proxy's
   password, a token echoed back, a cookie, an address, body bytes). This amends 7a design 6.2's "a
   network failure passes the exception" and 7.12's "by message only" for every such log call in
-  `src/VisualCommit.Hosting/` (`AvatarCache`'s one included); GitHub's lines are 7a's otherwise.
+  `src/VisualCommit.Hosting/` (`AvatarCache`'s one included), and, by D382, for every catch-all
+  there and every log call there that wrote an exception's message; GitHub's lines are 7a's otherwise.
 - **Helpers.** `SameOrigin`, `OriginOf`, `IsRedirect`, `Resolve`, `ReadBoundedAsync` and the constants
   are internal statics here; `GitHubClient`'s forward to them, so `AvatarCache.cs:152-183` compiles
   unchanged. `MalformedAnswer` gives a provider's
@@ -1611,7 +1617,10 @@ of none, goes on as in 7a.
   conditional, the budget, `ForgetKept`); headers without case and joined; `HostingLinks.Next`; pages
   (cap and `Next`, off origin or path, a failing page, the observer); one at a time and a waiting call cancelled; the texts, GitHub's equal to
   `GitHubClient`'s constants; no query, token or header in a log line; a body type outside `Json`;
-  D380's rows, on strings and over a raw socket on 127.0.0.1 with the real handler.
+  D380's rows, on strings and over a raw socket on 127.0.0.1 with the real handler; D382's path
+  screen and request id shape. D382's catch-alls are tested where they are: `RepositoryHostingTests`,
+  `RepositoryHostingAvatarsTests`, `HostingSessionCredentialTests`, `HostingSessionSignInTests` and
+  `SecretServiceStoreTests` each give one a made-up secret.
 - `GitHubClientTests`: unchanged; one method: every failure of the fault table names GitHub. D380
   changes three Network lines and one exception assertion, and adds the reset and a redirect's userinfo.
 - `GitHubProviderTests`: one theory, A5 against `FakeGitHub` for the four forms and an other 422
@@ -1633,54 +1642,48 @@ HTTP-stack exception (D380); CI's five jobs are green.
 
 **As built** (WP-H, `2ed2447`, `549ec8d`, `43bcb65`, review fixes `4bb76fe`, 2026-11-01). Where it
 differs from 5.1 to 5.5 or settles what they left open:
-- Beyond 1.4, now written there: `HostingHttpProfile.WarningOf`, the `<status or kind>` of the
-  warning for a failure the profile gave, the status unless overridden (6.3's "redirected outside the
-  organization"); and `HostingHttpClient.Failed(method, url, failure, requestId)`, which gives a
-  failure a client builds from a reply that succeeded (6.4's anonymous connectionData) the provider,
-  the address without its query, the request id, D368's screen and a warning by its kind;
-  `MalformedAnswer` is one. A failure built without the core sets `Provider` itself (the default is
-  GitHub). `HostingLinks` is in `HostingHttpProfile.cs`.
-- An answer's order: the core's own stops (no answer, the time, a redirect, 10 MB), `RefuseSuccess`
-  (2xx, 304), `SucceedsEmpty` (any status, so a 204 can be one), then the parse or `Classify`.
-  `RefuseRedirect` is asked of every redirect with a `Location`, a fourth too, before 7a's rule; its
-  exchange's `Url` is the request's (query kept), its `Body` empty (1.4 says so now).
-- `SendAsync`'s `Next` is always null; only `GetPagesAsync` pages. `pageHeaders` sees each page that
-  gave a value, before the next is asked.
-- The screen replaces the whole non-blank run around an `@` (`\S+@\S+`, `ScreenEmail`) in every
-  failure the core finishes. A branch name with an `@` goes too, GitHub's words included ("… already
-  exists for <e-mail>"; `Refusal` still holds), so 5.2's "changes no GitHub text" holds only for
-  branches without one, and the App's D316 fallback shows `<e-mail>` there: the lead decides whether
-  to put it to the owner.
-- Statics are `public` on the internal class; `Profile` and `Clock` are properties. The 30 s run on
-  real time, not `clock`; a profile reads its own clock for `RetryAt`. `HostingReply<T>.Succeeded`.
-  Bodies go as `application/json; charset=utf-8`.
-- `GitHubClient` adds `internal MalformedAnswer`. A list's `OAuthScopes` and `Sso` are the
-  observer's when the reply is of a page it saw, else that answer's own: 7a's in every case.
-- `GitHubProvider`: `public const OtherProviderDetail = "other-provider:"`, `internal static
-  RefusalOf(detail)`; the token refusal guards every method.
-- Outside section 5, only 1.4 and 6.3's lines above (the review's finding). `AvatarCache.cs`
-  unchanged but for D380's log call; nothing under `Http/` names a provider.
-- The lead's rulings H1 to H3 (D380, wave 1's verification): no exception object reaches the log;
-  `HostingHttpClient.Describe` names one by its type, its `HttpRequestError` when not `Unknown` and
-  the first inner `SocketException`'s code, and `AvatarCache`'s one such call uses it. `WithoutQuery`
-  keeps scheme, host, port and path, so every failure's `Url`, a profile's own too, drops the
-  userinfo. A body that cannot be decompressed is `Malformed`; so is an answer any profile hook
-  throws on (`RequestIdOf`'s then gives no id, `WarningOf`'s the kind), and GitHub's reset of digits
-  past year 9999 or a `long`. 7a assertions changed: `GitHubClientTests`' fault table's last line,
-  `No_answer_…` and `A_cancellation_…` (renamed; `Network (HttpRequestException)`,
-  `(TaskCanceledException)`, no exception), `HostingSessionCredentialTests`' Network line and
-  `AvatarCacheTests`' `(TaskCanceledException)`; `ListLog` keeps exceptions (`Entries`, `Written`).
-- After the hunt on the fixed code (D380's H3): `Uri.IdnHost` throws `UriFormatException` on hosts
-  `Uri.TryCreate` takes (U+200D, U+FF20, U+2488, U+FF0F, U+FF1A in the host; MEASURED on .NET 10),
-  which a server's `Location` or `Link` can name. The core reads a host through
-  `HostingHttpClient.IdnHostOf`, null for such a host: `SameOrigin` is false for it (its own address
-  included) and `OriginOf` names it `(an unreadable host)` (`UnreadableHost`), never the host as sent.
-  So a redirect or a next page there is `Malformed` with 7a's warnings (`redirected to
-  https://(an unreadable host):443`, `Link to …`), nothing is sent there, and nothing throws;
-  `HostingLinks.Next` still gives such an address as it is (a null would end the list as a success).
-  `GitHubUrls.SameOrigin` and `OriginOf` forward to the core's, and `GitHubProvider`'s avatar check
-  reads `IdnHostOf`, so such an avatar in the sign-in check or A6 is dropped with the one warning and
-  `AvatarCache.cs` stays as it was.
+- Beyond 1.4, now written there: `HostingHttpProfile.WarningOf` (the warning's `<status or kind>` for
+  a profile's failure, 6.3's "redirected outside the organization") and `HostingHttpClient.Failed`,
+  which finishes a failure a client builds from a success (6.4's anonymous connectionData) as the core
+  finishes its own; `MalformedAnswer` is one. A failure built without the core sets `Provider` itself
+  (default GitHub). `HostingLinks` is in `HostingHttpProfile.cs`.
+- An answer's order: the core's stops (no answer, the time, a redirect, 10 MB), `RefuseSuccess` (2xx,
+  304), `SucceedsEmpty` (any status), then the parse or `Classify`. `RefuseRedirect` is asked of every
+  redirect with a `Location`, a fourth too, before 7a's rule, with the request's `Url` (query kept) and
+  an empty `Body`. `SendAsync`'s `Next` is always null; `pageHeaders` sees each page that gave a value,
+  before the next is asked.
+- The screen replaces the whole non-blank run around an `@` or a U+FF20 (`ScreenEmail`). A branch name
+  with one goes too, GitHub's words included (`Refusal` still holds), so 5.2's "changes no GitHub text"
+  holds only for branches without one and the App's D316 fallback shows `<e-mail>` there: the lead
+  decides whether to put it to the owner.
+- Statics are `public` on the internal class; `Profile` and `Clock` are properties; the 30 s run on
+  real time, a profile reads its own clock for `RetryAt`. Bodies go as `application/json; charset=utf-8`.
+  `GitHubClient` adds `internal MalformedAnswer`; a list's `OAuthScopes` and `Sso` are 7a's in every
+  case. `GitHubProvider`: `public const OtherProviderDetail`, `internal static RefusalOf(detail)`; the
+  token refusal guards every method. Nothing under `Http/` names a provider. Outside section 5 the
+  design's text changed in 1.4 and 6.3 only.
+- D380 (H1 to H3): no exception object reaches the log; `HostingHttpClient.Describe` names one by its
+  type, its `HttpRequestError` when not `Unknown` and the first inner `SocketException`'s code
+  (`AvatarCache`'s one HTTP log call uses it, its only change). `WithoutQuery` keeps scheme, host, port
+  and path, so every `Url` drops the userinfo. A body that cannot be decompressed, an answer a profile
+  hook throws on (`RequestIdOf`'s then gives no id) and GitHub's reset past year 9999 are `Malformed`.
+  `Uri.IdnHost` throws on hosts `Uri.TryCreate` takes (U+200D, U+FF20, U+2488, U+FF0F, U+FF1A; MEASURED
+  on .NET 10), so hosts are read through `IdnHostOf` (null then): such a host is on no origin and named
+  `(an unreadable host)`, a redirect or next page there is `Malformed` and nothing is sent there
+  (`HostingLinks.Next` still gives it); `GitHubUrls` and the avatar check read hosts so too. 7a
+  assertions changed: `GitHubClientTests`' fault table's last line, `No_answer_…`, `A_cancellation_…`,
+  `HostingSessionCredentialTests`' Network line, `AvatarCacheTests`' `(TaskCanceledException)`.
+- D382 (H4 to H6, the second hunt): every catch-all of `src/VisualCommit.Hosting/`, and every log call
+  there that wrote an exception's message, names it by `Describe` alone and passes no exception: the
+  pull requests' and the avatars' runs in `RepositoryHosting`, `HostingSession`'s refusal check and its
+  sign-out's deletion (`DeleteAvatarFile`, a seam for the test), the Secret Service's probe; the pull
+  requests' failure has `HostingHttpTexts.Network`, not the message. `ScreenPath` screens the warning's
+  path and every `Url`: a segment that holds an address once percent-decoded (`%40`, `%EF%BC%A0`)
+  becomes `<e-mail>`, the others stay as sent. `ShapedRequestId` keeps an id (the reply's, the
+  failure's, a profile's own, the log's) only of `^[A-Za-z0-9:._-]{1,128}\z` (`$` would pass a last
+  line end). No 7a assertion changed; `HostingSessionSetup.Fault` throws a given exception. The
+  typed file and JSON catches that hand their exception to the log (`AuthorMapStore`, `AvatarCache`'s
+  save and index, `JsonAccountStore`) stay: no server's text reaches them.
 
 ## 6. WP-AZ: Azure DevOps' client and provider
 

@@ -185,6 +185,23 @@ public sealed class RepositoryHostingAvatarsTests
     }
 
     [Fact]
+    public async Task An_exception_an_images_download_lets_through_ends_the_run_without_its_text_in_the_log()
+    {
+        // D382 (H4): AvatarCache's read can still throw from the HTTP stack (a body that does not
+        // decompress is an InvalidDataException); the run's catch-all names it by its type alone.
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await OpenHelloAsync(setup);
+        setup.Fault = request => request.RequestUri!.AbsolutePath.StartsWith("/avatars/", StringComparison.Ordinal) ? new InvalidDataException(setup.ThrownText) : null;
+
+        await ShowAsync(setup, hosting, Scenarios.OctoEmail);
+
+        Assert.Empty(hosting.Avatars.FileByEmail);
+        Assert.Contains("hello: the authors' avatars could not be read (InvalidDataException).", setup.Warnings);
+        setup.AssertNothingThrownLogged();
+    }
+
+    [Fact]
     public async Task Signed_out_nothing_is_read_or_asked()
     {
         await using var setup = await HostingSessionSetup.StartAsync();
