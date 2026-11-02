@@ -21,8 +21,10 @@ namespace VisualCommit.Hosting.Tests;
 /// each with an open request from <c>feature/sign-in</c>: <c>fake-org/P/r</c> (!11),
 /// <c>other-org/P/r</c>, <c>fake-group/sub/web-app</c> (!21) and <c>octo/web-app</c> (#7). The
 /// session is made, not started. Disposing it checks that no token it minted or a test gave
-/// <see cref="Track"/> reached the data folder or the log, that no line holds a token of any fake's
-/// form, and that no fake saw an error. Made-up names only.
+/// <see cref="Track"/> reached the data folder or the log, in any form the tripwire knows, that no
+/// line holds a token of any fake's form, and that no fake saw an error. A token a test has a fake
+/// mint and does not give <see cref="Track"/> is looked for only by its form, in the log. Made-up
+/// names only.
 /// </summary>
 internal sealed class ProvidersSessionSetup : IAsyncDisposable
 {
@@ -127,7 +129,7 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
 
     public HostingSession Session { get; }
 
-    /// <summary>Every token the fakes minted for the test, the setup's and those given to <see cref="Track"/>, for the tripwire.</summary>
+    /// <summary>The tokens the setup had its fakes mint and those a test gave <see cref="Track"/>, for the tripwire.</summary>
     public IReadOnlyList<string> AllTokens
     {
         get
@@ -192,7 +194,8 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
 
     /// <summary>
     /// <paramref name="token"/>, which a test had a fake mint (<c>setup.Track(setup.GitLab!.AddToken("bob"))</c>),
-    /// searched for at the disposal as the setup's own: in the data folder and, in any case, in the log.
+    /// searched for at the disposal as the setup's own: in the data folder and the log, in every form
+    /// the tripwire knows, and in the log ignoring case.
     /// </summary>
     public string Track(string token)
     {
@@ -275,9 +278,15 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
         Thread.Dispose();
         try
         {
+            // The log as the app's log file holds it, searched as a file in every form the tripwire
+            // knows (Azure DevOps' Basic credential among them: base64 at offset 1), and as text
+            // ignoring case.
+            var written = Path.Combine(Root.Path, "written-log");
+            Directory.CreateDirectory(written);
+            File.WriteAllText(Path.Combine(written, "app.log"), Log.Written);
             foreach (var token in AllTokens)
             {
-                TokenTripwire.AssertAbsent(token, [Data.Path], null);
+                TokenTripwire.AssertAbsent(token, [Data.Path, written], null);
                 Assert.DoesNotContain(token, Log.Written, StringComparison.OrdinalIgnoreCase);
             }
 

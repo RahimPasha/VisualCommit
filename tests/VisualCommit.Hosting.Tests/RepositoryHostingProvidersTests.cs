@@ -24,8 +24,9 @@ namespace VisualCommit.Hosting.Tests;
 /// tab and its sign-out keeping GitLab's bindings; an <c>&lt;organization&gt;.visualstudio.com</c>
 /// remote listed through <c>dev.azure.com</c>; A3's names holding the token malformed (D382) and an
 /// address-shaped one written in the log as the core writes one (D368); another provider's
-/// repository listed cancelling the list's run and GitHub's avatar run in flight. The fakes are in
-/// process (ProvidersSessionSetup).
+/// repository listed cancelling the list's run and GitHub's avatar run in flight, and dropping A3's
+/// read in flight, which then warns of nothing and never takes a fork's answer's place. The fakes
+/// are in process (ProvidersSessionSetup).
 /// </summary>
 public sealed class RepositoryHostingProvidersTests
 {
@@ -33,6 +34,8 @@ public sealed class RepositoryHostingProvidersTests
     private const string GitLabUrl = "http://127.0.0.1:3/fake-group/sub/web-app.git";
     private const string AzureUrl = "http://fake-org@127.0.0.1:2/fake-org/P/_git/r";
     private const string OtherAzureUrl = "http://other-org@127.0.0.1:2/other-org/P/_git/r";
+    private const string ForkProject = ProvidersSessionSetup.Group + "/fork";
+    private const string ForkUrl = "http://127.0.0.1:3/" + ForkProject + ".git";
 
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
@@ -741,6 +744,106 @@ public sealed class RepositoryHostingProvidersTests
         Assert.Equal((PullRequestsState.Loaded, HostingProvider.GitLab), (hosting.State.PullRequests, hosting.State.Repository!.Provider));
         await setup.Thread.RunAsync(hosting.Dispose);
     }
+
+    [Theory]
+    [InlineData("answer")]
+    [InlineData("fault")]
+    [InlineData("asked")]
+    public async Task Another_providers_candidate_drops_A3s_read_in_flight_so_it_neither_warns_nor_takes_the_forks_answers_place(string release)
+    {
+        // GitHub's A3 held; then a GitLab fork listed (9.7), whose listed repository is its parent
+        // (7.8). GitHub's read is given up (the hold abandoned), so that, released with its answer or
+        // a fault, it warns of no repository listed no more. With a caller of ReadRepositoryAsync
+        // waiting on it, it goes on and answers that caller, but keeps nothing. Either way the parent
+        // stays listed after a refs read, and a refresh sends GitLab's A3 no more.
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
+        using var source = await TempRepo.CreateAsync("fork-source");
+        await source.CommitFileAsync("README.md", "fork\n", "Initial commit");
+        await setup.GitLab!.AddProjectAsync(ForkProject, source.Path, forkOf: setup.WebApp, ct: Cancelled);
+        await setup.SignInAsync(HostingProvider.GitHub);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "fork");
+        var onGitLab = RefsOf(("origin", ForkUrl), ("upstream", GitHubUrl));
+        Task<HostingResult<RepositoryInfo>>? asked = null;
+
+        using (var hold = setup.GitHub!.HoldNext("repo:octo/web-app"))
+        {
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", ForkUrl)), UrlRewrites.None));
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            if (release == "asked")
+            {
+                asked = await setup.Thread.RunAsync<Task<HostingResult<RepositoryInfo>>>(() => hosting.ReadRepositoryAsync(Cancelled));
+            }
+
+            await setup.Thread.RunAsync(() => hosting.Update(onGitLab, UrlRewrites.None));
+            await setup.Thread.WaitForAsync(() => hosting.State is { PullRequests: PullRequestsState.Loaded, Repository.Provider: HostingProvider.GitLab }, "the fork's parent's list");
+            Assert.Equal(ProvidersSessionSetup.GitLabProject, hosting.State.Repository!.FullName);
+            if (asked is null)
+            {
+                await setup.Thread.WaitForAsync(() => hold.Abandoned.IsCompleted, "GitHub's A3 given up");
+            }
+            else
+            {
+                Assert.False(hold.Abandoned.IsCompleted);
+            }
+
+            if (release == "fault")
+            {
+                setup.GitHub.FailNext("repo:octo/web-app", FakeGitHubFault.ServerError);
+            }
+        }
+
+        if (asked is not null)
+        {
+            var read = await asked.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            Assert.Equal(ProvidersSessionSetup.GitHubRepository, read.Value!.Repository.FullName);
+        }
+
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+        var gitLabA3 = GitLabA3s(setup, ForkProject);
+        await setup.Thread.RunAsync(() => hosting.Update(onGitLab, UrlRewrites.None));
+        Assert.Equal((PullRequestsState.Loaded, ProvidersSessionSetup.GitLabProject), (hosting.State.PullRequests, hosting.State.Repository!.FullName));
+        await setup.Thread.RunAsync(() => hosting.RefreshPullRequestsAsync(Cancelled));
+
+        Assert.Equal((1, 1), (gitLabA3, GitLabA3s(setup, ForkProject)));
+        Assert.Equal((PullRequestsState.Loaded, ProvidersSessionSetup.GitLabProject), (hosting.State.PullRequests, hosting.State.Repository!.FullName));
+        Assert.DoesNotContain(setup.Warnings, warning => warning.Contains("octo/web-app", StringComparison.Ordinal));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task A_run_cancelled_in_the_turn_it_started_leaves_no_A3_going()
+    {
+        // Two refs reads in one turn of the UI thread, GitHub's repository listed, then GitLab's
+        // (9.7): GitHub's cancelled run starts no A3, or gives up at once the one it started, so that
+        // GitHub answers nothing about a repository listed no more and no warning names it.
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
+        await setup.SignInAsync(HostingProvider.GitHub);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "web-app");
+
+        using (var hold = setup.GitHub!.HoldNext("repo:octo/web-app"))
+        {
+            await setup.Thread.RunAsync(() =>
+            {
+                hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None);
+                hosting.Update(RefsOf(("origin", GitLabUrl), ("upstream", GitHubUrl)), UrlRewrites.None);
+            });
+            await setup.Thread.WaitForAsync(() => hosting.State is { PullRequests: PullRequestsState.Loaded, Repository.Provider: HostingProvider.GitLab }, "GitLab's list");
+            await setup.Thread.WaitForAsync(() => !hold.Arrived.IsCompleted || hold.Abandoned.IsCompleted, "GitHub's A3, if sent, given up");
+        }
+
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+        Assert.DoesNotContain(setup.GitHub.Requests, request => request.Route == "repo:octo/web-app");
+        Assert.DoesNotContain(setup.Warnings, warning => warning.Contains("octo/web-app", StringComparison.Ordinal));
+        Assert.Equal((PullRequestsState.Loaded, HostingProvider.GitLab), (hosting.State.PullRequests, hosting.State.Repository!.Provider));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    private static int GitLabA3s(ProvidersSessionSetup setup, string project) =>
+        setup.GitLab!.Requests.Count(request => string.Equals(request.Route, "project:" + project, StringComparison.OrdinalIgnoreCase));
 
     private static bool IsGitLabA3(Uri address) =>
         Uri.UnescapeDataString(address.AbsolutePath).EndsWith("/projects/" + ProvidersSessionSetup.GitLabProject, StringComparison.Ordinal);

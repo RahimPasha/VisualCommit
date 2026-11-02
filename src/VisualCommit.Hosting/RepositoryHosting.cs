@@ -48,7 +48,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     // in flight with the account it was asked for: another account of the candidate's provider
     // (D348) uses neither, since what one account may read another may not.
     private (HostedRepository Candidate, AccountKey Account, RepositoryInfo Info)? _info;
-    private (HostedRepository Candidate, AccountKey? Account, Task<HostingResult<RepositoryInfo>> Read)? _reading;
+    private Reading? _reading;
 
     private RepositoryHostingState _state = RepositoryHostingState.NoHostedRemote;
     private IReadOnlyList<CredentialBinding> _bindings = [];
@@ -106,9 +106,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// bindings and the state again; a new candidate drops the list and, while signed in, starts a
     /// refresh (D289); no candidate left drops the avatars too. A new candidate of another provider
     /// than the run in flight cancels that run, whose answer then applies nothing, so that its list
-    /// waits on no other provider's answer (docs/phase-7b-design.md 9.7); within one provider the run
-    /// in flight ends first, as in 7a. The rewrites count as known only when they were wanted for
-    /// this read (D290).
+    /// waits on no other provider's answer, and drops A3's read in flight of another provider, which
+    /// then keeps nothing and is given up unless a caller of <see cref="ReadRepositoryAsync"/> waits
+    /// on it (docs/phase-7b-design.md 9.7); within one provider the run in flight ends first, as in
+    /// 7a. The rewrites count as known only when they were wanted for this read (D290).
     /// </summary>
     public void Update(RepoRefs refs, UrlRewrites rewrites)
     {
@@ -131,9 +132,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             ForgetList();
             if (_running is { } running && candidate is not null && running.Candidate.Provider != candidate.Provider)
             {
-                // Its answer, or its failure's warning, is of a repository listed no more, and this
-                // candidate's run would wait behind it up to that provider's time-out. The waits
-                // asked of it meanwhile end with this candidate's run (RefreshPullRequestsAsync).
+                // Its answer, or its A4's failure's warning, is of a repository listed no more, and
+                // this candidate's run would wait behind it up to that provider's time-out (its A3
+                // goes below, DropReadingOfOthers). The waits asked of it meanwhile end with this
+                // candidate's run (RefreshPullRequestsAsync).
                 _running = null;
                 running.Stop.Cancel();
                 if (!CanList && _again is { } waiting)
@@ -156,6 +158,13 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         else
         {
             Apply();
+        }
+
+        if (changed && candidate is not null)
+        {
+            // After the run's stop and the avatars' (no run waits on that read any more), before
+            // this candidate's run, which would otherwise take its place.
+            DropReadingOfOthers(candidate.Provider);
         }
 
         if (changed && CanList)
@@ -191,9 +200,13 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         return done.Task.WaitAsync(ct);
     }
 
-    /// <summary>A3 of the candidate, kept per candidate (a failure is not kept; an answer whose names hold the token is malformed, D382); on the UI thread.</summary>
+    /// <summary>
+    /// A3 of the candidate, kept per candidate (a failure is not kept; an answer whose names hold the
+    /// token is malformed, D382); on the UI thread. Another provider's candidate meanwhile never
+    /// cancels the read this call waits on (<see cref="Update"/>): it ends with its answer, kept no more.
+    /// </summary>
     public Task<HostingResult<RepositoryInfo>> ReadRepositoryAsync(CancellationToken ct) =>
-        _candidate is { } candidate ? ReadInfoAsync(candidate, ct) : Task.FromResult(HostingResult<RepositoryInfo>.Fail(NoRemote));
+        _candidate is { } candidate ? ReadInfoAsync(candidate, ct, asked: true) : Task.FromResult(HostingResult<RepositoryInfo>.Fail(NoRemote));
 
     /// <summary>A5 on <paramref name="baseRepository"/> (D293): once created, on top of the held list when that is the listed repository.</summary>
     public async Task<HostingResult<PullRequest>> CreatePullRequestAsync(HostedRepository baseRepository, NewPullRequest request, CancellationToken ct)
@@ -347,7 +360,8 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     }
 
     // On the UI thread, at the candidate's provider's change of account: A3's answer and the read in
-    // flight of another account are dropped (InfoOf would not use them either).
+    // flight of another account are forgotten (InfoOf would not use them either); that read keeps no
+    // answer, so that it never takes the place of this account's.
     private void ForgetInfoOfOthers(HostedRepository candidate)
     {
         lock (_infoLock)
@@ -360,8 +374,32 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             if (_reading is { } reading && !HeldOrNone(candidate, reading.Account))
             {
                 _reading = null;
+                reading.Superseded = true;
             }
         }
+    }
+
+    // On the UI thread, at a new candidate of another provider than A3's read in flight (Update): no
+    // list or avatar run waits on that read any more (Update has stopped them), and its answer, or
+    // its failure's warning, would be of a repository listed no more. It is dropped and keeps no
+    // answer, so that it never takes the place of this candidate's (7.8: a fork's listed repository
+    // is its parent), and it is given up at once, or when the last caller of ReadRepositoryAsync
+    // waiting on it is done (WaitAskedAsync).
+    private void DropReadingOfOthers(HostingProvider provider)
+    {
+        Reading? givenUp = null;
+        lock (_infoLock)
+        {
+            if (_reading is { } reading && reading.Candidate.Provider != provider)
+            {
+                _reading = null;
+                reading.Superseded = true;
+                reading.Dropped = true;
+                givenUp = reading.Callers == 0 ? reading : null;
+            }
+        }
+
+        givenUp?.GiveUp();
     }
 
     /// <summary>
@@ -597,36 +635,82 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     }
 
     // A3 of the candidate as the candidate's provider's account reads it now: kept, the read in
-    // flight for that account, or a new read (docs/phase-7b-design.md 9.7: per account).
-    private Task<HostingResult<RepositoryInfo>> ReadInfoAsync(HostedRepository candidate, CancellationToken ct)
+    // flight for that account, or a new read (docs/phase-7b-design.md 9.7: per account), which a read
+    // of another candidate or account in flight gives its place to (that one keeps no answer). Once
+    // ct is cancelled, none: a run or an avatar run that Update stopped starts no read, since Update
+    // stops them before its DropReadingOfOthers and both that and this check hold the lock, so a read
+    // one of them started first is dropped there. A caller of ReadRepositoryAsync (asked) is counted
+    // on the read while it waits.
+    private Task<HostingResult<RepositoryInfo>> ReadInfoAsync(HostedRepository candidate, CancellationToken ct, bool asked = false)
     {
-        Task<HostingResult<RepositoryInfo>> read;
+        Reading reading;
         lock (_infoLock)
         {
+            if (ct.IsCancellationRequested)
+            {
+                return Task.FromCanceled<HostingResult<RepositoryInfo>>(ct);
+            }
+
             if (_info is { } kept && kept.Candidate.Equals(candidate) && HeldOrNone(candidate, kept.Account))
             {
                 return Task.FromResult(HostingResult<RepositoryInfo>.Ok(kept.Info));
             }
 
             var account = _session.SlotOf(candidate.Provider)?.Key;
-            if (_reading is { } reading && reading.Candidate.Equals(candidate) && reading.Account == account)
+            if (_reading is { } current && current.Candidate.Equals(candidate) && current.Account == account)
             {
-                read = reading.Read;
+                reading = current;
             }
             else
             {
-                read = Task.Run(() => ReadInfoCoreAsync(candidate, account));
-                _reading = (candidate, account, read);
+                if (_reading is { } replaced)
+                {
+                    replaced.Superseded = true;
+                }
+
+                var started = new Reading(candidate, account);
+                started.Read = Task.Run(() => ReadInfoCoreAsync(started));
+                _reading = reading = started;
+            }
+
+            if (asked)
+            {
+                reading.Callers++;
             }
         }
 
-        return read.WaitAsync(ct);
+        return asked ? WaitAskedAsync(reading, ct) : reading.Read.WaitAsync(ct);
     }
 
-    private async Task<HostingResult<RepositoryInfo>> ReadInfoCoreAsync(HostedRepository candidate, AccountKey? asked)
+    // A caller of ReadRepositoryAsync's wait, counted on the read meanwhile: the last to be done with
+    // a read that DropReadingOfOthers dropped gives it up.
+    private async Task<HostingResult<RepositoryInfo>> WaitAskedAsync(Reading reading, CancellationToken ct)
     {
+        try
+        {
+            return await reading.Read.WaitAsync(ct).ConfigureAwait(false);
+        }
+        finally
+        {
+            bool giveUp;
+            lock (_infoLock)
+            {
+                giveUp = --reading.Callers == 0 && reading.Dropped;
+            }
+
+            if (giveUp)
+            {
+                reading.GiveUp();
+            }
+        }
+    }
+
+    private async Task<HostingResult<RepositoryInfo>> ReadInfoCoreAsync(Reading reading)
+    {
+        var candidate = reading.Candidate;
         HostingResult<RepositoryInfo>? result = null;
         AccountKey? readWith = null;
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(reading.Stop.Token, _lifetime);
         try
         {
             result = await _session.CallAsync(
@@ -644,20 +728,21 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                         ? HostingResult<RepositoryInfo>.Fail(echoed)
                         : read;
                 },
-                _lifetime).ConfigureAwait(false);
+                stop.Token).ConfigureAwait(false);
             return result;
         }
         finally
         {
             lock (_infoLock)
             {
-                // Kept with the account the request was sent with, which only that account uses.
-                if (result?.Value is { } info && readWith is { } key)
+                // Kept with the account the request was sent with, which only that account uses,
+                // unless the read was superseded: its answer would take the current one's place.
+                if (!reading.Superseded && result?.Value is { } info && readWith is { } key)
                 {
                     _info = (candidate, key, info);
                 }
 
-                if (_reading is { } reading && reading.Candidate.Equals(candidate) && reading.Account == asked)
+                if (ReferenceEquals(_reading, reading))
                 {
                     _reading = null;
                 }
@@ -696,5 +781,34 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         public TaskCompletionSource Done { get; } = done;
 
         public CancellationTokenSource Stop { get; } = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
+    }
+
+    /// <summary>
+    /// A3's read in flight of a candidate for an account (7.8; docs/phase-7b-design.md 9.7): its
+    /// request under its own stop beside the tab's lifetime (linked in the read alone, so the stop
+    /// needs no disposal and may be cancelled from any thread at any time); the rest under
+    /// <c>_infoLock</c>. <see cref="Superseded"/>: replaced, of another account, or dropped, it keeps
+    /// no answer. <see cref="Dropped"/>: for another provider's candidate, given up once no caller of
+    /// <see cref="ReadRepositoryAsync"/> waits on it (<see cref="Callers"/>).
+    /// </summary>
+    private sealed class Reading(HostedRepository candidate, AccountKey? account)
+    {
+        public HostedRepository Candidate { get; } = candidate;
+
+        public AccountKey? Account { get; } = account;
+
+        public CancellationTokenSource Stop { get; } = new();
+
+        /// <summary>The read itself, set as it starts (<see cref="ReadInfoAsync"/>).</summary>
+        public Task<HostingResult<RepositoryInfo>> Read { get; set; } = null!;
+
+        public int Callers { get; set; }
+
+        public bool Superseded { get; set; }
+
+        public bool Dropped { get; set; }
+
+        /// <summary>Its request is given up: the HTTP core throws, warning nothing (docs/phase-7b-design.md 5); a read that has ended has none left.</summary>
+        public void GiveUp() => Stop.Cancel();
     }
 }
