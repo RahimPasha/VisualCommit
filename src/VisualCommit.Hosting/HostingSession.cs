@@ -254,7 +254,7 @@ public sealed class HostingSession : IHostingSession
             checkedToken = await entry.Provider.CheckTokenAsync(request.Token, request.Organization, linked.Token).ConfigureAwait(false);
         }
 
-        if ((checkedToken.Failure ?? EchoedToken(entry, checkedToken.Value!, request.Token)) is { } failure)
+        if ((checkedToken.Failure ?? EchoedInAccount(entry, checkedToken.Value!, request.Token)) is { } failure)
         {
             _log.Warning($"{entry.Name}: signing in on {entry.Host} failed: {Describe(failure)}");
             return new SignInResult(null, failure, null);
@@ -486,7 +486,9 @@ public sealed class HostingSession : IHostingSession
     /// 9.6): without a request when it is off, when its account is not signed in (D257), or when
     /// <paramref name="about"/> is a repository the account does not cover (D350), each failure with
     /// <see cref="HostingFailure.Provider"/> set; <paramref name="ct"/> linked to the session's
-    /// lifetime; a 401 marks the account refused, any other failure is a warning naming <paramref name="what"/>.
+    /// lifetime; a 401 marks the account refused, any other failure is a warning naming <paramref name="what"/>,
+    /// an address in it written as the core writes one (<see cref="HostingHttpClient.ScreenEmail"/>, D368):
+    /// a repository's name can come from a server's answer.
     /// </summary>
     internal async Task<HostingResult<T>> CallAsync<T>(
         HostingProvider provider,
@@ -518,7 +520,7 @@ public sealed class HostingSession : IHostingSession
         }
         else if (result.Failure is { } failure)
         {
-            _log.Warning($"{entry.Name}: {what} failed: {Describe(failure)}");
+            _log.Warning($"{entry.Name}: {HostingHttpClient.ScreenEmail(what)} failed: {Describe(failure)}");
         }
 
         return result;
@@ -564,9 +566,11 @@ public sealed class HostingSession : IHostingSession
     }
 
     /// <summary>
-    /// Runs a tab's avatar work (7.9) on the thread pool under the tab's lifetime and the session's
-    /// avatar work, which GitHub's sign-out cancels and waits for before it deletes <c>avatars/</c>
-    /// (D291). Null, and nothing runs, once the session is disposed or GitHub's account is not signed in.
+    /// Runs a tab's avatar work (7.9) on the thread pool under the tab's token (its lifetime, and its
+    /// own stop when GitHub's repository is listed no more: docs/phase-7b-design.md 9.8) and the
+    /// session's avatar work, which GitHub's sign-out cancels and waits for before it deletes
+    /// <c>avatars/</c> (D291). Null, and nothing runs, once the session is disposed or GitHub's
+    /// account is not signed in.
     /// </summary>
     internal Task? RunAvatarWork(Func<CancellationToken, Task> work, CancellationToken hostingLifetime)
     {
@@ -625,6 +629,15 @@ public sealed class HostingSession : IHostingSession
         });
     }
 
+    /// <summary>
+    /// D382 for an answer read with <paramref name="token"/> after the sign-in (docs/phase-7b-design.md
+    /// 9.7: A3's repository and parent names, which the tab logs, lists and shows): any of
+    /// <paramref name="texts"/> naming the token as <see cref="EchoedIn"/> finds it gives
+    /// <paramref name="provider"/>'s malformed answer; null otherwise, and while it is off.
+    /// </summary>
+    internal HostingFailure? EchoedToken(HostingProvider provider, string token, params string?[] texts) =>
+        EntryOf(provider) is { } entry ? EchoedIn(entry, token, texts) : null;
+
     /// <summary>"{Name} is turned off.", GitHub's 7a's (docs/phase-7b-design.md 9.4).</summary>
     private static HostingFailure TurnedOff(HostingProvider provider) =>
         new(HostingFailureKind.Validation, $"{HostingProviders.DisplayName(provider)} is turned off.") { Provider = provider };
@@ -636,28 +649,31 @@ public sealed class HostingSession : IHostingSession
         new(new AccountStatus(account, AccountState.NeedsSignIn, null, noteKind, note), null, tokenState);
 
     /// <summary>
-    /// D382: an A1 answer that names the token, ignoring case, in any text a record or a slot keeps
-    /// (the login, Azure DevOps' organization, the display name, the user id, the avatar's whole
-    /// address as given, as written and percent-decoded) is the provider's malformed answer, so that
-    /// no record, slot or sign-in line carries an echoed token; null for any other answer. The token
-    /// is looked for in each form the request sent it in (the HTTP core's <c>SecretsOf</c>: Azure
-    /// DevOps' <c>Basic</c> credential too), as the core screens its own warnings.
+    /// D382: an A1 answer that names the token in any text a record or a slot keeps (the login, Azure
+    /// DevOps' organization, the display name, the user id, the avatar's whole address as given, as
+    /// written and percent-decoded) is the provider's malformed answer, so that no record, slot or
+    /// sign-in line carries an echoed token; null for any other answer (<see cref="EchoedIn"/>).
     /// </summary>
-    private static HostingFailure? EchoedToken(Entry entry, HostingAccount account, string token)
+    private static HostingFailure? EchoedInAccount(Entry entry, HostingAccount account, string token)
     {
-        var secrets = SecretsOf(entry.Provider, token);
-        if (secrets.Length == 0)
-        {
-            return null;
-        }
-
         var avatar = account.AvatarUrl;
-        string?[] texts =
+        return EchoedIn(entry, token,
         [
             account.Login, account.Key.Login, account.Name, account.UserId,
             avatar?.OriginalString, avatar?.AbsoluteUri, avatar is null ? null : Uri.UnescapeDataString(avatar.AbsoluteUri),
-        ];
-        return texts.Any(text => text is not null && secrets.Any(secret => text.Contains(secret, StringComparison.OrdinalIgnoreCase)))
+        ]);
+    }
+
+    /// <summary>
+    /// D382: the provider's malformed answer when any of <paramref name="texts"/> holds
+    /// <paramref name="token"/>, ignoring case, in any form the request sent it in (the HTTP core's
+    /// <c>SecretsOf</c>: Azure DevOps' <c>Basic</c> credential too), as the core screens its own
+    /// warnings; null otherwise, and for an empty token.
+    /// </summary>
+    private static HostingFailure? EchoedIn(Entry entry, string token, IReadOnlyCollection<string?> texts)
+    {
+        var secrets = SecretsOf(entry.Provider, token);
+        return secrets.Length > 0 && texts.Any(text => text is not null && secrets.Any(secret => text.Contains(secret, StringComparison.OrdinalIgnoreCase)))
             ? new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(entry.Kind)) { Provider = entry.Kind }
             : null;
     }

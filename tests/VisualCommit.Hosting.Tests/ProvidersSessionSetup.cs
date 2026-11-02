@@ -20,8 +20,9 @@ namespace VisualCommit.Hosting.Tests;
 /// <see cref="HostingTestThread"/> as the post delegate. With <c>repositories</c>, one repository
 /// each with an open request from <c>feature/sign-in</c>: <c>fake-org/P/r</c> (!11),
 /// <c>other-org/P/r</c>, <c>fake-group/sub/web-app</c> (!21) and <c>octo/web-app</c> (#7). The
-/// session is made, not started. Disposing it checks that no token reached the data folder or the
-/// log and that no fake saw an error. Made-up names only.
+/// session is made, not started. Disposing it checks that no token it minted or a test gave
+/// <see cref="Track"/> reached the data folder or the log, that no line holds a token of any fake's
+/// form, and that no fake saw an error. Made-up names only.
 /// </summary>
 internal sealed class ProvidersSessionSetup : IAsyncDisposable
 {
@@ -33,7 +34,13 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
     public const string GitLabProject = Group + "/web-app";
     public const string GitHubRepository = "octo/web-app";
 
+    // The fakes' tokens in a log line (github_pat_FAKE-, ghp_FAKE-, azdo_FAKE-, glpat-FAKE-, or one
+    // a server echoed without its prefix): "FAKE-", but for the fakes' request ids, which warnings
+    // name (GitHub's FAKE-0001, GitLab's FAKE-GL-000001).
+    private static readonly System.Text.RegularExpressions.Regex FakeToken = new(@"FAKE-(?!\d{4}\b|GL-\d{6}\b)", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
     private readonly Lock _gate = new();
+    private readonly List<string> _tokens = [];
     private readonly Dictionary<HostingProvider, List<RecordingHttpHandler>> _recorders = [];
     private readonly List<HostingSession> _sessions = [];
     private readonly AzureDevOpsEndpoints? _azureDevOpsEndpoints;
@@ -48,7 +55,7 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
         {
             GitHub = FakeGitHub.InProcess(Path.Combine(root.Path, "github"));
             GitHub.AddUser("octo", 1001, Scenarios.OctoName);
-            GitHubToken = GitHub.AddToken("octo");
+            GitHubToken = Track(GitHub.AddToken("octo"));
         }
 
         if (azureDevOps)
@@ -57,18 +64,18 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
             AzureDevOps.AddOrganization(Organization);
             AzureDevOps.AddProject(Organization, Project);
             Ada = AzureDevOps.AddUser(Organization, Scenarios.AdaName);
-            AzureDevOpsToken = AzureDevOps.AddToken(Organization, Ada);
+            AzureDevOpsToken = Track(AzureDevOps.AddToken(Organization, Ada));
             AzureDevOps.AddOrganization(OtherOrganization);
             AzureDevOps.AddProject(OtherOrganization, Project);
             OtherAda = AzureDevOps.AddUser(OtherOrganization, Scenarios.AdaName);
-            OtherOrganizationToken = AzureDevOps.AddToken(OtherOrganization, OtherAda);
+            OtherOrganizationToken = Track(AzureDevOps.AddToken(OtherOrganization, OtherAda));
         }
 
         if (gitLab)
         {
             GitLab = FakeGitLab.InProcess(Path.Combine(root.Path, "gitlab"));
             GitLab.AddUser("ada", 2001, Scenarios.AdaName);
-            GitLabToken = GitLab.AddToken("ada");
+            GitLabToken = Track(GitLab.AddToken("ada"));
             GitLab.Grant("fake-group", "ada", 40);
         }
 
@@ -120,8 +127,17 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
 
     public HostingSession Session { get; }
 
-    /// <summary>The three fakes' tokens given out, for the tripwire.</summary>
-    public IReadOnlyList<string> AllTokens => [.. new[] { GitHubToken, AzureDevOpsToken, OtherOrganizationToken, GitLabToken }.Where(token => token.Length > 0)];
+    /// <summary>Every token the fakes minted for the test, the setup's and those given to <see cref="Track"/>, for the tripwire.</summary>
+    public IReadOnlyList<string> AllTokens
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return [.. _tokens];
+            }
+        }
+    }
 
     /// <summary>Starts a setup with the fakes asked for; <paramref name="azureDevOpsEndpoints"/> in place of the fake's own (<c>Local(2)</c>), such as <see cref="AzureDevOpsEndpoints.Service"/>.</summary>
     public static async Task<ProvidersSessionSetup> StartAsync(
@@ -172,6 +188,24 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
             GitLab = GitLab?.Endpoints,
             CreateGitLabHandler = GitLab is { } gitLab ? () => Recorded(HostingProvider.GitLab, gitLab.CreateHandler()) : null,
         };
+    }
+
+    /// <summary>
+    /// <paramref name="token"/>, which a test had a fake mint (<c>setup.Track(setup.GitLab!.AddToken("bob"))</c>),
+    /// searched for at the disposal as the setup's own: in the data folder and, in any case, in the log.
+    /// </summary>
+    public string Track(string token)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(token);
+        lock (_gate)
+        {
+            if (!_tokens.Contains(token, StringComparer.Ordinal))
+            {
+                _tokens.Add(token);
+            }
+        }
+
+        return token;
     }
 
     /// <summary>Another session over the same data folder, store and fakes: the app's next start; <see cref="Options"/>, <see cref="Tokens"/> and <see cref="Log"/> unless given.</summary>
@@ -247,7 +281,7 @@ internal sealed class ProvidersSessionSetup : IAsyncDisposable
                 Assert.DoesNotContain(token, Log.Written, StringComparison.OrdinalIgnoreCase);
             }
 
-            Assert.All(Log.Lines, line => Assert.DoesNotContain("_FAKE-", line.Message, StringComparison.Ordinal));
+            Assert.All(Log.Lines, line => Assert.False(FakeToken.IsMatch(line.Message), "A log line holds a token of a fake's form."));
             Assert.Empty(Thread.Errors);
             Assert.Empty(GitHub?.Errors ?? []);
             Assert.Empty(AzureDevOps?.Errors ?? []);

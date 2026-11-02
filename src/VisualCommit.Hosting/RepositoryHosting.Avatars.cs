@@ -16,6 +16,10 @@ public sealed partial class RepositoryHosting
     private IReadOnlyList<AuthorCommit>? _avatarNext;
     private int _avatarGeneration;
 
+    // On the UI thread: linked to the tab's lifetime, in each run's token; cancelled and replaced at
+    // each StopAvatars, so that a run in flight asks GitHub nothing more (9.8).
+    private CancellationTokenSource? _avatarStop;
+
     /// <summary>The avatars' run in progress, for the tests; read on the UI thread.</summary>
     internal Task AvatarRun => _avatarRun ?? Task.CompletedTask;
 
@@ -50,12 +54,20 @@ public sealed partial class RepositoryHosting
     /// <summary>The listed repository is GitHub's and GitHub's account is signed in (9.8).</summary>
     private bool AvatarsWanted => _candidate?.Provider == HostingProvider.GitHub && GitHubSignedIn;
 
-    // On the UI thread: GitHub's sign-out (the session cancels the run itself), or no GitHub
-    // repository listed any more; what a run still brings is dropped.
+    // On the UI thread: GitHub's sign-out (the session cancels the run too), no GitHub repository
+    // listed any more, or the tab closed: the run in flight is cancelled, so that GitHub is asked
+    // nothing more for it and nothing is saved under avatars/ (D367), and what it still brings is
+    // dropped.
     private void StopAvatars()
     {
         _avatarGeneration++;
         _avatarNext = null;
+        if (_avatarStop is { } stop)
+        {
+            _avatarStop = null;
+            stop.Cancel();
+            stop.Dispose();
+        }
     }
 
     private void DisposeAvatars() => StopAvatars();
@@ -70,6 +82,7 @@ public sealed partial class RepositoryHosting
         // Null when the session started nothing (signed out meanwhile, or closed): the next set then
         // starts a run of its own instead of folding into none.
         var generation = _avatarGeneration;
+        _avatarStop ??= CancellationTokenSource.CreateLinkedTokenSource(_lifetime);
         _avatarRun = _session.RunAvatarWork(async ct =>
         {
             AuthorAvatars? avatars = null;
@@ -79,7 +92,7 @@ public sealed partial class RepositoryHosting
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
-                // Signed out or closed: nothing is applied.
+                // Signed out, stopped or closed: nothing is applied.
             }
             catch (Exception ex)
             {
@@ -89,7 +102,7 @@ public sealed partial class RepositoryHosting
             }
 
             _session.Post(() => FinishAvatars(generation, avatars));
-        }, _lifetime);
+        }, _avatarStop.Token);
     }
 
     // On the UI thread: the run's avatars applied while still wanted; then the set asked for meanwhile.

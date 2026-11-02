@@ -220,8 +220,8 @@ public sealed class HostingSessionProvidersTests
         var grace = setup.AzureDevOps!.AddUser(ProvidersSessionSetup.Organization, "grace.hopper@example.com");
         setup.GitLab!.AddUser("grace", 2005, "grace.hopper@example.com");
 
-        var azure = await setup.SignInAsync(HostingProvider.AzureDevOps, setup.AzureDevOps.AddToken(ProvidersSessionSetup.Organization, grace));
-        var gitLab = await setup.SignInAsync(HostingProvider.GitLab, setup.GitLab.AddToken("grace"));
+        var azure = await setup.SignInAsync(HostingProvider.AzureDevOps, setup.Track(setup.AzureDevOps.AddToken(ProvidersSessionSetup.Organization, grace)));
+        var gitLab = await setup.SignInAsync(HostingProvider.GitLab, setup.Track(setup.GitLab.AddToken("grace")));
 
         Assert.Equal(((string?)null, (string?)null), (azure.Account.Name, gitLab.Account.Name));
         Assert.DoesNotContain("@", File.ReadAllText(setup.Paths.AccountsFile), StringComparison.Ordinal);
@@ -236,7 +236,7 @@ public sealed class HostingSessionProvidersTests
         await setup.SignInAsync(HostingProvider.GitLab);
         setup.GitLab!.AddUser("bob", 2003, "Bob Example");
 
-        var bob = await setup.SignInAsync(HostingProvider.GitLab, setup.GitLab.AddToken("bob"));
+        var bob = await setup.SignInAsync(HostingProvider.GitLab, setup.Track(setup.GitLab.AddToken("bob")));
 
         Assert.Equal("bob", bob.Account.Login);
         Assert.False(setup.FakeTokens.Holds(TokenKey.Of(new AccountKey(HostingProvider.GitLab, "127.0.0.1:3", "ada"))));
@@ -271,7 +271,7 @@ public sealed class HostingSessionProvidersTests
     {
         await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, azureDevOps: false);
         setup.GitLab!.AddUser("eve", 2004, "Eve GLPAT-FAKE-EVE-1");
-        var token = setup.GitLab.AddToken("eve");
+        var token = setup.Track(setup.GitLab.AddToken("eve"));
         Assert.Equal("glpat-FAKE-eve-1", token);
         await setup.Session.StartAsync(Cancelled);
 

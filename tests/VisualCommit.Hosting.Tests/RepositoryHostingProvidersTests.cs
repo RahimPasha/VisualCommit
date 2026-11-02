@@ -22,7 +22,10 @@ namespace VisualCommit.Hosting.Tests;
 /// (D348) never shows the first one's list, and GitHub's reads the repository again; the rewrites as
 /// each Changed raised them, through a refusal raced by a sign-in; GitHub's sign-in refreshing no GitLab-listed
 /// tab and its sign-out keeping GitLab's bindings; an <c>&lt;organization&gt;.visualstudio.com</c>
-/// remote listed through <c>dev.azure.com</c>. The fakes are in process (ProvidersSessionSetup).
+/// remote listed through <c>dev.azure.com</c>; A3's names holding the token malformed (D382) and an
+/// address-shaped one written in the log as the core writes one (D368); another provider's
+/// repository listed cancelling the list's run and GitHub's avatar run in flight. The fakes are in
+/// process (ProvidersSessionSetup).
 /// </summary>
 public sealed class RepositoryHostingProvidersTests
 {
@@ -292,7 +295,7 @@ public sealed class RepositoryHostingProvidersTests
         await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, azureDevOps: false);
         var gitLab = setup.GitLab!;
         gitLab.AddUser("bob", 2002, "Bob Example");
-        var bobToken = gitLab.AddToken("bob");
+        var bobToken = setup.Track(gitLab.AddToken("bob"));
         using var source = await TempRepo.CreateAsync("fork-source");
         await source.CommitFileAsync("README.md", "fork\n", "Initial commit");
         var parent = await gitLab.AddProjectAsync("secret/parent", source.Path, ct: Cancelled);
@@ -411,7 +414,7 @@ public sealed class RepositoryHostingProvidersTests
         await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, azureDevOps: false);
         var gitLab = setup.GitLab!;
         gitLab.AddUser("bob", 2002, "Bob Example");
-        var bobToken = gitLab.AddToken("bob");
+        var bobToken = setup.Track(gitLab.AddToken("bob"));
         using var source = await TempRepo.CreateAsync("fork-source");
         await source.CommitFileAsync("README.md", "fork\n", "Initial commit");
         var parent = await gitLab.AddProjectAsync("secret/parent", source.Path, ct: Cancelled);
@@ -486,7 +489,7 @@ public sealed class RepositoryHostingProvidersTests
         await using var setup = await ProvidersSessionSetup.StartAsync(gitLab: false, azureDevOps: false, repositories: true);
         var gitHub = setup.GitHub!;
         gitHub.AddUser("octocat", 4242, "Octo Cat");
-        var octocatToken = gitHub.AddToken("octocat");
+        var octocatToken = setup.Track(gitHub.AddToken("octocat"));
         await setup.SignInAsync(HostingProvider.GitHub);
         var hosting = await OpenAsync(setup, "web-app");
         await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl)), UrlRewrites.None));
@@ -556,8 +559,226 @@ public sealed class RepositoryHostingProvidersTests
         Assert.Equal([new CredentialBinding(Remote, account.Key)], hosting.Bindings);
     }
 
-    private static Task<RepositoryHosting> OpenAsync(ProvidersSessionSetup setup, string name) =>
-        setup.Thread.RunAsync(() => (RepositoryHosting)setup.Session.ForRepository(Path.Combine(setup.Root.Path, name)));
+    [Theory]
+    [InlineData(HostingProvider.GitLab, GitLabUrl, "GitLab", "fake-group/sub/web-app")]
+    [InlineData(HostingProvider.AzureDevOps, AzureUrl, "Azure DevOps", "fake-org/P/r")]
+    public async Task An_A3_answer_whose_names_hold_the_token_is_malformed_and_no_log_line_holds_it(HostingProvider provider, string url, string name, string fullName)
+    {
+        // A server that echoes the request's token (D382) into A3's answer: GitLab's into the
+        // project's path, in upper case; Azure DevOps' Basic credential as a fork's parent's name.
+        // Either would be the listed repository's name, which A4's request and the log lines write.
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, azureDevOps: provider == HostingProvider.AzureDevOps, gitLab: provider == HostingProvider.GitLab, repositories: true);
+        var token = setup.TokenOf(provider);
+        var basic = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(":" + token));
+        var echoes = 0;
+        var options = setup.Options();
+        var session = setup.NewSession(options: provider == HostingProvider.GitLab
+            ? options with
+            {
+                CreateGitLabHandler = () => new Rewriting(options.CreateGitLabHandler!(), IsGitLabA3, json =>
+                {
+                    json["path_with_namespace"] = $"{ProvidersSessionSetup.Group}/{token.ToUpperInvariant()}";
+                    Interlocked.Increment(ref echoes);
+                }),
+            }
+            : options with
+            {
+                CreateAzureDevOpsHandler = () => new Rewriting(options.CreateAzureDevOpsHandler!(), address => address.AbsolutePath == "/fake-org/P/_apis/git/repositories/r", json =>
+                {
+                    json["isFork"] = true;
+                    json["parentRepository"] = new System.Text.Json.Nodes.JsonObject { ["name"] = basic, ["project"] = new System.Text.Json.Nodes.JsonObject { ["name"] = ProvidersSessionSetup.Project } };
+                    Interlocked.Increment(ref echoes);
+                }),
+            });
+        await setup.SignInAsync(provider, session: session);
+        var hosting = await OpenAsync(setup, "web-app", session);
+
+        await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", url)), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Failed, "the failed list");
+        await setup.Thread.IdleAsync();
+
+        var state = hosting.State;
+        Assert.Equal((HostingFailureKind.Malformed, Http.HostingHttpTexts.Malformed(provider), provider), (state.Failure!.Kind, state.Failure.Message, state.Failure.Provider));
+        Assert.Equal(fullName, state.Repository!.FullName);
+        Assert.True(Volatile.Read(ref echoes) > 0);
+        Assert.DoesNotContain(setup.Sent(provider), request => request.Url.AbsolutePath.EndsWith("/pullrequests", StringComparison.Ordinal) || request.Url.AbsolutePath.EndsWith("/merge_requests", StringComparison.Ordinal));
+        Assert.Single(setup.Warnings, warning => warning == $"{name}: reading {fullName} failed: Malformed, {Http.HostingHttpTexts.Malformed(provider)}");
+        Assert.DoesNotContain(token, setup.Log.Written, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(basic, setup.Log.Written, StringComparison.OrdinalIgnoreCase);
+        var read = await setup.Thread.RunAsync(() => hosting.ReadRepositoryAsync(Cancelled));
+        Assert.Equal(HostingFailureKind.Malformed, read.Failure!.Kind);
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task An_A3_name_that_is_an_address_is_written_in_the_log_as_the_core_writes_one()
+    {
+        // A3 names the fork's parent grace.hopper@example.com, which the service serves (Azure
+        // DevOps' names hold any character but a slash; GitLab's no at sign): the listed
+        // repository's name, which the Debug line and a failure's warning write as the core writes
+        // an address (D368). The section shows it as given: the known limit of sections 6 and 7.
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, gitLab: false, repositories: true);
+        const string Parent = "grace.hopper@example.com";
+        const string Address = "fake-org/P/" + Parent;
+        var options = setup.Options();
+        var session = setup.NewSession(options: options with
+        {
+            CreateAzureDevOpsHandler = () => new Rewriting(
+                options.CreateAzureDevOpsHandler!(),
+                address => address.AbsolutePath == "/fake-org/P/_apis/git/repositories/r",
+                json =>
+                {
+                    json["isFork"] = true;
+                    json["parentRepository"] = new System.Text.Json.Nodes.JsonObject { ["name"] = Parent, ["project"] = new System.Text.Json.Nodes.JsonObject { ["name"] = ProvidersSessionSetup.Project } };
+                },
+                address => new Uri(address.AbsoluteUri
+                    .Replace("/repositories/" + Uri.EscapeDataString(Parent), "/repositories/r", StringComparison.OrdinalIgnoreCase)
+                    .Replace("/repositories/" + Parent, "/repositories/r", StringComparison.OrdinalIgnoreCase))),
+        });
+        await setup.SignInAsync(HostingProvider.AzureDevOps, session: session);
+        var hosting = await OpenAsync(setup, "web-app", session);
+
+        await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", AzureUrl)), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests is PullRequestsState.Loaded or PullRequestsState.Failed, "the parent's list");
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+        Assert.True(hosting.State.PullRequests == PullRequestsState.Loaded, $"{hosting.State.PullRequests} {hosting.State.Failure?.Kind}: {string.Join(" | ", setup.Warnings)}");
+        Assert.Equal(Address, hosting.State.Repository!.FullName);
+        var screened = Http.HostingHttpClient.ScreenEmail(Address);
+        Assert.NotEqual(Address, screened);
+        Assert.Contains($"web-app: listed 1 open pull requests of {screened}", setup.Log.Lines.Where(line => line.Level == LogLevel.Debug).Select(line => line.Message));
+
+        setup.AzureDevOps!.FailNext("pulls:fake-org/p/r", FakeAzureDevOpsFault.ServerError);
+        await setup.Thread.RunAsync(() => hosting.RefreshPullRequestsAsync(Cancelled));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Failed, "the failed list");
+
+        Assert.Single(setup.Warnings, warning => warning.StartsWith($"Azure DevOps: listing the pull requests of {screened} failed: ", StringComparison.Ordinal));
+        Assert.DoesNotContain("example.com", setup.Log.Written, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("grace.hopper", setup.Log.Written, StringComparison.OrdinalIgnoreCase);
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task Githubs_avatar_run_in_flight_is_cancelled_when_gitlabs_repository_becomes_the_listed_one()
+    {
+        // GitHub's commits page held while the run asks it, two authors left to look up after it
+        // and one avatar to fetch; then GitLab's repository listed (D367, 9.8): the run is
+        // cancelled, so that GitHub gets no lookup and no download and nothing new is saved under
+        // avatars/.
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
+        setup.GitHub!.LinkEmail(TempRepo.AuthorEmail, "octo");
+        await setup.SignInAsync(HostingProvider.GitHub);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "web-app");
+        await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "GitHub's list");
+        var webApp = new HostedRepository(HostingProvider.GitHub, "127.0.0.1:1", "octo", "web-app");
+        AuthorCommit[] authors =
+        [
+            new(TempRepo.AuthorEmail, new string('a', 40), webApp),
+            new("grace@example.com", new string('c', 40), webApp),
+            new("linus@example.com", new string('d', 40), webApp),
+        ];
+
+        Task run;
+        int sent;
+        IReadOnlyList<string> files;
+        using (var hold = setup.GitHub.HoldNext("commits:octo/web-app"))
+        {
+            run = await setup.Thread.RunAsync<Task>(() =>
+            {
+                hosting.ShowAvatarsFor(authors);
+                return hosting.AvatarRun;
+            });
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            (sent, files) = (setup.Sent(HostingProvider.GitHub).Count, FilesUnder(setup.Paths.AvatarsDirectory));
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitLabUrl), ("upstream", GitHubUrl)), UrlRewrites.None));
+        }
+
+        await run.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+        await setup.Thread.WaitForAsync(() => hosting.State is { PullRequests: PullRequestsState.Loaded, Repository.Provider: HostingProvider.GitLab }, "GitLab's list");
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+
+        Assert.Equal(sent, setup.Sent(HostingProvider.GitHub).Count);
+        Assert.DoesNotContain(setup.GitHub.Requests, request => request.Query.Contains("author=", StringComparison.Ordinal));
+        Assert.Equal(files, FilesUnder(setup.Paths.AvatarsDirectory));
+        Assert.Same(AuthorAvatars.None, hosting.Avatars);
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task Another_providers_candidate_cancels_the_run_in_flight_and_is_listed_at_once()
+    {
+        // GitHub's list held; then GitLab's repository listed (9.7): GitLab's A3 and A4 are sent and
+        // its list shown while GitHub's request is still held, and GitHub's run, cancelled, warns
+        // of no repository listed no more.
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
+        await setup.SignInAsync(HostingProvider.GitHub);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "web-app");
+        var gitLabRequests = setup.GitLab!.Requests.Count;
+
+        using (var hold = setup.GitHub!.HoldNext("pulls:octo/web-app"))
+        {
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitLabUrl), ("upstream", GitHubUrl)), UrlRewrites.None));
+            await setup.Thread.WaitForAsync(() => hosting.State is { PullRequests: PullRequestsState.Loaded, Repository.Provider: HostingProvider.GitLab }, "GitLab's list while GitHub's is held");
+
+            Assert.Equal(
+                ["project:fake-group/sub/web-app", "mrs:fake-group/sub/web-app"],
+                setup.GitLab.Requests.Skip(gitLabRequests).Select(request => request.Route?.ToLowerInvariant()));
+            Assert.Equal(21, Assert.Single(hosting.State.List!.PullRequests).Number);
+
+            // Not after GitHub's request timed out or failed: no warning names its repository yet.
+            Assert.DoesNotContain(setup.Warnings, warning => warning.Contains("octo/web-app", StringComparison.Ordinal));
+        }
+
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+        Assert.DoesNotContain(setup.Warnings, warning => warning.Contains("octo/web-app", StringComparison.Ordinal));
+        Assert.Equal((PullRequestsState.Loaded, HostingProvider.GitLab), (hosting.State.PullRequests, hosting.State.Repository!.Provider));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    private static bool IsGitLabA3(Uri address) =>
+        Uri.UnescapeDataString(address.AbsolutePath).EndsWith("/projects/" + ProvidersSessionSetup.GitLabProject, StringComparison.Ordinal);
+
+    private static IReadOnlyList<string> FilesUnder(string folder) =>
+        Directory.Exists(folder) ? [.. Directory.EnumerateFiles(folder, "*", SearchOption.AllDirectories).Order(StringComparer.Ordinal)] : [];
+
+    private static Task<RepositoryHosting> OpenAsync(ProvidersSessionSetup setup, string name, HostingSession? session = null) =>
+        setup.Thread.RunAsync(() => (RepositoryHosting)(session ?? setup.Session).ForRepository(Path.Combine(setup.Root.Path, name)));
+
+    /// <summary>
+    /// A fake behind a server that answers <paramref name="rewritten"/>'s requests with their JSON
+    /// object changed by <paramref name="rewrite"/>, and that serves each request at the address
+    /// <paramref name="address"/> gives (a project renamed and served under its new path).
+    /// </summary>
+    private sealed class Rewriting(HttpMessageHandler inner, Func<Uri, bool> rewritten, Action<System.Text.Json.Nodes.JsonObject> rewrite, Func<Uri, Uri>? address = null) : DelegatingHandler(inner)
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (address is not null)
+            {
+                request.RequestUri = address(request.RequestUri!);
+            }
+
+            var answered = rewritten(request.RequestUri!);
+            var response = await base.SendAsync(request, cancellationToken);
+            if (!answered || response.Content is not { } content || content.Headers.ContentType?.MediaType != "application/json")
+            {
+                return response;
+            }
+
+            var json = System.Text.Json.Nodes.JsonNode.Parse(await content.ReadAsStringAsync(cancellationToken))!.AsObject();
+            rewrite(json);
+            response.Content = new StringContent(json.ToJsonString(), System.Text.Encoding.UTF8, "application/json");
+            content.Dispose();
+            return response;
+        }
+    }
 
     // The remotes with feature/sign-in on each, and a local feature/sign-in tracking the first.
     private static RepoRefs RefsOf(params (string Remote, string Url)[] remotes) =>

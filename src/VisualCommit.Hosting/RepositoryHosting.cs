@@ -41,7 +41,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     // The account the run whose answer is _list or _failure asked with: neither is shown, kept or
     // added to while the candidate's provider holds another (D348: one user swapped for another).
     private AccountKey? _listAccount;
-    private TaskCompletionSource? _running;
+    private Run? _running;
     private TaskCompletionSource? _again;
 
     // Under _infoLock: A3's answer for a candidate with the account it was read with, and the read
@@ -104,8 +104,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// <summary>
     /// After each refs read, on the UI thread (7.8): the remotes recognised, the candidate, the
     /// bindings and the state again; a new candidate drops the list and, while signed in, starts a
-    /// refresh (D289); no candidate left drops the avatars too. The rewrites count as known only
-    /// when they were wanted for this read (D290).
+    /// refresh (D289); no candidate left drops the avatars too. A new candidate of another provider
+    /// than the run in flight cancels that run, whose answer then applies nothing, so that its list
+    /// waits on no other provider's answer (docs/phase-7b-design.md 9.7); within one provider the run
+    /// in flight ends first, as in 7a. The rewrites count as known only when they were wanted for
+    /// this read (D290).
     /// </summary>
     public void Update(RepoRefs refs, UrlRewrites rewrites)
     {
@@ -126,6 +129,19 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         {
             _candidate = candidate;
             ForgetList();
+            if (_running is { } running && candidate is not null && running.Candidate.Provider != candidate.Provider)
+            {
+                // Its answer, or its failure's warning, is of a repository listed no more, and this
+                // candidate's run would wait behind it up to that provider's time-out. The waits
+                // asked of it meanwhile end with this candidate's run (RefreshPullRequestsAsync).
+                _running = null;
+                running.Stop.Cancel();
+                if (!CanList && _again is { } waiting)
+                {
+                    _again = null;
+                    waiting.TrySetResult();
+                }
+            }
         }
 
         if (changed && candidate?.Provider != HostingProvider.GitHub)
@@ -168,12 +184,14 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             return _again.Task.WaitAsync(ct);
         }
 
-        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Waits left by a run that another provider's candidate cancelled (Update) end with this run.
+        var done = _again ?? new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        _again = null;
         StartRun(done);
         return done.Task.WaitAsync(ct);
     }
 
-    /// <summary>A3 of the candidate, kept per candidate (a failure is not kept); on the UI thread.</summary>
+    /// <summary>A3 of the candidate, kept per candidate (a failure is not kept; an answer whose names hold the token is malformed, D382); on the UI thread.</summary>
     public Task<HostingResult<RepositoryInfo>> ReadRepositoryAsync(CancellationToken ct) =>
         _candidate is { } candidate ? ReadInfoAsync(candidate, ct) : Task.FromResult(HostingResult<RepositoryInfo>.Fail(NoRemote));
 
@@ -212,7 +230,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         _lifetimeSource.Cancel();
         _session.Remove(this);
         DisposeAvatars();
-        _running?.TrySetResult();
+        _running?.Done.TrySetResult();
         _again?.TrySetResult();
         _lifetimeSource.Dispose();
     }
@@ -474,14 +492,16 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             : new(PullRequestsState.Loading, remotes, listed, null, null, NoPullRequests);
     }
 
-    // On the UI thread: a run of A3 and A4 for the candidate; a failure shown before is cleared,
-    // a list held stays until the answer.
+    // On the UI thread: a run of A3 and A4 for the candidate, under its own stop; a failure shown
+    // before is cleared, a list held stays until the answer.
     private void StartRun(TaskCompletionSource done)
     {
-        _running = done;
+        var candidate = _candidate!;
+        var run = new Run(candidate, done, _lifetime);
+        var stop = run.Stop.Token;
+        _running = run;
         _failure = null;
         Apply();
-        var candidate = _candidate!;
         var asked = _session.SlotOf(candidate.Provider)?.Key;
         _ = Task.Run(async () =>
         {
@@ -490,7 +510,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             AccountKey? listedWith = null;
             try
             {
-                var info = await ReadInfoAsync(candidate, _lifetime).ConfigureAwait(false);
+                var info = await ReadInfoAsync(candidate, stop).ConfigureAwait(false);
                 if (info.Failure is { } failure)
                 {
                     result = HostingResult<PullRequestList>.Fail(failure);
@@ -507,12 +527,12 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                             listedWith = account.Key;
                             return provider.ListPullRequestsAsync(token, listed, linked);
                         },
-                        _lifetime).ConfigureAwait(false);
+                        stop).ConfigureAwait(false);
                 }
             }
-            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
+            catch (OperationCanceledException) when (stop.IsCancellationRequested)
             {
-                // Closed: nothing is applied.
+                // Closed, or another provider's repository listed: nothing is applied.
             }
             catch (Exception ex)
             {
@@ -524,17 +544,19 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                 result = HostingResult<PullRequestList>.Fail(new HostingFailure(HostingFailureKind.Network, Http.HostingHttpTexts.Network(candidate.Provider)) { Provider = candidate.Provider });
             }
 
-            _session.Post(() => Finish(candidate, listed, result, done, asked, listedWith));
+            _session.Post(() => Finish(run, listed, result, asked, listedWith));
         });
     }
 
-    // On the UI thread: the run's answer applied when it is still the candidate's, its provider's
-    // account can list it, and that account is the one the run asked with and A4 was sent with
-    // (D348: another user's answer is dropped; the refresh that user's sign-in asked for lists for
-    // it); then the run asked for meanwhile, if any.
-    private void Finish(HostedRepository candidate, HostedRepository? listed, HostingResult<PullRequestList>? result, TaskCompletionSource done, AccountKey? asked, AccountKey? listedWith)
+    // On the UI thread: the run's answer applied when it is still the tab's run (Update cancels
+    // another provider's) and the candidate's, its provider's account can list it, and that account
+    // is the one the run asked with and A4 was sent with (D348: another user's answer is dropped;
+    // the refresh that user's sign-in asked for lists for it); then the run asked for meanwhile, if any.
+    private void Finish(Run run, HostedRepository? listed, HostingResult<PullRequestList>? result, AccountKey? asked, AccountKey? listedWith)
     {
-        if (!_disposed && result is not null && Equals(candidate, _candidate) && CanList
+        var candidate = run.Candidate;
+        var current = ReferenceEquals(_running, run);
+        if (current && !_disposed && result is not null && Equals(candidate, _candidate) && CanList
             && HeldIs(candidate, asked) && (listedWith is null || listedWith == asked))
         {
             _list = result.Value;
@@ -543,13 +565,23 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             Apply();
             if (result.Value is { } list && listed is not null)
             {
-                // After the Changed above, so that the line follows the state's being applied (1.9, D322).
-                _session.Post(() => _session.Log.Debug($"{_name}: listed {list.PullRequests.Count} open pull requests of {listed.FullName}"));
+                // After the Changed above, so that the line follows the state's being applied (1.9,
+                // D322); an address in the name, which A3 can give, as the core writes one (D368).
+                var name = Http.HostingHttpClient.ScreenEmail(listed.FullName);
+                _session.Post(() => _session.Log.Debug($"{_name}: listed {list.PullRequests.Count} open pull requests of {name}"));
             }
         }
 
+        run.Stop.Dispose();
+        if (!current)
+        {
+            // Cancelled for another provider's candidate, whose run is the tab's now.
+            run.Done.TrySetResult();
+            return;
+        }
+
         _running = null;
-        done.TrySetResult();
+        run.Done.TrySetResult();
         if (_again is { } again)
         {
             _again = null;
@@ -601,10 +633,16 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                 candidate.Provider,
                 $"reading {candidate.FullName}",
                 candidate,
-                (provider, token, account, linked) =>
+                async (provider, token, account, linked) =>
                 {
                     readWith = account.Key;
-                    return provider.ReadRepositoryAsync(token, candidate, linked);
+                    var read = await provider.ReadRepositoryAsync(token, candidate, linked).ConfigureAwait(false);
+
+                    // D382: names that hold the request's token (a server that echoes it) would reach
+                    // the log lines, A4's request and the state, so the answer is malformed.
+                    return read.Value is { } answered && _session.EchoedToken(candidate.Provider, token, answered.Repository.FullName, answered.Parent?.FullName) is { } echoed
+                        ? HostingResult<RepositoryInfo>.Fail(echoed)
+                        : read;
                 },
                 _lifetime).ConfigureAwait(false);
             return result;
@@ -644,5 +682,19 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
 
         _list = new PullRequestList([created, .. list.PullRequests], list.MoreExist);
         Apply();
+    }
+
+    /// <summary>
+    /// A run of A3 and A4 (7.8): the candidate it lists, the waits its end completes, and its stop,
+    /// linked to the tab's lifetime, which <see cref="Update"/> cancels when another provider's
+    /// repository becomes the candidate (docs/phase-7b-design.md 9.7); disposed at its Finish.
+    /// </summary>
+    private sealed class Run(HostedRepository candidate, TaskCompletionSource done, CancellationToken lifetime)
+    {
+        public HostedRepository Candidate { get; } = candidate;
+
+        public TaskCompletionSource Done { get; } = done;
+
+        public CancellationTokenSource Stop { get; } = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
     }
 }

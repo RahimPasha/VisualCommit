@@ -160,13 +160,14 @@ public sealed class RepositoryHostingProvidersWiringTests
     private static int Lists(ServedHosting7b served) =>
         served.AzureDevOps.Requests.Count(request => request.Path.EndsWith("/_apis/git/repositories/mobile-app/pullrequests", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Closes the app, then checks that no token reached the data folder, the clones or the log and that no fake saw an error.</summary>
+    /// <summary>Closes the app, then checks that no token reached the data folder, the clones or a git call's command, input, output or error (the session's call log, taken before the app closes) and that no fake saw an error.</summary>
     private static void End(ShellDriver app, TempDirectory data, ServedHosting7b served)
     {
+        var calls = app.Session.GitCalls;
         app.Dispose();
         foreach (var token in served.Tokens)
         {
-            TokenTripwire.AssertAbsent(token, [data.Path, served.MobileApp.Path, served.Manifest.Path, served.WebApp.Path], null);
+            TokenTripwire.AssertAbsent(token, [data.Path, served.MobileApp.Path, served.Manifest.Path, served.WebApp.Path], calls);
         }
 
         Assert.Empty(served.AzureDevOps.Errors);
