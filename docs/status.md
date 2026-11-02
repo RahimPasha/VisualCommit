@@ -118,8 +118,9 @@ Build:
   fixes. (2026-11-01. Week: share not read.)
 - [ ] 6. The provider model for three providers: one account per provider (D348), Azure DevOps'
   and GitLab's remotes recognised from their URLs (D347), their tokens in the OS keychain (R3).
-  Tests. Under way: recognition is WP-AZ's and WP-GL's (merged, steps 7 and 8); the session's
-  accounts and keychain entries per provider are WP-S's (section 9, wave 3).
+  Tests. Recognition is WP-AZ's and WP-GL's (merged, steps 7 and 8); the session's accounts and
+  keychain entries per provider are WP-S's, merged at `bdc92c3` (section 9; D383). Its merge's
+  lagged list and whole default run are in Next step.
 - [x] 7. Azure DevOps' API: a token checked at sign-in, the organization's repositories, a
   repository's pull requests, creating one; against its fake. Tests. WP-AZ (Azure DevOps' client and
   provider, section 6) merged at `767d9b9` on WP-H's core (`3591dc4`) and WP-FA's fake (`e995fc4`),
@@ -394,17 +395,15 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wave 2 (design 0.4) is merged (WP-FL `7780908`, WP-FA `e995fc4`, WP-GL `e8a5abf`, WP-AZ `767d9b9`
-with the lead's `df365e5` to `b65d0d9`); its whole default run passed (Notes) and CI's run on
-`c0af1be` is green in all five jobs (CI section). Wave 3: WP-S (section 9) is being built, reviewed
-and hunted as wave 2's packages were, on `wip/p7b-session` in a worktree made from `7087d6c` under
-`D:/Projects/Personal/vc-wt/p7b-session` (a session that finds it after a break reads
-`git log 7087d6c..` there first), now in the lead's last round on its third hunt (S1 to S5; D383 records
-the account switch it keeps, and D382's amendment takes S1's A3 refusal at the merge). Before its merge the owner's 15.8
-steps (Waiting on the owner); right after it WP-LIVE's stage 1 (15.1: `wip/p7b-live1`, built, then
-run by the lead with the owner's tokens, the owner told and present), then WP-LF. Until the reset
-of 2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if
-it runs out (D344).
+Wave 3's WP-S (section 9) is merged at `bdc92c3`, with its reviews', hunts' and the lead's fixes
+(D383; D382 amended). Its merge closes wave 3 (9.11): the lagged list (0.4) and then the whole default
+run, through `bash scripts/heavy-run.sh`, one command at a time with nothing else running; then CI's
+run on the push. Beside them WP-LIVE's stage 1 (15.1, `wip/p7b-live1`) is built in a worktree; its
+run waits for the owner's 15.8 steps (Waiting on the owner: the four new variables were not set on
+2026-11-02), the owner told and present. 15.8's "before WP-S's merge" is read by its own reason, "so
+before stage 1": nothing in the merge, the lagged list, the whole run or stage 1's build reads the
+tokens. Then WP-LF, before part A's checks are written. Until the reset of 2026-11-05 the phase may
+use all that is left of the week's allowance and waits for the reset if it runs out (D344).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
