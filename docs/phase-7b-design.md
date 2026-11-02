@@ -3912,30 +3912,36 @@ each run with the tokens; with the tokens every live test passes, each request r
 up, only `visualcommit-live/` branches touched; no run.txt holds a token, the organization, its ids or
 an address; no value from the research's captures is in the files (section 1); the tripwire and `ReachProblems` find nothing.
 
-**As built** (WP-LIVE1, `06574c5` and its As built commit, 2026-11-02), stage 1 only; where the build differs
-or settles what was open:
-- `LiveRequest`'s headers are `KeptHeaders` (7a's `Headers()` keeps its name); `LiveCredentialForm` is
-  public. `LiveReach` (`AzureDevOpsReach`, `GitLabReach`, in `LiveRequestLog.cs`) judges both the path as
-  sent and as written (a dot segment .NET would remove is refused); `ReachProblems(requests, reach)` and
-  `PerHostOf` are the providers' overloads. `Require(provider)` returns `LiveHostSandbox`.
-- The shared parts are in `LiveProbes.cs`: `LiveServiceApi` (both APIs' base: handler, learning, screen),
-  `LiveServiceAnswer` (`Beside` normalizes GUIDs, dates, origins and each side's names), `LiveCredential`,
-  `LiveMadeUp`, `LiveProviderPremises`, `LiveAzureFake`, `LiveGitLabFake`. `LiveSteps`,
-  `LiveProviderLeftovers` (in `AzureDevOpsLiveTests.cs`) and `LiveApp` (in `GitLabLiveTests.cs`, the
-  app's steps 1 to 7 and 10) serve both classes.
-- `LiveScreen.Apply` screens addresses before the organization (equivalent to 15.3's order, and the user
-  part is judged before the organization is replaced); it also learns every address in any string of
-  an answer, the tenant of a `ClaimsIdentity` descriptor, and replaces any `hid=` value. Address runs
-  end at white space, quotes, brackets, `,` and `;` (narrower than WP-H's whole non-blank run).
-  `SurvivorIn` blanks the placeholders first. The Git area id (`4e080c62-fa21-…`) is written from
-  memory as a published constant; the lead checks it against the research.
-- GitLab gets `Check_1b_probes` too. Check_2's probes run at 15 s a call (`LiveSteps.ProbeLimit`) so
-  that its sum stays near 600 s; the module initializer's comment gives the sums (estimates).
-- Check_2's push clicks "Push {branch}…" and the push dialog's Confirm, and waits for the next
-  operation record; its "nothing ahead" makes `visualcommit-live/<stamp>-even` at the default branch's
-  tip with one refs POST (GitLab: the default branch into itself), which the clean-up removes.
-- For the lead: the live classes were built, never run; CLAUDE.md's rows and the csproj's comment stay
-  the lead's (15.9). No file outside 15.1's list changed.
+**As built** (WP-LIVE1, `06574c5`, with its review's fixes, 2026-11-02), stage 1 only; where the build
+differs or settles what was open:
+- `LiveRequest`'s headers are `KeptHeaders` (7a's `Headers()` keeps its name), `api-version` read from
+  `Content-Type`; `LiveCredentialForm` is public. `LiveReach` (in `LiveRequestLog.cs`) judges a path as
+  sent and as written; `ReachProblems(requests, reach)` is an overload, `PerHostOf` a new member beside
+  7a's `PerHost`. `Require(provider)` returns `LiveHostSandbox`.
+- Shared parts: `LiveServiceApi` (its `Handler` the log over `NewHandler()`), `LiveServiceAnswer`
+  (`Message` falls back to `error_description`) and the fakes beside in `LiveProbes.cs`; `LiveSteps` in
+  `AzureDevOpsLiveTests.cs`, `LiveApp` in `GitLabLiveTests.cs`.
+- Sums: Check_2's steps 8 and 9 are `Check_2b_probes`, after Check_2 in both orders.
+  Check_2 hands its branches and request to the run (`LiveMade`) and cleans up nothing; Check_2b cleans
+  up in `finally` whether Check_2 passed or not (Check_2 run alone leaves them to Check_1, D324).
+  `LiveSteps.Sums` computes each sum from the limits (own call 30 s, fake 5 s, app step 60 s, the clone's
+  two waits one 120 s, a merge ref's poll one 30 s) and a test holds each under 600 s: Azure DevOps 300,
+  560, 480, 525, 330 s; GitLab 570, 215, 540, 385 s.
+- The identity read is each method's first call, once per run (`LiveRun.IdentityRead`).
+- Check_2b probes beside the fake's own draft (its run's branch one commit ahead, `-even` at `main`).
+  Azure DevOps: duplicate and missing branch while the draft is active, then the abandon, then the empty
+  title; nothing ahead from `<branch>-even`, made by a refs POST whose `value[0].success` took, else
+  skipped. GitLab's `-even` is pushed through the app (`--no-track` at `origin/<default>`). The refs
+  delete goes to the service alone.
+- info/refs probes go as git (`git/<version>`, `Accept: */*`, `Git-Protocol: version=2`); the core area
+  as A1 sends it (`{o}/_apis/resourceAreas/{id}`), the root form not probed.
+- run.txt adds git's version, the clone's time, the create POST's status (200 or 201) and the head.
+- `LiveScreen.Apply` screens addresses before the organization; runs end
+  at white space, quotes, brackets, `,` and `;`. The Git area id `4e080c62-…` was confirmed against g1's
+  captures by the review.
+- For the lead: the live classes are built, never run (risks: the log-line wait, the push dialog,
+  `accounts.json`'s record); CLAUDE.md's rows and the csproj's comment are the lead's (15.9). No file
+  outside 15.1's list changed.
 
 ## 16. Open points
 

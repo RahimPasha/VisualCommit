@@ -59,13 +59,18 @@ internal sealed class AzureDevOpsLiveApi : LiveServiceApi
     public Task<LiveServiceAnswer> ConnectionDataAsync(LiveCredential credential, CancellationToken ct, bool suppress = true, string version = AzureDevOpsApi.ConnectionDataVersion, string? organization = null) =>
         SendAsync(HttpMethod.Get, $"{Uri.EscapeDataString(organization ?? Sandbox.Organization)}/_apis/connectionData?api-version={version}", null, credential, ct, suppress);
 
-    /// <summary>The core area's location (D360): <c>_apis/resourceAreas/{id}?organizationName={o}</c>.</summary>
+    /// <summary>The core area's location (D360), as A1's spelling read sends it (6.4): <c>{o}/_apis/resourceAreas/{id}</c> at <c>ConnectionDataVersion</c>.</summary>
     public Task<LiveServiceAnswer> CoreAreaAsync(LiveCredential credential, CancellationToken ct) =>
-        SendAsync(HttpMethod.Get, $"_apis/resourceAreas/{AzureDevOpsApi.CoreAreaId}?organizationName={O}&api-version={AzureDevOpsApi.ConnectionDataVersion}", null, credential, ct);
+        SendAsync(HttpMethod.Get, $"{O}/_apis/resourceAreas/{AzureDevOpsApi.CoreAreaId}?api-version={AzureDevOpsApi.ConnectionDataVersion}", null, credential, ct);
 
-    /// <summary>git's first read of the sandbox repository: <c>{o}/{p}/_git/{r}/info/refs?service=git-upload-pack</c>.</summary>
-    public Task<LiveServiceAnswer> InfoRefsAsync(LiveCredential credential, bool suppress, CancellationToken ct) =>
-        SendAsync(HttpMethod.Get, $"{O}/{Uri.EscapeDataString(Sandbox.Project)}/_git/{Uri.EscapeDataString(Sandbox.Repository)}/info/refs?service=git-upload-pack", null, credential, ct, suppress);
+    /// <summary>
+    /// git's first read of the sandbox repository, <c>{o}/{p}/_git/{r}/info/refs?service=git-upload-pack</c>,
+    /// sent as git sends it (g1 G0.7: the git endpoints answer by <c>User-Agent</c>): git's agent
+    /// <paramref name="gitAgent"/>, <c>Accept: */*</c>, <c>Pragma: no-cache</c> and
+    /// <c>Git-Protocol: version=2</c>, never the API's <c>Accept</c>; Suppress as <paramref name="suppress"/> says (D373).
+    /// </summary>
+    public Task<LiveServiceAnswer> InfoRefsAsync(LiveCredential credential, bool suppress, string gitAgent, CancellationToken ct) =>
+        SendAsync(HttpMethod.Get, $"{O}/{Uri.EscapeDataString(Sandbox.Project)}/_git/{Uri.EscapeDataString(Sandbox.Repository)}/info/refs?service=git-upload-pack", null, credential, ct, suppress, gitAgent: gitAgent);
 
     /// <summary>The sandbox repository.</summary>
     public Task<LiveServiceAnswer> RepositoryAsync(CancellationToken ct) =>
@@ -107,6 +112,29 @@ internal sealed class AzureDevOpsLiveApi : LiveServiceApi
         return [.. ListOf(answer, "value").Select(item => (item.GetProperty("name").GetString() ?? string.Empty, item.GetProperty("objectId").GetString() ?? string.Empty))];
     }
 
+    /// <summary>One <c>POST …/refs</c> making <paramref name="name"/> (a branch, without <c>refs/heads/</c>) at <paramref name="objectId"/>, as answered: its outcome is <see cref="RefUpdated"/>, not the status.</summary>
+    public Task<LiveServiceAnswer> MakeBranchAsync(string name, string objectId, CancellationToken ct) =>
+        SendAsync(
+            HttpMethod.Post,
+            $"{RepositoryPath}/refs?api-version={AzureDevOpsApi.Version}",
+            new JsonArray(new JsonObject { ["name"] = LiveLeftovers.HeadsPrefix + name, ["oldObjectId"] = ZeroId, ["newObjectId"] = objectId }),
+            LiveCredential.Token,
+            ct);
+
+    /// <summary>
+    /// Whether a refs POST's first update took: Azure DevOps answers 200 even when an update failed,
+    /// so the outcome is <c>value[0].success</c> (and <c>updateStatus</c> <c>succeeded</c> when given).
+    /// </summary>
+    public static bool RefUpdated(LiveServiceAnswer answer)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        return answer.Status == 200
+            && answer.Json is { ValueKind: JsonValueKind.Object } json
+            && json.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Array && value.GetArrayLength() > 0
+            && value[0].TryGetProperty("success", out var success) && success.ValueKind == JsonValueKind.True
+            && (!value[0].TryGetProperty("updateStatus", out var status) || string.Equals(status.GetString(), "succeeded", StringComparison.OrdinalIgnoreCase));
+    }
+
     /// <summary>One <c>POST …/refs</c> deleting <paramref name="refs"/> (a zero <c>newObjectId</c> each), as answered.</summary>
     public Task<LiveServiceAnswer> DeleteRefsAsync(IEnumerable<(string Name, string ObjectId)> refs, CancellationToken ct) =>
         SendAsync(
@@ -119,14 +147,23 @@ internal sealed class AzureDevOpsLiveApi : LiveServiceApi
     protected override void Authorize(HttpRequestMessage request, string value) =>
         request.Headers.TryAddWithoutValidation("Authorization", "Basic " + Convert.ToBase64String(Encoding.UTF8.GetBytes(":" + value)));
 
-    protected override void AddHeaders(HttpRequestMessage request, bool suppress)
+    protected override void AddHeaders(HttpRequestMessage request, bool suppress, bool asGit)
     {
         if (suppress)
         {
             request.Headers.TryAddWithoutValidation("X-TFS-FedAuthRedirect", "Suppress");
         }
 
-        request.Headers.TryAddWithoutValidation("Accept", "application/json");
+        if (asGit)
+        {
+            request.Headers.TryAddWithoutValidation("Accept", "*/*");
+            request.Headers.TryAddWithoutValidation("Pragma", "no-cache");
+            request.Headers.TryAddWithoutValidation("Git-Protocol", "version=2");
+        }
+        else
+        {
+            request.Headers.TryAddWithoutValidation("Accept", "application/json");
+        }
     }
 
     private static string Show(int value) => value.ToString(CultureInfo.InvariantCulture);

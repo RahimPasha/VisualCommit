@@ -132,6 +132,12 @@ public class LiveRun : IDisposable
     /// <summary>What <c>Check_1</c> read of the sandbox (<c>GET /repos/{o}/{r}</c>), for <c>Check_2</c>; null until read.</summary>
     internal LiveRepository? Repository { get; set; }
 
+    /// <summary>Whether this run's identity read (connectionData, <c>GET user</c>) has answered: each method's first call, once per run (docs/phase-7b-design.md 15.3).</summary>
+    internal bool IdentityRead { get; set; }
+
+    /// <summary>What <c>Check_2</c> made, for <c>Check_2b_probes</c>, which probes it and cleans it up (15.5 steps 8 and 9); null until <c>Check_2</c> knows its branches, and again once taken.</summary>
+    internal LiveMade? Made { get; set; }
+
     /// <summary>
     /// Keeps <paramref name="text"/> and writes it to the test output, after searching it for the
     /// token: a note that holds it is kept and written as <see cref="WithheldNote"/>, and the run
@@ -280,7 +286,7 @@ public class LiveRun : IDisposable
         ArgumentNullException.ThrowIfNull(text);
         if (LiveTokenForms.FoundIn(text, _token) is { } form)
         {
-            System.IO.File.Delete(File);
+            DeleteEarlierFile();
             lock (_gate)
             {
                 _failures.Add($"run.txt was withheld: its text held the token ({form}).");
@@ -294,7 +300,7 @@ public class LiveRun : IDisposable
             text = screen.Apply(text);
             if (screen.SurvivorIn(text) is { } kind)
             {
-                System.IO.File.Delete(File);
+                DeleteEarlierFile();
                 lock (_gate)
                 {
                     _failures.Add($"run.txt was withheld: its screened text still held {kind} (D323, D372).");
@@ -306,6 +312,15 @@ public class LiveRun : IDisposable
 
         Directory.CreateDirectory(Path.GetDirectoryName(File)!);
         System.IO.File.WriteAllText(File, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+    }
+
+    /// <summary>Deletes an earlier run's file, so that it is not read as this run's; a provider's first run has no folder yet, and nothing to delete.</summary>
+    private void DeleteEarlierFile()
+    {
+        if (System.IO.File.Exists(File))
+        {
+            System.IO.File.Delete(File);
+        }
     }
 
     /// <summary>Writes run.txt, <see cref="NoNotes"/> when no note was taken, then fails when a note, a message, an exception or the file held the token.</summary>
@@ -326,6 +341,20 @@ public class LiveRun : IDisposable
             throw new InvalidOperationException("The live command's record failed: " + string.Join(' ', failures));
         }
     }
+}
+
+/// <summary>
+/// What a new provider's <c>Check_2</c> hands to <c>Check_2b_probes</c> (15.5 steps 8 and 9): its
+/// branch, the branch with nothing ahead, the target and the title, known before the push; the
+/// request's number, the account's user id (Azure DevOps) and the pushed commit, once the create answered.
+/// </summary>
+internal sealed record LiveMade(string Branch, string Even, string Target, string Title)
+{
+    public int? Number { get; init; }
+
+    public string? UserId { get; init; }
+
+    public string? Head { get; init; }
 }
 
 /// <summary>Azure DevOps' run (15.3): <c>artifacts/live/azure-devops/run.txt</c>, its token and its screen.</summary>

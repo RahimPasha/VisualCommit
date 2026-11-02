@@ -168,9 +168,14 @@ internal sealed class LiveRequestLog : DelegatingHandler
         return response;
     }
 
-    /// <summary>The rate-limit, expiry and API version headers of an answer (15.4), by lower-case name, values joined.</summary>
-    private static Dictionary<string, string> KeptOf(HttpResponseMessage response)
+    /// <summary>
+    /// The rate-limit, expiry and API version headers of an answer (15.4), by lower-case name, values
+    /// joined; and as <c>api-version</c> the version Azure DevOps served, which it names as a parameter
+    /// of <c>Content-Type</c>, not as a header (r5 1.2, design 3.4).
+    /// </summary>
+    internal static Dictionary<string, string> KeptOf(HttpResponseMessage response)
     {
+        ArgumentNullException.ThrowIfNull(response);
         var kept = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var (name, values) in response.Headers.Concat(response.Content.Headers))
         {
@@ -179,6 +184,11 @@ internal sealed class LiveRequestLog : DelegatingHandler
                 || lower is "retry-after" or "api-supported-versions" or "x-vss-tokenexpiration" || lower.Contains("expir", StringComparison.Ordinal))
             {
                 kept[lower] = string.Join(", ", values);
+            }
+            else if (lower == "content-type"
+                && values.SelectMany(value => value.Split(';')).Select(part => part.Trim()).FirstOrDefault(part => part.StartsWith("api-version=", StringComparison.OrdinalIgnoreCase)) is { } version)
+            {
+                kept["api-version"] = version["api-version=".Length..];
             }
         }
 

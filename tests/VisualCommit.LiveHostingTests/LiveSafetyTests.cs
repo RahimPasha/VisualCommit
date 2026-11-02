@@ -1239,10 +1239,194 @@ public sealed partial class LiveSafetyTests
                 .Order(StringComparer.Ordinal);
             Assert.Equal(declared, methods.Order(StringComparer.Ordinal));
             Assert.Equal(methods.Count, methods.Distinct(StringComparer.Ordinal).Count());
+            Assert.Equal(methods.ToList().IndexOf("Check_2_the_providers_and_the_session") + 1, methods.ToList().IndexOf("Check_2b_probes"));
         }
     }
 
+    // ---- What the review of WP-LIVE1 found -------------------------------------------------------
+
+    [Fact]
+    public void Each_live_method_s_call_limits_sum_under_the_watchdog_s_600_s()
+    {
+        var ordered = AzureDevOpsLiveOrder.Methods.Select(method => nameof(AzureDevOpsLiveTests) + "." + method)
+            .Concat(GitLabLiveOrder.Methods.Select(method => nameof(GitLabLiveTests) + "." + method));
+        Assert.Equal(ordered.Order(StringComparer.Ordinal), LiveSteps.Sums.Keys.Order(StringComparer.Ordinal));
+        Assert.All(LiveSteps.Sums, sum => Assert.True(sum.Value < TimeSpan.FromSeconds(600), $"{sum.Key} sums to {sum.Value.TotalSeconds.ToString(System.Globalization.CultureInfo.InvariantCulture)} s."));
+    }
+
+    [Fact]
+    public void The_kept_headers_hold_the_api_version_azure_devops_names_in_content_type()
+    {
+        using var answer = new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent("{}") };
+        answer.Content.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("application/json; charset=utf-8; api-version=7.1");
+        answer.Headers.TryAddWithoutValidation("X-RateLimit-Remaining", "199");
+        var kept = LiveRequestLog.KeptOf(answer);
+        Assert.Equal(["api-version", "x-ratelimit-remaining"], kept.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal("7.1", kept["api-version"]);
+    }
+
+    [Fact]
+    public void Each_new_live_api_s_public_constructor_builds_the_log_over_a_handler_that_follows_no_redirect()
+    {
+        var store = new LiveRequestLog.Store();
+        using var azure = new AzureDevOpsLiveApi(new LiveAzureSandbox(Organization, Project, Repository, ProviderToken), AzureReach(), store, new LiveScreen());
+        using var gitlab = new GitLabLiveApi(new LiveGitLabSandbox("ada", Project, ProviderToken), LiveReach.GitLab(), store, new LiveScreen());
+        foreach (var api in new LiveServiceApi[] { azure, gitlab })
+        {
+            var inner = Assert.IsType<SocketsHttpHandler>(Assert.IsType<LiveRequestLog>(api.Handler).InnerHandler);
+            Assert.Equal((false, false, DecompressionMethods.All, TimeSpan.FromSeconds(10)), (inner.AllowAutoRedirect, inner.UseCookies, inner.AutomaticDecompression, inner.ConnectTimeout));
+        }
+
+        Assert.Empty(store.Snapshot());
+    }
+
+    [Fact]
+    public void Beside_compares_gitlab_s_shape_f_description()
+    {
+        static LiveServiceAnswer F(string description) => Answer(403, $$"""{"error":"insufficient_granular_scope","error_description":"{{description}}","scope":"read_user"}""");
+        Assert.Equal("The request requires higher privileges.", F("The request requires higher privileges.").Message);
+        Assert.Equal("same", LiveServiceAnswer.Beside(F("The request requires higher privileges."), F("The request requires higher privileges."), [], []));
+        Assert.Equal("message Another text.", LiveServiceAnswer.Beside(F("The request requires higher privileges."), F("Another text."), [], []));
+        Assert.Equal("shape B", Answer(400, """{"message":"shape B","error_description":"not read"}""").Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task The_info_refs_probe_goes_as_git_sends_it_and_the_core_area_as_the_client_does(bool suppress)
+    {
+        var stub = new HeadersStub();
+        using var api = new AzureDevOpsLiveApi(new LiveAzureSandbox(Organization, Project, Repository, ProviderToken), new LiveRequestLog(stub, new LiveRequestLog.Store(), AzureReach()), AzureDevOpsEndpoints.Service.WebBase, TimeSpan.FromSeconds(5), new LiveScreen());
+        await api.InfoRefsAsync(LiveMadeUp.ShortValue, suppress, LiveSteps.AgentOf("git version 2.56.0.windows.4"), Cancelled);
+        var git = Assert.Single(stub.Requests);
+        Assert.Equal("git/2.56.0.windows.4", git.Headers["User-Agent"]);
+        Assert.Equal("*/*", git.Headers["Accept"]);
+        Assert.Equal("version=2", git.Headers["Git-Protocol"]);
+        Assert.Equal(suppress, git.Headers.ContainsKey("X-TFS-FedAuthRedirect"));
+        await api.CoreAreaAsync(LiveCredential.Token, Cancelled);
+        var area = stub.Requests[1];
+        Assert.Equal($"https://dev.azure.com/{Organization}/_apis/resourceAreas/{AzureDevOpsApi.CoreAreaId}?api-version={AzureDevOpsApi.ConnectionDataVersion}", area.Url);
+        Assert.Equal("application/json", area.Headers["Accept"]);
+        Assert.NotEqual("git/2.56.0.windows.4", area.Headers["User-Agent"]);
+    }
+
+    [Theory]
+    [InlineData(200, """{"value":[{"name":"refs/heads/visualcommit-live/x-even","success":true,"updateStatus":"succeeded"}],"count":1}""", true)]
+    [InlineData(200, """{"value":[{"name":"refs/heads/visualcommit-live/x-even","success":true}],"count":1}""", true)]
+    [InlineData(200, """{"value":[{"name":"refs/heads/visualcommit-live/x-even","success":false,"updateStatus":"staleOldObjectId"}],"count":1}""", false)]
+    [InlineData(200, """{"value":[],"count":0}""", false)]
+    [InlineData(400, """{"value":[{"success":true}]}""", false)]
+    public void A_refs_post_took_only_when_its_update_says_so(int status, string body, bool took) =>
+        Assert.Equal(took, AzureDevOpsLiveApi.RefUpdated(Answer(status, body)));
+
+    [Fact]
+    public async Task A_poll_stops_when_the_ref_comes_holds_each_read_to_what_is_left_and_restores_the_limit()
+    {
+        var reads = 0;
+        var stub = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent(Interlocked.Increment(ref reads) < 3 ? """{"value":[],"count":0}""" : """{"value":[{"name":"refs/pull/7/merge","objectId":"0123"}],"count":1}"""),
+        });
+        using var api = new AzureDevOpsLiveApi(new LiveAzureSandbox(Organization, Project, Repository, ProviderToken), new LiveRequestLog(stub, new LiveRequestLog.Store(), AzureReach()), AzureDevOpsEndpoints.Service.WebBase, TimeSpan.FromSeconds(5), new LiveScreen());
+        var appeared = await LiveSteps.PollAsync(api, () => api.RefsAsync("pull/7/merge", Cancelled), refs => refs.Count > 0, TimeSpan.FromSeconds(20), TimeSpan.FromMilliseconds(10));
+        Assert.Equal((true, 3, (string?)null), (appeared.Done, appeared.Reads, appeared.Failure));
+        Assert.Equal(TimeSpan.FromSeconds(5), api.Limit);
+        var stayed = await LiveSteps.PollAsync(api, () => api.RefsAsync("pull/7/merge", Cancelled), refs => refs.Count == 0, TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(50));
+        Assert.False(stayed.Done);
+        Assert.True(stayed.Reads > 1, $"{stayed.Reads} reads");
+        Assert.True(stayed.Took < TimeSpan.FromSeconds(5));
+        Assert.Equal(TimeSpan.FromSeconds(5), api.Limit);
+    }
+
+    [Fact]
+    public async Task The_identity_read_is_sent_once_per_run_and_its_ids_are_learned_before_any_note()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var notes = new List<string>();
+        const string userId = "7b0a0201-0000-4a00-8000-00000000fa4e";
+        var stub = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent($$"""{"authenticatedUser":{"id":"{{userId}}","descriptor":"Microsoft.IdentityModel.Claims.ClaimsIdentity;7b0a0202-0000-4a00-8000-00000000fa4e\\ada@corp.test","providerDisplayName":"Ada"},"instanceId":"7b0a0203-0000-4a00-8000-00000000fa4e"}"""),
+        });
+        var screen = new LiveScreen();
+        screen.AddOrganization(Organization);
+        var run = new LiveRun(ProviderToken, folder.Combine("run.txt"), notes.Add, screen, HostingProvider.AzureDevOps);
+        using var api = new AzureDevOpsLiveApi(new LiveAzureSandbox(Organization, Project, Repository, ProviderToken), new LiveRequestLog(stub, new LiveRequestLog.Store(), AzureReach()), AzureDevOpsEndpoints.Service.WebBase, TimeSpan.FromSeconds(5), screen);
+        var problems = new List<string>();
+        await AzureDevOpsLiveTests.IdentityOnceAsync(run, api, problems);
+        await AzureDevOpsLiveTests.IdentityOnceAsync(run, api, problems);
+        Assert.Single(stub.Requests);
+        Assert.True(run.IdentityRead);
+        Assert.Empty(problems);
+        run.Note($"TF400813: The user '{userId}' is not authorized.");
+        Assert.DoesNotContain(userId, notes[^1], StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task The_fakes_beside_hold_the_run_s_branch_ahead_and_the_branch_with_nothing_ahead_for_check_2b()
+    {
+        const string branch = "visualcommit-live/20261102-010203Z";
+        await using (var azure = await LiveAzureFake.StartAsync(Project, Repository, branch, branch + LiveSteps.EvenSuffix, Cancelled))
+        {
+            var draft = await azure.Api.CreateAsync(branch, LiveAzureFake.DefaultBranch, "VisualCommit live test", true, Cancelled);
+            Assert.True(draft.Status is 200 or 201, $"{draft}: {draft.Text}");
+            Assert.Equal(409, (await azure.Api.CreateAsync(branch, LiveAzureFake.DefaultBranch, "VisualCommit live test", true, Cancelled)).Status);
+            Assert.Contains((await azure.Api.RefsAsync("heads/" + LiveLeftovers.Prefix, Cancelled)).Select(reference => reference.Name), name => name == LiveLeftovers.HeadsPrefix + branch + LiveSteps.EvenSuffix);
+        }
+
+        await using (var gitlab = await LiveGitLabFake.StartAsync(Project, branch, branch + LiveSteps.EvenSuffix, Cancelled))
+        {
+            var draft = await gitlab.Api.CreateAsync(branch, LiveAzureFake.DefaultBranch, "Draft: VisualCommit live test", Cancelled);
+            Assert.True(draft.Status == 201, $"{draft}: {draft.Text}");
+            var even = await gitlab.Api.CreateAsync(branch + LiveSteps.EvenSuffix, LiveAzureFake.DefaultBranch, "VisualCommit live test", Cancelled);
+            Assert.True(even.Status == 201, $"{even}: {even.Text}");   // 4.3 (h): a branch with nothing ahead is allowed; (e) is the default branch into itself
+        }
+    }
+
+    [Fact]
+    public async Task The_fake_beside_is_asked_for_its_304_with_its_own_etag()
+    {
+        await using var fake = await LiveGitLabFake.StartAsync(Project, null, null, Cancelled);
+        using var service = new GitLabLiveApi(new LiveGitLabSandbox("ada", Project, ProviderToken), new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotModified)), VisualCommit.Hosting.GitLab.GitLabEndpoints.GitLabCom.ApiBase, TimeSpan.FromSeconds(5), new LiveScreen());
+        Assert.Equal(304, (await GitLabLiveTests.UserWithOwnETagAsync(fake.Api, service, "W/\"made-up-service-etag\"", Cancelled)).Status);
+        Assert.Equal(304, (await GitLabLiveTests.UserWithOwnETagAsync(service, service, "W/\"made-up-service-etag\"", Cancelled)).Status);
+    }
+
+    [Fact]
+    public void The_push_waits_for_its_own_record_never_a_background_one()
+    {
+        static VisualCommit.Core.Operations.OperationRecord Record(long sequence, bool background, VisualCommit.Core.Operations.OperationKind kind) =>
+            new("id", "sandbox", "title", DateTimeOffset.UnixEpoch, TimeSpan.Zero, VisualCommit.Core.Operations.OperationOutcome.Succeeded, "message") { Sequence = sequence, IsBackground = background, Kind = kind };
+        Assert.False(LiveApp.IsPushRecord(Record(5, true, VisualCommit.Core.Operations.OperationKind.Local), 4));
+        Assert.False(LiveApp.IsPushRecord(Record(5, true, VisualCommit.Core.Operations.OperationKind.Network), 4));
+        Assert.False(LiveApp.IsPushRecord(Record(5, false, VisualCommit.Core.Operations.OperationKind.Local), 4));
+        Assert.False(LiveApp.IsPushRecord(Record(4, false, VisualCommit.Core.Operations.OperationKind.Network), 4));
+        Assert.True(LiveApp.IsPushRecord(Record(5, false, VisualCommit.Core.Operations.OperationKind.Network), 4));
+    }
+
+    private static LiveServiceAnswer Answer(int status, string body)
+    {
+        using var document = JsonDocument.Parse(body);
+        return new LiveServiceAnswer(status, null, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Content-Type"] = "application/json; charset=utf-8" }, body, false, document.RootElement.Clone());
+    }
+
     private static AzureDevOpsReach AzureReach() => LiveReach.AzureDevOps(Organization, Project, Repository, MadeUpOrganization);
+
+    /// <summary>A handler that answers 401 and keeps each request's URL and headers by name.</summary>
+    private sealed class HeadersStub : HttpMessageHandler
+    {
+        public List<(string Url, Dictionary<string, string> Headers)> Requests { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            lock (Requests)
+            {
+                Requests.Add((request.RequestUri!.AbsoluteUri, request.Headers.ToDictionary(header => header.Key, header => string.Join(' ', header.Value), StringComparer.OrdinalIgnoreCase)));
+            }
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.Unauthorized));
+        }
+    }
 }
 
 /// <summary>
@@ -1418,6 +1602,22 @@ public sealed class LiveScreenTests
         Assert.Contains("still held the organization's name once percent-decoded", failed.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Fernhill", failed.Message, StringComparison.OrdinalIgnoreCase);
         Assert.False(File.Exists(file));
+    }
+
+    [Fact]
+    public void A_withheld_run_txt_on_a_provider_s_first_run_fails_with_its_reason()
+    {
+        using var folder = new TempDirectory("live-screen");
+        var file = Path.Combine(folder.Path, "azure-devops", "run.txt");
+        var run = new LiveRun(null, file, _ => { }, Screen(), HostingProvider.AzureDevOps);
+        run.Note("x%252FFernhill-Labs%252Fy");
+        var failed = Assert.Throws<InvalidOperationException>(run.Dispose);
+        Assert.Contains("run.txt was withheld: its screened text still held", failed.Message, StringComparison.Ordinal);
+        Assert.False(File.Exists(file));
+        const string token = "made-up-token-for-the-screen-0123456789";
+        var held = new LiveRun(token, Path.Combine(folder.Path, "gitlab", "run.txt"), _ => { }, Screen(), HostingProvider.GitLab);
+        held.WriteRunFile("a text holding " + token);
+        Assert.Contains(held.Failures, failure => failure.StartsWith("run.txt was withheld: its text held the token", StringComparison.Ordinal));
     }
 
     [Fact]

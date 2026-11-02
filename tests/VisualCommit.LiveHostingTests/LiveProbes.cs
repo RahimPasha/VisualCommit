@@ -334,10 +334,13 @@ internal sealed record LiveServiceAnswer(int Status, string? RequestId, IReadOnl
     /// <summary><c>typeKey</c>, Azure DevOps' exception's name, or null.</summary>
     public string? TypeKey => Member("typeKey");
 
-    /// <summary><c>message</c> as text: a string as it is, an object or array as JSON (GitLab's shapes B and C, r6 10).</summary>
+    /// <summary>
+    /// <c>message</c> as text: a string as it is, an object or array as JSON (GitLab's shapes B and C,
+    /// r6 10); without one, <c>error_description</c>, shape F's text, as r6 10's client rule reads it.
+    /// </summary>
     public string? Message => Json is { ValueKind: JsonValueKind.Object } json && json.TryGetProperty("message", out var message)
         ? message.ValueKind == JsonValueKind.String ? message.GetString() : message.GetRawText()
-        : null;
+        : Member("error_description");
 
     /// <summary>The TF (or VS) code that starts a message, or null.</summary>
     public string? Code => Message is { } text && TfCode.Match(text) is { Success: true } match ? match.Value : null;
@@ -456,6 +459,7 @@ internal abstract class LiveServiceApi : IDisposable
         ArgumentNullException.ThrowIfNull(baseAddress);
         ArgumentException.ThrowIfNullOrEmpty(token);
         ArgumentNullException.ThrowIfNull(screen);
+        Handler = handler;
         _client = new HttpClient(handler, disposeHandler: true) { BaseAddress = baseAddress, Timeout = Timeout.InfiniteTimeSpan };
         _token = token;
         ScreenOfAnswers = screen;
@@ -471,6 +475,9 @@ internal abstract class LiveServiceApi : IDisposable
 
     /// <summary>The screen every answer is learned by.</summary>
     public LiveScreen ScreenOfAnswers { get; }
+
+    /// <summary>The handler the calls go through: for a public constructor's, <see cref="LiveRequestLog"/> over <see cref="NewHandler"/>'s (15.9).</summary>
+    internal HttpMessageHandler Handler { get; }
 
     /// <summary>The handler the public constructors build (15.4): no redirect followed, any compression, no cookies, 10 s to connect.</summary>
     public static SocketsHttpHandler NewHandler() => new()
@@ -505,14 +512,15 @@ internal abstract class LiveServiceApi : IDisposable
     /// <summary>Adds the provider's credential header for <paramref name="value"/>.</summary>
     protected abstract void Authorize(HttpRequestMessage request, string value);
 
-    /// <summary>Adds the provider's other headers.</summary>
-    protected virtual void AddHeaders(HttpRequestMessage request, bool suppress)
+    /// <summary>Adds the provider's other headers; <paramref name="asGit"/> for a read sent as git sends it (no API's <c>Accept</c>).</summary>
+    protected virtual void AddHeaders(HttpRequestMessage request, bool suppress, bool asGit)
     {
     }
 
     /// <summary>One call, answered whatever the status: learned by the screen before it is returned.</summary>
     /// <exception cref="LiveServiceException">No answer within <see cref="Limit"/>, the guard refused it, or the service was not reached.</exception>
-    internal async Task<LiveServiceAnswer> SendAsync(HttpMethod method, string path, JsonNode? body, LiveCredential credential, CancellationToken cancellationToken, bool suppress = true, string? ifNoneMatch = null)
+    /// <param name="gitAgent">git's own <c>User-Agent</c> (<c>git/&lt;version&gt;</c>) for a read sent as git sends it (g1 G0.7), or null for the test's own agent and the API's headers.</param>
+    internal async Task<LiveServiceAnswer> SendAsync(HttpMethod method, string path, JsonNode? body, LiveCredential credential, CancellationToken cancellationToken, bool suppress = true, string? ifNoneMatch = null, string? gitAgent = null)
     {
         ArgumentNullException.ThrowIfNull(credential);
         using var request = new HttpRequestMessage(method, path);
@@ -525,8 +533,8 @@ internal abstract class LiveServiceApi : IDisposable
             Authorize(request, value);
         }
 
-        request.Headers.TryAddWithoutValidation("User-Agent", GitHubLiveApi.UserAgent);
-        AddHeaders(request, suppress);
+        request.Headers.TryAddWithoutValidation("User-Agent", gitAgent ?? GitHubLiveApi.UserAgent);
+        AddHeaders(request, suppress, gitAgent is not null);
         if (ifNoneMatch is not null)
         {
             request.Headers.TryAddWithoutValidation("If-None-Match", ifNoneMatch);
@@ -678,11 +686,16 @@ internal static class LiveMadeUp
 /// <summary>
 /// The fake beside for Azure DevOps (15.7): <see cref="FakeAzureDevOps"/> in process with
 /// <c>fake-org</c>, the sandbox's project and repository names, a user and a token of its own, and a
-/// README on <c>main</c> and on the run's branch; its calls go through its in-process handler alone.
+/// README on <c>main</c>; for Check_2b's probes also the run's branch, one commit ahead of <c>main</c>
+/// as the sandbox's is, and the branch with nothing ahead, at <c>main</c>. Its calls go through its
+/// in-process handler alone.
 /// </summary>
 internal sealed class LiveAzureFake : IAsyncDisposable
 {
     public const string Organization = "fake-org";
+
+    /// <summary>The default branch of both fakes beside.</summary>
+    public const string DefaultBranch = "main";
 
     private readonly TempDirectory _folder;
     private readonly TempRepo _source;
@@ -701,7 +714,8 @@ internal sealed class LiveAzureFake : IAsyncDisposable
     /// <summary>The names the fake's side replaces before a comparison.</summary>
     public IReadOnlyList<string> Names => [Organization, Api.Sandbox.Project, Api.Sandbox.Repository];
 
-    public static async Task<LiveAzureFake> StartAsync(string project, string repository, string branch, CancellationToken ct)
+    /// <summary>The fake, with <paramref name="branch"/> one commit ahead of <c>main</c> and <paramref name="even"/> at <c>main</c> when given (Check_2b's probes).</summary>
+    public static async Task<LiveAzureFake> StartAsync(string project, string repository, string? branch, string? even, CancellationToken ct)
     {
         var folder = new TempDirectory("live-azure-fake");
         TempRepo? source = null;
@@ -709,8 +723,7 @@ internal sealed class LiveAzureFake : IAsyncDisposable
         try
         {
             source = await TempRepo.CreateAsync("live-azure-source");
-            await source.CommitFileAsAsync("README.md", "The fake's namesake of the sandbox.\n", "Initial commit", "Sandbox author", "sandbox-author@example.com");
-            await source.GitAsync("branch", branch);
+            await BranchesAsync(source, branch, even);
             fake = FakeAzureDevOps.InProcess(folder.Combine("azure"));
             fake.AddOrganization(Organization);
             fake.AddProject(Organization, project);
@@ -740,9 +753,27 @@ internal sealed class LiveAzureFake : IAsyncDisposable
         _source.Dispose();
         _folder.Dispose();
     }
+
+    /// <summary>A README on <c>main</c>; <paramref name="branch"/> one commit ahead of it and <paramref name="even"/> at it, each when given (both fakes beside).</summary>
+    internal static async Task BranchesAsync(TempRepo source, string? branch, string? even)
+    {
+        await source.CommitFileAsAsync("README.md", "The fake's namesake of the sandbox.\n", "Initial commit", "Sandbox author", "sandbox-author@example.com");
+        if (even is not null)
+        {
+            await source.CreateBranchAsync(even);
+        }
+
+        if (branch is not null)
+        {
+            await source.CreateBranchAsync(branch);
+            await source.CheckoutAsync(branch);
+            await source.CommitFileAsAsync("visualcommit-live/fake.txt", "The fake's side of the run's commit.\n", LiveSteps.IdentityName, LiveSteps.IdentityName, LiveScreen.KeptAddress);
+            await source.CheckoutAsync(DefaultBranch);
+        }
+    }
 }
 
-/// <summary>The fake beside for GitLab (15.7): <see cref="FakeGitLab"/> in process with <c>ada/&lt;project&gt;</c>, a fine-grained token of its own, and a README on <c>main</c> and the run's branch.</summary>
+/// <summary>The fake beside for GitLab (15.7): <see cref="FakeGitLab"/> in process with <c>ada/&lt;project&gt;</c>, a fine-grained token of its own, a README on <c>main</c>, and for Check_2b's probes the run's branch one commit ahead and the branch with nothing ahead, as <see cref="LiveAzureFake"/>'s.</summary>
 internal sealed class LiveGitLabFake : IAsyncDisposable
 {
     public const string Login = "ada";
@@ -763,7 +794,7 @@ internal sealed class LiveGitLabFake : IAsyncDisposable
 
     public IReadOnlyList<string> Names => [Login, Api.Sandbox.Project];
 
-    public static async Task<LiveGitLabFake> StartAsync(string project, string branch, CancellationToken ct)
+    public static async Task<LiveGitLabFake> StartAsync(string project, string? branch, string? even, CancellationToken ct)
     {
         var folder = new TempDirectory("live-gitlab-fake");
         TempRepo? source = null;
@@ -771,8 +802,7 @@ internal sealed class LiveGitLabFake : IAsyncDisposable
         try
         {
             source = await TempRepo.CreateAsync("live-gitlab-source");
-            await source.CommitFileAsAsync("README.md", "The fake's namesake of the sandbox.\n", "Initial commit", "Sandbox author", "sandbox-author@example.com");
-            await source.GitAsync("branch", branch);
+            await LiveAzureFake.BranchesAsync(source, branch, even);
             fake = FakeGitLab.InProcess(folder.Combine("gitlab"));
             fake.AddUser(Login, 1001, "Ada Lovelace");
             var token = fake.AddToken(Login);

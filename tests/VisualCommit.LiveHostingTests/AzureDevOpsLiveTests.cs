@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
 using System.Text;
@@ -22,7 +23,7 @@ using Xunit.v3;
 
 namespace VisualCommit.LiveHostingTests;
 
-/// <summary>Runs <see cref="AzureDevOpsLiveTests"/>' methods in 15.5's order (stage 1; stage 2's Check_3 takes its place after Check_2).</summary>
+/// <summary>Runs <see cref="AzureDevOpsLiveTests"/>' methods in 15.5's order (stage 1; stage 2's Check_3 takes its place after Check_2b_probes).</summary>
 public sealed class AzureDevOpsLiveOrder : ITestCaseOrderer
 {
     public static IReadOnlyList<string> Methods { get; } =
@@ -30,6 +31,7 @@ public sealed class AzureDevOpsLiveOrder : ITestCaseOrderer
         nameof(AzureDevOpsLiveTests.Check_1_the_sandbox_and_its_leftovers),
         nameof(AzureDevOpsLiveTests.Check_1b_probes),
         nameof(AzureDevOpsLiveTests.Check_2_the_providers_and_the_session),
+        nameof(AzureDevOpsLiveTests.Check_2b_probes),
         nameof(AzureDevOpsLiveTests.Check_4_a_clone_through_the_organization_host),
     ];
 
@@ -124,9 +126,10 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     /// <summary>
     /// Check_1's probes (15.7), in a method of their own for 15.5's sums: connectionData with and
     /// without Suppress and at <c>7.1</c>; the core area anonymously and with the token; D373's
-    /// made-up values to connectionData and to the sandbox's <c>info/refs</c>, each with and without
-    /// Suppress; D374's made-up organization; the sandbox project's repository list. Each beside the
-    /// fake's answer; a broken premise fails the test after its note.
+    /// made-up values to connectionData and to the sandbox's <c>info/refs</c> (sent as git sends it),
+    /// each with and without Suppress; D374's made-up organization; the sandbox project's repository
+    /// list. Each beside the fake's answer; a broken premise fails the test after its note. Its first
+    /// call, connectionData with the token, is the run's identity read when Check_1 did not make it.
     /// </summary>
     [Fact]
     public async Task Check_1b_probes()
@@ -134,16 +137,17 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         var sandbox = Sandbox;
         var store = new LiveRequestLog.Store();
         var reach = LiveReach.AzureDevOps(sandbox.Organization, sandbox.Project, sandbox.Repository);
-        var stamp = LiveSteps.Stamp();
         var step = "1b, the probes";
         var problems = new List<string>();
         try
         {
             using var api = new AzureDevOpsLiveApi(sandbox, reach, store, run.Screener!, run.Withheld);
             run.Note($"Check_1b. D374's made-up organization of this run: {reach.MadeUpOrganization}.");
-            await using var fake = await StartFakeAsync(sandbox, LiveLeftovers.Prefix + stamp);
+            await using var fake = await StartFakeAsync(sandbox, null, null);
             await ProbeIdentityAsync(api, fake, problems);
-            await ProbeMadeUpAsync(api, fake, problems);
+            var agent = LiveSteps.AgentOf(await LiveSteps.GitVersionAsync());
+            run.Note($"The info/refs probes are sent as git sends them: User-Agent {agent}, Accept */*, Pragma no-cache, Git-Protocol version=2 (g1 G0.7).");
+            await ProbeMadeUpAsync(api, fake, agent, problems);
             await ProbeMadeUpOrganizationAsync(run, api, fake?.Api, fake?.Names ?? [], reach.MadeUpOrganization, problems);
             var list = await ProbeAsync(run, api, fake?.Api, fake?.Names ?? [], "the sandbox project's repositories (ListProject's list)", a => a.RepositoriesAsync(Cancelled));
             var rows = list?.Json is { ValueKind: JsonValueKind.Object } json && json.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Array ? value.EnumerateArray().ToList() : [];
@@ -163,8 +167,9 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     /// Check_2 (15.5): the app with Azure DevOps on (its handler the log over the default one, behind
     /// the guard) signs in through the session, lists the sandbox, clones it through the clone form and
     /// the app's helper, loads its pull requests, pushes D325's commit with "Push {branch}…" and creates
-    /// a draft through the repository's hosting; the create is probed (15.7) and everything cleaned up;
-    /// then the tripwires.
+    /// a draft through the repository's hosting; then the tripwires. Its steps 8 and 9, the probes of
+    /// the create and the clean-up, are Check_2b's (15.5's sums): Check_2 hands its branches to the run
+    /// before the push and its pull request once created, and cleans up nothing itself.
     /// </summary>
     [AvaloniaFact]
     public async Task Check_2_the_providers_and_the_session()
@@ -172,20 +177,22 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         var sandbox = Sandbox;
         var stamp = LiveSteps.Stamp();
         var branch = LiveLeftovers.Prefix + stamp;
-        var even = branch + "-even";
         var title = "VisualCommit live test " + stamp;
         var appRequests = new LiveRequestLog.Store();
         var ownRequests = new LiveRequestLog.Store();
         var reach = LiveReach.AzureDevOps(sandbox.Organization, sandbox.Project, sandbox.Repository);
         using var api = new AzureDevOpsLiveApi(sandbox, reach, ownRequests, run.Screener!, run.Withheld);
         using var app = new LiveApp(run, sandbox, AppOptions(sandbox, appRequests, reach));
-        var step = "1, the start";
+        var step = "1, the identity";
         var problems = new List<string>();
         ExceptionDispatchInfo? failure = null;
         try
         {
+            await IdentityAsync(api, problems);
             run.Note($"Check_2. The branch {branch}.");
             var repository = await ReadSandboxAsync(api);
+            run.Made = new LiveMade(branch, branch + LiveSteps.EvenSuffix, repository.DefaultBranch, title);
+            step = "1, the start";
             await app.StartAsync(appRequests);
 
             step = "2, the sign-in";
@@ -205,24 +212,19 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
             await app.LoadAsync(opened);
 
             step = "6, the push";
-            await app.PushAsync(opened, branch, stamp, title);
+            var head = await app.PushAsync(opened, branch, stamp, title);
 
             step = "7, the create";
-            var pull = await app.CreateAsync(opened, title, branch, repository.DefaultBranch);
-
-            step = "8, the probes";
-            api.Limit = LiveSteps.ProbeLimit;
-            await ProbeCreateAsync(api, pull.Number, account.UserId, branch, even, repository.DefaultBranch, title, problems);
+            var pull = await app.CreateAsync(opened, title, branch, repository.DefaultBranch, appRequests, "/pullrequests", problems);
+            run.Made = run.Made with { Number = pull.Number, UserId = account.UserId, Head = head };
         }
         catch (Exception ex)
         {
             failure = run.FailureOf(ex, step);
-            run.Note($"Check_2 failed in step {step}: {ex.GetType().Name}: {ex.Message}");
+            run.Note($"Check_2 failed in step {step}: {ex.GetType().Name}: {ex.Message}; Check_2b_probes cleans up what it made.");
         }
         finally
         {
-            api.Limit = LiveServiceApi.CallLimit;
-            await CleanUpAsync(api, [branch, even], problems);
             app.Close();
         }
 
@@ -231,7 +233,60 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     }
 
     /// <summary>
-    /// Check_4 (15.5, D363): started and signed in as Check_2, the app clones
+    /// Check_2's steps 8 and 9 (15.5, 15.7), in a method of their own for 15.5's sums: the create's
+    /// probes beside the fake's own draft on its namesake of the run's branch (its status,
+    /// <c>mergeStatus</c>, <c>isDraft</c>, <c>createdBy</c> and head; when the merge ref appears; a
+    /// duplicate, a missing branch; the abandon and the merge ref's removal; an empty title from the
+    /// branch, which then has no active pull request; nothing ahead, from a branch made at the default
+    /// branch's tip), then, in <c>finally</c>, the clean-up of what Check_2 handed over, whether Check_2
+    /// passed or not. A stopped run's leftovers are Check_1's (D324).
+    /// </summary>
+    [Fact]
+    public async Task Check_2b_probes()
+    {
+        var sandbox = Sandbox;
+        var store = new LiveRequestLog.Store();
+        var reach = LiveReach.AzureDevOps(sandbox.Organization, sandbox.Project, sandbox.Repository);
+        using var api = new AzureDevOpsLiveApi(sandbox, reach, store, run.Screener!, run.Withheld);
+        var made = run.Made;
+        run.Made = null;
+        var step = "2b, the identity";
+        var problems = new List<string>();
+        ExceptionDispatchInfo? failure = null;
+        try
+        {
+            await IdentityAsync(api, problems);
+            run.Check(made is not null, () => "Check_2 handed over nothing: it did not run in this process, so there is nothing to probe or clean up.");
+            step = "8, the probes";
+            if (made!.Number is not { } number)
+            {
+                run.Note("Check_2b. Check_2 created no pull request, so there is nothing to probe; its branches are cleaned up.");
+            }
+            else
+            {
+                run.Note($"Check_2b. The probes of !{Show(number)} from {made.Branch}.");
+                await using var fake = await StartFakeAsync(sandbox, made.Branch, made.Even);
+                await ProbeCreateAsync(api, fake, made, number, problems);
+            }
+        }
+        catch (Exception ex)
+        {
+            failure = run.FailureOf(ex, step);
+            run.Note($"Check_2b failed in step {step}: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            if (made is not null)
+            {
+                await CleanUpAsync(api, [made.Branch, made.Even], problems);
+            }
+        }
+
+        LiveSteps.Finish(run, store, reach, problems, failure);
+    }
+
+    /// <summary>
+    /// Check_4 (15.5, D363): after the identity read, started and signed in as Check_2, the app clones
     /// <c>https://&lt;organization&gt;.visualstudio.com/&lt;project&gt;/_git/&lt;repository&gt;</c> with no
     /// credentials dialog, then lists from <c>dev.azure.com</c>: the only test of
     /// <c>OrganizationHost</c> against the service.
@@ -241,14 +296,18 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     {
         var sandbox = Sandbox;
         var appRequests = new LiveRequestLog.Store();
+        var ownRequests = new LiveRequestLog.Store();
         var reach = LiveReach.AzureDevOps(sandbox.Organization, sandbox.Project, sandbox.Repository);
+        using var api = new AzureDevOpsLiveApi(sandbox, reach, ownRequests, run.Screener!, run.Withheld);
         using var app = new LiveApp(run, sandbox, AppOptions(sandbox, appRequests, reach));
-        var step = "1, the start";
+        var step = "1, the identity";
         var problems = new List<string>();
         ExceptionDispatchInfo? failure = null;
         try
         {
+            await IdentityAsync(api, problems);
             run.Note("Check_4. A clone through the organization's host.");
+            step = "1, the start";
             await app.StartAsync(appRequests);
             step = "2, the sign-in";
             await app.SignInAsync(sandbox.Organization, appRequests, problems);
@@ -271,7 +330,7 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         }
 
         app.Tripwires(problems);
-        LiveSteps.Finish(run, appRequests, reach, problems, failure, signInStarted: app.SignInStarted);
+        LiveSteps.Finish(run, appRequests, reach, problems, failure, ownRequests, signInStarted: app.SignInStarted);
     }
 
     /// <summary>15.5 step 1's options: Azure DevOps alone, <c>ListProject</c> the sandbox's project, its handler the log over the default one behind the guard.</summary>
@@ -284,15 +343,31 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
 
     // ---- The sandbox and the identity --------------------------------------------------------
 
-    /// <summary>The identity read (connectionData with the token): 200, a member's id, its member names noted.</summary>
-    private async Task IdentityAsync(AzureDevOpsLiveApi api, List<string> problems)
+    /// <summary>
+    /// The identity read (connectionData with the token), each method's first call and once per run
+    /// (15.3), so that the screen knows the user's id, the host's and the addresses before any note:
+    /// 200, a member's id, its member names noted. Nothing when the run made it already.
+    /// </summary>
+    private Task IdentityAsync(AzureDevOpsLiveApi api, List<string> problems) => IdentityOnceAsync(run, api, problems);
+
+    /// <summary><see cref="IdentityAsync"/> for <paramref name="run"/>; internal for <see cref="LiveSafetyTests"/>.</summary>
+    internal static async Task IdentityOnceAsync(LiveRun run, AzureDevOpsLiveApi api, List<string> problems)
     {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(problems);
+        if (run.IdentityRead)
+        {
+            return;
+        }
+
         var answer = await api.ConnectionDataAsync(LiveCredential.Token, Cancelled);
         if (answer is not { Status: 200, Json: { ValueKind: JsonValueKind.Object } json } || !json.TryGetProperty("authenticatedUser", out var user))
         {
             throw new LiveServiceException(api.Describe(answer, "connectionData") + ": 401 or 203 means the token is wrong, expired or for another organization.");
         }
 
+        run.IdentityRead = true;
         run.Note($"The identity (connectionData): {answer}; authenticatedUser's members: {string.Join(", ", user.EnumerateObject().Select(member => member.Name))}.");
         var id = user.TryGetProperty("id", out var value) ? value.GetString() : null;
         if (!LiveProviderPremises.IsMemberId(id))
@@ -329,11 +404,11 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
 
     // ---- The probes (15.7) -------------------------------------------------------------------
 
-    private async Task<LiveAzureFake?> StartFakeAsync(LiveAzureSandbox sandbox, string branch)
+    private async Task<LiveAzureFake?> StartFakeAsync(LiveAzureSandbox sandbox, string? branch, string? even)
     {
         try
         {
-            return await LiveAzureFake.StartAsync(sandbox.Project, sandbox.Repository, branch, Cancelled);
+            return await LiveAzureFake.StartAsync(sandbox.Project, sandbox.Repository, branch, even, Cancelled);
         }
         catch (Exception ex) when (!Cancelled.IsCancellationRequested)
         {
@@ -370,13 +445,14 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         var identity = await ProbeAsync(api, fake, "connectionData with the token and Suppress", a => a.ConnectionDataAsync(LiveCredential.Token, Cancelled));
         if (identity?.Json is { ValueKind: JsonValueKind.Object } json && json.TryGetProperty("authenticatedUser", out var user))
         {
+            run.IdentityRead |= identity.Status == 200;
             run.Note($"The identity's member names: {string.Join(", ", user.EnumerateObject().Select(member => member.Name))}.");
         }
 
         await ProbeAsync(api, fake, "connectionData with the token, without Suppress", a => a.ConnectionDataAsync(LiveCredential.Token, Cancelled, suppress: false));
         await ProbeAsync(api, fake, $"connectionData with the token at {AzureDevOpsApi.Version}", a => a.ConnectionDataAsync(LiveCredential.Token, Cancelled, version: AzureDevOpsApi.Version));
-        await ProbeAsync(api, fake, "the core area without a credential", a => a.CoreAreaAsync(LiveCredential.None, Cancelled));
-        var area = await ProbeAsync(api, fake, "the core area with the token", a => a.CoreAreaAsync(LiveCredential.Token, Cancelled));
+        await ProbeAsync(api, fake, "the core area, as A1's spelling read sends it ({o}/_apis/resourceAreas/…), without a credential", a => a.CoreAreaAsync(LiveCredential.None, Cancelled));
+        var area = await ProbeAsync(api, fake, "the core area, as A1's spelling read sends it, with the token", a => a.CoreAreaAsync(LiveCredential.Token, Cancelled));
         var location = area?.Json is { ValueKind: JsonValueKind.Object } areaJson && areaJson.TryGetProperty("locationUrl", out var url) && Uri.TryCreate(url.GetString(), UriKind.Absolute, out var parsed) && parsed.Scheme == Uri.UriSchemeHttps
             ? parsed.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault()
             : null;
@@ -388,7 +464,7 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     }
 
     /// <summary>D373's made-up values, a short plain one and an 84-character one in Azure DevOps' form, each with and without Suppress, to connectionData and the sandbox's info/refs.</summary>
-    private async Task ProbeMadeUpAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, List<string> problems)
+    private async Task ProbeMadeUpAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, string agent, List<string> problems)
     {
         var shaped = LiveMadeUp.AzureShaped(api.Sandbox.Token);
         foreach (var value in new[] { LiveMadeUp.ShortValue, LiveCredential.MadeUp(shaped, "a made-up value of 84 characters in Azure DevOps' form") })
@@ -399,7 +475,7 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
                 foreach (var (target, probe) in new (string, Func<AzureDevOpsLiveApi, Task<LiveServiceAnswer>>)[]
                 {
                     ("connectionData", a => a.ConnectionDataAsync(value, Cancelled, suppress)),
-                    ("the sandbox's info/refs", a => a.InfoRefsAsync(value, suppress, Cancelled)),
+                    ("the sandbox's info/refs", a => a.InfoRefsAsync(value, suppress, agent, Cancelled)),
                 })
                 {
                     var answer = await ProbeAsync(api, fake, $"{target} with {value} {with}", probe);
@@ -430,73 +506,125 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     }
 
     /// <summary>
-    /// Check_2's probes of the create (15.7): its status, <c>mergeStatus</c>, <c>isDraft</c> and
-    /// <c>createdBy</c>; when the merge ref appears; a duplicate, a missing branch, an empty title and
-    /// nothing ahead; the abandon and the merge ref's removal. The refs delete is the clean-up's.
+    /// Check_2b's probes of the create (15.7), each beside the fake's own draft from its namesake of the
+    /// run's branch: the read back (status, <c>mergeStatus</c>, <c>isDraft</c>, <c>createdBy</c>, the
+    /// head); when the merge ref appears (polled within <see cref="LiveSteps.PollBudget"/>); a duplicate
+    /// and a missing branch while the draft is active; the abandon and the merge ref's removal (polled
+    /// likewise); an empty title from the branch, which then has no active pull request, so that a
+    /// duplicate's refusal cannot stand in for it; nothing ahead, from <see cref="LiveMade.Even"/> made
+    /// at the default branch's tip by one refs POST whose update took. The refs delete is the clean-up's.
     /// </summary>
-    private async Task ProbeCreateAsync(AzureDevOpsLiveApi api, int id, string? userId, string branch, string even, string target, string title, List<string> problems)
+    private async Task ProbeCreateAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, LiveMade made, int id, List<string> problems)
     {
-        var read = await api.PullRequestAsync(id, Cancelled);
-        var json = read.Json ?? default;
-        string? Text(string name) => read.Json is { ValueKind: JsonValueKind.Object } && json.TryGetProperty(name, out var value) ? (value.ValueKind == JsonValueKind.String ? value.GetString() : value.GetRawText()) : null;
-        var createdBy = read.Json is { ValueKind: JsonValueKind.Object } && json.TryGetProperty("createdBy", out var by) && by.TryGetProperty("id", out var byId) ? byId.GetString() : null;
-        run.Note($"The created !{Show(id)}: {read}; status {Text("status") ?? "none"}, mergeStatus {Text("mergeStatus") ?? "none"}, isDraft {Text("isDraft") ?? "none"}, createdBy.id {(string.Equals(createdBy, userId, StringComparison.OrdinalIgnoreCase) ? "the account's UserId" : "another id")}; {read.Shape}.");
-        if (!string.Equals(createdBy, userId, StringComparison.OrdinalIgnoreCase))
+        var fakeId = await FakeDraftAsync(fake, made);
+        var side = fakeId is null ? null : fake;
+        string Target(AzureDevOpsLiveApi a) => a == api ? made.Target : LiveAzureFake.DefaultBranch;
+        int Id(AzureDevOpsLiveApi a) => a == api ? id : fakeId.GetValueOrDefault();
+
+        var read = await ProbeAsync(api, side, $"the read of the created !{Show(id)}", a => a.PullRequestAsync(Id(a), Cancelled));
+        string? Text(string name) => read?.Json is { ValueKind: JsonValueKind.Object } json && json.TryGetProperty(name, out var value) ? (value.ValueKind == JsonValueKind.String ? value.GetString() : value.GetRawText()) : null;
+        string? Inner(string name, string member) => read?.Json is { ValueKind: JsonValueKind.Object } json && json.TryGetProperty(name, out var outer) && outer.ValueKind == JsonValueKind.Object && outer.TryGetProperty(member, out var value) ? value.GetString() : null;
+        var createdBy = Inner("createdBy", "id");
+        var head = Inner("lastMergeSourceCommit", "commitId");
+        run.Note($"The created !{Show(id)}: status {Text("status") ?? "none"}, mergeStatus {Text("mergeStatus") ?? "none"}, isDraft {Text("isDraft") ?? "none"}, createdBy.id {(string.Equals(createdBy, made.UserId, StringComparison.OrdinalIgnoreCase) ? "the account's UserId" : "another id")}, the head {head ?? "none"} ({(string.Equals(head, made.Head, StringComparison.OrdinalIgnoreCase) ? "the pushed commit" : "not the pushed commit")}).");
+        if (!string.Equals(createdBy, made.UserId, StringComparison.OrdinalIgnoreCase))
         {
             problems.Add("The create's createdBy.id is not the account's UserId (15.7's premise).");
         }
 
-        var polls = 0;
-        IReadOnlyList<(string Name, string ObjectId)> merge = [];
-        while (polls < 5 && merge.Count == 0)
-        {
-            polls++;
-            merge = await api.RefsAsync($"pull/{Show(id)}/merge", Cancelled);
-            if (merge.Count == 0)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(2), Cancelled);
-            }
-        }
+        var merge = $"pull/{Show(id)}/merge";
+        var appeared = await LiveSteps.PollAsync(api, () => api.RefsAsync(merge, Cancelled), refs => refs.Count > 0);
+        run.Note($"The merge ref refs/{merge} {(appeared.Done ? "appeared" : "had not appeared")} by read {Show(appeared.Reads)}, {appeared.Took.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s after the read back{(appeared.Failure is { } failed ? $" ({failed})" : string.Empty)}; the fake's: {await FakeMergeRefAsync(side, fakeId)}.");
 
-        run.Note($"The merge ref refs/pull/{Show(id)}/merge {(merge.Count > 0 ? $"appeared by read {Show(polls)}" : $"had not appeared after {Show(polls)} reads")}.");
-
-        var duplicate = await api.CreateAsync(branch, target, title, true, Cancelled);
-        run.Note($"The duplicate create: {duplicate}; 409 GitPullRequestExistsException expected. {duplicate.BodyForNotes}");
-        if (!LiveProviderPremises.IsAzureDuplicate(duplicate))
+        var duplicate = await ProbeAsync(api, side, "the duplicate create (409 GitPullRequestExistsException expected)", a => a.CreateAsync(made.Branch, Target(a), made.Title, true, Cancelled));
+        if (duplicate is not null && !LiveProviderPremises.IsAzureDuplicate(duplicate))
         {
             problems.Add($"The duplicate create answered {duplicate} with typeKey {duplicate.TypeKey ?? "none"}, not 409 GitPullRequestExistsException.");
         }
 
-        var missing = await api.CreateAsync(MissingBranch, target, title, true, Cancelled);
-        run.Note($"The create from a missing branch: {missing}; 400 GitPullRequestCannotBeActivated expected. {missing.BodyForNotes}");
-        if (!LiveProviderPremises.IsAzureMissingBranch(missing))
+        var missing = await ProbeAsync(api, side, "the create from a missing branch (400 GitPullRequestCannotBeActivated expected)", a => a.CreateAsync(MissingBranch, Target(a), made.Title, true, Cancelled));
+        if (missing is not null && !LiveProviderPremises.IsAzureMissingBranch(missing))
         {
             problems.Add($"The create from a missing branch answered {missing} with typeKey {missing.TypeKey ?? "none"}, not 400 GitPullRequestCannotBeActivated.");
         }
 
-        var empty = await api.CreateAsync(branch, target, string.Empty, true, Cancelled);
-        run.Note($"The create with an empty title: {empty}. {empty.BodyForNotes}");
-
-        var head = (await api.RefsAsync("heads/" + target, Cancelled)).FirstOrDefault(reference => reference.Name == LiveLeftovers.HeadsPrefix + target);
-        if (head.ObjectId is { Length: > 0 })
+        var abandoned = await ProbeAsync(api, side, $"the abandon of !{Show(id)}", a => a.AbandonAsync(Id(a), Cancelled));
+        if (abandoned is not { Status: 200 })
         {
-            var made = await api.SendAsync(HttpMethod.Post, $"{Uri.EscapeDataString(api.Sandbox.Organization)}/{Uri.EscapeDataString(api.Sandbox.Project)}/_apis/git/repositories/{Uri.EscapeDataString(api.Sandbox.Repository)}/refs?api-version={AzureDevOpsApi.Version}", new JsonArray(new JsonObject { ["name"] = LiveLeftovers.HeadsPrefix + even, ["oldObjectId"] = AzureDevOpsLiveApi.ZeroId, ["newObjectId"] = head.ObjectId }), LiveCredential.Token, Cancelled);
-            var ahead = await api.CreateAsync(even, target, title, true, Cancelled);
-            run.Note($"A branch with nothing ahead of {target} ({made}), then a create from it: {ahead}. {ahead.BodyForNotes}");
+            problems.Add(abandoned is null ? $"The abandon of !{Show(id)} had no answer." : api.Describe(abandoned, $"abandoning !{Show(id)}"));
+            run.Note("The merge ref's removal and the empty title: skipped, since the abandon did not take; the clean-up abandons the draft.");
+        }
+        else
+        {
+            var gone = await LiveSteps.PollAsync(api, () => api.RefsAsync(merge, Cancelled), refs => refs.Count == 0);
+            run.Note($"After the abandon, the merge ref {(gone.Done ? "was gone" : "was still there")} by read {Show(gone.Reads)}, {gone.Took.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s after the abandon{(gone.Failure is { } lost ? $" ({lost})" : string.Empty)}; the fake's: {await FakeMergeRefAsync(side, fakeId)}.");
+            await ProbeAsync(api, side, "the create with an empty title, from the branch without an active pull request", a => a.CreateAsync(made.Branch, Target(a), string.Empty, true, Cancelled));
         }
 
-        var abandoned = await api.AbandonAsync(id, Cancelled);
-        run.Note($"The abandon of !{Show(id)}: {abandoned}.");
-        if (abandoned.Status != 200)
+        var tip = (await api.RefsAsync("heads/" + made.Target, Cancelled)).FirstOrDefault(reference => reference.Name == LiveLeftovers.HeadsPrefix + made.Target);
+        if (tip.ObjectId is not { Length: > 0 })
         {
-            problems.Add(api.Describe(abandoned, $"abandoning !{Show(id)}"));
+            run.Note($"Nothing ahead: skipped, since the refs read named no tip of {made.Target}.");
+            return;
         }
 
-        var after = await api.RefsAsync($"pull/{Show(id)}/merge", Cancelled);
-        run.Note($"After the abandon, the merge ref is {(after.Count == 0 ? "gone" : "still there")}.");
+        var even = await api.MakeBranchAsync(made.Even, tip.ObjectId, Cancelled);
+        if (!AzureDevOpsLiveApi.RefUpdated(even))
+        {
+            run.Note($"Nothing ahead: skipped, since the refs POST making {made.Even} at {made.Target}'s tip did not take: {even}. {even.BodyForNotes}");
+            return;
+        }
+
+        run.Note($"{made.Even} made at {made.Target}'s tip by one refs POST: {even}, its update took.");
+        await ProbeAsync(api, side, $"the create with nothing ahead of {made.Target}, from {made.Even}", a => a.CreateAsync(made.Even, Target(a), made.Title, true, Cancelled));
     }
 
-    /// <summary>15.5 step 9: the run's pull requests abandoned (by their source branch, never a fork's), then one refs POST deleting the run's branches.</summary>
+    /// <summary>The fake's own draft from its namesake of the run's branch, for the probes beside: its id, or null (noted) when the fake did not start or did not create it.</summary>
+    private async Task<int?> FakeDraftAsync(LiveAzureFake? fake, LiveMade made)
+    {
+        if (fake is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var created = await fake.Api.CreateAsync(made.Branch, LiveAzureFake.DefaultBranch, made.Title, true, Cancelled);
+            if (created is { Status: 200 or 201, Json: { ValueKind: JsonValueKind.Object } json } && json.TryGetProperty("pullRequestId", out var id) && id.TryGetInt32(out var number))
+            {
+                run.Note($"The fake's own draft from its {made.Branch}: {created.Status.ToString(CultureInfo.InvariantCulture)}.");
+                return number;
+            }
+
+            run.Note($"The fake did not create its own draft ({created}), so the probes go to the service alone. {created.BodyForNotes}");
+        }
+        catch (LiveServiceException ex)
+        {
+            run.Note($"The fake did not create its own draft ({ex.Message}), so the probes go to the service alone.");
+        }
+
+        return null;
+    }
+
+    /// <summary>Whether the fake's merge ref of its draft is there (one read), or why not asked.</summary>
+    private static async Task<string> FakeMergeRefAsync(LiveAzureFake? fake, int? id)
+    {
+        if (fake is null || id is not { } number)
+        {
+            return "not asked";
+        }
+
+        try
+        {
+            return (await fake.Api.RefsAsync($"pull/{Show(number)}/merge", Cancelled)).Count > 0 ? "there" : "not there";
+        }
+        catch (LiveServiceException ex)
+        {
+            return "no answer: " + ex.Message;
+        }
+    }
+
+    /// <summary>15.5 step 9, Check_2b's <c>finally</c>: the run's pull requests abandoned (by their source branch, never a fork's), then one refs POST deleting the run's branches.</summary>
     private async Task CleanUpAsync(AzureDevOpsLiveApi api, IReadOnlyList<string> branches, List<string> problems)
     {
         try
@@ -557,8 +685,116 @@ internal static class LiveSteps
     /// <summary>The identity of the command's commit (D325).</summary>
     public const string IdentityName = "VisualCommit live test";
 
-    /// <summary>How long one of Check_2's probes may take, so that its steps stay under the watchdog's 600 s (15.5).</summary>
-    public static readonly TimeSpan ProbeLimit = TimeSpan.FromSeconds(15);
+    /// <summary>The suffix of the branch with nothing ahead, made at the default branch's tip for Check_2b's probe (15.7).</summary>
+    public const string EvenSuffix = "-even";
+
+    /// <summary>How long one poll of a merge ref may take in all, its reads included (15.5's sums count it once).</summary>
+    public static readonly TimeSpan PollBudget = TimeSpan.FromSeconds(30);
+
+    /// <summary>The pause between a poll's reads.</summary>
+    public static readonly TimeSpan PollPause = TimeSpan.FromSeconds(2);
+
+    /// <summary>
+    /// Reads until <paramref name="done"/> holds or <paramref name="budget"/> (<see cref="PollBudget"/>)
+    /// is spent, each read held to what is left of it and <paramref name="pause"/> (<see cref="PollPause"/>)
+    /// between reads: whether it came, after how many reads and how long, and why a read had no answer.
+    /// </summary>
+    public static async Task<(bool Done, int Reads, TimeSpan Took, string? Failure)> PollAsync<T>(LiveServiceApi api, Func<Task<T>> read, Func<T, bool> done, TimeSpan? budget = null, TimeSpan? pause = null)
+    {
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(read);
+        ArgumentNullException.ThrowIfNull(done);
+        var total = budget ?? PollBudget;
+        var limit = api.Limit;
+        var clock = Stopwatch.StartNew();
+        var reads = 0;
+        try
+        {
+            while (total - clock.Elapsed is var left && left > TimeSpan.Zero)
+            {
+                api.Limit = left;
+                reads++;
+                try
+                {
+                    if (done(await read()))
+                    {
+                        return (true, reads, clock.Elapsed, null);
+                    }
+                }
+                catch (LiveServiceException ex)
+                {
+                    return (false, reads, clock.Elapsed, ex.Message);
+                }
+
+                var wait = total - clock.Elapsed;
+                if (wait <= TimeSpan.Zero)
+                {
+                    break;
+                }
+
+                await Task.Delay(wait < (pause ?? PollPause) ? wait : pause ?? PollPause, TestContext.Current.CancellationToken);
+            }
+
+            return (false, reads, clock.Elapsed, null);
+        }
+        finally
+        {
+            api.Limit = limit;
+        }
+    }
+
+    /// <summary><c>git --version</c>'s line, of the git the app finds (7a 14.5's item).</summary>
+    public static async Task<string> GitVersionAsync()
+    {
+        var git = new GitRunner(GitLocator.FindExecutable(GitSearchContext.FromSystem()) ?? throw new InvalidOperationException("The live command needs git."));
+        var result = await git.RunAsync(new GitCommand(["--version"]) { WorkingDirectory = AppContext.BaseDirectory }, TestContext.Current.CancellationToken);
+        return result.Succeeded ? result.StandardOutput.Trim() : throw new InvalidOperationException($"git --version failed ({result.ExitCode.ToString(CultureInfo.InvariantCulture)}).");
+    }
+
+    /// <summary>git's <c>User-Agent</c> for <paramref name="version"/>, <c>git version 2.56.0.windows.4</c>'s <c>git/2.56.0.windows.4</c>.</summary>
+    public static string AgentOf(string version)
+    {
+        ArgumentNullException.ThrowIfNull(version);
+        const string Prefix = "git version ";
+        return "git/" + (version.StartsWith(Prefix, StringComparison.Ordinal) ? version[Prefix.Length..] : version).Trim();
+    }
+
+    /// <summary>
+    /// Each method's call limits summed as 7a's are (each app step 60 s, the clone 120 s, each own call
+    /// at its limit, a poll at its budget; 7a design 14.4), with the leftovers' calls at full limits:
+    /// the watchdog's 600 s must cover each (15.5). The counts are the methods' own; the fake's start,
+    /// a few git calls, and local waits are outside, as in 7a's sums.
+    /// </summary>
+    public static IReadOnlyDictionary<string, TimeSpan> Sums { get; } = new Dictionary<string, TimeSpan>(StringComparer.Ordinal)
+    {
+        // The identity, the sandbox, the active list, the refs read; five abandons and one refs POST.
+        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_1_the_sandbox_and_its_leftovers)] = Own(4 + 6),
+        // 16 probes, the first of them the identity read, each beside the fake.
+        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_1b_probes)] = Own(16) + Fake(16),
+        // The identity, the sandbox; sign-in, list, load, push, create; the clone.
+        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_2_the_providers_and_the_session)] = Own(2) + App(5) + LiveApp.CloneLimit,
+        // The identity, the read, the duplicate, the missing branch, the abandon, the empty title, the
+        // tip's read, the refs POST, nothing ahead; two polls; the clean-up's active list, two abandons,
+        // refs read and refs POST; the fake's draft, the eight probes beside and its two merge-ref reads.
+        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_2b_probes)] = Own(9) + (PollBudget * 2) + Own(5) + Fake(1 + 6 + 2),
+        // The identity; sign-in, list, load; the clone.
+        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_4_a_clone_through_the_organization_host)] = Own(1) + App(3) + LiveApp.CloneLimit,
+        // The identity, the sandbox, the opened list, the branches' list; five leftovers' close, delete and branch delete.
+        [nameof(GitLabLiveTests) + "." + nameof(GitLabLiveTests.Check_1_the_sandbox_and_its_leftovers)] = Own(4 + 15),
+        // 6 probes, the first of them the identity read, beside the fake's 7 (two for the 304: its own ETag first).
+        [nameof(GitLabLiveTests) + "." + nameof(GitLabLiveTests.Check_1b_probes)] = Own(6) + Fake(7),
+        // The identity, the sandbox; sign-in, list, load, the two pushes, create; the clone.
+        [nameof(GitLabLiveTests) + "." + nameof(GitLabLiveTests.Check_2_the_providers_and_the_session)] = Own(2) + App(6) + LiveApp.CloneLimit,
+        // The identity, the read, the duplicate, the missing branch, nothing ahead; the clean-up's
+        // opened list, two requests' close and delete, two branches' delete; the fake's draft and four beside.
+        [nameof(GitLabLiveTests) + "." + nameof(GitLabLiveTests.Check_2b_probes)] = Own(5) + Own(1 + 4 + 2) + Fake(1 + 4),
+    };
+
+    private static TimeSpan Own(int calls) => LiveServiceApi.CallLimit * calls;
+
+    private static TimeSpan Fake(int calls) => LiveServiceApi.FakeCallLimit * calls;
+
+    private static TimeSpan App(int steps) => LiveApp.NetworkStep * steps;
 
     public static string Stamp() => DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss'Z'", CultureInfo.InvariantCulture);
 

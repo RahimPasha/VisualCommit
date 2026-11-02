@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.ExceptionServices;
 using System.Text;
@@ -22,7 +23,7 @@ using Xunit.v3;
 
 namespace VisualCommit.LiveHostingTests;
 
-/// <summary>Runs <see cref="GitLabLiveTests"/>' methods in 15.5's order (stage 1; stage 2's Check_3 takes its place after Check_2).</summary>
+/// <summary>Runs <see cref="GitLabLiveTests"/>' methods in 15.5's order (stage 1; stage 2's Check_3 takes its place after Check_2b_probes).</summary>
 public sealed class GitLabLiveOrder : ITestCaseOrderer
 {
     public static IReadOnlyList<string> Methods { get; } =
@@ -30,6 +31,7 @@ public sealed class GitLabLiveOrder : ITestCaseOrderer
         nameof(GitLabLiveTests.Check_1_the_sandbox_and_its_leftovers),
         nameof(GitLabLiveTests.Check_1b_probes),
         nameof(GitLabLiveTests.Check_2_the_providers_and_the_session),
+        nameof(GitLabLiveTests.Check_2b_probes),
     ];
 
     public IReadOnlyCollection<TTestCase> OrderTestCases<TTestCase>(IReadOnlyCollection<TTestCase> testCases)
@@ -74,10 +76,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
             using var api = new GitLabLiveApi(sandbox, reach, store, run.Screener!, run.Withheld);
 
             step = "1, the identity";
-            var user = await api.UserAsync(LiveCredential.Token, Cancelled);
-            run.Check(user.Status == 200, () => api.Describe(user, "GET user") + ": 401 means the token is wrong or expired.");
-            run.Note($"GET user: {user}; its members: {(user.Json is { ValueKind: JsonValueKind.Object } json ? string.Join(", ", json.EnumerateObject().Select(member => member.Name)) : user.Shape)}.");
-            run.Check(string.Equals(user.Member("username"), sandbox.Login, StringComparison.OrdinalIgnoreCase), () => $"The token's user is not {sandbox.Login}, the namespace's first segment.");
+            await IdentityAsync(api);
 
             step = "1, the sandbox";
             await ReadSandboxAsync(api);
@@ -114,7 +113,8 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
     /// <c>personal_access_tokens/self</c>, whose 403 <c>insufficient_granular_scope</c> is expected and
     /// noted (r6 2.2); a made-up <c>glpat-</c> value on <c>GET user</c> (D373), which must get 401; the
     /// projects with <c>permissions</c>; the merge requests; <c>ratelimit-*</c> across a 304. Each
-    /// beside the fake's answer; every request Bearer.
+    /// beside the fake's answer; every request Bearer. Its first call, <c>GET user</c>, is the run's
+    /// identity read when Check_1 did not make it.
     /// </summary>
     [Fact]
     public async Task Check_1b_probes()
@@ -122,18 +122,21 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
         var sandbox = Sandbox;
         var store = new LiveRequestLog.Store();
         var reach = LiveReach.GitLab();
-        var stamp = LiveSteps.Stamp();
         var step = "1b, the probes";
         var problems = new List<string>();
         try
         {
             using var api = new GitLabLiveApi(sandbox, reach, store, run.Screener!, run.Withheld);
             run.Note("Check_1b. GitLab's probes.");
-            await using var fake = await StartFakeAsync(sandbox, LiveLeftovers.Prefix + stamp);
+            await using var fake = await StartFakeAsync(sandbox, null, null);
             var user = await ProbeAsync(api, fake, "GET user", a => a.UserAsync(LiveCredential.Token, Cancelled));
             if (user is not { Status: 200 })
             {
                 problems.Add($"GET user answered {user?.ToString() ?? "nothing"}, not 200 (15.7's premise).");
+            }
+            else
+            {
+                run.IdentityRead = true;
             }
 
             var self = await ProbeAsync(api, fake, "GET personal_access_tokens/self (403 insufficient_granular_scope expected, r6 2.2)", a => a.TokenSelfAsync(Cancelled));
@@ -150,7 +153,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
             await ProbeAsync(api, fake, "GET the sandbox's opened merge requests", a => a.MergeRequestsAnswerAsync(Cancelled));
             if (user?.Header("ETag") is { } etag)
             {
-                var again = await ProbeAsync(api, fake, "GET user with If-None-Match", a => a.UserAsync(LiveCredential.Token, Cancelled, a == api ? etag : "\"none\""));
+                var again = await ProbeAsync(api, fake, "GET user with If-None-Match, each side its own ETag", a => UserWithOwnETagAsync(a, api, etag, Cancelled));
                 run.Note($"ratelimit across the 304: before {Rate(user)}; after {(again is null ? "no answer" : Rate(again))}.");
             }
             else
@@ -175,8 +178,11 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
 
     /// <summary>
     /// Check_2 (15.5): the app with GitLab on signs in, lists the sandbox, clones it, loads its merge
-    /// requests, pushes D325's commit and creates a draft; the create is probed (<c>draft</c>,
-    /// <c>references</c>, a duplicate, a missing branch, nothing ahead) and everything cleaned up.
+    /// requests, pushes D325's commit and creates a draft; it also pushes the branch with nothing ahead
+    /// (at the default branch's tip, through the app's helper: D364's token has Code: Push and no
+    /// Branch: Create) for Check_2b's probe. Its steps 8 and 9, the probes of the create and the
+    /// clean-up, are Check_2b's (15.5's sums): Check_2 hands its branches to the run before the pushes
+    /// and its merge request once created, and cleans up nothing itself.
     /// </summary>
     [AvaloniaFact]
     public async Task Check_2_the_providers_and_the_session()
@@ -195,13 +201,17 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
             CreateGitLabHandler = () => new LiveRequestLog(HostingOptions.DefaultHandler(GitLabEndpoints.GitLabCom.ApiBase)(), appRequests, reach),
         };
         using var app = new LiveApp(run, sandbox, hosting);
-        var step = "1, the start";
+        var step = "1, the identity";
         var problems = new List<string>();
         ExceptionDispatchInfo? failure = null;
         try
         {
+            await IdentityAsync(api);
             run.Note($"Check_2. The branch {branch}.");
             var project = await ReadSandboxAsync(api);
+            var made = new LiveMade(branch, branch + LiveSteps.EvenSuffix, project.DefaultBranch, title);
+            run.Made = made;
+            step = "1, the start";
             await app.StartAsync(appRequests);
 
             step = "2, the sign-in";
@@ -218,29 +228,95 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
             await app.LoadAsync(opened);
 
             step = "6, the push";
-            await app.PushAsync(opened, branch, stamp, title);
+            var head = await app.PushAsync(opened, branch, stamp, title);
+            step = "6, the push of the branch with nothing ahead";
+            await app.PushNewBranchAsync(made.Even, "origin/" + project.DefaultBranch);
 
             step = "7, the create";
-            var request = await app.CreateAsync(opened, title, branch, project.DefaultBranch);
-
-            step = "8, the probes";
-            api.Limit = LiveSteps.ProbeLimit;
-            await ProbeCreateAsync(api, request.Number, branch, project.DefaultBranch, title, problems);
+            var request = await app.CreateAsync(opened, title, branch, project.DefaultBranch, appRequests, "/merge_requests", problems);
+            run.Made = made with { Number = request.Number, Head = head };
         }
         catch (Exception ex)
         {
             failure = run.FailureOf(ex, step);
-            run.Note($"Check_2 failed in step {step}: {ex.GetType().Name}: {ex.Message}");
+            run.Note($"Check_2 failed in step {step}: {ex.GetType().Name}: {ex.Message}; Check_2b_probes cleans up what it made.");
         }
         finally
         {
-            api.Limit = LiveServiceApi.CallLimit;
-            await CleanUpAsync(api, branch, problems);
             app.Close();
         }
 
         app.Tripwires(problems);
         LiveSteps.Finish(run, appRequests, reach, problems, failure, ownRequests, signInStarted: app.SignInStarted);
+    }
+
+    /// <summary>
+    /// Check_2's steps 8 and 9 (15.5, 15.7), in a method of their own as Azure DevOps' are: the
+    /// create's probes (<c>draft</c>, <c>references</c> and the head; a duplicate, a missing branch,
+    /// nothing ahead from the branch Check_2 pushed at the default branch's tip), each beside the
+    /// fake's own draft on its namesake of the run's branch; then, in <c>finally</c>, the clean-up of
+    /// what Check_2 handed over, whether Check_2 passed or not. A stopped run's leftovers are Check_1's.
+    /// </summary>
+    [Fact]
+    public async Task Check_2b_probes()
+    {
+        var sandbox = Sandbox;
+        var store = new LiveRequestLog.Store();
+        var reach = LiveReach.GitLab();
+        using var api = new GitLabLiveApi(sandbox, reach, store, run.Screener!, run.Withheld);
+        var made = run.Made;
+        run.Made = null;
+        var step = "2b, the identity";
+        var problems = new List<string>();
+        ExceptionDispatchInfo? failure = null;
+        try
+        {
+            await IdentityAsync(api);
+            run.Check(made is not null, () => "Check_2 handed over nothing: it did not run in this process, so there is nothing to probe or clean up.");
+            step = "8, the probes";
+            if (made!.Number is not { } number)
+            {
+                run.Note("Check_2b. Check_2 created no merge request, so there is nothing to probe; its branches are cleaned up.");
+            }
+            else
+            {
+                run.Note($"Check_2b. The probes of !{Show(number)} from {made.Branch}.");
+                await using var fake = await StartFakeAsync(sandbox, made.Branch, made.Even);
+                await ProbeCreateAsync(api, fake, made, number, problems);
+            }
+        }
+        catch (Exception ex)
+        {
+            failure = run.FailureOf(ex, step);
+            run.Note($"Check_2b failed in step {step}: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            if (made is not null)
+            {
+                await CleanUpAsync(api, [made.Branch, made.Even], problems);
+            }
+        }
+
+        LiveSteps.Finish(run, store, reach, problems, failure);
+    }
+
+    /// <summary>
+    /// The identity read (<c>GET user</c>), each method's first call and once per run (15.3): 200, the
+    /// namespace's first segment as its login, its member names noted. Nothing when the run made it.
+    /// </summary>
+    private async Task IdentityAsync(GitLabLiveApi api)
+    {
+        if (run.IdentityRead)
+        {
+            return;
+        }
+
+        var user = await api.UserAsync(LiveCredential.Token, Cancelled);
+        run.Check(user.Status == 200, () => api.Describe(user, "GET user") + ": 401 means the token is wrong or expired.");
+        run.IdentityRead = true;
+        run.Note($"GET user: {user}; its members: {(user.Json is { ValueKind: JsonValueKind.Object } json ? string.Join(", ", json.EnumerateObject().Select(member => member.Name)) : user.Shape)}.");
+        run.Check(string.Equals(user.Member("username"), api.Sandbox.Login, StringComparison.OrdinalIgnoreCase), () => $"The token's user is not {api.Sandbox.Login}, the namespace's first segment.");
     }
 
     /// <summary>The sandbox project, once per run: 200, private (D326), its default branch.</summary>
@@ -263,11 +339,11 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
         return repository;
     }
 
-    private async Task<LiveGitLabFake?> StartFakeAsync(LiveGitLabSandbox sandbox, string branch)
+    private async Task<LiveGitLabFake?> StartFakeAsync(LiveGitLabSandbox sandbox, string? branch, string? even)
     {
         try
         {
-            return await LiveGitLabFake.StartAsync(sandbox.Project, branch, Cancelled);
+            return await LiveGitLabFake.StartAsync(sandbox.Project, branch, even, Cancelled);
         }
         catch (Exception ex) when (!Cancelled.IsCancellationRequested)
         {
@@ -298,45 +374,93 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
         string.Join(", ", answer.Headers.Where(header => header.Key.StartsWith("ratelimit", StringComparison.OrdinalIgnoreCase)).Select(header => $"{header.Key.ToLowerInvariant()} {header.Value}").DefaultIfEmpty("no ratelimit header"))
         + $" ({answer})";
 
-    /// <summary>Check_2's probes of the create (15.7): <c>draft</c> and <c>references</c>; a duplicate (409), a missing branch (400 naming <c>source_branch</c>), nothing ahead.</summary>
-    private async Task ProbeCreateAsync(GitLabLiveApi api, int iid, string branch, string target, string title, List<string> problems)
+    /// <summary>
+    /// <c>GET user</c> with <c>If-None-Match</c>: the service with its first answer's ETag, the fake
+    /// beside with its own (one read of its own first), so that each side is asked with its own ETag
+    /// and the fake's 304 is compared, not its 200 to a made-up one (15.7, 4.4).
+    /// </summary>
+    internal static async Task<LiveServiceAnswer> UserWithOwnETagAsync(GitLabLiveApi asked, GitLabLiveApi service, string serviceETag, CancellationToken ct)
     {
-        var read = await api.MergeRequestAsync(iid, Cancelled);
-        run.Note($"The created !{Show(iid)}: {read}; draft {read.Member("draft") ?? "none"}, title starts Draft: {(read.Member("title")?.StartsWith("Draft: ", StringComparison.Ordinal) == true ? "yes" : "no")}, references {read.Member("references") ?? "none"}.");
-        if (read.Member("draft") != "true")
+        ArgumentNullException.ThrowIfNull(asked);
+        var etag = asked == service ? serviceETag : (await asked.UserAsync(LiveCredential.Token, ct)).Header("ETag") ?? "\"none\"";
+        return await asked.UserAsync(LiveCredential.Token, ct, etag);
+    }
+
+    /// <summary>
+    /// Check_2b's probes of the create (15.7), each beside the fake's own draft from its namesake of the
+    /// run's branch: <c>draft</c>, <c>references</c> and the head; a duplicate (409), a missing branch
+    /// (400 naming <c>source_branch</c>); nothing ahead, from <see cref="LiveMade.Even"/>, which Check_2
+    /// pushed at the default branch's tip (4.3 (h): a branch with no commit ahead, not the default
+    /// branch into itself, which is 4.3 (e)'s refusal).
+    /// </summary>
+    private async Task ProbeCreateAsync(GitLabLiveApi api, LiveGitLabFake? fake, LiveMade made, int iid, List<string> problems)
+    {
+        var fakeIid = await FakeDraftAsync(fake, made);
+        var side = fakeIid is null ? null : fake;
+        string Target(GitLabLiveApi a) => a == api ? made.Target : LiveAzureFake.DefaultBranch;
+        int Iid(GitLabLiveApi a) => a == api ? iid : fakeIid.GetValueOrDefault();
+
+        var read = await ProbeAsync(api, side, $"the read of the created !{Show(iid)}", a => a.MergeRequestAsync(Iid(a), Cancelled));
+        var sha = read?.Member("sha");
+        run.Note($"The created !{Show(iid)}: draft {read?.Member("draft") ?? "none"}, title starts Draft: {(read?.Member("title")?.StartsWith("Draft: ", StringComparison.Ordinal) == true ? "yes" : "no")}, references {read?.Member("references") ?? "none"}, the head {sha ?? "none"} ({(string.Equals(sha, made.Head, StringComparison.OrdinalIgnoreCase) ? "the pushed commit" : "not the pushed commit")}).");
+        if (read?.Member("draft") != "true")
         {
-            problems.Add($"The created !{Show(iid)}'s draft is {read.Member("draft") ?? "absent"}, not true, though its title starts Draft: (15.7's premise).");
+            problems.Add($"The created !{Show(iid)}'s draft is {read?.Member("draft") ?? "absent"}, not true, though its title starts Draft: (15.7's premise).");
         }
 
-        var duplicate = await api.CreateAsync(branch, target, GitLabProvider.TitleFor(title, true), Cancelled);
-        run.Note($"The duplicate create: {duplicate}; 409 expected. {duplicate.BodyForNotes}");
-        if (!LiveProviderPremises.IsGitLabDuplicate(duplicate))
+        var duplicate = await ProbeAsync(api, side, "the duplicate create (409 expected)", a => a.CreateAsync(made.Branch, Target(a), GitLabProvider.TitleFor(made.Title, true), Cancelled));
+        if (duplicate is not null && !LiveProviderPremises.IsGitLabDuplicate(duplicate))
         {
             problems.Add($"The duplicate create answered {duplicate}, not 409.");
         }
 
-        var missing = await api.CreateAsync(MissingBranch, target, title, Cancelled);
-        run.Note($"The create from a missing branch: {missing}; 400 naming source_branch expected. {missing.BodyForNotes}");
-        if (!LiveProviderPremises.IsGitLabMissingBranch(missing))
+        var missing = await ProbeAsync(api, side, "the create from a missing branch (400 naming source_branch expected)", a => a.CreateAsync(MissingBranch, Target(a), made.Title, Cancelled));
+        if (missing is not null && !LiveProviderPremises.IsGitLabMissingBranch(missing))
         {
             problems.Add($"The create from a missing branch answered {missing}, not 400 naming source_branch (7.3).");
         }
 
-        var even = await api.CreateAsync(target, target, title, Cancelled);
-        run.Note($"A create with nothing ahead (the default branch into itself): {even}. {even.BodyForNotes}");
+        await ProbeAsync(api, side, $"the create with nothing ahead of {made.Target}, from {made.Even}", a => a.CreateAsync(made.Even, Target(a), made.Title, Cancelled));
     }
 
-    /// <summary>15.5 step 9: the run's merge requests closed and deleted, then its branch deleted.</summary>
-    private async Task CleanUpAsync(GitLabLiveApi api, string branch, List<string> problems)
+    /// <summary>The fake's own draft from its namesake of the run's branch, for the probes beside: its iid, or null (noted).</summary>
+    private async Task<int?> FakeDraftAsync(LiveGitLabFake? fake, LiveMade made)
+    {
+        if (fake is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            var created = await fake.Api.CreateAsync(made.Branch, LiveAzureFake.DefaultBranch, GitLabProvider.TitleFor(made.Title, true), Cancelled);
+            if (created is { Status: 201 or 200, Json: { ValueKind: JsonValueKind.Object } json } && json.TryGetProperty("iid", out var iid) && iid.TryGetInt32(out var number))
+            {
+                run.Note($"The fake's own draft from its {made.Branch}: {created.Status.ToString(CultureInfo.InvariantCulture)}.");
+                return number;
+            }
+
+            run.Note($"The fake did not create its own draft ({created}), so the probes go to the service alone. {created.BodyForNotes}");
+        }
+        catch (LiveServiceException ex)
+        {
+            run.Note($"The fake did not create its own draft ({ex.Message}), so the probes go to the service alone.");
+        }
+
+        return null;
+    }
+
+    /// <summary>15.5 step 9, Check_2b's <c>finally</c>: the run's merge requests (from either branch, never a fork's) closed and deleted, then each branch deleted (a 404: gone, g2 G1.7).</summary>
+    private async Task CleanUpAsync(GitLabLiveApi api, IReadOnlyList<string> branches, List<string> problems)
     {
         try
         {
-            foreach (var request in (await api.OpenedMergeRequestsAsync(CancellationToken.None)).Where(request => request.SourceBranch == branch && !request.FromFork))
+            foreach (var request in (await api.OpenedMergeRequestsAsync(CancellationToken.None)).Where(request => branches.Contains(request.SourceBranch) && !request.FromFork))
             {
                 await CloseAndDeleteAsync(api, request.Iid, problems, CancellationToken.None);
             }
 
-            if ((await api.BranchesAsync(LiveLeftovers.Prefix, CancellationToken.None)).Contains(branch))
+            foreach (var branch in branches)
             {
                 await DeleteBranchAsync(api, branch, problems, CancellationToken.None);
             }
@@ -385,8 +509,11 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
 /// </summary>
 internal sealed class LiveApp : IDisposable
 {
-    private static readonly TimeSpan NetworkStep = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan CloneLimit = TimeSpan.FromSeconds(120);
+    /// <summary>How long a network step of the app may take (7a 14.4).</summary>
+    internal static readonly TimeSpan NetworkStep = TimeSpan.FromSeconds(60);
+
+    /// <summary>How long the clone may take, its two waits together (7a 14.4).</summary>
+    internal static readonly TimeSpan CloneLimit = TimeSpan.FromSeconds(120);
 
     private readonly LiveRun _run;
     private readonly LiveHostSandbox _sandbox;
@@ -417,9 +544,10 @@ internal sealed class LiveApp : IDisposable
 
     private Dictionary<string, string?> Session => new(GitIsolation.SessionGitEnvironment(_data.Path));
 
-    /// <summary>Step 1: the app with the provider on and no request sent.</summary>
+    /// <summary>Step 1: git's version noted (7a 14.5), then the app with the provider on and no request sent.</summary>
     public async Task StartAsync(LiveRequestLog.Store requests)
     {
+        _run.Note("Git: " + await LiveSteps.GitVersionAsync() + ".");
         _app = ShellDriver.StartWithTabs(_data.Path, [null], hosting: _hosting);
         await _app.WaitUntilReadyAsync();
         var session = _app.Session.Services.Hosting;
@@ -479,6 +607,7 @@ internal sealed class LiveApp : IDisposable
         App.ReplaceText("CloneParentBox", _clones.Path);
         var clone = Path.Combine(_clones.Path, App.Find<Avalonia.Controls.TextBox>("CloneNameBox").Text ?? "clone");
         var mark = App.LogMark();
+        var clock = Stopwatch.StartNew();
         App.Click(App.FindByAutomationId("CloneStartButton"));
         await WaitWatchingAsync(() => tab.Repository is not null || (!tab.Welcome.IsCloning && tab.Welcome.HasError), "the clone to open its repository", CloneLimit);
         if (tab.Repository is null)
@@ -486,7 +615,8 @@ internal sealed class LiveApp : IDisposable
             throw new XunitException(_run.Screen("The clone failed: " + tab.Welcome.ErrorText));
         }
 
-        var opened = await App.WaitForRepositoryAsync(CloneLimit);
+        var opened = await App.WaitForRepositoryAsync(Left(CloneLimit, clock));
+        _run.Note($"The clone took {clock.Elapsed.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s, its repository opened.");
         _clone = clone;
         _run.Check(
             App.LogLinesSince(mark).Any(line => line.Contains(": Clone: git's credential get for ", StringComparison.Ordinal) && line.EndsWith(" answered from the account.", StringComparison.Ordinal)),
@@ -507,8 +637,8 @@ internal sealed class LiveApp : IDisposable
         _run.Note($"Open requests the app listed: {(opened.HostingState.List?.PullRequests.Count ?? 0).ToString(CultureInfo.InvariantCulture)}.");
     }
 
-    /// <summary>Step 6: D325's commit on <paramref name="branch"/>, pushed with the branch menu's "Push {branch}…".</summary>
-    public async Task PushAsync(RepositoryViewModel opened, string branch, string stamp, string title)
+    /// <summary>Step 6: D325's commit on <paramref name="branch"/>, pushed with the branch menu's "Push {branch}…"; the commit's id.</summary>
+    public async Task<string> PushAsync(RepositoryViewModel opened, string branch, string stamp, string title)
     {
         var clone = _clone ?? throw new InvalidOperationException("No clone.");
         await App.WaitForWatchersQuietAsync();
@@ -519,39 +649,81 @@ internal sealed class LiveApp : IDisposable
         File.WriteAllText(file, $"VisualCommit live test {stamp}\n", new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
         await GitOkAsync(clone, identity, "add", "--", $"visualcommit-live/{stamp}.txt");
         await GitOkAsync(clone, identity, "commit", "-m", title);
-        await App.WaitForAsync(() => HasRow(LeftPanelViewModel.LocalBranchesTitle, "visualcommit-live"), "the branch's folder under Local branches");
-        await App.WaitForWatchersQuietAsync();
-        if (App.RefRowModel(LeftPanelViewModel.LocalBranchesTitle, "visualcommit-live") is { IsOpen: false })
-        {
-            App.Click(await App.RefRowAsync(LeftPanelViewModel.LocalBranchesTitle, "visualcommit-live"));
-        }
-
-        await App.WaitForAsync(() => HasRow(LeftPanelViewModel.LocalBranchesTitle, "visualcommit-live", stamp), "the branch's row");
-        App.RightClick(await App.RefRowAsync(LeftPanelViewModel.LocalBranchesTitle, "visualcommit-live", stamp));
-        await App.WaitForAsync(() => App.Session.Shell.Menu.IsOpen, "the branch's menu");
-        var mark = App.Session.Operations.Snapshot().Select(record => record.Sequence).DefaultIfEmpty(0).Max();
-        App.ClickMenuItem(OperationTexts.MenuTexts.PushWithDialog(branch));
-        await App.WaitForDialogAsync<PushDialogViewModel>();
-        App.Click(App.FindByAutomationId("ConfirmButton"));
-        OperationRecord? pushed = null;
-        await WaitWatchingAsync(() => (pushed = App.Session.Operations.Snapshot().FirstOrDefault(record => record.Sequence > mark)) is not null, "the push to end", NetworkStep);
-        _run.Check(pushed!.Outcome == OperationOutcome.Succeeded, () => $"The push ended {pushed.Outcome}: {pushed.Message}");
-        _run.Note($"The push of {branch}: {pushed.Title}, {pushed.Outcome}.");
+        var head = (await GitOkAsync(clone, identity, "rev-parse", "HEAD")).StandardOutput.Trim();
+        await PushBranchAsync(branch);
+        return head;
     }
 
-    /// <summary>Step 7: a draft through the repository's hosting (<c>Hosting.CreatePullRequestAsync</c>); <c>ByRef</c> holds it.</summary>
-    public async Task<PullRequest> CreateAsync(RepositoryViewModel opened, string title, string branch, string baseBranch)
+    /// <summary>
+    /// A branch made in the clone at <paramref name="startPoint"/> without tracking it (so that the push
+    /// dialog never offers the start point's branch), then pushed as <see cref="PushAsync"/> pushes:
+    /// GitLab's branch with nothing ahead (D364's token has Code: Push, no Branch: Create).
+    /// </summary>
+    public async Task PushNewBranchAsync(string branch, string startPoint)
+    {
+        var clone = _clone ?? throw new InvalidOperationException("No clone.");
+        await App.WaitForWatchersQuietAsync();
+        await GitOkAsync(clone, Identity(), "branch", "--no-track", branch, startPoint);
+        await PushBranchAsync(branch);
+    }
+
+    /// <summary>
+    /// The push's own record: a foreground network operation that started after <paramref name="mark"/>,
+    /// never a background one (the backups' clean-up, auto-fetch) that ends first.
+    /// </summary>
+    internal static bool IsPushRecord(OperationRecord record, long mark)
+    {
+        ArgumentNullException.ThrowIfNull(record);
+        return record.Sequence > mark && !record.IsBackground && record.Kind == OperationKind.Network;
+    }
+
+    /// <summary>What is left of <paramref name="limit"/> on <paramref name="clock"/>, never below zero: a step's second wait shares its first's limit.</summary>
+    internal static TimeSpan Left(TimeSpan limit, Stopwatch clock) => limit - clock.Elapsed is { Ticks: > 0 } left ? left : TimeSpan.Zero;
+
+    /// <summary>Step 7: a draft through the repository's hosting (<c>Hosting.CreatePullRequestAsync</c>); its POST's status and request id noted (200 or 201, r5 9 item 6); <c>ByRef</c> holds it, within the step's one limit.</summary>
+    public async Task<PullRequest> CreateAsync(RepositoryViewModel opened, string title, string branch, string baseBranch, LiveRequestLog.Store requests, string createPath, List<string> problems)
     {
         var target = opened.HostingState.Repository ?? throw new XunitException("The repository has no hosted repository.");
+        var clock = Stopwatch.StartNew();
         var created = await opened.Hosting.CreatePullRequestAsync(target, new NewPullRequest(title, LiveSteps.Description, branch, null, baseBranch, Draft: true), Cancelled).WaitAsync(NetworkStep, Cancelled);
         if (created.Value is not { } pull)
         {
             throw new XunitException(_run.Screen($"The create failed: {created.Failure?.Kind}: {created.Failure?.Refusal}: {created.Failure?.Message} (request {created.Failure?.RequestId ?? "none"})."));
         }
 
-        _run.Note($"Created {HostingProviders.DisplayName(Provider)}'s !{pull.Number.ToString(CultureInfo.InvariantCulture)} from {branch} into {baseBranch}, draft {(pull.IsDraft ? "yes" : "no")}.");
-        await App.WaitForAsync(() => opened.HostingState.ByRef.TryGetValue(LiveLeftovers.HeadsPrefix + branch, out var listed) && listed.Number == pull.Number, $"!{pull.Number} in ByRef", NetworkStep);
+        var post = requests.Snapshot().LastOrDefault(request => request.Method == "POST" && request.Path.EndsWith(createPath, StringComparison.Ordinal));
+        _run.Note($"Created {HostingProviders.DisplayName(Provider)}'s !{pull.Number.ToString(CultureInfo.InvariantCulture)} from {branch} into {baseBranch}, draft {(pull.IsDraft ? "yes" : "no")}; the app's POST answered {post?.Status?.ToString(CultureInfo.InvariantCulture) ?? "nothing recorded"} (request {post?.RequestId ?? "none"}).");
+        if (post?.Status is not (200 or 201))
+        {
+            problems.Add($"The app's create POST answered {post?.Status?.ToString(CultureInfo.InvariantCulture) ?? "nothing recorded"}, not 200 or 201 (15.7's premise).");
+        }
+
+        await App.WaitForAsync(() => opened.HostingState.ByRef.TryGetValue(LiveLeftovers.HeadsPrefix + branch, out var listed) && listed.Number == pull.Number, $"!{pull.Number} in ByRef", Left(NetworkStep, clock));
         return pull;
+    }
+
+    /// <summary>"Push {branch}…" from the branch's row under Local branches, the push dialog's Confirm, and the push's own record, which must have succeeded.</summary>
+    private async Task PushBranchAsync(string branch)
+    {
+        string[] row = [LeftPanelViewModel.LocalBranchesTitle, .. branch.Split('/')];
+        await App.WaitForAsync(() => HasRow(row[..2]), "the branch's folder under Local branches");
+        await App.WaitForWatchersQuietAsync();
+        if (row.Length > 2 && App.RefRowModel(row[..2]) is { IsOpen: false })
+        {
+            App.Click(await App.RefRowAsync(row[..2]));
+        }
+
+        await App.WaitForAsync(() => HasRow(row), "the branch's row");
+        App.RightClick(await App.RefRowAsync(row));
+        await App.WaitForAsync(() => App.Session.Shell.Menu.IsOpen, "the branch's menu");
+        var mark = App.Session.Operations.Snapshot().Select(record => record.Sequence).DefaultIfEmpty(0).Max();
+        App.ClickMenuItem(OperationTexts.MenuTexts.PushWithDialog(branch));
+        await App.WaitForDialogAsync<PushDialogViewModel>();
+        App.Click(App.FindByAutomationId("ConfirmButton"));
+        OperationRecord? pushed = null;
+        await WaitWatchingAsync(() => (pushed = App.Session.Operations.Snapshot().FirstOrDefault(record => IsPushRecord(record, mark))) is not null, "the push to end", NetworkStep);
+        _run.Check(pushed!.Outcome == OperationOutcome.Succeeded, () => $"The push ended {pushed.Outcome}: {pushed.Message}");
+        _run.Note($"The push of {branch}: {pushed.Title}, {pushed.Outcome}.");
     }
 
     /// <summary>Closes the app once (before the tripwires read its git calls).</summary>
