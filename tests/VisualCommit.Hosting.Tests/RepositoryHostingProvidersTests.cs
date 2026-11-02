@@ -3,6 +3,8 @@ using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Hosting.AzureDevOps;
+using VisualCommit.Testing;
+using VisualCommit.Testing.Hosting;
 using Xunit;
 
 namespace VisualCommit.Hosting.Tests;
@@ -10,8 +12,11 @@ namespace VisualCommit.Hosting.Tests;
 /// <summary>
 /// One repository's hosting for three providers (docs/phase-7b-design.md 9.7, 9.8, 9.10; D356, D366,
 /// D367, ruling 5): each provider's candidate signed out without a request and listed by its own
-/// account, with the Debug line of any depth; a GitLab candidate beside a GitHub upstream asking
-/// neither fake while GitHub alone is signed in, and no avatars; another organization's remote sending
+/// account, with the Debug line of any depth; a new provider's list loading while its request waits
+/// and failed with its provider and one warning when the service fails; a GitLab candidate beside a
+/// GitHub upstream asking neither fake while GitHub alone is signed in, and no avatars; GitHub's
+/// avatars taking GitHub remotes' authors alone, kept through GitLab's sign-out and gone once
+/// GitLab's repository is listed; another organization's remote sending
 /// nothing and its tab's state swapped by a sign-in there; GitHub's sign-in refreshing no GitLab-listed
 /// tab and its sign-out keeping GitLab's bindings; an <c>&lt;organization&gt;.visualstudio.com</c>
 /// remote listed through <c>dev.azure.com</c>. The fakes are in process (ProvidersSessionSetup).
@@ -67,6 +72,41 @@ public sealed class RepositoryHostingProvidersTests
         await setup.Thread.RunAsync(hosting.Dispose);
     }
 
+    [Theory]
+    [InlineData(HostingProvider.GitLab, GitLabUrl, "GitLab", "fake-group/sub/web-app", "mrs:fake-group/sub/web-app")]
+    [InlineData(HostingProvider.AzureDevOps, AzureUrl, "Azure DevOps", "fake-org/P/r", "pulls:fake-org/p/r")]
+    public async Task A_new_providers_list_is_loading_while_its_request_waits_and_failed_with_its_provider_when_the_service_fails(HostingProvider provider, string url, string name, string fullName, string route)
+    {
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, repositories: true);
+        FakeHostingService fake = provider == HostingProvider.GitLab ? setup.GitLab! : setup.AzureDevOps!;
+        await setup.SignInAsync(provider);
+        var hosting = await OpenAsync(setup, "web-app");
+
+        // The list's request held: the section is loading, its repository the candidate.
+        using (var hold = fake.HoldNext(route))
+        {
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", url)), UrlRewrites.None));
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            await setup.Thread.IdleAsync();
+            Assert.Equal((PullRequestsState.Loading, provider, fullName), (hosting.State.PullRequests, hosting.State.Repository!.Provider, hosting.State.Repository.FullName));
+            Assert.Equal(((PullRequestList?)null, (HostingFailure?)null), (hosting.State.List, hosting.State.Failure));
+        }
+
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "the list once released");
+
+        // The next list answered with a server fault: failed, the failure the provider's, one warning naming it.
+        fake.FailNext(route, provider == HostingProvider.GitLab ? FakeGitLabFault.ServerError : FakeAzureDevOpsFault.ServerError);
+        var warnings = setup.Warnings.Count;
+        await setup.Thread.RunAsync(() => hosting.RefreshPullRequestsAsync(Cancelled));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Failed, "the failed list");
+
+        var state = hosting.State;
+        Assert.Equal((provider, fullName), (state.Failure!.Provider, state.Repository!.FullName));
+        Assert.Equal(((PullRequestList?)null, 0), (state.List, state.ByRef.Count));
+        Assert.Single(setup.Warnings.Skip(warnings), warning => warning.StartsWith($"{name}: listing the pull requests of {fullName} failed: ", StringComparison.Ordinal));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
     [Fact]
     public async Task A_gitlab_candidate_beside_a_github_upstream_asks_neither_fake_while_github_alone_is_signed_in()
     {
@@ -86,9 +126,58 @@ public sealed class RepositoryHostingProvidersTests
         Assert.Equal((HostingFailureKind.BadCredentials, HostingProvider.GitLab), (read.Failure!.Kind, read.Failure.Provider));
         Assert.Equal(["origin"], hosting.State.RequestRemotes.Keys);
         Assert.True(hosting.WantsUrlRewrites);
-        Assert.Same(AuthorAvatars.None, hosting.Avatars);
         Assert.Equal(sent, setup.SentCount);
         Assert.Equal([new CredentialBinding(GitHubUrl, setup.Session.AccountOf(HostingProvider.GitHub)!.Account.Key)], hosting.Bindings);
+    }
+
+    [Fact]
+    public async Task Githubs_avatars_take_github_authors_alone_stay_through_gitlabs_sign_out_and_go_when_gitlab_is_listed()
+    {
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
+        setup.GitHub!.LinkEmail(TempRepo.AuthorEmail, "octo");
+        await setup.SignInAsync(HostingProvider.GitHub);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "web-app");
+        await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "GitHub's list");
+
+        // One author of a GitHub remote, found on main's page, and one of the GitLab remote, whom
+        // GitHub is never asked about: no lookup names it, and only the first gets an avatar.
+        const string GitLabOnly = "gitlab-only@example.com";
+        AuthorCommit[] authors =
+        [
+            new(TempRepo.AuthorEmail, new string('a', 40), new HostedRepository(HostingProvider.GitHub, "127.0.0.1:1", "octo", "web-app")),
+            new(GitLabOnly, new string('b', 40), new HostedRepository(HostingProvider.GitLab, "127.0.0.1:3", "fake-group/sub", "web-app")),
+        ];
+        var run = await setup.Thread.RunAsync<Task>(() =>
+        {
+            hosting.ShowAvatarsFor(authors);
+            return hosting.AvatarRun;
+        });
+        await run.WaitAsync(Cancelled);
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+
+        Assert.Equal(["sha=main&per_page=100"], setup.GitHub.Requests.Where(request => request.Route == "commits:octo/web-app").Select(request => request.Query));
+        Assert.DoesNotContain(setup.GitHub.Requests, request => request.Query.Contains("gitlab-only", StringComparison.OrdinalIgnoreCase));
+        var avatars = hosting.Avatars;
+        Assert.True(File.Exists(avatars.FileOf(TempRepo.AuthorEmail)));
+        Assert.Null(avatars.FileOf(GitLabOnly));
+        Assert.Single(avatars.FileByEmail);
+
+        // GitLab's sign-out keeps GitHub's avatars.
+        Assert.Null(await setup.Session.SignOutAsync(HostingProvider.GitLab, Cancelled));
+        await setup.Thread.IdleAsync();
+        Assert.Same(avatars, hosting.Avatars);
+
+        // GitLab's repository listed: the avatars go, and GitHub is asked nothing more.
+        var gitHubSent = setup.Sent(HostingProvider.GitHub).Count;
+        await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitLabUrl), ("upstream", GitHubUrl)), UrlRewrites.None));
+        await setup.Thread.IdleAsync();
+        Assert.Equal(HostingProvider.GitLab, hosting.State.Repository!.Provider);
+        Assert.Same(AuthorAvatars.None, hosting.Avatars);
+        Assert.Equal(gitHubSent, setup.Sent(HostingProvider.GitHub).Count);
+        await setup.Thread.RunAsync(hosting.Dispose);
     }
 
     [Fact]
@@ -171,7 +260,6 @@ public sealed class RepositoryHostingProvidersTests
         Assert.True(hosting.WantsUrlRewrites);
         Assert.Equal(PullRequestsState.Loaded, hosting.State.PullRequests);
         Assert.Equal(lists, setup.Sent(HostingProvider.GitLab).Count);
-        Assert.Same(AuthorAvatars.None, hosting.Avatars);
     }
 
     [Fact]

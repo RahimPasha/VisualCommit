@@ -2793,14 +2793,14 @@ limit (0.6).
 **As built** (WP-S, `46ab4af` to its last commit, 2026-11-02). Where the build differs from the text
 above or settles what it left open:
 - `HostingSession`: a private `Entry` per provider on (provider, slot, refusal check, switch chain);
-  `SlotOf`, `AnySignedIn`, `SwitchingOf`, `RefusalCheckOf`, `BindingsOf(effective, rulesKnown)` (the
-  union, which `BindingsFor`, `BindingsForClone` and the tabs share), `CallAsync`, `CallGitHubAsync`;
-  `Endpoints` is gone. A provider on without a handler gets `HostingOptions.RefusingHandler()`
-  (internal; "The provider is off: the app makes no request."). One origin twice throws before
-  anything is made. The start posts one event per provider read; `AccountChanged` and
-  `OnAccountChanged(provider)` are per provider. D382's screen checks `Login`, `Key.Login`, `Name` and
-  `AvatarUrl.Host`; its failure is logged as any failed sign-in. A record's `avatarUrl` is read for
-  GitHub alone.
+  `BindingsOf(effective, rulesKnown)` is the union that `BindingsFor`, `BindingsForClone` and the tabs
+  share; `Endpoints` is gone. A provider on without a handler gets `HostingOptions.RefusingHandler()`
+  ("The provider is off: the app makes no request."). One origin twice throws before
+  anything is made. `FromEnvironment` can give such options (two variables on one local port), and
+  `AppSession`'s construction then throws: the lead decides whether `FromEnvironment` turns the later
+  provider off with a warning naming its variable. D382's screen checks `Login`, `Key.Login`, `Name`
+  and `AvatarUrl.Host`; its failure is logged as any failed sign-in. A record's `avatarUrl` is read
+  for GitHub alone.
 - 9.5: a 200 with the held user (or the check's own user unknown) logs 7a's warning; a held user
   unknown (`UserId` null, `Id` 0) then takes the check's, under the gate, only while that slot holds
   that token.
@@ -2808,14 +2808,13 @@ above or settles what it left open:
   `OtherOrganization` on Azure DevOps and `SignedOut` elsewhere (unreachable: GitHub and GitLab cover
   by host). `CallAsync`'s `about` check also guards A3 and A5; A6 passes none (7a's).
 - Tests: `HostingSessionGitHubForms.Account` is declared `AccountStatus` (not `?`) with `!`: C# 14
-  keeps no null state for an extension property between two reads, which 7a's
-  `Account!.State, Account.NoteKind` needs (`HostingSessionSignInTests` unchanged). `ProvidersSessionSetup`
-  (with `repositories: true`: one repository and request per fake) wraps the in-process Azure DevOps
-  fake in `ServiceAnswers` when given `AzureDevOpsEndpoints.Service`: the fake names its `Local(2)`
-  base in `remoteUrl`, `webUrl` and `locationUrl`, which WP-AZ reads only on its own origin, so A3 was
-  `Malformed`; the shim writes them on dev.azure.com (no fake changed; WP-LF may give the fake a base).
-  7a's copy is `JsonAccountStore7a.cs` (namespace `Store7a`). The wiring class adds `upstream` to
-  `mobile-app/` itself; it passed with `VISUALCOMMIT_WATCHER_LAG_MS=1500`.
+  keeps no null state for an extension property between two reads, which 7a's tests need. `ProvidersSessionSetup` (`repositories: true`: one
+  repository with an open request in each fake, in Azure DevOps one in each of `fake-org` and
+  `other-org`) wraps the in-process Azure DevOps fake in `ServiceAnswers` when given
+  `AzureDevOpsEndpoints.Service`: the fake's answers name its `Local(2)` base, which WP-AZ reads
+  only on its own origin, so the shim writes them on dev.azure.com (WP-LF may give the fake a base). 7a's copy is `JsonAccountStore7a.cs`. The wiring class adds
+  `upstream` to `mobile-app/` itself and matches git calls by the tab's
+  `Repository.WorkingDirectory` (git's spelling); it passed with `VISUALCOMMIT_WATCHER_LAG_MS=1500`.
 - Outside 9.1's list: none in src/; `HostingContractsTests` (passed to WP-S) has one test renamed.
 - For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without a repository.
   For WP-N: `IHostingSession.cs` changed only `NullRepositoryHosting`'s text.

@@ -100,7 +100,26 @@ public sealed class HostingSessionProvidersTests
         var next = setup.NewSession();
         var providers = new List<HostingProvider>();
         await setup.Thread.RunAsync(() => next.AccountChanged += (_, e) => providers.Add(e.Provider));
-        await next.StartAsync(Cancelled);
+
+        // The first read held (after the keychain's probe, which every read waits for): the next
+        // read starts only once it has ended.
+        var hold = setup.FakeTokens.HoldNext();
+        var start = next.StartAsync(Cancelled);
+        await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+        if (setup.FakeTokens.Calls[^1] == "probe")
+        {
+            var probe = hold;
+            hold = setup.FakeTokens.HoldNext();
+            probe.Dispose();
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+        }
+
+        Assert.Equal("read github:127.0.0.1:1:octo", setup.FakeTokens.Calls[^1]);
+        await Task.Delay(200, Cancelled);
+        Assert.DoesNotContain(setup.FakeTokens.Calls.Skip(calls), call => call.StartsWith("read gitlab", StringComparison.Ordinal) || call.StartsWith("read azure-devops", StringComparison.Ordinal));
+        Assert.False(start.IsCompleted);
+        hold.Dispose();
+        await start.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
         await setup.Thread.IdleAsync();
 
         Assert.Equal(

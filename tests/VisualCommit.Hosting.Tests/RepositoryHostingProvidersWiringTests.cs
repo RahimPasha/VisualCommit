@@ -16,7 +16,7 @@ namespace VisualCommit.Hosting.Tests;
 /// The hosting of three providers in a repository's view model with real git (docs/phase-7b-design.md
 /// 9.7, 9.9, 9.10; D290, D322, D356, D277): the app started through <see cref="ShellDriver"/> with
 /// "hosting7b"'s fakes on port 0 (<see cref="Scenarios.ServeHosting7bAsync"/>). An Azure DevOps
-/// <c>origin</c> and a GitLab <c>upstream</c> both bound, one <c>^url\.</c> read per refresh and one
+/// <c>origin</c> and a GitLab <c>upstream</c> both bound, one <c>^url\.</c> read per refs read and one
 /// Debug line per list; GitLab alone signed in, the Azure DevOps fake asked nothing; a succeeded fetch
 /// refreshing the listed provider's list alone. Another organization's repository sends nothing after
 /// the sign-in's requests and stays unbound, and its fetch sends git no account's token: no
@@ -39,8 +39,9 @@ public sealed class RepositoryHostingProvidersWiringTests
         using var data = new TempDirectory("providers wiring");
         using var app = ShellDriver.StartWithTabs(data.Path, [served.MobileApp.Path], gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
         var repository = await app.WaitForRepositoryAsync();
+        var folder = repository.Repository.WorkingDirectory;
         await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.SignedOut, "the section signed out");
-        Assert.Equal(0, RulesReads(app, served.MobileApp));
+        Assert.Equal(0, RulesReads(app, folder));
 
         // GitLab alone: the listed repository is Azure DevOps', whose fake is asked nothing.
         await app.SignInAsync(HostingProvider.GitLab, served.GitLabToken, cancellationToken: Cancelled);
@@ -62,12 +63,14 @@ public sealed class RepositoryHostingProvidersWiringTests
         Assert.Contains(new CredentialBinding(Scenarios.GitLabUrl(Scenarios.Hosting7bWebApp, served.GitLab.Port), gitLabKey), bindings);
         Assert.Equal(1, app.CountLogLines(MobileAppListed));
 
-        // One read of the rules per refresh of the refs.
-        var rules = RulesReads(app, served.MobileApp);
+        // One read of the rules per read of the refs: a refresh, and any the watcher adds.
+        var (rules, refs) = (RulesReads(app, folder), RefsReads(app, folder));
         await Dispatcher.UIThread.InvokeAsync(repository.RefreshAsync);
-        await app.WaitForAsync(() => RulesReads(app, served.MobileApp) > rules && repository.IsWatcherQuiet, "the refresh's rules read");
+        await app.WaitForAsync(() => RulesReads(app, folder) > rules && repository.IsWatcherQuiet, "the refresh's rules read");
         await app.WaitForWatchersQuietAsync();
-        Assert.InRange(RulesReads(app, served.MobileApp) - rules, 1, 3);
+        await app.WaitForIdleAsync(repository);
+        Assert.InRange(RulesReads(app, folder) - rules, 1, 3);
+        Assert.Equal(RefsReads(app, folder) - refs, RulesReads(app, folder) - rules);
 
         // A succeeded fetch refreshes Azure DevOps' list alone; GitLab's fake is asked nothing.
         var (lists, gitLabRequests, logMark) = (Lists(served), served.GitLab.Requests.Count, app.LogMark());
@@ -78,6 +81,8 @@ public sealed class RepositoryHostingProvidersWiringTests
         await app.WaitForWatchersQuietAsync();
         Assert.Equal(gitLabRequests, served.GitLab.Requests.Count);
         Assert.Equal(lists + 1, Lists(served));
+        Assert.Equal(2, app.CountLogLines(MobileAppListed));
+        Assert.Equal(1, app.CountLogLines(MobileAppListed, logMark));
         Assert.Empty(served.GitHub.Requests);
         End(app, data, served);
     }
@@ -139,11 +144,18 @@ public sealed class RepositoryHostingProvidersWiringTests
         }
     }
 
-    private static int RulesReads(ShellDriver app, TempRepo repo) =>
-        app.GitCalls().Count(call => RulesRead.IsMatch(call.CommandText) && SameFolder(call.WorkingDirectory, repo.Path));
+    // A call's folder is the one git ran in as git spells it (IGitRepository.WorkingDirectory):
+    // /private/var/... on macOS where TMPDIR says /var/..., the long name on Windows where TEMP
+    // may be a short 8.3 one; so the calls are matched with the tab's own repository's spelling.
+    private static int RulesReads(ShellDriver app, string folder) =>
+        app.GitCalls().Count(call => RulesRead.IsMatch(call.CommandText) && InFolder(call, folder));
 
-    private static bool SameFolder(string? a, string b) =>
-        a is not null && string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)), StringComparison.OrdinalIgnoreCase);
+    private static int RefsReads(ShellDriver app, string folder) =>
+        app.GitCalls().Count(call => call.CommandText == "git symbolic-ref -q HEAD" && InFolder(call, folder));
+
+    private static bool InFolder(GitCallRecord call, string folder) =>
+        call.WorkingDirectory is { } directory
+        && WorktreeKey.Comparer.Equals(Path.TrimEndingDirectorySeparator(directory), Path.TrimEndingDirectorySeparator(folder));
 
     private static int Lists(ServedHosting7b served) =>
         served.AzureDevOps.Requests.Count(request => request.Path.EndsWith("/_apis/git/repositories/mobile-app/pullrequests", StringComparison.OrdinalIgnoreCase));
