@@ -2797,26 +2797,31 @@ above or settles what it left open:
   `BindingsFor`, `BindingsForClone` and the tabs share; `Endpoints` is gone. A provider on without a
   handler gets `HostingOptions.RefusingHandler()`. One origin twice throws; `FromEnvironment` turns
   the later provider in D353's order off instead, warning `{variable} names the origin of {Name}:
-  {Name} is off.` D382's screen (9.4 amended) checks each form the core's `SecretsOf` gives (internal
-  now, reached through an internal member on each provider and on GitHub's and Azure DevOps'
-  clients, outside 9.1) in the user's names, id and avatar address. `avatarUrl` is GitHub's alone.
+  {Name} is off.` D382's screen (9.4 amended) checks each form the core's `SecretsOf` gives
+  (internal, through each provider and two clients, outside 9.1) in the user's names, id and avatar
+  address, and in A3's repository and parent names (`EchoedToken`): either is the provider's
+  malformed answer. `avatarUrl` is GitHub's alone.
 - 9.5: a 200 with the held user (or the check's unknown) logs 7a's warning; a held user unknown then
   takes the check's, under the gate, while that slot holds that token.
 - `RepositoryHosting`: `StateOf` gives a held account not covering the candidate `OtherOrganization`
   on Azure DevOps, `SignedOut` elsewhere (unreachable). `WantsUrlRewrites` is the value last raised,
-  within a `Changed` handler the one that event carries (`Update` counts the rules known by it): a
-  refusal raced by a sign-in or a refresh still reads the rules. `Changed` also comes when the listed
-  provider's account (key, login) changes: WP-P's row follows a swap of organizations. A3's answer,
-  the list or failure and a created request are kept with their account, unused while another of
-  that provider is held (D348); a run's answer applies only for the account it asked and sent with.
-  7a's GitHub path too: another user's sign-in over the first shows Loading and sends A3 again.
+  within a `Changed` handler the one that event carries (`Update` counts the rules known by it).
+  `Changed` also comes when the listed provider's account (key, login) changes, for WP-P's row. A3's
+  answer, the list or failure and a created request are kept with their account, unused while
+  another of that provider is held (D348); a run's answer applies only for the account it asked and
+  sent with. 7a's GitHub path too: another user's sign-in over the first shows Loading and sends A3
+  again (D383). A new candidate of another provider cancels the run in flight (a source linked to
+  the tab's lifetime), whose answer applies nothing; its own starts at once. Within one provider,
+  7a's `_again`. `StopAvatars` cancels the avatar run in flight (9.8). `CallAsync`'s `what` and the
+  Debug line pass names through `ScreenEmail` (D368); the state's stay as given (6, 7).
 - Tests: `HostingSessionGitHubForms.Account` is `AccountStatus` with `!` (C# 14's extension
-  properties). `ProvidersSessionSetup` (`repositories: true`: one repository with an
-  open request in each fake, in Azure DevOps one in each organization) wraps the in-process Azure
-  DevOps fake in `ServiceAnswers` for `AzureDevOpsEndpoints.Service`, writing its `Local(2)` addresses
-  on dev.azure.com (WP-LF may give the fake a base). 7a's copy is `JsonAccountStore7a.cs`. The wiring
-  class matches git calls by `Repository.WorkingDirectory`. `HostingContractsTests`
-  (passed to WP-S) has one test renamed.
+  properties). `ProvidersSessionSetup` (`repositories: true`: an open request in each fake, one per
+  Azure DevOps organization) wraps the in-process Azure DevOps fake in `ServiceAnswers` for
+  `AzureDevOpsEndpoints.Service`, writing its `Local(2)` addresses on dev.azure.com (WP-LF may give
+  the fake a base); its disposal seeks every token its fakes mint (`Track`) and any `FAKE-` but
+  request ids. 7a's copy is `JsonAccountStore7a.cs`. The wiring class matches git calls by
+  `Repository.WorkingDirectory` and gives the tripwire the session's git calls.
+  `HostingContractsTests` (passed to WP-S) has one test renamed.
 - For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without one. For
   WP-N: `IHostingSession.cs` changed `NullRepositoryHosting`'s text and three docs.
 
