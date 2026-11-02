@@ -1486,6 +1486,344 @@ public sealed partial class LiveSafetyTests
 }
 
 /// <summary>
+/// The second review's findings on the new providers' guard, premises and clean-up (docs/phase-7b-design.md
+/// 15.4, 15.5, 15.7): the <c>Host</c> header, the query, D374's read with the token once, a probe without
+/// an answer as a broken premise, and each clean-up call on its own; made-up values and stubs only.
+/// </summary>
+public sealed partial class LiveSafetyTests
+{
+    private const string LiveBranch = "visualcommit-live/20261102-050000Z";
+
+    private const string LiveEven = LiveBranch + "-even";
+
+    private const string UserIdOfTheRun = "7b0a0201-0000-4a00-8000-00000000fa4e";
+
+    private const string PushedHead = "3333333333333333333333333333333333333333";
+
+    [Theory]
+    [InlineData("fernhill-labs.visualstudio.com")]
+    [InlineData("vssps.dev.azure.com")]
+    [InlineData("dev.azure.com:444")]
+    public async Task A_host_header_naming_another_authority_is_refused_before_it_leaves(string host)
+    {
+        var store = new LiveRequestLog.Store();
+        var stub = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        using var client = new HttpClient(new LiveRequestLog(stub, store, AzureReach()));
+        using var request = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://dev.azure.com/{Organization}/_apis/connectionData?api-version=7.1-preview.1"));
+        request.Headers.Host = host;
+        request.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(":made-up-not-a-token")));
+        var refused = await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(request, Cancelled));
+        Assert.Empty(stub.Requests);
+        Assert.DoesNotContain("visualstudio", refused.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Fernhill", refused.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith("refused: its Host header names another authority than https://dev.azure.com:443", Assert.Single(store.Snapshot()).FailedWith, StringComparison.Ordinal);
+
+        using var same = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://dev.azure.com/{Organization}/_apis/connectionData?api-version=7.1-preview.1"));
+        same.Headers.Host = "DEV.AZURE.COM";
+        using var answered = await client.SendAsync(same, Cancelled);
+        Assert.Single(stub.Requests);
+    }
+
+    [Theory]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/commits/1111111111111111111111111111111111111111/mergebases?otherCommitId=2222222222222222222222222222222222222222&otherRepositoryId=7b0a0011-0000-4a00-8000-00000000fa4e&otherCollectionId=7b0a0012-0000-4a00-8000-00000000fa4e&api-version=7.1")]
+    [InlineData("https://dev.azure.com/_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf?organizationName=Fernhill-Labs&organizationName=other-org")]
+    [InlineData("https://dev.azure.com/_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf?organizationName=Fernhill-Labs&accountName=other-org")]
+    [InlineData("https://dev.azure.com/_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf?organizationName=Fernhill-Labs&hostId=7b0a0012-0000-4a00-8000-00000000fa4e")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf?organizationName=other-org")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf?organizationName=Fernhill-Labs")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/pullrequests?api-version=7.1&API-VERSION=7.0")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/items?path=%2F&project=other-project&api-version=7.1")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/_apis/connectionData?connectOptions=1&lastChangeId=-1")]
+    public void The_guard_refuses_a_query_that_names_another_repository_or_organization_or_repeats_a_parameter(string url)
+    {
+        var refusal = AzureReach().RefusalOf(new Uri(url), LiveCredentialForm.Basic);
+        Assert.NotNull(refusal);
+        Assert.Contains("query parameter", refusal, StringComparison.Ordinal);
+        Assert.DoesNotContain("Fernhill", refusal, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("other-org", refusal, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData("https://dev.azure.com/_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf?organizationName=fernhill-labs")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf?api-version=7.1-preview.1")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/pullrequests?searchCriteria.status=active&$top=100&api-version=7.1")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/pullrequests?searchCriteria.status=active&api-version=7.1&$top=1&$skip=100")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?filter=heads%2Fvisualcommit-live%2F&api-version=7.1")]
+    public void The_guard_admits_the_query_parameters_the_app_and_the_command_send(string url) =>
+        Assert.Null(AzureReach().RefusalOf(new Uri(url), LiveCredentialForm.Basic));
+
+    [Fact]
+    public void D374_s_read_with_the_token_is_admitted_once_per_run()
+    {
+        var path = new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1");
+        var upper = new Uri($"https://dev.azure.com/{MadeUpOrganization.ToUpperInvariant()}/_apis/connectionData?api-version=7.1-preview.1");
+        var reach = AzureReach();
+        reach.Answered(path, LiveCredentialForm.None, 404);
+        Assert.Null(reach.RefusalOf(path, LiveCredentialForm.Basic));
+        Assert.NotNull(reach.RefusalOf(path, LiveCredentialForm.Basic));
+        Assert.NotNull(reach.RefusalOf(upper, LiveCredentialForm.Basic));
+        Assert.Null(reach.RefusalOf(path, LiveCredentialForm.None));
+
+        var answered = AzureReach();
+        answered.Answered(path, LiveCredentialForm.None, 404);
+        answered.Answered(path, LiveCredentialForm.Basic, 200);
+        Assert.NotNull(answered.RefusalOf(path, LiveCredentialForm.Basic));
+    }
+
+    [Fact]
+    public async Task D374_s_read_with_the_token_without_an_answer_is_a_problem()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var notes = new List<string>();
+        var stub = new StubHandler(request => request.Headers.Authorization is null
+            ? new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("""{"message":"TF400813: made-up 404"}""", Encoding.UTF8, "application/json") }
+            : throw new HttpRequestException(HttpRequestError.ConnectionError, "made-up connection error"));
+        using var api = AzureApi(stub);
+        var run = new LiveRun(ProviderToken, folder.Combine("run.txt"), notes.Add, new LiveScreen(), HostingProvider.AzureDevOps);
+        var problems = new List<string>();
+        await AzureDevOpsLiveTests.ProbeMadeUpOrganizationAsync(run, api, null, [], MadeUpOrganization, problems);
+        Assert.Equal(2, stub.Requests.Count);
+        Assert.Contains("D374's read with the token had no answer", Assert.Single(problems), StringComparison.Ordinal);
+
+        var silent = new StubHandler(_ => throw new HttpRequestException(HttpRequestError.ConnectionError, "made-up connection error"));
+        using var second = AzureApi(silent);
+        problems.Clear();
+        await AzureDevOpsLiveTests.ProbeMadeUpOrganizationAsync(run, second, null, [], MadeUpOrganization, problems);
+        Assert.Single(silent.Requests);
+        Assert.Contains("D374's read without a credential had no answer", Assert.Single(problems), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task D373_s_made_up_probes_without_an_answer_are_each_a_problem()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var stub = new StubHandler(_ => throw new HttpRequestException(HttpRequestError.ConnectionError, "made-up connection error"));
+        using var api = AzureApi(stub);
+        var problems = new List<string>();
+        await AzureTests(folder, out _).ProbeMadeUpAsync(api, null, "git/2.56.0", problems);
+        Assert.Equal(8, stub.Requests.Count);
+        Assert.Equal(8, problems.Count);
+        Assert.All(problems, problem => Assert.Contains("had no answer, so D373's premise is not shown", problem, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Azure_DevOps_duplicate_and_missing_branch_without_an_answer_are_each_a_problem()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var abandoned = false;
+        var stub = new StubHandler(request =>
+        {
+            var url = request.RequestUri!.AbsoluteUri;
+            if (request.Method == HttpMethod.Post)
+            {
+                throw new HttpRequestException(HttpRequestError.ConnectionError, "made-up connection error");
+            }
+
+            if (request.Method == HttpMethod.Patch)
+            {
+                abandoned = true;
+                return Json(HttpStatusCode.OK, """{"status":"abandoned"}""");
+            }
+
+            if (url.Contains("/refs?", StringComparison.Ordinal))
+            {
+                return Json(HttpStatusCode.OK, url.Contains("pull%2F7%2Fmerge", StringComparison.Ordinal) && !abandoned
+                    ? """{"value":[{"name":"refs/pull/7/merge","objectId":"4444444444444444444444444444444444444444"}],"count":1}"""
+                    : """{"value":[],"count":0}""");
+            }
+
+            return Json(HttpStatusCode.OK, $$$"""{"pullRequestId":7,"status":"active","createdBy":{"id":"{{{UserIdOfTheRun}}}"},"lastMergeSourceCommit":{"commitId":"{{{PushedHead}}}"}}""");
+        });
+        using var api = AzureApi(stub);
+        var problems = new List<string>();
+        var made = new LiveMade(LiveBranch, LiveEven, "main", "made-up title") { Number = 7, UserId = UserIdOfTheRun, Head = PushedHead };
+        await AzureTests(folder, out var notes).ProbeCreateAsync(api, null, made, 7, problems);
+        Assert.Equal(3, stub.Requests.Count(request => request.Method == "POST"));
+        Assert.Equal(2, problems.Count);
+        Assert.Contains("The duplicate create had no answer", problems[0], StringComparison.Ordinal);
+        Assert.Contains("The create from a missing branch had no answer", problems[1], StringComparison.Ordinal);
+        Assert.Contains(notes, note => note.StartsWith("Nothing ahead: skipped", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task GitLab_s_duplicate_and_missing_branch_without_an_answer_are_each_a_problem()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var stub = new StubHandler(request => request.Method == HttpMethod.Post
+            ? throw new HttpRequestException(HttpRequestError.ConnectionError, "made-up connection error")
+            : Json(HttpStatusCode.OK, $$"""{"iid":7,"draft":true,"title":"Draft: made-up title","sha":"{{PushedHead}}"}"""));
+        using var api = GitLabApi(stub);
+        var problems = new List<string>();
+        var made = new LiveMade(LiveBranch, LiveEven, "main", "made-up title") { Number = 7, Head = PushedHead };
+        await GitLabTests(folder, out _).ProbeCreateAsync(api, null, made, 7, problems);
+        Assert.Equal(3, stub.Requests.Count(request => request.Method == "POST"));
+        Assert.Equal(2, problems.Count);
+        Assert.Contains("The duplicate create had no answer", problems[0], StringComparison.Ordinal);
+        Assert.Contains("The create from a missing branch had no answer", problems[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Azure_DevOps_clean_up_goes_on_after_a_call_that_throws_and_still_sends_the_refs_post()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var stub = AzureCleanUpStub();
+        using var api = AzureApi(stub);
+        var problems = new List<string>();
+        await AzureTests(folder, out _).CleanUpAsync(api, null, [LiveBranch, LiveEven], problems);
+        Assert.Equal(["GET pullrequests", "PATCH 11", "PATCH 14", "GET refs", "POST refs"], [.. stub.Requests.Select(AzureCall)]);
+        Assert.Contains("abandoning !11: LiveServiceException", Assert.Single(problems), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Azure_DevOps_leftovers_go_on_after_a_call_that_throws_and_still_send_the_refs_post()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var stub = AzureCleanUpStub();
+        using var api = AzureApi(stub);
+        var problems = new List<string>();
+        await AzureTests(folder, out _).RemoveLeftoversAsync(api, problems, Cancelled);
+        Assert.Equal(["GET pullrequests", "PATCH 11", "PATCH 14", "GET refs", "POST refs"], [.. stub.Requests.Select(AzureCall)]);
+        Assert.Contains("abandoning !11: LiveServiceException", Assert.Single(problems), StringComparison.Ordinal);
+
+        var unlisted = new StubHandler(request => request.RequestUri!.AbsolutePath.EndsWith("/pullrequests", StringComparison.Ordinal)
+            ? throw new HttpRequestException(HttpRequestError.ConnectionError, "made-up connection error")
+            : AzureCleanUpAnswer(request));
+        using var second = AzureApi(unlisted);
+        problems.Clear();
+        await AzureTests(folder, out _).RemoveLeftoversAsync(second, problems, Cancelled);
+        Assert.Equal(["GET pullrequests", "GET refs", "POST refs"], [.. unlisted.Requests.Select(AzureCall)]);
+        Assert.Single(problems);
+    }
+
+    [Fact]
+    public async Task GitLab_s_clean_up_goes_on_after_a_call_that_throws_and_still_deletes_both_branches()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var stub = GitLabCleanUpStub();
+        using var api = GitLabApi(stub);
+        var problems = new List<string>();
+        await GitLabTests(folder, out _).CleanUpAsync(api, [LiveBranch, LiveEven], problems);
+        Assert.Equal(["GET merge_requests", "PUT 21", "DELETE 21", "PUT 22", "DELETE 22", "DELETE branch", "DELETE branch"], [.. stub.Requests.Select(GitLabCall)]);
+        Assert.Contains("closing !21: LiveServiceException", Assert.Single(problems), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GitLab_s_leftovers_go_on_after_a_call_that_throws_and_still_delete_the_branches()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var stub = GitLabCleanUpStub();
+        using var api = GitLabApi(stub);
+        var problems = new List<string>();
+        await GitLabTests(folder, out _).RemoveLeftoversAsync(api, problems, Cancelled);
+        Assert.Equal(["GET merge_requests", "PUT 21", "DELETE 21", "PUT 22", "DELETE 22", "GET branches", "DELETE branch", "DELETE branch"], [.. stub.Requests.Select(GitLabCall)]);
+        Assert.Contains("closing !21: LiveServiceException", Assert.Single(problems), StringComparison.Ordinal);
+    }
+
+    private static HttpResponseMessage Json(HttpStatusCode status, string body) =>
+        new(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
+    private static AzureDevOpsLiveApi AzureApi(HttpMessageHandler stub) =>
+        new(new LiveAzureSandbox(Organization, Project, Repository, ProviderToken), new LiveRequestLog(stub, new LiveRequestLog.Store(), AzureReach()), AzureDevOpsEndpoints.Service.WebBase, TimeSpan.FromSeconds(5), new LiveScreen(), madeUpOrganization: MadeUpOrganization);
+
+    private static GitLabLiveApi GitLabApi(HttpMessageHandler stub) =>
+        new(new LiveGitLabSandbox("ada", Project, ProviderToken), new LiveRequestLog(stub, new LiveRequestLog.Store(), LiveReach.GitLab()), VisualCommit.Hosting.GitLab.GitLabEndpoints.GitLabCom.ApiBase, TimeSpan.FromSeconds(5), new LiveScreen());
+
+    private static AzureDevOpsLiveTests AzureTests(TempDirectory folder, out List<string> notes)
+    {
+        var kept = new List<string>();
+        notes = kept;
+        return new AzureDevOpsLiveTests(new AzureDevOpsLiveRun(ProviderToken, folder.Combine("azure-run.txt"), kept.Add, new LiveScreen()));
+    }
+
+    private static GitLabLiveTests GitLabTests(TempDirectory folder, out List<string> notes)
+    {
+        var kept = new List<string>();
+        notes = kept;
+        return new GitLabLiveTests(new GitLabLiveRun(ProviderToken, folder.Combine("gitlab-run.txt"), kept.Add, new LiveScreen()));
+    }
+
+    /// <summary>Azure DevOps over a stub: the run's !11 and !14 active, among another; the first abandon throws; the refs read names both branches; the refs POST takes both.</summary>
+    private static StubHandler AzureCleanUpStub()
+    {
+        var first = true;
+        return new StubHandler(request =>
+        {
+            if (request.Method == HttpMethod.Patch && first)
+            {
+                first = false;
+                throw new HttpRequestException(HttpRequestError.ConnectionError, "made-up connection error");
+            }
+
+            return AzureCleanUpAnswer(request);
+        });
+    }
+
+    private static HttpResponseMessage AzureCleanUpAnswer(HttpRequestMessage request)
+    {
+        var path = request.RequestUri!.AbsolutePath;
+        if (request.Method == HttpMethod.Patch)
+        {
+            return Json(HttpStatusCode.OK, """{"status":"abandoned"}""");
+        }
+
+        if (path.EndsWith("/pullrequests", StringComparison.Ordinal))
+        {
+            return Json(HttpStatusCode.OK, $$"""{"value":[{"pullRequestId":11,"sourceRefName":"refs/heads/{{LiveBranch}}","status":"active"},{"pullRequestId":12,"sourceRefName":"refs/heads/feature","status":"active"},{"pullRequestId":14,"sourceRefName":"refs/heads/{{LiveEven}}","status":"active"}],"count":3}""");
+        }
+
+        return request.Method == HttpMethod.Post
+            ? Json(HttpStatusCode.OK, $$"""{"value":[{"name":"refs/heads/{{LiveBranch}}","success":true,"updateStatus":"succeeded"},{"name":"refs/heads/{{LiveEven}}","success":true,"updateStatus":"succeeded"}],"count":2}""")
+            : Json(HttpStatusCode.OK, $$"""{"value":[{"name":"refs/heads/{{LiveBranch}}","objectId":"1111111111111111111111111111111111111111"},{"name":"refs/heads/{{LiveEven}}","objectId":"2222222222222222222222222222222222222222"}],"count":2}""");
+    }
+
+    private static string AzureCall((string Method, string Url, string? Authorization, string? Accept, string? Version, string? UserAgent) request)
+    {
+        var path = new Uri(request.Url).AbsolutePath;
+        return request.Method == "PATCH" ? "PATCH " + path[(path.LastIndexOf('/') + 1)..]
+            : path.EndsWith("/refs", StringComparison.Ordinal) ? $"{request.Method} refs"
+            : $"{request.Method} pullrequests";
+    }
+
+    /// <summary>GitLab over a stub: the run's !21 and !22 opened; the first close throws; every other call answers as GitLab does.</summary>
+    private static StubHandler GitLabCleanUpStub()
+    {
+        var first = true;
+        return new StubHandler(request =>
+        {
+            var path = request.RequestUri!.AbsolutePath;
+            if (request.Method == HttpMethod.Put)
+            {
+                if (first)
+                {
+                    first = false;
+                    throw new HttpRequestException(HttpRequestError.ConnectionError, "made-up connection error");
+                }
+
+                return Json(HttpStatusCode.OK, """{"state":"closed"}""");
+            }
+
+            if (request.Method == HttpMethod.Delete)
+            {
+                return new HttpResponseMessage(HttpStatusCode.NoContent);
+            }
+
+            return path.EndsWith("/merge_requests", StringComparison.Ordinal)
+                ? Json(HttpStatusCode.OK, $$"""[{"iid":21,"source_branch":"{{LiveBranch}}","source_project_id":5,"target_project_id":5},{"iid":22,"source_branch":"{{LiveEven}}","source_project_id":5,"target_project_id":5}]""")
+                : Json(HttpStatusCode.OK, $$"""[{"name":"{{LiveBranch}}"},{"name":"{{LiveEven}}"}]""");
+        });
+    }
+
+    private static string GitLabCall((string Method, string Url, string? Authorization, string? Accept, string? Version, string? UserAgent) request)
+    {
+        var path = new Uri(request.Url).AbsolutePath;
+        return path.Contains("/repository/branches/", StringComparison.Ordinal) ? $"{request.Method} branch"
+            : path.EndsWith("/repository/branches", StringComparison.Ordinal) ? $"{request.Method} branches"
+            : path.EndsWith("/merge_requests", StringComparison.Ordinal) ? $"{request.Method} merge_requests"
+            : $"{request.Method} {path[(path.LastIndexOf('/') + 1)..]}";
+    }
+}
+
+/// <summary>
 /// The screen of the new providers' notes (docs/phase-7b-design.md 15.3, 15.9; D372): the
 /// organization at each boundary, addresses, ids learned from made-up copies of the services'
 /// answers (their member names and nesting, made-up values), kept addresses, encoded survivors,
@@ -1577,17 +1915,81 @@ public sealed class LiveScreenTests
     public void Sign_in_ids_are_learned_from_a_302_s_location_its_object_moved_body_and_its_context()
     {
         var screen = Screen();
-        var context = Convert.ToBase64String(Encoding.UTF8.GetBytes($$$"""{"ht":2,"hid":"{{{OtherHostId}}}","qs":{}}"""));
-        var location = $"https://spsprodfake.vssps.visualstudio.com/_signin?realm=dev.azure.com&reply_to=https%3A%2F%2Fdev.azure.com%2FFernhill-Labs&redirect=1&hid={InstanceId}&context={Uri.EscapeDataString(context)}#ctx=made-up";
-        var body = $"<html><head><title>Object moved</title></head><body><h2>Object moved to <a href=\"https://spsprodfake.vssps.visualstudio.com/_signin?realm=dev.azure.com&amp;hid={InstanceId}&amp;context={context}\">here</a>.</h2></body></html>";
-        screen.LearnFromAnswer([new("Location", [location])], body);
+        var context = SignInContext(OtherHostId);
+        Assert.Equal(125, context.Length);
+        var location = SignInLocation(context);
+        var body = ObjectMoved(location);
+        screen.LearnFromAnswer([new("Location", [location]), new("X-TFS-FedAuthRedirect", [location])], body);
         Assert.Equal(2, screen.Counts.Ids);
         var screened = screen.Apply($"Location {location}; body {body}; ids {InstanceId} {OtherHostId}");
         Assert.DoesNotContain(InstanceId, screened, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(OtherHostId, screened, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("reply_to", screened, StringComparison.Ordinal);
+        Assert.DoesNotContain("context=", screened, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("hid=", screened, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("/_signin?<the sign-in query>", screened, StringComparison.Ordinal);
+        Assert.Equal(screened, screen.Apply(screened));
         Assert.Null(screen.SurvivorIn(screened));
+        Assert.Equal("https://spsprodfake.vssps.visualstudio.com/A<the organization's id>/_apis/Identities/x", screen.Apply($"https://spsprodfake.vssps.visualstudio.com/A{OtherHostId}/_apis/Identities/x"));
+    }
+
+    [Fact]
+    public void A_302_after_the_identity_read_reaches_run_txt_without_its_sign_in_query_or_either_host_id()
+    {
+        using var folder = new TempDirectory("live-screen");
+        var file = folder.Combine("run.txt");
+        var screen = Screen();
+        using (var identity = JsonDocument.Parse($$$"""{"authenticatedUser":{"id":"{{{UserId}}}"},"instanceId":"{{{InstanceId}}}"}"""))
+        {
+            screen.Learn(identity.RootElement);
+        }
+
+        var context = SignInContext(OtherHostId);
+        var location = SignInLocation(context);
+        var body = ObjectMoved(location);
+        screen.LearnFromAnswer([new("Location", [location])], body);
+        var output = new List<string>();
+        var run = new LiveRun("made-up-token-for-the-screen-0123456789", file, output.Add, screen, HostingProvider.AzureDevOps);
+        run.Note($"Azure DevOps' answer to connectionData with a made-up value: 302 Found; Location {location}; the fake: same. {body}");
+        run.Dispose();
+        var text = File.ReadAllText(file);
+        foreach (var hidden in new[] { InstanceId, OtherHostId, context, "context=", "hid=", "reply_to", "Fernhill" })
+        {
+            Assert.DoesNotContain(hidden, text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(hidden, Assert.Single(output), StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.Equal(2, CountOf(text, "/_signin?<the sign-in query>"));
+    }
+
+    [Fact]
+    public void A_sign_in_context_is_read_in_the_url_token_form_with_each_pad_count()
+    {
+        var digits = new List<char>();
+        foreach (var filler in new[] { string.Empty, "a", "ab" })
+        {
+            var json = $$$"""{"ht":2,"hid":"{{{OtherHostId}}}","qs":{},"rr":"{{{filler}}}","vh":"","cv":"","cs":""}""";
+            var token = UrlToken(json);
+            digits.Add(token[^1]);
+            Assert.Equal(OtherHostId, LiveScreen.HidOfContext(token));
+            Assert.Equal(OtherHostId, LiveScreen.HidOfContext(Convert.ToBase64String(Encoding.UTF8.GetBytes(json))));
+        }
+
+        Assert.Equal(['0', '1', '2'], digits.Order());
+        Assert.Null(LiveScreen.HidOfContext("not-a-context"));
+    }
+
+    [Fact]
+    public void An_unscreened_sign_in_query_or_context_is_a_survivor_and_a_context_is_replaced_anywhere()
+    {
+        var screen = Screen();
+        Assert.Equal("a sign-in query", screen.SurvivorIn("https://spsprodfake.vssps.visualstudio.com/_signin?realm=dev.azure.com"));
+        Assert.Equal("a sign-in query once percent-decoded", screen.SurvivorIn("x=https%3A%2F%2Fspsprodfake.vssps.visualstudio.com%2F_signin%3Frealm%3Ddev.azure.com"));
+        var context = SignInContext(OtherHostId);
+        Assert.Equal("a sign-in context", screen.SurvivorIn($"see ?context={context}"));
+        Assert.Equal("see ?context=<the organization's id>", screen.Apply($"see ?context={context}"));
+        Assert.Equal("see ?context=plain", screen.Apply("see ?context=plain"));
+        Assert.Null(screen.SurvivorIn("see ?context=plain and /_signin? alone"));
     }
 
     [Fact]
@@ -1644,7 +2046,7 @@ public sealed class LiveScreenTests
     }
 
     [Fact]
-    public void Notes_are_screened_and_a_run_txt_with_a_survivor_is_withheld_and_fails_the_run()
+    public void Notes_are_screened_and_one_that_still_holds_a_value_is_withheld_before_the_output_and_fails_the_run()
     {
         using var folder = new TempDirectory("live-screen");
         var output = new List<string>();
@@ -1653,10 +2055,27 @@ public sealed class LiveScreenTests
         var run = new LiveRun("made-up-token-for-the-screen-0123456789", file, output.Add, Screen(), HostingProvider.AzureDevOps);
         run.Note("GET https://dev.azure.com/Fernhill-Labs/_apis/connectionData: 200");
         Assert.Equal("GET https://dev.azure.com/<the organization>/_apis/connectionData: 200", Assert.Single(output));
+        run.Note("Location state=realm%3Ddev.azure.com%26reply_to%3Dhttps%253A%252F%252Fdev.azure.com%252FFernhill-Labs%252F_apis");
         run.Note("x%252FFernhill-Labs%252Fy");
+        Assert.Equal(
+            ["A note was withheld: it still held the organization's name once percent-decoded.", "A note was withheld: it still held the organization's name once percent-decoded."],
+            output.Skip(1));
         var failed = Assert.Throws<InvalidOperationException>(run.Dispose);
-        Assert.Contains("still held the organization's name once percent-decoded", failed.Message, StringComparison.Ordinal);
+        Assert.Contains("A note still held the organization's name once percent-decoded once screened (D372)", failed.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("Fernhill", failed.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Fernhill", File.ReadAllText(file), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("an earlier run's", File.ReadAllText(file), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_run_txt_with_a_survivor_is_withheld_and_fails_the_run()
+    {
+        using var folder = new TempDirectory("live-screen");
+        var file = folder.Combine("run.txt");
+        File.WriteAllText(file, "an earlier run's");
+        var run = new LiveRun("made-up-token-for-the-screen-0123456789", file, _ => { }, Screen(), HostingProvider.AzureDevOps);
+        run.WriteRunFile("x%252FFernhill-Labs%252Fy");
+        Assert.Contains("run.txt was withheld: its screened text still held the organization's name once percent-decoded", Assert.Single(run.Failures), StringComparison.Ordinal);
         Assert.False(File.Exists(file));
     }
 
@@ -1666,9 +2085,8 @@ public sealed class LiveScreenTests
         using var folder = new TempDirectory("live-screen");
         var file = Path.Combine(folder.Path, "azure-devops", "run.txt");
         var run = new LiveRun(null, file, _ => { }, Screen(), HostingProvider.AzureDevOps);
-        run.Note("x%252FFernhill-Labs%252Fy");
-        var failed = Assert.Throws<InvalidOperationException>(run.Dispose);
-        Assert.Contains("run.txt was withheld: its screened text still held", failed.Message, StringComparison.Ordinal);
+        run.WriteRunFile("x%252FFernhill-Labs%252Fy");
+        Assert.Contains(run.Failures, failure => failure.StartsWith("run.txt was withheld: its screened text still held", StringComparison.Ordinal));
         Assert.False(File.Exists(file));
         const string token = "made-up-token-for-the-screen-0123456789";
         var held = new LiveRun(token, Path.Combine(folder.Path, "gitlab", "run.txt"), _ => { }, Screen(), HostingProvider.GitLab);
@@ -1701,6 +2119,57 @@ public sealed class LiveScreenTests
         var check = Assert.Throws<XunitException>(() => run.Check(false, () => "Fernhill-Labs is wrong"));
         Assert.Equal("<the organization> is wrong", check.Message);
         run.Dispose();
+    }
+
+    [Fact]
+    public void A_message_a_check_or_a_failure_that_still_holds_a_value_once_screened_is_withheld_and_fails_the_run()
+    {
+        using var folder = new TempDirectory("live-screen");
+        var output = new List<string>();
+        var screen = Screen();
+        screen.AddAddress(Address);
+        var run = new LiveRun("made-up-token-for-the-screen-0123456789", folder.Combine("run.txt"), output.Add, screen, HostingProvider.AzureDevOps);
+        Assert.Equal("(withheld: it still held the organization's name once percent-decoded)", run.Screen("reply_to%3Dhttps%253A%252F%252Fdev.azure.com%252FFernhill-Labs"));
+        var thrown = Assert.Throws<XunitException>(() => run.FailureOf(new InvalidOperationException("reply_to%3Dhttps%253A%252F%252Fdev.azure.com%252FFernhill-Labs"), "2, the sign-in").Throw());
+        Assert.Equal("Step 2, the sign-in failed with InvalidOperationException, whose text still held the organization's name once percent-decoded once screened, so it is withheld (D372).", thrown.Message);
+        Assert.Null(thrown.InnerException);
+        var check = Assert.Throws<XunitException>(() => run.Check(false, () => "the login is fernhill%252Dlabs"));
+        Assert.Equal("(withheld: it still held the organization's name once percent-decoded)", check.Message);
+        run.Note("by ada.lovelace%2540corp.test");
+        Assert.Equal("A note was withheld: it still held a learned address once percent-decoded.", Assert.Single(output));
+        Assert.Equal(4, run.Failures.Count);
+        Assert.All(run.Failures, failure => Assert.DoesNotContain("Fernhill", failure, StringComparison.OrdinalIgnoreCase));
+        Assert.Throws<InvalidOperationException>(run.Dispose);
+    }
+
+    /// <summary>A sign-in context as the service sends it (MEASURED r5 p03, p15): 93 bytes of JSON in the UrlToken form, 125 characters ending in its pad count.</summary>
+    private static string SignInContext(string hid) => UrlToken($$$"""{"ht":2,"hid":"{{{hid}}}","qs":{},"rr":"","vh":"","cv":"","cs":""}""");
+
+    /// <summary>ASP.NET's UrlToken form: base64url without its padding, then the number of <c>=</c> it had.</summary>
+    private static string UrlToken(string json)
+    {
+        var base64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(json));
+        var trimmed = base64.TrimEnd('=');
+        return trimmed.Replace('+', '-').Replace('/', '_') + (base64.Length - trimmed.Length).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>A 302's <c>Location</c> in the measured order: realm, reply_to, redirect, hid, context, then <c>#ctx=</c>.</summary>
+    private static string SignInLocation(string context) =>
+        $"https://spsprodfake.vssps.visualstudio.com/_signin?realm=dev.azure.com&reply_to=https%3A%2F%2Fdev.azure.com%2FFernhill-Labs%2F_apis%2FconnectionData&redirect=1&hid={InstanceId}&context={context}#ctx=made-up";
+
+    /// <summary>The 302's "Object moved" body, its <c>href</c> with <c>&amp;amp;</c> as written.</summary>
+    private static string ObjectMoved(string location) =>
+        $"<html><head><title>Object moved</title></head><body><h2>Object moved to <a href=\"{location.Replace("&", "&amp;", StringComparison.Ordinal)}\">here</a>.</h2></body></html>";
+
+    private static int CountOf(string text, string part)
+    {
+        var count = 0;
+        for (var at = text.IndexOf(part, StringComparison.Ordinal); at >= 0; at = text.IndexOf(part, at + part.Length, StringComparison.Ordinal))
+        {
+            count++;
+        }
+
+        return count;
     }
 
     [Fact]

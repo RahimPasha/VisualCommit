@@ -86,27 +86,7 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
             await ReadSandboxAsync(api);
 
             step = "2, the leftovers";
-            var active = await api.ActivePullRequestsAsync(Cancelled);
-            var leftovers = active.Where(LiveProviderLeftovers.IsLeftover).ToList();
-            run.Note($"Active pull requests: {Show(active.Count)}, {Show(leftovers.Count)} of them from {LiveLeftovers.Prefix} branches of the sandbox and no fork.");
-            foreach (var pull in leftovers)
-            {
-                var abandoned = await api.AbandonAsync(pull.Id, Cancelled);
-                run.Note($"Leftover pull request !{Show(pull.Id)} abandoned: {abandoned}.");
-                if (abandoned.Status != 200)
-                {
-                    problems.Add(api.Describe(abandoned, $"abandoning !{Show(pull.Id)}"));
-                }
-            }
-
-            var refs = await api.RefsAsync("heads/" + LiveLeftovers.Prefix, Cancelled);
-            var branches = LiveProviderLeftovers.Branches(refs);
-            if (branches.Count > 0)
-            {
-                await DeleteRefsAsync(run, api, branches, $"Leftover branches {string.Join(", ", branches.Select(reference => reference.Name))} deleted in one refs POST", "deleting the leftover branches", problems, Cancelled);
-            }
-
-            run.Note($"Leftovers of a stopped run: {Show(leftovers.Count)} pull requests abandoned, {Show(branches.Count)} branches in the refs POST (each update's outcome above); {Show(refs.Count - branches.Count)} other refs not touched.");
+            await RemoveLeftoversAsync(api, problems, Cancelled);
         }
         catch (Exception ex)
         {
@@ -467,7 +447,7 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     }
 
     /// <summary>D373's made-up values, a short plain one and an 84-character one in Azure DevOps' form, each with and without Suppress, to connectionData and the sandbox's info/refs.</summary>
-    private async Task ProbeMadeUpAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, string agent, List<string> problems)
+    internal async Task ProbeMadeUpAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, string agent, List<string> problems)
     {
         var shaped = LiveMadeUp.AzureShaped(api.Sandbox.Token);
         foreach (var value in new[] { LiveMadeUp.ShortValue, LiveCredential.MadeUp(shaped, "a made-up value of 84 characters in Azure DevOps' form") })
@@ -482,7 +462,11 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
                 })
                 {
                     var answer = await ProbeAsync(api, fake, $"{target} with {value} {with}", probe);
-                    if (answer is not null && !LiveProviderPremises.MadeUpRefused(answer))
+                    if (answer is null)
+                    {
+                        problems.Add($"{target} with {value} {with} had no answer, so D373's premise is not shown (its note says why).");
+                    }
+                    else if (!LiveProviderPremises.MadeUpRefused(answer))
                     {
                         problems.Add($"{target} with {value} {with} earned {answer}, a 2xx ruling 16 would take (D373).");
                     }
@@ -498,11 +482,20 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         if (anonymous?.Status != 404)
         {
             run.Note($"D374's read with the token: skipped, since the read without a credential answered {anonymous?.ToString() ?? "nothing"}, not 404; nothing was sent with the token.");
+            if (anonymous is null)
+            {
+                problems.Add("D374's read without a credential had no answer, so its 404 and the read with the token are not shown (its note says why).");
+            }
+
             return;
         }
 
         var token = await ProbeAsync(run, api, fake, fakeNames, $"connectionData of the made-up organization {organization} with the token", a => a.ConnectionDataAsync(LiveCredential.Token, Cancelled, organization: a == api ? organization : a.MadeUpOrganization));
-        if (token is not null && token.Status != 404)
+        if (token is null)
+        {
+            problems.Add("D374's read with the token had no answer, so its 404 is not shown (A1's NotFound, 6.4; its note says why).");
+        }
+        else if (token.Status != 404)
         {
             problems.Add($"D374's read with the token answered {token}, not 404 as the read without one did (A1's NotFound, 6.4).");
         }
@@ -518,7 +511,7 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     /// at the default branch's tip by one refs POST whose update took. The refs delete is the clean-up's,
     /// beside the fake's (<see cref="DeleteRefsAsync"/>).
     /// </summary>
-    private async Task ProbeCreateAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, LiveMade made, int id, List<string> problems)
+    internal async Task ProbeCreateAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, LiveMade made, int id, List<string> problems)
     {
         var fakeId = await FakeDraftAsync(fake, made);
         var side = fakeId is null ? null : fake;
@@ -541,13 +534,21 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         run.Note($"The merge ref refs/{merge} {(appeared.Done ? "appeared" : "had not appeared")} by read {Show(appeared.Reads)}, {appeared.Took.TotalSeconds.ToString("0.0", CultureInfo.InvariantCulture)} s after the read back{(appeared.Failure is { } failed ? $" ({failed})" : string.Empty)}; the fake's: {await FakeMergeRefAsync(side, fakeId)}.");
 
         var duplicate = await ProbeAsync(api, side, "the duplicate create (409 GitPullRequestExistsException expected)", a => a.CreateAsync(made.Branch, Target(a), made.Title, true, Cancelled));
-        if (duplicate is not null && !LiveProviderPremises.IsAzureDuplicate(duplicate))
+        if (duplicate is null)
+        {
+            problems.Add("The duplicate create had no answer, not 409 GitPullRequestExistsException (its note says why).");
+        }
+        else if (!LiveProviderPremises.IsAzureDuplicate(duplicate))
         {
             problems.Add($"The duplicate create answered {duplicate} with typeKey {duplicate.TypeKey ?? "none"}, not 409 GitPullRequestExistsException.");
         }
 
         var missing = await ProbeAsync(api, side, "the create from a missing branch (400 GitPullRequestCannotBeActivated expected)", a => a.CreateAsync(MissingBranch, Target(a), made.Title, true, Cancelled));
-        if (missing is not null && !LiveProviderPremises.IsAzureMissingBranch(missing))
+        if (missing is null)
+        {
+            problems.Add("The create from a missing branch had no answer, not 400 GitPullRequestCannotBeActivated (its note says why).");
+        }
+        else if (!LiveProviderPremises.IsAzureMissingBranch(missing))
         {
             problems.Add($"The create from a missing branch answered {missing} with typeKey {missing.TypeKey ?? "none"}, not 400 GitPullRequestCannotBeActivated.");
         }
@@ -633,31 +634,71 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     /// never a fork's), then one refs POST deleting the run's branches, beside the fake's own refs POST
     /// deleting its namesakes (15.7; null: the fake did not start, or Check_2 created nothing to probe).
     /// </summary>
-    private async Task CleanUpAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, IReadOnlyList<string> branches, List<string> problems)
+    internal async Task CleanUpAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, IReadOnlyList<string> branches, List<string> problems)
     {
-        try
+        var active = await LiveSteps.AttemptAsync(api, problems, "the clean-up's read of the active pull requests", () => api.ActivePullRequestsAsync(CancellationToken.None));
+        foreach (var pull in (active ?? []).Where(pull => !pull.FromFork && branches.Any(branch => pull.SourceRef == LiveLeftovers.HeadsPrefix + branch)))
         {
-            var active = await api.ActivePullRequestsAsync(CancellationToken.None);
-            foreach (var pull in active.Where(pull => !pull.FromFork && branches.Any(branch => pull.SourceRef == LiveLeftovers.HeadsPrefix + branch)))
-            {
-                var abandoned = await api.AbandonAsync(pull.Id, CancellationToken.None);
-                run.Note($"Clean-up: !{Show(pull.Id)} abandoned: {abandoned}.");
-                if (abandoned.Status != 200)
-                {
-                    problems.Add(api.Describe(abandoned, $"abandoning !{Show(pull.Id)}"));
-                }
-            }
-
-            var refs = (await api.RefsAsync("heads/" + LiveLeftovers.Prefix, CancellationToken.None))
-                .Where(reference => branches.Any(branch => reference.Name == LiveLeftovers.HeadsPrefix + branch)).ToList();
-            if (refs.Count > 0)
-            {
-                await DeleteRefsAsync(run, api, refs, $"Clean-up: the refs POST deleting {Show(refs.Count)} branches", "deleting the run's branches", problems, CancellationToken.None, beside: true, fake: fake);
-            }
+            await AbandonAsync(api, pull.Id, "Clean-up: ", problems, CancellationToken.None);
         }
-        catch (Exception ex)
+
+        var refs = await LiveSteps.AttemptAsync(api, problems, "the clean-up's read of the refs", () => api.RefsAsync("heads/" + LiveLeftovers.Prefix, CancellationToken.None));
+        var mine = (refs ?? []).Where(reference => branches.Any(branch => reference.Name == LiveLeftovers.HeadsPrefix + branch)).ToList();
+        if (mine.Count > 0)
         {
-            problems.Add($"The clean-up failed: {ex.GetType().Name}: {api.Screen(ex.Message)}");
+            await LiveSteps.AttemptAsync(api, problems, "the clean-up's refs POST", async () =>
+            {
+                await DeleteRefsAsync(run, api, mine, $"Clean-up: the refs POST deleting {Show(mine.Count)} branches", "deleting the run's branches", problems, CancellationToken.None, beside: true, fake: fake);
+                return string.Empty;
+            });
+        }
+    }
+
+    /// <summary>
+    /// 15.5 step 2, Check_1's leftovers of a stopped run (D324): the active pull requests from
+    /// <c>visualcommit-live/</c> branches of the sandbox abandoned, then one refs POST deleting those
+    /// branches. Each call goes on its own: one that fails is a problem, and the others are still
+    /// sent, the refs read and POST after a failed list or abandon too. Internal for <see cref="LiveSafetyTests"/>.
+    /// </summary>
+    internal async Task RemoveLeftoversAsync(AzureDevOpsLiveApi api, List<string> problems, CancellationToken ct)
+    {
+        var active = await LiveSteps.AttemptAsync(api, problems, "the read of the active pull requests", () => api.ActivePullRequestsAsync(ct));
+        var leftovers = (active ?? []).Where(LiveProviderLeftovers.IsLeftover).ToList();
+        run.Note(active is null
+            ? $"Active pull requests: unread (a problem above), so none is abandoned; the {LiveLeftovers.Prefix} branches are still read and deleted."
+            : $"Active pull requests: {Show(active.Count)}, {Show(leftovers.Count)} of them from {LiveLeftovers.Prefix} branches of the sandbox and no fork.");
+        foreach (var pull in leftovers)
+        {
+            await AbandonAsync(api, pull.Id, "Leftover pull request ", problems, ct);
+        }
+
+        var refs = await LiveSteps.AttemptAsync(api, problems, "the read of the leftover refs", () => api.RefsAsync("heads/" + LiveLeftovers.Prefix, ct));
+        var branches = LiveProviderLeftovers.Branches(refs ?? []);
+        if (branches.Count > 0)
+        {
+            await LiveSteps.AttemptAsync(api, problems, "the leftovers' refs POST", async () =>
+            {
+                await DeleteRefsAsync(run, api, branches, $"Leftover branches {string.Join(", ", branches.Select(reference => reference.Name))} deleted in one refs POST", "deleting the leftover branches", problems, ct);
+                return string.Empty;
+            });
+        }
+
+        run.Note($"Leftovers of a stopped run: {Show(leftovers.Count)} pull requests abandoned, {Show(branches.Count)} branches in the refs POST (each update's outcome above); {(refs is null ? "the refs unread" : $"{Show(refs.Count - branches.Count)} other refs not touched")}.");
+    }
+
+    /// <summary>One abandon, noted after <paramref name="lead"/>; a status other than 200, or no answer, is a problem.</summary>
+    private async Task AbandonAsync(AzureDevOpsLiveApi api, int id, string lead, List<string> problems, CancellationToken ct)
+    {
+        var abandoned = await LiveSteps.AttemptAsync(api, problems, $"abandoning !{Show(id)}", () => api.AbandonAsync(id, ct));
+        if (abandoned is null)
+        {
+            return;
+        }
+
+        run.Note($"{lead}!{Show(id)} abandoned: {abandoned}.");
+        if (abandoned.Status != 200)
+        {
+            problems.Add(api.Describe(abandoned, $"abandoning !{Show(id)}"));
         }
     }
 
@@ -884,6 +925,28 @@ internal static class LiveSteps
     /// A test's end: the requests per host, the reach's problems, a request before the sign-in, then
     /// the problems noted; the failure first, then a test that found problems fails, screened.
     /// </summary>
+    /// <summary>
+    /// One call of a clean-up on its own (D324): its result, or null when it threw, which is then a
+    /// problem naming <paramref name="what"/> and the exception, its message screened, and the clean-up
+    /// goes on with its other calls. A cancellation of the test is no such failure and goes on up.
+    /// </summary>
+    public static async Task<T?> AttemptAsync<T>(LiveServiceApi api, List<string> problems, string what, Func<Task<T>> call)
+        where T : class
+    {
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(problems);
+        ArgumentNullException.ThrowIfNull(call);
+        try
+        {
+            return await call();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            problems.Add($"The clean-up's call failed, {what}: {ex.GetType().Name}: {api.Screen(ex.Message)}");
+            return null;
+        }
+    }
+
     public static void Finish(LiveRun run, LiveRequestLog.Store requests, LiveReach reach, List<string> problems, ExceptionDispatchInfo? failure, LiveRequestLog.Store? own = null, DateTimeOffset? signInStarted = null)
     {
         var all = requests.Snapshot();

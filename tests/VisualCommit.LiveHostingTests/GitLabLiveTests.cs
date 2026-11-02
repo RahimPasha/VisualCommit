@@ -82,21 +82,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
             await ReadSandboxAsync(api);
 
             step = "2, the leftovers";
-            var opened = await api.OpenedMergeRequestsAsync(Cancelled);
-            var leftovers = opened.Where(LiveProviderLeftovers.IsLeftover).ToList();
-            run.Note($"Opened merge requests: {Show(opened.Count)}, {Show(leftovers.Count)} of them from {LiveLeftovers.Prefix} branches of the sandbox.");
-            foreach (var request in leftovers)
-            {
-                await CloseAndDeleteAsync(api, request.Iid, problems, CancellationToken.None);
-            }
-
-            var branches = await api.BranchesAsync(LiveLeftovers.Prefix, Cancelled);
-            foreach (var branch in branches)
-            {
-                await DeleteBranchAsync(api, branch, problems, CancellationToken.None);
-            }
-
-            run.Note($"Leftovers of a stopped run: {Show(leftovers.Count)} merge requests, {Show(branches.Count)} branches.");
+            await RemoveLeftoversAsync(api, problems, Cancelled);
         }
         catch (Exception ex)
         {
@@ -393,7 +379,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
     /// pushed at the default branch's tip (4.3 (h): a branch with no commit ahead, not the default
     /// branch into itself, which is 4.3 (e)'s refusal).
     /// </summary>
-    private async Task ProbeCreateAsync(GitLabLiveApi api, LiveGitLabFake? fake, LiveMade made, int iid, List<string> problems)
+    internal async Task ProbeCreateAsync(GitLabLiveApi api, LiveGitLabFake? fake, LiveMade made, int iid, List<string> problems)
     {
         var fakeIid = await FakeDraftAsync(fake, made);
         var side = fakeIid is null ? null : fake;
@@ -409,13 +395,21 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
         }
 
         var duplicate = await ProbeAsync(api, side, "the duplicate create (409 expected)", a => a.CreateAsync(made.Branch, Target(a), GitLabProvider.TitleFor(made.Title, true), Cancelled));
-        if (duplicate is not null && !LiveProviderPremises.IsGitLabDuplicate(duplicate))
+        if (duplicate is null)
+        {
+            problems.Add("The duplicate create had no answer, not 409 (its note says why).");
+        }
+        else if (!LiveProviderPremises.IsGitLabDuplicate(duplicate))
         {
             problems.Add($"The duplicate create answered {duplicate}, not 409.");
         }
 
         var missing = await ProbeAsync(api, side, "the create from a missing branch (400 naming source_branch expected)", a => a.CreateAsync(MissingBranch, Target(a), made.Title, Cancelled));
-        if (missing is not null && !LiveProviderPremises.IsGitLabMissingBranch(missing))
+        if (missing is null)
+        {
+            problems.Add("The create from a missing branch had no answer, not 400 naming source_branch (7.3; its note says why).");
+        }
+        else if (!LiveProviderPremises.IsGitLabMissingBranch(missing))
         {
             problems.Add($"The create from a missing branch answered {missing}, not 400 naming source_branch (7.3).");
         }
@@ -451,37 +445,59 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
     }
 
     /// <summary>15.5 step 9, Check_2b's <c>finally</c>: the run's merge requests (from either branch, never a fork's) closed and deleted, then each branch deleted (a 404: gone, g2 G1.7).</summary>
-    private async Task CleanUpAsync(GitLabLiveApi api, IReadOnlyList<string> branches, List<string> problems)
+    internal async Task CleanUpAsync(GitLabLiveApi api, IReadOnlyList<string> branches, List<string> problems)
     {
-        try
+        var opened = await LiveSteps.AttemptAsync(api, problems, "the clean-up's read of the opened merge requests", () => api.OpenedMergeRequestsAsync(CancellationToken.None));
+        foreach (var request in (opened ?? []).Where(request => branches.Contains(request.SourceBranch) && !request.FromFork))
         {
-            foreach (var request in (await api.OpenedMergeRequestsAsync(CancellationToken.None)).Where(request => branches.Contains(request.SourceBranch) && !request.FromFork))
-            {
-                await CloseAndDeleteAsync(api, request.Iid, problems, CancellationToken.None);
-            }
-
-            foreach (var branch in branches)
-            {
-                await DeleteBranchAsync(api, branch, problems, CancellationToken.None);
-            }
+            await CloseAndDeleteAsync(api, request.Iid, problems, CancellationToken.None);
         }
-        catch (Exception ex)
+
+        foreach (var branch in branches)
         {
-            problems.Add($"The clean-up failed: {ex.GetType().Name}: {api.Screen(ex.Message)}");
+            await DeleteBranchAsync(api, branch, problems, CancellationToken.None);
         }
     }
 
+    /// <summary>
+    /// 15.5 step 2, Check_1's leftovers of a stopped run (D324): the opened merge requests from
+    /// <c>visualcommit-live/</c> branches of the sandbox closed and deleted, then each such branch
+    /// deleted. Each call goes on its own: one that fails is a problem, and the others are still sent,
+    /// the branches' read and deletes after a failed list, close or delete too. Internal for <see cref="LiveSafetyTests"/>.
+    /// </summary>
+    internal async Task RemoveLeftoversAsync(GitLabLiveApi api, List<string> problems, CancellationToken ct)
+    {
+        var opened = await LiveSteps.AttemptAsync(api, problems, "the read of the opened merge requests", () => api.OpenedMergeRequestsAsync(ct));
+        var leftovers = (opened ?? []).Where(LiveProviderLeftovers.IsLeftover).ToList();
+        run.Note(opened is null
+            ? $"Opened merge requests: unread (a problem above), so none is closed; the {LiveLeftovers.Prefix} branches are still read and deleted."
+            : $"Opened merge requests: {Show(opened.Count)}, {Show(leftovers.Count)} of them from {LiveLeftovers.Prefix} branches of the sandbox.");
+        foreach (var request in leftovers)
+        {
+            await CloseAndDeleteAsync(api, request.Iid, problems, CancellationToken.None);
+        }
+
+        var branches = await LiveSteps.AttemptAsync(api, problems, "the read of the leftover branches", () => api.BranchesAsync(LiveLeftovers.Prefix, ct));
+        foreach (var branch in branches ?? [])
+        {
+            await DeleteBranchAsync(api, branch, problems, CancellationToken.None);
+        }
+
+        run.Note($"Leftovers of a stopped run: {Show(leftovers.Count)} merge requests, {(branches is null ? "the branches unread" : $"{Show(branches.Count)} branches")}.");
+    }
+
+    /// <summary>One merge request closed, then deleted, each call on its own: the delete is sent after a close that failed too.</summary>
     private async Task CloseAndDeleteAsync(GitLabLiveApi api, int iid, List<string> problems, CancellationToken ct)
     {
-        var closed = await api.CloseAsync(iid, ct);
-        var deleted = await api.DeleteMergeRequestAsync(iid, ct);
-        run.Note($"Merge request !{Show(iid)}: closed {closed}, deleted {deleted}{(deleted.Status == 403 ? " (closed, kept, g2 G1.6)" : string.Empty)}.");
-        if (closed.Status != 200)
+        var closed = await LiveSteps.AttemptAsync(api, problems, $"closing !{Show(iid)}", () => api.CloseAsync(iid, ct));
+        var deleted = await LiveSteps.AttemptAsync(api, problems, $"deleting !{Show(iid)}", () => api.DeleteMergeRequestAsync(iid, ct));
+        run.Note($"Merge request !{Show(iid)}: closed {closed?.ToString() ?? "no answer"}, deleted {deleted?.ToString() ?? "no answer"}{(deleted?.Status == 403 ? " (closed, kept, g2 G1.6)" : string.Empty)}.");
+        if (closed is not null && closed.Status != 200)
         {
             problems.Add(api.Describe(closed, $"closing !{Show(iid)}"));
         }
 
-        if (deleted.Status is not (204 or 403))
+        if (deleted is not null && deleted.Status is not (204 or 403))
         {
             problems.Add(api.Describe(deleted, $"deleting !{Show(iid)}"));
         }
@@ -489,7 +505,12 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
 
     private async Task DeleteBranchAsync(GitLabLiveApi api, string branch, List<string> problems, CancellationToken ct)
     {
-        var deleted = await api.DeleteBranchAsync(branch, ct);
+        var deleted = await LiveSteps.AttemptAsync(api, problems, $"deleting {branch}", () => api.DeleteBranchAsync(branch, ct));
+        if (deleted is null)
+        {
+            return;
+        }
+
         run.Note($"Branch {branch} deleted: {deleted}{(deleted.Status == 404 ? " (gone already, g2 G1.7)" : string.Empty)}.");
         if (deleted.Status is not (204 or 404))
         {

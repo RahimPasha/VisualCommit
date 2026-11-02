@@ -146,7 +146,7 @@ internal sealed class LiveRequestLog : DelegatingHandler
                 KeptHeaders = response is null ? new Dictionary<string, string>() : KeptOf(response),
             };
 
-        if (within.RefusalOf(uri, form) is { } refusal)
+        if ((LiveReach.HostRefusalOf(request, within) ?? within.RefusalOf(uri, form)) is { } refusal)
         {
             store.Add(Record(null, "refused: " + refusal, null));
             throw new HttpRequestException($"The live command refused {request.Method.Method} {uri.Scheme}://{uri.Authority}: {refusal} (D352, D371).");
@@ -434,6 +434,22 @@ internal abstract class LiveReach
     /// <summary>Why a request to <paramref name="uri"/> with <paramref name="form"/> must not leave, or null; never names the path.</summary>
     public abstract string? RefusalOf(Uri uri, LiveCredentialForm form);
 
+    /// <summary>
+    /// Why <paramref name="request"/>'s <c>Host</c> header keeps it from leaving, or null: one set to
+    /// another authority than its URL's, which <c>SocketsHttpHandler</c> would send as the TLS server
+    /// name and the <c>Host</c>, with the credential, while the URL the guard judges and the store
+    /// records names the origin. Names the origin, never the header's value. No request of the app's
+    /// or of the command's sets it.
+    /// </summary>
+    public static string? HostRefusalOf(HttpRequestMessage request, LiveReach within)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(within);
+        return request.Headers.Host is { } host && request.RequestUri is { } uri && !string.Equals(host, uri.Authority, StringComparison.OrdinalIgnoreCase)
+            ? $"its Host header names another authority than {within.Origin}"
+            : null;
+    }
+
     /// <summary>Sees the answer of a request the guard let through.</summary>
     public virtual void Answered(Uri uri, LiveCredentialForm form, int status)
     {
@@ -462,6 +478,10 @@ internal abstract class LiveReach
     /// <summary>A decoded segment that is <c>.</c> or <c>..</c>.</summary>
     protected static bool IsDotSegment(string raw) => Uri.UnescapeDataString(raw) is "." or "..";
 
+    /// <summary>The names of the query's parameters, decoded, in order (a repeated one as often as it shows).</summary>
+    protected static IReadOnlyList<string> QueryNames(Uri uri) =>
+        [.. uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries).Select(pair => Uri.UnescapeDataString(pair.Split('=', 2)[0]))];
+
     /// <summary>The value of the query's <paramref name="name"/> (decoded, case ignored), or null.</summary>
     protected static string? QueryValue(Uri uri, string name)
     {
@@ -483,15 +503,28 @@ internal abstract class LiveReach
 /// <summary>
 /// Azure DevOps' guard (15.4): <c>https://dev.azure.com:443</c> alone, Basic or no credential, no
 /// segment empty, <c>.</c>, <c>..</c> or holding <c>/</c>, <c>\</c> or <c>%</c> once decoded, and only
-/// the sandbox's paths and D374's made-up organization's connectionData, compared without case.
+/// the sandbox's paths and D374's made-up organization's connectionData, compared without case, and
+/// only the query parameters the app's client and the command send (<see cref="SentQueryNames"/>),
+/// none repeated; <c>organizationName</c> only on the root form of the core area, naming the sandbox's
+/// organization. D374's read with the token is admitted once per guard (per run), after its 404.
 /// </summary>
 internal sealed class AzureDevOpsReach : LiveReach
 {
+    /// <summary>
+    /// The query parameters the app's client (6.5: <c>api-version</c>, <c>$top</c>, <c>$skip</c>,
+    /// <c>searchCriteria.status</c>) and the command (<c>filter</c> of the refs read, <c>service</c> of
+    /// info/refs) send; none names another repository, collection or organization, as Merge Bases'
+    /// <c>otherRepositoryId</c> and <c>otherCollectionId</c>, <c>hostId</c> or <c>accountName</c> would.
+    /// </summary>
+    internal static readonly IReadOnlySet<string> SentQueryNames =
+        new HashSet<string>(["api-version", "$top", "$skip", "searchCriteria.status", "filter", "service"], StringComparer.OrdinalIgnoreCase);
+
     private readonly string _organization;
     private readonly string _project;
     private readonly string _repository;
     private readonly Lock _gate = new();
     private int? _madeUpAnswer;
+    private bool _madeUpTokenAdmitted;
 
     internal AzureDevOpsReach(string organization, string project, string repository, string madeUpOrganization)
     {
@@ -530,17 +563,47 @@ internal sealed class AzureDevOpsReach : LiveReach
         }
 
         var s = uri.AbsolutePath.Split('/')[1..].Select(Uri.UnescapeDataString).ToArray();
+        if (QueryRefusalOf(s, uri) is { } query)
+        {
+            return query;
+        }
+
         return Admits(s, uri, form) ? null : $"the path is none of the sandbox's on {Origin} (D352, D371, D374)";
+    }
+
+    /// <summary>Why the query keeps the request from leaving, or null: a repeated parameter, or one that neither the app's client nor the command sends; <c>organizationName</c> only on the root form of the core area. Names no parameter.</summary>
+    private string? QueryRefusalOf(string[] s, Uri uri)
+    {
+        var names = QueryNames(uri);
+        if (names.GroupBy(name => name, StringComparer.OrdinalIgnoreCase).Any(group => group.Count() > 1))
+        {
+            return $"a query parameter on {Origin} is repeated";
+        }
+
+        var rootArea = s.Length == 3 && Is(s[0], "_apis") && Is(s[1], "resourceAreas") && Is(s[2], AzureDevOpsApi.CoreAreaId);
+        return names.All(name => SentQueryNames.Contains(name) || (rootArea && Is(name, "organizationName")))
+            ? null
+            : $"a query parameter on {Origin} is none that the app or the command sends (D352, D371)";
     }
 
     public override void Answered(Uri uri, LiveCredentialForm form, int status)
     {
         ArgumentNullException.ThrowIfNull(uri);
-        if (form == LiveCredentialForm.None && IsMadeUpConnectionData(uri.AbsolutePath.Split('/')[1..].Select(Uri.UnescapeDataString).ToArray()))
+        if (!IsMadeUpConnectionData(uri.AbsolutePath.Split('/')[1..].Select(Uri.UnescapeDataString).ToArray()))
         {
-            lock (_gate)
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (form == LiveCredentialForm.None)
             {
                 _madeUpAnswer = status;
+            }
+            else
+            {
+                // Any answer to a read with a credential closes the gate, which admits one anyway.
+                _madeUpTokenAdmitted = true;
             }
         }
     }
@@ -583,7 +646,14 @@ internal sealed class AzureDevOpsReach : LiveReach
 
             lock (_gate)
             {
-                return _madeUpAnswer == 404;
+                // Once per guard, which is once per run: the check that admits it takes it.
+                if (_madeUpAnswer != 404 || _madeUpTokenAdmitted)
+                {
+                    return false;
+                }
+
+                _madeUpTokenAdmitted = true;
+                return true;
             }
         }
 

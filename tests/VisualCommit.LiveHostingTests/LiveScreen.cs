@@ -39,8 +39,16 @@ internal sealed class LiveScreen
 
     private static readonly string[] Published = [AnonymousId, AzureDevOpsApi.CoreAreaId, GitAreaId];
 
-    /// <summary>A sign-in URL's query and <c>#ctx=</c> fragment: replaced whole, so that <c>reply_to</c>, <c>hid</c> and <c>context</c> never show.</summary>
-    private static readonly Regex SignInQuery = new(@"(/_signin)[?#][^\s""'<>]*", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    /// <summary>
+    /// A sign-in URL's query and <c>#ctx=</c> fragment: replaced whole, so that <c>reply_to</c>,
+    /// <c>hid</c> and <c>context</c> never show. It needs one character after the <c>?</c> or <c>#</c>
+    /// that is not blank, a quote or a bracket, so that a second <see cref="Apply"/> leaves
+    /// <c>/_signin?&lt;the sign-in query&gt;</c> as it is.
+    /// </summary>
+    private static readonly Regex SignInQuery = new(@"(/_signin)[?#][^\s""'<>]+", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
+    /// <summary>A <c>context=</c> value anywhere: replaced, and a survivor, when it is a sign-in context (<see cref="HidOfContext"/>).</summary>
+    private static readonly Regex ContextValue = new(@"(?<=(?:^|[?&#;])context=)[^&#\s""'<>]+", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
 
     /// <summary>A <c>hid=</c> value anywhere, learned or not.</summary>
     private static readonly Regex HidValue = new(@"(?<=(?:^|[?&#;])hid=)[^&#\s""'<>]+", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
@@ -185,11 +193,13 @@ internal sealed class LiveScreen
     }
 
     /// <summary>
-    /// <paramref name="text"/> screened (15.3): each learned address, as written and URL-escaped; each
-    /// learned id in any case, with and without hyphens, as written and URL-escaped; a sign-in URL's
-    /// query and <c>#ctx=</c> fragment and any <c>hid=</c> value; any other address but D325's and
-    /// <c>example.com</c> ones (judged before the organization is replaced, so that a URL's user part
-    /// stays one); then the organization in any case at a boundary.
+    /// <paramref name="text"/> screened (15.3): first a sign-in URL's query and <c>#ctx=</c> fragment,
+    /// any <c>hid=</c> value and any sign-in <c>context=</c> value, before a learned id's placeholder
+    /// could end the sign-in query's run and leave its <c>context=</c> behind; then each learned
+    /// address, as written and URL-escaped; each learned id in any case, with and without hyphens, as
+    /// written and URL-escaped; any other address but D325's and <c>example.com</c> ones (judged before
+    /// the organization is replaced, so that a URL's user part stays one); then the organization in
+    /// any case at a boundary. A second pass changes nothing.
     /// </summary>
     public string Apply(string text)
     {
@@ -204,7 +214,9 @@ internal sealed class LiveScreen
             organizations = [.. _organizations];
         }
 
-        var screened = text;
+        var screened = SignInQuery.Replace(text, "$1?" + SignInQueryPlaceholder);
+        screened = HidValue.Replace(screened, OrganizationIdPlaceholder);
+        screened = ContextValue.Replace(screened, match => IsSignInContext(match.Value) ? OrganizationIdPlaceholder : match.Value);
         foreach (var address in addresses)
         {
             screened = screened.Replace(address, AddressPlaceholder, StringComparison.OrdinalIgnoreCase)
@@ -219,8 +231,6 @@ internal sealed class LiveScreen
             }
         }
 
-        screened = SignInQuery.Replace(screened, "$1?" + SignInQueryPlaceholder);
-        screened = HidValue.Replace(screened, OrganizationIdPlaceholder);
         screened = ReplaceAddresses(screened);
         foreach (var (_, pattern) in organizations)
         {
@@ -419,6 +429,16 @@ internal sealed class LiveScreen
             return "a learned id";
         }
 
+        if (SignInQuery.IsMatch(text))
+        {
+            return "a sign-in query";
+        }
+
+        if (ContextValue.Matches(text).Any(match => IsSignInContext(match.Value)))
+        {
+            return "a sign-in context";
+        }
+
         var runs = AddressRuns(text);
         return runs.Any(run => !(CoreOf(text.Substring(run.Start, run.Length).TrimEnd('.', ',', ':', '!', '?')) is { } core && IsKept(core) && core.Length == text.Substring(run.Start, run.Length).TrimEnd('.', ',', ':', '!', '?').Length))
             ? "an address"
@@ -520,8 +540,31 @@ internal sealed class LiveScreen
         }
     }
 
-    /// <summary>The <c>hid</c> of a sign-in URL's <c>context=</c>, base64 (or base64url) of JSON <c>{"ht":2,"hid":"…",…}</c> (MEASURED r5 p03, p15); null when it is not one.</summary>
+    /// <summary>Whether a <c>context=</c> value, URL-escaped or not, is a sign-in context.</summary>
+    private static bool IsSignInContext(string value) => HidOfContext(Uri.UnescapeDataString(value)) is not null;
+
+    /// <summary>
+    /// The <c>hid</c> of a sign-in URL's <c>context=</c>, JSON <c>{"ht":2,"hid":"…",…}</c> (MEASURED r5
+    /// p03, p15) in ASP.NET's UrlToken form, which the service sends (base64url without its padding,
+    /// then one digit, 0 to 2, counting the <c>=</c> it had; 125 characters ending <c>0</c> in every
+    /// capture), or in base64 or base64url with or without padding; null when it is not one. A text that
+    /// can be read both ways (a padded base64 text ending <c>1</c>) is tried in the UrlToken form first,
+    /// then as it is.
+    /// </summary>
     internal static string? HidOfContext(string context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+        if (context.Length > 1 && context[^1] is >= '0' and <= '2' && (context.Length - 1 + (context[^1] - '0')) % 4 == 0
+            && HidOfBase64(context[..^1] + new string('=', context[^1] - '0')) is { } hid)
+        {
+            return hid;
+        }
+
+        return HidOfBase64(context);
+    }
+
+    /// <summary>The <c>hid</c> of base64 or base64url JSON, padded or not; null when it is not one.</summary>
+    private static string? HidOfBase64(string context)
     {
         var text = context.Replace('-', '+').Replace('_', '/');
         text = text.PadRight(text.Length + ((4 - (text.Length % 4)) % 4), '=');
