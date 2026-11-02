@@ -2791,39 +2791,38 @@ providers off nothing changes (no new git call or request); the tripwire finds n
 declares no GitHub-named member; CI's five jobs are green, each Test step under four fifths of its
 limit (0.6).
 
-**As built** (WP-S, `46ab4af` to its last commit, 2026-11-02). Where the build differs from the text
-above or settles what it left open:
+**As built** (WP-S, `46ab4af` to its last commit, 2026-11-02), where the build differs or settles
+what was open:
 - `HostingSession`: a private `Entry` per provider on; `BindingsOf(effective, rulesKnown)` is the
   union `BindingsFor`, `BindingsForClone` and the tabs share; `Endpoints` is gone. A provider on
   without a handler gets `HostingOptions.RefusingHandler()`. One origin twice throws;
   `FromEnvironment` turns the later provider in D353's order off instead, warning `{variable} names
-  the origin of {Name}: {Name} is off.` D382's screen (9.4 amended) seeks each form the core's
-  `SecretsOf` gives (internal, outside 9.1) in the user's names, id and avatar address and in A3's
-  repository and parent names (`EchoedToken`): the provider's malformed answer. `avatarUrl` is
-  GitHub's alone.
-- 9.5: a 200 with the held user (or the check's unknown) logs 7a's warning; a held user unknown then
-  takes the check's, under the gate, while that slot holds that token.
-- `RepositoryHosting`: `StateOf` gives a held account not covering the candidate `OtherOrganization`
-  on Azure DevOps, `SignedOut` elsewhere (unreachable). `WantsUrlRewrites` is the value last raised,
-  in a `Changed` handler that event's (`Update` counts the rules known by it). `Changed` also comes
-  when the listed provider's account (key, login) changes, for WP-P's row. A3's answer, the list or
-  failure and a created request are kept with their account, unused under another of that provider
-  (D348); a run's answer applies only for the account it asked and sent with. 7a's GitHub path too:
-  another user's sign-in over the first shows Loading and sends A3 again (D383). A new candidate of
-  another provider cancels the run in flight and drops A3's read of another provider: neither
-  applies, keeps or warns; its own run starts at once. A read a `ReadRepositoryAsync` caller awaits
-  goes on for it alone; a stopped run starts no A3; a replaced read keeps nothing. Within one
-  provider, 7a's `_again`. `StopAvatars` cancels the avatar run in flight (9.8). `CallAsync`'s
-  `what` and the Debug line pass names through `ScreenEmail` (D368); the state's stay as given
-  (6, 7).
-- Tests: `HostingSessionGitHubForms.Account` is `AccountStatus` with `!` (C# 14's extension
-  properties). `ProvidersSessionSetup` (`repositories: true`: an open request per fake and Azure
-  DevOps organization) wraps the in-process Azure DevOps fake in `ServiceAnswers` for
-  `AzureDevOpsEndpoints.Service`, writing its `Local(2)` addresses on dev.azure.com (WP-LF may give
-  the fake a base); its disposal seeks its and `Track`'s tokens in the data folder and log in the
-  tripwire's forms, and `FAKE-` but request ids in the log. 7a's copy is `JsonAccountStore7a.cs`.
-  The wiring class matches git calls by `Repository.WorkingDirectory`; its tripwire searches them.
-  `HostingContractsTests` (passed to WP-S) has one test renamed.
+  the origin of {Name}: {Name} is off.` D382's screen (9.4 amended, `EchoedToken`) seeks each form
+  of the core's `SecretsOf` (made internal) in the user's names, id and avatar address and A3's
+  names: a malformed answer. `avatarUrl` is GitHub's alone.
+- 9.5: a 200 with the held user (or the check's unknown) logs 7a's warning; a held user unknown takes
+  the check's under the gate while the slot holds that token.
+- `RepositoryHosting`: a held account not covering the candidate: `OtherOrganization` on Azure
+  DevOps, `SignedOut` elsewhere (unreachable). `WantsUrlRewrites` is the value last raised, in a
+  `Changed` handler that event's (`Update` counts the rules known by it). `Changed` also comes when
+  the listed provider's account (key, login) changes, for WP-P's row. A3's answer, the list or
+  failure and a created request are kept with their account, unused under another (D348); a run's
+  answer applies only for the account it asked and sent with. 7a's GitHub path too: another user's
+  sign-in over the first shows Loading and sends A3 again (D383). Another provider's candidate
+  cancels the run in flight, ending its wait there (a disposed session drops its `Finish`), and
+  drops every A3 read in flight of another provider, replaced or forgotten ones too (`_readings`):
+  none applies, keeps or warns; its own run starts at once. A read a `ReadRepositoryAsync` caller
+  awaits goes on for it alone; a stopped run starts no A3. Within one provider, 7a's `_again`.
+  `StopAvatars` cancels the avatar run in flight (9.8). `CallAsync`'s `what` and the Debug line pass
+  names through `ScreenEmail` (D368); the state's stay as given.
+- Tests: `HostingSessionGitHubForms.Account` is `AccountStatus` with `!` (C# 14); its `AccountsFile`
+  forms keep 7a's store tests unchanged. `ProvidersSessionSetup` (`repositories: true`: an open
+  request per fake and Azure DevOps organization) wraps the in-process Azure DevOps fake in
+  `ServiceAnswers` for `AzureDevOpsEndpoints.Service`, writing its `Local(2)` addresses on
+  dev.azure.com (WP-LF may give the fake a base); its disposal seeks its and `Track`'s tokens in the
+  data folder and log in the tripwire's forms, and `FAKE-` but request ids in the log. 7a's copy is
+  `JsonAccountStore7a.cs`. The wiring class matches git calls by `Repository.WorkingDirectory`; its
+  tripwire searches them. `HostingContractsTests` (passed to WP-S): one test renamed.
 - For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without one. For
   WP-N: `IHostingSession.cs` changed `NullRepositoryHosting`'s text and three docs.
 

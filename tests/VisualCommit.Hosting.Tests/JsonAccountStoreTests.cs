@@ -94,17 +94,17 @@ public sealed class JsonAccountStoreTests
 
         var file = store.Load();
         Assert.Equal(3, file.Accounts.Count);
-        Assert.Equal(("old", false, AccountTokenStates.Refused), (file.For(HostingProvider.GitHub, "github.com")!.Login, file.For(HostingProvider.GitHub, "github.com")!.UseForGit, file.For(HostingProvider.GitHub, "github.com")!.TokenState));
-        Assert.Equal(AccountTokenStates.Session, file.For(HostingProvider.GitHub, "127.0.0.1:47395")!.TokenState);
+        Assert.Equal(("old", false, AccountTokenStates.Refused), (file.GitHubOn("github.com")!.Login, file.GitHubOn("github.com")!.UseForGit, file.GitHubOn("github.com")!.TokenState));
+        Assert.Equal(AccountTokenStates.Session, file.GitHubOn("127.0.0.1:47395")!.TokenState);
 
-        store.Save(file.With(Octocat));
+        store.Save(file.WithGitHub(Octocat));
         var saved = store.Load();
         Assert.Equal(["gitlab.com", "127.0.0.1:47395", "github.com"], saved.Accounts.Select(record => record.Host));
-        Assert.Equal(Octocat, saved.For(HostingProvider.GitHub, "github.com"));
+        Assert.Equal(Octocat, saved.GitHubOn("github.com"));
 
-        store.Save(saved.Without(HostingProvider.GitHub, "github.com"));
+        store.Save(saved.WithoutGitHub("github.com"));
         Assert.Equal(["gitlab.com", "127.0.0.1:47395"], store.Load().Accounts.Select(record => record.Host));
-        Assert.Null(store.Load().For(HostingProvider.GitHub, "github.com"));
+        Assert.Null(store.Load().GitHubOn("github.com"));
     }
 
     [Fact]
@@ -114,7 +114,7 @@ public sealed class JsonAccountStoreTests
         var path = data.Combine("accounts.json");
         File.WriteAllText(path, """{ "accounts": [ { "provider": "github", "host": "github.com", "login": "octocat", "id": 583231 } ] }""");
 
-        var record = new JsonAccountStore(path, new ListLog()).Load().For(HostingProvider.GitHub, "github.com")!;
+        var record = new JsonAccountStore(path, new ListLog()).Load().GitHubOn("github.com")!;
 
         Assert.Null(record.TokenState);
         Assert.True(record.UseForGit);

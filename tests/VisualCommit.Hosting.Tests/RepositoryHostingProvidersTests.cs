@@ -24,13 +24,15 @@ namespace VisualCommit.Hosting.Tests;
 /// tab and its sign-out keeping GitLab's bindings; an <c>&lt;organization&gt;.visualstudio.com</c>
 /// remote listed through <c>dev.azure.com</c>; A3's names holding the token malformed (D382) and an
 /// address-shaped one written in the log as the core writes one (D368); another provider's
-/// repository listed cancelling the list's run and GitHub's avatar run in flight, and dropping A3's
-/// read in flight, which then warns of nothing and never takes a fork's answer's place. The fakes
+/// repository listed cancelling the list's run, whose wait ends though the session is disposed in that
+/// turn, and GitHub's avatar run in flight, and dropping every A3 read in flight of another provider, a
+/// replaced one too, which then warns of nothing and never takes a fork's answer's place. The fakes
 /// are in process (ProvidersSessionSetup).
 /// </summary>
 public sealed class RepositoryHostingProvidersTests
 {
     private const string GitHubUrl = "http://127.0.0.1:1/octo/web-app.git";
+    private const string OtherGitHubUrl = "http://127.0.0.1:1/octo/other.git";
     private const string GitLabUrl = "http://127.0.0.1:3/fake-group/sub/web-app.git";
     private const string AzureUrl = "http://fake-org@127.0.0.1:2/fake-org/P/_git/r";
     private const string OtherAzureUrl = "http://other-org@127.0.0.1:2/other-org/P/_git/r";
@@ -746,6 +748,45 @@ public sealed class RepositoryHostingProvidersTests
     }
 
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_wait_on_a_run_cancelled_for_another_providers_candidate_ends_though_the_session_is_disposed_in_that_turn(bool disposeFirst)
+    {
+        // A refresh a caller waits on, its GitHub list held; then, in one turn of the UI thread,
+        // GitLab's repository listed and the session disposed, in either order (9.7): the cancelled
+        // run's Finish, posted through the session, never runs, so its wait ends at the cancel.
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
+        await setup.SignInAsync(HostingProvider.GitHub);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "web-app");
+        await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "GitHub's list");
+
+        using (var hold = setup.GitHub!.HoldNext("pulls:octo/web-app"))
+        {
+            var refresh = await setup.Thread.RunAsync<Task>(() => hosting.RefreshPullRequestsAsync(Cancelled));
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            await setup.Thread.RunAsync(() =>
+            {
+                if (disposeFirst)
+                {
+                    setup.Session.Dispose();
+                }
+
+                hosting.Update(RefsOf(("origin", GitLabUrl), ("upstream", GitHubUrl)), UrlRewrites.None);
+                if (!disposeFirst)
+                {
+                    setup.Session.Dispose();
+                }
+            });
+
+            await refresh.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+        }
+
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Theory]
     [InlineData("answer")]
     [InlineData("fault")]
     [InlineData("asked")]
@@ -809,6 +850,46 @@ public sealed class RepositoryHostingProvidersTests
         Assert.Equal((1, 1), (gitLabA3, GitLabA3s(setup, ForkProject)));
         Assert.Equal((PullRequestsState.Loaded, ProvidersSessionSetup.GitLabProject), (hosting.State.PullRequests, hosting.State.Repository!.FullName));
         Assert.DoesNotContain(setup.Warnings, warning => warning.Contains("octo/web-app", StringComparison.Ordinal));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task Another_providers_candidate_gives_up_a_replaced_A3_read_still_in_flight_so_it_warns_of_nothing()
+    {
+        // GitHub's A3 of octo/web-app held; a second GitHub repository listed and its A3 asked for by
+        // a caller who gives up, so that the first read is replaced and the second waits behind it
+        // (GitHub's one request at a time); then GitLab's repository listed (9.7): every A3 read of
+        // GitHub in flight is dropped, the replaced one too, so that the hold is abandoned and,
+        // released with a fault, no warning names either repository.
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
+        await setup.SignInAsync(HostingProvider.GitHub);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "web-app");
+
+        using (var hold = setup.GitHub!.HoldNext("repo:octo/web-app"))
+        {
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", OtherGitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
+            using (var gaveUp = new CancellationTokenSource())
+            {
+                var asked = await setup.Thread.RunAsync<Task<HostingResult<RepositoryInfo>>>(() => hosting.ReadRepositoryAsync(gaveUp.Token));
+                gaveUp.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asked.WaitAsync(TimeSpan.FromSeconds(30), Cancelled));
+            }
+
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitLabUrl), ("upstream", GitHubUrl)), UrlRewrites.None));
+            await setup.Thread.WaitForAsync(() => hosting.State is { PullRequests: PullRequestsState.Loaded, Repository.Provider: HostingProvider.GitLab }, "GitLab's list");
+            await setup.Thread.WaitForAsync(() => hold.Abandoned.IsCompleted, "GitHub's replaced A3 given up");
+            setup.GitHub.FailNext("repo:octo/web-app", FakeGitHubFault.ServerError);
+        }
+
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+        Assert.DoesNotContain(setup.Warnings, warning => warning.Contains("octo/web-app", StringComparison.Ordinal));
+        Assert.DoesNotContain(setup.Warnings, warning => warning.Contains("octo/other", StringComparison.Ordinal));
+        Assert.DoesNotContain(setup.GitHub.Requests, request => request.Route == "repo:octo/other");
+        Assert.Equal((PullRequestsState.Loaded, HostingProvider.GitLab), (hosting.State.PullRequests, hosting.State.Repository!.Provider));
         await setup.Thread.RunAsync(hosting.Dispose);
     }
 

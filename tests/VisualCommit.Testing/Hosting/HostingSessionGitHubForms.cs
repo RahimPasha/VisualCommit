@@ -4,12 +4,13 @@ using VisualCommit.Core.Hosting;
 namespace VisualCommit.Hosting;
 
 /// <summary>
-/// 7a's GitHub-named forms of the session, for tests alone (docs/phase-7b-design.md 1.9, 9.2): C# 14
-/// extension members on <see cref="IHostingSession"/>, each delegating with
-/// <see cref="HostingProvider.GitHub"/>. <see cref="HostingSession"/> declares none of them, so 7a's
-/// tests, which call them on a <see cref="HostingSession"/>, compile through these; a call on an
-/// <see cref="IHostingSession"/>-typed receiver takes the interface's default body until WP-N
-/// removes it. Only tests see them: src/ references no test project.
+/// 7a's GitHub-named forms of the session and of <c>accounts.json</c>, for tests alone
+/// (docs/phase-7b-design.md 1.9, 9.2, 9.3): C# 14 extension members on <see cref="IHostingSession"/>
+/// and <see cref="AccountsFile"/>, each delegating with <see cref="HostingProvider.GitHub"/>.
+/// <see cref="HostingSession"/> and <see cref="AccountsFile"/> declare none of them, so 7a's tests,
+/// which call them on a <see cref="HostingSession"/> or an <see cref="AccountsFile"/>, compile through
+/// these unchanged; a call on an <see cref="IHostingSession"/>-typed receiver takes the interface's
+/// default body until WP-N removes it. Only tests see them: src/ references no test project.
 /// </summary>
 public static class HostingSessionGitHubForms
 {
@@ -38,5 +39,20 @@ public static class HostingSessionGitHubForms
         /// <summary>A2 with GitHub's account's token.</summary>
         public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(CancellationToken ct) =>
             session.ListRepositoriesAsync(HostingProvider.GitHub, ct);
+    }
+
+    extension(AccountsFile file)
+    {
+        /// <summary>7a's <c>GitHubOn</c>: the first GitHub record on <paramref name="host"/>; null without one.</summary>
+        public AccountRecord? GitHubOn(string host) => file.For(HostingProvider.GitHub, host);
+
+        /// <summary>
+        /// 7a's <c>WithGitHub</c>: <paramref name="record"/> in place of the first record of its provider on
+        /// its host, or appended; every other record kept (D292). 7a's tests pass GitHub records alone.
+        /// </summary>
+        public AccountsFile WithGitHub(AccountRecord record) => file.With(record);
+
+        /// <summary>7a's <c>WithoutGitHub</c>: the first GitHub record on <paramref name="host"/> left out, every other kept.</summary>
+        public AccountsFile WithoutGitHub(string host) => file.Without(HostingProvider.GitHub, host);
     }
 }
