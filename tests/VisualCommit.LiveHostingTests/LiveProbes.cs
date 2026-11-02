@@ -662,8 +662,10 @@ internal static class LiveMadeUp
     /// <summary>A <c>glpat-</c> value of 20 letters and digits after the prefix, sharing no 16 characters in a row with <paramref name="token"/>.</summary>
     public static string GitLabShaped(string? token) => Draw(token, () => "glpat-" + Letters(20));
 
-    private static string Draw(string? token, Func<string> draw)
+    /// <summary>The first value <paramref name="draw"/> gives that shares no 16 characters in a row with <paramref name="token"/>, either way round; internal for its test.</summary>
+    internal static string Draw(string? token, Func<string> draw)
     {
+        ArgumentNullException.ThrowIfNull(draw);
         while (true)
         {
             var value = draw();

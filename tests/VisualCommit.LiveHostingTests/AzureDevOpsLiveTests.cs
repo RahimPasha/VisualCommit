@@ -922,10 +922,6 @@ internal static class LiveSteps
     }
 
     /// <summary>
-    /// A test's end: the requests per host, the reach's problems, a request before the sign-in, then
-    /// the problems noted; the failure first, then a test that found problems fails, screened.
-    /// </summary>
-    /// <summary>
     /// One call of a clean-up on its own (D324): its result, or null when it threw, which is then a
     /// problem naming <paramref name="what"/> and the exception, its message screened, and the clean-up
     /// goes on with its other calls. A cancellation of the test is no such failure and goes on up.
@@ -947,6 +943,10 @@ internal static class LiveSteps
         }
     }
 
+    /// <summary>
+    /// A test's end: the requests per host, the reach's problems, a request before the sign-in, then
+    /// the problems noted; the failure first, then a test that found problems fails, screened.
+    /// </summary>
     public static void Finish(LiveRun run, LiveRequestLog.Store requests, LiveReach reach, List<string> problems, ExceptionDispatchInfo? failure, LiveRequestLog.Store? own = null, DateTimeOffset? signInStarted = null)
     {
         var all = requests.Snapshot();
@@ -969,7 +969,7 @@ internal static class LiveSteps
 
         if (signInStarted is { } started && all.FirstOrDefault(request => request.Time < started) is { } early)
         {
-            problems.Add($"A request left before the sign-in: {early.Describe()}.");
+            problems.Add($"A request {(early.Refused ? "was sent" : "left")} before the sign-in: {early.DescribeOrigin()}.");
         }
 
         foreach (var problem in problems)

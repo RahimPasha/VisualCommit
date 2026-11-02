@@ -1213,6 +1213,52 @@ public sealed partial class LiveSafetyTests
     }
 
     [Fact]
+    public void D373_s_draw_is_made_again_while_the_token_is_found_in_it_either_way_round()
+    {
+        var clean = new string('x', 40);
+        var draws = new Queue<string>(["made-up " + ProviderToken[..16] + " value", ProviderToken[20..36], Convert.ToBase64String(Encoding.UTF8.GetBytes(ProviderToken)), clean, "never drawn"]);
+        Assert.Equal(clean, LiveMadeUp.Draw(ProviderToken, draws.Dequeue));
+        Assert.Equal("never drawn", Assert.Single(draws));
+        Assert.Equal("first", LiveMadeUp.Draw(null, () => "first"));
+    }
+
+    [Fact]
+    public async Task D373_s_probes_note_no_made_up_value_they_send()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var sent = new List<string>();
+        var stub = new StubHandler(request =>
+        {
+            if (request.Headers.Authorization is { Scheme: "Basic", Parameter: { } parameter })
+            {
+                lock (sent)
+                {
+                    sent.Add(Encoding.UTF8.GetString(Convert.FromBase64String(parameter))[1..]);
+                }
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.Unauthorized) { Content = new StringContent("""{"message":"TF400813: made-up refusal"}""", Encoding.UTF8, "application/json") };
+        });
+        using var api = AzureApi(stub);
+        var problems = new List<string>();
+        await AzureTests(folder, out var notes).ProbeMadeUpAsync(api, null, "git/2.56.0", problems);
+        Assert.Equal(8, sent.Count);
+        var values = sent.Distinct(StringComparer.Ordinal).ToList();
+        Assert.Equal(2, values.Count);
+        Assert.Contains(LiveMadeUp.Short, values);
+        Assert.Contains(values, value => value.Length == 84);
+        Assert.NotEmpty(notes);
+        foreach (var line in notes.Concat(problems))
+        {
+            foreach (var value in values)
+            {
+                Assert.DoesNotContain(value, line, StringComparison.Ordinal);
+                Assert.Null(LiveTokenForms.FoundIn(line, value));
+            }
+        }
+    }
+
+    [Fact]
     public void The_clean_up_selects_only_the_sandbox_s_own_live_branches_and_their_requests()
     {
         Assert.True(LiveProviderLeftovers.IsLeftover(new LiveAzurePullRequest(1, "refs/heads/visualcommit-live/20261102-010203Z", "active", false)));
@@ -1570,6 +1616,142 @@ public sealed partial class LiveSafetyTests
         Assert.NotNull(answered.RefusalOf(path, LiveCredentialForm.Basic));
     }
 
+    [Theory]
+    [InlineData(new[] { 200, 404 }, false)]
+    [InlineData(new[] { 302, 404 }, false)]
+    [InlineData(new[] { 401, 404 }, false)]
+    [InlineData(new[] { 404, 200 }, false)]
+    [InlineData(new[] { 404, 302, 404 }, false)]
+    [InlineData(new[] { 404, 404 }, true)]
+    public void D374_s_read_with_the_token_stays_barred_once_a_read_without_one_answered_otherwise(int[] answers, bool basic)
+    {
+        var path = new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1");
+        var reach = AzureReach();
+        foreach (var status in answers)
+        {
+            Assert.Null(reach.RefusalOf(path, LiveCredentialForm.None));
+            reach.Answered(path, LiveCredentialForm.None, status);
+        }
+
+        Assert.Equal(basic, reach.RefusalOf(path, LiveCredentialForm.Basic) is null);
+    }
+
+    [Fact]
+    public void D374_s_read_with_the_token_stays_barred_once_a_read_without_one_was_refused_or_unanswered()
+    {
+        var path = new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1");
+        var unanswered = AzureReach();
+        Assert.Null(unanswered.RefusalOf(path, LiveCredentialForm.None));
+        unanswered.Failed(path, LiveCredentialForm.None);
+        unanswered.Answered(path, LiveCredentialForm.None, 404);
+        Assert.NotNull(unanswered.RefusalOf(path, LiveCredentialForm.Basic));
+
+        var refused = AzureReach();
+        Assert.NotNull(refused.RefusalOf(new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1&hostId=x"), LiveCredentialForm.None));
+        refused.Answered(path, LiveCredentialForm.None, 404);
+        Assert.NotNull(refused.RefusalOf(path, LiveCredentialForm.Basic));
+
+        var failedWithToken = AzureReach();
+        failedWithToken.Answered(path, LiveCredentialForm.None, 404);
+        Assert.Null(failedWithToken.RefusalOf(path, LiveCredentialForm.Basic));
+        failedWithToken.Failed(path, LiveCredentialForm.Basic);
+        Assert.NotNull(failedWithToken.RefusalOf(path, LiveCredentialForm.Basic));
+    }
+
+    [Fact]
+    public async Task D374_s_read_with_the_token_is_never_sent_after_a_200_then_a_404_without_one()
+    {
+        var store = new LiveRequestLog.Store();
+        var answers = new Queue<HttpStatusCode>([HttpStatusCode.OK, HttpStatusCode.NotFound, HttpStatusCode.NotFound]);
+        var stub = new StubHandler(_ => new HttpResponseMessage(answers.Dequeue()) { Content = new StringContent("{}") });
+        using var client = new HttpClient(new LiveRequestLog(stub, store, AzureReach()));
+        var path = new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1");
+        HttpRequestMessage Read(bool basic)
+        {
+            var request = new HttpRequestMessage(HttpMethod.Get, path);
+            if (basic)
+            {
+                request.Headers.Authorization = new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(":made-up-not-a-token")));
+            }
+
+            return request;
+        }
+
+        using (var first = await client.SendAsync(Read(basic: false), Cancelled))
+        {
+            Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        }
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(Read(basic: true), Cancelled));
+        using (var second = await client.SendAsync(Read(basic: false), Cancelled))
+        {
+            Assert.Equal(HttpStatusCode.NotFound, second.StatusCode);
+        }
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(Read(basic: true), Cancelled));
+        Assert.Equal(2, stub.Requests.Count);
+        Assert.All(stub.Requests, request => Assert.Null(request.Authorization));
+    }
+
+    [Fact]
+    public async Task A_refused_request_s_problems_and_lines_name_its_origin_and_never_its_path()
+    {
+        using var folder = new TempDirectory("live-safety");
+        var reach = AzureReach();
+        var store = new LiveRequestLog.Store();
+        var stub = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK));
+        using var client = new HttpClient(new LiveRequestLog(stub, store, reach));
+        foreach (var url in new[]
+        {
+            $"https://{Organization.ToLowerInvariant()}.visualstudio.com/other-team-project/_apis/git/repositories/payroll-service/pullrequests",
+            $"http://dev.azure.com/{Organization}/other-team-project/_apis/git/repositories/payroll-service",
+            $"https://dev.azure.com/{Organization}/other-team-project/_apis/git/repositories/payroll-service",
+        })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Authorization = new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(":made-up")));
+            await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(request, Cancelled));
+        }
+
+        Assert.Empty(stub.Requests);
+        var records = store.Snapshot();
+        Assert.All(records, record => Assert.True(record.Refused));
+        var problems = LiveRequestLog.ReachProblems(records, reach);
+        Assert.Equal(3, problems.Count);
+        Assert.All(problems, problem => Assert.StartsWith("The guard refused a request (D352, D371): GET ", problem, StringComparison.Ordinal));
+        var lines = problems.Concat(records.Select(record => record.DescribeForRun())).Concat(records.Select(record => record.DescribeOrigin())).ToList();
+
+        var notes = new List<string>();
+        var run = new LiveRun(ProviderToken, folder.Combine("run.txt"), notes.Add, new LiveScreen(), HostingProvider.AzureDevOps);
+        Assert.Throws<XunitException>(() => LiveSteps.Finish(run, store, reach, [], null, signInStarted: DateTimeOffset.UtcNow.AddMinutes(1)));
+        Assert.Contains(notes, note => note.StartsWith("Problem: A request was sent before the sign-in: GET ", StringComparison.Ordinal));
+        foreach (var line in lines.Concat(notes))
+        {
+            foreach (var segment in new[] { "other-team-project", "payroll-service", "_apis", "pullrequests" })
+            {
+                Assert.DoesNotContain(segment, line, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/forks/7b0a0012-0000-4a00-8000-00000000fa4e?api-version=7.1")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/forkSyncRequests?api-version=7.1")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/importRequests?api-version=7.1")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/7b0a0011-0000-4a00-8000-00000000fa4e")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/pullrequests/3/statuses?api-version=7.1")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/pullrequests/7b0a0011-0000-4a00-8000-00000000fa4e")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs/heads?api-version=7.1")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/items?api-version=7.1")]
+    public void The_guard_admits_below_the_repository_only_what_the_app_and_the_command_send(string url)
+    {
+        var refusal = AzureReach().RefusalOf(new Uri(url), LiveCredentialForm.Basic);
+        Assert.NotNull(refusal);
+        Assert.DoesNotContain("visualcommit-sandbox", refusal, StringComparison.OrdinalIgnoreCase);
+        Assert.Null(AzureReach().RefusalOf(new Uri("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/PullRequests/12?api-version=7.1"), LiveCredentialForm.Basic));
+        Assert.Null(AzureReach().RefusalOf(new Uri("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?api-version=7.1"), LiveCredentialForm.Basic));
+    }
+
     [Fact]
     public async Task D374_s_read_with_the_token_without_an_answer_is_a_problem()
     {
@@ -1863,6 +2045,16 @@ public sealed class LiveScreenTests
         Assert.Equal("by <the user's address> and <the user's address>.", screen.Apply($"by {Address} and {Uri.EscapeDataString(Address)}."));
         Assert.Equal("from <an address>, kept live-test@visualcommit.invalid and ada@example.com.", screen.Apply("from bob@other.test, kept live-test@visualcommit.invalid and ada@example.com."));
         Assert.Equal("git@ssh.dev.azure.com:v3/<the organization>/p/r", screen.Apply("git@ssh.dev.azure.com:v3/Fernhill-Labs/p/r"));
+        foreach (var glued in new[] { "jane.roe@corp.test@example.com", "jane.roe%40corp.test@example.com", "jane.roe%2540corp.test@example.com", "jane.roe＠corp.test@example.com" })
+        {
+            var fresh = Screen();
+            Assert.Equal("author <an address>", fresh.Apply("author " + glued));
+            Assert.Equal("an address", fresh.SurvivorIn("author " + glued));
+            Assert.False(LiveScreen.IsKept(glued));
+        }
+
+        Assert.True(LiveScreen.IsKept("ada+commits@example.com"));
+        Assert.True(LiveScreen.IsKept("ada%2Bcommits@example.com"));
     }
 
     [Fact]
@@ -2014,9 +2206,69 @@ public sealed class LiveScreenTests
             screen.Learn(anonymous.RootElement);
         }
 
-        var text = $"{LiveScreen.AnonymousId} {AzureDevOpsApi.CoreAreaId} {LiveScreen.GitAreaId}";
+        screen.LearnFromAnswer(
+            [new("X-VSS-ResourceTenant", [LiveScreen.ZeroId]), new("WWW-Authenticate", ["Basic realm=\"https://dev.azure.com/\"", "TFS-Federated"])],
+            string.Empty);
+        screen.AddId(LiveScreen.ZeroId.Replace("-", string.Empty, StringComparison.Ordinal), LiveScreen.TenantPlaceholder);
+
+        var zeroObject = new string('0', 40);
+        var text = $"{LiveScreen.AnonymousId} {AzureDevOpsApi.CoreAreaId} {LiveScreen.GitAreaId} {LiveScreen.ZeroId} {zeroObject}";
         Assert.Equal(text, screen.Apply(text));
         Assert.Equal(0, screen.Counts.Ids);
+    }
+
+    [Fact]
+    public void A_zero_tenant_is_never_learned_so_zero_object_ids_and_zero_guids_stay_as_sent()
+    {
+        var screen = Screen();
+        using (var connection = JsonDocument.Parse($$$"""{"authenticatedUser":{"id":"{{{UserId}}}","subjectDescriptor":"aad.QnJhY2tlbnJpZGdlLW1hZGUtdXA"},"instanceId":"{{{InstanceId}}}"}"""))
+        {
+            screen.Learn(connection.RootElement);
+        }
+
+        Assert.Equal(3, screen.Counts.Ids);
+        screen.LearnFromAnswer(
+            [new("X-VSS-ResourceTenant", [LiveScreen.ZeroId]), new("WWW-Authenticate", ["Basic realm=\"https://dev.azure.com/\"", "TFS-Federated"])],
+            string.Empty);
+        Assert.Equal(3, screen.Counts.Ids);
+        var body = """The body as sent: {"name":"refs/heads/visualcommit-live/x","oldObjectId":"1f2e3d4c5b6a79881f2e3d4c5b6a79881f2e3d4c","newObjectId":"0000000000000000000000000000000000000000"}""";
+        Assert.Equal(body, screen.Apply(body));
+        Assert.Equal("""{"serviceOwner":"00000000-0000-0000-0000-000000000000"}""", screen.Apply("""{"serviceOwner":"00000000-0000-0000-0000-000000000000"}"""));
+        Assert.Equal("<the user's id> <the organization's id>", screen.Apply($"{UserId} {InstanceId}"));
+    }
+
+    [Fact]
+    public void Accounts_json_written_by_the_app_with_an_escaped_learned_address_is_a_problem()
+    {
+        foreach (var address in new[] { "rowan.vale@corp.test", "rowan.vale+azure@corp.test", "jörg.vale@corp.test" })
+        {
+            using var folder = new TempDirectory("live-screen");
+            var screen = Screen();
+            using (var connection = JsonDocument.Parse(JsonSerializer.Serialize(new { authenticatedUser = new { id = UserId, providerDisplayName = address, properties = new { Account = new Dictionary<string, string> { ["$type"] = "System.String", ["$value"] = address } } } })))
+            {
+                screen.Learn(connection.RootElement);
+            }
+
+            Assert.Equal(1, screen.Counts.Addresses);
+            var file = Path.Combine(folder.Path, "accounts.json");
+            new VisualCommit.Hosting.JsonAccountStore(file, VisualCommit.Core.Logging.NullAppLog.Instance).Save(new VisualCommit.Hosting.AccountsFile
+            {
+                Accounts = [new VisualCommit.Hosting.AccountRecord { Provider = "azure-devops", Host = "dev.azure.com", Login = Org, Name = address }],
+            });
+            var written = File.ReadAllText(file);
+            if (address.Contains('+', StringComparison.Ordinal) || !address.All(char.IsAscii))
+            {
+                Assert.DoesNotContain(address, written, StringComparison.OrdinalIgnoreCase);
+            }
+
+            var run = new LiveRun("made-up-token-for-the-screen-0123456789", Path.Combine(folder.Path, "run.txt"), _ => { }, screen, HostingProvider.AzureDevOps);
+            Assert.Equal("The data folder's accounts.json held a learned address (D372).", Assert.Single(run.DataFolderProblems(folder.Path)));
+            Assert.Equal("a learned address", screen.SurvivorInDataFile(written));
+        }
+
+        var unlearned = Screen();
+        unlearned.AddAddress("someone.else@corp.test");
+        Assert.Null(unlearned.SurvivorInDataFile("""{"accounts":[{"name":"rowan.vale+azure@corp.test"}]}"""));
     }
 
     [Theory]

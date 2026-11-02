@@ -41,6 +41,21 @@ internal sealed record LiveRequest(
         $"{Method} {Scheme}://{Host}{Path} {(Status is { } status ? status.ToString(CultureInfo.InvariantCulture) : "failed: " + FailedWith)} "
         + $"{(AuthorizationSent ? "with" : "without")} Authorization (request {RequestId ?? "none"})";
 
+    /// <summary>Whether the guard refused the request, which then never left (docs/phase-7b-design.md 15.4).</summary>
+    public bool Refused => FailedWith?.StartsWith("refused", StringComparison.Ordinal) == true;
+
+    /// <summary>
+    /// <see cref="Describe"/> without the path, for a new provider's problems (15.4): a refused request's
+    /// path may name another project, repository or organization, and a refusal names the origin alone;
+    /// <c>GET https://dev.azure.com 200 with Authorization (request …)</c>.
+    /// </summary>
+    public string DescribeOrigin() =>
+        $"{Method} {Scheme}://{Host} {(Status is { } status ? status.ToString(CultureInfo.InvariantCulture) : "failed: " + FailedWith)} "
+        + $"{(AuthorizationSent ? "with" : "without")} Authorization (request {RequestId ?? "none"})";
+
+    /// <summary><see cref="Describe"/> for a request that left, <see cref="DescribeOrigin"/> for one the guard refused.</summary>
+    public string DescribeForRun() => Refused ? DescribeOrigin() : Describe();
+
     /// <summary>
     /// The three headers of the answer that run.txt shows (14.5): <c>API version selected 2026-03-10,
     /// X-OAuth-Scopes absent, the token expires 2026-12-31</c>, each "not sent" when it was not.
@@ -160,6 +175,7 @@ internal sealed class LiveRequestLog : DelegatingHandler
         catch (Exception ex)
         {
             store.Add(Record(null, ex.GetType().Name, null));
+            within.Failed(uri, form);
             throw;
         }
 
@@ -196,9 +212,10 @@ internal sealed class LiveRequestLog : DelegatingHandler
     }
 
     /// <summary>
-    /// A new provider's reach over <paramref name="requests"/> (15.4): every one <c>https</c>, none the
-    /// guard refused, none with a credential to another origin than <paramref name="within"/>'s. One
-    /// line per request that breaks a rule.
+    /// A new provider's reach over <paramref name="requests"/> (15.4): none the guard refused, and of
+    /// those that left, every one <c>https</c> and none with a credential to another origin than
+    /// <paramref name="within"/>'s. One line per request that breaks a rule, naming its origin and
+    /// never its path; a refused one has the guard's line alone, since it never left.
     /// </summary>
     internal static IReadOnlyList<string> ReachProblems(IEnumerable<LiveRequest> requests, LiveReach within)
     {
@@ -207,19 +224,20 @@ internal sealed class LiveRequestLog : DelegatingHandler
         var problems = new List<string>();
         foreach (var request in requests)
         {
-            if (!string.Equals(request.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal))
-            {
-                problems.Add($"A request was not https: {request.Describe()}.");
-            }
-
-            if (request.FailedWith?.StartsWith("refused", StringComparison.Ordinal) == true)
+            if (request.Refused)
             {
                 problems.Add($"The guard refused a request (D352, D371): {request.Method} {request.Scheme}://{request.Host}: {request.FailedWith}.");
+                continue;
+            }
+
+            if (!string.Equals(request.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal))
+            {
+                problems.Add($"A request was not https: {request.DescribeOrigin()}.");
             }
 
             if (request.Form != LiveCredentialForm.None && !string.Equals(request.Host, within.Host, StringComparison.OrdinalIgnoreCase))
             {
-                problems.Add($"A credential went to another host than {within.Host}: {request.Describe()}.");
+                problems.Add($"A credential went to another host than {within.Host}: {request.DescribeOrigin()}.");
             }
         }
 
@@ -455,6 +473,11 @@ internal abstract class LiveReach
     {
     }
 
+    /// <summary>Sees a request the guard let through that got no answer.</summary>
+    public virtual void Failed(Uri uri, LiveCredentialForm form)
+    {
+    }
+
     /// <summary>Whether <paramref name="uri"/> is <c>https</c> on <see cref="Host"/> at port 443.</summary>
     protected bool OnOrigin(Uri uri) =>
         string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)
@@ -503,10 +526,12 @@ internal abstract class LiveReach
 /// <summary>
 /// Azure DevOps' guard (15.4): <c>https://dev.azure.com:443</c> alone, Basic or no credential, no
 /// segment empty, <c>.</c>, <c>..</c> or holding <c>/</c>, <c>\</c> or <c>%</c> once decoded, and only
-/// the sandbox's paths and D374's made-up organization's connectionData, compared without case, and
+/// the sandbox's paths (below its repository's API path only <c>pullrequests</c>,
+/// <c>pullrequests/{n}</c> and <c>refs</c>) and D374's made-up organization's connectionData, compared without case, and
 /// only the query parameters the app's client and the command send (<see cref="SentQueryNames"/>),
 /// none repeated; <c>organizationName</c> only on the root form of the core area, naming the sandbox's
-/// organization. D374's read with the token is admitted once per guard (per run), after its 404.
+/// organization. D374's read with the token is admitted once per guard (per run), after its 404, and
+/// never once the read without a credential was answered otherwise, refused or left unanswered.
 /// </summary>
 internal sealed class AzureDevOpsReach : LiveReach
 {
@@ -523,7 +548,13 @@ internal sealed class AzureDevOpsReach : LiveReach
     private readonly string _project;
     private readonly string _repository;
     private readonly Lock _gate = new();
+
+    /// <summary>The first answer to D374's read without a credential in this run.</summary>
     private int? _madeUpAnswer;
+
+    /// <summary>Set for good by any answer to that read other than 404, and by one refused or unanswered.</summary>
+    private bool _madeUpBarred;
+
     private bool _madeUpTokenAdmitted;
 
     internal AzureDevOpsReach(string organization, string project, string repository, string madeUpOrganization)
@@ -547,6 +578,20 @@ internal sealed class AzureDevOpsReach : LiveReach
     public override string? RefusalOf(Uri uri, LiveCredentialForm form)
     {
         ArgumentNullException.ThrowIfNull(uri);
+        var refusal = RefusalCore(uri, form);
+        if (refusal is not null && form == LiveCredentialForm.None && IsMadeUpConnectionData(SegmentsOf(uri)))
+        {
+            lock (_gate)
+            {
+                _madeUpBarred = true;
+            }
+        }
+
+        return refusal;
+    }
+
+    private string? RefusalCore(Uri uri, LiveCredentialForm form)
+    {
         if (!OnOrigin(uri))
         {
             return $"it is not on {Origin}";
@@ -562,7 +607,7 @@ internal sealed class AzureDevOpsReach : LiveReach
             return $"a path segment on {Origin} is empty, a dot segment, or holds a slash, a backslash or a percent sign once decoded";
         }
 
-        var s = uri.AbsolutePath.Split('/')[1..].Select(Uri.UnescapeDataString).ToArray();
+        var s = SegmentsOf(uri);
         if (QueryRefusalOf(s, uri) is { } query)
         {
             return query;
@@ -589,7 +634,7 @@ internal sealed class AzureDevOpsReach : LiveReach
     public override void Answered(Uri uri, LiveCredentialForm form, int status)
     {
         ArgumentNullException.ThrowIfNull(uri);
-        if (!IsMadeUpConnectionData(uri.AbsolutePath.Split('/')[1..].Select(Uri.UnescapeDataString).ToArray()))
+        if (!IsMadeUpConnectionData(SegmentsOf(uri)))
         {
             return;
         }
@@ -598,11 +643,34 @@ internal sealed class AzureDevOpsReach : LiveReach
         {
             if (form == LiveCredentialForm.None)
             {
-                _madeUpAnswer = status;
+                // The first answer stands; any other than 404, first or later, bars the read with the token for good.
+                _madeUpAnswer ??= status;
+                _madeUpBarred |= status != 404;
             }
             else
             {
                 // Any answer to a read with a credential closes the gate, which admits one anyway.
+                _madeUpTokenAdmitted = true;
+            }
+        }
+    }
+
+    public override void Failed(Uri uri, LiveCredentialForm form)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        if (!IsMadeUpConnectionData(SegmentsOf(uri)))
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (form == LiveCredentialForm.None)
+            {
+                _madeUpBarred = true;
+            }
+            else
+            {
                 _madeUpTokenAdmitted = true;
             }
         }
@@ -627,7 +695,7 @@ internal sealed class AzureDevOpsReach : LiveReach
             return true;
         }
 
-        if (inProject && s.Length >= 6 && Is(s[2], "_apis") && Is(s[3], "git") && Is(s[4], "repositories") && Is(s[5], _repository))
+        if (inProject && s.Length >= 6 && Is(s[2], "_apis") && Is(s[3], "git") && Is(s[4], "repositories") && Is(s[5], _repository) && IsSentBelowRepository(s[6..]))
         {
             return true;
         }
@@ -646,8 +714,9 @@ internal sealed class AzureDevOpsReach : LiveReach
 
             lock (_gate)
             {
-                // Once per guard, which is once per run: the check that admits it takes it.
-                if (_madeUpAnswer != 404 || _madeUpTokenAdmitted)
+                // Once per guard, which is once per run, and only while every answer without a
+                // credential was 404: the check that admits it takes it.
+                if (_madeUpAnswer != 404 || _madeUpBarred || _madeUpTokenAdmitted)
                 {
                     return false;
                 }
@@ -659,6 +728,19 @@ internal sealed class AzureDevOpsReach : LiveReach
 
         return false;
     }
+
+    /// <summary>
+    /// Whether <paramref name="tail"/>, the segments below <c>{o}/{p}/_apis/git/repositories/{r}</c>, is
+    /// one the app's client (6.5: the repository itself, <c>pullrequests</c>) or the command
+    /// (<c>pullrequests/{n}</c>, <c>refs</c>) sends: below the repository a segment can name another
+    /// collection or repository (Forks' <c>forks/{collectionId}</c>), so nothing else is admitted.
+    /// </summary>
+    private static bool IsSentBelowRepository(string[] tail) =>
+        tail.Length == 0
+        || (tail.Length == 1 && (Is(tail[0], "pullrequests") || Is(tail[0], "refs")))
+        || (tail.Length == 2 && Is(tail[0], "pullrequests") && tail[1].Length is > 0 and <= 10 && tail[1].All(char.IsAsciiDigit));
+
+    private static string[] SegmentsOf(Uri uri) => [.. uri.AbsolutePath.Split('/')[1..].Select(Uri.UnescapeDataString)];
 
     private bool IsMadeUpConnectionData(string[] s) =>
         s.Length == 3 && Is(s[0], MadeUpOrganization) && Is(s[1], "_apis") && Is(s[2], "connectionData");

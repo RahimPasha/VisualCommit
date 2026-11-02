@@ -37,7 +37,14 @@ internal sealed class LiveScreen
     private static readonly string[] Placeholders =
         [OrganizationPlaceholder, OrganizationIdPlaceholder, TenantPlaceholder, UserIdPlaceholder, SignInQueryPlaceholder, AddressPlaceholder, OtherAddressPlaceholder];
 
-    private static readonly string[] Published = [AnonymousId, AzureDevOpsApi.CoreAreaId, GitAreaId];
+    /// <summary>
+    /// The zero GUID, which <c>X-VSS-ResourceTenant</c> sends for an organization without a tenant (on a
+    /// 302 or a refused token's answer, and on every answer of an organization backed by a Microsoft
+    /// account): no tenant, so never learned; learned, it would eat a zero object id and a zero GUID.
+    /// </summary>
+    public const string ZeroId = "00000000-0000-0000-0000-000000000000";
+
+    private static readonly string[] Published = [AnonymousId, AzureDevOpsApi.CoreAreaId, GitAreaId, ZeroId];
 
     /// <summary>
     /// A sign-in URL's query and <c>#ctx=</c> fragment: replaced whole, so that <c>reply_to</c>,
@@ -269,9 +276,12 @@ internal sealed class LiveScreen
     }
 
     /// <summary>
-    /// What a data folder's file (<c>accounts.json</c>, the log) holds of the learned addresses, as
-    /// written and URL-escaped, or null: both name the organization (the login, the clone's command
-    /// line) and the log holds git's <c>https://***@…</c> URLs, so nothing else is searched there.
+    /// What a data folder's file (<c>accounts.json</c>, the log) holds of the learned addresses, or
+    /// null: each searched as written, URL-escaped and JSON-escaped as the app's writer escapes it
+    /// (System.Text.Json's default encoder writes <c>+</c> and any letter beyond ASCII as an escape),
+    /// and, when the text is one JSON document, in its decoded strings, whatever escapes wrote them.
+    /// Both files name the organization (the login, the clone's command line) and the log holds git's
+    /// <c>https://***@…</c> URLs, so nothing else is searched there.
     /// </summary>
     public string? SurvivorInDataFile(string text)
     {
@@ -282,15 +292,90 @@ internal sealed class LiveScreen
             addresses = [.. _addresses];
         }
 
-        return addresses.Any(address => text.Contains(address, StringComparison.OrdinalIgnoreCase) || text.Contains(Uri.EscapeDataString(address), StringComparison.OrdinalIgnoreCase))
+        if (addresses.Length == 0)
+        {
+            return null;
+        }
+
+        var strings = JsonStringsOf(text);
+        return addresses.Any(address =>
+                new[] { address, Uri.EscapeDataString(address), JsonEncodedText.Encode(address).ToString() }.Any(form => text.Contains(form, StringComparison.OrdinalIgnoreCase))
+                || strings.Any(value => value.Contains(address, StringComparison.OrdinalIgnoreCase)))
             ? "a learned address"
             : null;
     }
 
-    /// <summary>Whether <paramref name="core"/> is an address the screen keeps: D325's, or one at <c>example.com</c>.</summary>
-    internal static bool IsKept(string core) =>
-        string.Equals(core, KeptAddress, StringComparison.OrdinalIgnoreCase)
-        || core.EndsWith("@example.com", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// Whether <paramref name="core"/> is an address the screen keeps: D325's, or one at
+    /// <c>example.com</c>, holding one <c>@</c> (or U+FF20) once percent-decoded, so that an address
+    /// glued in front of a kept one (<c>a@b.test@example.com</c>, <c>a%40b.test@example.com</c>) is none.
+    /// </summary>
+    internal static bool IsKept(string core)
+    {
+        var decoded = Decoded(core);
+        return decoded.Count(c => c is '@' or '＠') == 1
+            && (string.Equals(decoded, KeptAddress, StringComparison.OrdinalIgnoreCase)
+                || decoded.EndsWith("@example.com", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary><paramref name="text"/> percent-decoded again until a pass changes nothing, at most eight passes.</summary>
+    private static string Decoded(string text)
+    {
+        for (var pass = 0; pass < 8; pass++)
+        {
+            var next = Uri.UnescapeDataString(text);
+            if (string.Equals(next, text, StringComparison.Ordinal))
+            {
+                break;
+            }
+
+            text = next;
+        }
+
+        return text;
+    }
+
+    /// <summary>Every property name and string value of <paramref name="text"/>, decoded, when it is one JSON document; none otherwise.</summary>
+    private static List<string> JsonStringsOf(string text)
+    {
+        var strings = new List<string>();
+        try
+        {
+            using var document = JsonDocument.Parse(text, new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+            Collect(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            strings.Clear();
+        }
+
+        return strings;
+
+        void Collect(JsonElement element)
+        {
+            switch (element.ValueKind)
+            {
+                case JsonValueKind.Object:
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        strings.Add(property.Name);
+                        Collect(property.Value);
+                    }
+
+                    break;
+                case JsonValueKind.Array:
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        Collect(item);
+                    }
+
+                    break;
+                case JsonValueKind.String:
+                    strings.Add(element.GetString() ?? string.Empty);
+                    break;
+            }
+        }
+    }
 
     /// <summary>
     /// The address-shaped runs of <paramref name="text"/> (D368: an <c>@</c> or U+FF20 between

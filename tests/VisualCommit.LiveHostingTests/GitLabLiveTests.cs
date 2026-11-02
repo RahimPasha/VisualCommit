@@ -575,7 +575,7 @@ internal sealed class LiveApp : IDisposable
         _run.Check(session.IsOn(Provider), () => $"{HostingProviders.DisplayName(Provider)} is off in the app.");
         var line = $" [INF] {HostingProviders.DisplayName(Provider)}: {session.ProviderOf(Provider)!.Host}.";
         await _app.WaitForAsync(() => _app.LogLines().Any(logged => logged.EndsWith(line, StringComparison.Ordinal)), $"the log's \"{line.Trim()}\"");
-        _run.Check(requests.Count == 0, () => "The app sent a request before the sign-in: " + string.Join("; ", requests.Snapshot().Select(request => request.Describe())));
+        _run.Check(requests.Count == 0, () => "The app sent a request before the sign-in: " + string.Join("; ", requests.Snapshot().Select(request => request.DescribeOrigin())));
     }
 
     /// <summary>Step 2: the sign-in through the session; only its reads leave, each 200 and each in the log's store; <c>accounts.json</c> as 1.8.</summary>
@@ -592,11 +592,11 @@ internal sealed class LiveApp : IDisposable
         }
 
         var signIn = requests.Snapshot();
-        _run.Note($"The sign-in: {string.Join("; ", signIn.Select(request => request.Describe()))}.");
+        _run.Note($"The sign-in: {string.Join("; ", signIn.Select(request => request.DescribeForRun()))}.");
         _run.Check(signIn.Count > 0, () => "The sign-in's requests bypassed LiveRequestLog, so the guard did not judge them (15.5 step 2).");
         if (signIn.Any(request => request.Status != 200))
         {
-            problems.Add("A sign-in read did not answer 200: " + string.Join("; ", signIn.Where(request => request.Status != 200).Select(request => request.Describe())));
+            problems.Add("A sign-in read did not answer 200: " + string.Join("; ", signIn.Where(request => request.Status != 200).Select(request => request.DescribeForRun())));
         }
 
         var account = App.Session.Services.Hosting.AccountOf(Provider)!.Account;
