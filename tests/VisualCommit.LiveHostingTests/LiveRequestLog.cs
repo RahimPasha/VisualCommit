@@ -403,9 +403,9 @@ public enum LiveCredentialForm
 /// <summary>
 /// D352's guard for a new provider (15.4; D371, D374): what the live command's requests may reach
 /// with which method and credential. <see cref="HostRefusalOf"/>, <see cref="OverrideRefusalOf"/> and
-/// <see cref="RefusalOf"/> judge a request before it leaves, naming the method and the origin and never
-/// the path; <see cref="Refused"/> sees a refusal by any of them, <see cref="Answered"/> each answer
-/// (D374's 404). Safe from any thread.
+/// <see cref="RefusalOf"/> judge a request before it leaves, each naming the origin and never the path
+/// (a method refusal also the method); <see cref="Refused"/> sees a refusal by any of them,
+/// <see cref="Answered"/> each answer (D374's 404). Safe from any thread.
 /// </summary>
 internal abstract class LiveReach
 {
@@ -467,7 +467,8 @@ internal abstract class LiveReach
     /// <summary>
     /// Why a <paramref name="method"/> request to <paramref name="uri"/> with <paramref name="form"/>
     /// must not leave, or null: each admitted path takes only the methods the app and the command send
-    /// to it, compared ordinally (<c>get</c> is none). Names the method and the origin, never the path.
+    /// to it, compared ordinally (<c>get</c> is none). Names the origin and never the path; a method
+    /// refusal also names the method.
     /// </summary>
     public abstract string? RefusalOf(HttpMethod method, Uri uri, LiveCredentialForm form);
 
@@ -493,16 +494,19 @@ internal abstract class LiveReach
 
     /// <summary>
     /// Why <paramref name="request"/>'s method-override header keeps it from leaving, or null: any of
-    /// <see cref="OverrideHeaders"/> among the request's headers or the content's, judged raw, since the
-    /// service could read the request as another method than the one <see cref="RefusalOf"/> judges (a
-    /// refs POST as a PATCH). No request of the app's or of the command's sets one. Names the origin,
-    /// never the header's value.
+    /// <see cref="OverrideHeaders"/>, case ignored and <c>-</c> and <c>_</c> taken as one
+    /// (<c>X_HTTP_METHOD_OVERRIDE</c>, which a server behind CGI's naming reads as the same header), among
+    /// the request's headers or the content's, judged raw, since the service could read the request as
+    /// another method than the one <see cref="RefusalOf"/> judges (a refs POST as a PATCH). No request of
+    /// the app's or of the command's sets one. Names the origin, never the header's value.
     /// </summary>
     public static string? OverrideRefusalOf(HttpRequestMessage request, LiveReach within)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(within);
-        return OverrideHeaders.Any(name => Sets(request, name))
+        var names = request.Headers.NonValidated.Select(header => header.Key)
+            .Concat(request.Content?.Headers.NonValidated.Select(header => header.Key) ?? []);
+        return names.Any(name => OverrideHeaders.Contains(name.Replace('_', '-'), StringComparer.OrdinalIgnoreCase))
             ? $"it sets a method-override header, which no request of the app's or the command's to {within.Origin} sets"
             : null;
     }
@@ -594,7 +598,7 @@ internal abstract class LiveReach
 /// repeated; <c>organizationName</c> only on the root form of the core area, naming the sandbox's
 /// organization. D374's read with the token is admitted once per guard (per run), after its 404, and
 /// never once the read without a credential was answered otherwise or left unanswered, or a request
-/// without one under the made-up organization was refused by any check.
+/// without one whose URL names the made-up organization anywhere was refused by any check or failed.
 /// </summary>
 internal sealed class AzureDevOpsReach : LiveReach
 {
@@ -619,7 +623,7 @@ internal sealed class AzureDevOpsReach : LiveReach
     /// <summary>The first answer to D374's read without a credential in this run.</summary>
     private int? _madeUpAnswer;
 
-    /// <summary>Set for good by any answer to that read other than 404, by one unanswered, and by any request without a credential under the made-up organization that was refused.</summary>
+    /// <summary>Set for good by any answer to that read other than 404, by one unanswered, and by any request without a credential whose URL names the made-up organization that was refused or failed.</summary>
     private bool _madeUpBarred;
 
     private bool _madeUpTokenAdmitted;
@@ -647,7 +651,7 @@ internal sealed class AzureDevOpsReach : LiveReach
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(uri);
         var refusal = RefusalCore(method, uri, form);
-        if (refusal is not null && form == LiveCredentialForm.None && IsUnderMadeUp(uri))
+        if (refusal is not null && form == LiveCredentialForm.None && HoldsMadeUp(uri))
         {
             lock (_gate)
             {
@@ -740,17 +744,17 @@ internal sealed class AzureDevOpsReach : LiveReach
         Bar(uri, form);
     }
 
-    /// <summary>A refused request under D374's organization bars the read with the token as an unanswered read does, whichever check refused it (15.4 item 6).</summary>
+    /// <summary>A refused request whose URL names D374's organization bars the read with the token as an unanswered read does, whichever check refused it (15.4 item 6).</summary>
     public override void Refused(Uri uri, LiveCredentialForm form)
     {
         ArgumentNullException.ThrowIfNull(uri);
         Bar(uri, form);
     }
 
-    /// <summary>For any request under D374's organization (<see cref="IsUnderMadeUp"/>): without a credential, bars the read with the token for good; with one, closes the gate that admits it.</summary>
+    /// <summary>For any request whose URL names D374's organization (<see cref="HoldsMadeUp"/>): without a credential, bars the read with the token for good; with one, closes the gate that admits it.</summary>
     private void Bar(Uri uri, LiveCredentialForm form)
     {
-        if (!IsUnderMadeUp(uri))
+        if (!HoldsMadeUp(uri))
         {
             return;
         }
@@ -837,12 +841,37 @@ internal sealed class AzureDevOpsReach : LiveReach
         s.Length == 3 && Is(s[0], MadeUpOrganization) && Is(s[1], "_apis") && Is(s[2], "connectionData");
 
     /// <summary>
-    /// Whether the path, as sent or as written, decoded, has D374's organization as its first segment
-    /// that is not empty: D374's path in any form the guard refuses (<c>connectionData/</c>,
-    /// <c>_apis//connectionData</c>, <c>//{x}/…</c>) and any other path under it, none of which the probe sends.
+    /// Whether the URL, as sent or as written, as it stands or percent-decoded again and again (at most
+    /// eight passes), holds D374's organization's name anywhere, in its host, path or query, case
+    /// ignored: D374's path in any form the guard refuses (<c>connectionData/</c>,
+    /// <c>_apis//connectionData</c>, <c>//{x}/…</c>) and any other URL that names it, none of which the
+    /// probe sends. The name's 12 random hexadecimal digits make it no other value's.
     /// </summary>
-    private bool IsUnderMadeUp(Uri uri) =>
-        RawSegments(uri).Any(raw => raw.Select(Uri.UnescapeDataString).FirstOrDefault(segment => segment.Length > 0) is { } first && Is(first, MadeUpOrganization));
+    private bool HoldsMadeUp(Uri uri)
+    {
+        var texts = uri.IsAbsoluteUri ? new[] { uri.OriginalString, uri.AbsoluteUri, uri.Host, uri.IdnHost } : [uri.OriginalString];
+        foreach (var written in texts)
+        {
+            var text = written;
+            for (var pass = 0; pass <= 8; pass++)
+            {
+                if (text.Contains(MadeUpOrganization, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                var next = Uri.UnescapeDataString(text);
+                if (string.Equals(next, text, StringComparison.Ordinal))
+                {
+                    break;
+                }
+
+                text = next;
+            }
+        }
+
+        return false;
+    }
 
     private static bool Is(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 }

@@ -81,6 +81,26 @@ internal static class LiveSettings
         }
     }
 
+    /// <summary>
+    /// GitLab's sandbox namespace's first segment, the account's username, as
+    /// <see cref="GitLabRepositoryVariable"/> gives it (<see cref="NamespaceOf"/>), or null: what GitLab's
+    /// screen hides from its first note on (D384), even when the variable as a whole is not in 15.2's form.
+    /// </summary>
+    internal static string? CapturedGitLabNamespace
+    {
+        get
+        {
+            lock (Gate)
+            {
+                return NamespaceOf(CapturedOthers.GetValueOrDefault(GitLabRepositoryVariable));
+            }
+        }
+    }
+
+    /// <summary>The first segment of <paramref name="repository"/> when it is one of 7a's <see cref="Segment"/>s (letters, digits, <c>.</c>, <c>_</c> and <c>-</c>, not dots alone), or null.</summary>
+    internal static string? NamespaceOf(string? repository) =>
+        repository?.Split('/')[0] is { } first && Segment.IsMatch(first) ? first : null;
+
     /// <summary>The token variable of <paramref name="provider"/>.</summary>
     internal static string TokenVariableOf(HostingProvider provider) => provider switch
     {
@@ -344,7 +364,7 @@ internal sealed class LiveSandbox(string owner, string name, string token)
     public override string ToString() => FullName;
 }
 
-/// <summary>A new provider's sandbox and its token (docs/phase-7b-design.md 15.2): <see cref="object.ToString"/> never shows the token, nor Azure DevOps' organization.</summary>
+/// <summary>A new provider's sandbox and its token (docs/phase-7b-design.md 15.2): <see cref="object.ToString"/> never shows the token, nor Azure DevOps' organization, nor GitLab's namespace (D384).</summary>
 internal abstract class LiveHostSandbox(string token)
 {
     public string Token { get; } = token;
@@ -371,7 +391,7 @@ internal sealed class LiveAzureSandbox(string organization, string project, stri
     public override string ToString() => $"<organization>/{Project}/{Repository}";
 }
 
-/// <summary>GitLab's sandbox: <c>&lt;namespace path&gt;/&lt;project&gt;</c>; the namespace's first segment is the account's login.</summary>
+/// <summary>GitLab's sandbox: <c>&lt;namespace path&gt;/&lt;project&gt;</c>; the namespace's first segment is the account's login, which <see cref="ToString"/> hides (D384).</summary>
 internal sealed class LiveGitLabSandbox(string @namespace, string project, string token) : LiveHostSandbox(token)
 {
     public string Namespace { get; } = @namespace;
@@ -385,5 +405,7 @@ internal sealed class LiveGitLabSandbox(string @namespace, string project, strin
     /// <summary>The namespace's first segment: the login the sign-in must give (15.5 step 2).</summary>
     public string Login => Namespace.Split('/')[0];
 
-    public override string ToString() => FullName;
+    /// <summary><see cref="FullName"/> with each segment that is the login, in any case, as <see cref="LiveScreen.NamespacePlaceholder"/>: <c>&lt;the namespace&gt;/sandbox</c>.</summary>
+    public override string ToString() =>
+        string.Join('/', FullName.Split('/').Select(segment => string.Equals(segment, Login, StringComparison.OrdinalIgnoreCase) ? LiveScreen.NamespacePlaceholder : segment));
 }

@@ -2312,6 +2312,11 @@ public sealed partial class LiveSafetyTests
     [InlineData("GET", "https://dev.azure.com/Fernhill-Labs/_apis/connectionData?api-version=7.1-preview.1", "x-method-override", "PUT", false)]
     [InlineData("POST", GitLabProject + "/merge_requests", "X-HTTP-Method-Override", "DELETE", false)]
     [InlineData("POST", GitLabProject + "/merge_requests", "X-HTTP-Method", "DELETE", true)]
+    [InlineData("POST", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?api-version=7.1", "X_HTTP_METHOD_OVERRIDE", "PATCH", false)]
+    [InlineData("POST", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?api-version=7.1", "x_http_method", "PATCH", true)]
+    [InlineData("GET", "https://dev.azure.com/Fernhill-Labs/_apis/connectionData?api-version=7.1-preview.1", "X_METHOD_OVERRIDE", "PUT", false)]
+    [InlineData("POST", GitLabProject + "/merge_requests", "X-HTTP_Method-Override", "DELETE", false)]
+    [InlineData("POST", GitLabProject + "/merge_requests", "X_Method-Override", "DELETE", true)]
     public async Task A_method_override_header_is_refused_before_it_leaves_naming_the_origin_alone(string method, string url, string header, string value, bool inContent)
     {
         var gitlab = url.Contains("gitlab", StringComparison.Ordinal);
@@ -2334,7 +2339,12 @@ public sealed partial class LiveSafetyTests
     [InlineData("https://dev.azure.com/vc-none-0123456789ab/_apis//connectionData?api-version=7.1-preview.1")]
     [InlineData("https://dev.azure.com//vc-none-0123456789ab/_apis/connectionData?api-version=7.1-preview.1")]
     [InlineData("https://dev.azure.com/vc-none-0123456789ab/_apis/connectionData/x?api-version=7.1-preview.1")]
-    public async Task D374_s_read_without_a_credential_refused_for_another_path_under_the_made_up_organization_bars_the_read_with_the_token(string refusedUrl)
+    [InlineData("https://dev.azure.com/_apis/connectionData?organizationName=VC-NONE-0123456789AB&api-version=7.1-preview.1")]
+    [InlineData("https://vc-none-0123456789ab.visualstudio.com/_apis/connectionData?api-version=7.1-preview.1")]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/vc-none-0123456789ab/_apis/connectionData?api-version=7.1-preview.1")]
+    [InlineData("https://dev.azure.com/%2576c-none-0123456789ab/_apis/connectionData?api-version=7.1-preview.1")]
+    [InlineData("https://dev.azure.com/vc-none-0123456789ab%2F_apis/connectionData?api-version=7.1-preview.1")]
+    public async Task D374_s_read_without_a_credential_refused_for_a_url_that_names_the_made_up_organization_anywhere_bars_the_read_with_the_token(string refusedUrl)
     {
         var store = new LiveRequestLog.Store();
         var stub = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") });
@@ -3016,6 +3026,227 @@ public sealed class LiveScreenTests
         Assert.Equal("the organization's name once decoded", screen.SurvivorIn("x &#00000102;abrikam7 y"));
         Assert.Equal("the organization's name once decoded", screen.SurvivorIn("x &#x0000066;abrikam7 y"));
         Assert.Equal("a learned address once decoded", screen.SurvivorIn("by pat.user&#x0000040;corp.test"));
+    }
+
+    // ---- The lead's last round (N1 to N4): escaped values, cut addresses, GitLab's namespace -------
+
+    /// <summary>A learned address at the organization's domain (N1): the organization's rule would cut it in any form Apply does not replace.</summary>
+    private const string OrgDomainAddress = "pat.user@fabrikam7.test";
+
+    /// <summary>
+    /// The verifiers' bodies (N1): <see cref="OrgDomainAddress"/> with its at sign as a JSON escape, a
+    /// zero-padded reference, <c>&amp;commat;</c> and <c>&amp;amp;#64;</c>, in a URL's user part, and a
+    /// learned hid whose hyphens are references.
+    /// </summary>
+    public static TheoryData<string> EscapedLearnedValues => new()
+    {
+        "{\"by\":\"pat.user\\u0040fabrikam7.test\"}",
+        "<p>Signed in as pat.user&#064;fabrikam7.test</p>",
+        "<p>Signed in as pat.user&#x0040;fabrikam7.test</p>",
+        "<p>Signed in as pat.user&commat;fabrikam7.test</p>",
+        "<p>Signed in as pat.user&amp;#64;fabrikam7.test</p>",
+        "remote https://pat.user&amp;#64;fabrikam7.test@dev.azure.com/fabrikam7/p/_git/r",
+        "Location https://dev.azure.com/_signedout?realm=dev.azure.com&hid=7b0a0103&#45;0000&#45;4a00&#45;8000&#45;00000000fa4e",
+    };
+
+    [Theory]
+    [MemberData(nameof(EscapedLearnedValues))]
+    public void A_learned_value_in_a_form_the_screen_does_not_replace_is_withheld_whole_and_fails_the_run(string body)
+    {
+        using var folder = new TempDirectory("live-screen");
+        var file = folder.Combine("run.txt");
+        var screen = Screen(HuntOrg);
+        screen.AddAddress(OrgDomainAddress);
+        screen.AddId(OtherHostId, LiveScreen.OrganizationIdPlaceholder);
+        var output = new List<string>();
+        var run = new LiveRun(HuntToken, file, output.Add, screen, HostingProvider.AzureDevOps);
+        run.Note(BodyNote + body);
+        var message = run.Screen("The service said: " + body);
+        var failure = Assert.Throws<XunitException>(() => run.FailureOf(new InvalidOperationException("The service said: " + body), "2, the sign-in").Throw());
+        var told = new List<string>();
+        string answer;
+        using (var api = new AzureDevOpsLiveApi(new LiveAzureSandbox(HuntOrg, "p", "r", HuntToken), new SocketsHttpHandler(), AzureDevOpsEndpoints.Service.WebBase, TimeSpan.FromSeconds(5), screen, told.Add))
+        {
+            answer = api.Screen(body);
+        }
+
+        Assert.StartsWith(LiveRun.ScreenedNotePrefix, Assert.Single(output), StringComparison.Ordinal);
+        Assert.StartsWith("(withheld: it still held ", message, StringComparison.Ordinal);
+        Assert.EndsWith("so it is withheld (D372).", failure.Message, StringComparison.Ordinal);
+        Assert.StartsWith("Azure DevOps's answer was withheld: it held ", answer, StringComparison.Ordinal);
+        Assert.Single(told);
+        var direct = new LiveRun(HuntToken, folder.Combine("direct.txt"), _ => { }, screen, HostingProvider.AzureDevOps);
+        direct.WriteRunFile(body);
+        Assert.StartsWith("run.txt was withheld: its screened text still held ", Assert.Single(direct.Failures), StringComparison.Ordinal);
+        Assert.False(File.Exists(folder.Combine("direct.txt")));
+        Assert.Throws<InvalidOperationException>(run.Dispose);
+        foreach (var text in new[] { output[0], message, failure.Message, answer, File.ReadAllText(file) })
+        {
+            var decoded = FullyDecoded(text);
+            foreach (var hidden in new[] { "pat.user", HuntOrg, "00000000fa4e" })
+            {
+                Assert.DoesNotContain(hidden, decoded, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
+    [Fact]
+    public void A_learned_value_written_as_itself_is_replaced_as_before_and_a_text_without_one_is_left_as_it_is()
+    {
+        using var folder = new TempDirectory("live-screen");
+        var file = folder.Combine("run.txt");
+        var screen = Screen(HuntOrg);
+        screen.AddAddress(OrgDomainAddress);
+        screen.AddId(OtherHostId, LiveScreen.OrganizationIdPlaceholder);
+        var output = new List<string>();
+        var run = new LiveRun(HuntToken, file, output.Add, screen, HostingProvider.AzureDevOps);
+        run.Note($"by pat.user@fabrikam7.test, PAT.USER%40FABRIKAM7.TEST and pat.user&#64;fabrikam7.test in fabrikam7, x?hid={OtherHostId}");
+        const string none = "{\"path\":\"C:\\\\Users\\\\x\",\"note\":\"\\u0041 &amp; %41 &#65; bob=a\"}";
+        run.Note(none);
+        run.Dispose();
+        Assert.Equal(["by <the user's address>, <the user's address> and <the user's address> in <the organization>, x?hid=<the organization's id>", none], output);
+    }
+
+    /// <summary>The verifier's five texts (N2), each an answer's body or header and the note that shows it: an address with <c>=</c>, <c>/</c> or <c>+</c> before its <c>@</c> inside a message.</summary>
+    public static TheoryData<string, string?, string> AddressesInMessages => new()
+    {
+        { string.Empty, """{"$id":"1","message":"TF401019: the user pat=dev@corp.test has no access.","typeKey":"UnauthorizedRequestException"}""", string.Empty },
+        { string.Empty, """{"message":"The owner team/ops@corp.test must approve it."}""", string.Empty },
+        { string.Empty, """{"message":"Pushed by Pat <pat=dev@corp.test> to main."}""", string.Empty },
+        { "pat=dev@corp.test", null, "The answer's X-Pushed-By: pat=dev@corp.test" },
+        { string.Empty, """{"message":"Approved by pat+ci=x@corp.test."}""", string.Empty },
+    };
+
+    [Theory]
+    [MemberData(nameof(AddressesInMessages))]
+    public void An_address_with_an_equals_sign_a_slash_or_a_plus_in_a_message_is_learned_whole_and_hidden_whole(string header, string? body, string note)
+    {
+        using var folder = new TempDirectory("live-screen");
+        var screen = Screen(HuntOrg);
+        screen.LearnFromAnswer(header.Length == 0 ? [] : [new("X-Pushed-By", [header])], body);
+        var output = new List<string>();
+        var run = new LiveRun(HuntToken, folder.Combine("run.txt"), output.Add, screen, HostingProvider.AzureDevOps);
+        run.Note(body ?? note);
+        run.Dispose();
+        var kept = Assert.Single(output);
+        Assert.Contains(LiveScreen.AddressPlaceholder, kept, StringComparison.Ordinal);
+        foreach (var head in new[] { "pat=", "team/", "pat+ci" })
+        {
+            Assert.DoesNotContain(head, kept, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void A_run_s_widest_whole_address_tail_stops_at_a_url_s_marks_and_a_reference_and_is_none_without_one()
+    {
+        Assert.Equal("pat=dev@corp.test", LiveScreen.WholeTailOf("pat=dev@corp.test."));
+        Assert.Equal("team/ops@corp.test", LiveScreen.WholeTailOf("https://example.test//team/ops@corp.test"));
+        Assert.Equal("ada@corp.test", LiveScreen.WholeTailOf("ClaimsIdentity;7b0a0104\\ada@corp.test"));
+        Assert.Equal("bob@corp.test", LiveScreen.WholeTailOf("mailto:bob@corp.test"));
+        Assert.Equal("hint=pat=dev@corp.test", LiveScreen.WholeTailOf("x/?hint=pat=dev@corp.test"));
+        Assert.Null(LiveScreen.WholeTailOf("mary.o&#39;connor@corp.test"));
+        Assert.Null(LiveScreen.WholeTailOf("a&amp;b@other.test"));
+        Assert.Null(LiveScreen.WholeTailOf("@corp.test"));
+    }
+
+    [Theory]
+    [InlineData("by bob&#x40cafe.test")]
+    [InlineData("by bob&#X0040beef.test")]
+    [InlineData("by bob&#6412.test")]
+    [InlineData("by bob&#00649.test")]
+    public void An_at_sign_s_reference_whose_digits_run_on_is_still_read_as_an_at_sign(string text) =>
+        Assert.Equal("an address once decoded", Screen(HuntOrg).SurvivorIn(text));
+
+    [Fact]
+    public void A_hid_or_a_sign_in_context_whose_characters_are_references_is_replaced_whole()
+    {
+        var screen = Screen();
+        var hid = OtherHostId.Replace("-", "&#45;", StringComparison.Ordinal);
+        Assert.Equal("x?realm=dev.azure.com&hid=<the organization's id>", screen.Apply($"x?realm=dev.azure.com&hid={hid}"));
+        Assert.Equal("x?hid=<the organization's id>", screen.Apply($"x?hid=7b0a0103&#x2D;0000&#x2d;4a00-8000&#45;00000000fa4e"));
+        var context = SignInContext(OtherHostId);
+        var escaped = "&#" + ((int)context[0]).ToString(System.Globalization.CultureInfo.InvariantCulture) + ";" + context[1..];
+        Assert.Equal("see ?context=<the organization's id>", screen.Apply($"see ?context={escaped}"));
+        Assert.Equal("see ?context=plain&#45;value", screen.Apply("see ?context=plain&#45;value"));
+        Assert.Equal("x?hid=<the organization's id>&#38;realm=dev.azure.com&#x26;context=<the organization's id>", screen.Apply($"x?hid=7b0a0103&#38;realm=dev.azure.com&#x26;context={context}"));
+    }
+
+    /// <summary>GitLab's made-up namespaces (N3, D384): dotted, and with <c>_</c> and <c>-</c>.</summary>
+    public static TheoryData<string> MadeUpNamespaces => new() { "j.q.public", "a_b-c.d" };
+
+    [Theory]
+    [MemberData(nameof(MadeUpNamespaces))]
+    public void GitLab_s_namespace_is_hidden_in_any_case_in_paths_urls_ids_and_members(string name)
+    {
+        var screen = LiveRun.ScreenOf(HostingProvider.GitLab, null, LiveSettings.NamespaceOf($"{name}/visualcommit-sandbox"));
+        var id = Uri.EscapeDataString($"{name}/visualcommit-sandbox");
+        var texts = new[]
+        {
+            $$"""{"id":1001,"username":"{{name}}","web_url":"https://gitlab.com/{{name}}","path_with_namespace":"{{name}}/visualcommit-sandbox","ssh_url_to_repo":"git@gitlab.com:{{name}}/visualcommit-sandbox.git","http_url_to_repo":"https://gitlab.com/{{name}}/visualcommit-sandbox.git"}""",
+            $"GET https://gitlab.com/api/v4/projects/{id} 200 and /projects/{id.ToUpperInvariant()}/merge_requests and %2F{name}%2f",
+            $"git clone -- https://oauth2:***@gitlab.com/{name.ToUpperInvariant()}/visualcommit-sandbox.git and https://{name}@gitlab.com/x",
+            $"The account's login is {name}, not {name}.",
+            $"The sandbox {new LiveGitLabSandbox(name, "visualcommit-sandbox", HuntToken)}.",
+        };
+        using var folder = new TempDirectory("live-screen");
+        var file = folder.Combine("run.txt");
+        var output = new List<string>();
+        var run = new LiveRun(HuntToken, file, output.Add, screen, HostingProvider.GitLab);
+        foreach (var text in texts)
+        {
+            run.Note(text);
+        }
+
+        run.Dispose();
+        Assert.Equal(texts.Length, output.Count);
+        foreach (var text in output.Append(File.ReadAllText(file)))
+        {
+            Assert.DoesNotContain(name, FullyDecoded(text), StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(LiveRun.ScreenedNotePrefix, text, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("\"username\":\"<the namespace>\"", output[0], StringComparison.Ordinal);
+        Assert.Contains("/projects/<the namespace>%2Fvisualcommit-sandbox 200", output[1], StringComparison.Ordinal);
+        Assert.EndsWith("not <the namespace>.", output[3], StringComparison.Ordinal);
+        Assert.Equal("The sandbox <the namespace>/visualcommit-sandbox.", output[4]);
+    }
+
+    [Theory]
+    [MemberData(nameof(MadeUpNamespaces))]
+    public void GitLab_s_namespace_escaped_is_withheld_and_a_longer_name_holding_it_is_left(string name)
+    {
+        var screen = LiveRun.ScreenOf(HostingProvider.GitLab, "Fernhill-Labs", name);
+        Assert.Equal((1, 0, 0), screen.Counts);
+        Assert.Equal("Fernhill-Labs", screen.Apply("Fernhill-Labs"));
+        var longer = $"{name}x and {name}.x and {name}_x and x{name} and {name}-tools";
+        Assert.Equal(longer, screen.Apply(longer));
+        Assert.Null(screen.SurvivorIn(longer));
+        var json = name.Replace(".", "\\u002E", StringComparison.Ordinal).Replace("_", "\\u005F", StringComparison.Ordinal);
+        foreach (var escaped in new[] { $"x%252F{name}%252Fy", $"{{\"username\":\"{json}\"}}", "&#" + ((int)name[0]).ToString(System.Globalization.CultureInfo.InvariantCulture) + ";" + name[1..], name.Replace(".", "%2E", StringComparison.Ordinal).Replace("_", "%5F", StringComparison.Ordinal) })
+        {
+            using var folder = new TempDirectory("live-screen");
+            var file = folder.Combine("run.txt");
+            File.WriteAllText(file, "an earlier run's");
+            var output = new List<string>();
+            var run = new LiveRun(HuntToken, file, output.Add, screen, HostingProvider.GitLab);
+            run.Note(escaped);
+            Assert.StartsWith(LiveRun.ScreenedNotePrefix + "the namespace's name once", Assert.Single(output), StringComparison.Ordinal);
+            run.WriteRunFile(escaped);
+            Assert.False(File.Exists(file));
+            Assert.Throws<InvalidOperationException>(run.Dispose);
+        }
+    }
+
+    [Fact]
+    public void GitLab_s_sandbox_shows_every_segment_that_is_the_login_as_the_namespace()
+    {
+        Assert.Equal("<the namespace>/visualcommit-sandbox", new LiveGitLabSandbox("j.q.public", "visualcommit-sandbox", HuntToken).ToString());
+        Assert.Equal("<the namespace>/tools/<the namespace>", new LiveGitLabSandbox("j.q.public/tools", "J.Q.Public", HuntToken).ToString());
+        Assert.Equal("j.q.public/tools/J.Q.Public", new LiveGitLabSandbox("j.q.public/tools", "J.Q.Public", HuntToken).FullName);
+        Assert.Equal("a_b-c.d", LiveSettings.NamespaceOf("a_b-c.d/group/visualcommit-sandbox"));
+        Assert.Null(LiveSettings.NamespaceOf("../visualcommit-sandbox"));
+        Assert.Null(LiveSettings.NamespaceOf("j q/visualcommit-sandbox"));
+        Assert.Null(LiveSettings.NamespaceOf(null));
     }
 
     /// <summary><paramref name="text"/> with JSON's string escapes, HTML's character references and percent escapes decoded until nothing changes: the test's own reading.</summary>

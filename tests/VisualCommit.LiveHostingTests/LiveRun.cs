@@ -22,8 +22,9 @@ namespace VisualCommit.LiveHostingTests;
 /// also keeps what <c>Check_1</c> read of the sandbox for <c>Check_2</c>. For Azure DevOps and GitLab
 /// (docs/phase-7b-design.md 15.3) the fixtures <see cref="AzureDevOpsLiveRun"/> and
 /// <see cref="GitLabLiveRun"/> add a <see cref="LiveScreen"/>: after the token's search, every note,
-/// message, failure and run.txt is screened, and a run.txt that still holds a learned value is
-/// withheld and fails the run (D323, D372).
+/// message, failure and run.txt is screened (<see cref="ScreenedBy"/>), and one that holds a learned
+/// value in a form the screen does not replace, or still holds one once screened, is withheld and
+/// fails the run (D323, D372).
 /// </summary>
 public class LiveRun : IDisposable
 {
@@ -63,7 +64,7 @@ public class LiveRun : IDisposable
     {
     }
 
-    /// <summary>A new provider's run (15.3): its captured token, <c>artifacts/live/&lt;id&gt;/run.txt</c>, and a screen that knows Azure DevOps' organization from the variable.</summary>
+    /// <summary>A new provider's run (15.3): its captured token, <c>artifacts/live/&lt;id&gt;/run.txt</c>, and a screen that knows Azure DevOps' organization or GitLab's namespace from the variable (D384).</summary>
     protected LiveRun(HostingProvider provider)
         : this(LiveSettings.CapturedTokenOf(provider), FileOf(provider), line => TestContext.Current.TestOutputHelper?.WriteLine(line), ScreenOf(provider), provider)
     {
@@ -93,13 +94,21 @@ public class LiveRun : IDisposable
     /// <summary>The token this run searches for, for the run's own API: null without one.</summary>
     internal string? Token => _token;
 
-    /// <summary>The provider's screen: Azure DevOps' with the organization the variable names.</summary>
-    private static LiveScreen ScreenOf(HostingProvider provider)
+    /// <summary>The provider's screen: Azure DevOps' with the organization its variable names, GitLab's with the namespace's first segment its variable names (D384).</summary>
+    private static LiveScreen ScreenOf(HostingProvider provider) =>
+        ScreenOf(provider, LiveSettings.CapturedOrganization, LiveSettings.CapturedGitLabNamespace);
+
+    /// <summary>The screen of <paramref name="provider"/>'s run, made before its first request: Azure DevOps' with <paramref name="organization"/>, GitLab's with <paramref name="namespace"/>, each when given.</summary>
+    internal static LiveScreen ScreenOf(HostingProvider provider, string? organization, string? @namespace)
     {
         var screen = new LiveScreen();
-        if (provider == HostingProvider.AzureDevOps && LiveSettings.CapturedOrganization is { } organization)
+        if (provider == HostingProvider.AzureDevOps && organization is not null)
         {
             screen.AddOrganization(organization);
+        }
+        else if (provider == HostingProvider.GitLab && @namespace is not null)
+        {
+            screen.AddNamespace(@namespace);
         }
 
         return screen;
@@ -144,14 +153,14 @@ public class LiveRun : IDisposable
     /// <summary>
     /// Keeps <paramref name="text"/> and writes it to the test output, after searching it for the
     /// token: a note that holds it is kept and written as <see cref="WithheldNote"/>, and the run
-    /// fails at its end. With a screen, the note is screened, and one that still holds a value the
-    /// screen knows (<see cref="LiveScreen.SurvivorIn"/>) is kept and written as
-    /// <see cref="ScreenedNotePrefix"/> and the kind of value, and the run fails at its end too.
+    /// fails at its end. With a screen, the note is screened (<see cref="ScreenedBy"/>), and one the
+    /// screen withholds is kept and written as <see cref="ScreenedNotePrefix"/> and the kind of value,
+    /// and the run fails at its end too.
     /// </summary>
     public void Note(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var kept = Screener?.Apply(text) ?? text;
+        var kept = text;
         if (LiveTokenForms.FoundIn(text, _token) is { } form)
         {
             kept = WithheldNote;
@@ -160,10 +169,17 @@ public class LiveRun : IDisposable
                 _failures.Add($"A note held the token ({form}); run.txt shows where.");
             }
         }
-        else if (Screener?.SurvivorIn(kept) is { } kind)
+        else if (Screener is { } screen)
         {
-            kept = ScreenedNotePrefix + kind + ".";
-            Withheld($"A note still held {kind} once screened (D372); run.txt shows where.");
+            if (ScreenedBy(screen, text, out var kind) is { } screened)
+            {
+                kept = screened;
+            }
+            else
+            {
+                kept = ScreenedNotePrefix + kind + ".";
+                Withheld($"A note still held {kind} once screened (D372); run.txt shows where.");
+            }
         }
 
         lock (_gate)
@@ -175,17 +191,21 @@ public class LiveRun : IDisposable
     }
 
     /// <summary>
-    /// <paramref name="text"/> as it is (screened, with a screen), or <see cref="WithheldText"/> when it
-    /// holds the token: for an exception's or an assertion's message. A screened text that still holds a
-    /// value the screen knows is replaced by a text that names the kind of value alone. A find fails
-    /// the run at its end, as a note's does.
+    /// <paramref name="text"/> as it is (screened, with a screen: <see cref="ScreenedBy"/>), or
+    /// <see cref="WithheldText"/> when it holds the token: for an exception's or an assertion's message.
+    /// A text the screen withholds is replaced by a text that names the kind of value alone. A find
+    /// fails the run at its end, as a note's does.
     /// </summary>
     public string Screen(string text)
     {
         if (LiveTokenForms.FoundIn(text, _token) is not { } form)
         {
-            var screened = Screener?.Apply(text) ?? text;
-            if (Screener?.SurvivorIn(screened) is not { } kind)
+            if (Screener is not { } screen)
+            {
+                return text;
+            }
+
+            if (ScreenedBy(screen, text, out var kind) is { } screened)
             {
                 return screened;
             }
@@ -196,6 +216,29 @@ public class LiveRun : IDisposable
 
         Withheld($"A message held the token ({form}); it was withheld.");
         return WithheldText;
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> screened by <paramref name="screen"/>, or null with the kind of value in
+    /// <paramref name="kind"/> when the text is withheld: when a reading of the text as it stands shows a
+    /// learned value in a form <see cref="LiveScreen.Apply"/> does not replace
+    /// (<see cref="LiveScreen.EscapedValueIn"/>, judged before Apply, which then only meets values written
+    /// as themselves), or when the screened text still holds a value the screen knows
+    /// (<see cref="LiveScreen.SurvivorIn"/>). A text with nothing to hide comes back as it was.
+    /// </summary>
+    internal static string? ScreenedBy(LiveScreen screen, string text, out string? kind)
+    {
+        ArgumentNullException.ThrowIfNull(screen);
+        ArgumentNullException.ThrowIfNull(text);
+        kind = screen.EscapedValueIn(text);
+        if (kind is not null)
+        {
+            return null;
+        }
+
+        var screened = screen.Apply(text);
+        kind = screen.SurvivorIn(screened);
+        return kind is null ? screened : null;
     }
 
     /// <summary>The one assertion given values (15.3, g4 D1.4): fails with <paramref name="message"/>'s text, screened, unless <paramref name="condition"/> holds.</summary>
@@ -261,8 +304,8 @@ public class LiveRun : IDisposable
     /// holds the token, as an assertion's message that shows a URL or a git value would. Then an
     /// <see cref="XunitException"/> that names the step and the exception's type, without an inner
     /// exception, and the run fails at its end; the test output never sees the original's text. With
-    /// a screen, a text the screen changes is rethrown screened, and one that still holds a value the
-    /// screen knows once screened is withheld as a token's is.
+    /// a screen, a text the screen changes is rethrown screened, and one the screen withholds
+    /// (<see cref="ScreenedBy"/>), its text or its message, is withheld as a token's is.
     /// </summary>
     internal ExceptionDispatchInfo FailureOf(Exception exception, string step)
     {
@@ -275,10 +318,12 @@ public class LiveRun : IDisposable
                 return ExceptionDispatchInfo.Capture(exception);
             }
 
-            var screenedWhole = screen.Apply(whole);
-            var message = screen.Apply(exception.Message);
-            if ((screen.SurvivorIn(screenedWhole) ?? screen.SurvivorIn(message)) is { } kind)
+            string? kind = null;
+            var screenedWhole = ScreenedBy(screen, whole, out var wholeKind);
+            var message = screenedWhole is null ? null : ScreenedBy(screen, exception.Message, out kind);
+            if (screenedWhole is null || message is null)
             {
+                kind = wholeKind ?? kind;
                 Withheld($"The failure of step {step} still held {kind} once screened (D372); its exception was withheld.");
                 return ExceptionDispatchInfo.Capture(new XunitException($"Step {step} failed with {exception.GetType().Name}, whose text still held {kind} once screened, so it is withheld (D372)."));
             }
@@ -331,8 +376,7 @@ public class LiveRun : IDisposable
 
         if (Screener is { } screen)
         {
-            text = screen.Apply(text);
-            if (screen.SurvivorIn(text) is { } kind)
+            if (ScreenedBy(screen, text, out var kind) is not { } screened)
             {
                 DeleteEarlierFile();
                 lock (_gate)
@@ -342,6 +386,8 @@ public class LiveRun : IDisposable
 
                 return;
             }
+
+            text = screened;
         }
 
         Directory.CreateDirectory(Path.GetDirectoryName(File)!);
@@ -406,7 +452,7 @@ public sealed class AzureDevOpsLiveRun : LiveRun
     }
 }
 
-/// <summary>GitLab's run (15.3): <c>artifacts/live/gitlab/run.txt</c>, its token and its screen of addresses.</summary>
+/// <summary>GitLab's run (15.3): <c>artifacts/live/gitlab/run.txt</c>, its token and its screen of the namespace (D384) and addresses.</summary>
 public sealed class GitLabLiveRun : LiveRun
 {
     public GitLabLiveRun()

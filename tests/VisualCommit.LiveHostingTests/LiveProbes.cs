@@ -439,7 +439,7 @@ internal sealed class LiveServiceException(string message) : Exception(message);
 /// its one), through <see cref="LiveRequestLog"/> and the provider's <see cref="LiveReach"/> for the
 /// service, through the fake's in-process handler for the fake beside. Each answer is learned by the
 /// screen (<see cref="LiveScreen.LearnFromAnswer"/>) before anything can note it; a message holding
-/// the token is withheld and told to the run.
+/// the token, or a learned value in a form the screen does not replace, is withheld and told to the run.
 /// </summary>
 internal abstract class LiveServiceApi : IDisposable
 {
@@ -495,13 +495,23 @@ internal abstract class LiveServiceApi : IDisposable
         return Screen($"{Name} answered {answer.Status.ToString(CultureInfo.InvariantCulture)} {answer.Message ?? "(no message)"} for {what} (request {answer.RequestId ?? "none"})");
     }
 
-    /// <summary><paramref name="text"/> screened, or a sentence without it when it holds the token (told to the run).</summary>
+    /// <summary>
+    /// <paramref name="text"/> screened, or a sentence without it (told to the run) when it holds the
+    /// token, or a learned value in a form the screen does not replace (<see cref="LiveScreen.EscapedValueIn"/>,
+    /// judged before <see cref="LiveScreen.Apply"/>, which would cut it and hide what is left from the run's search).
+    /// </summary>
     public string Screen(string text)
     {
         if (LiveTokenForms.FoundIn(text, _token) is { } form)
         {
             _withheld?.Invoke($"{Name}'s answer held the token ({form}); it was withheld.");
             return $"{Name}'s answer was withheld: it held the token";
+        }
+
+        if (ScreenOfAnswers.EscapedValueIn(text) is { } kind)
+        {
+            _withheld?.Invoke($"{Name}'s answer held {kind} in a form the screen does not replace (D372); it was withheld.");
+            return $"{Name}'s answer was withheld: it held {kind}";
         }
 
         return ScreenOfAnswers.Apply(text);

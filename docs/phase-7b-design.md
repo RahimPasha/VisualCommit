@@ -3931,46 +3931,31 @@ an address; no value from the research's captures is in the files (section 1); t
 
 **As built** (WP-LIVE1, `06574c5` to its last commit, with its reviews' and hunts' fixes, 2026-11-02),
 stage 1 only; where the build differs or settles what was open:
-- `LiveRequest`'s headers are `KeptHeaders` (7a's `Headers()` stays), `api-version` read from
-  `Content-Type`; `LiveCredentialForm` is public. `LiveReach` judges a path as sent and as written and
-  the query as 15.4 says, below `{r}` only item 4's three forms, and refuses any `Host` header and any
-  method-override header (`X-HTTP-Method-Override`, `X-HTTP-Method`, `X-Method-Override`), each read raw
-  among the request's and the content's headers.
-  Each path takes only the methods the app and the command send it (ordinal): GET, but GET or POST for
-  `pullrequests` and `refs`, GET or PATCH for `pullrequests/{n}`. GitLab's admits only `user`,
-  `personal_access_tokens/self`, `projects`, `projects/{id}` and `…/repository/branches` by GET,
-  `…/merge_requests` by GET or POST, `…/merge_requests/{iid}` by GET, PUT or DELETE and a branch by
-  DELETE. A query parameter whose name holds `token` (split at `&` and `;`) and `PRIVATE`/`JOB` `-TOKEN`
-  or `_TOKEN` in either collection are credentials. D374's Basic is taken by the check that admits it and
-  barred for good by any other first or later answer, no answer (`LiveReach.Failed`), or a refusal by any
-  check (`LiveReach.Refused`) of a request without a credential whose first non-empty segment, as sent
-  or written, is the made-up organization.
-  `ReachProblems(requests, reach)` is an overload naming origins (`DescribeOrigin`).
-- Shared parts: `LiveServiceApi`, `LiveServiceAnswer` and the fakes beside in `LiveProbes.cs`;
-  `LiveSteps` in `AzureDevOpsLiveTests.cs`, `LiveApp` in `GitLabLiveTests.cs`. The fixtures have
-  internal constructors over a file, so `LiveSafetyTests` drives the internal steps over stubs.
-- Sums: steps 8 and 9 are `Check_2b_probes`, after Check_2 in both orders; Check_2 hands over
-  `LiveMade`, Check_2b cleans up in `finally`. `LiveSteps.Sums`: Azure DevOps 300, 560, 480, 530, 330 s;
-  GitLab 570, 215, 540, 385 s. The identity read is each method's first call, once per run.
+- `LiveRequest`'s headers are `KeptHeaders` (`api-version` from `Content-Type`); `LiveCredentialForm`
+  is public. `LiveReach` judges paths as sent and as written, below `{r}` only item 4's three forms. It
+  refuses, read raw, a `Host` header among the request's headers, a method-override header (`_` read
+  as `-`) among the request's or the content's, and a method not sent to the path: GET; also POST on
+  `pullrequests`, `refs` and `…/merge_requests`; PATCH on `pullrequests/{n}`; PUT and DELETE on
+  `…/merge_requests/{iid}`; DELETE alone on a GitLab branch. D374's Basic is admitted once, and never
+  after another answer, no answer, or a refused or failed credential-less request naming the made-up
+  organization. `ReachProblems(requests, reach)` names origins.
+- `LiveServiceApi`, `LiveServiceAnswer` and the fakes beside are in `LiveProbes.cs`, `LiveSteps` in
+  `AzureDevOpsLiveTests.cs`, `LiveApp` in `GitLabLiveTests.cs`; the fixtures' internal constructors let
+  `LiveSafetyTests` drive the steps over stubs.
+- Steps 8 and 9 are `Check_2b_probes`, after Check_2 in both orders, which hands it `LiveMade`;
+  it cleans up in `finally`. `LiveSteps.Sums`: Azure DevOps 300, 560, 480, 530, 330 s; GitLab 570, 215,
+  540, 385 s. The identity read is each method's first call, once per run.
 - Check_2b probes beside the fake's own draft; Azure DevOps' empty title after the abandon, nothing
-  ahead from `<branch>-even` once its refs POST took. GitLab's `-even` is pushed through the app. A
-  probe with no answer breaks its premise (D373, D374, duplicate, missing branch).
-- Clean-up and Check_1's leftovers send each call on its own (`LiveSteps.AttemptAsync`); the refs
-  delete goes beside the fake's; `RefFailures` fails each ref a 200 left. A GitLab merge request is the
-  sandbox's own only when both its project ids are equal numbers.
+  ahead from `<branch>-even` once its refs POST took; GitLab's `-even` is pushed through the app. A
+  probe with no answer breaks its premise.
+- Clean-up and Check_1's leftovers send each call on its own (`LiveSteps.AttemptAsync`); `RefFailures`
+  fails each ref a 200 left; a GitLab merge request is the sandbox's when both project ids are equal.
 - info/refs probes go as git (`git/<version>`, `Accept: */*`, `Git-Protocol: version=2`), the core
   area as A1 sends it; run.txt adds git's version, the clone's time, the create's status and the head.
-- The screen: the sign-in query, `hid=` and a sign-in `context=` first; the zero GUID is never learned
-  (`ZeroId`); address runs end at blanks, brackets, `,`, `;` and quotes, but not at a quote or a
-  character reference's `;` between letters, digits or `.`; a JSON string or git line that is an address
-  as a whole (RFC 5322's `atext` before the `@`) is learned whole and never in pieces; a kept one holds
-  one `@` once decoded; data files are searched JSON-escaped and in their decoded strings. `Apply` takes
-  as the organization's boundary a JSON escape, a character reference or an escape's start whose digits
-  may run into the name (`&#x2F`, `&#x`, `%F`, `\u00`), and replaces a learned address with `&#64;` or
-  `&#x40;`, `;` or not. `SurvivorIn` (amending 15.3) also reports any `hid=` value, and searches every
-  reading that decoding JSON's escapes, HTML's references (zero-padded too) and percent escapes reaches
-  in any order, withholding a text with more than 512; `LearnText` reads `hid=` and `context=` in those
-  readings too. The Git area id was confirmed against g1's captures.
+- The screen (amending 15.3) also hides GitLab's namespace (D384) and withholds, before `Apply`, a text
+  whose reading shows a learned value in a form `Apply` does not replace; `SurvivorIn` also reports any
+  `hid=` and searches every reading of the decodings (512 at most). Addresses are learned whole; forms
+  and boundaries are in `LiveScreen`'s comments. The Git area id matches g1's.
 - For the lead: the live classes are built, never run (risks: the log-line wait, the push dialog,
   `accounts.json`'s record); CLAUDE.md's rows and the csproj's comment are the lead's (15.9). No file
   outside 15.1's list changed.
