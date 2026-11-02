@@ -3912,6 +3912,31 @@ each run with the tokens; with the tokens every live test passes, each request r
 up, only `visualcommit-live/` branches touched; no run.txt holds a token, the organization, its ids or
 an address; no value from the research's captures is in the files (section 1); the tripwire and `ReachProblems` find nothing.
 
+**As built** (WP-LIVE1, `06574c5` and its As built commit, 2026-11-02), stage 1 only; where the build differs
+or settles what was open:
+- `LiveRequest`'s headers are `KeptHeaders` (7a's `Headers()` keeps its name); `LiveCredentialForm` is
+  public. `LiveReach` (`AzureDevOpsReach`, `GitLabReach`, in `LiveRequestLog.cs`) judges both the path as
+  sent and as written (a dot segment .NET would remove is refused); `ReachProblems(requests, reach)` and
+  `PerHostOf` are the providers' overloads. `Require(provider)` returns `LiveHostSandbox`.
+- The shared parts are in `LiveProbes.cs`: `LiveServiceApi` (both APIs' base: handler, learning, screen),
+  `LiveServiceAnswer` (`Beside` normalizes GUIDs, dates, origins and each side's names), `LiveCredential`,
+  `LiveMadeUp`, `LiveProviderPremises`, `LiveAzureFake`, `LiveGitLabFake`. `LiveSteps`,
+  `LiveProviderLeftovers` (in `AzureDevOpsLiveTests.cs`) and `LiveApp` (in `GitLabLiveTests.cs`, the
+  app's steps 1 to 7 and 10) serve both classes.
+- `LiveScreen.Apply` screens addresses before the organization (equivalent to 15.3's order, and the user
+  part is judged before the organization is replaced); it also learns every address in any string of
+  an answer, the tenant of a `ClaimsIdentity` descriptor, and replaces any `hid=` value. Address runs
+  end at white space, quotes, brackets, `,` and `;` (narrower than WP-H's whole non-blank run).
+  `SurvivorIn` blanks the placeholders first. The Git area id (`4e080c62-fa21-…`) is written from
+  memory as a published constant; the lead checks it against the research.
+- GitLab gets `Check_1b_probes` too. Check_2's probes run at 15 s a call (`LiveSteps.ProbeLimit`) so
+  that its sum stays near 600 s; the module initializer's comment gives the sums (estimates).
+- Check_2's push clicks "Push {branch}…" and the push dialog's Confirm, and waits for the next
+  operation record; its "nothing ahead" makes `visualcommit-live/<stamp>-even` at the default branch's
+  tip with one refs POST (GitLab: the default branch into itself), which the clean-up removes.
+- For the lead: the live classes were built, never run; CLAUDE.md's rows and the csproj's comment stay
+  the lead's (15.9). No file outside 15.1's list changed.
+
 ## 16. Open points
 
 Each point names what settles it and who meets it.
