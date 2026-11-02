@@ -367,6 +367,9 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// </summary>
     internal void ForgetKept() => _client.ForgetKept();
 
+    /// <summary>What a request with <paramref name="token"/> is screened as: WP-S's D382 check reads A1's answer for each.</summary>
+    internal string[] SecretsOf(string token) => _client.SecretsOf(token);
+
     /// <summary><c>repos/{owner}/{name}</c>, each segment escaped.</summary>
     private static string RepositoryPath(HostedRepository repository) =>
         $"repos/{Uri.EscapeDataString(repository.Owner)}/{Uri.EscapeDataString(repository.Name)}";

@@ -254,7 +254,7 @@ public sealed class HostingSession : IHostingSession
             checkedToken = await entry.Provider.CheckTokenAsync(request.Token, request.Organization, linked.Token).ConfigureAwait(false);
         }
 
-        if ((checkedToken.Failure ?? EchoedToken(entry.Kind, checkedToken.Value!, request.Token)) is { } failure)
+        if ((checkedToken.Failure ?? EchoedToken(entry, checkedToken.Value!, request.Token)) is { } failure)
         {
             _log.Warning($"{entry.Name}: signing in on {entry.Host} failed: {Describe(failure)}");
             return new SignInResult(null, failure, null);
@@ -636,22 +636,41 @@ public sealed class HostingSession : IHostingSession
         new(new AccountStatus(account, AccountState.NeedsSignIn, null, noteKind, note), null, tokenState);
 
     /// <summary>
-    /// D382: an A1 answer that names the token itself, ignoring case, in the login (Azure DevOps'
-    /// organization), the display name or the avatar's host is the provider's malformed answer, so
-    /// that no record, slot or sign-in line carries an echoed token; null for any other answer.
+    /// D382: an A1 answer that names the token, ignoring case, in any text a record or a slot keeps
+    /// (the login, Azure DevOps' organization, the display name, the user id, the avatar's whole
+    /// address as given, as written and percent-decoded) is the provider's malformed answer, so that
+    /// no record, slot or sign-in line carries an echoed token; null for any other answer. The token
+    /// is looked for in each form the request sent it in (the HTTP core's <c>SecretsOf</c>: Azure
+    /// DevOps' <c>Basic</c> credential too), as the core screens its own warnings.
     /// </summary>
-    private static HostingFailure? EchoedToken(HostingProvider provider, HostingAccount account, string token)
+    private static HostingFailure? EchoedToken(Entry entry, HostingAccount account, string token)
     {
-        if (token.Length == 0)
+        var secrets = SecretsOf(entry.Provider, token);
+        if (secrets.Length == 0)
         {
             return null;
         }
 
-        string?[] texts = [account.Login, account.Key.Login, account.Name, account.AvatarUrl?.Host];
-        return texts.Any(text => text is not null && text.Contains(token, StringComparison.OrdinalIgnoreCase))
-            ? new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(provider)) { Provider = provider }
+        var avatar = account.AvatarUrl;
+        string?[] texts =
+        [
+            account.Login, account.Key.Login, account.Name, account.UserId,
+            avatar?.OriginalString, avatar?.AbsoluteUri, avatar is null ? null : Uri.UnescapeDataString(avatar.AbsoluteUri),
+        ];
+        return texts.Any(text => text is not null && secrets.Any(secret => text.Contains(secret, StringComparison.OrdinalIgnoreCase)))
+            ? new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(entry.Kind)) { Provider = entry.Kind }
             : null;
     }
+
+    /// <summary>The forms a request of <paramref name="provider"/> sends <paramref name="token"/> in (the core's <c>SecretsOf</c>); none for an empty token.</summary>
+    private static string[] SecretsOf(IHostingProvider provider, string token) => provider switch
+    {
+        _ when token.Length == 0 => [],
+        GitHubProvider gitHub => gitHub.SecretsOf(token),
+        GitLabProvider gitLab => gitLab.SecretsOf(token),
+        AzureDevOpsProvider azureDevOps => azureDevOps.SecretsOf(token),
+        _ => [token],
+    };
 
     /// <summary>
     /// The same user as held (D357): Azure DevOps by its user id without case, GitHub and GitLab by

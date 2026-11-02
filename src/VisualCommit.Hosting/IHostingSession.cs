@@ -252,10 +252,10 @@ public interface IRepositoryHosting : IDisposable
 
     AuthorAvatars Avatars { get; }
 
-    /// <summary>Signed in and not off: the tab reads <see cref="UrlRewrites"/> with its refs.</summary>
+    /// <summary>Some account signed in, as last raised with <see cref="Changed"/>: the tab reads <see cref="UrlRewrites"/> with its refs.</summary>
     bool WantsUrlRewrites { get; }
 
-    /// <summary><see cref="State"/>, <see cref="Bindings"/>, <see cref="Avatars"/> or <see cref="WantsUrlRewrites"/> changed.</summary>
+    /// <summary><see cref="State"/>, <see cref="Bindings"/>, <see cref="Avatars"/>, <see cref="WantsUrlRewrites"/> or the account of <see cref="RepositoryHostingState.Repository"/>'s provider (its key or its login) changed.</summary>
     event EventHandler? Changed;
 
     /// <summary>On the UI thread, after each refs read.</summary>

@@ -232,6 +232,158 @@ public sealed class RepositoryHostingProvidersTests
         Assert.DoesNotContain(setup.AzureDevOps!.Requests, request => request.Path.StartsWith("/other-org/", StringComparison.Ordinal) && request.Login is { } login && !login.StartsWith("other-org", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Another_organizations_tab_raises_changed_when_azure_devops_account_becomes_a_third_organizations(bool refusedFirst)
+    {
+        // The tab's state is OtherOrganization for fake-org's account and for other-org's alike, yet
+        // the tab shows which account is held (D356, 9.9): swapping one for the other is a change.
+        // Refused first, with GitLab signed in so that the rewrites stay wanted, it is too (D366).
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, gitLab: refusedFirst);
+        await setup.Session.StartAsync(Cancelled);
+        if (refusedFirst)
+        {
+            await setup.SignInAsync(HostingProvider.GitLab);
+        }
+
+        var hosting = await OpenAsync(setup, "unlisted");
+        var logins = new List<string?>();
+        await setup.Thread.RunAsync(() =>
+        {
+            hosting.Changed += (_, _) => logins.Add(setup.Session.AccountOf(HostingProvider.AzureDevOps)?.Account.Key.Login);
+            hosting.Update(RefsOf(("origin", "http://unlisted-org@127.0.0.1:2/unlisted-org/P/_git/r")), UrlRewrites.None);
+        });
+        await setup.SignInAsync(HostingProvider.AzureDevOps);
+        await setup.Thread.IdleAsync();
+        Assert.Equal(PullRequestsState.OtherOrganization, hosting.State.PullRequests);
+        Assert.Equal("fake-org", logins[^1]);
+        if (refusedFirst)
+        {
+            setup.AzureDevOps!.Revoke(setup.AzureDevOpsToken);
+            var listed = await setup.Session.ListRepositoriesAsync(HostingProvider.AzureDevOps, Cancelled);
+            Assert.Equal(HostingFailureKind.BadCredentials, listed.Failure!.Kind);
+            await setup.Thread.IdleAsync();
+            Assert.Equal((AccountState.NeedsSignIn, PullRequestsState.OtherOrganization), (setup.Session.AccountOf(HostingProvider.AzureDevOps)!.State, hosting.State.PullRequests));
+        }
+
+        var changes = logins.Count;
+        await setup.SignInAsync(HostingProvider.AzureDevOps, setup.OtherOrganizationToken, ProvidersSessionSetup.OtherOrganization);
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+
+        Assert.Equal(["other-org"], logins.Skip(changes));
+        Assert.Equal(PullRequestsState.OtherOrganization, hosting.State.PullRequests);
+        Assert.DoesNotContain(setup.AzureDevOps!.Requests, request => request.Path.Contains("unlisted", StringComparison.OrdinalIgnoreCase));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task A3s_answer_is_kept_for_its_account_alone_so_another_user_never_lists_the_first_ones_private_parent()
+    {
+        // ada may see the fork's private parent, bob may not (D348: one GitLab user swapped for
+        // another). Under bob the fork is read again and listed itself, as for bob alone.
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, azureDevOps: false);
+        var gitLab = setup.GitLab!;
+        gitLab.AddUser("bob", 2002, "Bob Example");
+        var bobToken = gitLab.AddToken("bob");
+        using var source = await TempRepo.CreateAsync("fork-source");
+        await source.CommitFileAsync("README.md", "fork\n", "Initial commit");
+        var parent = await gitLab.AddProjectAsync("secret/parent", source.Path, ct: Cancelled);
+        await gitLab.AddProjectAsync("g/fork", source.Path, forkOf: parent, ct: Cancelled);
+        gitLab.Grant("secret", "ada", 40);
+        gitLab.Grant("g", "ada", 40);
+        gitLab.Grant("g", "bob", 40);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "fork");
+        await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", "http://127.0.0.1:3/g/fork.git")), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "ada's list");
+        Assert.Equal("secret/parent", hosting.State.Repository!.FullName);
+
+        Assert.Null(await setup.Session.SignOutAsync(HostingProvider.GitLab, Cancelled));
+        await setup.Thread.IdleAsync();
+        var mark = setup.Sent(HostingProvider.GitLab).Count;
+        var signedIn = await setup.Session.SignInAsync(new SignInRequest(HostingProvider.GitLab, bobToken), Cancelled);
+        Assert.Null(signedIn.Failure);
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests is PullRequestsState.Loaded or PullRequestsState.Failed, "bob's list");
+        var read = await setup.Thread.RunAsync(() => hosting.ReadRepositoryAsync(Cancelled));
+
+        Assert.Equal((PullRequestsState.Loaded, "g/fork"), (hosting.State.PullRequests, hosting.State.Repository!.FullName));
+        Assert.Equal((false, (HostedRepository?)null), (read.Value!.IsFork, read.Value.Parent));
+        Assert.DoesNotContain(setup.Sent(HostingProvider.GitLab).Skip(mark), request => request.Url.AbsoluteUri.Contains("secret", StringComparison.OrdinalIgnoreCase));
+        TokenTripwire.AssertAbsent(bobToken, [setup.Data.Path], null);
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task The_rewrites_are_wanted_as_last_raised_so_a_refusal_raced_by_another_sign_in_still_reads_the_rules()
+    {
+        // Azure DevOps alone signed in, a GitLab tab whose rules were read. Its 401 changes the
+        // account on the UI thread, and GitLab's sign-in sets its slot before the Changed that change
+        // posted runs. A handler by 7.10's rule (forget the rules when they are not wanted, read them
+        // when they are and were forgotten) sees the first Changed unwanted and the second wanted, so
+        // the rules are read again and GitLab's remote is bound.
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, repositories: true);
+        await setup.SignInAsync(HostingProvider.AzureDevOps);
+        var hosting = await OpenAsync(setup, "web-app");
+        var refs = RefsOf(("origin", GitLabUrl));
+        var rulesRead = true;
+        var seen = new List<bool>();
+        await setup.Thread.RunAsync(() =>
+        {
+            hosting.Update(refs, UrlRewrites.None);
+            hosting.Changed += (_, _) =>
+            {
+                seen.Add(hosting.WantsUrlRewrites);
+                if (!hosting.WantsUrlRewrites)
+                {
+                    rulesRead = false;
+                }
+                else if (!rulesRead)
+                {
+                    rulesRead = true;
+                    setup.Thread.Post(() =>
+                    {
+                        if (hosting.WantsUrlRewrites)
+                        {
+                            hosting.Update(refs, UrlRewrites.None);
+                        }
+                    });
+                }
+            };
+        });
+        await setup.Thread.IdleAsync();
+        Assert.True(hosting.WantsUrlRewrites);
+        Assert.Empty(hosting.Bindings);
+        await setup.Thread.RunAsync(seen.Clear);
+
+        // The UI thread held while the 401 posts its change, then held again behind it.
+        using var first = new ManualResetEventSlim();
+        using var second = new ManualResetEventSlim();
+        var secondArrived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        setup.Thread.Post(() => first.Wait(Cancelled));
+        setup.AzureDevOps!.Revoke(setup.AzureDevOpsToken);
+        Assert.Equal(HostingFailureKind.BadCredentials, (await setup.Session.ListRepositoriesAsync(HostingProvider.AzureDevOps, Cancelled)).Failure!.Kind);
+        setup.Thread.Post(() =>
+        {
+            secondArrived.SetResult();
+            second.Wait(Cancelled);
+        });
+        first.Set();
+        await secondArrived.Task.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+
+        // Azure DevOps' change has run; GitLab's slot is set before its Changed runs.
+        var gitLab = (await setup.Session.SignInAsync(new SignInRequest(HostingProvider.GitLab, setup.GitLabToken), Cancelled)).Status!.Account.Key;
+        second.Set();
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "GitLab's list");
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+
+        Assert.Equal([false, true], seen.Take(2));
+        Assert.Equal([new CredentialBinding(GitLabUrl, gitLab)], hosting.Bindings);
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
     [Fact]
     public async Task Githubs_sign_in_refreshes_no_gitlab_listed_tab_and_its_sign_out_keeps_gitlabs_bindings()
     {

@@ -2,7 +2,9 @@ using System.Text.Json;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting.Tokens;
+using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
+using VisualCommit.Testing.Hosting;
 using Xunit;
 
 namespace VisualCommit.Hosting.Tests;
@@ -71,6 +73,35 @@ public sealed class HostingSessionProvidersTests
         Assert.Throws<ArgumentException>(() => setup.NewSession(options: shared));
         var sharedAzure = HostingOptions.Off with { GitLab = GitLab.GitLabEndpoints.Local(47002), AzureDevOps = AzureDevOps.AzureDevOpsEndpoints.Local(47002) };
         Assert.Throws<ArgumentException>(() => setup.NewSession(options: sharedAzure));
+    }
+
+    [Theory]
+    [InlineData("http://127.0.0.1:47395/", "http://127.0.0.1:47395/", "none", "VISUALCOMMIT_GITLAB_URL names the origin of GitHub: GitLab is off.", new[] { HostingProvider.GitHub })]
+    [InlineData("none", "http://127.0.0.1:47398/", "http://127.0.0.1:47398", "VISUALCOMMIT_AZURE_DEVOPS_URL names the origin of GitLab: Azure DevOps is off.", new[] { HostingProvider.GitLab })]
+    [InlineData("http://127.0.0.1:47395/", "none", " http://127.0.0.1:47395 ", "VISUALCOMMIT_AZURE_DEVOPS_URL names the origin of GitHub: Azure DevOps is off.", new[] { HostingProvider.GitHub })]
+    [InlineData("http://127.0.0.1:47395/", "http://127.0.0.1:47395/", "http://127.0.0.1:47395/", "VISUALCOMMIT_GITLAB_URL names the origin of GitHub: GitLab is off.|VISUALCOMMIT_AZURE_DEVOPS_URL names the origin of GitHub: Azure DevOps is off.", new[] { HostingProvider.GitHub })]
+    public async Task Two_variables_on_one_origin_turn_the_later_provider_off_with_a_warning_and_the_session_is_made(string gitHub, string gitLab, string azureDevOps, string warnings, HostingProvider[] on)
+    {
+        // An environment set before 7b (VISUALCOMMIT_GITHUB_URL and another variable on one local
+        // port) starts the app: the provider later in D353's order is off, named by its variable,
+        // never by its value, and the session does not throw.
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, azureDevOps: false, gitLab: false);
+        var log = new ListLog();
+        var variables = new Dictionary<string, string>
+        {
+            [HostingOptions.GitHubVariable] = gitHub,
+            [HostingOptions.GitLabVariable] = gitLab,
+            [HostingOptions.AzureDevOpsVariable] = azureDevOps,
+        };
+
+        var options = HostingOptions.FromEnvironment(name => variables.GetValueOrDefault(name), log);
+        using var session = setup.NewSession(options: options, log: log);
+
+        Assert.Equal(warnings.Split('|'), log.Lines.Where(line => line.Level == LogLevel.Warning).Select(line => line.Message));
+        Assert.Equal(on, session.Providers);
+        Assert.Equal(on.Contains(HostingProvider.GitLab), options.GitLab is not null && options.CreateGitLabHandler is not null);
+        Assert.Null(options.AzureDevOps);
+        Assert.Null(options.CreateAzureDevOpsHandler);
     }
 
     [Fact]
@@ -253,6 +284,47 @@ public sealed class HostingSessionProvidersTests
         Assert.DoesNotContain("EVE-1", setup.Log.Written, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData(HostingProvider.GitHub)]
+    [InlineData(HostingProvider.AzureDevOps)]
+    public async Task An_answer_that_names_the_credential_as_sent_in_the_avatars_address_or_the_display_name_is_malformed(HostingProvider provider)
+    {
+        // A server that echoes what the request sent in Authorization: GitHub's into the avatar's
+        // query (its host stays the web base's, so the provider keeps the address), Azure DevOps'
+        // Basic credential (Base64 of ":" and the token) as Ada's display name.
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: provider == HostingProvider.GitHub, azureDevOps: provider == HostingProvider.AzureDevOps, gitLab: false);
+        var echoes = 0;
+        string Echo(string text, string credential)
+        {
+            var echoed = provider == HostingProvider.GitHub
+                ? text.Replace("?v=4\"", $"?v=4&s={credential}\"", StringComparison.Ordinal)
+                : text.Replace(Scenarios.AdaName, credential, StringComparison.Ordinal);
+            if (echoed != text)
+            {
+                Interlocked.Increment(ref echoes);
+            }
+
+            return echoed;
+        }
+
+        var options = provider == HostingProvider.GitHub
+            ? setup.Options() with { CreateHandler = () => new Echoing(setup.GitHub!.CreateHandler(), Echo) }
+            : setup.Options() with { CreateAzureDevOpsHandler = () => new Echoing(setup.AzureDevOps!.CreateHandler(), Echo) };
+        var session = setup.NewSession(options: options);
+        await session.StartAsync(Cancelled);
+        var token = setup.TokenOf(provider);
+
+        var result = await session.SignInAsync(new SignInRequest(provider, token, provider == HostingProvider.AzureDevOps ? ProvidersSessionSetup.Organization : null), Cancelled);
+
+        Assert.Equal((HostingFailureKind.Malformed, Http.HostingHttpTexts.Malformed(provider), provider), (result.Failure?.Kind, result.Failure?.Message, result.Failure?.Provider));
+        Assert.True(Volatile.Read(ref echoes) > 0);
+        Assert.Null(session.AccountOf(provider));
+        Assert.False(File.Exists(setup.Paths.AccountsFile));
+        Assert.DoesNotContain(setup.FakeTokens.Calls, call => call.StartsWith("save", StringComparison.Ordinal));
+        TokenTripwire.AssertAbsent(token, [setup.Data.Path], null);
+        Assert.DoesNotContain(Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(":" + token)), setup.Log.Written, StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task Gitlabs_sign_out_keeps_the_avatars_and_githubs_slot_and_githubs_deletes_them_keeping_gitlabs()
     {
@@ -302,4 +374,24 @@ public sealed class HostingSessionProvidersTests
 
     private static IReadOnlyList<string> Paths(ProvidersSessionSetup setup, HostingProvider provider) =>
         [.. setup.Sent(provider).Select(request => $"{request.Method} {request.Url.AbsolutePath}")];
+
+    /// <summary>A fake behind a server that writes the request's credential (what follows <c>Authorization</c>'s scheme) into its JSON answers by <paramref name="echo"/>.</summary>
+    private sealed class Echoing(HttpMessageHandler inner, Func<string, string, string> echo) : DelegatingHandler(inner)
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var response = await base.SendAsync(request, cancellationToken);
+            if (request.Headers.Authorization?.Parameter is not { Length: > 0 } credential
+                || response.Content is not { } content
+                || content.Headers.ContentType?.MediaType != "application/json")
+            {
+                return response;
+            }
+
+            var text = await content.ReadAsStringAsync(cancellationToken);
+            response.Content = new StringContent(echo(text, credential), System.Text.Encoding.UTF8, "application/json");
+            content.Dispose();
+            return response;
+        }
+    }
 }

@@ -131,6 +131,9 @@ internal sealed class GitHubClient : IDisposable
     /// </summary>
     internal void ForgetKept() => _core.ForgetKept();
 
+    /// <summary>What a request with <paramref name="token"/> is screened as (the core's <c>SecretsOf</c>): the session's D382 check reads an answer for each.</summary>
+    internal string[] SecretsOf(string token) => _core.SecretsOf(token);
+
     /// <summary>An answer that succeeded but lacks what the app needs: <see cref="MalformedText"/>, with the warning the core writes for one.</summary>
     internal HostingFailure MalformedAnswer(HttpMethod method, Uri url, string? requestId) => _core.MalformedAnswer(method, url, requestId);
 

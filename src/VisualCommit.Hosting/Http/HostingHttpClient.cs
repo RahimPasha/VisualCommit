@@ -730,7 +730,7 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// such as a <c>Basic</c> one in Base64; the longest first. A server can echo either into a
     /// request id, a <c>Location</c>, a message or a reason phrase.
     /// </summary>
-    private string[] SecretsOf(string token)
+    internal string[] SecretsOf(string token)
     {
         if (token.Length == 0)
         {

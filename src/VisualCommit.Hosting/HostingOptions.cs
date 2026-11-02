@@ -80,7 +80,10 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
     /// <c>http://127.0.0.1:&lt;port&gt;/</c>, the provider's <c>Local(port)</c>; anything else, off
     /// and a warning that names the variable but not its value. Each provider it turns on gets its
     /// handler set explicitly (<see cref="DefaultHandler(Uri)"/> of Azure DevOps' web base, of
-    /// GitLab's API base). All three off is <see cref="Off"/> itself.
+    /// GitLab's API base). A provider whose web origin an earlier one in D353's order (GitHub, GitLab,
+    /// Azure DevOps) already has is off, with a warning that names its variable and that provider,
+    /// since one origin serves one provider (the session refuses such options). All three off is
+    /// <see cref="Off"/> itself.
     /// </summary>
     public static HostingOptions FromEnvironment(Func<string, string?> readEnvironment, IAppLog log)
     {
@@ -89,6 +92,18 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
         var gitHub = Read(readEnvironment, log, GitHubVariable, HostingProvider.GitHub, GitHubEndpoints.GitHubCom, GitHubEndpoints.Local);
         var azureDevOps = Read(readEnvironment, log, AzureDevOpsVariable, HostingProvider.AzureDevOps, AzureDevOpsEndpoints.Service, AzureDevOpsEndpoints.Local);
         var gitLab = Read(readEnvironment, log, GitLabVariable, HostingProvider.GitLab, GitLabEndpoints.GitLabCom, GitLabEndpoints.Local);
+        if (gitLab is not null && SharedWith(gitLab.WebBase, (gitHub?.WebBase, HostingProvider.GitHub)) is { } gitLabShares)
+        {
+            log.Warning($"{GitLabVariable} names the origin of {HostingProviders.DisplayName(gitLabShares)}: GitLab is off.");
+            gitLab = null;
+        }
+
+        if (azureDevOps is not null && SharedWith(azureDevOps.WebBase, (gitHub?.WebBase, HostingProvider.GitHub), (gitLab?.WebBase, HostingProvider.GitLab)) is { } azureShares)
+        {
+            log.Warning($"{AzureDevOpsVariable} names the origin of {HostingProviders.DisplayName(azureShares)}: Azure DevOps is off.");
+            azureDevOps = null;
+        }
+
         if (gitHub is null && azureDevOps is null && gitLab is null)
         {
             return Off;
@@ -157,6 +172,23 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
         // The value is left out: whatever it holds (a user part, a token typed by mistake) never
         // reaches the log (docs/phase-7a-design.md 1).
         log.Warning($"{variable} is neither none nor http://127.0.0.1:<port>/: {HostingProviders.DisplayName(provider)} is off.");
+        return null;
+    }
+
+    /// <summary>The first of <paramref name="earlier"/> on <paramref name="webBase"/>'s origin (scheme, host and port, without case, as the session compares them); null when none is.</summary>
+    private static HostingProvider? SharedWith(Uri webBase, params (Uri? WebBase, HostingProvider Provider)[] earlier)
+    {
+        foreach (var (otherBase, provider) in earlier)
+        {
+            if (otherBase is not null
+                && string.Equals(otherBase.Scheme, webBase.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(otherBase.Host, webBase.Host, StringComparison.OrdinalIgnoreCase)
+                && otherBase.Port == webBase.Port)
+            {
+                return provider;
+            }
+        }
+
         return null;
     }
 

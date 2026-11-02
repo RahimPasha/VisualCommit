@@ -15,7 +15,7 @@ namespace VisualCommit.Hosting;
 /// delegate); network work runs off it under the hosting's lifetime, which <see cref="Dispose"/>
 /// ends. <see cref="State"/>, <see cref="Bindings"/> and <see cref="Avatars"/> are swapped whole and
 /// may be read from any thread; <see cref="Changed"/> comes through the post delegate, only when one
-/// of them or <see cref="WantsUrlRewrites"/> differs.
+/// of them, <see cref="WantsUrlRewrites"/> or the listed provider's account differs.
 /// </summary>
 public sealed partial class RepositoryHosting : IRepositoryHosting
 {
@@ -40,16 +40,20 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     private TaskCompletionSource? _running;
     private TaskCompletionSource? _again;
 
-    // Under _infoLock: A3's answer for a candidate, and the read in flight.
-    private (HostedRepository Candidate, RepositoryInfo Info)? _info;
-    private (HostedRepository Candidate, Task<HostingResult<RepositoryInfo>> Read)? _reading;
+    // Under _infoLock: A3's answer for a candidate with the account it was read with, and the read
+    // in flight with the account it was asked for: another account of the candidate's provider
+    // (D348) uses neither, since what one account may read another may not.
+    private (HostedRepository Candidate, AccountKey Account, RepositoryInfo Info)? _info;
+    private (HostedRepository Candidate, AccountKey? Account, Task<HostingResult<RepositoryInfo>> Read)? _reading;
 
     private RepositoryHostingState _state = RepositoryHostingState.NoHostedRemote;
     private IReadOnlyList<CredentialBinding> _bindings = [];
     private AuthorAvatars _avatars = AuthorAvatars.None;
 
-    // On the UI thread: WantsUrlRewrites as last raised.
+    // On the UI thread: WantsUrlRewrites as last raised, and the listed provider's account (its key
+    // and its login as given) as last raised.
     private bool _wantsRewrites;
+    private (AccountKey Key, string Login)? _account;
     private volatile bool _disposed;
 
     internal RepositoryHosting(HostingSession session, string workingDirectory)
@@ -58,7 +62,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         _name = Path.GetFileName(Path.TrimEndingDirectorySeparator(workingDirectory));
         _lifetimeSource = CancellationTokenSource.CreateLinkedTokenSource(session.Lifetime);
         _lifetime = _lifetimeSource.Token;
-        _wantsRewrites = WantsUrlRewrites;
+        _wantsRewrites = session.AnySignedIn;
     }
 
     public RepositoryHostingState State => Volatile.Read(ref _state);
@@ -70,8 +74,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// <summary>
     /// Some provider's account is signed in (with or without "Use for git over HTTPS"): the tab reads
     /// the URL rewrites with its refs, since the rules decide every provider's recognition (D290).
+    /// It is the value last raised with <see cref="Changed"/> (set on the UI thread), never the
+    /// session's live one, so that the tab and the hosting decide from one value: an account's change
+    /// that a handler has not seen yet cannot hide another one's from it.
     /// </summary>
-    public bool WantsUrlRewrites => _session.AnySignedIn;
+    public bool WantsUrlRewrites => _wantsRewrites;
 
     public event EventHandler? Changed;
 
@@ -98,7 +105,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
 
         _refs = refs;
         _effective = rewrites.Apply(refs.RemoteUrls);
-        _rulesKnown = WantsUrlRewrites;
+        _rulesKnown = _wantsRewrites;
         _remotes = HostingRules.Remotes(refs.RemoteUrls, _effective, url => _session.Recognise(url));
         var candidate = HostingRules.ListedCandidate(_remotes);
         var changed = !Equals(candidate, _candidate);
@@ -207,7 +214,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             return;
         }
 
-        if (!WantsUrlRewrites)
+        if (!_session.AnySignedIn)
         {
             _rulesKnown = false;
         }
@@ -221,6 +228,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
 
         if (_candidate is { } candidate && candidate.Provider == provider)
         {
+            ForgetInfoOfOthers(candidate);
             if (CanList)
             {
                 Apply(avatars);
@@ -268,12 +276,38 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         null => candidate,
     };
 
-    /// <summary>A3's answer for <paramref name="candidate"/>, once it has come; null before.</summary>
+    /// <summary>
+    /// A3's answer for <paramref name="candidate"/>, once it has come; null before, and while the
+    /// candidate's provider holds another account than the one it was read with (a sign-out keeps it,
+    /// as 7a did, until another account signs in).
+    /// </summary>
     private RepositoryInfo? InfoOf(HostedRepository candidate)
     {
         lock (_infoLock)
         {
-            return _info is { } kept && kept.Candidate.Equals(candidate) ? kept.Info : null;
+            return _info is { } kept && kept.Candidate.Equals(candidate) && HeldOrNone(candidate, kept.Account) ? kept.Info : null;
+        }
+    }
+
+    /// <summary>The candidate's provider holds <paramref name="account"/>, or no account at all.</summary>
+    private bool HeldOrNone(HostedRepository candidate, AccountKey? account) =>
+        _session.SlotOf(candidate.Provider) is not { } slot || slot.Key == account;
+
+    // On the UI thread, at the candidate's provider's change of account: A3's answer and the read in
+    // flight of another account are dropped (InfoOf would not use them either).
+    private void ForgetInfoOfOthers(HostedRepository candidate)
+    {
+        lock (_infoLock)
+        {
+            if (_info is { } kept && !HeldOrNone(candidate, kept.Account))
+            {
+                _info = null;
+            }
+
+            if (_reading is { } reading && !HeldOrNone(candidate, reading.Account))
+            {
+                _reading = null;
+            }
         }
     }
 
@@ -302,17 +336,35 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
 
     // On the UI thread: the state and the bindings as the fields say, with the avatars given;
     // Changed posted when any of them differs, or WantsUrlRewrites: a sign-in that changes nothing
-    // else (a remote GitHub's only through the user's insteadOf) still starts the tab's rules read.
+    // else (a remote GitHub's only through the user's insteadOf) still starts the tab's rules read;
+    // or the listed provider's account, which the tab shows (D356: another organization's account
+    // swapped for a third leaves the state as it was).
     private void Apply(AuthorAvatars? avatars = null)
     {
-        var state = StateOf();
-        var bindings = _session.BindingsOf(_effective, _rulesKnown);
         var changed = false;
-        if (WantsUrlRewrites != _wantsRewrites)
+        if (_session.AnySignedIn != _wantsRewrites)
         {
             _wantsRewrites = !_wantsRewrites;
+            if (!_wantsRewrites)
+            {
+                // Raised as unwanted: the tab forgets its rules, so they count as unknown here too.
+                _rulesKnown = false;
+            }
+
             changed = true;
         }
+
+        var account = _candidate is { } listed && _session.SlotOf(listed.Provider)?.Status.Account is { } held
+            ? (held.Key, held.Login)
+            : ((AccountKey Key, string Login)?)null;
+        if (!Nullable.Equals(account, _account))
+        {
+            _account = account;
+            changed = true;
+        }
+
+        var state = StateOf();
+        var bindings = _session.BindingsOf(_effective, _rulesKnown);
 
         if (!SameState(_state, state))
         {
@@ -456,40 +508,48 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         }
     }
 
+    // A3 of the candidate as the candidate's provider's account reads it now: kept, the read in
+    // flight for that account, or a new read (docs/phase-7b-design.md 9.7: per account).
     private Task<HostingResult<RepositoryInfo>> ReadInfoAsync(HostedRepository candidate, CancellationToken ct)
     {
         Task<HostingResult<RepositoryInfo>> read;
         lock (_infoLock)
         {
-            if (_info is { } kept && kept.Candidate.Equals(candidate))
+            if (_info is { } kept && kept.Candidate.Equals(candidate) && HeldOrNone(candidate, kept.Account))
             {
                 return Task.FromResult(HostingResult<RepositoryInfo>.Ok(kept.Info));
             }
 
-            if (_reading is { } reading && reading.Candidate.Equals(candidate))
+            var account = _session.SlotOf(candidate.Provider)?.Key;
+            if (_reading is { } reading && reading.Candidate.Equals(candidate) && reading.Account == account)
             {
                 read = reading.Read;
             }
             else
             {
-                read = Task.Run(() => ReadInfoCoreAsync(candidate));
-                _reading = (candidate, read);
+                read = Task.Run(() => ReadInfoCoreAsync(candidate, account));
+                _reading = (candidate, account, read);
             }
         }
 
         return read.WaitAsync(ct);
     }
 
-    private async Task<HostingResult<RepositoryInfo>> ReadInfoCoreAsync(HostedRepository candidate)
+    private async Task<HostingResult<RepositoryInfo>> ReadInfoCoreAsync(HostedRepository candidate, AccountKey? asked)
     {
         HostingResult<RepositoryInfo>? result = null;
+        AccountKey? readWith = null;
         try
         {
             result = await _session.CallAsync(
                 candidate.Provider,
                 $"reading {candidate.FullName}",
                 candidate,
-                (provider, token, _, linked) => provider.ReadRepositoryAsync(token, candidate, linked),
+                (provider, token, account, linked) =>
+                {
+                    readWith = account.Key;
+                    return provider.ReadRepositoryAsync(token, candidate, linked);
+                },
                 _lifetime).ConfigureAwait(false);
             return result;
         }
@@ -497,12 +557,13 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         {
             lock (_infoLock)
             {
-                if (result?.Value is { } info)
+                // Kept with the account the request was sent with, which only that account uses.
+                if (result?.Value is { } info && readWith is { } key)
                 {
-                    _info = (candidate, info);
+                    _info = (candidate, key, info);
                 }
 
-                if (_reading is { } reading && reading.Candidate.Equals(candidate))
+                if (_reading is { } reading && reading.Candidate.Equals(candidate) && reading.Account == asked)
                 {
                     _reading = null;
                 }

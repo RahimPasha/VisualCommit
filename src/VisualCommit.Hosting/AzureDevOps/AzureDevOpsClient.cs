@@ -192,6 +192,9 @@ internal sealed class AzureDevOpsClient : IDisposable
     /// <summary>Forgets the core's kept answers (a sign-out); Azure DevOps sends no <c>ETag</c>, so there are none in practice.</summary>
     public void ForgetKept() => _core.ForgetKept();
 
+    /// <summary>What a request with <paramref name="token"/> is screened as (the core's <c>SecretsOf</c>: the token and its <c>Basic</c> credential): the session's D382 check reads an answer for each.</summary>
+    internal string[] SecretsOf(string token) => _core.SecretsOf(token);
+
     public void Dispose() => _core.Dispose();
 
     /// <summary><paramref name="url"/> with <paramref name="parameters"/> added to its query.</summary>

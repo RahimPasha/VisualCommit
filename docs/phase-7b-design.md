@@ -2644,10 +2644,11 @@ The key for all three is `new AccountKey(provider.Kind, provider.Host, account.L
   "{Name} is turned off." (GitHub's 7a's, `:28`) without a request. Else `CheckTokenAsync(r.Token,
   r.Organization, linked)` outside the gate; a failure changes nothing. Then 7a's steps on that provider's record: another key forgotten (D348),
   `UseForGit` kept or true, record, slot, event. Other providers are untouched. A check whose answer
-  names the token itself (ignoring case) in the login, the display name, the organization or the
-  avatar's host is a malformed answer, with the provider's malformed text, before anything is kept or
-  logged, so no sign-in line carries an echoed token (D382; the core already screens it out of its
-  own warnings and failures).
+  names the token (ignoring case), as given or as the request sent it (the core's `SecretsOf`: Azure
+  DevOps' `Basic` credential too), in the login, the display name, the organization, the user id or
+  the avatar's whole address is a malformed answer, with the provider's malformed text, before
+  anything is kept or logged, so no record or sign-in line carries an echoed token (D382; the core
+  already screens it out of its own warnings and failures).
 - **`SignOutAsync(provider, ct)`**: 7a's steps for that slot, then its provider's `ForgetKept()`
   (`GitHubProvider.cs:311`; the others' `internal ForgetKept`, 1.4). Only GitHub's runs `ForgetAvatarsAsync`
   (`:661-713`; D291, D349).
@@ -2692,8 +2693,8 @@ The key for all three is `new AccountKey(provider.Kind, provider.Host, account.L
   is held, signed in or needing sign-in, that does not cover it, `OtherOrganization`: `Repository` the
   candidate, no list, failure or `ByRef`, no request (D366, D356); else 7a's. `RequestRemotes`
   is empty in both (1.5).
-- **Bindings**: 9.6's union; `WantsUrlRewrites` is `AnySignedIn`, since the rules decide every
-  provider's recognition (D290, r2 7.5).
+- **Bindings**: 9.6's union; `WantsUrlRewrites` is `AnySignedIn` as last raised with `Changed`, since
+  the rules decide every provider's recognition (D290, r2 7.5).
 - **`ByRef`** keys heads by (`HeadRepository`, `HeadRef`) with the record's equality, never `FullName`
   (`HostingRules.cs:102,121`): a GitHub mirror of a GitLab head's path maps nothing; an
   `<organization>.visualstudio.com` remote maps a `dev.azure.com` head (one `Host`).
@@ -2792,32 +2793,30 @@ limit (0.6).
 
 **As built** (WP-S, `46ab4af` to its last commit, 2026-11-02). Where the build differs from the text
 above or settles what it left open:
-- `HostingSession`: a private `Entry` per provider on (provider, slot, refusal check, switch chain);
-  `BindingsOf(effective, rulesKnown)` is the union that `BindingsFor`, `BindingsForClone` and the tabs
-  share; `Endpoints` is gone. A provider on without a handler gets `HostingOptions.RefusingHandler()`
-  ("The provider is off: the app makes no request."). One origin twice throws before
-  anything is made. `FromEnvironment` can give such options (two variables on one local port), and
-  `AppSession`'s construction then throws: the lead decides whether `FromEnvironment` turns the later
-  provider off with a warning naming its variable. D382's screen checks `Login`, `Key.Login`, `Name`
-  and `AvatarUrl.Host`; its failure is logged as any failed sign-in. A record's `avatarUrl` is read
-  for GitHub alone.
-- 9.5: a 200 with the held user (or the check's own user unknown) logs 7a's warning; a held user
-  unknown (`UserId` null, `Id` 0) then takes the check's, under the gate, only while that slot holds
-  that token.
-- `RepositoryHosting.StateOf`: an account held that does not cover the candidate is
-  `OtherOrganization` on Azure DevOps and `SignedOut` elsewhere (unreachable: GitHub and GitLab cover
-  by host). `CallAsync`'s `about` check also guards A3 and A5; A6 passes none (7a's).
-- Tests: `HostingSessionGitHubForms.Account` is declared `AccountStatus` (not `?`) with `!`: C# 14
-  keeps no null state for an extension property between two reads, which 7a's tests need. `ProvidersSessionSetup` (`repositories: true`: one
-  repository with an open request in each fake, in Azure DevOps one in each of `fake-org` and
-  `other-org`) wraps the in-process Azure DevOps fake in `ServiceAnswers` when given
-  `AzureDevOpsEndpoints.Service`: the fake's answers name its `Local(2)` base, which WP-AZ reads
-  only on its own origin, so the shim writes them on dev.azure.com (WP-LF may give the fake a base). 7a's copy is `JsonAccountStore7a.cs`. The wiring class adds
-  `upstream` to `mobile-app/` itself and matches git calls by the tab's
-  `Repository.WorkingDirectory` (git's spelling); it passed with `VISUALCOMMIT_WATCHER_LAG_MS=1500`.
-- Outside 9.1's list: none in src/; `HostingContractsTests` (passed to WP-S) has one test renamed.
-- For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without a repository.
-  For WP-N: `IHostingSession.cs` changed only `NullRepositoryHosting`'s text.
+- `HostingSession`: a private `Entry` per provider on; `BindingsOf(effective, rulesKnown)` is the union
+  `BindingsFor`, `BindingsForClone` and the tabs share; `Endpoints` is gone. A provider on without a
+  handler gets `HostingOptions.RefusingHandler()`. One origin twice throws; `FromEnvironment` turns
+  the later provider in D353's order off instead, warning `{variable} names the origin of {Name}:
+  {Name} is off.` D382's screen (9.4 amended) takes each form the core's `SecretsOf` gives (internal
+  now, reached through one internal member on each provider and on GitHub's and Azure DevOps'
+  clients, outside 9.1's list) in `Login`, `Key.Login`, `Name`, `UserId` and the avatar's address as
+  given, written and decoded. A record's `avatarUrl` is read for GitHub alone.
+- 9.5: a 200 with the held user (or the check's unknown) logs 7a's warning; a held user unknown then
+  takes the check's, under the gate, while that slot holds that token.
+- `RepositoryHosting`: `StateOf` gives a held account not covering the candidate `OtherOrganization`
+  on Azure DevOps, `SignedOut` elsewhere (unreachable). `WantsUrlRewrites` is the value last raised,
+  so a refusal raced by another sign-in still reads the rules. `Changed` also comes when the listed
+  provider's account (key, login) changes: WP-P's row follows a swap of organizations. A3's answer
+  and read are kept with their account and unused while another account of that provider is held.
+- Tests: `HostingSessionGitHubForms.Account` is `AccountStatus` with `!` (C# 14 keeps no null state
+  for extension properties). `ProvidersSessionSetup` (`repositories: true`: one repository with an
+  open request in each fake, in Azure DevOps one in each organization) wraps the in-process Azure
+  DevOps fake in `ServiceAnswers` for `AzureDevOpsEndpoints.Service`, writing its `Local(2)` addresses
+  on dev.azure.com (WP-LF may give the fake a base). 7a's copy is `JsonAccountStore7a.cs`. The wiring
+  class matches git calls by `Repository.WorkingDirectory` and passed lagged. `HostingContractsTests`
+  (passed to WP-S) has one test renamed.
+- For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without one. For
+  WP-N: `IHostingSession.cs` changed `NullRepositoryHosting`'s text and two docs.
 
 ## 10. WP-A: accounts and sign-in (part A)
 
