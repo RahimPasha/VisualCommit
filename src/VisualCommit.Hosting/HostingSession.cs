@@ -34,7 +34,6 @@ public sealed class HostingSession : IHostingSession
     private readonly Action<Action> _post;
     private readonly Entry[] _entries;
     private readonly HostingProvider[] _providers;
-    private readonly GitHubProvider? _gitHub;
     private readonly TokenVault? _vault;
     private readonly JsonAccountStore _accounts;
 
@@ -91,10 +90,9 @@ public sealed class HostingSession : IHostingSession
             switch (kind)
             {
                 case HostingProvider.GitHub when options.GitHub is { } gitHub:
-                    _gitHub = new GitHubProvider(gitHub, options.CreateHandler, log, clock);
+                    provider = new GitHubProvider(gitHub, options.CreateHandler, log, clock);
                     _avatarCache = NewAvatarCache(options);
                     _authorMaps = new AuthorMapStore(Path.Combine(paths.AvatarsDirectory, "authors"), clock, log);
-                    provider = _gitHub;
                     break;
                 case HostingProvider.GitLab when options.GitLab is { } gitLab:
                     provider = new GitLabProvider(gitLab, options.CreateGitLabHandler ?? HostingOptions.RefusingHandler, log, clock);
@@ -133,9 +131,6 @@ public sealed class HostingSession : IHostingSession
 
     /// <summary>Some provider's account is signed in with its token in hand: the tabs read the URL rewrites (docs/phase-7b-design.md 9.7).</summary>
     internal bool AnySignedIn => _entries.Any(entry => entry.Slot is { IsSignedIn: true });
-
-    /// <summary>GitHub's typed provider while it is on, for A6 (D349).</summary>
-    internal GitHubProvider? GitHubProvider => _gitHub;
 
     internal IAppLog Log => _log;
 
