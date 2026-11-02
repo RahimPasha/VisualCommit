@@ -1604,7 +1604,8 @@ branch `wip/p7b-http`; no git, no UI, no picture.
 - **Sending.** One `HttpClient` over `createHandler()`, `Timeout` infinite; one request at a time (a
   `SemaphoreSlim(1)` waited with the caller's token); 30 s (`timeout`) from the send; the caller's
   cancellation throws, the 30 s give `Network` with `HostingHttpTexts.Timeout`, no answer `Network` with
-  `Network`; work on the pool (`Task.Run`, `ConfigureAwait(false)`). Every request gets `User-Agent:`
+  `Network`; work on the pool (`Task.Run`, `ConfigureAwait(false)`); a call cancelled while it waits
+  sends nothing, even when it is given the turn (WP-S, `1fe31fa`). Every request gets `User-Agent:`
   `HostingHttpClient.UserAgent` (7a's value), then `profile.AddHeaders`; `profile.Authorize(request, token)`
   only when its scheme, host and port are `TokenOrigin`'s (D285). A body is serialised through
   `profile.Json`; a type outside it is an `ArgumentException`.
@@ -2798,7 +2799,7 @@ what was open:
   without a handler gets `HostingOptions.RefusingHandler()`. One origin twice throws;
   `FromEnvironment` turns the later provider in D353's order off instead, warning `{variable} names
   the origin of {Name}: {Name} is off.` D382's screen (9.4 amended, `EchoedToken`) seeks each form
-  of the core's `SecretsOf` (made internal) in the user's names, id and avatar address and A3's
+  of the core's `SecretsOf` in the user's names, id and avatar address and A3's
   names: a malformed answer. `avatarUrl` is GitHub's alone.
 - 9.5: a 200 with the held user (or the check's unknown) logs 7a's warning; a held user unknown takes
   the check's under the gate while the slot holds that token.
@@ -2816,6 +2817,12 @@ what was open:
   starts at once. A read a `ReadRepositoryAsync` caller awaits goes on for it alone. Within one
   provider, 7a's `_again`. `StopAvatars` cancels the avatar run (9.8). `CallAsync`'s `what` and the
   Debug line pass names through `ScreenEmail` (D368); the state's stay as given.
+- Outside 9.1: WP-H's `Http/HostingHttpClient.cs` (`SecretsOf` internal; `ExchangeAsync` sends
+  nothing for a request cancelled before its turn) and one internal `SecretsOf` on each client and
+  provider. Two guards have no test that fails without them, since no seam orders the races they
+  close (`SemaphoreSlim` hands its count to a waiter cancelled just before a release; a run or
+  avatar run between the drop and its stop): that core check, and `ReadInfoAsync`'s refusal of
+  another provider's read; the lead accepted them so (2026-11-02).
 - Tests: `HostingSessionGitHubForms.Account` is `AccountStatus` with `!` (C# 14); its `AccountsFile`
   forms keep 7a's store tests unchanged. `GiveUpObserver` stands for a late UI thread.
   `ProvidersSessionSetup` (`repositories: true`: an open request per fake and Azure DevOps
