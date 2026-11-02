@@ -247,6 +247,13 @@ Test steps: `windows-latest` 39 min 11 s (36 min 5 s), `macos-latest` 32 min 42 
 `ubuntu-latest` 5 min 39 s (4 min 20 s), the containers 9 min 26 s and 7 min 50 s (6 min 26 s and
 5 min 32 s), each under four fifths.
 
+[41484799303](https://github.com/RahimPasha/VisualCommit/actions/runs/41484799303) on `9b31004`
+(WP-LIVE's stage 1, merged at `b377aa3`, and its CLAUDE.md rows): all five jobs green, none failed a
+test; Windows' "Build the opt-in projects" green (the live project, with stage 1, compiles there).
+Jobs and Test steps: `windows-latest` 38 min 28 s (35 min 25 s), `macos-latest` 43 min 27 s (41 min
+7 s), `ubuntu-latest` 6 min 2 s (4 min 38 s), the containers 8 min 27 s and 8 min 24 s (6 min 7 s and
+6 min 11 s), each under four fifths (56 and 11 min 12 s).
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
