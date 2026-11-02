@@ -674,7 +674,14 @@ every commit.
   variables `VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN`, `…_AZURE_DEVOPS_REPO`, `…_GITLAB_TOKEN` and
   `…_GITLAB_REPO`, then VS Code quit and started again. Needed before WP-S's merge (wave 3), since
   stage 1 of the live command runs then; on 2026-11-01 none of the four was set (checked by name
-  alone). Each token's expiry date goes here once it is made.
+  alone). Each token's expiry date goes here once it is made. On 2026-11-02 the owner made both
+  sandbox projects and a token for each, and showed the two tokens in the session's conversation;
+  so both are revoked and made again, never shown anywhere (D250, D260). GitLab's first token was a
+  legacy one with every scope; the new one is 15.8's fine-grained token (D375), and Azure DevOps'
+  new one has Code "Read & write" alone, for D352's organization alone, at most 30 days. The lead
+  gave the owner a PowerShell script, outside the repository, that sets the four variables from
+  masked prompts and prints only 15.8's true-or-false checks; the GitLab account's user name,
+  like the organization's name, stays out of the repository.
 - **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
   (the review before the gate and the runs after it: the avatars' lookup per author, git's
