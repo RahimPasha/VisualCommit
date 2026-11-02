@@ -399,10 +399,12 @@ with the lead's `df365e5` to `b65d0d9`); its whole default run passed (Notes) an
 `c0af1be` is green in all five jobs (CI section). Wave 3: WP-S (section 9) is being built, reviewed
 and hunted as wave 2's packages were, on `wip/p7b-session` in a worktree made from `7087d6c` under
 `D:/Projects/Personal/vc-wt/p7b-session` (a session that finds it after a break reads
-`git log 7087d6c..` there first); before its merge the owner's 15.8 steps
-(Waiting on the owner) and stage 1 of the live command (15.9), the owner told and present; then
-WP-LF. Until the reset of 2026-11-05 the phase may use all that is left of the week's allowance and
-waits for the reset if it runs out (D344).
+`git log 7087d6c..` there first), now in the lead's last round on its third hunt (S1 to S5; D383 records
+the account switch it keeps, and D382's amendment takes S1's A3 refusal at the merge). Before its merge the owner's 15.8
+steps (Waiting on the owner); right after it WP-LIVE's stage 1 (15.1: `wip/p7b-live1`, built, then
+run by the lead with the owner's tokens, the owner told and present), then WP-LF. Until the reset
+of 2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if
+it runs out (D344).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -672,8 +674,9 @@ every commit.
   scopes and variables (step 16). The design names them in 15.8 (D364): the Azure DevOps project
   and token, the GitLab account, project and fine-grained token, and the four Windows user
   variables `VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN`, `…_AZURE_DEVOPS_REPO`, `…_GITLAB_TOKEN` and
-  `…_GITLAB_REPO`, then VS Code quit and started again. Needed before WP-S's merge (wave 3), since
-  stage 1 of the live command runs then; on 2026-11-01 none of the four was set (checked by name
+  `…_GITLAB_REPO`, then VS Code quit and started again, or, without the restart, the lead gives
+  the six to the live command's own process from the user scope (15.8's PowerShell line). Needed
+  before WP-S's merge (wave 3), since stage 1 of the live command follows it; on 2026-11-01 none of the four was set (checked by name
   alone). Each token's expiry date goes here once it is made. On 2026-11-02 the owner made both
   sandbox projects and a token for each, and showed the two tokens in the session's conversation;
   so both are revoked and made again, never shown anywhere (D250, D260). GitLab's first token was a
@@ -692,8 +695,9 @@ every commit.
   the owner's acceptance (above); D352 is the owner's answer at 7b's start, and D353 to D356 the
   owner's rulings on the research's questions of taste; D357 to D372 the design's (2026-10-31);
   D373 to D376 the owner's answers of 2026-11-01, D377 and D378 the design review's, D379 and
-  D380 the lead's rulings on wave 1's adversarial check, D381 and D382 on its second round. The next
-  decision number is D383.
+  D380 the lead's rulings on wave 1's adversarial check, D381 and D382 on its second round, D383
+  the lead's on WP-S's hunts (an account switch within a provider drops the tab's list and A3
+  answer). The next decision number is D384.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -725,7 +729,7 @@ every commit.
   the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D383 on, since D239 to D248 went to the review before
+  owner"; each answer becomes a decision, D384 on, since D239 to D248 went to the review before
   phase 7, D249 to D264 to phase 7a's start, D265 to D338 to its design, D339 to D343 to its build
   and gate D344 to D356 to 7b's start and its research, D357 to D378 to its design and D379 on to its
   build): design 17.5's reading of "ten repos can be checked and
@@ -759,7 +763,7 @@ every commit.
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D383 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D384 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,
