@@ -23,7 +23,20 @@ namespace VisualCommit.LiveHostingTests
         /// at 5 s) and 30 s more per leftover, so the 600 s cover five leftovers at full limits (a
         /// stopped Check_2 leaves two: its branch and its pull request); the fake's start, a few git
         /// calls with no limit of their own, is outside that sum. Check_3's calls sum to about 150 s
-        /// (D342). Real calls take a small part of their limits.
+        /// (D342). Real calls take a small part of their limits. The new providers' sums
+        /// (docs/phase-7b-design.md 15.5; <c>LiveSteps.Sums</c> computes them from the limits, and
+        /// <c>LiveSafetyTests</c> holds each under 600 s), each own call at 30 s, each call to the fake
+        /// in process at 5 s, each app step at 60 s, the clone at 120 s and a merge ref's poll at its
+        /// 30 s: Azure DevOps' Check_1 sends 4 calls and 6 for five leftovers (5 abandons and one refs
+        /// POST), 300 s; its Check_1b_probes 16 calls, the first of them the identity read, and 16 to
+        /// the fake, 560 s; its Check_2 the identity and the sandbox's reads and five app steps and the
+        /// clone, 480 s; its Check_2b_probes 9 probes, two polls and the clean-up's 5 calls, with 10 to
+        /// the fake (its refs delete beside the clean-up's among them), 530 s; its Check_4 the identity, three app steps and the clone, 330 s. GitLab's
+        /// Check_1 sends 4 calls and 15 for five leftovers (each request's close and delete, each
+        /// branch's delete), 570 s; its Check_1b_probes 6 calls and 7 to the fake, 215 s; its Check_2
+        /// the two reads, six app steps (two pushes) and the clone, 540 s; its Check_2b_probes 5 probes
+        /// and the clean-up's 7 calls, with 5 to the fake, 385 s. The fakes' start, a few git calls, is
+        /// outside the sums, as in 7a's.
         /// </summary>
         [ModuleInitializer]
         internal static void Isolate()

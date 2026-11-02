@@ -3632,27 +3632,32 @@ call is the identity read (connectionData, `GET user`), once per run.
 organization rule screens those user parts); `SurvivorIn`, which reads screened text, also takes an `@`
 right after one of the screen's placeholders as such an end.
 
-**`Apply`** replaces, learned values first: each learned address, as written and URL-escaped; each
+**`Apply`** replaces each learned address, as written and URL-escaped; each
 learned id anywhere, inside vssps' `A<id>` path segment too, in any case, with and without hyphens, as
 written and URL-escaped, by `<the organization's id>` (either host id), `<the tenant>` or `<the user's
 id>`; the query and `#ctx=` fragment of any URL whose path ends `/_signin`, in a `Location`, an
 `X-TFS-FedAuthRedirect` or an "Object moved" body's `href` (with `&amp;` as written), by `<the sign-in
 query>`, so that `reply_to`, `hid` and `context` are never shown; then the organization in any case at
 a boundary (a text end, a character outside `[A-Za-z0-9-]`, a `%XX` escape); and any other
-address-shaped string except D325's and `example.com` ones.
+address-shaped string except D325's and `example.com` ones. The sign-in query, any other `hid=` value
+and any `context=` that reads as a sign-in context (ASP.NET's UrlToken form, as the service sends it:
+base64url without padding, then a digit counting the `=`) go first, before the learned values: a learned
+id's placeholder would end the query's run and leave its `context=`, the second host id in base64,
+behind. A second `Apply` changes nothing.
 
 It runs in `Note`, `Screen` and run.txt after the token search; in `FailureOf`, rethrowing the screened
 text as an `XunitException`; and in `Check(bool, Func<string>)`, the only assertion given values (g4
-D1.4).
+D1.4). In each, a screened text in which `SurvivorIn` still finds a value is withheld as one holding the
+token is (the kind of value named, never the value), and the run fails at its end.
 
 **`SurvivorIn`** searches run.txt raw, then percent-decoded again until a pass changes nothing
 (`Uri.UnescapeDataString` leaves an invalid escape such as `%C0%AE` as it is, so the loop stops on no
 change, never on "no `%XX` left"). It looks for the organization at `Apply`'s boundaries, for each
-learned address and each learned id in every form `Apply` replaces, and for any address-shaped string
-`Apply` would replace. D374's made-up organization (15.4) is no secret: run.txt names it, and it is no
-survivor. The data folder's `accounts.json` and log are searched only for the learned addresses, as
-written and URL-escaped: both name the organization (the login, the clone's command line), and the log
-holds git's `https://***@…` URLs. A survivor withholds run.txt and fails the run (D323).
+learned address and each learned id in every form `Apply` replaces, and for any address-shaped string,
+sign-in query or sign-in context `Apply` would replace. D374's made-up organization (15.4) is no
+secret: run.txt names it, and it is no survivor. The data folder's `accounts.json` and log are searched
+only for the learned addresses, as written and URL-escaped: both name the organization (the login, the
+clone's command line), and the log holds git's `https://***@…` URLs. A survivor withholds run.txt and fails the run (D323).
 
 **`LiveRun`** loses `sealed`, GitHub's constructor and render unchanged; `LiveRun(HostingProvider)`
 gives the fixtures `AzureDevOpsLiveRun` and `GitLabLiveRun` their token, `artifacts/live/<id>/run.txt`
@@ -3669,7 +3674,8 @@ of its own built as GitHub's public constructor builds its one (`GitHubLiveApi.c
 10 s `ConnectTimeout`), so `GitHubLiveApi.cs` stays unchanged (15.1). A redirect is recorded as the answer and never followed:
 a hop the handler followed by itself would pass neither the guard nor the store, and the probe would
 record the target's answer instead of the 302. A refusal names the origin, never the path;
-`ReachProblems` and `PerHost` print through the screen.
+`ReachProblems` and `PerHost` print through the screen and name a request's origin, never its path;
+a refused request has the guard's line alone.
 
 **`LiveReach.AzureDevOps`** admits only `https://dev.azure.com:443`, with Basic or no credential. It
 refuses a segment that is empty, is `.` or `..`, or holds `/`, `\` or `%` once decoded. Matching
@@ -3678,11 +3684,22 @@ without case, it admits only:
 2. `_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf` with `organizationName={o}`, or that id
    under `{o}/` (D360).
 3. `{o}/{p}/_apis/git/repositories` alone (`ListProject`'s list).
-4. `{o}/{p}/_apis/git/repositories/{r}` itself, and anything below it.
+4. `{o}/{p}/_apis/git/repositories/{r}` itself, and below it only `pullrequests`, `pullrequests/{n}`
+   (`{n}` digits) and `refs`, which the app (6.5) and the command send: a segment below it can name
+   another collection (Forks' `forks/{collectionId}`), so nothing else is admitted (WP-LIVE1's
+   third review; stage 2 widens the list if `Check_3` needs more).
 5. Anything below `{o}/{p}/_git/{r}`.
 6. `{x}/_apis/connectionData`, where `{x}` is the one made-up organization the run draws, `vc-none-`
    and 12 random lower-case hex digits (D374, amending D352 and D371): without a credential, and with
-   Basic only after that path answered 404 without one in this run.
+   Basic only after that path answered 404 without one in this run, and only once; never once a
+   read without one was answered otherwise, refused or left without an answer, first or later.
+
+The query may hold only the parameters the app's client (6.5) and the command send: `api-version`,
+`$top`, `$skip`, `searchCriteria.status`, `filter` and `service`, none repeated, and `organizationName`
+in item 2's root form alone; another, such as Merge Bases' `otherRepositoryId`, `hostId` or
+`accountName`, could name another repository or organization. For either provider, a request whose
+`Host` header names another authority than its URL's is refused: the handler would send that header's
+host as the TLS server name and the `Host`, with the credential, while the store records the URL's.
 
 Here `{o}`, `{p}` and `{r}` are the names `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO` gives (15.2), compared
 without case. A project or repository named by an id is refused, since no request of the app's (6.5:
@@ -3911,6 +3928,41 @@ has the other rows.
 each run with the tokens; with the tokens every live test passes, each request read back and cleaned
 up, only `visualcommit-live/` branches touched; no run.txt holds a token, the organization, its ids or
 an address; no value from the research's captures is in the files (section 1); the tripwire and `ReachProblems` find nothing.
+
+**As built** (WP-LIVE1, `06574c5` to its last commit, with its reviews' and hunts' fixes, 2026-11-02),
+stage 1 only; where the build differs or settles what was open:
+- `LiveRequest`'s headers are `KeptHeaders` (`api-version` from `Content-Type`); `LiveCredentialForm`
+  is public. `LiveReach` judges paths as sent and as written, below `{r}` only item 4's three forms. It
+  refuses, read raw, a `Host` header among the request's headers, a method-override header (`_` read
+  as `-`) among the request's or the content's, and a method not sent to the path: GET; also POST on
+  `pullrequests`, `refs` and `…/merge_requests`; PATCH on `pullrequests/{n}`; PUT and DELETE on
+  `…/merge_requests/{iid}`; DELETE alone on a GitLab branch. D374's Basic is admitted once, and never
+  after another answer, no answer, or a refused or failed credential-less request naming the made-up
+  organization. `ReachProblems(requests, reach)` names origins.
+- `LiveServiceApi`, `LiveServiceAnswer` and the fakes beside are in `LiveProbes.cs`, `LiveSteps` in
+  `AzureDevOpsLiveTests.cs`, `LiveApp` in `GitLabLiveTests.cs`; the fixtures' internal constructors let
+  `LiveSafetyTests` drive the steps over stubs.
+- Steps 8 and 9 are `Check_2b_probes`, after Check_2 in both orders, which hands it `LiveMade`;
+  it cleans up in `finally`. `LiveSteps.Sums`: Azure DevOps 300, 560, 480, 530, 330 s; GitLab 570, 215,
+  540, 385 s. The identity read is each method's first call, once per run.
+- Check_2b probes beside the fake's own draft; Azure DevOps' empty title after the abandon, nothing
+  ahead from `<branch>-even` once its refs POST took; GitLab's `-even` is pushed through the app. A
+  probe with no answer breaks its premise.
+- Clean-up and Check_1's leftovers send each call on its own (`LiveSteps.AttemptAsync`); `RefFailures`
+  fails each ref a 200 left; a GitLab merge request is the sandbox's when both project ids are equal.
+- info/refs probes go as git (`git/<version>`, `Accept: */*`, `Git-Protocol: version=2`), the core
+  area as A1 sends it; run.txt adds git's version, the clone's time, the create's status and the head.
+- The screen (amending 15.3) also hides GitLab's namespace (D384) and withholds, before `Apply`, a text
+  whose reading shows a learned value in a form `Apply` does not replace; `SurvivorIn` also reports any
+  `hid=` and searches every reading of the decodings (512 at most); a text that, its raw addresses and
+  learned addresses' forms taken out, shows an address in a reading is withheld too (an unlearned
+  address at the organization's domain, its at sign escaped). Addresses are learned whole; forms and
+  boundaries are in `LiveScreen`'s comments. The Git area id matches g1's. Accepted by the lead: an
+  address with `=` or `/` learned from a URL's query or path and quoted elsewhere keeps the head
+  before its widest learned tail (the last verification's minor; no answer seen holds one).
+- For the lead: the live classes are built, never run (risks: the log-line wait, the push dialog,
+  `accounts.json`'s record); CLAUDE.md's rows and the csproj's comment are the lead's (15.9). No file
+  outside 15.1's list changed.
 
 ## 16. Open points
 
