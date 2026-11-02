@@ -422,6 +422,12 @@ every commit.
   too (`wp-gl-*`, `wp-az-*`, `wp-fa-correctness`); what they found and the lead's rulings on the
   clients' third hunts are in sections 6's and 7's As built, which end with the lead's items for
   the review before the gate (7a's GitHub gaps the same inputs show, and the core's).
+- **Passed on to later packages** (from WP-S's hunts, 2026-11-02): WP-N (section 13) makes the
+  create's two log lines (`RepositoryOperations.CreatePullRequest.cs:293` and `:403`) write
+  `baseRepository.FullName` through `HostingHttpClient.ScreenEmail`, with a test of a create into an
+  Azure DevOps parent whose name is address-shaped (D368; an echoed token cannot reach them since
+  WP-S's S1). WP-LF may give `FakeAzureDevOps` a configurable web base, so that
+  `ProvidersSessionSetup`'s `ServiceAnswers` shim can go (WP-S's builder's question; optional).
 - **Wave 2's whole default run** (2026-11-01, 15:01 to 16:17, on `c0af1be`, through
   `bash scripts/heavy-run.sh`, four projects at once): 7,494 tests, 7,490 passed, 4 skipped (as
   wave 1's), none failed, 1 h 14 min 20 s. MTP started App.Tests, Phase7a, Git.Tests and
