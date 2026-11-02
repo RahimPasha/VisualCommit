@@ -147,9 +147,10 @@ internal sealed class LiveRequestLog : DelegatingHandler
     }
 
     /// <summary>
-    /// A new provider's request: the guard first (the <c>Host</c> header, then the method, the URL and
-    /// the credential), telling the reach of a refusal by either check; then the record with its form,
-    /// request id and kept headers; a redirect is the answer, never followed (the inner handler follows none).
+    /// A new provider's request: the guard first (a <c>Host</c> header, a method-override header, then
+    /// the method, the URL and the credential), telling the reach of a refusal by any check; then the
+    /// record with its form, request id and kept headers; a redirect is the answer, never followed (the
+    /// inner handler follows none).
     /// </summary>
     private async Task<HttpResponseMessage> SendWithinAsync(LiveReach within, HttpRequestMessage request, CancellationToken cancellationToken)
     {
@@ -165,7 +166,7 @@ internal sealed class LiveRequestLog : DelegatingHandler
                 KeptHeaders = response is null ? new Dictionary<string, string>() : KeptOf(response),
             };
 
-        if ((LiveReach.HostRefusalOf(request, within) ?? within.RefusalOf(request.Method, uri, form)) is { } refusal)
+        if ((LiveReach.HostRefusalOf(request, within) ?? LiveReach.OverrideRefusalOf(request, within) ?? within.RefusalOf(request.Method, uri, form)) is { } refusal)
         {
             store.Add(Record(null, "refused: " + refusal, null));
             within.Refused(uri, form);
@@ -401,9 +402,10 @@ public enum LiveCredentialForm
 
 /// <summary>
 /// D352's guard for a new provider (15.4; D371, D374): what the live command's requests may reach
-/// with which method and credential. <see cref="HostRefusalOf"/> and <see cref="RefusalOf"/> judge a
-/// request before it leaves, naming the method and the origin and never the path; <see cref="Refused"/>
-/// sees a refusal by either, <see cref="Answered"/> each answer (D374's 404). Safe from any thread.
+/// with which method and credential. <see cref="HostRefusalOf"/>, <see cref="OverrideRefusalOf"/> and
+/// <see cref="RefusalOf"/> judge a request before it leaves, naming the method and the origin and never
+/// the path; <see cref="Refused"/> sees a refusal by any of them, <see cref="Answered"/> each answer
+/// (D374's 404). Safe from any thread.
 /// </summary>
 internal abstract class LiveReach
 {
@@ -425,10 +427,12 @@ internal abstract class LiveReach
     public static GitLabReach GitLab() => new();
 
     /// <summary>
-    /// The credential's form: a query token (any parameter whose decoded name, before any <c>[</c>,
-    /// ends in <c>token</c>, case ignored, the query split at <c>&amp;</c> and <c>;</c>),
-    /// <c>PRIVATE-TOKEN</c> or <c>PRIVATE_TOKEN</c>, <c>JOB-TOKEN</c> or <c>JOB_TOKEN</c>, else
-    /// <c>Authorization</c>'s scheme (two values: another scheme).
+    /// The credential's form: a query token (any parameter whose decoded name, <c>+</c> read as a
+    /// blank, holds <c>token</c> anywhere, case ignored, the query split at <c>&amp;</c> and <c>;</c>:
+    /// <c>[private_token]</c> too, which Rack reads as <c>private_token</c>), <c>PRIVATE-TOKEN</c> or
+    /// <c>PRIVATE_TOKEN</c>, <c>JOB-TOKEN</c> or <c>JOB_TOKEN</c> among the request's headers or the
+    /// content's (which <c>SocketsHttpHandler</c> sends too), else <c>Authorization</c>'s scheme (two
+    /// values: another scheme).
     /// </summary>
     public static LiveCredentialForm FormOf(HttpRequestMessage request)
     {
@@ -438,12 +442,12 @@ internal abstract class LiveReach
             return LiveCredentialForm.QueryToken;
         }
 
-        if (request.Headers.Contains("PRIVATE-TOKEN") || request.Headers.Contains("PRIVATE_TOKEN"))
+        if (Sets(request, "PRIVATE-TOKEN") || Sets(request, "PRIVATE_TOKEN"))
         {
             return LiveCredentialForm.PrivateToken;
         }
 
-        if (request.Headers.Contains("JOB-TOKEN") || request.Headers.Contains("JOB_TOKEN"))
+        if (Sets(request, "JOB-TOKEN") || Sets(request, "JOB_TOKEN"))
         {
             return LiveCredentialForm.JobToken;
         }
@@ -484,6 +488,29 @@ internal abstract class LiveReach
             : null;
     }
 
+    /// <summary>The method-override headers a service may honour (Azure DevOps documents <c>X-HTTP-Method-Override</c> on a POST).</summary>
+    internal static readonly string[] OverrideHeaders = ["X-HTTP-Method-Override", "X-HTTP-Method", "X-Method-Override"];
+
+    /// <summary>
+    /// Why <paramref name="request"/>'s method-override header keeps it from leaving, or null: any of
+    /// <see cref="OverrideHeaders"/> among the request's headers or the content's, judged raw, since the
+    /// service could read the request as another method than the one <see cref="RefusalOf"/> judges (a
+    /// refs POST as a PATCH). No request of the app's or of the command's sets one. Names the origin,
+    /// never the header's value.
+    /// </summary>
+    public static string? OverrideRefusalOf(HttpRequestMessage request, LiveReach within)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(within);
+        return OverrideHeaders.Any(name => Sets(request, name))
+            ? $"it sets a method-override header, which no request of the app's or the command's to {within.Origin} sets"
+            : null;
+    }
+
+    /// <summary>Whether <paramref name="request"/> sets the header <paramref name="name"/> among its own headers or its content's, judged raw (<c>NonValidated</c>), case ignored.</summary>
+    private static bool Sets(HttpRequestMessage request, string name) =>
+        request.Headers.NonValidated.Contains(name) || request.Content?.Headers.NonValidated.Contains(name) == true;
+
     /// <summary>Sees the answer of a request the guard let through.</summary>
     public virtual void Answered(Uri uri, LiveCredentialForm form, int status)
     {
@@ -494,7 +521,7 @@ internal abstract class LiveReach
     {
     }
 
-    /// <summary>Sees a request that either check (<see cref="HostRefusalOf"/>, <see cref="RefusalOf"/>) refused, so that it never left.</summary>
+    /// <summary>Sees a request that any check (<see cref="HostRefusalOf"/>, <see cref="OverrideRefusalOf"/>, <see cref="RefusalOf"/>) refused, so that it never left.</summary>
     public virtual void Refused(Uri uri, LiveCredentialForm form)
     {
     }
@@ -551,9 +578,9 @@ internal abstract class LiveReach
         return null;
     }
 
-    /// <summary>Whether a parameter's decoded name, before any <c>[</c>, ends in <c>token</c>, case ignored: none of the app's or the command's does.</summary>
+    /// <summary>Whether a parameter's decoded name, <c>+</c> read as a blank, holds <c>token</c> anywhere, case ignored: none of the app's or the command's does.</summary>
     private static bool HasQueryToken(Uri uri) =>
-        QueryNames(uri).Any(name => name.Split('[', 2)[0].Trim().EndsWith("token", StringComparison.OrdinalIgnoreCase));
+        QueryNames(uri).Any(name => name.Replace('+', ' ').Contains("token", StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>
@@ -566,7 +593,8 @@ internal abstract class LiveReach
 /// query parameters the app's client and the command send (<see cref="SentQueryNames"/>), none
 /// repeated; <c>organizationName</c> only on the root form of the core area, naming the sandbox's
 /// organization. D374's read with the token is admitted once per guard (per run), after its 404, and
-/// never once the read without a credential was answered otherwise, refused by any check or left unanswered.
+/// never once the read without a credential was answered otherwise or left unanswered, or a request
+/// without one under the made-up organization was refused by any check.
 /// </summary>
 internal sealed class AzureDevOpsReach : LiveReach
 {
@@ -591,7 +619,7 @@ internal sealed class AzureDevOpsReach : LiveReach
     /// <summary>The first answer to D374's read without a credential in this run.</summary>
     private int? _madeUpAnswer;
 
-    /// <summary>Set for good by any answer to that read other than 404, and by one refused or unanswered.</summary>
+    /// <summary>Set for good by any answer to that read other than 404, by one unanswered, and by any request without a credential under the made-up organization that was refused.</summary>
     private bool _madeUpBarred;
 
     private bool _madeUpTokenAdmitted;
@@ -619,7 +647,7 @@ internal sealed class AzureDevOpsReach : LiveReach
         ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(uri);
         var refusal = RefusalCore(method, uri, form);
-        if (refusal is not null && form == LiveCredentialForm.None && IsMadeUpConnectionData(SegmentsOf(uri)))
+        if (refusal is not null && form == LiveCredentialForm.None && IsUnderMadeUp(uri))
         {
             lock (_gate)
             {
@@ -712,17 +740,17 @@ internal sealed class AzureDevOpsReach : LiveReach
         Bar(uri, form);
     }
 
-    /// <summary>A refused read of D374's path bars the read with the token as an unanswered one does, whichever check refused it (15.4 item 6).</summary>
+    /// <summary>A refused request under D374's organization bars the read with the token as an unanswered read does, whichever check refused it (15.4 item 6).</summary>
     public override void Refused(Uri uri, LiveCredentialForm form)
     {
         ArgumentNullException.ThrowIfNull(uri);
         Bar(uri, form);
     }
 
-    /// <summary>For D374's path: without a credential, bars the read with the token for good; with one, closes the gate that admits it.</summary>
+    /// <summary>For any request under D374's organization (<see cref="IsUnderMadeUp"/>): without a credential, bars the read with the token for good; with one, closes the gate that admits it.</summary>
     private void Bar(Uri uri, LiveCredentialForm form)
     {
-        if (!IsMadeUpConnectionData(SegmentsOf(uri)))
+        if (!IsUnderMadeUp(uri))
         {
             return;
         }
@@ -807,6 +835,14 @@ internal sealed class AzureDevOpsReach : LiveReach
 
     private bool IsMadeUpConnectionData(string[] s) =>
         s.Length == 3 && Is(s[0], MadeUpOrganization) && Is(s[1], "_apis") && Is(s[2], "connectionData");
+
+    /// <summary>
+    /// Whether the path, as sent or as written, decoded, has D374's organization as its first segment
+    /// that is not empty: D374's path in any form the guard refuses (<c>connectionData/</c>,
+    /// <c>_apis//connectionData</c>, <c>//{x}/…</c>) and any other path under it, none of which the probe sends.
+    /// </summary>
+    private bool IsUnderMadeUp(Uri uri) =>
+        RawSegments(uri).Any(raw => raw.Select(Uri.UnescapeDataString).FirstOrDefault(segment => segment.Length > 0) is { } first && Is(first, MadeUpOrganization));
 
     private static bool Is(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 }

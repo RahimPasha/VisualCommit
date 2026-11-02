@@ -2260,6 +2260,95 @@ public sealed partial class LiveSafetyTests
         var only = Assert.Single(stub.Requests);
         Assert.Null(only.Authorization);
     }
+
+    // ---- The verification of hunt 3's fixes: the guard ----------------------------------------------
+
+    [Theory]
+    [InlineData("PRIVATE-TOKEN", LiveCredentialForm.PrivateToken)]
+    [InlineData("PRIVATE_TOKEN", LiveCredentialForm.PrivateToken)]
+    [InlineData("JOB-TOKEN", LiveCredentialForm.JobToken)]
+    [InlineData("JOB_TOKEN", LiveCredentialForm.JobToken)]
+    public async Task A_token_header_among_the_content_s_headers_is_read_as_its_form_and_refused(string header, LiveCredentialForm form)
+    {
+        var request = Request("POST", GitLabProject + "/merge_requests", null);
+        Assert.True(request.Content!.Headers.TryAddWithoutValidation(header, "made-up"));
+        Assert.Equal(form, LiveReach.FormOf(request));
+        var (stub, store, refused) = await SendThroughAsync(LiveReach.GitLab(), request);
+        Assert.NotNull(refused);
+        Assert.Empty(stub.Requests);
+        Assert.Equal(form, Assert.Single(store.Snapshot()).Form);
+    }
+
+    [Theory]
+    [InlineData("https://gitlab.com/api/v4/user?[private_token]=made-up")]
+    [InlineData("https://gitlab.com/api/v4/user?%5Bprivate_token%5D=made-up")]
+    [InlineData("https://gitlab.com/api/v4/user?private_token]=made-up")]
+    [InlineData("https://gitlab.com/api/v4/user?private_token%5D=made-up")]
+    [InlineData("https://gitlab.com/api/v4/user?state=opened&[access_token]x=made-up")]
+    public async Task A_parameter_whose_name_holds_token_anywhere_is_a_query_token_the_guard_refuses(string url)
+    {
+        var request = Request("GET", url, null);
+        Assert.Equal(LiveCredentialForm.QueryToken, LiveReach.FormOf(request));
+        var (stub, _, refused) = await SendThroughAsync(LiveReach.GitLab(), request);
+        Assert.NotNull(refused);
+        Assert.Empty(stub.Requests);
+    }
+
+    [Fact]
+    public void None_of_the_parameters_the_app_and_the_command_send_is_named_for_a_token()
+    {
+        foreach (var name in new[] { "membership", "archived", "order_by", "sort", "per_page", "page", "simple", "state", "search", "api-version", "$top", "$skip", "searchCriteria.status", "filter", "service", "organizationName" })
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"https://gitlab.com/api/v4/projects?{name}=x");
+            Assert.Equal(LiveCredentialForm.None, LiveReach.FormOf(request));
+        }
+    }
+
+    [Theory]
+    [InlineData("GET", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox?api-version=7.1", "X-HTTP-Method-Override", "DELETE", false)]
+    [InlineData("POST", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?api-version=7.1", "X-HTTP-Method-Override", "PATCH", false)]
+    [InlineData("POST", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?api-version=7.1", "X-HTTP-Method-Override", "PATCH", true)]
+    [InlineData("GET", "https://dev.azure.com/Fernhill-Labs/_apis/connectionData?api-version=7.1-preview.1", "X-HTTP-Method", "DELETE", false)]
+    [InlineData("GET", "https://dev.azure.com/Fernhill-Labs/_apis/connectionData?api-version=7.1-preview.1", "x-method-override", "PUT", false)]
+    [InlineData("POST", GitLabProject + "/merge_requests", "X-HTTP-Method-Override", "DELETE", false)]
+    [InlineData("POST", GitLabProject + "/merge_requests", "X-HTTP-Method", "DELETE", true)]
+    public async Task A_method_override_header_is_refused_before_it_leaves_naming_the_origin_alone(string method, string url, string header, string value, bool inContent)
+    {
+        var gitlab = url.Contains("gitlab", StringComparison.Ordinal);
+        var request = Request(method, url, gitlab ? "Bearer" : "Basic");
+        System.Net.Http.Headers.HttpHeaders headers = inContent ? request.Content!.Headers : request.Headers;
+        Assert.True(headers.TryAddWithoutValidation(header, value));
+        var (stub, store, refused) = await SendThroughAsync(gitlab ? LiveReach.GitLab() : AzureReach(), request);
+        Assert.NotNull(refused);
+        Assert.Empty(stub.Requests);
+        foreach (var text in new[] { refused.Message, Assert.Single(store.Snapshot()).FailedWith! })
+        {
+            Assert.Contains(gitlab ? "https://gitlab.com" : "https://dev.azure.com", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("visualcommit-sandbox", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Fernhill", text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Theory]
+    [InlineData("https://dev.azure.com/vc-none-0123456789ab/_apis/connectionData/?api-version=7.1-preview.1")]
+    [InlineData("https://dev.azure.com/vc-none-0123456789ab/_apis//connectionData?api-version=7.1-preview.1")]
+    [InlineData("https://dev.azure.com//vc-none-0123456789ab/_apis/connectionData?api-version=7.1-preview.1")]
+    [InlineData("https://dev.azure.com/vc-none-0123456789ab/_apis/connectionData/x?api-version=7.1-preview.1")]
+    public async Task D374_s_read_without_a_credential_refused_for_another_path_under_the_made_up_organization_bars_the_read_with_the_token(string refusedUrl)
+    {
+        var store = new LiveRequestLog.Store();
+        var stub = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") });
+        using var client = new HttpClient(new LiveRequestLog(stub, store, AzureReach()));
+        var path = $"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1";
+        using (var first = await client.SendAsync(Request("GET", path, null), Cancelled))
+        {
+            Assert.Equal(HttpStatusCode.NotFound, first.StatusCode);
+        }
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(Request("GET", refusedUrl, null), Cancelled));
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(Request("GET", path, "Basic"), Cancelled));
+        Assert.Null(Assert.Single(stub.Requests).Authorization);
+    }
 }
 
 /// <summary>
@@ -2817,6 +2906,116 @@ public sealed class LiveScreenTests
         Assert.Equal("a host id once percent-decoded", unlearned.SurvivorIn($"reply_to=x%3Frealm%3Ddev.azure.com%26hid%3D{OtherHostId}"));
         Assert.Equal("a host id", unlearned.SurvivorIn($"x?hid={OtherHostId}"));
         Assert.Null(unlearned.SurvivorIn("x?hid=<the organization's id> and hid%3D<the organization's id>"));
+    }
+
+    // ---- The verification of hunt 3's fixes: the screen ---------------------------------------------
+
+    [Theory]
+    [InlineData("x fabrik%61m7&#65; y")]
+    [InlineData("\\u0041fabrik%61m7")]
+    [InlineData("&#65;fabrik%61m7")]
+    public void Every_reading_the_three_decodings_reach_is_searched_not_one_chain_of_them(string text) =>
+        Assert.NotNull(Screen(HuntOrg).SurvivorIn(text));
+
+    [Theory]
+    [InlineData(6, true)]
+    [InlineData(8, false)]
+    public void A_text_whose_readings_pass_the_limit_is_withheld_whole(int depth, bool complete)
+    {
+        // Three sites, each needing depth passes of one decoding alone: (depth + 1)³ - 1 readings.
+        var text = string.Join(
+            ' ',
+            new string('\\', 1 << (depth - 1)) + "u0041",
+            "%" + string.Concat(Enumerable.Repeat("25", depth - 1)) + "41",
+            "&" + string.Concat(Enumerable.Repeat("amp;", depth - 1)) + "#65;");
+        var (readings, done) = LiveScreen.Decodings(text);
+        Assert.Equal(complete, done);
+        Assert.Equal(complete ? ((depth + 1) * (depth + 1) * (depth + 1)) - 1 : LiveScreen.ReadingLimit, readings.Count);
+        Assert.Equal(complete, readings.Contains(("A A A", false)));
+        Assert.Equal(complete ? null : LiveScreen.NestedPastTheSearch, Screen(HuntOrg).SurvivorIn(text));
+    }
+
+    [Fact]
+    public void An_escape_whose_digits_run_into_the_name_or_the_address_bounds_it_and_is_searched()
+    {
+        var screen = Screen(HuntOrg);
+        screen.AddAddress(HuntAddress);
+        const string text = "in &#x2Ffabrikam7 by pat.user&#x40corp.test";
+        Assert.Equal("in &#x2F<the organization> by <the user's address>", screen.Apply(text));
+        Assert.NotNull(screen.SurvivorIn(text));
+        Assert.Equal("a learned address", screen.SurvivorIn("by pat.user&#x40corp.test"));
+        Assert.Equal("by <the user's address> and <the user's address>", screen.Apply("by pat.user&#64corp.test and PAT.USER&#X40CORP.TEST"));
+        foreach (var (raw, screened) in new[]
+        {
+            ("&#xfabrikam7", "&#x<the organization>"),
+            ("%Ffabrikam7", "%F<the organization>"),
+            ("\\u00fabrikam7", "\\u00<the organization>"),
+            ("&#1fabrikam7", "&#1<the organization>"),
+        })
+        {
+            Assert.Equal(screened, screen.Apply(raw));
+            Assert.Equal("the organization's name", screen.SurvivorIn(raw));
+            Assert.Null(screen.SurvivorIn(screened));
+        }
+    }
+
+    [Fact]
+    public void A_learned_address_leaves_no_part_of_itself_behind_in_any_escaped_form()
+    {
+        var screen = Screen(HuntOrg);
+        using (var answer = JsonDocument.Parse("""{"authenticatedUser":{"properties":{"Account":{"$value":"mary.o'connor@corp.test"}}}}"""))
+        {
+            screen.Learn(answer.RootElement);
+        }
+
+        foreach (var form in new[] { "mary.o'connor@corp.test", "mary.o%27connor@corp.test", "mary.o&#39;connor@corp.test", "mary.o&apos;connor@corp.test", "mary.o&#x27;connor@corp.test", "mary.o\\u0027connor@corp.test", "<p>Signed in as mary.o&#39;connor@corp.test</p>", "?hint=mary.o%27connor@corp.test" })
+        {
+            var decoded = FullyDecoded(screen.Apply("by " + form));
+            Assert.DoesNotContain("mary", decoded, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("connor", decoded, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.Equal((1, 1, 0), screen.Counts);
+        var git = Screen(HuntOrg);
+        git.LearnFromGit("pat=dev@corp.test\npat/dev@corp.test");
+        Assert.Equal(2, git.Counts.Addresses);
+        foreach (var form in new[] { "pat%3Ddev@corp.test", "pat&#61;dev@corp.test", "pat%2Fdev@corp.test", "pat&#47;dev@corp.test" })
+        {
+            var decoded = FullyDecoded(git.Apply("author " + form));
+            Assert.DoesNotContain("pat", decoded, StringComparison.Ordinal);
+            Assert.DoesNotContain("dev", decoded, StringComparison.Ordinal);
+        }
+
+        // A value that is no address as a whole keeps its address learned: the descriptor's and mailto's.
+        var composite = Screen(HuntOrg);
+        using (var answer = JsonDocument.Parse("""{"descriptor":"Microsoft.IdentityModel.Claims.ClaimsIdentity;7b0a0104-0000-4a00-8000-00000000fa4e\\ada@corp.test","link":"mailto:bob@corp.test"}"""))
+        {
+            composite.Learn(answer.RootElement);
+        }
+
+        Assert.Equal("a learned address", composite.SurvivorInDataFile("""{"name":"ada@corp.test"}"""));
+        Assert.Equal("a learned address", composite.SurvivorInDataFile("""{"name":"bob@corp.test"}"""));
+
+        // A reference that encodes a bracket still ends a run, so the address learned beside it is the address alone.
+        var html = Screen(HuntOrg);
+        html.LearnFromAnswer([], "<p>Ada&lt;ada@corp.test&gt; signed in</p>");
+        Assert.Equal("a learned address", html.SurvivorInDataFile("""{"name":"ada@corp.test"}"""));
+
+        var unlearned = Screen(HuntOrg);
+        foreach (var form in new[] { "john.o&#39;neil@other.test", "a&amp;b@other.test", "pat&#46;user@corp.test", "x&#39;&#39;y@other.test" })
+        {
+            Assert.Equal("by <an address>", unlearned.Apply("by " + form));
+        }
+    }
+
+    [Fact]
+    public void A_zero_padded_character_reference_is_decoded_for_the_search()
+    {
+        var screen = Screen(HuntOrg);
+        screen.AddAddress(HuntAddress);
+        Assert.Equal("the organization's name once decoded", screen.SurvivorIn("x &#00000102;abrikam7 y"));
+        Assert.Equal("the organization's name once decoded", screen.SurvivorIn("x &#x0000066;abrikam7 y"));
+        Assert.Equal("a learned address once decoded", screen.SurvivorIn("by pat.user&#x0000040;corp.test"));
     }
 
     /// <summary><paramref name="text"/> with JSON's string escapes, HTML's character references and percent escapes decoded until nothing changes: the test's own reading.</summary>

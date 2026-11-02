@@ -12,8 +12,9 @@ namespace VisualCommit.LiveHostingTests;
 /// hold. It learns them before a note can hold them: the organization from the variable, the rest
 /// from every answer the test's own API reads (<see cref="Learn"/>, <see cref="LearnFromAnswer"/>)
 /// and from the clone's authors (<see cref="LearnFromGit"/>). <see cref="Apply"/> replaces them in
-/// any text; <see cref="SurvivorIn"/> says whether a text still holds one, raw or once JSON's string
-/// escapes, HTML's character references and percent escapes are decoded, and never which value.
+/// any text; <see cref="SurvivorIn"/> says whether a text still holds one, raw or in any reading that
+/// decoding JSON's string escapes, HTML's character references and percent escapes reaches, and never
+/// which value.
 /// Safe from any thread.
 /// </summary>
 internal sealed class LiveScreen
@@ -72,8 +73,23 @@ internal sealed class LiveScreen
     /// <summary>A JSON string escape: <c>\uXXXX</c>, or <c>\</c> and one of <c>"\/bfnrt</c>.</summary>
     private static readonly Regex JsonEscape = new(@"\\(?:u(?<hex>[0-9A-Fa-f]{4})|(?<char>[""\\/bfnrt]))", RegexOptions.CultureInvariant);
 
-    /// <summary>An HTML numeric character reference, decimal or hexadecimal, its <c>;</c> optional as browsers read it.</summary>
-    private static readonly Regex NumericReference = new(@"&#(?:[xX](?<hex>[0-9A-Fa-f]{1,6})|(?<dec>[0-9]{1,7}));?", RegexOptions.CultureInvariant);
+    /// <summary>An HTML numeric character reference, decimal or hexadecimal, its leading zeros skipped and its <c>;</c> optional, as browsers read it.</summary>
+    private static readonly Regex NumericReference = new(@"&#(?:[xX]0*(?<hex>[0-9A-Fa-f]{1,6})|0*(?<dec>[0-9]{1,7}));?", RegexOptions.CultureInvariant);
+
+    /// <summary>What stands between a character reference's <c>&amp;</c> and its <c>;</c>: a decimal or hexadecimal number, or a name.</summary>
+    private static readonly Regex ReferenceName = new(@"^(?:#[0-9]{1,8}|#[xX][0-9A-Fa-f]{1,8}|[A-Za-z][A-Za-z0-9]{1,31})$", RegexOptions.CultureInvariant);
+
+    /// <summary>What an address's local part may hold besides letters and digits: RFC 5322's <c>atext</c> marks and <c>.</c>.</summary>
+    private const string LocalPartMarks = "!#$%&'*+-/=?^_`{|}~.";
+
+    /// <summary>The most readings <see cref="Decodings"/> gives of one text; past it, <see cref="SurvivorIn"/> withholds the text.</summary>
+    internal const int ReadingLimit = 512;
+
+    /// <summary>The kind <see cref="SurvivorIn"/> names for a text whose readings pass <see cref="ReadingLimit"/>.</summary>
+    internal const string NestedPastTheSearch = "escapes nested past the screen's search";
+
+    /// <summary>The three decodings <see cref="Decodings"/> applies, each once over a whole text.</summary>
+    private static readonly Func<string, string>[] Decoders = [JsonDecoded, HtmlDecoded, Uri.UnescapeDataString];
 
     /// <summary>The quotes that end an address run unless they stand between letters, digits or <c>.</c> (<c>mary.o'connor@…</c>).</summary>
     private static readonly char[] Quotes = ['"', '\'', '`'];
@@ -98,7 +114,10 @@ internal sealed class LiveScreen
     /// <summary>
     /// The organization's name (15.2's grammar), hidden in any case at a boundary: a text's end, a
     /// character outside <c>[A-Za-z0-9-]</c>, a <c>%XX</c> escape, a JSON string escape (<c>\n</c>,
-    /// <c>\u002F</c>) or an HTML character reference (<c>&amp;#47;</c>, <c>&amp;amp;</c>).
+    /// <c>\u002F</c>) or an HTML character reference (<c>&amp;#47;</c>, <c>&amp;amp;</c>); before it
+    /// also an escape's start whose digits may run into the name, so that its letters never stay
+    /// readable where a decoder would read them as digits: <c>&amp;#x2F</c> or <c>&amp;#x</c> without
+    /// its <c>;</c> (<c>&amp;#x2Ffabrikam</c> reads as U+2FFAB), <c>&amp;#1</c>, <c>%F</c>, <c>\u00</c>.
     /// </summary>
     public void AddOrganization(string name)
     {
@@ -109,7 +128,7 @@ internal sealed class LiveScreen
         }
 
         var pattern = new Regex(
-            @"(?<=^|[^A-Za-z0-9-]|%[0-9A-Fa-f]{2}|\\[bfnrt""\\/]|\\u[0-9A-Fa-f]{4}|&#[0-9]+;|&#[xX][0-9A-Fa-f]+;|&[A-Za-z][A-Za-z0-9]*;)"
+            @"(?<=^|[^A-Za-z0-9-]|%[0-9A-Fa-f]{1,2}|\\[bfnrt""\\/]|\\u[0-9A-Fa-f]{0,4}|&#[0-9]+;?|&#[xX][0-9A-Fa-f]*;?|&[A-Za-z][A-Za-z0-9]*;)"
                 + Regex.Escape(name) + @"(?=$|[^A-Za-z0-9-]|%[0-9A-Fa-f]{2})",
             RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
         lock (_gate)
@@ -142,25 +161,40 @@ internal sealed class LiveScreen
     }
 
     /// <summary>
-    /// A value that is address-shaped as a whole (a JSON string, a line of git's <c>%ae</c>), learned
-    /// whole so that an apostrophe, <c>=</c> or <c>/</c> in it (<c>pat=dev@corp.test</c>) cuts nothing
-    /// off: no blank or control character, one <c>@</c> (or U+FF20) with something on each side, no
-    /// <c>://</c> before it (a URL's user part) and none of <c>/?#&amp;\:</c> after it (a path, git's
-    /// scp-like <c>git@host:</c>). Its address runs are learned too.
+    /// A value (a JSON string, a line of git's <c>%ae</c>): when it is address-shaped as a whole
+    /// (<see cref="IsWholeAddress"/>), learned whole and never in pieces, so that an apostrophe, <c>=</c>
+    /// or <c>/</c> in it (<c>mary.o'connor@…</c>, <c>pat=dev@…</c>) cuts nothing off and no piece
+    /// (<c>connor@…</c>) is replaced while its head stays; its ids are learned. Otherwise its address runs
+    /// and ids, as in any text (a descriptor's <c>…;&lt;tenant&gt;\&lt;address&gt;</c>, a <c>mailto:</c>).
     /// </summary>
     private void LearnValue(string value)
     {
         var whole = value.Trim();
-        var at = whole.IndexOfAny(['@', '＠']);
-        if (at > 0 && at < whole.Length - 1 && whole.IndexOfAny(['@', '＠'], at + 1) < 0
-            && !whole.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))
-            && !whole[..at].Contains("://", StringComparison.Ordinal)
-            && whole.IndexOfAny(['/', '?', '#', '&', '\\', ':'], at + 1) < 0)
+        if (IsWholeAddress(whole))
         {
             AddCore(whole);
+            LearnText(value, addresses: false);
+            return;
         }
 
         LearnText(value);
+    }
+
+    /// <summary>
+    /// Whether <paramref name="value"/> is address-shaped as a whole: one <c>@</c> (or U+FF20) with
+    /// something on each side; before it only letters, digits and RFC 5322's <c>atext</c> marks and
+    /// <c>.</c> (<see cref="LocalPartMarks"/>: an apostrophe, <c>=</c> or <c>/</c> is part of an address,
+    /// a blank, <c>\</c>, <c>;</c>, <c>:</c>, <c>,</c> or a double quote makes a composite such as a
+    /// descriptor, <c>mailto:</c> or a URL's user part); after it only letters, digits, <c>-</c>,
+    /// <c>.</c> and <c>_</c>, the last no <c>.</c>.
+    /// </summary>
+    internal static bool IsWholeAddress(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        var at = value.IndexOfAny(['@', '＠']);
+        return at > 0 && at < value.Length - 1 && value.IndexOfAny(['@', '＠'], at + 1) < 0 && value[^1] != '.'
+            && value[..at].All(c => char.IsLetterOrDigit(c) || LocalPartMarks.Contains(c, StringComparison.Ordinal))
+            && value[(at + 1)..].All(c => char.IsLetterOrDigit(c) || c is '-' or '.' or '_');
     }
 
     /// <summary>An id to hide by <paramref name="placeholder"/>, in any case, with and without hyphens; a published constant or a short value is not learned.</summary>
@@ -245,7 +279,7 @@ internal sealed class LiveScreen
     /// <paramref name="text"/> screened (15.3): first a sign-in URL's query and <c>#ctx=</c> fragment,
     /// any <c>hid=</c> value and any sign-in <c>context=</c> value, before a learned id's placeholder
     /// could end the sign-in query's run and leave its <c>context=</c> behind; then each learned
-    /// address, as written, URL-escaped and with its <c>@</c> as <c>&amp;#64;</c> or <c>&amp;#x40;</c>;
+    /// address in each of <see cref="AddressFormsOf"/>'s forms;
     /// each learned id in any case, with and without hyphens, as
     /// written and URL-escaped; any other address but D325's and <c>example.com</c> ones (judged before
     /// the organization is replaced, so that a URL's user part stays one); then the organization in
@@ -297,11 +331,11 @@ internal sealed class LiveScreen
     /// What <paramref name="text"/> (screened run.txt) still holds, or null: the organization at a
     /// boundary, a learned address or id in any form <see cref="Apply"/> replaces, an address, sign-in
     /// query or sign-in context <see cref="Apply"/> would replace, or a <c>hid=</c> value (a host id);
-    /// searched raw, then after each decoding that changes it (<see cref="Decodings"/>: JSON's string
-    /// escapes, HTML's character references, percent escapes, pass after pass until a pass changes
-    /// nothing; an invalid escape such as <c>%C0%AE</c> stays). The answer names the kind of value and
-    /// whether it was percent-decoded alone or otherwise decoded, never the value. D374's made-up
-    /// organization is no survivor.
+    /// searched raw, then in each of its readings (<see cref="Decodings"/>: every text that decoding
+    /// JSON's string escapes, HTML's character references and percent escapes reaches, in any order;
+    /// an invalid escape such as <c>%C0%AE</c> stays), and a text with more readings than
+    /// <see cref="ReadingLimit"/> is withheld whole. The answer names the kind of value and whether
+    /// percent decoding alone reached it, never the value. D374's made-up organization is no survivor.
     /// </summary>
     public string? SurvivorIn(string text)
     {
@@ -311,7 +345,8 @@ internal sealed class LiveScreen
             return raw;
         }
 
-        foreach (var (decoded, percentAlone) in Decodings(text))
+        var (readings, complete) = Decodings(text);
+        foreach (var (decoded, percentAlone) in readings)
         {
             if (FindIn(WithoutPlaceholders(decoded)) is { } kind)
             {
@@ -319,35 +354,63 @@ internal sealed class LiveScreen
             }
         }
 
-        return null;
+        return complete ? null : NestedPastTheSearch;
     }
 
     /// <summary>
-    /// <paramref name="text"/> after each decoding that changes it, in order: JSON's string escapes,
-    /// HTML's character references, then percent escapes, round after round until a round changes
-    /// nothing; each with whether percent escapes alone were decoded so far. Each change shortens the
-    /// text, so the rounds end.
+    /// <paramref name="text"/>'s readings, the text itself left out: every text that the three
+    /// decodings (JSON's string escapes, HTML's character references, percent escapes, each over the
+    /// whole text at once) reach from it, applied in any order and any number of times, so that no
+    /// order hides what another shows (<c>fabrik%61m7&amp;#65;</c> percent-decoded alone shows the name
+    /// at the reference). First those that percent decoding alone reaches, marked so, then the others
+    /// breadth first. A decoding that changes a text shortens it, so the readings end; <c>Complete</c>
+    /// is false when they passed <see cref="ReadingLimit"/> and the rest were not given.
     /// </summary>
-    internal static IEnumerable<(string Text, bool PercentAlone)> Decodings(string text)
+    internal static (IReadOnlyList<(string Text, bool PercentAlone)> Readings, bool Complete) Decodings(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var current = text;
-        var percentAlone = true;
-        for (var changed = true; changed;)
+        var readings = new List<(string Text, bool PercentAlone)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal) { text };
+        var pending = new Queue<string>([text]);
+        for (var current = text; ;)
         {
-            changed = false;
-            foreach (var (decode, percent) in new (Func<string, string> Decode, bool Percent)[] { (JsonDecoded, false), (HtmlDecoded, false), (Uri.UnescapeDataString, true) })
+            var next = Uri.UnescapeDataString(current);
+            if (!seen.Add(next))
             {
-                var next = decode(current);
-                if (!string.Equals(next, current, StringComparison.Ordinal))
+                break;
+            }
+
+            if (readings.Count == ReadingLimit)
+            {
+                return (readings, false);
+            }
+
+            readings.Add((next, true));
+            pending.Enqueue(next);
+            current = next;
+        }
+
+        while (pending.TryDequeue(out var reading))
+        {
+            foreach (var decode in Decoders)
+            {
+                var next = decode(reading);
+                if (!seen.Add(next))
                 {
-                    current = next;
-                    percentAlone &= percent;
-                    changed = true;
-                    yield return (current, percentAlone);
+                    continue;
                 }
+
+                if (readings.Count == ReadingLimit)
+                {
+                    return (readings, false);
+                }
+
+                readings.Add((next, false));
+                pending.Enqueue(next);
             }
         }
+
+        return (readings, true);
     }
 
     /// <summary><paramref name="text"/> with its JSON string escapes decoded once.</summary>
@@ -380,9 +443,15 @@ internal sealed class LiveScreen
         return System.Net.WebUtility.HtmlDecode(numeric.Replace("&commat;", "@", StringComparison.OrdinalIgnoreCase));
     }
 
-    /// <summary>A learned address's forms that <see cref="Apply"/> replaces: as written, URL-escaped, and with its <c>@</c> as <c>&amp;#64;</c> or <c>&amp;#x40;</c>.</summary>
+    /// <summary>
+    /// A learned address's forms that <see cref="Apply"/> replaces and <see cref="SurvivorIn"/> looks
+    /// for: as written, URL-escaped, and with its <c>@</c> as <c>&amp;#64;</c> or <c>&amp;#x40;</c>, with
+    /// or without the <c>;</c> (<c>pat.user&amp;#x40corp.test</c>, whose hexadecimal digits run into the
+    /// domain, reads as U+040C and hides the address from any decoding).
+    /// </summary>
     private static IEnumerable<string> AddressFormsOf(string address) =>
-        new[] { address, Uri.EscapeDataString(address), address.Replace("@", "&#64;", StringComparison.Ordinal), address.Replace("@", "&#x40;", StringComparison.Ordinal) }
+        new[] { address, Uri.EscapeDataString(address) }
+            .Concat(new[] { "&#64;", "&#x40;", "&#64", "&#x40" }.Select(at => address.Replace("@", at, StringComparison.Ordinal)))
             .Distinct(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -491,7 +560,8 @@ internal sealed class LiveScreen
     /// The address-shaped runs of <paramref name="text"/> (D368: an <c>@</c> or U+FF20 between
     /// non-blank characters, a run bounded by white space, brackets, <c>,</c>, <c>;</c> and quotes, a
     /// quote only when it does not stand between letters, digits or <c>.</c>, as in
-    /// <c>mary.o'connor@…</c>), but for an <c>@</c> that ends a URL's user information
+    /// <c>mary.o'connor@…</c>, and a <c>;</c> only when it ends no character reference standing so, as in
+    /// <c>mary.o&amp;#39;connor@…</c>), but for an <c>@</c> that ends a URL's user information
     /// (<c>&lt;scheme&gt;://&lt;user&gt;@</c>, git's <c>***@</c> included) or git's scp-like
     /// <c>git@&lt;host&gt;:</c>: start, length.
     /// </summary>
@@ -537,12 +607,39 @@ internal sealed class LiveScreen
     private static bool IsBound(char c) =>
         char.IsWhiteSpace(c) || char.IsControl(c) || c is '"' or '\'' or '<' or '>' or '(' or ')' or '[' or ']' or '{' or '}' or ',' or ';' or '`';
 
-    /// <summary>Whether <paramref name="text"/>'s character at <paramref name="index"/> bounds an address run: a quote between letters, digits or <c>.</c> does not.</summary>
+    /// <summary>Whether <paramref name="text"/>'s character at <paramref name="index"/> bounds an address run: a quote between letters, digits or <c>.</c> does not, nor the <c>;</c> of a character reference standing so (<see cref="EndsReferenceInWord"/>).</summary>
     private static bool IsBoundAt(string text, int index) =>
         IsBound(text[index])
-        && !(Quotes.Contains(text[index]) && index > 0 && index < text.Length - 1 && InWord(text[index - 1]) && InWord(text[index + 1]));
+        && !(Quotes.Contains(text[index]) && index > 0 && index < text.Length - 1 && InWord(text[index - 1]) && InWord(text[index + 1]))
+        && !EndsReferenceInWord(text, index);
 
     private static bool InWord(char c) => char.IsLetterOrDigit(c) || c == '.';
+
+    /// <summary>
+    /// Whether the <c>;</c> at <paramref name="index"/> ends a character reference (<c>&amp;#NN;</c>,
+    /// <c>&amp;#xHH;</c>, <c>&amp;name;</c>) that stands between letters, digits or <c>.</c>, another
+    /// reference beside it counting as one, and encodes neither a blank, a bracket, <c>,</c> nor
+    /// <c>;</c> (a quote counts as in a word, as written; a name it cannot decode too): what it encodes
+    /// is part of the word, as in <c>mary.o&amp;#39;connor</c> or <c>a&amp;amp;b</c>, but not in
+    /// <c>Ada&amp;lt;ada@…</c>.
+    /// </summary>
+    private static bool EndsReferenceInWord(string text, int index)
+    {
+        if (index < 3 || text[index] != ';' || index == text.Length - 1 || !(InWord(text[index + 1]) || text[index + 1] == '&'))
+        {
+            return false;
+        }
+
+        var amp = text.LastIndexOf('&', index - 1, Math.Min(index, 34));
+        if (amp <= 0 || !(InWord(text[amp - 1]) || text[amp - 1] == ';') || !ReferenceName.IsMatch(text[(amp + 1)..index]))
+        {
+            return false;
+        }
+
+        var reference = text[amp..(index + 1)];
+        var decoded = HtmlDecoded(reference);
+        return string.Equals(decoded, reference, StringComparison.Ordinal) || !decoded.Any(c => IsBound(c) && !Quotes.Contains(c));
+    }
 
     /// <summary>Whether the <c>@</c> at <paramref name="at"/> ends a URL's user part or git's scp-like <c>git@host:</c>, judged on the run from <paramref name="start"/>.</summary>
     private static bool EndsUserPart(string text, int start, int at)
@@ -568,7 +665,7 @@ internal sealed class LiveScreen
         return false;
     }
 
-    /// <summary>The address in a run: from after its last <c>\</c>, <c>/</c>, <c>:</c>, <c>=</c> or <c>;</c> before the <c>@</c> to before the first <c>/</c>, <c>?</c>, <c>#</c>, <c>&amp;</c>, <c>\</c> or <c>:</c> after it, less a final <c>.</c>; null without one.</summary>
+    /// <summary>The address in a run: from after its last <c>\</c>, <c>/</c>, <c>:</c>, <c>=</c> or <c>;</c> before the <c>@</c> (but a <c>;</c> that ends a character reference inside a word, <see cref="EndsReferenceInWord"/>) to before the first <c>/</c>, <c>?</c>, <c>#</c>, <c>&amp;</c>, <c>\</c> or <c>:</c> after it, less a final <c>.</c>; null without one.</summary>
     internal static string? CoreOf(string run)
     {
         var at = run.IndexOfAny(['@', '＠']);
@@ -577,7 +674,12 @@ internal sealed class LiveScreen
             return null;
         }
 
-        var start = run.LastIndexOfAny(['\\', '/', ':', '=', ';'], at - 1) + 1;
+        var start = at;
+        while (start > 0 && !(run[start - 1] is '\\' or '/' or ':' or '=' || (run[start - 1] == ';' && !EndsReferenceInWord(run, start - 1))))
+        {
+            start--;
+        }
+
         var end = run.IndexOfAny(['/', '?', '#', '&', '\\', ':'], at + 1);
         var core = run[start..(end < 0 ? run.Length : end)].TrimEnd('.', '!', '?');
         return core.Length > 2 && core.IndexOfAny(['@', '＠']) is > 0 and var index && index < core.Length - 1 ? core : null;
@@ -623,7 +725,7 @@ internal sealed class LiveScreen
             return "the organization's name";
         }
 
-        if (addresses.Any(address => text.Contains(address, StringComparison.OrdinalIgnoreCase) || text.Contains(Uri.EscapeDataString(address), StringComparison.OrdinalIgnoreCase)))
+        if (addresses.Any(address => AddressFormsOf(address).Any(form => text.Contains(form, StringComparison.OrdinalIgnoreCase))))
         {
             return "a learned address";
         }
@@ -715,12 +817,14 @@ internal sealed class LiveScreen
     }
 
     /// <summary>
-    /// The ids and addresses a text holds: tenants; <c>hid=</c> and sign-in <c>context=</c> values in
-    /// the text as it is, with <c>&amp;amp;</c> as <c>&amp;</c>, and after each of
-    /// <see cref="Decodings"/>, so that an escaped one (<c>reply_to=…%26hid%3D…</c>) is learned too;
-    /// addresses, each run whole and, when a quote stands in it, each part between its quotes too.
+    /// The ids and, unless <paramref name="addresses"/> is false, the addresses a text holds: tenants;
+    /// <c>hid=</c> and sign-in <c>context=</c> values in the text as it is, with <c>&amp;amp;</c> as
+    /// <c>&amp;</c>, and in each of its readings (<see cref="Decodings"/>), so that an escaped one
+    /// (<c>reply_to=…%26hid%3D…</c>) is learned too; each run's address (<see cref="CoreOf"/>) and, when
+    /// a quote stands in a run whose address is no address as a whole (<see cref="IsWholeAddress"/>),
+    /// each part between its quotes too.
     /// </summary>
-    private void LearnText(string text)
+    private void LearnText(string text, bool addresses = true)
     {
         foreach (Match match in TenantAfterLogin.Matches(text))
         {
@@ -732,7 +836,7 @@ internal sealed class LiveScreen
             AddId(match.Groups["tenant"].Value, TenantPlaceholder);
         }
 
-        var readings = new[] { text, text.Replace("&amp;", "&", StringComparison.OrdinalIgnoreCase) }.Concat(Decodings(text).Select(decoded => decoded.Text));
+        var readings = new[] { text, text.Replace("&amp;", "&", StringComparison.OrdinalIgnoreCase) }.Concat(Decodings(text).Readings.Select(decoded => decoded.Text));
         foreach (var decoded in readings.Distinct(StringComparer.Ordinal))
         {
             foreach (Match match in HidOrContext.Matches(decoded))
@@ -749,11 +853,17 @@ internal sealed class LiveScreen
             }
         }
 
+        if (!addresses)
+        {
+            return;
+        }
+
         foreach (var (start, length) in AddressRuns(text))
         {
             var run = text.Substring(start, length);
-            AddAddress(run);
-            if (run.IndexOfAny(Quotes) >= 0)
+            var core = CoreOf(run);
+            AddCore(core);
+            if (run.IndexOfAny(Quotes) >= 0 && !(core is not null && IsWholeAddress(core)))
             {
                 foreach (var part in run.Split(Quotes, StringSplitOptions.RemoveEmptyEntries))
                 {
