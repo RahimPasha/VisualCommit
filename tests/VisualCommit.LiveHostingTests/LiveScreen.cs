@@ -407,14 +407,18 @@ internal sealed class LiveScreen
     /// are escaped (<c>pat.user\u0040fabrikam7.test</c>, <c>&amp;amp;#64;</c>, a hid's <c>&amp;#45;</c>)
     /// would be cut by the organization's rule or replaced in part, and <see cref="SurvivorIn"/> would no
     /// longer see what is left: the caller withholds such a text instead, so that Apply only meets values
-    /// written as themselves. A text with more readings than <see cref="ReadingLimit"/> is withheld too.
-    /// The answer names the kind of value and whether percent decoding alone reached it, never the value.
+    /// written as themselves. So is a text that, its raw address runs and learned addresses' forms taken
+    /// out, shows an address in a reading: an unlearned one at the organization's domain with its at
+    /// sign escaped would lose its domain to the organization's rule and keep its local part. A text with
+    /// more readings than <see cref="ReadingLimit"/> is withheld too. The answer names the kind of value
+    /// and whether percent decoding alone reached it, never the value.
     /// </summary>
     public string? EscapedValueIn(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
         (IReadOnlyList<(string Text, bool PercentAlone)> Readings, bool Complete)? asWritten = null;
-        foreach (var (kind, forms, shows) in LearnedValues())
+        var learned = LearnedValues();
+        foreach (var (kind, forms, shows) in learned)
         {
             var masked = text;
             foreach (var form in forms)
@@ -437,8 +441,35 @@ internal sealed class LiveScreen
             }
         }
 
-        return null;
+        // An address, learned or not, that only a reading shows (its at sign escaped): the
+        // organization's or the namespace's rule would cut its domain and leave its local part, which
+        // SurvivorIn would no longer see as an address. The text's raw address runs, which Apply
+        // replaces whole, and each learned address's forms, which it replaces as they stand, are taken
+        // out first (the lead's ruling after N1).
+        var unmasked = text;
+        foreach (var form in learned.Where(value => value.Kind == LearnedAddressKind).SelectMany(value => value.Forms))
+        {
+            unmasked = unmasked.Replace(form, Mask, StringComparison.OrdinalIgnoreCase);
+        }
+
+        foreach (var (start, length) in AddressRuns(unmasked).OrderByDescending(run => run.Start))
+        {
+            unmasked = string.Concat(unmasked.AsSpan(0, start), Mask, unmasked.AsSpan(start + length));
+        }
+
+        var (addressReadings, addressesComplete) = Decodings(unmasked);
+        foreach (var (reading, percentAlone) in addressReadings)
+        {
+            if (HoldsUnkeptAddress(WithoutPlaceholders(reading)))
+            {
+                return percentAlone ? "an address once percent-decoded" : "an address once decoded";
+            }
+        }
+
+        return addressesComplete ? null : NestedPastTheSearch;
     }
+
+    private const string LearnedAddressKind = "a learned address";
 
     /// <summary>Each learned value with the kind <see cref="EscapedValueIn"/> names, the forms <see cref="Apply"/> replaces (longest first) and whether a reading shows it.</summary>
     private List<(string Kind, string[] Forms, Func<string, bool> Shows)> LearnedValues()
@@ -458,7 +489,7 @@ internal sealed class LiveScreen
         var values = new List<(string Kind, string[] Forms, Func<string, bool> Shows)>();
         values.AddRange(organizations.Select(organization => ("the organization's name", new[] { organization.Name }, (Func<string, bool>)organization.Pattern.IsMatch)));
         values.AddRange(namespaces.Select(name => ("the namespace's name", new[] { name.Name }, (Func<string, bool>)name.Pattern.IsMatch)));
-        values.AddRange(addresses.Select(address => ("a learned address", AddressFormsOf(address).OrderByDescending(form => form.Length).ToArray(), (Func<string, bool>)(reading => reading.Contains(address, StringComparison.OrdinalIgnoreCase)))));
+        values.AddRange(addresses.Select(address => (LearnedAddressKind, AddressFormsOf(address).OrderByDescending(form => form.Length).ToArray(), (Func<string, bool>)(reading => reading.Contains(address, StringComparison.OrdinalIgnoreCase)))));
         values.AddRange(ids.Select(id => ("a learned id", FormsOf(id).OrderByDescending(form => form.Length).ToArray(), (Func<string, bool>)(reading => PlainFormsOf(id).Any(form => reading.Contains(form, StringComparison.OrdinalIgnoreCase))))));
         return values;
     }
@@ -942,11 +973,12 @@ internal sealed class LiveScreen
             return "a host id";
         }
 
-        var runs = AddressRuns(text);
-        return runs.Any(run => !(CoreOf(text.Substring(run.Start, run.Length).TrimEnd('.', ',', ':', '!', '?')) is { } core && IsKept(core) && core.Length == text.Substring(run.Start, run.Length).TrimEnd('.', ',', ':', '!', '?').Length))
-            ? "an address"
-            : null;
+        return HoldsUnkeptAddress(text) ? "an address" : null;
     }
+
+    /// <summary>Whether <paramref name="text"/> holds an address run that the screen does not keep whole (D325's, <c>example.com</c>'s).</summary>
+    private static bool HoldsUnkeptAddress(string text) =>
+        AddressRuns(text).Any(run => !(CoreOf(text.Substring(run.Start, run.Length).TrimEnd('.', ',', ':', '!', '?')) is { } core && IsKept(core) && core.Length == text.Substring(run.Start, run.Length).TrimEnd('.', ',', ':', '!', '?').Length));
 
     /// <summary>The screen's placeholders as blanks, so that a placeholder's words never pass for the organization and an <c>@</c> right after one ends a user part.</summary>
     private static string WithoutPlaceholders(string text)

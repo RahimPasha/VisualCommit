@@ -3954,8 +3954,12 @@ stage 1 only; where the build differs or settles what was open:
   area as A1 sends it; run.txt adds git's version, the clone's time, the create's status and the head.
 - The screen (amending 15.3) also hides GitLab's namespace (D384) and withholds, before `Apply`, a text
   whose reading shows a learned value in a form `Apply` does not replace; `SurvivorIn` also reports any
-  `hid=` and searches every reading of the decodings (512 at most). Addresses are learned whole; forms
-  and boundaries are in `LiveScreen`'s comments. The Git area id matches g1's.
+  `hid=` and searches every reading of the decodings (512 at most); a text that, its raw addresses and
+  learned addresses' forms taken out, shows an address in a reading is withheld too (an unlearned
+  address at the organization's domain, its at sign escaped). Addresses are learned whole; forms and
+  boundaries are in `LiveScreen`'s comments. The Git area id matches g1's. Accepted by the lead: an
+  address with `=` or `/` learned from a URL's query or path and quoted elsewhere keeps the head
+  before its widest learned tail (the last verification's minor; no answer seen holds one).
 - For the lead: the live classes are built, never run (risks: the log-line wait, the push dialog,
   `accounts.json`'s record); CLAUDE.md's rows and the csproj's comment are the lead's (15.9). No file
   outside 15.1's list changed.

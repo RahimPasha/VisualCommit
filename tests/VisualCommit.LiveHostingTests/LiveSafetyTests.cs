@@ -3107,6 +3107,43 @@ public sealed class LiveScreenTests
         Assert.Equal(["by <the user's address>, <the user's address> and <the user's address> in <the organization>, x?hid=<the organization's id>", none], output);
     }
 
+    /// <summary>
+    /// The last verification's texts (the lead's ruling after N1): an address at the organization's
+    /// domain that the screen never learned, its at sign escaped, as a reference without its <c>;</c>,
+    /// with it, as <c>&amp;commat;</c>, or raw in JSON; the organization's rule must not cut its domain
+    /// and leave its local part.
+    /// </summary>
+    public static TheoryData<string> UnlearnedAddressesAtTheOrganizationsDomain => new()
+    {
+        "by bob&#x40fabrikam7.test",
+        "by bob&#64fabrikam7.test",
+        "<p>Reviewer: colleague&#64;fabrikam7.test</p>",
+        "<p>Reviewer: colleague&#x40;fabrikam7.test</p>",
+        "<p>Reviewer: colleague&commat;fabrikam7.test</p>",
+        "{\"reviewer\":\"colleague@fabrikam7.test\"}",
+        "See https://dev.azure.com/fabrikam7/_usersSettings/about?user=colleague%40fabrikam7.test for it.",
+    };
+
+    [Theory]
+    [MemberData(nameof(UnlearnedAddressesAtTheOrganizationsDomain))]
+    public void An_unlearned_address_at_the_organization_s_domain_leaves_no_part_of_itself(string text)
+    {
+        var screen = Screen(HuntOrg);
+        screen.LearnFromAnswer([], "{\"message\":" + System.Text.Json.JsonSerializer.Serialize(text) + "}");
+
+        var screened = LiveRun.ScreenedBy(screen, text, out var kind);
+
+        if (screened is not null)
+        {
+            var decoded = FullyDecoded(screened);
+            Assert.True(kind is null, kind);
+            foreach (var hidden in new[] { "bob", "colleague", HuntOrg })
+            {
+                Assert.DoesNotContain(hidden, decoded, StringComparison.OrdinalIgnoreCase);
+            }
+        }
+    }
+
     /// <summary>The verifier's five texts (N2), each an answer's body or header and the note that shows it: an address with <c>=</c>, <c>/</c> or <c>+</c> before its <c>@</c> inside a message.</summary>
     public static TheoryData<string, string?, string> AddressesInMessages => new()
     {
