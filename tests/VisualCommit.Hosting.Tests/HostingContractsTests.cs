@@ -56,7 +56,7 @@ public sealed class HostingContractsTests
     }
 
     [Fact]
-    public async Task The_session_holds_GitHub_alone_until_WP_S()
+    public async Task A_session_with_GitHub_alone_on_answers_the_other_providers_as_turned_off_without_a_request()
     {
         await using var setup = await HostingSessionSetup.StartAsync();
         var session = setup.Session;

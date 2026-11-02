@@ -1,12 +1,14 @@
 // The authors' avatars of a repository tab (docs/phase-7a-design.md 11.3; D252, D257, D310, D311):
 // the tab tells its hosting the authors of the commits that a GitHub remote's branch reaches, each
 // with the newest such commit and that remote (D339), and gives the avatars it gets back to the
-// details panel; the graph's view logs them once drawn (D322).
+// details panel; the graph's view logs them once drawn (D322). GitHub's alone (D349, D367;
+// docs/phase-7b-design.md 9.9): only while the listed repository is GitHub's.
 // The only override of OnPropertyChanged in RepositoryViewModel (1.7).
 
 using System.ComponentModel;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting;
 
@@ -49,7 +51,8 @@ public sealed partial class RepositoryViewModel
                 UpdateAuthors();
                 break;
             case nameof(HostingState):
-                if (HostingState.PullRequests is PullRequestsState.SignedOut or PullRequestsState.NoHostedRemote)
+                if (HostingState.PullRequests is PullRequestsState.SignedOut or PullRequestsState.NoHostedRemote or PullRequestsState.OtherOrganization
+                    || HostingState.Repository?.Provider is not HostingProvider.GitHub)
                 {
                     _authorsSent = null;
                 }
@@ -106,7 +109,8 @@ public sealed partial class RepositoryViewModel
     /// </summary>
     private void UpdateAuthors()
     {
-        if (IsSummary || _disposed || HostingState.PullRequests is not (PullRequestsState.Loading or PullRequestsState.Failed or PullRequestsState.Loaded))
+        if (IsSummary || _disposed || HostingState.PullRequests is not (PullRequestsState.Loading or PullRequestsState.Failed or PullRequestsState.Loaded)
+            || HostingState.Repository?.Provider is not HostingProvider.GitHub)
         {
             return;
         }
@@ -133,7 +137,8 @@ public sealed partial class RepositoryViewModel
     /// <summary>
     /// The distinct author e-mails, lower-case (invariant), newest first and at most
     /// <see cref="AvatarAuthors"/>, of those of the first <see cref="AvatarRows"/> rows that a
-    /// remote-tracking branch of a GitHub remote (a key of <paramref name="remotes"/>) reaches, each
+    /// remote-tracking branch of a GitHub remote (a key of <paramref name="remotes"/> whose repository
+    /// is GitHub's; another provider's remote reaches nothing, docs/phase-7b-design.md 9.9) reaches, each
     /// with its newest such commit and the repository of the remote that reaches it, the first in
     /// <see cref="HostingRemoteOrder"/> when several do (D339). One pass in row order: the branches'
     /// tips start the set and a row in it adds its parents, with its remote, since the graph's order
@@ -146,7 +151,7 @@ public sealed partial class RepositoryViewModel
         ArgumentNullException.ThrowIfNull(remotes);
 
         // Each reached SHA with the place, in the remotes' order, of the first remote that reaches it.
-        var order = HostingRemoteOrder.Of(remotes.Keys);
+        var order = HostingRemoteOrder.Of(remotes.Where(remote => remote.Value.Provider == HostingProvider.GitHub).Select(remote => remote.Key));
         var places = order.Select((remote, place) => (remote, place)).ToDictionary(pair => pair.remote, pair => pair.place, StringComparer.Ordinal);
         var reached = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var gitRef in graph.Refs.Refs)

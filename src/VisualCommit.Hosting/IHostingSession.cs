@@ -252,10 +252,10 @@ public interface IRepositoryHosting : IDisposable
 
     AuthorAvatars Avatars { get; }
 
-    /// <summary>Signed in and not off: the tab reads <see cref="UrlRewrites"/> with its refs.</summary>
+    /// <summary>Some account signed in, as last raised with <see cref="Changed"/> (within a handler of <see cref="Changed"/>, as that event raised it): the tab reads <see cref="UrlRewrites"/> with its refs.</summary>
     bool WantsUrlRewrites { get; }
 
-    /// <summary><see cref="State"/>, <see cref="Bindings"/>, <see cref="Avatars"/> or <see cref="WantsUrlRewrites"/> changed.</summary>
+    /// <summary><see cref="State"/>, <see cref="Bindings"/>, <see cref="Avatars"/>, <see cref="WantsUrlRewrites"/> or the account of <see cref="RepositoryHostingState.Repository"/>'s provider (its key or its login) changed.</summary>
     event EventHandler? Changed;
 
     /// <summary>On the UI thread, after each refs read.</summary>
@@ -351,12 +351,12 @@ public sealed class NullHostingSession : IHostingSession
 
 /// <summary>
 /// The hosting of a repository without a remote on a known service, and of every repository while
-/// the service is off or in a dashboard's summary row (docs/phase-7a-design.md 1.5, 1.7): not
-/// GitHub, no bindings, no avatars, no URL rewrites wanted, never changed; disposing it does nothing.
+/// every provider is off or in a dashboard's summary row (docs/phase-7a-design.md 1.5, 1.7): no hosted
+/// remote, no bindings, no avatars, no URL rewrites wanted, never changed; disposing it does nothing.
 /// </summary>
 public sealed class NullRepositoryHosting : IRepositoryHosting
 {
-    private static readonly HostingFailure NoRemoteFailure = new(HostingFailureKind.NotFound, "This repository has no GitHub remote.");
+    private static readonly HostingFailure NoRemoteFailure = new(HostingFailureKind.NotFound, "This repository has no hosted remote.");
 
     private NullRepositoryHosting()
     {

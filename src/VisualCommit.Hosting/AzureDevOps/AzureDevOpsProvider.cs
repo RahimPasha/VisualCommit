@@ -357,6 +357,9 @@ public sealed class AzureDevOpsProvider : IHostingProvider, IDisposable
     /// <summary>Forgets the client's kept answers: WP-S calls it at this provider's sign-out.</summary>
     internal void ForgetKept() => _client.ForgetKept();
 
+    /// <summary>What a request with <paramref name="token"/> is screened as (the token and its <c>Basic</c> credential): WP-S's D382 check reads A1's answer for each.</summary>
+    internal string[] SecretsOf(string token) => _client.SecretsOf(token);
+
     /// <summary>
     /// The member a <c>connectionData</c>'s <c>authenticatedUser</c> names; null for the Anonymous
     /// identity, which a token the service ignored gets (g1 G0.3): no user or no GUID <c>id</c>, the

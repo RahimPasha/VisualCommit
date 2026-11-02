@@ -57,7 +57,7 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
     public const string GitLabVariable = "VISUALCOMMIT_GITLAB_URL";
 
     /// <summary>The three providers off: nothing is recognised and no request is made (the harnesses' default). Its handler refuses every request.</summary>
-    public static HostingOptions Off { get; } = new(null, static () => new RefusingHandler());
+    public static HostingOptions Off { get; } = new(null, RefusingHandler);
 
     /// <summary>Azure DevOps' endpoints; null: off.</summary>
     public AzureDevOpsEndpoints? AzureDevOps { get; init; }
@@ -80,7 +80,10 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
     /// <c>http://127.0.0.1:&lt;port&gt;/</c>, the provider's <c>Local(port)</c>; anything else, off
     /// and a warning that names the variable but not its value. Each provider it turns on gets its
     /// handler set explicitly (<see cref="DefaultHandler(Uri)"/> of Azure DevOps' web base, of
-    /// GitLab's API base). All three off is <see cref="Off"/> itself.
+    /// GitLab's API base). A provider whose web origin an earlier one in D353's order (GitHub, GitLab,
+    /// Azure DevOps) already has is off, with a warning that names its variable and that provider,
+    /// since one origin serves one provider (the session refuses such options). All three off is
+    /// <see cref="Off"/> itself.
     /// </summary>
     public static HostingOptions FromEnvironment(Func<string, string?> readEnvironment, IAppLog log)
     {
@@ -89,6 +92,18 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
         var gitHub = Read(readEnvironment, log, GitHubVariable, HostingProvider.GitHub, GitHubEndpoints.GitHubCom, GitHubEndpoints.Local);
         var azureDevOps = Read(readEnvironment, log, AzureDevOpsVariable, HostingProvider.AzureDevOps, AzureDevOpsEndpoints.Service, AzureDevOpsEndpoints.Local);
         var gitLab = Read(readEnvironment, log, GitLabVariable, HostingProvider.GitLab, GitLabEndpoints.GitLabCom, GitLabEndpoints.Local);
+        if (gitLab is not null && SharedWith(gitLab.WebBase, (gitHub?.WebBase, HostingProvider.GitHub)) is { } gitLabShares)
+        {
+            log.Warning($"{GitLabVariable} names the origin of {HostingProviders.DisplayName(gitLabShares)}: GitLab is off.");
+            gitLab = null;
+        }
+
+        if (azureDevOps is not null && SharedWith(azureDevOps.WebBase, (gitHub?.WebBase, HostingProvider.GitHub), (gitLab?.WebBase, HostingProvider.GitLab)) is { } azureShares)
+        {
+            log.Warning($"{AzureDevOpsVariable} names the origin of {HostingProviders.DisplayName(azureShares)}: Azure DevOps is off.");
+            azureDevOps = null;
+        }
+
         if (gitHub is null && azureDevOps is null && gitLab is null)
         {
             return Off;
@@ -160,6 +175,23 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
         return null;
     }
 
+    /// <summary>The first of <paramref name="earlier"/> on <paramref name="webBase"/>'s origin (scheme, host and port, without case, as the session compares them); null when none is.</summary>
+    private static HostingProvider? SharedWith(Uri webBase, params (Uri? WebBase, HostingProvider Provider)[] earlier)
+    {
+        foreach (var (otherBase, provider) in earlier)
+        {
+            if (otherBase is not null
+                && string.Equals(otherBase.Scheme, webBase.Scheme, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(otherBase.Host, webBase.Host, StringComparison.OrdinalIgnoreCase)
+                && otherBase.Port == webBase.Port)
+            {
+                return provider;
+            }
+        }
+
+        return null;
+    }
+
     /// <summary>The port of <c>http://127.0.0.1:&lt;port&gt;/</c> (the trailing <c>/</c> optional), or null for any other value.</summary>
     private static int? LocalPort(string value) =>
         Uri.TryCreate(value, UriKind.Absolute, out var uri)
@@ -173,10 +205,17 @@ public sealed record HostingOptions(GitHubEndpoints? GitHub, Func<HttpMessageHan
             ? uri.Port
             : null;
 
-    /// <summary>The handler of <see cref="Off"/>: every request fails, so that no request leaves the app while GitHub is off.</summary>
-    private sealed class RefusingHandler : HttpMessageHandler
+    /// <summary>
+    /// Makes the handler of <see cref="Off"/>, which the session also gives a provider on without a
+    /// handler of its own (docs/phase-7b-design.md 9.2): every request fails, so that no request
+    /// leaves the app. Its message names no provider, since every provider's client may hold one.
+    /// </summary>
+    internal static HttpMessageHandler RefusingHandler() => new Refusing();
+
+    /// <summary><see cref="RefusingHandler"/>'s handler: every request fails before it is sent.</summary>
+    private sealed class Refusing : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
-            Task.FromException<HttpResponseMessage>(new InvalidOperationException("GitHub is off: the app makes no request."));
+            Task.FromException<HttpResponseMessage>(new InvalidOperationException("The provider is off: the app makes no request."));
     }
 }

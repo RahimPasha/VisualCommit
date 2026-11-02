@@ -407,6 +407,9 @@ public sealed class GitLabProvider : IHostingProvider, IDisposable
 
     public void Dispose() => _client.Dispose();
 
+    /// <summary>What a request with <paramref name="token"/> is screened as: WP-S's D382 check reads A1's answer for each.</summary>
+    internal string[] SecretsOf(string token) => _client.SecretsOf(token);
+
     /// <summary>
     /// Forgets the client's kept answers and A4's forks (a sign-out). An answer or a fork that a
     /// request still in flight brings is kept under its token's fingerprint, which no other token's

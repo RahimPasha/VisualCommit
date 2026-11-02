@@ -1,3 +1,4 @@
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 
 namespace VisualCommit.Hosting;
@@ -5,14 +6,19 @@ namespace VisualCommit.Hosting;
 // The authors' avatars of one repository tab (docs/phase-7a-design.md 7.9; D252, D291, D311,
 // ruling 22): the e-mails the graph gives, matched through the repository's map, each looked up
 // through a commit of its own when the map lacks it (D339), then the images from the session's
-// cache. One run at a time; a call during a run folds into one more with the latest set. Signed
-// out, nothing is read or asked.
+// cache. One run at a time; a call during a run folds into one more with the latest set. GitHub's
+// alone (D349, D367; docs/phase-7b-design.md 9.8): only while the listed repository is GitHub's and
+// GitHub's account is signed in, of GitHub remotes' authors; else nothing is read or asked.
 public sealed partial class RepositoryHosting
 {
-    // On the UI thread.
+    // On the UI thread; _avatarGeneration is also read where a run ends.
     private Task? _avatarRun;
     private IReadOnlyList<AuthorCommit>? _avatarNext;
     private int _avatarGeneration;
+
+    // On the UI thread: linked to the tab's lifetime, in each run's token; cancelled and replaced at
+    // each StopAvatars, so that a run in flight asks GitHub nothing more (9.8).
+    private CancellationTokenSource? _avatarStop;
 
     /// <summary>The avatars' run in progress, for the tests; read on the UI thread.</summary>
     internal Task AvatarRun => _avatarRun ?? Task.CompletedTask;
@@ -20,18 +26,20 @@ public sealed partial class RepositoryHosting
     /// <summary>
     /// On the UI thread: the authors of graph commits that a GitHub remote's branch reaches (D311),
     /// each with the newest such commit and that remote's repository (D339), copied, lower-cased and
-    /// one per e-mail (the first); GitHub is asked about no other address. Signed out, nothing happens.
+    /// one per e-mail (the first); an author whose repository is another provider's is left out, and
+    /// GitHub is asked about no other address. Unless the listed repository is GitHub's and GitHub's
+    /// account is signed in, nothing happens (docs/phase-7b-design.md 9.8).
     /// </summary>
     public void ShowAvatarsFor(IReadOnlyCollection<AuthorCommit> authors)
     {
         ArgumentNullException.ThrowIfNull(authors);
-        if (_disposed || !IsSignedIn)
+        if (_disposed || !AvatarsWanted)
         {
             return;
         }
 
         IReadOnlyList<AuthorCommit> set = [.. authors
-            .Where(author => author is not null && !string.IsNullOrWhiteSpace(author.Email))
+            .Where(author => author is not null && !string.IsNullOrWhiteSpace(author.Email) && author.Repository?.Provider == HostingProvider.GitHub)
             .Select(author => author with { Email = author.Email.ToLowerInvariant() })
             .DistinctBy(author => author.Email, StringComparer.Ordinal)];
         if (_avatarRun is not null)
@@ -43,12 +51,37 @@ public sealed partial class RepositoryHosting
         StartAvatars(set);
     }
 
-    // On the UI thread: a sign-out (the session cancels the run itself) or no GitHub remote left;
-    // what a run still brings is dropped.
+    /// <summary>The listed repository is GitHub's and GitHub's account is signed in (9.8).</summary>
+    private bool AvatarsWanted => _candidate?.Provider == HostingProvider.GitHub && GitHubSignedIn;
+
+    // On the UI thread: GitHub's sign-out (the session cancels the run too), no GitHub repository
+    // listed any more, or the tab closed: the run in flight is cancelled, so that GitHub is asked
+    // nothing more for it and nothing is saved under avatars/ (D367), and what it still brings is
+    // dropped.
     private void StopAvatars()
     {
-        _avatarGeneration++;
+        DropAvatarRun();
+        CancelAvatarRun();
+    }
+
+    // On the UI thread, StopAvatars' first half, which Update does before it gives A3 reads up: what
+    // the run in flight still brings is dropped, an A3 read of it given up or refused ends it
+    // quietly, and the set asked for meanwhile goes.
+    private void DropAvatarRun()
+    {
+        Interlocked.Increment(ref _avatarGeneration);
         _avatarNext = null;
+    }
+
+    // On the UI thread, StopAvatars' second half: the run in flight is cancelled.
+    private void CancelAvatarRun()
+    {
+        if (_avatarStop is { } stop)
+        {
+            _avatarStop = null;
+            stop.Cancel();
+            stop.Dispose();
+        }
     }
 
     private void DisposeAvatars() => StopAvatars();
@@ -63,6 +96,7 @@ public sealed partial class RepositoryHosting
         // Null when the session started nothing (signed out meanwhile, or closed): the next set then
         // starts a run of its own instead of folding into none.
         var generation = _avatarGeneration;
+        _avatarStop ??= CancellationTokenSource.CreateLinkedTokenSource(_lifetime);
         _avatarRun = _session.RunAvatarWork(async ct =>
         {
             AuthorAvatars? avatars = null;
@@ -70,9 +104,10 @@ public sealed partial class RepositoryHosting
             {
                 avatars = await ReadAvatarsAsync(candidate, set, ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested || generation != Volatile.Read(ref _avatarGeneration))
             {
-                // Signed out or closed: nothing is applied.
+                // Signed out, stopped or closed, or about to be stopped (its A3 given up or refused
+                // first, Update): nothing is applied.
             }
             catch (Exception ex)
             {
@@ -82,7 +117,7 @@ public sealed partial class RepositoryHosting
             }
 
             _session.Post(() => FinishAvatars(generation, avatars));
-        }, _lifetime);
+        }, _avatarStop.Token);
     }
 
     // On the UI thread: the run's avatars applied while still wanted; then the set asked for meanwhile.
@@ -94,7 +129,7 @@ public sealed partial class RepositoryHosting
             return;
         }
 
-        if (avatars is not null && generation == _avatarGeneration && IsSignedIn)
+        if (avatars is not null && generation == _avatarGeneration && AvatarsWanted)
         {
             Apply(avatars);
         }
@@ -102,7 +137,7 @@ public sealed partial class RepositoryHosting
         if (_avatarNext is { } next)
         {
             _avatarNext = null;
-            if (IsSignedIn)
+            if (AvatarsWanted)
             {
                 StartAvatars(next);
             }
@@ -134,8 +169,9 @@ public sealed partial class RepositoryHosting
             HostingResult<AuthorMap>? answer = null;
             try
             {
-                answer = await _session.CallAsync(
+                answer = await _session.CallGitHubAsync(
                     $"reading the authors of {listed.FullName}",
+                    null,
                     (provider, token, linked) => provider.ReadAuthorsAsync(token, listed, commitsDue ? branch : null, lookups, linked),
                     ct).ConfigureAwait(false);
             }

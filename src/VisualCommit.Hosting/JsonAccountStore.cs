@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using VisualCommit.Core;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 
 namespace VisualCommit.Hosting;
@@ -92,7 +93,7 @@ public static class AccountTokenStates
     /// <summary>Kept in memory only (no keychain, or the save failed): gone at the next start.</summary>
     public const string Session = "session";
 
-    /// <summary>GitHub refused it: the next start reads no store.</summary>
+    /// <summary>The service refused it: the next start reads no store.</summary>
     public const string Refused = "refused";
 
     /// <summary><paramref name="value"/> as one of the three; missing or unknown is <see cref="Keychain"/>.</summary>
@@ -114,20 +115,30 @@ public sealed record AccountsFile
 
     public IReadOnlyList<AccountRecord> Accounts { get; init; } = [];
 
-    /// <summary>The record the session uses (7.2): the first of provider <c>github</c> on <paramref name="host"/>; null without one.</summary>
-    public AccountRecord? GitHubOn(string host)
+    /// <summary>
+    /// The record the session uses for <paramref name="provider"/> on <paramref name="host"/>
+    /// (7.2; docs/phase-7b-design.md 9.3): the first whose <c>provider</c> is that provider's id
+    /// (<see cref="HostingProviders.Id"/>) and whose host is <paramref name="host"/>, both without
+    /// case; null without one.
+    /// </summary>
+    public AccountRecord? For(HostingProvider provider, string host)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(host);
-        return Accounts.FirstOrDefault(record => IsGitHubOn(record, host));
+        var id = HostingProviders.Id(provider);
+        return Accounts.FirstOrDefault(record => IsOn(record, id, host));
     }
 
-    /// <summary>This file with <paramref name="record"/> in place of the first GitHub record on its host, or appended; the others kept (D292).</summary>
-    public AccountsFile WithGitHub(AccountRecord record)
+    /// <summary>
+    /// This file with <paramref name="record"/> in place of the first record of its provider and
+    /// host, or appended; every other record kept, an off or unknown provider's too (D292).
+    /// </summary>
+    public AccountsFile With(AccountRecord record)
     {
         ArgumentNullException.ThrowIfNull(record);
+        ArgumentException.ThrowIfNullOrWhiteSpace(record.Provider);
         ArgumentException.ThrowIfNullOrWhiteSpace(record.Host);
         var accounts = Accounts.ToList();
-        var index = accounts.FindIndex(existing => IsGitHubOn(existing, record.Host));
+        var index = accounts.FindIndex(existing => IsOn(existing, record.Provider, record.Host));
         if (index >= 0)
         {
             accounts[index] = record;
@@ -140,12 +151,13 @@ public sealed record AccountsFile
         return this with { Accounts = accounts };
     }
 
-    /// <summary>This file without the first GitHub record on <paramref name="host"/>; the others kept (D292).</summary>
-    public AccountsFile WithoutGitHub(string host)
+    /// <summary>This file without the first record of <paramref name="provider"/> on <paramref name="host"/>; the others kept (D292).</summary>
+    public AccountsFile Without(HostingProvider provider, string host)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(host);
+        var id = HostingProviders.Id(provider);
         var accounts = Accounts.ToList();
-        var index = accounts.FindIndex(existing => IsGitHubOn(existing, host));
+        var index = accounts.FindIndex(existing => IsOn(existing, id, host));
         if (index >= 0)
         {
             accounts.RemoveAt(index);
@@ -154,8 +166,8 @@ public sealed record AccountsFile
         return this with { Accounts = accounts };
     }
 
-    private static bool IsGitHubOn(AccountRecord record, string host) =>
-        string.Equals(record.Provider, AccountRecord.GitHubProvider, StringComparison.OrdinalIgnoreCase)
+    private static bool IsOn(AccountRecord record, string providerId, string host) =>
+        string.Equals(record.Provider, providerId, StringComparison.OrdinalIgnoreCase)
         && string.Equals(record.Host, host, StringComparison.OrdinalIgnoreCase);
 }
 
@@ -165,7 +177,7 @@ public sealed record AccountsFile
 /// </summary>
 public sealed record AccountRecord
 {
-    /// <summary>GitHub's provider id.</summary>
+    /// <summary>GitHub's provider id (<see cref="HostingProviders.Id"/>).</summary>
     public const string GitHubProvider = "github";
 
     public string? Provider { get; init; }
@@ -189,6 +201,14 @@ public sealed record AccountRecord
     public bool UseForGit { get; set; } = true;
 
     public string? TokenState { get; init; }
+
+    /// <summary>
+    /// Azure DevOps' user id, a GUID's lower-case text (docs/phase-7b-design.md 9.3; its <see cref="Id"/>
+    /// is 0); null for GitHub and GitLab, whose records then keep 7a's eight names, and in a record a
+    /// 7a build saved, which the next check of git's refusal fills (9.5).
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? UserId { get; init; }
 }
 
 /// <summary>The file's names: camelCase, as the app's other files (D336).</summary>

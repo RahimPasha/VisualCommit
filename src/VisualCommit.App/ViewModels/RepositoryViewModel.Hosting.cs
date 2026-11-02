@@ -1,6 +1,7 @@
-// The repository's hosting (docs/phase-7a-design.md 1.7, 7.10): its pull requests, the bindings of
-// git's credentials to the account and its authors' avatars, from the session's hosting. While the
-// account is signed in, the tab reads the user's URL rewrites after each refs read (one
+// The repository's hosting (docs/phase-7a-design.md 1.7, 7.10; docs/phase-7b-design.md 9.9): its pull
+// requests, the bindings of git's credentials to the accounts and its authors' avatars, from the
+// session's hosting. While any account is signed in, the tab reads the user's URL rewrites after each
+// refs read (one
 // `git config --null --get-regexp ^url\.`, D281, D290) and gives them to the hosting; a succeeded
 // network operation of its queue refreshes the pull requests (D289). A dashboard row's view model
 // in summary mode holds none (NullRepositoryHosting) until a tab adopts it.
@@ -158,7 +159,8 @@ public sealed partial class RepositoryViewModel
         // Summary mode shows no left panel (3.1).
         if (!IsSummary)
         {
-            LeftPanel.UpdatePullRequests(HostingState, _services?.Hosting.Account?.Account.Key);
+            // The listed repository's provider's account (docs/phase-7b-design.md 9.9).
+            LeftPanel.UpdatePullRequests(HostingState, HostingState.Repository is { } listed ? _services?.Hosting.AccountOf(listed.Provider)?.Account.Key : null);
         }
 
         // Signed out the rewrites are forgotten; a sign-in while the tab is open starts their read.
