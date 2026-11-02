@@ -17,7 +17,10 @@ namespace VisualCommit.Hosting.Tests;
 /// GitHub upstream asking neither fake while GitHub alone is signed in, and no avatars; GitHub's
 /// avatars taking GitHub remotes' authors alone, kept through GitLab's sign-out and gone once
 /// GitLab's repository is listed; another organization's remote sending
-/// nothing and its tab's state swapped by a sign-in there; GitHub's sign-in refreshing no GitLab-listed
+/// nothing and its tab's state swapped by a sign-in there, and its Changed at a swap of organizations;
+/// A3's answer and the list kept for their account alone, so another user signed in over the first
+/// (D348) never shows the first one's list, and GitHub's reads the repository again; the rewrites as
+/// each Changed raised them, through a refusal raced by a sign-in; GitHub's sign-in refreshing no GitLab-listed
 /// tab and its sign-out keeping GitLab's bindings; an <c>&lt;organization&gt;.visualstudio.com</c>
 /// remote listed through <c>dev.azure.com</c>. The fakes are in process (ProvidersSessionSetup).
 /// </summary>
@@ -255,24 +258,27 @@ public sealed class RepositoryHostingProvidersTests
             hosting.Update(RefsOf(("origin", "http://unlisted-org@127.0.0.1:2/unlisted-org/P/_git/r")), UrlRewrites.None);
         });
         await setup.SignInAsync(HostingProvider.AzureDevOps);
-        await setup.Thread.IdleAsync();
+
+        // The account's change runs on the UI thread and posts the Changed again: waited for there,
+        // where the list is written.
+        await setup.Thread.WaitForAsync(() => logins.Count > 0 && logins[^1] == "fake-org", "the Changed after fake-org's sign-in");
         Assert.Equal(PullRequestsState.OtherOrganization, hosting.State.PullRequests);
-        Assert.Equal("fake-org", logins[^1]);
         if (refusedFirst)
         {
             setup.AzureDevOps!.Revoke(setup.AzureDevOpsToken);
             var listed = await setup.Session.ListRepositoriesAsync(HostingProvider.AzureDevOps, Cancelled);
             Assert.Equal(HostingFailureKind.BadCredentials, listed.Failure!.Kind);
             await setup.Thread.IdleAsync();
+            await setup.Thread.IdleAsync();
             Assert.Equal((AccountState.NeedsSignIn, PullRequestsState.OtherOrganization), (setup.Session.AccountOf(HostingProvider.AzureDevOps)!.State, hosting.State.PullRequests));
         }
 
-        var changes = logins.Count;
+        var changes = await setup.Thread.RunAsync(() => logins.Count);
         await setup.SignInAsync(HostingProvider.AzureDevOps, setup.OtherOrganizationToken, ProvidersSessionSetup.OtherOrganization);
         await setup.Thread.IdleAsync();
         await setup.Thread.IdleAsync();
 
-        Assert.Equal(["other-org"], logins.Skip(changes));
+        Assert.Equal(["other-org"], await setup.Thread.RunAsync(() => logins.Skip(changes).ToList()));
         Assert.Equal(PullRequestsState.OtherOrganization, hosting.State.PullRequests);
         Assert.DoesNotContain(setup.AzureDevOps!.Requests, request => request.Path.Contains("unlisted", StringComparison.OrdinalIgnoreCase));
         await setup.Thread.RunAsync(hosting.Dispose);
@@ -315,14 +321,18 @@ public sealed class RepositoryHostingProvidersTests
         await setup.Thread.RunAsync(hosting.Dispose);
     }
 
-    [Fact]
-    public async Task The_rewrites_are_wanted_as_last_raised_so_a_refusal_raced_by_another_sign_in_still_reads_the_rules()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task The_rewrites_are_wanted_as_last_raised_so_a_refusal_raced_by_another_sign_in_still_reads_the_rules(bool refreshBetween)
     {
         // Azure DevOps alone signed in, a GitLab tab whose rules were read. Its 401 changes the
         // account on the UI thread, and GitLab's sign-in sets its slot before the Changed that change
         // posted runs. A handler by 7.10's rule (forget the rules when they are not wanted, read them
         // when they are and were forgotten) sees the first Changed unwanted and the second wanted, so
-        // the rules are read again and GitLab's remote is bound.
+        // the rules are read again and GitLab's remote is bound. With a refresh posted between (as a
+        // network operation's end posts one), the refresh raises the wanted value before the
+        // unwanted Changed is delivered: each Changed still carries its own.
         await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, repositories: true);
         await setup.SignInAsync(HostingProvider.AzureDevOps);
         var hosting = await OpenAsync(setup, "web-app");
@@ -369,6 +379,11 @@ public sealed class RepositoryHostingProvidersTests
             secondArrived.SetResult();
             second.Wait(Cancelled);
         });
+        if (refreshBetween)
+        {
+            setup.Thread.Post(() => _ = hosting.RefreshPullRequestsAsync(CancellationToken.None));
+        }
+
         first.Set();
         await secondArrived.Task.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
 
@@ -379,8 +394,115 @@ public sealed class RepositoryHostingProvidersTests
         await setup.Thread.IdleAsync();
         await setup.Thread.IdleAsync();
 
-        Assert.Equal([false, true], seen.Take(2));
+        Assert.Equal([false, true], await setup.Thread.RunAsync(() => seen.Take(2).ToList()));
         Assert.Equal([new CredentialBinding(GitLabUrl, gitLab)], hosting.Bindings);
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Another_user_signed_in_over_the_first_never_shows_the_first_ones_list_of_a_private_parent(bool answerInFlight)
+    {
+        // ada may see the fork's private parent and its merge request !5, bob may not; bob signs in
+        // over ada (D348: the account replaced, no sign-out between). Until bob's own answer the
+        // state is loading, and an answer ada's run brings once bob holds the slot is dropped: no
+        // Changed under bob shows !5 or the parent, and bob's list is the fork's own.
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, azureDevOps: false);
+        var gitLab = setup.GitLab!;
+        gitLab.AddUser("bob", 2002, "Bob Example");
+        var bobToken = gitLab.AddToken("bob");
+        using var source = await TempRepo.CreateAsync("fork-source");
+        await source.CommitFileAsync("README.md", "fork\n", "Initial commit");
+        var parent = await gitLab.AddProjectAsync("secret/parent", source.Path, ct: Cancelled);
+        await gitLab.AddProjectAsync("g/fork", source.Path, forkOf: parent, ct: Cancelled);
+        gitLab.AddMergeRequest(parent, "Secret change", "ada", "feature/secret", "main", iid: 5);
+        gitLab.Grant("secret", "ada", 40);
+        gitLab.Grant("g", "ada", 40);
+        gitLab.Grant("g", "bob", 40);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "fork");
+        var seen = new List<string>();
+        await setup.Thread.RunAsync(() => hosting.Changed += (_, _) =>
+        {
+            var state = hosting.State;
+            var numbers = state.List?.PullRequests.Select(pull => pull.Number) ?? [];
+            seen.Add($"{setup.Session.AccountOf(HostingProvider.GitLab)?.Account.Key.Login} {state.PullRequests} {state.Repository?.FullName} [{string.Join(",", numbers)}]");
+        });
+        int mark;
+        int logMark;
+        if (!answerInFlight)
+        {
+            // ada's list shown; bob's read of the fork held after his sign-in.
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", "http://127.0.0.1:3/g/fork.git")), UrlRewrites.None));
+            await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "ada's list");
+            Assert.Equal("secret/parent", hosting.State.Repository!.FullName);
+            Assert.Equal([5], hosting.State.List!.PullRequests.Select(pull => pull.Number));
+            using var read = gitLab.HoldNext("project:g/fork");
+            mark = await setup.Thread.RunAsync(() => seen.Count);
+            logMark = setup.Log.Lines.Count;
+            Assert.Null((await setup.Session.SignInAsync(new SignInRequest(HostingProvider.GitLab, bobToken), Cancelled)).Failure);
+            await read.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            await setup.Thread.IdleAsync();
+            await setup.Thread.IdleAsync();
+            Assert.Equal((PullRequestsState.Loading, "g/fork", (PullRequestList?)null), (hosting.State.PullRequests, hosting.State.Repository!.FullName, hosting.State.List));
+        }
+        else
+        {
+            // ada's list request held; bob's sign-in completes while the UI thread is held behind
+            // the run's answer, so the answer comes once bob holds the slot.
+            var list = gitLab.HoldNext("mrs:secret/parent");
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", "http://127.0.0.1:3/g/fork.git")), UrlRewrites.None));
+            await list.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            mark = await setup.Thread.RunAsync(() => seen.Count);
+            logMark = setup.Log.Lines.Count;
+            var signIn = setup.Session.SignInAsync(new SignInRequest(HostingProvider.GitLab, bobToken), Cancelled);
+            using var held = new ManualResetEventSlim();
+            setup.Thread.Post(() => held.Wait(Cancelled));
+            list.Dispose();
+            Assert.Null((await signIn.WaitAsync(TimeSpan.FromSeconds(30), Cancelled)).Failure);
+            held.Set();
+        }
+
+        await setup.Thread.WaitForAsync(() => hosting.State is { PullRequests: PullRequestsState.Loaded, Repository.FullName: "g/fork" }, "bob's list");
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+
+        var underBob = await setup.Thread.RunAsync(() => seen.Skip(mark).Where(line => line.StartsWith("bob ", StringComparison.Ordinal)).ToList());
+        Assert.NotEmpty(underBob);
+        Assert.All(underBob, line => Assert.DoesNotContain("secret", line, StringComparison.Ordinal));
+        Assert.All(underBob, line => Assert.DoesNotContain("[5]", line, StringComparison.Ordinal));
+        Assert.Equal("bob Loaded g/fork []", underBob[^1]);
+        Assert.Empty(hosting.State.List!.PullRequests);
+        Assert.DoesNotContain(setup.Log.Lines.Skip(logMark), line => line.Message == "fork: listed 1 open pull requests of secret/parent");
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task Another_github_users_sign_in_reads_the_listed_repository_again_and_lists_it_anew()
+    {
+        // 7a's GitHub path too: A3's answer and the list are another account's (D348), so octocat's
+        // sign-in over octo sends A3 and A4 again, the list loading between.
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitLab: false, azureDevOps: false, repositories: true);
+        var gitHub = setup.GitHub!;
+        gitHub.AddUser("octocat", 4242, "Octo Cat");
+        var octocatToken = gitHub.AddToken("octocat");
+        await setup.SignInAsync(HostingProvider.GitHub);
+        var hosting = await OpenAsync(setup, "web-app");
+        await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl)), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "octo's list");
+        var mark = setup.Sent(HostingProvider.GitHub).Count;
+        var states = new List<PullRequestsState>();
+        await setup.Thread.RunAsync(() => hosting.Changed += (_, _) => states.Add(hosting.State.PullRequests));
+
+        await setup.SignInAsync(HostingProvider.GitHub, octocatToken);
+        await setup.Thread.WaitForAsync(() => states.Count > 0 && states[^1] == PullRequestsState.Loaded, "octocat's list");
+
+        Assert.Equal(
+            ["GET /api/v3/user", "GET /api/v3/repos/octo/web-app", "GET /api/v3/repos/octo/web-app/pulls"],
+            setup.Sent(HostingProvider.GitHub).Skip(mark).Select(request => $"{request.Method} {request.Url.AbsolutePath}"));
+        Assert.Equal(PullRequestsState.Loading, (await setup.Thread.RunAsync(() => states.ToList()))[0]);
+        Assert.Equal([7], hosting.State.List!.PullRequests.Select(pull => pull.Number));
         await setup.Thread.RunAsync(hosting.Dispose);
     }
 

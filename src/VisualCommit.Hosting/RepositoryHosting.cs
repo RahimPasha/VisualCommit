@@ -37,6 +37,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     private HostedRepository? _candidate;
     private PullRequestList? _list;
     private HostingFailure? _failure;
+
+    // The account the run whose answer is _list or _failure asked with: neither is shown, kept or
+    // added to while the candidate's provider holds another (D348: one user swapped for another).
+    private AccountKey? _listAccount;
     private TaskCompletionSource? _running;
     private TaskCompletionSource? _again;
 
@@ -51,8 +55,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     private AuthorAvatars _avatars = AuthorAvatars.None;
 
     // On the UI thread: WantsUrlRewrites as last raised, and the listed provider's account (its key
-    // and its login as given) as last raised.
+    // and its login as given) as last raised. While a Changed is delivered, _raising holds the value that
+    // Changed carries (1 wanted, 0 not, -1 none delivered), which WantsUrlRewrites gives then.
     private bool _wantsRewrites;
+    private volatile int _raising = -1;
     private (AccountKey Key, string Login)? _account;
     private volatile bool _disposed;
 
@@ -75,10 +81,17 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// Some provider's account is signed in (with or without "Use for git over HTTPS"): the tab reads
     /// the URL rewrites with its refs, since the rules decide every provider's recognition (D290).
     /// It is the value last raised with <see cref="Changed"/> (set on the UI thread), never the
-    /// session's live one, so that the tab and the hosting decide from one value: an account's change
-    /// that a handler has not seen yet cannot hide another one's from it.
+    /// session's live one, and within a handler of <see cref="Changed"/> the value that event
+    /// carries: a handler sees an unwanted value raised before a wanted one even when the wanted one
+    /// was raised before the unwanted was delivered, so the tab forgets its rules and reads them
+    /// again, and <see cref="Update"/> counts them known by the same value the tab read (7.10).
     /// </summary>
-    public bool WantsUrlRewrites => _wantsRewrites;
+    public bool WantsUrlRewrites => _raising switch
+    {
+        0 => false,
+        1 => true,
+        _ => _wantsRewrites,
+    };
 
     public event EventHandler? Changed;
 
@@ -105,15 +118,14 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
 
         _refs = refs;
         _effective = rewrites.Apply(refs.RemoteUrls);
-        _rulesKnown = _wantsRewrites;
+        _rulesKnown = WantsUrlRewrites;
         _remotes = HostingRules.Remotes(refs.RemoteUrls, _effective, url => _session.Recognise(url));
         var candidate = HostingRules.ListedCandidate(_remotes);
         var changed = !Equals(candidate, _candidate);
         if (changed)
         {
             _candidate = candidate;
-            _list = null;
-            _failure = null;
+            ForgetList();
         }
 
         if (changed && candidate?.Provider != HostingProvider.GitHub)
@@ -170,15 +182,20 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     {
         ArgumentNullException.ThrowIfNull(baseRepository);
         ArgumentNullException.ThrowIfNull(request);
+        AccountKey? createdWith = null;
         var result = await _session.CallAsync(
             baseRepository.Provider,
             $"creating a pull request on {baseRepository.FullName}",
             baseRepository,
-            (provider, token, _, linked) => provider.CreatePullRequestAsync(token, baseRepository, request, linked),
+            (provider, token, account, linked) =>
+            {
+                createdWith = account.Key;
+                return provider.CreatePullRequestAsync(token, baseRepository, request, linked);
+            },
             ct).ConfigureAwait(false);
-        if (result.Value is { } created)
+        if (result.Value is { } created && createdWith is { } key)
         {
-            _session.Post(() => AddCreated(baseRepository, created));
+            _session.Post(() => AddCreated(baseRepository, created, key));
         }
 
         return result;
@@ -204,8 +221,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// <paramref name="provider"/>'s account changed, on the UI thread (7.8; docs/phase-7b-design.md
     /// 9.7): with no account signed in, the rewrites count as unknown until the next
     /// <see cref="Update"/> that wants them. The candidate's provider: listable, the state and the
-    /// bindings again and a refresh; else its list, failure and refs' pull requests go. Another
-    /// provider: the state and the bindings again alone. GitHub not signed in: the avatars go (9.8).
+    /// bindings again and a refresh; else its list, failure and refs' pull requests go. A list or a
+    /// failure another account read goes either way, so the state is loading until this account's
+    /// answer (D348). Another provider: the state and the bindings again alone. GitHub not signed
+    /// in: the avatars go (9.8).
     /// </summary>
     internal void OnAccountChanged(HostingProvider provider)
     {
@@ -229,6 +248,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         if (_candidate is { } candidate && candidate.Provider == provider)
         {
             ForgetInfoOfOthers(candidate);
+            if (!HeldIs(candidate, _listAccount))
+            {
+                ForgetList();
+            }
+
             if (CanList)
             {
                 Apply(avatars);
@@ -236,8 +260,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                 return;
             }
 
-            _list = null;
-            _failure = null;
+            ForgetList();
         }
 
         Apply(avatars);
@@ -292,6 +315,18 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// <summary>The candidate's provider holds <paramref name="account"/>, or no account at all.</summary>
     private bool HeldOrNone(HostedRepository candidate, AccountKey? account) =>
         _session.SlotOf(candidate.Provider) is not { } slot || slot.Key == account;
+
+    /// <summary>The candidate's provider holds <paramref name="account"/>, which is not null.</summary>
+    private bool HeldIs(HostedRepository candidate, AccountKey? account) =>
+        account is not null && _session.SlotOf(candidate.Provider)?.Key == account;
+
+    // On the UI thread: the list and the failure go, with the account they were read with.
+    private void ForgetList()
+    {
+        _list = null;
+        _failure = null;
+        _listAccount = null;
+    }
 
     // On the UI thread, at the candidate's provider's change of account: A3's answer and the read in
     // flight of another account are dropped (InfoOf would not use them either).
@@ -386,11 +421,21 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
 
         if (changed)
         {
+            // Each Changed carries the value raised with it: WantsUrlRewrites within its handlers.
+            var raising = _wantsRewrites ? 1 : 0;
             _session.Post(() =>
             {
                 if (!_disposed)
                 {
-                    Changed?.Invoke(this, EventArgs.Empty);
+                    _raising = raising;
+                    try
+                    {
+                        Changed?.Invoke(this, EventArgs.Empty);
+                    }
+                    finally
+                    {
+                        _raising = -1;
+                    }
                 }
             });
         }
@@ -422,9 +467,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         var info = InfoOf(candidate);
         var listed = ListedOf(candidate, info);
         var remotes = RemotesOf(candidate, info);
+        var held = HeldIs(candidate, _listAccount);
         return slot is not { IsSignedIn: true } ? new(PullRequestsState.SignedOut, remotes, listed, null, null, NoPullRequests)
-            : _list is { } list ? new(PullRequestsState.Loaded, remotes, listed, list, null, HostingRules.ByRef(refs, remotes, list))
-            : _failure is { } failure ? new(PullRequestsState.Failed, remotes, listed, null, failure, NoPullRequests)
+            : _list is { } list && held ? new(PullRequestsState.Loaded, remotes, listed, list, null, HostingRules.ByRef(refs, remotes, list))
+            : _failure is { } failure && held ? new(PullRequestsState.Failed, remotes, listed, null, failure, NoPullRequests)
             : new(PullRequestsState.Loading, remotes, listed, null, null, NoPullRequests);
     }
 
@@ -436,10 +482,12 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         _failure = null;
         Apply();
         var candidate = _candidate!;
+        var asked = _session.SlotOf(candidate.Provider)?.Key;
         _ = Task.Run(async () =>
         {
             HostedRepository? listed = null;
             HostingResult<PullRequestList>? result = null;
+            AccountKey? listedWith = null;
             try
             {
                 var info = await ReadInfoAsync(candidate, _lifetime).ConfigureAwait(false);
@@ -454,7 +502,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                         candidate.Provider,
                         $"listing the pull requests of {listed.FullName}",
                         listed,
-                        (provider, token, _, linked) => provider.ListPullRequestsAsync(token, listed, linked),
+                        (provider, token, account, linked) =>
+                        {
+                            listedWith = account.Key;
+                            return provider.ListPullRequestsAsync(token, listed, linked);
+                        },
                         _lifetime).ConfigureAwait(false);
                 }
             }
@@ -472,18 +524,22 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                 result = HostingResult<PullRequestList>.Fail(new HostingFailure(HostingFailureKind.Network, Http.HostingHttpTexts.Network(candidate.Provider)) { Provider = candidate.Provider });
             }
 
-            _session.Post(() => Finish(candidate, listed, result, done));
+            _session.Post(() => Finish(candidate, listed, result, done, asked, listedWith));
         });
     }
 
-    // On the UI thread: the run's answer applied when it is still the candidate's and its
-    // provider's account can list it; then the run asked for meanwhile, if any.
-    private void Finish(HostedRepository candidate, HostedRepository? listed, HostingResult<PullRequestList>? result, TaskCompletionSource done)
+    // On the UI thread: the run's answer applied when it is still the candidate's, its provider's
+    // account can list it, and that account is the one the run asked with and A4 was sent with
+    // (D348: another user's answer is dropped; the refresh that user's sign-in asked for lists for
+    // it); then the run asked for meanwhile, if any.
+    private void Finish(HostedRepository candidate, HostedRepository? listed, HostingResult<PullRequestList>? result, TaskCompletionSource done, AccountKey? asked, AccountKey? listedWith)
     {
-        if (!_disposed && result is not null && Equals(candidate, _candidate) && CanList)
+        if (!_disposed && result is not null && Equals(candidate, _candidate) && CanList
+            && HeldIs(candidate, asked) && (listedWith is null || listedWith == asked))
         {
             _list = result.Value;
             _failure = result.Failure;
+            _listAccount = asked;
             Apply();
             if (result.Value is { } list && listed is not null)
             {
@@ -576,10 +632,12 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         && _session.ProviderOf(candidate.Provider) is { } provider
         && provider.Covers(candidate, slot.Key);
 
-    // On the UI thread: a created pull request on top of the held list of its base (D293).
-    private void AddCreated(HostedRepository baseRepository, PullRequest created)
+    // On the UI thread: a created pull request on top of the held list of its base (D293), when the
+    // account that created it read that list and is still held.
+    private void AddCreated(HostedRepository baseRepository, PullRequest created, AccountKey createdWith)
     {
-        if (_disposed || _list is not { } list || !Equals(State.Repository, baseRepository) || list.PullRequests.Any(pull => pull.Number == created.Number))
+        if (_disposed || _list is not { } list || !Equals(State.Repository, baseRepository) || list.PullRequests.Any(pull => pull.Number == created.Number)
+            || createdWith != _listAccount || _candidate is not { } candidate || !HeldIs(candidate, createdWith))
         {
             return;
         }

@@ -2797,26 +2797,28 @@ above or settles what it left open:
   `BindingsFor`, `BindingsForClone` and the tabs share; `Endpoints` is gone. A provider on without a
   handler gets `HostingOptions.RefusingHandler()`. One origin twice throws; `FromEnvironment` turns
   the later provider in D353's order off instead, warning `{variable} names the origin of {Name}:
-  {Name} is off.` D382's screen (9.4 amended) takes each form the core's `SecretsOf` gives (internal
-  now, reached through one internal member on each provider and on GitHub's and Azure DevOps'
-  clients, outside 9.1's list) in `Login`, `Key.Login`, `Name`, `UserId` and the avatar's address as
-  given, written and decoded. A record's `avatarUrl` is read for GitHub alone.
+  {Name} is off.` D382's screen (9.4 amended) checks each form the core's `SecretsOf` gives (internal
+  now, reached through an internal member on each provider and on GitHub's and Azure DevOps'
+  clients, outside 9.1) in the user's names, id and avatar address. `avatarUrl` is GitHub's alone.
 - 9.5: a 200 with the held user (or the check's unknown) logs 7a's warning; a held user unknown then
   takes the check's, under the gate, while that slot holds that token.
 - `RepositoryHosting`: `StateOf` gives a held account not covering the candidate `OtherOrganization`
   on Azure DevOps, `SignedOut` elsewhere (unreachable). `WantsUrlRewrites` is the value last raised,
-  so a refusal raced by another sign-in still reads the rules. `Changed` also comes when the listed
-  provider's account (key, login) changes: WP-P's row follows a swap of organizations. A3's answer
-  and read are kept with their account and unused while another account of that provider is held.
-- Tests: `HostingSessionGitHubForms.Account` is `AccountStatus` with `!` (C# 14 keeps no null state
-  for extension properties). `ProvidersSessionSetup` (`repositories: true`: one repository with an
+  within a `Changed` handler the one that event carries (`Update` counts the rules known by it): a
+  refusal raced by a sign-in or a refresh still reads the rules. `Changed` also comes when the listed
+  provider's account (key, login) changes: WP-P's row follows a swap of organizations. A3's answer,
+  the list or failure and a created request are kept with their account, unused while another of
+  that provider is held (D348); a run's answer applies only for the account it asked and sent with.
+  7a's GitHub path too: another user's sign-in over the first shows Loading and sends A3 again.
+- Tests: `HostingSessionGitHubForms.Account` is `AccountStatus` with `!` (C# 14's extension
+  properties). `ProvidersSessionSetup` (`repositories: true`: one repository with an
   open request in each fake, in Azure DevOps one in each organization) wraps the in-process Azure
   DevOps fake in `ServiceAnswers` for `AzureDevOpsEndpoints.Service`, writing its `Local(2)` addresses
   on dev.azure.com (WP-LF may give the fake a base). 7a's copy is `JsonAccountStore7a.cs`. The wiring
-  class matches git calls by `Repository.WorkingDirectory` and passed lagged. `HostingContractsTests`
+  class matches git calls by `Repository.WorkingDirectory`. `HostingContractsTests`
   (passed to WP-S) has one test renamed.
 - For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without one. For
-  WP-N: `IHostingSession.cs` changed `NullRepositoryHosting`'s text and two docs.
+  WP-N: `IHostingSession.cs` changed `NullRepositoryHosting`'s text and three docs.
 
 ## 10. WP-A: accounts and sign-in (part A)
 
