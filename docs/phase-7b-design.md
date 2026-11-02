@@ -2793,34 +2793,36 @@ limit (0.6).
 
 **As built** (WP-S, `46ab4af` to its last commit, 2026-11-02). Where the build differs from the text
 above or settles what it left open:
-- `HostingSession`: a private `Entry` per provider on; `BindingsOf(effective, rulesKnown)` is the union
-  `BindingsFor`, `BindingsForClone` and the tabs share; `Endpoints` is gone. A provider on without a
-  handler gets `HostingOptions.RefusingHandler()`. One origin twice throws; `FromEnvironment` turns
-  the later provider in D353's order off instead, warning `{variable} names the origin of {Name}:
-  {Name} is off.` D382's screen (9.4 amended) checks each form the core's `SecretsOf` gives
-  (internal, through each provider and two clients, outside 9.1) in the user's names, id and avatar
-  address, and in A3's repository and parent names (`EchoedToken`): either is the provider's
-  malformed answer. `avatarUrl` is GitHub's alone.
+- `HostingSession`: a private `Entry` per provider on; `BindingsOf(effective, rulesKnown)` is the
+  union `BindingsFor`, `BindingsForClone` and the tabs share; `Endpoints` is gone. A provider on
+  without a handler gets `HostingOptions.RefusingHandler()`. One origin twice throws;
+  `FromEnvironment` turns the later provider in D353's order off instead, warning `{variable} names
+  the origin of {Name}: {Name} is off.` D382's screen (9.4 amended) seeks each form the core's
+  `SecretsOf` gives (internal, outside 9.1) in the user's names, id and avatar address and in A3's
+  repository and parent names (`EchoedToken`): the provider's malformed answer. `avatarUrl` is
+  GitHub's alone.
 - 9.5: a 200 with the held user (or the check's unknown) logs 7a's warning; a held user unknown then
   takes the check's, under the gate, while that slot holds that token.
 - `RepositoryHosting`: `StateOf` gives a held account not covering the candidate `OtherOrganization`
   on Azure DevOps, `SignedOut` elsewhere (unreachable). `WantsUrlRewrites` is the value last raised,
-  within a `Changed` handler the one that event carries (`Update` counts the rules known by it).
-  `Changed` also comes when the listed provider's account (key, login) changes, for WP-P's row. A3's
-  answer, the list or failure and a created request are kept with their account, unused while
-  another of that provider is held (D348); a run's answer applies only for the account it asked and
-  sent with. 7a's GitHub path too: another user's sign-in over the first shows Loading and sends A3
-  again (D383). A new candidate of another provider cancels the run in flight (a source linked to
-  the tab's lifetime), whose answer applies nothing; its own starts at once. Within one provider,
-  7a's `_again`. `StopAvatars` cancels the avatar run in flight (9.8). `CallAsync`'s `what` and the
-  Debug line pass names through `ScreenEmail` (D368); the state's stay as given (6, 7).
+  in a `Changed` handler that event's (`Update` counts the rules known by it). `Changed` also comes
+  when the listed provider's account (key, login) changes, for WP-P's row. A3's answer, the list or
+  failure and a created request are kept with their account, unused under another of that provider
+  (D348); a run's answer applies only for the account it asked and sent with. 7a's GitHub path too:
+  another user's sign-in over the first shows Loading and sends A3 again (D383). A new candidate of
+  another provider cancels the run in flight and drops A3's read of another provider: neither
+  applies, keeps or warns; its own run starts at once. A read a `ReadRepositoryAsync` caller awaits
+  goes on for it alone; a stopped run starts no A3; a replaced read keeps nothing. Within one
+  provider, 7a's `_again`. `StopAvatars` cancels the avatar run in flight (9.8). `CallAsync`'s
+  `what` and the Debug line pass names through `ScreenEmail` (D368); the state's stay as given
+  (6, 7).
 - Tests: `HostingSessionGitHubForms.Account` is `AccountStatus` with `!` (C# 14's extension
-  properties). `ProvidersSessionSetup` (`repositories: true`: an open request in each fake, one per
-  Azure DevOps organization) wraps the in-process Azure DevOps fake in `ServiceAnswers` for
+  properties). `ProvidersSessionSetup` (`repositories: true`: an open request per fake and Azure
+  DevOps organization) wraps the in-process Azure DevOps fake in `ServiceAnswers` for
   `AzureDevOpsEndpoints.Service`, writing its `Local(2)` addresses on dev.azure.com (WP-LF may give
-  the fake a base); its disposal seeks every token its fakes mint (`Track`) and any `FAKE-` but
-  request ids. 7a's copy is `JsonAccountStore7a.cs`. The wiring class matches git calls by
-  `Repository.WorkingDirectory` and gives the tripwire the session's git calls.
+  the fake a base); its disposal seeks its and `Track`'s tokens in the data folder and log in the
+  tripwire's forms, and `FAKE-` but request ids in the log. 7a's copy is `JsonAccountStore7a.cs`.
+  The wiring class matches git calls by `Repository.WorkingDirectory`; its tripwire searches them.
   `HostingContractsTests` (passed to WP-S) has one test renamed.
 - For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without one. For
   WP-N: `IHostingSession.cs` changed `NullRepositoryHosting`'s text and three docs.
