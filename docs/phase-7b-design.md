@@ -3674,7 +3674,8 @@ of its own built as GitHub's public constructor builds its one (`GitHubLiveApi.c
 10 s `ConnectTimeout`), so `GitHubLiveApi.cs` stays unchanged (15.1). A redirect is recorded as the answer and never followed:
 a hop the handler followed by itself would pass neither the guard nor the store, and the probe would
 record the target's answer instead of the 302. A refusal names the origin, never the path;
-`ReachProblems` and `PerHost` print through the screen.
+`ReachProblems` and `PerHost` print through the screen and name a request's origin, never its path;
+a refused request has the guard's line alone.
 
 **`LiveReach.AzureDevOps`** admits only `https://dev.azure.com:443`, with Basic or no credential. It
 refuses a segment that is empty, is `.` or `..`, or holds `/`, `\` or `%` once decoded. Matching
@@ -3683,11 +3684,15 @@ without case, it admits only:
 2. `_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf` with `organizationName={o}`, or that id
    under `{o}/` (D360).
 3. `{o}/{p}/_apis/git/repositories` alone (`ListProject`'s list).
-4. `{o}/{p}/_apis/git/repositories/{r}` itself, and anything below it.
+4. `{o}/{p}/_apis/git/repositories/{r}` itself, and below it only `pullrequests`, `pullrequests/{n}`
+   (`{n}` digits) and `refs`, which the app (6.5) and the command send: a segment below it can name
+   another collection (Forks' `forks/{collectionId}`), so nothing else is admitted (WP-LIVE1's
+   third review; stage 2 widens the list if `Check_3` needs more).
 5. Anything below `{o}/{p}/_git/{r}`.
 6. `{x}/_apis/connectionData`, where `{x}` is the one made-up organization the run draws, `vc-none-`
    and 12 random lower-case hex digits (D374, amending D352 and D371): without a credential, and with
-   Basic only after that path answered 404 without one in this run, and only once.
+   Basic only after that path answered 404 without one in this run, and only once; never once a
+   read without one was answered otherwise, refused or left without an answer, first or later.
 
 The query may hold only the parameters the app's client (6.5) and the command send: `api-version`,
 `$top`, `$skip`, `searchCriteria.status`, `filter` and `service`, none repeated, and `organizationName`
@@ -3927,27 +3932,26 @@ an address; no value from the research's captures is in the files (section 1); t
 **As built** (WP-LIVE1, `06574c5` to its last commit, with its reviews' fixes, 2026-11-02), stage 1
 only; where the build differs or settles what was open:
 - `LiveRequest`'s headers are `KeptHeaders` (7a's `Headers()` stays), `api-version` read from
-  `Content-Type`; `LiveCredentialForm` is public. `LiveReach` judges a path as sent and as written, and
-  the query and `Host` as 15.4 says (`HostRefusalOf`, `AzureDevOpsReach.SentQueryNames`); D374's Basic
-  is taken by the check that admits it. `ReachProblems(requests, reach)` is an overload, `PerHostOf` new.
-- Shared parts: `LiveServiceApi`, `LiveServiceAnswer` (`Message` falls back to `error_description`) and
-  the fakes beside in `LiveProbes.cs`; `LiveSteps` in `AzureDevOpsLiveTests.cs`, `LiveApp` in
-  `GitLabLiveTests.cs`. The fixtures have internal constructors over a file, so `LiveSafetyTests`
-  drives the classes' internal steps over stubs.
+  `Content-Type`; `LiveCredentialForm` is public. `LiveReach` judges a path as sent and as written, the
+  query and `Host` as 15.4 says, and below `{r}` only item 4's three forms. D374's Basic is taken by the
+  check that admits it and barred for good by any other first or later answer, a refusal or no answer
+  (`LiveReach.Failed`). `ReachProblems(requests, reach)` is an overload naming origins (`DescribeOrigin`).
+- Shared parts: `LiveServiceApi`, `LiveServiceAnswer` and the fakes beside in `LiveProbes.cs`;
+  `LiveSteps` in `AzureDevOpsLiveTests.cs`, `LiveApp` in `GitLabLiveTests.cs`. The fixtures have
+  internal constructors over a file, so `LiveSafetyTests` drives the internal steps over stubs.
 - Sums: steps 8 and 9 are `Check_2b_probes`, after Check_2 in both orders; Check_2 hands over
-  `LiveMade`, Check_2b cleans up in `finally`. `LiveSteps.Sums` from the limits: Azure DevOps 300, 560,
-  480, 530, 330 s; GitLab 570, 215, 540, 385 s. The identity read is each method's first call, once per run.
+  `LiveMade`, Check_2b cleans up in `finally`. `LiveSteps.Sums`: Azure DevOps 300, 560, 480, 530, 330 s;
+  GitLab 570, 215, 540, 385 s. The identity read is each method's first call, once per run.
 - Check_2b probes beside the fake's own draft; Azure DevOps' empty title after the abandon, nothing
   ahead from `<branch>-even` once its refs POST took. GitLab's `-even` is pushed through the app. A
   probe with no answer breaks its premise (D373, D374, duplicate, missing branch).
-- Clean-up and Check_1's leftovers send each call on its own (`LiveSteps.AttemptAsync`): a failed one
-  is a problem, the refs POST or branch deletes still go. The refs delete goes beside the fake's;
-  `RefFailures` fails each ref a 200 left.
+- Clean-up and Check_1's leftovers send each call on its own (`LiveSteps.AttemptAsync`); the refs
+  delete goes beside the fake's; `RefFailures` fails each ref a 200 left.
 - info/refs probes go as git (`git/<version>`, `Accept: */*`, `Git-Protocol: version=2`), the core
   area as A1 sends it; run.txt adds git's version, the clone's time, the create's status and the head.
-- The screen: the sign-in query, `hid=` and a sign-in `context=` first; `HidOfContext` reads the
-  UrlToken form at each pad count. Address runs end at white space, quotes, brackets, `,` and `;`. The
-  Git area id was confirmed against g1's captures by the review.
+- The screen: the sign-in query, `hid=` and a sign-in `context=` first; the zero GUID is never learned
+  (`ZeroId`); address runs end at blanks, quotes, brackets, `,` and `;`, and a kept one holds one `@`
+  once decoded; data files are searched JSON-escaped and in their decoded strings. The Git area id was confirmed against g1's captures by the review.
 - For the lead: the live classes are built, never run (risks: the log-line wait, the push dialog,
   `accounts.json`'s record); CLAUDE.md's rows and the csproj's comment are the lead's (15.9). No file
   outside 15.1's list changed.
