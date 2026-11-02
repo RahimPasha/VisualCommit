@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Runtime.ExceptionServices;
 using System.Text;
+using VisualCommit.Core.Hosting;
 using Xunit;
 using Xunit.Sdk;
 
@@ -18,9 +19,13 @@ namespace VisualCommit.LiveHostingTests;
 /// exception (<see cref="FailureOf"/>) that hold it: they are replaced before they reach the test
 /// output. A run whose tests failed before their first note (no variables) writes a run.txt that
 /// says so (<see cref="NoNotes"/>), so that an earlier run's file is never read as this run's. It
-/// also keeps what <c>Check_1</c> read of the sandbox for <c>Check_2</c>.
+/// also keeps what <c>Check_1</c> read of the sandbox for <c>Check_2</c>. For Azure DevOps and GitLab
+/// (docs/phase-7b-design.md 15.3) the fixtures <see cref="AzureDevOpsLiveRun"/> and
+/// <see cref="GitLabLiveRun"/> add a <see cref="LiveScreen"/>: after the token's search, every note,
+/// message, failure and run.txt is screened, and a run.txt that still holds a learned value is
+/// withheld and fails the run (D323, D372).
 /// </summary>
-public sealed class LiveRun : IDisposable
+public class LiveRun : IDisposable
 {
     /// <summary>What stands in the notes for a note that held the token.</summary>
     public const string WithheldNote = "A note was withheld: it held the token.";
@@ -36,6 +41,7 @@ public sealed class LiveRun : IDisposable
             .First(attribute => attribute.Key == "RepoRoot").Value!;
 
     private readonly string? _token;
+    private readonly HostingProvider _provider;
     private readonly Action<string> _output;
     private readonly Lock _gate = new();
     private readonly List<string> _notes = [];
@@ -50,16 +56,51 @@ public sealed class LiveRun : IDisposable
 
     /// <summary>A run that searches for <paramref name="token"/>, writes <paramref name="file"/> and sends each kept note to <paramref name="output"/>: for <see cref="LiveSafetyTests"/>.</summary>
     internal LiveRun(string? token, string file, Action<string> output)
+        : this(token, file, output, null, HostingProvider.GitHub)
+    {
+    }
+
+    /// <summary>A new provider's run (15.3): its captured token, <c>artifacts/live/&lt;id&gt;/run.txt</c>, and a screen that knows Azure DevOps' organization from the variable.</summary>
+    protected LiveRun(HostingProvider provider)
+        : this(LiveSettings.CapturedTokenOf(provider), FileOf(provider), line => TestContext.Current.TestOutputHelper?.WriteLine(line), ScreenOf(provider), provider)
+    {
+    }
+
+    /// <summary>A run with <paramref name="screen"/> for <paramref name="provider"/>: for <see cref="LiveScreenTests"/>.</summary>
+    internal LiveRun(string? token, string file, Action<string> output, LiveScreen? screen, HostingProvider provider)
     {
         ArgumentException.ThrowIfNullOrEmpty(file);
         ArgumentNullException.ThrowIfNull(output);
         _token = string.IsNullOrEmpty(token) ? null : token;
         File = file;
         _output = output;
+        Screener = screen;
+        _provider = provider;
     }
 
     /// <summary><c>artifacts/live/github/run.txt</c> under the repo root.</summary>
     public static string DefaultFile => Path.Combine(RepoRoot, "artifacts", "live", "github", "run.txt");
+
+    /// <summary><c>artifacts/live/&lt;provider id&gt;/run.txt</c> (0.3: <c>azure-devops</c>, <c>gitlab</c>, beside 7a's <c>github</c>).</summary>
+    public static string FileOf(HostingProvider provider) => Path.Combine(RepoRoot, "artifacts", "live", HostingProviders.Id(provider), "run.txt");
+
+    /// <summary>The screen of the run's notes (15.3), or null for GitHub's, which keeps 7a's.</summary>
+    internal LiveScreen? Screener { get; }
+
+    /// <summary>The token this run searches for, for the run's own API: null without one.</summary>
+    internal string? Token => _token;
+
+    /// <summary>The provider's screen: Azure DevOps' with the organization the variable names.</summary>
+    private static LiveScreen ScreenOf(HostingProvider provider)
+    {
+        var screen = new LiveScreen();
+        if (provider == HostingProvider.AzureDevOps && LiveSettings.CapturedOrganization is { } organization)
+        {
+            screen.AddOrganization(organization);
+        }
+
+        return screen;
+    }
 
     /// <summary>Where run.txt goes.</summary>
     internal string File { get; }
@@ -99,7 +140,7 @@ public sealed class LiveRun : IDisposable
     public void Note(string text)
     {
         ArgumentNullException.ThrowIfNull(text);
-        var kept = text;
+        var kept = Screener?.Apply(text) ?? text;
         if (LiveTokenForms.FoundIn(text, _token) is { } form)
         {
             kept = WithheldNote;
@@ -125,11 +166,58 @@ public sealed class LiveRun : IDisposable
     {
         if (LiveTokenForms.FoundIn(text, _token) is not { } form)
         {
-            return text;
+            return Screener?.Apply(text) ?? text;
         }
 
         Withheld($"A message held the token ({form}); it was withheld.");
         return WithheldText;
+    }
+
+    /// <summary>The one assertion given values (15.3, g4 D1.4): fails with <paramref name="message"/>'s text, screened, unless <paramref name="condition"/> holds.</summary>
+    /// <exception cref="XunitException"><paramref name="condition"/> is false.</exception>
+    public void Check(bool condition, Func<string> message)
+    {
+        ArgumentNullException.ThrowIfNull(message);
+        if (!condition)
+        {
+            throw new XunitException(Screen(message()));
+        }
+    }
+
+    /// <summary>
+    /// The data folder's <c>accounts.json</c> and logs searched for the learned addresses (15.3): one
+    /// problem per file that holds one, naming the file and never the value; none without a screen.
+    /// </summary>
+    internal IReadOnlyList<string> DataFolderProblems(string dataFolder)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(dataFolder);
+        if (Screener is null || !Directory.Exists(dataFolder))
+        {
+            return [];
+        }
+
+        var problems = new List<string>();
+        foreach (var path in Directory.EnumerateFiles(dataFolder, "*", SearchOption.AllDirectories)
+            .Where(path => string.Equals(Path.GetFileName(path), "accounts.json", StringComparison.OrdinalIgnoreCase) || string.Equals(Path.GetExtension(path), ".log", StringComparison.OrdinalIgnoreCase)))
+        {
+            string text;
+            try
+            {
+                text = System.IO.File.ReadAllText(path);
+            }
+            catch (IOException ex)
+            {
+                problems.Add($"The data folder's {Path.GetFileName(path)} could not be read to prove it holds no address: {ex.GetType().Name}.");
+                continue;
+            }
+
+            if (Screener.SurvivorInDataFile(text) is { } kind)
+            {
+                problems.Add($"The data folder's {Path.GetFileName(path)} held {kind} (D372).");
+            }
+        }
+
+        return problems;
     }
 
     /// <summary>Records that a text held the token and was withheld (<see cref="GitHubLiveApi"/>'s answers too): the run fails at its end.</summary>
@@ -154,7 +242,10 @@ public sealed class LiveRun : IDisposable
         ArgumentNullException.ThrowIfNull(exception);
         if (LiveTokenForms.FoundIn(exception.ToString(), _token) is not { } form)
         {
-            return ExceptionDispatchInfo.Capture(exception);
+            var whole = exception.ToString();
+            return Screener is { } screen && !string.Equals(screen.Apply(whole), whole, StringComparison.Ordinal)
+                ? ExceptionDispatchInfo.Capture(new XunitException($"Step {step} failed with {exception.GetType().Name}: {screen.Apply(exception.Message)}"))
+                : ExceptionDispatchInfo.Capture(exception);
         }
 
         Withheld($"The failure of step {step} held the token ({form}); its exception was withheld.");
@@ -165,7 +256,9 @@ public sealed class LiveRun : IDisposable
     internal string Render()
     {
         var text = new StringBuilder()
-            .Append("VisualCommit's live command against GitHub (docs/phase-7a-design.md 14.5), written ")
+            .Append(_provider == HostingProvider.GitHub
+                ? "VisualCommit's live command against GitHub (docs/phase-7a-design.md 14.5), written "
+                : $"VisualCommit's live command against {HostingProviders.DisplayName(_provider)} (docs/phase-7b-design.md 15.7), written ")
             .Append(DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture))
             .Append(" UTC.\n\n");
         var notes = Notes;
@@ -196,6 +289,21 @@ public sealed class LiveRun : IDisposable
             return;
         }
 
+        if (Screener is { } screen)
+        {
+            text = screen.Apply(text);
+            if (screen.SurvivorIn(text) is { } kind)
+            {
+                System.IO.File.Delete(File);
+                lock (_gate)
+                {
+                    _failures.Add($"run.txt was withheld: its screened text still held {kind} (D323, D372).");
+                }
+
+                return;
+            }
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(File)!);
         System.IO.File.WriteAllText(File, text, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
     }
@@ -219,6 +327,12 @@ public sealed class LiveRun : IDisposable
         }
     }
 }
+
+/// <summary>Azure DevOps' run (15.3): <c>artifacts/live/azure-devops/run.txt</c>, its token and its screen.</summary>
+public sealed class AzureDevOpsLiveRun() : LiveRun(HostingProvider.AzureDevOps);
+
+/// <summary>GitLab's run (15.3): <c>artifacts/live/gitlab/run.txt</c>, its token and its screen of addresses.</summary>
+public sealed class GitLabLiveRun() : LiveRun(HostingProvider.GitLab);
 
 /// <summary>
 /// The forms in which the token is searched for in the live command's notes, run.txt and messages
@@ -266,5 +380,34 @@ internal static class LiveTokenForms
         yield return ("URL-escaped", Uri.EscapeDataString(token));
         yield return ("as the base64 of x-access-token:<token>", Convert.ToBase64String(Encoding.UTF8.GetBytes("x-access-token:" + token)));
         yield return ("as base64", Convert.ToBase64String(Encoding.UTF8.GetBytes(token)));
+        for (var offset = 0; offset < 3; offset++)
+        {
+            if (Base64AtOffset(token, offset) is { } aligned)
+            {
+                yield return ($"as base64 at offset {offset.ToString(CultureInfo.InvariantCulture)}", aligned);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The part of the base64 of any text that holds <paramref name="token"/> after a prefix leaving
+    /// <paramref name="offset"/> bytes over a multiple of 3 (g4 D1.6; as <c>TokenTripwire</c>'s): it
+    /// covers Azure DevOps' <c>:&lt;token&gt;</c>, <c>x-access-token:</c> and any user before the token.
+    /// Null when under 8 characters are left.
+    /// </summary>
+    internal static string? Base64AtOffset(string token, int offset)
+    {
+        var bytes = Encoding.UTF8.GetBytes(token);
+        var aligned = new byte[offset + bytes.Length];
+        bytes.CopyTo(aligned, offset);
+        var full = aligned.Length / 3 * 3;
+        var start = offset > 0 ? 3 : 0;
+        if (full - start <= 0)
+        {
+            return null;
+        }
+
+        var text = Convert.ToBase64String(aligned, start, full - start);
+        return text.Length >= 8 ? text : null;
     }
 }

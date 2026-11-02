@@ -23,7 +23,16 @@ namespace VisualCommit.LiveHostingTests
         /// at 5 s) and 30 s more per leftover, so the 600 s cover five leftovers at full limits (a
         /// stopped Check_2 leaves two: its branch and its pull request); the fake's start, a few git
         /// calls with no limit of their own, is outside that sum. Check_3's calls sum to about 150 s
-        /// (D342). Real calls take a small part of their limits.
+        /// (D342). Real calls take a small part of their limits. The new providers' sums
+        /// (docs/phase-7b-design.md 15.5): Azure DevOps' Check_1 sends at most 4 calls and 6 for five
+        /// leftovers (5 abandons and one refs POST), 300 s at 30 s; its probes go to Check_1b_probes,
+        /// 16 calls to the service at 30 s and 16 to the fake in process at 5 s, 560 s; its Check_2's
+        /// app steps (sign-in, list, load, push and create at 60 s, the clone at 120 s) and its own
+        /// reads (the sandbox, about 13 probes held to 15 s each, the clean-up's three calls at 30 s)
+        /// sum to about 600 s at full limits; Check_4's to about 360 s. GitLab's Check_1 sends 4
+        /// calls and 15 for five leftovers (each request's close and delete, each branch's delete),
+        /// 570 s; its Check_1b_probes 7 to the service and 7 to the fake, 245 s; its Check_2 about
+        /// 555 s. Real calls take a small part of their limits.
         /// </summary>
         [ModuleInitializer]
         internal static void Isolate()
