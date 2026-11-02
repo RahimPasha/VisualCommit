@@ -2818,8 +2818,7 @@ above or settles what it left open:
   `mobile-app/` itself; it passed with `VISUALCOMMIT_WATCHER_LAG_MS=1500`.
 - Outside 9.1's list: none in src/; `HostingContractsTests` (passed to WP-S) has one test renamed.
 - For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without a repository.
-  For WP-N: `IHostingSession.cs` changed only `NullRepositoryHosting`'s text. For the lead: from this
-  merge a hand run needs the two new variables at `none` (1.10's As built).
+  For WP-N: `IHostingSession.cs` changed only `NullRepositoryHosting`'s text.
 
 ## 10. WP-A: accounts and sign-in (part A)
 
