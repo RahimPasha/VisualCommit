@@ -47,10 +47,13 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     // Under _infoLock: A3's answer for a candidate with the account it was read with, and the read
     // in flight with the account it was asked for: another account of the candidate's provider
     // (D348) uses neither, since what one account may read another may not. _readings holds every
-    // read in flight, _reading's and those replaced or forgotten that still run, until each ends.
+    // read in flight, _reading's and those replaced or forgotten that still run, until each ends, in
+    // the order they started; _listedProvider, the provider of the last candidate listed (null before
+    // any), whose reads alone may start (DropReadingOfOthers).
     private (HostedRepository Candidate, AccountKey Account, RepositoryInfo Info)? _info;
     private Reading? _reading;
     private readonly List<Reading> _readings = [];
+    private HostingProvider? _listedProvider;
 
     private RepositoryHostingState _state = RepositoryHostingState.NoHostedRemote;
     private IReadOnlyList<CredentialBinding> _bindings = [];
@@ -111,8 +114,9 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// at once, so that its list waits on no other provider's answer, and drops every A3 read in
     /// flight of another provider (the tab's, and any replaced or forgotten one still running), each
     /// then keeping nothing and given up unless a caller of <see cref="ReadRepositoryAsync"/> waits on
-    /// it (docs/phase-7b-design.md 9.7); within one provider the run in flight ends first, as in 7a.
-    /// The rewrites count as known only when they were wanted for this read (D290).
+    /// it, before the run's and the avatar run's stops free that provider's turn to a read waiting
+    /// behind them (docs/phase-7b-design.md 9.7); within one provider the run in flight ends first,
+    /// as in 7a. The rewrites count as known only when they were wanted for this read (D290).
     /// </summary>
     public void Update(RepoRefs refs, UrlRewrites rewrites)
     {
@@ -129,6 +133,7 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
         _remotes = HostingRules.Remotes(refs.RemoteUrls, _effective, url => _session.Recognise(url));
         var candidate = HostingRules.ListedCandidate(_remotes);
         var changed = !Equals(candidate, _candidate);
+        Run? cancelled = null;
         if (changed)
         {
             _candidate = candidate;
@@ -136,41 +141,55 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             if (_running is { } running && candidate is not null && running.Candidate.Provider != candidate.Provider)
             {
                 // Its answer, or its A4's failure's warning, is of a repository listed no more, and
-                // this candidate's run would wait behind it up to that provider's time-out (its A3
-                // goes below, DropReadingOfOthers). Its own wait ends now: its Finish comes through
-                // the session's post, which drops it once the session is disposed, and the tab's
-                // Dispose ends only the run that is the tab's then. The waits asked of it meanwhile
-                // end with this candidate's run (RefreshPullRequestsAsync).
+                // this candidate's run would wait behind it up to that provider's time-out. Marked
+                // first, so that whatever ends it below, its A3 given up or its stop, applies and
+                // warns nothing.
                 _running = null;
-                running.Stop.Cancel();
-                running.Done.TrySetResult();
-                if (!CanList && _again is { } waiting)
-                {
-                    _again = null;
-                    waiting.TrySetResult();
-                }
+                running.Cancelled = true;
+                cancelled = running;
             }
         }
 
-        if (changed && candidate?.Provider != HostingProvider.GitHub)
+        // No GitHub repository listed any more (D252, 11.3, D367): none, or another provider's. The
+        // avatars go, and a run in flight brings none. A change to another GitHub repository keeps
+        // them: the tab sends the same set again only after NoHostedRemote or a sign-out, so
+        // dropping them there would leave none.
+        var avatarsGo = changed && candidate?.Provider != HostingProvider.GitHub;
+        if (avatarsGo)
         {
-            // No GitHub repository listed any more (D252, 11.3, D367): none, or another provider's.
-            // The avatars go, and a run in flight brings none. A change to another GitHub repository
-            // keeps them: the tab sends the same set again only after NoHostedRemote or a sign-out,
-            // so dropping them there would leave none.
-            StopAvatars();
+            DropAvatarRun();
+        }
+
+        if (changed && candidate is not null)
+        {
+            // Before the run's stop and the avatar run's: cancelling a request in flight hands its
+            // provider's turn to the next waiting, which may be one of these reads. Before this
+            // candidate's run, which would otherwise take a read's place.
+            DropReadingOfOthers(candidate.Provider);
+        }
+
+        if (cancelled is not null)
+        {
+            // Its own wait ends now: its Finish comes through the session's post, which drops it once
+            // the session is disposed, and the tab's Dispose ends only the run that is the tab's then.
+            // The waits asked of it meanwhile end with this candidate's run (RefreshPullRequestsAsync).
+            cancelled.Stop.Cancel();
+            cancelled.Done.TrySetResult();
+            if (!CanList && _again is { } waiting)
+            {
+                _again = null;
+                waiting.TrySetResult();
+            }
+        }
+
+        if (avatarsGo)
+        {
+            CancelAvatarRun();
             Apply(AuthorAvatars.None);
         }
         else
         {
             Apply();
-        }
-
-        if (changed && candidate is not null)
-        {
-            // After the run's stop and the avatars' (no run waits on that read any more), before
-            // this candidate's run, which would otherwise take its place.
-            DropReadingOfOthers(candidate.Provider);
         }
 
         if (changed && CanList)
@@ -388,16 +407,21 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
 
     // On the UI thread, at a new candidate (Update): every A3 read in flight of another provider,
     // the tab's and any replaced or forgotten one that still runs (one waiting behind another in its
-    // provider's one request at a time, say). No list or avatar run waits on them any more (Update
-    // has stopped them), and their answers, or their failures' warnings, would be of repositories
-    // listed no more. Each is dropped and keeps no answer, so that it never takes the place of this
-    // candidate's (7.8: a fork's listed repository is its parent), and is given up at once, or when
-    // the last caller of ReadRepositoryAsync waiting on it is done (WaitAskedAsync).
+    // provider's one request at a time, say), before Update stops the run and the avatar run, which
+    // it has marked so that the reads' ends warn nothing. Their answers, or their failures'
+    // warnings, would be of repositories listed no more. Each is dropped and keeps no answer, so that
+    // it never takes the place of this candidate's (7.8: a fork's listed repository is its parent),
+    // and is given up at once, or when the last caller of ReadRepositoryAsync waiting on it is done
+    // (WaitAskedAsync); from here no read of another provider starts (ReadInfoAsync). Newest first:
+    // the oldest is the one whose request is in flight, and giving it up hands its provider's turn
+    // to the next waiting, which by then is given up too, so that it sends nothing.
     private void DropReadingOfOthers(HostingProvider provider)
     {
+        GiveUpObserver?.Invoke();
         List<Reading>? givenUp = null;
         lock (_infoLock)
         {
+            _listedProvider = provider;
             if (_reading is { } reading && reading.Candidate.Provider != provider)
             {
                 _reading = null;
@@ -417,8 +441,18 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             }
         }
 
-        givenUp?.ForEach(reading => reading.GiveUp());
+        for (var i = (givenUp?.Count ?? 0) - 1; i >= 0; i--)
+        {
+            givenUp![i].GiveUp();
+            GiveUpObserver?.Invoke();
+        }
     }
+
+    /// <summary>
+    /// A seam for the tests, null in the app: called on the UI thread as <c>DropReadingOfOthers</c>
+    /// starts and after each A3 read it gives up, where a test stands for a UI thread that is late.
+    /// </summary>
+    internal Action? GiveUpObserver { get; set; }
 
     /// <summary>
     /// The remotes as the state gives them (7.8): once A3 has answered for <paramref name="candidate"/>
@@ -586,9 +620,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                         stop).ConfigureAwait(false);
                 }
             }
-            catch (OperationCanceledException) when (stop.IsCancellationRequested)
+            catch (OperationCanceledException) when (stop.IsCancellationRequested || run.Cancelled)
             {
-                // Closed, or another provider's repository listed: nothing is applied.
+                // Closed, or another provider's repository listed (its A3 given up before its stop,
+                // or refused): nothing is applied.
             }
             catch (Exception ex)
             {
@@ -656,11 +691,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     // A3 of the candidate as the candidate's provider's account reads it now: kept, the read in
     // flight for that account, or a new read (docs/phase-7b-design.md 9.7: per account), which a read
     // of another candidate or account in flight gives its place to (that one keeps no answer, and
-    // stays in _readings until it ends, for DropReadingOfOthers). Once ct is cancelled, none: a run
-    // or an avatar run that Update stopped starts no read, since Update stops them before its
-    // DropReadingOfOthers and both that and this check hold the lock, so a read one of them started
-    // first is dropped there. A caller of ReadRepositoryAsync (asked) is counted on the read while it
-    // waits.
+    // stays in _readings until it ends, for DropReadingOfOthers). None once ct is cancelled, or for a
+    // candidate of another provider than the one listed: a run or an avatar run that Update stopped,
+    // or is about to stop, starts no read, since DropReadingOfOthers and this check both hold the
+    // lock, so a read one of them started first is dropped there. A caller of ReadRepositoryAsync
+    // (asked), whose candidate is the listed one, is counted on the read while it waits.
     private Task<HostingResult<RepositoryInfo>> ReadInfoAsync(HostedRepository candidate, CancellationToken ct, bool asked = false)
     {
         Reading reading;
@@ -669,6 +704,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             if (ct.IsCancellationRequested)
             {
                 return Task.FromCanceled<HostingResult<RepositoryInfo>>(ct);
+            }
+
+            if (_listedProvider is { } listed && candidate.Provider != listed)
+            {
+                return Task.FromCanceled<HostingResult<RepositoryInfo>>(new CancellationToken(canceled: true));
             }
 
             if (_info is { } kept && kept.Candidate.Equals(candidate) && HeldOrNone(candidate, kept.Account))
@@ -797,15 +837,25 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// A run of A3 and A4 (7.8): the candidate it lists, the waits its end completes, and its stop,
     /// linked to the tab's lifetime, which <see cref="Update"/> cancels when another provider's
     /// repository becomes the candidate (docs/phase-7b-design.md 9.7), completing its waits there and
-    /// then; disposed at its Finish.
+    /// then; disposed at its Finish. <see cref="Cancelled"/> is set there first, before the A3 reads
+    /// it may wait on are given up, so that a read given up or refused ends it as its stop would.
     /// </summary>
     private sealed class Run(HostedRepository candidate, TaskCompletionSource done, CancellationToken lifetime)
     {
+        private volatile bool _cancelled;
+
         public HostedRepository Candidate { get; } = candidate;
 
         public TaskCompletionSource Done { get; } = done;
 
         public CancellationTokenSource Stop { get; } = CancellationTokenSource.CreateLinkedTokenSource(lifetime);
+
+        /// <summary>Set on the UI thread, read where the run ends.</summary>
+        public bool Cancelled
+        {
+            get => _cancelled;
+            set => _cancelled = value;
+        }
     }
 
     /// <summary>
@@ -815,7 +865,8 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// <c>_infoLock</c>, in whose <c>_readings</c> it is listed from its start to its end.
     /// <see cref="Superseded"/>: replaced, of another account, or dropped, it keeps no answer.
     /// <see cref="Dropped"/>: of another provider than a new candidate, replaced or not, given up
-    /// once no caller of <see cref="ReadRepositoryAsync"/> waits on it (<see cref="Callers"/>).
+    /// once no caller of <see cref="ReadRepositoryAsync"/> waits on it (<see cref="Callers"/>), and
+    /// before any stop that would hand its provider's turn to it.
     /// </summary>
     private sealed class Reading(HostedRepository candidate, AccountKey? account)
     {
@@ -834,7 +885,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
 
         public bool Dropped { get; set; }
 
-        /// <summary>Its request is given up: the HTTP core throws, warning nothing (docs/phase-7b-design.md 5); a read that has ended has none left.</summary>
+        /// <summary>
+        /// Its request is given up: the HTTP core throws, warning nothing, and sends nothing when it
+        /// had not had its turn (docs/phase-7b-design.md 5); a read that has ended has none left.
+        /// </summary>
         public void GiveUp() => Stop.Cancel();
     }
 }

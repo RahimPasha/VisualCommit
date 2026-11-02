@@ -497,13 +497,17 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// <summary>
     /// Sends the request, repeating a redirect on the token's origin up to three times, and reads
     /// the answer's body (at most 10 MB). A 304 to a kept answer gives the kept body. One at a
-    /// time; the time limit starts once the request is sent. A failure here is finished and warned.
+    /// time, and nothing sent for a request cancelled before its turn; the time limit starts once
+    /// the request is sent. A failure here is finished and warned.
     /// </summary>
     private async Task<(HostingExchange Exchange, HostingFailure? Failure)> ExchangeAsync(HttpMethod method, string token, string fingerprint, string[] secrets, Uri url, byte[]? content, CancellationToken ct)
     {
         await _one.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            // SemaphoreSlim still gives its turn to a waiter cancelled just before the request ahead
+            // frees it (it takes the waiter out of its queue later, off the cancelling thread).
+            ct.ThrowIfCancellationRequested();
             using var limit = CancellationTokenSource.CreateLinkedTokenSource(ct);
             limit.CancelAfter(_timeout);
             var current = url;

@@ -26,13 +26,15 @@ namespace VisualCommit.Hosting.Tests;
 /// address-shaped one written in the log as the core writes one (D368); another provider's
 /// repository listed cancelling the list's run, whose wait ends though the session is disposed in that
 /// turn, and GitHub's avatar run in flight, and dropping every A3 read in flight of another provider, a
-/// replaced one too, which then warns of nothing and never takes a fork's answer's place. The fakes
-/// are in process (ProvidersSessionSetup).
+/// replaced or forgotten one too, which then warns of nothing and never takes a fork's answer's place,
+/// each read waiting behind another request given up before that request's end hands GitHub's turn
+/// on, with the UI thread late there too. The fakes are in process (ProvidersSessionSetup).
 /// </summary>
 public sealed class RepositoryHostingProvidersTests
 {
     private const string GitHubUrl = "http://127.0.0.1:1/octo/web-app.git";
     private const string OtherGitHubUrl = "http://127.0.0.1:1/octo/other.git";
+    private static readonly HostedRepository Other = new(HostingProvider.GitHub, "127.0.0.1:1", "octo", "other");
     private const string GitLabUrl = "http://127.0.0.1:3/fake-group/sub/web-app.git";
     private const string AzureUrl = "http://fake-org@127.0.0.1:2/fake-org/P/_git/r";
     private const string OtherAzureUrl = "http://other-org@127.0.0.1:2/other-org/P/_git/r";
@@ -853,20 +855,72 @@ public sealed class RepositoryHostingProvidersTests
         await setup.Thread.RunAsync(hosting.Dispose);
     }
 
-    [Fact]
-    public async Task Another_providers_candidate_gives_up_a_replaced_A3_read_still_in_flight_so_it_warns_of_nothing()
+    [Theory]
+    [InlineData("asked")]
+    [InlineData("avatars")]
+    public async Task Another_providers_candidate_gives_up_a_replaced_A3_read_still_in_flight_so_it_warns_of_nothing(string by)
     {
         // GitHub's A3 of octo/web-app held; a second GitHub repository listed and its A3 asked for by
-        // a caller who gives up, so that the first read is replaced and the second waits behind it
-        // (GitHub's one request at a time); then GitLab's repository listed (9.7): every A3 read of
-        // GitHub in flight is dropped, the replaced one too, so that the hold is abandoned and,
-        // released with a fault, no warning names either repository.
+        // a caller who gives up, or by an avatar run, so that the first read is replaced and the
+        // second waits behind it (GitHub's one request at a time); then GitLab's repository listed
+        // (9.7), the UI thread late as it gives reads up: every A3 read of GitHub in flight is
+        // dropped, the replaced one too, and given up newest first, so that the held one's end hands
+        // GitHub's turn to none. The hold is abandoned, GitHub is never asked about octo/other and,
+        // released with a fault, nothing warns.
         await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
         await setup.SignInAsync(HostingProvider.GitHub);
         await setup.SignInAsync(HostingProvider.GitLab);
         var hosting = await OpenAsync(setup, "web-app");
+        hosting.GiveUpObserver = LateUiThread(setup, "repo:octo/other");
 
         using (var hold = setup.GitHub!.HoldNext("repo:octo/web-app"))
+        {
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", OtherGitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
+            if (by == "asked")
+            {
+                using var gaveUp = new CancellationTokenSource();
+                var asked = await setup.Thread.RunAsync<Task<HostingResult<RepositoryInfo>>>(() => hosting.ReadRepositoryAsync(gaveUp.Token));
+                gaveUp.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asked.WaitAsync(TimeSpan.FromSeconds(30), Cancelled));
+            }
+            else
+            {
+                await setup.Thread.RunAsync(() => hosting.ShowAvatarsFor([new AuthorCommit("ada@example.com", new string('a', 40), Other)]));
+
+                // Time for the run to start its read; one not started yet is refused at the switch.
+                await Task.Delay(200, Cancelled);
+            }
+
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitLabUrl), ("upstream", GitHubUrl)), UrlRewrites.None));
+            await setup.Thread.WaitForAsync(() => hosting.State is { PullRequests: PullRequestsState.Loaded, Repository.Provider: HostingProvider.GitLab }, "GitLab's list");
+            await setup.Thread.WaitForAsync(() => hold.Abandoned.IsCompleted, "GitHub's replaced A3 given up");
+            setup.GitHub.FailNext("repo:octo/web-app", FakeGitHubFault.ServerError);
+        }
+
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+        Assert.Empty(setup.Warnings);
+        Assert.DoesNotContain(setup.GitHub.Requests, request => request.Route == "repo:octo/other");
+        Assert.Equal((PullRequestsState.Loaded, HostingProvider.GitLab), (hosting.State.PullRequests, hosting.State.Repository!.Provider));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task Another_providers_candidate_gives_up_an_A3_read_waiting_behind_the_runs_list_before_it_stops_the_run()
+    {
+        // GitHub's list held; a second GitHub repository listed and its A3 asked for by a caller who
+        // gives up, so that it waits behind the list's request; then GitLab's repository listed
+        // (9.7), the UI thread late as it gives reads up: the read is given up before the run's
+        // stop frees GitHub's turn, so that GitHub is never asked about octo/other and nothing warns.
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
+        await setup.SignInAsync(HostingProvider.GitHub);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "web-app");
+        hosting.GiveUpObserver = LateUiThread(setup, "repo:octo/other");
+
+        using (var hold = setup.GitHub!.HoldNext("pulls:octo/web-app"))
         {
             await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
             await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
@@ -880,15 +934,63 @@ public sealed class RepositoryHostingProvidersTests
 
             await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitLabUrl), ("upstream", GitHubUrl)), UrlRewrites.None));
             await setup.Thread.WaitForAsync(() => hosting.State is { PullRequests: PullRequestsState.Loaded, Repository.Provider: HostingProvider.GitLab }, "GitLab's list");
-            await setup.Thread.WaitForAsync(() => hold.Abandoned.IsCompleted, "GitHub's replaced A3 given up");
-            setup.GitHub.FailNext("repo:octo/web-app", FakeGitHubFault.ServerError);
+            await setup.Thread.WaitForAsync(() => hold.Abandoned.IsCompleted, "GitHub's list given up");
+        }
+
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+        Assert.Empty(setup.Warnings);
+        Assert.DoesNotContain(setup.GitHub.Requests, request => request.Route == "repo:octo/other");
+        Assert.Equal((PullRequestsState.Loaded, HostingProvider.GitLab), (hosting.State.PullRequests, hosting.State.Repository!.Provider));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task Another_providers_candidate_gives_up_an_A3_read_that_another_users_sign_in_forgot()
+    {
+        // octo's A3 of octo/web-app asked for while octocat's sign-in waits on GitHub, then held;
+        // octocat's sign-in forgets it (D348) while it is still in flight; then GitLab's repository
+        // listed (9.7): the forgotten read is dropped too, so that the hold is abandoned and,
+        // released with a fault, no warning names octo/web-app.
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false, repositories: true);
+        var gitHub = setup.GitHub!;
+        gitHub.AddUser("octocat", 4242, "Octo Cat");
+        var octocatToken = setup.Track(gitHub.AddToken("octocat"));
+        await setup.SignInAsync(HostingProvider.GitHub);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "web-app");
+
+        using (var held = gitHub.HoldNext("repo:octo/web-app"))
+        {
+            Task signIn;
+            using (var user = gitHub.HoldNext("user"))
+            {
+                signIn = setup.SignInAsync(HostingProvider.GitHub, octocatToken);
+                await user.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+                await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitHubUrl), ("upstream", GitLabUrl)), UrlRewrites.None));
+
+                // octo's read started before octocat's sign-in ends, by a caller who gives up.
+                using var gaveUp = new CancellationTokenSource();
+                var asked = await setup.Thread.RunAsync<Task<HostingResult<RepositoryInfo>>>(() => hosting.ReadRepositoryAsync(gaveUp.Token));
+                gaveUp.Cancel();
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(() => asked.WaitAsync(TimeSpan.FromSeconds(30), Cancelled));
+            }
+
+            await held.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            await signIn.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            await setup.Thread.IdleAsync();
+            await setup.Thread.IdleAsync();
+            Assert.Equal("octocat", setup.Session.AccountOf(HostingProvider.GitHub)!.Account!.Login);
+
+            await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", GitLabUrl), ("upstream", GitHubUrl)), UrlRewrites.None));
+            await setup.Thread.WaitForAsync(() => hosting.State is { PullRequests: PullRequestsState.Loaded, Repository.Provider: HostingProvider.GitLab }, "GitLab's list");
+            await setup.Thread.WaitForAsync(() => held.Abandoned.IsCompleted, "octo's forgotten A3 given up");
+            gitHub.FailNext("repo:octo/web-app", FakeGitHubFault.ServerError);
         }
 
         await setup.Thread.IdleAsync();
         await setup.Thread.IdleAsync();
         Assert.DoesNotContain(setup.Warnings, warning => warning.Contains("octo/web-app", StringComparison.Ordinal));
-        Assert.DoesNotContain(setup.Warnings, warning => warning.Contains("octo/other", StringComparison.Ordinal));
-        Assert.DoesNotContain(setup.GitHub.Requests, request => request.Route == "repo:octo/other");
         Assert.Equal((PullRequestsState.Loaded, HostingProvider.GitLab), (hosting.State.PullRequests, hosting.State.Repository!.Provider));
         await setup.Thread.RunAsync(hosting.Dispose);
     }
@@ -922,6 +1024,11 @@ public sealed class RepositoryHostingProvidersTests
         Assert.Equal((PullRequestsState.Loaded, HostingProvider.GitLab), (hosting.State.PullRequests, hosting.State.Repository!.Provider));
         await setup.Thread.RunAsync(hosting.Dispose);
     }
+
+    // The UI thread late as Update gives A3 reads up (RepositoryHosting.GiveUpObserver): until
+    // GitHub has answered a request of route, or for half a second.
+    private static Action LateUiThread(ProvidersSessionSetup setup, string route) =>
+        () => SpinWait.SpinUntil(() => setup.GitHub!.Requests.Any(request => request.Route == route), TimeSpan.FromMilliseconds(500));
 
     private static int GitLabA3s(ProvidersSessionSetup setup, string project) =>
         setup.GitLab!.Requests.Count(request => string.Equals(request.Route, "project:" + project, StringComparison.OrdinalIgnoreCase));

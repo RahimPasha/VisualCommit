@@ -2807,22 +2807,24 @@ what was open:
   `Changed` handler that event's (`Update` counts the rules known by it). `Changed` also comes when
   the listed provider's account (key, login) changes, for WP-P's row. A3's answer, the list or
   failure and a created request are kept with their account, unused under another (D348); a run's
-  answer applies only for the account it asked and sent with. 7a's GitHub path too: another user's
-  sign-in over the first shows Loading and sends A3 again (D383). Another provider's candidate
-  cancels the run in flight, ending its wait there (a disposed session drops its `Finish`), and
-  drops every A3 read in flight of another provider, replaced or forgotten ones too (`_readings`):
-  none applies, keeps or warns; its own run starts at once. A read a `ReadRepositoryAsync` caller
-  awaits goes on for it alone; a stopped run starts no A3. Within one provider, 7a's `_again`.
-  `StopAvatars` cancels the avatar run in flight (9.8). `CallAsync`'s `what` and the Debug line pass
-  names through `ScreenEmail` (D368); the state's stay as given.
+  answer applies only for the account it asked and sent with; 7a's GitHub path too (D383). Another
+  provider's candidate cancels the run in flight, ending its wait there (a disposed session drops
+  its `Finish`), and drops every A3 read in flight of another provider, replaced or forgotten too
+  (`_readings`), given up newest first before the run's and avatar run's stops free that
+  provider's turn (none of another provider starts after; the core sends nothing for a request
+  cancelled before its turn): none waiting is sent, none applies, keeps or warns; its own run
+  starts at once. A read a `ReadRepositoryAsync` caller awaits goes on for it alone. Within one
+  provider, 7a's `_again`. `StopAvatars` cancels the avatar run (9.8). `CallAsync`'s `what` and the
+  Debug line pass names through `ScreenEmail` (D368); the state's stay as given.
 - Tests: `HostingSessionGitHubForms.Account` is `AccountStatus` with `!` (C# 14); its `AccountsFile`
-  forms keep 7a's store tests unchanged. `ProvidersSessionSetup` (`repositories: true`: an open
-  request per fake and Azure DevOps organization) wraps the in-process Azure DevOps fake in
-  `ServiceAnswers` for `AzureDevOpsEndpoints.Service`, writing its `Local(2)` addresses on
-  dev.azure.com (WP-LF may give the fake a base); its disposal seeks its and `Track`'s tokens in the
-  data folder and log in the tripwire's forms, and `FAKE-` but request ids in the log. 7a's copy is
-  `JsonAccountStore7a.cs`. The wiring class matches git calls by `Repository.WorkingDirectory`; its
-  tripwire searches them. `HostingContractsTests` (passed to WP-S): one test renamed.
+  forms keep 7a's store tests unchanged. `GiveUpObserver` stands for a late UI thread.
+  `ProvidersSessionSetup` (`repositories: true`: an open request per fake and Azure DevOps
+  organization) wraps the in-process Azure DevOps fake in `ServiceAnswers` for
+  `AzureDevOpsEndpoints.Service`, its `Local(2)` addresses on dev.azure.com (WP-LF may give the fake
+  a base); its disposal seeks its and `Track`'s tokens in the data folder and log in the tripwire's
+  forms, and `FAKE-` but request ids in the log. 7a's copy is `JsonAccountStore7a.cs`. The wiring
+  class matches git calls by `Repository.WorkingDirectory`; its tripwire searches them.
+  `HostingContractsTests` (passed to WP-S): one test renamed.
 - For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without one. For
   WP-N: `IHostingSession.cs` changed `NullRepositoryHosting`'s text and three docs.
 

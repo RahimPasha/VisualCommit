@@ -11,7 +11,7 @@ namespace VisualCommit.Hosting;
 // GitHub's account is signed in, of GitHub remotes' authors; else nothing is read or asked.
 public sealed partial class RepositoryHosting
 {
-    // On the UI thread.
+    // On the UI thread; _avatarGeneration is also read where a run ends.
     private Task? _avatarRun;
     private IReadOnlyList<AuthorCommit>? _avatarNext;
     private int _avatarGeneration;
@@ -60,8 +60,22 @@ public sealed partial class RepositoryHosting
     // dropped.
     private void StopAvatars()
     {
-        _avatarGeneration++;
+        DropAvatarRun();
+        CancelAvatarRun();
+    }
+
+    // On the UI thread, StopAvatars' first half, which Update does before it gives A3 reads up: what
+    // the run in flight still brings is dropped, an A3 read of it given up or refused ends it
+    // quietly, and the set asked for meanwhile goes.
+    private void DropAvatarRun()
+    {
+        Interlocked.Increment(ref _avatarGeneration);
         _avatarNext = null;
+    }
+
+    // On the UI thread, StopAvatars' second half: the run in flight is cancelled.
+    private void CancelAvatarRun()
+    {
         if (_avatarStop is { } stop)
         {
             _avatarStop = null;
@@ -90,9 +104,10 @@ public sealed partial class RepositoryHosting
             {
                 avatars = await ReadAvatarsAsync(candidate, set, ct).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            catch (OperationCanceledException) when (ct.IsCancellationRequested || generation != Volatile.Read(ref _avatarGeneration))
             {
-                // Signed out, stopped or closed: nothing is applied.
+                // Signed out, stopped or closed, or about to be stopped (its A3 given up or refused
+                // first, Update): nothing is applied.
             }
             catch (Exception ex)
             {
