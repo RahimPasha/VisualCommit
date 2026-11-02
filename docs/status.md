@@ -154,7 +154,9 @@ Checks, live trial and review:
   not, committed before the UI they test.
 - [ ] 16. The owner's sandboxes and tokens for Azure DevOps and GitLab made as the design says
   (D346, D352), and the live command extended to both, run with them; what it finds goes into the
-  fakes (D342).
+  fakes (D342). Under way: the sandboxes are made (2026-11-02; their first tokens replaced, Waiting
+  on the owner); stage 1 (15.1) merged at `b377aa3`, built, reviewed and hunted, offline classes
+  404 of 404, never run with the tokens yet; stage 2 (`Check_3`) follows WP-N.
 - [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
   tests.
 
@@ -401,18 +403,18 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wave 3's WP-S is merged at `bdc92c3` (D383; D382 amended); its lagged list and whole default run
-passed and CI's run on `a924cda` is green (Notes, CI section). Next: WP-LIVE's stage 1 (15.1,
-`wip/p7b-live1`: `Check_1`, `Check_1b_probes` where 15.5's sums need it, `Check_2` and Azure DevOps'
-`Check_4`, with 15.2 to 15.6's settings, screen, guard and request log) is being built, reviewed and
-hunted on `wip/p7b-live1` in a worktree made from `af98f37` under `D:/Projects/Personal/vc-wt/p7b-live1`
-(a session that finds it after a break reads `git log af98f37..` there first); only its offline
-`LiveSafetyTests` and `LiveScreenTests` run there. Its run against the
-real services waits for the owner's 15.8 steps (Waiting on the owner: on 2026-11-02 the four new
-variables were not set), the owner told and present, the variables given to the command's process
-from the user scope (15.8). Then WP-LF, before part A's checks are written. Until the reset of
-2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if it
-runs out (D344).
+WP-LIVE's stage 1 is merged at `b377aa3` (D384; CLAUDE.md's live and offline rows and the csproj's
+comment updated, 15.9). Its run with the tokens waits for the owner's 15.8 steps (Waiting on the
+owner: on 2026-11-02 the four new variables were not set). When the owner says they are set: check
+them with 15.8's true-or-false checks; in the commit that records the tokens' dates, rewrite "What to
+know"'s paragraph on the live command (the six variables, 15.8's check, 15.8's PowerShell line, the
+offline run first; 15.9); then, the owner told and present, run the offline classes alone and, only if
+they pass, stage 1 with the six variables given to the command's process from the user scope (15.8's
+line, `--filter-class "*AzureDevOpsLiveTests" --filter-class "*GitLabLiveTests"`); read
+`artifacts/live/azure-devops/` and `gitlab/run.txt` and check them, fully decoded, for the
+organization's name and the GitLab namespace before anything from them enters the repository. Then
+WP-LF (0.4), before part A's checks are written. Until the reset of 2026-11-05 the phase may use all
+that is left of the week's allowance and waits for the reset if it runs out (D344).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.

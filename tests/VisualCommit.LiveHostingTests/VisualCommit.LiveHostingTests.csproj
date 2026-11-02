@@ -15,7 +15,14 @@
        (the token stays in memory);
        its findings in artifacts/live/github/run.txt, never with the token. Its class
        LiveSafetyTests proves the token's search and the request log offline, with a made-up token,
-       an in-process handler and no network. -->
+       an in-process handler and no network.
+       Phase 7b (D346, docs/phase-7b-design.md 15) adds Azure DevOps and GitLab: AzureDevOpsLiveTests
+       and GitLabLiveTests, with the four variables VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN and _REPO
+       (organization/project/repository) and VISUALCOMMIT_LIVE_GITLAB_TOKEN and _REPO
+       (namespace/project), D352's guard on every request, and a screen that keeps the organization's
+       name, GitLab's namespace and addresses out of artifacts/live/azure-devops/ and gitlab/run.txt
+       (D372, D384); LiveScreenTests proves the screen offline. The offline classes run first, alone,
+       before every run with the tokens (CLAUDE.md's Commands). -->
 
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
