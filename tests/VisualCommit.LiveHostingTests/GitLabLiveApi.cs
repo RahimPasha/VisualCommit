@@ -5,13 +5,20 @@ using VisualCommit.Hosting.GitLab;
 
 namespace VisualCommit.LiveHostingTests;
 
-/// <summary>A merge request as GitLab lists and reads it: its iid, its source branch and whether its source is another project.</summary>
+/// <summary>
+/// A merge request as GitLab lists and reads it: its iid, its source branch and whether its source
+/// may be another project. It fails closed: a request is the sandbox's own only when
+/// <c>source_project_id</c> and <c>target_project_id</c> are both numbers and equal, so one whose
+/// source is null, missing or not a number counts as a fork's, which the clean-up never touches.
+/// </summary>
 internal sealed record LiveMergeRequest(int Iid, string SourceBranch, bool FromFork)
 {
     internal static LiveMergeRequest From(JsonElement request) => new(
         request.GetProperty("iid").GetInt32(),
         request.TryGetProperty("source_branch", out var source) ? source.GetString() ?? string.Empty : string.Empty,
-        request.TryGetProperty("source_project_id", out var from) && request.TryGetProperty("target_project_id", out var to) && from.ValueKind == JsonValueKind.Number && to.ValueKind == JsonValueKind.Number && from.GetInt64() != to.GetInt64());
+        !(request.TryGetProperty("source_project_id", out var from) && request.TryGetProperty("target_project_id", out var to)
+            && from.ValueKind == JsonValueKind.Number && to.ValueKind == JsonValueKind.Number
+            && from.TryGetInt64(out var fromId) && to.TryGetInt64(out var toId) && fromId == toId));
 }
 
 /// <summary>

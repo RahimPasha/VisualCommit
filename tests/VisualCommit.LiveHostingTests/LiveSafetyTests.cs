@@ -1051,8 +1051,8 @@ public sealed partial class LiveSafetyTests
     public void The_guard_admits_the_sandbox_s_paths_with_basic_or_no_credential(string url)
     {
         var reach = AzureReach();
-        Assert.Null(reach.RefusalOf(new Uri(url), LiveCredentialForm.Basic));
-        Assert.Null(reach.RefusalOf(new Uri(url), LiveCredentialForm.None));
+        Assert.Null(reach.RefusalOf(HttpMethod.Get, new Uri(url), LiveCredentialForm.Basic));
+        Assert.Null(reach.RefusalOf(HttpMethod.Get, new Uri(url), LiveCredentialForm.None));
     }
 
     [Theory]
@@ -1077,7 +1077,7 @@ public sealed partial class LiveSafetyTests
     [InlineData("https://dev.azure.com/_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf?organizationName=other-org")]
     public void The_guard_refuses_everything_else_naming_the_origin_and_never_the_path(string url)
     {
-        var refusal = AzureReach().RefusalOf(new Uri(url), LiveCredentialForm.Basic);
+        var refusal = AzureReach().RefusalOf(HttpMethod.Get, new Uri(url), LiveCredentialForm.Basic);
         Assert.NotNull(refusal);
         Assert.DoesNotContain("visualcommit-sandbox", refusal, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Fernhill", refusal, StringComparison.OrdinalIgnoreCase);
@@ -1088,9 +1088,9 @@ public sealed partial class LiveSafetyTests
     {
         var reach = AzureReach();
         var dotted = new Uri("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_git/visualcommit-sandbox/../visualcommit-sandbox/info/refs", new UriCreationOptions { DangerousDisablePathAndQueryCanonicalization = true });
-        Assert.NotNull(reach.RefusalOf(dotted, LiveCredentialForm.Basic));
-        Assert.NotNull(reach.RefusalOf(new Uri("https://dev.azure.com/Fernhill-Labs/_apis/connectionData"), LiveCredentialForm.Bearer));
-        Assert.NotNull(reach.RefusalOf(new Uri("https://dev.azure.com/Fernhill-Labs/_apis/connectionData?private_token=x"), LiveCredentialForm.QueryToken));
+        Assert.NotNull(reach.RefusalOf(HttpMethod.Get, dotted, LiveCredentialForm.Basic));
+        Assert.NotNull(reach.RefusalOf(HttpMethod.Get, new Uri("https://dev.azure.com/Fernhill-Labs/_apis/connectionData"), LiveCredentialForm.Bearer));
+        Assert.NotNull(reach.RefusalOf(HttpMethod.Get, new Uri("https://dev.azure.com/Fernhill-Labs/_apis/connectionData?private_token=x"), LiveCredentialForm.QueryToken));
     }
 
     [Theory]
@@ -1103,16 +1103,16 @@ public sealed partial class LiveSafetyTests
     {
         var reach = AzureReach();
         var path = new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData");
-        Assert.Null(reach.RefusalOf(path, LiveCredentialForm.None));
+        Assert.Null(reach.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.None));
         if (anonymous is { } status)
         {
             reach.Answered(path, LiveCredentialForm.None, status);
         }
 
-        Assert.Equal(basic, reach.RefusalOf(path, LiveCredentialForm.Basic) is null);
-        Assert.NotNull(reach.RefusalOf(new Uri("https://dev.azure.com/vc-none-ffffffffffff/_apis/connectionData"), LiveCredentialForm.None));
-        Assert.NotNull(reach.RefusalOf(new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/git/repositories"), LiveCredentialForm.None));
-        Assert.NotNull(reach.RefusalOf(new Uri($"https://dev.azure.com/{MadeUpOrganization}/{Project}/_git/{Repository}/info/refs"), LiveCredentialForm.None));
+        Assert.Equal(basic, reach.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.Basic) is null);
+        Assert.NotNull(reach.RefusalOf(HttpMethod.Get, new Uri("https://dev.azure.com/vc-none-ffffffffffff/_apis/connectionData"), LiveCredentialForm.None));
+        Assert.NotNull(reach.RefusalOf(HttpMethod.Get, new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/git/repositories"), LiveCredentialForm.None));
+        Assert.NotNull(reach.RefusalOf(HttpMethod.Get, new Uri($"https://dev.azure.com/{MadeUpOrganization}/{Project}/_git/{Repository}/info/refs"), LiveCredentialForm.None));
         Assert.Matches("^vc-none-[0-9a-f]{12}$", AzureDevOpsReach.DrawMadeUpOrganization());
     }
 
@@ -1143,13 +1143,13 @@ public sealed partial class LiveSafetyTests
     [InlineData("https://gitlab.com/api/v4/user", LiveCredentialForm.Basic)]
     [InlineData("http://gitlab.com/api/v4/user", LiveCredentialForm.None)]
     public void GitLab_s_guard_refuses_another_host_a_web_path_and_other_credentials(string url, LiveCredentialForm form) =>
-        Assert.NotNull(LiveReach.GitLab().RefusalOf(new Uri(url), form));
+        Assert.NotNull(LiveReach.GitLab().RefusalOf(HttpMethod.Get, new Uri(url), form));
 
     [Fact]
     public void GitLab_s_guard_admits_its_api_with_bearer_or_no_credential()
     {
-        Assert.Null(LiveReach.GitLab().RefusalOf(new Uri("https://gitlab.com/api/v4/projects/ada%2Fvisualcommit-sandbox/merge_requests?state=opened"), LiveCredentialForm.Bearer));
-        Assert.Null(LiveReach.GitLab().RefusalOf(new Uri("https://gitlab.com/api/v4/user"), LiveCredentialForm.None));
+        Assert.Null(LiveReach.GitLab().RefusalOf(HttpMethod.Get, new Uri("https://gitlab.com/api/v4/projects/ada%2Fvisualcommit-sandbox/merge_requests?state=opened"), LiveCredentialForm.Bearer));
+        Assert.Null(LiveReach.GitLab().RefusalOf(HttpMethod.Get, new Uri("https://gitlab.com/api/v4/user"), LiveCredentialForm.None));
     }
 
     [Fact]
@@ -1269,6 +1269,20 @@ public sealed partial class LiveSafetyTests
         Assert.True(LiveProviderLeftovers.IsLeftover(new LiveMergeRequest(1, "visualcommit-live/20261102-010203Z", false)));
         Assert.False(LiveProviderLeftovers.IsLeftover(new LiveMergeRequest(2, "visualcommit-live/x", true)));
         Assert.False(LiveProviderLeftovers.IsLeftover(new LiveMergeRequest(3, "feature/visualcommit-live/x", false)));
+
+        // Hunt 3's M8: a request is the sandbox's own only when both project ids are numbers and equal.
+        static LiveMergeRequest Read(string json)
+        {
+            using var document = JsonDocument.Parse(json);
+            return LiveMergeRequest.From(document.RootElement);
+        }
+
+        Assert.True(LiveProviderLeftovers.IsLeftover(Read("""{"iid":7,"source_branch":"visualcommit-live/x","source_project_id":5,"target_project_id":5}""")));
+        Assert.False(LiveProviderLeftovers.IsLeftover(Read("""{"iid":8,"source_branch":"visualcommit-live/x","source_project_id":6,"target_project_id":5}""")));
+        Assert.False(LiveProviderLeftovers.IsLeftover(Read("""{"iid":9,"source_branch":"visualcommit-live/x","source_project_id":null,"target_project_id":5}""")));
+        Assert.False(LiveProviderLeftovers.IsLeftover(Read("""{"iid":10,"source_branch":"visualcommit-live/x","target_project_id":5}""")));
+        Assert.False(LiveProviderLeftovers.IsLeftover(Read("""{"iid":11,"source_branch":"visualcommit-live/x","source_project_id":5}""")));
+        Assert.False(LiveProviderLeftovers.IsLeftover(Read("""{"iid":12,"source_branch":"visualcommit-live/x","source_project_id":"5","target_project_id":5}""")));
         Assert.Equal(
             ["refs/heads/visualcommit-live/a"],
             LiveProviderLeftovers.Branches([("refs/heads/visualcommit-live/a", "1"), ("refs/heads/visualcommit-livex", "2"), ("refs/tags/visualcommit-live/b", "3"), ("refs/heads/visualcommit-live/", "4")]).Select(reference => reference.Name));
@@ -1562,11 +1576,15 @@ public sealed partial class LiveSafetyTests
         Assert.Empty(stub.Requests);
         Assert.DoesNotContain("visualstudio", refused.Message, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Fernhill", refused.Message, StringComparison.OrdinalIgnoreCase);
-        Assert.StartsWith("refused: its Host header names another authority than https://dev.azure.com:443", Assert.Single(store.Snapshot()).FailedWith, StringComparison.Ordinal);
+        Assert.StartsWith("refused: it sets a Host header, which no request of the app's or the command's to https://dev.azure.com:443 sets", Assert.Single(store.Snapshot()).FailedWith, StringComparison.Ordinal);
 
+        // Hunt 3's M5: one naming the URL's own authority is refused too, since no request of the app's or the command's sets one.
         using var same = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://dev.azure.com/{Organization}/_apis/connectionData?api-version=7.1-preview.1"));
         same.Headers.Host = "DEV.AZURE.COM";
-        using var answered = await client.SendAsync(same, Cancelled);
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(same, Cancelled));
+        Assert.Empty(stub.Requests);
+        using var plain = new HttpRequestMessage(HttpMethod.Get, new Uri($"https://dev.azure.com/{Organization}/_apis/connectionData?api-version=7.1-preview.1"));
+        using var answered = await client.SendAsync(plain, Cancelled);
         Assert.Single(stub.Requests);
     }
 
@@ -1582,7 +1600,7 @@ public sealed partial class LiveSafetyTests
     [InlineData("https://dev.azure.com/Fernhill-Labs/_apis/connectionData?connectOptions=1&lastChangeId=-1")]
     public void The_guard_refuses_a_query_that_names_another_repository_or_organization_or_repeats_a_parameter(string url)
     {
-        var refusal = AzureReach().RefusalOf(new Uri(url), LiveCredentialForm.Basic);
+        var refusal = AzureReach().RefusalOf(HttpMethod.Get, new Uri(url), LiveCredentialForm.Basic);
         Assert.NotNull(refusal);
         Assert.Contains("query parameter", refusal, StringComparison.Ordinal);
         Assert.DoesNotContain("Fernhill", refusal, StringComparison.OrdinalIgnoreCase);
@@ -1596,7 +1614,7 @@ public sealed partial class LiveSafetyTests
     [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/pullrequests?searchCriteria.status=active&api-version=7.1&$top=1&$skip=100")]
     [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?filter=heads%2Fvisualcommit-live%2F&api-version=7.1")]
     public void The_guard_admits_the_query_parameters_the_app_and_the_command_send(string url) =>
-        Assert.Null(AzureReach().RefusalOf(new Uri(url), LiveCredentialForm.Basic));
+        Assert.Null(AzureReach().RefusalOf(HttpMethod.Get, new Uri(url), LiveCredentialForm.Basic));
 
     [Fact]
     public void D374_s_read_with_the_token_is_admitted_once_per_run()
@@ -1605,15 +1623,15 @@ public sealed partial class LiveSafetyTests
         var upper = new Uri($"https://dev.azure.com/{MadeUpOrganization.ToUpperInvariant()}/_apis/connectionData?api-version=7.1-preview.1");
         var reach = AzureReach();
         reach.Answered(path, LiveCredentialForm.None, 404);
-        Assert.Null(reach.RefusalOf(path, LiveCredentialForm.Basic));
-        Assert.NotNull(reach.RefusalOf(path, LiveCredentialForm.Basic));
-        Assert.NotNull(reach.RefusalOf(upper, LiveCredentialForm.Basic));
-        Assert.Null(reach.RefusalOf(path, LiveCredentialForm.None));
+        Assert.Null(reach.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.Basic));
+        Assert.NotNull(reach.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.Basic));
+        Assert.NotNull(reach.RefusalOf(HttpMethod.Get, upper, LiveCredentialForm.Basic));
+        Assert.Null(reach.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.None));
 
         var answered = AzureReach();
         answered.Answered(path, LiveCredentialForm.None, 404);
         answered.Answered(path, LiveCredentialForm.Basic, 200);
-        Assert.NotNull(answered.RefusalOf(path, LiveCredentialForm.Basic));
+        Assert.NotNull(answered.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.Basic));
     }
 
     [Theory]
@@ -1629,11 +1647,11 @@ public sealed partial class LiveSafetyTests
         var reach = AzureReach();
         foreach (var status in answers)
         {
-            Assert.Null(reach.RefusalOf(path, LiveCredentialForm.None));
+            Assert.Null(reach.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.None));
             reach.Answered(path, LiveCredentialForm.None, status);
         }
 
-        Assert.Equal(basic, reach.RefusalOf(path, LiveCredentialForm.Basic) is null);
+        Assert.Equal(basic, reach.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.Basic) is null);
     }
 
     [Fact]
@@ -1641,21 +1659,21 @@ public sealed partial class LiveSafetyTests
     {
         var path = new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1");
         var unanswered = AzureReach();
-        Assert.Null(unanswered.RefusalOf(path, LiveCredentialForm.None));
+        Assert.Null(unanswered.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.None));
         unanswered.Failed(path, LiveCredentialForm.None);
         unanswered.Answered(path, LiveCredentialForm.None, 404);
-        Assert.NotNull(unanswered.RefusalOf(path, LiveCredentialForm.Basic));
+        Assert.NotNull(unanswered.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.Basic));
 
         var refused = AzureReach();
-        Assert.NotNull(refused.RefusalOf(new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1&hostId=x"), LiveCredentialForm.None));
+        Assert.NotNull(refused.RefusalOf(HttpMethod.Get, new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1&hostId=x"), LiveCredentialForm.None));
         refused.Answered(path, LiveCredentialForm.None, 404);
-        Assert.NotNull(refused.RefusalOf(path, LiveCredentialForm.Basic));
+        Assert.NotNull(refused.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.Basic));
 
         var failedWithToken = AzureReach();
         failedWithToken.Answered(path, LiveCredentialForm.None, 404);
-        Assert.Null(failedWithToken.RefusalOf(path, LiveCredentialForm.Basic));
+        Assert.Null(failedWithToken.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.Basic));
         failedWithToken.Failed(path, LiveCredentialForm.Basic);
-        Assert.NotNull(failedWithToken.RefusalOf(path, LiveCredentialForm.Basic));
+        Assert.NotNull(failedWithToken.RefusalOf(HttpMethod.Get, path, LiveCredentialForm.Basic));
     }
 
     [Fact]
@@ -1745,11 +1763,11 @@ public sealed partial class LiveSafetyTests
     [InlineData("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/items?api-version=7.1")]
     public void The_guard_admits_below_the_repository_only_what_the_app_and_the_command_send(string url)
     {
-        var refusal = AzureReach().RefusalOf(new Uri(url), LiveCredentialForm.Basic);
+        var refusal = AzureReach().RefusalOf(HttpMethod.Get, new Uri(url), LiveCredentialForm.Basic);
         Assert.NotNull(refusal);
         Assert.DoesNotContain("visualcommit-sandbox", refusal, StringComparison.OrdinalIgnoreCase);
-        Assert.Null(AzureReach().RefusalOf(new Uri("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/PullRequests/12?api-version=7.1"), LiveCredentialForm.Basic));
-        Assert.Null(AzureReach().RefusalOf(new Uri("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?api-version=7.1"), LiveCredentialForm.Basic));
+        Assert.Null(AzureReach().RefusalOf(HttpMethod.Get, new Uri("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/PullRequests/12?api-version=7.1"), LiveCredentialForm.Basic));
+        Assert.Null(AzureReach().RefusalOf(HttpMethod.Get, new Uri("https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?api-version=7.1"), LiveCredentialForm.Basic));
     }
 
     [Fact]
@@ -2002,6 +2020,245 @@ public sealed partial class LiveSafetyTests
             : path.EndsWith("/repository/branches", StringComparison.Ordinal) ? $"{request.Method} branches"
             : path.EndsWith("/merge_requests", StringComparison.Ordinal) ? $"{request.Method} merge_requests"
             : $"{request.Method} {path[(path.LastIndexOf('/') + 1)..]}";
+    }
+}
+
+/// <summary>
+/// Hunt 3's findings on the new providers' guard (docs/phase-7b-design.md 15.4): the method (M4), any
+/// <c>Host</c> header (M5), a query parameter named for a token and GitLab's underscore headers (M6),
+/// and D374's bar after a refusal by any check (M7); each request sent through the log over a stub,
+/// which sees nothing the guard refuses. Made-up values only.
+/// </summary>
+public sealed partial class LiveSafetyTests
+{
+    private const string GitLabProject = "https://gitlab.com/api/v4/projects/ada%2Fvisualcommit-sandbox";
+
+    /// <summary>Sends one request through <paramref name="reach"/>'s log over a stub that answers <paramref name="status"/>; the stub's requests and the store.</summary>
+    private static async Task<(StubHandler Stub, LiveRequestLog.Store Store, HttpRequestException? Refused)> SendThroughAsync(LiveReach reach, HttpRequestMessage request, HttpStatusCode status = HttpStatusCode.OK)
+    {
+        var store = new LiveRequestLog.Store();
+        var stub = new StubHandler(_ => new HttpResponseMessage(status) { Content = new StringContent("{}") });
+        using var client = new HttpClient(new LiveRequestLog(stub, store, reach));
+        try
+        {
+            using var answer = await client.SendAsync(request, Cancelled);
+            return (stub, store, null);
+        }
+        catch (HttpRequestException refused)
+        {
+            return (stub, store, refused);
+        }
+    }
+
+    private static HttpRequestMessage Request(string method, string url, string? scheme)
+    {
+        var request = new HttpRequestMessage(new HttpMethod(method), url);
+        if (method is "POST" or "PUT" or "PATCH")
+        {
+            request.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+        }
+
+        if (scheme is "Basic")
+        {
+            request.Headers.Authorization = new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(":made-up-not-a-token")));
+        }
+        else if (scheme is "Bearer")
+        {
+            request.Headers.Authorization = new("Bearer", "made-up-not-a-token");
+        }
+
+        return request;
+    }
+
+    // ---- M4: the method --------------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("POST", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories?api-version=7.1")]
+    [InlineData("DELETE", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox?api-version=7.1")]
+    [InlineData("PATCH", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox?api-version=7.1")]
+    [InlineData("POST", "https://dev.azure.com/Fernhill-Labs/_apis/connectionData?api-version=7.1-preview.1")]
+    [InlineData("POST", "https://dev.azure.com/Fernhill-Labs/_apis/resourceAreas/79134c72-4a58-4b42-976c-04e7115f32bf")]
+    [InlineData("PUT", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/pullrequests?api-version=7.1")]
+    [InlineData("DELETE", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/pullrequests/3?api-version=7.1")]
+    [InlineData("POST", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/pullrequests/3?api-version=7.1")]
+    [InlineData("PATCH", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox/refs?api-version=7.1")]
+    [InlineData("POST", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_git/visualcommit-sandbox/git-receive-pack")]
+    [InlineData("HEAD", "https://dev.azure.com/Fernhill-Labs/visualcommit-sandbox/_apis/git/repositories/visualcommit-sandbox?api-version=7.1")]
+    [InlineData("get", "https://dev.azure.com/Fernhill-Labs/_apis/connectionData?api-version=7.1-preview.1")]
+    public async Task Azure_DevOps_guard_refuses_a_method_neither_the_app_nor_the_command_sends_to_the_path(string method, string url)
+    {
+        var (stub, store, refused) = await SendThroughAsync(AzureReach(), Request(method, url, "Basic"));
+        Assert.NotNull(refused);
+        Assert.Empty(stub.Requests);
+        var failed = Assert.Single(store.Snapshot()).FailedWith!;
+        foreach (var text in new[] { failed, refused.Message })
+        {
+            Assert.Contains(method, text, StringComparison.Ordinal);
+            Assert.Contains("https://dev.azure.com", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("visualcommit-sandbox", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("Fernhill", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("_apis", text, StringComparison.Ordinal);
+        }
+    }
+
+    [Theory]
+    [InlineData("POST", "https://dev.azure.com/vc-none-0123456789ab/_apis/connectionData?api-version=7.1-preview.1")]
+    [InlineData("DELETE", "https://dev.azure.com/vc-none-0123456789ab/_apis/connectionData")]
+    public async Task D374_s_path_takes_get_alone_and_another_method_without_a_credential_bars_the_read_with_the_token(string method, string url)
+    {
+        var reach = AzureReach();
+        var path = new Uri($"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1");
+        reach.Answered(path, LiveCredentialForm.None, 404);
+        var (stub, _, refused) = await SendThroughAsync(reach, Request(method, url, null));
+        Assert.NotNull(refused);
+        Assert.Empty(stub.Requests);
+        var (basic, _, barred) = await SendThroughAsync(reach, Request("GET", path.AbsoluteUri, "Basic"));
+        Assert.NotNull(barred);
+        Assert.Empty(basic.Requests);
+    }
+
+    [Theory]
+    [InlineData("DELETE", GitLabProject)]
+    [InlineData("PUT", GitLabProject)]
+    [InlineData("POST", "https://gitlab.com/api/v4/projects")]
+    [InlineData("POST", "https://gitlab.com/api/v4/user")]
+    [InlineData("POST", GitLabProject + "/repository/branches?branch=x&ref=main")]
+    [InlineData("GET", GitLabProject + "/repository/branches/main")]
+    [InlineData("PUT", GitLabProject + "/repository/branches/visualcommit-live%2Fx")]
+    [InlineData("DELETE", GitLabProject + "/repository/branches")]
+    [InlineData("PUT", GitLabProject + "/merge_requests/3/merge")]
+    [InlineData("POST", GitLabProject + "/merge_requests/3")]
+    [InlineData("DELETE", GitLabProject + "/merge_requests")]
+    [InlineData("PATCH", GitLabProject + "/merge_requests/3")]
+    [InlineData("GET", GitLabProject + "/members")]
+    [InlineData("POST", GitLabProject + "/fork")]
+    [InlineData("DELETE", "https://gitlab.com/api/v4/personal_access_tokens/self")]
+    [InlineData("GET", "https://gitlab.com/api/v4/personal_access_tokens")]
+    [InlineData("get", "https://gitlab.com/api/v4/user")]
+    public async Task GitLab_s_guard_refuses_a_path_or_method_neither_the_app_nor_the_command_sends(string method, string url)
+    {
+        var (stub, store, refused) = await SendThroughAsync(LiveReach.GitLab(), Request(method, url, "Bearer"));
+        Assert.NotNull(refused);
+        Assert.Empty(stub.Requests);
+        var failed = Assert.Single(store.Snapshot()).FailedWith!;
+        Assert.Contains("https://gitlab.com", failed, StringComparison.Ordinal);
+        Assert.DoesNotContain("visualcommit-sandbox", failed, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("/api/v4/projects", failed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Each_admitted_path_takes_the_methods_the_app_and_the_command_send_it()
+    {
+        var azure = AzureReach();
+        var repository = $"https://dev.azure.com/{Organization}/{Project}/_apis/git/repositories/{Repository}";
+        foreach (var (method, url) in new[]
+        {
+            ("GET", $"https://dev.azure.com/{Organization}/_apis/connectionData?api-version=7.1-preview.1"),
+            ("GET", $"https://dev.azure.com/{Organization}/{Project}/_apis/git/repositories?api-version=7.1&$top=100&$skip=0"),
+            ("GET", repository + "?api-version=7.1"),
+            ("GET", repository + "/pullrequests?searchCriteria.status=active&$top=100&api-version=7.1"),
+            ("POST", repository + "/pullrequests?api-version=7.1"),
+            ("GET", repository + "/pullrequests/7?api-version=7.1"),
+            ("PATCH", repository + "/pullrequests/7?api-version=7.1"),
+            ("GET", repository + "/refs?filter=heads%2Fvisualcommit-live%2F&api-version=7.1"),
+            ("POST", repository + "/refs?api-version=7.1"),
+            ("GET", $"https://dev.azure.com/{Organization}/{Project}/_git/{Repository}/info/refs?service=git-upload-pack"),
+            ("GET", $"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1"),
+        })
+        {
+            var form = url.Contains(MadeUpOrganization, StringComparison.Ordinal) ? LiveCredentialForm.None : LiveCredentialForm.Basic;
+            Assert.Null(azure.RefusalOf(new HttpMethod(method), new Uri(url), form));
+        }
+
+        var gitlab = LiveReach.GitLab();
+        foreach (var (method, url) in new[]
+        {
+            ("GET", "https://gitlab.com/api/v4/user"),
+            ("GET", "https://gitlab.com/api/v4/personal_access_tokens/self"),
+            ("GET", "https://gitlab.com/api/v4/projects?membership=true&archived=false&order_by=last_activity_at&sort=desc&per_page=100&page=2"),
+            ("GET", GitLabProject),
+            ("GET", "https://gitlab.com/api/v4/projects/123"),
+            ("GET", GitLabProject + "/merge_requests?state=opened&per_page=100"),
+            ("POST", "https://gitlab.com/api/v4/projects/123/merge_requests"),
+            ("GET", GitLabProject + "/merge_requests/7"),
+            ("PUT", GitLabProject + "/merge_requests/7"),
+            ("DELETE", GitLabProject + "/merge_requests/7"),
+            ("GET", GitLabProject + "/repository/branches?search=%5Evisualcommit-live%2F&per_page=100"),
+            ("DELETE", GitLabProject + "/repository/branches/visualcommit-live%2F20261102-010203Z"),
+        })
+        {
+            Assert.Null(gitlab.RefusalOf(new HttpMethod(method), new Uri(url), LiveCredentialForm.Bearer));
+        }
+    }
+
+    // ---- M5: any Host header -----------------------------------------------------------------------
+
+    [Theory]
+    [InlineData("elsewhere.example:99999")]
+    [InlineData("elsewhere.example, dev.azure.com")]
+    [InlineData("dev.azure.com")]
+    public async Task A_host_header_is_refused_whatever_it_holds_judged_on_the_raw_headers(string host)
+    {
+        var request = Request("GET", $"https://dev.azure.com/{Organization}/_apis/connectionData?api-version=7.1-preview.1", "Basic");
+        request.Headers.TryAddWithoutValidation("Host", host);
+        var (stub, store, refused) = await SendThroughAsync(AzureReach(), request);
+        Assert.NotNull(refused);
+        Assert.Empty(stub.Requests);
+        Assert.DoesNotContain("elsewhere", refused.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("elsewhere", Assert.Single(store.Snapshot()).FailedWith!, StringComparison.Ordinal);
+
+        var gitlab = Request("GET", "https://gitlab.com/api/v4/user", "Bearer");
+        gitlab.Headers.TryAddWithoutValidation("Host", host.Replace("dev.azure.com", "gitlab.com", StringComparison.Ordinal));
+        var (gitlabStub, _, gitlabRefused) = await SendThroughAsync(LiveReach.GitLab(), gitlab);
+        Assert.NotNull(gitlabRefused);
+        Assert.Empty(gitlabStub.Requests);
+    }
+
+    // ---- M6: a parameter named for a token, GitLab's underscore headers -----------------------------
+
+    [Theory]
+    [InlineData("https://gitlab.com/api/v4/user?bearer_token=made-up", null, LiveCredentialForm.QueryToken)]
+    [InlineData("https://gitlab.com/api/v4/projects?membership=true;private_token=made-up", null, LiveCredentialForm.QueryToken)]
+    [InlineData("https://gitlab.com/api/v4/user?private_token[]=made-up", null, LiveCredentialForm.QueryToken)]
+    [InlineData("https://gitlab.com/api/v4/user?OAuth_Token=made-up", null, LiveCredentialForm.QueryToken)]
+    [InlineData("https://gitlab.com/api/v4/user?x=1&my%5Ftoken=made-up", null, LiveCredentialForm.QueryToken)]
+    [InlineData("https://gitlab.com/api/v4/user", "PRIVATE_TOKEN", LiveCredentialForm.PrivateToken)]
+    [InlineData("https://gitlab.com/api/v4/user", "JOB_TOKEN", LiveCredentialForm.JobToken)]
+    [InlineData("https://dev.azure.com/Fernhill-Labs/_apis/connectionData?api-version=7.1-preview.1;private_token=made-up", null, LiveCredentialForm.QueryToken)]
+    public async Task A_parameter_named_for_a_token_and_gitlab_s_underscore_headers_are_credentials_the_guard_refuses(string url, string? header, LiveCredentialForm form)
+    {
+        var request = Request("GET", url, null);
+        if (header is not null)
+        {
+            request.Headers.TryAddWithoutValidation(header, "made-up");
+        }
+
+        Assert.Equal(form, LiveReach.FormOf(request));
+        var (stub, _, refused) = await SendThroughAsync(url.Contains("gitlab", StringComparison.Ordinal) ? LiveReach.GitLab() : AzureReach(), request);
+        Assert.NotNull(refused);
+        Assert.Empty(stub.Requests);
+    }
+
+    // ---- M7: D374's bar after a refusal by any check ------------------------------------------------
+
+    [Fact]
+    public async Task D374_s_read_without_a_credential_that_the_host_check_refuses_bars_the_read_with_the_token()
+    {
+        var store = new LiveRequestLog.Store();
+        var stub = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") });
+        using var client = new HttpClient(new LiveRequestLog(stub, store, AzureReach()));
+        var path = $"https://dev.azure.com/{MadeUpOrganization}/_apis/connectionData?api-version=7.1-preview.1";
+        using (var first = await client.SendAsync(Request("GET", path, null), Cancelled))
+        {
+            Assert.Equal(HttpStatusCode.NotFound, first.StatusCode);
+        }
+
+        var hosted = Request("GET", path, null);
+        hosted.Headers.Host = "elsewhere.example";
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(hosted, Cancelled));
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(Request("GET", path, "Basic"), Cancelled));
+        var only = Assert.Single(stub.Requests);
+        Assert.Null(only.Authorization);
     }
 }
 
@@ -2435,5 +2692,151 @@ public sealed class LiveScreenTests
         Assert.Null(run.Screener);
         run.Dispose();
         Assert.StartsWith("VisualCommit's live command against GitHub (docs/phase-7a-design.md 14.5)", File.ReadAllText(folder.Combine("run.txt")), StringComparison.Ordinal);
+    }
+
+    // ---- Hunt 3's findings on the screen (M1 to M3) -----------------------------------------------
+
+    private const string HuntOrg = "fabrikam7";
+
+    private const string HuntAddress = "pat.user@corp.test";
+
+    private const string HuntToken = "made-up-token-for-the-screen-0123456789";
+
+    private const string BodyNote = "Azure DevOps answered 404, the body as sent: ";
+
+    /// <summary>
+    /// Hunt 3's three bodies (M1), each with the note it leaves, or null when it is withheld: JSON's
+    /// line escapes before the organization; <c>\/</c> and <c>\uXXXX</c> before it, inside it and in
+    /// the address; HTML character references in the address.
+    /// </summary>
+    public static TheoryData<string, string?> HuntBodies => new()
+    {
+        {
+            """{"$id":"1","message":"TF401019: no repository in\nfabrikam7\tfor\npat.user@corp.test.","typeKey":"GitRepositoryNotFoundException"}""",
+            """{"$id":"1","message":"TF401019: no repository in\n<the organization>\tfor\n<the user's address>.","typeKey":"GitRepositoryNotFoundException"}"""
+        },
+        {
+            """{"url":"https:\/\/dev.azure.com\/fabrikam7\/_apis","in":"\u002Ffabrikam7","by":"pat.user\u0040corp.test","name":"\u0066abrikam7"}""",
+            null
+        },
+        {
+            """<html><body><h2>Sign in to fabrikam7&#47;sandbox as pat.user&#64;corp.test or PAT.USER&#x40;CORP.TEST &amp;fabrikam7</h2></body></html>""",
+            """<html><body><h2>Sign in to <the organization>&#47;sandbox as <the user's address> or <the user's address> &amp;<the organization></h2></body></html>"""
+        },
+    };
+
+    [Theory]
+    [MemberData(nameof(HuntBodies))]
+    public void A_body_s_json_escapes_and_character_references_leave_neither_the_organization_nor_a_learned_address(string body, string? kept)
+    {
+        using var folder = new TempDirectory("live-screen");
+        var file = folder.Combine("run.txt");
+        var screen = Screen(HuntOrg);
+        screen.AddAddress(HuntAddress);
+        var output = new List<string>();
+        var run = new LiveRun(HuntToken, file, output.Add, screen, HostingProvider.AzureDevOps);
+        run.Note(BodyNote + body);
+        if (kept is null)
+        {
+            Assert.StartsWith(LiveRun.ScreenedNotePrefix, Assert.Single(output), StringComparison.Ordinal);
+            Assert.Throws<InvalidOperationException>(run.Dispose);
+        }
+        else
+        {
+            Assert.Equal(BodyNote + kept, Assert.Single(output));
+            run.Dispose();
+        }
+
+        foreach (var text in new[] { output[0], File.ReadAllText(file) })
+        {
+            var decoded = FullyDecoded(text);
+            Assert.DoesNotContain(HuntOrg, decoded, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain(HuntAddress, decoded, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void Json_escapes_and_character_references_bound_the_organization_and_hide_nothing_from_the_search()
+    {
+        var screen = Screen(HuntOrg);
+        screen.AddAddress(HuntAddress);
+        var screened = screen.Apply("""in\nfabrikam7\tor\rfabrikam7\b, \u002Ffabrikam7 and \u00e9fabrikam7; by pat.user&#64;corp.test, pat.user&#x40;corp.test and PAT.USER&#X40;CORP.TEST.""");
+        Assert.Equal("""in\n<the organization>\tor\r<the organization>\b, \u002F<the organization> and \u00e9<the organization>; by <the user's address>, <the user's address> and <the user's address>.""", screened);
+        Assert.Equal(screened, screen.Apply(screened));
+        Assert.Null(screen.SurvivorIn(screened));
+        Assert.Equal("fabrikam7x and \\nfabrikam7x", screen.Apply("fabrikam7x and \\nfabrikam7x"));
+
+        Assert.Equal("the organization's name once decoded", screen.SurvivorIn("""{"name":"\u0066abrikam7"}"""));
+        Assert.Equal("the organization's name once decoded", screen.SurvivorIn("Sign in to &#102;abrikam7"));
+        Assert.Equal("the organization's name once decoded", screen.SurvivorIn("x%20%5Cu0066abrikam7"));
+        Assert.Equal("a learned address once decoded", screen.SurvivorIn("""{"by":"pat.user\u0040corp.test"}"""));
+        Assert.Equal("an address once decoded", screen.SurvivorIn("by bob&#x40;other.test"));
+        Assert.Equal("an address once decoded", screen.SurvivorIn("by bob&commat;other.test"));
+        Assert.Equal("the organization's name once percent-decoded", screen.SurvivorIn("x%252Ffabrikam7%252Fy"));
+        Assert.Null(screen.SurvivorIn("""C:\Users\x\new and \u0041 and &amp; and %C0%AE"""));
+    }
+
+    [Fact]
+    public void An_address_with_an_apostrophe_an_equals_sign_or_a_slash_is_learned_and_hidden_whole()
+    {
+        var screen = Screen(HuntOrg);
+        using (var answer = JsonDocument.Parse("""{"authenticatedUser":{"properties":{"Account":{"$type":"System.String","$value":"mary.o'connor@corp.test"}}},"createdBy":{"uniqueName":"pat=dev@corp.test"},"mailAddress":"team/ops@corp.test","remoteUrl":"https://fabrikam7@dev.azure.com/fabrikam7/p/_git/r","sshUrl":"git@ssh.dev.azure.com:v3/fabrikam7/p/r"}"""))
+        {
+            screen.Learn(answer.RootElement);
+        }
+
+        Assert.Equal("by <the user's address>, <the user's address> and <the user's address>.", screen.Apply("by mary.o'connor@corp.test, pat=dev@corp.test and team/ops@corp.test."));
+        Assert.Equal("https://<the organization>@dev.azure.com/<the organization>/p/_git/r and git@ssh.dev.azure.com:v3/<the organization>/p/r", screen.Apply("https://fabrikam7@dev.azure.com/fabrikam7/p/_git/r and git@ssh.dev.azure.com:v3/fabrikam7/p/r"));
+        Assert.Equal("a learned address", screen.SurvivorInDataFile("""{"name":"mary.o'connor@corp.test"}"""));
+        Assert.Equal("from <an address> and '<an address>' now", Screen(HuntOrg).Apply("from mary.o'connor@corp.test and 'bob@other.test' now"));
+
+        var git = Screen(HuntOrg);
+        git.LearnFromGit("pat=dev@corp.test\nmary.o'connor@corp.test\n");
+        Assert.Equal("<the user's address> and <the user's address>", git.Apply("pat=dev@corp.test and mary.o'connor@corp.test"));
+    }
+
+    [Fact]
+    public void An_escaped_hid_is_learned_from_an_answer_and_replaced_and_one_never_learned_is_a_survivor()
+    {
+        using var folder = new TempDirectory("live-screen");
+        var file = folder.Combine("run.txt");
+        var screen = Screen();
+        var location = $"https://dev.azure.com/_signedout?reply_to=https%3A%2F%2Fspsprodfake.vssps.visualstudio.com%2F_apis%2Fconnect%3Frealm%3Ddev.azure.com%26hid%3D{OtherHostId}";
+        screen.LearnFromAnswer([new("Location", [location])], null);
+        Assert.Equal(1, screen.Counts.Ids);
+        var output = new List<string>();
+        var run = new LiveRun(HuntToken, file, output.Add, screen, HostingProvider.AzureDevOps);
+        run.Note($"Azure DevOps' answer: 302 Found; Location {location}");
+        run.Dispose();
+        foreach (var text in new[] { Assert.Single(output), File.ReadAllText(file) })
+        {
+            Assert.DoesNotContain(OtherHostId, FullyDecoded(text), StringComparison.OrdinalIgnoreCase);
+        }
+
+        var unlearned = Screen();
+        Assert.Equal("a host id once percent-decoded", unlearned.SurvivorIn($"reply_to=x%3Frealm%3Ddev.azure.com%26hid%3D{OtherHostId}"));
+        Assert.Equal("a host id", unlearned.SurvivorIn($"x?hid={OtherHostId}"));
+        Assert.Null(unlearned.SurvivorIn("x?hid=<the organization's id> and hid%3D<the organization's id>"));
+    }
+
+    /// <summary><paramref name="text"/> with JSON's string escapes, HTML's character references and percent escapes decoded until nothing changes: the test's own reading.</summary>
+    private static string FullyDecoded(string text)
+    {
+        while (true)
+        {
+            var next = System.Text.RegularExpressions.Regex.Replace(
+                text,
+                @"\\(?:u([0-9A-Fa-f]{4})|([""\\/bfnrt]))",
+                match => match.Groups[1].Success
+                    ? ((char)Convert.ToInt32(match.Groups[1].Value, 16)).ToString()
+                    : match.Groups[2].Value switch { "n" => "\n", "t" => "\t", "r" => "\r", "b" => "\b", "f" => "\f", var other => other });
+            next = Uri.UnescapeDataString(System.Net.WebUtility.HtmlDecode(next.Replace("&commat;", "@", StringComparison.Ordinal)));
+            if (string.Equals(next, text, StringComparison.Ordinal))
+            {
+                return text;
+            }
+
+            text = next;
+        }
     }
 }

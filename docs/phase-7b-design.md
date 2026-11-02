@@ -3929,13 +3929,19 @@ each run with the tokens; with the tokens every live test passes, each request r
 up, only `visualcommit-live/` branches touched; no run.txt holds a token, the organization, its ids or
 an address; no value from the research's captures is in the files (section 1); the tripwire and `ReachProblems` find nothing.
 
-**As built** (WP-LIVE1, `06574c5` to its last commit, with its reviews' fixes, 2026-11-02), stage 1
-only; where the build differs or settles what was open:
+**As built** (WP-LIVE1, `06574c5` to its last commit, with its reviews' and hunts' fixes, 2026-11-02),
+stage 1 only; where the build differs or settles what was open:
 - `LiveRequest`'s headers are `KeptHeaders` (7a's `Headers()` stays), `api-version` read from
-  `Content-Type`; `LiveCredentialForm` is public. `LiveReach` judges a path as sent and as written, the
-  query and `Host` as 15.4 says, and below `{r}` only item 4's three forms. D374's Basic is taken by the
-  check that admits it and barred for good by any other first or later answer, a refusal or no answer
-  (`LiveReach.Failed`). `ReachProblems(requests, reach)` is an overload naming origins (`DescribeOrigin`).
+  `Content-Type`; `LiveCredentialForm` is public. `LiveReach` judges a path as sent and as written and
+  the query as 15.4 says, below `{r}` only item 4's three forms, and refuses any `Host` header, read raw.
+  Each path takes only the methods the app and the command send it (ordinal): GET, but GET or POST for
+  `pullrequests` and `refs`, GET or PATCH for `pullrequests/{n}`. GitLab's admits only `user`,
+  `personal_access_tokens/self`, `projects`, `projects/{id}` and `…/repository/branches` by GET,
+  `…/merge_requests` by GET or POST, `…/merge_requests/{iid}` by GET, PUT or DELETE and a branch by
+  DELETE. A query parameter named `…token` (split at `&` and `;`), `PRIVATE_TOKEN` and `JOB_TOKEN` are
+  credentials. D374's Basic is taken by the check that admits it and barred for good by any other first
+  or later answer, a refusal by either check (`LiveReach.Refused`) or no answer (`LiveReach.Failed`).
+  `ReachProblems(requests, reach)` is an overload naming origins (`DescribeOrigin`).
 - Shared parts: `LiveServiceApi`, `LiveServiceAnswer` and the fakes beside in `LiveProbes.cs`;
   `LiveSteps` in `AzureDevOpsLiveTests.cs`, `LiveApp` in `GitLabLiveTests.cs`. The fixtures have
   internal constructors over a file, so `LiveSafetyTests` drives the internal steps over stubs.
@@ -3946,12 +3952,18 @@ only; where the build differs or settles what was open:
   ahead from `<branch>-even` once its refs POST took. GitLab's `-even` is pushed through the app. A
   probe with no answer breaks its premise (D373, D374, duplicate, missing branch).
 - Clean-up and Check_1's leftovers send each call on its own (`LiveSteps.AttemptAsync`); the refs
-  delete goes beside the fake's; `RefFailures` fails each ref a 200 left.
+  delete goes beside the fake's; `RefFailures` fails each ref a 200 left. A GitLab merge request is the
+  sandbox's own only when both its project ids are equal numbers.
 - info/refs probes go as git (`git/<version>`, `Accept: */*`, `Git-Protocol: version=2`), the core
   area as A1 sends it; run.txt adds git's version, the clone's time, the create's status and the head.
 - The screen: the sign-in query, `hid=` and a sign-in `context=` first; the zero GUID is never learned
-  (`ZeroId`); address runs end at blanks, quotes, brackets, `,` and `;`, and a kept one holds one `@`
-  once decoded; data files are searched JSON-escaped and in their decoded strings. The Git area id was confirmed against g1's captures by the review.
+  (`ZeroId`); address runs end at blanks, brackets, `,`, `;` and quotes not between letters, digits or
+  `.`; a JSON string or git line address-shaped whole is learned whole; a kept one holds one `@` once
+  decoded; data files are searched JSON-escaped and in their decoded strings. `Apply` takes a JSON
+  escape or character reference as the organization's boundary, and a learned address with `&#64;` or
+  `&#x40;` too. `SurvivorIn` (amending 15.3) also reports any `hid=` value, and decodes JSON's escapes
+  and HTML's references as well as percent escapes until a pass changes nothing; `LearnText` reads
+  `hid=` and `context=` in those decodings too. The Git area id was confirmed against g1's captures.
 - For the lead: the live classes are built, never run (risks: the log-line wait, the push dialog,
   `accounts.json`'s record); CLAUDE.md's rows and the csproj's comment are the lead's (15.9). No file
   outside 15.1's list changed.

@@ -91,7 +91,7 @@ internal sealed class LiveRequestLog : DelegatingHandler
         this.store = store;
     }
 
-    /// <summary>A new provider's log (15.4): every request passes <paramref name="reach"/>'s guard (D352, D371, D374) before it leaves, and a refusal names the origin, never the path.</summary>
+    /// <summary>A new provider's log (15.4): every request passes <paramref name="reach"/>'s guard (D352, D371, D374) before it leaves, and a refusal names the method and the origin, never the path.</summary>
     public LiveRequestLog(HttpMessageHandler inner, Store store, LiveReach reach)
         : this(inner, store)
     {
@@ -146,7 +146,11 @@ internal sealed class LiveRequestLog : DelegatingHandler
         return response;
     }
 
-    /// <summary>A new provider's request: the guard first, then the record with its form, request id and kept headers; a redirect is the answer, never followed (the inner handler follows none).</summary>
+    /// <summary>
+    /// A new provider's request: the guard first (the <c>Host</c> header, then the method, the URL and
+    /// the credential), telling the reach of a refusal by either check; then the record with its form,
+    /// request id and kept headers; a redirect is the answer, never followed (the inner handler follows none).
+    /// </summary>
     private async Task<HttpResponseMessage> SendWithinAsync(LiveReach within, HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var time = DateTimeOffset.UtcNow;
@@ -161,9 +165,10 @@ internal sealed class LiveRequestLog : DelegatingHandler
                 KeptHeaders = response is null ? new Dictionary<string, string>() : KeptOf(response),
             };
 
-        if ((LiveReach.HostRefusalOf(request, within) ?? within.RefusalOf(uri, form)) is { } refusal)
+        if ((LiveReach.HostRefusalOf(request, within) ?? within.RefusalOf(request.Method, uri, form)) is { } refusal)
         {
             store.Add(Record(null, "refused: " + refusal, null));
+            within.Refused(uri, form);
             throw new HttpRequestException($"The live command refused {request.Method.Method} {uri.Scheme}://{uri.Authority}: {refusal} (D352, D371).");
         }
 
@@ -396,12 +401,13 @@ public enum LiveCredentialForm
 
 /// <summary>
 /// D352's guard for a new provider (15.4; D371, D374): what the live command's requests may reach
-/// with which credential. <see cref="RefusalOf"/> judges a request before it leaves, naming the
-/// origin and never the path; <see cref="Answered"/> sees each answer (D374's 404). Safe from any thread.
+/// with which method and credential. <see cref="HostRefusalOf"/> and <see cref="RefusalOf"/> judge a
+/// request before it leaves, naming the method and the origin and never the path; <see cref="Refused"/>
+/// sees a refusal by either, <see cref="Answered"/> each answer (D374's 404). Safe from any thread.
 /// </summary>
 internal abstract class LiveReach
 {
-    private static readonly string[] QueryTokens = ["private_token", "access_token", "job_token"];
+    protected static readonly string[] Get = ["GET"];
 
     public abstract HostingProvider Provider { get; }
 
@@ -415,10 +421,15 @@ internal abstract class LiveReach
     public static AzureDevOpsReach AzureDevOps(string organization, string project, string repository, string? madeUpOrganization = null) =>
         new(organization, project, repository, madeUpOrganization ?? AzureDevOpsReach.DrawMadeUpOrganization());
 
-    /// <summary>GitLab's guard: <c>https://gitlab.com:443/api/v4/</c> alone, Bearer or no credential (D349).</summary>
+    /// <summary>GitLab's guard: the app's and the command's paths under <c>https://gitlab.com:443/api/v4/</c> alone, each with their methods, Bearer or no credential (D349).</summary>
     public static GitLabReach GitLab() => new();
 
-    /// <summary>The credential's form: a query token, <c>PRIVATE-TOKEN</c>, <c>JOB-TOKEN</c>, else <c>Authorization</c>'s scheme (two values: another scheme).</summary>
+    /// <summary>
+    /// The credential's form: a query token (any parameter whose decoded name, before any <c>[</c>,
+    /// ends in <c>token</c>, case ignored, the query split at <c>&amp;</c> and <c>;</c>),
+    /// <c>PRIVATE-TOKEN</c> or <c>PRIVATE_TOKEN</c>, <c>JOB-TOKEN</c> or <c>JOB_TOKEN</c>, else
+    /// <c>Authorization</c>'s scheme (two values: another scheme).
+    /// </summary>
     public static LiveCredentialForm FormOf(HttpRequestMessage request)
     {
         ArgumentNullException.ThrowIfNull(request);
@@ -427,12 +438,12 @@ internal abstract class LiveReach
             return LiveCredentialForm.QueryToken;
         }
 
-        if (request.Headers.Contains("PRIVATE-TOKEN"))
+        if (request.Headers.Contains("PRIVATE-TOKEN") || request.Headers.Contains("PRIVATE_TOKEN"))
         {
             return LiveCredentialForm.PrivateToken;
         }
 
-        if (request.Headers.Contains("JOB-TOKEN"))
+        if (request.Headers.Contains("JOB-TOKEN") || request.Headers.Contains("JOB_TOKEN"))
         {
             return LiveCredentialForm.JobToken;
         }
@@ -449,22 +460,27 @@ internal abstract class LiveReach
             : LiveCredentialForm.OtherScheme;
     }
 
-    /// <summary>Why a request to <paramref name="uri"/> with <paramref name="form"/> must not leave, or null; never names the path.</summary>
-    public abstract string? RefusalOf(Uri uri, LiveCredentialForm form);
+    /// <summary>
+    /// Why a <paramref name="method"/> request to <paramref name="uri"/> with <paramref name="form"/>
+    /// must not leave, or null: each admitted path takes only the methods the app and the command send
+    /// to it, compared ordinally (<c>get</c> is none). Names the method and the origin, never the path.
+    /// </summary>
+    public abstract string? RefusalOf(HttpMethod method, Uri uri, LiveCredentialForm form);
 
     /// <summary>
-    /// Why <paramref name="request"/>'s <c>Host</c> header keeps it from leaving, or null: one set to
-    /// another authority than its URL's, which <c>SocketsHttpHandler</c> would send as the TLS server
-    /// name and the <c>Host</c>, with the credential, while the URL the guard judges and the store
-    /// records names the origin. Names the origin, never the header's value. No request of the app's
-    /// or of the command's sets it.
+    /// Why <paramref name="request"/>'s <c>Host</c> header keeps it from leaving, or null: any
+    /// <c>Host</c> header at all, judged on the raw headers (<c>NonValidated</c>), so that a value that
+    /// does not parse counts too. <c>SocketsHttpHandler</c> would send it as the TLS server name and the
+    /// <c>Host</c>, or beside its own, with the credential, while the URL the guard judges and the store
+    /// records names the origin. No request of the app's or of the command's sets one. Names the
+    /// origin, never the header's value.
     /// </summary>
     public static string? HostRefusalOf(HttpRequestMessage request, LiveReach within)
     {
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(within);
-        return request.Headers.Host is { } host && request.RequestUri is { } uri && !string.Equals(host, uri.Authority, StringComparison.OrdinalIgnoreCase)
-            ? $"its Host header names another authority than {within.Origin}"
+        return request.Headers.NonValidated.Contains("Host")
+            ? $"it sets a Host header, which no request of the app's or the command's to {within.Origin} sets"
             : null;
     }
 
@@ -477,6 +493,18 @@ internal abstract class LiveReach
     public virtual void Failed(Uri uri, LiveCredentialForm form)
     {
     }
+
+    /// <summary>Sees a request that either check (<see cref="HostRefusalOf"/>, <see cref="RefusalOf"/>) refused, so that it never left.</summary>
+    public virtual void Refused(Uri uri, LiveCredentialForm form)
+    {
+    }
+
+    /// <summary>Whether <paramref name="method"/> is one of <paramref name="methods"/>, compared ordinally as sent.</summary>
+    protected static bool Takes(string[] methods, HttpMethod method) => methods.Contains(method.Method, StringComparer.Ordinal);
+
+    /// <summary>What a refusal of <paramref name="method"/> on an admitted path says: the method and the origin, never the path.</summary>
+    protected string MethodRefusal(HttpMethod method) =>
+        $"{method.Method} is none of the methods the app or the command sends to that path on {Origin} (D352, D371)";
 
     /// <summary>Whether <paramref name="uri"/> is <c>https</c> on <see cref="Host"/> at port 443.</summary>
     protected bool OnOrigin(Uri uri) =>
@@ -501,14 +529,17 @@ internal abstract class LiveReach
     /// <summary>A decoded segment that is <c>.</c> or <c>..</c>.</summary>
     protected static bool IsDotSegment(string raw) => Uri.UnescapeDataString(raw) is "." or "..";
 
+    /// <summary>The query's parameters as written, split at <c>&amp;</c> and at <c>;</c>, which a server may read as a separator too.</summary>
+    private static string[] QueryPairs(Uri uri) => uri.Query.TrimStart('?').Split(['&', ';'], StringSplitOptions.RemoveEmptyEntries);
+
     /// <summary>The names of the query's parameters, decoded, in order (a repeated one as often as it shows).</summary>
     protected static IReadOnlyList<string> QueryNames(Uri uri) =>
-        [.. uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries).Select(pair => Uri.UnescapeDataString(pair.Split('=', 2)[0]))];
+        [.. QueryPairs(uri).Select(pair => Uri.UnescapeDataString(pair.Split('=', 2)[0]))];
 
     /// <summary>The value of the query's <paramref name="name"/> (decoded, case ignored), or null.</summary>
     protected static string? QueryValue(Uri uri, string name)
     {
-        foreach (var pair in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        foreach (var pair in QueryPairs(uri))
         {
             var parts = pair.Split('=', 2);
             if (string.Equals(Uri.UnescapeDataString(parts[0]), name, StringComparison.OrdinalIgnoreCase))
@@ -520,21 +551,29 @@ internal abstract class LiveReach
         return null;
     }
 
-    private static bool HasQueryToken(Uri uri) => QueryTokens.Any(name => QueryValue(uri, name) is not null);
+    /// <summary>Whether a parameter's decoded name, before any <c>[</c>, ends in <c>token</c>, case ignored: none of the app's or the command's does.</summary>
+    private static bool HasQueryToken(Uri uri) =>
+        QueryNames(uri).Any(name => name.Split('[', 2)[0].Trim().EndsWith("token", StringComparison.OrdinalIgnoreCase));
 }
 
 /// <summary>
 /// Azure DevOps' guard (15.4): <c>https://dev.azure.com:443</c> alone, Basic or no credential, no
 /// segment empty, <c>.</c>, <c>..</c> or holding <c>/</c>, <c>\</c> or <c>%</c> once decoded, and only
 /// the sandbox's paths (below its repository's API path only <c>pullrequests</c>,
-/// <c>pullrequests/{n}</c> and <c>refs</c>) and D374's made-up organization's connectionData, compared without case, and
-/// only the query parameters the app's client and the command send (<see cref="SentQueryNames"/>),
-/// none repeated; <c>organizationName</c> only on the root form of the core area, naming the sandbox's
+/// <c>pullrequests/{n}</c> and <c>refs</c>) and D374's made-up organization's connectionData, compared
+/// without case, each with the methods the app and the command send it alone: GET, but GET or POST
+/// for <c>pullrequests</c> and <c>refs</c> and GET or PATCH for <c>pullrequests/{n}</c>; and only the
+/// query parameters the app's client and the command send (<see cref="SentQueryNames"/>), none
+/// repeated; <c>organizationName</c> only on the root form of the core area, naming the sandbox's
 /// organization. D374's read with the token is admitted once per guard (per run), after its 404, and
-/// never once the read without a credential was answered otherwise, refused or left unanswered.
+/// never once the read without a credential was answered otherwise, refused by any check or left unanswered.
 /// </summary>
 internal sealed class AzureDevOpsReach : LiveReach
 {
+    private static readonly string[] GetOrPost = ["GET", "POST"];
+
+    private static readonly string[] GetOrPatch = ["GET", "PATCH"];
+
     /// <summary>
     /// The query parameters the app's client (6.5: <c>api-version</c>, <c>$top</c>, <c>$skip</c>,
     /// <c>searchCriteria.status</c>) and the command (<c>filter</c> of the refs read, <c>service</c> of
@@ -575,10 +614,11 @@ internal sealed class AzureDevOpsReach : LiveReach
     /// <summary>A new made-up organization's name (D374).</summary>
     public static string DrawMadeUpOrganization() => "vc-none-" + Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(6));
 
-    public override string? RefusalOf(Uri uri, LiveCredentialForm form)
+    public override string? RefusalOf(HttpMethod method, Uri uri, LiveCredentialForm form)
     {
+        ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(uri);
-        var refusal = RefusalCore(uri, form);
+        var refusal = RefusalCore(method, uri, form);
         if (refusal is not null && form == LiveCredentialForm.None && IsMadeUpConnectionData(SegmentsOf(uri)))
         {
             lock (_gate)
@@ -590,7 +630,7 @@ internal sealed class AzureDevOpsReach : LiveReach
         return refusal;
     }
 
-    private string? RefusalCore(Uri uri, LiveCredentialForm form)
+    private string? RefusalCore(HttpMethod method, Uri uri, LiveCredentialForm form)
     {
         if (!OnOrigin(uri))
         {
@@ -613,7 +653,18 @@ internal sealed class AzureDevOpsReach : LiveReach
             return query;
         }
 
-        return Admits(s, uri, form) ? null : $"the path is none of the sandbox's on {Origin} (D352, D371, D374)";
+        var none = $"the path is none of the sandbox's on {Origin} (D352, D371, D374)";
+        if (MethodsOf(s, uri) is not { } methods)
+        {
+            return none;
+        }
+
+        if (!Takes(methods, method))
+        {
+            return MethodRefusal(method);
+        }
+
+        return !IsMadeUpConnectionData(s) || form == LiveCredentialForm.None || TakeMadeUpTokenRead() ? null : none;
     }
 
     /// <summary>Why the query keeps the request from leaving, or null: a repeated parameter, or one that neither the app's client nor the command sends; <c>organizationName</c> only on the root form of the core area. Names no parameter.</summary>
@@ -658,6 +709,19 @@ internal sealed class AzureDevOpsReach : LiveReach
     public override void Failed(Uri uri, LiveCredentialForm form)
     {
         ArgumentNullException.ThrowIfNull(uri);
+        Bar(uri, form);
+    }
+
+    /// <summary>A refused read of D374's path bars the read with the token as an unanswered one does, whichever check refused it (15.4 item 6).</summary>
+    public override void Refused(Uri uri, LiveCredentialForm form)
+    {
+        ArgumentNullException.ThrowIfNull(uri);
+        Bar(uri, form);
+    }
+
+    /// <summary>For D374's path: without a credential, bars the read with the token for good; with one, closes the gate that admits it.</summary>
+    private void Bar(Uri uri, LiveCredentialForm form)
+    {
         if (!IsMadeUpConnectionData(SegmentsOf(uri)))
         {
             return;
@@ -676,69 +740,68 @@ internal sealed class AzureDevOpsReach : LiveReach
         }
     }
 
-    private bool Admits(string[] s, Uri uri, LiveCredentialForm form)
+    /// <summary>D374's read with the token: once per guard, which is once per run, and only while every answer without a credential was 404; the check that admits it takes it.</summary>
+    private bool TakeMadeUpTokenRead()
+    {
+        lock (_gate)
+        {
+            if (_madeUpAnswer != 404 || _madeUpBarred || _madeUpTokenAdmitted)
+            {
+                return false;
+            }
+
+            _madeUpTokenAdmitted = true;
+            return true;
+        }
+    }
+
+    /// <summary>The methods the app and the command send to the path <paramref name="s"/> (15.4's items 1 to 6), or null for a path that is none of them.</summary>
+    private string[]? MethodsOf(string[] s, Uri uri)
     {
         if (s.Length == 3 && Is(s[0], _organization) && Is(s[1], "_apis") && Is(s[2], "connectionData"))
         {
-            return true;
+            return Get;
         }
 
         if ((s.Length == 3 && Is(s[0], "_apis") && Is(s[1], "resourceAreas") && Is(s[2], AzureDevOpsApi.CoreAreaId) && QueryValue(uri, "organizationName") is { } name && Is(name, _organization))
             || (s.Length == 4 && Is(s[0], _organization) && Is(s[1], "_apis") && Is(s[2], "resourceAreas") && Is(s[3], AzureDevOpsApi.CoreAreaId)))
         {
-            return true;
+            return Get;
         }
 
         var inProject = s.Length >= 3 && Is(s[0], _organization) && Is(s[1], _project);
         if (inProject && s.Length == 5 && Is(s[2], "_apis") && Is(s[3], "git") && Is(s[4], "repositories"))
         {
-            return true;
+            return Get;
         }
 
-        if (inProject && s.Length >= 6 && Is(s[2], "_apis") && Is(s[3], "git") && Is(s[4], "repositories") && Is(s[5], _repository) && IsSentBelowRepository(s[6..]))
+        if (inProject && s.Length >= 6 && Is(s[2], "_apis") && Is(s[3], "git") && Is(s[4], "repositories") && Is(s[5], _repository))
         {
-            return true;
+            return MethodsBelowRepository(s[6..]);
         }
 
         if (inProject && s.Length >= 5 && Is(s[2], "_git") && Is(s[3], _repository))
         {
-            return true;
+            return Get;
         }
 
-        if (IsMadeUpConnectionData(s))
-        {
-            if (form == LiveCredentialForm.None)
-            {
-                return true;
-            }
-
-            lock (_gate)
-            {
-                // Once per guard, which is once per run, and only while every answer without a
-                // credential was 404: the check that admits it takes it.
-                if (_madeUpAnswer != 404 || _madeUpBarred || _madeUpTokenAdmitted)
-                {
-                    return false;
-                }
-
-                _madeUpTokenAdmitted = true;
-                return true;
-            }
-        }
-
-        return false;
+        return IsMadeUpConnectionData(s) ? Get : null;
     }
 
     /// <summary>
-    /// Whether <paramref name="tail"/>, the segments below <c>{o}/{p}/_apis/git/repositories/{r}</c>, is
-    /// one the app's client (6.5: the repository itself, <c>pullrequests</c>) or the command
-    /// (<c>pullrequests/{n}</c>, <c>refs</c>) sends: below the repository a segment can name another
-    /// collection or repository (Forks' <c>forks/{collectionId}</c>), so nothing else is admitted.
+    /// The methods for <paramref name="tail"/>, the segments below <c>{o}/{p}/_apis/git/repositories/{r}</c>,
+    /// that the app's client (6.5: the repository itself, <c>pullrequests</c>'s list and create) or the
+    /// command (<c>pullrequests/{n}</c>'s read and abandon, <c>refs</c>' read and POST) sends; null for
+    /// any other: below the repository a segment can name another collection or repository (Forks'
+    /// <c>forks/{collectionId}</c>), so nothing else is admitted.
     /// </summary>
-    private static bool IsSentBelowRepository(string[] tail) =>
-        tail.Length == 0
-        || (tail.Length == 1 && (Is(tail[0], "pullrequests") || Is(tail[0], "refs")))
-        || (tail.Length == 2 && Is(tail[0], "pullrequests") && tail[1].Length is > 0 and <= 10 && tail[1].All(char.IsAsciiDigit));
+    private static string[]? MethodsBelowRepository(string[] tail) => tail switch
+    {
+        [] => Get,
+        [var one] when Is(one, "pullrequests") || Is(one, "refs") => GetOrPost,
+        [var pulls, var number] when Is(pulls, "pullrequests") && number.Length is > 0 and <= 10 && number.All(char.IsAsciiDigit) => GetOrPatch,
+        _ => null,
+    };
 
     private static string[] SegmentsOf(Uri uri) => [.. uri.AbsolutePath.Split('/')[1..].Select(Uri.UnescapeDataString)];
 
@@ -748,15 +811,29 @@ internal sealed class AzureDevOpsReach : LiveReach
     private static bool Is(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 }
 
-/// <summary>GitLab's guard (15.4, D349): <c>https://gitlab.com:443/api/v4/</c> alone, Bearer or no credential, no dot segment.</summary>
+/// <summary>
+/// GitLab's guard (15.4, D349): <c>https://gitlab.com:443/api/v4/</c> alone, Bearer or no credential
+/// (a query parameter named for a token is one, <see cref="LiveReach.FormOf"/>), no empty or dot
+/// segment and no <c>\</c>, and below <c>api/v4/</c> only the paths the app's client (7: <c>user</c>,
+/// <c>projects</c>, <c>projects/{id}</c>, <c>projects/{id}/merge_requests</c>'s list and create) and
+/// the command (<c>personal_access_tokens/self</c>, a merge request's read, close and delete, the
+/// branches' list and a branch's delete) send, each with those methods alone, as written and as sent.
+/// </summary>
 internal sealed class GitLabReach : LiveReach
 {
+    private static readonly string[] GetOrPost = ["GET", "POST"];
+
+    private static readonly string[] GetPutOrDelete = ["GET", "PUT", "DELETE"];
+
+    private static readonly string[] Delete = ["DELETE"];
+
     public override HostingProvider Provider => HostingProvider.GitLab;
 
     public override string Host => "gitlab.com";
 
-    public override string? RefusalOf(Uri uri, LiveCredentialForm form)
+    public override string? RefusalOf(HttpMethod method, Uri uri, LiveCredentialForm form)
     {
+        ArgumentNullException.ThrowIfNull(method);
         ArgumentNullException.ThrowIfNull(uri);
         if (!OnOrigin(uri))
         {
@@ -769,11 +846,31 @@ internal sealed class GitLabReach : LiveReach
         }
 
         var segments = RawSegments(uri).ToList();
-        if (segments.Any(raw => raw.Length < 3 || raw[0] != "api" || raw[1] != "v4" || raw.Any(IsDotSegment) || raw.Any(segment => segment.Contains('\\', StringComparison.Ordinal))))
+        if (segments.Any(raw => raw.Length < 3 || raw[0] != "api" || raw[1] != "v4" || raw.Any(segment => segment.Length == 0 || IsDotSegment(segment) || segment.Contains('\\', StringComparison.Ordinal))))
         {
             return $"the path is not under {Origin}/api/v4/";
         }
 
-        return null;
+        var methods = segments.Select(raw => MethodsOf(raw[2..])).ToList();
+        if (methods.Any(each => each is null))
+        {
+            return $"the path is none that the app or the command sends under {Origin}/api/v4/ (D349)";
+        }
+
+        return methods.All(each => Takes(each!, method)) ? null : MethodRefusal(method);
     }
+
+    /// <summary>The methods the app and the command send to <paramref name="path"/>, the raw segments below <c>api/v4/</c>, or null for a path they never send.</summary>
+    private static string[]? MethodsOf(string[] path) => path switch
+    {
+        ["user"] => Get,
+        ["personal_access_tokens", "self"] => Get,
+        ["projects"] => Get,
+        ["projects", _] => Get,
+        ["projects", _, "merge_requests"] => GetOrPost,
+        ["projects", _, "merge_requests", var iid] when iid.Length <= 10 && iid.All(char.IsAsciiDigit) => GetPutOrDelete,
+        ["projects", _, "repository", "branches"] => Get,
+        ["projects", _, "repository", "branches", _] => Delete,
+        _ => null,
+    };
 }
