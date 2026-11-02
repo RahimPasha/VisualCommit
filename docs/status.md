@@ -404,8 +404,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 Wave 3's WP-S is merged at `bdc92c3` (D383; D382 amended); its lagged list and whole default run
 passed and CI's run on `a924cda` is green (Notes, CI section). Next: WP-LIVE's stage 1 (15.1,
 `wip/p7b-live1`: `Check_1`, `Check_1b_probes` where 15.5's sums need it, `Check_2` and Azure DevOps'
-`Check_4`, with 15.2 to 15.6's settings, screen, guard and request log), built, reviewed and hunted
-in a worktree; only its offline `LiveSafetyTests` and `LiveScreenTests` run there. Its run against the
+`Check_4`, with 15.2 to 15.6's settings, screen, guard and request log) is being built, reviewed and
+hunted on `wip/p7b-live1` in a worktree made from `af98f37` under `D:/Projects/Personal/vc-wt/p7b-live1`
+(a session that finds it after a break reads `git log af98f37..` there first); only its offline
+`LiveSafetyTests` and `LiveScreenTests` run there. Its run against the
 real services waits for the owner's 15.8 steps (Waiting on the owner: on 2026-11-02 the four new
 variables were not set), the owner told and present, the variables given to the command's process
 from the user scope (15.8). Then WP-LF, before part A's checks are written. Until the reset of
