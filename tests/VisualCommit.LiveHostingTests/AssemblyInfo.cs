@@ -30,8 +30,8 @@ namespace VisualCommit.LiveHostingTests
         /// 30 s: Azure DevOps' Check_1 sends 4 calls and 6 for five leftovers (5 abandons and one refs
         /// POST), 300 s; its Check_1b_probes 16 calls, the first of them the identity read, and 16 to
         /// the fake, 560 s; its Check_2 the identity and the sandbox's reads and five app steps and the
-        /// clone, 480 s; its Check_2b_probes 9 probes, two polls and the clean-up's 5 calls, with 9 to
-        /// the fake, 525 s; its Check_4 the identity, three app steps and the clone, 330 s. GitLab's
+        /// clone, 480 s; its Check_2b_probes 9 probes, two polls and the clean-up's 5 calls, with 10 to
+        /// the fake (its refs delete beside the clean-up's among them), 530 s; its Check_4 the identity, three app steps and the clone, 330 s. GitLab's
         /// Check_1 sends 4 calls and 15 for five leftovers (each request's close and delete, each
         /// branch's delete), 570 s; its Check_1b_probes 6 calls and 7 to the fake, 215 s; its Check_2
         /// the two reads, six app steps (two pushes) and the clone, 540 s; its Check_2b_probes 5 probes

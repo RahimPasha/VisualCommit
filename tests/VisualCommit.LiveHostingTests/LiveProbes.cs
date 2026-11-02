@@ -701,15 +701,19 @@ internal sealed class LiveAzureFake : IAsyncDisposable
     private readonly TempRepo _source;
     private readonly FakeAzureDevOps _fake;
 
-    private LiveAzureFake(TempDirectory folder, TempRepo source, FakeAzureDevOps fake, AzureDevOpsLiveApi api)
+    private LiveAzureFake(TempDirectory folder, TempRepo source, FakeAzureDevOps fake, AzureDevOpsLiveApi api, IReadOnlyDictionary<string, string> tips)
     {
         _folder = folder;
         _source = source;
         _fake = fake;
         Api = api;
+        Tips = tips;
     }
 
     public AzureDevOpsLiveApi Api { get; }
+
+    /// <summary>The tips of the fake's run's branch and branch with nothing ahead, by full ref name (<c>refs/heads/…</c>), for its side of the clean-up's refs delete (15.7).</summary>
+    public IReadOnlyDictionary<string, string> Tips { get; }
 
     /// <summary>The names the fake's side replaces before a comparison.</summary>
     public IReadOnlyList<string> Names => [Organization, Api.Sandbox.Project, Api.Sandbox.Repository];
@@ -723,7 +727,7 @@ internal sealed class LiveAzureFake : IAsyncDisposable
         try
         {
             source = await TempRepo.CreateAsync("live-azure-source");
-            await BranchesAsync(source, branch, even);
+            var tips = await BranchesAsync(source, branch, even);
             fake = FakeAzureDevOps.InProcess(folder.Combine("azure"));
             fake.AddOrganization(Organization);
             fake.AddProject(Organization, project);
@@ -731,7 +735,7 @@ internal sealed class LiveAzureFake : IAsyncDisposable
             var token = fake.AddToken(Organization, user);
             await fake.AddRepositoryAsync(Organization, project, repository, source.Path, ct: ct);
             var api = new AzureDevOpsLiveApi(new LiveAzureSandbox(Organization, project, repository, token), fake.CreateHandler(), fake.Endpoints.WebBase, LiveServiceApi.FakeCallLimit, new LiveScreen());
-            return new LiveAzureFake(folder, source, fake, api);
+            return new LiveAzureFake(folder, source, fake, api, tips);
         }
         catch
         {
@@ -754,22 +758,26 @@ internal sealed class LiveAzureFake : IAsyncDisposable
         _folder.Dispose();
     }
 
-    /// <summary>A README on <c>main</c>; <paramref name="branch"/> one commit ahead of it and <paramref name="even"/> at it, each when given (both fakes beside).</summary>
-    internal static async Task BranchesAsync(TempRepo source, string? branch, string? even)
+    /// <summary>A README on <c>main</c>; <paramref name="branch"/> one commit ahead of it and <paramref name="even"/> at it, each when given (both fakes beside): the given branches' tips by full ref name.</summary>
+    internal static async Task<IReadOnlyDictionary<string, string>> BranchesAsync(TempRepo source, string? branch, string? even)
     {
-        await source.CommitFileAsAsync("README.md", "The fake's namesake of the sandbox.\n", "Initial commit", "Sandbox author", "sandbox-author@example.com");
+        var tips = new Dictionary<string, string>(StringComparer.Ordinal);
+        var main = await source.CommitFileAsAsync("README.md", "The fake's namesake of the sandbox.\n", "Initial commit", "Sandbox author", "sandbox-author@example.com");
         if (even is not null)
         {
             await source.CreateBranchAsync(even);
+            tips[LiveLeftovers.HeadsPrefix + even] = main;
         }
 
         if (branch is not null)
         {
             await source.CreateBranchAsync(branch);
             await source.CheckoutAsync(branch);
-            await source.CommitFileAsAsync("visualcommit-live/fake.txt", "The fake's side of the run's commit.\n", LiveSteps.IdentityName, LiveSteps.IdentityName, LiveScreen.KeptAddress);
+            tips[LiveLeftovers.HeadsPrefix + branch] = await source.CommitFileAsAsync("visualcommit-live/fake.txt", "The fake's side of the run's commit.\n", LiveSteps.IdentityName, LiveSteps.IdentityName, LiveScreen.KeptAddress);
             await source.CheckoutAsync(DefaultBranch);
         }
+
+        return tips;
     }
 }
 

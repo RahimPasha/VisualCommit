@@ -128,12 +128,82 @@ internal sealed class AzureDevOpsLiveApi : LiveServiceApi
     public static bool RefUpdated(LiveServiceAnswer answer)
     {
         ArgumentNullException.ThrowIfNull(answer);
-        return answer.Status == 200
-            && answer.Json is { ValueKind: JsonValueKind.Object } json
-            && json.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Array && value.GetArrayLength() > 0
-            && value[0].TryGetProperty("success", out var success) && success.ValueKind == JsonValueKind.True
-            && (!value[0].TryGetProperty("updateStatus", out var status) || string.Equals(status.GetString(), "succeeded", StringComparison.OrdinalIgnoreCase));
+        return answer.Status == 200 && UpdatesOf(answer) is [var first, ..] && Took(first);
     }
+
+    /// <summary>
+    /// The refs of a 200 refs POST that sent <paramref name="names"/> whose update did not take, one
+    /// line each naming the ref (a <c>visualcommit-live/</c> name of the run's) and its
+    /// <c>updateStatus</c>: Azure DevOps answers 200 even when an update failed, so each item's
+    /// <c>success</c> must be true and its <c>updateStatus</c> <c>succeeded</c> when given. An item is
+    /// matched by its <c>name</c>, else by its position; an answer with no <c>value</c> list or another
+    /// count of items than refs sent fails too. Empty when every update took.
+    /// </summary>
+    public static IReadOnlyList<string> RefFailures(LiveServiceAnswer answer, IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        ArgumentNullException.ThrowIfNull(names);
+        if (UpdatesOf(answer) is not { } items)
+        {
+            return [$"the refs POST answered {answer.Status.ToString(CultureInfo.InvariantCulture)} with no value list, so no update of {string.Join(", ", names)} is shown to have taken"];
+        }
+
+        var failures = new List<string>();
+        if (items.Count != names.Count)
+        {
+            failures.Add($"the refs POST answered {Show(items.Count)} updates for {Show(names.Count)} refs");
+        }
+
+        for (var i = 0; i < names.Count; i++)
+        {
+            var name = names[i];
+            JsonElement? item = items.FindIndex(update => NameOf(update) == name) is var named and >= 0
+                ? items[named]
+                : i < items.Count && (NameOf(items[i]) is not { } other || !names.Contains(other, StringComparer.Ordinal)) ? items[i] : null;
+            if (item is not { } update)
+            {
+                failures.Add($"{name}: no update in the answer");
+            }
+            else if (!Took(update))
+            {
+                failures.Add($"{name}: success {Text(update, "success")}, updateStatus {Text(update, "updateStatus")}");
+            }
+        }
+
+        return failures;
+    }
+
+    /// <summary>A refs POST's updates for a note, by position and naming no ref (15.7): each one's <c>success</c> and <c>updateStatus</c>, and the first one's member names.</summary>
+    public static string RefItems(LiveServiceAnswer answer)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        if (UpdatesOf(answer) is not { } items)
+        {
+            return "no value list";
+        }
+
+        var each = items.Select((update, i) => $"{Show(i + 1)} success {Text(update, "success")}, updateStatus {Text(update, "updateStatus")}");
+        var members = items is [{ ValueKind: JsonValueKind.Object } first, ..] ? $"; the first's members {string.Join(", ", first.EnumerateObject().Select(member => member.Name))}" : string.Empty;
+        return $"{Show(items.Count)} updates: {(items.Count == 0 ? "none" : string.Join("; ", each))}{members}";
+    }
+
+    private static List<JsonElement>? UpdatesOf(LiveServiceAnswer answer) =>
+        answer.Json is { ValueKind: JsonValueKind.Object } json && json.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Array
+            ? [.. value.EnumerateArray()]
+            : null;
+
+    private static string? NameOf(JsonElement update) =>
+        update.ValueKind == JsonValueKind.Object && update.TryGetProperty("name", out var name) && name.ValueKind == JsonValueKind.String ? name.GetString() : null;
+
+    private static bool Took(JsonElement update) =>
+        update.ValueKind == JsonValueKind.Object
+        && update.TryGetProperty("success", out var success) && success.ValueKind == JsonValueKind.True
+        && (!update.TryGetProperty("updateStatus", out var status) || string.Equals(status.GetString(), "succeeded", StringComparison.OrdinalIgnoreCase));
+
+    private static string Text(JsonElement update, string name) =>
+        update.ValueKind == JsonValueKind.Object && update.TryGetProperty(name, out var value)
+            ? value.ValueKind == JsonValueKind.String ? value.GetString() ?? "null" : value.GetRawText()
+            : "not given";
 
     /// <summary>One <c>POST …/refs</c> deleting <paramref name="refs"/> (a zero <c>newObjectId</c> each), as answered.</summary>
     public Task<LiveServiceAnswer> DeleteRefsAsync(IEnumerable<(string Name, string ObjectId)> refs, CancellationToken ct) =>

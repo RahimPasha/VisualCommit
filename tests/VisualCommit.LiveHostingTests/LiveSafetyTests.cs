@@ -1319,6 +1319,62 @@ public sealed partial class LiveSafetyTests
     public void A_refs_post_took_only_when_its_update_says_so(int status, string body, bool took) =>
         Assert.Equal(took, AzureDevOpsLiveApi.RefUpdated(Answer(status, body)));
 
+    [Theory]
+    [InlineData("""{"value":[{"name":"refs/heads/visualcommit-live/x","success":true,"updateStatus":"succeeded"},{"name":"refs/heads/visualcommit-live/x-even","success":false,"updateStatus":"staleOldObjectId"}],"count":2}""", "refs/heads/visualcommit-live/x-even: success false, updateStatus staleOldObjectId")]
+    [InlineData("""{"value":[{"name":"refs/heads/visualcommit-live/x-even","success":false,"updateStatus":"rejectedByPolicy"},{"name":"refs/heads/visualcommit-live/x","success":true,"updateStatus":"succeeded"}],"count":2}""", "refs/heads/visualcommit-live/x-even: success false, updateStatus rejectedByPolicy")]
+    [InlineData("""{"value":[{"success":true},{"success":true,"updateStatus":"forcePushRequired"}],"count":2}""", "refs/heads/visualcommit-live/x-even: success true, updateStatus forcePushRequired")]
+    [InlineData("""{"value":[{"name":"refs/heads/visualcommit-live/x","success":true,"updateStatus":"succeeded"}],"count":1}""", "the refs POST answered 1 updates for 2 refs|refs/heads/visualcommit-live/x-even: no update in the answer")]
+    [InlineData("""{"value":[{"name":"refs/heads/visualcommit-live/x","success":true},{"name":"refs/heads/visualcommit-live/x","success":true}],"count":2}""", "refs/heads/visualcommit-live/x-even: no update in the answer")]
+    [InlineData("""{"count":2}""", "the refs POST answered 200 with no value list, so no update of refs/heads/visualcommit-live/x, refs/heads/visualcommit-live/x-even is shown to have taken")]
+    [InlineData("""{"value":[{"name":"refs/heads/visualcommit-live/x","success":true,"updateStatus":"succeeded"},{"name":"refs/heads/visualcommit-live/x-even","success":true}],"count":2}""", "")]
+    public void A_refs_post_at_200_fails_each_ref_its_answer_does_not_show_deleted(string body, string failures) =>
+        Assert.Equal(
+            failures.Split('|', StringSplitOptions.RemoveEmptyEntries),
+            AzureDevOpsLiveApi.RefFailures(Answer(200, body), ["refs/heads/visualcommit-live/x", "refs/heads/visualcommit-live/x-even"]));
+
+    [Fact]
+    public async Task The_clean_up_s_refs_delete_goes_beside_the_fake_notes_each_update_and_fails_on_one_that_did_not_take_at_200()
+    {
+        const string branch = "visualcommit-live/20261102-010203Z";
+        const string even = branch + LiveSteps.EvenSuffix;
+        using var folder = new TempDirectory("live-safety");
+        await using var fake = await LiveAzureFake.StartAsync(Project, Repository, branch, even, Cancelled);
+        Assert.Equal([LiveLeftovers.HeadsPrefix + branch, LiveLeftovers.HeadsPrefix + even], fake.Tips.Keys.Order(StringComparer.Ordinal));
+        var stub = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent($$"""{"value":[{"name":"refs/heads/{{branch}}","success":true,"updateStatus":"succeeded"},{"name":"refs/heads/{{even}}","success":false,"updateStatus":"staleOldObjectId"}],"count":2}""", Encoding.UTF8, "application/json"),
+        });
+        using var api = new AzureDevOpsLiveApi(new LiveAzureSandbox(Organization, Project, Repository, ProviderToken), new LiveRequestLog(stub, new LiveRequestLog.Store(), AzureReach()), AzureDevOpsEndpoints.Service.WebBase, TimeSpan.FromSeconds(5), new LiveScreen());
+        List<(string Name, string ObjectId)> refs = [(LiveLeftovers.HeadsPrefix + branch, "1111111111111111111111111111111111111111"), (LiveLeftovers.HeadsPrefix + even, "2222222222222222222222222222222222222222")];
+        var notes = new List<string>();
+        var run = new LiveRun(ProviderToken, folder.Combine("run.txt"), notes.Add, new LiveScreen(), HostingProvider.AzureDevOps);
+        var problems = new List<string>();
+
+        await AzureDevOpsLiveTests.DeleteRefsAsync(run, api, refs, "Clean-up: the refs POST deleting 2 branches", "deleting the run's branches", problems, Cancelled, beside: true, fake: fake);
+
+        Assert.Equal("POST", Assert.Single(stub.Requests).Method);
+        var note = Assert.Single(notes);
+        Assert.Contains("its updates: 2 updates: 1 success true, updateStatus succeeded; 2 success false, updateStatus staleOldObjectId; the first's members name, success, updateStatus", note, StringComparison.Ordinal);
+        Assert.Contains("; the fake: ", note, StringComparison.Ordinal);
+        Assert.Contains("its updates: 2 updates: 1 success true, updateStatus succeeded; 2 success true, updateStatus succeeded", note[note.IndexOf("; the fake: ", StringComparison.Ordinal)..], StringComparison.Ordinal);
+        Assert.DoesNotContain(branch, note, StringComparison.Ordinal);
+        Assert.Empty(await fake.Api.RefsAsync("heads/" + LiveLeftovers.Prefix, Cancelled));
+        var problem = Assert.Single(problems);
+        Assert.Contains(LiveLeftovers.HeadsPrefix + even + ": success false, updateStatus staleOldObjectId", problem, StringComparison.Ordinal);
+
+        notes.Clear();
+        problems.Clear();
+        await AzureDevOpsLiveTests.DeleteRefsAsync(run, api, refs, "Clean-up: the refs POST deleting 2 branches", "deleting the run's branches", problems, Cancelled, beside: true);
+        Assert.Contains("; the fake: not asked", Assert.Single(notes), StringComparison.Ordinal);
+        Assert.Single(problems);
+
+        notes.Clear();
+        problems.Clear();
+        await AzureDevOpsLiveTests.DeleteRefsAsync(run, api, refs, "Leftover branches deleted in one refs POST", "deleting the leftover branches", problems, Cancelled);
+        Assert.DoesNotContain("the fake:", Assert.Single(notes), StringComparison.Ordinal);
+        Assert.Contains("deleting the leftover branches answered 200 but did not delete everything: " + LiveLeftovers.HeadsPrefix + even, Assert.Single(problems), StringComparison.Ordinal);
+    }
+
     [Fact]
     public async Task A_poll_stops_when_the_ref_comes_holds_each_read_to_what_is_left_and_restores_the_limit()
     {

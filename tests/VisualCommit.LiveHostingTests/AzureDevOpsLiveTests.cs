@@ -103,15 +103,10 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
             var branches = LiveProviderLeftovers.Branches(refs);
             if (branches.Count > 0)
             {
-                var deleted = await api.DeleteRefsAsync(branches, Cancelled);
-                run.Note($"Leftover branches {string.Join(", ", branches.Select(reference => reference.Name))} deleted in one refs POST: {deleted}.");
-                if (deleted.Status != 200)
-                {
-                    problems.Add(api.Describe(deleted, "deleting the leftover branches"));
-                }
+                await DeleteRefsAsync(run, api, branches, $"Leftover branches {string.Join(", ", branches.Select(reference => reference.Name))} deleted in one refs POST", "deleting the leftover branches", problems, Cancelled);
             }
 
-            run.Note($"Leftovers of a stopped run: {Show(leftovers.Count)} pull requests abandoned, {Show(branches.Count)} branches deleted; {Show(refs.Count - branches.Count)} other refs not touched.");
+            run.Note($"Leftovers of a stopped run: {Show(leftovers.Count)} pull requests abandoned, {Show(branches.Count)} branches in the refs POST (each update's outcome above); {Show(refs.Count - branches.Count)} other refs not touched.");
         }
         catch (Exception ex)
         {
@@ -239,7 +234,8 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     /// duplicate, a missing branch; the abandon and the merge ref's removal; an empty title from the
     /// branch, which then has no active pull request; nothing ahead, from a branch made at the default
     /// branch's tip), then, in <c>finally</c>, the clean-up of what Check_2 handed over, whether Check_2
-    /// passed or not. A stopped run's leftovers are Check_1's (D324).
+    /// passed or not, its refs delete beside the fake's own (so the fake is disposed after it). A stopped
+    /// run's leftovers are Check_1's (D324).
     /// </summary>
     [Fact]
     public async Task Check_2b_probes()
@@ -253,6 +249,7 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         var step = "2b, the identity";
         var problems = new List<string>();
         ExceptionDispatchInfo? failure = null;
+        LiveAzureFake? fake = null;
         try
         {
             await IdentityAsync(api, problems);
@@ -260,12 +257,12 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
             step = "8, the probes";
             if (made!.Number is not { } number)
             {
-                run.Note("Check_2b. Check_2 created no pull request, so there is nothing to probe; its branches are cleaned up.");
+                run.Note("Check_2b. Check_2 created no pull request, so there is nothing to probe and the fake is not started; its branches are cleaned up.");
             }
             else
             {
                 run.Note($"Check_2b. The probes of !{Show(number)} from {made.Branch}.");
-                await using var fake = await StartFakeAsync(sandbox, made.Branch, made.Even);
+                fake = await StartFakeAsync(sandbox, made.Branch, made.Even);
                 await ProbeCreateAsync(api, fake, made, number, problems);
             }
         }
@@ -276,9 +273,15 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         }
         finally
         {
+            // The fake lives until the clean-up's refs delete has gone beside it (15.7).
             if (made is not null)
             {
-                await CleanUpAsync(api, [made.Branch, made.Even], problems);
+                await CleanUpAsync(api, fake, [made.Branch, made.Even], problems);
+            }
+
+            if (fake is not null)
+            {
+                await fake.DisposeAsync();
             }
         }
 
@@ -512,7 +515,8 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     /// and a missing branch while the draft is active; the abandon and the merge ref's removal (polled
     /// likewise); an empty title from the branch, which then has no active pull request, so that a
     /// duplicate's refusal cannot stand in for it; nothing ahead, from <see cref="LiveMade.Even"/> made
-    /// at the default branch's tip by one refs POST whose update took. The refs delete is the clean-up's.
+    /// at the default branch's tip by one refs POST whose update took. The refs delete is the clean-up's,
+    /// beside the fake's (<see cref="DeleteRefsAsync"/>).
     /// </summary>
     private async Task ProbeCreateAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, LiveMade made, int id, List<string> problems)
     {
@@ -624,8 +628,12 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         }
     }
 
-    /// <summary>15.5 step 9, Check_2b's <c>finally</c>: the run's pull requests abandoned (by their source branch, never a fork's), then one refs POST deleting the run's branches.</summary>
-    private async Task CleanUpAsync(AzureDevOpsLiveApi api, IReadOnlyList<string> branches, List<string> problems)
+    /// <summary>
+    /// 15.5 step 9, Check_2b's <c>finally</c>: the run's pull requests abandoned (by their source branch,
+    /// never a fork's), then one refs POST deleting the run's branches, beside the fake's own refs POST
+    /// deleting its namesakes (15.7; null: the fake did not start, or Check_2 created nothing to probe).
+    /// </summary>
+    private async Task CleanUpAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, IReadOnlyList<string> branches, List<string> problems)
     {
         try
         {
@@ -644,18 +652,55 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
                 .Where(reference => branches.Any(branch => reference.Name == LiveLeftovers.HeadsPrefix + branch)).ToList();
             if (refs.Count > 0)
             {
-                var deleted = await api.DeleteRefsAsync(refs, CancellationToken.None);
-                run.Note($"Clean-up: the refs POST deleting {Show(refs.Count)} branches: {deleted}. {deleted.BodyForNotes}");
-                if (deleted.Status != 200)
-                {
-                    problems.Add(api.Describe(deleted, "deleting the run's branches"));
-                }
+                await DeleteRefsAsync(run, api, refs, $"Clean-up: the refs POST deleting {Show(refs.Count)} branches", "deleting the run's branches", problems, CancellationToken.None, beside: true, fake: fake);
             }
         }
         catch (Exception ex)
         {
             problems.Add($"The clean-up failed: {ex.GetType().Name}: {api.Screen(ex.Message)}");
         }
+    }
+
+    /// <summary>
+    /// One refs POST deleting <paramref name="refs"/> (15.5, 15.7), noted as <paramref name="what"/> with
+    /// its headers, each update's <c>success</c> and <c>updateStatus</c> by position (no names) and its
+    /// body; with <paramref name="beside"/> (Check_2b's clean-up; Check_1's leftovers have no fake), also
+    /// the fake's own refs POST deleting its namesakes at its tips, compared and its updates noted (null
+    /// <paramref name="fake"/>: not asked). A status other than 200 is a problem, and so, at 200, is each
+    /// ref whose update did not take (<see cref="AzureDevOpsLiveApi.RefFailures"/>), named: a branch the
+    /// POST left in the sandbox must fail the run, though the next Check_1 retries it (D324). Internal for
+    /// <see cref="LiveSafetyTests"/>.
+    /// </summary>
+    /// <exception cref="LiveServiceException">The service sent no answer.</exception>
+    internal static async Task DeleteRefsAsync(LiveRun run, AzureDevOpsLiveApi api, IReadOnlyList<(string Name, string ObjectId)> refs, string what, string describe, List<string> problems, CancellationToken ct, bool beside = false, LiveAzureFake? fake = null)
+    {
+        ArgumentNullException.ThrowIfNull(run);
+        ArgumentNullException.ThrowIfNull(api);
+        ArgumentNullException.ThrowIfNull(refs);
+        ArgumentNullException.ThrowIfNull(problems);
+        var deleted = await api.DeleteRefsAsync(refs, ct);
+        var fakeSide = string.Empty;
+        if (beside)
+        {
+            LiveServiceAnswer? fakeAnswer = null;
+            List<(string Name, string ObjectId)> fakeRefs = fake is null ? [] : [.. refs.Where(reference => fake.Tips.ContainsKey(reference.Name)).Select(reference => (reference.Name, fake.Tips[reference.Name]))];
+            var compared = await LiveSteps.FakeBesideAsync(
+                deleted,
+                fake is null || fakeRefs.Count == 0 ? null : async () => fakeAnswer = await fake.Api.DeleteRefsAsync(fakeRefs, ct),
+                [api.Sandbox.Organization, api.Sandbox.Project, api.Sandbox.Repository, api.MadeUpOrganization],
+                fake?.Names ?? []);
+            fakeSide = $"; the fake: {compared}{(fakeAnswer is null ? string.Empty : ", its updates: " + AzureDevOpsLiveApi.RefItems(fakeAnswer))}";
+        }
+
+        run.Note($"{what}: {deleted}; {deleted.HeadersForNotes}; its updates: {AzureDevOpsLiveApi.RefItems(deleted)}{fakeSide}. {deleted.BodyForNotes}");
+        if (deleted.Status != 200)
+        {
+            problems.Add(api.Describe(deleted, describe));
+            return;
+        }
+
+        problems.AddRange(AzureDevOpsLiveApi.RefFailures(deleted, [.. refs.Select(reference => reference.Name)])
+            .Select(failure => $"The refs POST {describe} answered 200 but did not delete everything: {failure}."));
     }
 
     private static string Show(int value) => value.ToString(CultureInfo.InvariantCulture);
@@ -775,8 +820,9 @@ internal static class LiveSteps
         [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_2_the_providers_and_the_session)] = Own(2) + App(5) + LiveApp.CloneLimit,
         // The identity, the read, the duplicate, the missing branch, the abandon, the empty title, the
         // tip's read, the refs POST, nothing ahead; two polls; the clean-up's active list, two abandons,
-        // refs read and refs POST; the fake's draft, the eight probes beside and its two merge-ref reads.
-        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_2b_probes)] = Own(9) + (PollBudget * 2) + Own(5) + Fake(1 + 6 + 2),
+        // refs read and refs POST; the fake's draft, the six probes beside, its two merge-ref reads and
+        // its refs POST beside the clean-up's.
+        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_2b_probes)] = Own(9) + (PollBudget * 2) + Own(5) + Fake(1 + 6 + 2 + 1),
         // The identity; sign-in, list, load; the clone.
         [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_4_a_clone_through_the_organization_host)] = Own(1) + App(3) + LiveApp.CloneLimit,
         // The identity, the sandbox, the opened list, the branches' list; five leftovers' close, delete and branch delete.
