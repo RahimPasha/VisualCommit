@@ -3939,7 +3939,11 @@ Each point names what settles it and who meets it.
   App.Tests, Phase7a, Git.Tests and Hosting.Tests, App.Tests ran from the start (67 min 28 s of its
   own) and the run ended with Phase5Undo at about 74 min; Hosting.Tests took 17 min 12 s (+1 min 38
   s, under 0.6's 5 to 9). With App.Tests first the run is bound by App.Tests and the last lane's
-  three or four walk-throughs, not by Hosting.Tests; either order stays under 80 min.
+  three or four walk-throughs, not by Hosting.Tests. Wave 3's run (2026-11-02, 1 h 20 min 21 s,
+  7,561 tests) started Hosting.Tests, Phase6Look, Phase7a and Git.Tests; App.Tests (61 min 10 s of
+  its own) took the lane the 7a and 7b walk-throughs freed at about 17 min and ended at about 79,
+  Phase5Undo last at about 80 (24 min 30 s of its own, 13 min 56 s in wave 2); Hosting.Tests 20 min
+  2 s. Each order so far lies within 0.6's 78 to 85 min.
 - FETCH_HEAD's line for `refs/merge-requests/<iid>/head` (ASSUMED): WP-P's test on 2.56, CI on 2.43. The
   GitLab twin over HTTP before 2.46: WP-B's `CloneFromAccountTests` on CI's 2.43 containers (4.5's 301).
 - Up to three keychain reads at start (9.4) on a slow macOS store, against git's 10 s wait: CI, the gate.

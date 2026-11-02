@@ -116,11 +116,11 @@ Build:
   `564dad4` and its CLAUDE.md rows at `900ad1a`; WP-FL (the fake of GitLab, section 4) merged at
   `7780908` and WP-FA (the fake of Azure DevOps, section 3) at `e995fc4`, each with its review's
   fixes. (2026-11-01. Week: share not read.)
-- [ ] 6. The provider model for three providers: one account per provider (D348), Azure DevOps'
+- [x] 6. The provider model for three providers: one account per provider (D348), Azure DevOps'
   and GitLab's remotes recognised from their URLs (D347), their tokens in the OS keychain (R3).
   Tests. Recognition is WP-AZ's and WP-GL's (merged, steps 7 and 8); the session's accounts and
-  keychain entries per provider are WP-S's, merged at `bdc92c3` (section 9; D383). Its merge's
-  lagged list and whole default run are in Next step.
+  keychain entries per provider are WP-S's, merged at `bdc92c3` (section 9; D383), its lagged list
+  and whole default run passed (Notes), CI green (CI section). (2026-11-02. Week: share not read.)
 - [x] 7. Azure DevOps' API: a token checked at sign-in, the organization's repositories, a
   repository's pull requests, creating one; against its fake. Tests. WP-AZ (Azure DevOps' client and
   provider, section 6) merged at `767d9b9` on WP-H's core (`3591dc4`) and WP-FA's fake (`e995fc4`),
@@ -238,6 +238,12 @@ s), `ubuntu-latest` 6 min 5 s (4 min 44 s), the containers 8 min 28 s and 8 min 
 green, none failed a test, the keychain steps green. Jobs and Test steps: `windows-latest` 40 min 52 s
 (37 min 39 s), `macos-latest` 40 min 21 s (37 min 4 s), `ubuntu-latest` 6 min 22 s (4 min 55 s), the
 containers 8 min 48 s and 6 min 18 s (6 min 31 s and 4 min 33 s), each under four fifths.
+
+[41414339419](https://github.com/RahimPasha/VisualCommit/actions/runs/41414339419) on `a924cda`
+(WP-S's merge `bdc92c3`): all five jobs green, none failed a test, the keychain steps green. Jobs and
+Test steps: `windows-latest` 39 min 11 s (36 min 5 s), `macos-latest` 32 min 42 s (30 min 27 s),
+`ubuntu-latest` 5 min 39 s (4 min 20 s), the containers 9 min 26 s and 7 min 50 s (6 min 26 s and
+5 min 32 s), each under four fifths.
 
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
@@ -395,15 +401,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wave 3's WP-S (section 9) is merged at `bdc92c3`, with its reviews', hunts' and the lead's fixes
-(D383; D382 amended). Its merge closes wave 3 (9.11): the lagged list (0.4) and then the whole default
-run, through `bash scripts/heavy-run.sh`, one command at a time with nothing else running; then CI's
-run on the push. Beside them WP-LIVE's stage 1 (15.1, `wip/p7b-live1`) is built in a worktree; its
-run waits for the owner's 15.8 steps (Waiting on the owner: the four new variables were not set on
-2026-11-02), the owner told and present. 15.8's "before WP-S's merge" is read by its own reason, "so
-before stage 1": nothing in the merge, the lagged list, the whole run or stage 1's build reads the
-tokens. Then WP-LF, before part A's checks are written. Until the reset of 2026-11-05 the phase may
-use all that is left of the week's allowance and waits for the reset if it runs out (D344).
+Wave 3's WP-S is merged at `bdc92c3` (D383; D382 amended); its lagged list and whole default run
+passed and CI's run on `a924cda` is green (Notes, CI section). Next: WP-LIVE's stage 1 (15.1,
+`wip/p7b-live1`: `Check_1`, `Check_1b_probes` where 15.5's sums need it, `Check_2` and Azure DevOps'
+`Check_4`, with 15.2 to 15.6's settings, screen, guard and request log), built, reviewed and hunted
+in a worktree; only its offline `LiveSafetyTests` and `LiveScreenTests` run there. Its run against the
+real services waits for the owner's 15.8 steps (Waiting on the owner: on 2026-11-02 the four new
+variables were not set), the owner told and present, the variables given to the command's process
+from the user scope (15.8). Then WP-LF, before part A's checks are written. Until the reset of
+2026-11-05 the phase may use all that is left of the week's allowance and waits for the reset if it
+runs out (D344).
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -427,6 +434,17 @@ every commit.
   Azure DevOps parent whose name is address-shaped (D368; an echoed token cannot reach them since
   WP-S's S1). WP-LF may give `FakeAzureDevOps` a configurable web base, so that
   `ProvidersSessionSetup`'s `ServiceAnswers` shim can go (WP-S's builder's question; optional).
+- **Wave 3's closing runs** (2026-11-02, on `a924cda`, through `bash scripts/heavy-run.sh`, one at a
+  time): the lagged list with `VISUALCOMMIT_WATCHER_LAG_MS=1500`, 01:37 to 01:52, all passed (phases
+  0 to 2's part 2, 25; the App.Tests classes, 66; phase 6's, 21; 7a's walk-through, 207; 7a's six
+  wiring classes, 44; 7b's `RepositoryHostingProvidersWiringTests`, 2, the only 7b class of its line
+  that exists yet); then the whole default run, 01:52 to 03:12: 7,561 tests, 7,557 passed, 4
+  skipped, none failed, 1 h 20 min 21 s. MTP started Hosting.Tests, Phase6Look, Phase7a and
+  Git.Tests. Projects ended after: Phase6Look 10 min 17 s, Phase7a 14 min 42 s, Phase7b 17 min 27 s,
+  Hosting.Tests 20 min 2 s, phases 0 to 2's 31 min 39 s, Git.Tests 51 min 43 s, Phase3 55 min 46 s,
+  Phase5 56 min 25 s, Phase4 70 min 4 s, Phase6 77 min 45 s, App.Tests 78 min 37 s (61 min 10 s of
+  its own), Phase5Undo 80 min 16 s (16.2). The logs are `$TMP/p7b-runs/lagged-w3.txt` and
+  `full-w3.txt`.
 - **Wave 2's whole default run** (2026-11-01, 15:01 to 16:17, on `c0af1be`, through
   `bash scripts/heavy-run.sh`, four projects at once): 7,494 tests, 7,490 passed, 4 skipped (as
   wave 1's), none failed, 1 h 14 min 20 s. MTP started App.Tests, Phase7a, Git.Tests and
