@@ -1346,7 +1346,7 @@ public sealed partial class LiveSafetyTests
         const string userId = "7b0a0201-0000-4a00-8000-00000000fa4e";
         var stub = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.OK)
         {
-            Content = new StringContent($$"""{"authenticatedUser":{"id":"{{userId}}","descriptor":"Microsoft.IdentityModel.Claims.ClaimsIdentity;7b0a0202-0000-4a00-8000-00000000fa4e\\ada@corp.test","providerDisplayName":"Ada"},"instanceId":"7b0a0203-0000-4a00-8000-00000000fa4e"}"""),
+            Content = new StringContent($$"""{"authenticatedUser":{"id":"{{userId}}","descriptor":"Microsoft.IdentityModel.Claims.ClaimsIdentity;7b0a0202-0000-4a00-8000-00000000fa4e\\ada@example.com","providerDisplayName":"Ada"},"instanceId":"7b0a0203-0000-4a00-8000-00000000fa4e"}"""),
         });
         var screen = new LiveScreen();
         screen.AddOrganization(Organization);
