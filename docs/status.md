@@ -46,8 +46,9 @@ nothing but docs changed after it.
 
 Each item is ticked in the commit that completes it, and each tick, like the start of each stage,
 records the share of the plan's weekly allowance used at that point (D241). Until the reset of
-Thursday 2026-11-05 at 2:00 the stages start without that check (D344), and a checkpoint records
-the share the owner gives, or "share not read". The numbers are plain step numbers, not requirement
+Thursday 2026-11-05 at 2:00 the stages started without that check (D344); for the week from then the
+owner gives the phase about all of it (2026-11-05), and a checkpoint records the share the owner
+gives, or "share not read". The numbers are plain step numbers, not requirement
 numbers. The design (step 3) splits the steps below into work packages and says how they map onto
 them. Phase 7a's checklist, with a note on each step, is in this file as of `019e68a`'s second
 parent (`git show 3a3cc71:docs/status.md`).
@@ -410,18 +411,17 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-LIVE's stage 1 is merged at `b377aa3` (D384; CLAUDE.md's live and offline rows and the csproj's
-comment updated, 15.9). Its run with the tokens waits for the owner's 15.8 steps (Waiting on the
-owner: on 2026-11-02 the four new variables were not set). When the owner says they are set: check
-them with 15.8's true-or-false checks; in the commit that records the tokens' dates, rewrite "What to
-know"'s paragraph on the live command (the six variables, 15.8's check, 15.8's PowerShell line, the
-offline run first; 15.9); then, the owner told and present, run the offline classes alone and, only if
-they pass, stage 1 with the six variables given to the command's process from the user scope (15.8's
-line, `--filter-class "*AzureDevOpsLiveTests" --filter-class "*GitLabLiveTests"`); read
-`artifacts/live/azure-devops/` and `gitlab/run.txt` and check them, fully decoded, for the
-organization's name and the GitLab namespace before anything from them enters the repository. Then
-WP-LF (0.4), before part A's checks are written. Until the reset of 2026-11-05 the phase may use all
-that is left of the week's allowance and waits for the reset if it runs out (D344).
+WP-LIVE's stage 1 is merged at `b377aa3`; the owner's tokens are set and all six variables pass 15.8's
+checks (2026-11-05; Waiting on the owner), and the owner, told and present, gave the go-ahead for
+stage 1's run. Run the offline classes alone (`bash scripts/heavy-run.sh --project
+tests/VisualCommit.LiveHostingTests -c Release --filter-class "*LiveSafetyTests" --filter-class
+"*LiveScreenTests"`) and, only if they pass, stage 1 with the six variables given to the command's
+process from the user scope (CLAUDE.md's line, with `--filter-class "*AzureDevOpsLiveTests"
+--filter-class "*GitLabLiveTests"`); read `artifacts/live/azure-devops/` and `gitlab/run.txt` and
+check them, fully decoded, for the organization's name and the GitLab namespace before anything from
+them enters the repository; fix what the run finds in the live code (only the live project's files:
+D335) and run again. Then WP-LF (0.4), before part A's checks are written. For the week from
+2026-11-05 the owner gives the phase about all of its allowance.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -716,9 +716,16 @@ every commit.
   so both are revoked and made again, never shown anywhere (D250, D260). GitLab's first token was a
   legacy one with every scope; the new one is 15.8's fine-grained token (D375), and Azure DevOps'
   new one has Code "Read & write" alone, for D352's organization alone, at most 30 days. The lead
-  gave the owner a PowerShell script, outside the repository, that sets the four variables from
-  masked prompts and prints only 15.8's true-or-false checks; the GitLab account's user name,
-  like the organization's name, stays out of the repository.
+  gave the owner a PowerShell script, outside the repository, that sets the four variables and
+  prints only 15.8's true-or-false checks; the GitLab account's user name, like the organization's
+  name, stays out of the repository. Done on 2026-11-05: the old tokens revoked (the owner), the new
+  ones set (the script reads each from the clipboard; its first two forms lost a pasted token and
+  saved a message with it, which the lead stripped in place, printing nothing), and all six variables
+  pass 15.8's checks. GitLab's is a fine-grained token for "Only my personal projects" with 15.8's
+  permissions and a few more (Merge Request: Approve, Merge, Subscribe; Pages Domain: Read). **The
+  tokens expire**: GitHub's on 2026-11-29 (risk 42), Azure DevOps' and GitLab's on 2026-12-04 (the
+  owner's answer); the gate's two live runs fall before 2026-11-29, or the owner makes GitHub's
+  again first.
 - **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
   (the review before the gate and the runs after it: the avatars' lookup per author, git's
@@ -752,7 +759,8 @@ every commit.
   record "share not read"; for 7b the owner gave the share before the start (48 % used on
   2026-10-31) and lets the phase use the rest of that week (D344): the session asks for the share
   before each stage to record it, but until the reset of 2026-11-05 no stage waits for it
-  (plan.md's "Workflow").
+  (plan.md's "Workflow"). For the week from 2026-11-05 the owner gives the phase about all of it
+  (the owner's answer of 2026-11-05).
 - **The live command's sandbox for GitHub (D250)**: the private `RahimPasha/visualcommit-sandbox`
   and a fine-grained token for it alone, expiring 2026-11-29, in the two Windows user variables
   `VISUALCOMMIT_LIVE_GITHUB_TOKEN` and `VISUALCOMMIT_LIVE_GITHUB_REPO` (set on 2026-10-30; the

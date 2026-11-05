@@ -427,27 +427,42 @@ What to know about them:
 - Phase 7b's walk-through serves its three fakes, of Azure DevOps, GitLab and its own of GitHub, on
   ports 47397, 47398 and 47399, each falling back to a free port when its own is taken (D363, D265's
   fallback); 47396 stays reserved. Every other test uses port 0 or a fake in process.
-- The live command (`tests/VisualCommit.LiveHostingTests`, D250) acts on the owner's GitHub
-  account: it signs in, clones, lists pull requests and creates one in a private sandbox
-  repository, with a fine-grained token for that repository alone. It reads two Windows user
-  variables, set in Windows' Environment Variables dialog and never typed in a shell:
-  `VISUALCOMMIT_LIVE_GITHUB_TOKEN` (the token) and `VISUALCOMMIT_LIVE_GITHUB_REPO`
-  (`<owner>/<name>`); `docs/phase-7a-design.md` 14.6 says how the owner makes them. It runs never
+- The live command (`tests/VisualCommit.LiveHostingTests`, D250, D346) acts on the owner's accounts:
+  on GitHub, Azure DevOps and GitLab it signs in, clones, lists pull or merge requests and creates one
+  in a private sandbox. GitHub's token is a fine-grained one for that repository alone; Azure
+  DevOps' reaches D352's organization, which holds other work, so D352's guard keeps every request
+  to the sandbox; GitLab's is a fine-grained token of an account that holds only the sandbox. It
+  reads six Windows user variables, never typed in a shell or pasted anywhere:
+  `VISUALCOMMIT_LIVE_GITHUB_TOKEN` and `VISUALCOMMIT_LIVE_GITHUB_REPO` (`<owner>/<name>`;
+  `docs/phase-7a-design.md` 14.6), `VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN` and
+  `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO` (`<organization>/<project>/<repository>`), and
+  `VISUALCOMMIT_LIVE_GITLAB_TOKEN` and `VISUALCOMMIT_LIVE_GITLAB_REPO` (`<namespace>/<project>`);
+  `docs/phase-7b-design.md` 15.8 says how the owner makes them (on 2026-11-05 the owner set the four
+  new ones with a PowerShell script of the lead's, outside the repository, that reads each token
+  from the clipboard). The organization's name and GitLab's namespace never enter the repository:
+  the command's screen keeps them, addresses and ids out of every run.txt (D372, D384), and the lead
+  checks each run.txt, fully decoded, before anything from it enters the repository. It runs never
   in CI or the default run: the project is in no solution, and CI's Windows job only builds it
-  (D337). At its start it removes what a stopped run left in the sandbox (branches under
-  `visualcommit-live/` and their pull requests, D324), and it closes and deletes what it made. The
-  owner is told before it runs; at a gate it runs as D335 says (`docs/plan.md`'s Visual test gate,
-  step 4). In a session where the two variables are set, every shell inherits the token: never
-  print the whole environment (`env`, `printenv`, `set`, `export -p`, `Get-ChildItem Env:`); read
-  a variable by its name, or filter the list (`env | grep -v '^VISUALCOMMIT_LIVE_'`), and tell
-  every agent of that session so. A session whose VS Code started before the owner set the
-  variables does not have them in its shells (a process inherits the environment it was started
-  with); then give them to the command's own process alone from the Windows user scope, never
-  printed, in PowerShell:
-  `$env:VISUALCOMMIT_LIVE_GITHUB_TOKEN = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_TOKEN','User'); $env:VISUALCOMMIT_LIVE_GITHUB_REPO = [Environment]::GetEnvironmentVariable('VISUALCOMMIT_LIVE_GITHUB_REPO','User'); & 'C:\Program Files\Git\bin\bash.exe' scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`
-  (Git Bash by its path: PowerShell finds no `bash` on `PATH` there, and a bare `bash` could be
-  WSL's). The variables last for that one command. Check that they exist by name, length and
-  prefix only (first done on 2026-10-30).
+  (D337). At its start it removes what a stopped run left in each sandbox (branches under
+  `visualcommit-live/` and their requests, D324), and it closes and deletes what it made. The
+  owner is told before it runs, and its offline classes run first, alone, on the same commit (the
+  Commands row): their failure stops the run with the tokens. At a gate it runs as D335 says
+  (`docs/plan.md`'s Visual test gate, step 4). In a session where the variables are set, every shell
+  inherits the tokens: never print the whole environment (`env`, `printenv`, `set`, `export -p`,
+  `Get-ChildItem Env:`); read a variable by its name, or filter the list
+  (`env | grep -v '^VISUALCOMMIT_LIVE_'`), and tell every agent of that session so. A session whose
+  VS Code started before the owner set the variables does not have them in its shells (a process
+  inherits the environment it was started with); then give all six to the command's own process
+  alone from the Windows user scope, never printed, in PowerShell:
+  `foreach ($n in 'VISUALCOMMIT_LIVE_GITHUB_TOKEN','VISUALCOMMIT_LIVE_GITHUB_REPO','VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN','VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO','VISUALCOMMIT_LIVE_GITLAB_TOKEN','VISUALCOMMIT_LIVE_GITLAB_REPO') { [Environment]::SetEnvironmentVariable($n, [Environment]::GetEnvironmentVariable($n,'User'), 'Process') }; & 'C:\Program Files\Git\bin\bash.exe' scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`
+  followed by the classes' `--filter-class` arguments, if any (Git Bash by its path: PowerShell
+  finds no `bash` on `PATH` there, and a bare `bash` could be WSL's). The variables last for that
+  one command. Check them only as 15.8 says: each by name, each but
+  `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO` by length, and true or false for GitHub's `github_pat_`,
+  GitLab's `glpat-`, Azure DevOps' 84 characters holding `AZDO`, the Azure DevOps repository's
+  sandbox form and the GitLab repository's `/visualcommit-sandbox`; no other character of a token
+  or of `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO` is printed (GitHub's first checked on 2026-10-30, all
+  six on 2026-11-05).
 - The Secret Service's real tests (the Commands row "The real keychains' own tests") as typed in a
   shell, with a real pipe, which a table cell cannot hold. Typed `\|`, as a table would escape it,
   `sh` takes the pipe as a plain character: `echo` prints `throwaway | gnome-keyring-daemon …` as
