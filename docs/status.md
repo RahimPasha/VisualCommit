@@ -157,7 +157,8 @@ Checks, live trial and review:
   (D346, D352), and the live command extended to both, run with them; what it finds goes into the
   fakes (D342). Under way: the sandboxes are made (2026-11-02; their first tokens replaced, Waiting
   on the owner); stage 1 (15.1) merged at `b377aa3`, built, reviewed and hunted, offline classes
-  404 of 404, never run with the tokens yet; stage 2 (`Check_3`) follows WP-N.
+  404 of 404; its first run with the tokens (2026-11-05) passed 8 of 9 (Notes, D385); stage 2
+  (`Check_3`) follows WP-N.
 - [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
   tests.
 
@@ -411,17 +412,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-LIVE's stage 1 is merged at `b377aa3`; the owner's tokens are set and all six variables pass 15.8's
-checks (2026-11-05; Waiting on the owner), and the owner, told and present, gave the go-ahead for
-stage 1's run. Run the offline classes alone (`bash scripts/heavy-run.sh --project
-tests/VisualCommit.LiveHostingTests -c Release --filter-class "*LiveSafetyTests" --filter-class
-"*LiveScreenTests"`) and, only if they pass, stage 1 with the six variables given to the command's
-process from the user scope (CLAUDE.md's line, with `--filter-class "*AzureDevOpsLiveTests"
---filter-class "*GitLabLiveTests"`); read `artifacts/live/azure-devops/` and `gitlab/run.txt` and
-check them, fully decoded, for the organization's name and the GitLab namespace before anything from
-them enters the repository; fix what the run finds in the live code (only the live project's files:
-D335) and run again. Then WP-LF (0.4), before part A's checks are written. For the week from
-2026-11-05 the owner gives the phase about all of its allowance.
+Stage 1's first run (2026-11-05, on `8faa839`, the owner told and present; Notes) passed 8 of its 9
+tests: all of Azure DevOps' and GitLab's `Check_1` and its probes; GitLab's `Check_2` failed at step 3,
+the list, because `GET /projects` wants Project: Read among the token's user permissions (D385). The
+owner makes a new GitLab fine-grained token with Project: Read among its user permissions too (and
+revokes the one it replaces), and sets it with the lead's GitLab-only script (outside the
+repository); the lead checks it (15.8) and, the owner told, runs the offline classes and then GitLab's
+stage 1 again (`--filter-class "*GitLabLiveTests"`), reads its run.txt and checks it, fully decoded,
+for the organization's name and the namespace. Then WP-LF (0.4) on both run.txt files, before part
+A's checks are written. For the week from 2026-11-05 the owner gives the phase about all of its
+allowance.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -439,6 +439,17 @@ every commit.
   too (`wp-gl-*`, `wp-az-*`, `wp-fa-correctness`); what they found and the lead's rulings on the
   clients' third hunts are in sections 6's and 7's As built, which end with the lead's items for
   the review before the gate (7a's GitHub gaps the same inputs show, and the core's).
+- **Stage 1's first run** (2026-11-05, 20:51 UTC, on `8faa839`; the offline classes first, 404 of 404):
+  9 tests, 8 passed, 41.9 s. Azure DevOps: `Check_1`, `Check_1b_probes`, `Check_2` (the app's sign-in,
+  list, push and create, !5, abandoned and cleaned up) and `Check_4` (a clone through the
+  organization's host) passed; its run.txt (631 lines) names 12 answers equal to the fake's and
+  differences for WP-LF (a made-up plain token on connectionData answers 200 where the fake answers
+  401, the sandbox's info/refs with a made-up token 401 with Basic, Bearer and TFS-Federated
+  challenges where the fake answers 404, the 409 and 400 creates' bodies, the abandon's and the
+  create's members, and more). GitLab: `Check_1` and its probes passed; `Check_2` failed at the list
+  (D385; `Check_2b` had nothing to probe and deleted its branches). Both run.txt files hold neither
+  the organization's name, the namespace nor an address, checked fully decoded; `glpat-` appears
+  only as the prefix in the command's own words. They lie in `artifacts/live/` (not committed).
 - **Passed on to later packages** (from WP-S's hunts, 2026-11-02): WP-N (section 13) makes the
   create's two log lines (`RepositoryOperations.CreatePullRequest.cs:293` and `:403`) write
   `baseRepository.FullName` through `HostingHttpClient.ScreenEmail`, with a test of a create into an
@@ -738,8 +749,9 @@ every commit.
   D373 to D376 the owner's answers of 2026-11-01, D377 and D378 the design review's, D379 and
   D380 the lead's rulings on wave 1's adversarial check, D381 and D382 on its second round, D383
   the lead's on WP-S's hunts (an account switch within a provider drops the tab's list and A3
-  answer), D384 the lead's at WP-LIVE's stage 1 (the screen hides GitLab's sandbox namespace). The
-  next decision number is D385.
+  answer), D384 the lead's at WP-LIVE's stage 1 (the screen hides GitLab's sandbox namespace), D385
+  stage 1's measurement (a GitLab token's Project: Read among its user permissions too). The next
+  decision number is D386.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -772,7 +784,7 @@ every commit.
   the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D385 on, since D239 to D248 went to the review before
+  owner"; each answer becomes a decision, D386 on, since D239 to D248 went to the review before
   phase 7, D249 to D264 to phase 7a's start, D265 to D338 to its design, D339 to D343 to its build
   and gate D344 to D356 to 7b's start and its research, D357 to D378 to its design and D379 on to its
   build): design 17.5's reading of "ten repos can be checked and
@@ -806,7 +818,7 @@ every commit.
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D385 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D386 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,

@@ -2862,7 +2862,7 @@ pull requests (merge requests on GitLab) and clones your repositories."
 | `NeedsSignInRefusedOf` | 7a's with "GitLab" | 7a's with "Azure DevOps" |
 | `AccountUseForGitNoteOf(p, login)` | 7a's with "GitLab" | 7a's with "to {org}'s repositories on Azure DevOps" (D350) |
 | `SignOutTitleOf`; `SignOutQuestionOf(p, login, git)` | "Sign out of GitLab?"; "Sign out of GitLab as {login}? VisualCommit removes its token from this computer and no longer lists merge requests." + 7a's git sentence | "Sign out of Azure DevOps?"; "Sign out of Azure DevOps for {org}? VisualCommit removes its token from this computer and no longer lists pull requests." + it |
-| `SignInHelpOf` | "Paste a personal access token from GitLab. A fine-grained token needs User: Read, Project: Read, Merge Request: Read and Create, and Code: Download and Push for the groups and projects you work in; a legacy token needs the api scope." | "Type your organization, then paste a personal access token made for it in Azure DevOps with the scope Code (Read & write). The organization can be its name or its address on dev.azure.com or visualstudio.com." |
+| `SignInHelpOf` | "Paste a personal access token from GitLab. A fine-grained token needs User: Read and Project: Read among its user permissions, and Project: Read, Merge Request: Read and Create, and Code: Download and Push for the groups and projects you work in; a legacy token needs the api scope." (D385) | "Type your organization, then paste a personal access token made for it in Azure DevOps with the scope Code (Read & write). The organization can be its name or its address on dev.azure.com or visualstudio.com." |
 | `TokenLinkOf`; tip | "Create a fine-grained token on GitLab"; "Opens GitLab's form for a new fine-grained token in your browser." | "Create a token on Azure DevOps"; "Opens the organization's page for new tokens in your browser." |
 | `LegacyTokenLink`; tip | "Or create a legacy token, filled in"; "Opens GitLab's form for a legacy token with the api scope in your browser." | — |
 | `OrganizationLabel`; `SignInNotAnOrganization` | — | "Organization"; "Type the organization's name, of letters, digits and hyphens, or its address on dev.azure.com or visualstudio.com." |
@@ -3846,7 +3846,8 @@ The token's date goes under "Waiting on the owner" (no header carries it).
 2. A private project `visualcommit-sandbox`, with a README.
 3. A fine-grained token (g2 G5.3), named and described, at most 30 days, "Only my personal projects",
    with (r6 2.2) User: Read; Project: Read; Merge Request: Read, Create, Update, Delete; Branch: Read,
-   Delete; Code: Download, Push. No second, legacy token is made (D375).
+   Delete; Code: Download, Push, and Project: Read among its user permissions too, which listing the
+   projects needs (D385, MEASURED 2026-11-05). No second, legacy token is made (D375).
 4. `VISUALCOMMIT_LIVE_GITLAB_TOKEN`, and `VISUALCOMMIT_LIVE_GITLAB_REPO` =
    `<username>/visualcommit-sandbox`.
 
