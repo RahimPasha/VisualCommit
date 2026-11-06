@@ -105,7 +105,8 @@ public sealed class GitRunner : IGitRunner
     /// <summary>
     /// A seam for the tests: called on the call's thread with git's process just after git has started,
     /// before the runner puts it in a job and, for a below-normal call, lowers it (docs/phase-6-design.md
-    /// 8.10). It must not throw: git would be left running.
+    /// 8.10). It must not throw: git would be left running, and the call neither recorded nor
+    /// registered for cancellation, which both come after it.
     /// </summary>
     internal Action<Process>? StartObserver { get; init; }
 
@@ -316,18 +317,18 @@ public sealed class GitRunner : IGitRunner
     /// one. At most <see cref="LoweringRounds"/> snapshots. A child that started before its parent is
     /// no descendant (the parent's id was reused) and is left alone; one that ends meanwhile is skipped.
     /// <para>
-    /// The class alone does not hold what starts later: Windows takes a new process's class from its
-    /// creator partway through the creation and lists the process in a snapshot only at its end, so
-    /// any process of the tree whose class was taken before its creator was lowered and that shows
-    /// only after the last snapshot runs at normal priority to its end. CI run 42216604663 caught
-    /// git's console host so, which the launcher creates as it begins, when the runner lowers the
-    /// launcher. On Windows 11 with git 2.56, with the lowering held about 2 ms after the start
-    /// beside below-normal load, the console host showed as late as 250 ms after the launcher was
-    /// lowered, at normal priority, in 7 calls of 210. A job whose
-    /// <see cref="WindowsJob.HoldsBelowNormal"/> closes that gap (none of 360 such calls): Windows
-    /// adds a new process to its creator's job and applies the job's limit as the process joins, so
-    /// whatever starts in the tree once its creator, the root or a descendant added here, is in the
-    /// job runs below normal, however its class was chosen. One case is left: a process whose
+    /// The class alone does not hold what starts later. CI run 42216604663 found git's console host
+    /// at normal priority. Measured on the laptop (Windows 11, git 2.56): Windows takes a new
+    /// process's class from its creator partway through the creation and lists the process in a
+    /// snapshot only at its end, so any process of the tree whose class was taken before its creator
+    /// was lowered and that shows only after the last snapshot runs at normal priority to its end.
+    /// The launcher creates its console host as it begins, when the runner lowers the launcher: with
+    /// the lowering held about 2 ms after the start beside below-normal load, the console host showed
+    /// as late as 250 ms after the launcher was lowered, at normal priority, in 7 calls of 210. A job
+    /// whose <see cref="WindowsJob.HoldsBelowNormal"/> closes that gap (none of 360 such calls):
+    /// Windows adds a new process to its creator's job and applies the job's limit as the process
+    /// joins, so whatever starts in the tree once its creator, the root or a descendant added here, is
+    /// in the job runs below normal, however its class was chosen. One case is left: a process whose
     /// creation read its creator's job before the creator joined it, and that shows only after the
     /// last snapshot, stays out of the job and keeps the class it was given.
     /// </para>
