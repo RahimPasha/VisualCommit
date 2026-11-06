@@ -117,13 +117,88 @@ public class GitRunnerPriorityTests
         return Assert.Single(found);
     }
 
-    [Fact]
-    public async Task A_tree_that_started_before_its_priority_was_set_is_lowered_whole()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_process_that_joins_the_tree_after_the_lowering_at_normal_priority_runs_below_normal_only_in_the_job(bool inTheCallsJob)
+    {
+        // CI run 42216604663 failed the test above with git's console host at normal priority.
+        // Windows can take a new process's class from its creator well before the process shows in
+        // a snapshot: git's launcher, which creates its console host as it begins, took the class
+        // before the runner lowered it, and the console host showed only after the runner's last
+        // snapshot (GitRunner.LowerTreeBelowNormal). Its class was chosen as normal, it joined git's
+        // tree after the lowering, and nothing lowered it. A below-normal call's git is now in a job
+        // whose limit Windows applies to each process as it joins (WindowsJob.HoldsBelowNormal),
+        // however its class was chosen.
+        //
+        // The test makes such a process on purpose, without a race and without any work of git's
+        // tree: after the runner's steps (the job, then the lowering), this process creates one with
+        // normal priority named for it and git as its parent (PROC_THREAD_ATTRIBUTE_PARENT_PROCESS:
+        // Windows then gives it git's job, as for what git starts itself), suspended, so it does
+        // nothing. Without the job, as the runner lowered before this fix, it runs at normal
+        // priority, as the console host did; in the job, below normal.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var folder = new TempDirectory("priority-late");
+        var start = new ProcessStartInfo(GitPath)
+        {
+            WorkingDirectory = folder.Path,
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        foreach (var argument in new[] { "-c", "alias.script=!sleep 120", "script" })
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var git = Process.Start(start) ?? throw new InvalidOperationException("git did not start.");
+        Process? late = null;
+        try
+        {
+            using var job = inTheCallsJob ? WindowsJob.TryAttach(git, belowNormal: true) : null;
+            Assert.Equal(inTheCallsJob, job is { HoldsBelowNormal: true });
+            GitRunner.LowerTreeBelowNormal(git, job);
+            Assert.Equal(ProcessPriorityClass.BelowNormal, git.PriorityClass);
+
+            late = LateChild.StartSuspended(git, Path.Combine(Environment.SystemDirectory, "PING.EXE"));
+            Assert.Contains(DescendantsOf(git.Id), process => process.Id == late.Id);
+            if (job is null)
+            {
+                // The class alone: the process runs at the class chosen for it.
+                Assert.Equal(ProcessPriorityClass.Normal, late.PriorityClass);
+            }
+            else
+            {
+                Assert.True(job.Contains(late), "The process git's tree gained is not in git's job.");
+                Assert.Equal(ProcessPriorityClass.BelowNormal, late.PriorityClass);
+            }
+        }
+        finally
+        {
+            late?.Kill();
+            late?.Dispose();
+            git.Kill(entireProcessTree: true);
+            await git.WaitForExitAsync(TestCancelled);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_tree_that_started_before_its_priority_was_set_is_lowered_whole(bool inTheCallsJob)
     {
         // The race 8.10's lowering must survive: Git for Windows' cmd\git.exe starts the real git
         // at once, which may come before the runner sets the class, and the shells it starts would
         // then run at normal priority. Here the whole tree runs, at normal priority, before it is
-        // lowered: every process in it ends below normal.
+        // lowered: every process in it ends below normal. In the job a below-normal call gets, which
+        // git joins only after its start, the lowering also adds to the job what git started before,
+        // so that what those start later joins it too.
         if (!OperatingSystem.IsWindows())
         {
             return;
@@ -176,12 +251,33 @@ public class GitRunnerPriorityTests
             var before = DescendantsOf(git.Id);
             Assert.All(before, process => Assert.Equal(ProcessPriorityClass.Normal, process.Priority));
 
-            GitRunner.LowerTreeBelowNormal(git);
+            using var job = inTheCallsJob ? WindowsJob.TryAttach(git, belowNormal: true) : null;
+            if (inTheCallsJob)
+            {
+                Assert.NotNull(job);
+                Assert.True(job.HoldsBelowNormal);
+                foreach (var process in before)
+                {
+                    using var found = Process.GetProcessById(process.Id);
+                    Assert.False(job.Contains(found), $"{process.Name} is in the job before the lowering.");
+                }
+            }
+
+            GitRunner.LowerTreeBelowNormal(git, job);
 
             Assert.Equal(ProcessPriorityClass.BelowNormal, git.PriorityClass);
             var after = DescendantsOf(git.Id);
             Assert.Equal(before.Select(process => process.Id).Order(), after.Select(process => process.Id).Order());
             Assert.All(after, process => Assert.Equal(ProcessPriorityClass.BelowNormal, process.Priority));
+            if (job is not null)
+            {
+                Assert.True(job.Contains(git));
+                foreach (var process in after)
+                {
+                    using var found = Process.GetProcessById(process.Id);
+                    Assert.True(job.Contains(found), $"{process.Name} is not in the job.");
+                }
+            }
         }
         finally
         {
@@ -265,6 +361,130 @@ public class GitRunnerPriorityTests
         }
 
         return children;
+    }
+
+    /// <summary>
+    /// Starts a process with a given parent and normal priority named for it, suspended, so that it
+    /// does nothing (Windows; PROC_THREAD_ATTRIBUTE_PARENT_PROCESS: the new process takes its job,
+    /// among other things, from that parent).
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static class LateChild
+    {
+        private const uint CreateSuspended = 0x00000004;
+        private const uint NormalPriorityClass = 0x00000020;
+        private const uint ExtendedStartupInfoPresent = 0x00080000;
+        private const uint CreateNoWindow = 0x08000000;
+        private static readonly IntPtr ParentProcessAttribute = new(0x00020000);
+
+        public static Process StartSuspended(Process parent, string executable)
+        {
+            var size = IntPtr.Zero;
+            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+            var attributes = System.Runtime.InteropServices.Marshal.AllocHGlobal(size);
+            var parentHandle = System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size);
+            try
+            {
+                if (!InitializeProcThreadAttributeList(attributes, 1, 0, ref size))
+                {
+                    throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                }
+
+                try
+                {
+                    System.Runtime.InteropServices.Marshal.WriteIntPtr(parentHandle, parent.SafeHandle.DangerousGetHandle());
+                    if (!UpdateProcThreadAttribute(attributes, 0, ParentProcessAttribute, parentHandle, IntPtr.Size, IntPtr.Zero, IntPtr.Zero))
+                    {
+                        throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                    }
+
+                    var startup = new StartupInfoEx { AttributeList = attributes };
+                    startup.StartupInfo.Size = System.Runtime.InteropServices.Marshal.SizeOf<StartupInfoEx>();
+                    var commandLine = new System.Text.StringBuilder($"\"{executable}\" -n 120 127.0.0.1");
+                    if (!CreateProcessW(null, commandLine, IntPtr.Zero, IntPtr.Zero, false, CreateSuspended | NormalPriorityClass | ExtendedStartupInfoPresent | CreateNoWindow, IntPtr.Zero, null, ref startup, out var created))
+                    {
+                        throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                    }
+
+                    try
+                    {
+                        return Process.GetProcessById(created.ProcessId);
+                    }
+                    finally
+                    {
+                        CloseHandle(created.Thread);
+                        CloseHandle(created.Process);
+                    }
+                }
+                finally
+                {
+                    DeleteProcThreadAttributeList(attributes);
+                }
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(parentHandle);
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(attributes);
+            }
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private struct StartupInfo
+        {
+            public int Size;
+            public string? Reserved;
+            public string? Desktop;
+            public string? Title;
+            public int X;
+            public int Y;
+            public int XSize;
+            public int YSize;
+            public int XCountChars;
+            public int YCountChars;
+            public int FillAttribute;
+            public int Flags;
+            public short ShowWindow;
+            public short Reserved2Size;
+            public IntPtr Reserved2;
+            public IntPtr StdInput;
+            public IntPtr StdOutput;
+            public IntPtr StdError;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct StartupInfoEx
+        {
+            public StartupInfo StartupInfo;
+            public IntPtr AttributeList;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct ProcessInformation
+        {
+            public IntPtr Process;
+            public IntPtr Thread;
+            public int ProcessId;
+            public int ThreadId;
+        }
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, int flags, ref IntPtr size);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr previous, IntPtr returnSize);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern void DeleteProcThreadAttributeList(IntPtr list);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateProcessW(string? application, System.Text.StringBuilder commandLine, IntPtr processAttributes, IntPtr threadAttributes, [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)] bool inheritHandles, uint flags, IntPtr environment, string? directory, ref StartupInfoEx startup, out ProcessInformation information);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr handle);
     }
 
     /// <summary>Every process of the machine with its parent's id and its file name, from Toolhelp's snapshot (Windows).</summary>
