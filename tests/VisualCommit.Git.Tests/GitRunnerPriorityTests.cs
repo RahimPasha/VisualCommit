@@ -25,12 +25,15 @@ public class GitRunnerPriorityTests
     [Fact]
     public async Task A_below_normal_priority_call_starts_git_below_normal_on_windows()
     {
-        // docs/phase-6-design.md 8.10: the runner lowers the process it started right after the
-        // start, with what that has started by then; Windows gives the processes they start from
-        // then on the same class. The test looks at this process's own git children (Toolhelp's
-        // snapshot names each process's parent) while the call waits, and needs no work of the
-        // lowered processes: under a full test run a chain of below-normal shells starves behind
-        // the normal-priority work, which is what the class is for, so a test that waited for
+        // docs/phase-6-design.md 8.10: right after the start the runner puts git in a job that holds
+        // every process in it below normal, then lowers what git has started by then and adds it to
+        // the job; what any of them starts from then on joins the job too. The class alone did not
+        // hold that: Windows can take a new process's class from its creator before the creator is
+        // lowered (CI run 42216604663 found git's console host at normal priority so), and the next
+        // test makes such processes on purpose. This one looks at this process's own git children
+        // (Toolhelp's snapshot names each process's parent) while the call waits, and needs no work
+        // of the lowered processes: under a full test run a chain of below-normal shells starves
+        // behind the normal-priority work, which is what the class is for, so a test that waited for
         // their output hung. It waits only for the runner's own lowering of git's descendants.
         // The calls run in a folder of their own, outside the project's repository.
         using var folder = new TempDirectory("priority");
@@ -118,12 +121,196 @@ public class GitRunnerPriorityTests
     }
 
     [Fact]
-    public async Task A_tree_that_started_before_its_priority_was_set_is_lowered_whole()
+    public async Task A_below_normal_call_runs_what_gits_tree_starts_at_normal_priority_below_normal()
+    {
+        // The runner's own steps for a below-normal call, through RunAsync (GitRunner.RunHereAsync):
+        // git joins a job that holds it below normal right after its start, and the lowering then adds
+        // to the job what git had started before. The tests below call the job and the lowering
+        // themselves, and the test above passes with the class alone nearly always.
+        //
+        // This one makes the processes the steps must hold on purpose, without a race and without any
+        // work of git's tree, as the test below does: this process creates each suspended, at normal
+        // priority named for it, with a parent in git's tree (PROC_THREAD_ATTRIBUTE_PARENT_PROCESS).
+        // The first is made just after git starts, before the runner's steps (StartObserver), with git
+        // as its parent: a process git started before it joined the job. Once the lowering has reached
+        // that one, two more are made: one of git's, then one of the first's. Each one's class is read
+        // as its creation returns, before a round of the lowering that may still run could change it.
+        // Both run below normal only if git joined a job that holds it there and the lowering added the
+        // first to that job: a job without the limit leaves git's at normal priority, and a job git
+        // joins only after the lowering leaves the first one's.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var folder = new TempDirectory("priority-wiring");
+        var ping = Path.Combine(Environment.SystemDirectory, "PING.EXE");
+        var started = new TaskCompletionSource<(int Git, Process Early)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var runner = new GitRunner(GitPath) { StartObserver = StartSuspendedOnStart(started, ping) };
+        using var cancel = CancellationTokenSource.CreateLinkedTokenSource(TestCancelled);
+        var call = runner.RunAsync(new GitCommand("-c", "alias.script=!sleep 120", "script") { WorkingDirectory = folder.Path, BelowNormalPriority = true }, cancel.Token);
+        Process? early = null;
+        Process? ofGit = null;
+        Process? ofEarly = null;
+        try
+        {
+            if (await Task.WhenAny(started.Task, call) != started.Task)
+            {
+                await call;
+                Assert.Fail("The call ended before it started git.");
+            }
+
+            (var gitId, early) = await started.Task;
+
+            // The lowering's first snapshot shows the first process: it was there before the runner's steps.
+            var clock = Stopwatch.StartNew();
+            while (PriorityOf(early) != ProcessPriorityClass.BelowNormal)
+            {
+                Assert.False(call.IsCompleted, "The call ended before the runner lowered what git had started.");
+                Assert.True(clock.Elapsed < TimeSpan.FromSeconds(60), "The runner did not lower within 60 s what git had started before its steps.");
+                await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
+            }
+
+            ProcessPriorityClass ofGitPriority;
+            using (var git = Process.GetProcessById(gitId))
+            {
+                ofGit = LateChild.StartSuspended(git, ping, out ofGitPriority);
+            }
+
+            Assert.True(
+                ofGitPriority == ProcessPriorityClass.BelowNormal,
+                $"What git starts at normal priority after the runner's steps runs at {ofGitPriority}: git is in no job that holds it below normal.");
+            ofEarly = LateChild.StartSuspended(early, ping, out var ofEarlyPriority);
+            Assert.True(
+                ofEarlyPriority == ProcessPriorityClass.BelowNormal,
+                $"What a process git started before it joined its job starts at normal priority runs at {ofEarlyPriority}: the lowering did not add that process to a job that holds it below normal.");
+        }
+        finally
+        {
+            // Made also when the call ended before the test took it.
+            early ??= started.Task.IsCompletedSuccessfully ? (await started.Task).Early : null;
+            foreach (var process in new[] { ofEarly, ofGit, early })
+            {
+                process?.Kill();
+                process?.Dispose();
+            }
+
+            // The runner stops git, with its job; waited for, so that no git of this test is left for the next.
+            await cancel.CancelAsync();
+            await Task.WhenAny(call);
+        }
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => call);
+    }
+
+    /// <summary>
+    /// A <see cref="GitRunner.StartObserver"/> that starts <paramref name="executable"/> with git as its
+    /// parent (<see cref="LateChild"/>) before the runner's steps, and gives <paramref name="started"/>
+    /// git's id and that process, or what went wrong (Windows).
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static Action<Process> StartSuspendedOnStart(TaskCompletionSource<(int Git, Process Early)> started, string executable) => git =>
+    {
+        try
+        {
+            started.TrySetResult((git.Id, LateChild.StartSuspended(git, executable)));
+        }
+        catch (Exception ex)
+        {
+            started.TrySetException(ex);
+        }
+    };
+
+    /// <summary>The priority class of <paramref name="process"/> as it is now (Windows): <see cref="Process"/> keeps the one it read first.</summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static ProcessPriorityClass PriorityOf(Process process)
+    {
+        process.Refresh();
+        return process.PriorityClass;
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_process_that_joins_the_tree_after_the_lowering_at_normal_priority_runs_below_normal_only_in_the_job(bool inTheCallsJob)
+    {
+        // CI run 42216604663 failed the class's first test with git's console host at normal priority.
+        // Windows can take a new process's class from its creator well before the process shows in
+        // a snapshot: git's launcher, which creates its console host as it begins, took the class
+        // before the runner lowered it, and the console host showed only after the runner's last
+        // snapshot (GitRunner.LowerTreeBelowNormal). Its class was chosen as normal, it joined git's
+        // tree after the lowering, and nothing lowered it. A below-normal call's git is now in a job
+        // whose limit Windows applies to each process as it joins (WindowsJob.HoldsBelowNormal),
+        // however its class was chosen.
+        //
+        // The test makes such a process on purpose, without a race and without any work of git's
+        // tree: after the runner's steps (the job, then the lowering), this process creates one with
+        // normal priority named for it and git as its parent (PROC_THREAD_ATTRIBUTE_PARENT_PROCESS:
+        // Windows then gives it git's job, as for what git starts itself), suspended, so it does
+        // nothing. Without the job, as the runner lowered before this fix, it runs at normal
+        // priority, as the console host did; in the job, below normal.
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        using var folder = new TempDirectory("priority-late");
+        var start = new ProcessStartInfo(GitPath)
+        {
+            WorkingDirectory = folder.Path,
+            UseShellExecute = false,
+            RedirectStandardInput = true,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            CreateNoWindow = true,
+        };
+        foreach (var argument in new[] { "-c", "alias.script=!sleep 120", "script" })
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var git = Process.Start(start) ?? throw new InvalidOperationException("git did not start.");
+        Process? late = null;
+        try
+        {
+            using var job = inTheCallsJob ? WindowsJob.TryAttach(git, belowNormal: true) : null;
+            Assert.Equal(inTheCallsJob, job is { HoldsBelowNormal: true });
+            GitRunner.LowerTreeBelowNormal(git, job);
+            Assert.Equal(ProcessPriorityClass.BelowNormal, git.PriorityClass);
+
+            late = LateChild.StartSuspended(git, Path.Combine(Environment.SystemDirectory, "PING.EXE"));
+            Assert.Contains(DescendantsOf(git.Id), process => process.Id == late.Id);
+            if (job is null)
+            {
+                // The class alone: the process runs at the class chosen for it.
+                Assert.Equal(ProcessPriorityClass.Normal, late.PriorityClass);
+            }
+            else
+            {
+                Assert.True(job.Contains(late), "The process git's tree gained is not in git's job.");
+                Assert.Equal(ProcessPriorityClass.BelowNormal, late.PriorityClass);
+            }
+        }
+        finally
+        {
+            late?.Kill();
+            late?.Dispose();
+            git.Kill(entireProcessTree: true);
+            await git.WaitForExitAsync(TestCancelled);
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task A_tree_that_started_before_its_priority_was_set_is_lowered_whole(bool inTheCallsJob)
     {
         // The race 8.10's lowering must survive: Git for Windows' cmd\git.exe starts the real git
         // at once, which may come before the runner sets the class, and the shells it starts would
         // then run at normal priority. Here the whole tree runs, at normal priority, before it is
-        // lowered: every process in it ends below normal.
+        // lowered: every process in it ends below normal. In the job a below-normal call gets, which
+        // git joins only after its start, the lowering also adds to the job what git started before,
+        // so that what those start later joins it too.
         if (!OperatingSystem.IsWindows())
         {
             return;
@@ -145,7 +332,23 @@ public class GitRunnerPriorityTests
             start.ArgumentList.Add(argument);
         }
 
-        using var git = Process.Start(start) ?? throw new InvalidOperationException("git did not start.");
+        // Started from this process at normal priority, so that git's tree works at normal priority
+        // until it is lowered: started below normal, as CI's runner runs the test host, it would wait
+        // behind any normal-priority work that keeps every processor busy.
+        using var self = Process.GetCurrentProcess();
+        var priorityBefore = self.PriorityClass;
+        self.PriorityClass = ProcessPriorityClass.Normal;
+        Process git;
+        try
+        {
+            git = Process.Start(start) ?? throw new InvalidOperationException("git did not start.");
+        }
+        finally
+        {
+            self.PriorityClass = priorityBefore;
+        }
+
+        using var started = git;
         try
         {
             // Normal-priority work: the tree reaches sleep within seconds, even under a full run.
@@ -176,12 +379,33 @@ public class GitRunnerPriorityTests
             var before = DescendantsOf(git.Id);
             Assert.All(before, process => Assert.Equal(ProcessPriorityClass.Normal, process.Priority));
 
-            GitRunner.LowerTreeBelowNormal(git);
+            using var job = inTheCallsJob ? WindowsJob.TryAttach(git, belowNormal: true) : null;
+            if (inTheCallsJob)
+            {
+                Assert.NotNull(job);
+                Assert.True(job.HoldsBelowNormal);
+                foreach (var process in before)
+                {
+                    using var found = Process.GetProcessById(process.Id);
+                    Assert.False(job.Contains(found), $"{process.Name} is in the job before the lowering.");
+                }
+            }
+
+            GitRunner.LowerTreeBelowNormal(git, job);
 
             Assert.Equal(ProcessPriorityClass.BelowNormal, git.PriorityClass);
             var after = DescendantsOf(git.Id);
             Assert.Equal(before.Select(process => process.Id).Order(), after.Select(process => process.Id).Order());
             Assert.All(after, process => Assert.Equal(ProcessPriorityClass.BelowNormal, process.Priority));
+            if (job is not null)
+            {
+                Assert.True(job.Contains(git));
+                foreach (var process in after)
+                {
+                    using var found = Process.GetProcessById(process.Id);
+                    Assert.True(job.Contains(found), $"{process.Name} is not in the job.");
+                }
+            }
         }
         finally
         {
@@ -265,6 +489,153 @@ public class GitRunnerPriorityTests
         }
 
         return children;
+    }
+
+    /// <summary>
+    /// Starts a process with a given parent and normal priority named for it, suspended, so that it
+    /// does nothing (Windows; PROC_THREAD_ATTRIBUTE_PARENT_PROCESS: the new process takes its job,
+    /// among other things, from that parent).
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static class LateChild
+    {
+        private const uint CreateSuspended = 0x00000004;
+        private const uint NormalPriorityClass = 0x00000020;
+        private const uint ExtendedStartupInfoPresent = 0x00080000;
+        private const uint CreateNoWindow = 0x08000000;
+        private static readonly IntPtr ParentProcessAttribute = new(0x00020000);
+
+        public static Process StartSuspended(Process parent, string executable) => StartSuspended(parent, executable, out _);
+
+        /// <summary>
+        /// As <see cref="StartSuspended(Process, string)"/>, with the new process's class read from the
+        /// handle its creation returns, before anything else can change it.
+        /// </summary>
+        public static Process StartSuspended(Process parent, string executable, out ProcessPriorityClass priorityAtStart)
+        {
+            var size = IntPtr.Zero;
+            InitializeProcThreadAttributeList(IntPtr.Zero, 1, 0, ref size);
+            var attributes = System.Runtime.InteropServices.Marshal.AllocHGlobal(size);
+            var parentHandle = System.Runtime.InteropServices.Marshal.AllocHGlobal(IntPtr.Size);
+            try
+            {
+                if (!InitializeProcThreadAttributeList(attributes, 1, 0, ref size))
+                {
+                    throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                }
+
+                try
+                {
+                    System.Runtime.InteropServices.Marshal.WriteIntPtr(parentHandle, parent.SafeHandle.DangerousGetHandle());
+                    if (!UpdateProcThreadAttribute(attributes, 0, ParentProcessAttribute, parentHandle, IntPtr.Size, IntPtr.Zero, IntPtr.Zero))
+                    {
+                        throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                    }
+
+                    var startup = new StartupInfoEx { AttributeList = attributes };
+                    startup.StartupInfo.Size = System.Runtime.InteropServices.Marshal.SizeOf<StartupInfoEx>();
+                    var commandLine = new System.Text.StringBuilder($"\"{executable}\" -n 120 127.0.0.1");
+                    if (!CreateProcessW(null, commandLine, IntPtr.Zero, IntPtr.Zero, false, CreateSuspended | NormalPriorityClass | ExtendedStartupInfoPresent | CreateNoWindow, IntPtr.Zero, null, ref startup, out var created))
+                    {
+                        throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastWin32Error());
+                    }
+
+                    try
+                    {
+                        var priority = GetPriorityClass(created.Process);
+                        if (priority == 0)
+                        {
+                            var error = System.Runtime.InteropServices.Marshal.GetLastWin32Error();
+                            TerminateProcess(created.Process, 1);
+                            throw new System.ComponentModel.Win32Exception(error);
+                        }
+
+                        // The class's values are Windows' own (NORMAL_PRIORITY_CLASS is Normal's 0x20).
+                        priorityAtStart = (ProcessPriorityClass)priority;
+                        return Process.GetProcessById(created.ProcessId);
+                    }
+                    finally
+                    {
+                        CloseHandle(created.Thread);
+                        CloseHandle(created.Process);
+                    }
+                }
+                finally
+                {
+                    DeleteProcThreadAttributeList(attributes);
+                }
+            }
+            finally
+            {
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(parentHandle);
+                System.Runtime.InteropServices.Marshal.FreeHGlobal(attributes);
+            }
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        private struct StartupInfo
+        {
+            public int Size;
+            public string? Reserved;
+            public string? Desktop;
+            public string? Title;
+            public int X;
+            public int Y;
+            public int XSize;
+            public int YSize;
+            public int XCountChars;
+            public int YCountChars;
+            public int FillAttribute;
+            public int Flags;
+            public short ShowWindow;
+            public short Reserved2Size;
+            public IntPtr Reserved2;
+            public IntPtr StdInput;
+            public IntPtr StdOutput;
+            public IntPtr StdError;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct StartupInfoEx
+        {
+            public StartupInfo StartupInfo;
+            public IntPtr AttributeList;
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
+        private struct ProcessInformation
+        {
+            public IntPtr Process;
+            public IntPtr Thread;
+            public int ProcessId;
+            public int ThreadId;
+        }
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool InitializeProcThreadAttributeList(IntPtr list, int count, int flags, ref IntPtr size);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool UpdateProcThreadAttribute(IntPtr list, uint flags, IntPtr attribute, IntPtr value, IntPtr size, IntPtr previous, IntPtr returnSize);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern void DeleteProcThreadAttributeList(IntPtr list);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        private static extern uint GetPriorityClass(IntPtr process);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool TerminateProcess(IntPtr process, uint exitCode);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CreateProcessW(string? application, System.Text.StringBuilder commandLine, IntPtr processAttributes, IntPtr threadAttributes, [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)] bool inheritHandles, uint flags, IntPtr environment, string? directory, ref StartupInfoEx startup, out ProcessInformation information);
+
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+        [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+        private static extern bool CloseHandle(IntPtr handle);
     }
 
     /// <summary>Every process of the machine with its parent's id and its file name, from Toolhelp's snapshot (Windows).</summary>
