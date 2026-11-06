@@ -451,9 +451,9 @@ WP-A (design 10, part A) is merged at `b6de3cf`; its classes, lagged list and pi
 passed (Notes). CI's run on it (42301846503) failed two phase 6 tests on Linux that WP-A does not
 touch: two Opus investigators find and fix each cause in `D:/Projects/Personal/vc-wt/p7b-close-slots`
 and `p7b-palette-growth`, each fix then put to two skeptics; the lead merges them, runs their classes
-and reads the CI run. Beside them, part B's checks are being written and reviewed (D244) in
-`docs/test-reports/phase-7b.md`; once committed, WP-B (section 11) is built in
-`D:/Projects/Personal/vc-wt/p7b-clone` on `wip/p7b-clone`. Open point 8 of the report: Azure DevOps'
+and reads the CI run. Part B's checks are committed (D244); WP-B (section 11) is built from that
+commit in `D:/Projects/Personal/vc-wt/p7b-clone` on `wip/p7b-clone`, then reviewed and hunted; at its
+merge the lead runs 11.8's comparison, part B's checks, 11.6's classes and the lagged list. Open point 8 of the report: Azure DevOps'
 `Check_1b_probes` (17 reads, its new probe of the sandbox organization's connectionData without a
 credential among them) runs when the owner agrees (Waiting on the owner); until then A9 rests on the
 ASSUMED Anonymous 200. For the week from 2026-11-05 the owner gives the phase about all of its
@@ -579,6 +579,13 @@ every commit.
   57 the same, the 23 part A pictures changed only in the intro's box (10.6), and `b06a` (the fake's
   port in the clone URL), `n06b` (the caret), `n02b` and `n07a` (the status bar's busy indicator) and
   `a09b` (2 pixels) by nature.
+- **Part B's checks** (2026-11-06): B1 to B8 with 21 scripted pictures (`b01a` to `b08c`; `b03a` and
+  `b03b` repeated in the real window, and B1's button and B7's clones there with no capture), written by
+  one Opus writer and reviewed by one Opus reviewer (three minors, all fixed), open points 11 to 21.
+  The lead ruled open point 21: a palette command opens the browser through the form's browse command
+  with its provider, so 7a's `b03a-listed` keeps its disabled button. The same commit records the
+  inspection's 562 for three signed-in blocks (part A's "Changed in this report after its first
+  commit").
 - **Part A's pictures inspected** (2026-11-06, an Opus agent, after WP-A's merge runs): all 29 match
   their steps, no defect; 7a's 28 changed pictures as the lead read them (the intro's box only in the
   23 part A ones). Its notes, for later: the report's "about 553 of 495" for three signed-in blocks
