@@ -268,6 +268,12 @@ opt-in projects" green. Jobs and Test steps: `windows-latest` 30 min 15 s (27 mi
 `macos-latest` 43 min 8 s (41 min 8 s), `ubuntu-latest` 8 min 1 s (6 min 4 s), the containers 6 min
 39 s and 8 min 19 s (4 min 44 s and 6 min 1 s), each under four fifths.
 
+[42285038375](https://github.com/RahimPasha/VisualCommit/actions/runs/42285038375) on `972c144`, the
+priority fix merged (`32eaee3`, `d62dff8`; D386): all five jobs green, `GitRunnerPriorityTests` among
+them on Windows; Windows' "Build the opt-in projects" green. Jobs and Test steps: `windows-latest`
+33 min 17 s (30 min 5 s), `macos-latest` 37 min 58 s (35 min 53 s), `ubuntu-latest` 6 min 10 s (4 min
+34 s), the containers 8 min 52 s and 8 min 45 s (6 min 18 s and 6 min 26 s), each under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -426,10 +432,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 WP-A (design 10) is being built in `D:/Projects/Personal/vc-wt/p7b-accounts` on `wip/p7b-accounts`,
 from `f4ae515`, which holds part A's checks (`docs/test-reports/phase-7b.md`, D244). The priority fix
-for CI's one failure on WP-LF's merge is merged at `32eaee3` and `d62dff8` (D386; Notes) and pushed;
-the lead reads its CI run (Windows must pass `GitRunnerPriorityTests`). WP-A's last fix round (the
-lead's rulings on A12's bound and the disabled token link, and the third hunt's minors) runs with two
-verifiers before its merge. At WP-A's merge the lead runs 10.9's classes and the lagged list and has
+for CI's one failure on WP-LF's merge is merged at `32eaee3` and `d62dff8` (D386; Notes); its CI run
+42285038375 is green. WP-A's two fix rounds after its hunts (the lead's rulings on A12's bound and the
+disabled token link, the third hunt's minors, and a verifier's finding on a wrapped token) are done at
+`587b425`; two skeptics attack the dialog's new token rule before the lead merges it. At WP-A's merge the lead runs 10.9's classes and the lagged list and has
 both parts' pictures inspected.
 Open point 8 of the report: Azure DevOps' `Check_1b_probes` (17 reads, its new probe of the sandbox
 organization's connectionData without a credential among them) runs before WP-A's merge if the owner
