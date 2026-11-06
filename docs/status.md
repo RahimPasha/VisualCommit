@@ -157,8 +157,9 @@ Checks, live trial and review:
   (D346, D352), and the live command extended to both, run with them; what it finds goes into the
   fakes (D342). Under way: the sandboxes are made (2026-11-02; their first tokens replaced, Waiting
   on the owner); stage 1 (15.1) merged at `b377aa3`, built, reviewed and hunted, offline classes
-  404 of 404; its first run with the tokens (2026-11-05) passed 8 of 9 (Notes, D385); stage 2
-  (`Check_3`) follows WP-N.
+  404 of 404; its first run with the tokens (2026-11-05) passed 8 of 9 (Notes, D385), and GitLab's
+  again with a new token (2026-11-06) 4 of 4, so stage 1's 9 tests have passed; WP-LF (0.4) puts
+  what they found into the fakes; stage 2 (`Check_3`) follows WP-N.
 - [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
   tests.
 
@@ -412,16 +413,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Stage 1's first run (2026-11-05, on `8faa839`, the owner told and present; Notes) passed 8 of its 9
-tests: all of Azure DevOps' and GitLab's `Check_1` and its probes; GitLab's `Check_2` failed at step 3,
-the list, because `GET /projects` wants Project: Read among the token's user permissions (D385). The
-owner makes a new GitLab fine-grained token with Project: Read among its user permissions too (and
-revokes the one it replaces), and sets it with the lead's GitLab-only script (outside the
-repository); the lead checks it (15.8) and, the owner told, runs the offline classes and then GitLab's
-stage 1 again (`--filter-class "*GitLabLiveTests"`), reads its run.txt and checks it, fully decoded,
-for the organization's name and the namespace. Then WP-LF (0.4) on both run.txt files, before part
-A's checks are written. For the week from 2026-11-05 the owner gives the phase about all of its
-allowance.
+Stage 1 has passed all 9 tests (Notes): Azure DevOps' 5 on 2026-11-05 and GitLab's 4 again on
+2026-11-06 with the owner's new token (D385). Next is WP-LF (design 0.4, branch `wip/p7b-live-fix`):
+the fakes and clients take both run.txt files' findings, each corrected answer marked MEASURED with
+its date, with made-up values only; its classes and then the lead's lagged list (0.4) run, it merges
+and its CI run is read; then part A's checks are written (D244) and WP-A is built. For the week from
+2026-11-05 the owner gives the phase about all of its allowance.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -450,6 +447,17 @@ every commit.
   (D385; `Check_2b` had nothing to probe and deleted its branches). Both run.txt files hold neither
   the organization's name, the namespace nor an address, checked fully decoded; `glpat-` appears
   only as the prefix in the command's own words. They lie in `artifacts/live/` (not committed).
+- **Stage 1's GitLab run again** (2026-11-06, 05:20 UTC, on `652ad80`, whose code is `8faa839`'s; the
+  owner's new token with Project: Read among its user permissions too, D385; checked as 15.8 says;
+  the offline classes first, 404 of 404): `--filter-class "*GitLabLiveTests"`, 4 tests, 4 passed,
+  47 s with the lock. `Check_2` signed in, listed, cloned through the clone form with the app's
+  helper (`x-access-token` holds on gitlab.com, 16.1), pushed two branches and created !1 as a
+  draft; `Check_2b` probed it (the 409 and 400 bodies as the fake sends them, the create with
+  nothing ahead 201, as the fake), and closed and deleted !1, !2 and both branches. The fake's
+  answers to `GET user`, the created request and its probes hold a subset of GitLab's members (for
+  WP-LF; the create with nothing ahead has no `first_contribution`); every probed status and body
+  matched the fake's. run.txt (48 lines) holds neither the organization's name, the namespace nor
+  an address, fully decoded; `glpat-` only in the command's own words, none token-shaped.
 - **Passed on to later packages** (from WP-S's hunts, 2026-11-02): WP-N (section 13) makes the
   create's two log lines (`RepositoryOperations.CreatePullRequest.cs:293` and `:403`) write
   `baseRepository.FullName` through `HostingHttpClient.ScreenEmail`, with a test of a create into an
@@ -734,9 +742,11 @@ every commit.
   saved a message with it, which the lead stripped in place, printing nothing), and all six variables
   pass 15.8's checks. GitLab's is a fine-grained token for "Only my personal projects" with 15.8's
   permissions and a few more (Merge Request: Approve, Merge, Subscribe; Pages Domain: Read). **The
-  tokens expire**: GitHub's on 2026-11-29 (risk 42), Azure DevOps' and GitLab's on 2026-12-04 (the
-  owner's answer); the gate's two live runs fall before 2026-11-29, or the owner makes GitHub's
-  again first.
+  tokens expire**: GitHub's on 2026-11-29 (risk 42), Azure DevOps' on 2026-12-04 (the owner's
+  answer); the gate's two live runs fall before 2026-11-29, or the owner makes GitHub's again first.
+  GitLab's was made again on 2026-11-05 with Project: Read among its user permissions too (D385;
+  the one it replaced, which expired on 2026-12-04, revoked), set with the lead's GitLab-only script
+  and checked as 15.8 says; its expiry date is still to be told by the owner.
 - **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
   (the review before the gate and the runs after it: the avatars' lookup per author, git's
