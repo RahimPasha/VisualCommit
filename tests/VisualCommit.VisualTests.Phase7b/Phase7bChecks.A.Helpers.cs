@@ -885,4 +885,33 @@ public sealed partial class Phase7bChecksA
         app.MoveToNeutral();
         app.Settle();
     }
+
+    /// <summary>
+    /// Azure DevOps' link loses its hover effect when it is disabled under the pointer (the verifiers of
+    /// 2026-11-06: Avalonia hit-tests no disabled control, so a pointer moved onto a disabled link alone
+    /// proves nothing of the underline's selector): with <paramref name="organization"/> typed into the
+    /// focused organization box, the pointer on the enabled link, which is underlined; the box's text
+    /// replaced by keyboard with <see cref="PartA.NotAnOrganization"/>, the pointer left where it is; then
+    /// no underline and the arrow cursor. The box is left holding <see cref="PartA.NotAnOrganization"/>
+    /// and the pointer goes back to the neutral point.
+    /// </summary>
+    private static void AssertHoverEndsWhenDisabledUnderThePointer(ShellDriver app, string organization)
+    {
+        Replace(app, "SignInOrganization", organization);
+        var link = Find(app, "SignInTokenLink");
+        AssertLinkLook(link, enabled: true);
+        app.MoveMouse(link);
+        app.Settle();
+        var text = link.GetVisualDescendants().OfType<TextBlock>().First();
+        Assert.True(text.TextDecorations is { Count: > 0 }, "SignInTokenLink is not underlined under the pointer while enabled.");
+
+        app.PressKey(Avalonia.Input.Key.A, Avalonia.Input.RawInputModifiers.Control);
+        app.Type(PartA.NotAnOrganization);
+        app.Settle();
+        Assert.Equal("SignInOrganization", FocusedId(app));
+        AssertLinkLook(link, enabled: false);
+        Assert.True(text.TextDecorations is not { Count: > 0 }, "SignInTokenLink stays underlined once disabled under the pointer.");
+        app.MoveToNeutral();
+        app.Settle();
+    }
 }

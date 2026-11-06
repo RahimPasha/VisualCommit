@@ -3040,15 +3040,21 @@ or settles what it left open:
   check and each of Azure DevOps' two reads (A7's note).
 - Report: `SettingsNavAccounts` at x 141 (±2). A12's step 4 changed by the lead's ruling of 2026-11-06
   (the report's "Changed in this report after its first commit", open point 2): at `a12b`'s offset 0 the
-  section scrolls (about 502 of 495) and 7 px of `AccountUseForGitNoteAzureDevOps` (three lines, 13.9
-  apart) lie below the viewport, less than one line, the last line's top inside it; `Check_A12` asserts
+  section scrolls (about 502 of 495 in the report's frame; `SectionScroller` measures 499 of 492) and
+  7 px of `AccountUseForGitNoteAzureDevOps` (three lines, 13.9 apart) lie below the viewport, less than
+  one line, the last line's top inside it; `Check_A12` asserts
   that at the step, each line's height read from the note's layout against `PartA.A12NoteLine` (13.9,
   ±0.5). Azure DevOps' disabled link (`a06a`, `a11b`) takes the disabled look by the
   lead's ruling of 2026-11-06 (the report's same section): `SignInLinkButton`'s `:disabled` gives the
   theme's `VcTextDisabledBrush` and the arrow cursor, and the underline's selector skips a disabled link;
   GitHub's and GitLab's links are never disabled, and 7a's part A pictures still differ from the main
   checkout's in the intro alone, compared pixel by pixel. `AssertDialog` asserts the accent and the hand
-  cursor while a link is enabled, the disabled look while it is not. Hunt 3's check-strength findings:
+  cursor while a link is enabled, the disabled look while it is not. After `a11b`, the link is also
+  disabled under the resting pointer (the organization retyped by keyboard): underlined before, not
+  after. Avalonia hit-tests no disabled control and clears `:pointerover` on one disabled under the
+  pointer, so neither step tells the selector's `:not(:disabled)` from the old selector (both pass
+  with it, probed 2026-11-06): it is a guard, and the checks prove the look. The asserted cursor is
+  the link's `Cursor`, not the one shown. Hunt 3's check-strength findings:
   `AssertDialog` asserts as 7a's the stack over the screen on Accounts, `SignInDialog` named by its
   title, no "In …" line and the buttons' order; `SignInNoKeychain`, `SignInChecking` and `SignInError`
   are asserted in their classes below the token box and above the buttons; A2 step 7 the whole intro

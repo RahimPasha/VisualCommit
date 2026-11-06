@@ -454,6 +454,9 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             Assert.True(ConfirmOf(app).IsEffectivelyEnabled);
             ShotA(app, PartA.A11AzureNotAnOrganization);
             AssertNoHoverWhileDisabled(app, "SignInTokenLink");
+            AssertHoverEndsWhenDisabledUnderThePointer(app, PartA.Organization);
+            AssertError(app, PartA.NotAnOrganizationError);
+            AssertNoRequests(served, mark);
 
             // A11 step 6: GitHub's form in Azure DevOps' dialog.
             Replace(app, "SignInOrganization", PartA.Organization);
