@@ -433,8 +433,9 @@ public sealed class SignInDialogProvidersTests
 
     /// <summary>
     /// Another provider's token wrapped (in quotes or angle brackets, a <c>.env</c> line, a clone URL,
-    /// JSON, percent-encoded or behind a backslash escape, joined by <c>_</c>, <c>-</c> or <c>.</c>) is
-    /// refused unsent as a bare one (D378; the lead's ruling of 2026-11-06, Hunt 3, and its verifiers): the
+    /// JSON, percent-encoded or behind a backslash escape, joined by <c>_</c>, <c>-</c> or <c>.</c>, with
+    /// a letter or digit against it, escaped inside its form) is refused unsent as a bare one (D378; the
+    /// lead's ruling of 2026-11-06, Hunt 3, its verifiers and the skeptic of <c>587b425</c>): the
     /// dialog shows <c>SignInOtherProviderTokenOf</c>, no fake is asked, and neither the error nor the
     /// log holds the value (the setup's end checks the log and the data folder for each form).
     /// </summary>
@@ -482,8 +483,8 @@ public sealed class SignInDialogProvidersTests
     /// rule on the whole value refuses: random values of each of its forms (GitHub's prefixed and
     /// classic ones, GitLab's fine-grained, newer and unprefixed ones, Azure DevOps' 84-character and
     /// legacy ones), the scenario's made-up tokens, and edge values that hold another provider's prefix
-    /// or Azure DevOps' mark inside, after <c>_</c>, <c>-</c> or <c>.</c>
-    /// (<see cref="SignInDialogViewModel.OtherProviderFormIn"/>).
+    /// or Azure DevOps' mark inside, after a letter, a digit, <c>_</c>, <c>-</c> or <c>.</c>, the mark
+    /// with 76 letters and digits or more before it (<see cref="SignInDialogViewModel.OtherProviderFormIn"/>).
     /// </summary>
     [Fact]
     public void No_token_of_the_dialog_s_own_provider_is_refused_as_another_s()
@@ -638,6 +639,69 @@ public sealed class SignInDialogProvidersTests
         }
     }
 
+    /// <summary>
+    /// The skeptic's values on <c>587b425</c> (made-up tokens): a letter or digit directly against another
+    /// provider's token, as an escape read as a break leaves it (an ANSI colour code with its escape
+    /// character stripped, as in CI's logs, or written <c>\033</c>, <c>\e</c> or <c>\x1b</c>; octal
+    /// <c>\042</c> and <c>\072</c>; <c>\U00000022</c>; quoted-printable <c>=3D</c> and <c>=22</c>), a
+    /// bare word joined to it, or letters after Azure DevOps' 84; and an escape that stands for one of the
+    /// token's own characters inside its form (<c>glpat%2D</c>, <c>ghp%5F</c>, the <c>Z</c> of
+    /// <c>AZDO</c>), percent-encoded once or twice, as <c>\u</c>, <c>\x</c>, <c>\U</c>, octal or a
+    /// backslash before the character, and the whole token so encoded: named in every other provider's
+    /// dialog, while the dialog's own token so written is not refused.
+    /// </summary>
+    [Fact]
+    public void A_letter_or_digit_against_the_token_or_an_escaped_token_character_hides_no_token()
+    {
+        var tokens = new Dictionary<HostingProvider, string[]>
+        {
+            [HostingProvider.GitHub] = [GitHubToken, "ghp_" + new string('F', 36), "github_pat_" + new string('F', 22) + "_" + new string('f', 59)],
+            [HostingProvider.GitLab] = [GitLabToken, "glpat-" + "FAKEfakeFAKEfake1234", "glpat-" + "FAKEfakeFAKEfakeFAKEfak.01.abcdefghi"],
+            [HostingProvider.AzureDevOps] = [AzureDevOpsForm, new string('F', 76) + "AZDO" + "F7f7"],
+        };
+        Func<string, string>[] wrappers =
+        [
+            token => "[32m" + token + "[0m",
+            token => "\\033[32m" + token + "\\033[0m",
+            token => "\\e[1m" + token,
+            token => "\\x1b[1;31m" + token,
+            token => "\\042" + token + "\\042",
+            token => "oauth2\\072" + token,
+            token => "\\U00000022" + token,
+            token => "GITHUB_TOKEN=3D" + token,
+            token => "=22" + token + "=22",
+            token => "Bearer" + token,
+            token => token + "xyz",
+            token => "x" + token + "7",
+            token => "7" + token,
+            token => EscapedAtJoint(token, character => $"%{(int)character:X2}"),
+            token => EscapedAtJoint(token, character => $"%25{(int)character:X2}"),
+            token => EscapedAtJoint(token, character => $"\\u{(int)character:X4}"),
+            token => EscapedAtJoint(token, character => $"\\x{(int)character:x2}"),
+            token => EscapedAtJoint(token, character => $"\\U{(int)character:X8}"),
+            token => EscapedAtJoint(token, character => "\\" + Convert.ToString(character, 8)),
+            token => EscapedAtJoint(token, character => "\\" + character),
+            token => "\"" + EscapedAtJoint(token, character => $"%{(int)character:X2}") + "\"",
+            token => string.Concat(token.Select(character => $"%{(int)character:X2}")),
+            token => string.Concat(token.Select(character => $"\\u{(int)character:x4}")),
+        ];
+        foreach (var provider in HostingProviders.InAccountsOrder)
+        {
+            foreach (var (other, values) in tokens)
+            {
+                foreach (var token in values)
+                {
+                    for (var which = 0; which < wrappers.Length; which++)
+                    {
+                        Assert.True(
+                            SignInDialogViewModel.OtherProviderFormIn(wrappers[which](token), provider) == (other == provider ? null : other),
+                            $"{provider}'s dialog: {other}'s token of {token.Length} characters in the skeptic's wrapper {which} is judged otherwise.");
+                    }
+                }
+            }
+        }
+    }
+
     /// <summary>The provider other than <paramref name="provider"/> whose form the whole value has (D378's rule as it was), or null.</summary>
     private static HostingProvider? WholeOther(string value, HostingProvider provider) =>
         HostingProviders.TokenFormOf(value) is { } form && form != provider ? form : null;
@@ -645,7 +709,7 @@ public sealed class SignInDialogProvidersTests
     /// <summary>
     /// Another provider's form between other characters is found wherever it lies, the first one when
     /// there are two; the dialog's own form so wrapped is not refused. Random values of each form,
-    /// random separators and runs of digits around them.
+    /// random separators and runs of digits around them, and letters and digits directly against them.
     /// </summary>
     [Fact]
     public void Another_provider_s_form_between_other_characters_is_found_anywhere()
@@ -654,9 +718,16 @@ public sealed class SignInDialogProvidersTests
         const string Separators = "\"'<>()[]{}=:@/,;!#$%&*+?^|~`\\";
 
         // Escapes that leave a token character against the token, read as the character they stand for,
-        // and the token characters that join a token to a name, Markdown's underscores or a full stop.
-        string[] lefts = ["%3A", "%22", "%2522", "%3D", "%20", "\\u0022", "\\n", "\\\"", "&quot;", "_", "__", "PAT_", "PAT-", "x."];
-        string[] rights = ["%40", "%22", "%2540", "\\u0022", "\\n", "&quot;", ".", "-", "_", "__"];
+        // and the token characters that join a token to a name, Markdown's underscores or a full stop;
+        // and (the skeptic's values on 587b425) escapes and words that leave a letter or digit directly
+        // against it: ANSI colour codes with and without their escape character, octal, \U and
+        // quoted-printable escapes, a bare word, letters and digits.
+        string[] lefts =
+        [
+            "%3A", "%22", "%2522", "%3D", "%20", "\\u0022", "\\n", "\\\"", "&quot;", "_", "__", "PAT_", "PAT-", "x.",
+            "[32m", "\\033[32m", "\\e[1m", "\\x1b[1;31m", "\\042", "oauth2\\072", "\\U00000022", "=3D", "GITHUB_TOKEN=3D", "=22", "Bearer", "x", "7",
+        ];
+        string[] rights = ["%40", "%22", "%2540", "\\u0022", "\\n", "&quot;", ".", "-", "_", "__", "[0m", "\\033[0m", "\\042", "=22", "x", "xyz", "7"];
         foreach (var provider in HostingProviders.InAccountsOrder)
         {
             foreach (var other in HostingProviders.InAccountsOrder)
@@ -664,18 +735,20 @@ public sealed class SignInDialogProvidersTests
                 for (var i = 0; i < 1000; i++)
                 {
                     var token = FormOf(other, random);
-                    var left = random.Next(4) switch
+                    var left = random.Next(5) switch
                     {
                         0 => string.Empty,
                         1 => Separators[random.Next(Separators.Length)].ToString(),
                         2 => Digits(random, random.Next(1, 30)) + Separators[random.Next(Separators.Length)],
+                        3 => Of(random, Alphanumerics, random.Next(1, 30)),
                         _ => lefts[random.Next(lefts.Length)],
                     };
-                    var right = random.Next(4) switch
+                    var right = random.Next(5) switch
                     {
                         0 => string.Empty,
                         1 => Separators[random.Next(Separators.Length)].ToString(),
                         2 => Separators[random.Next(Separators.Length)] + Digits(random, random.Next(1, 30)),
+                        3 => Of(random, Alphanumerics, random.Next(1, 30)),
                         _ => rights[random.Next(rights.Length)],
                     };
                     var expected = other == provider ? (HostingProvider?)null : other;
@@ -735,7 +808,36 @@ public sealed class SignInDialogProvidersTests
         token => $"{token}-",
         token => $"AZURE_DEVOPS_PAT_{token}",
         token => $"PAT-{token}",
+
+        // The skeptic's values on 587b425: a letter or digit directly against the token, left by an
+        // escape read as a break (ANSI colour codes, octal, \U, quoted-printable) or a bare word, and
+        // letters after it; and an escape that stands for one of the token's own characters inside it.
+        token => $"[32m{token}[0m",
+        token => $"\\033[32m{token}\\033[0m",
+        token => $"\\e[1m{token}",
+        token => $"\\042{token}\\042",
+        token => $"oauth2\\072{token}",
+        token => $"\\U00000022{token}",
+        token => $"GITHUB_TOKEN=3D{token}",
+        token => $"=22{token}=22",
+        token => $"Bearer{token}",
+        token => $"{token}xyz",
+        token => EscapedAtJoint(token, character => $"%{(int)character:X2}"),
+        token => EscapedAtJoint(token, character => $"\\u{(int)character:X4}"),
     ];
+
+    /// <summary>
+    /// <paramref name="token"/> with the character inside its form that joins its signature escaped by
+    /// <paramref name="escape"/>: the <c>_</c> or <c>-</c> of a GitHub or GitLab prefix (<c>ghp%5F</c>,
+    /// <c>glpat%2D</c>), else the <c>Z</c> of Azure DevOps' <c>AZDO</c>.
+    /// </summary>
+    private static string EscapedAtJoint(string token, Func<char, string> escape)
+    {
+        var at = HostingProviders.TokenFormOf(token) is HostingProvider.GitHub or HostingProvider.GitLab
+            ? token.IndexOfAny(['_', '-'])
+            : token.IndexOf("AZDO", StringComparison.Ordinal) + 1;
+        return token[..at] + escape(token[at]) + token[(at + 1)..];
+    }
 
     /// <summary>The characters of the providers' tokens: letters, digits, <c>_</c>, <c>-</c> and <c>.</c>.</summary>
     private const string TokenCharacters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.";
@@ -810,6 +912,11 @@ public sealed class SignInDialogProvidersTests
                 yield return "ghp_ghp_" + Of(random, Alphanumerics, 32);
                 yield return "ghp_" + Of(random, Alphanumerics, 36).ToUpperInvariant();
                 yield return Of(random, "0123456789ABCDEF", 40);
+
+                // Azure DevOps' mark with 76 letters and digits or more before it inside the dialog's own form.
+                yield return "ghp_" + Of(random, Alphanumerics, 90) + "AZDO" + Of(random, Alphanumerics, 10);
+                yield return "github_pat_" + Of(random, Alphanumerics, 22) + "_" + Of(random, Alphanumerics, 80) + "AZDO" + Of(random, Alphanumerics, 6);
+                yield return "ghp_" + Of(random, Alphanumerics, 36) + "glpat" + Of(random, Alphanumerics, 30);
                 yield return GitHubToken;
                 yield return PartA.PlainValue;
                 break;
@@ -830,6 +937,14 @@ public sealed class SignInDialogProvidersTests
                 yield return Of(random, Alphanumerics, 3) + "_ghp_" + Of(random, Alphanumerics, 12);
                 yield return Of(random, Base64Url, 2) + "-github_pat_" + Of(random, Alphanumerics, 6);
                 yield return Of(random, Alphanumerics, 12) + "AZDO" + Of(random, Alphanumerics, 4);
+
+                // GitHub's prefix after a letter or digit, and Azure DevOps' mark with 76 or more before it,
+                // inside the dialog's own forms.
+                yield return "glpat-" + Of(random, Alphanumerics, 5) + "ghp_" + Of(random, Alphanumerics, 36);
+                yield return "glpat-" + Of(random, Alphanumerics, 5) + "github_pat_" + Of(random, Alphanumerics, 22) + "_" + Of(random, Alphanumerics, 59);
+                yield return "glpat-" + Of(random, Alphanumerics, 80) + "AZDO" + Of(random, Alphanumerics, 9);
+                yield return Of(random, Alphanumerics, 2) + "ghp_" + Of(random, Alphanumerics, 14);
+                yield return Of(random, Alphanumerics, 1) + "github_pat_" + Of(random, Alphanumerics, 8);
                 yield return GitLabToken;
                 yield return GitLabLegacyToken;
                 yield return PartA.UnknownGitLabToken;

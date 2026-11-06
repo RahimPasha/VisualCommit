@@ -3014,22 +3014,34 @@ or settles what it left open:
   the session's Azure DevOps endpoints, sent as it reads; off, nothing parses. A name of a provider's
   token form, of a formless token's shape (52 base32 or 40 hex characters, any case) or equal to the
   token box's text is no organization: refused unsent, the link disabled, never echoed. D378's refusal
-  reads the token box anywhere (the lead's ruling of 2026-11-06, Hunt 3, and its verifiers):
-  `OtherProviderFormIn` takes the whole value's form (D378 as it was); else it reads the value as
-  typed and then with each escape as a break (`%` and two hex digits, once and twice encoded, `\u`,
-  `\x`, a backslash and a character), and in each reading, run by run of token characters (letters,
-  digits, `_`, `-`, `.`), names the first other form by its place: a run's own form; `glpat-`
-  anywhere on GitHub and Azure DevOps (their tokens hold no `-`); GitHub's prefixes anywhere on Azure
-  DevOps (no `_`); on GitLab, GitHub's prefix at a run's start or after `_`, `-` or `.`; on GitHub and
-  GitLab, Azure DevOps' 84 as a run of letters and digits. The last two skip a run of the dialog's own
-  shape: a GitHub prefix, `glpat-` (each after leading `_`, `-`, `.`) or GitLab's unprefixed 20
-  characters (ASSUMED from the tests' forms). So a token quoted, in a `.env` line or a clone URL,
-  percent-encoded, behind `\u0022` or `\n`, between Markdown's underscores, before a full stop or joined
-  to a name by `_` or `-` is refused unsent as a bare one, with the same text and nothing logged; an own
-  token (no `%` or `\`, one run of its own shape) is refused only as D378 refuses it
-  (`SignInDialogProvidersTests`: the verifiers' values, 33 wrappers through the dialog, random wrappers,
-  random and edge own tokens and own-shaped values). A run that starts with the dialog's own prefix is
-  not searched for Azure DevOps' 84 or GitHub's prefix (`glpat-<10>.<84>` goes to GitLab). The
+  reads the token box anywhere (the lead's ruling of 2026-11-06, Hunt 3, its verifiers and the
+  skeptic of `587b425`), by one rule in `OtherProviderFormIn`: the whole value's form first (D378 as
+  it was); else the value is read as typed and then with its escapes read, up to three times (`%` and
+  two hex digits; `\u` and four, `\U` and eight or `\x` and two hex digits, octal, `\n` and the other
+  control letters, a backslash before any other character), an escape that stands for a token
+  character (letter, digit, `_`, `-`, `.`) as that character, one for `%` or `\` as itself (a value
+  encoded twice) and any other as a break; each reading is cut into runs of token characters at every
+  other character, and in each run another provider's signature counts wherever it lies, but only
+  where it begins before the dialog's own token: GitHub's prefixes, GitLab's `glpat-`, Azure DevOps'
+  `AZDO` inside one stretch of letters and digits with 76 or more before it and 4 or more after it.
+  The dialog's own token is the run from the first place of its own prefix (a GitHub prefix,
+  `glpat-`) to its end, and on GitLab also a run of 20 characters, its unprefixed tokens' length
+  (ASSUMED); Azure DevOps' tokens hold no `_` or `-`, so no signature. The first signature by its
+  place names the provider: the same text, nothing sent, nothing logged. So a letter or digit against
+  the token (an escape's residue, `[32m`, `\042`, `=3D`; a word, `Bearer`; letters after Azure DevOps'
+  84), an escape inside its form (`glpat%2D`, `ghp%5F`) and the earlier wrappers (quotes, a `.env`
+  line, a clone URL, Markdown's underscores, a full stop) hide no token, while a bare own token is one
+  run that is its own token from its first character or holds no signature, refused only as D378
+  refuses it (`SignInDialogProvidersTests`: the verifiers' and the skeptic's values, 45 wrappers
+  through each dialog, random wrappers with letters and digits against the token, random and edge own
+  tokens and own-shaped values; the skeptic's probe, rerun: its 38 values all named, no throw over its
+  edges and 200,000 random values, 1M characters in 153 ms at most, linear). It deliberately does not
+  cover a value made to hide a token: one split by a character that is no escape it reads (`ghp&#95;`,
+  quoted-printable `glpat=2D`), one placed after the dialog's own prefix in the same run
+  (`glpat-x_ghp_...`), or one cut or changed until its signature is gone. It may refuse a wrapped own
+  token whose wrapper holds another's signature by chance (a GitLab path such as `laughs_app` holds
+  `ghs_`), or an unprefixed GitLab token holding a GitHub prefix by chance once wrapped so that its run
+  is not 20 long; the bare token then goes on. The
   providers' own local refusals (Hosting) still read the whole value. Local refusals move no focus; only `NotFound`
   asks `SignInOrganization` (`dialogBox`, `Margin="0"`). `SignInFailedOf` reads `failure.Provider`.
 - Prefill: the held account's login, else the active tab's `HostingState.Remotes` in

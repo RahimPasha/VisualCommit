@@ -178,8 +178,8 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
         }
 
         // Another provider's form anywhere in the box, refused without a request (D378): as the
-        // whole value or wrapped (quotes, a .env line, a clone URL, escaped, joined by "_", "-" or
-        // "."); its own form or none goes on.
+        // whole value or wrapped (quotes, a .env line, a clone URL, escaped outside or inside its form,
+        // with a letter, a digit, "_", "-" or "." against it); its own form or none goes on.
         if (OtherProviderFormIn(token, Provider) is { } form)
         {
             ErrorText = Texts.SignInOtherProviderTokenOf(Provider, form, organization);
@@ -342,30 +342,29 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
     private static bool IsPrintableAscii(string token) => token.All(character => character is >= '!' and <= '~');
 
     /// <summary>
-    /// The provider other than <paramref name="provider"/> whose token form <paramref name="token"/>
-    /// holds anywhere (D378; the lead's ruling of 2026-11-06 and its verifiers), or null. First the
-    /// whole value's form by <see cref="HostingProviders.TokenFormOf"/> (D378 as it was); else the
-    /// value is read as typed and then with its escapes read as breaks (<see cref="Unescape"/>:
-    /// percent escapes, once and twice encoded, and backslash escapes such as <c>\u0022</c> and
-    /// <c>\n</c>), and in each reading, run by run of token characters (letters, digits, <c>_</c>,
-    /// <c>-</c> and <c>.</c>) between any other characters, the first of these that a run holds, by its place:
+    /// The provider other than <paramref name="provider"/> whose token <paramref name="token"/> holds
+    /// (D378; the lead's ruling of 2026-11-06, Hunt 3, its verifiers and the skeptic of <c>587b425</c>),
+    /// or null. First the whole value's form by <see cref="HostingProviders.TokenFormOf"/> (D378 as it
+    /// was). Else the value is read as typed and then with its escapes read (<see cref="Unescape"/>, up to
+    /// three times, for a value encoded twice); each reading is cut into runs of token characters
+    /// (letters, digits, <c>_</c>, <c>-</c> and <c>.</c>) at every other character, and in each run
+    /// another provider's signature counts wherever it lies, but only where it begins before the dialog's
+    /// own token:
     /// <list type="bullet">
-    /// <item>the run's own form by <see cref="HostingProviders.TokenFormOf"/>: a token in quotes, angle
-    /// brackets, a <c>.env</c> line or a clone URL;</item>
-    /// <item>GitLab's <c>glpat-</c> anywhere, in GitHub's and Azure DevOps' dialogs, whose tokens hold
-    /// no <c>-</c>;</item>
-    /// <item>GitHub's prefixes anywhere, in Azure DevOps' dialog, whose tokens hold no <c>_</c>;</item>
-    /// <item>GitHub's prefix at the run's start or after <c>_</c>, <c>-</c> or <c>.</c>, in GitLab's
-    /// dialog, in a run that is not a GitLab token's shape (<see cref="IsOwnShaped"/>), as GitLab's
-    /// tokens may hold <c>_</c> and so a GitHub prefix by chance;</item>
-    /// <item>Azure DevOps' form as a run of 84 letters and digits between other characters, in GitHub's
-    /// and GitLab's dialogs, in a run that is not the dialog's token's shape.</item>
+    /// <item>GitHub's: one of its prefixes (<c>github_pat_</c>, <c>ghp_</c>, <c>gho_</c>, <c>ghu_</c>,
+    /// <c>ghs_</c>, <c>ghr_</c>);</item>
+    /// <item>GitLab's: <c>glpat-</c>;</item>
+    /// <item>Azure DevOps': <c>AZDO</c> inside one stretch of letters and digits with at least 76 of
+    /// them before it and 4 after it, beginning 76 before the mark.</item>
     /// </list>
-    /// A token of <paramref name="provider"/>'s own holds no <c>%</c> or <c>\</c> and is one run, the
-    /// whole value: GitHub's a GitHub prefix and letters, digits and <c>_</c> (or 40 hexadecimal
-    /// digits), GitLab's <c>glpat-</c> and letters, digits, <c>_</c>, <c>-</c> and <c>.</c> (or, from
-    /// before that prefix, 20 characters), Azure DevOps' letters and digits; none meets a rule above but
-    /// its whole value's, so no own token is refused here that D378's rule did not refuse.
+    /// The dialog's own token is, in GitHub's and GitLab's dialogs, the run from the first place of the
+    /// dialog's own prefix (a GitHub prefix; <c>glpat-</c>) to its end, and in GitLab's also a run of 20
+    /// characters, the length of its unprefixed tokens; Azure DevOps' tokens hold no <c>_</c> or
+    /// <c>-</c>, and so none of the others' signatures. The first signature by its place, in the first
+    /// reading that holds one, names the provider. A token of <paramref name="provider"/>'s own form,
+    /// bare, is one run that is its own token from its first character (or holds no signature), so no
+    /// own token is refused here that D378's rule on the whole value did not refuse. Linear in the
+    /// value's length.
     /// </summary>
     public static HostingProvider? OtherProviderFormIn(string token, HostingProvider provider)
     {
@@ -404,11 +403,12 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
     // GitLab's tokens from before its glpat- prefix (GitLab 14.5): 20 characters.
     private const int UnprefixedGitLabLength = 20;
 
-    // Azure DevOps' form: 84 characters with AZDO at the 0-based characters 76 to 79 (D378).
+    // Azure DevOps' form: 84 letters and digits with AZDO at the 0-based characters 76 to 79 (D378).
+    private const string AzureDevOpsMark = "AZDO";
     private const int AzureDevOpsLength = 84;
     private const int AzureDevOpsMarkIndex = 76;
 
-    /// <summary>The first other provider's form that <paramref name="text"/>'s runs of token characters hold, by its place.</summary>
+    /// <summary>The first other provider's signature that <paramref name="text"/>'s runs of token characters hold, by its place.</summary>
     private static HostingProvider? FirstOtherFormIn(string text, HostingProvider provider)
     {
         var start = 0;
@@ -419,7 +419,7 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
                 continue;
             }
 
-            if (i > start && OtherFormInRun(text[start..i], provider) is { } form)
+            if (i > start && OtherFormInRun(text.AsSpan(start, i - start), provider) is { } form)
             {
                 return form;
             }
@@ -430,88 +430,60 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
         return null;
     }
 
-    /// <summary>The other provider's form that one run of token characters holds first, by the rules of <see cref="OtherProviderFormIn"/>; null for none.</summary>
-    private static HostingProvider? OtherFormInRun(string run, HostingProvider provider)
+    /// <summary>The other provider whose signature begins first in one run of token characters, before the dialog's own token (<see cref="OtherProviderFormIn"/>); null for none.</summary>
+    private static HostingProvider? OtherFormInRun(ReadOnlySpan<char> run, HostingProvider provider)
     {
-        if (HostingProviders.TokenFormOf(run) is { } form && form != provider)
+        var own = provider switch
         {
-            return form;
-        }
+            HostingProvider.GitHub => FirstOf(run, GitHubPrefixes),
+            HostingProvider.GitLab => run.Length == UnprefixedGitLabLength ? 0 : run.IndexOf(GitLabPrefix, StringComparison.Ordinal),
+            _ => -1,
+        };
 
-        var first = int.MaxValue;
+        // A signature counts where it begins before the dialog's own token; no two begin at one place.
+        var limit = own < 0 ? run.Length : own;
         HostingProvider? found = null;
-        void Consider(int at, HostingProvider other)
+        if (provider != HostingProvider.GitHub && FirstOf(run, GitHubPrefixes) is >= 0 and var gitHub && gitHub < limit)
         {
-            if (at >= 0 && at < first)
-            {
-                first = at;
-                found = other;
-            }
+            (found, limit) = (HostingProvider.GitHub, gitHub);
         }
 
-        if (provider != HostingProvider.GitLab)
+        if (provider != HostingProvider.GitLab && run.IndexOf(GitLabPrefix, StringComparison.Ordinal) is >= 0 and var gitLab && gitLab < limit)
         {
-            Consider(run.IndexOf(GitLabPrefix, StringComparison.Ordinal), HostingProvider.GitLab);
+            (found, limit) = (HostingProvider.GitLab, gitLab);
         }
 
-        if (provider == HostingProvider.AzureDevOps)
+        if (provider != HostingProvider.AzureDevOps && AzureDevOpsFormAt(run) is >= 0 and var azureDevOps && azureDevOps < limit)
         {
-            foreach (var prefix in GitHubPrefixes)
-            {
-                Consider(run.IndexOf(prefix, StringComparison.Ordinal), HostingProvider.GitHub);
-            }
-        }
-
-        if (provider != HostingProvider.AzureDevOps && !IsOwnShaped(run, provider))
-        {
-            if (provider == HostingProvider.GitLab)
-            {
-                foreach (var prefix in GitHubPrefixes)
-                {
-                    Consider(PrefixAtBoundary(run, prefix), HostingProvider.GitHub);
-                }
-            }
-
-            Consider(AzureDevOpsFormAt(run), HostingProvider.AzureDevOps);
+            found = HostingProvider.AzureDevOps;
         }
 
         return found;
     }
 
-    /// <summary>
-    /// The run has the shape of <paramref name="provider"/>'s tokens, so that no other form is looked
-    /// for inside it: on GitHub it starts with a GitHub prefix, on GitLab with <c>glpat-</c> or is
-    /// GitLab's unprefixed 20 characters; either after any leading <c>_</c>, <c>-</c> and <c>.</c>
-    /// (Markdown's underscores around the dialog's own token).
-    /// </summary>
-    private static bool IsOwnShaped(string run, HostingProvider provider)
+    /// <summary>The first place in <paramref name="run"/> of any of <paramref name="values"/>; -1 for none.</summary>
+    private static int FirstOf(ReadOnlySpan<char> run, string[] values)
     {
-        var bare = run.TrimStart('_', '-', '.');
-        return provider switch
+        var first = -1;
+        foreach (var value in values)
         {
-            HostingProvider.GitHub => GitHubPrefixes.Any(prefix => bare.StartsWith(prefix, StringComparison.Ordinal)),
-            HostingProvider.GitLab => bare.StartsWith(GitLabPrefix, StringComparison.Ordinal) || run.Length == UnprefixedGitLabLength,
-            _ => false,
-        };
-    }
-
-    /// <summary>The first place of <paramref name="prefix"/> in the run at its start or after <c>_</c>, <c>-</c> or <c>.</c>; -1 for none.</summary>
-    private static int PrefixAtBoundary(string run, string prefix)
-    {
-        for (var at = run.IndexOf(prefix, StringComparison.Ordinal); at >= 0; at = run.IndexOf(prefix, at + 1, StringComparison.Ordinal))
-        {
-            if (at == 0 || run[at - 1] is '_' or '-' or '.')
+            var at = run.IndexOf(value, StringComparison.Ordinal);
+            if (at >= 0 && (first < 0 || at < first))
             {
-                return at;
+                first = at;
             }
         }
 
-        return -1;
+        return first;
     }
 
-    /// <summary>The start of the run's first run of letters and digits that is Azure DevOps' form, 84 long with <c>AZDO</c> at 76; -1 for none.</summary>
-    private static int AzureDevOpsFormAt(string run)
+    /// <summary>
+    /// Where Azure DevOps' form first begins in the run: 76 characters before an <c>AZDO</c> that has at
+    /// least 76 letters and digits before it and 4 after it in one stretch of letters and digits; -1 for none.
+    /// </summary>
+    private static int AzureDevOpsFormAt(ReadOnlySpan<char> run)
     {
+        const int After = AzureDevOpsLength - AzureDevOpsMarkIndex - 4;
         var start = 0;
         for (var i = 0; i <= run.Length; i++)
         {
@@ -520,9 +492,11 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
                 continue;
             }
 
-            if (i - start == AzureDevOpsLength && HostingProviders.TokenFormOf(run[start..i]) == HostingProvider.AzureDevOps)
+            // The stretch [start, i): the mark searched from its 76th character to 4 before its end.
+            if (i - start >= AzureDevOpsLength
+                && run[(start + AzureDevOpsMarkIndex)..(i - After)].IndexOf(AzureDevOpsMark, StringComparison.Ordinal) is >= 0 and var mark)
             {
-                return start;
+                return start + mark;
             }
 
             start = i + 1;
@@ -532,12 +506,15 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
     }
 
     /// <summary>
-    /// <paramref name="text"/> with each escape read once as a break between runs, so that the letters
-    /// and digits of an escape (<c>%3A</c>'s <c>3A</c>, <c>\u0022</c>'s <c>u0022</c>, <c>\n</c>'s
-    /// <c>n</c>) never join a token: <c>%</c> and two hexadecimal digits, <c>\u</c> and four, <c>\x</c>
-    /// and two, and a backslash and any one character, each as a space; but one that stands for
-    /// <c>%</c> or <c>\</c> as that character, so that a value escaped twice is read again. Read only to
-    /// find another provider's form; never sent or shown.
+    /// <paramref name="text"/> with each escape read once: one that stands for a token character (a
+    /// letter, a digit, <c>_</c>, <c>-</c> or <c>.</c>) as that character, so that a token escaped
+    /// inside its form (<c>glpat%2D</c>, <c>ghp_</c>) is read whole; one that stands for <c>%</c>
+    /// or <c>\</c> as that character, so that a value escaped twice is read again; every other one as a
+    /// break (a space). The escapes: <c>%</c> and two hexadecimal digits; a backslash and <c>u</c> and
+    /// four, <c>U</c> and eight, or <c>x</c> and two hexadecimal digits, one to three octal digits, or
+    /// one of <c>a</c>, <c>b</c>, <c>e</c>, <c>f</c>, <c>n</c>, <c>r</c>, <c>t</c> and <c>v</c> (a
+    /// control character); a backslash before any other character stands for that character. Read only
+    /// to find another provider's token; never sent or shown.
     /// </summary>
     private static string Unescape(string text)
     {
@@ -549,38 +526,65 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
         var read = new System.Text.StringBuilder(text.Length);
         for (var i = 0; i < text.Length; i++)
         {
-            var character = text[i];
-            char? escaped = null;
-            var length = 0;
-            if (character == '%' && HexAt(text, i + 1, 2) is { } percent)
+            var (code, length) = EscapeAt(text, i);
+            if (length == 0)
             {
-                (escaped, length) = (percent, 3);
-            }
-            else if (character == '\\' && i + 1 < text.Length)
-            {
-                (escaped, length) = text[i + 1] switch
-                {
-                    'u' when HexAt(text, i + 2, 4) is { } unicode => (unicode, 6),
-                    'x' when HexAt(text, i + 2, 2) is { } hex => (hex, 4),
-                    var next => ((char?)next, 2),
-                };
-            }
-
-            if (escaped is not { } stands)
-            {
-                read.Append(character);
+                read.Append(text[i]);
                 continue;
             }
 
-            read.Append(stands is '%' or '\\' ? stands : ' ');
+            read.Append(code is >= 0 and < 0x80 && ((char)code is '%' or '\\' || IsTokenCharacter((char)code)) ? (char)code : ' ');
             i += length - 1;
         }
 
         return read.ToString();
     }
 
-    /// <summary>The character whose code the <paramref name="count"/> hexadecimal digits at <paramref name="at"/> give; null if they are not there.</summary>
-    private static char? HexAt(string text, int at, int count)
+    /// <summary>The code that the escape at <paramref name="at"/> stands for and its length (<see cref="Unescape"/>); length 0 where none begins.</summary>
+    private static (long Code, int Length) EscapeAt(string text, int at)
+    {
+        if (text[at] == '%')
+        {
+            return HexAt(text, at + 1, 2) is { } percent ? (percent, 3) : (0, 0);
+        }
+
+        if (text[at] != '\\' || at + 1 == text.Length)
+        {
+            return (0, 0);
+        }
+
+        var next = text[at + 1];
+        switch (next)
+        {
+            case 'u' when HexAt(text, at + 2, 4) is { } unicode:
+                return (unicode, 6);
+            case 'U' when HexAt(text, at + 2, 8) is { } wide:
+                return (wide, 10);
+            case 'x' when HexAt(text, at + 2, 2) is { } hex:
+                return (hex, 4);
+            case >= '0' and <= '7':
+                {
+                    var octal = 0;
+                    var digits = 0;
+                    while (digits < 3 && at + 1 + digits < text.Length && text[at + 1 + digits] is >= '0' and <= '7')
+                    {
+                        octal = (octal * 8) + (text[at + 1 + digits] - '0');
+                        digits++;
+                    }
+
+                    return (octal, 1 + digits);
+                }
+
+            case 'a' or 'b' or 'e' or 'f' or 'n' or 'r' or 't' or 'v':
+                // A control character: a break.
+                return (0, 2);
+            default:
+                return (next, 2);
+        }
+    }
+
+    /// <summary>The code that the <paramref name="count"/> hexadecimal digits at <paramref name="at"/> give; null if they are not there.</summary>
+    private static long? HexAt(string text, int at, int count)
     {
         if (at + count > text.Length)
         {
@@ -596,7 +600,7 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
             }
         }
 
-        return (char)int.Parse(digits, System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture);
+        return long.Parse(digits, System.Globalization.NumberStyles.AllowHexSpecifier, System.Globalization.CultureInfo.InvariantCulture);
     }
 
     /// <summary>A character of some provider's tokens: an ASCII letter or digit, <c>_</c>, <c>-</c> or <c>.</c>.</summary>
