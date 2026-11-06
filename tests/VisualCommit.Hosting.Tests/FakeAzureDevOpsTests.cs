@@ -121,6 +121,29 @@ public sealed class FakeAzureDevOpsTests
             Assert.Null(fake.Requests[^1].Login);
         }
 
+        // The Anonymous 200 is for a Basic value in none of the PAT forms (azdo_FAKE-, 84 with AZDO,
+        // 52 base32). The older form, 52 characters of a to z and 2 to 7 (READ r5 0.6, valid until it
+        // expires), unknown here, gets the empty 401 with and without Suppress (READ g1 G0.2 for an
+        // invalid PAT-shaped value); 52 characters with a 1 are no PAT and get the 200.
+        var legacy = new string('a', 52);
+        foreach (var suppress in new[] { false, true })
+        {
+            var refused = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: request =>
+            {
+                request.Headers.Authorization = Basic(string.Empty, legacy);
+                if (suppress)
+                {
+                    Suppress(request);
+                }
+            });
+            Assert.Equal((401, 0), (refused.Status, refused.Bytes.Length));
+            Assert.Equal([TokenRealm], refused.WwwAuthenticate);
+            Assert.Null(fake.Requests[^1].Login);
+        }
+
+        var notLegacy = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: request => request.Headers.Authorization = Basic(string.Empty, new string('a', 51) + "1"));
+        Assert.Equal((200, AnonymousId), (notLegacy.Status, notLegacy.Json.GetProperty("authenticatedUser").GetProperty("id").GetString()));
+
         // No credential at all: the sign-in's 302 off the fake's origin, or 401 TF400813 with Suppress
         // (MEASURED r5 1.3).
         var redirected = await SendAsync(fake, HttpMethod.Get, Connection, token: null);
@@ -633,6 +656,16 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal([("refNameConflict", false), ("refNameConflict", false), ("succeeded", true), ("refNameConflict", false)], conflicts.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
         var afterConflicts = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()).ToList();
         Assert.Equal((true, false, false, true), (afterConflicts.Contains("refs/heads/batch"), afterConflicts.Contains("refs/heads/batch/inner"), afterConflicts.Contains("refs/heads/feature"), afterConflicts.Contains("refs/heads/feature/sign-in")));
+        // A create whose name differs only in case from a ref there (refs/heads/MAIN beside main) or
+        // from one named before it in the batch (case, then CASE): refNameConflict with HTTP 200 (the
+        // status ASSUMED), the same on a file system that ignores case and on one that does not;
+        // never git's own refusal of the whole batch.
+        var cased = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/MAIN\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/case\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/CASE\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}}]");
+        Assert.Equal(200, cased.Status);
+        Assert.Equal([("refNameConflict", false), ("succeeded", true), ("refNameConflict", false)], cased.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var afterCased = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()).ToList();
+        Assert.Equal((true, false, true, false), (afterCased.Contains("refs/heads/main"), afterCased.Contains("refs/heads/MAIN"), afterCased.Contains("refs/heads/case"), afterCased.Contains("refs/heads/CASE")));
         AssertError(await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken, $"[{{\"name\":\"refs/heads/main-even\",\"oldObjectId\":\"{main}\",\"newObjectId\":\"{tip}\"}}]"), 400, "InvalidArgumentValueException", null);
         Assert.Empty(fake.Errors);
     }

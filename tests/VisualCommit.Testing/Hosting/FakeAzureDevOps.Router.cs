@@ -6,12 +6,13 @@
 //   out, as g1 G3.2's sample 1 has it, READ);
 // - check 4's refusals of D373's made-up values, each sent as Basic with the empty user: a short one,
 //   on the sandbox organization's connectionData 200 with the Anonymous identity, with and without
-//   Suppress; an 84-character PAT-shaped one, 401 with an empty body and one Basic challenge (its
-//   realm TokenRealm's form), with and without Suppress; with a user (x-access-token) both are
-//   ASSUMED alike, the user ignored (READ g1 G1.0). The fake gives the short value's 200 in a private
-//   organization too: ASSUMED, inferred from that 200, since the run did not read whether the
-//   sandbox's organization allows public projects (no read of its connectionData without a
-//   credential); g1 G0.2 (READ) takes a value that is no PAT for no credential, which a private
+//   Suppress (the fake gives it to a Basic value in none of the PAT forms: azdo_FAKE-, 84 with AZDO,
+//   52 base32; the 52's empty 401 READ g1 G0.2); an 84-character PAT-shaped one, 401 with an empty
+//   body and one Basic challenge (its realm TokenRealm's form), with and without Suppress; with a
+//   user (x-access-token) both are ASSUMED alike, the user ignored (READ g1 G1.0). The fake gives
+//   the short value's 200 in a private organization too: ASSUMED, inferred from that 200, since the
+//   run did not read whether the sandbox's organization allows public projects (no read of its
+//   connectionData without a credential); g1 G0.2 (READ) takes a value that is no PAT for no credential, which a private
 //   organization answers with r5 1.3's 302 or 401 TF400813, so the next live run reads it before
 //   part A's checks copy the 200 (16.1's As built). No credential at all keeps r5 1.3's 302 and 401 (MEASURED);
 // - check 1 with a token (D374's made-up organization: 404 "The resource cannot be found." both ways);
@@ -19,7 +20,8 @@
 // - create: 201 (CreateStatus), isDraft, createdBy.id the account's, mergeStatus succeeded and the
 //   merge ref at the read after it; the 409 TF401179 and the 400 TF401398, word for word; an empty
 //   title's 400 InvalidArgumentValueException with its own words and eventId 0; one with nothing
-//   ahead, 201 with labels; every error's Content-Type without api-version;
+//   ahead, 201 with labels; the errors' Content-Type without api-version (the version's 400, the
+//   creates' 409 and two 400s; ASSUMED on the other errors);
 // - abandon through PATCH (update): 200 without mergeStatus and lastMergeCommit, and the merge ref
 //   gone at the next read;
 // - the refs delete (POST …/refs): 200, each update's seven members (no customMessage, rejectedBy);
@@ -30,9 +32,12 @@
 // - git's info/refs refusals of the made-up values: the service answers 401, a short value with its
 //   TF400813 HTML page (a BOM, text/html, Basic, Bearer and TFS-Federated challenges), an 84-character
 //   one empty with one Basic challenge; the fake's git is AuthRemoteServer's, shared with 7a's fake,
-//   whose 401 is "Authentication required." with one Basic challenge (the fake's realm), and in
-//   process git's paths are 404 (1.9). Git asks the app's helper on any 401 and the helper reads no
-//   wwwauth[] (AskPassProtocol), so no path of the app's differs; the statuses agree in host mode.
+//   whose 401 is "Authentication required." with one Basic challenge and one realm for every git
+//   401, TfsRealm with .app. (MEASURED g1 G4.1 for git's first request, with no credential), where
+//   the service's refusal of the 84-character value named TokenRealm's form without .app. (MEASURED
+//   2026-11-05); in process git's paths are 404 (1.9). Git asks the app's helper on any 401 and the
+//   helper reads no wwwauth[] (AskPassProtocol), so no path of the app's differs; the statuses
+//   agree in host mode.
 // - mergeStatus queued in the create's answer (READ r5 sample; stage 1 read succeeded only after).
 // Kept READ or ASSUMED, not reached by the live command:
 // - a read-only token's write (401 TF400813) and the expired token's body (AccessCheckException with
@@ -173,8 +178,9 @@ public sealed partial class FakeAzureDevOps
 
             if (caller is null)
             {
-                // connectionData with a Basic credential whose password is no PAT: 200 with the
-                // Anonymous identity, with and without Suppress (MEASURED 2026-11-05 in the sandbox's
+                // connectionData with a Basic credential whose password is in none of the PAT forms
+                // (azdo_FAKE-, 84 with AZDO, 52 base32: IsPatShaped): 200 with the Anonymous
+                // identity, with and without Suppress (MEASURED 2026-11-05 in the sandbox's
                 // organization with the empty user, D373's short value; with a user ASSUMED alike, the
                 // user ignored, READ g1 G1.0: no path of the app's sends one there). In a private
                 // organization too: ASSUMED, the sandbox organization's public-projects policy not
@@ -413,20 +419,25 @@ public sealed partial class FakeAzureDevOps
 
     /// <summary>
     /// A token PAT-shaped: the fake's <c>azdo_FAKE-…</c>, or 84 characters with <c>AZDO</c> at 76 to 79
-    /// (READ r5 0.6, 5; MEASURED 2026-11-05: a made-up value of that form got the empty 401). Any other
+    /// (READ r5 0.6, 5; MEASURED 2026-11-05: a made-up value of that form got the empty 401), or the
+    /// older form, 52 characters of <c>a</c> to <c>z</c> and <c>2</c> to <c>7</c>, valid until it expires
+    /// (READ r5 0.6; an unknown one's empty 401 READ g1 G0.2 for an invalid PAT-shaped value). Any other
     /// value is no credential (READ g1 G0.2), but on connectionData, where a Basic one gets the
     /// Anonymous identity (MEASURED 2026-11-05 in the sandbox's organization with the empty user; with
     /// a user ASSUMED alike; in a private organization ASSUMED, its policy not read, see check 4).
     /// </summary>
     private static bool IsPatShaped(string token) =>
-        token.StartsWith("azdo_FAKE-", StringComparison.Ordinal) || token.Length == 84 && string.CompareOrdinal(token, 76, "AZDO", 0, 4) == 0;
+        token.StartsWith("azdo_FAKE-", StringComparison.Ordinal)
+        || token.Length == 84 && string.CompareOrdinal(token, 76, "AZDO", 0, 4) == 0
+        || token.Length == 52 && token.All(c => c is >= 'a' and <= 'z' or >= '2' and <= '7');
 
     /// <summary>
     /// Check 4 for a PAT-shaped token: unknown, revoked or another organization's, 401 with an empty
     /// body, no <c>Content-Type</c> and one <c>WWW-Authenticate: Basic realm</c> (MEASURED 2026-11-05 for
-    /// an unknown one on connectionData with the empty user, with and without Suppress, D373; with a
-    /// user ASSUMED alike, the user ignored, READ g1 G1.0; revoked READ g1 G2, another organization's
-    /// ASSUMED); expired, 401 <c>AccessCheckException</c> (READ g1 G2, kept: 15.7).
+    /// an unknown 84-character one on connectionData with the empty user, with and without Suppress,
+    /// D373; an unknown 52-character one READ g1 G0.2; with a user ASSUMED alike, the user ignored,
+    /// READ g1 G1.0; revoked READ g1 G2, another organization's ASSUMED); expired, 401
+    /// <c>AccessCheckException</c> (READ g1 G2, kept: 15.7).
     /// </summary>
     private (FakeAzureToken? Known, AuthRemoteResponse? Refused) TokenOf(string token, FakeAzureOrganization organization, string served)
     {
@@ -1035,7 +1046,7 @@ public sealed partial class FakeAzureDevOps
     private static string RequestUrl(AuthRemoteRouteRequest request) =>
         $"http://{request.Host}{request.Path}" + (request.Query.Length > 0 ? "?" + request.Query : string.Empty);
 
-    /// <summary>A PAT-shaped token unknown, revoked or another organization's: 401, an empty body and one <c>WWW-Authenticate: Basic realm</c> (MEASURED 2026-11-05 for an unknown one; the realm <see cref="TokenRealm"/>, a made-up host of the measured form).</summary>
+    /// <summary>A PAT-shaped token unknown, revoked or another organization's: 401, an empty body and one <c>WWW-Authenticate: Basic realm</c> (MEASURED 2026-11-05 for an unknown 84-character one, READ g1 G0.2 for a 52-character one; the realm <see cref="TokenRealm"/>, a made-up host of the measured form).</summary>
     private AuthRemoteResponse InvalidTokenAnswer()
     {
         var headers = new List<KeyValuePair<string, string>>();

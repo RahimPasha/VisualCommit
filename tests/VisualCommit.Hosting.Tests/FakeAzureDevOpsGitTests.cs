@@ -178,12 +178,15 @@ public sealed class FakeAzureDevOpsGitTests
         fake.Revoke(served.AzureDevOpsToken);
         await AssertRefusedAsync(copy, fake, Url(fake, "x-access-token", served.AzureDevOpsToken, "Fernhill-Labs", "Mobile App", "mobile-app"));
 
-        // git's 401 carries one Basic challenge with the service's realm (MEASURED g1 G4.1 for git's
-        // agent; the realm's form, without .app., MEASURED 2026-11-05 on the sandbox's info/refs).
+        // git's first request, with no credential: 401 with the realm's form with .app. (both MEASURED
+        // g1 G4.1 for git's agent). The service sends three challenges (Bearer, Basic, TFS-Federated) and
+        // a text/html body with a BOM, and a refused credential's realm without .app. (MEASURED
+        // 2026-11-05); the one Basic challenge, its one realm and the text/plain body are the kept
+        // difference: AuthRemoteServer's shared 401, and the helper reads no wwwauth[] (D370).
         using var client = Loopback();
         using var refusal = await client.GetAsync(new Uri($"http://127.0.0.1:{fake.Port}/Fernhill-Labs/Mobile%20App/_git/mobile-app/info/refs?service=git-upload-pack"), Cancelled);
         Assert.Equal(401, (int)refusal.StatusCode);
-        Assert.Equal(["Basic realm=\"https://tfsprodfake.visualstudio.com/\""], refusal.Headers.NonValidated["WWW-Authenticate"]);
+        Assert.Equal(["Basic realm=\"https://tfsprodfake.app.visualstudio.com/\""], refusal.Headers.NonValidated["WWW-Authenticate"]);
         Assert.Empty(fake.Errors);
     }
 

@@ -313,10 +313,14 @@ public sealed partial class FakeAzureDevOps
     /// (<c>succeeded</c>, MEASURED 2026-11-05); a create (<c>oldObjectId</c> forty zeros) of a ref that
     /// is not there, at a commit of the repository, is written (<c>succeeded</c>, MEASURED 2026-11-05:
     /// the live command's <c>-even</c> branch at main's tip). A delete of another tip or none, a create
-    /// of a ref that is there or a second update of one name is <c>staleOldObjectId</c>, a create at no
-    /// commit <c>unresolvableToCommit</c>, a create whose name is a folder of a ref there or created
-    /// before it in the batch, or has one of them as its folder (<c>refs/heads/feature</c> beside
-    /// <c>refs/heads/feature/sign-in</c>), <c>refNameConflict</c>, and a ref outside <c>refs/heads/</c>
+    /// of a ref that is there (the exact name) or a second update of one name is <c>staleOldObjectId</c>,
+    /// a create at no commit <c>unresolvableToCommit</c>; a create whose name is a folder of a ref there
+    /// or created before it in the batch, or has one of them as its folder (<c>refs/heads/feature</c>
+    /// beside <c>refs/heads/feature/sign-in</c>), or differs from one of them only in case
+    /// (<c>refs/heads/MAIN</c> beside <c>refs/heads/main</c>), and an update whose name differs only in
+    /// case from one named before it in the batch, <c>refNameConflict</c> (names compared without case,
+    /// as <see cref="Nests"/> does, so that the answer is the same on every file system and git never
+    /// meets two loose files of one name); and a ref outside <c>refs/heads/</c>
     /// and <c>refs/tags/</c> <c>invalidRefName</c>, each with HTTP 200 (READ enum; the statuses ASSUMED;
     /// a ref the same batch deletes still counts, so that git's transaction never meets the conflict).
     /// One <c>update-ref --stdin</c>.
@@ -330,7 +334,7 @@ public sealed partial class FakeAzureDevOps
             var refs = await ReadRefsAsync(repository.BarePath, ct, "refs/heads/", "refs/tags/").ConfigureAwait(false);
             var results = new List<(string Name, string Old, string New, string Status)>();
             var updates = new StringBuilder();
-            var named = new HashSet<string>(StringComparer.Ordinal);
+            var named = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var created = new List<string>();
             foreach (var (name, old, @new) in requested)
             {
@@ -340,7 +344,8 @@ public sealed partial class FakeAzureDevOps
                 }
                 else if (!named.Add(name))
                 {
-                    results.Add((name, old, @new, "staleOldObjectId"));
+                    named.TryGetValue(name, out var earlier);
+                    results.Add((name, old, @new, string.Equals(earlier, name, StringComparison.Ordinal) ? "staleOldObjectId" : "refNameConflict"));
                 }
                 else if (@new == ZeroId)
                 {
@@ -362,7 +367,7 @@ public sealed partial class FakeAzureDevOps
                 {
                     results.Add((name, old, @new, "invalidRefName"));
                 }
-                else if (refs.Keys.Concat(created).Any(other => Nests(name, other) || Nests(other, name)))
+                else if (refs.Keys.Concat(created).Any(other => Nests(name, other) || Nests(other, name) || string.Equals(other, name, StringComparison.OrdinalIgnoreCase)))
                 {
                     results.Add((name, old, @new, "refNameConflict"));
                 }
