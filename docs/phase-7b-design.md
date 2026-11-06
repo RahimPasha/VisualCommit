@@ -3979,6 +3979,42 @@ Each point names what settles it and who meets it.
   `Check_4` on `<organization>.visualstudio.com`, before part B; a refusal brings ruling 8's fallback, a
   user name per provider (WP-C).
 
+**As built (WP-LF, 2026-11-06).** Stage 1 (Azure DevOps 2026-11-05; GitLab 2026-11-06, after D385's
+first run) is copied into the fakes, each answer marked MEASURED with its date, the two `.Router.cs`
+headers listing them:
+- Azure DevOps, as the fake answered: a member's connectionData both ways and its 400 at `7.1`; the
+  core area anonymous and with the token; a made-up 84-character PAT-shaped value's empty 401 with one
+  Basic challenge; D374's made-up organization, 404 both ways (A1's `NotFound` holds); `ListProject`'s
+  list; the create's 201, `isDraft`, `createdBy.id`, `succeeded` and the merge ref at the next read,
+  gone after the abandon; `x-access-token` through the helper on both hosts (16.1).
+- Azure DevOps, corrected: a Basic value that is no PAT gets connectionData's 200 with the Anonymous
+  identity in a private organization too, with and without Suppress (no credential at all keeps r5
+  1.3's 302 and 401); errors have no `api-version` in `Content-Type` (the 409 and the 400s MEASURED,
+  the rest ASSUMED alike); an empty title's 400 in the service's words, `eventId` 0; the create's answer
+  has `labels`, the abandon's no `mergeStatus` or `lastMergeCommit`; the refs POST's updates no
+  `customMessage` or `rejectedBy`.
+- GitLab, as the fake answered: every probed status and body. Corrected: `user`'s 41 members and a
+  single merge request's in the service's order (the create's without `first_contribution`), values
+  made up; `ratelimit-name` `burst_traffic_per_user_free_plan`, `ratelimit-limit` 100 with a token;
+  D385: `FakeGitLabPermissions.UserSection` and `UserProjectRead` tell user permissions from group and
+  project ones, `GET projects` needs `UserProjectRead` (else check 5's 403 naming `user`), the default
+  holds both.
+- Clients unchanged: A1 already refuses the Anonymous 200 (`BadCredentials`, `AnonymousDetail`, one
+  request), GitLab's A2 gives the 403 as `Forbidden` with `Detail` `insufficient_granular_scope` by the
+  code (7.3); `AzureDevOpsProviderTests` and `GitLabProviderTests` pin both against the fakes, each
+  failing on the old fake.
+- Kept, with reasons in the headers: git's `info/refs` refusals of the made-up values (the service's
+  401 is TF400813's HTML page, a BOM and three challenges, or empty with one; the fake's is
+  `AuthRemoteServer`'s, shared with 7a's, 404 in process; the helper reads no `wwwauth[]`, so no path
+  of the app's differs); `queued` in a create's answer; a list's merge-request members past r6 4.1's;
+  what 3.7 and 4.7 keep (the expired and revoked bodies, a read-only write, the fork shapes and
+  `/source`, a legacy token, a selected-projects list, other organizations, TF401027, 429 and 5xx).
+  WP-S's `ServiceAnswers` shim stays (no configurable web base).
+- For parts A to N and the review: WP-A words `AnonymousDetail` (a value that is no token) apart from a
+  refused token, and GitLab's `Forbidden` with the code as a missing permission naming Project: Read
+  among the user permissions (D385, `SignInHelpOf`); a fake GitLab token given an explicit list needs
+  `UserProjectRead` to list; no test may lean on the made-up values of members the client does not read.
+
 ### 16.2 Settled by a measurement, a CI run or the lead
 
 - MTP's order of twelve projects at four lanes (0.6): wave 1's full run (0.4). CI's Test steps against

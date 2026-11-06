@@ -79,8 +79,30 @@ public sealed class FakeAzureDevOpsTests
             Assert.Null(fake.Requests[^1].Login);
         }
 
-        // Fernhill-Labs does not: the sign-in's 302 off the fake's origin, or 401 TF400813 with Suppress.
-        var redirected = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: request => request.Headers.Authorization = Basic(string.Empty, "short-value"));
+        // Fernhill-Labs is private, yet a Basic password that is no PAT is the Anonymous identity there
+        // too, with and without Suppress (MEASURED 2026-11-05, D373's short value): a 200 that A1
+        // refuses (6.4).
+        foreach (var edit in new Action<HttpRequestMessage>[]
+        {
+            request => request.Headers.Authorization = Basic(string.Empty, "short-value"),
+            request =>
+            {
+                request.Headers.Authorization = Basic("x-access-token", "short-value");
+                Suppress(request);
+            },
+        })
+        {
+            var plain = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: edit);
+            Assert.Equal((200, "application/json; charset=utf-8; api-version=7.1-preview.1"), (plain.Status, plain.Header("Content-Type")));
+            Assert.Equal(["authenticatedUser", "authorizedUser", "instanceId", "deploymentId", "deploymentType", "locationServiceData"], plain.Json.EnumerateObject().Select(property => property.Name));
+            Assert.Equal((AnonymousId, "Anonymous"), (plain.Json.GetProperty("authenticatedUser").GetProperty("id").GetString(), plain.Json.GetProperty("authenticatedUser").GetProperty("providerDisplayName").GetString()));
+            Assert.Empty(plain.WwwAuthenticate);
+            Assert.Null(fake.Requests[^1].Login);
+        }
+
+        // No credential at all: the sign-in's 302 off the fake's origin, or 401 TF400813 with Suppress
+        // (MEASURED r5 1.3).
+        var redirected = await SendAsync(fake, HttpMethod.Get, Connection, token: null);
         Assert.Equal(302, redirected.Status);
         Assert.StartsWith("https://spsprodfake.vssps.visualstudio.com/_signin?", redirected.Header("Location"), StringComparison.Ordinal);
         Assert.Contains("Object moved", redirected.Body, StringComparison.Ordinal);
@@ -456,6 +478,11 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal((14, "active", "queued", "Ada Lovelace"), (created.Json.GetProperty("pullRequestId").GetInt32(), created.Json.GetProperty("status").GetString(), created.Json.GetProperty("mergeStatus").GetString(), created.Json.GetProperty("createdBy").GetProperty("displayName").GetString()));
         Assert.False(created.Json.TryGetProperty("lastMergeCommit", out _));
         Assert.True(created.Json.TryGetProperty("artifactId", out _));
+
+        // The create's members in the service's order, labels among them (MEASURED 2026-11-05).
+        Assert.Equal(
+            ["repository", "pullRequestId", "codeReviewId", "status", "createdBy", "creationDate", "title", "description", "sourceRefName", "targetRefName", "mergeStatus", "isDraft", "mergeId", "lastMergeSourceCommit", "lastMergeTargetCommit", "reviewers", "labels", "url", "_links", "supportsIterations", "artifactId"],
+            created.Json.EnumerateObject().Select(property => property.Name));
         var read = await SendAsync(fake, HttpMethod.Get, Pulls + "/14?api-version=7.1", fixture.AdaToken);
         Assert.Equal("succeeded", read.Json.GetProperty("mergeStatus").GetString());
         Assert.Equal(fake.PullRequests(fixture.MobileApp).Single(pull => pull.Id == 14).LastMergeCommit, read.Json.GetProperty("lastMergeCommit").GetProperty("commitId").GetString());
@@ -475,7 +502,15 @@ public sealed class FakeAzureDevOpsTests
         const string CannotBeActivated = "TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches";
         AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/missing", "refs/heads/main")), 400, "GitPullRequestCannotBeActivated", CannotBeActivated);
         AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("topic/no-request", "main")), 400, "GitPullRequestCannotBeActivated", CannotBeActivated);
-        AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/topic/no-request", "refs/heads/docs/guide", title: null)), 400, "InvalidArgumentValueException", null);
+        // An empty title (MEASURED 2026-11-05, eventId 0) and a missing one (ASSUMED alike); the
+        // errors' Content-Type has no api-version (MEASURED 2026-11-05).
+        const string TitleMissing = "Invalid argument value.\r\nParameter name: Invalid pull request title.";
+        AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/topic/no-request", "refs/heads/docs/guide", title: null)), 400, "InvalidArgumentValueException", TitleMissing, eventId: 0);
+        var empty = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/topic/no-request", "refs/heads/docs/guide", title: string.Empty));
+        AssertError(empty, 400, "InvalidArgumentValueException", TitleMissing, eventId: 0);
+        Assert.Equal("application/json; charset=utf-8", empty.Header("Content-Type"));
+        var duplicate = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/feature/sign-in", "refs/heads/main"));
+        Assert.Equal("application/json; charset=utf-8", duplicate.Header("Content-Type"));
         var readOnly = fake.AddToken(Organization, fixture.Ada, codeWrite: false);
         AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", readOnly, Body("refs/heads/topic/no-request", "refs/heads/docs/guide")), 401, "UnauthorizedRequestException",
             $"TF400813: The user '{fixture.Ada.Id}' is not authorized to access this resource.");
@@ -498,6 +533,13 @@ public sealed class FakeAzureDevOpsTests
         var abandoned = await SendAsync(fake, HttpMethod.Patch, Pulls + "/11?api-version=7.1", fixture.AdaToken, "{\"status\":\"abandoned\"}");
         Assert.Equal((200, "abandoned", "update:fernhill-labs/mobile app/11"), (abandoned.Status, abandoned.Json.GetProperty("status").GetString(), fake.Requests[^1].Route));
         Assert.True(abandoned.Json.TryGetProperty("closedDate", out _));
+
+        // The abandon's answer has no mergeStatus or lastMergeCommit (MEASURED 2026-11-05), a read
+        // of an active one has both.
+        Assert.False(abandoned.Json.TryGetProperty("mergeStatus", out _));
+        Assert.False(abandoned.Json.TryGetProperty("lastMergeCommit", out _));
+        Assert.Equal(["reviewers", "url", "_links", "supportsIterations", "artifactId"], abandoned.Json.EnumerateObject().Select(property => property.Name).TakeLast(5));
+        Assert.True((await SendAsync(fake, HttpMethod.Get, Pulls + "/12?api-version=7.1", fixture.AdaToken)).Json.TryGetProperty("mergeStatus", out _));
         Assert.Equal(FakeAzurePullRequestStatus.Abandoned, fake.PullRequests(fixture.MobileApp)[0].Status);
         var renamed = await SendAsync(fake, HttpMethod.Patch, Pulls + "/12?api-version=7.1", fixture.AdaToken, "{\"title\":\"Write the user guide\",\"description\":\"Longer.\"}");
         Assert.Equal(("Write the user guide", "Longer."), (renamed.Json.GetProperty("title").GetString(), renamed.Json.GetProperty("description").GetString()));
@@ -641,12 +683,12 @@ public sealed class FakeAzureDevOpsTests
     private static AuthenticationHeaderValue Basic(string user, string password) =>
         new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(user + ":" + password)));
 
-    private static void AssertError(Answer answer, int status, string typeKey, string? message)
+    private static void AssertError(Answer answer, int status, string typeKey, string? message, int eventId = 3000)
     {
         Assert.Equal(status, answer.Status);
         var json = answer.Json;
         Assert.Equal(["$id", "innerException", "message", "typeName", "typeKey", "errorCode", "eventId"], json.EnumerateObject().Select(property => property.Name));
-        Assert.Equal(("1", typeKey, 0, 3000), (json.GetProperty("$id").GetString(), json.GetProperty("typeKey").GetString(), json.GetProperty("errorCode").GetInt32(), json.GetProperty("eventId").GetInt32()));
+        Assert.Equal(("1", typeKey, 0, eventId), (json.GetProperty("$id").GetString(), json.GetProperty("typeKey").GetString(), json.GetProperty("errorCode").GetInt32(), json.GetProperty("eventId").GetInt32()));
         if (message is not null)
         {
             Assert.Equal(message, json.GetProperty("message").GetString());

@@ -168,6 +168,36 @@ public sealed class GitLabProviderTests
         lab.AssertNoSecret();
     }
 
+    /// <summary>
+    /// D385 (MEASURED 2026-11-05, WP-LF): a fine-grained token with Project: Read among its group and
+    /// project permissions alone signs in, but its list is GitLab's 403 <c>insufficient_granular_scope</c>
+    /// naming the user permission; A2 gives <c>Forbidden</c> with that code as <c>Detail</c> (7.3, never
+    /// by the English), after one request, nothing listed; the token with it among its user
+    /// permissions lists.
+    /// </summary>
+    [Fact]
+    public async Task A2_with_Project_Read_among_the_group_and_project_permissions_alone_is_Forbidden_by_the_code()
+    {
+        await using var lab = await GitLabLab.CreateAsync(withGit: false);
+        using var provider = lab.Provider();
+        var projectSection = lab.Fake.AddToken("ada", permissions: [FakeGitLabPermissions.UserRead, FakeGitLabPermissions.ProjectRead, FakeGitLabPermissions.MergeRequestRead]);
+        var ada = (await provider.CheckTokenAsync(projectSection, null, Cancelled)).Value!;
+        var before = lab.Fake.Requests.Count;
+
+        var listed = await provider.ListRepositoriesAsync(projectSection, ada, Cancelled);
+
+        var failure = listed.Failure!;
+        Assert.Null(listed.Value);
+        Assert.Equal((HostingFailureKind.Forbidden, "insufficient_granular_scope", HostingProvider.GitLab), (failure.Kind, failure.Detail, failure.Provider));
+        Assert.Equal(PullRequestRefusal.None, failure.Refusal);
+        Assert.Equal(before + 1, lab.Fake.Requests.Count);
+        Assert.Equal(("/api/v4/projects", 403), (lab.Fake.Requests[^1].Path, lab.Fake.Requests[^1].Status));
+
+        var both = lab.Fake.AddToken("ada", permissions: [FakeGitLabPermissions.UserRead, FakeGitLabPermissions.UserProjectRead, FakeGitLabPermissions.ProjectRead]);
+        Assert.NotEmpty((await provider.ListRepositoriesAsync(both, ada, Cancelled)).Value!.Repositories);
+        lab.AssertNoSecret();
+    }
+
     [Fact]
     public async Task A2_stops_at_ten_pages_and_says_more_exist()
     {

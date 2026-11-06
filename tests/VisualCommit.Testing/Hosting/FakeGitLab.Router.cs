@@ -1,14 +1,20 @@
-// What the live command settles (docs/phase-7b-design.md 4.7, D342, D375). WP-LIVE's probes (r6 14,
-// g2, 15.7) settle, before part A's checks (0.4), for the fine-grained kind alone (D375): `user`, and
-// `self`, which D364's token may not read (no Personal Access Token: Read, r6 2.2), so check 5's 403
-// and its text; create (201, the 409, the missing-branch 400, `Draft:`, nothing ahead); a made-up
-// `glpat-` value's 401 on `GET user` (D373); git (user names, the head ref, D340's Basic);
-// `ratelimit-*` and a 304 with a token; a non-simple row; the clean-up's PUT, DELETE and branch
-// delete. Kept as marked: a legacy token's sign-in (`user`, `self`) and check 4's 403 with its `scope`
-// lists, on GitLab's docs and source (READ, the lists ASSUMED; D375); a selected-projects token's list
-// (ASSUMED, as 7.5) and git's 403s (READ g2 G3, as 4.5 marks them), which need a token D364 does not
-// make; the expired and revoked 401s (READ, 15.7). Kept ASSUMED: the moved project's query order, an
-// empty repository's `default_branch`, an unknown `target_project_id`, the 5xx bodies.
+// What the live command settles (docs/phase-7b-design.md 4.7, D342, D375). WP-LIVE's stage 1 ran
+// with D364's fine-grained token (D375) and WP-LF copied it: MEASURED 2026-11-06 (Check_1b, Check_2,
+// Check_2b): `user` (200, its 41 members in order), `self`'s check 5 403 and its text, a made-up
+// `glpat-` value's 401 on `GET user` (D373), the projects with `permissions`, the merge requests'
+// 200, `ratelimit-*` on every answer (`burst_traffic_per_user_free_plan`, 100, with a token) and
+// across a 304, the create (201, `Draft:`, `references`), the 409, the missing-branch 400 and
+// nothing ahead (201 without `first_contribution`), a single one's members in order, the clean-up's
+// PUT, DELETE and branch delete, git through the app's helper (Check_2's clone and pushes); MEASURED
+// 2026-11-05 (the first run): `GET projects` without Project: Read among the user permissions is check
+// 5's 403 naming `user` (D385). Kept as marked: a legacy token's sign-in (`user`, `self`) and check
+// 4's 403 with its `scope` lists, on GitLab's docs and source (READ, the lists ASSUMED; D375); a
+// selected-projects token's list (ASSUMED, as 7.5) and git's 403s (READ g2 G3, as 4.5 marks them),
+// which need a token D364 does not make; the expired and revoked 401s (READ, 15.7); a list's members
+// past r6 4.1's (ASSUMED: the sandbox had no open one to list); a project route with Project: Read
+// among the user permissions alone (ASSUMED: the project permission's 403). Kept ASSUMED: the moved
+// project's query order, an empty repository's `default_branch`, an unknown `target_project_id`,
+// the 5xx bodies, the values of the members the client does not read.
 // Kept ASSUMED too (4.3, 4.4 and the build's own choices, D370): create's (a) before (b), its missing
 // parameters joined by ", " in Grape's declared order (title, source_branch, target_branch) and (e)'s
 // "not a fork" body; a fine-grained token's `scopes: ["granular"]`; the 400 texts for an invalid
@@ -35,7 +41,7 @@ namespace VisualCommit.Testing.Hosting;
 public sealed partial class FakeGitLab
 {
     private const string ApiPrefix = "/api/v4/";
-    private const int AuthenticatedLimit = 2000;
+    private const int AuthenticatedLimit = 100;
     private const int AnonymousLimit = 500;
 
     private enum RouteKind
@@ -214,7 +220,7 @@ public sealed partial class FakeGitLab
         };
     }
 
-    /// <summary><c>GET user</c>: the token's user (READ r6 1.3).</summary>
+    /// <summary><c>GET user</c>: the token's user, 200 (MEASURED 2026-11-06 with a fine-grained token; READ r6 1.3 for a legacy one, D375).</summary>
     private AuthRemoteResponse CurrentUser(FakeServiceCall call)
     {
         JsonObject json;
@@ -226,7 +232,7 @@ public sealed partial class FakeGitLab
         return Json(call, 200, json);
     }
 
-    /// <summary><c>GET personal_access_tokens/self</c>: the token (READ r6 1.4).</summary>
+    /// <summary><c>GET personal_access_tokens/self</c>: the token (READ r6 1.4); without Personal Access Token: Read check 5's 403 (MEASURED 2026-11-06).</summary>
     private AuthRemoteResponse Self(FakeServiceCall call, GitLabToken token)
     {
         JsonObject json;
@@ -242,7 +248,10 @@ public sealed partial class FakeGitLab
     /// <c>GET projects</c> (4.3): <c>membership=true</c> the user's, through groups too (READ g2 G5.4),
     /// empty without a token (MEASURED r6 1.2); else the public and the user's (and the internal ones
     /// for a signed-in user); <c>archived</c>; <c>simple</c> (always without a token, READ r6 3.1);
-    /// <c>order_by</c> (default <c>created_at</c>) and <c>sort</c> (default <c>desc</c>), READ; paged.
+    /// <c>order_by</c> (default <c>created_at</c>) and <c>sort</c> (default <c>desc</c>), READ; paged; a
+    /// row with <c>permissions</c> (MEASURED 2026-11-06). A fine-grained token needs Project: Read among
+    /// its user permissions (<see cref="FakeGitLabPermissions.UserProjectRead"/>), else check 5's 403
+    /// naming <c>user</c> (MEASURED 2026-11-05, D385).
     /// Another <c>order_by</c> or <c>sort</c> 400 shape E "&lt;name&gt; does not have a valid value"
     /// (ASSUMED: Grape's text, MEASURED for <c>state</c>, r6 4.1).
     /// </summary>
@@ -384,7 +393,11 @@ public sealed partial class FakeGitLab
     /// for a fork's too (READ: <c>conflicting_mr.to_reference</c> with no <c>from</c>,
     /// app/models/merge_request.rb:1441-1446, :1055-1058); (g) 400 shape C for a missing branch, the
     /// source's first; (h) 201, the iid next in the target, the title and description as sent,
-    /// <c>draft</c> from the title, nothing ahead needed, the head ref written.
+    /// <c>draft</c> from the title, nothing ahead needed, the head ref written. MEASURED 2026-11-06 with
+    /// a fine-grained token: (f)'s 409 <c>{"message":["Another open merge request already exists for
+    /// this source branch: !&lt;iid&gt;"]}</c>, (g)'s 400 <c>{"message":{"source_branch":["does not exist"]}}</c>,
+    /// (h)'s 201 with <c>draft</c> for a <c>Draft:</c> title and <c>references</c>, and a create with
+    /// nothing ahead 201 without <c>first_contribution</c>; the rest as marked.
     /// </summary>
     private async Task<AuthRemoteResponse> CreateAsync(FakeServiceCall call, FakeGitLabProject source, CancellationToken ct)
     {
@@ -494,7 +507,7 @@ public sealed partial class FakeGitLab
             JsonObject json;
             lock (Gate)
             {
-                json = MergeRequestJsonLocked(created, single: true);
+                json = MergeRequestJsonLocked(created, single: true, created: true);
             }
 
             return Json(call, 201, json);
@@ -557,7 +570,7 @@ public sealed partial class FakeGitLab
         return Json(call, 200, json);
     }
 
-    /// <summary><c>DELETE …/merge_requests/:iid</c>: 204 for an Owner alone, else 403; unknown 404 "404 Not found" (READ g2 G1.6). Its head ref goes at the next sync (ASSUMED).</summary>
+    /// <summary><c>DELETE …/merge_requests/:iid</c>: 204 for an Owner alone, else 403; unknown 404 "404 Not found" (READ g2 G1.6; the Owner's 204 MEASURED 2026-11-06, stage 1's clean-up). Its head ref goes at the next sync (ASSUMED).</summary>
     private AuthRemoteResponse DeleteMergeRequest(FakeServiceCall call, FakeGitLabProject project, string iidText)
     {
         if (!TryIid(iidText, out var iid))
@@ -610,7 +623,7 @@ public sealed partial class FakeGitLab
         };
     }
 
-    /// <summary><c>DELETE …/repository/branches/:branch</c> (the name one escaped segment): 403 without push, 404 "404 Branch Not Found", else 204 (READ g2 G1.7).</summary>
+    /// <summary><c>DELETE …/repository/branches/:branch</c> (the name one escaped segment): 403 without push, 404 "404 Branch Not Found", else 204 (READ g2 G1.7; the 204 MEASURED 2026-11-06, stage 1's clean-up).</summary>
     private async Task<AuthRemoteResponse> DeleteBranchAnswerAsync(FakeServiceCall call, FakeGitLabProject project, string branchSegment, CancellationToken ct)
     {
         lock (Gate)
@@ -757,7 +770,7 @@ public sealed partial class FakeGitLab
     private static string GranularText(string boundary, string label) =>
         $"Access denied: This operation requires a fine-grained personal access token with the following {boundary} permissions: [{label}].";
 
-    /// <summary>401 shape A "401 Unauthorized", no <c>WWW-Authenticate</c>: no token (MEASURED r6 1.2) or an unknown one (READ g2 G2.1).</summary>
+    /// <summary>401 shape A "401 Unauthorized", no <c>WWW-Authenticate</c>: no token (MEASURED r6 1.2) or an unknown one (MEASURED 2026-11-06: a made-up <c>glpat-</c> value on <c>GET user</c>, D373; READ g2 G2.1).</summary>
     private AuthRemoteResponse Unauthorized(FakeServiceCall call) => ErrorJson(call, 401, new JsonObject { ["message"] = "401 Unauthorized" });
 
     /// <summary>401 shape F <c>invalid_token</c> with <c>WWW-Authenticate: Bearer realm="Protected by OAuth 2.0", error=…, error_description=…</c> (READ g2 G2.2).</summary>
@@ -776,12 +789,12 @@ public sealed partial class FakeGitLab
             new JsonObject { ["error"] = "insufficient_scope", ["error_description"] = ScopeText, ["scope"] = scopes },
             [KeyValuePair.Create("WWW-Authenticate", $"Bearer realm=\"Protected by OAuth 2.0\", error=\"insufficient_scope\", error_description=\"{ScopeText}\", scope=\"{scopes}\"")]);
 
-    /// <summary>403 shape F <c>insufficient_granular_scope</c> naming the boundary (<c>user</c>, as on <c>GET projects</c>, r6 2.2, or <c>project</c>) and the label, no <c>WWW-Authenticate</c> (READ g2 G2.4).</summary>
+    /// <summary>403 shape F <c>insufficient_granular_scope</c> naming the boundary (<c>user</c>, as on <c>GET projects</c>, r6 2.2, or <c>project</c>) and the label as GitLab writes it (<see cref="FakeGitLabPermissions.LabelOf"/>), no <c>WWW-Authenticate</c>, <c>Content-Type: application/json</c> (MEASURED 2026-11-06 on <c>personal_access_tokens/self</c> and 2026-11-05 on <c>GET projects</c>, D385, both naming <c>user</c>; the <c>project</c> form READ g2 G2.4).</summary>
     private AuthRemoteResponse InsufficientGranular(FakeServiceCall call, string label, bool userBoundary) =>
         ErrorJson(call, 403, new JsonObject
         {
             ["error"] = "insufficient_granular_scope",
-            ["error_description"] = GranularText(userBoundary ? "user" : "project", label),
+            ["error_description"] = GranularText(userBoundary ? "user" : "project", FakeGitLabPermissions.LabelOf(label)),
         });
 
     /// <summary>403 shape A "403 Forbidden" (READ r6 5.2, g2 G1.2).</summary>
@@ -879,8 +892,11 @@ public sealed partial class FakeGitLab
     /// <summary>
     /// The headers on every API answer (MEASURED r6 8, 13.1): <c>ratelimit-observed</c>,
     /// <c>ratelimit-remaining</c>, <c>ratelimit-reset</c> (the next minute's epoch), <c>ratelimit-limit</c>
-    /// and <c>ratelimit-name</c>, per user (<c>throttle_authenticated_api</c>, 2000, READ) or anonymous
-    /// (<c>throttle_unauthenticated_api</c>, 500, MEASURED), each request counted, a 304 too (MEASURED);
+    /// and <c>ratelimit-name</c>, per user (<c>burst_traffic_per_user_free_plan</c>, 100, MEASURED
+    /// 2026-11-06 with a fine-grained token on every answer of stage 1, a 304 among them; r6 READ
+    /// <c>throttle_authenticated_api</c>, 2000) or anonymous (<c>throttle_unauthenticated_api</c>, 500,
+    /// MEASURED), each request counted, a 304 too (MEASURED); the fake's count never resets (ASSUMED:
+    /// no test waits a window out, and the client reads none of them but on a 429);
     /// then <c>x-request-id</c> and <c>x-gitlab-meta</c> (MEASURED).
     /// </summary>
     private void AddCommonHeaders(FakeServiceCall call, List<KeyValuePair<string, string>> headers, bool exhausted = false)
@@ -897,7 +913,7 @@ public sealed partial class FakeGitLab
         headers.Add(KeyValuePair.Create("ratelimit-remaining", (exhausted ? 0 : Math.Max(0, limit - used)).ToString(CultureInfo.InvariantCulture)));
         headers.Add(KeyValuePair.Create("ratelimit-reset", AppClocks.HarnessTime.AddMinutes(1).ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture)));
         headers.Add(KeyValuePair.Create("ratelimit-limit", limit.ToString(CultureInfo.InvariantCulture)));
-        headers.Add(KeyValuePair.Create("ratelimit-name", login is null ? "throttle_unauthenticated_api" : "throttle_authenticated_api"));
+        headers.Add(KeyValuePair.Create("ratelimit-name", login is null ? "throttle_unauthenticated_api" : "burst_traffic_per_user_free_plan"));
         var id = RequestIdHeader();
         headers.Add(id);
         headers.Add(KeyValuePair.Create("x-gitlab-meta", $"{{\"correlation_id\":\"{id.Value}\",\"version\":\"1\"}}"));
@@ -1123,7 +1139,8 @@ public sealed partial class FakeGitLab
     {
         RouteKind.User => new(FakeGitLabPermissions.UserRead, [FakeGitLabPermissions.ReadUser, FakeGitLabPermissions.ReadApi, FakeGitLabPermissions.Api], "read_user ai_workflows api read_api", Read: true),
         RouteKind.Self => new(FakeGitLabPermissions.PersonalAccessTokenRead, null, null, Read: true),
-        RouteKind.Projects or RouteKind.Project => new(FakeGitLabPermissions.ProjectRead, ReadScopes, "api read_api", Read: true),
+        RouteKind.Projects => new(FakeGitLabPermissions.UserProjectRead, ReadScopes, "api read_api", Read: true),
+        RouteKind.Project => new(FakeGitLabPermissions.ProjectRead, ReadScopes, "api read_api", Read: true),
         RouteKind.MergeRequests => new(FakeGitLabPermissions.MergeRequestRead, ReadScopes, "ai_workflows api read_api", Read: true),
         RouteKind.MergeRequest => new(FakeGitLabPermissions.MergeRequestRead, ReadScopes, "api read_api", Read: true),
         RouteKind.Create => new(FakeGitLabPermissions.MergeRequestCreate, [FakeGitLabPermissions.Api], "mcp ai_workflows api", Read: false),

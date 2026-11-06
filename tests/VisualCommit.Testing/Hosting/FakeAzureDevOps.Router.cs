@@ -1,29 +1,38 @@
 // The fake of Azure DevOps' answers that the research left ASSUMED and that WP-LIVE's probes settle
 // before part A's checks copy them (docs/phase-7b-design.md 3.7; r5 9, g1 G6; D342, D370, D373, D374).
-// The fix package (WP-LF) marks each one MEASURED, with its date, once it has copied the live answer:
-// - connectionData for a member signed in with a Code-only token (g1 G3.2's shape, READ);
-// - check 4's refusals of a made-up short value and of a made-up 84-character PAT-shaped one, each
-//   with and without X-TFS-FedAuthRedirect: Suppress, on the sandbox organization's connectionData
-//   and on the sandbox repository's info/refs (D373: no credential's 302 or 401 TF400813, and the
-//   empty 401; git's 401);
-// - check 1 with a token (D374's probe of a made-up organization: the token sent only after the read
-//   without a credential answers 404);
-// - the core resource area (areas) read with a token;
-// - create: its status (200 or 201, CreateStatus), mergeStatus queued, the merge ref written by the
-//   sync, isDraft; the 409 TF401179 and the 400 TF401398; a create without a title; one with nothing
-//   ahead;
-// - abandon through PATCH (update), and the merge ref's removal at the next sync;
-// - the refs delete (POST …/refs) and its 200;
-// - createdBy's members;
-// - the sandbox's row in the project's list (ListProject);
-// - any BOM on an error body.
+// The fix package (WP-LF) copied stage 1's run of 2026-11-05 and marked each one MEASURED 2026-11-05:
+// - connectionData for a member signed in with a Code-only token (g1 G3.2's shape; the member names
+//   as served, customDisplayName present only when set, as g1's sample has it);
+// - check 4's refusals of D373's made-up values: a short one in Basic, on connectionData 200 with the
+//   Anonymous identity, with and without Suppress, in the private organization too (the fake's 302
+//   and 401 TF400813 stay for no credential at all, MEASURED r5 1.3); an 84-character PAT-shaped one,
+//   401 with an empty body and one Basic challenge, with and without Suppress;
+// - check 1 with a token (D374's made-up organization: 404 "The resource cannot be found." both ways);
+// - the core resource area (areas), without a credential and with the token;
+// - create: 201 (CreateStatus), isDraft, createdBy.id the account's, mergeStatus succeeded and the
+//   merge ref at the read after it; the 409 TF401179 and the 400 TF401398, word for word; an empty
+//   title's 400 InvalidArgumentValueException with its own words and eventId 0; one with nothing
+//   ahead, 201 with labels; every error's Content-Type without api-version;
+// - abandon through PATCH (update): 200 without mergeStatus and lastMergeCommit, and the merge ref
+//   gone at the next read;
+// - the refs delete (POST …/refs): 200, each update's seven members (no customMessage, rejectedBy);
+// - the sandbox's row in the project's list (ListProject); no BOM on any of these.
+// Kept, with their reasons (D370):
+// - git's info/refs refusals of the made-up values: the service answers 401, a short value with its
+//   TF400813 HTML page (a BOM, text/html, Basic, Bearer and TFS-Federated challenges), an 84-character
+//   one empty with one Basic challenge; the fake's git is AuthRemoteServer's, shared with 7a's fake,
+//   whose 401 is "Authentication required." with one Basic challenge (the fake's realm), and in
+//   process git's paths are 404 (1.9). Git asks the app's helper on any 401 and the helper reads no
+//   wwwauth[] (AskPassProtocol), so no path of the app's differs; the statuses agree in host mode.
+// - mergeStatus queued in the create's answer (READ r5 sample; stage 1 read succeeded only after).
 // Kept READ or ASSUMED, not reached by the live command:
 // - a read-only token's write (401 TF400813) and the expired token's body (AccessCheckException with
 //   its BOM), which need a token D364 does not make (design 15.7, 16.1);
 // - with no fork in the sandbox (D375): parentRepository, the fork shapes (forkSource, sourceRefName
 //   refs/pull/<n>/source) and /source refs;
 // - outside D352 and D374: another organization's token, an unknown project (TF200016), TF401027's
-//   statuses, 429's typeKey, the 5xx bodies, $top's default (101) and its cap (MaxPerPage).
+//   statuses, 429's typeKey, the 5xx bodies, $top's default (101) and its cap (MaxPerPage); a
+//   Bearer or no credential on connectionData of a private organization (r5 1.3's 302 and 401).
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -154,7 +163,12 @@ public sealed partial class FakeAzureDevOps
 
             if (caller is null)
             {
-                if (route.Kind == Kind.Connection && (ignored || organization.PublicProjects))
+                // connectionData with a Basic credential whose password is no PAT: 200 with the
+                // Anonymous identity, with and without Suppress, in a private organization too
+                // (MEASURED 2026-11-05, D373's short value; with no credential at all r5 1.3's 302 or
+                // 401 stays, MEASURED); a public organization's for anyone (MEASURED r5 1.2).
+                var plainBasic = call.Authorization is FakeAuthorizationForm.Basic or FakeAuthorizationForm.BasicEmptyUser;
+                if (route.Kind == Kind.Connection && (ignored || organization.PublicProjects || plainBasic))
                 {
                     return Finish(fault, Json(200, ConnectionJson(null), served));
                 }
@@ -383,14 +397,20 @@ public sealed partial class FakeAzureDevOps
         return null;
     }
 
-    /// <summary>A token PAT-shaped: the fake's <c>azdo_FAKE-…</c>, or 84 characters with <c>AZDO</c> at 76 to 79 (READ r5 0.6, 5); any other value is no credential (READ g1 G0.2).</summary>
+    /// <summary>
+    /// A token PAT-shaped: the fake's <c>azdo_FAKE-…</c>, or 84 characters with <c>AZDO</c> at 76 to 79
+    /// (READ r5 0.6, 5; MEASURED 2026-11-05: a made-up value of that form got the empty 401). Any other
+    /// value is no credential (READ g1 G0.2), but on connectionData, where a Basic one gets the
+    /// Anonymous identity (MEASURED 2026-11-05).
+    /// </summary>
     private static bool IsPatShaped(string token) =>
         token.StartsWith("azdo_FAKE-", StringComparison.Ordinal) || token.Length == 84 && string.CompareOrdinal(token, 76, "AZDO", 0, 4) == 0;
 
     /// <summary>
     /// Check 4 for a PAT-shaped token: unknown, revoked or another organization's, 401 with an empty
-    /// body and one <c>WWW-Authenticate: Basic realm</c> (READ g1 G2, community; the last ASSUMED);
-    /// expired, 401 <c>AccessCheckException</c> (READ g1 G2).
+    /// body, no <c>Content-Type</c> and one <c>WWW-Authenticate: Basic realm</c> (MEASURED 2026-11-05 for
+    /// an unknown one on connectionData, with and without Suppress, D373; revoked READ g1 G2, another
+    /// organization's ASSUMED); expired, 401 <c>AccessCheckException</c> (READ g1 G2, kept: 15.7).
     /// </summary>
     private (FakeAzureToken? Known, AuthRemoteResponse? Refused) TokenOf(string token, FakeAzureOrganization organization, string served)
     {
@@ -575,11 +595,15 @@ public sealed partial class FakeAzureDevOps
 
     /// <summary>
     /// <c>create:</c> (design 3.3; r5 4, g1 G2): no title, 400 <c>InvalidArgumentValueException</c>
-    /// (ASSUMED); a ref outside <c>refs/heads/</c> or a missing branch, 400
-    /// <c>GitPullRequestCannotBeActivated</c> TF401398 (READ); an active one with that source and
-    /// target, 409 <c>GitPullRequestExistsException</c> TF401179 (READ); else <see cref="CreateStatus"/>,
-    /// <c>status: active</c>, <c>mergeStatus: queued</c>, the token's user as <c>createdBy</c>; one with
-    /// nothing ahead is made too (ASSUMED). A fork's source is <c>forkSource.repository.id</c> (READ g1 G1.2).
+    /// (<see cref="TitleMissing"/>, MEASURED 2026-11-05); a missing branch, 400
+    /// <c>GitPullRequestCannotBeActivated</c> TF401398 (MEASURED 2026-11-05; a ref outside
+    /// <c>refs/heads/</c> READ); an active one with that source and target, 409
+    /// <c>GitPullRequestExistsException</c> TF401179 (MEASURED 2026-11-05); else
+    /// <see cref="CreateStatus"/> (201 MEASURED 2026-11-05), <c>status: active</c>, <c>isDraft</c> as
+    /// sent, the token's user as <c>createdBy</c> (its <c>id</c> the account's, MEASURED 2026-11-05),
+    /// <c>mergeStatus: queued</c> (READ; <c>succeeded</c> at the read after it MEASURED 2026-11-05),
+    /// the answer with <c>labels</c>; one with nothing ahead is made too (MEASURED 2026-11-05). A
+    /// fork's source is <c>forkSource.repository.id</c> (READ g1 G1.2, kept: D375).
     /// </summary>
     private async Task<AuthRemoteResponse> CreateAsync(FakeServiceCall call, Route route, FakeAzureOrganization organization, FakeAzureToken caller, string served, CancellationToken ct)
     {
@@ -602,7 +626,7 @@ public sealed partial class FakeAzureDevOps
         var title = StringOf(body, "title");
         if (string.IsNullOrWhiteSpace(title))
         {
-            return InvalidArgument("The pull request needs a title (the fake's words; the service's answer is ASSUMED).", served);
+            return TitleMissing(served);
         }
 
         FakeAzureRepository? fork = null;
@@ -646,6 +670,7 @@ public sealed partial class FakeAzureDevOps
             {
                 if (_pullRequests.Exists(other => other.Repository == target && other.IsActive && other.Fork == fork && other.SourceBranch == source && other.TargetBranch == into))
                 {
+                    // MEASURED 2026-11-05: status, typeName, typeKey and words.
                     return Json(409, ErrorJson("TF401179: An active pull request for the source and target branch already exists.", "Microsoft.TeamFoundation.Git.Server.GitPullRequestExistsException, Microsoft.TeamFoundation.Git.Server", "GitPullRequestExistsException"), served);
                 }
 
@@ -659,7 +684,7 @@ public sealed partial class FakeAzureDevOps
                 _pullRequests.Add(pull);
             }
 
-            return SinglePull(pull, caller, served, CreateStatus);
+            return SinglePull(pull, caller, served, CreateStatus, PullAnswer.Created);
         }
         finally
         {
@@ -670,8 +695,10 @@ public sealed partial class FakeAzureDevOps
     /// <summary>
     /// <c>update:</c> (READ g1 G1.1): <c>status</c> (<c>active</c>, <c>abandoned</c>, <c>completed</c>),
     /// <c>title</c> and <c>description</c>; any other member, or another value, 400
-    /// <c>InvalidArgumentValueException</c> (READ; the status ASSUMED). The merge ref of one abandoned
-    /// or completed goes at the next sync.
+    /// <c>InvalidArgumentValueException</c> (READ; the status ASSUMED). The abandon's 200 (MEASURED
+    /// 2026-11-05) has no <c>mergeStatus</c> or <c>lastMergeCommit</c> (MEASURED 2026-11-05; a
+    /// completion's answered so too, ASSUMED). The merge ref of one abandoned or completed goes at the
+    /// next sync (MEASURED 2026-11-05: gone at the first read after an abandon).
     /// </summary>
     private AuthRemoteResponse Update(FakeServiceCall call, Route route, FakeAzureOrganization organization, FakeAzureToken caller, string served)
     {
@@ -737,7 +764,7 @@ public sealed partial class FakeAzureDevOps
             }
         }
 
-        return SinglePull(pull, caller, served, 200);
+        return SinglePull(pull, caller, served, 200, pull.IsActive ? PullAnswer.Read : PullAnswer.Closed);
     }
 
     /// <summary><c>GET …/refs?filter=</c> after the ref sync (MEASURED r5 3.3): the refs under <c>refs/&lt;filter&gt;</c>, by name.</summary>
@@ -757,7 +784,13 @@ public sealed partial class FakeAzureDevOps
         return Json(200, ListJson(rows.Select(pair => (JsonNode)RefJson(repository, pair.Key, pair.Value))), served);
     }
 
-    /// <summary><c>POST …/refs</c>: deletes only (a <c>newObjectId</c> other than forty zeros, 400 in the fake's words), with r5 4's results at 200 (<see cref="DeleteRefsAsync"/>).</summary>
+    /// <summary>
+    /// <c>POST …/refs</c>: deletes only (a <c>newObjectId</c> other than forty zeros, 400 in the fake's
+    /// words), with r5 4's results at 200 (<see cref="DeleteRefsAsync"/>): each update's members
+    /// <c>repositoryId, name, oldObjectId, newObjectId, isLocked, updateStatus, success</c> (MEASURED
+    /// 2026-11-05: 200, <c>succeeded</c> and <c>success: true</c> for two branches; r5 READ
+    /// <c>customMessage</c> and <c>rejectedBy</c>, which the service did not send).
+    /// </summary>
     private async Task<AuthRemoteResponse> RefUpdatesAsync(FakeServiceCall call, Route route, FakeAzureOrganization organization, FakeAzureToken caller, string served, CancellationToken ct)
     {
         var (_, repository, refusal) = Resolve(route, organization, caller, served);
@@ -807,8 +840,6 @@ public sealed partial class FakeAzureDevOps
             ["isLocked"] = false,
             ["updateStatus"] = result.Status,
             ["success"] = result.Status == "succeeded",
-            ["customMessage"] = null,
-            ["rejectedBy"] = null,
         })), served);
     }
 
@@ -820,13 +851,13 @@ public sealed partial class FakeAzureDevOps
         }
     }
 
-    private AuthRemoteResponse SinglePull(FakeAzurePullRequest pull, FakeAzureToken? caller, string served, int status)
+    private AuthRemoteResponse SinglePull(FakeAzurePullRequest pull, FakeAzureToken? caller, string served, int status, PullAnswer answer = PullAnswer.Read)
     {
         var forkFacts = pull.Fork is null ? default : FolderFacts(pull.Fork);
         var facts = FolderFacts(pull.Repository);
         lock (Gate)
         {
-            return Json(status, PullRequestJsonLocked(pull, caller is null, single: true, forkFacts, facts), served);
+            return Json(status, PullRequestJsonLocked(pull, caller is null, single: true, forkFacts, facts, answer), served);
         }
     }
 
@@ -982,7 +1013,7 @@ public sealed partial class FakeAzureDevOps
     private static string RequestUrl(AuthRemoteRouteRequest request) =>
         $"http://{request.Host}{request.Path}" + (request.Query.Length > 0 ? "?" + request.Query : string.Empty);
 
-    /// <summary>A PAT-shaped token unknown, revoked or another organization's: 401, an empty body and one <c>WWW-Authenticate: Basic realm</c> (READ g1 G2).</summary>
+    /// <summary>A PAT-shaped token unknown, revoked or another organization's: 401, an empty body and one <c>WWW-Authenticate: Basic realm</c> (MEASURED 2026-11-05 for an unknown one; the realm the fake's own host, as the service names one of its own).</summary>
     private AuthRemoteResponse InvalidTokenAnswer()
     {
         var headers = new List<KeyValuePair<string, string>>();
@@ -1006,7 +1037,7 @@ public sealed partial class FakeAzureDevOps
                 ["NamespaceId"] = "00000000-0000-0000-0000-000000000000",
             }), served, bom: true);
 
-    /// <summary>An unknown organization: 404 <c>text/plain</c> "The resource cannot be found.", <c>X-TFS-ServiceError</c>, no <c>ActivityId</c> (MEASURED r5 1.3).</summary>
+    /// <summary>An unknown organization: 404 <c>text/plain</c> "The resource cannot be found.", <c>X-TFS-ServiceError</c>, no <c>ActivityId</c> (MEASURED r5 1.3 without a credential; MEASURED 2026-11-05 on connectionData with a token too, D374's made-up organization).</summary>
     private AuthRemoteResponse OrganizationNotFound() =>
         Text(404, "text/plain; charset=utf-8", "The resource cannot be found.", [KeyValuePair.Create("X-TFS-ServiceError", "The%20resource%20cannot%20be%20found.")], activity: false);
 
@@ -1033,13 +1064,21 @@ public sealed partial class FakeAzureDevOps
     private AuthRemoteResponse ProjectMissing(string name, string served) =>
         Json(404, ErrorJson($"TF200016: The following project does not exist: {name}. Verify that the name of the project is correct and that the project exists on the specified Azure DevOps Server.", "Microsoft.TeamFoundation.Core.WebApi.ProjectDoesNotExistWithNameException, Microsoft.TeamFoundation.Core.WebApi", "ProjectDoesNotExistWithNameException"), served);
 
-    /// <summary>TF401398 (READ g1 G2, no final period).</summary>
+    /// <summary>TF401398, no final period (READ g1 G2; MEASURED 2026-11-05, a create from a missing branch: status, typeName, typeKey and words).</summary>
     private AuthRemoteResponse CannotBeActivated(string served) =>
         Json(400, ErrorJson("TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches", "Microsoft.TeamFoundation.Git.Server.GitPullRequestCannotBeActivated, Microsoft.TeamFoundation.Git.Server", "GitPullRequestCannotBeActivated"), served);
 
-    /// <summary>400 <c>InvalidArgumentValueException</c> (READ g1 G1.1; the status, typeName and words ASSUMED).</summary>
-    private AuthRemoteResponse InvalidArgument(string message, string served) =>
-        Json(400, ErrorJson(message, "Microsoft.TeamFoundation.SourceControl.WebServer.InvalidArgumentValueException, Microsoft.TeamFoundation.SourceControl.WebServer", "InvalidArgumentValueException"), served);
+    /// <summary>400 <c>InvalidArgumentValueException</c> (READ g1 G1.1; the status and typeName MEASURED 2026-11-05 on a create; the fake's own words but for <see cref="TitleMissing"/>, D370).</summary>
+    private AuthRemoteResponse InvalidArgument(string message, string served, int eventId = 3000) =>
+        Json(400, ErrorJson(message, "Microsoft.TeamFoundation.SourceControl.WebServer.InvalidArgumentValueException, Microsoft.TeamFoundation.SourceControl.WebServer", "InvalidArgumentValueException", eventId: eventId), served);
+
+    /// <summary>
+    /// A create with an empty title: 400 <c>InvalidArgumentValueException</c>, "Invalid argument
+    /// value.\r\nParameter name: Invalid pull request title.", <c>eventId</c> 0 (MEASURED 2026-11-05;
+    /// a missing or blank title answered so too, ASSUMED).
+    /// </summary>
+    private AuthRemoteResponse TitleMissing(string served) =>
+        InvalidArgument("Invalid argument value.\r\nParameter name: Invalid pull request title.", served, eventId: 0);
 
     private const string UnauthorizedTypeName = "Microsoft.TeamFoundation.Framework.Server.UnauthorizedRequestException, Microsoft.TeamFoundation.Framework.Server";
 

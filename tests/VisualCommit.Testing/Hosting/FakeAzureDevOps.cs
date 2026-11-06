@@ -49,8 +49,9 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
     public AzureDevOpsEndpoints Endpoints => AzureDevOpsEndpoints.Local(Port);
 
     /// <summary>
-    /// The status of a pull request's create: 201 unless set (READ: the documentation's sample says
-    /// 201 and its table 200, g1 G0.12; which one the service sends is ASSUMED, design 3.7).
+    /// The status of a pull request's create: 201 unless set (MEASURED 2026-11-05: the service sent
+    /// 201 for a draft and for one with nothing ahead; the documentation's table says 200, g1 G0.12,
+    /// which the client takes too).
     /// </summary>
     public int CreateStatus
     {

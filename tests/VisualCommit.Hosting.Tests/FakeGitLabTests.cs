@@ -31,7 +31,12 @@ public sealed class FakeGitLabTests
         Assert.Equal(("ada", 2001L, "Ada Lovelace", "ada@example.com"), ((string)user.Json["username"]!, (long)user.Json["id"]!, (string)user.Json["name"]!, (string)user.Json["email"]!));
         Assert.Equal(lab.Fake.Endpoints.WebBase.AbsoluteUri + "ada", (string)user.Json["web_url"]!);
         Assert.Matches(@"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$", (string)user.Json["created_at"]!);
-        Assert.Equal(("throttle_authenticated_api", "2000"), (user.Header("ratelimit-name"), user.Header("ratelimit-limit")));
+        Assert.Equal(("burst_traffic_per_user_free_plan", "100"), (user.Header("ratelimit-name"), user.Header("ratelimit-limit")));
+
+        // GET user's 41 members in gitlab.com's order (MEASURED 2026-11-06).
+        Assert.Equal(
+            ["id", "username", "public_email", "name", "state", "locked", "avatar_url", "web_url", "created_at", "bio", "location", "linkedin", "twitter", "discord", "website_url", "github", "job_title", "pronouns", "organization", "bot", "work_information", "local_time", "last_sign_in_at", "confirmed_at", "last_activity_on", "email", "theme_id", "color_scheme_id", "projects_limit", "current_sign_in_at", "identities", "can_create_group", "can_create_project", "two_factor_enabled", "external", "private_profile", "commit_email", "preferred_language", "shared_runners_minutes_limit", "extra_shared_runners_minutes_limit", "scim_identities"],
+            user.Json.AsObject().Select(property => property.Key));
         Assert.StartsWith("FAKE-GL-", user.Header("x-request-id"), StringComparison.Ordinal);
         Assert.Contains(user.Header("x-request-id")!, user.Header("x-gitlab-meta"), StringComparison.Ordinal);
         Assert.StartsWith("W/\"", user.Header("ETag"), StringComparison.Ordinal);
@@ -162,6 +167,20 @@ public sealed class FakeGitLabTests
         Assert.Equal((403, "insufficient_granular_scope", Prefix + "user permissions: [User: Read]."), (user.Status, (string)user.Json["error"]!, (string)user.Json["error_description"]!));
         Assert.Null(user.Header("WWW-Authenticate"));
         Assert.Equal(Prefix + "user permissions: [Project: Read].", (string)(await lab.SendAsync(HttpMethod.Get, "api/v4/projects", noProject)).Json["error_description"]!);
+
+        // D385: Project: Read among the group and project permissions alone does not list the
+        // projects: 403 naming the user permission (MEASURED 2026-11-05), while a project's read
+        // passes; among the user permissions alone it lists them, and a project's read is the project
+        // permission's 403 (ASSUMED).
+        var projectSection = lab.Fake.AddToken("ada", permissions: [FakeGitLabPermissions.UserRead, FakeGitLabPermissions.ProjectRead]);
+        var listed = await lab.SendAsync(HttpMethod.Get, "api/v4/projects?membership=true", projectSection);
+        Assert.Equal((403, "{\"error\":\"insufficient_granular_scope\",\"error_description\":\"Access denied: This operation requires a fine-grained personal access token with the following user permissions: [Project: Read].\"}"), (listed.Status, listed.Body));
+        Assert.Equal(("application/json", null), (listed.Header("Content-Type"), listed.Header("WWW-Authenticate")));
+        Assert.Equal(200, (await lab.SendAsync(HttpMethod.Get, "api/v4/projects/g%2Fs%2Fp", projectSection)).Status);
+        var userSection = lab.Fake.AddToken("ada", permissions: [FakeGitLabPermissions.UserRead, FakeGitLabPermissions.UserProjectRead]);
+        Assert.Equal(200, (await lab.SendAsync(HttpMethod.Get, "api/v4/projects?membership=true", userSection)).Status);
+        var project = await lab.SendAsync(HttpMethod.Get, "api/v4/projects/g%2Fs%2Fp", userSection);
+        Assert.Equal((403, Prefix + "project permissions: [Project: Read]."), (project.Status, (string)project.Json["error_description"]!));
 
         var requests = await lab.SendAsync(HttpMethod.Get, "api/v4/projects/g%2Fs%2Fp/merge_requests", noProject);
         Assert.Equal((403, Prefix + "project permissions: [Merge Request: Read]."), (requests.Status, (string)requests.Json["error_description"]!));
@@ -348,6 +367,20 @@ public sealed class FakeGitLabTests
         Assert.Equal((201, 3, true), (three.Status, (int)three.Json["iid"]!, (bool)three.Json["draft"]!));
         var level = await lab.CreateAsync(Path, lab.Ada, ("source_branch", "level"), ("target_branch", "main"), ("title", "(draft) Nothing ahead"));
         Assert.Equal((201, 4, true, await lab.TipAsync("main")), (level.Status, (int)level.Json["iid"]!, (bool)level.Json["draft"]!, (string)level.Json["sha"]!));
+
+        // A single one's members in gitlab.com's order (MEASURED 2026-11-06); the create's answer leaves
+        // out first_contribution (MEASURED 2026-11-06 for nothing ahead).
+        string[] read =
+        [
+            "id", "iid", "project_id", "title", "description", "state", "created_at", "updated_at", "merged_by", "merge_user", "merged_at", "closed_by", "closed_at", "target_branch", "source_branch",
+            "user_notes_count", "upvotes", "downvotes", "author", "assignees", "assignee", "reviewers", "source_project_id", "target_project_id", "labels", "draft", "imported", "imported_from",
+            "work_in_progress", "milestone", "merge_when_pipeline_succeeds", "merge_status", "detailed_merge_status", "merge_after", "sha", "merge_commit_sha", "squash_commit_sha",
+            "discussion_locked", "should_remove_source_branch", "force_remove_source_branch", "prepared_at", "reference", "references", "web_url", "time_stats", "squash", "squash_on_merge",
+            "task_completion_status", "has_conflicts", "blocking_discussions_resolved", "approvals_before_merge", "subscribed", "changes_count", "latest_build_started_at",
+            "latest_build_finished_at", "first_deployed_to_production_at", "pipeline", "head_pipeline", "diff_refs", "merge_error", "first_contribution", "user",
+        ];
+        Assert.Equal(read.Where(name => name != "first_contribution"), level.Json.AsObject().Select(member => member.Key));
+        Assert.Equal(read, (await lab.SendAsync(HttpMethod.Get, "api/v4/projects/g%2Fs%2Fp/merge_requests/4", lab.Ada)).Json.AsObject().Select(member => member.Key));
 
         var fork = await lab.CreateAsync(forkPath, lab.Ada, ("source_branch", "fix"), ("target_branch", "main"), ("title", "Fix the typo"), ("target_project_id", Id(lab.Project)), ("allow_collaboration", "true"));
         Assert.Equal((201, 5, false), (fork.Status, (int)fork.Json["iid"]!, (bool)fork.Json["draft"]!));

@@ -34,16 +34,32 @@ public static class FakeGitLabPermissions
     public const string CodeDownload = "Code: Download";
     public const string CodePush = "Code: Push";
 
+    /// <summary>
+    /// The prefix of a label among a fine-grained token's user permissions, where GitLab's form has
+    /// two sections, "User permissions" and "Group and project permissions" (D385). A label without it
+    /// is a group and project permission, but for <see cref="UserRead"/> and
+    /// <see cref="PersonalAccessTokenRead"/>, which are the user's alone (r6 2.2).
+    /// </summary>
+    public const string UserSection = "User permissions: ";
+
+    /// <summary>
+    /// Project: Read among the user permissions, which <c>GET projects</c> needs (MEASURED 2026-11-05,
+    /// D385: with Project: Read among the group and project permissions alone, gitlab.com answered
+    /// 403 <c>insufficient_granular_scope</c> "…with the following user permissions: [Project: Read].").
+    /// </summary>
+    public const string UserProjectRead = UserSection + ProjectRead;
+
     /// <summary>A legacy token's default scopes: <c>api</c> (D345).</summary>
     public static IReadOnlyList<string> LegacyDefault { get; } = [Api];
 
     /// <summary>
-    /// A fine-grained token's default labels: r6 2.2's table as D364's live token has it (User: Read;
-    /// Project: Read; Merge Request: Read, Create, Update and Delete; Branch: Read and Delete; Code:
-    /// Download and Push), so without Personal Access Token: Read, as 4.7 says of <c>self</c>.
+    /// A fine-grained token's default labels: r6 2.2's table as D364's live token has it, with D385's
+    /// amendment (user permissions User: Read and Project: Read; group and project permissions Project:
+    /// Read, Merge Request: Read, Create, Update and Delete, Branch: Read and Delete, Code: Download and
+    /// Push), so without Personal Access Token: Read, as 4.7 says of <c>self</c>.
     /// </summary>
     public static IReadOnlyList<string> FineGrainedDefault { get; } =
-        [UserRead, ProjectRead, MergeRequestRead, MergeRequestCreate, MergeRequestUpdate, MergeRequestDelete, BranchRead, BranchDelete, CodeDownload, CodePush];
+        [UserRead, UserProjectRead, ProjectRead, MergeRequestRead, MergeRequestCreate, MergeRequestUpdate, MergeRequestDelete, BranchRead, BranchDelete, CodeDownload, CodePush];
 
     /// <summary>
     /// A label's raw permission name, as <c>personal_access_tokens/self</c>'s <c>granular_scopes</c>
@@ -51,7 +67,7 @@ public static class FakeGitLabPermissions
     /// <c>update_merge_request</c>, <c>delete_merge_request</c>, <c>delete_branch</c> READ g2 G1.5 to G1.7,
     /// G2.4; the others ASSUMED by the same pattern).
     /// </summary>
-    internal static string RawName(string label) => label switch
+    internal static string RawName(string label) => LabelOf(label) switch
     {
         UserRead => "read_user",
         PersonalAccessTokenRead => "read_personal_access_token",
@@ -64,11 +80,19 @@ public static class FakeGitLabPermissions
         BranchDelete => "delete_branch",
         CodeDownload => "download_code",
         CodePush => "push_code",
-        _ => label.ToLowerInvariant().Replace(": ", "_", StringComparison.Ordinal).Replace(' ', '_'),
+        var other => other.ToLowerInvariant().Replace(": ", "_", StringComparison.Ordinal).Replace(' ', '_'),
     };
 
-    /// <summary>Whether a label's boundary is the user (<c>User</c>, <c>Personal Access Token</c>) rather than a project (r6 2.2).</summary>
-    internal static bool IsUserBoundary(string label) => label is UserRead or PersonalAccessTokenRead;
+    /// <summary>
+    /// Whether a label's boundary is the user (<c>User</c>, <c>Personal Access Token</c>, or one under
+    /// <see cref="UserSection"/>) rather than a group or project (r6 2.2; D385).
+    /// </summary>
+    internal static bool IsUserBoundary(string label) =>
+        label is UserRead or PersonalAccessTokenRead || label.StartsWith(UserSection, StringComparison.Ordinal);
+
+    /// <summary>A label as GitLab's texts name it, without <see cref="UserSection"/> (<c>Project: Read</c>).</summary>
+    internal static string LabelOf(string label) =>
+        label.StartsWith(UserSection, StringComparison.Ordinal) ? label[UserSection.Length..] : label;
 }
 
 /// <summary>A GitLab user of the fake (r6 1.3): <see cref="Email"/> is the made-up <c>&lt;username&gt;@example.com</c>.</summary>
