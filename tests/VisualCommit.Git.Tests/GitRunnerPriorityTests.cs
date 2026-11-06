@@ -187,6 +187,8 @@ public class GitRunnerPriorityTests
         }
         finally
         {
+            // Made also when the call ended before the test took it.
+            early ??= started.Task.IsCompletedSuccessfully ? (await started.Task).Early : null;
             foreach (var process in new[] { ofEarly, ofGit, early })
             {
                 process?.Kill();
