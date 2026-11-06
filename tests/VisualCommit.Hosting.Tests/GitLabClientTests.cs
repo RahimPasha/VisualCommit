@@ -191,7 +191,8 @@ public sealed class GitLabClientTests
     [InlineData(401, "application/json", "{\"error\":\"invalid_token\",\"error_description\":\"Token is expired. You can either do re-authorization or token refresh.\"}", HostingFailureKind.BadCredentials, "Token is expired. You can either do re-authorization or token refresh.", null)]
     [InlineData(401, "text/plain", "", HostingFailureKind.BadCredentials, "401 Unauthorized", null)]
     // 403 shape F: READ g2 G2.3 (insufficient_scope; its scope list ASSUMED); granular, its user form
-    // MEASURED 2026-11-06 (self) and 2026-11-05 (GET projects, D385), its project form READ g2 G2.4.
+    // MEASURED 2026-11-06 (self; its words also 2026-11-05 on GET projects through the app's message,
+    // D385), its project form READ g2 G2.4.
     // 403 shape A: READ r6 5.2.
     [InlineData(403, "application/json", "{\"error\":\"insufficient_scope\",\"error_description\":\"The request requires higher privileges than provided by the access token.\",\"scope\":\"read_user ai_workflows api read_api\"}", HostingFailureKind.Forbidden, "The request requires higher privileges than provided by the access token.", "insufficient_scope")]
     [InlineData(403, "application/json", "{\"error\":\"insufficient_granular_scope\",\"error_description\":\"Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read].\"}", HostingFailureKind.Forbidden, "Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read].", "insufficient_granular_scope")]
@@ -273,7 +274,7 @@ public sealed class GitLabClientTests
     [Theory]
     // The fake's faults (4.4), marked as the fake marks them: Unauthorized MEASURED r6 1.2; Expired and
     // Revoked READ g2 G2.2 (kept READ, 15.7); InsufficientScope READ g2 G2.3; InsufficientGranular's
-    // user form MEASURED 2026-11-06 and 2026-11-05 (D385), its project form READ g2 G2.4; Forbidden
+    // user form MEASURED 2026-11-06 (self; its words also 2026-11-05, D385), its project form READ g2 G2.4; Forbidden
     // READ r6 5.2; NotFound READ r6 1.2; both rate limits READ r6 8; Timeout READ
     // r6 5.2, 8; ServerError and BadGateway ASSUMED; Malformed the fake's own.
     [InlineData("Unauthorized", HostingFailureKind.BadCredentials, "401 Unauthorized", null, null)]

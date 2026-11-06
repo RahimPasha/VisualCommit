@@ -6,8 +6,9 @@
 // across a 304, the create (201, `Draft:`, `references`), the 409, the missing-branch 400 and
 // nothing ahead (201 without `first_contribution`), a single one's members in order, the clean-up's
 // PUT, DELETE and branch delete, git through the app's helper (Check_2's clone and pushes); MEASURED
-// 2026-11-05 (the first run): `GET projects` without Project: Read among the user permissions is check
-// 5's 403 naming `user` (D385). Kept as marked: a legacy token's sign-in (`user`, `self`) and check
+// 2026-11-05 (the first run, through the app's message alone): `GET projects` without Project: Read
+// among the user permissions answered 403 with check 5's words naming `user` (D385); that answer's
+// headers and code are taken to be self's (READ alike). Kept as marked: a legacy token's sign-in (`user`, `self`) and check
 // 4's 403 with its `scope` lists, on GitLab's docs and source (READ, the lists ASSUMED; D375); a
 // selected-projects token's list (ASSUMED, as 7.5) and git's 403s (READ g2 G3, as 4.5 marks them),
 // which need a token D364 does not make; the expired and revoked 401s (READ, 15.7); a project route
@@ -168,8 +169,8 @@ public sealed partial class FakeGitLab
         }
 
         // Check 5: a fine-grained token without the route's permission: 403 naming the boundary and
-        // the label (the user form MEASURED 2026-11-06 on self and 2026-11-05 on GET projects, D385;
-        // the project form READ g2 G2.4); a public project's reads pass; a project hidden from the user 404.
+        // the label (the user form MEASURED 2026-11-06 on self, its words MEASURED 2026-11-05 on GET
+        // projects through the app's message, D385; the project form READ g2 G2.4); a public project's reads pass; a project hidden from the user 404.
         if (token is { Kind: FakeGitLabTokenKind.FineGrained } && !token.Has(need.Label))
         {
             if (FakeGitLabPermissions.IsUserBoundary(need.Label) || route.Id is null)
@@ -253,7 +254,8 @@ public sealed partial class FakeGitLab
     /// <c>order_by</c> (default <c>created_at</c>) and <c>sort</c> (default <c>desc</c>), READ; paged; a
     /// row with <c>permissions</c> (MEASURED 2026-11-06). A fine-grained token needs Project: Read among
     /// its user permissions (<see cref="FakeGitLabPermissions.UserProjectRead"/>), else check 5's 403
-    /// naming <c>user</c> (MEASURED 2026-11-05, D385).
+    /// naming <c>user</c> (its status and words MEASURED 2026-11-05 through the app's message, D385; its
+    /// headers and code taken to be self's, READ alike).
     /// Another <c>order_by</c> or <c>sort</c> 400 shape E "&lt;name&gt; does not have a valid value"
     /// (ASSUMED: Grape's text, MEASURED for <c>state</c>, r6 4.1).
     /// </summary>
@@ -766,7 +768,7 @@ public sealed partial class FakeGitLab
     }
 
     // The texts of shape F (READ g2 G2.1, G2.2) and of a fine-grained refusal (its user form MEASURED
-    // 2026-11-06 and 2026-11-05, D385; the project form READ g2 G2.4).
+    // 2026-11-06 on self, its words 2026-11-05 on GET projects, D385; the project form READ g2 G2.4).
     private const string ExpiredText = "Token is expired. You can either do re-authorization or token refresh.";
     private const string RevokedText = "Token was revoked. You have to re-authorize from the user.";
     private const string ScopeText = "The request requires higher privileges than provided by the access token.";
@@ -793,7 +795,7 @@ public sealed partial class FakeGitLab
             new JsonObject { ["error"] = "insufficient_scope", ["error_description"] = ScopeText, ["scope"] = scopes },
             [KeyValuePair.Create("WWW-Authenticate", $"Bearer realm=\"Protected by OAuth 2.0\", error=\"insufficient_scope\", error_description=\"{ScopeText}\", scope=\"{scopes}\"")]);
 
-    /// <summary>403 shape F <c>insufficient_granular_scope</c> naming the boundary (<c>user</c>, as on <c>GET projects</c>, r6 2.2, or <c>project</c>) and the label as GitLab writes it (<see cref="FakeGitLabPermissions.LabelOf"/>), no <c>WWW-Authenticate</c>, <c>Content-Type: application/json</c> (MEASURED 2026-11-06 on <c>personal_access_tokens/self</c> and 2026-11-05 on <c>GET projects</c>, D385, both naming <c>user</c>; the <c>project</c> form READ g2 G2.4).</summary>
+    /// <summary>403 shape F <c>insufficient_granular_scope</c> naming the boundary (<c>user</c>, as on <c>GET projects</c>, r6 2.2, or <c>project</c>) and the label as GitLab writes it (<see cref="FakeGitLabPermissions.LabelOf"/>), no <c>WWW-Authenticate</c>, <c>Content-Type: application/json</c> (the <c>user</c> form MEASURED 2026-11-06 on <c>personal_access_tokens/self</c>: status, <c>Content-Type</c>, no <c>WWW-Authenticate</c>, the body word for word; its words MEASURED 2026-11-05 on <c>GET projects</c>, D385, through the app's message, that answer's headers and code taken to be self's, READ alike; the <c>project</c> form READ g2 G2.4).</summary>
     private AuthRemoteResponse InsufficientGranular(FakeServiceCall call, string label, bool userBoundary) =>
         ErrorJson(call, 403, new JsonObject
         {

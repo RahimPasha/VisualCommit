@@ -80,7 +80,7 @@ public sealed class GitLabProviderTests
 
         // The fake's answers (4.3, 4.4): an unknown token's 401 A MEASURED r6 1.2; the revoked and
         // expired 401 F READ g2 G2.2, kept READ by 15.7; the granular 403 F naming user MEASURED
-        // 2026-11-06 (self) and 2026-11-05 (GET projects, D385).
+        // 2026-11-06 (self; its words also 2026-11-05 on GET projects through the app's message, D385).
         Assert.Equal(
             [
                 (HostingFailureKind.BadCredentials, "401 Unauthorized", (string?)null),
@@ -170,9 +170,10 @@ public sealed class GitLabProviderTests
     }
 
     /// <summary>
-    /// D385 (MEASURED 2026-11-05, WP-LF): a fine-grained token with Project: Read among its group and
-    /// project permissions alone signs in, but its list is GitLab's 403 <c>insufficient_granular_scope</c>
-    /// naming the user permission; A2 gives <c>Forbidden</c> with that code as <c>Detail</c> (7.3, never
+    /// D385 (its status and words MEASURED 2026-11-05 through the app's message, WP-LF; the body's form
+    /// self's, MEASURED 2026-11-06, taken to hold here): a fine-grained token with Project: Read among its
+    /// group and project permissions alone signs in, but its list is GitLab's 403
+    /// <c>insufficient_granular_scope</c> naming the user permission; A2 gives <c>Forbidden</c> with that code as <c>Detail</c> (7.3, never
     /// by the English), after one request, nothing listed; the token with it among its user
     /// permissions lists.
     /// </summary>

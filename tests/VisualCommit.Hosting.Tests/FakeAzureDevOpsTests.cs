@@ -89,11 +89,17 @@ public sealed class FakeAzureDevOpsTests
         }
 
         // Fernhill-Labs is private, yet a Basic password that is no PAT is the Anonymous identity there
-        // too, with and without Suppress (MEASURED 2026-11-05, D373's short value): a 200 that A1
-        // refuses (6.4).
+        // too: with the empty user, as the probe and the client send it, with and without Suppress
+        // (MEASURED 2026-11-05, D373's short value); with a user, ASSUMED alike (the user ignored, READ
+        // g1 G1.0; no path of the app's sends one to connectionData). A 200 that A1 refuses (6.4).
         foreach (var edit in new Action<HttpRequestMessage>[]
         {
             request => request.Headers.Authorization = Basic(string.Empty, "short-value"),
+            request =>
+            {
+                request.Headers.Authorization = Basic(string.Empty, "short-value");
+                Suppress(request);
+            },
             request =>
             {
                 request.Headers.Authorization = Basic("x-access-token", "short-value");
@@ -566,7 +572,7 @@ public sealed class FakeAzureDevOpsTests
     }
 
     [Fact]
-    public async Task Refs_are_listed_after_the_sync_and_deleted_with_the_services_results()
+    public async Task Refs_are_listed_after_the_sync_and_deleted_and_created_with_the_services_results()
     {
         await using var fixture = await Fixture.CreateAsync();
         var fake = fixture.Fake;
@@ -592,8 +598,26 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal(200, deleted.Status);
         var results = deleted.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())).ToList();
         Assert.Equal([("succeeded", true), ("staleOldObjectId", false), ("invalidRefName", false)], results);
+        // Each update's seven members, without r5's customMessage and rejectedBy (MEASURED 2026-11-05, the clean-up's delete).
+        string[] updateMembers = ["repositoryId", "name", "oldObjectId", "newObjectId", "isLocked", "updateStatus", "success"];
+        Assert.Equal(updateMembers, deleted.Json.GetProperty("value")[0].EnumerateObject().Select(property => property.Name));
         Assert.DoesNotContain("refs/heads/topic/no-request", (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Body, StringComparison.Ordinal);
-        AssertError(await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken, $"[{{\"name\":\"refs/heads/new\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{tip}\"}}]"), 400, "InvalidArgumentValueException", null);
+
+        // A create (oldObjectId forty zeros) at a commit of the repository: 200, succeeded, the branch
+        // there (MEASURED 2026-11-05: the live command's -even branch at main's tip; its members ASSUMED
+        // alike). A create of a ref that is there, staleOldObjectId; at no commit, unresolvableToCommit
+        // (READ enum, ASSUMED); a move from one commit to another, 400 in the fake's words (D370).
+        var main = heads["refs/heads/main"];
+        var made = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/main-even\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/main\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/nowhere\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{new string('e', 40)}\"}}]");
+        Assert.Equal(200, made.Status);
+        var createdRow = made.Json.GetProperty("value")[0];
+        Assert.Equal(updateMembers, createdRow.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(("refs/heads/main-even", "0000000000000000000000000000000000000000", main), (createdRow.GetProperty("name").GetString(), createdRow.GetProperty("oldObjectId").GetString(), createdRow.GetProperty("newObjectId").GetString()));
+        Assert.Equal([("succeeded", true), ("staleOldObjectId", false), ("unresolvableToCommit", false)], made.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var after = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().ToDictionary(row => row.GetProperty("name").GetString()!, row => row.GetProperty("objectId").GetString()!);
+        Assert.Equal((main, main, false), (after["refs/heads/main-even"], after["refs/heads/main"], after.ContainsKey("refs/heads/nowhere")));
+        AssertError(await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken, $"[{{\"name\":\"refs/heads/main-even\",\"oldObjectId\":\"{main}\",\"newObjectId\":\"{tip}\"}}]"), 400, "InvalidArgumentValueException", null);
         Assert.Empty(fake.Errors);
     }
 

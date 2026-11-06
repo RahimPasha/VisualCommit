@@ -38,14 +38,16 @@ public static class FakeGitLabPermissions
     /// The prefix of a label among a fine-grained token's user permissions, where GitLab's form has
     /// two sections, "User permissions" and "Group and project permissions" (D385). A label without it
     /// is a group and project permission, but for <see cref="UserRead"/> and
-    /// <see cref="PersonalAccessTokenRead"/>, which are the user's alone (r6 2.2).
+    /// <see cref="PersonalAccessTokenRead"/>, which are the user's alone (r6 2.2): with or without the
+    /// prefix they are the same permission (<see cref="Canonical"/>).
     /// </summary>
     public const string UserSection = "User permissions: ";
 
     /// <summary>
     /// Project: Read among the user permissions, which <c>GET projects</c> needs (MEASURED 2026-11-05,
-    /// D385: with Project: Read among the group and project permissions alone, gitlab.com answered
-    /// 403 <c>insufficient_granular_scope</c> "…with the following user permissions: [Project: Read].").
+    /// D385, through the app's message: with Project: Read among the group and project permissions
+    /// alone, gitlab.com answered 403 "…with the following user permissions: [Project: Read]."; its
+    /// code and headers taken to be <c>self</c>'s <c>insufficient_granular_scope</c>, READ alike).
     /// </summary>
     public const string UserProjectRead = UserSection + ProjectRead;
 
@@ -89,6 +91,14 @@ public static class FakeGitLabPermissions
     /// </summary>
     internal static bool IsUserBoundary(string label) =>
         label is UserRead or PersonalAccessTokenRead || label.StartsWith(UserSection, StringComparison.Ordinal);
+
+    /// <summary>
+    /// A label in the one form a token keeps: <see cref="UserSection"/> + <see cref="UserRead"/> is
+    /// <see cref="UserRead"/> and <see cref="UserSection"/> + <see cref="PersonalAccessTokenRead"/>
+    /// <see cref="PersonalAccessTokenRead"/>, the user's permissions alone (r6 2.2); any other label as given.
+    /// </summary>
+    internal static string Canonical(string label) =>
+        label.StartsWith(UserSection, StringComparison.Ordinal) && label[UserSection.Length..] is UserRead or PersonalAccessTokenRead ? label[UserSection.Length..] : label;
 
     /// <summary>A label as GitLab's texts name it, without <see cref="UserSection"/> (<c>Project: Read</c>).</summary>
     internal static string LabelOf(string label) =>
@@ -281,7 +291,7 @@ public sealed class FakeGitLabFault : FakeServiceFault
     /// <summary>403 shape F <c>insufficient_scope</c>, the route's <c>scope</c> list in body and header (READ g2 G2.3; the lists ASSUMED).</summary>
     public static FakeGitLabFault InsufficientScope { get; } = new(nameof(InsufficientScope));
 
-    /// <summary>403 shape F <c>insufficient_granular_scope</c> naming the route's boundary and label, no <c>WWW-Authenticate</c> (the <c>user</c> form MEASURED 2026-11-06 on <c>personal_access_tokens/self</c> and 2026-11-05 on <c>GET projects</c>, D385; the <c>project</c> form READ g2 G2.4).</summary>
+    /// <summary>403 shape F <c>insufficient_granular_scope</c> naming the route's boundary and label, no <c>WWW-Authenticate</c> (the <c>user</c> form MEASURED 2026-11-06 on <c>personal_access_tokens/self</c>: status, <c>Content-Type</c>, no <c>WWW-Authenticate</c>, the body word for word; its words MEASURED 2026-11-05 on <c>GET projects</c>, D385, through the app's message, that answer's headers and code taken to be self's, READ alike; the <c>project</c> form READ g2 G2.4).</summary>
     public static FakeGitLabFault InsufficientGranular { get; } = new(nameof(InsufficientGranular));
 
     /// <summary>403 shape A <c>{"message":"403 Forbidden"}</c> (READ r6 5.2).</summary>

@@ -308,34 +308,63 @@ public sealed partial class FakeAzureDevOps
     }
 
     /// <summary>
-    /// Deletes branches and tags for <c>POST …/refs</c> (r5 4's results; design 3.3): each whose
-    /// <c>oldObjectId</c> is its tip is deleted (<c>succeeded</c>); another tip or none is
-    /// <c>staleOldObjectId</c> and a ref outside <c>refs/heads/</c> and <c>refs/tags/</c>
-    /// <c>invalidRefName</c>, both with HTTP 200 (READ enum; the status ASSUMED). One <c>update-ref --stdin</c>.
+    /// Deletes and creates branches and tags for <c>POST …/refs</c> (r5 4's results; design 3.3): a
+    /// delete (<c>newObjectId</c> forty zeros) whose <c>oldObjectId</c> is its tip is deleted
+    /// (<c>succeeded</c>, MEASURED 2026-11-05); a create (<c>oldObjectId</c> forty zeros) of a ref that
+    /// is not there, at a commit of the repository, is written (<c>succeeded</c>, MEASURED 2026-11-05:
+    /// the live command's <c>-even</c> branch at main's tip). A delete of another tip or none, a create
+    /// of a ref that is there or a second update of one name is <c>staleOldObjectId</c>, a create at no
+    /// commit <c>unresolvableToCommit</c> and a ref outside <c>refs/heads/</c> and <c>refs/tags/</c>
+    /// <c>invalidRefName</c>, each with HTTP 200 (READ enum; the statuses ASSUMED). One <c>update-ref --stdin</c>.
     /// </summary>
-    private async Task<IReadOnlyList<(string Name, string Old, string Status)>> DeleteRefsAsync(FakeAzureRepository repository, IReadOnlyList<(string Name, string Old)> deletes, CancellationToken ct)
+    private async Task<IReadOnlyList<(string Name, string Old, string New, string Status)>> UpdateRefsAsync(FakeAzureRepository repository, IReadOnlyList<(string Name, string Old, string New)> requested, CancellationToken ct)
     {
         var gate = LockOf(repository.FolderName);
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var refs = await ReadRefsAsync(repository.BarePath, ct, "refs/heads/", "refs/tags/").ConfigureAwait(false);
-            var results = new List<(string Name, string Old, string Status)>();
+            var results = new List<(string Name, string Old, string New, string Status)>();
             var updates = new StringBuilder();
-            foreach (var (name, old) in deletes)
+            var named = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var (name, old, @new) in requested)
             {
                 if (!name.StartsWith("refs/heads/", StringComparison.Ordinal) && !name.StartsWith("refs/tags/", StringComparison.Ordinal))
                 {
-                    results.Add((name, old, "invalidRefName"));
+                    results.Add((name, old, @new, "invalidRefName"));
                 }
-                else if (refs.TryGetValue(name, out var tip) && string.Equals(tip, old, StringComparison.OrdinalIgnoreCase))
+                else if (!named.Add(name))
                 {
-                    updates.Append(CultureInfo.InvariantCulture, $"delete {name} {tip}\n");
-                    results.Add((name, old, "succeeded"));
+                    results.Add((name, old, @new, "staleOldObjectId"));
+                }
+                else if (@new == ZeroId)
+                {
+                    if (refs.TryGetValue(name, out var tip) && string.Equals(tip, old, StringComparison.OrdinalIgnoreCase))
+                    {
+                        updates.Append(CultureInfo.InvariantCulture, $"delete {name} {tip}\n");
+                        results.Add((name, old, @new, "succeeded"));
+                    }
+                    else
+                    {
+                        results.Add((name, old, @new, "staleOldObjectId"));
+                    }
+                }
+                else if (refs.ContainsKey(name))
+                {
+                    results.Add((name, old, @new, "staleOldObjectId"));
+                }
+                else if (!(await GitAsync(repository.BarePath, null, null, ct, "check-ref-format", name).ConfigureAwait(false)).Succeeded)
+                {
+                    results.Add((name, old, @new, "invalidRefName"));
+                }
+                else if (!IsObjectId(@new) || !(await GitAsync(repository.BarePath, null, null, ct, "cat-file", "-e", @new + "^{commit}").ConfigureAwait(false)).Succeeded)
+                {
+                    results.Add((name, old, @new, "unresolvableToCommit"));
                 }
                 else
                 {
-                    results.Add((name, old, "staleOldObjectId"));
+                    updates.Append(CultureInfo.InvariantCulture, $"create {name} {@new}\n");
+                    results.Add((name, old, @new, "succeeded"));
                 }
             }
 
@@ -351,6 +380,10 @@ public sealed partial class FakeAzureDevOps
             gate.Release();
         }
     }
+
+    /// <summary>Forty hex digits, ASCII only: what a create's <c>newObjectId</c> must be before git is asked whether it names a commit.</summary>
+    private static bool IsObjectId(string value) =>
+        value.Length == ZeroId.Length && value.All(char.IsAsciiHexDigit);
 
     /// <summary>The refs under <paramref name="prefixes"/> of a bare repository, by full name: one <c>for-each-ref</c>.</summary>
     private async Task<IReadOnlyDictionary<string, string>> ReadRefsAsync(string bare, CancellationToken ct, params string[] prefixes)

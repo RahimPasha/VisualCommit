@@ -1250,7 +1250,7 @@ served by path and git's paths get 404, as 7a's.
 | `pull:…/{n}` | `GET …/pullrequests/{n}`, `{o}/{p}/_apis/git/pullrequests/{n}` | with `artifactId`; 404 TF401180 (MEASURED) |
 | `create:…/{r}` | `POST …/pullrequests` | below |
 | `update:…/{n}` | `PATCH …/pullrequests/{n}` | `status`, `title`, `description` (READ); others 400 `InvalidArgumentValueException` (READ g1 G1.1, status ASSUMED) |
-| `refs:…/{r}` | `GET …/refs?filter=`, `POST …/refs` | GET MEASURED; POST deletes only, r5 4's results, `staleOldObjectId` at 200 (200 ASSUMED) |
+| `refs:…/{r}` | `GET …/refs?filter=`, `POST …/refs` | GET MEASURED; POST deletes and creates, r5 4's results, `staleOldObjectId` at 200 (200 MEASURED 2026-11-05) |
 | `page` | any other GET | 200 `text/html`, any path (MEASURED g1 G4.3) |
 
 **Checks**, in order (ASSUMED but for 1):
@@ -1393,8 +1393,9 @@ above or settles what it left open:
   `creator` the TFS identity; `closedDate` on a closed one; a create's `lastMerge…Commit`s the tips at
   the create. A PR alone (`pull:`, create, update) has its `repository` whole but `defaultBranch` and
   ends `url, _links, supportsIterations, artifactId` (r5's single GET); a list keeps the trimmed form.
-- Writes: update takes `status`, `title`, `description`; refs POST deletes under `refs/heads/` and
-  `refs/tags/` (`succeeded`, `staleOldObjectId`, else `invalidRefName`), a non-zero `newObjectId` 400;
+- Writes: update takes `status`, `title`, `description`; refs POST deletes and creates under `refs/heads/` and
+  `refs/tags/` (`succeeded`, `staleOldObjectId`, `unresolvableToCommit`, else `invalidRefName`; WP-LF),
+  an update that moves a ref 400;
   a non-contributor's update and refs POST 403 TF401027.
 - Git: git's callbacks find a repository `x.git` as `x`; `x` beside it is refused. Sync: one
   `commit-tree` per merge, not the hash-object batch; also before `refs` GET; a missing branch keeps
@@ -3987,21 +3988,21 @@ headers listing them:
   core area anonymous and with the token; a made-up PAT-shaped value's empty 401 with one Basic
   challenge; D374's made-up organization, 404 both ways (A1's `NotFound` holds); `ListProject`'s list;
   the create's 201, `isDraft`, `createdBy.id`, `succeeded` and the merge ref at the next read, gone
-  after the abandon; `x-access-token` through the helper on both hosts (16.1).
+  after the abandon; `x-access-token` through the helper on both hosts.
 - Azure DevOps, corrected: a Basic value that is no PAT gets connectionData's Anonymous 200 in a
-  private organization too, both ways (no credential keeps r5 1.3's 302 and 401); errors have no
-  `api-version` in `Content-Type` (MEASURED on the 409 and the 400s); an empty title's 400 in the
-  service's words, `eventId` 0; the create's answer has `labels` (measured with nothing ahead), the
-  abandon's no `mergeStatus` or `lastMergeCommit`; the refs POST's updates no `customMessage` or
-  `rejectedBy`; a member's identity has nine names, `customDisplayName` the display name unless set
-  to null (g1's sample 1).
+  private organization too, both ways (measured with the empty user, a user ASSUMED alike; no
+  credential keeps r5 1.3's 302 and 401); errors have no `api-version` in `Content-Type` (measured on
+  the 409 and the 400s); an empty title's 400 in the service's words, `eventId` 0; the create's answer has `labels` (measured with
+  nothing ahead), the abandon's no `mergeStatus` or `lastMergeCommit`; the refs POST's updates no
+  `customMessage` or `rejectedBy`, and it creates a branch too (200 `succeeded`, as the `-even` one;
+  a move stays 400); a member's identity has nine names, `customDisplayName` the display name unless null.
 - GitLab, as the fake answered: every probed status and body. Corrected: `user`'s 41 members and a
   single merge request's in the service's order (the create's without `first_contribution`), values
-  made up; a fork's `allow_collaboration` and `allow_maintainer_to_push` after `prepared_at`, as r6
-  4.1's captured rows (MEASURED there); `ratelimit-name` `burst_traffic_per_user_free_plan`,
-  `ratelimit-limit` 100 with a token; D385: `FakeGitLabPermissions.UserSection` and
-  `UserProjectRead`, which `GET projects` needs (else check 5's 403 naming `user`); the default holds
-  both.
+  made up; a fork's pair after `prepared_at`, as r6 4.1's rows; `ratelimit-name`
+  `burst_traffic_per_user_free_plan`, `ratelimit-limit` 100 with a token; D385:
+  `FakeGitLabPermissions.UserSection` and `UserProjectRead`, which `GET projects` needs (else check
+  5's 403 naming `user`, its words measured through the app's message, its code and headers taken
+  from `self`'s); User: Read under `UserSection` is User: Read; the default holds both.
 - Clients unchanged: A1 already refuses the Anonymous 200 (`BadCredentials`, `AnonymousDetail`, one
   request), GitLab's A2 gives the 403 as `Forbidden`, `Detail` `insufficient_granular_scope`, by the
   code (7.3); `AzureDevOpsProviderTests` and `GitLabProviderTests` pin both, each failing on the old fake.
@@ -4014,9 +4015,9 @@ headers listing them:
 - For parts A to N and the review: WP-A words `AnonymousDetail` (a value that is no token) apart from a
   refused token, and GitLab's `Forbidden` with the code as Project: Read missing among the user
   permissions (D385, `SignInHelpOf`); a fake GitLab token with an explicit list needs `UserProjectRead`
-  to list; no test leans on made-up values the client does not read. GitLab's measured 100 a minute
-  (a burst, 304s counted) supersedes 7.3's and 4.4's 2,000; an hourly cap is possible, unmeasured; a
-  429 stays `RateLimited`; the review weighs part P's refreshes and A2's and A4's requests against it.
+  to list. GitLab's measured 100 a minute (a burst, 304s counted) supersedes 7.3's and 4.4's 2,000;
+  an hourly cap is possible, unmeasured; a 429 stays `RateLimited`; the review weighs part P's
+  refreshes and A2's and A4's requests against it.
 
 ### 16.2 Settled by a measurement, a CI run or the lead
 

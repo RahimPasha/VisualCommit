@@ -169,8 +169,9 @@ public sealed class FakeGitLabTests
         Assert.Equal(Prefix + "user permissions: [Project: Read].", (string)(await lab.SendAsync(HttpMethod.Get, "api/v4/projects", noProject)).Json["error_description"]!);
 
         // D385: Project: Read among the group and project permissions alone does not list the
-        // projects: 403 naming the user permission (MEASURED 2026-11-05), while a project's read
-        // passes; among the user permissions alone it lists them, and a project's read is the project
+        // projects: 403 naming the user permission (its status and words MEASURED 2026-11-05 through
+        // the app's message; its body's form and headers self's, MEASURED 2026-11-06, taken to hold
+        // here, READ alike), while a project's read passes; among the user permissions alone it lists them, and a project's read is the project
         // permission's 403 (ASSUMED).
         var projectSection = lab.Fake.AddToken("ada", permissions: [FakeGitLabPermissions.UserRead, FakeGitLabPermissions.ProjectRead]);
         var listed = await lab.SendAsync(HttpMethod.Get, "api/v4/projects?membership=true", projectSection);
@@ -181,6 +182,13 @@ public sealed class FakeGitLabTests
         Assert.Equal(200, (await lab.SendAsync(HttpMethod.Get, "api/v4/projects?membership=true", userSection)).Status);
         var project = await lab.SendAsync(HttpMethod.Get, "api/v4/projects/g%2Fs%2Fp", userSection);
         Assert.Equal((403, Prefix + "project permissions: [Project: Read]."), (project.Status, (string)project.Json["error_description"]!));
+
+        // User: Read and Personal Access Token: Read are the user's permissions alone (r6 2.2): spelled
+        // under the user section they are the same permission, never one the 403 names as missing.
+        var spelled = lab.Fake.AddToken("ada", permissions: [FakeGitLabPermissions.UserSection + FakeGitLabPermissions.UserRead, FakeGitLabPermissions.UserSection + FakeGitLabPermissions.PersonalAccessTokenRead, FakeGitLabPermissions.UserProjectRead]);
+        Assert.Equal(200, (await lab.SendAsync(HttpMethod.Get, "api/v4/user", spelled)).Status);
+        Assert.Equal(200, (await lab.SendAsync(HttpMethod.Get, "api/v4/personal_access_tokens/self", spelled)).Status);
+        Assert.Equal(200, (await lab.SendAsync(HttpMethod.Get, "api/v4/projects?membership=true", spelled)).Status);
 
         var requests = await lab.SendAsync(HttpMethod.Get, "api/v4/projects/g%2Fs%2Fp/merge_requests", noProject);
         Assert.Equal((403, Prefix + "project permissions: [Merge Request: Read]."), (requests.Status, (string)requests.Json["error_description"]!));

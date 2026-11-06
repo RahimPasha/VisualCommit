@@ -121,7 +121,8 @@ public sealed partial class FakeGitLab : FakeHostingService
     /// <summary>
     /// A new token of <paramref name="username"/>: <c>glpat-FAKE-&lt;username&gt;-&lt;n&gt;</c>, n counting
     /// that user's tokens from 1. <paramref name="permissions"/> are scopes for a legacy token (default
-    /// <c>api</c>) and labels for a fine-grained one (default <see cref="FakeGitLabPermissions.FineGrainedDefault"/>),
+    /// <c>api</c>) and labels for a fine-grained one (default <see cref="FakeGitLabPermissions.FineGrainedDefault"/>;
+    /// User: Read and Personal Access Token: Read the same with or without <see cref="FakeGitLabPermissions.UserSection"/>),
     /// on every project the user reaches ("Only specific…" is not modelled, D370). A token whose
     /// <paramref name="expires"/> is on or before <see cref="AppClocks.HarnessTime"/>'s date is expired
     /// (ASSUMED r6 2.4: unusable from 00:00 UTC of its date).
@@ -135,7 +136,7 @@ public sealed partial class FakeGitLab : FakeHostingService
             var n = _tokenCounts[user.Username] = _tokenCounts.GetValueOrDefault(user.Username) + 1;
             var token = $"glpat-FAKE-{user.Username}-{n}";
             var granted = permissions ?? (kind == FakeGitLabTokenKind.Legacy ? FakeGitLabPermissions.LegacyDefault : FakeGitLabPermissions.FineGrainedDefault);
-            _tokens[token] = new GitLabToken(_nextTokenId++, user.Username, kind, new HashSet<string>(granted, StringComparer.Ordinal), expires);
+            _tokens[token] = new GitLabToken(_nextTokenId++, user.Username, kind, new HashSet<string>(granted.Select(FakeGitLabPermissions.Canonical), StringComparer.Ordinal), expires);
             AddTokenLocked(token, user.Username);
             return token;
         }

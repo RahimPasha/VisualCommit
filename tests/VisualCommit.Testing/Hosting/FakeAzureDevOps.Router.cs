@@ -4,10 +4,11 @@
 // - connectionData for a member signed in with a Code-only token (g1 G3.2's shape; the identity's nine
 //   member names as served, customDisplayName among them, by default the display name; null leaves it
 //   out, as g1 G3.2's sample 1 has it, READ);
-// - check 4's refusals of D373's made-up values: a short one in Basic, on connectionData 200 with the
-//   Anonymous identity, with and without Suppress, in the private organization too (the fake's 302
-//   and 401 TF400813 stay for no credential at all, MEASURED r5 1.3); an 84-character PAT-shaped one,
-//   401 with an empty body and one Basic challenge, with and without Suppress;
+// - check 4's refusals of D373's made-up values, each sent as Basic with the empty user: a short one,
+//   on connectionData 200 with the Anonymous identity, with and without Suppress, in the private
+//   organization too (the fake's 302 and 401 TF400813 stay for no credential at all, MEASURED r5 1.3);
+//   an 84-character PAT-shaped one, 401 with an empty body and one Basic challenge, with and without
+//   Suppress; with a user (x-access-token) both are ASSUMED alike, the user ignored (READ g1 G1.0);
 // - check 1 with a token (D374's made-up organization: 404 "The resource cannot be found." both ways);
 // - the core resource area (areas), without a credential and with the token;
 // - create: 201 (CreateStatus), isDraft, createdBy.id the account's, mergeStatus succeeded and the
@@ -17,6 +18,8 @@
 // - abandon through PATCH (update): 200 without mergeStatus and lastMergeCommit, and the merge ref
 //   gone at the next read;
 // - the refs delete (POST …/refs): 200, each update's seven members (no customMessage, rejectedBy);
+//   the refs create (oldObjectId forty zeros, the -even branch at main's tip): 200, succeeded and
+//   success true (its members ASSUMED alike to the delete's);
 // - the sandbox's row in the project's list (ListProject); no BOM on any of these.
 // Kept, with their reasons (D370):
 // - git's info/refs refusals of the made-up values: the service answers 401, a short value with its
@@ -167,8 +170,10 @@ public sealed partial class FakeAzureDevOps
             {
                 // connectionData with a Basic credential whose password is no PAT: 200 with the
                 // Anonymous identity, with and without Suppress, in a private organization too
-                // (MEASURED 2026-11-05, D373's short value; with no credential at all r5 1.3's 302 or
-                // 401 stays, MEASURED); a public organization's for anyone (MEASURED r5 1.2).
+                // (MEASURED 2026-11-05 with the empty user, D373's short value; with a user ASSUMED
+                // alike, the user ignored, READ g1 G1.0: no path of the app's sends one there; with no
+                // credential at all r5 1.3's 302 or 401 stays, MEASURED); a public organization's for
+                // anyone (MEASURED r5 1.2).
                 var plainBasic = call.Authorization is FakeAuthorizationForm.Basic or FakeAuthorizationForm.BasicEmptyUser;
                 if (route.Kind == Kind.Connection && (ignored || organization.PublicProjects || plainBasic))
                 {
@@ -403,7 +408,7 @@ public sealed partial class FakeAzureDevOps
     /// A token PAT-shaped: the fake's <c>azdo_FAKE-…</c>, or 84 characters with <c>AZDO</c> at 76 to 79
     /// (READ r5 0.6, 5; MEASURED 2026-11-05: a made-up value of that form got the empty 401). Any other
     /// value is no credential (READ g1 G0.2), but on connectionData, where a Basic one gets the
-    /// Anonymous identity (MEASURED 2026-11-05).
+    /// Anonymous identity (MEASURED 2026-11-05 with the empty user; with a user ASSUMED alike).
     /// </summary>
     private static bool IsPatShaped(string token) =>
         token.StartsWith("azdo_FAKE-", StringComparison.Ordinal) || token.Length == 84 && string.CompareOrdinal(token, 76, "AZDO", 0, 4) == 0;
@@ -411,8 +416,9 @@ public sealed partial class FakeAzureDevOps
     /// <summary>
     /// Check 4 for a PAT-shaped token: unknown, revoked or another organization's, 401 with an empty
     /// body, no <c>Content-Type</c> and one <c>WWW-Authenticate: Basic realm</c> (MEASURED 2026-11-05 for
-    /// an unknown one on connectionData, with and without Suppress, D373; revoked READ g1 G2, another
-    /// organization's ASSUMED); expired, 401 <c>AccessCheckException</c> (READ g1 G2, kept: 15.7).
+    /// an unknown one on connectionData with the empty user, with and without Suppress, D373; with a
+    /// user ASSUMED alike, the user ignored, READ g1 G1.0; revoked READ g1 G2, another organization's
+    /// ASSUMED); expired, 401 <c>AccessCheckException</c> (READ g1 G2, kept: 15.7).
     /// </summary>
     private (FakeAzureToken? Known, AuthRemoteResponse? Refused) TokenOf(string token, FakeAzureOrganization organization, string served)
     {
@@ -788,11 +794,15 @@ public sealed partial class FakeAzureDevOps
     }
 
     /// <summary>
-    /// <c>POST …/refs</c>: deletes only (a <c>newObjectId</c> other than forty zeros, 400 in the fake's
-    /// words), with r5 4's results at 200 (<see cref="DeleteRefsAsync"/>): each update's members
+    /// <c>POST …/refs</c>: deletes (<c>newObjectId</c> forty zeros) and creates (<c>oldObjectId</c> forty
+    /// zeros), with r5 4's results at 200 (<see cref="UpdateRefsAsync"/>); an update that moves a ref
+    /// from one commit to another, 400 in the fake's words (no path of the app's or the live command's
+    /// sends one, D370). Each update's members
     /// <c>repositoryId, name, oldObjectId, newObjectId, isLocked, updateStatus, success</c> (MEASURED
-    /// 2026-11-05: 200, <c>succeeded</c> and <c>success: true</c> for two branches; r5 READ
-    /// <c>customMessage</c> and <c>rejectedBy</c>, which the service did not send).
+    /// 2026-11-05 on the clean-up's delete of two branches: 200, <c>succeeded</c> and <c>success: true</c>;
+    /// r5 READ <c>customMessage</c> and <c>rejectedBy</c>, which the service did not send); a create's
+    /// 200 with <c>succeeded</c> and <c>success: true</c> MEASURED 2026-11-05 (the live command's
+    /// <c>-even</c> branch at main's tip), its members ASSUMED alike (the run noted the outcome alone).
     /// </summary>
     private async Task<AuthRemoteResponse> RefUpdatesAsync(FakeServiceCall call, Route route, FakeAzureOrganization organization, FakeAzureToken caller, string served, CancellationToken ct)
     {
@@ -817,29 +827,30 @@ public sealed partial class FakeAzureDevOps
             updates = null;
         }
 
-        var deletes = new List<(string Name, string Old)>();
+        var requested = new List<(string Name, string Old, string New)>();
         foreach (var update in updates ?? [])
         {
-            if (update is not JsonObject row || StringOf(row, "name") is not { } name || StringOf(row, "oldObjectId") is not { } old || StringOf(row, "newObjectId") != ZeroId)
+            if (update is not JsonObject row || StringOf(row, "name") is not { } name || StringOf(row, "oldObjectId") is not { } old || StringOf(row, "newObjectId") is not { } @new
+                || (old == ZeroId) == (@new == ZeroId))
             {
-                return InvalidArgument("The fake of Azure DevOps deletes refs only: each update needs a name, its oldObjectId and a newObjectId of forty zeros.", served);
+                return InvalidArgument("The fake of Azure DevOps deletes and creates refs only: each update needs a name, its oldObjectId and its newObjectId, one of them forty zeros.", served);
             }
 
-            deletes.Add((name, old));
+            requested.Add((name, old, @new));
         }
 
-        if (updates is null || deletes.Count == 0)
+        if (updates is null || requested.Count == 0)
         {
             return InvalidArgument("The fake of Azure DevOps takes a JSON array of ref updates.", served);
         }
 
-        var results = await DeleteRefsAsync(repository!, deletes, ct).ConfigureAwait(false);
+        var results = await UpdateRefsAsync(repository!, requested, ct).ConfigureAwait(false);
         return Json(200, ListJson(results.Select(result => (JsonNode)new JsonObject
         {
             ["repositoryId"] = repository!.Id.ToString("D", CultureInfo.InvariantCulture),
             ["name"] = result.Name,
             ["oldObjectId"] = result.Old,
-            ["newObjectId"] = ZeroId,
+            ["newObjectId"] = result.New,
             ["isLocked"] = false,
             ["updateStatus"] = result.Status,
             ["success"] = result.Status == "succeeded",
