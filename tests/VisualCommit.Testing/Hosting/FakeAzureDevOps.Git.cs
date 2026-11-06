@@ -321,8 +321,11 @@ public sealed partial class FakeAzureDevOps
     /// theirs but for case (<c>refs/heads/dir/b</c> beside <c>refs/heads/Dir/c</c>, <see cref="FoldersClash"/>),
     /// and an update whose name differs only in case from one named before it in the batch,
     /// <c>refNameConflict</c> (whole names and folders compared without case, as <see cref="Nests"/>
-    /// does, so that the rows and the list are the same on every file system and git never meets two
-    /// loose files of one name); and a ref outside <c>refs/heads/</c>
+    /// does, so that the rows and the list are the same on every file system for the names git can
+    /// store on each, and git never meets two loose files of one name; a name that Windows cannot
+    /// store as a file, such as <c>con</c>, <c>aux.txt</c>, one ending in <c>.</c> or holding <c>|</c>,
+    /// makes git's <c>update-ref</c> fail there and the call throw, a limit kept because no test and no
+    /// path of the app's creates such a ref through the API); and a ref outside <c>refs/heads/</c>
     /// and <c>refs/tags/</c> <c>invalidRefName</c>, each with HTTP 200 (READ enum; the statuses ASSUMED;
     /// a ref the same batch deletes still counts, so that git's transaction never meets the conflict).
     /// One <c>update-ref --stdin</c>.
