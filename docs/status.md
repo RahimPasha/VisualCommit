@@ -158,8 +158,8 @@ Checks, live trial and review:
   fakes (D342). Under way: the sandboxes are made (2026-11-02; their first tokens replaced, Waiting
   on the owner); stage 1 (15.1) merged at `b377aa3`, built, reviewed and hunted, offline classes
   404 of 404; its first run with the tokens (2026-11-05) passed 8 of 9 (Notes, D385), and GitLab's
-  again with a new token (2026-11-06) 4 of 4, so stage 1's 9 tests have passed; WP-LF (0.4) puts
-  what they found into the fakes; stage 2 (`Check_3`) follows WP-N.
+  again with a new token (2026-11-06) 4 of 4, so stage 1's 9 tests have passed; WP-LF (0.4), which
+  put what they found into the fakes, merged at `22fad1b` (Notes); stage 2 (`Check_3`) follows WP-N.
 - [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
   tests.
 
@@ -413,15 +413,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Stage 1 has passed all 9 tests (Notes): Azure DevOps' 5 on 2026-11-05 and GitLab's 4 again on
-2026-11-06 with the owner's new token (D385). Next is WP-LF (design 0.4, branch `wip/p7b-live-fix`):
-the fakes and clients take both run.txt files' findings, each corrected answer marked MEASURED with
-its date, with made-up values only; its classes and then the lead's lagged list (0.4) run, it merges
-and its CI run is read; then part A's checks are written (D244) and WP-A is built. WP-LF is under way
-(2026-11-06): its worktree is `D:/Projects/Personal/vc-wt/p7b-live-fix` on `wip/p7b-live-fix`, made
-from `bc5b0f3`, and the live run's three files it reads lie outside the repository in
-`D:/Projects/Personal/phase7b-work/live/` (Notes). For the week from 2026-11-05 the owner gives the
-phase about all of its allowance.
+WP-LF merged at `22fad1b` (2026-11-06; Notes). The lead's lagged list (0.4) for it runs through
+`scripts/heavy-run.sh`, and CI's run 42216604663 on the merge is read. Part A's visual checks are
+being written into `docs/test-reports/phase-7b.md` (new, from the template) by one writer and one
+reviewer (D244); the lead reads them and commits them, then WP-A (design 10) is built in its
+worktree. For the week from 2026-11-05 the owner gives the phase about all of its allowance.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -467,6 +463,30 @@ every commit.
   (`stage1-run1-output-20261105.txt`, D385). They are screened, but still hold the services' request
   ids, ETags, the sandbox's ids and the deployment's host names: nothing of them enters the
   repository; the fakes take made-up copies of the measured shapes and texts.
+- **WP-LF** (merged at `22fad1b`, 2026-11-06; design 0.4, 16.1's As built): stage 1's answers in
+  `FakeAzureDevOps*.cs` and `FakeGitLab*.cs`, made-up values, each marked MEASURED with its UTC date
+  where the run read it and ASSUMED where it was generalised (a private organization's Anonymous 200,
+  the ratelimit values beyond `GET user`, a create with commits ahead's `labels`). Azure DevOps: a Basic
+  value in none of the PAT forms (`azdo_FAKE-`, 84 with `AZDO`, the older 52 of base32, ASSUMED) gets
+  connectionData's Anonymous 200; errors without `api-version` in `Content-Type`; an empty title's 400 in
+  the service's words; the create's `labels`, the abandon's members; the refs POST creates (200) and
+  its updates' seven members, names compared without case so every OS answers alike; git's 401 keeps
+  g1 G4.1's realm with `.app.`, the API's empty 401 the measured one without. GitLab: `GET user`'s 41
+  members and a single request's in the service's order (the create's without `first_contribution`),
+  a fork's pair after `prepared_at` (r6 4.1), `burst_traffic_per_user_free_plan` 100, and D385's user
+  permissions (`FakeGitLabPermissions.UserSection`, `UserProjectRead`; the default holds both). The
+  clients: only messages made one line (CR LF split a log line); A1's refusal of the Anonymous 200 and
+  A2's `Forbidden` with `insufficient_granular_scope` pinned. The live command gains one probe, the
+  sandbox organization's connectionData without a credential (whether it is private), for stage 2.
+  Kept: git's `info/refs` refusals (the fake's `AuthRemoteServer` 401; the helper reads no
+  `wwwauth[]`), a name Windows cannot store in the refs POST. Built by one fixer, reviewed with two
+  lenses (6 minors fixed), hunted in three rounds (one major confirmed and fixed: the Anonymous 200's
+  mark for a private organization), the lead's five minors fixed and verified twice; 720 Hosting.Tests
+  of the package's classes, 272 `CredentialBindingSelectTests`, 8 `Phase7bSupportTests` and 404 offline
+  live tests passed in its worktree. **For the review before the gate**: GitLab measured a burst limit of
+  100 a minute with a token, 304s counted, not 7.3's and 4.4's 2,000; part P's refreshes and A2's and
+  A4's requests are weighed against it. The empty folder `D:/Projects/Personal/vc-wt/p7b-live-fix/src/VisualCommit.App`
+  is left (a process held it at removal); remove it later.
 - **Passed on to later packages** (from WP-S's hunts, 2026-11-02): WP-N (section 13) makes the
   create's two log lines (`RepositoryOperations.CreatePullRequest.cs:293` and `:403`) write
   `baseRepository.FullName` through `HostingHttpClient.ScreenEmail`, with a test of a create into an
