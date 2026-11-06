@@ -306,6 +306,13 @@ public static partial class Phase7bExpectations
         public static readonly Color Danger = Color.Parse("#E5606B");
         public static readonly Color Accent = Color.Parse("#7C8CFF");
 
+        /// <summary>The theme's disabled foreground (<c>VcTextDisabledBrush</c>): Azure DevOps' token link while disabled (A6, A11; the lead's ruling of 2026-11-06).</summary>
+        public static readonly Color Disabled = Color.Parse("#5F6775");
+
+        /// <summary>A token link's cursor: the hand while enabled, the arrow while disabled (as the cursors' names read).</summary>
+        public const string HandCursor = "Hand";
+        public const string ArrowCursor = "Arrow";
+
         // ---- Pictures (the report's Screenshots column) --------------------------------------------
 
         public const string A01ThreeSignedOut = "a01a-three-signed-out";

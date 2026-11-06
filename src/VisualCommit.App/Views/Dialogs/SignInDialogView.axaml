@@ -14,7 +14,11 @@
        Since phase 7b one per provider (docs/phase-7b-design.md 10.4): GitLab's second link 4 below
        the first; Azure DevOps' organization label and box above the token's. -->
   <local:DialogView.Resources>
-    <!-- The link: ParentLinkButton's look (RightPanelView.axaml), reached by Tab. -->
+    <!-- The link: ParentLinkButton's look (RightPanelView.axaml), reached by Tab. Disabled (Azure
+         DevOps' while its box gives no organization, 10.4; the lead's ruling of 2026-11-06): the
+         theme's disabled look of its buttons (Theme/Controls.axaml, VcTextDisabledBrush), the arrow
+         cursor and no underline (below), so that it invites no click that does nothing. GitHub's and
+         GitLab's links are never disabled. -->
     <ControlTheme x:Key="SignInLinkButton" TargetType="Button">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
@@ -29,6 +33,10 @@
                             ContentTemplate="{TemplateBinding ContentTemplate}" />
         </ControlTemplate>
       </Setter>
+      <Style Selector="^:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+        <Setter Property="Cursor" Value="Arrow" />
+      </Style>
     </ControlTheme>
   </local:DialogView.Resources>
 
@@ -38,8 +46,8 @@
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Margin" Value="0,12,0,4" />
     </Style>
-    <!-- Underlined on pointer-over and while focused. -->
-    <Style Selector="Button.tokenLink:pointerover TextBlock, Button.tokenLink:focus TextBlock">
+    <!-- Underlined on pointer-over and while focused; never while disabled. -->
+    <Style Selector="Button.tokenLink:not(:disabled):pointerover TextBlock, Button.tokenLink:not(:disabled):focus TextBlock">
       <Setter Property="TextDecorations" Value="Underline" />
     </Style>
   </local:DialogView.Styles>

@@ -691,14 +691,16 @@ public sealed partial class Phase7bChecksA
         var link = app.FindByAutomationId(view, "SignInTokenLink");
         Assert.Equal(provider switch { HostingProvider.GitHub => PartA.GitHubTokenLink, HostingProvider.GitLab => PartA.GitLabTokenLink, _ => PartA.AzureDevOpsTokenLink }, AutomationProperties.GetName(link));
         Assert.Equal(PartA.LinkGap, app.BoundsOf(link).Top - app.BoundsOf(help).Bottom, PartA.Tolerance);
-        Assert.Equal(PartA.Accent, ColourOf(link.GetVisualDescendants().OfType<TextBlock>().First()));
+
+        // The accent while enabled; Azure DevOps' without an organization disabled, in the disabled look.
+        AssertLinkLook(link, enabled: provider != HostingProvider.AzureDevOps || organization.Length > 0);
         var legacy = app.FindByAutomationId(view, "SignInLegacyTokenLink");
         Assert.Equal(provider == HostingProvider.GitLab, legacy.IsEffectivelyVisible);
         if (provider == HostingProvider.GitLab)
         {
             Assert.Equal(PartA.GitLabLegacyLink, AutomationProperties.GetName(legacy));
             Assert.Equal(PartA.LegacyLinkGap, app.BoundsOf(legacy).Top - app.BoundsOf(link).Bottom, PartA.Tolerance);
-            Assert.Equal(PartA.Accent, ColourOf(legacy.GetVisualDescendants().OfType<TextBlock>().First()));
+            AssertLinkLook(legacy, enabled: true);
         }
 
         var box = (TextBox)app.FindByAutomationId(view, "SignInOrganization");
@@ -711,11 +713,6 @@ public sealed partial class Phase7bChecksA
             Assert.Contains("dialogBox", box.Classes);
             Assert.True(app.BoundsOf(box).Bottom <= app.BoundsOf(token).Top);
             Assert.True(app.BoundsOf(box).Top >= app.BoundsOf(link).Bottom);
-            Assert.Equal(organization.Length > 0, link.IsEffectivelyEnabled);
-        }
-        else
-        {
-            Assert.True(link.IsEffectivelyEnabled);
         }
 
         Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(token));
@@ -800,4 +797,34 @@ public sealed partial class Phase7bChecksA
     }
 
     private static Control ConfirmOf(ShellDriver app) => app.FindByAutomationId(app.SignInDialogView(), "ConfirmButton");
+
+    /// <summary>
+    /// A token link's look (part A's "The dialog"; A6's and A11's disabled look, the lead's ruling of
+    /// 2026-11-06): enabled, the accent foreground and the hand cursor; disabled, the theme's disabled
+    /// foreground (<c>VcTextDisabledBrush</c>, as its other disabled buttons) and the arrow cursor.
+    /// </summary>
+    private static void AssertLinkLook(Control link, bool enabled)
+    {
+        var name = AutomationProperties.GetAutomationId(link);
+        Assert.True(enabled == link.IsEffectivelyEnabled, $"{name} is {(enabled ? "disabled" : "enabled")}.");
+        Assert.Equal(enabled ? PartA.Accent : PartA.Disabled, ColourOf(link.GetVisualDescendants().OfType<TextBlock>().First()));
+        Assert.Equal(enabled ? PartA.HandCursor : PartA.ArrowCursor, link.Cursor?.ToString());
+    }
+
+    /// <summary>
+    /// A disabled link has no hover effect: with the pointer moved onto it no underline and the arrow
+    /// cursor (A6 and A11, the lead's ruling of 2026-11-06); then the pointer goes back to the neutral point.
+    /// </summary>
+    private static void AssertNoHoverWhileDisabled(ShellDriver app, string id)
+    {
+        var link = Find(app, id);
+        AssertLinkLook(link, enabled: false);
+        app.MoveMouse(link);
+        app.Settle();
+        var text = link.GetVisualDescendants().OfType<TextBlock>().First();
+        Assert.True(text.TextDecorations is not { Count: > 0 }, $"{id} is underlined under the pointer while disabled.");
+        Assert.Equal(PartA.ArrowCursor, link.Cursor?.ToString());
+        app.MoveToNeutral();
+        app.Settle();
+    }
 }

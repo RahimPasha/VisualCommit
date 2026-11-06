@@ -413,18 +413,19 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
 
             Assert.True(app.BoundsOf(CardNamed(app, "SignInCard")).Height <= PartA.AzureDevOpsCardMaxHeight, "Azure DevOps' card is over 345 high.");
             Assert.Equal(PartA.FocusOpenedEmpty, FocusedId(app));
-            Assert.False(Find(app, "SignInTokenLink").IsEffectivelyEnabled);
+            AssertLinkLook(Find(app, "SignInTokenLink"), enabled: false);
             Assert.False(ConfirmOf(app).IsEffectivelyEnabled);
             Assert.Equal(["probe"], app.Tokens.Calls);
             AssertNoRequests(served, mark);
             ShotA(app, PartA.A06AzureDialogEmpty);
+            AssertNoHoverWhileDisabled(app, "SignInTokenLink");
 
             // A6 step 3: the organization typed and the token masked (R).
             app.TypeOrganization(PartA.Organization);
             app.Click(Find(app, "SignInToken"));
             app.TypeToken(AzureDevOpsToken);
             Assert.Equal(PartA.Organization, ((TextBox)Find(app, "SignInOrganization")).Text);
-            Assert.True(Find(app, "SignInTokenLink").IsEffectivelyEnabled);
+            AssertLinkLook(Find(app, "SignInTokenLink"), enabled: true);
             AssertMasked(app, AzureDevOpsToken);
             Assert.True(ConfirmOf(app).IsEffectivelyEnabled);
             Assert.Empty(app.Launcher.Requests);
@@ -449,10 +450,11 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertError(app, PartA.NotAnOrganizationError);
             AssertNoRequests(served, mark);
             Assert.Equal(PartA.NotAnOrganization, ((TextBox)Find(app, "SignInOrganization")).Text);
-            Assert.False(Find(app, "SignInTokenLink").IsEffectivelyEnabled);
+            AssertLinkLook(Find(app, "SignInTokenLink"), enabled: false);
             AssertMasked(app, AzureDevOpsToken);
             Assert.True(ConfirmOf(app).IsEffectivelyEnabled);
             ShotA(app, PartA.A11AzureNotAnOrganization);
+            AssertNoHoverWhileDisabled(app, "SignInTokenLink");
 
             // A11 step 6: GitHub's form in Azure DevOps' dialog.
             Replace(app, "SignInOrganization", PartA.Organization);
@@ -462,7 +464,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertError(app, PartA.AzureDevOpsGivenGitHubToken);
             AssertNoRequests(served, mark);
             Assert.Equal(PartA.Organization, ((TextBox)Find(app, "SignInOrganization")).Text);
-            Assert.True(Find(app, "SignInTokenLink").IsEffectivelyEnabled);
+            AssertLinkLook(Find(app, "SignInTokenLink"), enabled: true);
             Assert.True(string.Equals(GitHubToken, dialog.Token, StringComparison.Ordinal), "Azure DevOps' dialog does not keep the refused token.");
             AssertMasked(app, GitHubToken);
             Assert.True(ConfirmOf(app).IsEffectivelyEnabled);
@@ -515,7 +517,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertError(app, PartA.AzureDevOpsNoOrganization);
             AssertSelected(app, "SignInOrganization", PartA.UnknownOrganization);
             AssertMasked(app, AzureDevOpsToken);
-            Assert.True(Find(app, "SignInTokenLink").IsEffectivelyEnabled);
+            AssertLinkLook(Find(app, "SignInTokenLink"), enabled: true);
             AssertDialogButtonsEnabled(app);
             Assert.Null(session.AccountOf(HostingProvider.AzureDevOps));
             Assert.False(File.Exists(AccountsFile(data)));
@@ -609,7 +611,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertDialog(app, HostingProvider.AzureDevOps, PartA.Organization);
             Assert.Equal(PartA.Organization, dialog.Organization);
             Assert.Equal(PartA.FocusOpened, FocusedId(app));
-            Assert.True(Find(app, "SignInTokenLink").IsEffectivelyEnabled);
+            AssertLinkLook(Find(app, "SignInTokenLink"), enabled: true);
             Assert.False(ConfirmOf(app).IsEffectivelyEnabled);
             Assert.Equal(["probe"], app.Tokens.Calls);
             AssertNoRequests(served, mark);
@@ -765,7 +767,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
                     Assert.Equal(PartA.Organization, dialog.Organization);
                     Assert.Equal(PartA.FocusOpened, FocusedId(app));
                     Assert.True(Find(app, "SignInNoKeychain").IsEffectivelyVisible);
-                    Assert.True(Find(app, "SignInTokenLink").IsEffectivelyEnabled);
+                    AssertLinkLook(Find(app, "SignInTokenLink"), enabled: true);
                     Assert.False(ConfirmOf(app).IsEffectivelyEnabled);
                     Assert.Equal(["probe"], CallsSince(tokens, stored));
                     AssertNoRequests(served, requests);

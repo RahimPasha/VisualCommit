@@ -3023,9 +3023,12 @@ or settles what it left open:
   section scrolls (about 502 of 495) and 7 px of `AccountUseForGitNoteAzureDevOps` (three lines, 13.9
   apart) lie below the viewport, less than one line, the last line's top inside it; `Check_A12` asserts
   that at the step, each line's height read from the note's layout against `PartA.A12NoteLine` (13.9,
-  ±0.5). Azure DevOps' disabled link (`a06a`, `a11b`) keeps the accent, as the report's "accent
-  foreground" reads and `AssertDialog` asserts; a disabled look needs a ruling. Open point 8: A9 as
-  given (ASSUMED).
+  ±0.5). Azure DevOps' disabled link (`a06a`, `a11b`) takes the disabled look by the
+  lead's ruling of 2026-11-06 (the report's same section): `SignInLinkButton`'s `:disabled` gives the
+  theme's `VcTextDisabledBrush` and the arrow cursor, and the underline's selector skips a disabled link;
+  GitHub's and GitLab's links are never disabled, and 7a's part A pictures still differ from the main
+  checkout's in the intro alone, compared pixel by pixel. `AssertDialog` asserts the accent and the hand
+  cursor while a link is enabled, the disabled look while it is not. Open point 8: A9 as given (ASSUMED).
 - For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` serves every provider (false while off).
   `SignInEntryProvidersTests` passes under the 1.5 s watcher lag.
 
