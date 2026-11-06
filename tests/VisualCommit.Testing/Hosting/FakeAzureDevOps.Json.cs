@@ -73,9 +73,11 @@ public sealed partial class FakeAzureDevOps
         $"git@ssh.dev.azure.com:v3/{Seg(repository.Organization)}/{Seg(repository.Project.Name)}/{Seg(repository.Name)}";
 
     /// <summary>
-    /// <c>connectionData</c> (r5 1.2, g1 G3.2): a member's identity in sample 1's member names and
-    /// nesting (READ), or the Anonymous identity when <paramref name="user"/> is null (MEASURED r5 1.2);
-    /// the instance, deployment and service owner the fake's own.
+    /// <c>connectionData</c> (r5 1.2, g1 G3.2): a member's identity in g1 G3.2's nesting (MEASURED
+    /// 2026-11-05 for a Code-only token: the top-level names and the identity's nine, with
+    /// <c>customDisplayName</c>, with and without Suppress), or the Anonymous
+    /// identity when <paramref name="user"/> is null (MEASURED r5 1.2); the instance, deployment and
+    /// service owner the fake's own.
     /// </summary>
     private static JsonObject ConnectionJson(FakeAzureUser? user) => new()
     {
@@ -94,11 +96,13 @@ public sealed partial class FakeAzureDevOps
     };
 
     /// <summary>
-    /// A trimmed identity. The Anonymous one is r5 1.2's byte for byte (MEASURED). A member's (READ g1
-    /// G3.2 sample 1): <c>id</c>, <c>descriptor</c> <c>Microsoft.IdentityModel.Claims.ClaimsIdentity;&lt;tenant&gt;\&lt;address&gt;</c>,
-    /// <c>subjectDescriptor</c> <c>aad.…</c>, <c>providerDisplayName</c>, <c>customDisplayName</c> only when
-    /// set (sample 2), <c>isActive</c>, <c>properties.Account</c> with a capital A (MEASURED g4 D4 §1)
-    /// holding the address, <c>resourceVersion</c> 2 and <c>metaTypeId</c> (0 unless set, g1 G0.4).
+    /// A trimmed identity. The Anonymous one is r5 1.2's byte for byte (MEASURED). A member's nine names
+    /// in the order stage 1 measured (MEASURED 2026-11-05; the values' forms READ g1 G3.2 sample 1):
+    /// <c>id</c>, <c>descriptor</c> <c>Microsoft.IdentityModel.Claims.ClaimsIdentity;&lt;tenant&gt;\&lt;address&gt;</c>,
+    /// <c>subjectDescriptor</c> <c>aad.…</c>, <c>providerDisplayName</c>, <c>customDisplayName</c>
+    /// (<see cref="FakeAzureUser.CustomDisplayName"/>: the display name unless set; null leaves it out,
+    /// as sample 1 has it, READ), <c>isActive</c>, <c>properties.Account</c> with a capital A (MEASURED
+    /// g4 D4 §1) holding the address, <c>resourceVersion</c> 2 and <c>metaTypeId</c> (0 unless set, g1 G0.4).
     /// </summary>
     private static JsonObject IdentityJson(FakeAzureUser? user)
     {
@@ -141,7 +145,7 @@ public sealed partial class FakeAzureDevOps
         ["Account"] = new JsonObject { ["$type"] = "System.String", ["$value"] = value },
     };
 
-    /// <summary>The core resource area of <paramref name="organization"/>: its <c>locationUrl</c> in the stored spelling (MEASURED g1 G4.2).</summary>
+    /// <summary>The core resource area of <paramref name="organization"/>: its <c>locationUrl</c> in the stored spelling (MEASURED g1 G4.2 without a credential; MEASURED 2026-11-05 with the token too, A1's spelling read: 200, <c>id, name, locationUrl</c>).</summary>
     private JsonObject AreaJson(FakeAzureOrganization organization) => new()
     {
         ["id"] = CoreAreaId,
@@ -265,7 +269,7 @@ public sealed partial class FakeAzureDevOps
     /// <paramref name="anonymous"/>: <c>uniqueName</c> and <c>imageUrl</c> null (MEASURED r5 3.1). Under
     /// <see cref="FakeHostingService.Gate"/>; <paramref name="facts"/> are the target's when single.
     /// </summary>
-    private JsonObject PullRequestJsonLocked(FakeAzurePullRequest pull, bool anonymous, bool single, (string? DefaultBranch, long Size) forkFacts, (string? DefaultBranch, long Size) facts = default)
+    private JsonObject PullRequestJsonLocked(FakeAzurePullRequest pull, bool anonymous, bool single, (string? DefaultBranch, long Size) forkFacts, (string? DefaultBranch, long Size) facts = default, PullAnswer answer = PullAnswer.Read)
     {
         var repository = pull.Repository;
         var json = new JsonObject
@@ -310,7 +314,11 @@ public sealed partial class FakeAzureDevOps
 
         json["sourceRefName"] = pull.Fork is null ? "refs/heads/" + pull.SourceBranch : string.Create(CultureInfo.InvariantCulture, $"refs/pull/{pull.Id}/source");
         json["targetRefName"] = "refs/heads/" + pull.TargetBranch;
-        json["mergeStatus"] = pull.MergeStatus;
+        if (answer != PullAnswer.Closed)
+        {
+            json["mergeStatus"] = pull.MergeStatus;
+        }
+
         json["isDraft"] = pull.IsDraft;
         json["mergeId"] = pull.MergeId.ToString("D", CultureInfo.InvariantCulture);
         if (pull.LastMergeSourceCommit is { } source)
@@ -323,12 +331,17 @@ public sealed partial class FakeAzureDevOps
             json["lastMergeTargetCommit"] = CommitJson(repository, target);
         }
 
-        if (pull.LastMergeCommit is { } merge)
+        if (pull.LastMergeCommit is { } merge && answer != PullAnswer.Closed)
         {
             json["lastMergeCommit"] = CommitJson(repository, merge);
         }
 
         json["reviewers"] = new JsonArray();
+        if (answer == PullAnswer.Created)
+        {
+            json["labels"] = new JsonArray();
+        }
+
         if (pull.Fork is { } fork)
         {
             json["forkSource"] = new JsonObject
@@ -423,10 +436,12 @@ public sealed partial class FakeAzureDevOps
     }
 
     /// <summary>
-    /// An error body (MEASURED r5 1.4): <c>{"$id":"1","innerException":null,"message","typeName","typeKey","errorCode":0,"eventId":3000}</c>;
+    /// An error body (MEASURED r5 1.4; MEASURED 2026-11-05 on the 400s and the 409 of stage 1):
+    /// <c>{"$id":"1","innerException":null,"message","typeName","typeKey","errorCode":0,"eventId":3000}</c>,
+    /// <paramref name="eventId"/> 0 for an empty title's (MEASURED 2026-11-05);
     /// <paramref name="customProperties"/> after <c>$id</c> (the expired token's, READ g1 G2).
     /// </summary>
-    private static JsonObject ErrorJson(string message, string typeName, string typeKey, JsonObject? customProperties = null)
+    private static JsonObject ErrorJson(string message, string typeName, string typeKey, JsonObject? customProperties = null, int eventId = 3000)
     {
         var json = new JsonObject { ["$id"] = "1" };
         if (customProperties is not null)
@@ -439,7 +454,7 @@ public sealed partial class FakeAzureDevOps
         json["typeName"] = typeName;
         json["typeKey"] = typeKey;
         json["errorCode"] = 0;
-        json["eventId"] = 3000;
+        json["eventId"] = eventId;
         return json;
     }
 
@@ -447,16 +462,26 @@ public sealed partial class FakeAzureDevOps
 
     private static byte[] Serialize(JsonNode node) => JsonSerializer.SerializeToUtf8Bytes(node, JsonOptions);
 
+    /// <summary>Which answer a single pull request is: a read, a create's (with <c>labels</c>, MEASURED 2026-11-05 on the create with nothing ahead, ASSUMED alike for a create with commits ahead) or an update's that closed it (without <c>mergeStatus</c> and <c>lastMergeCommit</c>, MEASURED 2026-11-05 on an abandon).</summary>
+    private enum PullAnswer
+    {
+        Read,
+        Created,
+        Closed,
+    }
+
     /// <summary>
-    /// A JSON answer: <c>Content-Type</c> with the served <c>api-version</c> (MEASURED r5 0.9; none
-    /// before a version was served), and <c>ActivityId</c>, <c>X-TFS-Session</c> and
+    /// A JSON answer: <c>Content-Type</c> with the served <c>api-version</c> on a 2xx (MEASURED r5 0.9;
+    /// none before a version was served), none on an error (MEASURED 2026-11-05 on the version's 400,
+    /// the creates' 409 and two 400s; ASSUMED on the other errors, the same exception filter), and
+    /// <c>ActivityId</c>, <c>X-TFS-Session</c> and
     /// <c>X-VSS-E2EID</c> one id (MEASURED r5 1.2); no <c>ETag</c>, <c>Link</c> or continuation (MEASURED r5 7).
     /// </summary>
     private AuthRemoteResponse Json(int status, JsonNode body, string? served, IEnumerable<KeyValuePair<string, string>>? extra = null, bool bom = false)
     {
         var headers = new List<KeyValuePair<string, string>>
         {
-            KeyValuePair.Create("Content-Type", "application/json; charset=utf-8" + (served is null ? string.Empty : "; api-version=" + served)),
+            KeyValuePair.Create("Content-Type", "application/json; charset=utf-8" + (served is null || status >= 400 ? string.Empty : "; api-version=" + served)),
         };
         AddActivity(headers);
         headers.AddRange(extra ?? []);

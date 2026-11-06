@@ -72,8 +72,8 @@ public sealed class AzureDevOpsClientTests
     {
         var bodies = new Func<HttpResponseMessage>[]
         {
-            // Empty, as for an unknown token (READ g1 G2).
-            () => Answer(HttpStatusCode.Unauthorized, string.Empty, null, ("WWW-Authenticate", "Basic realm=\"https://tfsprodfake.app.visualstudio.com/\""), ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),
+            // Empty, as for an unknown token (MEASURED 2026-11-05, D373's PAT-shaped value; READ g1 G2).
+            () => Answer(HttpStatusCode.Unauthorized, string.Empty, null, ("WWW-Authenticate", "Basic realm=\"https://tfsprodfake.visualstudio.com/\""), ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),
             // HTML (g1 G0.2), and the same led by a BOM.
             () => Answer(HttpStatusCode.Unauthorized, "<html><body>Sign in</body></html>", "text/html", ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),
             () => AnswerBytes(HttpStatusCode.Unauthorized, [0xEF, 0xBB, 0xBF, .. "<html><body>Sign in</body></html>"u8.ToArray()], ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),
@@ -124,6 +124,13 @@ public sealed class AzureDevOpsClientTests
             new(409, Error("TF401179: An active pull request for the source and target branch already exists.", "GitPullRequestExistsException"), "application/json", HostingFailureKind.Validation, PullRequestRefusal.AlreadyExists, "TF401179: An active pull request for the source and target branch already exists."),
             new(400, Error("TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches", "GitPullRequestCannotBeActivated"), "application/json", HostingFailureKind.Validation, PullRequestRefusal.BranchesMissing, "TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches"),
             new(400, Error("The pull request needs a title.", "InvalidArgumentValueException"), "application/json", HostingFailureKind.Validation, PullRequestRefusal.None, "The pull request needs a title."),
+            // An empty title's words hold a CR LF (MEASURED 2026-11-05): the message is one line, each
+            // run of control characters one space, so that the app's log keeps one entry a line; so are
+            // X-TFS-ServiceError's decoded words; a message of control characters alone is none, and
+            // the reason phrase stands in.
+            new(400, Error("Invalid argument value.\r\nParameter name: Invalid pull request title.", "InvalidArgumentValueException"), "application/json", HostingFailureKind.Validation, PullRequestRefusal.None, "Invalid argument value. Parameter name: Invalid pull request title."),
+            new(404, "Not here.", "text/plain", HostingFailureKind.NotFound, PullRequestRefusal.None, "Line one. Line two.", [("X-TFS-ServiceError", "Line%20one.%0D%0ALine%20two.%0A")]),
+            new(400, Error("\u0001\u0007", "InvalidArgumentValueException"), "application/json", HostingFailureKind.Validation, PullRequestRefusal.None, "Bad Request"),
             // GitPullRequestExistsException's key on a 400, or the other's on a 409, is no refusal of its kind.
             new(400, Error("Exists.", "GitPullRequestExistsException"), "application/json", HostingFailureKind.Validation, PullRequestRefusal.None, "Exists."),
             new(409, Error("Cannot.", "GitPullRequestCannotBeActivated"), "application/json", HostingFailureKind.Validation, PullRequestRefusal.None, "Cannot."),

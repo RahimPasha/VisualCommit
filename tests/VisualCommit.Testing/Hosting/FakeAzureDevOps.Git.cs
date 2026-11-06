@@ -78,8 +78,9 @@ public sealed partial class FakeAzureDevOps
     /// "Merge pull request &lt;n&gt; from &lt;source&gt; into &lt;target&gt;" (parents and message MEASURED
     /// r5 3.3), its creator at <see cref="AppClocks.HarnessTime"/> as author and committer; a fork's
     /// source is fetched first into <c>refs/fake/source/&lt;n&gt;</c>. One <c>update-ref --stdin</c>
-    /// writes them and deletes every <c>refs/fake/source/*</c> and the merge refs of abandoned,
-    /// completed (MEASURED r5 3.3) and conflicting ones (READ). A pull request whose branch is gone keeps its ref.
+    /// writes them and deletes every <c>refs/fake/source/*</c> and the merge refs of abandoned
+    /// (MEASURED 2026-11-05: gone by the first read after the abandon), completed (MEASURED r5 3.3) and
+    /// conflicting ones (READ). A pull request whose branch is gone keeps its ref.
     /// </summary>
     public async Task SyncRefsAsync(FakeAzureRepository repository, CancellationToken ct = default)
     {
@@ -137,7 +138,9 @@ public sealed partial class FakeAzureDevOps
     /// A Basic password's login for git: a known token, neither revoked nor expired, of the
     /// repository's organization (its first segment), under any non-empty user, the organization and
     /// <c>x-access-token</c> included (READ r5 0.5: "a username, which can be anything except an empty
-    /// string"); another organization's token is refused (401, ASSUMED). The login is <c>{o}/{user id}</c>,
+    /// string"; <c>x-access-token</c> through the app's helper MEASURED 2026-11-05, stage 1's clones on
+    /// dev.azure.com and the organization's host, design 16.1); another organization's token is refused
+    /// (401, ASSUMED). The login is <c>{o}/{user id}</c>,
     /// with <c>#read</c> for a read-only token.
     /// </summary>
     protected override string? LoginOfToken(string repository, string token)
@@ -305,34 +308,83 @@ public sealed partial class FakeAzureDevOps
     }
 
     /// <summary>
-    /// Deletes branches and tags for <c>POST …/refs</c> (r5 4's results; design 3.3): each whose
-    /// <c>oldObjectId</c> is its tip is deleted (<c>succeeded</c>); another tip or none is
-    /// <c>staleOldObjectId</c> and a ref outside <c>refs/heads/</c> and <c>refs/tags/</c>
-    /// <c>invalidRefName</c>, both with HTTP 200 (READ enum; the status ASSUMED). One <c>update-ref --stdin</c>.
+    /// Deletes and creates branches and tags for <c>POST …/refs</c> (r5 4's results; design 3.3): a
+    /// delete (<c>newObjectId</c> forty zeros) whose <c>oldObjectId</c> is its tip is deleted
+    /// (<c>succeeded</c>, MEASURED 2026-11-05); a create (<c>oldObjectId</c> forty zeros) of a ref that
+    /// is not there, at a commit of the repository, is written (<c>succeeded</c>, MEASURED 2026-11-05:
+    /// the live command's <c>-even</c> branch at main's tip). A delete of another tip or none, a create
+    /// of a ref that is there (the exact name) or a second update of one name is <c>staleOldObjectId</c>,
+    /// a create at no commit <c>unresolvableToCommit</c>; a create whose name is a folder of a ref there
+    /// or created before it in the batch, or has one of them as its folder (<c>refs/heads/feature</c>
+    /// beside <c>refs/heads/feature/sign-in</c>), or differs from one of them only in case
+    /// (<c>refs/heads/MAIN</c> beside <c>refs/heads/main</c>), or has a folder spelled like one of
+    /// theirs but for case (<c>refs/heads/dir/b</c> beside <c>refs/heads/Dir/c</c>, <see cref="FoldersClash"/>),
+    /// and an update whose name differs only in case from one named before it in the batch,
+    /// <c>refNameConflict</c> (whole names and folders compared without case, as <see cref="Nests"/>
+    /// does, so that the rows and the list are the same on every file system for the names git can
+    /// store on each, and git never meets two loose files of one name; a name that Windows cannot
+    /// store as a file, such as <c>con</c>, <c>aux.txt</c>, one ending in <c>.</c> or holding <c>|</c>,
+    /// makes git's <c>update-ref</c> fail there and the call throw, a limit kept because no test and no
+    /// path of the app's creates such a ref through the API); and a ref outside <c>refs/heads/</c>
+    /// and <c>refs/tags/</c> <c>invalidRefName</c>, each with HTTP 200 (READ enum; the statuses ASSUMED;
+    /// a ref the same batch deletes still counts, so that git's transaction never meets the conflict).
+    /// One <c>update-ref --stdin</c>.
     /// </summary>
-    private async Task<IReadOnlyList<(string Name, string Old, string Status)>> DeleteRefsAsync(FakeAzureRepository repository, IReadOnlyList<(string Name, string Old)> deletes, CancellationToken ct)
+    private async Task<IReadOnlyList<(string Name, string Old, string New, string Status)>> UpdateRefsAsync(FakeAzureRepository repository, IReadOnlyList<(string Name, string Old, string New)> requested, CancellationToken ct)
     {
         var gate = LockOf(repository.FolderName);
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             var refs = await ReadRefsAsync(repository.BarePath, ct, "refs/heads/", "refs/tags/").ConfigureAwait(false);
-            var results = new List<(string Name, string Old, string Status)>();
+            var results = new List<(string Name, string Old, string New, string Status)>();
             var updates = new StringBuilder();
-            foreach (var (name, old) in deletes)
+            var named = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var created = new List<string>();
+            foreach (var (name, old, @new) in requested)
             {
                 if (!name.StartsWith("refs/heads/", StringComparison.Ordinal) && !name.StartsWith("refs/tags/", StringComparison.Ordinal))
                 {
-                    results.Add((name, old, "invalidRefName"));
+                    results.Add((name, old, @new, "invalidRefName"));
                 }
-                else if (refs.TryGetValue(name, out var tip) && string.Equals(tip, old, StringComparison.OrdinalIgnoreCase))
+                else if (!named.Add(name))
                 {
-                    updates.Append(CultureInfo.InvariantCulture, $"delete {name} {tip}\n");
-                    results.Add((name, old, "succeeded"));
+                    named.TryGetValue(name, out var earlier);
+                    results.Add((name, old, @new, string.Equals(earlier, name, StringComparison.Ordinal) ? "staleOldObjectId" : "refNameConflict"));
+                }
+                else if (@new == ZeroId)
+                {
+                    if (refs.TryGetValue(name, out var tip) && string.Equals(tip, old, StringComparison.OrdinalIgnoreCase))
+                    {
+                        updates.Append(CultureInfo.InvariantCulture, $"delete {name} {tip}\n");
+                        results.Add((name, old, @new, "succeeded"));
+                    }
+                    else
+                    {
+                        results.Add((name, old, @new, "staleOldObjectId"));
+                    }
+                }
+                else if (refs.ContainsKey(name))
+                {
+                    results.Add((name, old, @new, "staleOldObjectId"));
+                }
+                else if (!(await GitAsync(repository.BarePath, null, null, ct, "check-ref-format", name).ConfigureAwait(false)).Succeeded)
+                {
+                    results.Add((name, old, @new, "invalidRefName"));
+                }
+                else if (refs.Keys.Concat(created).Any(other => Nests(name, other) || Nests(other, name) || string.Equals(other, name, StringComparison.OrdinalIgnoreCase) || FoldersClash(name, other)))
+                {
+                    results.Add((name, old, @new, "refNameConflict"));
+                }
+                else if (!IsObjectId(@new) || !(await GitAsync(repository.BarePath, null, null, ct, "cat-file", "-e", @new + "^{commit}").ConfigureAwait(false)).Succeeded)
+                {
+                    results.Add((name, old, @new, "unresolvableToCommit"));
                 }
                 else
                 {
-                    results.Add((name, old, "staleOldObjectId"));
+                    updates.Append(CultureInfo.InvariantCulture, $"create {name} {@new}\n");
+                    created.Add(name);
+                    results.Add((name, old, @new, "succeeded"));
                 }
             }
 
@@ -348,6 +400,39 @@ public sealed partial class FakeAzureDevOps
             gate.Release();
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="folder"/> is a folder of <paramref name="name"/> (<c>refs/heads/feature</c>
+    /// of <c>refs/heads/feature/sign-in</c>): git keeps no ref beside a folder of its name. Without case,
+    /// so that the answer is the same on a file system that ignores case and on one that does not.
+    /// </summary>
+    private static bool Nests(string folder, string name) =>
+        name.Length > folder.Length && name[folder.Length] == '/' && name.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a folder of <paramref name="name"/> past <c>refs/heads/</c> or <c>refs/tags/</c> and a
+    /// folder of <paramref name="other"/> are spelled alike but for case (<c>refs/heads/dir/b</c> beside
+    /// <c>refs/heads/Dir/c</c>): a file system that ignores case would put both in one folder and list
+    /// <c>Dir/b</c>, one that does not two folders, so the fake refuses the create on every one.
+    /// </summary>
+    private static bool FoldersClash(string name, string other)
+    {
+        var start = name.StartsWith("refs/heads/", StringComparison.Ordinal) ? "refs/heads/".Length : "refs/tags/".Length;
+        for (var slash = name.IndexOf('/', start); slash > 0; slash = name.IndexOf('/', slash + 1))
+        {
+            var folder = name[..(slash + 1)];
+            if (other.StartsWith(folder, StringComparison.OrdinalIgnoreCase) && !other.StartsWith(folder, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>Forty hex digits, ASCII only: what a create's <c>newObjectId</c> must be before git is asked whether it names a commit.</summary>
+    private static bool IsObjectId(string value) =>
+        value.Length == ZeroId.Length && value.All(char.IsAsciiHexDigit);
 
     /// <summary>The refs under <paramref name="prefixes"/> of a bare repository, by full name: one <c>for-each-ref</c>.</summary>
     private async Task<IReadOnlyDictionary<string, string>> ReadRefsAsync(string bare, CancellationToken ct, params string[] prefixes)

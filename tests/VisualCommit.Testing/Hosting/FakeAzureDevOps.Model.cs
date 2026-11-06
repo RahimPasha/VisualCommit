@@ -93,6 +93,7 @@ public sealed class FakeAzureUser
         Id = id;
         DisplayName = displayName;
         UniqueName = uniqueName;
+        _customDisplayName = displayName;
     }
 
     public FakeAzureOrganization Organization { get; }
@@ -106,7 +107,10 @@ public sealed class FakeAzureUser
     /// <summary>The made-up address (<c>ada.lovelace@example.com</c>; the display name itself when it is one).</summary>
     public string UniqueName { get; }
 
-    /// <summary>The identity's <c>customDisplayName</c>, left out when null (the default; g1 G3.2 sample 1, READ).</summary>
+    /// <summary>
+    /// The identity's <c>customDisplayName</c>: the display name unless set (MEASURED 2026-11-05: the
+    /// member's identity held one, its value not noted, D372); null leaves it out (g1 G3.2 sample 1, READ).
+    /// </summary>
     public string? CustomDisplayName
     {
         get => Volatile.Read(ref _customDisplayName);
@@ -294,7 +298,7 @@ public sealed class FakeAzureDevOpsFault : FakeServiceFault
     {
     }
 
-    /// <summary>401 with an empty body and one <c>WWW-Authenticate: Basic realm="…"</c>: a PAT-shaped token unknown or revoked (READ g1 G2, community).</summary>
+    /// <summary>401 with an empty body and one <c>WWW-Authenticate: Basic realm="…"</c>: a PAT-shaped token unknown (MEASURED 2026-11-05, D373's 84-character value on connectionData) or revoked (READ g1 G2, community).</summary>
     public static FakeAzureDevOpsFault InvalidToken { get; } = new(nameof(InvalidToken));
 
     /// <summary>401 <c>UnauthorizedRequestException</c> TF400813 naming the caller's id (the token's user, else the anonymous one; READ g1 G2).</summary>

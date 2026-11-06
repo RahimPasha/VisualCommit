@@ -121,7 +121,8 @@ public sealed partial class FakeGitLab : FakeHostingService
     /// <summary>
     /// A new token of <paramref name="username"/>: <c>glpat-FAKE-&lt;username&gt;-&lt;n&gt;</c>, n counting
     /// that user's tokens from 1. <paramref name="permissions"/> are scopes for a legacy token (default
-    /// <c>api</c>) and labels for a fine-grained one (default <see cref="FakeGitLabPermissions.FineGrainedDefault"/>),
+    /// <c>api</c>) and labels for a fine-grained one (default <see cref="FakeGitLabPermissions.FineGrainedDefault"/>;
+    /// User: Read and Personal Access Token: Read the same with or without <see cref="FakeGitLabPermissions.UserSection"/>),
     /// on every project the user reaches ("Only specific…" is not modelled, D370). A token whose
     /// <paramref name="expires"/> is on or before <see cref="AppClocks.HarnessTime"/>'s date is expired
     /// (ASSUMED r6 2.4: unusable from 00:00 UTC of its date).
@@ -135,7 +136,7 @@ public sealed partial class FakeGitLab : FakeHostingService
             var n = _tokenCounts[user.Username] = _tokenCounts.GetValueOrDefault(user.Username) + 1;
             var token = $"glpat-FAKE-{user.Username}-{n}";
             var granted = permissions ?? (kind == FakeGitLabTokenKind.Legacy ? FakeGitLabPermissions.LegacyDefault : FakeGitLabPermissions.FineGrainedDefault);
-            _tokens[token] = new GitLabToken(_nextTokenId++, user.Username, kind, new HashSet<string>(granted, StringComparer.Ordinal), expires);
+            _tokens[token] = new GitLabToken(_nextTokenId++, user.Username, kind, new HashSet<string>(granted.Select(FakeGitLabPermissions.Canonical), StringComparer.Ordinal), expires);
             AddTokenLocked(token, user.Username);
             return token;
         }
@@ -338,7 +339,7 @@ public sealed partial class FakeGitLab : FakeHostingService
         }
     }
 
-    /// <summary>A push: Developer (30) or above, with <c>api</c>, <c>write_repository</c> or Code: Push (READ g2 G3).</summary>
+    /// <summary>A push: Developer (30) or above, with <c>api</c>, <c>write_repository</c> or Code: Push (READ g2 G3; an Owner's with a fine-grained token's Code: Push MEASURED 2026-11-06, stage 1's two pushes through the app's helper).</summary>
     protected override bool MayPush(string repository, string login)
     {
         var token = GitToken();
@@ -422,8 +423,9 @@ public sealed partial class FakeGitLab : FakeHostingService
 
     /// <summary>
     /// A Basic password's login for git: the username of a live token under any non-empty user (READ r6
-    /// 11, g2 G3); an unknown, revoked or expired one null, so 401 with realm GitLab (MEASURED; expired
-    /// and revoked READ g2 G3).
+    /// 11, g2 G3; under <c>x-access-token</c> through the app's helper MEASURED 2026-11-06, stage 1's
+    /// clone and pushes, design 16.1); an unknown, revoked or expired one null, so 401 with realm GitLab
+    /// (MEASURED; expired and revoked READ g2 G3).
     /// </summary>
     protected override string? LoginOfToken(string repository, string token)
     {

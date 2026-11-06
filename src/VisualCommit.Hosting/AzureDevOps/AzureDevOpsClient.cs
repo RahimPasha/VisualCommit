@@ -432,26 +432,26 @@ internal sealed class AzureDevOpsClient : IDisposable
         /// <summary>
         /// The body's <c>message</c>, else <c>value.Message</c> (TF400677's shape), else
         /// <c>X-TFS-ServiceError</c> URL-decoded, else the reason phrase, else <c>HTTP &lt;status&gt;</c>
-        /// (a 5xx's: <see cref="HostingHttpTexts.ServerError"/>).
+        /// (a 5xx's: <see cref="HostingHttpTexts.ServerError"/>), each on one line (<see cref="OneLine"/>).
         /// </summary>
         private string MessageOf(HostingExchange exchange, AzureDevOpsErrorJson? error)
         {
-            if (error?.Message is { } message && !string.IsNullOrWhiteSpace(message))
+            if (OneLine(error?.Message) is { } message)
             {
                 return message;
             }
 
-            if (error?.Value?.Message is { } valueMessage && !string.IsNullOrWhiteSpace(valueMessage))
+            if (OneLine(error?.Value?.Message) is { } valueMessage)
             {
                 return valueMessage;
             }
 
-            if (exchange.Headers.GetValueOrDefault(ServiceErrorHeader) is { } serviceError && Uri.UnescapeDataString(serviceError) is { } decoded && !string.IsNullOrWhiteSpace(decoded))
+            if (exchange.Headers.GetValueOrDefault(ServiceErrorHeader) is { } serviceError && OneLine(Uri.UnescapeDataString(serviceError)) is { } decoded)
             {
                 return decoded;
             }
 
-            if (exchange.Reason is { } reason && !string.IsNullOrWhiteSpace(reason))
+            if (OneLine(exchange.Reason) is { } reason)
             {
                 return reason;
             }
@@ -459,6 +459,43 @@ internal sealed class AzureDevOpsClient : IDisposable
             return exchange.Status is >= 500 and < 600
                 ? HostingHttpTexts.ServerError(Provider, exchange.Status)
                 : string.Create(CultureInfo.InvariantCulture, $"HTTP {exchange.Status}");
+        }
+
+        /// <summary>
+        /// <paramref name="text"/> on one line: each run of control characters (<c>char.IsControl</c>)
+        /// and line or paragraph separators one space, the ends trimmed; null when nothing is left. The
+        /// service's .NET texts hold line breaks (an empty title's 400, MEASURED 2026-11-05: "Invalid
+        /// argument value.\r\nParameter name: Invalid pull request title."), and a failure's message
+        /// goes into the app's log, which keeps one entry a line.
+        /// </summary>
+        private static string? OneLine(string? text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            var line = new StringBuilder(text.Length);
+            var gap = false;
+            foreach (var c in text)
+            {
+                if (char.IsControl(c) || char.GetUnicodeCategory(c) is UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+                {
+                    gap = true;
+                    continue;
+                }
+
+                if (gap && line.Length > 0)
+                {
+                    line.Append(' ');
+                }
+
+                gap = false;
+                line.Append(c);
+            }
+
+            var folded = line.ToString().Trim();
+            return folded.Length == 0 ? null : folded;
         }
 
         /// <summary>When a rate limit ends: now plus <c>Retry-After</c> (seconds or a date), else <c>X-RateLimit-Reset</c> (Unix seconds), else 60 s; not before now and a day ahead at most.</summary>

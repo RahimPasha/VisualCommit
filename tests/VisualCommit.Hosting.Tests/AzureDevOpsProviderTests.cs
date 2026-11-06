@@ -20,10 +20,12 @@ namespace VisualCommit.Hosting.Tests;
 /// parent; A3's parent; A4's drafts, forks, addresses and authors, and its walk of 301 rows; A5's
 /// body, a fork after one read, 200 and 201, the refusals, one POST, another organization; the
 /// other members; and Azure DevOps named on every failure. Made-up names only.
-/// ASSUMED answers these tests rest on, for WP-LIVE's first stage (D342, design 6.8): connectionData's
-/// 404 for an unknown organization read with a token (D374's probe), the core resource area read
-/// with a token, the create's POST by the repository's name, and a message naming an e-mail; kept as
-/// marked (D375): a fork's create body and the fork shapes A2 and A4 read.
+/// Answers these tests rest on that WP-LIVE's first stage MEASURED on 2026-11-05 (D342, design 6.8,
+/// WP-LF): connectionData's 404 for an unknown organization read with a token (D374's probe), the
+/// core resource area read with a token, the Anonymous 200 for a Basic value that is no PAT and the
+/// empty 401 for a PAT-shaped unknown one (D373), the create's POST by the repository's name (201) and
+/// its 409 and 400 refusals; still ASSUMED: a message naming an e-mail; kept as marked (D375): a
+/// fork's create body and the fork shapes A2 and A4 read.
 /// </summary>
 public sealed class AzureDevOpsProviderTests
 {
@@ -99,7 +101,7 @@ public sealed class AzureDevOpsProviderTests
         // The one warning the provider's own failure needs, and no other.
         Assert.Equal(["Azure DevOps: GET /Fernhill-Labs/_apis/connectionData failed: BadCredentials (request " + anonymous.RequestId + ")."], fixture.Log.Lines.Select(line => line.Message));
 
-        // An unknown organization: connectionData's 404 (MEASURED r5 1.3 without a credential; with one ASSUMED until D374's probe).
+        // An unknown organization: connectionData's 404 (MEASURED r5 1.3 without a credential; with one MEASURED 2026-11-05, D374's probe).
         var nowhere = (await fixture.Provider.CheckTokenAsync(fixture.AdaToken, "vc-none-0123456789ab", Cancelled)).Failure!;
         Assert.Equal((HostingFailureKind.NotFound, HostingProvider.AzureDevOps), (nowhere.Kind, nowhere.Provider));
         Assert.Equal(2, fixture.Recorder.Sent.Count);
@@ -116,6 +118,16 @@ public sealed class AzureDevOpsProviderTests
         var patShaped = new string('x', 76) + "AZDO" + "yyyy";
         Assert.Equal(HostingFailureKind.BadCredentials, (await fixture.Provider.CheckTokenAsync(patShaped, Organization, Cancelled)).Failure!.Kind);
         Assert.Equal(5, fixture.Recorder.Sent.Count);
+
+        // A value that is no PAT gets connectionData's 200 with the Anonymous identity from the service
+        // (MEASURED 2026-11-05 in the sandbox's organization, D373; in a private organization ASSUMED,
+        // the sandbox organization's policy not read, the fake's check 4), which A1 refuses as the token
+        // ignored, after that one request (6.4; WP-LF). Were it the sign-in's 401 (g1 G0.2, READ), A1
+        // would refuse it too, as BadCredentials without AnonymousDetail.
+        var plain = (await fixture.Provider.CheckTokenAsync("not-a-token-made-up-24ch", Organization, Cancelled)).Failure!;
+        Assert.Equal((HostingFailureKind.BadCredentials, AzureDevOpsProvider.AnonymousDetail, HostingProvider.AzureDevOps), (plain.Kind, plain.Detail, plain.Provider));
+        Assert.Equal(6, fixture.Recorder.Sent.Count);
+        Assert.Equal(200, fake.Requests[^1].Status);
         Assert.DoesNotContain(fixture.Recorder.Sent, sent => sent.Url.AbsolutePath.Contains("resourceAreas", StringComparison.Ordinal));
     }
 

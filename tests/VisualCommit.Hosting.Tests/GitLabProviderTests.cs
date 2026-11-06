@@ -79,7 +79,8 @@ public sealed class GitLabProviderTests
         var noUser = await provider.CheckTokenAsync(projectsOnly, null, Cancelled);
 
         // The fake's answers (4.3, 4.4): an unknown token's 401 A MEASURED r6 1.2; the revoked and
-        // expired 401 F READ g2 G2.2, kept READ by 15.7; the granular 403 F READ g2 G2.4.
+        // expired 401 F READ g2 G2.2, kept READ by 15.7; the granular 403 F naming user MEASURED
+        // 2026-11-06 (self; its words also 2026-11-05 on GET projects through the app's message, D385).
         Assert.Equal(
             [
                 (HostingFailureKind.BadCredentials, "401 Unauthorized", (string?)null),
@@ -165,6 +166,37 @@ public sealed class GitLabProviderTests
         Assert.False(bob.Value.Repositories[0].CanPush);
         Assert.All(lab.Fake.Requests.Where(request => request.Path == "/api/v4/projects"), request =>
             Assert.Equal("membership=true&archived=false&order_by=last_activity_at&sort=desc&per_page=100", request.Query));
+        lab.AssertNoSecret();
+    }
+
+    /// <summary>
+    /// D385 (its status and words MEASURED 2026-11-05 through the app's message, WP-LF; the body's form
+    /// self's, MEASURED 2026-11-06, taken to hold here): a fine-grained token with Project: Read among its
+    /// group and project permissions alone signs in, but its list is GitLab's 403
+    /// <c>insufficient_granular_scope</c> naming the user permission; A2 gives <c>Forbidden</c> with that code as <c>Detail</c> (7.3, never
+    /// by the English), after one request, nothing listed; the token with it among its user
+    /// permissions lists.
+    /// </summary>
+    [Fact]
+    public async Task A2_with_Project_Read_among_the_group_and_project_permissions_alone_is_Forbidden_by_the_code()
+    {
+        await using var lab = await GitLabLab.CreateAsync(withGit: false);
+        using var provider = lab.Provider();
+        var projectSection = lab.Fake.AddToken("ada", permissions: [FakeGitLabPermissions.UserRead, FakeGitLabPermissions.ProjectRead, FakeGitLabPermissions.MergeRequestRead]);
+        var ada = (await provider.CheckTokenAsync(projectSection, null, Cancelled)).Value!;
+        var before = lab.Fake.Requests.Count;
+
+        var listed = await provider.ListRepositoriesAsync(projectSection, ada, Cancelled);
+
+        var failure = listed.Failure!;
+        Assert.Null(listed.Value);
+        Assert.Equal((HostingFailureKind.Forbidden, "insufficient_granular_scope", HostingProvider.GitLab), (failure.Kind, failure.Detail, failure.Provider));
+        Assert.Equal(PullRequestRefusal.None, failure.Refusal);
+        Assert.Equal(before + 1, lab.Fake.Requests.Count);
+        Assert.Equal(("/api/v4/projects", 403), (lab.Fake.Requests[^1].Path, lab.Fake.Requests[^1].Status));
+
+        var both = lab.Fake.AddToken("ada", permissions: [FakeGitLabPermissions.UserRead, FakeGitLabPermissions.UserProjectRead, FakeGitLabPermissions.ProjectRead]);
+        Assert.NotEmpty((await provider.ListRepositoriesAsync(both, ada, Cancelled)).Value!.Repositories);
         lab.AssertNoSecret();
     }
 
@@ -473,8 +505,11 @@ public sealed class GitLabProviderTests
         using var provider = lab.Provider();
         var p = new HostedRepository(HostingProvider.GitLab, Host, "g/s", "p");
         NewPullRequest New(string head, string @base) => new("T", "", head, null, @base, false);
-        // Create's answers (4.3): 409 B, 400 C and 422 B READ g2 G1.1; 403 A READ g2 G1.2. The 409
-        // names the open request !<iid> alone (READ, 4's As built: to_reference).
+        // Create's answers (4.3): 409 B and 400 C naming source_branch MEASURED 2026-11-06 (the rest
+        // READ g2 G1.1); 422 B READ g2
+        // G1.1; 403 A READ g2 G1.2. The 409
+        // names the open request !<iid> alone (MEASURED 2026-11-06, stage 1's duplicate create; a
+        // fork's READ, 4's As built: to_reference).
         var cases = new (HostedRepository Base, NewPullRequest Request, HostingFailureKind Kind, PullRequestRefusal Refusal)[]
         {
             (p, New("feature/one", "main"), HostingFailureKind.Validation, PullRequestRefusal.AlreadyExists),

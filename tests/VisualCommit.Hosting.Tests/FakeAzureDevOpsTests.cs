@@ -26,6 +26,9 @@ public sealed class FakeAzureDevOpsTests
     private const string AnonymousId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     private const string Realm = "Basic realm=\"https://tfsprodfake.app.visualstudio.com/\"";
 
+    /// <summary>A refused credential's one challenge: the realm a host of the service's measured form, without <c>.app.</c> (MEASURED 2026-11-05).</summary>
+    private const string TokenRealm = "Basic realm=\"https://tfsprodfake.visualstudio.com/\"";
+
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -42,11 +45,13 @@ public sealed class FakeAzureDevOpsTests
         Assert.Null(member.Header("ETag"));
         Assert.Null(member.Header("Link"));
         var user = member.Json.GetProperty("authenticatedUser");
+        // The identity's nine names in the service's order, customDisplayName among them (MEASURED
+        // 2026-11-05, a Code-only token), the display name unless set.
         Assert.Equal(
-            ["id", "descriptor", "subjectDescriptor", "providerDisplayName", "isActive", "properties", "resourceVersion", "metaTypeId"],
+            ["id", "descriptor", "subjectDescriptor", "providerDisplayName", "customDisplayName", "isActive", "properties", "resourceVersion", "metaTypeId"],
             user.EnumerateObject().Select(property => property.Name));
         Assert.Equal(fixture.Ada.Id.ToString(), user.GetProperty("id").GetString());
-        Assert.Equal("Ada Lovelace", user.GetProperty("providerDisplayName").GetString());
+        Assert.Equal(("Ada Lovelace", "Ada Lovelace"), (user.GetProperty("providerDisplayName").GetString(), user.GetProperty("customDisplayName").GetString()));
         Assert.StartsWith("Microsoft.IdentityModel.Claims.ClaimsIdentity;", user.GetProperty("descriptor").GetString(), StringComparison.Ordinal);
         Assert.EndsWith("\\ada.lovelace@example.com", user.GetProperty("descriptor").GetString(), StringComparison.Ordinal);
         Assert.StartsWith("aad.", user.GetProperty("subjectDescriptor").GetString(), StringComparison.Ordinal);
@@ -59,6 +64,13 @@ public sealed class FakeAzureDevOpsTests
         fixture.Ada.MetaTypeId = 255;
         var custom = (await SendAsync(fake, HttpMethod.Get, Connection, fixture.AdaToken)).Json.GetProperty("authenticatedUser");
         Assert.Equal(("Ada", 255), (custom.GetProperty("customDisplayName").GetString(), custom.GetProperty("metaTypeId").GetInt32()));
+
+        // Null leaves customDisplayName out, as g1 G3.2's sample 1 (READ).
+        fixture.Ada.CustomDisplayName = null;
+        var sampleOne = (await SendAsync(fake, HttpMethod.Get, Connection, fixture.AdaToken)).Json.GetProperty("authenticatedUser");
+        Assert.Equal(
+            ["id", "descriptor", "subjectDescriptor", "providerDisplayName", "isActive", "properties", "resourceVersion", "metaTypeId"],
+            sampleOne.EnumerateObject().Select(property => property.Name));
 
         // harbor-co allows public projects: no credential, a password that is no PAT and Bearer are
         // each the Anonymous identity (MEASURED r5 1.2; READ g1 G0.2).
@@ -79,8 +91,64 @@ public sealed class FakeAzureDevOpsTests
             Assert.Null(fake.Requests[^1].Login);
         }
 
-        // Fernhill-Labs does not: the sign-in's 302 off the fake's origin, or 401 TF400813 with Suppress.
-        var redirected = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: request => request.Headers.Authorization = Basic(string.Empty, "short-value"));
+        // A Basic password that is no PAT is the Anonymous identity on connectionData: with the empty
+        // user, as the probe and the client send it, with and without Suppress (MEASURED 2026-11-05 in
+        // the sandbox's organization, D373's short value); with a user, ASSUMED alike (the user ignored,
+        // READ g1 G1.0; no path of the app's sends one to connectionData). Fernhill-Labs is private:
+        // the 200 there is ASSUMED, since the run did not read whether the sandbox's organization
+        // allows public projects (g1 G0.2, READ, would give the sign-in's 302 or 401 below); the next
+        // live run reads it (16.1's As built). A 200 that A1 refuses (6.4).
+        foreach (var edit in new Action<HttpRequestMessage>[]
+        {
+            request => request.Headers.Authorization = Basic(string.Empty, "short-value"),
+            request =>
+            {
+                request.Headers.Authorization = Basic(string.Empty, "short-value");
+                Suppress(request);
+            },
+            request =>
+            {
+                request.Headers.Authorization = Basic("x-access-token", "short-value");
+                Suppress(request);
+            },
+        })
+        {
+            var plain = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: edit);
+            Assert.Equal((200, "application/json; charset=utf-8; api-version=7.1-preview.1"), (plain.Status, plain.Header("Content-Type")));
+            Assert.Equal(["authenticatedUser", "authorizedUser", "instanceId", "deploymentId", "deploymentType", "locationServiceData"], plain.Json.EnumerateObject().Select(property => property.Name));
+            Assert.Equal((AnonymousId, "Anonymous"), (plain.Json.GetProperty("authenticatedUser").GetProperty("id").GetString(), plain.Json.GetProperty("authenticatedUser").GetProperty("providerDisplayName").GetString()));
+            Assert.Empty(plain.WwwAuthenticate);
+            Assert.Null(fake.Requests[^1].Login);
+        }
+
+        // The Anonymous 200 is for a Basic value in none of the PAT forms (azdo_FAKE-, 84 with AZDO,
+        // 52 base32). The older form, 52 characters of a to z and 2 to 7, valid until it expires
+        // (ASSUMED, r5 0.6 and 5: the docs say only to support the 84-character format, and the
+        // alphabet is inferred from r5 5's "base32-looking"), unknown here, gets the empty 401 with and
+        // without Suppress (READ g1 G0.2 for an invalid PAT-shaped value); 52 characters with a 1 are
+        // no PAT and get the 200.
+        var legacy = new string('a', 52);
+        foreach (var suppress in new[] { false, true })
+        {
+            var refused = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: request =>
+            {
+                request.Headers.Authorization = Basic(string.Empty, legacy);
+                if (suppress)
+                {
+                    Suppress(request);
+                }
+            });
+            Assert.Equal((401, 0), (refused.Status, refused.Bytes.Length));
+            Assert.Equal([TokenRealm], refused.WwwAuthenticate);
+            Assert.Null(fake.Requests[^1].Login);
+        }
+
+        var notLegacy = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: request => request.Headers.Authorization = Basic(string.Empty, new string('a', 51) + "1"));
+        Assert.Equal((200, AnonymousId), (notLegacy.Status, notLegacy.Json.GetProperty("authenticatedUser").GetProperty("id").GetString()));
+
+        // No credential at all: the sign-in's 302 off the fake's origin, or 401 TF400813 with Suppress
+        // (MEASURED r5 1.3).
+        var redirected = await SendAsync(fake, HttpMethod.Get, Connection, token: null);
         Assert.Equal(302, redirected.Status);
         Assert.StartsWith("https://spsprodfake.vssps.visualstudio.com/_signin?", redirected.Header("Location"), StringComparison.Ordinal);
         Assert.Contains("Object moved", redirected.Body, StringComparison.Ordinal);
@@ -104,7 +172,7 @@ public sealed class FakeAzureDevOpsTests
         {
             var refused = await SendAsync(fake, HttpMethod.Get, Connection, token);
             Assert.Equal((401, 0), (refused.Status, refused.Bytes.Length));
-            Assert.Equal([Realm], refused.WwwAuthenticate);
+            Assert.Equal([TokenRealm], refused.WwwAuthenticate);
             Assert.Null(refused.Header("Content-Type"));
         }
 
@@ -456,6 +524,12 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal((14, "active", "queued", "Ada Lovelace"), (created.Json.GetProperty("pullRequestId").GetInt32(), created.Json.GetProperty("status").GetString(), created.Json.GetProperty("mergeStatus").GetString(), created.Json.GetProperty("createdBy").GetProperty("displayName").GetString()));
         Assert.False(created.Json.TryGetProperty("lastMergeCommit", out _));
         Assert.True(created.Json.TryGetProperty("artifactId", out _));
+
+        // The create's members in the service's order, labels among them (MEASURED 2026-11-05 on the
+        // create with nothing ahead, below; ASSUMED alike for this one, with commits ahead).
+        Assert.Equal(
+            ["repository", "pullRequestId", "codeReviewId", "status", "createdBy", "creationDate", "title", "description", "sourceRefName", "targetRefName", "mergeStatus", "isDraft", "mergeId", "lastMergeSourceCommit", "lastMergeTargetCommit", "reviewers", "labels", "url", "_links", "supportsIterations", "artifactId"],
+            created.Json.EnumerateObject().Select(property => property.Name));
         var read = await SendAsync(fake, HttpMethod.Get, Pulls + "/14?api-version=7.1", fixture.AdaToken);
         Assert.Equal("succeeded", read.Json.GetProperty("mergeStatus").GetString());
         Assert.Equal(fake.PullRequests(fixture.MobileApp).Single(pull => pull.Id == 14).LastMergeCommit, read.Json.GetProperty("lastMergeCommit").GetProperty("commitId").GetString());
@@ -464,8 +538,13 @@ public sealed class FakeAzureDevOpsTests
         var draft = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/docs/guide", "refs/heads/feature/sign-in", extra: ",\"isDraft\":true").Replace("\"isDraft\":false,", string.Empty, StringComparison.Ordinal));
         Assert.Equal((200, 15, true), (draft.Status, draft.Json.GetProperty("pullRequestId").GetInt32(), draft.Json.GetProperty("isDraft").GetBoolean()));
 
-        // Nothing ahead is made too (ASSUMED); a fork's source by forkSource.repository.id.
-        Assert.Equal(200, (await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/main", "refs/heads/docs/guide"))).Status);
+        // Nothing ahead is made too, its answer with labels and without lastMergeCommit (MEASURED
+        // 2026-11-05); a fork's source by forkSource.repository.id.
+        var level = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/main", "refs/heads/docs/guide"));
+        Assert.Equal(200, level.Status);
+        Assert.Equal(
+            ["repository", "pullRequestId", "codeReviewId", "status", "createdBy", "creationDate", "title", "description", "sourceRefName", "targetRefName", "mergeStatus", "isDraft", "mergeId", "lastMergeSourceCommit", "lastMergeTargetCommit", "reviewers", "labels", "url", "_links", "supportsIterations", "artifactId"],
+            level.Json.EnumerateObject().Select(property => property.Name));
         var fromFork = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/fix-typo", "refs/heads/docs/guide", extra: $",\"forkSource\":{{\"repository\":{{\"id\":\"{fixture.Fork.Id}\"}}}}"));
         Assert.Equal(("refs/pull/17/source", "mobile-app-fork"), (fromFork.Json.GetProperty("sourceRefName").GetString(), fromFork.Json.GetProperty("forkSource").GetProperty("repository").GetProperty("name").GetString()));
 
@@ -475,7 +554,15 @@ public sealed class FakeAzureDevOpsTests
         const string CannotBeActivated = "TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches";
         AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/missing", "refs/heads/main")), 400, "GitPullRequestCannotBeActivated", CannotBeActivated);
         AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("topic/no-request", "main")), 400, "GitPullRequestCannotBeActivated", CannotBeActivated);
-        AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/topic/no-request", "refs/heads/docs/guide", title: null)), 400, "InvalidArgumentValueException", null);
+        // An empty title (MEASURED 2026-11-05, eventId 0) and a missing one (ASSUMED alike); the
+        // errors' Content-Type has no api-version (MEASURED 2026-11-05).
+        const string TitleMissing = "Invalid argument value.\r\nParameter name: Invalid pull request title.";
+        AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/topic/no-request", "refs/heads/docs/guide", title: null)), 400, "InvalidArgumentValueException", TitleMissing, eventId: 0);
+        var empty = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/topic/no-request", "refs/heads/docs/guide", title: string.Empty));
+        AssertError(empty, 400, "InvalidArgumentValueException", TitleMissing, eventId: 0);
+        Assert.Equal("application/json; charset=utf-8", empty.Header("Content-Type"));
+        var duplicate = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/feature/sign-in", "refs/heads/main"));
+        Assert.Equal("application/json; charset=utf-8", duplicate.Header("Content-Type"));
         var readOnly = fake.AddToken(Organization, fixture.Ada, codeWrite: false);
         AssertError(await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", readOnly, Body("refs/heads/topic/no-request", "refs/heads/docs/guide")), 401, "UnauthorizedRequestException",
             $"TF400813: The user '{fixture.Ada.Id}' is not authorized to access this resource.");
@@ -498,6 +585,13 @@ public sealed class FakeAzureDevOpsTests
         var abandoned = await SendAsync(fake, HttpMethod.Patch, Pulls + "/11?api-version=7.1", fixture.AdaToken, "{\"status\":\"abandoned\"}");
         Assert.Equal((200, "abandoned", "update:fernhill-labs/mobile app/11"), (abandoned.Status, abandoned.Json.GetProperty("status").GetString(), fake.Requests[^1].Route));
         Assert.True(abandoned.Json.TryGetProperty("closedDate", out _));
+
+        // The abandon's answer has no mergeStatus or lastMergeCommit (MEASURED 2026-11-05), a read
+        // of an active one has both.
+        Assert.False(abandoned.Json.TryGetProperty("mergeStatus", out _));
+        Assert.False(abandoned.Json.TryGetProperty("lastMergeCommit", out _));
+        Assert.Equal(["reviewers", "url", "_links", "supportsIterations", "artifactId"], abandoned.Json.EnumerateObject().Select(property => property.Name).TakeLast(5));
+        Assert.True((await SendAsync(fake, HttpMethod.Get, Pulls + "/12?api-version=7.1", fixture.AdaToken)).Json.TryGetProperty("mergeStatus", out _));
         Assert.Equal(FakeAzurePullRequestStatus.Abandoned, fake.PullRequests(fixture.MobileApp)[0].Status);
         var renamed = await SendAsync(fake, HttpMethod.Patch, Pulls + "/12?api-version=7.1", fixture.AdaToken, "{\"title\":\"Write the user guide\",\"description\":\"Longer.\"}");
         Assert.Equal(("Write the user guide", "Longer."), (renamed.Json.GetProperty("title").GetString(), renamed.Json.GetProperty("description").GetString()));
@@ -509,7 +603,7 @@ public sealed class FakeAzureDevOpsTests
     }
 
     [Fact]
-    public async Task Refs_are_listed_after_the_sync_and_deleted_with_the_services_results()
+    public async Task Refs_are_listed_after_the_sync_and_deleted_and_created_with_the_services_results()
     {
         await using var fixture = await Fixture.CreateAsync();
         var fake = fixture.Fake;
@@ -535,8 +629,59 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal(200, deleted.Status);
         var results = deleted.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())).ToList();
         Assert.Equal([("succeeded", true), ("staleOldObjectId", false), ("invalidRefName", false)], results);
+        // Each update's seven members, without r5's customMessage and rejectedBy (MEASURED 2026-11-05, the clean-up's delete).
+        string[] updateMembers = ["repositoryId", "name", "oldObjectId", "newObjectId", "isLocked", "updateStatus", "success"];
+        Assert.Equal(updateMembers, deleted.Json.GetProperty("value")[0].EnumerateObject().Select(property => property.Name));
         Assert.DoesNotContain("refs/heads/topic/no-request", (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Body, StringComparison.Ordinal);
-        AssertError(await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken, $"[{{\"name\":\"refs/heads/new\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{tip}\"}}]"), 400, "InvalidArgumentValueException", null);
+
+        // A create (oldObjectId forty zeros) at a commit of the repository: 200, succeeded, the branch
+        // there (MEASURED 2026-11-05: the live command's -even branch at main's tip; its members ASSUMED
+        // alike). A create of a ref that is there, staleOldObjectId; at no commit, unresolvableToCommit
+        // (READ enum, ASSUMED); a move from one commit to another, 400 in the fake's words (D370).
+        var main = heads["refs/heads/main"];
+        var made = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/main-even\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/main\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/nowhere\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{new string('e', 40)}\"}}]");
+        Assert.Equal(200, made.Status);
+        var createdRow = made.Json.GetProperty("value")[0];
+        Assert.Equal(updateMembers, createdRow.EnumerateObject().Select(property => property.Name));
+        Assert.Equal(("refs/heads/main-even", "0000000000000000000000000000000000000000", main), (createdRow.GetProperty("name").GetString(), createdRow.GetProperty("oldObjectId").GetString(), createdRow.GetProperty("newObjectId").GetString()));
+        Assert.Equal([("succeeded", true), ("staleOldObjectId", false), ("unresolvableToCommit", false)], made.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var after = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().ToDictionary(row => row.GetProperty("name").GetString()!, row => row.GetProperty("objectId").GetString()!);
+        Assert.Equal((main, main, false), (after["refs/heads/main-even"], after["refs/heads/main"], after.ContainsKey("refs/heads/nowhere")));
+        // A create whose name is a folder of a ref there (refs/heads/feature beside the scenario's
+        // feature/sign-in), has one as its folder (main-even/x), or meets an earlier create of the
+        // same batch (batch, then batch/inner): refNameConflict with HTTP 200, the others written
+        // (READ enum, the status ASSUMED); never git's own refusal of the whole batch.
+        var conflicts = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/feature\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/Main-Even/x\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/batch\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/batch/inner\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}}]");
+        Assert.Equal(200, conflicts.Status);
+        Assert.Equal([("refNameConflict", false), ("refNameConflict", false), ("succeeded", true), ("refNameConflict", false)], conflicts.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var afterConflicts = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()).ToList();
+        Assert.Equal((true, false, false, true), (afterConflicts.Contains("refs/heads/batch"), afterConflicts.Contains("refs/heads/batch/inner"), afterConflicts.Contains("refs/heads/feature"), afterConflicts.Contains("refs/heads/feature/sign-in")));
+        // A create whose name differs only in case from a ref there (refs/heads/MAIN beside main) or
+        // from one named before it in the batch (case, then CASE): refNameConflict with HTTP 200 (the
+        // status ASSUMED), the same on a file system that ignores case and on one that does not;
+        // never git's own refusal of the whole batch.
+        var cased = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/MAIN\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/case\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/CASE\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}}]");
+        Assert.Equal(200, cased.Status);
+        Assert.Equal([("refNameConflict", false), ("succeeded", true), ("refNameConflict", false)], cased.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var afterCased = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()).ToList();
+        Assert.Equal((true, false, true, false), (afterCased.Contains("refs/heads/main"), afterCased.Contains("refs/heads/MAIN"), afterCased.Contains("refs/heads/case"), afterCased.Contains("refs/heads/CASE")));
+        // A create one of whose folders differs only in case from a folder of a ref there (Dir/c, then
+        // dir/b in a later POST) or of one created before it in the batch (q/x, then Q/y):
+        // refNameConflict with HTTP 200 (the status ASSUMED), so that a file system that ignores case
+        // and one that does not give the same rows and the same list.
+        var folder = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/Dir/c\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}}]");
+        Assert.Equal([("succeeded", true)], folder.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var folderCased = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/dir/b\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/q/x\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/Q/y\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}}]");
+        Assert.Equal(200, folderCased.Status);
+        Assert.Equal([("refNameConflict", false), ("succeeded", true), ("refNameConflict", false)], folderCased.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var afterFolders = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()).ToList();
+        Assert.Equal((true, false, false, true, false, false), (afterFolders.Contains("refs/heads/Dir/c"), afterFolders.Contains("refs/heads/dir/b"), afterFolders.Contains("refs/heads/Dir/b"), afterFolders.Contains("refs/heads/q/x"), afterFolders.Contains("refs/heads/Q/y"), afterFolders.Contains("refs/heads/q/y")));
+        AssertError(await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken, $"[{{\"name\":\"refs/heads/main-even\",\"oldObjectId\":\"{main}\",\"newObjectId\":\"{tip}\"}}]"), 400, "InvalidArgumentValueException", null);
         Assert.Empty(fake.Errors);
     }
 
@@ -641,12 +786,12 @@ public sealed class FakeAzureDevOpsTests
     private static AuthenticationHeaderValue Basic(string user, string password) =>
         new("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes(user + ":" + password)));
 
-    private static void AssertError(Answer answer, int status, string typeKey, string? message)
+    private static void AssertError(Answer answer, int status, string typeKey, string? message, int eventId = 3000)
     {
         Assert.Equal(status, answer.Status);
         var json = answer.Json;
         Assert.Equal(["$id", "innerException", "message", "typeName", "typeKey", "errorCode", "eventId"], json.EnumerateObject().Select(property => property.Name));
-        Assert.Equal(("1", typeKey, 0, 3000), (json.GetProperty("$id").GetString(), json.GetProperty("typeKey").GetString(), json.GetProperty("errorCode").GetInt32(), json.GetProperty("eventId").GetInt32()));
+        Assert.Equal(("1", typeKey, 0, eventId), (json.GetProperty("$id").GetString(), json.GetProperty("typeKey").GetString(), json.GetProperty("errorCode").GetInt32(), json.GetProperty("eventId").GetInt32()));
         if (message is not null)
         {
             Assert.Equal(message, json.GetProperty("message").GetString());

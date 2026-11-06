@@ -22,22 +22,59 @@ public sealed partial class FakeGitLab
     private string Web(string relative) => new Uri(Endpoints.WebBase, relative).AbsoluteUri;
 
     /// <summary>
-    /// <c>GET user</c>'s user (r6 1.3, READ: <c>id</c>, <c>username</c>, <c>name</c>, <c>state</c>,
-    /// <c>locked</c>, <c>avatar_url</c>, <c>web_url</c>, <c>bot</c>, <c>created_at</c>,
-    /// <c>public_email</c>, <c>email</c>, <c>commit_email</c>, <c>two_factor_enabled</c>,
-    /// <c>can_create_project</c>, <c>identities</c>); its addresses the made-up
-    /// <c>&lt;username&gt;@example.com</c>, which a client must not keep (D346); no avatar (D349).
+    /// <c>GET user</c>'s user: GitLab's 41 members in the order gitlab.com served them for a
+    /// fine-grained token (MEASURED 2026-11-06, stage 1's <c>Check_1b</c>; r6 1.3 READ the first
+    /// fifteen), with made-up values of their types (ASSUMED: the run noted names alone, D346); its
+    /// addresses the made-up <c>&lt;username&gt;@example.com</c>, which a client must not keep (D346);
+    /// no avatar (D349).
     /// </summary>
     private JsonObject CurrentUserJson(FakeGitLabUser user)
     {
-        var json = UserJson(user);
-        json["created_at"] = Time(AppClocks.HarnessTime.AddYears(-1));
-        json["email"] = user.Email;
-        json["commit_email"] = user.Email;
-        json["two_factor_enabled"] = false;
-        json["can_create_project"] = true;
-        json["identities"] = new JsonArray();
-        return json;
+        var created = AppClocks.HarnessTime.AddYears(-1);
+        return new JsonObject
+        {
+            ["id"] = user.Id,
+            ["username"] = user.Username,
+            ["public_email"] = user.Email,
+            ["name"] = user.Name,
+            ["state"] = "active",
+            ["locked"] = false,
+            ["avatar_url"] = null,
+            ["web_url"] = Web(user.Username),
+            ["created_at"] = Time(created),
+            ["bio"] = string.Empty,
+            ["location"] = string.Empty,
+            ["linkedin"] = string.Empty,
+            ["twitter"] = string.Empty,
+            ["discord"] = string.Empty,
+            ["website_url"] = string.Empty,
+            ["github"] = string.Empty,
+            ["job_title"] = string.Empty,
+            ["pronouns"] = null,
+            ["organization"] = string.Empty,
+            ["bot"] = false,
+            ["work_information"] = null,
+            ["local_time"] = null,
+            ["last_sign_in_at"] = Time(AppClocks.HarnessTime.AddDays(-1)),
+            ["confirmed_at"] = Time(created),
+            ["last_activity_on"] = AppClocks.HarnessTime.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["email"] = user.Email,
+            ["theme_id"] = 1,
+            ["color_scheme_id"] = 1,
+            ["projects_limit"] = 100000,
+            ["current_sign_in_at"] = Time(AppClocks.HarnessTime),
+            ["identities"] = new JsonArray(),
+            ["can_create_group"] = true,
+            ["can_create_project"] = true,
+            ["two_factor_enabled"] = false,
+            ["external"] = false,
+            ["private_profile"] = false,
+            ["commit_email"] = user.Email,
+            ["preferred_language"] = "en",
+            ["shared_runners_minutes_limit"] = null,
+            ["extra_shared_runners_minutes_limit"] = null,
+            ["scim_identities"] = new JsonArray(),
+        };
     }
 
     /// <summary>A user as an MR's <c>author</c> or a project's <c>owner</c> (MEASURED r6 4.1's members, <c>public_email</c> among them, g4 D4 §5).</summary>
@@ -217,15 +254,23 @@ public sealed partial class FakeGitLab
     }
 
     /// <summary>
-    /// A merge request (r6 4.1, MEASURED members): <c>references</c> <c>!&lt;iid&gt;</c>, <c>web_url</c>
+    /// A merge request in the member order gitlab.com served for a single one (MEASURED 2026-11-06:
+    /// stage 1's read of the created !1 and the create's answer; r6 4.1 MEASURED a list's members, a
+    /// subset of these): <c>references</c> <c>!&lt;iid&gt;</c>, <c>web_url</c>
     /// <c>&lt;web&gt;&lt;target path&gt;/-/merge_requests/&lt;iid&gt;</c>, <c>draft</c> and
     /// <c>work_in_progress</c> alike, <c>source_project_id</c> and <c>target_project_id</c> but no source
-    /// path (MEASURED), a fork's <c>allow_collaboration</c>; with <paramref name="single"/> the single MR's
-    /// <c>diff_refs</c>, <c>changes_count</c> and the rest (MEASURED r6 4.1; values ASSUMED).
+    /// path (MEASURED), a fork's <c>allow_collaboration</c> and <c>allow_maintainer_to_push</c> right
+    /// after <c>prepared_at</c> (MEASURED r6 4.1: its captured fork rows and single fork one; the
+    /// sandbox has no fork, D375). A list's row ends at <c>approvals_before_merge</c> (MEASURED r6 4.1:
+    /// its captured rows, the same members in the same order; the sandbox had no open one to list); a
+    /// <paramref name="single"/> one goes on with <c>subscribed</c> to <c>user</c> (MEASURED
+    /// 2026-11-06), but for <c>first_contribution</c>, which the create's answer leaves out
+    /// (<paramref name="created"/>; MEASURED 2026-11-06 on the create with nothing ahead, ASSUMED on
+    /// the others). The values of the members the client does not read are made up (ASSUMED);
     /// <c>merge_status</c> is always <c>can_be_merged</c> and <c>detailed_merge_status</c>
     /// <c>mergeable</c> (ASSUMED: the fake computes no merge).
     /// </summary>
-    private JsonObject MergeRequestJsonLocked(FakeMergeRequest request, bool single)
+    private JsonObject MergeRequestJsonLocked(FakeMergeRequest request, bool single, bool created = false)
     {
         var author = _users.GetValueOrDefault(request.Author);
         var json = new JsonObject
@@ -238,10 +283,16 @@ public sealed partial class FakeGitLab
             ["state"] = request.State,
             ["created_at"] = Time(request.CreatedAt),
             ["updated_at"] = Time(request.UpdatedAt),
+            ["merged_by"] = null,
+            ["merge_user"] = null,
             ["merged_at"] = null,
+            ["closed_by"] = null,
             ["closed_at"] = request.State == "closed" ? Time(request.UpdatedAt) : null,
             ["target_branch"] = request.TargetBranch,
             ["source_branch"] = request.SourceBranch,
+            ["user_notes_count"] = 0,
+            ["upvotes"] = 0,
+            ["downvotes"] = 0,
             ["author"] = author is null ? null : UserJson(author),
             ["assignees"] = new JsonArray(),
             ["assignee"] = null,
@@ -250,24 +301,20 @@ public sealed partial class FakeGitLab
             ["target_project_id"] = request.Target.Id,
             ["labels"] = new JsonArray(),
             ["draft"] = request.Draft,
+            ["imported"] = false,
+            ["imported_from"] = "none",
             ["work_in_progress"] = request.Draft,
             ["milestone"] = null,
+            ["merge_when_pipeline_succeeds"] = false,
             ["merge_status"] = "can_be_merged",
             ["detailed_merge_status"] = "mergeable",
+            ["merge_after"] = null,
             ["sha"] = request.HeadSha,
             ["merge_commit_sha"] = null,
             ["squash_commit_sha"] = null,
-            ["reference"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
-            ["references"] = new JsonObject
-            {
-                ["short"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
-                ["relative"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
-                ["full"] = request.Target.Path + "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
-            },
-            ["web_url"] = Web(string.Create(CultureInfo.InvariantCulture, $"{request.Target.Path}/-/merge_requests/{request.Iid}")),
-            ["time_stats"] = new JsonObject { ["time_estimate"] = 0, ["total_time_spent"] = 0, ["human_time_estimate"] = null, ["human_total_time_spent"] = null },
-            ["squash"] = false,
-            ["has_conflicts"] = false,
+            ["discussion_locked"] = null,
+            ["should_remove_source_branch"] = null,
+            ["force_remove_source_branch"] = false,
             ["prepared_at"] = Time(request.CreatedAt),
         };
         if (request.Source != request.Target)
@@ -276,16 +323,39 @@ public sealed partial class FakeGitLab
             json["allow_maintainer_to_push"] = request.AllowCollaboration;
         }
 
+        json["reference"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture);
+        json["references"] = new JsonObject
+        {
+            ["short"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
+            ["relative"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
+            ["full"] = request.Target.Path + "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
+        };
+        json["web_url"] = Web(string.Create(CultureInfo.InvariantCulture, $"{request.Target.Path}/-/merge_requests/{request.Iid}"));
+        json["time_stats"] = new JsonObject { ["time_estimate"] = 0, ["total_time_spent"] = 0, ["human_time_estimate"] = null, ["human_total_time_spent"] = null };
+        json["squash"] = false;
+        json["squash_on_merge"] = false;
+        json["task_completion_status"] = new JsonObject { ["count"] = 0, ["completed_count"] = 0 };
+        json["has_conflicts"] = false;
+        json["blocking_discussions_resolved"] = true;
+        json["approvals_before_merge"] = null;
+
         if (single)
         {
-            json["diff_refs"] = new JsonObject { ["base_sha"] = request.TargetSha, ["head_sha"] = request.HeadSha, ["start_sha"] = request.TargetSha };
-            json["changes_count"] = null;
-            json["user"] = new JsonObject { ["can_merge"] = false };
             json["subscribed"] = false;
-            json["merge_error"] = null;
-            json["first_contribution"] = false;
+            json["changes_count"] = null;
+            json["latest_build_started_at"] = null;
+            json["latest_build_finished_at"] = null;
+            json["first_deployed_to_production_at"] = null;
             json["pipeline"] = null;
             json["head_pipeline"] = null;
+            json["diff_refs"] = new JsonObject { ["base_sha"] = request.TargetSha, ["head_sha"] = request.HeadSha, ["start_sha"] = request.TargetSha };
+            json["merge_error"] = null;
+            if (!created)
+            {
+                json["first_contribution"] = false;
+            }
+
+            json["user"] = new JsonObject { ["can_merge"] = false };
         }
 
         return json;

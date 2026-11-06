@@ -434,6 +434,11 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
 
         await ProbeAsync(api, fake, "connectionData with the token, without Suppress", a => a.ConnectionDataAsync(LiveCredential.Token, Cancelled, suppress: false));
         await ProbeAsync(api, fake, $"connectionData with the token at {AzureDevOpsApi.Version}", a => a.ConnectionDataAsync(LiveCredential.Token, Cancelled, version: AzureDevOpsApi.Version));
+        // Whether the sandbox's organization answers no credential as a private one (r5 1.3's 401
+        // TF400813 with Suppress, the fake's) or as one that allows public projects (200 with the
+        // Anonymous identity): it tells whether the Anonymous 200 that D373's short value got holds in
+        // a private organization, as the fake answers, or comes of the policy (design 16.1's As built).
+        await ProbeAsync(api, fake, "connectionData without a credential, with Suppress", a => a.ConnectionDataAsync(LiveCredential.None, Cancelled));
         await ProbeAsync(api, fake, "the core area, as A1's spelling read sends it ({o}/_apis/resourceAreas/…), without a credential", a => a.CoreAreaAsync(LiveCredential.None, Cancelled));
         var area = await ProbeAsync(api, fake, "the core area, as A1's spelling read sends it, with the token", a => a.CoreAreaAsync(LiveCredential.Token, Cancelled));
         var location = area?.Json is { ValueKind: JsonValueKind.Object } areaJson && areaJson.TryGetProperty("locationUrl", out var url) && Uri.TryCreate(url.GetString(), UriKind.Absolute, out var parsed) && parsed.Scheme == Uri.UriSchemeHttps
@@ -855,8 +860,9 @@ internal static class LiveSteps
     {
         // The identity, the sandbox, the active list, the refs read; five abandons and one refs POST.
         [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_1_the_sandbox_and_its_leftovers)] = Own(4 + 6),
-        // 16 probes, the first of them the identity read, each beside the fake.
-        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_1b_probes)] = Own(16) + Fake(16),
+        // 17 probes, the first of them the identity read, each beside the fake (595 s: one more would
+        // pass the watchdog's 600 s).
+        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_1b_probes)] = Own(17) + Fake(17),
         // The identity, the sandbox; sign-in, list, load, push, create; the clone.
         [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_2_the_providers_and_the_session)] = Own(2) + App(5) + LiveApp.CloneLimit,
         // The identity, the read, the duplicate, the missing branch, the abandon, the empty title, the

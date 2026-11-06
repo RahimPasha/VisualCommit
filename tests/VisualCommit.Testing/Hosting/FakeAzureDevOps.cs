@@ -25,8 +25,21 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
     /// <summary>The port of <see cref="InProcess"/>'s endpoints, <c>Local(2)</c>: never listened on.</summary>
     public const int InProcessPort = 2;
 
-    /// <summary>The realm of a 401's <c>WWW-Authenticate: Basic</c>, on the API and on git (READ g1 G2; MEASURED g1 G4.1 for git's agent; the host the fake's own).</summary>
+    /// <summary>
+    /// The realm of the <c>WWW-Authenticate: Basic</c> among the sign-in's three challenges on the API, a
+    /// 302's and a 401's (MEASURED r5 1.3), and of git's 401s (MEASURED g1 G4.1: git's first request
+    /// with no credential, on three organizations); the host the fake's own.
+    /// </summary>
     public const string TfsRealm = "https://tfsprodfake.app.visualstudio.com/";
+
+    /// <summary>
+    /// The realm of the API's empty 401 to a PAT-shaped value it refuses (MEASURED 2026-11-05 on
+    /// connectionData: the service's own <c>tfsprod…</c> host under <c>visualstudio.com</c>, without
+    /// <see cref="TfsRealm"/>'s <c>.app.</c> label; the host the fake's own). Git's 401 to a refused
+    /// credential carried this form too (MEASURED 2026-11-05 on the sandbox's info/refs), but the fake's
+    /// git keeps <see cref="TfsRealm"/> on every 401: a kept difference (the Router's header, D370).
+    /// </summary>
+    public const string TokenRealm = "https://tfsprodfake.visualstudio.com/";
 
     /// <summary>The suffix of a read-only token's login (<c>{o}/{user id}#read</c>), which <see cref="MayPush"/> refuses.</summary>
     private const string ReadOnlyLoginSuffix = "#read";
@@ -49,8 +62,9 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
     public AzureDevOpsEndpoints Endpoints => AzureDevOpsEndpoints.Local(Port);
 
     /// <summary>
-    /// The status of a pull request's create: 201 unless set (READ: the documentation's sample says
-    /// 201 and its table 200, g1 G0.12; which one the service sends is ASSUMED, design 3.7).
+    /// The status of a pull request's create: 201 unless set (MEASURED 2026-11-05: the service sent
+    /// 201 for a draft and for one with nothing ahead; the documentation's table says 200, g1 G0.12,
+    /// which the client takes too).
     /// </summary>
     public int CreateStatus
     {
@@ -63,7 +77,10 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
         }
     }
 
-    /// <inheritdoc/>
+    /// <summary>
+    /// Git's 401s, which <see cref="AuthRemoteServer"/> gives one realm: <see cref="TfsRealm"/>, the form
+    /// g1 G4.1 measured for the first request of every clone and fetch, which carries no credential.
+    /// </summary>
     protected override string Realm => TfsRealm;
 
     /// <summary>
