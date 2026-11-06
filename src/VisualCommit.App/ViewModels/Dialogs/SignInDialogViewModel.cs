@@ -282,8 +282,9 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
     /// The organization the box gives by <see cref="AzureDevOpsProvider.OrganizationOf"/> on the
     /// provider's endpoints; null without one or while Azure DevOps is off. A token pasted into the
     /// box, which opens focused while empty, is no organization: a name of a provider's token form
-    /// (<see cref="HostingProviders.TokenFormOf"/>) or equal to the token box's text is refused, so
-    /// that it is never sent in a path, opened in the browser, logged or shown in an error (design 1).
+    /// (<see cref="HostingProviders.TokenFormOf"/>), of the shape of a token of no form
+    /// (<see cref="HasShapeOfUnmarkedToken"/>) or equal to the token box's text is refused, so that it
+    /// is never sent in a path, opened in the browser, logged or shown in an error (design 1).
     /// </summary>
     private string? OrganizationOrNull()
     {
@@ -294,10 +295,23 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
         }
 
         var token = Token.Trim();
-        return HostingProviders.TokenFormOf(organization) is not null || (token.Length > 0 && string.Equals(organization, token, StringComparison.OrdinalIgnoreCase))
+        return HostingProviders.TokenFormOf(organization) is not null
+            || HasShapeOfUnmarkedToken(organization)
+            || (token.Length > 0 && string.Equals(organization, token, StringComparison.OrdinalIgnoreCase))
             ? null
             : organization;
     }
+
+    /// <summary>
+    /// The shapes of the tokens that <see cref="HostingProviders.TokenFormOf"/> leaves as forms of
+    /// none, which the organization's grammar would take: Azure DevOps' legacy tokens, 52 characters
+    /// of base32 (<c>a</c> to <c>z</c> and <c>2</c> to <c>7</c>), and GitHub's classic ones, 40
+    /// hexadecimal digits, either in any case. Read in the organization box only, which fails closed
+    /// on such a name; the token box still takes them (D378).
+    /// </summary>
+    private static bool HasShapeOfUnmarkedToken(string name) =>
+        (name.Length == 52 && name.All(c => char.IsAsciiLetter(c) || c is >= '2' and <= '7'))
+        || (name.Length == 40 && name.All(char.IsAsciiHexDigit));
 
     /// <summary>Cancel and Esc, and the session's end (<c>CancelAll</c>): the check's request is cancelled.</summary>
     protected override void OnCancel()

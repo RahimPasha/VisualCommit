@@ -48,6 +48,14 @@ public sealed partial class Phase7bChecksA
         Assert.Empty(GitHubSince(served, mark));
     }
 
+    /// <summary>"Requests exactly …" of one fake: none in the other two since <paramref name="mark"/>.</summary>
+    private static void AssertNoRequestsBut(ServedHosting7b served, Marks mark, HostingProvider provider)
+    {
+        Assert.True(provider == HostingProvider.AzureDevOps || AzureSince(served, mark).Count == 0, "Azure DevOps' fake was asked since the mark.");
+        Assert.True(provider == HostingProvider.GitLab || GitLabSince(served, mark).Count == 0, "GitLab's fake was asked since the mark.");
+        Assert.True(provider == HostingProvider.GitHub || GitHubSince(served, mark).Count == 0, "GitHub's fake was asked since the mark.");
+    }
+
     /// <summary>The store's calls since <paramref name="mark"/>.</summary>
     private static List<string> CallsSince(FakeTokenStore tokens, int mark) => [.. tokens.Calls.Skip(mark)];
 
@@ -398,10 +406,17 @@ public sealed partial class Phase7bChecksA
             Assert.True(shown.Contains(id) == Shows(app, provider, id), $"{PartA.IdOf(provider, id)} {(shown.Contains(id) ? "does not show" : "shows")}.");
         }
 
-        // The label, from x 336 in the 132-wide column, the provider's name.
+        // The label, from x 336 in the 132-wide column (to x 468), the provider's name; the row's
+        // controls from x 480 to 944 (part A's conventions).
         var label = app.AccountsBlock(provider).GetVisualDescendants().OfType<TextBlock>().First(block => block.Classes.Contains("settingsLabel"));
         Assert.Equal(PartA.LabelOf(provider), label.Text);
         Assert.Equal(PartA.SectionX, app.BoundsOf(label).X, PartA.Tolerance);
+        Assert.True(app.BoundsOf(label).Right <= PartA.LabelRight + PartA.Tolerance, $"{provider}'s label ends at x {app.BoundsOf(label).Right:0.#}, past {PartA.LabelRight}.");
+        foreach (var id in shown)
+        {
+            var bounds = app.BoundsOf(InBlock(app, provider, id));
+            Assert.True(bounds.X >= PartA.ControlsX - PartA.Tolerance && bounds.Right <= PartA.ControlsRight + PartA.Tolerance, $"{PartA.IdOf(provider, id)} lies at x {bounds.X:0.#} to {bounds.Right:0.#}, outside the controls' {PartA.ControlsX} to {PartA.ControlsRight}.");
+        }
     }
 
     /// <summary>
@@ -752,7 +767,7 @@ public sealed partial class Phase7bChecksA
     {
         var box = (TextBox)app.FindByAutomationId(app.SignInDialogView(), id);
         Assert.True(box.IsEffectivelyEnabled);
-        Assert.Equal(text, box.Text);
+        Assert.True(string.Equals(text, box.Text, StringComparison.Ordinal), $"{id} does not keep the text typed ({box.Text?.Length ?? 0} characters, {text.Length} typed).");
         Assert.Equal((0, text.Length), (Math.Min(box.SelectionStart, box.SelectionEnd), Math.Max(box.SelectionStart, box.SelectionEnd)));
         Assert.Equal(id, FocusedId(app));
     }

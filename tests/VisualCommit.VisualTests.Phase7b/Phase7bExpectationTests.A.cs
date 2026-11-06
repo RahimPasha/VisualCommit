@@ -126,10 +126,12 @@ public sealed partial class Phase7bExpectationTests
 
         Assert.Equal(HostingProvider.GitLab, HostingProviders.TokenFormOf(PartA.UnknownGitLabToken));
         Assert.Null(HostingProviders.TokenFormOf(PartA.UnknownAzureDevOpsToken));
-        Assert.StartsWith("azdo_FAKE-", PartA.UnknownAzureDevOpsToken, StringComparison.Ordinal);
+        // The made-up values are compared without handing them to Assert, which would print them (7a's rule).
+        Assert.True(PartA.UnknownAzureDevOpsToken.StartsWith("azdo_FAKE-", StringComparison.Ordinal), "UnknownAzureDevOpsToken does not start azdo_FAKE-.");
         Assert.Null(HostingProviders.TokenFormOf(PartA.PlainValue));
-        Assert.Matches("^[A-Za-z0-9-]+$", PartA.PlainValue);
-        Assert.DoesNotMatch("^[a-z2-7]{52}$", PartA.PlainValue);
+        Assert.True(Regex.IsMatch(PartA.PlainValue, "^[A-Za-z0-9-]+$"), "PlainValue is outside the organization's grammar.");
+        Assert.False(Regex.IsMatch(PartA.PlainValue, "^[A-Za-z2-7]{52}$"), "PlainValue has the legacy Azure DevOps token's shape.");
+        Assert.False(Regex.IsMatch(PartA.PlainValue, "^[0-9A-Fa-f]{40}$"), "PlainValue has GitHub's classic token's shape.");
         Assert.NotEqual(84, PartA.PlainValue.Length);
         Assert.Equal(84, PartA.AzureDevOpsForm.Length);
         Assert.Equal("AZDO", PartA.AzureDevOpsForm[76..80]);

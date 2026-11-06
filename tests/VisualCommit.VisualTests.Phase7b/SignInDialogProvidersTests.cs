@@ -26,6 +26,12 @@ public sealed class SignInDialogProvidersTests
 {
     private static readonly string AzureDevOpsForm = new string('a', 76) + "AZDO" + "abcd";
 
+    /// <summary>A made-up value of Azure DevOps' legacy token shape, 52 characters of base32, which <see cref="HostingProviders.TokenFormOf"/> leaves as a form of none.</summary>
+    private static readonly string LegacyAzureDevOpsShape = string.Concat(Enumerable.Repeat("mnbvcxzlkjhgfdsapoiuytrewq234567", 2))[..52];
+
+    /// <summary>A made-up value of GitHub's classic token shape, 40 hexadecimal digits, a form of none too.</summary>
+    private static readonly string ClassicGitHubShape = string.Concat(Enumerable.Repeat("a1b2c3d4e5", 4));
+
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -134,7 +140,7 @@ public sealed class SignInDialogProvidersTests
         Assert.Empty(attempts);
         Assert.Equal(taken.Length, launcher.Requests.Count);
         Assert.Null(session.AccountOf(HostingProvider.AzureDevOps));
-        Assert.DoesNotContain(log.Messages, message => message.Contains(AzureDevOpsToken, StringComparison.Ordinal));
+        Assert.False(log.Messages.Any(message => message.Contains(AzureDevOpsToken, StringComparison.Ordinal)), "The log holds AzureDevOpsToken.");
     }
 
     /// <summary>
@@ -189,6 +195,108 @@ public sealed class SignInDialogProvidersTests
         Assert.Empty(setup.AllRequests());
         Assert.Empty(setup.Launcher.Requests);
         Assert.Equal(["probe"], setup.Tokens.Calls.Distinct());
+    }
+
+    /// <summary>
+    /// A token of a shape <see cref="HostingProviders.TokenFormOf"/> leaves as a form of none, which the
+    /// organization's grammar takes (Azure DevOps' legacy 52 characters of base32, GitHub's classic 40
+    /// hexadecimal digits, in any case), is no organization in the box either: the link stays
+    /// disabled with the token box empty, and Sign in gives <c>SignInNotAnOrganization</c> with the
+    /// organization's name, a token or GitHub's form in the token box (the boxes swapped); no request,
+    /// no launch, no focus moved, and neither the error, the log nor the data folder holds it (design 1; 10.4).
+    /// </summary>
+    [Fact]
+    public async Task A_token_of_no_form_in_the_organization_box_is_no_organization_and_goes_nowhere()
+    {
+        await using var setup = await Setup.StartAsync();
+        foreach (var shape in new[] { LegacyAzureDevOpsShape, ClassicGitHubShape, LegacyAzureDevOpsShape.ToUpperInvariant(), ClassicGitHubShape.ToUpperInvariant() })
+        {
+            // The grammar takes it and no form is known: the refusal is the dialog's own.
+            Assert.Null(HostingProviders.TokenFormOf(shape));
+            Assert.True(AzureDevOpsProvider.OrganizationOf(shape, setup.Served.AzureDevOps.Endpoints) is not null, $"The grammar refuses a token's shape of {shape.Length} characters.");
+
+            var link = setup.Dialog(HostingProvider.AzureDevOps);
+            await link.Opened;
+            link.Organization = shape;
+            Assert.False(link.CanOpenTokenPage, $"The link is enabled for a token's shape of {shape.Length} characters.");
+            Assert.False(link.OpenTokenPageCommand.CanExecute(null));
+            await link.OpenTokenPageCommand.ExecuteAsync(null);
+
+            foreach (var token in new[] { PartA.Organization, AzureDevOpsToken, GitHubToken })
+            {
+                var dialog = setup.Dialog(HostingProvider.AzureDevOps);
+                await dialog.Opened;
+                var focus = new List<string>();
+                dialog.FocusRequested += (_, id) => focus.Add(id);
+                dialog.Organization = shape;
+                dialog.Token = token;
+                Assert.False(dialog.CanOpenTokenPage, $"The link is enabled for a token's shape of {shape.Length} characters.");
+                Assert.True(dialog.ConfirmCommand.CanExecute(null));
+                await dialog.ConfirmCommand.ExecuteAsync(null);
+                Assert.True(dialog.ErrorText == PartA.NotAnOrganizationError, $"A token's shape of {shape.Length} characters did not give SignInNotAnOrganization.");
+                Assert.Empty(focus);
+                Assert.False(dialog.IsClosed);
+            }
+        }
+
+        Assert.Empty(setup.AllRequests());
+        Assert.Empty(setup.Launcher.Requests);
+        Assert.Equal(["probe"], setup.Tokens.Calls.Distinct());
+        Assert.Null(setup.Session.AccountOf(HostingProvider.AzureDevOps));
+    }
+
+    /// <summary>
+    /// Cancel (Esc too, and the session's end through <c>CancelAll</c>, which run the same
+    /// <c>OnCancel</c>) during GitLab's check or either of Azure DevOps' two reads: the dialog closes
+    /// at once with no result, the held request ends with the dialog's cancellation before its hold is
+    /// released (in process: abandoned, never answered), no read follows it, and nothing is signed in
+    /// or kept: no account, the store asked only its probe, no <c>accounts.json</c> (7a's A3 per provider, 10.4).
+    /// </summary>
+    [Theory]
+    [InlineData(HostingProvider.GitLab, "user")]
+    [InlineData(HostingProvider.AzureDevOps, "connection:fernhill-labs")]
+    [InlineData(HostingProvider.AzureDevOps, "areas")]
+    public async Task Cancel_during_the_check_cancels_its_request_and_nothing_changes(HostingProvider provider, string route)
+    {
+        await using var setup = await Setup.StartAsync();
+        var dialog = setup.Dialog(provider);
+        await dialog.Opened;
+        FakeHostingService fake = provider == HostingProvider.GitLab ? setup.Served.GitLab : setup.Served.AzureDevOps;
+        using var hold = fake.HoldNext(route);
+
+        dialog.Organization = PartA.Organization;
+        dialog.Token = provider == HostingProvider.GitLab ? GitLabToken : AzureDevOpsToken;
+        var checking = dialog.ConfirmCommand.ExecuteAsync(null);
+        await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+        Assert.True(dialog.IsChecking);
+        Assert.False(dialog.ConfirmCommand.CanExecute(null));
+
+        dialog.CancelCommand.Execute(null);
+
+        Assert.True(dialog.IsClosed);
+        Assert.Null(await dialog.Result);
+
+        // The held request ends with the dialog's cancellation, before the hold is released.
+        await checking.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+        await hold.Abandoned.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+        Assert.False(dialog.IsChecking);
+        Assert.Null(setup.Session.AccountOf(provider));
+        Assert.False(File.Exists(Path.Combine(setup.Data.Path, "accounts.json")));
+        Assert.Equal(["probe"], setup.Tokens.Calls);
+
+        // Only what comes before the held read was answered: Azure DevOps' connectionData, 200, when
+        // the resource area was held; nothing after it, and nothing at the other fakes.
+        if (route == "areas")
+        {
+            var connection = Assert.Single(fake.Requests);
+            Assert.Equal(("connection:fernhill-labs", 200), (connection.Route, connection.Status));
+        }
+        else
+        {
+            Assert.Empty(fake.Requests);
+        }
+
+        Assert.All(HostingProviders.InAccountsOrder.Where(other => other != provider), other => Assert.Empty(setup.RequestsOf(other)));
     }
 
     [Fact]
@@ -265,7 +373,8 @@ public sealed class SignInDialogProvidersTests
             Assert.Equal(text, azure.ErrorText);
             Assert.Equal([box], focus);
             Assert.False(azure.IsClosed);
-            Assert.Equal((organization, token), (azure.Organization, azure.Token));
+            Assert.Equal(organization, azure.Organization);
+            Assert.True(string.Equals(token, azure.Token, StringComparison.Ordinal), $"The token box does not keep the token typed ({azure.Token.Length} characters, {token.Length} typed).");
             var request = Assert.Single(setup.Served.AzureDevOps.Requests.Skip(mark));
             Assert.Equal("connection:" + organization.ToLowerInvariant(), request.Route);
         }
@@ -447,10 +556,10 @@ public sealed class SignInDialogProvidersTests
             Session.Dispose();
             try
             {
-                foreach (var token in new[] { AzureDevOpsToken, GitLabToken, GitLabLegacyToken, GitHubToken, AzureDevOpsForm, PartA.UnknownGitLabToken, PartA.UnknownAzureDevOpsToken, PartA.PlainValue })
+                foreach (var token in new[] { AzureDevOpsToken, GitLabToken, GitLabLegacyToken, GitHubToken, AzureDevOpsForm, PartA.UnknownGitLabToken, PartA.UnknownAzureDevOpsToken, PartA.PlainValue, LegacyAzureDevOpsShape, ClassicGitHubShape })
                 {
                     TokenTripwire.AssertAbsent(token, [Data.Path], null);
-                    Assert.DoesNotContain(Log.Messages, message => message.Contains(token, StringComparison.Ordinal));
+                    Assert.False(Log.Messages.Any(message => message.Contains(token, StringComparison.Ordinal)), $"The log holds a made-up token ({token.Length} characters).");
                 }
 
                 Assert.Empty(Served.AzureDevOps.Errors);

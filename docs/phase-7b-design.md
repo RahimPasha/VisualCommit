@@ -3009,17 +3009,18 @@ or settles what it left open:
   StringFormat='AccountLogin{0}'}` in one template over `ContentControl`s.
 - Dialog: `HelpText`, `TokenLinkText`, `TokenLinkTip` added. The organization is `OrganizationOf`'s on
   the session's Azure DevOps endpoints, sent as it reads; off, nothing parses. A name of a provider's
-  token form, or equal to the token box's text, is no organization: refused unsent, the link disabled,
-  never echoed. Local refusals move no focus; only `NotFound` asks `SignInOrganization` (`dialogBox`,
+  token form, of a formless token's shape (52 base32 or 40 hex characters, any case) or equal to the
+  token box's text is no organization: refused unsent, the link disabled, never echoed. Local refusals move no focus; only `NotFound` asks `SignInOrganization` (`dialogBox`,
   `Margin="0"`). `SignInFailedOf` reads `failure.Provider`.
 - Prefill: the held account's login, else the active tab's `HostingState.Remotes` in
   `HostingRemoteOrder`. Driver: 1.9's forms plus `static AccountIdOf(p, id)`; a block's button is
   brought into view first. 7a's files changed as 10.6 says, plus `Phase7aChecks.A.cs:479`.
 - `SignInDialogProvidersTests` serves the fakes on port 0 (1.8); the service's URL forms run on
-  `AzureDevOpsEndpoints.Service` with a handler that refuses every request.
+  `AzureDevOpsEndpoints.Service` with a handler that refuses every request; a theory cancels GitLab's
+  check and each of Azure DevOps' two reads (A7's note).
 - Report: no expected result changed; `SettingsNavAccounts` at x 141 (±2). For the lead:
   `Check_A12` fails on open point 2's bound alone, asserted after its last step: at `a12b`'s offset 0
-  7 px of Azure DevOps' `Git` row (its note wraps to three lines) lie below the viewport, over
+  7 px of Azure DevOps' `Git` row (a three-line note) lie below the viewport, over
   `PartA.A12FewPixels` (3); the texts and gaps are the report's, so it needs a ruling under "Changed in
   this report". Azure DevOps' disabled link (`a06a`, `a11b`) keeps the accent, as the report's "accent
   foreground" reads and `AssertDialog` asserts; a disabled look needs a ruling. Open point 8: A9 as
