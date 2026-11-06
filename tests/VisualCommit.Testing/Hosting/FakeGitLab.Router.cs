@@ -2,8 +2,9 @@
 // with D364's fine-grained token (D375) and WP-LF copied it: MEASURED 2026-11-06 (Check_1b, Check_2,
 // Check_2b): `user` (200, its 41 members in order), `self`'s check 5 403 and its text, a made-up
 // `glpat-` value's 401 on `GET user` (D373), the projects with `permissions`, the merge requests'
-// 200, `ratelimit-*` on every answer (`burst_traffic_per_user_free_plan`, 100, with a token) and
-// across a 304, the create (201, `Draft:`, `references`), the 409, the missing-branch 400 and
+// 200, the five `ratelimit-*` headers on every answer (their values, `burst_traffic_per_user_free_plan`
+// and 100 with a token, on `GET user`'s 200 and across its 304; on the other answers ASSUMED alike),
+// the create (201, `Draft:`; `references` on the read of the created one), the 409, the missing-branch 400 and
 // nothing ahead (201 without `first_contribution`), a single one's members in order, the clean-up's
 // PUT, DELETE and branch delete, git through the app's helper (Check_2's clone and pushes); MEASURED
 // 2026-11-05 (the first run, through the app's message alone): `GET projects` without Project: Read
@@ -400,8 +401,9 @@ public sealed partial class FakeGitLab
     /// <c>draft</c> from the title, nothing ahead needed, the head ref written. MEASURED 2026-11-06 with
     /// a fine-grained token: (f)'s 409 <c>{"message":["Another open merge request already exists for
     /// this source branch: !&lt;iid&gt;"]}</c>, (g)'s 400 <c>{"message":{"source_branch":["does not exist"]}}</c>,
-    /// (h)'s 201 with <c>draft</c> for a <c>Draft:</c> title and <c>references</c>, and a create with
-    /// nothing ahead 201 without <c>first_contribution</c>; the rest as marked.
+    /// (h)'s 201 with <c>draft</c> for a <c>Draft:</c> title (<c>references</c> on the read of the
+    /// created one, ASSUMED alike in the 201), and a create with nothing ahead 201 without
+    /// <c>first_contribution</c>; the rest as marked.
     /// </summary>
     private async Task<AuthRemoteResponse> CreateAsync(FakeServiceCall call, FakeGitLabProject source, CancellationToken ct)
     {
@@ -898,8 +900,9 @@ public sealed partial class FakeGitLab
     /// <summary>
     /// The headers on every API answer (MEASURED r6 8, 13.1): <c>ratelimit-observed</c>,
     /// <c>ratelimit-remaining</c>, <c>ratelimit-reset</c> (the next minute's epoch), <c>ratelimit-limit</c>
-    /// and <c>ratelimit-name</c>, per user (<c>burst_traffic_per_user_free_plan</c>, 100, MEASURED
-    /// 2026-11-06 with a fine-grained token on every answer of stage 1, a 304 among them; r6 READ
+    /// and <c>ratelimit-name</c>, present on every answer of stage 1 (MEASURED 2026-11-06), per user
+    /// (<c>burst_traffic_per_user_free_plan</c>, 100: the values MEASURED 2026-11-06 with a fine-grained
+    /// token on <c>GET user</c>'s 200 and on its 304, ASSUMED alike on the other answers; r6 READ
     /// <c>throttle_authenticated_api</c>, 2000) or anonymous (<c>throttle_unauthenticated_api</c>, 500,
     /// MEASURED), each request counted, a 304 too (MEASURED); the fake's count never resets (ASSUMED:
     /// no test waits a window out, and the client reads none of them but on a 429);

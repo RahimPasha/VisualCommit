@@ -1269,7 +1269,8 @@ served by path and git's paths get 404, as 7a's.
      `https://spsprodfake.vssps.visualstudio.com/_signin?…`, or with `X-TFS-FedAuthRedirect: Suppress`
      401 TF400813 naming `aaaaaaaa-…` (MEASURED);
    - PAT-shaped, unknown, revoked or another organization's: 401, empty body, one `WWW-Authenticate:
-     Basic realm="https://tfsprodfake.app.visualstudio.com/"` (READ g1 G2; the last ASSUMED);
+     Basic realm="https://tfsprodfake.visualstudio.com/"` (READ g1 G2; the last ASSUMED; the realm's
+     form, without `.app.`, MEASURED 2026-11-05, WP-LF's `TokenRealm`);
    - expired: 401 `AccessCheckException` "Access Denied: The Personal Access Token used has expired.",
      led by a UTF-8 BOM (READ g1 G2; on dev.azure.com ASSUMED).
 5. The route: a hidden project or repository 404 TF401019; a read-only token's write 401 TF400813
@@ -1378,7 +1379,8 @@ research's captures.
 **As built** (WP-FA, `70ff3d4` to its last commit, 2026-11-01). Where the build differs from the text
 above or settles what it left open:
 - Beyond 1.9: `User(organization, displayName)` and `TfsRealm`, which replaces 2.3's skeleton realm
-  "Azure DevOps" on every 401, git's included. A user's address is its words joined by `.` at
+  "Azure DevOps" on every 401, git's included (since WP-LF a refused credential's empty 401 and git's
+  name `TokenRealm`, the measured form without `.app.`; `TfsRealm` stays in the sign-in's challenges). A user's address is its words joined by `.` at
   example.com. A read-only token's login is `{o}/<user id>#read`, since `MayPush` gets the login alone.
 - Keys: decoded names, lower-cased; a project (as the fake's own `url` names it) or repository named by
   GUID keys by its name; `pull:` and `update:` are `{o}/{p}/{n}`; both refs methods share `refs:`. `api-version` from the query or `Accept`, ASCII digits within an int. An
@@ -1394,7 +1396,8 @@ above or settles what it left open:
   the create. A PR alone (`pull:`, create, update) has its `repository` whole but `defaultBranch` and
   ends `url, _links, supportsIterations, artifactId` (r5's single GET); a list keeps the trimmed form.
 - Writes: update takes `status`, `title`, `description`; refs POST deletes and creates under `refs/heads/` and
-  `refs/tags/` (`succeeded`, `staleOldObjectId`, `unresolvableToCommit`, else `invalidRefName`; WP-LF),
+  `refs/tags/` (`succeeded`, `staleOldObjectId`, `unresolvableToCommit`, `refNameConflict` for a name
+  that is a ref's folder or has one as its own, else `invalidRefName`; WP-LF),
   an update that moves a ref 400;
   a non-contributor's update and refs POST 403 TF401027.
 - Git: git's callbacks find a repository `x.git` as `x`; `x` beside it is refused. Sync: one
@@ -3982,42 +3985,43 @@ Each point names what settles it and who meets it.
   user name per provider (WP-C).
 
 **As built (WP-LF, 2026-11-06).** Stage 1 (Azure DevOps 2026-11-05; GitLab 2026-11-06, after D385's
-first run) is copied into the fakes, each answer marked MEASURED with its date, the two `.Router.cs`
-headers listing them:
+first run) is copied into the fakes, each marked MEASURED with its date where the run read that answer
+(the `.Router.cs` headers list them):
 - Azure DevOps, as the fake answered: a member's connectionData both ways and its 400 at `7.1`; the
-  core area anonymous and with the token; a made-up PAT-shaped value's empty 401 with one Basic
-  challenge; D374's made-up organization, 404 both ways (A1's `NotFound` holds); `ListProject`'s list;
-  the create's 201, `isDraft`, `createdBy.id`, `succeeded` and the merge ref at the next read, gone
-  after the abandon; `x-access-token` through the helper on both hosts.
-- Azure DevOps, corrected: a Basic value that is no PAT gets connectionData's Anonymous 200 in a
-  private organization too, both ways (measured with the empty user, a user ASSUMED alike; no
-  credential keeps r5 1.3's 302 and 401); errors have no `api-version` in `Content-Type` (measured on
-  the 409 and the 400s); an empty title's 400 in the service's words, `eventId` 0; the create's answer has `labels` (measured with
-  nothing ahead), the abandon's no `mergeStatus` or `lastMergeCommit`; the refs POST's updates no
-  `customMessage` or `rejectedBy`, and it creates a branch too (200 `succeeded`, as the `-even` one;
-  a move stays 400); a member's identity has nine names, `customDisplayName` the display name unless null.
+  core area; a made-up PAT-shaped value's empty 401; D374's made-up organization, 404 both ways;
+  `ListProject`; the create's 201, `isDraft`, `createdBy.id`, `succeeded` and the merge ref at the next
+  read, gone after the abandon; `x-access-token` through the helper on both hosts.
+- Azure DevOps, corrected: a Basic value that is no PAT gets connectionData's Anonymous 200 both ways
+  (the empty user measured, a user ASSUMED alike); errors without `api-version` in `Content-Type`; an
+  empty title's 400 in the service's words (a CR LF), `eventId` 0; the create's `labels`; the abandon
+  without `mergeStatus` or `lastMergeCommit`; the refs POST's updates without `customMessage` or
+  `rejectedBy`, and a create (200 `succeeded`; a name's folder conflict `refNameConflict`; a move stays
+  400); nine identity names; a refused credential's realm without `.app.`.
 - GitLab, as the fake answered: every probed status and body. Corrected: `user`'s 41 members and a
-  single merge request's in the service's order (the create's without `first_contribution`), values
-  made up; a fork's pair after `prepared_at`, as r6 4.1's rows; `ratelimit-name`
-  `burst_traffic_per_user_free_plan`, `ratelimit-limit` 100 with a token; D385:
-  `FakeGitLabPermissions.UserSection` and `UserProjectRead`, which `GET projects` needs (else check
-  5's 403 naming `user`, its words measured through the app's message, its code and headers taken
-  from `self`'s); User: Read under `UserSection` is User: Read; the default holds both.
-- Clients unchanged: A1 already refuses the Anonymous 200 (`BadCredentials`, `AnonymousDetail`, one
-  request), GitLab's A2 gives the 403 as `Forbidden`, `Detail` `insufficient_granular_scope`, by the
-  code (7.3); `AzureDevOpsProviderTests` and `GitLabProviderTests` pin both, each failing on the old fake.
-- Kept, with reasons in the headers: git's `info/refs` refusals of the made-up values (the service's
-  401 is TF400813's HTML page, a BOM and three challenges, or empty with one; the fake's is
-  `AuthRemoteServer`'s, shared with 7a's, 404 in process; the helper reads no `wwwauth[]`, so no app
-  path differs); `queued` in a create's answer; what 3.7 and 4.7 keep (the expired and revoked bodies,
-  a read-only write, the fork shapes and `/source`, a legacy token, a selected-projects list, other
-  organizations, TF401027, 429 and 5xx). WP-S's `ServiceAnswers` shim stays.
-- For parts A to N and the review: WP-A words `AnonymousDetail` (a value that is no token) apart from a
-  refused token, and GitLab's `Forbidden` with the code as Project: Read missing among the user
-  permissions (D385, `SignInHelpOf`); a fake GitLab token with an explicit list needs `UserProjectRead`
-  to list. GitLab's measured 100 a minute (a burst, 304s counted) supersedes 7.3's and 4.4's 2,000;
-  an hourly cap is possible, unmeasured; a 429 stays `RateLimited`; the review weighs part P's
-  refreshes and A2's and A4's requests against it.
+  single merge request's in the service's order (the create's without `first_contribution`); a fork's
+  pair after `prepared_at` (r6 4.1); with a token `burst_traffic_per_user_free_plan` and 100 (read on
+  `GET user`'s 200 and 304, ASSUMED alike elsewhere); D385: `FakeGitLabPermissions.UserSection` and
+  `UserProjectRead`, which `GET projects` needs (else check 5's 403 naming `user`: its words measured
+  via the app's message, code and headers taken from `self`'s); the default holds both.
+- Clients: A1 already refused the Anonymous 200 (`BadCredentials`, `AnonymousDetail`, one request) and
+  A2 gives the 403 as `Forbidden` by the code (7.3), both pinned; changed: a message is one line, so a
+  service's CR LF never splits the app's log.
+- ASSUMED: the Anonymous 200 in a private organization, since the run never read the sandbox
+  organization's public-projects policy, and g1 G0.2 (READ) gives a private one r5 1.3's 302 or 401.
+  Check_1b's new 17th probe (595 s) reads its connectionData without a credential, with Suppress; run
+  again before part A's checks: a 401 TF400813 makes the rule MEASURED; on a 200 the fake keeps the
+  200 to `PublicProjects`, `LiveAzureFake`'s organization public. A1 refuses either.
+- Kept (reasons in the headers): git's `info/refs` refusals of the made-up values (the helper reads no
+  `wwwauth[]`); `queued` in a create's answer; what 3.7 and 4.7 keep (the expired and revoked bodies, a
+  read-only write, the fork shapes, a legacy token, other organizations, TF401027, 429 and 5xx). WP-S's
+  `ServiceAnswers` shim stays.
+- For parts A to N and the review: WP-A words `AnonymousDetail` apart from a refused token. GitLab's
+  `Forbidden` with `insufficient_granular_scope` means the route lacks a permission, on A2 Project:
+  Read among the user permissions (D385), on A1 User: Read: the texts show GitLab's message (10.2,
+  11.2), never a permission derived from the code, and `SignInHelpOf` names both. A fake GitLab token
+  with an explicit list needs `UserProjectRead` to list. GitLab's measured 100 a minute (a burst, 304s
+  counted) supersedes 7.3's and 4.4's 2,000; the review weighs part P's refreshes and A2's and A4's
+  requests against it.
 
 ### 16.2 Settled by a measurement, a CI run or the lead
 

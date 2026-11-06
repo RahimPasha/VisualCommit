@@ -508,7 +508,8 @@ public sealed class GitLabProviderTests
         // Create's answers (4.3): 409 B and 400 C naming source_branch MEASURED 2026-11-06 (the rest
         // READ g2 G1.1); 422 B READ g2
         // G1.1; 403 A READ g2 G1.2. The 409
-        // names the open request !<iid> alone (READ, 4's As built: to_reference).
+        // names the open request !<iid> alone (MEASURED 2026-11-06, stage 1's duplicate create; a
+        // fork's READ, 4's As built: to_reference).
         var cases = new (HostedRepository Base, NewPullRequest Request, HostingFailureKind Kind, PullRequestRefusal Refusal)[]
         {
             (p, New("feature/one", "main"), HostingFailureKind.Validation, PullRequestRefusal.AlreadyExists),

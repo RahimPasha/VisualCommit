@@ -5,10 +5,15 @@
 //   member names as served, customDisplayName among them, by default the display name; null leaves it
 //   out, as g1 G3.2's sample 1 has it, READ);
 // - check 4's refusals of D373's made-up values, each sent as Basic with the empty user: a short one,
-//   on connectionData 200 with the Anonymous identity, with and without Suppress, in the private
-//   organization too (the fake's 302 and 401 TF400813 stay for no credential at all, MEASURED r5 1.3);
-//   an 84-character PAT-shaped one, 401 with an empty body and one Basic challenge, with and without
-//   Suppress; with a user (x-access-token) both are ASSUMED alike, the user ignored (READ g1 G1.0);
+//   on the sandbox organization's connectionData 200 with the Anonymous identity, with and without
+//   Suppress; an 84-character PAT-shaped one, 401 with an empty body and one Basic challenge (its
+//   realm TokenRealm's form), with and without Suppress; with a user (x-access-token) both are
+//   ASSUMED alike, the user ignored (READ g1 G1.0). The fake gives the short value's 200 in a private
+//   organization too: ASSUMED, inferred from that 200, since the run did not read whether the
+//   sandbox's organization allows public projects (no read of its connectionData without a
+//   credential); g1 G0.2 (READ) takes a value that is no PAT for no credential, which a private
+//   organization answers with r5 1.3's 302 or 401 TF400813, so the next live run reads it before
+//   part A's checks copy the 200 (16.1's As built). No credential at all keeps r5 1.3's 302 and 401 (MEASURED);
 // - check 1 with a token (D374's made-up organization: 404 "The resource cannot be found." both ways);
 // - the core resource area (areas), without a credential and with the token;
 // - create: 201 (CreateStatus), isDraft, createdBy.id the account's, mergeStatus succeeded and the
@@ -169,11 +174,13 @@ public sealed partial class FakeAzureDevOps
             if (caller is null)
             {
                 // connectionData with a Basic credential whose password is no PAT: 200 with the
-                // Anonymous identity, with and without Suppress, in a private organization too
-                // (MEASURED 2026-11-05 with the empty user, D373's short value; with a user ASSUMED
-                // alike, the user ignored, READ g1 G1.0: no path of the app's sends one there; with no
-                // credential at all r5 1.3's 302 or 401 stays, MEASURED); a public organization's for
-                // anyone (MEASURED r5 1.2).
+                // Anonymous identity, with and without Suppress (MEASURED 2026-11-05 in the sandbox's
+                // organization with the empty user, D373's short value; with a user ASSUMED alike, the
+                // user ignored, READ g1 G1.0: no path of the app's sends one there). In a private
+                // organization too: ASSUMED, the sandbox organization's public-projects policy not
+                // read, against g1 G0.2's READ (no credential, r5 1.3's 302 or 401); both are refused
+                // by A1 (6.4). With no credential at all r5 1.3's 302 or 401 stays, MEASURED; a public
+                // organization's for anyone (MEASURED r5 1.2).
                 var plainBasic = call.Authorization is FakeAuthorizationForm.Basic or FakeAuthorizationForm.BasicEmptyUser;
                 if (route.Kind == Kind.Connection && (ignored || organization.PublicProjects || plainBasic))
                 {
@@ -408,7 +415,8 @@ public sealed partial class FakeAzureDevOps
     /// A token PAT-shaped: the fake's <c>azdo_FAKE-…</c>, or 84 characters with <c>AZDO</c> at 76 to 79
     /// (READ r5 0.6, 5; MEASURED 2026-11-05: a made-up value of that form got the empty 401). Any other
     /// value is no credential (READ g1 G0.2), but on connectionData, where a Basic one gets the
-    /// Anonymous identity (MEASURED 2026-11-05 with the empty user; with a user ASSUMED alike).
+    /// Anonymous identity (MEASURED 2026-11-05 in the sandbox's organization with the empty user; with
+    /// a user ASSUMED alike; in a private organization ASSUMED, its policy not read, see check 4).
     /// </summary>
     private static bool IsPatShaped(string token) =>
         token.StartsWith("azdo_FAKE-", StringComparison.Ordinal) || token.Length == 84 && string.CompareOrdinal(token, 76, "AZDO", 0, 4) == 0;

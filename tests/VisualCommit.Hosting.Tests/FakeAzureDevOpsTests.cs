@@ -91,10 +91,13 @@ public sealed class FakeAzureDevOpsTests
             Assert.Null(fake.Requests[^1].Login);
         }
 
-        // Fernhill-Labs is private, yet a Basic password that is no PAT is the Anonymous identity there
-        // too: with the empty user, as the probe and the client send it, with and without Suppress
-        // (MEASURED 2026-11-05, D373's short value); with a user, ASSUMED alike (the user ignored, READ
-        // g1 G1.0; no path of the app's sends one to connectionData). A 200 that A1 refuses (6.4).
+        // A Basic password that is no PAT is the Anonymous identity on connectionData: with the empty
+        // user, as the probe and the client send it, with and without Suppress (MEASURED 2026-11-05 in
+        // the sandbox's organization, D373's short value); with a user, ASSUMED alike (the user ignored,
+        // READ g1 G1.0; no path of the app's sends one to connectionData). Fernhill-Labs is private:
+        // the 200 there is ASSUMED, since the run did not read whether the sandbox's organization
+        // allows public projects (g1 G0.2, READ, would give the sign-in's 302 or 401 below); the next
+        // live run reads it (16.1's As built). A 200 that A1 refuses (6.4).
         foreach (var edit in new Action<HttpRequestMessage>[]
         {
             request => request.Headers.Authorization = Basic(string.Empty, "short-value"),

@@ -119,9 +119,11 @@ public sealed class AzureDevOpsProviderTests
         Assert.Equal(HostingFailureKind.BadCredentials, (await fixture.Provider.CheckTokenAsync(patShaped, Organization, Cancelled)).Failure!.Kind);
         Assert.Equal(5, fixture.Recorder.Sent.Count);
 
-        // A value that is no PAT gets connectionData's 200 with the Anonymous identity from the service,
-        // in a private organization too (MEASURED 2026-11-05, D373), which A1 refuses as the token
-        // ignored, after that one request (6.4; WP-LF).
+        // A value that is no PAT gets connectionData's 200 with the Anonymous identity from the service
+        // (MEASURED 2026-11-05 in the sandbox's organization, D373; in a private organization ASSUMED,
+        // the sandbox organization's policy not read, the fake's check 4), which A1 refuses as the token
+        // ignored, after that one request (6.4; WP-LF). Were it the sign-in's 401 (g1 G0.2, READ), A1
+        // would refuse it too, as BadCredentials without AnonymousDetail.
         var plain = (await fixture.Provider.CheckTokenAsync("not-a-token-made-up-24ch", Organization, Cancelled)).Failure!;
         Assert.Equal((HostingFailureKind.BadCredentials, AzureDevOpsProvider.AnonymousDetail, HostingProvider.AzureDevOps), (plain.Kind, plain.Detail, plain.Provider));
         Assert.Equal(6, fixture.Recorder.Sent.Count);
