@@ -2999,6 +2999,33 @@ lagged list, and inspects both parts' pictures. Done when they pass with 10.6's 
 is in any file, log, call record, automation value or picture text, and the report's paragraph is with
 the writer.
 
+**As built** (WP-A, `4b8edaf` to its last commit, 2026-11-06). Where the build differs from the text
+or settles what it left open:
+- `AccountsSettingsViewModel` subscribes to `AccountChanged` once and hands each event to
+  `BlockOf(e.Provider)` (7a's one subscriber holds); `IsChanged` follows the blocks; `Dispose` closes
+  them. `AccountBlockViewModel.Follow` is public. A block's note reads `AccountUseForGitNoteOf(p,
+  login)`, on a git older than 2.31 7a's older note for every provider. Log lines take the name.
+- The template's ids are `{Binding IdSuffix, StringFormat='AccountLogin{0}'}`; each instance keeps
+  7a's `Name`s; the containers are `ContentControl`s.
+- Dialog: `HelpText`, `TokenLinkText`, `TokenLinkTip` added. The organization sent is
+  `OrganizationOf`'s on the session's Azure DevOps provider's endpoints (A2's lower case and the
+  prefill go as they read); with that provider off nothing parses. Local refusals move no focus;
+  only `NotFound` asks `SignInOrganization`. `SignInFailedOf` reads `failure.Provider`; the dialog's
+  unreachable failure carries it. `SignInOrganization` keeps `dialogBox` with `Margin="0"`, so it
+  sits under its label as `SignInToken` does (dialogBox's 12 doubled the gap).
+- `MainWindowViewModel.SignInAsync`'s prefill is `OrganizationToPrefill`: the held account's login,
+  else the active tab's `HostingState.Remotes` in `HostingRemoteOrder` (signed out too).
+- Driver: beside 1.9's forms, `static AccountIdOf(p, id)`; a block's button is brought into view
+  before its click. `OpenSignInDialogAsync(p)` waits for that provider's dialog on top.
+- 7a's files changed as 10.6 says, plus `Phase7aChecks.A.cs:479` (`Accounts.GitHub`). No file outside
+  10.1's list; `Phase6ChecksS`, `Check_L31*`, `SettingsDialogViewTests` and `SignInEntryTests` pass
+  unchanged.
+- Report against design: none that changes an expected result. Open point 2: every picture the
+  report reads as fitting fits; open point 8: A9 is built as the report gives it (the Anonymous 200,
+  ASSUMED). `SettingsNavAccounts` measures at x 141, within the report's ±2.
+- For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` now serves every provider (false while off);
+  their own callers move to it. `SignInEntryProvidersTests` passes under the 1.5 s watcher lag.
+
 ## 11. WP-B: browse and clone (part B)
 
 ### 11.1 Goal and files
