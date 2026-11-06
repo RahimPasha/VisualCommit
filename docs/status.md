@@ -262,8 +262,8 @@ Jobs and Test steps: `windows-latest` 38 min 28 s (35 min 25 s), `macos-latest` 
 `GitRunnerPriorityTests.A_below_normal_priority_call_starts_git_below_normal_on_windows`, after 60 s:
 "Processes git started run at another priority: conhost.exe Normal" (image windows-2025-vs2026
 20261030.294.1). WP-LF changed neither the runner nor that test; it passes here 3 of 3, and every
-earlier 7b run passed it. Its cause was in the runner: the priority fix, merged at `32eaee3` (D386;
-Notes). Windows' "Build the
+earlier 7b run passed it. Its cause was in the runner: the priority fix, merged at `32eaee3` and
+`d62dff8` (D386; Notes). Windows' "Build the
 opt-in projects" green. Jobs and Test steps: `windows-latest` 30 min 15 s (27 min 38 s),
 `macos-latest` 43 min 8 s (41 min 8 s), `ubuntu-latest` 8 min 1 s (6 min 4 s), the containers 6 min
 39 s and 8 min 19 s (4 min 44 s and 6 min 1 s), each under four fifths.
@@ -426,9 +426,10 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 WP-A (design 10) is being built in `D:/Projects/Personal/vc-wt/p7b-accounts` on `wip/p7b-accounts`,
 from `f4ae515`, which holds part A's checks (`docs/test-reports/phase-7b.md`, D244). The priority fix
-for CI's one failure on WP-LF's merge is merged at `32eaee3` (D386; Notes); two skeptics check its new
-wiring test before it is pushed, and the lead then pushes it and reads its CI run (Windows must pass
-`GitRunnerPriorityTests`). At WP-A's merge the lead runs 10.9's classes and the lagged list and has
+for CI's one failure on WP-LF's merge is merged at `32eaee3` and `d62dff8` (D386; Notes) and pushed;
+the lead reads its CI run (Windows must pass `GitRunnerPriorityTests`). WP-A's last fix round (the
+lead's rulings on A12's bound and the disabled token link, and the third hunt's minors) runs with two
+verifiers before its merge. At WP-A's merge the lead runs 10.9's classes and the lagged list and has
 both parts' pictures inspected.
 Open point 8 of the report: Azure DevOps' `Check_1b_probes` (17 reads, its new probe of the sandbox
 organization's connectionData without a credential among them) runs before WP-A's merge if the owner
@@ -520,9 +521,14 @@ every commit.
   Two Opus skeptics could not refute it (minor points only); a follow-up added
   `GitRunner.StartObserver`, an internal seam for the tests, and a test through `RunAsync` that fails
   3 of 3 under each of four reversions of the wiring, and corrected the comments and
-  `docs/architecture.md`. On the merge, `GitRunnerPriorityTests`, `GitRunnerTests`,
-  `GitRunnerRecordTests`, `AskPassRunnerTests` and `MergeToolHelpTests` passed 84 of 84 through
-  `scripts/heavy-run.sh`. The experiments and their outputs are in
+  `docs/architecture.md`. Two more skeptics then checked that test: one ran it 75 times under load
+  and found no failure, hang or leftover process; the other showed a lowering round still running
+  could lower a late process before the test read it, so a broken wiring could pass the first
+  assertion. The second round (`864c900`, merged at `d62dff8`) raises each process the test made
+  and reads it back, at once and 100 ms later; with the host below normal the fix passed 15 of 15
+  and each of four reversions failed every run (10 to 15 each) with its own message. On each merge,
+  `GitRunnerPriorityTests`, `GitRunnerTests`, `GitRunnerRecordTests`, `AskPassRunnerTests` and
+  `MergeToolHelpTests` passed 84 of 84 through `scripts/heavy-run.sh`. The experiments and their outputs are in
   `D:/Projects/Personal/phase7b-work/verify/priority/`. One case stays open (D386): a process whose
   creation read git's job before git joined it and that shows only after the last round; none in
   about 480 trials. If CI's signature comes back, that order is the place to look.
