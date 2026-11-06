@@ -4,6 +4,7 @@ using Avalonia.Input;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting;
 
 namespace VisualCommit.Testing.Headless;
@@ -11,7 +12,10 @@ namespace VisualCommit.Testing.Headless;
 /// <summary>
 /// Phase 7a's part A as the checks drive it (docs/phase-7a-design.md 8.7; the report's part A
 /// conventions): the settings screen's Accounts section and the "Add GitHub account" dialog, every
-/// action a click or a key on their own controls.
+/// action a click or a key on their own controls. Since phase 7b (docs/phase-7b-design.md 1.9,
+/// 10.3; 7b's report, part A's conventions) beside 7a's GitHub forms, which keep their behaviour,
+/// the provider forms: each block's own controls (ids 7a's followed by the provider's suffix) and
+/// each provider's dialog, Azure DevOps' organization box among them.
 /// </summary>
 public sealed partial class ShellDriver
 {
@@ -93,9 +97,88 @@ public sealed partial class ShellDriver
         var question = await WaitForDialogAsync<ConfirmationViewModel>(timeout);
         Click(FindByAutomationId(TopDialogView!, confirm ? "ConfirmButton" : "CancelButton"));
         await WaitForAsync(() => question.IsClosed, "the sign-out's question to close", timeout);
-        var accounts = settings.Accounts;
+        var accounts = settings.Accounts.GitHub;
         await WaitForAsync(() => !accounts.SignOutCommand.IsRunning, "the sign-out to end", timeout);
         Settle();
+    }
+
+    /// <summary>
+    /// Brings the block's <c>AccountsSignInButton&lt;suffix&gt;</c> of <paramref name="provider"/> into
+    /// view and clicks it, then waits until that provider's dialog shows, its question to the keychain
+    /// has been answered and the keyboard focus is in <c>SignInOrganization</c> when that box shows and
+    /// is empty, else in <c>SignInToken</c>.
+    /// </summary>
+    public async Task<SignInDialogViewModel> OpenSignInDialogAsync(HostingProvider provider, TimeSpan? timeout = null)
+    {
+        ClickInView(SettingsControl(AccountIdOf(provider, "AccountsSignInButton")));
+        await WaitForAsync(() => Session.Services.DialogHost.Current is SignInDialogViewModel { } shown && shown.Provider == provider, $"the {HostingProviders.DisplayName(provider)} sign-in dialog on top", timeout);
+        var dialog = Dialog<SignInDialogViewModel>();
+        var opened = dialog.Opened;
+        await WaitForAsync(() => opened.IsCompleted, "the sign-in dialog's question to the keychain", timeout);
+        var box = dialog.ShowsOrganization && dialog.Organization.Length == 0 ? "SignInOrganization" : "SignInToken";
+        await WaitForAsync(
+            () => FocusManagerOf()?.GetFocusedElement() is TextBox focused && focused.Name == box,
+            $"the keyboard focus in {box}",
+            timeout);
+        Settle();
+        return dialog;
+    }
+
+    /// <summary>Types <paramref name="organization"/> into <c>SignInOrganization</c> after what it holds (<see cref="TypeInto"/>: focus, caret at the end, typed).</summary>
+    public void TypeOrganization(string organization)
+    {
+        TypeInto("SignInOrganization", organization);
+        Settle();
+    }
+
+    /// <summary>
+    /// The block of <paramref name="provider"/>: its "Sign out…" brought into view and clicked, the
+    /// provider's confirmation, then its "Sign out" (<paramref name="confirm"/>) or "Cancel"; waits
+    /// until the question has closed and, when confirmed, the sign-out has ended.
+    /// </summary>
+    public async Task SignOutAsync(HostingProvider provider, bool confirm, TimeSpan? timeout = null)
+    {
+        var settings = SettingsDialog ?? throw new InvalidOperationException("The settings screen is not open.");
+        ClickInView(SettingsControl(AccountIdOf(provider, "AccountsSignOutButton")));
+        var question = await WaitForDialogAsync<ConfirmationViewModel>(timeout);
+        Click(FindByAutomationId(TopDialogView!, confirm ? "ConfirmButton" : "CancelButton"));
+        await WaitForAsync(() => question.IsClosed, "the sign-out's question to close", timeout);
+        var block = settings.Accounts.BlockOf(provider);
+        await WaitForAsync(() => !block.SignOutCommand.IsRunning, "the sign-out to end", timeout);
+        Settle();
+    }
+
+    /// <summary>Waits until the session's account of <paramref name="provider"/> is as <paramref name="condition"/> wants.</summary>
+    public async Task WaitForAccountAsync(HostingProvider provider, Func<AccountStatus?, bool> condition, TimeSpan? timeout = null)
+    {
+        ArgumentNullException.ThrowIfNull(condition);
+        var hosting = Session.Services.Hosting;
+        await WaitForAsync(() => condition(hosting.AccountOf(provider)), $"the {HostingProviders.DisplayName(provider)} account's state", timeout);
+        Settle();
+    }
+
+    /// <summary>The block of <paramref name="provider"/> in the open settings screen: <c>AccountsGitHub</c>, <c>AccountsGitLab</c> or <c>AccountsAzureDevOps</c>.</summary>
+    public Control AccountsBlock(HostingProvider provider) => SettingsControl(provider switch
+    {
+        HostingProvider.GitHub => "AccountsGitHub",
+        HostingProvider.GitLab => "AccountsGitLab",
+        _ => "AccountsAzureDevOps",
+    });
+
+    /// <summary>The automation id of 7a's <paramref name="id"/> in the block of <paramref name="provider"/> (7a's for GitHub, else followed by the provider, 1.7).</summary>
+    public static string AccountIdOf(HostingProvider provider, string id) => id + provider switch
+    {
+        HostingProvider.GitHub => string.Empty,
+        HostingProvider.GitLab => "GitLab",
+        _ => "AzureDevOps",
+    };
+
+    /// <summary>Brings <paramref name="control"/> into its scroll viewer's view, lets the layout settle, then clicks it.</summary>
+    private void ClickInView(Control control)
+    {
+        control.BringIntoView();
+        Settle();
+        Click(control);
     }
 
     /// <summary>Waits until the session's account (<c>Session.Services.Hosting.Account</c>) is as <paramref name="condition"/> wants.</summary>

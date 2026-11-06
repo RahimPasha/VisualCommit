@@ -72,7 +72,7 @@ public partial class MainWindowViewModel
                     _log)
                 {
                     Hosting = _tabServices.Hosting,
-                    SignIn = () => SignInAsync(HostingProvider.GitHub),
+                    SignIn = SignInAsync,
                     GitVersion = Git?.Version,
                 },
                 section);

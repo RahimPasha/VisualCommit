@@ -2999,6 +2999,81 @@ lagged list, and inspects both parts' pictures. Done when they pass with 10.6's 
 is in any file, log, call record, automation value or picture text, and the report's paragraph is with
 the writer.
 
+**As built** (WP-A, `4b8edaf` to its last commit, 2026-11-06). Where the build differs from the text
+or settles what it left open:
+- `AccountsSettingsViewModel` subscribes to `AccountChanged` once and hands each event to
+  `BlockOf(e.Provider)` (7a's one subscriber holds). `AccountBlockViewModel.Follow` is public; it
+  resets a switch for another account and, untoggled, to its account's on every event (a toggle
+  survives the same account's). While any block signs out, every block's buttons are disabled
+  (`Joins`). A sign-out outlives its screen (D256), so the blocks keep the running sign-outs per
+  session and provider (a weak table): a block made while one runs, in a screen reopened meanwhile,
+  shows `Signing out…`, every block's buttons disabled, until it ends, then the account and the
+  keychain's note, moving no focus (Hunt 3: it offered "Sign out…" again). An older git's note is 7a's for every provider. Ids: `{Binding IdSuffix,
+  StringFormat='AccountLogin{0}'}` in one template over `ContentControl`s.
+- Dialog: `HelpText`, `TokenLinkText`, `TokenLinkTip` added. The organization is `OrganizationOf`'s on
+  the session's Azure DevOps endpoints, sent as it reads; off, nothing parses. A name of a provider's
+  token form, of a formless token's shape (52 base32 or 40 hex characters, any case) or equal to the
+  token box's text is no organization: refused unsent, the link disabled, never echoed. D378's refusal
+  reads the token box anywhere (the lead's ruling of 2026-11-06, Hunt 3, its verifiers and the
+  skeptic of `587b425`), by one rule in `OtherProviderFormIn`: the whole value's form first (D378 as
+  it was); else the value is read as typed and then with its escapes read, up to three times (`%` and
+  two hex digits; `\u` and four, `\U` and eight or `\x` and two hex digits, octal, `\n` and the other
+  control letters, a backslash before any other character), an escape that stands for a token
+  character (letter, digit, `_`, `-`, `.`) as that character, one for `%` or `\` as itself (a value
+  encoded twice) and any other as a break; each reading is cut into runs of token characters at every
+  other character, and in each run another provider's signature counts wherever it lies, but only
+  where it begins before the dialog's own token: GitHub's prefixes, GitLab's `glpat-`, Azure DevOps'
+  `AZDO` inside one stretch of letters and digits with 76 or more before it and 4 or more after it.
+  The dialog's own token is the run from the first place of its own prefix (a GitHub prefix,
+  `glpat-`) to its end, and on GitLab also a run of 20 characters, its unprefixed tokens' length
+  (ASSUMED); Azure DevOps' tokens hold no `_` or `-`, so no signature. The first signature by its
+  place names the provider: the same text, nothing sent, nothing logged. So a letter or digit against
+  the token (an escape's residue, `[32m`, `\042`, `=3D`; a word, `Bearer`; letters after Azure DevOps'
+  84), an escape inside its form (`glpat%2D`, `ghp%5F`) and the earlier wrappers (quotes, a `.env`
+  line, a clone URL, Markdown's underscores, a full stop) hide no token, while a bare own token is one
+  run that is its own token from its first character or holds no signature, refused only as D378
+  refuses it (`SignInDialogProvidersTests`: the verifiers' and the skeptic's values, 45 wrappers
+  through each dialog, random wrappers with letters and digits against the token, random and edge own
+  tokens and own-shaped values; the skeptic's probe, rerun: its 38 values all named, no throw over its
+  edges and 200,000 random values, 1M characters in 153 ms at most, linear). It deliberately does not
+  cover a value made to hide a token: one split by a character that is no escape it reads (`ghp&#95;`,
+  quoted-printable `glpat=2D`), one placed after the dialog's own prefix in the same run
+  (`glpat-x_ghp_...`), or one cut or changed until its signature is gone. It may refuse a wrapped own
+  token whose wrapper holds another's signature by chance (a GitLab path such as `laughs_app` holds
+  `ghs_`), or an unprefixed GitLab token holding a GitHub prefix by chance once wrapped so that its run
+  is not 20 long; the bare token then goes on. The
+  providers' own local refusals (Hosting) still read the whole value. Local refusals move no focus; only `NotFound`
+  asks `SignInOrganization` (`dialogBox`, `Margin="0"`). `SignInFailedOf` reads `failure.Provider`.
+- Prefill: the held account's login, else the active tab's `HostingState.Remotes` in
+  `HostingRemoteOrder`. Driver: 1.9's forms plus `static AccountIdOf(p, id)`; a block's button is
+  brought into view first. 7a's files changed as 10.6 says, plus `Phase7aChecks.A.cs:479`.
+- `SignInDialogProvidersTests` serves the fakes on port 0 (1.8); the service's URL forms run on
+  `AzureDevOpsEndpoints.Service` with a handler that refuses every request; a theory cancels GitLab's
+  check and each of Azure DevOps' two reads (A7's note).
+- Report: `SettingsNavAccounts` at x 141 (±2). A12's step 4 changed by the lead's ruling of 2026-11-06
+  (the report's "Changed in this report after its first commit", open point 2): at `a12b`'s offset 0 the
+  section scrolls (about 502 of 495 in the report's frame; `SectionScroller` measures 499 of 492) and
+  7 px of `AccountUseForGitNoteAzureDevOps` (three lines, 13.9 apart) lie below the viewport, less than
+  one line, the last line's top inside it; `Check_A12` asserts
+  that at the step, each line's height read from the note's layout against `PartA.A12NoteLine` (13.9,
+  ±0.5). Azure DevOps' disabled link (`a06a`, `a11b`) takes the disabled look by the
+  lead's ruling of 2026-11-06 (the report's same section): `SignInLinkButton`'s `:disabled` gives the
+  theme's `VcTextDisabledBrush` and the arrow cursor, and the underline's selector skips a disabled link;
+  GitHub's and GitLab's links are never disabled, and 7a's part A pictures still differ from the main
+  checkout's in the intro alone, compared pixel by pixel. `AssertDialog` asserts the accent and the hand
+  cursor while a link is enabled, the disabled look while it is not. After `a11b`, the link is also
+  disabled under the resting pointer (the organization retyped by keyboard): underlined before, not
+  after. Avalonia hit-tests no disabled control and clears `:pointerover` on one disabled under the
+  pointer, so neither step tells the selector's `:not(:disabled)` from the old selector (both pass
+  with it, probed 2026-11-06): it is a guard, and the checks prove the look. The asserted cursor is
+  the link's `Cursor`, not the one shown. Hunt 3's check-strength findings:
+  `AssertDialog` asserts as 7a's the stack over the screen on Accounts, `SignInDialog` named by its
+  title, no "In …" line and the buttons' order; `SignInNoKeychain`, `SignInChecking` and `SignInError`
+  are asserted in their classes below the token box and above the buttons; A2 step 7 the whole intro
+  above the viewport; A2 step 3 GitHub's avatar address. Open point 8: A9 as given (ASSUMED).
+- For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` serves every provider (false while off).
+  `SignInEntryProvidersTests` passes under the 1.5 s watcher lag.
+
 ## 11. WP-B: browse and clone (part B)
 
 ### 11.1 Goal and files

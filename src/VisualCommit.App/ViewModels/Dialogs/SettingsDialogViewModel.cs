@@ -7,6 +7,7 @@ using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Settings;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Settings;
@@ -55,8 +56,8 @@ public sealed record SettingsScreenServices(
     /// <summary>The session's hosting, for the Accounts section (docs/phase-7a-design.md 1.7, D256); null without one.</summary>
     public IHostingSession? Hosting { get; init; }
 
-    /// <summary>The window's sign-in entry (docs/phase-7a-design.md 8.5), which the Accounts section's "Sign in…" runs; null without one.</summary>
-    public Func<Task<bool>>? SignIn { get; init; }
+    /// <summary>The window's sign-in entry (docs/phase-7a-design.md 8.5, docs/phase-7b-design.md 10.5), which each Accounts block's "Sign in…" runs with its provider; null without one.</summary>
+    public Func<HostingProvider, Task<bool>>? SignIn { get; init; }
 
     /// <summary>The detected git's version, null when unknown: the Accounts section's texts on git older than 2.31 (D277).</summary>
     public GitVersion? GitVersion { get; init; }
@@ -263,11 +264,9 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
             settings.Update(Changed);
         }
 
-        // Accounts' switch (D216, docs/phase-7a-design.md 8.3): the session writes it off the UI thread.
-        if (Accounts.IsChanged)
-        {
-            _services.Hosting!.SetUseForGit(Accounts.UseForGit);
-        }
+        // Accounts' switches (D216, docs/phase-7a-design.md 8.3, docs/phase-7b-design.md 10.3): each
+        // changed one alone; the session writes them off the UI thread.
+        Accounts.ApplySwitches();
 
         // 3. The theme, when changed (11.6).
         if (General.Theme != General.StartTheme)

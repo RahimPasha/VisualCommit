@@ -33,7 +33,7 @@ public static partial class Phase7aExpectations
         public const string AccountsButton = "Accounts";
         public const string GitHubLabel = "GitHub";
         public const string GitLabel = "Git";
-        public const string Intro = "With a GitHub account, VisualCommit lists and creates pull requests, shows authors' pictures and clones your repositories.";
+        public const string Intro = "With a GitHub, GitLab or Azure DevOps account, VisualCommit lists and creates pull requests (merge requests on GitLab) and clones your repositories.";
         public const string Off = "GitHub is turned off for this session.";
         public const string SignedOut = "Not signed in.";
         public const string SignInButton = "Sign in…";

@@ -295,7 +295,7 @@ public sealed class SignInDialogViewModelTests
             }
         }
 
-        public SignInDialogViewModel Dialog() => new(Session, Launcher, Log);
+        public SignInDialogViewModel Dialog() => new(Session, VisualCommit.Core.Hosting.HostingProvider.GitHub, Launcher, Log);
 
         public async ValueTask DisposeAsync()
         {

@@ -33,20 +33,20 @@ public sealed class AccountsSettingsViewModelTests
     [Fact]
     public void Signed_out_shows_not_signed_in_and_sign_in_only()
     {
-        using var model = new AccountsSettingsViewModel(new StubSession(), () => Task.FromResult(false), new StubDialogs(), new RecordingLog());
+        using var model = new AccountsSettingsViewModel(new StubSession(), _ => Task.FromResult(false), new StubDialogs(), new RecordingLog());
 
-        Assert.False(model.IsOff);
-        Assert.True(model.IsSignedOut);
-        Assert.False(model.HasAccount);
-        Assert.Null(model.Login);
-        Assert.Null(model.TokenPlaceText);
-        Assert.Null(model.NeedsSignInText);
-        Assert.True(model.ShowsSignIn);
-        Assert.False(model.ShowsSignOut);
-        Assert.True(model.ShowsButtons);
-        Assert.False(model.IsChanged);
-        Assert.Null(model.BusyText);
-        Assert.Null(model.SignOutNote);
+        Assert.False(model.GitHub.IsOff);
+        Assert.True(model.GitHub.IsSignedOut);
+        Assert.False(model.GitHub.HasAccount);
+        Assert.Null(model.GitHub.Login);
+        Assert.Null(model.GitHub.TokenPlaceText);
+        Assert.Null(model.GitHub.NeedsSignInText);
+        Assert.True(model.GitHub.ShowsSignIn);
+        Assert.False(model.GitHub.ShowsSignOut);
+        Assert.True(model.GitHub.ShowsButtons);
+        Assert.False(model.GitHub.IsChanged);
+        Assert.Null(model.GitHub.BusyText);
+        Assert.Null(model.GitHub.SignOutNote);
     }
 
     [Fact]
@@ -55,13 +55,13 @@ public sealed class AccountsSettingsViewModelTests
         foreach (var hosting in new IHostingSession?[] { null, NullHostingSession.Instance, new StubSession { Off = true } })
         {
             using var model = new AccountsSettingsViewModel(hosting, null, new StubDialogs(), new RecordingLog());
-            Assert.True(model.IsOff);
-            Assert.False(model.IsSignedOut);
-            Assert.False(model.HasAccount);
-            Assert.False(model.ShowsSignIn);
-            Assert.False(model.ShowsSignOut);
-            Assert.False(model.ShowsButtons);
-            Assert.False(model.IsChanged);
+            Assert.True(model.GitHub.IsOff);
+            Assert.False(model.GitHub.IsSignedOut);
+            Assert.False(model.GitHub.HasAccount);
+            Assert.False(model.GitHub.ShowsSignIn);
+            Assert.False(model.GitHub.ShowsSignOut);
+            Assert.False(model.GitHub.ShowsButtons);
+            Assert.False(model.GitHub.IsChanged);
         }
 
         Assert.Equal("GitHub is turned off for this session.", Texts.AccountsOff);
@@ -76,16 +76,16 @@ public sealed class AccountsSettingsViewModelTests
     {
         using var model = new AccountsSettingsViewModel(new StubSession { Account = Status(AccountState.SignedIn, place, kind, note) }, null, new StubDialogs(), new RecordingLog());
 
-        Assert.True(model.HasAccount);
-        Assert.False(model.IsSignedOut);
-        Assert.Equal("Octo", model.Login);
-        Assert.Equal(expected, model.TokenPlaceText);
-        Assert.True(model.ShowsTokenPlace);
-        Assert.Null(model.NeedsSignInText);
-        Assert.False(model.ShowsNeedsSignIn);
-        Assert.False(model.ShowsSignIn);
-        Assert.True(model.ShowsSignOut);
-        Assert.True(model.UseForGit);
+        Assert.True(model.GitHub.HasAccount);
+        Assert.False(model.GitHub.IsSignedOut);
+        Assert.Equal("Octo", model.GitHub.Login);
+        Assert.Equal(expected, model.GitHub.TokenPlaceText);
+        Assert.True(model.GitHub.ShowsTokenPlace);
+        Assert.Null(model.GitHub.NeedsSignInText);
+        Assert.False(model.GitHub.ShowsNeedsSignIn);
+        Assert.False(model.GitHub.ShowsSignIn);
+        Assert.True(model.GitHub.ShowsSignOut);
+        Assert.True(model.GitHub.UseForGit);
     }
 
     [Theory]
@@ -97,13 +97,13 @@ public sealed class AccountsSettingsViewModelTests
     {
         using var model = new AccountsSettingsViewModel(new StubSession { Account = Status(AccountState.NeedsSignIn, null, kind, note) }, null, new StubDialogs(), new RecordingLog());
 
-        Assert.True(model.HasAccount);
-        Assert.Equal("Octo", model.Login);
-        Assert.Null(model.TokenPlaceText);
-        Assert.Equal(expected, model.NeedsSignInText);
-        Assert.True(model.ShowsNeedsSignIn);
-        Assert.True(model.ShowsSignIn);
-        Assert.True(model.ShowsSignOut);
+        Assert.True(model.GitHub.HasAccount);
+        Assert.Equal("Octo", model.GitHub.Login);
+        Assert.Null(model.GitHub.TokenPlaceText);
+        Assert.Equal(expected, model.GitHub.NeedsSignInText);
+        Assert.True(model.GitHub.ShowsNeedsSignIn);
+        Assert.True(model.GitHub.ShowsSignIn);
+        Assert.True(model.GitHub.ShowsSignOut);
     }
 
     [Fact]
@@ -112,23 +112,23 @@ public sealed class AccountsSettingsViewModelTests
         var session = new StubSession { Account = Status(AccountState.SignedIn, TokenPlace.Keychain) };
         using var model = new AccountsSettingsViewModel(session, null, new StubDialogs(), new RecordingLog());
 
-        Assert.True(model.UseForGit);
-        Assert.False(model.IsChanged);
-        model.UseForGit = false;
-        Assert.True(model.IsChanged);
-        model.UseForGit = true;
-        Assert.False(model.IsChanged);
-        model.UseForGit = false;
+        Assert.True(model.GitHub.UseForGit);
+        Assert.False(model.GitHub.IsChanged);
+        model.GitHub.UseForGit = false;
+        Assert.True(model.GitHub.IsChanged);
+        model.GitHub.UseForGit = true;
+        Assert.False(model.GitHub.IsChanged);
+        model.GitHub.UseForGit = false;
 
         // The same account's change (a refusal) keeps the toggle; another account resets it.
         session.Change(Status(AccountState.NeedsSignIn, null, AccountNoteKind.Refused));
-        Assert.False(model.UseForGit);
-        Assert.True(model.IsChanged);
+        Assert.False(model.GitHub.UseForGit);
+        Assert.True(model.GitHub.IsChanged);
         session.Change(Status(AccountState.SignedIn, TokenPlace.Keychain, useForGit: false, key: new AccountKey(HostingProvider.GitHub, "github.com", "ada")));
-        Assert.False(model.UseForGit);
-        Assert.False(model.IsChanged);
+        Assert.False(model.GitHub.UseForGit);
+        Assert.False(model.GitHub.IsChanged);
         session.Change(null);
-        Assert.False(model.IsChanged);
+        Assert.False(model.GitHub.IsChanged);
         Assert.Empty(session.UseForGitCalls);
     }
 
@@ -146,9 +146,9 @@ public sealed class AccountsSettingsViewModelTests
             usesTheAccount
                 ? "Clone, fetch, pull and push to GitHub over HTTPS use this account's token in place of your git credential helpers. Git in a terminal still uses your helpers."
                 : "This needs Git 2.31 or newer. With Git 2.30.0, clone, fetch, pull and push still use your git credential helpers.",
-            model.UseForGitNote);
+            model.GitHub.UseForGitNote);
 
-        model.SignOutCommand.Execute(null);
+        model.GitHub.SignOutCommand.Execute(null);
         var request = Assert.Single(dialogs.Requests);
         Assert.Equal("Sign out of GitHub?", request.Title);
         Assert.Equal(
@@ -167,13 +167,13 @@ public sealed class AccountsSettingsViewModelTests
         var dialogs = new StubDialogs { Answer = false };
         using var model = new AccountsSettingsViewModel(session, null, dialogs, new RecordingLog());
 
-        await model.SignOutCommand.ExecuteAsync(null);
+        await model.GitHub.SignOutCommand.ExecuteAsync(null);
 
         Assert.Single(dialogs.Requests);
         Assert.Equal(0, session.SignOuts);
-        Assert.True(model.ShowsSignOut);
-        Assert.Null(model.SignOutNote);
-        Assert.Null(model.BusyText);
+        Assert.True(model.GitHub.ShowsSignOut);
+        Assert.Null(model.GitHub.SignOutNote);
+        Assert.Null(model.GitHub.BusyText);
     }
 
     [Fact]
@@ -186,27 +186,27 @@ public sealed class AccountsSettingsViewModelTests
         var focus = new List<string>();
         model.FocusRequested += (_, id) => focus.Add(id);
 
-        var running = model.SignOutCommand.ExecuteAsync(null);
-        Assert.Equal("Signing out…", model.BusyText);
-        Assert.True(model.IsBusy);
-        Assert.False(model.SignInCommand.CanExecute(null));
-        Assert.False(model.SignOutCommand.CanExecute(null));
+        var running = model.GitHub.SignOutCommand.ExecuteAsync(null);
+        Assert.Equal("Signing out…", model.GitHub.BusyText);
+        Assert.True(model.GitHub.IsBusy);
+        Assert.False(model.GitHub.SignInCommand.CanExecute(null));
+        Assert.False(model.GitHub.SignOutCommand.CanExecute(null));
 
         session.Account = null;
         answer.SetResult("the keychain stayed locked");
         await running;
 
         Assert.Equal(1, session.SignOuts);
-        Assert.Null(model.BusyText);
-        Assert.True(model.IsSignedOut);
-        Assert.True(model.ShowsSignIn);
-        Assert.False(model.ShowsSignOut);
-        Assert.Equal("Signed out, but the token could not be removed from this computer's keychain: the keychain stayed locked.", model.SignOutNote);
+        Assert.Null(model.GitHub.BusyText);
+        Assert.True(model.GitHub.IsSignedOut);
+        Assert.True(model.GitHub.ShowsSignIn);
+        Assert.False(model.GitHub.ShowsSignOut);
+        Assert.Equal("Signed out, but the token could not be removed from this computer's keychain: the keychain stayed locked.", model.GitHub.SignOutNote);
         Assert.Equal(["AccountsSignInButton"], focus);
 
         // The note clears at the next sign-in.
         session.Change(Status(AccountState.SignedIn, TokenPlace.Keychain));
-        Assert.Null(model.SignOutNote);
+        Assert.Null(model.GitHub.SignOutNote);
     }
 
     [Fact]
@@ -216,7 +216,7 @@ public sealed class AccountsSettingsViewModelTests
         var calls = 0;
         using var model = new AccountsSettingsViewModel(
             session,
-            () =>
+            _ =>
             {
                 calls++;
                 session.Account = Status(AccountState.SignedIn, TokenPlace.Keychain);
@@ -227,12 +227,12 @@ public sealed class AccountsSettingsViewModelTests
         var focus = new List<string>();
         model.FocusRequested += (_, id) => focus.Add(id);
 
-        await model.SignInCommand.ExecuteAsync(null);
+        await model.GitHub.SignInCommand.ExecuteAsync(null);
 
         Assert.Equal(1, calls);
-        Assert.Equal("Octo", model.Login);
-        Assert.True(model.ShowsSignOut);
-        Assert.False(model.ShowsSignIn);
+        Assert.Equal("Octo", model.GitHub.Login);
+        Assert.True(model.GitHub.ShowsSignOut);
+        Assert.False(model.GitHub.ShowsSignIn);
         Assert.Equal(["AccountsSignOutButton"], focus);
     }
 
@@ -269,14 +269,14 @@ public sealed class AccountsSettingsViewModelTests
 
         var cancelled = Open();
         await cancelled.Loaded;
-        cancelled.Accounts.UseForGit = false;
+        cancelled.Accounts.GitHub.UseForGit = false;
         cancelled.CancelCommand.Execute(null);
         Assert.True(cancelled.IsClosed);
         Assert.Empty(session.UseForGitCalls);
 
         var saved = Open();
         await saved.Loaded;
-        saved.Accounts.UseForGit = false;
+        saved.Accounts.GitHub.UseForGit = false;
         await saved.ConfirmCommand.ExecuteAsync(null);
         Assert.True(saved.IsClosed);
         Assert.Equal([false], session.UseForGitCalls);
@@ -295,7 +295,7 @@ public sealed class AccountsSettingsViewModelTests
 
         Assert.Equal(0, session.Subscribers);
         session.Change(Status(AccountState.SignedIn, TokenPlace.Keychain));
-        Assert.True(model.IsSignedOut);
+        Assert.True(model.GitHub.IsSignedOut);
     }
 
     /// <summary>A confirmation that answers <see cref="Answer"/> and keeps each request.</summary>
