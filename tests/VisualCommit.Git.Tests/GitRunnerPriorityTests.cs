@@ -29,12 +29,13 @@ public class GitRunnerPriorityTests
         // every process in it below normal, then lowers what git has started by then and adds it to
         // the job; what any of them starts from then on joins the job too. The class alone did not
         // hold that: Windows can take a new process's class from its creator before the creator is
-        // lowered (CI run 42216604663 found git's console host at normal priority so), and the next
-        // test makes such processes on purpose. This one looks at this process's own git children
-        // (Toolhelp's snapshot names each process's parent) while the call waits, and needs no work
-        // of the lowered processes: under a full test run a chain of below-normal shells starves
-        // behind the normal-priority work, which is what the class is for, so a test that waited for
-        // their output hung. It waits only for the runner's own lowering of git's descendants.
+        // lowered (measured on the laptop; CI run 42216604663 found git's console host at normal
+        // priority), and the next test makes such processes on purpose. This one looks at this
+        // process's own git children (Toolhelp's snapshot names each process's parent) while the call
+        // waits, and needs no work of the lowered processes: under a full test run a chain of
+        // below-normal shells starves behind the normal-priority work, which is what the class is for,
+        // so a test that waited for their output hung. It waits only for the runner's own lowering of
+        // git's descendants.
         // The calls run in a folder of their own, outside the project's repository.
         using var folder = new TempDirectory("priority");
         var runner = new GitRunner(GitPath);
@@ -133,11 +134,16 @@ public class GitRunnerPriorityTests
         // priority named for it, with a parent in git's tree (PROC_THREAD_ATTRIBUTE_PARENT_PROCESS).
         // The first is made just after git starts, before the runner's steps (StartObserver), with git
         // as its parent: a process git started before it joined the job. Once the lowering has reached
-        // that one, two more are made: one of git's, then one of the first's. Each one's class is read
-        // as its creation returns, before a round of the lowering that may still run could change it.
-        // Both run below normal only if git joined a job that holds it there and the lowering added the
-        // first to that job: a job without the limit leaves git's at normal priority, and a job git
-        // joins only after the lowering leaves the first one's.
+        // that one, two more are made: one of git's, then one of the first's. Both run below normal only
+        // if git joined a job that holds it there and the lowering added the first to that job: a job
+        // without the limit leaves git's at normal priority, and a job git joins only after the
+        // lowering leaves the first one's.
+        //
+        // The lowering often still runs when they are made, and a new process shows in a snapshot up to
+        // about 3 ms before its creation returns, so a round can lower one by its class alone before the
+        // test reads it. So each is also raised to normal and read back, at once and again 100 ms later:
+        // in a job whose limit holds it below normal the raise reports success and changes nothing; with
+        // the class alone it takes.
         if (!OperatingSystem.IsWindows())
         {
             return;
@@ -171,32 +177,53 @@ public class GitRunnerPriorityTests
                 await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
             }
 
+            static string OfGit(string seen) => $"What git starts at normal priority after the runner's steps runs at {seen}: git is in no job that holds it below normal.";
+            static string OfEarly(string seen) => $"What a process git started before it joined its job starts at normal priority runs at {seen}: the lowering did not add that process to a job that holds it below normal.";
+            const ProcessPriorityClass Below = ProcessPriorityClass.BelowNormal;
+
             ProcessPriorityClass ofGitPriority;
             using (var git = Process.GetProcessById(gitId))
             {
                 ofGit = LateChild.StartSuspended(git, ping, out ofGitPriority);
             }
 
-            Assert.True(
-                ofGitPriority == ProcessPriorityClass.BelowNormal,
-                $"What git starts at normal priority after the runner's steps runs at {ofGitPriority}: git is in no job that holds it below normal.");
+            var ofGitRaised = PriorityOnceRaised(ofGit);
+            Assert.True(ofGitPriority == Below && ofGitRaised == Below, OfGit($"{ofGitPriority}, {ofGitRaised} once raised"));
             ofEarly = LateChild.StartSuspended(early, ping, out var ofEarlyPriority);
-            Assert.True(
-                ofEarlyPriority == ProcessPriorityClass.BelowNormal,
-                $"What a process git started before it joined its job starts at normal priority runs at {ofEarlyPriority}: the lowering did not add that process to a job that holds it below normal.");
+            var ofEarlyRaised = PriorityOnceRaised(ofEarly);
+            Assert.True(ofEarlyPriority == Below && ofEarlyRaised == Below, OfEarly($"{ofEarlyPriority}, {ofEarlyRaised} once raised"));
+
+            // Should a round have lowered one again between its raise and the read.
+            await Task.Delay(TimeSpan.FromMilliseconds(100), TestCancelled);
+            ofGitRaised = PriorityOnceRaised(ofGit);
+            Assert.True(ofGitRaised == Below, OfGit($"{ofGitRaised} once raised 100 ms later"));
+            ofEarlyRaised = PriorityOnceRaised(ofEarly);
+            Assert.True(ofEarlyRaised == Below, OfEarly($"{ofEarlyRaised} once raised 100 ms later"));
         }
         finally
         {
+            // The runner stops git, with its job, before anything below can fail; waited for at the end,
+            // so that no git of this test is left for the next.
+            await cancel.CancelAsync();
+
             // Made also when the call ended before the test took it.
             early ??= started.Task.IsCompletedSuccessfully ? (await started.Task).Early : null;
             foreach (var process in new[] { ofEarly, ofGit, early })
             {
-                process?.Kill();
-                process?.Dispose();
+                try
+                {
+                    process?.Kill();
+                }
+                catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or NotSupportedException)
+                {
+                    // Each is tried: one that cannot be stopped must not keep the others running.
+                }
+                finally
+                {
+                    process?.Dispose();
+                }
             }
 
-            // The runner stops git, with its job; waited for, so that no git of this test is left for the next.
-            await cancel.CancelAsync();
             await Task.WhenAny(call);
         }
 
@@ -220,6 +247,18 @@ public class GitRunnerPriorityTests
             started.TrySetException(ex);
         }
     };
+
+    /// <summary>
+    /// Raises <paramref name="process"/> to normal priority and returns its class as it is then
+    /// (Windows): below normal still when it is in a job whose limit holds it there, which lets the raise
+    /// report success and change nothing.
+    /// </summary>
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    private static ProcessPriorityClass PriorityOnceRaised(Process process)
+    {
+        process.PriorityClass = ProcessPriorityClass.Normal;
+        return PriorityOf(process);
+    }
 
     /// <summary>The priority class of <paramref name="process"/> as it is now (Windows): <see cref="Process"/> keeps the one it read first.</summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
@@ -508,8 +547,8 @@ public class GitRunnerPriorityTests
         public static Process StartSuspended(Process parent, string executable) => StartSuspended(parent, executable, out _);
 
         /// <summary>
-        /// As <see cref="StartSuspended(Process, string)"/>, with the new process's class read from the
-        /// handle its creation returns, before anything else can change it.
+        /// As <see cref="StartSuspended(Process, string)"/>, with the new process's class as its creation
+        /// returns, read from the handle the creation gives.
         /// </summary>
         public static Process StartSuspended(Process parent, string executable, out ProcessPriorityClass priorityAtStart)
         {
