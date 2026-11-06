@@ -3014,13 +3014,23 @@ or settles what it left open:
   the session's Azure DevOps endpoints, sent as it reads; off, nothing parses. A name of a provider's
   token form, of a formless token's shape (52 base32 or 40 hex characters, any case) or equal to the
   token box's text is no organization: refused unsent, the link disabled, never echoed. D378's refusal
-  reads the token box anywhere (the lead's ruling of 2026-11-06, Hunt 3): `OtherProviderFormIn` takes
-  the whole value's form, else the first form of its runs of token characters (letters, digits, `_`,
-  `-`, `.`) between any other characters, so another provider's token in quotes, angle brackets, a
-  `.env` line or a clone URL is refused unsent as a bare one, with the same text and nothing logged;
-  every provider's tokens are made of those characters alone, so an own token is one run and is never
-  refused so (`SignInDialogProvidersTests`, random and edge values of each form). The providers' own
-  local refusals (Hosting) still read the whole value. Local refusals move no focus; only `NotFound`
+  reads the token box anywhere (the lead's ruling of 2026-11-06, Hunt 3, and its verifiers):
+  `OtherProviderFormIn` takes the whole value's form (D378 as it was); else it reads the value as
+  typed and then with each escape as a break (`%` and two hex digits, once and twice encoded, `\u`,
+  `\x`, a backslash and a character), and in each reading, run by run of token characters (letters,
+  digits, `_`, `-`, `.`), names the first other form by its place: a run's own form; `glpat-`
+  anywhere on GitHub and Azure DevOps (their tokens hold no `-`); GitHub's prefixes anywhere on Azure
+  DevOps (no `_`); on GitLab, GitHub's prefix at a run's start or after `_`, `-` or `.`; on GitHub and
+  GitLab, Azure DevOps' 84 as a run of letters and digits. The last two skip a run of the dialog's own
+  shape: a GitHub prefix, `glpat-` (each after leading `_`, `-`, `.`) or GitLab's unprefixed 20
+  characters (ASSUMED from the tests' forms). So a token quoted, in a `.env` line or a clone URL,
+  percent-encoded, behind `\u0022` or `\n`, between Markdown's underscores, before a full stop or joined
+  to a name by `_` or `-` is refused unsent as a bare one, with the same text and nothing logged; an own
+  token (no `%` or `\`, one run of its own shape) is refused only as D378 refuses it
+  (`SignInDialogProvidersTests`: the verifiers' values, 33 wrappers through the dialog, random wrappers,
+  random and edge own tokens and own-shaped values). A run that starts with the dialog's own prefix is
+  not searched for Azure DevOps' 84 or GitHub's prefix (`glpat-<10>.<84>` goes to GitLab). The
+  providers' own local refusals (Hosting) still read the whole value. Local refusals move no focus; only `NotFound`
   asks `SignInOrganization` (`dialogBox`, `Margin="0"`). `SignInFailedOf` reads `failure.Provider`.
 - Prefill: the held account's login, else the active tab's `HostingState.Remotes` in
   `HostingRemoteOrder`. Driver: 1.9's forms plus `static AccountIdOf(p, id)`; a block's button is

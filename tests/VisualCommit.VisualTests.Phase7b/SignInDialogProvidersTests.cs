@@ -433,7 +433,8 @@ public sealed class SignInDialogProvidersTests
 
     /// <summary>
     /// Another provider's token wrapped (in quotes or angle brackets, a <c>.env</c> line, a clone URL,
-    /// JSON) is refused unsent as a bare one (D378; the lead's ruling of 2026-11-06, Hunt 3): the
+    /// JSON, percent-encoded or behind a backslash escape, joined by <c>_</c>, <c>-</c> or <c>.</c>) is
+    /// refused unsent as a bare one (D378; the lead's ruling of 2026-11-06, Hunt 3, and its verifiers): the
     /// dialog shows <c>SignInOtherProviderTokenOf</c>, no fake is asked, and neither the error nor the
     /// log holds the value (the setup's end checks the log and the data folder for each form).
     /// </summary>
@@ -477,11 +478,12 @@ public sealed class SignInDialogProvidersTests
     }
 
     /// <summary>
-    /// No token of a dialog's own provider is refused as holding another's form: random values of
-    /// each of its forms (GitHub's prefixed and classic ones, GitLab's fine-grained, newer and legacy
-    /// ones, Azure DevOps' 84-character and legacy ones) and edge values that hold another provider's
-    /// prefix or Azure DevOps' mark inside, after <c>_</c>, <c>-</c> or <c>.</c>, are each one run of
-    /// token characters whose form is the provider's own or none (<see cref="SignInDialogViewModel.OtherProviderFormIn"/>).
+    /// No token of a dialog's own provider is refused as holding another's form beyond what D378's
+    /// rule on the whole value refuses: random values of each of its forms (GitHub's prefixed and
+    /// classic ones, GitLab's fine-grained, newer and unprefixed ones, Azure DevOps' 84-character and
+    /// legacy ones), the scenario's made-up tokens, and edge values that hold another provider's prefix
+    /// or Azure DevOps' mark inside, after <c>_</c>, <c>-</c> or <c>.</c>
+    /// (<see cref="SignInDialogViewModel.OtherProviderFormIn"/>).
     /// </summary>
     [Fact]
     public void No_token_of_the_dialog_s_own_provider_is_refused_as_another_s()
@@ -494,39 +496,68 @@ public sealed class SignInDialogProvidersTests
             for (var i = 0; i < own.Count; i++)
             {
                 Assert.True(
-                    SignInDialogViewModel.OtherProviderFormIn(own[i], provider) is null,
+                    SignInDialogViewModel.OtherProviderFormIn(own[i], provider) == WholeOther(own[i], provider),
                     $"{provider}'s own token {i} ({own[i].Length} characters) is refused as another provider's.");
             }
         }
     }
 
     /// <summary>
-    /// A value with no character outside the token characters is one run, and only the whole value's
-    /// form counts (D378's rule as it was): random values of letters, digits, <c>_</c>, <c>-</c> and
-    /// <c>.</c> with the providers' prefixes and Azure DevOps' mark spliced in at random places.
+    /// The rule's bounds (the lead's ruling of 2026-11-06): a value made only of the characters of the
+    /// dialog's own provider's tokens, in the shape they take, is judged by its whole value alone (D378's
+    /// rule as it was), whatever other provider's prefixes or Azure DevOps' mark lie inside it: on
+    /// GitHub, a GitHub prefix and letters, digits and <c>_</c>; on GitLab, <c>glpat-</c> and letters,
+    /// digits, <c>_</c>, <c>-</c> and <c>.</c>, or GitLab's unprefixed 20 characters; on Azure DevOps,
+    /// letters and digits. Random values with the providers' prefixes and the mark spliced in where the
+    /// alphabet allows, every fourth 84 long with the mark at 76. And in any dialog, a value of token
+    /// characters whose whole value has another provider's form is named by it first.
     /// </summary>
     [Fact]
-    public void Within_one_run_of_token_characters_only_the_whole_value_s_form_counts()
+    public void A_value_of_the_dialog_s_own_shape_is_judged_by_its_whole_value_alone()
     {
         var random = new Random(2026);
-        string[] pieces = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "glpat-", "AZDO", "_", "-", ".", "x", "7"];
+        string[] gitHubPieces = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "AZDO", "_", "glpat", "x", "7"];
+        string[] gitLabPieces = ["ghp_", "gho_", "ghu_", "ghs_", "ghr_", "github_pat_", "glpat-", "AZDO", "_", "-", ".", "x", "7"];
+        string[] azurePieces = ["ghp", "glpat", "githubpat", "AZDO", "x", "7"];
+        string[] gitHubPrefixes = ["github_pat_", "ghp_", "gho_", "ghu_", "ghs_", "ghr_"];
         foreach (var provider in HostingProviders.InAccountsOrder)
         {
             for (var i = 0; i < 4000; i++)
             {
-                var value = new System.Text.StringBuilder();
-                var length = random.Next(1, 130);
-                while (value.Length < length)
+                var (prefix, alphabet, pieces) = provider switch
                 {
-                    value.Append(random.Next(3) == 0 ? pieces[random.Next(pieces.Length)] : TokenCharacters[random.Next(TokenCharacters.Length)].ToString());
+                    HostingProvider.GitHub => (gitHubPrefixes[random.Next(gitHubPrefixes.Length)], Alphanumerics + "_", gitHubPieces),
+                    HostingProvider.GitLab => (i % 3 == 2 ? string.Empty : "glpat-", i % 3 == 2 ? Alphanumerics + "_-" : TokenCharacters, gitLabPieces),
+                    _ => (string.Empty, Alphanumerics, azurePieces),
+                };
+                if (provider == HostingProvider.GitLab && prefix.Length == 0)
+                {
+                    pieces = [.. gitLabPieces.Where(piece => !piece.Contains('.'))];
                 }
 
-                // Every fourth value 84 long with the mark at 76, the length of Azure DevOps' form.
-                if (i % 4 == 0)
+                var value = new System.Text.StringBuilder(prefix);
+                var length = random.Next(prefix.Length + 1, 130);
+                while (value.Length < length)
                 {
+                    value.Append(random.Next(3) == 0 ? pieces[random.Next(pieces.Length)] : alphabet[random.Next(alphabet.Length)].ToString());
+                }
+
+                if (provider == HostingProvider.GitLab && prefix.Length == 0)
+                {
+                    // GitLab's unprefixed tokens, from before its glpat- prefix, are 20 characters.
+                    while (value.Length < 20)
+                    {
+                        value.Append(alphabet[random.Next(alphabet.Length)]);
+                    }
+
+                    value.Length = 20;
+                }
+                else if (i % 4 == 0)
+                {
+                    // 84 long with the mark at 76, the length of Azure DevOps' form.
                     while (value.Length < 84)
                     {
-                        value.Append(TokenCharacters[random.Next(TokenCharacters.Length)]);
+                        value.Append(alphabet[random.Next(alphabet.Length)]);
                     }
 
                     value.Length = 84;
@@ -534,13 +565,82 @@ public sealed class SignInDialogProvidersTests
                 }
 
                 var text = value.ToString();
-                var whole = HostingProviders.TokenFormOf(text) is { } form && form != provider ? form : (HostingProvider?)null;
                 Assert.True(
-                    SignInDialogViewModel.OtherProviderFormIn(text, provider) == whole,
-                    $"{provider}'s dialog: value {i} ({text.Length} characters) is judged otherwise than its whole value.");
+                    SignInDialogViewModel.OtherProviderFormIn(text, provider) == WholeOther(text, provider),
+                    $"{provider}'s dialog: value {i} of its own shape ({text.Length} characters) is judged otherwise than its whole value.");
+            }
+
+            // Any value of token characters whose whole value has another provider's form is named by it.
+            for (var i = 0; i < 2000; i++)
+            {
+                var other = HostingProviders.InAccountsOrder[random.Next(3)];
+                var text = FormOf(other, random) + (other == HostingProvider.AzureDevOps ? string.Empty : Of(random, TokenCharacters, random.Next(0, 20)));
+                var whole = WholeOther(text, provider);
+                Assert.Equal(other == provider ? (HostingProvider?)null : other, whole);
+                Assert.True(whole is null || SignInDialogViewModel.OtherProviderFormIn(text, provider) == whole, $"{provider}'s dialog: {other}'s whole value {i} is not named by its form.");
             }
         }
     }
+
+    /// <summary>
+    /// The verifiers' values of 2026-11-06, each sent to a service before: another provider's token
+    /// percent-encoded in a clone URL, in quotes or JSON, behind a backslash escape, between Markdown's
+    /// underscores, before a full stop or a hyphen, or joined to a name by <c>_</c>, <c>-</c> or
+    /// <c>%3D</c>, is named in every other provider's dialog (made-up values).
+    /// </summary>
+    [Fact]
+    public void The_verifiers_wrapped_values_are_refused_in_every_other_provider_s_dialog()
+    {
+        var gitLab = new[] { GitLabToken, "glpat-" + "FAKEfakeFAKEfake1234" };
+        var gitHub = new[] { GitHubToken, "ghp_" + new string('F', 36) };
+        var azure = new[] { AzureDevOpsForm };
+        Func<string, string>[] wrappers =
+        [
+            token => "https%3A%2F%2Foauth2%3A" + token + "%40127.0.0.1%2Fada%2Fweb-app.git",
+            token => "https%3A%2F%2Fx-access-token%3A" + token + "%40127.0.0.1%2Focto%2Fweb-app.git",
+            token => "https%3A%2F%2F" + token + "%40127.0.0.1%2FFernhill-Labs",
+            token => "%22" + token + "%22",
+            token => "%7B%22token%22%3A%22" + token + "%22%7D",
+            token => "_" + token + "_",
+            token => "__" + token + "__",
+            token => token + ".",
+            token => token + "-",
+            token => "AZURE_DEVOPS_PAT_" + token,
+            token => "{\"token\":\"\\u0022" + token + "\\u0022\"}",
+            token => "\\n" + token,
+            token => "oauth2%3A" + token,
+            token => "GITHUB_TOKEN%3D" + token,
+            token => "token%20" + token,
+            token => "Fernhill-Labs%2F" + token,
+            token => "PAT-" + token,
+            token => "*" + token + "*",
+            token => "&quot;" + token + "&quot;",
+        ];
+        foreach (var provider in HostingProviders.InAccountsOrder)
+        {
+            foreach (var (other, tokens) in new[] { (HostingProvider.GitLab, gitLab), (HostingProvider.GitHub, gitHub), (HostingProvider.AzureDevOps, azure) })
+            {
+                if (other == provider)
+                {
+                    continue;
+                }
+
+                foreach (var token in tokens)
+                {
+                    for (var which = 0; which < wrappers.Length; which++)
+                    {
+                        Assert.True(
+                            SignInDialogViewModel.OtherProviderFormIn(wrappers[which](token), provider) == other,
+                            $"{provider}'s dialog: {other}'s token of {token.Length} characters in the verifiers' wrapper {which} is not named.");
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>The provider other than <paramref name="provider"/> whose form the whole value has (D378's rule as it was), or null.</summary>
+    private static HostingProvider? WholeOther(string value, HostingProvider provider) =>
+        HostingProviders.TokenFormOf(value) is { } form && form != provider ? form : null;
 
     /// <summary>
     /// Another provider's form between other characters is found wherever it lies, the first one when
@@ -552,24 +652,31 @@ public sealed class SignInDialogProvidersTests
     {
         var random = new Random(1378);
         const string Separators = "\"'<>()[]{}=:@/,;!#$%&*+?^|~`\\";
+
+        // Escapes that leave a token character against the token, read as the character they stand for,
+        // and the token characters that join a token to a name, Markdown's underscores or a full stop.
+        string[] lefts = ["%3A", "%22", "%2522", "%3D", "%20", "\\u0022", "\\n", "\\\"", "&quot;", "_", "__", "PAT_", "PAT-", "x."];
+        string[] rights = ["%40", "%22", "%2540", "\\u0022", "\\n", "&quot;", ".", "-", "_", "__"];
         foreach (var provider in HostingProviders.InAccountsOrder)
         {
             foreach (var other in HostingProviders.InAccountsOrder)
             {
-                for (var i = 0; i < 500; i++)
+                for (var i = 0; i < 1000; i++)
                 {
                     var token = FormOf(other, random);
-                    var left = random.Next(3) switch
+                    var left = random.Next(4) switch
                     {
                         0 => string.Empty,
                         1 => Separators[random.Next(Separators.Length)].ToString(),
-                        _ => Digits(random, random.Next(1, 30)) + Separators[random.Next(Separators.Length)],
+                        2 => Digits(random, random.Next(1, 30)) + Separators[random.Next(Separators.Length)],
+                        _ => lefts[random.Next(lefts.Length)],
                     };
-                    var right = random.Next(3) switch
+                    var right = random.Next(4) switch
                     {
                         0 => string.Empty,
                         1 => Separators[random.Next(Separators.Length)].ToString(),
-                        _ => Separators[random.Next(Separators.Length)] + Digits(random, random.Next(1, 30)),
+                        2 => Separators[random.Next(Separators.Length)] + Digits(random, random.Next(1, 30)),
+                        _ => rights[random.Next(rights.Length)],
                     };
                     var expected = other == provider ? (HostingProvider?)null : other;
                     Assert.True(
@@ -587,7 +694,12 @@ public sealed class SignInDialogProvidersTests
         }
     }
 
-    /// <summary>The ways a token is pasted wrapped (Hunt 3): quotes, angle brackets, a <c>.env</c> line, clone URLs, JSON, a header without its space.</summary>
+    /// <summary>
+    /// The ways a token is pasted wrapped (Hunt 3): quotes, angle brackets, a <c>.env</c> line, clone
+    /// URLs, JSON, a header without its space; and (the verifiers of 2026-11-06) the same percent-encoded,
+    /// once and twice, with backslash escapes, and joined by the token characters <c>_</c>, <c>-</c> and
+    /// <c>.</c> (Markdown's underscores, a full stop, a name joined by <c>_</c> or <c>-</c>).
+    /// </summary>
     private static readonly Func<string, string>[] Wrappers =
     [
         token => $"\"{token}\"",
@@ -604,6 +716,25 @@ public sealed class SignInDialogProvidersTests
         token => $"{{\"token\":\"{token}\"}}",
         token => $"Authorization:Bearer:{token}",
         token => $"{token},",
+        token => $"https%3A%2F%2Foauth2%3A{token}%40127.0.0.1%3A47398%2Fnorthfield%2Fplatform%2Fweb-app.git",
+        token => $"https%3A%2F%2Fx-access-token%3A{token}%40127.0.0.1%3A47399%2Focto%2Fweb-app.git",
+        token => $"%22{token}%22",
+        token => $"%7B%22token%22%3A%22{token}%22%7D",
+        token => $"oauth2%253A{token}%2540127.0.0.1",
+        token => $"GITHUB_TOKEN%3D{token}",
+        token => $"token%20{token}",
+        token => $"Fernhill-Labs%2F{token}",
+        token => $"{{\"token\":\"\\u0022{token}\\u0022\"}}",
+        token => $"\\n{token}\\n",
+        token => $"\\\"{token}\\\"",
+        token => $"&quot;{token}&quot;",
+        token => $"_{token}_",
+        token => $"__{token}__",
+        token => $"*{token}*",
+        token => $"{token}.",
+        token => $"{token}-",
+        token => $"AZURE_DEVOPS_PAT_{token}",
+        token => $"PAT-{token}",
     ];
 
     /// <summary>The characters of the providers' tokens: letters, digits, <c>_</c>, <c>-</c> and <c>.</c>.</summary>
@@ -654,7 +785,9 @@ public sealed class SignInDialogProvidersTests
                     yield return "glpat-" + Of(random, Base64Url, 20);
                     yield return "glpat-" + Of(random, Base64Url, 27) + ".01." + Of(random, "0123456789abcdefghijklmnopqrstuvwxyz", 9);
                     yield return "glpat-" + Of(random, Base64Url, random.Next(20, 120));
-                    yield return Of(random, Alphanumerics, 20);
+
+                    // From before GitLab's glpat- prefix: 20 characters.
+                    yield return Of(random, Base64Url, 20);
                     break;
                 default:
                     yield return Of(random, Alphanumerics, 76) + "AZDO" + Of(random, Alphanumerics, 4);
@@ -675,6 +808,10 @@ public sealed class SignInDialogProvidersTests
                 yield return "github_pat_" + Of(random, Alphanumerics, 22) + "_" + mark;
                 yield return "ghp_glpat" + Of(random, Alphanumerics, 31);
                 yield return "ghp_ghp_" + Of(random, Alphanumerics, 32);
+                yield return "ghp_" + Of(random, Alphanumerics, 36).ToUpperInvariant();
+                yield return Of(random, "0123456789ABCDEF", 40);
+                yield return GitHubToken;
+                yield return PartA.PlainValue;
                 break;
             case HostingProvider.GitLab:
                 yield return "glpat-x_ghp_" + Of(random, Alphanumerics, 36);
@@ -685,11 +822,26 @@ public sealed class SignInDialogProvidersTests
                 yield return "glpat-" + Of(random, Base64Url, 10) + "_" + mark + "." + Of(random, Base64Url, 5);
                 yield return "glpat-" + Of(random, Alphanumerics, 70) + "AZDO" + Of(random, Alphanumerics, 4);
                 yield return "glpat-" + Of(random, Base64Url, 5) + ".glpat-" + Of(random, Base64Url, 20);
+                yield return "glpat-" + Of(random, Base64Url, 4) + "_github_pat_" + Of(random, Alphanumerics, 22) + "_" + Of(random, Alphanumerics, 59);
+
+                // Unprefixed, 20 characters, with GitHub's prefix after "_" or "-" and Azure DevOps' mark.
+                yield return "_ghp_" + Of(random, Alphanumerics, 15);
+                yield return "-gho_" + Of(random, Base64Url, 15);
+                yield return Of(random, Alphanumerics, 3) + "_ghp_" + Of(random, Alphanumerics, 12);
+                yield return Of(random, Base64Url, 2) + "-github_pat_" + Of(random, Alphanumerics, 6);
+                yield return Of(random, Alphanumerics, 12) + "AZDO" + Of(random, Alphanumerics, 4);
+                yield return GitLabToken;
+                yield return GitLabLegacyToken;
+                yield return PartA.UnknownGitLabToken;
+                yield return PartA.PlainValue;
                 break;
             default:
                 yield return "ghpglpatgithubpat" + Of(random, Alphanumerics, 59) + "AZDO" + Of(random, Alphanumerics, 4);
                 yield return "AZDO" + Of(random, Alphanumerics, 72) + "AZDO" + "AZDO";
                 yield return Of(random, Base32, 52).Replace('a', 'g');
+                yield return AzureDevOpsToken;
+                yield return PartA.UnknownAzureDevOpsToken;
+                yield return PartA.PlainValue;
                 break;
         }
     }
