@@ -650,7 +650,6 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
         var tokens = new FakeTokenStore { Available = false };
         var apps = new List<ShellDriver>();
         string? fileAfterFirst = null;
-        double? belowAtA12b = null;
 
         await FreshApplication.RunAsync(
             assembly,
@@ -711,10 +710,11 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
                     Assert.False(tokens.Holds(new("gitlab", PartA.Host(served.GitLab.Port), AdaLogin)));
                     Assert.False(tokens.Holds(new("azure-devops", PartA.Host(served.AzureDevOps.Port), PartA.OrganizationLower)));
 
-                    // Open point 2: at offset 0 at most the last few pixels of Azure DevOps' Git row
-                    // below the viewport. Measured here and asserted after the method's last step, so
-                    // that a failure of that bound alone still lets every other step run.
-                    belowAtA12b = BelowView(app, InBlock(app, HostingProvider.AzureDevOps, "AccountUseForGitNote"));
+                    // Open point 2 (the lead's ruling of 2026-11-06): the section scrolls at offset 0,
+                    // and the bottom of Azure DevOps' note lies below the viewport by less than one of
+                    // its lines, about 14 apart: the last line's top inside the viewport, scrolled out
+                    // of view, not cut (AssertNoClippedText allows text a scroll viewer scrolls out).
+                    AssertLastLineScrolledOut(app, (TextBlock)InBlock(app, HostingProvider.AzureDevOps, "AccountUseForGitNote"), PartA.A12NoteLine);
                     ShotA(app, PartA.A12SessionOnly);
                     fileAfterFirst = File.ReadAllText(AccountsFile(data));
                 }
@@ -785,10 +785,6 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             Cancelled);
 
         AssertCleanEnd(apps, data, served);
-        Assert.NotNull(belowAtA12b);
-        Assert.True(
-            belowAtA12b <= PartA.A12FewPixels,
-            $"a12b: at offset 0, {belowAtA12b:0.#} px of Azure DevOps' Git row lie below the viewport, more than the few pixels (PartA.A12FewPixels, {PartA.A12FewPixels}) A12's step 4 allows (open point 2).");
     }
 
     /// <summary>Method 8: A13, one sign-out leaves the other blocks and records (D348, D291, D296).</summary>

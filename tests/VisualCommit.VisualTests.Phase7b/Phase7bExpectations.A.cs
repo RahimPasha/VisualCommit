@@ -291,11 +291,13 @@ public static partial class Phase7bExpectations
         public const double LegacyLinkGap = 4;
 
         /// <summary>
-        /// A12 after step 4 (open point 2): at offset 0 "at most the last few pixels of Azure DevOps'
-        /// Git row lie below the viewport". Read as at most 3 below the viewport's bottom, measured
-        /// at the bottom of <c>AccountUseForGitNoteAzureDevOps</c>, the row's last control.
+        /// One line of <c>AccountUseForGitNoteAzureDevOps</c> in <c>a12b</c>: its lines are this far
+        /// apart (±0.5), <c>settingsNote</c>'s 11.5 at the font's line spacing of about 1.21 as the
+        /// note's layout gives it. A12 after step 4 (open point 2; the lead's ruling of 2026-11-06):
+        /// the section scrolls at offset 0, and the note's bottom lies below the viewport by less than
+        /// one of its lines, the last line's top inside the viewport, scrolled out of view, not cut.
         /// </summary>
-        public const double A12FewPixels = 3;
+        public const double A12NoteLine = 13.9;
 
         // ---- Colours (7a's theme brushes, dark) ---------------------------------------------------
 

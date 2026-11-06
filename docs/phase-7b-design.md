@@ -3018,11 +3018,12 @@ or settles what it left open:
 - `SignInDialogProvidersTests` serves the fakes on port 0 (1.8); the service's URL forms run on
   `AzureDevOpsEndpoints.Service` with a handler that refuses every request; a theory cancels GitLab's
   check and each of Azure DevOps' two reads (A7's note).
-- Report: no expected result changed; `SettingsNavAccounts` at x 141 (±2). For the lead:
-  `Check_A12` fails on open point 2's bound alone, asserted after its last step: at `a12b`'s offset 0
-  7 px of Azure DevOps' `Git` row (a three-line note) lie below the viewport, over
-  `PartA.A12FewPixels` (3); the texts and gaps are the report's, so it needs a ruling under "Changed in
-  this report". Azure DevOps' disabled link (`a06a`, `a11b`) keeps the accent, as the report's "accent
+- Report: `SettingsNavAccounts` at x 141 (±2). A12's step 4 changed by the lead's ruling of 2026-11-06
+  (the report's "Changed in this report after its first commit", open point 2): at `a12b`'s offset 0 the
+  section scrolls (about 502 of 495) and 7 px of `AccountUseForGitNoteAzureDevOps` (three lines, 13.9
+  apart) lie below the viewport, less than one line, the last line's top inside it; `Check_A12` asserts
+  that at the step, each line's height read from the note's layout against `PartA.A12NoteLine` (13.9,
+  ±0.5). Azure DevOps' disabled link (`a06a`, `a11b`) keeps the accent, as the report's "accent
   foreground" reads and `AssertDialog` asserts; a disabled look needs a ruling. Open point 8: A9 as
   given (ASSUMED).
 - For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` serves every provider (false while off).

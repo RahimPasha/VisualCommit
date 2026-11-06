@@ -533,9 +533,26 @@ public sealed partial class Phase7bChecksA
         Assert.True(app.BoundsOf(note).Top >= app.BoundsOf(check).Bottom - 0.5, $"{PartA.IdOf(provider, "AccountUseForGitNote")} is not under the switch.");
     }
 
-    /// <summary>How far <paramref name="control"/>'s bottom lies below the section's viewport (0 or less: in view).</summary>
-    private static double BelowView(ShellDriver app, Control control) =>
-        app.BoundsOf(control).Bottom - app.BoundsOf(Scroller(app)).Bottom;
+    /// <summary>
+    /// The section scrolls (its extent above its viewport) and <paramref name="note"/>'s bottom lies
+    /// below the viewport by less than one of its lines: its lines <paramref name="line"/> apart, read
+    /// from its layout (±0.5) and stacked without gaps, so the last line's top, the note's bottom less
+    /// one line, lies inside the viewport, the line scrolled out of view (A12's <c>a12b</c>, open point 2).
+    /// </summary>
+    private static void AssertLastLineScrolledOut(ShellDriver app, TextBlock note, double line)
+    {
+        var scroller = Scroller(app);
+        Assert.True(scroller.Extent.Height > scroller.Viewport.Height + 0.5, $"The section does not scroll: extent {scroller.Extent.Height:0.#}, viewport {scroller.Viewport.Height:0.#}.");
+        var lines = note.TextLayout.TextLines;
+        Assert.True(lines.Count > 1, $"{AutomationProperties.GetAutomationId(note)} is laid out in {lines.Count} line.");
+        Assert.All(lines, text => Assert.Equal(line, text.Height, 0.5));
+        Assert.Equal(note.Bounds.Height, lines.Sum(text => text.Height), 0.5);
+        var below = app.BoundsOf(note).Bottom - app.BoundsOf(scroller).Bottom;
+        var lastLine = lines[^1].Height;
+        Assert.True(
+            below > 0.5 && below < lastLine,
+            $"{AutomationProperties.GetAutomationId(note)}'s bottom lies {below:0.#} below the viewport; less than one line ({lastLine:0.#}) and more than none expected.");
+    }
 
     private static string NoteOf(HostingProvider provider) => provider switch
     {
