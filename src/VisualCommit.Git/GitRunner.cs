@@ -103,6 +103,13 @@ public sealed class GitRunner : IGitRunner
     internal Action? StopObserver { get; init; }
 
     /// <summary>
+    /// A seam for the tests: called on the call's thread with git's process just after git has started,
+    /// before the runner puts it in a job and, for a below-normal call, lowers it (docs/phase-6-design.md
+    /// 8.10). It must not throw: git would be left running.
+    /// </summary>
+    internal Action<Process>? StartObserver { get; init; }
+
+    /// <summary>
     /// The session's git environment given to the constructor (empty for none), a copy, which the
     /// runner applies to every call (docs/phase-6-design.md 8.12). Nothing in the app reads it back:
     /// the session gives the same variables to the settings' <c>GitConfiguration</c> itself; the tests
@@ -137,6 +144,8 @@ public sealed class GitRunner : IGitRunner
             Record(command, startedAt, stopwatch.Elapsed, GitCallOutcome.FailedToStart, null, string.Empty, ex.Message);
             throw new GitException(command.DisplayText, null, ex.Message, ex);
         }
+
+        StartObserver?.Invoke(process);
 
         // A call at below-normal priority gets a job that holds every process in it there (8.10); the
         // lowering then catches what git started before it joined the job.
