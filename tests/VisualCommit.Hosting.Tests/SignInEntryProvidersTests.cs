@@ -15,7 +15,8 @@ namespace VisualCommit.Hosting.Tests;
 /// 10.5, 10.8; ruling 22, D104, D334): each provider's dialog by its title; off answers false and
 /// signed in true, without a dialog; GitLab's call while GitHub's dialog is open opens none and
 /// answers for GitLab; one provider's two calls share a dialog; Azure DevOps' prefill from the held
-/// account and from the active tab's remote; a block's "Sign in…" stacks the dialog over the screen.
+/// account and from the active tab's remote; a block's "Sign in…" stacks the dialog over the screen;
+/// a block's sign-out holds every block's buttons until it ends.
 /// The app starts through <see cref="ShellDriver"/> with real git and the scenario "hosting7b" served
 /// by the three fakes on free ports (port 0, D265). On the lagged list (design 0.4).
 /// </summary>
@@ -223,6 +224,65 @@ public sealed class SignInEntryProvidersTests
         Assert.Equal("ada", settings.Accounts.GitLab.Login);
         End(app, data, served);
     }
+
+    /// <summary>
+    /// While one block's sign-out waits on the keychain, no other block's button can open a dialog
+    /// over the screen (7a's rule for one block, section-wide), so the sign-out's end puts the focus
+    /// on its own "Sign in…" with the screen on top, never under another block's dialog.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_block_s_sign_out_holds_every_block_s_buttons_and_ends_with_its_sign_in_focused()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("sign-in entry providers");
+        using var app = Start(data, served);
+        await app.WaitUntilReadyAsync();
+        await app.SignInAsync(HostingProvider.GitHub, served.GitHubToken, cancellationToken: Cancelled);
+        await app.SignInAsync(HostingProvider.GitLab, served.GitLabToken, cancellationToken: Cancelled);
+        var settings = await app.OpenAccountsAsync();
+        var others = new[] { (HostingProvider.GitLab, "AccountsSignOutButtonGitLab"), (HostingProvider.AzureDevOps, "AccountsSignInButtonAzureDevOps") };
+
+        using (var hold = app.Tokens.HoldNext())
+        {
+            app.Click(app.FindByAutomationId(app.AccountsBlock(HostingProvider.GitHub), "AccountsSignOutButton"));
+            var question = await app.WaitForDialogAsync<ConfirmationViewModel>();
+            app.Click(app.FindByAutomationId(app.TopDialogView!, "ConfirmButton"));
+            await app.WaitForAsync(() => question.IsClosed, "GitHub's sign-out question to close");
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(30), Cancelled);
+            app.Settle();
+
+            Assert.True(settings.Accounts.GitHub.IsBusy);
+            foreach (var (provider, id) in others)
+            {
+                var button = app.FindByAutomationId(app.AccountsBlock(provider), id);
+                Assert.True(button.IsEffectivelyVisible, $"{id} does not show.");
+                Assert.False(button.IsEffectivelyEnabled, $"{id} is enabled while GitHub's sign-out runs.");
+                button.BringIntoView();
+                app.Settle();
+                app.Click(button);
+                app.Settle();
+                Assert.Same(settings, app.Session.Services.DialogHost.Current);
+            }
+        }
+
+        await app.WaitForAsync(() => !settings.Accounts.GitHub.SignOutCommand.IsRunning, "GitHub's sign-out to end");
+        app.Settle();
+        Assert.Null(app.Session.Services.Hosting.AccountOf(HostingProvider.GitHub));
+        Assert.Same(settings, app.Session.Services.DialogHost.Current);
+        await app.WaitForAsync(() => FocusedId(app) == "AccountsSignInButton", "the focus on GitHub's Sign in…");
+        foreach (var (provider, id) in others)
+        {
+            Assert.True(app.FindByAutomationId(app.AccountsBlock(provider), id).IsEffectivelyEnabled, $"{id} is disabled after GitHub's sign-out.");
+        }
+
+        Assert.Equal("ada", settings.Accounts.GitLab.Login);
+        End(app, data, served);
+    }
+
+    private static string? FocusedId(ShellDriver app) =>
+        app.FocusedElement is Control focused
+            ? focused.GetSelfAndVisualAncestors().OfType<Control>().Select(Avalonia.Automation.AutomationProperties.GetAutomationId).FirstOrDefault(id => id is { Length: > 0 })
+            : null;
 
     private static Task<bool> EntryOf(ShellDriver app, HostingProvider provider)
     {

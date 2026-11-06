@@ -31,6 +31,7 @@ public sealed partial class AccountBlockViewModel : ObservableObject
     private readonly IAppLog _log;
     private readonly GitVersion? _gitVersion;
     private AccountStatus? _account;
+    private Func<bool>? _sectionBusy;
     private bool _disposed;
 
     /// <param name="hosting">The session's hosting; null without one (all off).</param>
@@ -147,7 +148,7 @@ public sealed partial class AccountBlockViewModel : ObservableObject
     [NotifyCanExecuteChangedFor(nameof(SignInCommand), nameof(SignOutCommand))]
     public partial string? BusyText { get; private set; }
 
-    /// <summary>A sign-out runs: both buttons are disabled.</summary>
+    /// <summary>This block's sign-out runs: its own buttons, and every other block's (<see cref="Joins"/>), are disabled.</summary>
     public bool IsBusy => BusyText is not null;
 
     /// <summary>The sign-out's note when the keychain kept its entry (<c>AccountsSignOutNote</c>); cleared at the next sign-in, and with the screen.</summary>
@@ -162,13 +163,18 @@ public sealed partial class AccountBlockViewModel : ObservableObject
 
     /// <summary>
     /// Shows <paramref name="account"/>, the session's account of <see cref="Provider"/>: the switch
-    /// reset when it is another account, the sign-out's note cleared by a sign-in.
+    /// reset when it is another account, and while it is not toggled (<see cref="IsChanged"/>) the
+    /// account's own, so a Save that lands after the screen reopened moves an untoggled switch with
+    /// it and a later Save cannot write the old value back; a toggled one keeps the user's toggle
+    /// through the same account's changes (docs/phase-7a-design.md 17, WP-A's reading). The
+    /// sign-out's note is cleared by a sign-in.
     /// </summary>
     public void Follow(AccountStatus? account)
     {
         var another = account?.Account.Key != _account?.Account.Key;
+        var toggled = IsChanged;
         _account = account;
-        if (another)
+        if (another || !toggled)
         {
             UseForGit = account?.Account.UseForGit ?? false;
         }
@@ -195,6 +201,21 @@ public sealed partial class AccountBlockViewModel : ObservableObject
 
     /// <summary>The section's end: the block follows no more and focuses nothing.</summary>
     internal void Close() => _disposed = true;
+
+    /// <summary>
+    /// Joins the section: while <paramref name="sectionBusy"/> holds (any block's sign-out runs), this
+    /// block's "Sign in…" and "Sign out…" are disabled too, 7a's rule for one block extended to the
+    /// section, so that no dialog of another block can open over the screen while a sign-out runs and
+    /// the sign-out's end moves the focus under it.
+    /// </summary>
+    internal void Joins(Func<bool> sectionBusy) => _sectionBusy = sectionBusy;
+
+    /// <summary>Asks both commands again whether they can run, when a block's sign-out starts or ends.</summary>
+    internal void RefreshCommands()
+    {
+        SignInCommand.NotifyCanExecuteChanged();
+        SignOutCommand.NotifyCanExecuteChanged();
+    }
 
     /// <summary>
     /// "Sign in…": the window's entry for <see cref="Provider"/>, whose dialog stacks over the
@@ -226,7 +247,7 @@ public sealed partial class AccountBlockViewModel : ObservableObject
         }
     }
 
-    private bool CanSignIn() => !IsBusy;
+    private bool CanSignIn() => !IsBusy && _sectionBusy?.Invoke() != true;
 
     /// <summary>
     /// "Sign out…": the provider's confirmation, stacked; declined, nothing. Accepted: <c>Signing
@@ -272,5 +293,5 @@ public sealed partial class AccountBlockViewModel : ObservableObject
         }
     }
 
-    private bool CanSignOut() => !IsBusy;
+    private bool CanSignOut() => !IsBusy && _sectionBusy?.Invoke() != true;
 }

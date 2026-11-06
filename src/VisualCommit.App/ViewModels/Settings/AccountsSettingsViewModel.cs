@@ -36,12 +36,21 @@ public sealed class AccountsSettingsViewModel : ObservableObject, IDisposable
         Blocks = [.. HostingProviders.InAccountsOrder.Select(provider => new AccountBlockViewModel(hosting, provider, signIn, dialogs, log, gitVersion))];
         foreach (var block in Blocks)
         {
+            // While any block's sign-out runs, every block's buttons are disabled (7a's rule, section-wide).
+            block.Joins(() => Blocks.Any(any => any.IsBusy));
             block.FocusRequested += (_, id) => FocusRequested?.Invoke(this, id);
             block.PropertyChanged += (_, e) =>
             {
                 if (e.PropertyName is nameof(AccountBlockViewModel.IsChanged))
                 {
                     OnPropertyChanged(nameof(IsChanged));
+                }
+                else if (e.PropertyName is nameof(AccountBlockViewModel.IsBusy))
+                {
+                    foreach (var other in Blocks)
+                    {
+                        other.RefreshCommands();
+                    }
                 }
             };
         }

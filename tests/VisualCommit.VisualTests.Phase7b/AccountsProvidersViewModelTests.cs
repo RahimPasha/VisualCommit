@@ -13,9 +13,10 @@ namespace VisualCommit.VisualTests.Phase7b;
 /// <summary>
 /// The Accounts section for three providers as view models (docs/phase-7b-design.md 10.3, 10.8):
 /// the blocks' order, which blocks show (all off too), 10.2's texts per state, Azure DevOps' name
-/// line, one provider's event leaving another's toggled switch, Save's switches one per block,
-/// each command's provider, the focus by <c>IdOf</c>, an old git and the unsubscription. The
-/// session is a stub; nothing here reaches a fake or the network.
+/// line, one provider's event leaving another's toggled switch, an untoggled switch following its
+/// account's changes, Save's switches one per block, one block's sign-out disabling every block's
+/// buttons, each command's provider, the focus by <c>IdOf</c>, an old git and the unsubscription.
+/// The session is a stub; nothing here reaches a fake or the network.
 /// </summary>
 public sealed class AccountsProvidersViewModelTests
 {
@@ -137,6 +138,67 @@ public sealed class AccountsProvidersViewModelTests
         session.Change(HostingProvider.GitLab, Status(new AccountKey(HostingProvider.GitLab, "127.0.0.1:47398", "octo"), AccountState.SignedIn, TokenPlace.Keychain));
         Assert.True(model.GitLab.UseForGit);
         Assert.False(model.IsChanged);
+    }
+
+    [Fact]
+    public void An_untoggled_switch_follows_its_account_s_changes_and_a_toggled_one_keeps_its_toggle()
+    {
+        var session = new ProvidersSession();
+        session.Accounts[HostingProvider.GitLab] = Status(Ada, AccountState.SignedIn, TokenPlace.Keychain);
+        session.Accounts[HostingProvider.AzureDevOps] = Status(Fernhill, AccountState.SignedIn, TokenPlace.Keychain);
+        using var model = Model(session);
+        model.AzureDevOps.UseForGit = false;
+
+        // A Save of an earlier screen that lands after this one opened: the same account, its switch off.
+        session.Change(HostingProvider.GitLab, Status(Ada, AccountState.SignedIn, TokenPlace.Keychain, useForGit: false));
+        Assert.False(model.GitLab.UseForGit);
+        Assert.False(model.GitLab.IsChanged);
+
+        // The same account's change (a refusal) keeps the user's toggle.
+        session.Change(HostingProvider.AzureDevOps, Status(Fernhill, AccountState.NeedsSignIn, null, AccountNoteKind.Refused));
+        Assert.False(model.AzureDevOps.UseForGit);
+        Assert.True(model.AzureDevOps.IsChanged);
+
+        // A Save that touched nothing else writes the toggled switch alone, never GitLab's old value.
+        model.ApplySwitches();
+        Assert.Equal([(HostingProvider.AzureDevOps, false)], session.UseForGitCalls);
+    }
+
+    [Fact]
+    public async Task One_block_s_sign_out_disables_every_block_s_buttons_until_it_ends()
+    {
+        var session = new ProvidersSession { SignOutHold = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        session.Accounts[HostingProvider.GitHub] = Status(Octo, AccountState.SignedIn, TokenPlace.Keychain);
+        session.Accounts[HostingProvider.GitLab] = Status(Ada, AccountState.SignedIn, TokenPlace.Keychain);
+        using var model = Model(session);
+        var asked = 0;
+        foreach (var block in model.Blocks.Where(block => block.Provider != HostingProvider.GitHub))
+        {
+            block.SignInCommand.CanExecuteChanged += (_, _) => asked++;
+            block.SignOutCommand.CanExecuteChanged += (_, _) => asked++;
+        }
+
+        var signOut = model.GitHub.SignOutCommand.ExecuteAsync(null);
+        Assert.True(model.GitHub.IsBusy);
+        Assert.Equal([HostingProvider.GitHub], session.SignOuts);
+        Assert.True(asked >= 4, "The other blocks' buttons were not asked again when GitHub's sign-out started.");
+        foreach (var block in model.Blocks)
+        {
+            Assert.False(block.SignInCommand.CanExecute(null), $"{block.Label}'s Sign in… can run while GitHub's sign-out runs.");
+            Assert.False(block.SignOutCommand.CanExecute(null), $"{block.Label}'s Sign out… can run while GitHub's sign-out runs.");
+        }
+
+        asked = 0;
+        session.SignOutHold.SetResult(null);
+        await signOut;
+
+        Assert.False(model.GitHub.IsBusy);
+        Assert.True(asked >= 4, "The other blocks' buttons were not asked again when GitHub's sign-out ended.");
+        foreach (var block in model.Blocks)
+        {
+            Assert.True(block.SignInCommand.CanExecute(null), $"{block.Label}'s Sign in… cannot run after GitHub's sign-out.");
+            Assert.True(block.SignOutCommand.CanExecute(null), $"{block.Label}'s Sign out… cannot run after GitHub's sign-out.");
+        }
     }
 
     [Fact]
@@ -286,6 +348,9 @@ public sealed class AccountsProvidersViewModelTests
 
         public List<HostingProvider> SignOuts { get; } = [];
 
+        /// <summary>When set, each sign-out waits for it before it clears the account (a slow keychain).</summary>
+        public TaskCompletionSource<string?>? SignOutHold { get; init; }
+
         public List<(HostingProvider, bool)> UseForGitCalls { get; } = [];
 
         public int Subscribers => _accountChanged?.GetInvocationList().Length ?? 0;
@@ -320,11 +385,12 @@ public sealed class AccountsProvidersViewModelTests
 
         public Task<SignInResult> SignInAsync(SignInRequest request, CancellationToken ct) => throw new NotSupportedException();
 
-        public Task<string?> SignOutAsync(HostingProvider provider, CancellationToken ct)
+        public async Task<string?> SignOutAsync(HostingProvider provider, CancellationToken ct)
         {
             SignOuts.Add(provider);
+            var reason = SignOutHold is { } hold ? await hold.Task : null;
             Accounts[provider] = null;
-            return Task.FromResult<string?>(null);
+            return reason;
         }
 
         public void SetUseForGit(HostingProvider provider, bool useForGit) => UseForGitCalls.Add((provider, useForGit));
