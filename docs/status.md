@@ -257,6 +257,16 @@ Jobs and Test steps: `windows-latest` 38 min 28 s (35 min 25 s), `macos-latest` 
 7 s), `ubuntu-latest` 6 min 2 s (4 min 38 s), the containers 8 min 27 s and 8 min 24 s (6 min 7 s and
 6 min 11 s), each under four fifths (56 and 11 min 12 s).
 
+[42216604663](https://github.com/RahimPasha/VisualCommit/actions/runs/42216604663) on WP-LF's merge
+`22fad1b`: four jobs green; `windows-latest` failed one test of 7,566 (7,561 passed, 4 skipped),
+`GitRunnerPriorityTests.A_below_normal_priority_call_starts_git_below_normal_on_windows`, after 60 s:
+"Processes git started run at another priority: conhost.exe Normal" (image windows-2025-vs2026
+20261030.294.1). WP-LF changed neither the runner nor that test; it passes here 3 of 3, and every
+earlier 7b run passed it; under investigation in `wip/p7b-priority` (Notes). Windows' "Build the
+opt-in projects" green. Jobs and Test steps: `windows-latest` 30 min 15 s (27 min 38 s),
+`macos-latest` 43 min 8 s (41 min 8 s), `ubuntu-latest` 8 min 1 s (6 min 4 s), the containers 6 min
+39 s and 8 min 19 s (4 min 44 s and 6 min 1 s), each under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -413,11 +423,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-LF merged at `22fad1b` (2026-11-06; Notes). The lead's lagged list (0.4) for it runs through
-`scripts/heavy-run.sh`, and CI's run 42216604663 on the merge is read. Part A's visual checks are
-being written into `docs/test-reports/phase-7b.md` (new, from the template) by one writer and one
-reviewer (D244); the lead reads them and commits them, then WP-A (design 10) is built in its
-worktree. For the week from 2026-11-05 the owner gives the phase about all of its allowance.
+WP-A (design 10) is being built in `D:/Projects/Personal/vc-wt/p7b-accounts` on `wip/p7b-accounts`,
+from `f4ae515`, which holds part A's checks (`docs/test-reports/phase-7b.md`, D244). Beside it,
+`wip/p7b-priority` (`D:/Projects/Personal/vc-wt/p7b-priority`, from `f4ae515`) investigates and fixes
+CI's one failure on WP-LF's merge (`GitRunnerPriorityTests`, a `conhost.exe` at Normal; the CI
+section). The lead merges the priority fix once its refuters are answered and reads its CI run; at
+WP-A's merge the lead runs 10.9's classes and the lagged list and has both parts' pictures inspected.
+Open point 8 of the report: Azure DevOps' `Check_1b_probes` (17 reads, its new probe of the sandbox
+organization's connectionData without a credential among them) runs before WP-A's merge if the owner
+agrees (Waiting on the owner). For the week from 2026-11-05 the owner gives the phase about all of its
+allowance.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -487,6 +502,15 @@ every commit.
   100 a minute with a token, 304s counted, not 7.3's and 4.4's 2,000; part P's refreshes and A2's and
   A4's requests are weighed against it. The empty folder `D:/Projects/Personal/vc-wt/p7b-live-fix/src/VisualCommit.App`
   is left (a process held it at removal); remove it later.
+- **WP-LF's lagged list** (2026-11-06, 05:18 to 05:35 on the laptop, on `22fad1b`, through
+  `scripts/heavy-run.sh`, one command at a time, `VISUALCOMMIT_WATCHER_LAG_MS=1500`): all passed,
+  phases 0 to 2's part 2 25, the App.Tests classes 66, phase 6's 21, 7a's walk-through 207, 7a's six
+  wiring classes 44, 7b's line 2 (only `RepositoryHostingProvidersWiringTests` exists yet). The log
+  is `$TMP/p7b-runs/lagged-lf.txt`.
+- **Part A's checks** (`f4ae515`, 2026-11-06): A1 to A14 with 29 scripted pictures, written by one
+  writer and checked by one reviewer (seven minors, all fixed; no blocker or major); the report's
+  shared conventions are about 15 KB (D244's 30). Its open point 8: A9's Anonymous 200 rests on
+  WP-LF's ASSUMED reading for a private organization until `Check_1b`'s new probe runs.
 - **Passed on to later packages** (from WP-S's hunts, 2026-11-02): WP-N (section 13) makes the
   create's two log lines (`RepositoryOperations.CreatePullRequest.cs:293` and `:403`) write
   `baseRepository.FullName` through `HostingHttpClient.ScreenEmail`, with a test of a create into an
@@ -776,6 +800,10 @@ every commit.
   GitLab's was made again on 2026-11-05 with Project: Read among its user permissions too (D385;
   the one it replaced, which expired on 2026-12-04, revoked), set with the lead's GitLab-only script
   and checked as 15.8 says; its expiry date is still to be told by the owner.
+- **Azure DevOps' probes before WP-A's merge** (the report's open point 8; design 16.1's As built):
+  the lead asks to run `--filter-class "*AzureDevOpsLiveTests"` with `--filter-method "*Check_1b_probes*"`,
+  17 reads and no write in the sandbox's organization, after the offline classes, the owner told; its
+  new probe tells whether the organization allows public projects, which decides A9's expected result.
 - **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
   (the review before the gate and the runs after it: the avatars' lookup per author, git's
