@@ -417,8 +417,11 @@ Stage 1 has passed all 9 tests (Notes): Azure DevOps' 5 on 2026-11-05 and GitLab
 2026-11-06 with the owner's new token (D385). Next is WP-LF (design 0.4, branch `wip/p7b-live-fix`):
 the fakes and clients take both run.txt files' findings, each corrected answer marked MEASURED with
 its date, with made-up values only; its classes and then the lead's lagged list (0.4) run, it merges
-and its CI run is read; then part A's checks are written (D244) and WP-A is built. For the week from
-2026-11-05 the owner gives the phase about all of its allowance.
+and its CI run is read; then part A's checks are written (D244) and WP-A is built. WP-LF is under way
+(2026-11-06): its worktree is `D:/Projects/Personal/vc-wt/p7b-live-fix` on `wip/p7b-live-fix`, made
+from `bc5b0f3`, and the live run's three files it reads lie outside the repository in
+`D:/Projects/Personal/phase7b-work/live/` (Notes). For the week from 2026-11-05 the owner gives the
+phase about all of its allowance.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -458,6 +461,12 @@ every commit.
   WP-LF; the create with nothing ahead has no `first_contribution`); every probed status and body
   matched the fake's. run.txt (48 lines) holds neither the organization's name, the namespace nor
   an address, fully decoded; `glpat-` only in the command's own words, none token-shaped.
+- **WP-LF's inputs** (2026-11-06): `D:/Projects/Personal/phase7b-work/live/` holds copies of
+  Azure DevOps' run.txt (`azure-devops-run-20261105.txt`, 631 lines: 12 answers equal to the fake's,
+  11 not), GitLab's (`gitlab-run-20261106.txt`) and the first run's console output with GitLab's 403
+  (`stage1-run1-output-20261105.txt`, D385). They are screened, but still hold the services' request
+  ids, ETags, the sandbox's ids and the deployment's host names: nothing of them enters the
+  repository; the fakes take made-up copies of the measured shapes and texts.
 - **Passed on to later packages** (from WP-S's hunts, 2026-11-02): WP-N (section 13) makes the
   create's two log lines (`RepositoryOperations.CreatePullRequest.cs:293` and `:403`) write
   `baseRepository.FullName` through `HostingHttpClient.ScreenEmail`, with a test of a create into an
