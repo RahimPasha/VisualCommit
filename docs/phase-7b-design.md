@@ -3038,7 +3038,11 @@ or settles what it left open:
   theme's `VcTextDisabledBrush` and the arrow cursor, and the underline's selector skips a disabled link;
   GitHub's and GitLab's links are never disabled, and 7a's part A pictures still differ from the main
   checkout's in the intro alone, compared pixel by pixel. `AssertDialog` asserts the accent and the hand
-  cursor while a link is enabled, the disabled look while it is not. Open point 8: A9 as given (ASSUMED).
+  cursor while a link is enabled, the disabled look while it is not. Hunt 3's check-strength findings:
+  `AssertDialog` asserts as 7a's the stack over the screen on Accounts, `SignInDialog` named by its
+  title, no "In …" line and the buttons' order; `SignInNoKeychain`, `SignInChecking` and `SignInError`
+  are asserted in their classes below the token box and above the buttons; A2 step 7 the whole intro
+  above the viewport; A2 step 3 GitHub's avatar address. Open point 8: A9 as given (ASSUMED).
 - For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` serves every provider (false while off).
   `SignInEntryProvidersTests` passes under the 1.5 s watcher lag.
 

@@ -7,6 +7,8 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
+using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting;
 using VisualCommit.Testing;
@@ -300,7 +302,7 @@ public sealed partial class Phase7bChecksA
         {
             case HostingProvider.GitHub:
                 Assert.Equal((PartA.GitHubKey(served.GitHub.Port), OctoLogin, PartA.OctoId, OctoName), (KeyText(account), account.Account.Login, account.Account.Id, account.Account.Name));
-                Assert.NotNull(account.Account.AvatarUrl);
+                Assert.Equal(PartA.GitHubAvatarUrl(served.GitHub.Port), account.Account.AvatarUrl?.AbsoluteUri);
                 break;
             case HostingProvider.GitLab:
                 Assert.Equal((PartA.GitLabKey(served.GitLab.Port), AdaLogin, PartA.AdaGitLabId, AdaName), (KeyText(account), account.Account.Login, account.Account.Id, account.Account.Name));
@@ -677,15 +679,31 @@ public sealed partial class Phase7bChecksA
         Assert.True(app.FindByAutomationId(app.SignInDialogView(), "CancelButton").IsEffectivelyEnabled, "Cancel is disabled.");
     }
 
-    /// <summary>The dialog of <paramref name="provider"/> as it opens: 7a's card, 400 wide at x 350 to 750, centred; title, help and the provider's link(s) and boxes.</summary>
+    /// <summary>
+    /// The dialog of <paramref name="provider"/> as it opens, as 7a's A-checks assert it: stacked over
+    /// the screen on Accounts (D104), <c>SignInDialog</c> named by its title, 7a's card 400 wide at x
+    /// 350 to 750, centred; title, help and the provider's link(s) and boxes; the warning when no
+    /// keychain, below the token box; no status line and no "In …" line; Cancel and Sign in, in that
+    /// order, right-aligned.
+    /// </summary>
     private static void AssertDialog(ShellDriver app, HostingProvider provider, string organization, bool noKeychain = false)
     {
+        var host = app.Session.Services.DialogHost;
+        var screen = app.SettingsDialog ?? throw new Xunit.Sdk.XunitException("The settings screen is not open under the dialog.");
+        var dialog = app.SignInDialog ?? throw new Xunit.Sdk.XunitException("The sign-in dialog is not open.");
+        Assert.Equal([screen, dialog], host.Open.Cast<DialogViewModel>());
+        Assert.Same(dialog, host.Current);
+        Assert.Equal(SettingsSection.Accounts, screen.SelectedSection);
+        Assert.Equal(provider, dialog.Provider);
+        var titleText = provider switch { HostingProvider.GitHub => PartA.GitHubDialogTitle, HostingProvider.GitLab => PartA.GitLabDialogTitle, _ => PartA.AzureDevOpsDialogTitle };
         var view = app.SignInDialogView();
+        Assert.Equal("SignInDialog", AutomationProperties.GetAutomationId(view));
+        Assert.Equal(titleText, AutomationProperties.GetName(view));
         var card = app.BoundsOf(CardNamed(app, "SignInCard"));
         Assert.Equal(PartA.DialogCard, (card.Left, card.Right));
         Assert.Equal(app.Window.Bounds.Height / 2, card.Center.Y, PartA.Tolerance);
         var title = (TextBlock)app.FindByAutomationId(view, "DialogTitle");
-        Assert.Equal(provider switch { HostingProvider.GitHub => PartA.GitHubDialogTitle, HostingProvider.GitLab => PartA.GitLabDialogTitle, _ => PartA.AzureDevOpsDialogTitle }, title.Text);
+        Assert.Equal(titleText, title.Text);
         var help = (TextBlock)app.FindByAutomationId(view, "SignInHelp");
         Assert.Equal(provider switch { HostingProvider.GitHub => PartA.GitHubHelp, HostingProvider.GitLab => PartA.GitLabHelp, _ => PartA.AzureDevOpsHelp }, help.Text);
         var link = app.FindByAutomationId(view, "SignInTokenLink");
@@ -734,10 +752,18 @@ public sealed partial class Phase7bChecksA
         }
 
         Assert.Equal(noKeychain, app.FindByAutomationId(view, "SignInNoKeychain").IsEffectivelyVisible);
+        if (noKeychain)
+        {
+            AssertStatusLine(app, "SignInNoKeychain", "dialogWarning");
+        }
+
         foreach (var id in new[] { "SignInChecking", "SignInError", "SignInSaveFailed" })
         {
             Assert.False(app.FindByAutomationId(view, id).IsEffectivelyVisible, $"{id} shows.");
         }
+
+        // No "In {repo}" line (7a's A2 step 3).
+        Assert.DoesNotContain(view.GetVisualDescendants().OfType<Control>(), control => AutomationProperties.GetAutomationId(control) == "DialogRepository" && control.IsEffectivelyVisible);
 
         // As it opens the token box is empty, so Sign in (VcPrimaryButton) is disabled, right of
         // Cancel and right-aligned in the card (7a's AssertDialog).
@@ -747,6 +773,7 @@ public sealed partial class Phase7bChecksA
         Assert.True(cancel.IsEffectivelyEnabled);
         Assert.Equal(PartA.SignIn, AutomationProperties.GetName(confirm));
         Assert.False(confirm.IsEffectivelyEnabled, "Sign in is enabled as the dialog opens.");
+        Assert.Equal([PartA.Cancel, PartA.SignIn], ButtonsOf(app, view));
         Assert.Same(Application.Current!.FindResource("VcPrimaryButton"), confirm.Theme);
         Assert.DoesNotContain("danger", confirm.Classes);
         Assert.True(
@@ -767,14 +794,45 @@ public sealed partial class Phase7bChecksA
         Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(box));
     }
 
-    /// <summary>The dialog's error line: its text in <c>dialogError</c>.</summary>
+    /// <summary>The dialog's error line: its text in <c>dialogError</c>, the one status line, below the token box and above the buttons.</summary>
     private static void AssertError(ShellDriver app, string text)
     {
         var error = (TextBlock)app.FindByAutomationId(app.SignInDialogView(), "SignInError");
         Assert.True(error.IsEffectivelyVisible, "SignInError does not show.");
         Assert.Equal(text, error.Text);
-        Assert.Contains("dialogError", error.Classes);
+        AssertStatusLine(app, "SignInError", "dialogError");
+        Assert.False(app.FindByAutomationId(app.SignInDialogView(), "SignInChecking").IsEffectivelyVisible, "SignInChecking shows beside SignInError.");
+        Assert.False(app.FindByAutomationId(app.SignInDialogView(), "SignInSaveFailed").IsEffectivelyVisible, "SignInSaveFailed shows beside SignInError.");
     }
+
+    /// <summary>
+    /// A line of the dialog's state where part A's "The dialog" puts it: shown, in <paramref name="style"/>,
+    /// below the token box (and below <c>SignInNoKeychain</c> when that shows and the line is another),
+    /// from the token box's left, and above the buttons.
+    /// </summary>
+    private static void AssertStatusLine(ShellDriver app, string id, string style)
+    {
+        var view = app.SignInDialogView();
+        var line = app.FindByAutomationId(view, id);
+        Assert.True(line.IsEffectivelyVisible, $"{id} does not show.");
+        Assert.Contains(style, line.Classes);
+        var bounds = app.BoundsOf(line);
+        var token = app.BoundsOf(app.FindByAutomationId(view, "SignInToken"));
+        Assert.True(bounds.Top >= token.Bottom - 0.5, $"{id} is not below the token box.");
+        Assert.Equal(token.Left, bounds.Left, PartA.Tolerance);
+        var warning = app.FindByAutomationId(view, "SignInNoKeychain");
+        if (id != "SignInNoKeychain" && warning.IsEffectivelyVisible)
+        {
+            Assert.True(bounds.Top >= app.BoundsOf(warning).Bottom - 0.5, $"{id} is not below SignInNoKeychain.");
+        }
+
+        var buttons = Math.Min(app.BoundsOf(app.FindByAutomationId(view, "CancelButton")).Top, app.BoundsOf(app.FindByAutomationId(view, "ConfirmButton")).Top);
+        Assert.True(bounds.Bottom <= buttons + 0.5, $"{id} is not above the buttons.");
+    }
+
+    /// <summary>Whether <paramref name="control"/> lies wholly above the section's viewport: scrolled out of view.</summary>
+    private static bool WhollyOutAbove(ShellDriver app, Control control) =>
+        app.BoundsOf(control).Bottom <= app.BoundsOf(Scroller(app)).Top + 0.5;
 
     /// <summary>A box after the service's refusal: enabled, its text kept and all of it selected, the keyboard focus in it.</summary>
     private static void AssertSelected(ShellDriver app, string id, string text)

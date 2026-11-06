@@ -154,8 +154,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertAtEnd(app);
             Assert.True(WhollyInView(app, InBlock(app, HostingProvider.AzureDevOps, "AccountUseForGitNote")), "Azure DevOps' note is not in view at the end.");
             Assert.True(WhollyInView(app, app.AccountsBlock(HostingProvider.AzureDevOps)), "Azure DevOps' block is not wholly in view at the end.");
-            Assert.False(WhollyInView(app, Find(app, "AccountsIntro")), "The intro is still in view at the end.");
-            Assert.True(TopScrolledOut(app, Find(app, "AccountsIntro")), "The intro's top is not scrolled out of view at the end.");
+            Assert.True(WhollyOutAbove(app, Find(app, "AccountsIntro")), "The intro is not wholly scrolled out of view at the end.");
             Assert.True(TopScrolledOut(app, app.AccountsBlock(HostingProvider.GitHub)), "The top of GitHub's block is not scrolled out of view at the end.");
             Assert.Equal("AccountsSignOutButtonAzureDevOps", FocusedId(app));
             AssertBlockGaps(app, Three);
@@ -537,7 +536,8 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
                 var checking = (TextBlock)Find(app, "SignInChecking");
                 Assert.True(checking.IsEffectivelyVisible);
                 Assert.Equal(PartA.Checking, checking.Text);
-                Assert.Contains("secondary", checking.Classes);
+                AssertStatusLine(app, "SignInChecking", "secondary");
+                Assert.False(Find(app, "SignInSaveFailed").IsEffectivelyVisible);
                 Assert.Equal(PartA.Organization, ((TextBox)Find(app, "SignInOrganization")).Text);
                 Assert.False(Find(app, "SignInOrganization").IsEffectivelyEnabled);
                 Assert.False(Find(app, "SignInToken").IsEffectivelyEnabled);
@@ -669,6 +669,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
                     AssertDialog(app, HostingProvider.GitLab, string.Empty, noKeychain: true);
                     var warning = (TextBlock)Find(app, "SignInNoKeychain");
                     Assert.Equal(PartA.NoKeychain, warning.Text);
+                    AssertStatusLine(app, "SignInNoKeychain", "dialogWarning");
                     Assert.Equal(PartA.Warning, ColourOf(warning));
                     Assert.Equal(["probe"], tokens.Calls);
                     AssertNoRequests(served, mark);
@@ -686,7 +687,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
                     // Step 4: Azure DevOps' too.
                     mark = Mark(served);
                     dialog = await app.OpenSignInDialogAsync(HostingProvider.AzureDevOps);
-                    Assert.True(Find(app, "SignInNoKeychain").IsEffectivelyVisible);
+                    AssertDialog(app, HostingProvider.AzureDevOps, string.Empty, noKeychain: true);
                     Assert.Equal(PartA.FocusOpenedEmpty, FocusedId(app));
                     app.TypeOrganization(PartA.Organization);
                     app.Click(Find(app, "SignInToken"));
