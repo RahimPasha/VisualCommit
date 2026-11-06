@@ -220,7 +220,23 @@ public class GitRunnerPriorityTests
             start.ArgumentList.Add(argument);
         }
 
-        using var git = Process.Start(start) ?? throw new InvalidOperationException("git did not start.");
+        // Started from this process at normal priority, so that git's tree works at normal priority
+        // until it is lowered: started below normal, as CI's runner runs the test host, it would wait
+        // behind any normal-priority work that keeps every processor busy.
+        using var self = Process.GetCurrentProcess();
+        var priorityBefore = self.PriorityClass;
+        self.PriorityClass = ProcessPriorityClass.Normal;
+        Process git;
+        try
+        {
+            git = Process.Start(start) ?? throw new InvalidOperationException("git did not start.");
+        }
+        finally
+        {
+            self.PriorityClass = priorityBefore;
+        }
+
+        using var started = git;
         try
         {
             // Normal-priority work: the tree reaches sleep within seconds, even under a full run.
