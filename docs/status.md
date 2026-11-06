@@ -138,9 +138,11 @@ Build:
   hosts, as the design decides. Tests. Under way: WP-C (`Select` with a coverage, the push guard
   and the prompts, section 8) merged at `6586066`, with wave 1's adversarial fixes (D379, D381);
   the session's union of the coverages is WP-S's (section 9, wave 3).
-- [ ] 10. Sign-in dialog and the Accounts section with an account of each provider (D345, D348).
+- [x] 10. Sign-in dialog and the Accounts section with an account of each provider (D345, D348).
   WP-A (section 10) merged at `b6de3cf`, with its reviews', hunts' and the lead's fixes (D387); its
-  merge's classes and lagged list passed (Notes); its pictures being inspected.
+  merge's classes and lagged list passed and its pictures were inspected (Notes). CI's run on it
+  failed two phase 6 tests on Linux that WP-A does not touch, under investigation (CI section).
+  (2026-11-06. Week: share not read.)
 - [ ] 11. Browse and clone the repositories of an Azure DevOps and a GitLab account.
 - [ ] 12. The left panel's section for each provider (GitLab's merge requests, D351), its menu,
   checkout, the badge on branches, open in browser.
@@ -275,6 +277,19 @@ priority fix merged (`32eaee3`, `d62dff8`; D386): all five jobs green, `GitRunne
 them on Windows; Windows' "Build the opt-in projects" green. Jobs and Test steps: `windows-latest`
 33 min 17 s (30 min 5 s), `macos-latest` 37 min 58 s (35 min 53 s), `ubuntu-latest` 6 min 10 s (4 min
 34 s), the containers 8 min 52 s and 8 min 45 s (6 min 18 s and 6 min 26 s), each under four fifths.
+
+[42301846503](https://github.com/RahimPasha/VisualCommit/actions/runs/42301846503) on `63d2d80`, WP-A's
+merge: `windows-latest` and `macos-latest` green (Windows' "Build the opt-in projects" green), the
+container with the SDK from Microsoft's installer green; `ubuntu-latest` failed one test of App.Tests,
+`MainWindowCloseTests.Closing_the_window_during_Fetch_all_ends_its_rows_in_line_and_waits_for_the_four_running`
+(line 113: `BulkSlots.Held` 1, not 0, right after the run's task ended), and the container with
+Ubuntu's SDK packages another, `PaletteGrowthTests.The_build_and_a_one_letter_query_grow_in_step_with_the_refs`
+("10,000 tags took 7.9 times the work of 2,500 … the limit is 6.3"). Both are phase 6's; WP-A
+changed nothing they run; each passed in the other four jobs. Under investigation, each in its own
+worktree (`wip/p7b-close-slots`, `wip/p7b-palette-growth`; Notes). Jobs and Test steps:
+`windows-latest` 40 min 52 s (37 min 44 s), `macos-latest` 37 min 30 s (35 min 16 s),
+`ubuntu-latest` 6 min 27 s (4 min 58 s), the containers 8 min 51 s and 8 min 45 s (6 min 26 s and
+6 min 27 s), each under four fifths.
 
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
@@ -432,10 +447,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-A (design 10, part A) is merged at `b6de3cf` and pushed; 10.9's classes and the lagged list
-passed on it (Notes). An Opus agent inspects part A's 29 pictures against the report and judges 7a's
-changed ones (only the intro's two lines may change, 10.6). Then the lead reads the merge's CI run,
-ticks step 10 and goes on to part B: its checks written and reviewed (D244), then WP-B (section 11). Open point 8 of the report: Azure DevOps'
+WP-A (design 10, part A) is merged at `b6de3cf`; its classes, lagged list and picture inspection
+passed (Notes). CI's run on it (42301846503) failed two phase 6 tests on Linux that WP-A does not
+touch: two Opus investigators find and fix each cause in `D:/Projects/Personal/vc-wt/p7b-close-slots`
+and `p7b-palette-growth`, each fix then put to two skeptics; the lead merges them, runs their classes
+and reads the CI run. Beside them, part B's checks are being written and reviewed (D244) in
+`docs/test-reports/phase-7b.md`; once committed, WP-B (section 11) is built in
+`D:/Projects/Personal/vc-wt/p7b-clone` on `wip/p7b-clone`. Open point 8 of the report: Azure DevOps'
 `Check_1b_probes` (17 reads, its new probe of the sandbox organization's connectionData without a
 credential among them) runs when the owner agrees (Waiting on the owner); until then A9 rests on the
 ASSUMED Anonymous 200. For the week from 2026-11-05 the owner gives the phase about all of its
@@ -561,6 +579,15 @@ every commit.
   57 the same, the 23 part A pictures changed only in the intro's box (10.6), and `b06a` (the fake's
   port in the clone URL), `n06b` (the caret), `n02b` and `n07a` (the status bar's busy indicator) and
   `a09b` (2 pixels) by nature.
+- **Part A's pictures inspected** (2026-11-06, an Opus agent, after WP-A's merge runs): all 29 match
+  their steps, no defect; 7a's 28 changed pictures as the lead read them (the intro's box only in the
+  23 part A ones). Its notes, for later: the report's "about 553 of 495" for three signed-in blocks
+  measures about 562 (a02c to a02d scroll 67 px; A2 step 6, the conventions' "Scrolling" and open
+  point 2 to say so, after part B's writer); in `a06c`, behind the backdrop, mobile-app's Pull
+  requests section reads "Sign in to Git…", cut by the card, likely 7a's GitHub wording on an Azure
+  DevOps repository: WP-P's region, for WP-P to check; in `a11b` no control shows a focus ring after
+  the organization's local refusal (open point 5 leaves it open; for the review before the gate).
+  Its crops and scripts are in `D:/Projects/Personal/phase7b-work/inspect-wpa/`.
 - **GitHub's push protection blocks a token-shaped literal** (2026-11-06): the first push of WP-A's
   merge was refused because `SignInDialogProvidersTests` held made-up GitLab values of a real token's
   shape (`glpat-` and 20 characters). WP-A's branch was never pushed, so its 17 commits were rewritten
