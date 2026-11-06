@@ -262,7 +262,8 @@ Jobs and Test steps: `windows-latest` 38 min 28 s (35 min 25 s), `macos-latest` 
 `GitRunnerPriorityTests.A_below_normal_priority_call_starts_git_below_normal_on_windows`, after 60 s:
 "Processes git started run at another priority: conhost.exe Normal" (image windows-2025-vs2026
 20261030.294.1). WP-LF changed neither the runner nor that test; it passes here 3 of 3, and every
-earlier 7b run passed it; under investigation in `wip/p7b-priority` (Notes). Windows' "Build the
+earlier 7b run passed it. Its cause was in the runner: the priority fix, merged at `32eaee3` (D386;
+Notes). Windows' "Build the
 opt-in projects" green. Jobs and Test steps: `windows-latest` 30 min 15 s (27 min 38 s),
 `macos-latest` 43 min 8 s (41 min 8 s), `ubuntu-latest` 8 min 1 s (6 min 4 s), the containers 6 min
 39 s and 8 min 19 s (4 min 44 s and 6 min 1 s), each under four fifths.
@@ -424,11 +425,11 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 ### Next step
 
 WP-A (design 10) is being built in `D:/Projects/Personal/vc-wt/p7b-accounts` on `wip/p7b-accounts`,
-from `f4ae515`, which holds part A's checks (`docs/test-reports/phase-7b.md`, D244). Beside it,
-`wip/p7b-priority` (`D:/Projects/Personal/vc-wt/p7b-priority`, from `f4ae515`) investigates and fixes
-CI's one failure on WP-LF's merge (`GitRunnerPriorityTests`, a `conhost.exe` at Normal; the CI
-section). The lead merges the priority fix once its refuters are answered and reads its CI run; at
-WP-A's merge the lead runs 10.9's classes and the lagged list and has both parts' pictures inspected.
+from `f4ae515`, which holds part A's checks (`docs/test-reports/phase-7b.md`, D244). The priority fix
+for CI's one failure on WP-LF's merge is merged at `32eaee3` (D386; Notes); two skeptics check its new
+wiring test before it is pushed, and the lead then pushes it and reads its CI run (Windows must pass
+`GitRunnerPriorityTests`). At WP-A's merge the lead runs 10.9's classes and the lagged list and has
+both parts' pictures inspected.
 Open point 8 of the report: Azure DevOps' `Check_1b_probes` (17 reads, its new probe of the sandbox
 organization's connectionData without a credential among them) runs before WP-A's merge if the owner
 agrees (Waiting on the owner). For the week from 2026-11-05 the owner gives the phase about all of its
@@ -511,6 +512,20 @@ every commit.
   writer and checked by one reviewer (seven minors, all fixed; no blocker or major); the report's
   shared conventions are about 15 KB (D244's 30). Its open point 8: A9's Anonymous 200 rests on
   WP-LF's ASSUMED reading for a private organization until `Check_1b`'s new probe runs.
+- **The priority fix** (merged at `32eaee3`, 2026-11-06; D386): CI run 42216604663 found git's console
+  host at Normal for the merge-tool lookup's below-normal call. An Opus investigator measured why
+  (Windows takes a new process's class from its creator partway through the creation, but puts it in
+  the creator's job and lists it only at the end) and fixed it in `WindowsJob` and `GitRunner` (a job
+  with Windows' priority-class limit, attached before the lowering, which adds each descendant to it).
+  Two Opus skeptics could not refute it (minor points only); a follow-up added
+  `GitRunner.StartObserver`, an internal seam for the tests, and a test through `RunAsync` that fails
+  3 of 3 under each of four reversions of the wiring, and corrected the comments and
+  `docs/architecture.md`. On the merge, `GitRunnerPriorityTests`, `GitRunnerTests`,
+  `GitRunnerRecordTests`, `AskPassRunnerTests` and `MergeToolHelpTests` passed 84 of 84 through
+  `scripts/heavy-run.sh`. The experiments and their outputs are in
+  `D:/Projects/Personal/phase7b-work/verify/priority/`. One case stays open (D386): a process whose
+  creation read git's job before git joined it and that shows only after the last round; none in
+  about 480 trials. If CI's signature comes back, that order is the place to look.
 - **Passed on to later packages** (from WP-S's hunts, 2026-11-02): WP-N (section 13) makes the
   create's two log lines (`RepositoryOperations.CreatePullRequest.cs:293` and `:403`) write
   `baseRepository.FullName` through `HostingHttpClient.ScreenEmail`, with a test of a create into an
