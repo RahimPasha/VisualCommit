@@ -25,8 +25,16 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
     /// <summary>The port of <see cref="InProcess"/>'s endpoints, <c>Local(2)</c>: never listened on.</summary>
     public const int InProcessPort = 2;
 
-    /// <summary>The realm of a 401's <c>WWW-Authenticate: Basic</c>, on the API and on git (READ g1 G2; MEASURED g1 G4.1 for git's agent; the host the fake's own).</summary>
+    /// <summary>The realm of the <c>WWW-Authenticate: Basic</c> among the sign-in's three challenges on the API, a 302's and a 401's (MEASURED r5 1.3; the host the fake's own).</summary>
     public const string TfsRealm = "https://tfsprodfake.app.visualstudio.com/";
+
+    /// <summary>
+    /// The realm of a refused credential's one <c>WWW-Authenticate: Basic</c>: the API's empty 401 and
+    /// git's 401 (MEASURED 2026-11-05 on connectionData and the sandbox's info/refs: the service's own
+    /// <c>tfsprod…</c> host under <c>visualstudio.com</c>, without <see cref="TfsRealm"/>'s <c>.app.</c>
+    /// label; the host the fake's own).
+    /// </summary>
+    public const string TokenRealm = "https://tfsprodfake.visualstudio.com/";
 
     /// <summary>The suffix of a read-only token's login (<c>{o}/{user id}#read</c>), which <see cref="MayPush"/> refuses.</summary>
     private const string ReadOnlyLoginSuffix = "#read";
@@ -65,7 +73,7 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
     }
 
     /// <inheritdoc/>
-    protected override string Realm => TfsRealm;
+    protected override string Realm => TokenRealm;
 
     /// <summary>
     /// Starts the fake on 127.0.0.1 in <see cref="AuthRemoteServer"/>'s host mode on

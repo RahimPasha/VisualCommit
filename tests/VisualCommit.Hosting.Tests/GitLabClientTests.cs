@@ -227,6 +227,11 @@ public sealed class GitLabClientTests
     [InlineData(400, "application/json", "{\"message\":", HostingFailureKind.Validation, "400 Bad Request", null)]
     [InlineData(401, "application/json", "{\"message\":\"\\uD800\"}", HostingFailureKind.BadCredentials, "401 Unauthorized", null)]
     [InlineData(409, "application/json", "{\"message\":[\"\\uDC00 !21\"]}", HostingFailureKind.Validation, "409 Conflict", null)]
+    // Made up: words with a line break are one line (each run of control characters one space), so
+    // that the app's log keeps one entry a line; words of control characters alone are none.
+    [InlineData(400, "application/json", "{\"message\":\"title is missing\\r\\nsource_branch is missing\\n\"}", HostingFailureKind.Validation, "title is missing source_branch is missing", null)]
+    [InlineData(500, "application/json", "{\"message\":{\"error\":\"Request\\u2028failed\\u0007\"}}", HostingFailureKind.ServerError, "Request failed", null)]
+    [InlineData(400, "application/json", "{\"message\":\"\\u0001\\u0007\"}", HostingFailureKind.Validation, "400 Bad Request", null)]
     public async Task GitLabs_answers_give_its_kinds_and_its_words(int status, string contentType, string body, HostingFailureKind kind, string message, string? detail)
     {
         var log = new ListLog();

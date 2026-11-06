@@ -1027,12 +1027,12 @@ public sealed partial class FakeAzureDevOps
     private static string RequestUrl(AuthRemoteRouteRequest request) =>
         $"http://{request.Host}{request.Path}" + (request.Query.Length > 0 ? "?" + request.Query : string.Empty);
 
-    /// <summary>A PAT-shaped token unknown, revoked or another organization's: 401, an empty body and one <c>WWW-Authenticate: Basic realm</c> (MEASURED 2026-11-05 for an unknown one; the realm the fake's own host, as the service names one of its own).</summary>
+    /// <summary>A PAT-shaped token unknown, revoked or another organization's: 401, an empty body and one <c>WWW-Authenticate: Basic realm</c> (MEASURED 2026-11-05 for an unknown one; the realm <see cref="TokenRealm"/>, a made-up host of the measured form).</summary>
     private AuthRemoteResponse InvalidTokenAnswer()
     {
         var headers = new List<KeyValuePair<string, string>>();
         AddActivity(headers);
-        headers.Add(KeyValuePair.Create("WWW-Authenticate", $"Basic realm=\"{TfsRealm}\""));
+        headers.Add(KeyValuePair.Create("WWW-Authenticate", $"Basic realm=\"{TokenRealm}\""));
         return new AuthRemoteResponse(401, "Unauthorized", headers, []);
     }
 

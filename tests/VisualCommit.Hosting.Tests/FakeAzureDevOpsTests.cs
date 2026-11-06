@@ -26,6 +26,9 @@ public sealed class FakeAzureDevOpsTests
     private const string AnonymousId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
     private const string Realm = "Basic realm=\"https://tfsprodfake.app.visualstudio.com/\"";
 
+    /// <summary>A refused credential's one challenge: the realm a host of the service's measured form, without <c>.app.</c> (MEASURED 2026-11-05).</summary>
+    private const string TokenRealm = "Basic realm=\"https://tfsprodfake.visualstudio.com/\"";
+
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
     [Fact]
@@ -141,7 +144,7 @@ public sealed class FakeAzureDevOpsTests
         {
             var refused = await SendAsync(fake, HttpMethod.Get, Connection, token);
             Assert.Equal((401, 0), (refused.Status, refused.Bytes.Length));
-            Assert.Equal([Realm], refused.WwwAuthenticate);
+            Assert.Equal([TokenRealm], refused.WwwAuthenticate);
             Assert.Null(refused.Header("Content-Type"));
         }
 
@@ -617,6 +620,16 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal([("succeeded", true), ("staleOldObjectId", false), ("unresolvableToCommit", false)], made.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
         var after = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().ToDictionary(row => row.GetProperty("name").GetString()!, row => row.GetProperty("objectId").GetString()!);
         Assert.Equal((main, main, false), (after["refs/heads/main-even"], after["refs/heads/main"], after.ContainsKey("refs/heads/nowhere")));
+        // A create whose name is a folder of a ref there (refs/heads/feature beside the scenario's
+        // feature/sign-in), has one as its folder (main-even/x), or meets an earlier create of the
+        // same batch (batch, then batch/inner): refNameConflict with HTTP 200, the others written
+        // (READ enum, the status ASSUMED); never git's own refusal of the whole batch.
+        var conflicts = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/feature\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/Main-Even/x\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/batch\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/batch/inner\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}}]");
+        Assert.Equal(200, conflicts.Status);
+        Assert.Equal([("refNameConflict", false), ("refNameConflict", false), ("succeeded", true), ("refNameConflict", false)], conflicts.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var afterConflicts = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()).ToList();
+        Assert.Equal((true, false, false, true), (afterConflicts.Contains("refs/heads/batch"), afterConflicts.Contains("refs/heads/batch/inner"), afterConflicts.Contains("refs/heads/feature"), afterConflicts.Contains("refs/heads/feature/sign-in")));
         AssertError(await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken, $"[{{\"name\":\"refs/heads/main-even\",\"oldObjectId\":\"{main}\",\"newObjectId\":\"{tip}\"}}]"), 400, "InvalidArgumentValueException", null);
         Assert.Empty(fake.Errors);
     }

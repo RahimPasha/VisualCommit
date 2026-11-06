@@ -314,8 +314,12 @@ public sealed partial class FakeAzureDevOps
     /// is not there, at a commit of the repository, is written (<c>succeeded</c>, MEASURED 2026-11-05:
     /// the live command's <c>-even</c> branch at main's tip). A delete of another tip or none, a create
     /// of a ref that is there or a second update of one name is <c>staleOldObjectId</c>, a create at no
-    /// commit <c>unresolvableToCommit</c> and a ref outside <c>refs/heads/</c> and <c>refs/tags/</c>
-    /// <c>invalidRefName</c>, each with HTTP 200 (READ enum; the statuses ASSUMED). One <c>update-ref --stdin</c>.
+    /// commit <c>unresolvableToCommit</c>, a create whose name is a folder of a ref there or created
+    /// before it in the batch, or has one of them as its folder (<c>refs/heads/feature</c> beside
+    /// <c>refs/heads/feature/sign-in</c>), <c>refNameConflict</c>, and a ref outside <c>refs/heads/</c>
+    /// and <c>refs/tags/</c> <c>invalidRefName</c>, each with HTTP 200 (READ enum; the statuses ASSUMED;
+    /// a ref the same batch deletes still counts, so that git's transaction never meets the conflict).
+    /// One <c>update-ref --stdin</c>.
     /// </summary>
     private async Task<IReadOnlyList<(string Name, string Old, string New, string Status)>> UpdateRefsAsync(FakeAzureRepository repository, IReadOnlyList<(string Name, string Old, string New)> requested, CancellationToken ct)
     {
@@ -327,6 +331,7 @@ public sealed partial class FakeAzureDevOps
             var results = new List<(string Name, string Old, string New, string Status)>();
             var updates = new StringBuilder();
             var named = new HashSet<string>(StringComparer.Ordinal);
+            var created = new List<string>();
             foreach (var (name, old, @new) in requested)
             {
                 if (!name.StartsWith("refs/heads/", StringComparison.Ordinal) && !name.StartsWith("refs/tags/", StringComparison.Ordinal))
@@ -357,6 +362,10 @@ public sealed partial class FakeAzureDevOps
                 {
                     results.Add((name, old, @new, "invalidRefName"));
                 }
+                else if (refs.Keys.Concat(created).Any(other => Nests(name, other) || Nests(other, name)))
+                {
+                    results.Add((name, old, @new, "refNameConflict"));
+                }
                 else if (!IsObjectId(@new) || !(await GitAsync(repository.BarePath, null, null, ct, "cat-file", "-e", @new + "^{commit}").ConfigureAwait(false)).Succeeded)
                 {
                     results.Add((name, old, @new, "unresolvableToCommit"));
@@ -364,6 +373,7 @@ public sealed partial class FakeAzureDevOps
                 else
                 {
                     updates.Append(CultureInfo.InvariantCulture, $"create {name} {@new}\n");
+                    created.Add(name);
                     results.Add((name, old, @new, "succeeded"));
                 }
             }
@@ -380,6 +390,14 @@ public sealed partial class FakeAzureDevOps
             gate.Release();
         }
     }
+
+    /// <summary>
+    /// Whether <paramref name="folder"/> is a folder of <paramref name="name"/> (<c>refs/heads/feature</c>
+    /// of <c>refs/heads/feature/sign-in</c>): git keeps no ref beside a folder of its name. Without case,
+    /// so that the answer is the same on a file system that ignores case and on one that does not.
+    /// </summary>
+    private static bool Nests(string folder, string name) =>
+        name.Length > folder.Length && name[folder.Length] == '/' && name.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Forty hex digits, ASCII only: what a create's <c>newObjectId</c> must be before git is asked whether it names a commit.</summary>
     private static bool IsObjectId(string value) =>

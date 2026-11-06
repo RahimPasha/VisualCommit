@@ -221,6 +221,28 @@ public sealed class RepositoryHostingProvidersTests
     }
 
     [Fact]
+    public async Task Azure_DevOps_words_with_a_line_break_reach_the_create_and_its_warning_on_one_line()
+    {
+        // The fake's empty-title 400 holds the service's CR LF (MEASURED 2026-11-05): the failure's
+        // message, and the session's warning built from it, are one line, so that no server's text
+        // makes a line of the app's log of its own (6.3).
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, gitLab: false, repositories: true);
+        await setup.SignInAsync(HostingProvider.AzureDevOps);
+        var hosting = await OpenAsync(setup, "web-app");
+        await setup.Thread.RunAsync(() => hosting.Update(RefsOf(("origin", AzureUrl)), UrlRewrites.None));
+        await setup.Thread.WaitForAsync(() => hosting.State.PullRequests == PullRequestsState.Loaded, "the list");
+
+        var created = await hosting.CreatePullRequestAsync(hosting.State.Repository!, new NewPullRequest(string.Empty, string.Empty, "feature/sign-in", null, "main", false), Cancelled);
+        await setup.Thread.IdleAsync();
+
+        const string Words = "Invalid argument value. Parameter name: Invalid pull request title.";
+        Assert.Equal((HostingFailureKind.Validation, Words, PullRequestRefusal.None), (created.Failure!.Kind, created.Failure.Message, created.Failure.Refusal));
+        Assert.Single(setup.Warnings, warning => warning.StartsWith($"Azure DevOps: creating a pull request on fake-org/P/r failed: Validation, {Words} (request ", StringComparison.Ordinal));
+        Assert.DoesNotContain(setup.Warnings, warning => warning.Contains('\r', StringComparison.Ordinal) || warning.Contains('\n', StringComparison.Ordinal));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
     public async Task A_sign_in_to_the_other_organization_swaps_two_tabs_states()
     {
         await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, gitLab: false, repositories: true);

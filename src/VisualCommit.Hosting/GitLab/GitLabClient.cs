@@ -121,7 +121,8 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
     /// <summary>
     /// The failure an answer stands for (7.3's table, in order). The message is GitLab's words
     /// (<see cref="GitLabError.Of"/>), else <c>&lt;code&gt; &lt;reason phrase&gt;</c>, and for a server
-    /// error without words the core's <see cref="HostingHttpTexts.ServerError"/>. A
+    /// error without words the core's <see cref="HostingHttpTexts.ServerError"/>, each on one line
+    /// (<see cref="OneLine"/>). A
     /// <see cref="PullRequestRefusal"/> is set only on a create's POST to <c>…/merge_requests</c>:
     /// a 409 <see cref="PullRequestRefusal.AlreadyExists"/>; a 400 of shape C by its keys,
     /// <c>source_branch</c> <see cref="PullRequestRefusal.HeadMissing"/>, <c>target_branch</c>
@@ -133,10 +134,11 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
     {
         var status = exchange.Status;
         var error = GitLabError.Of(exchange.Body);
-        var fallback = exchange.Reason is { Length: > 0 } reason
+        var words = OneLine(error.Text);
+        var fallback = OneLine(exchange.Reason) is { } reason
             ? string.Create(CultureInfo.InvariantCulture, $"{status} {reason}")
             : string.Create(CultureInfo.InvariantCulture, $"HTTP {status}");
-        var message = error.Text ?? fallback;
+        var message = words ?? fallback;
         var create = IsCreate(exchange);
         static HostingFailure Fail(HostingFailureKind kind, string text, string? detail = null, DateTimeOffset? retryAt = null) => new(kind, text, detail, retryAt);
 
@@ -157,10 +159,46 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
             case 429:
                 return Fail(HostingFailureKind.RateLimited, message, retryAt: RetryAt(exchange.Headers));
             case 408 or (>= 500 and < 600):
-                return Fail(HostingFailureKind.ServerError, error.Text ?? HostingHttpTexts.ServerError(Provider, status));
+                return Fail(HostingFailureKind.ServerError, words ?? HostingHttpTexts.ServerError(Provider, status));
             default:
                 return Fail(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(Provider));
         }
+    }
+
+    /// <summary>
+    /// <paramref name="text"/> on one line: each run of control characters (<c>char.IsControl</c>)
+    /// and line or paragraph separators one space, the ends trimmed; null when nothing is left. A
+    /// failure's message goes into the app's log, which keeps one entry a line, so a server's text
+    /// with a line break never makes a line of its own there (the rule of Azure DevOps' messages, 6.3).
+    /// </summary>
+    private static string? OneLine(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        var line = new System.Text.StringBuilder(text.Length);
+        var gap = false;
+        foreach (var c in text)
+        {
+            if (char.IsControl(c) || char.GetUnicodeCategory(c) is UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator)
+            {
+                gap = true;
+                continue;
+            }
+
+            if (gap && line.Length > 0)
+            {
+                line.Append(' ');
+            }
+
+            gap = false;
+            line.Append(c);
+        }
+
+        var folded = line.ToString().Trim();
+        return folded.Length == 0 ? null : folded;
     }
 
     /// <summary>Whether <paramref name="exchange"/> is a create's POST to <c>projects/:id/merge_requests</c>.</summary>
