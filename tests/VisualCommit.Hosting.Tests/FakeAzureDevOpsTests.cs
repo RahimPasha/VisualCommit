@@ -122,9 +122,11 @@ public sealed class FakeAzureDevOpsTests
         }
 
         // The Anonymous 200 is for a Basic value in none of the PAT forms (azdo_FAKE-, 84 with AZDO,
-        // 52 base32). The older form, 52 characters of a to z and 2 to 7 (READ r5 0.6, valid until it
-        // expires), unknown here, gets the empty 401 with and without Suppress (READ g1 G0.2 for an
-        // invalid PAT-shaped value); 52 characters with a 1 are no PAT and get the 200.
+        // 52 base32). The older form, 52 characters of a to z and 2 to 7, valid until it expires
+        // (ASSUMED, r5 0.6 and 5: the docs say only to support the 84-character format, and the
+        // alphabet is inferred from r5 5's "base32-looking"), unknown here, gets the empty 401 with and
+        // without Suppress (READ g1 G0.2 for an invalid PAT-shaped value); 52 characters with a 1 are
+        // no PAT and get the 200.
         var legacy = new string('a', 52);
         foreach (var suppress in new[] { false, true })
         {
@@ -666,6 +668,19 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal([("refNameConflict", false), ("succeeded", true), ("refNameConflict", false)], cased.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
         var afterCased = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()).ToList();
         Assert.Equal((true, false, true, false), (afterCased.Contains("refs/heads/main"), afterCased.Contains("refs/heads/MAIN"), afterCased.Contains("refs/heads/case"), afterCased.Contains("refs/heads/CASE")));
+        // A create one of whose folders differs only in case from a folder of a ref there (Dir/c, then
+        // dir/b in a later POST) or of one created before it in the batch (q/x, then Q/y):
+        // refNameConflict with HTTP 200 (the status ASSUMED), so that a file system that ignores case
+        // and one that does not give the same rows and the same list.
+        var folder = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/Dir/c\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}}]");
+        Assert.Equal([("succeeded", true)], folder.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var folderCased = await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken,
+            $"[{{\"name\":\"refs/heads/dir/b\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/q/x\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}},{{\"name\":\"refs/heads/Q/y\",\"oldObjectId\":\"0000000000000000000000000000000000000000\",\"newObjectId\":\"{main}\"}}]");
+        Assert.Equal(200, folderCased.Status);
+        Assert.Equal([("refNameConflict", false), ("succeeded", true), ("refNameConflict", false)], folderCased.Json.GetProperty("value").EnumerateArray().Select(row => (row.GetProperty("updateStatus").GetString(), row.GetProperty("success").GetBoolean())));
+        var afterFolders = (await SendAsync(fake, HttpMethod.Get, Refs + "?filter=heads/&api-version=7.1", fixture.AdaToken)).Json.GetProperty("value").EnumerateArray().Select(row => row.GetProperty("name").GetString()).ToList();
+        Assert.Equal((true, false, false, true, false, false), (afterFolders.Contains("refs/heads/Dir/c"), afterFolders.Contains("refs/heads/dir/b"), afterFolders.Contains("refs/heads/Dir/b"), afterFolders.Contains("refs/heads/q/x"), afterFolders.Contains("refs/heads/Q/y"), afterFolders.Contains("refs/heads/q/y")));
         AssertError(await SendAsync(fake, HttpMethod.Post, Refs + "?api-version=7.1", fixture.AdaToken, $"[{{\"name\":\"refs/heads/main-even\",\"oldObjectId\":\"{main}\",\"newObjectId\":\"{tip}\"}}]"), 400, "InvalidArgumentValueException", null);
         Assert.Empty(fake.Errors);
     }

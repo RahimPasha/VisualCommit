@@ -317,10 +317,12 @@ public sealed partial class FakeAzureDevOps
     /// a create at no commit <c>unresolvableToCommit</c>; a create whose name is a folder of a ref there
     /// or created before it in the batch, or has one of them as its folder (<c>refs/heads/feature</c>
     /// beside <c>refs/heads/feature/sign-in</c>), or differs from one of them only in case
-    /// (<c>refs/heads/MAIN</c> beside <c>refs/heads/main</c>), and an update whose name differs only in
-    /// case from one named before it in the batch, <c>refNameConflict</c> (names compared without case,
-    /// as <see cref="Nests"/> does, so that the answer is the same on every file system and git never
-    /// meets two loose files of one name); and a ref outside <c>refs/heads/</c>
+    /// (<c>refs/heads/MAIN</c> beside <c>refs/heads/main</c>), or has a folder spelled like one of
+    /// theirs but for case (<c>refs/heads/dir/b</c> beside <c>refs/heads/Dir/c</c>, <see cref="FoldersClash"/>),
+    /// and an update whose name differs only in case from one named before it in the batch,
+    /// <c>refNameConflict</c> (whole names and folders compared without case, as <see cref="Nests"/>
+    /// does, so that the rows and the list are the same on every file system and git never meets two
+    /// loose files of one name); and a ref outside <c>refs/heads/</c>
     /// and <c>refs/tags/</c> <c>invalidRefName</c>, each with HTTP 200 (READ enum; the statuses ASSUMED;
     /// a ref the same batch deletes still counts, so that git's transaction never meets the conflict).
     /// One <c>update-ref --stdin</c>.
@@ -367,7 +369,7 @@ public sealed partial class FakeAzureDevOps
                 {
                     results.Add((name, old, @new, "invalidRefName"));
                 }
-                else if (refs.Keys.Concat(created).Any(other => Nests(name, other) || Nests(other, name) || string.Equals(other, name, StringComparison.OrdinalIgnoreCase)))
+                else if (refs.Keys.Concat(created).Any(other => Nests(name, other) || Nests(other, name) || string.Equals(other, name, StringComparison.OrdinalIgnoreCase) || FoldersClash(name, other)))
                 {
                     results.Add((name, old, @new, "refNameConflict"));
                 }
@@ -403,6 +405,27 @@ public sealed partial class FakeAzureDevOps
     /// </summary>
     private static bool Nests(string folder, string name) =>
         name.Length > folder.Length && name[folder.Length] == '/' && name.StartsWith(folder, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether a folder of <paramref name="name"/> past <c>refs/heads/</c> or <c>refs/tags/</c> and a
+    /// folder of <paramref name="other"/> are spelled alike but for case (<c>refs/heads/dir/b</c> beside
+    /// <c>refs/heads/Dir/c</c>): a file system that ignores case would put both in one folder and list
+    /// <c>Dir/b</c>, one that does not two folders, so the fake refuses the create on every one.
+    /// </summary>
+    private static bool FoldersClash(string name, string other)
+    {
+        var start = name.StartsWith("refs/heads/", StringComparison.Ordinal) ? "refs/heads/".Length : "refs/tags/".Length;
+        for (var slash = name.IndexOf('/', start); slash > 0; slash = name.IndexOf('/', slash + 1))
+        {
+            var folder = name[..(slash + 1)];
+            if (other.StartsWith(folder, StringComparison.OrdinalIgnoreCase) && !other.StartsWith(folder, StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /// <summary>Forty hex digits, ASCII only: what a create's <c>newObjectId</c> must be before git is asked whether it names a commit.</summary>
     private static bool IsObjectId(string value) =>

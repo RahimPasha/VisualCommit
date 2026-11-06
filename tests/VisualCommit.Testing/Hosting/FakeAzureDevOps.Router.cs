@@ -421,7 +421,9 @@ public sealed partial class FakeAzureDevOps
     /// A token PAT-shaped: the fake's <c>azdo_FAKE-…</c>, or 84 characters with <c>AZDO</c> at 76 to 79
     /// (READ r5 0.6, 5; MEASURED 2026-11-05: a made-up value of that form got the empty 401), or the
     /// older form, 52 characters of <c>a</c> to <c>z</c> and <c>2</c> to <c>7</c>, valid until it expires
-    /// (READ r5 0.6; an unknown one's empty 401 READ g1 G0.2 for an invalid PAT-shaped value). Any other
+    /// (ASSUMED, r5 0.6 and 5: the docs say only to support the 84-character format, and the alphabet is
+    /// inferred from r5 5's "base32-looking"; an unknown one's empty 401 READ g1 G0.2 for an invalid
+    /// PAT-shaped value). Any other
     /// value is no credential (READ g1 G0.2), but on connectionData, where a Basic one gets the
     /// Anonymous identity (MEASURED 2026-11-05 in the sandbox's organization with the empty user; with
     /// a user ASSUMED alike; in a private organization ASSUMED, its policy not read, see check 4).

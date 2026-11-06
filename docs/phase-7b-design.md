@@ -1264,7 +1264,8 @@ served by path and git's paths get 404, as 7a's.
 3. A pending fault.
 4. Credentials, `Authorization: Basic` alone, its user ignored (READ g1 G1.0):
    - none, another scheme (`Bearer` too) or a password not PAT-shaped (`azdo_FAKE-…`, 84
-     characters holding `AZDO`, or the older 52 of `a`-`z` and `2`-`7`, r5 0.6): no credential (READ
+     characters holding `AZDO`, or the older 52 of `a`-`z` and `2`-`7`, ASSUMED from r5 0.6 and 5's
+     "base32-looking"): no credential (READ
      g1 G0.2): Anonymous for a public project's reads and for `connection` in an organization with
      `publicProjects`; else 302 to
      `https://spsprodfake.vssps.visualstudio.com/_signin?…`, or with `X-TFS-FedAuthRedirect: Suppress`
@@ -1401,8 +1402,9 @@ above or settles what it left open:
   ends `url, _links, supportsIterations, artifactId` (r5's single GET); a list keeps the trimmed form.
 - Writes: update takes `status`, `title`, `description`; refs POST deletes and creates under `refs/heads/` and
   `refs/tags/` (`succeeded`, `staleOldObjectId`, `unresolvableToCommit`, `refNameConflict` for a name
-  that is a ref's folder or has one as its own or differs from one only in case, names compared
-  without case so that every file system answers alike, else `invalidRefName`; WP-LF),
+  that is a ref's folder or has one as its own or differs from one only in case, or has a folder
+  that differs from one of a ref's only in case, names and folders compared without case so that
+  every file system answers alike, else `invalidRefName`; WP-LF),
   an update that moves a ref 400;
   a non-contributor's update and refs POST 403 TF401027.
 - Git: git's callbacks find a repository `x.git` as `x`; `x` beside it is refused. Sync: one
@@ -3997,12 +3999,12 @@ the `.Router.cs` headers):
   `ListProject`; the create's 201, `isDraft`, `createdBy.id`, `succeeded` and the merge ref at the next
   read, gone after the abandon; `x-access-token` through the helper on both hosts.
 - Azure DevOps, corrected: a Basic value in none of the PAT forms (`azdo_FAKE-`, 84 with `AZDO`, 52
-  base32: an unknown one's 401, READ) gets connectionData's Anonymous 200 both ways (the empty user
+  base32, a form ASSUMED: an unknown one's 401, READ) gets connectionData's Anonymous 200 both ways (the empty user
   measured, a user ASSUMED alike); measured errors without `api-version` in `Content-Type`; an empty
   title's 400 in the service's words (a CR LF), `eventId` 0; the create's `labels`; the abandon
   without `mergeStatus` or `lastMergeCommit`; the refs POST's updates without `customMessage` or
-  `rejectedBy`, and a create (200 `succeeded`; a folder or case clash `refNameConflict`, ASSUMED; a
-  move 400); nine identity names; the empty 401's realm without `.app.` (git's keeps G4.1's).
+  `rejectedBy`, and a create (200 `succeeded`; a folder clash or a name's or folder's case clash
+  `refNameConflict`, ASSUMED; a move 400); nine identity names; the empty 401's realm without `.app.` (git's keeps G4.1's).
 - GitLab, as the fake answered: every probed status and body. Corrected: `user`'s 41 members and a
   single merge request's in the service's order (the create's without `first_contribution`); a fork's
   pair after `prepared_at` (r6 4.1); with a token `burst_traffic_per_user_free_plan` and 100 (read on
