@@ -307,26 +307,29 @@ public sealed class GitRunner : IGitRunner
     /// <summary>
     /// Puts <paramref name="root"/> at below-normal priority, and every process it has started by
     /// then, directly or not (Windows), adding each to <paramref name="job"/> when there is one.
-    /// Git for Windows' <c>cmd\git.exe</c>, the git most machines find, is a launcher that starts
-    /// the real git at once, and every console program that starts without a console, as git does
-    /// here, starts its console host (<c>conhost.exe</c>) as it begins: both can come before the
-    /// root's class is set. So the descendants are lowered too, from a snapshot of the machine's
-    /// processes (Toolhelp's, which names each one's parent), until a snapshot finds none left to
-    /// change: a process that one of them started before it was changed shows up in the next one.
-    /// At most <see cref="LoweringRounds"/> snapshots. A child that started before its parent is no
-    /// descendant (the parent's id was reused) and is left alone; one that ends meanwhile is skipped.
+    /// What the root starts can come before its class is set: Git for Windows' <c>cmd\git.exe</c>,
+    /// the git most machines find, is a launcher that starts the real git at once, and a console
+    /// program started without a console, as git is here, starts its console host
+    /// (<c>conhost.exe</c>) as it begins. So the descendants are lowered too, from a snapshot of the
+    /// machine's processes (Toolhelp's, which names each one's parent), until a snapshot finds none
+    /// left to change: a process that one of them started before it was changed shows up in the next
+    /// one. At most <see cref="LoweringRounds"/> snapshots. A child that started before its parent is
+    /// no descendant (the parent's id was reused) and is left alone; one that ends meanwhile is skipped.
     /// <para>
-    /// The class alone does not hold what starts later: Windows can take a new process's class from
-    /// its creator well before the process shows in a snapshot, and a process whose class was taken
-    /// before its creator was lowered and that shows only after the last snapshot runs at normal
-    /// priority to its end. CI run 42216604663 found git's console host so: the launcher creates it
-    /// as it begins, which is when the runner lowers the launcher. On Windows 11 with git 2.56, with
-    /// the lowering held about 2 ms after the start beside below-normal load, the console host showed
-    /// as late as 250 ms after the launcher was lowered, at normal priority, in 7 calls of 210. A job
-    /// whose <see cref="WindowsJob.HoldsBelowNormal"/> closes that gap (none of 360 such calls):
-    /// Windows adds a new process to its creator's job and applies the job's limit as the process
-    /// joins, so whatever starts in the tree once the root, or a descendant added here, is in the job
-    /// runs below normal, however its class was chosen.
+    /// The class alone does not hold what starts later: Windows takes a new process's class from its
+    /// creator partway through the creation and lists the process in a snapshot only at its end, so
+    /// any process of the tree whose class was taken before its creator was lowered and that shows
+    /// only after the last snapshot runs at normal priority to its end. CI run 42216604663 caught
+    /// git's console host so, which the launcher creates as it begins, when the runner lowers the
+    /// launcher. On Windows 11 with git 2.56, with the lowering held about 2 ms after the start
+    /// beside below-normal load, the console host showed as late as 250 ms after the launcher was
+    /// lowered, at normal priority, in 7 calls of 210. A job whose
+    /// <see cref="WindowsJob.HoldsBelowNormal"/> closes that gap (none of 360 such calls): Windows
+    /// adds a new process to its creator's job and applies the job's limit as the process joins, so
+    /// whatever starts in the tree once its creator, the root or a descendant added here, is in the
+    /// job runs below normal, however its class was chosen. One case is left: a process whose
+    /// creation read its creator's job before the creator joined it, and that shows only after the
+    /// last snapshot, stays out of the job and keeps the class it was given.
     /// </para>
     /// </summary>
     /// <exception cref="InvalidOperationException"><paramref name="root"/> has exited.</exception>
