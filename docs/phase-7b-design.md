@@ -3010,8 +3010,15 @@ or settles what it left open:
 - Dialog: `HelpText`, `TokenLinkText`, `TokenLinkTip` added. The organization is `OrganizationOf`'s on
   the session's Azure DevOps endpoints, sent as it reads; off, nothing parses. A name of a provider's
   token form, of a formless token's shape (52 base32 or 40 hex characters, any case) or equal to the
-  token box's text is no organization: refused unsent, the link disabled, never echoed. Local refusals move no focus; only `NotFound` asks `SignInOrganization` (`dialogBox`,
-  `Margin="0"`). `SignInFailedOf` reads `failure.Provider`.
+  token box's text is no organization: refused unsent, the link disabled, never echoed. D378's refusal
+  reads the token box anywhere (the lead's ruling of 2026-11-06, Hunt 3): `OtherProviderFormIn` takes
+  the whole value's form, else the first form of its runs of token characters (letters, digits, `_`,
+  `-`, `.`) between any other characters, so another provider's token in quotes, angle brackets, a
+  `.env` line or a clone URL is refused unsent as a bare one, with the same text and nothing logged;
+  every provider's tokens are made of those characters alone, so an own token is one run and is never
+  refused so (`SignInDialogProvidersTests`, random and edge values of each form). The providers' own
+  local refusals (Hosting) still read the whole value. Local refusals move no focus; only `NotFound`
+  asks `SignInOrganization` (`dialogBox`, `Margin="0"`). `SignInFailedOf` reads `failure.Provider`.
 - Prefill: the held account's login, else the active tab's `HostingState.Remotes` in
   `HostingRemoteOrder`. Driver: 1.9's forms plus `static AccountIdOf(p, id)`; a block's button is
   brought into view first. 7a's files changed as 10.6 says, plus `Phase7aChecks.A.cs:479`.

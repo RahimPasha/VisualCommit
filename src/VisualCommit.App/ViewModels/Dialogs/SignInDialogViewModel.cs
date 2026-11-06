@@ -27,8 +27,8 @@ namespace VisualCommit.App.ViewModels.Dialogs;
 /// "Add GitLab account" with a second link to GitLab's legacy form, and "Add Azure DevOps account"
 /// with an organization box above the token's, read by <see cref="AzureDevOpsProvider.OrganizationOf"/>
 /// alone. Sign in refuses, without a request and in this order, an organization the box does not
-/// give, D298's token and a token of another provider's form (<see cref="HostingProviders.TokenFormOf"/>);
-/// a token of its own form or of none goes on. Each failure shows in its provider's words
+/// give, D298's token and a token that holds another provider's form anywhere, bare or wrapped
+/// (<see cref="OtherProviderFormIn"/>); a token of its own form or of none goes on. Each failure shows in its provider's words
 /// (<see cref="Texts.SignInFailedOf"/>); <c>NotFound</c> selects the organization box's text, any other
 /// failure the token box's. GitHub's dialog keeps 7a's texts and behaviour.
 /// </para>
@@ -177,8 +177,9 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
             return;
         }
 
-        // Another provider's form, refused without a request (D378); its own form or none goes on.
-        if (HostingProviders.TokenFormOf(token) is { } form && form != Provider)
+        // Another provider's form anywhere in the box, refused without a request (D378): as the
+        // whole value or wrapped (quotes, a .env line, a clone URL); its own form or none goes on.
+        if (OtherProviderFormIn(token, Provider) is { } form)
         {
             ErrorText = Texts.SignInOtherProviderTokenOf(Provider, form, organization);
             return;
@@ -338,4 +339,47 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
 
     /// <summary>Every character is printable ASCII, U+0021 to U+007E (D298).</summary>
     private static bool IsPrintableAscii(string token) => token.All(character => character is >= '!' and <= '~');
+
+    /// <summary>
+    /// The provider other than <paramref name="provider"/> whose token form <paramref name="token"/>
+    /// holds anywhere (D378; the lead's ruling of 2026-11-06), or null: the whole value's form by
+    /// <see cref="HostingProviders.TokenFormOf"/>, else the first run's of the value's runs of token
+    /// characters, letters, digits, <c>_</c>, <c>-</c> and <c>.</c>, between the other characters
+    /// (quotes, <c>=</c>, <c>&lt;</c>, <c>&gt;</c>, <c>:</c>, <c>@</c>, <c>/</c> and the like), so that
+    /// a token wrapped in quotes or angle brackets, in a <c>.env</c> line or in a clone URL is found as
+    /// a bare one. Every provider's tokens are made of token characters alone (GitHub's of letters,
+    /// digits and <c>_</c>; GitLab's of letters, digits, <c>_</c>, <c>-</c> and <c>.</c>; Azure
+    /// DevOps' of letters and digits),
+    /// so a token of <paramref name="provider"/>'s own is one run, the whole value, whose form is its
+    /// own or none: no own token is ever refused here that the whole value's rule did not refuse.
+    /// </summary>
+    public static HostingProvider? OtherProviderFormIn(string token, HostingProvider provider)
+    {
+        ArgumentNullException.ThrowIfNull(token);
+        if (HostingProviders.TokenFormOf(token) is { } whole && whole != provider)
+        {
+            return whole;
+        }
+
+        var start = 0;
+        for (var i = 0; i <= token.Length; i++)
+        {
+            if (i < token.Length && IsTokenCharacter(token[i]))
+            {
+                continue;
+            }
+
+            if (i > start && HostingProviders.TokenFormOf(token[start..i]) is { } form && form != provider)
+            {
+                return form;
+            }
+
+            start = i + 1;
+        }
+
+        return null;
+    }
+
+    /// <summary>A character of some provider's tokens: an ASCII letter or digit, <c>_</c>, <c>-</c> or <c>.</c>.</summary>
+    private static bool IsTokenCharacter(char character) => char.IsAsciiLetterOrDigit(character) || character is '_' or '-' or '.';
 }
