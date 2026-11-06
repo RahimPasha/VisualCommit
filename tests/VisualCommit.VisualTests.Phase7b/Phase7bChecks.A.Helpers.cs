@@ -421,29 +421,18 @@ public sealed partial class Phase7bChecksA
         Assert.Equal(PartA.ButtonsGap, app.BoundsOf(button).Top - app.BoundsOf(text).Bottom, PartA.Tolerance);
     }
 
-    /// <summary>A block signed in: the login (SemiBold) from x 480, Azure DevOps' name under it, the token's place, "Sign out…" and the switch with its note.</summary>
+    /// <summary>
+    /// A block signed in: the login (SemiBold) from x 480, Azure DevOps' name under it, the token's
+    /// place, 10 below it "Sign out…", and 18 below the buttons the row labelled <c>Git</c> with the
+    /// switch and its note.
+    /// </summary>
     private static void AssertSignedInBlock(ShellDriver app, HostingProvider provider, string place, bool useForGit = true)
     {
-        var withUser = provider == HostingProvider.AzureDevOps;
-        string[] shown = withUser
+        string[] shown = provider == HostingProvider.AzureDevOps
             ? ["AccountLogin", "AccountUser", "AccountTokenPlace", "AccountsSignOutButton", "AccountUseForGit", "AccountUseForGitNote"]
             : ["AccountLogin", "AccountTokenPlace", "AccountsSignOutButton", "AccountUseForGit", "AccountUseForGitNote"];
         AssertBlockShows(app, provider, shown);
-        var login = (TextBlock)InBlock(app, provider, "AccountLogin");
-        Assert.Equal(provider switch { HostingProvider.GitHub => OctoLogin, HostingProvider.GitLab => AdaLogin, _ => PartA.Organization }, login.Text);
-        Assert.Equal(FontWeight.SemiBold, login.FontWeight);
-        Assert.Equal(PartA.ControlsX, app.BoundsOf(login).X, PartA.Tolerance);
-        Control above = login;
-        if (withUser)
-        {
-            var user = (TextBlock)InBlock(app, provider, "AccountUser");
-            Assert.Equal(AdaName, user.Text);
-            Assert.Equal(PartA.Secondary, ColourOf(user));
-            Assert.Equal(FontWeight.Normal, user.FontWeight);
-            Assert.Equal(app.BoundsOf(login).Bottom, app.BoundsOf(user).Top, 0.5);
-            above = user;
-        }
-
+        var above = AssertLogin(app, provider);
         var placeText = (TextBlock)InBlock(app, provider, "AccountTokenPlace");
         Assert.Equal(place, placeText.Text);
         Assert.Contains("settingsNote", placeText.Classes);
@@ -451,26 +440,87 @@ public sealed partial class Phase7bChecksA
         var signOut = InBlock(app, provider, "AccountsSignOutButton");
         Assert.True(signOut.IsEffectivelyEnabled);
         Assert.Equal(PartA.SignOutButton, AutomationProperties.GetName(signOut));
-        var check = (CheckBox)InBlock(app, provider, "AccountUseForGit");
-        Assert.Equal(useForGit, check.IsChecked);
-        Assert.Equal(PartA.UseForGit, AutomationProperties.GetName(check));
-        Assert.Equal(NoteOf(provider), TextOf(app, provider, "AccountUseForGitNote"));
+        Assert.Equal(PartA.ButtonsGap, app.BoundsOf(signOut).Top - app.BoundsOf(placeText).Bottom, PartA.Tolerance);
+        AssertGitRow(app, provider, signOut, useForGit);
     }
 
-    /// <summary>A block needing sign-in after a session-only start: the login, <c>SessionEnded</c>'s warning, both buttons and the switch.</summary>
+    /// <summary>
+    /// A block needing sign-in after a session-only start: the login (and Azure DevOps' name),
+    /// <c>SessionEnded</c>'s warning, 10 below it both buttons, enabled and 8 apart, and 18 below
+    /// them the row labelled <c>Git</c>, checked.
+    /// </summary>
     private static void AssertSessionEndedBlock(ShellDriver app, HostingProvider provider)
     {
         string[] shown = provider == HostingProvider.AzureDevOps
             ? ["AccountLogin", "AccountUser", "AccountNeedsSignIn", "AccountsSignInButton", "AccountsSignOutButton", "AccountUseForGit", "AccountUseForGitNote"]
             : ["AccountLogin", "AccountNeedsSignIn", "AccountsSignInButton", "AccountsSignOutButton", "AccountUseForGit", "AccountUseForGitNote"];
         AssertBlockShows(app, provider, shown);
+        var above = AssertLogin(app, provider);
         var warning = (TextBlock)InBlock(app, provider, "AccountNeedsSignIn");
         Assert.Equal(PartA.SessionEnded, warning.Text);
         Assert.Contains("dialogWarning", warning.Classes);
-        Assert.True(InBlock(app, provider, "AccountsSignInButton").IsEffectivelyEnabled);
-        Assert.True(InBlock(app, provider, "AccountsSignOutButton").IsEffectivelyEnabled);
-        Assert.Equal(true, ((CheckBox)InBlock(app, provider, "AccountUseForGit")).IsChecked);
+        Assert.True(app.BoundsOf(warning).Top >= app.BoundsOf(above).Bottom - 0.5);
+        var signIn = InBlock(app, provider, "AccountsSignInButton");
+        var signOut = InBlock(app, provider, "AccountsSignOutButton");
+        Assert.True(signIn.IsEffectivelyEnabled);
+        Assert.True(signOut.IsEffectivelyEnabled);
+        Assert.Equal(PartA.ButtonsGap, app.BoundsOf(signIn).Top - app.BoundsOf(warning).Bottom, PartA.Tolerance);
+        Assert.Equal(app.BoundsOf(signIn).Top, app.BoundsOf(signOut).Top, PartA.Tolerance);
+        Assert.Equal(PartA.ButtonSpacing, app.BoundsOf(signOut).X - app.BoundsOf(signIn).Right, PartA.Tolerance);
+        AssertGitRow(app, provider, signOut, useForGit: true);
     }
+
+    /// <summary>
+    /// A block's first row's column: the login in the server's spelling, SemiBold, from x 480, and on
+    /// Azure DevOps the account's name right under it (secondary, normal weight). Returns the lower
+    /// of the two, under which the note lies.
+    /// </summary>
+    private static Control AssertLogin(ShellDriver app, HostingProvider provider)
+    {
+        var login = (TextBlock)InBlock(app, provider, "AccountLogin");
+        Assert.Equal(provider switch { HostingProvider.GitHub => OctoLogin, HostingProvider.GitLab => AdaLogin, _ => PartA.Organization }, login.Text);
+        Assert.Equal(FontWeight.SemiBold, login.FontWeight);
+        Assert.Equal(PartA.ControlsX, app.BoundsOf(login).X, PartA.Tolerance);
+        if (provider != HostingProvider.AzureDevOps)
+        {
+            return login;
+        }
+
+        var user = (TextBlock)InBlock(app, provider, "AccountUser");
+        Assert.Equal(AdaName, user.Text);
+        Assert.Equal(PartA.Secondary, ColourOf(user));
+        Assert.Equal(FontWeight.Normal, user.FontWeight);
+        Assert.Equal(PartA.ControlsX, app.BoundsOf(user).X, PartA.Tolerance);
+        Assert.Equal(app.BoundsOf(login).Bottom, app.BoundsOf(user).Top, 0.5);
+        return user;
+    }
+
+    /// <summary>
+    /// The row labelled <c>Git</c> (<c>settingsLabel</c>, from x 336), 18 below the buttons' row:
+    /// <c>AccountUseForGit</c> from x 480 in <paramref name="useForGit"/>'s state and its note under
+    /// it with the provider's text.
+    /// </summary>
+    private static void AssertGitRow(ShellDriver app, HostingProvider provider, Control buttons, bool useForGit)
+    {
+        var check = (CheckBox)InBlock(app, provider, "AccountUseForGit");
+        Assert.Equal(useForGit, check.IsChecked);
+        Assert.Equal(PartA.UseForGit, AutomationProperties.GetName(check));
+        Assert.Equal(PartA.RowSpacing, app.BoundsOf(check).Top - app.BoundsOf(buttons).Bottom, PartA.Tolerance);
+        Assert.Equal(PartA.ControlsX, app.BoundsOf(check).X, PartA.Tolerance);
+        var label = Assert.Single(
+            app.AccountsBlock(provider).GetVisualDescendants().OfType<TextBlock>(),
+            block => block.Classes.Contains("settingsLabel") && block.IsEffectivelyVisible && block.Text == PartA.GitLabel);
+        Assert.Equal(PartA.SectionX, app.BoundsOf(label).X, PartA.Tolerance);
+        Assert.Equal(app.BoundsOf(check).Top, app.BoundsOf(label).Top, PartA.Tolerance);
+        Assert.Equal(PartA.Secondary, ColourOf(label));
+        var note = InBlock(app, provider, "AccountUseForGitNote");
+        Assert.Equal(NoteOf(provider), TextOf(app, provider, "AccountUseForGitNote"));
+        Assert.True(app.BoundsOf(note).Top >= app.BoundsOf(check).Bottom - 0.5, $"{PartA.IdOf(provider, "AccountUseForGitNote")} is not under the switch.");
+    }
+
+    /// <summary>How far <paramref name="control"/>'s bottom lies below the section's viewport (0 or less: in view).</summary>
+    private static double BelowView(ShellDriver app, Control control) =>
+        app.BoundsOf(control).Bottom - app.BoundsOf(Scroller(app)).Bottom;
 
     private static string NoteOf(HostingProvider provider) => provider switch
     {
@@ -660,16 +710,30 @@ public sealed partial class Phase7bChecksA
             Assert.False(app.FindByAutomationId(view, id).IsEffectivelyVisible, $"{id} shows.");
         }
 
-        Assert.True(app.FindByAutomationId(view, "CancelButton").IsEffectivelyEnabled);
-        Assert.Equal(PartA.SignIn, AutomationProperties.GetName(app.FindByAutomationId(view, "ConfirmButton")));
+        // As it opens the token box is empty, so Sign in (VcPrimaryButton) is disabled, right of
+        // Cancel and right-aligned in the card (7a's AssertDialog).
+        Assert.True(string.IsNullOrEmpty(token.Text), "SignInToken is not empty as the dialog opens.");
+        var cancel = (Button)app.FindByAutomationId(view, "CancelButton");
+        var confirm = (Button)app.FindByAutomationId(view, "ConfirmButton");
+        Assert.True(cancel.IsEffectivelyEnabled);
+        Assert.Equal(PartA.SignIn, AutomationProperties.GetName(confirm));
+        Assert.False(confirm.IsEffectivelyEnabled, "Sign in is enabled as the dialog opens.");
+        Assert.Same(Application.Current!.FindResource("VcPrimaryButton"), confirm.Theme);
+        Assert.DoesNotContain("danger", confirm.Classes);
+        Assert.True(
+            app.BoundsOf(confirm).Right > app.BoundsOf(cancel).Right && app.BoundsOf(confirm).Right >= card.Right - PartA.SaveRightInset,
+            "The dialog's buttons are not right-aligned.");
     }
 
-    /// <summary>The token box masked: one <c>•</c> per character, its automation value empty and its name <c>Token</c>.</summary>
+    /// <summary>
+    /// The token box masked and holding <paramref name="token"/>: one <c>•</c> per character, its
+    /// automation value empty and its name <c>Token</c>. The text is compared without printing it.
+    /// </summary>
     private static void AssertMasked(ShellDriver app, string token)
     {
         var box = (SecretTextBox)app.FindByAutomationId(app.SignInDialogView(), "SignInToken");
         Assert.Equal(PartA.Mask, box.PasswordChar);
-        Assert.Equal(token.Length, box.Text?.Length);
+        Assert.True(string.Equals(token, box.Text, StringComparison.Ordinal), $"SignInToken does not hold the token typed ({box.Text?.Length ?? 0} characters, {token.Length} typed).");
         Assert.Equal(string.Empty, ValueOf(box) ?? string.Empty);
         Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(box));
     }

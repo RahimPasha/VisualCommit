@@ -635,6 +635,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
         var tokens = new FakeTokenStore { Available = false };
         var apps = new List<ShellDriver>();
         string? fileAfterFirst = null;
+        double? belowAtA12b = null;
 
         await FreshApplication.RunAsync(
             assembly,
@@ -691,6 +692,11 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
                     Assert.Equal(["probe"], tokens.Calls);
                     Assert.False(tokens.Holds(new("gitlab", PartA.Host(served.GitLab.Port), AdaLogin)));
                     Assert.False(tokens.Holds(new("azure-devops", PartA.Host(served.AzureDevOps.Port), PartA.OrganizationLower)));
+
+                    // Open point 2: at offset 0 at most the last few pixels of Azure DevOps' Git row
+                    // below the viewport. Measured here and asserted after the method's last step, so
+                    // that a failure of that bound alone still lets every other step run.
+                    belowAtA12b = BelowView(app, InBlock(app, HostingProvider.AzureDevOps, "AccountUseForGitNote"));
                     ShotA(app, PartA.A12SessionOnly);
                     fileAfterFirst = File.ReadAllText(AccountsFile(data));
                 }
@@ -728,8 +734,15 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
                     Assert.Equal(fileAfterFirst, File.ReadAllText(AccountsFile(data)));
                     ShotA(app, PartA.A12SessionEnded);
 
-                    // Step 7: the held account's organization prefills the dialog.
+                    // Step 7: the held account's organization prefills the dialog, stacked over the screen.
+                    var screen = app.SettingsDialog;
                     var dialog = await app.OpenSignInDialogAsync(HostingProvider.AzureDevOps);
+                    Assert.Equal(PartA.AzureDevOpsDialogTitle, dialog.Title);
+                    var open = app.Session.Services.DialogHost.Open;
+                    Assert.Equal(2, open.Count);
+                    Assert.Same(screen, open[0]);
+                    Assert.Same(dialog, open[1]);
+                    AssertDialog(app, HostingProvider.AzureDevOps, PartA.Organization, noKeychain: true);
                     Assert.Equal(PartA.Organization, dialog.Organization);
                     Assert.Equal(PartA.FocusOpened, FocusedId(app));
                     Assert.True(Find(app, "SignInNoKeychain").IsEffectivelyVisible);
@@ -753,6 +766,10 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             Cancelled);
 
         AssertCleanEnd(apps, data, served);
+        Assert.NotNull(belowAtA12b);
+        Assert.True(
+            belowAtA12b <= PartA.A12FewPixels,
+            $"a12b: at offset 0, {belowAtA12b:0.#} px of Azure DevOps' Git row lie below the viewport, more than the few pixels (PartA.A12FewPixels, {PartA.A12FewPixels}) A12's step 4 allows (open point 2).");
     }
 
     /// <summary>Method 8: A13, one sign-out leaves the other blocks and records (D348, D291, D296).</summary>
@@ -935,6 +952,8 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertAtEnd(app);
             Assert.Equal(true, ((CheckBox)InBlock(app, HostingProvider.GitHub, "AccountUseForGit")).IsChecked);
             Assert.Equal(false, ((CheckBox)InBlock(app, HostingProvider.GitLab, "AccountUseForGit")).IsChecked);
+            Assert.True(WhollyInView(app, InBlock(app, HostingProvider.GitHub, "AccountUseForGit")), "GitHub's switch is not in view at the end.");
+            Assert.True(WhollyInView(app, InBlock(app, HostingProvider.GitLab, "AccountUseForGit")), "GitLab's switch is not in view at the end.");
             Assert.True(WhollyInView(app, app.AccountsBlock(HostingProvider.AzureDevOps)));
             Assert.Equal(false, ((CheckBox)InBlock(app, HostingProvider.AzureDevOps, "AccountUseForGit")).IsChecked);
             Assert.Equal(PartA.AzureDevOpsUseForGitNote, TextOf(app, HostingProvider.AzureDevOps, "AccountUseForGitNote"));

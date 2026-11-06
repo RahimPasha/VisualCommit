@@ -3002,26 +3002,28 @@ the writer.
 **As built** (WP-A, `4b8edaf` to its last commit, 2026-11-06). Where the build differs from the text
 or settles what it left open:
 - `AccountsSettingsViewModel` subscribes to `AccountChanged` once and hands each event to
-  `BlockOf(e.Provider)` (7a's one subscriber holds); `AccountBlockViewModel.Follow` is public; a note
-  on a git older than 2.31 is 7a's older one for every provider. Ids are `{Binding IdSuffix,
+  `BlockOf(e.Provider)` (7a's one subscriber holds). `AccountBlockViewModel.Follow` is public; it
+  resets a switch for another account and, untoggled, to its account's on every event (a toggle
+  survives the same account's). While any block signs out, every block's buttons are disabled
+  (`Joins`). An older git's note is 7a's for every provider. Ids: `{Binding IdSuffix,
   StringFormat='AccountLogin{0}'}` in one template over `ContentControl`s.
 - Dialog: `HelpText`, `TokenLinkText`, `TokenLinkTip` added. The organization is `OrganizationOf`'s on
   the session's Azure DevOps endpoints, sent as it reads; off, nothing parses. A name of a provider's
   token form, or equal to the token box's text, is no organization: refused unsent, the link disabled,
-  never echoed (design 1). Local refusals move no focus; only `NotFound` asks `SignInOrganization`
-  (`dialogBox`, `Margin="0"`). `SignInFailedOf` reads `failure.Provider`.
-- `MainWindowViewModel.SignInAsync`'s prefill: the held account's login, else the active tab's
-  `HostingState.Remotes` in `HostingRemoteOrder`.
-- Driver: 1.9's forms plus `static AccountIdOf(p, id)`; a block's button is brought into view first.
-  7a's files changed as 10.6 says, plus `Phase7aChecks.A.cs:479`; nothing outside 10.1's list.
-- `SignInDialogProvidersTests` serves the fakes on port 0 (1.8), not in process; the service's URL
-  forms run on `AzureDevOpsEndpoints.Service` with a handler that refuses every request.
-- Report against design: no expected result changed; `SettingsNavAccounts` at x 141 (±2). Open point
-  2: in `a12b` at offset 0 Azure DevOps' note wraps to three lines and about half the last lies below
-  the viewport, more than "a few pixels" (not asserted). Open point 8: A9 as the report gives it
-  (ASSUMED). For the lead: Azure DevOps' disabled link (`a06a`, `a11b`) keeps the accent and the hand
-  cursor (`SignInLinkButton` has no disabled look), as the report's "accent foreground" reads, and
-  `AssertDialog` asserts it; a disabled look needs the lead's ruling.
+  never echoed. Local refusals move no focus; only `NotFound` asks `SignInOrganization` (`dialogBox`,
+  `Margin="0"`). `SignInFailedOf` reads `failure.Provider`.
+- Prefill: the held account's login, else the active tab's `HostingState.Remotes` in
+  `HostingRemoteOrder`. Driver: 1.9's forms plus `static AccountIdOf(p, id)`; a block's button is
+  brought into view first. 7a's files changed as 10.6 says, plus `Phase7aChecks.A.cs:479`.
+- `SignInDialogProvidersTests` serves the fakes on port 0 (1.8); the service's URL forms run on
+  `AzureDevOpsEndpoints.Service` with a handler that refuses every request.
+- Report: no expected result changed; `SettingsNavAccounts` at x 141 (±2). For the lead:
+  `Check_A12` fails on open point 2's bound alone, asserted after its last step: at `a12b`'s offset 0
+  7 px of Azure DevOps' `Git` row (its note wraps to three lines) lie below the viewport, over
+  `PartA.A12FewPixels` (3); the texts and gaps are the report's, so it needs a ruling under "Changed in
+  this report". Azure DevOps' disabled link (`a06a`, `a11b`) keeps the accent, as the report's "accent
+  foreground" reads and `AssertDialog` asserts; a disabled look needs a ruling. Open point 8: A9 as
+  given (ASSUMED).
 - For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` serves every provider (false while off).
   `SignInEntryProvidersTests` passes under the 1.5 s watcher lag.
 

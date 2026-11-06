@@ -290,6 +290,13 @@ public static partial class Phase7bExpectations
         public const double LinkGap = 6;
         public const double LegacyLinkGap = 4;
 
+        /// <summary>
+        /// A12 after step 4 (open point 2): at offset 0 "at most the last few pixels of Azure DevOps'
+        /// Git row lie below the viewport". Read as at most 3 below the viewport's bottom, measured
+        /// at the bottom of <c>AccountUseForGitNoteAzureDevOps</c>, the row's last control.
+        /// </summary>
+        public const double A12FewPixels = 3;
+
         // ---- Colours (7a's theme brushes, dark) ---------------------------------------------------
 
         public static readonly Color Secondary = Color.Parse("#9BA3B0");
