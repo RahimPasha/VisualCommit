@@ -492,7 +492,7 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
                 continue;
             }
 
-            // The stretch [start, i): the mark searched from its 76th character to 4 before its end.
+            // The stretch [start, i): the mark searched from its 0-based character 76 to 4 before its end.
             if (i - start >= AzureDevOpsLength
                 && run[(start + AzureDevOpsMarkIndex)..(i - After)].IndexOf(AzureDevOpsMark, StringComparison.Ordinal) is >= 0 and var mark)
             {
