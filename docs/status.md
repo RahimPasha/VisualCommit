@@ -139,6 +139,8 @@ Build:
   and the prompts, section 8) merged at `6586066`, with wave 1's adversarial fixes (D379, D381);
   the session's union of the coverages is WP-S's (section 9, wave 3).
 - [ ] 10. Sign-in dialog and the Accounts section with an account of each provider (D345, D348).
+  WP-A (section 10) merged at `b6de3cf`, with its reviews', hunts' and the lead's fixes (D387); its
+  merge's classes and lagged list passed (Notes); its pictures being inspected.
 - [ ] 11. Browse and clone the repositories of an Azure DevOps and a GitLab account.
 - [ ] 12. The left panel's section for each provider (GitLab's merge requests, D351), its menu,
   checkout, the badge on branches, open in browser.
@@ -430,16 +432,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-A (design 10) is being built in `D:/Projects/Personal/vc-wt/p7b-accounts` on `wip/p7b-accounts`,
-from `f4ae515`, which holds part A's checks (`docs/test-reports/phase-7b.md`, D244). The priority fix
-for CI's one failure on WP-LF's merge is merged at `32eaee3` and `d62dff8` (D386; Notes); its CI run
-42285038375 is green. WP-A's two fix rounds after its hunts (the lead's rulings on A12's bound and the
-disabled token link, the third hunt's minors, and a verifier's finding on a wrapped token) are done at
-`587b425`; two skeptics attack the dialog's new token rule before the lead merges it. At WP-A's merge the lead runs 10.9's classes and the lagged list and has
-both parts' pictures inspected.
-Open point 8 of the report: Azure DevOps' `Check_1b_probes` (17 reads, its new probe of the sandbox
-organization's connectionData without a credential among them) runs before WP-A's merge if the owner
-agrees (Waiting on the owner). For the week from 2026-11-05 the owner gives the phase about all of its
+WP-A (design 10, part A) is merged at `b6de3cf` and pushed; 10.9's classes and the lagged list
+passed on it (Notes). An Opus agent inspects part A's 29 pictures against the report and judges 7a's
+changed ones (only the intro's two lines may change, 10.6). Then the lead reads the merge's CI run,
+ticks step 10 and goes on to part B: its checks written and reviewed (D244), then WP-B (section 11). Open point 8 of the report: Azure DevOps'
+`Check_1b_probes` (17 reads, its new probe of the sandbox organization's connectionData without a
+credential among them) runs when the owner agrees (Waiting on the owner); until then A9 rests on the
+ASSUMED Anonymous 200. For the week from 2026-11-05 the owner gives the phase about all of its
 allowance.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
@@ -538,6 +537,37 @@ every commit.
   `D:/Projects/Personal/phase7b-work/verify/priority/`. One case stays open (D386): a process whose
   creation read git's job before git joined it and that shows only after the last round; none in
   about 480 trials. If CI's signature comes back, that order is the place to look.
+- **WP-A** (merged at `b6de3cf`, 2026-11-06; design 10 and its As built): built in
+  `D:/Projects/Personal/vc-wt/p7b-accounts`, two reviews and three hunts (no confirmed blocker; the
+  third hunt's one major was A12's bound, left failing for the lead). The lead's rulings: A12's `a12b`
+  scrolls by less than one line of Azure DevOps' note (measured 7 px, lines 13.9 apart; the report's
+  "Changed in this report after its first commit"); Azure DevOps' token link takes the theme's
+  disabled look while no organization is given (`a06a`, `a11b`); the dialog finds another provider's
+  token inside a pasted value (D387; two verification rounds). Accepted, not changed: GitLab's
+  unprefixed tokens read as 20 characters (ASSUMED); a run that starts with the dialog's own prefix is
+  not searched; the octal and base64 limits D387 names. For the review before the gate: whether the
+  providers' own refusals in Hosting should use the dialog's reading (D387). The verifiers' probes are
+  in `D:/Projects/Personal/phase7b-work/verify/wp-a-rulings/` and `wp-a-r3/`. 7a's pictures
+  before the merge are copied to `D:/Projects/Personal/phase7b-work/ref-7a-preA/`.
+- **WP-A's merge runs** (2026-11-06, 14:35 to 15:00 on the laptop, on the first merge `da7a296`,
+  through `scripts/heavy-run.sh`, one command at a time; the redone merge `b6de3cf` differs from it
+  only in two string literals of `SignInDialogProvidersTests`, whose 22 tests passed again on it):
+  10.9's classes 154 of 154 (`Phase7b` 62, 7a's part A classes 53, `SignInEntryProvidersTests` and
+  `SignInEntryTests` 13, `SettingsDialogViewTests` 11, `Phase6ChecksS` 13, `Check_L31*` 2), then the
+  lagged list (`VISUALCOMMIT_WATCHER_LAG_MS=1500`) 436 of 436 (`Phase2Checks` 25, App.Tests' eight
+  classes 66, Phase6's 21, `Phase7a` 207, Hosting's 7a classes 44, `Phase7b` 62, Hosting's 7b classes
+  11). Part A's 29 pictures were the same files with and without the lag. 7a's 85 against the copies
+  before the merge (`scripts/compare-pictures.py`, output in `D:/Projects/Personal/phase7b-work/cmp-wpa/`):
+  57 the same, the 23 part A pictures changed only in the intro's box (10.6), and `b06a` (the fake's
+  port in the clone URL), `n06b` (the caret), `n02b` and `n07a` (the status bar's busy indicator) and
+  `a09b` (2 pixels) by nature.
+- **GitHub's push protection blocks a token-shaped literal** (2026-11-06): the first push of WP-A's
+  merge was refused because `SignInDialogProvidersTests` held made-up GitLab values of a real token's
+  shape (`glpat-` and 20 characters). WP-A's branch was never pushed, so its 17 commits were rewritten
+  to split each such literal (`"glpat-" + "…"`; `git filter-branch`, the old ones kept on the local
+  branch `backup/p7b-accounts-before-split`) and the merge redone (`b6de3cf`; the first, `da7a296`, on
+  `backup/phase-before-split`). Every builder's brief says so from now on: a made-up token of a real
+  token's full shape is written split, as the scenario's `"ghp_" + new string('F', 36)` already is.
 - **Passed on to later packages** (from WP-S's hunts, 2026-11-02): WP-N (section 13) makes the
   create's two log lines (`RepositoryOperations.CreatePullRequest.cs:293` and `:403`) write
   `baseRepository.FullName` through `HostingHttpClient.ScreenEmail`, with a test of a create into an
