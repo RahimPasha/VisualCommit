@@ -259,8 +259,10 @@ public sealed partial class FakeGitLab
     /// subset of these): <c>references</c> <c>!&lt;iid&gt;</c>, <c>web_url</c>
     /// <c>&lt;web&gt;&lt;target path&gt;/-/merge_requests/&lt;iid&gt;</c>, <c>draft</c> and
     /// <c>work_in_progress</c> alike, <c>source_project_id</c> and <c>target_project_id</c> but no source
-    /// path (MEASURED), a fork's <c>allow_collaboration</c> (READ; its place ASSUMED). A list's row ends
-    /// at <c>approvals_before_merge</c> (ASSUMED: the sandbox had no open one to list); a
+    /// path (MEASURED), a fork's <c>allow_collaboration</c> and <c>allow_maintainer_to_push</c> right
+    /// after <c>prepared_at</c> (MEASURED r6 4.1: its captured fork rows and single fork one; the
+    /// sandbox has no fork, D375). A list's row ends at <c>approvals_before_merge</c> (MEASURED r6 4.1:
+    /// its captured rows, the same members in the same order; the sandbox had no open one to list); a
     /// <paramref name="single"/> one goes on with <c>subscribed</c> to <c>user</c> (MEASURED
     /// 2026-11-06), but for <c>first_contribution</c>, which the create's answer leaves out
     /// (<paramref name="created"/>; MEASURED 2026-11-06 on the create with nothing ahead, ASSUMED on
@@ -314,27 +316,28 @@ public sealed partial class FakeGitLab
             ["should_remove_source_branch"] = null,
             ["force_remove_source_branch"] = false,
             ["prepared_at"] = Time(request.CreatedAt),
-            ["reference"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
-            ["references"] = new JsonObject
-            {
-                ["short"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
-                ["relative"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
-                ["full"] = request.Target.Path + "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
-            },
-            ["web_url"] = Web(string.Create(CultureInfo.InvariantCulture, $"{request.Target.Path}/-/merge_requests/{request.Iid}")),
-            ["time_stats"] = new JsonObject { ["time_estimate"] = 0, ["total_time_spent"] = 0, ["human_time_estimate"] = null, ["human_total_time_spent"] = null },
-            ["squash"] = false,
-            ["squash_on_merge"] = false,
-            ["task_completion_status"] = new JsonObject { ["count"] = 0, ["completed_count"] = 0 },
-            ["has_conflicts"] = false,
-            ["blocking_discussions_resolved"] = true,
-            ["approvals_before_merge"] = null,
         };
         if (request.Source != request.Target)
         {
             json["allow_collaboration"] = request.AllowCollaboration;
             json["allow_maintainer_to_push"] = request.AllowCollaboration;
         }
+
+        json["reference"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture);
+        json["references"] = new JsonObject
+        {
+            ["short"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
+            ["relative"] = "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
+            ["full"] = request.Target.Path + "!" + request.Iid.ToString(CultureInfo.InvariantCulture),
+        };
+        json["web_url"] = Web(string.Create(CultureInfo.InvariantCulture, $"{request.Target.Path}/-/merge_requests/{request.Iid}"));
+        json["time_stats"] = new JsonObject { ["time_estimate"] = 0, ["total_time_spent"] = 0, ["human_time_estimate"] = null, ["human_total_time_spent"] = null };
+        json["squash"] = false;
+        json["squash_on_merge"] = false;
+        json["task_completion_status"] = new JsonObject { ["count"] = 0, ["completed_count"] = 0 };
+        json["has_conflicts"] = false;
+        json["blocking_discussions_resolved"] = true;
+        json["approvals_before_merge"] = null;
 
         if (single)
         {

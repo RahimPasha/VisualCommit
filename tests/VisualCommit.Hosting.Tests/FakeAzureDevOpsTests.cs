@@ -42,11 +42,13 @@ public sealed class FakeAzureDevOpsTests
         Assert.Null(member.Header("ETag"));
         Assert.Null(member.Header("Link"));
         var user = member.Json.GetProperty("authenticatedUser");
+        // The identity's nine names in the service's order, customDisplayName among them (MEASURED
+        // 2026-11-05, a Code-only token), the display name unless set.
         Assert.Equal(
-            ["id", "descriptor", "subjectDescriptor", "providerDisplayName", "isActive", "properties", "resourceVersion", "metaTypeId"],
+            ["id", "descriptor", "subjectDescriptor", "providerDisplayName", "customDisplayName", "isActive", "properties", "resourceVersion", "metaTypeId"],
             user.EnumerateObject().Select(property => property.Name));
         Assert.Equal(fixture.Ada.Id.ToString(), user.GetProperty("id").GetString());
-        Assert.Equal("Ada Lovelace", user.GetProperty("providerDisplayName").GetString());
+        Assert.Equal(("Ada Lovelace", "Ada Lovelace"), (user.GetProperty("providerDisplayName").GetString(), user.GetProperty("customDisplayName").GetString()));
         Assert.StartsWith("Microsoft.IdentityModel.Claims.ClaimsIdentity;", user.GetProperty("descriptor").GetString(), StringComparison.Ordinal);
         Assert.EndsWith("\\ada.lovelace@example.com", user.GetProperty("descriptor").GetString(), StringComparison.Ordinal);
         Assert.StartsWith("aad.", user.GetProperty("subjectDescriptor").GetString(), StringComparison.Ordinal);
@@ -59,6 +61,13 @@ public sealed class FakeAzureDevOpsTests
         fixture.Ada.MetaTypeId = 255;
         var custom = (await SendAsync(fake, HttpMethod.Get, Connection, fixture.AdaToken)).Json.GetProperty("authenticatedUser");
         Assert.Equal(("Ada", 255), (custom.GetProperty("customDisplayName").GetString(), custom.GetProperty("metaTypeId").GetInt32()));
+
+        // Null leaves customDisplayName out, as g1 G3.2's sample 1 (READ).
+        fixture.Ada.CustomDisplayName = null;
+        var sampleOne = (await SendAsync(fake, HttpMethod.Get, Connection, fixture.AdaToken)).Json.GetProperty("authenticatedUser");
+        Assert.Equal(
+            ["id", "descriptor", "subjectDescriptor", "providerDisplayName", "isActive", "properties", "resourceVersion", "metaTypeId"],
+            sampleOne.EnumerateObject().Select(property => property.Name));
 
         // harbor-co allows public projects: no credential, a password that is no PAT and Bearer are
         // each the Anonymous identity (MEASURED r5 1.2; READ g1 G0.2).
@@ -479,7 +488,8 @@ public sealed class FakeAzureDevOpsTests
         Assert.False(created.Json.TryGetProperty("lastMergeCommit", out _));
         Assert.True(created.Json.TryGetProperty("artifactId", out _));
 
-        // The create's members in the service's order, labels among them (MEASURED 2026-11-05).
+        // The create's members in the service's order, labels among them (MEASURED 2026-11-05 on the
+        // create with nothing ahead, below; ASSUMED alike for this one, with commits ahead).
         Assert.Equal(
             ["repository", "pullRequestId", "codeReviewId", "status", "createdBy", "creationDate", "title", "description", "sourceRefName", "targetRefName", "mergeStatus", "isDraft", "mergeId", "lastMergeSourceCommit", "lastMergeTargetCommit", "reviewers", "labels", "url", "_links", "supportsIterations", "artifactId"],
             created.Json.EnumerateObject().Select(property => property.Name));
@@ -491,8 +501,13 @@ public sealed class FakeAzureDevOpsTests
         var draft = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/docs/guide", "refs/heads/feature/sign-in", extra: ",\"isDraft\":true").Replace("\"isDraft\":false,", string.Empty, StringComparison.Ordinal));
         Assert.Equal((200, 15, true), (draft.Status, draft.Json.GetProperty("pullRequestId").GetInt32(), draft.Json.GetProperty("isDraft").GetBoolean()));
 
-        // Nothing ahead is made too (ASSUMED); a fork's source by forkSource.repository.id.
-        Assert.Equal(200, (await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/main", "refs/heads/docs/guide"))).Status);
+        // Nothing ahead is made too, its answer with labels and without lastMergeCommit (MEASURED
+        // 2026-11-05); a fork's source by forkSource.repository.id.
+        var level = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/main", "refs/heads/docs/guide"));
+        Assert.Equal(200, level.Status);
+        Assert.Equal(
+            ["repository", "pullRequestId", "codeReviewId", "status", "createdBy", "creationDate", "title", "description", "sourceRefName", "targetRefName", "mergeStatus", "isDraft", "mergeId", "lastMergeSourceCommit", "lastMergeTargetCommit", "reviewers", "labels", "url", "_links", "supportsIterations", "artifactId"],
+            level.Json.EnumerateObject().Select(property => property.Name));
         var fromFork = await SendAsync(fake, HttpMethod.Post, Pulls + "?api-version=7.1", fixture.AdaToken, Body("refs/heads/fix-typo", "refs/heads/docs/guide", extra: $",\"forkSource\":{{\"repository\":{{\"id\":\"{fixture.Fork.Id}\"}}}}"));
         Assert.Equal(("refs/pull/17/source", "mobile-app-fork"), (fromFork.Json.GetProperty("sourceRefName").GetString(), fromFork.Json.GetProperty("forkSource").GetProperty("repository").GetProperty("name").GetString()));
 

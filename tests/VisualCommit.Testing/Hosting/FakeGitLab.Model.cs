@@ -281,7 +281,7 @@ public sealed class FakeGitLabFault : FakeServiceFault
     /// <summary>403 shape F <c>insufficient_scope</c>, the route's <c>scope</c> list in body and header (READ g2 G2.3; the lists ASSUMED).</summary>
     public static FakeGitLabFault InsufficientScope { get; } = new(nameof(InsufficientScope));
 
-    /// <summary>403 shape F <c>insufficient_granular_scope</c> naming the route's boundary and label, no <c>WWW-Authenticate</c> (READ g2 G2.4).</summary>
+    /// <summary>403 shape F <c>insufficient_granular_scope</c> naming the route's boundary and label, no <c>WWW-Authenticate</c> (the <c>user</c> form MEASURED 2026-11-06 on <c>personal_access_tokens/self</c> and 2026-11-05 on <c>GET projects</c>, D385; the <c>project</c> form READ g2 G2.4).</summary>
     public static FakeGitLabFault InsufficientGranular { get; } = new(nameof(InsufficientGranular));
 
     /// <summary>403 shape A <c>{"message":"403 Forbidden"}</c> (READ r6 5.2).</summary>

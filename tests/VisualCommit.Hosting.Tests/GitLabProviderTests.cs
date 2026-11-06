@@ -79,7 +79,8 @@ public sealed class GitLabProviderTests
         var noUser = await provider.CheckTokenAsync(projectsOnly, null, Cancelled);
 
         // The fake's answers (4.3, 4.4): an unknown token's 401 A MEASURED r6 1.2; the revoked and
-        // expired 401 F READ g2 G2.2, kept READ by 15.7; the granular 403 F READ g2 G2.4.
+        // expired 401 F READ g2 G2.2, kept READ by 15.7; the granular 403 F naming user MEASURED
+        // 2026-11-06 (self) and 2026-11-05 (GET projects, D385).
         Assert.Equal(
             [
                 (HostingFailureKind.BadCredentials, "401 Unauthorized", (string?)null),
@@ -503,7 +504,9 @@ public sealed class GitLabProviderTests
         using var provider = lab.Provider();
         var p = new HostedRepository(HostingProvider.GitLab, Host, "g/s", "p");
         NewPullRequest New(string head, string @base) => new("T", "", head, null, @base, false);
-        // Create's answers (4.3): 409 B, 400 C and 422 B READ g2 G1.1; 403 A READ g2 G1.2. The 409
+        // Create's answers (4.3): 409 B and 400 C naming source_branch MEASURED 2026-11-06 (the rest
+        // READ g2 G1.1); 422 B READ g2
+        // G1.1; 403 A READ g2 G1.2. The 409
         // names the open request !<iid> alone (READ, 4's As built: to_reference).
         var cases = new (HostedRepository Base, NewPullRequest Request, HostingFailureKind Kind, PullRequestRefusal Refusal)[]
         {

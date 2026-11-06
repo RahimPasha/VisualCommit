@@ -1,8 +1,9 @@
 // The fake of Azure DevOps' answers that the research left ASSUMED and that WP-LIVE's probes settle
 // before part A's checks copy them (docs/phase-7b-design.md 3.7; r5 9, g1 G6; D342, D370, D373, D374).
 // The fix package (WP-LF) copied stage 1's run of 2026-11-05 and marked each one MEASURED 2026-11-05:
-// - connectionData for a member signed in with a Code-only token (g1 G3.2's shape; the member names
-//   as served, customDisplayName present only when set, as g1's sample has it);
+// - connectionData for a member signed in with a Code-only token (g1 G3.2's shape; the identity's nine
+//   member names as served, customDisplayName among them, by default the display name; null leaves it
+//   out, as g1 G3.2's sample 1 has it, READ);
 // - check 4's refusals of D373's made-up values: a short one in Basic, on connectionData 200 with the
 //   Anonymous identity, with and without Suppress, in the private organization too (the fake's 302
 //   and 401 TF400813 stay for no credential at all, MEASURED r5 1.3); an 84-character PAT-shaped one,
@@ -32,7 +33,8 @@
 //   refs/pull/<n>/source) and /source refs;
 // - outside D352 and D374: another organization's token, an unknown project (TF200016), TF401027's
 //   statuses, 429's typeKey, the 5xx bodies, $top's default (101) and its cap (MaxPerPage); a
-//   Bearer or no credential on connectionData of a private organization (r5 1.3's 302 and 401).
+//   Bearer on connectionData of a private organization (no credential there is r5 1.3's 302 and 401,
+//   MEASURED).
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -93,7 +95,7 @@ public sealed partial class FakeAzureDevOps
             return fault is not null && !late ? FaultAnswer(call, route, fault, null) : Finish(fault, Page());
         }
 
-        // 1. The organization (MEASURED r5 1.3 without a credential; with a token ASSUMED, D374).
+        // 1. The organization (MEASURED r5 1.3 without a credential; with a token MEASURED 2026-11-05, D374).
         FakeAzureOrganization? organization;
         if (route.Kind == Kind.Areas && route.Organization is null)
         {
@@ -374,7 +376,7 @@ public sealed partial class FakeAzureDevOps
     private static string OutOfRange(string version) =>
         $"The requested REST API version of {version} is out of range for this server. The latest REST API version this server supports is 7.2.";
 
-    /// <summary>A version's 400 in r5 1.4's shape (MEASURED; the typeNames ASSUMED).</summary>
+    /// <summary>A version's 400 in r5 1.4's shape (MEASURED; <c>VssInvalidPreviewVersionException</c>'s typeName MEASURED 2026-11-05 at <c>7.1</c>, the other typeNames ASSUMED alike).</summary>
     private AuthRemoteResponse VersionError(string typeKey, string message) =>
         Json(400, ErrorJson(message, $"Microsoft.VisualStudio.Services.WebApi.{typeKey}, Microsoft.VisualStudio.Services.WebApi", typeKey), null);
 
@@ -602,7 +604,8 @@ public sealed partial class FakeAzureDevOps
     /// <see cref="CreateStatus"/> (201 MEASURED 2026-11-05), <c>status: active</c>, <c>isDraft</c> as
     /// sent, the token's user as <c>createdBy</c> (its <c>id</c> the account's, MEASURED 2026-11-05),
     /// <c>mergeStatus: queued</c> (READ; <c>succeeded</c> at the read after it MEASURED 2026-11-05),
-    /// the answer with <c>labels</c>; one with nothing ahead is made too (MEASURED 2026-11-05). A
+    /// the answer with <c>labels</c> (MEASURED 2026-11-05 on the create with nothing ahead; ASSUMED
+    /// alike for a create with commits ahead); one with nothing ahead is made too (MEASURED 2026-11-05). A
     /// fork's source is <c>forkSource.repository.id</c> (READ g1 G1.2, kept: D375).
     /// </summary>
     private async Task<AuthRemoteResponse> CreateAsync(FakeServiceCall call, Route route, FakeAzureOrganization organization, FakeAzureToken caller, string served, CancellationToken ct)

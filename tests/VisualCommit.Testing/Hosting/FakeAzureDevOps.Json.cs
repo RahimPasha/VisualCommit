@@ -73,9 +73,9 @@ public sealed partial class FakeAzureDevOps
         $"git@ssh.dev.azure.com:v3/{Seg(repository.Organization)}/{Seg(repository.Project.Name)}/{Seg(repository.Name)}";
 
     /// <summary>
-    /// <c>connectionData</c> (r5 1.2, g1 G3.2): a member's identity in sample 1's member names and
-    /// nesting (MEASURED 2026-11-05 for a Code-only token: the top-level names and the identity's,
-    /// with and without Suppress; <c>customDisplayName</c> only when set, READ), or the Anonymous
+    /// <c>connectionData</c> (r5 1.2, g1 G3.2): a member's identity in g1 G3.2's nesting (MEASURED
+    /// 2026-11-05 for a Code-only token: the top-level names and the identity's nine, with
+    /// <c>customDisplayName</c>, with and without Suppress), or the Anonymous
     /// identity when <paramref name="user"/> is null (MEASURED r5 1.2); the instance, deployment and
     /// service owner the fake's own.
     /// </summary>
@@ -96,11 +96,13 @@ public sealed partial class FakeAzureDevOps
     };
 
     /// <summary>
-    /// A trimmed identity. The Anonymous one is r5 1.2's byte for byte (MEASURED). A member's (READ g1
-    /// G3.2 sample 1): <c>id</c>, <c>descriptor</c> <c>Microsoft.IdentityModel.Claims.ClaimsIdentity;&lt;tenant&gt;\&lt;address&gt;</c>,
-    /// <c>subjectDescriptor</c> <c>aad.…</c>, <c>providerDisplayName</c>, <c>customDisplayName</c> only when
-    /// set (sample 2), <c>isActive</c>, <c>properties.Account</c> with a capital A (MEASURED g4 D4 §1)
-    /// holding the address, <c>resourceVersion</c> 2 and <c>metaTypeId</c> (0 unless set, g1 G0.4).
+    /// A trimmed identity. The Anonymous one is r5 1.2's byte for byte (MEASURED). A member's nine names
+    /// in the order stage 1 measured (MEASURED 2026-11-05; the values' forms READ g1 G3.2 sample 1):
+    /// <c>id</c>, <c>descriptor</c> <c>Microsoft.IdentityModel.Claims.ClaimsIdentity;&lt;tenant&gt;\&lt;address&gt;</c>,
+    /// <c>subjectDescriptor</c> <c>aad.…</c>, <c>providerDisplayName</c>, <c>customDisplayName</c>
+    /// (<see cref="FakeAzureUser.CustomDisplayName"/>: the display name unless set; null leaves it out,
+    /// as sample 1 has it, READ), <c>isActive</c>, <c>properties.Account</c> with a capital A (MEASURED
+    /// g4 D4 §1) holding the address, <c>resourceVersion</c> 2 and <c>metaTypeId</c> (0 unless set, g1 G0.4).
     /// </summary>
     private static JsonObject IdentityJson(FakeAzureUser? user)
     {
@@ -460,7 +462,7 @@ public sealed partial class FakeAzureDevOps
 
     private static byte[] Serialize(JsonNode node) => JsonSerializer.SerializeToUtf8Bytes(node, JsonOptions);
 
-    /// <summary>Which answer a single pull request is: a read, a create's (with <c>labels</c>, MEASURED 2026-11-05) or an update's that closed it (without <c>mergeStatus</c> and <c>lastMergeCommit</c>, MEASURED 2026-11-05 on an abandon).</summary>
+    /// <summary>Which answer a single pull request is: a read, a create's (with <c>labels</c>, MEASURED 2026-11-05 on the create with nothing ahead, ASSUMED alike for a create with commits ahead) or an update's that closed it (without <c>mergeStatus</c> and <c>lastMergeCommit</c>, MEASURED 2026-11-05 on an abandon).</summary>
     private enum PullAnswer
     {
         Read,

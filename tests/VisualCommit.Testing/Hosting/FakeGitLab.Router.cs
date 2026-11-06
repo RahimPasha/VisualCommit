@@ -10,9 +10,10 @@
 // 5's 403 naming `user` (D385). Kept as marked: a legacy token's sign-in (`user`, `self`) and check
 // 4's 403 with its `scope` lists, on GitLab's docs and source (READ, the lists ASSUMED; D375); a
 // selected-projects token's list (ASSUMED, as 7.5) and git's 403s (READ g2 G3, as 4.5 marks them),
-// which need a token D364 does not make; the expired and revoked 401s (READ, 15.7); a list's members
-// past r6 4.1's (ASSUMED: the sandbox had no open one to list); a project route with Project: Read
-// among the user permissions alone (ASSUMED: the project permission's 403). Kept ASSUMED: the moved
+// which need a token D364 does not make; the expired and revoked 401s (READ, 15.7); a project route
+// with Project: Read among the user permissions alone (ASSUMED: the project permission's 403). A
+// list's rows, a fork's among them, are r6 4.1's captured ones (MEASURED there, the same members in
+// the same order; the sandbox had no open one to list on 2026-11-06). Kept ASSUMED: the moved
 // project's query order, an empty repository's `default_branch`, an unknown `target_project_id`,
 // the 5xx bodies, the values of the members the client does not read.
 // Kept ASSUMED too (4.3, 4.4 and the build's own choices, D370): create's (a) before (b), its missing
@@ -117,8 +118,8 @@ public sealed partial class FakeGitLab
                 revoked = token is not null && TokenLoginLocked(bearer) is null;
             }
 
-            // Check 3: unknown 401 shape A (READ g2 G2.1); revoked and expired 401 shape F with the
-            // challenge (READ g2 G2.2).
+            // Check 3: unknown 401 shape A (MEASURED 2026-11-06, D373's made-up glpat- value; READ g2
+            // G2.1); revoked and expired 401 shape F with the challenge (READ g2 G2.2, kept: 15.7).
             if (token is null)
             {
                 return Unauthorized(call);
@@ -166,8 +167,9 @@ public sealed partial class FakeGitLab
             return InsufficientScope(call, need.ScopeList!);
         }
 
-        // Check 5: a fine-grained token without the route's permission (READ g2 G2.4): 403 naming the
-        // boundary and the label; a public project's reads pass; a project hidden from the user 404.
+        // Check 5: a fine-grained token without the route's permission: 403 naming the boundary and
+        // the label (the user form MEASURED 2026-11-06 on self and 2026-11-05 on GET projects, D385;
+        // the project form READ g2 G2.4); a public project's reads pass; a project hidden from the user 404.
         if (token is { Kind: FakeGitLabTokenKind.FineGrained } && !token.Has(need.Label))
         {
             if (FakeGitLabPermissions.IsUserBoundary(need.Label) || route.Id is null)
@@ -520,7 +522,8 @@ public sealed partial class FakeGitLab
 
     /// <summary>
     /// <c>PUT …/merge_requests/:iid</c> with <c>state_event</c> <c>close</c> or <c>reopen</c> (READ g2 G1.5):
-    /// 200 with the state; unknown 404 "404 Not found" (READ g2 G1.5); neither its author nor a Developer
+    /// 200 with the state (the close's 200 MEASURED 2026-11-06, stage 1's clean-up; reopen READ);
+    /// unknown 404 "404 Not found" (READ g2 G1.5); neither its author nor a Developer
     /// 403 (ASSUMED: who may update); another <c>state_event</c> 400 shape E "state_event does not have a
     /// valid value" (ASSUMED: Grape's text).
     /// </summary>
@@ -762,7 +765,8 @@ public sealed partial class FakeGitLab
         return MovedPermanently(call, fault.Location!.AbsoluteUri);
     }
 
-    // The texts of shape F (READ g2 G2.1, G2.2) and of a fine-grained refusal (READ g2 G2.4).
+    // The texts of shape F (READ g2 G2.1, G2.2) and of a fine-grained refusal (its user form MEASURED
+    // 2026-11-06 and 2026-11-05, D385; the project form READ g2 G2.4).
     private const string ExpiredText = "Token is expired. You can either do re-authorization or token refresh.";
     private const string RevokedText = "Token was revoked. You have to re-authorize from the user.";
     private const string ScopeText = "The request requires higher privileges than provided by the access token.";

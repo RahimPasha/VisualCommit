@@ -311,7 +311,11 @@ public sealed class FakeGitLabTests
         Assert.Equal((lab.Project.Id, lab.Project.Id, lab.Project.Id), ((long)one["project_id"]!, (long)one["source_project_id"]!, (long)one["target_project_id"]!));
         Assert.False(one.ContainsKey("allow_collaboration"));
         Assert.Matches(@"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$", (string)one["created_at"]!);
+        // A list's row has r6 4.1's captured members in their order, a fork's with allow_collaboration
+        // and allow_maintainer_to_push right after prepared_at (MEASURED r6 4.1).
+        Assert.Equal(ListRow, one.Select(member => member.Key));
         var forked = all.Json[0]!.AsObject();
+        Assert.Equal(WithForkPair(ListRow), forked.Select(member => member.Key));
         Assert.Equal((lab.Fork.Id, lab.Project.Id, false), ((long)forked["source_project_id"]!, (long)forked["target_project_id"]!, (bool)forked["allow_collaboration"]!));
         Assert.DoesNotContain(forked, member => member.Key.Contains("source_project_path", StringComparison.Ordinal) || member.Key == "source_project");
         Assert.Equal(await lab.TipAsync("fix"), (string)forked["sha"]!);
@@ -385,6 +389,9 @@ public sealed class FakeGitLabTests
         var fork = await lab.CreateAsync(forkPath, lab.Ada, ("source_branch", "fix"), ("target_branch", "main"), ("title", "Fix the typo"), ("target_project_id", Id(lab.Project)), ("allow_collaboration", "true"));
         Assert.Equal((201, 5, false), (fork.Status, (int)fork.Json["iid"]!, (bool)fork.Json["draft"]!));
         Assert.Equal((lab.Project.Id, lab.Fork.Id, lab.Project.Id, true), ((long)fork.Json["project_id"]!, (long)fork.Json["source_project_id"]!, (long)fork.Json["target_project_id"]!, (bool)fork.Json["allow_collaboration"]!));
+        // A single fork one has the pair after prepared_at too (MEASURED r6 4.1, its captured fork one).
+        Assert.Equal(WithForkPair(read.Where(name => name != "first_contribution")), fork.Json.AsObject().Select(member => member.Key));
+        Assert.Equal(WithForkPair(read), (await lab.SendAsync(HttpMethod.Get, "api/v4/projects/g%2Fs%2Fp/merge_requests/5", lab.Ada)).Json.AsObject().Select(member => member.Key));
         Assert.Equal("ada", (string)fork.Json["author"]!["username"]!);
 
         // A fork's duplicate names the open one !<iid> alone, as a project's own does (READ: to_reference
@@ -621,6 +628,20 @@ public sealed class FakeGitLabTests
     }
 
     private static string Id(FakeGitLabProject project) => project.Id.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>A merge-request list's row: r6 4.1's captured members, in their order (MEASURED there).</summary>
+    private static readonly string[] ListRow =
+    [
+        "id", "iid", "project_id", "title", "description", "state", "created_at", "updated_at", "merged_by", "merge_user", "merged_at", "closed_by", "closed_at", "target_branch", "source_branch",
+        "user_notes_count", "upvotes", "downvotes", "author", "assignees", "assignee", "reviewers", "source_project_id", "target_project_id", "labels", "draft", "imported", "imported_from",
+        "work_in_progress", "milestone", "merge_when_pipeline_succeeds", "merge_status", "detailed_merge_status", "merge_after", "sha", "merge_commit_sha", "squash_commit_sha",
+        "discussion_locked", "should_remove_source_branch", "force_remove_source_branch", "prepared_at", "reference", "references", "web_url", "time_stats", "squash", "squash_on_merge",
+        "task_completion_status", "has_conflicts", "blocking_discussions_resolved", "approvals_before_merge",
+    ];
+
+    /// <summary>A fork's member names: <paramref name="names"/> with the fork pair right after <c>prepared_at</c> (MEASURED r6 4.1).</summary>
+    private static List<string> WithForkPair(IEnumerable<string> names) =>
+        [.. names.SelectMany(name => name == "prepared_at" ? [name, "allow_collaboration", "allow_maintainer_to_push"] : new[] { name })];
 
     private static List<string> Paths(Answer answer) => [.. answer.Json.AsArray().Select(row => (string)row!["path_with_namespace"]!)];
 

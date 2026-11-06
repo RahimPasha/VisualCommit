@@ -72,7 +72,7 @@ public sealed class AzureDevOpsClientTests
     {
         var bodies = new Func<HttpResponseMessage>[]
         {
-            // Empty, as for an unknown token (READ g1 G2).
+            // Empty, as for an unknown token (MEASURED 2026-11-05, D373's PAT-shaped value; READ g1 G2).
             () => Answer(HttpStatusCode.Unauthorized, string.Empty, null, ("WWW-Authenticate", "Basic realm=\"https://tfsprodfake.app.visualstudio.com/\""), ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),
             // HTML (g1 G0.2), and the same led by a BOM.
             () => Answer(HttpStatusCode.Unauthorized, "<html><body>Sign in</body></html>", "text/html", ("ActivityId", "7b0aac71-0000-4a00-8000-000000000001")),

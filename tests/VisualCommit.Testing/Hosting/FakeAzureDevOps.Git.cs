@@ -78,8 +78,9 @@ public sealed partial class FakeAzureDevOps
     /// "Merge pull request &lt;n&gt; from &lt;source&gt; into &lt;target&gt;" (parents and message MEASURED
     /// r5 3.3), its creator at <see cref="AppClocks.HarnessTime"/> as author and committer; a fork's
     /// source is fetched first into <c>refs/fake/source/&lt;n&gt;</c>. One <c>update-ref --stdin</c>
-    /// writes them and deletes every <c>refs/fake/source/*</c> and the merge refs of abandoned,
-    /// completed (MEASURED r5 3.3) and conflicting ones (READ). A pull request whose branch is gone keeps its ref.
+    /// writes them and deletes every <c>refs/fake/source/*</c> and the merge refs of abandoned
+    /// (MEASURED 2026-11-05: gone by the first read after the abandon), completed (MEASURED r5 3.3) and
+    /// conflicting ones (READ). A pull request whose branch is gone keeps its ref.
     /// </summary>
     public async Task SyncRefsAsync(FakeAzureRepository repository, CancellationToken ct = default)
     {
@@ -137,7 +138,9 @@ public sealed partial class FakeAzureDevOps
     /// A Basic password's login for git: a known token, neither revoked nor expired, of the
     /// repository's organization (its first segment), under any non-empty user, the organization and
     /// <c>x-access-token</c> included (READ r5 0.5: "a username, which can be anything except an empty
-    /// string"); another organization's token is refused (401, ASSUMED). The login is <c>{o}/{user id}</c>,
+    /// string"; <c>x-access-token</c> through the app's helper MEASURED 2026-11-05, stage 1's clones on
+    /// dev.azure.com and the organization's host, design 16.1); another organization's token is refused
+    /// (401, ASSUMED). The login is <c>{o}/{user id}</c>,
     /// with <c>#read</c> for a read-only token.
     /// </summary>
     protected override string? LoginOfToken(string repository, string token)

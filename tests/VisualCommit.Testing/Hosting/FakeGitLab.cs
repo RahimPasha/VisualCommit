@@ -338,7 +338,7 @@ public sealed partial class FakeGitLab : FakeHostingService
         }
     }
 
-    /// <summary>A push: Developer (30) or above, with <c>api</c>, <c>write_repository</c> or Code: Push (READ g2 G3).</summary>
+    /// <summary>A push: Developer (30) or above, with <c>api</c>, <c>write_repository</c> or Code: Push (READ g2 G3; an Owner's with a fine-grained token's Code: Push MEASURED 2026-11-06, stage 1's two pushes through the app's helper).</summary>
     protected override bool MayPush(string repository, string login)
     {
         var token = GitToken();
@@ -422,8 +422,9 @@ public sealed partial class FakeGitLab : FakeHostingService
 
     /// <summary>
     /// A Basic password's login for git: the username of a live token under any non-empty user (READ r6
-    /// 11, g2 G3); an unknown, revoked or expired one null, so 401 with realm GitLab (MEASURED; expired
-    /// and revoked READ g2 G3).
+    /// 11, g2 G3; under <c>x-access-token</c> through the app's helper MEASURED 2026-11-06, stage 1's
+    /// clone and pushes, design 16.1); an unknown, revoked or expired one null, so 401 with realm GitLab
+    /// (MEASURED; expired and revoked READ g2 G3).
     /// </summary>
     protected override string? LoginOfToken(string repository, string token)
     {

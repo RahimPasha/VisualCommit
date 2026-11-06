@@ -184,12 +184,14 @@ public sealed class GitLabClientTests
 
     [Theory]
     // Marks (the design's header): where each answer comes from, for WP-LF's corrections.
-    // 401 shape A: MEASURED r6 1.2. Shape F's expired token: READ g2 G2.2, kept READ by 15.7. An empty
+    // 401 shape A: MEASURED r6 1.2 (an unknown token's MEASURED 2026-11-06, D373). Shape F's expired
+    // token: READ g2 G2.2, kept READ by 15.7. An empty
     // text/plain 401: made up, for 7.3's "401, any body".
     [InlineData(401, "application/json", "{\"message\":\"401 Unauthorized\"}", HostingFailureKind.BadCredentials, "401 Unauthorized", null)]
     [InlineData(401, "application/json", "{\"error\":\"invalid_token\",\"error_description\":\"Token is expired. You can either do re-authorization or token refresh.\"}", HostingFailureKind.BadCredentials, "Token is expired. You can either do re-authorization or token refresh.", null)]
     [InlineData(401, "text/plain", "", HostingFailureKind.BadCredentials, "401 Unauthorized", null)]
-    // 403 shape F: READ g2 G2.3 (insufficient_scope; its scope list ASSUMED) and g2 G2.4 (granular).
+    // 403 shape F: READ g2 G2.3 (insufficient_scope; its scope list ASSUMED); granular, its user form
+    // MEASURED 2026-11-06 (self) and 2026-11-05 (GET projects, D385), its project form READ g2 G2.4.
     // 403 shape A: READ r6 5.2.
     [InlineData(403, "application/json", "{\"error\":\"insufficient_scope\",\"error_description\":\"The request requires higher privileges than provided by the access token.\",\"scope\":\"read_user ai_workflows api read_api\"}", HostingFailureKind.Forbidden, "The request requires higher privileges than provided by the access token.", "insufficient_scope")]
     [InlineData(403, "application/json", "{\"error\":\"insufficient_granular_scope\",\"error_description\":\"Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read].\"}", HostingFailureKind.Forbidden, "Access denied: This operation requires a fine-grained personal access token with the following user permissions: [User: Read].", "insufficient_granular_scope")]
@@ -198,7 +200,9 @@ public sealed class GitLabClientTests
     [InlineData(404, "application/json", "{\"message\":\"404 Project Not Found\"}", HostingFailureKind.NotFound, "404 Project Not Found", null)]
     [InlineData(404, "application/json", "{\"message\":\"404 Not found\"}", HostingFailureKind.NotFound, "404 Not found", null)]
     [InlineData(404, "application/json", "{\"error\":\"404 Not Found\"}", HostingFailureKind.NotFound, "404 Not Found", null)]
-    // 409 B and 400 C: READ g2 G1.1. 400 E "state does not have a valid value": MEASURED r6 4.1;
+    // 409 B and 400 C: MEASURED 2026-11-06 (stage 1's creates, C naming source_branch; the rest of C
+    // READ g2 G1.1). 400 E "state does not
+    // have a valid value": MEASURED r6 4.1;
     // 400 E "<name> is missing": READ g2 G1.1. 405 A: READ (r6 3.2). 422 B: READ g2 G1.1.
     [InlineData(409, "application/json", "{\"message\":[\"Another open merge request already exists for this source branch: !21\"]}", HostingFailureKind.Validation, "Another open merge request already exists for this source branch: !21", null)]
     [InlineData(400, "application/json", "{\"message\":{\"source_branch\":[\"does not exist\"]}}", HostingFailureKind.Validation, "source_branch does not exist", null)]
@@ -268,8 +272,9 @@ public sealed class GitLabClientTests
 
     [Theory]
     // The fake's faults (4.4), marked as the fake marks them: Unauthorized MEASURED r6 1.2; Expired and
-    // Revoked READ g2 G2.2 (kept READ, 15.7); InsufficientScope READ g2 G2.3; InsufficientGranular READ
-    // g2 G2.4; Forbidden READ r6 5.2; NotFound READ r6 1.2; both rate limits READ r6 8; Timeout READ
+    // Revoked READ g2 G2.2 (kept READ, 15.7); InsufficientScope READ g2 G2.3; InsufficientGranular's
+    // user form MEASURED 2026-11-06 and 2026-11-05 (D385), its project form READ g2 G2.4; Forbidden
+    // READ r6 5.2; NotFound READ r6 1.2; both rate limits READ r6 8; Timeout READ
     // r6 5.2, 8; ServerError and BadGateway ASSUMED; Malformed the fake's own.
     [InlineData("Unauthorized", HostingFailureKind.BadCredentials, "401 Unauthorized", null, null)]
     [InlineData("Expired", HostingFailureKind.BadCredentials, "Token is expired. You can either do re-authorization or token refresh.", null, null)]
@@ -303,7 +308,9 @@ public sealed class GitLabClientTests
     }
 
     [Theory]
-    // Create's answers (4.3): 409 B, 400 C and 400 E READ g2 G1.1; 422 B READ g2 G1.1 (this body
+    // Create's answers (4.3): 409 B and 400 C naming source_branch MEASURED 2026-11-06 (the rest
+    // READ g2 G1.1); 400 E READ g2
+    // G1.1; 422 B READ g2 G1.1 (this body
     // ASSUMED); 403 A READ g2 G1.2. "is too long": made-up words in C's shape.
     [InlineData("POST", "projects/5001/merge_requests", 409, "{\"message\":[\"Another open merge request already exists for this source branch: !21\"]}", PullRequestRefusal.AlreadyExists)]
     [InlineData("POST", "projects/5001/merge_requests", 400, "{\"message\":{\"source_branch\":[\"does not exist\"]}}", PullRequestRefusal.HeadMissing)]
