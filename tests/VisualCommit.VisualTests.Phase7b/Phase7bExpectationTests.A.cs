@@ -75,6 +75,7 @@ public sealed partial class Phase7bExpectationTests
         Assert.Equal(PartA.TokenLabel, Texts.TokenLabel);
         Assert.Equal(PartA.Checking, Texts.SignInChecking);
         Assert.Equal((PartA.Cancel, PartA.SignIn, PartA.Close), (Texts.Cancel, Texts.SignIn, Texts.Close));
+        Assert.Equal((PartA.Cancel, PartA.Save), (VisualCommit.App.ViewModels.Operations.OperationTexts.SettingsTexts.Cancel, VisualCommit.App.ViewModels.Operations.OperationTexts.SettingsTexts.Save));
     }
 
     [Fact]

@@ -404,15 +404,19 @@ public sealed partial class Phase7bChecksA
         Assert.Equal(PartA.SectionX, app.BoundsOf(label).X, PartA.Tolerance);
     }
 
-    /// <summary>A block signed out: 7a's signed-out block, <c>Not signed in.</c> from x 480, <c>Sign in…</c> 10 below, enabled.</summary>
-    private static void AssertSignedOutBlock(ShellDriver app, HostingProvider provider)
+    /// <summary>
+    /// A block signed out: 7a's signed-out block, <c>Not signed in.</c> from x 480, <c>Sign in…</c> 10
+    /// below, enabled; behind a stacked dialog (<paramref name="behindDialog"/>) the same block, whose
+    /// button the dialog's layer leaves disabled, so its enablement is not asserted there.
+    /// </summary>
+    private static void AssertSignedOutBlock(ShellDriver app, HostingProvider provider, bool behindDialog = false)
     {
         AssertBlockShows(app, provider, "AccountsSignedOut", "AccountsSignInButton");
         var text = InBlock(app, provider, "AccountsSignedOut");
         Assert.Equal(PartA.SignedOut, ((TextBlock)text).Text);
         Assert.Equal(PartA.ControlsX, app.BoundsOf(text).X, PartA.Tolerance);
         var button = InBlock(app, provider, "AccountsSignInButton");
-        Assert.True(button.IsEffectivelyEnabled);
+        Assert.True(behindDialog || button.IsEffectivelyEnabled, $"{PartA.IdOf(provider, "AccountsSignInButton")} is disabled.");
         Assert.Equal(PartA.SignInButton, AutomationProperties.GetName(button));
         Assert.Equal(PartA.ButtonsGap, app.BoundsOf(button).Top - app.BoundsOf(text).Bottom, PartA.Tolerance);
     }
@@ -525,20 +529,70 @@ public sealed partial class Phase7bChecksA
         Assert.Equal(sevenA.DesiredSize.Height, bounds.Height, PartA.IntroTolerance);
     }
 
-    /// <summary>The settings card and section list at 1100×700 (7a's A1).</summary>
+    /// <summary>
+    /// The settings card and section list at 1100×700 as 7a's A1: the card exactly, five buttons in
+    /// order, 176 × 30 and 2 apart, Accounts at its place (±2), only it selected, no error dot; and
+    /// <c>Cancel</c> and <c>Save</c> as phase 6's part S at 1100×700 (its S14 step 2): Save in the
+    /// primary look, 8 right of Cancel, ending about 22 inside the card's right, both on the row y 607
+    /// to 639 (±2).
+    /// </summary>
     private static void AssertFrame(ShellDriver app)
     {
         var (x, y, width, height) = PartA.Card;
-        Assert.Equal(new Rect(x, y, width, height), app.BoundsOf(CardNamed(app, "SettingsCard")));
+        var card = CardNamed(app, "SettingsCard");
+        var cardBounds = app.BoundsOf(card);
+        Assert.Equal(new Rect(x, y, width, height), cardBounds);
         var buttons = app.FindByAutomationId("SettingsNav").GetVisualChildren().OfType<Button>().ToList();
         Assert.Equal(PartA.NavIds, buttons.Select(button => AutomationProperties.GetAutomationId(button)));
         Assert.Equal(PartA.NavButtons, buttons.Select(button => AutomationProperties.GetName(button)));
+        for (var i = 0; i < buttons.Count; i++)
+        {
+            var bounds = app.BoundsOf(buttons[i]);
+            Assert.Equal((PartA.NavWidth, PartA.NavHeight), (bounds.Width, bounds.Height));
+            if (i > 0)
+            {
+                Assert.Equal(PartA.NavGap, bounds.Top - app.BoundsOf(buttons[i - 1]).Bottom, 1.0);
+            }
+
+            Assert.True(buttons[i].Classes.Contains("selected") == (i == 4), $"{PartA.NavIds[i]} is {(i == 4 ? "not " : string.Empty)}in the selected look.");
+            Assert.DoesNotContain(buttons[i].GetVisualDescendants().OfType<Control>(), control => AutomationProperties.GetAutomationId(control) == "SettingsNavError" && control.IsEffectivelyVisible);
+        }
+
         var accounts = app.BoundsOf(buttons[4]);
         Assert.True(
             Math.Abs(accounts.X - PartA.AccountsButtonAt.X) <= PartA.Tolerance && Math.Abs(accounts.Y - PartA.AccountsButtonAt.Y) <= PartA.Tolerance,
             $"SettingsNavAccounts is at ({accounts.X}, {accounts.Y}), expected {PartA.AccountsButtonAt} ±{PartA.Tolerance}.");
-        Assert.Equal((PartA.NavWidth, PartA.NavHeight), (accounts.Width, accounts.Height));
-        Assert.Contains("selected", buttons[4].Classes);
+
+        var cancel = (Button)app.FindByAutomationId(card, "CancelButton");
+        var save = (Button)app.FindByAutomationId(card, "ConfirmButton");
+        Assert.Equal((PartA.Cancel, PartA.Save), ((string?)cancel.Content, (string?)save.Content));
+        Assert.True(cancel.IsEffectivelyEnabled && save.IsEffectivelyEnabled, "Cancel or Save is disabled.");
+        Assert.Same(Application.Current!.FindResource("VcPrimaryButton"), save.Theme);
+        Assert.Equal(PartA.SettingsButtonSpacing, app.BoundsOf(save).X - app.BoundsOf(cancel).Right, PartA.Tolerance);
+        Assert.Equal(cardBounds.Right - PartA.SaveRightInset, app.BoundsOf(save).Right, PartA.Tolerance);
+        foreach (var button in new[] { cancel, save })
+        {
+            Assert.Equal(PartA.SettingsButtons.Top, app.BoundsOf(button).Top, PartA.Tolerance);
+            Assert.Equal(PartA.SettingsButtons.Bottom, app.BoundsOf(button).Bottom, PartA.Tolerance);
+        }
+    }
+
+    /// <summary>Whether two folder paths name one folder (the call log's working directory as git was given it; 7a's).</summary>
+    private static bool SameFolder(string? left, string right) =>
+        left is not null && string.Equals(
+            Path.GetFullPath(left).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            Path.GetFullPath(right).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    /// <summary>Whether <paramref name="control"/>'s top lies above the section's viewport: scrolled out of view.</summary>
+    private static bool TopScrolledOut(ShellDriver app, Control control) =>
+        app.BoundsOf(control).Top < app.BoundsOf(Scroller(app)).Top - 0.5;
+
+    /// <summary>The dialog's <c>Sign in</c> and <c>Cancel</c> both enabled.</summary>
+    private static void AssertDialogButtonsEnabled(ShellDriver app)
+    {
+        Assert.True(ConfirmOf(app).IsEffectivelyEnabled, "Sign in is disabled.");
+        Assert.True(app.FindByAutomationId(app.SignInDialogView(), "CancelButton").IsEffectivelyEnabled, "Cancel is disabled.");
     }
 
     /// <summary>The dialog of <paramref name="provider"/> as it opens: 7a's card, 400 wide at x 350 to 750, centred; title, help and the provider's link(s) and boxes.</summary>
@@ -583,6 +637,23 @@ public sealed partial class Phase7bChecksA
         }
 
         Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(token));
+
+        // The labels (promptLabel): "Token" right above its box, below the links or the organization's
+        // box; on Azure DevOps "Organization" right above its box, below the link; elsewhere none.
+        var labels = view.GetVisualDescendants().OfType<TextBlock>().Where(block => block.Classes.Contains("promptLabel") && block.IsEffectivelyVisible).ToList();
+        var tokenLabel = Assert.Single(labels, block => block.Text == PartA.TokenLabel);
+        Control aboveToken = provider switch { HostingProvider.AzureDevOps => box, HostingProvider.GitLab => legacy, _ => link };
+        Assert.True(app.BoundsOf(tokenLabel).Top >= app.BoundsOf(aboveToken).Bottom - 0.5 && app.BoundsOf(tokenLabel).Bottom <= app.BoundsOf(token).Top + 0.5, "The label Token is not between its box and what is above it.");
+        if (provider == HostingProvider.AzureDevOps)
+        {
+            var organizationLabel = Assert.Single(labels, block => block.Text == PartA.OrganizationLabel);
+            Assert.True(app.BoundsOf(organizationLabel).Top >= app.BoundsOf(link).Bottom - 0.5 && app.BoundsOf(organizationLabel).Bottom <= app.BoundsOf(box).Top + 0.5, "The label Organization is not between the link and its box.");
+        }
+        else
+        {
+            Assert.DoesNotContain(labels, block => block.Text == PartA.OrganizationLabel);
+        }
+
         Assert.Equal(noKeychain, app.FindByAutomationId(view, "SignInNoKeychain").IsEffectivelyVisible);
         foreach (var id in new[] { "SignInChecking", "SignInError", "SignInSaveFailed" })
         {

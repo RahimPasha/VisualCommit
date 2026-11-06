@@ -271,6 +271,17 @@ public static partial class Phase7bExpectations
         public const double ControlsRight = 944;
         public static readonly (double Left, double Right) DialogCard = (350, 750);
 
+        /// <summary>An empty tab's title (A14 step 3's tab strip).</summary>
+        public const string NewTab = "New tab";
+
+        /// <summary>The screen's <c>Save</c> (7a's, phase 6's part S).</summary>
+        public const string Save = "Save";
+
+        /// <summary>Cancel and Save as phase 6's part S at 1100×700 (its S14 step 2): the row y 607 to 639, 8 apart, Save ending 22 inside the card's right.</summary>
+        public static readonly (double Top, double Bottom) SettingsButtons = (607, 639);
+        public const double SettingsButtonSpacing = 8;
+        public const double SaveRightInset = 22;
+
         /// <summary>The section's rows 18 apart, the blocks 24, the buttons 10 below the texts and 8 apart; the link 6 below the help, GitLab's second 4 below the first.</summary>
         public const double RowSpacing = 18;
         public const double BlockSpacing = 24;

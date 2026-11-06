@@ -65,6 +65,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             ShotA(app, PartA.A01ThreeSignedOut);
             var calls = await app.QuietCallsSinceAsync(quiet);
             Assert.Equal(["git config --show-scope --show-origin -z --list"], calls.Select(call => call.CommandText));
+            Assert.True(SameFolder(calls[0].WorkingDirectory, data.Path), $"The screen's read ran in {calls[0].WorkingDirectory}.");
             AssertNoRequests(served, default);
             Assert.Empty(app.Tokens.Calls);
 
@@ -153,6 +154,8 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             Assert.True(WhollyInView(app, InBlock(app, HostingProvider.AzureDevOps, "AccountUseForGitNote")), "Azure DevOps' note is not in view at the end.");
             Assert.True(WhollyInView(app, app.AccountsBlock(HostingProvider.AzureDevOps)), "Azure DevOps' block is not wholly in view at the end.");
             Assert.False(WhollyInView(app, Find(app, "AccountsIntro")), "The intro is still in view at the end.");
+            Assert.True(TopScrolledOut(app, Find(app, "AccountsIntro")), "The intro's top is not scrolled out of view at the end.");
+            Assert.True(TopScrolledOut(app, app.AccountsBlock(HostingProvider.GitHub)), "The top of GitHub's block is not scrolled out of view at the end.");
             Assert.Equal("AccountsSignOutButtonAzureDevOps", FocusedId(app));
             ShotA(app, PartA.A02ThreeEnd);
             AssertNoRequests(served, signedIn);
@@ -278,6 +281,12 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertDialog(app, HostingProvider.GitLab, string.Empty);
             Assert.Equal("SignInToken", FocusedId(app));
             Assert.False(ConfirmOf(app).IsEffectivelyEnabled);
+            foreach (var provider in Three)
+            {
+                // Behind the dialog's backdrop, the three blocks still signed out.
+                AssertSignedOutBlock(app, provider, behindDialog: true);
+            }
+
             Assert.Equal(["probe"], app.Tokens.Calls);
             AssertNoRequests(served, mark);
             ShotA(app, PartA.A05GitLabDialog);
@@ -329,7 +338,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertError(app, PartA.GitLabRefused401);
             Assert.Equal(PartA.Danger, ColourOf(Find(app, "SignInError")));
             AssertSelected(app, "SignInToken", PartA.UnknownGitLabToken);
-            Assert.True(ConfirmOf(app).IsEffectivelyEnabled);
+            AssertDialogButtonsEnabled(app);
             Assert.Null(session.AccountOf(HostingProvider.GitLab));
             Assert.False(File.Exists(AccountsFile(data)));
             Assert.Equal(["probe"], app.Tokens.Calls);
@@ -419,6 +428,8 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             await app.WaitForAsync(() => app.Launcher.Requests.Count == 1, "the token page's launch");
             Assert.Equal((FileLaunchKind.OpenUrl, PartA.AzureDevOpsTokenPage(served.AzureDevOps.Port)), (app.Launcher.Requests[0].Kind, app.Launcher.Requests[0].FullPath));
             Assert.False(dialog.IsClosed);
+            Assert.Equal(PartA.Organization, ((TextBox)Find(app, "SignInOrganization")).Text);
+            AssertMasked(app, AzureDevOpsToken);
             AssertNoRequests(served, mark);
 
             // A11 step 5: an organization outside the grammar, refused unsent.
@@ -442,6 +453,8 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertNoRequests(served, mark);
             Assert.True(Find(app, "SignInTokenLink").IsEffectivelyEnabled);
             Assert.Equal(GitHubToken, dialog.Token);
+            AssertMasked(app, GitHubToken);
+            Assert.True(ConfirmOf(app).IsEffectivelyEnabled);
             Assert.Equal("SignInToken", FocusedId(app));
             Assert.Null(session.AccountOf(HostingProvider.AzureDevOps));
             ShotA(app, PartA.A11AzureGitHubToken);
@@ -458,6 +471,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             Assert.Equal(PartA.Organization, ((TextBox)Find(app, "SignInOrganization")).Text);
             Assert.True(Find(app, "SignInOrganization").IsEffectivelyEnabled);
             AssertSelected(app, "SignInToken", PartA.UnknownAzureDevOpsToken);
+            AssertDialogButtonsEnabled(app);
             Assert.Null(session.AccountOf(HostingProvider.AzureDevOps));
             Assert.False(File.Exists(AccountsFile(data)));
             Assert.Equal(["probe"], app.Tokens.Calls);
@@ -472,6 +486,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertError(app, PartA.AzureDevOpsAnonymous);
             Assert.Equal(PartA.Organization, ((TextBox)Find(app, "SignInOrganization")).Text);
             AssertSelected(app, "SignInToken", PartA.PlainValue);
+            AssertDialogButtonsEnabled(app);
             Assert.Null(session.AccountOf(HostingProvider.AzureDevOps));
             Assert.False(File.Exists(AccountsFile(data)));
             Assert.Equal(["probe"], app.Tokens.Calls);
@@ -488,7 +503,7 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             AssertSelected(app, "SignInOrganization", PartA.UnknownOrganization);
             AssertMasked(app, AzureDevOpsToken);
             Assert.True(Find(app, "SignInTokenLink").IsEffectivelyEnabled);
-            Assert.True(ConfirmOf(app).IsEffectivelyEnabled);
+            AssertDialogButtonsEnabled(app);
             Assert.Null(session.AccountOf(HostingProvider.AzureDevOps));
             Assert.False(File.Exists(AccountsFile(data)));
             Assert.Equal(["probe"], app.Tokens.Calls);
@@ -758,7 +773,8 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             var stored = app.Tokens.Calls.Count;
             await WaitForFileAsync(app, data, file => RecordsOf(file).Count == 3, "the three records");
             var before = ReadAccounts(data);
-            Assert.All(Three, provider => Assert.Equal(AccountState.SignedIn, session.AccountOf(provider)?.State));
+            Assert.All(Three, provider => Assert.Equal((AccountState.SignedIn, TokenPlace.Keychain), (session.AccountOf(provider)?.State, session.AccountOf(provider)?.Place)));
+            Assert.Equal(3, RecordsOf(before).Count);
             Assert.True(Scroller(app).Extent.Height > Scroller(app).Viewport.Height, "Three signed-in blocks do not scroll.");
             Assert.Equal(0, Scroller(app).Offset.Y, 0.5);
             Assert.True(WhollyInView(app, InBlock(app, HostingProvider.GitLab, "AccountsSignOutButton")));
@@ -855,6 +871,11 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             await app.WaitForAsync(() => webApp.Hosting.Bindings.Any(binding => binding.Account.Id == gitLabKey) && webApp.Hosting.Bindings.Any(binding => binding.Account.Id == gitHubKey), "web-app's bindings");
             AssertWebAppBindings(webApp, served, gitLab: true);
             Assert.True(session.BindsGit);
+            Assert.Equal(3, RecordsOf(before).Count);
+            foreach (var provider in Three)
+            {
+                AssertRecord(before, served, provider, useForGit: true, "keychain");
+            }
 
             // Step 2: GitLab's switch off and Save, on the empty tab.
             var tabs = app.Window.GetVisualDescendants().OfType<Button>().Where(button => button.Name == "TabButton" && button.IsEffectivelyVisible).OrderBy(button => app.BoundsOf(button).X).ToList();
@@ -887,6 +908,10 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             Assert.True(InBlock(app, HostingProvider.GitLab, "AccountUseForGit").IsEffectivelyEnabled);
             Assert.False(WhollyInView(app, InBlock(app, HostingProvider.AzureDevOps, "AccountUseForGit")), "Azure DevOps' Git row is wholly in view at the top.");
             Assert.Null(app.Session.Shell.ActiveTab.Repository);
+            var strip = app.TabStrip();
+            Assert.Equal([WebApp, PartA.NewTab], strip.Tabs.Select(tab => tab.Title));
+            Assert.Equal(1, strip.ActiveIndex);
+            Assert.True(strip.Tabs[1].IsActive, "The empty tab is not the active one.");
             ShotA(app, PartA.A14GitLabSwitchOff);
 
             // Step 4: Azure DevOps' switch off and Save.

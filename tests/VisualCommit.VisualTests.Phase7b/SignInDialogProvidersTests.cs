@@ -18,7 +18,9 @@ namespace VisualCommit.VisualTests.Phase7b;
 /// alone, Sign in's and the links' enablement, each failure's text against the fakes as WP-LF left
 /// them, another provider's token form refused unsent in each dialog while its own goes on, the
 /// login in the server's spelling, and the links' addresses. The session is the real one over the
-/// scenario "hosting7b" served by the three fakes on free ports (port 0), with a <see cref="FakeTokenStore"/>.
+/// scenario "hosting7b" served by the three fakes on free ports (port 0), with a <see cref="FakeTokenStore"/>;
+/// the service's URL forms are read by a session on <see cref="AzureDevOpsEndpoints.Service"/> whose
+/// handler refuses every request, so that nothing leaves the machine.
 /// </summary>
 public sealed class SignInDialogProvidersTests
 {
@@ -71,6 +73,122 @@ public sealed class SignInDialogProvidersTests
                 await setup.Session.SignOutAsync(HostingProvider.AzureDevOps, Cancelled);
             }
         }
+    }
+
+    /// <summary>
+    /// On the service's endpoints (<see cref="AzureDevOpsEndpoints.Service"/>, organization hosts on)
+    /// the box takes both URL forms and <c>&lt;organization&gt;@</c>, and refuses
+    /// <c>app.vssps.visualstudio.com</c> (a label with a dot), another host and an empty segment
+    /// without a request. Nothing leaves the machine: the launcher is the fake one, and Azure DevOps'
+    /// handler refuses and records every request.
+    /// </summary>
+    [Fact]
+    public async Task On_the_service_s_endpoints_the_box_takes_both_URL_forms_and_refuses_app_vssps()
+    {
+        using var data = new TempDirectory("sign-in dialog service forms");
+        var log = new RecordingLog();
+        var launcher = new FakeFileLauncher();
+        var attempts = new List<Uri?>();
+        var options = HostingOptions.Off with
+        {
+            AzureDevOps = AzureDevOpsEndpoints.Service,
+            CreateAzureDevOpsHandler = () => new RecordingRefusal(attempts),
+        };
+        using var session = new HostingSession(new AppPaths(data.Path), options, new FakeTokenStore(), log, action => action(), TimeProvider.System);
+        await session.StartAsync(Cancelled);
+
+        const string Page = "https://dev.azure.com/Fernhill-Labs/_usersSettings/tokens";
+        (string Text, string Page)[] taken =
+        [
+            ("Fernhill-Labs", Page),
+            ("https://dev.azure.com/Fernhill-Labs", Page),
+            ("https://dev.azure.com/Fernhill-Labs/Mobile%20App/_git/mobile-app", Page),
+            ("https://Fernhill-Labs@dev.azure.com/Fernhill-Labs/Mobile%20App", Page),
+            ("https://fernhill-labs.visualstudio.com/", "https://dev.azure.com/fernhill-labs/_usersSettings/tokens"),
+        ];
+        foreach (var (text, page) in taken)
+        {
+            var dialog = new SignInDialogViewModel(session, HostingProvider.AzureDevOps, launcher, log);
+            await dialog.Opened;
+            dialog.Organization = text;
+            Assert.True(dialog.CanOpenTokenPage, $"The link is disabled for '{text}'.");
+            Assert.True(dialog.OpenTokenPageCommand.CanExecute(null));
+            var launches = launcher.Requests.Count;
+            await dialog.OpenTokenPageCommand.ExecuteAsync(null);
+            Assert.Equal(page, Assert.Single(launcher.Requests.Skip(launches)).FullPath);
+        }
+
+        foreach (var text in new[] { "https://app.vssps.visualstudio.com/", "https://example.com/Fernhill-Labs", "https://dev.azure.com/", "https://dev.azure.com//Fernhill-Labs" })
+        {
+            var dialog = new SignInDialogViewModel(session, HostingProvider.AzureDevOps, launcher, log);
+            await dialog.Opened;
+            dialog.Organization = text;
+            dialog.Token = AzureDevOpsToken;
+            Assert.False(dialog.CanOpenTokenPage, $"The link is enabled for '{text}'.");
+            Assert.False(dialog.OpenTokenPageCommand.CanExecute(null));
+            Assert.True(dialog.ConfirmCommand.CanExecute(null));
+            await dialog.ConfirmCommand.ExecuteAsync(null);
+            Assert.Equal(PartA.NotAnOrganizationError, dialog.ErrorText);
+        }
+
+        Assert.Empty(attempts);
+        Assert.Equal(taken.Length, launcher.Requests.Count);
+        Assert.Null(session.AccountOf(HostingProvider.AzureDevOps));
+        Assert.DoesNotContain(log.Messages, message => message.Contains(AzureDevOpsToken, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A token pasted into the organization box (it opens focused while empty) is no organization:
+    /// a name of a provider's token form, or equal to the token box's text in any case, is refused
+    /// with <c>SignInNotAnOrganization</c>; no request, no launch, no focus moved, and the error does
+    /// not echo it (design 1; 10.4).
+    /// </summary>
+    [Fact]
+    public async Task A_token_in_the_organization_box_is_no_organization_and_goes_nowhere()
+    {
+        await using var setup = await Setup.StartAsync();
+        var port = setup.Served.AzureDevOps.Port;
+        (string Organization, string Token)[] cases =
+        [
+            (AzureDevOpsForm, PartA.PlainValue),
+            (GitLabToken, PartA.PlainValue),
+            ($"http://127.0.0.1:{port}/{AzureDevOpsForm}", PartA.PlainValue),
+            (PartA.PlainValue, PartA.PlainValue),
+            (" " + PartA.PlainValue.ToUpperInvariant() + " ", PartA.PlainValue),
+        ];
+        foreach (var (organization, token) in cases)
+        {
+            var dialog = setup.Dialog(HostingProvider.AzureDevOps);
+            await dialog.Opened;
+            var changed = new List<string?>();
+            var focus = new List<string>();
+            dialog.PropertyChanged += (_, e) => changed.Add(e.PropertyName);
+            dialog.FocusRequested += (_, id) => focus.Add(id);
+            dialog.Organization = organization;
+            changed.Clear();
+            dialog.Token = token;
+            Assert.Contains(nameof(SignInDialogViewModel.CanOpenTokenPage), changed);
+            Assert.False(dialog.CanOpenTokenPage, $"The link is enabled for the organization of case '{token}'.");
+            Assert.False(dialog.OpenTokenPageCommand.CanExecute(null));
+            await dialog.OpenTokenPageCommand.ExecuteAsync(null);
+            Assert.True(dialog.ConfirmCommand.CanExecute(null));
+            await dialog.ConfirmCommand.ExecuteAsync(null);
+            Assert.Equal(PartA.NotAnOrganizationError, dialog.ErrorText);
+            Assert.Empty(focus);
+            Assert.False(dialog.IsClosed);
+        }
+
+        // The same name with another token is an organization again.
+        var plain = setup.Dialog(HostingProvider.AzureDevOps);
+        await plain.Opened;
+        plain.Organization = PartA.PlainValue;
+        Assert.True(plain.CanOpenTokenPage);
+        plain.Token = AzureDevOpsToken;
+        Assert.True(plain.CanOpenTokenPage);
+
+        Assert.Empty(setup.AllRequests());
+        Assert.Empty(setup.Launcher.Requests);
+        Assert.Equal(["probe"], setup.Tokens.Calls.Distinct());
     }
 
     [Fact]
@@ -250,6 +368,20 @@ public sealed class SignInDialogProvidersTests
             ],
             setup.Launcher.Requests.Select(request => request.FullPath));
         Assert.Empty(setup.AllRequests());
+    }
+
+    /// <summary>A handler that records every request's address and refuses it before it is sent: nothing leaves the machine.</summary>
+    private sealed class RecordingRefusal(List<Uri?> attempts) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            lock (attempts)
+            {
+                attempts.Add(request.RequestUri);
+            }
+
+            throw new HttpRequestException("Refused by the test: nothing is sent.");
+        }
     }
 
     /// <summary>A hosting session for the three providers over the scenario "hosting7b" served on free ports, its data folder, keychain, log and launcher.</summary>

@@ -99,7 +99,8 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
 
     /// <summary>What the box holds, shown masked (<c>SignInToken</c>, D103, D130).</summary>
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
+    [NotifyPropertyChangedFor(nameof(CanOpenTokenPage))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand), nameof(OpenTokenPageCommand))]
     public partial string Token { get; set; } = string.Empty;
 
     /// <summary>No keychain can be reached (D253): <c>SignInNoKeychain</c> shows from the opening.</summary>
@@ -277,9 +278,26 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
         }
     }
 
-    /// <summary>The organization the box gives by <see cref="AzureDevOpsProvider.OrganizationOf"/> on the provider's endpoints; null without one or while Azure DevOps is off.</summary>
-    private string? OrganizationOrNull() =>
-        _hosting.ProviderOf(HostingProvider.AzureDevOps) is AzureDevOpsProvider azureDevOps ? AzureDevOpsProvider.OrganizationOf(Organization, azureDevOps.Endpoints) : null;
+    /// <summary>
+    /// The organization the box gives by <see cref="AzureDevOpsProvider.OrganizationOf"/> on the
+    /// provider's endpoints; null without one or while Azure DevOps is off. A token pasted into the
+    /// box, which opens focused while empty, is no organization: a name of a provider's token form
+    /// (<see cref="HostingProviders.TokenFormOf"/>) or equal to the token box's text is refused, so
+    /// that it is never sent in a path, opened in the browser, logged or shown in an error (design 1).
+    /// </summary>
+    private string? OrganizationOrNull()
+    {
+        if (_hosting.ProviderOf(HostingProvider.AzureDevOps) is not AzureDevOpsProvider azureDevOps
+            || AzureDevOpsProvider.OrganizationOf(Organization, azureDevOps.Endpoints) is not { } organization)
+        {
+            return null;
+        }
+
+        var token = Token.Trim();
+        return HostingProviders.TokenFormOf(organization) is not null || (token.Length > 0 && string.Equals(organization, token, StringComparison.OrdinalIgnoreCase))
+            ? null
+            : organization;
+    }
 
     /// <summary>Cancel and Esc, and the session's end (<c>CancelAll</c>): the check's request is cancelled.</summary>
     protected override void OnCancel()

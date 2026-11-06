@@ -3002,29 +3002,28 @@ the writer.
 **As built** (WP-A, `4b8edaf` to its last commit, 2026-11-06). Where the build differs from the text
 or settles what it left open:
 - `AccountsSettingsViewModel` subscribes to `AccountChanged` once and hands each event to
-  `BlockOf(e.Provider)` (7a's one subscriber holds); `IsChanged` follows the blocks; `Dispose` closes
-  them. `AccountBlockViewModel.Follow` is public. A block's note reads `AccountUseForGitNoteOf(p,
-  login)`, on a git older than 2.31 7a's older note for every provider. Log lines take the name.
-- The template's ids are `{Binding IdSuffix, StringFormat='AccountLogin{0}'}`; each instance keeps
-  7a's `Name`s; the containers are `ContentControl`s.
-- Dialog: `HelpText`, `TokenLinkText`, `TokenLinkTip` added. The organization sent is
-  `OrganizationOf`'s on the session's Azure DevOps provider's endpoints (A2's lower case and the
-  prefill go as they read); with that provider off nothing parses. Local refusals move no focus;
-  only `NotFound` asks `SignInOrganization`. `SignInFailedOf` reads `failure.Provider`; the dialog's
-  unreachable failure carries it. `SignInOrganization` keeps `dialogBox` with `Margin="0"`, so it
-  sits under its label as `SignInToken` does (dialogBox's 12 doubled the gap).
-- `MainWindowViewModel.SignInAsync`'s prefill is `OrganizationToPrefill`: the held account's login,
-  else the active tab's `HostingState.Remotes` in `HostingRemoteOrder` (signed out too).
-- Driver: beside 1.9's forms, `static AccountIdOf(p, id)`; a block's button is brought into view
-  before its click. `OpenSignInDialogAsync(p)` waits for that provider's dialog on top.
-- 7a's files changed as 10.6 says, plus `Phase7aChecks.A.cs:479` (`Accounts.GitHub`). No file outside
-  10.1's list; `Phase6ChecksS`, `Check_L31*`, `SettingsDialogViewTests` and `SignInEntryTests` pass
-  unchanged.
-- Report against design: none that changes an expected result. Open point 2: every picture the
-  report reads as fitting fits; open point 8: A9 is built as the report gives it (the Anonymous 200,
-  ASSUMED). `SettingsNavAccounts` measures at x 141, within the report's ±2.
-- For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` now serves every provider (false while off);
-  their own callers move to it. `SignInEntryProvidersTests` passes under the 1.5 s watcher lag.
+  `BlockOf(e.Provider)` (7a's one subscriber holds); `AccountBlockViewModel.Follow` is public; a note
+  on a git older than 2.31 is 7a's older one for every provider. Ids are `{Binding IdSuffix,
+  StringFormat='AccountLogin{0}'}` in one template over `ContentControl`s.
+- Dialog: `HelpText`, `TokenLinkText`, `TokenLinkTip` added. The organization is `OrganizationOf`'s on
+  the session's Azure DevOps endpoints, sent as it reads; off, nothing parses. A name of a provider's
+  token form, or equal to the token box's text, is no organization: refused unsent, the link disabled,
+  never echoed (design 1). Local refusals move no focus; only `NotFound` asks `SignInOrganization`
+  (`dialogBox`, `Margin="0"`). `SignInFailedOf` reads `failure.Provider`.
+- `MainWindowViewModel.SignInAsync`'s prefill: the held account's login, else the active tab's
+  `HostingState.Remotes` in `HostingRemoteOrder`.
+- Driver: 1.9's forms plus `static AccountIdOf(p, id)`; a block's button is brought into view first.
+  7a's files changed as 10.6 says, plus `Phase7aChecks.A.cs:479`; nothing outside 10.1's list.
+- `SignInDialogProvidersTests` serves the fakes on port 0 (1.8), not in process; the service's URL
+  forms run on `AzureDevOpsEndpoints.Service` with a handler that refuses every request.
+- Report against design: no expected result changed; `SettingsNavAccounts` at x 141 (±2). Open point
+  2: in `a12b` at offset 0 Azure DevOps' note wraps to three lines and about half the last lies below
+  the viewport, more than "a few pixels" (not asserted). Open point 8: A9 as the report gives it
+  (ASSUMED). For the lead: Azure DevOps' disabled link (`a06a`, `a11b`) keeps the accent and the hand
+  cursor (`SignInLinkButton` has no disabled look), as the report's "accent foreground" reads, and
+  `AssertDialog` asserts it; a disabled look needs the lead's ruling.
+- For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` serves every provider (false while off).
+  `SignInEntryProvidersTests` passes under the 1.5 s watcher lag.
 
 ## 11. WP-B: browse and clone (part B)
 
