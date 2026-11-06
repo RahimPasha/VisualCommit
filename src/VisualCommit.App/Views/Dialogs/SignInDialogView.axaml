@@ -80,8 +80,10 @@
         </Button>
 
         <TextBlock Classes="promptLabel" Text="{x:Static ops:OperationTexts+AccountTexts.OrganizationLabel}" IsVisible="{Binding ShowsOrganization}" />
+        <!-- Under its label as the token box is under its own: dialogBox's 12 above would double the label's gap. -->
         <TextBox Name="SignInOrganization"
                  Classes="dialogBox"
+                 Margin="0"
                  Text="{Binding Organization}"
                  IsVisible="{Binding ShowsOrganization}"
                  IsEnabled="{Binding IsBoxEnabled}"
