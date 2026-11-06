@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Dialogs;
@@ -18,12 +19,23 @@ namespace VisualCommit.App.ViewModels.Settings;
 /// subscribes to <see cref="IHostingSession.AccountChanged"/> once and hands each event to its
 /// provider's block alone (<see cref="Follow"/>), so another provider's event never resets a toggled
 /// switch. No git call or request when the screen opens. Sign in and sign out act at once (D256);
-/// the switch waits for Save (D216).
+/// the switch waits for Save (D216). A sign-out goes on when its screen closes, so a block made
+/// while its provider's sign-out runs, in a screen reopened meanwhile, shows it busy until it ends
+/// (<see cref="RunningSignOuts"/>; Hunt 3).
 /// </summary>
 public sealed partial class AccountBlockViewModel : ObservableObject
 {
     /// <summary>The first git that takes the account's credentials through <c>GIT_CONFIG_COUNT</c> (D277).</summary>
     private static readonly GitVersion GitThatUsesTheAccount = new(2, 31, 0);
+
+    /// <summary>
+    /// The sign-outs that run, per session and provider, each ending with its reason (null, or why the
+    /// keychain kept its entry). A sign-out outlives the screen that started it (D256); a block made
+    /// while one runs for its provider shows <c>Signing out…</c>, its buttons and, through the section,
+    /// every block's disabled, until it ends (Hunt 3: a reopened screen offered "Sign out…" again).
+    /// Keyed weakly by the session, so a session that ends takes its entries with it.
+    /// </summary>
+    private static readonly ConditionalWeakTable<IHostingSession, Dictionary<HostingProvider, Task<string?>>> RunningSignOuts = new();
 
     private readonly IHostingSession? _hosting;
     private readonly Func<HostingProvider, Task<bool>>? _signIn;
@@ -52,6 +64,11 @@ public sealed partial class AccountBlockViewModel : ObservableObject
         _gitVersion = gitVersion;
         _account = hosting?.AccountOf(provider);
         UseForGit = _account?.Account.UseForGit ?? false;
+        if (hosting is not null && RunningSignOutOf(hosting, provider) is { } running)
+        {
+            BusyText = Texts.AccountsBusy;
+            _ = FollowRunningSignOutAsync(running);
+        }
     }
 
     /// <summary>The block's provider.</summary>
@@ -270,26 +287,91 @@ public sealed partial class AccountBlockViewModel : ObservableObject
         }
 
         BusyText = Texts.AccountsBusy;
+        var hosting = _hosting;
+        var running = SignOutOfTheSessionAsync(hosting);
+        Register(hosting, Provider, running);
         string? reason;
         try
         {
-            reason = await _hosting.SignOutAsync(Provider, CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            _log.Warning($"Signing out of {HostingProviders.DisplayName(Provider)} failed.", ex);
-            reason = null;
+            reason = await running;
         }
         finally
         {
+            Unregister(hosting, Provider, running);
             BusyText = null;
         }
 
-        Follow(_hosting.AccountOf(Provider));
+        Follow(hosting.AccountOf(Provider));
         SignOutNote = reason is null ? null : Texts.AccountsSignOutNote(reason);
         if (!_disposed && ShowsSignIn)
         {
             FocusRequested?.Invoke(this, IdOf("AccountsSignInButton"));
+        }
+    }
+
+    /// <summary>The session's sign-out of <see cref="Provider"/> at once (D256): its reason, or null when it failed (logged).</summary>
+    private async Task<string?> SignOutOfTheSessionAsync(IHostingSession hosting)
+    {
+        try
+        {
+            return await hosting.SignOutAsync(Provider, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _log.Warning($"Signing out of {HostingProviders.DisplayName(Provider)} failed.", ex);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// A block made while its provider's sign-out runs (a screen reopened meanwhile): busy until the
+    /// sign-out ends, then the account's state and the keychain's note, as the block that started it
+    /// shows them. It moves no focus: this screen did not start the sign-out.
+    /// </summary>
+    private async Task FollowRunningSignOutAsync(Task<string?> running)
+    {
+        var reason = await running;
+        BusyText = null;
+        Follow(_hosting?.AccountOf(Provider));
+        SignOutNote = reason is null ? null : Texts.AccountsSignOutNote(reason);
+    }
+
+    /// <summary>The sign-out of <paramref name="provider"/> that runs in <paramref name="hosting"/>, or null.</summary>
+    private static Task<string?>? RunningSignOutOf(IHostingSession hosting, HostingProvider provider)
+    {
+        if (!RunningSignOuts.TryGetValue(hosting, out var running))
+        {
+            return null;
+        }
+
+        lock (running)
+        {
+            return running.TryGetValue(provider, out var task) && !task.IsCompleted ? task : null;
+        }
+    }
+
+    private static void Register(IHostingSession hosting, HostingProvider provider, Task<string?> task)
+    {
+        var running = RunningSignOuts.GetValue(hosting, _ => []);
+        lock (running)
+        {
+            running[provider] = task;
+        }
+    }
+
+    private static void Unregister(IHostingSession hosting, HostingProvider provider, Task<string?> task)
+    {
+        if (!RunningSignOuts.TryGetValue(hosting, out var running))
+        {
+            return;
+        }
+
+        lock (running)
+        {
+            if (running.TryGetValue(provider, out var registered) && ReferenceEquals(registered, task))
+            {
+                running.Remove(provider);
+            }
         }
     }
 

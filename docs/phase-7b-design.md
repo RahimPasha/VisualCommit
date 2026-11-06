@@ -3005,7 +3005,10 @@ or settles what it left open:
   `BlockOf(e.Provider)` (7a's one subscriber holds). `AccountBlockViewModel.Follow` is public; it
   resets a switch for another account and, untoggled, to its account's on every event (a toggle
   survives the same account's). While any block signs out, every block's buttons are disabled
-  (`Joins`). An older git's note is 7a's for every provider. Ids: `{Binding IdSuffix,
+  (`Joins`). A sign-out outlives its screen (D256), so the blocks keep the running sign-outs per
+  session and provider (a weak table): a block made while one runs, in a screen reopened meanwhile,
+  shows `Signing out…`, every block's buttons disabled, until it ends, then the account and the
+  keychain's note, moving no focus (Hunt 3: it offered "Sign out…" again). An older git's note is 7a's for every provider. Ids: `{Binding IdSuffix,
   StringFormat='AccountLogin{0}'}` in one template over `ContentControl`s.
 - Dialog: `HelpText`, `TokenLinkText`, `TokenLinkTip` added. The organization is `OrganizationOf`'s on
   the session's Azure DevOps endpoints, sent as it reads; off, nothing parses. A name of a provider's

@@ -15,7 +15,8 @@ namespace VisualCommit.VisualTests.Phase7b;
 /// the blocks' order, which blocks show (all off too), 10.2's texts per state, Azure DevOps' name
 /// line, one provider's event leaving another's toggled switch, an untoggled switch following its
 /// account's changes, Save's switches one per block, one block's sign-out disabling every block's
-/// buttons, each command's provider, the focus by <c>IdOf</c>, an old git and the unsubscription.
+/// buttons, also in a screen reopened while it runs, each command's provider, the focus by
+/// <c>IdOf</c>, an old git and the unsubscription.
 /// The session is a stub; nothing here reaches a fake or the network.
 /// </summary>
 public sealed class AccountsProvidersViewModelTests
@@ -199,6 +200,60 @@ public sealed class AccountsProvidersViewModelTests
             Assert.True(block.SignInCommand.CanExecute(null), $"{block.Label}'s Sign in… cannot run after GitHub's sign-out.");
             Assert.True(block.SignOutCommand.CanExecute(null), $"{block.Label}'s Sign out… cannot run after GitHub's sign-out.");
         }
+    }
+
+    /// <summary>
+    /// A screen reopened while a sign-out runs (Hunt 3; a sign-out goes on when its screen closes,
+    /// D256): the block of the sign-out's provider shows "Signing out…" and every block's buttons are
+    /// disabled until it ends, so no second "Sign out…" is offered; then it shows the account's state
+    /// and the keychain's note as the screen that started it would. A screen opened after the end shows
+    /// nothing busy. One sign-out reaches the session.
+    /// </summary>
+    [Fact]
+    public async Task A_screen_reopened_while_a_sign_out_runs_shows_the_block_busy_until_it_ends()
+    {
+        const string Reason = "The keychain is locked.";
+        var session = new ProvidersSession { SignOutHold = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        session.Accounts[HostingProvider.GitLab] = Status(Ada, AccountState.SignedIn, TokenPlace.Keychain);
+        session.Accounts[HostingProvider.AzureDevOps] = Status(Fernhill, AccountState.SignedIn, TokenPlace.Keychain);
+        var first = Model(session);
+        var signOut = first.GitLab.SignOutCommand.ExecuteAsync(null);
+        Assert.True(first.GitLab.IsBusy);
+        first.Dispose();
+
+        using var reopened = Model(session);
+        Assert.True(reopened.GitLab.IsBusy, "The reopened screen's GitLab block is not busy while its sign-out runs.");
+        Assert.Equal(PartA.Busy, reopened.GitLab.BusyText);
+        Assert.True(reopened.GitLab.ShowsSignOut, "The account left the block before its sign-out ended.");
+        Assert.False(reopened.AzureDevOps.IsBusy);
+        foreach (var block in reopened.Blocks)
+        {
+            Assert.False(block.SignInCommand.CanExecute(null), $"{block.Label}'s Sign in… can run while GitLab's sign-out runs.");
+            Assert.False(block.SignOutCommand.CanExecute(null), $"{block.Label}'s Sign out… can run while GitLab's sign-out runs.");
+        }
+
+        session.SignOutHold.SetResult(Reason);
+        await signOut;
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (reopened.GitLab.IsBusy && DateTime.UtcNow < deadline)
+        {
+            await Task.Yield();
+        }
+
+        Assert.False(reopened.GitLab.IsBusy, "The reopened screen's GitLab block is still busy after its sign-out ended.");
+        Assert.True(reopened.GitLab.IsSignedOut);
+        Assert.Equal(VisualCommit.App.ViewModels.Operations.OperationTexts.AccountTexts.AccountsSignOutNote(Reason), reopened.GitLab.SignOutNote);
+        foreach (var block in reopened.Blocks)
+        {
+            Assert.True(block.SignInCommand.CanExecute(null), $"{block.Label}'s Sign in… cannot run after GitLab's sign-out.");
+            Assert.True(block.SignOutCommand.CanExecute(null), $"{block.Label}'s Sign out… cannot run after GitLab's sign-out.");
+        }
+
+        Assert.Equal([HostingProvider.GitLab], session.SignOuts);
+        using var later = Model(session);
+        Assert.False(later.GitLab.IsBusy);
+        Assert.Null(later.GitLab.SignOutNote);
+        Assert.True(later.GitLab.IsSignedOut);
     }
 
     [Fact]
