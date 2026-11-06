@@ -476,7 +476,7 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             hold.Dispose();
             hold = null;
             await app.WaitForAccountAsync(account => account is null);
-            await app.WaitForAsync(() => !screen.Accounts.SignOutCommand.IsRunning, "the sign-out to end");
+            await app.WaitForAsync(() => !screen.Accounts.GitHub.SignOutCommand.IsRunning, "the sign-out to end");
             await app.WaitForAsync(() => FocusedId(app) == "AccountsSignInButton", "the focus on Sign in…");
             AssertSignedOutSection(app, full: false);
             Assert.Null(app.Session.Services.Hosting.Account);

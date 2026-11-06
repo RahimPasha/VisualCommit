@@ -1,0 +1,636 @@
+using System.Text.Json;
+using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
+using Avalonia.Controls;
+using Avalonia.Media;
+using Avalonia.VisualTree;
+using VisualCommit.App.Controls;
+using VisualCommit.Core.Hosting;
+using VisualCommit.Hosting;
+using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
+using VisualCommit.Testing.Hosting;
+using Xunit;
+using static VisualCommit.VisualTests.Phase7b.Phase7bExpectations;
+
+namespace VisualCommit.VisualTests.Phase7b;
+
+/// <summary>Part A's own helpers (docs/test-reports/phase-7b.md, part A's conventions).</summary>
+public sealed partial class Phase7bChecksA
+{
+    /// <summary>Every id a block may show, 7a's, before the provider's suffix.</summary>
+    private static readonly string[] BlockIds =
+    [
+        "AccountsOff", "AccountsSignedOut", "AccountLogin", "AccountUser", "AccountTokenPlace", "AccountNeedsSignIn", "AccountsSignOutNote",
+        "AccountsSignInButton", "AccountsSignOutButton", "AccountsBusy", "AccountUseForGit", "AccountUseForGitNote",
+    ];
+
+    private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
+
+    /// <summary>The three fakes' request counts before a step (the shared conventions' mark).</summary>
+    private readonly record struct Marks(int AzureDevOps, int GitLab, int GitHub);
+
+    private static Marks Mark(ServedHosting7b served) => new(served.AzureDevOps.Requests.Count, served.GitLab.Requests.Count, served.GitHub.Requests.Count);
+
+    private static List<FakeServiceRequest> AzureSince(ServedHosting7b served, Marks mark) => [.. served.AzureDevOps.Requests.Skip(mark.AzureDevOps)];
+
+    private static List<FakeServiceRequest> GitLabSince(ServedHosting7b served, Marks mark) => [.. served.GitLab.Requests.Skip(mark.GitLab)];
+
+    private static List<FakeGitHubRequest> GitHubSince(ServedHosting7b served, Marks mark) => [.. served.GitHub.Requests.Skip(mark.GitHub)];
+
+    /// <summary>"Requests none": none in any of the three fakes since <paramref name="mark"/>.</summary>
+    private static void AssertNoRequests(ServedHosting7b served, Marks mark)
+    {
+        Assert.Empty(AzureSince(served, mark));
+        Assert.Empty(GitLabSince(served, mark));
+        Assert.Empty(GitHubSince(served, mark));
+    }
+
+    /// <summary>The store's calls since <paramref name="mark"/>.</summary>
+    private static List<string> CallsSince(FakeTokenStore tokens, int mark) => [.. tokens.Calls.Skip(mark)];
+
+    /// <summary>Asserts a request of a new fake: method, raw path, query, route key, the authorization's form, status and login.</summary>
+    private static void AssertRequest(FakeServiceRequest request, string path, string route, FakeAuthorizationForm form, int status, string? login, string? query = null)
+    {
+        Assert.Equal(("GET", path, route), (request.Method, request.Path, request.Route));
+        if (query is not null)
+        {
+            Assert.Equal(query, request.Query.TrimStart('?'));
+        }
+
+        Assert.Equal(form, request.Authorization);
+        Assert.Equal(status, request.Status);
+        Assert.Equal(login, request.Login);
+    }
+
+    /// <summary>GitLab's sign-in: one <c>GET /api/v4/user</c>, <c>Bearer</c>.</summary>
+    private static void AssertGitLabUser(IReadOnlyList<FakeServiceRequest> requests, int status, string? login) =>
+        AssertRequest(Assert.Single(requests), "/api/v4/user", "user", FakeAuthorizationForm.Bearer, status, login);
+
+    /// <summary>Azure DevOps' connectionData of <paramref name="organization"/> as typed, with the token.</summary>
+    private static void AssertConnection(FakeServiceRequest request, string organization, int status, string? login) =>
+        AssertRequest(request, $"/{organization}/_apis/connectionData", "connection:" + organization.ToLowerInvariant(), FakeAuthorizationForm.BasicEmptyUser, status, login, PartA.AzureDevOpsSignInQuery);
+
+    /// <summary>Azure DevOps' second read: the core resource area.</summary>
+    private static void AssertArea(FakeServiceRequest request, string organization) =>
+        AssertRequest(request, $"/{organization}/_apis/resourceAreas/{PartA.CoreAreaId}", "areas", FakeAuthorizationForm.BasicEmptyUser, 200, null, PartA.AzureDevOpsSignInQuery);
+
+    /// <summary>Azure DevOps' whole sign-in as a member: connectionData then the area, as the organization was typed.</summary>
+    private static void AssertAzureSignIn(ServedHosting7b served, IReadOnlyList<FakeServiceRequest> requests, string organization)
+    {
+        Assert.Equal(PartA.AzureDevOpsSignInRoutes(organization), requests.Select(request => request.Route));
+        AssertConnection(requests[0], organization, 200, AdaAzureLogin(served));
+        AssertArea(requests[1], organization);
+    }
+
+    /// <summary>The login the fake records for Ada's token in Fernhill-Labs (WP-FA: its organization and her made-up id).</summary>
+    private static string AdaAzureLogin(ServedHosting7b served) => $"{Organization}/{AdaAzureId(served)}";
+
+    /// <summary>GitHub's sign-in: one <c>GET api/v3/user</c> with a token.</summary>
+    private static void AssertGitHubUser(IReadOnlyList<FakeGitHubRequest> requests, int status, string? login)
+    {
+        var request = Assert.Single(requests);
+        Assert.Equal(("GET", "/api/v3/user", "user"), (request.Method, request.Path, request.Route));
+        Assert.True(request.TokenPresent, "The sign-in's request carried no token.");
+        Assert.Equal(status, request.Status);
+        if (status == 200)
+        {
+            Assert.Equal(login, request.Login);
+        }
+    }
+
+    /// <summary>A picture of part A: before it no token on screen; after it no text cut.</summary>
+    private static Screenshot ShotA(ShellDriver app, string name, bool keepPointer = false)
+    {
+        AssertNoTokenOnScreen(app);
+        var screenshot = Shot(app, name, keepPointer);
+        AssertNoClippedText(app);
+        return screenshot;
+    }
+
+    /// <summary>No visible text, automation value or automation name in the window holds one of part A's tokens; a failure names the control and the token's constant.</summary>
+    private static void AssertNoTokenOnScreen(ShellDriver app)
+    {
+        app.Settle();
+        foreach (var control in app.Window.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible))
+        {
+            var texts = new List<(string What, string? Text)>
+            {
+                ("automation name", AutomationProperties.GetName(control)),
+                ("automation help text", AutomationProperties.GetHelpText(control)),
+                ("text", control is TextBlock block ? block.Text : null),
+                ("text", control is TextBox box and not SecretTextBox ? box.Text : null),
+                ("automation value", control is TextBox valueBox ? ValueOf(valueBox) : null),
+            };
+            foreach (var (what, text) in texts)
+            {
+                if (text is null)
+                {
+                    continue;
+                }
+
+                foreach (var (tokenName, token) in PartA.Tokens)
+                {
+                    Assert.False(
+                        text.Contains(token, StringComparison.Ordinal),
+                        $"The {what} of {AutomationProperties.GetAutomationId(control) ?? control.Name ?? control.GetType().Name} holds {tokenName}.");
+                }
+            }
+        }
+    }
+
+    /// <summary>A text box's value as UI Automation reads it: empty for a masked box (D103, D130).</summary>
+    private static string? ValueOf(TextBox box) =>
+        ControlAutomationPeer.CreatePeerForElement(box).GetProvider<IValueProvider>()?.Value;
+
+    /// <summary>
+    /// Every method's end, after its apps have closed: the tripwire for part A's tokens over the data
+    /// folder and the copy's three clones with each start's call log; each fake's errors and the
+    /// harness's refused requests empty; no request answered 400 or 415; the launcher's launches only
+    /// those the steps name.
+    /// </summary>
+    private static void AssertCleanEnd(IReadOnlyList<ShellDriver> apps, TempDirectory data, ServedHosting7b? served, int launches = 0)
+    {
+        List<string> folders = [data.Path];
+        if (served is not null)
+        {
+            folders.AddRange([served.MobileApp.Path, served.Manifest.Path, served.WebApp.Path]);
+        }
+
+        foreach (var app in apps)
+        {
+            foreach (var (_, token) in PartA.Tokens)
+            {
+                TokenTripwire.AssertAbsent(token, folders, app.Session.GitCalls);
+            }
+
+            Assert.Equal(0, app.RefusedRequests.Count);
+        }
+
+        if (served is not null)
+        {
+            Assert.Empty(served.AzureDevOps.Errors);
+            Assert.Empty(served.GitLab.Errors);
+            Assert.Empty(served.GitHub.Errors);
+            Assert.DoesNotContain(served.AzureDevOps.Requests, request => request.Status is 400 or 415);
+            Assert.DoesNotContain(served.GitLab.Requests, request => request.Status is 400 or 415);
+            Assert.DoesNotContain(served.GitHub.Requests, request => request.Status is 400 or 415);
+        }
+
+        Assert.Equal(launches, apps.Sum(app => app.Launcher.Requests.Count));
+    }
+
+    /// <summary>The start's Info lines, in order, through <c>WithPorts</c>.</summary>
+    private static void AssertStartLines(ShellDriver app, ServedHosting7b served, IReadOnlyList<string> expected)
+    {
+        var lines = app.LogLines();
+        var at = -1;
+        foreach (var line in expected.Select(text => WithPorts(text, served)))
+        {
+            var next = lines.Select((text, index) => (text, index)).FirstOrDefault(entry => entry.index > at && entry.text.EndsWith(line, StringComparison.Ordinal));
+            Assert.True(next.text is not null, $"The log has no line '{line}' after line {at}: {string.Join(" | ", lines)}");
+            at = next.index;
+        }
+    }
+
+    private static string AccountsFile(TempDirectory data) => Path.Combine(data.Path, "accounts.json");
+
+    /// <summary>The parsed <c>accounts.json</c>, or null when there is none (or it is being replaced).</summary>
+    private static JsonElement? ReadAccounts(TempDirectory data)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(AccountsFile(data)));
+            return document.RootElement.Clone();
+        }
+        catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The records of <c>accounts.json</c>, none when there is no file.</summary>
+    private static List<JsonElement> RecordsOf(JsonElement? file) =>
+        file is { } root && root.TryGetProperty("accounts", out var accounts) ? [.. accounts.EnumerateArray()] : [];
+
+    /// <summary>The record of <paramref name="provider"/> (its <c>provider</c> id) on <paramref name="host"/>, or null.</summary>
+    private static JsonElement? RecordOf(JsonElement? file, string provider, string host) =>
+        RecordsOf(file).Cast<JsonElement?>().FirstOrDefault(record =>
+            record!.Value.GetProperty("provider").GetString() == provider && record.Value.GetProperty("host").GetString() == host);
+
+    private static string IdOf(HostingProvider provider) => HostingProviders.Id(provider);
+
+    private static string HostOf(ServedHosting7b served, HostingProvider provider) => PartA.Host(provider switch
+    {
+        HostingProvider.GitHub => served.GitHub.Port,
+        HostingProvider.GitLab => served.GitLab.Port,
+        _ => served.AzureDevOps.Port,
+    });
+
+    private static JsonElement? RecordOf(TempDirectory data, ServedHosting7b served, HostingProvider provider) =>
+        RecordOf(ReadAccounts(data), IdOf(provider), HostOf(served, provider));
+
+    /// <summary>
+    /// Asserts a provider's record: exactly the scenario facts' fields (GitHub's and GitLab's eight,
+    /// Azure DevOps' nine with <c>userId</c>) and values, with <paramref name="useForGit"/> and
+    /// <paramref name="tokenState"/>.
+    /// </summary>
+    private static void AssertRecord(JsonElement? file, ServedHosting7b served, HostingProvider provider, bool useForGit, string tokenState)
+    {
+        var record = RecordOf(file, IdOf(provider), HostOf(served, provider)) ?? throw new Xunit.Sdk.XunitException($"accounts.json holds no {provider} record.");
+        List<string> names = ["avatarUrl", "host", "id", "login", "name", "provider", "tokenState", "useForGit"];
+        if (provider == HostingProvider.AzureDevOps)
+        {
+            names.Add("userId");
+        }
+
+        Assert.Equal(names.Order(StringComparer.Ordinal), record.EnumerateObject().Select(property => property.Name).Order(StringComparer.Ordinal));
+        var (login, id, name, avatar) = provider switch
+        {
+            HostingProvider.GitHub => (OctoLogin, PartA.OctoId, OctoName, (string?)PartA.GitHubAvatarUrl(served.GitHub.Port)),
+            HostingProvider.GitLab => (AdaLogin, PartA.AdaGitLabId, AdaName, null),
+            _ => (PartA.Organization, 0L, AdaName, null),
+        };
+        Assert.Equal(login, record.GetProperty("login").GetString());
+        Assert.Equal(id, record.GetProperty("id").GetInt64());
+        Assert.Equal(name, record.GetProperty("name").GetString());
+        Assert.Equal(avatar, record.GetProperty("avatarUrl").GetString());
+        Assert.Equal(useForGit, record.GetProperty("useForGit").GetBoolean());
+        Assert.Equal(tokenState, record.GetProperty("tokenState").GetString());
+        if (provider == HostingProvider.AzureDevOps)
+        {
+            Assert.Equal(AdaAzureId(served), record.GetProperty("userId").GetString());
+        }
+    }
+
+    /// <summary>Ada's made-up id in Fernhill-Labs, in lower case.</summary>
+    private static string AdaAzureId(ServedHosting7b served) => served.AzureDevOps.User(Organization, AdaName).Id.ToString("D");
+
+    /// <summary>The file's text holds no <c>@</c>: no field holds an e-mail address (D368).</summary>
+    private static void AssertNoAddress(TempDirectory data) =>
+        Assert.DoesNotContain("@", File.ReadAllText(AccountsFile(data)), StringComparison.Ordinal);
+
+    /// <summary>Waits until <paramref name="condition"/> holds of the parsed <c>accounts.json</c> (written off the UI thread).</summary>
+    private static Task WaitForFileAsync(ShellDriver app, TempDirectory data, Func<JsonElement?, bool> condition, string what) =>
+        app.WaitForAsync(() => condition(ReadAccounts(data)), what);
+
+    /// <summary>Asserts the session's account of <paramref name="provider"/> as the scenario facts give it.</summary>
+    private static void AssertAccount(ShellDriver app, ServedHosting7b served, HostingProvider provider, TokenPlace place, AccountNoteKind note, bool useForGit = true, AccountState state = AccountState.SignedIn)
+    {
+        var account = app.Session.Services.Hosting.AccountOf(provider) ?? throw new Xunit.Sdk.XunitException($"No {provider} account.");
+        Assert.Equal(state, account.State);
+        if (state == AccountState.SignedIn)
+        {
+            Assert.Equal(place, account.Place);
+        }
+
+        Assert.Equal(note, account.NoteKind);
+        Assert.Equal(useForGit, account.Account.UseForGit);
+        switch (provider)
+        {
+            case HostingProvider.GitHub:
+                Assert.Equal((PartA.GitHubKey(served.GitHub.Port), OctoLogin, PartA.OctoId, OctoName), (KeyText(account), account.Account.Login, account.Account.Id, account.Account.Name));
+                Assert.NotNull(account.Account.AvatarUrl);
+                break;
+            case HostingProvider.GitLab:
+                Assert.Equal((PartA.GitLabKey(served.GitLab.Port), AdaLogin, PartA.AdaGitLabId, AdaName), (KeyText(account), account.Account.Login, account.Account.Id, account.Account.Name));
+                Assert.Null(account.Account.AvatarUrl);
+                break;
+            default:
+                Assert.Equal((PartA.AzureDevOpsKey(served.AzureDevOps.Port), PartA.Organization, 0L, AdaName), (KeyText(account), account.Account.Login, account.Account.Id, account.Account.Name));
+                Assert.Equal(AdaAzureId(served), account.Account.UserId);
+                Assert.Null(account.Account.AvatarUrl);
+                break;
+        }
+    }
+
+    /// <summary>The account's key as the store's calls write it: provider, host and login, lower-cased.</summary>
+    private static string KeyText(AccountStatus account) => account.Account.Key.Id.ToLowerInvariant();
+
+    /// <summary>The automation id of the focused control or of its nearest ancestor with one.</summary>
+    private static string? FocusedId(ShellDriver app)
+    {
+        app.Settle();
+        return app.Window.FocusManager?.GetFocusedElement() is Control focused
+            ? focused.GetSelfAndVisualAncestors().OfType<Control>().Select(AutomationProperties.GetAutomationId).FirstOrDefault(id => id is { Length: > 0 })
+            : null;
+    }
+
+    private static Task WaitForFocusAsync(ShellDriver app, string id) =>
+        app.WaitForAsync(() => FocusedId(app) == id, $"the keyboard focus on {id}");
+
+    /// <summary>The named border (a dialog's card) in the window.</summary>
+    private static Border CardNamed(ShellDriver app, string name) =>
+        app.Window.GetVisualDescendants().OfType<Border>().First(border => border.Name == name && border.IsEffectivelyVisible);
+
+    /// <summary>The section's scroll viewer, <c>SectionScroller</c>.</summary>
+    private static ScrollViewer Scroller(ShellDriver app) =>
+        app.Window.GetVisualDescendants().OfType<ScrollViewer>().First(viewer => viewer.Name == "SectionScroller");
+
+    /// <summary>The section fits: its extent within its viewport, offset 0.</summary>
+    private static void AssertFits(ShellDriver app)
+    {
+        var scroller = Scroller(app);
+        Assert.True(scroller.Extent.Height <= scroller.Viewport.Height + 0.5, $"The section scrolls: extent {scroller.Extent.Height}, viewport {scroller.Viewport.Height}.");
+        Assert.Equal(0, scroller.Offset.Y, 0.5);
+    }
+
+    /// <summary>"Turn the wheel over SettingsSection until the offset stops changing": one notch at a time at the section's centre, the layout settled after each.</summary>
+    private static void WheelUntilStill(ShellDriver app, bool up)
+    {
+        var scroller = Scroller(app);
+        var centre = app.BoundsOf(scroller).Center;
+        for (var notch = 0; notch < 40; notch++)
+        {
+            var before = scroller.Offset.Y;
+            app.Wheel(centre, up ? 1 : -1);
+            if (Math.Abs(scroller.Offset.Y - before) < 0.01)
+            {
+                return;
+            }
+        }
+
+        throw new Xunit.Sdk.XunitException("The section's offset kept changing under the wheel.");
+    }
+
+    /// <summary>"The end": the largest offset, above 0.</summary>
+    private static void AssertAtEnd(ShellDriver app)
+    {
+        var scroller = Scroller(app);
+        Assert.True(scroller.Offset.Y > 0, "The section is not scrolled.");
+        Assert.Equal(scroller.Extent.Height - scroller.Viewport.Height, scroller.Offset.Y, 0.5);
+    }
+
+    /// <summary>Whether <paramref name="control"/> lies wholly inside the section's viewport.</summary>
+    private static bool WhollyInView(ShellDriver app, Control control)
+    {
+        var view = app.BoundsOf(Scroller(app));
+        var bounds = app.BoundsOf(control);
+        return bounds.Top >= view.Top - 0.5 && bounds.Bottom <= view.Bottom + 0.5;
+    }
+
+    /// <summary>A control of the screen or the dialog on top (<see cref="ShellDriver.FindByAutomationId(string)"/>).</summary>
+    private static Control Find(ShellDriver app, string id) => app.FindByAutomationId(id);
+
+    /// <summary>A control of a block, by 7a's id and the provider.</summary>
+    private static Control InBlock(ShellDriver app, HostingProvider provider, string id) =>
+        app.FindByAutomationId(app.AccountsBlock(provider), PartA.IdOf(provider, id));
+
+    private static bool Shows(ShellDriver app, HostingProvider provider, string id) =>
+        app.AccountsBlock(provider).GetVisualDescendants().OfType<Control>()
+            .Any(control => AutomationProperties.GetAutomationId(control) == PartA.IdOf(provider, id) && control.IsEffectivelyVisible);
+
+    private static string? TextOf(ShellDriver app, HostingProvider provider, string id) => (InBlock(app, provider, id) as TextBlock)?.Text;
+
+    /// <summary>A text block's colour.</summary>
+    private static Color? ColourOf(TextBlock block) => (block.Foreground as ISolidColorBrush)?.Color;
+
+    private static Color? ColourOf(Control control) => control is TextBlock block ? ColourOf(block) : null;
+
+    /// <summary>Asserts that a block shows exactly <paramref name="shown"/> of its ids, each in its own suffix.</summary>
+    private static void AssertBlockShows(ShellDriver app, HostingProvider provider, params string[] shown)
+    {
+        Assert.True(app.AccountsBlock(provider).IsEffectivelyVisible, $"The {provider} block does not show.");
+        foreach (var id in BlockIds)
+        {
+            Assert.True(shown.Contains(id) == Shows(app, provider, id), $"{PartA.IdOf(provider, id)} {(shown.Contains(id) ? "does not show" : "shows")}.");
+        }
+
+        // The label, from x 336 in the 132-wide column, the provider's name.
+        var label = app.AccountsBlock(provider).GetVisualDescendants().OfType<TextBlock>().First(block => block.Classes.Contains("settingsLabel"));
+        Assert.Equal(PartA.LabelOf(provider), label.Text);
+        Assert.Equal(PartA.SectionX, app.BoundsOf(label).X, PartA.Tolerance);
+    }
+
+    /// <summary>A block signed out: 7a's signed-out block, <c>Not signed in.</c> from x 480, <c>Sign in…</c> 10 below, enabled.</summary>
+    private static void AssertSignedOutBlock(ShellDriver app, HostingProvider provider)
+    {
+        AssertBlockShows(app, provider, "AccountsSignedOut", "AccountsSignInButton");
+        var text = InBlock(app, provider, "AccountsSignedOut");
+        Assert.Equal(PartA.SignedOut, ((TextBlock)text).Text);
+        Assert.Equal(PartA.ControlsX, app.BoundsOf(text).X, PartA.Tolerance);
+        var button = InBlock(app, provider, "AccountsSignInButton");
+        Assert.True(button.IsEffectivelyEnabled);
+        Assert.Equal(PartA.SignInButton, AutomationProperties.GetName(button));
+        Assert.Equal(PartA.ButtonsGap, app.BoundsOf(button).Top - app.BoundsOf(text).Bottom, PartA.Tolerance);
+    }
+
+    /// <summary>A block signed in: the login (SemiBold) from x 480, Azure DevOps' name under it, the token's place, "Sign out…" and the switch with its note.</summary>
+    private static void AssertSignedInBlock(ShellDriver app, HostingProvider provider, string place, bool useForGit = true)
+    {
+        var withUser = provider == HostingProvider.AzureDevOps;
+        string[] shown = withUser
+            ? ["AccountLogin", "AccountUser", "AccountTokenPlace", "AccountsSignOutButton", "AccountUseForGit", "AccountUseForGitNote"]
+            : ["AccountLogin", "AccountTokenPlace", "AccountsSignOutButton", "AccountUseForGit", "AccountUseForGitNote"];
+        AssertBlockShows(app, provider, shown);
+        var login = (TextBlock)InBlock(app, provider, "AccountLogin");
+        Assert.Equal(provider switch { HostingProvider.GitHub => OctoLogin, HostingProvider.GitLab => AdaLogin, _ => PartA.Organization }, login.Text);
+        Assert.Equal(FontWeight.SemiBold, login.FontWeight);
+        Assert.Equal(PartA.ControlsX, app.BoundsOf(login).X, PartA.Tolerance);
+        Control above = login;
+        if (withUser)
+        {
+            var user = (TextBlock)InBlock(app, provider, "AccountUser");
+            Assert.Equal(AdaName, user.Text);
+            Assert.Equal(PartA.Secondary, ColourOf(user));
+            Assert.Equal(FontWeight.Normal, user.FontWeight);
+            Assert.Equal(app.BoundsOf(login).Bottom, app.BoundsOf(user).Top, 0.5);
+            above = user;
+        }
+
+        var placeText = (TextBlock)InBlock(app, provider, "AccountTokenPlace");
+        Assert.Equal(place, placeText.Text);
+        Assert.Contains("settingsNote", placeText.Classes);
+        Assert.True(app.BoundsOf(placeText).Top >= app.BoundsOf(above).Bottom - 0.5);
+        var signOut = InBlock(app, provider, "AccountsSignOutButton");
+        Assert.True(signOut.IsEffectivelyEnabled);
+        Assert.Equal(PartA.SignOutButton, AutomationProperties.GetName(signOut));
+        var check = (CheckBox)InBlock(app, provider, "AccountUseForGit");
+        Assert.Equal(useForGit, check.IsChecked);
+        Assert.Equal(PartA.UseForGit, AutomationProperties.GetName(check));
+        Assert.Equal(NoteOf(provider), TextOf(app, provider, "AccountUseForGitNote"));
+    }
+
+    /// <summary>A block needing sign-in after a session-only start: the login, <c>SessionEnded</c>'s warning, both buttons and the switch.</summary>
+    private static void AssertSessionEndedBlock(ShellDriver app, HostingProvider provider)
+    {
+        string[] shown = provider == HostingProvider.AzureDevOps
+            ? ["AccountLogin", "AccountUser", "AccountNeedsSignIn", "AccountsSignInButton", "AccountsSignOutButton", "AccountUseForGit", "AccountUseForGitNote"]
+            : ["AccountLogin", "AccountNeedsSignIn", "AccountsSignInButton", "AccountsSignOutButton", "AccountUseForGit", "AccountUseForGitNote"];
+        AssertBlockShows(app, provider, shown);
+        var warning = (TextBlock)InBlock(app, provider, "AccountNeedsSignIn");
+        Assert.Equal(PartA.SessionEnded, warning.Text);
+        Assert.Contains("dialogWarning", warning.Classes);
+        Assert.True(InBlock(app, provider, "AccountsSignInButton").IsEffectivelyEnabled);
+        Assert.True(InBlock(app, provider, "AccountsSignOutButton").IsEffectivelyEnabled);
+        Assert.Equal(true, ((CheckBox)InBlock(app, provider, "AccountUseForGit")).IsChecked);
+    }
+
+    private static string NoteOf(HostingProvider provider) => provider switch
+    {
+        HostingProvider.GitHub => PartA.GitHubUseForGitNote,
+        HostingProvider.GitLab => PartA.GitLabUseForGitNote,
+        _ => PartA.AzureDevOpsUseForGitNote,
+    };
+
+    /// <summary>The shown blocks in D353's order, each <see cref="PartA.BlockSpacing"/> below the one before, the first 18 below the intro.</summary>
+    private static void AssertBlockGaps(ShellDriver app, params HostingProvider[] shown)
+    {
+        var intro = app.BoundsOf(Find(app, "AccountsIntro"));
+        var previous = intro.Bottom;
+        var gap = PartA.RowSpacing;
+        foreach (var provider in HostingProviders.InAccountsOrder)
+        {
+            var block = app.AccountsBlock(provider);
+            Assert.Equal(shown.Contains(provider), block.IsEffectivelyVisible);
+            if (!block.IsEffectivelyVisible)
+            {
+                continue;
+            }
+
+            var bounds = app.BoundsOf(block);
+            Assert.Equal(gap, bounds.Top - previous, PartA.Tolerance);
+            previous = bounds.Bottom;
+            gap = PartA.BlockSpacing;
+        }
+    }
+
+    /// <summary>
+    /// The intro (10.3, 10.9): 10.2's sentence, secondary, in exactly two lines, as high (±0.5) as
+    /// 7a's sentence laid out with its font in its width.
+    /// </summary>
+    private static void AssertIntro(ShellDriver app)
+    {
+        var intro = (TextBlock)Find(app, "AccountsIntro");
+        Assert.Equal(PartA.Intro, intro.Text);
+        Assert.Equal(PartA.Secondary, ColourOf(intro));
+        Assert.Equal(TextWrapping.Wrap, intro.TextWrapping);
+        Assert.Equal(PartA.IntroLines, intro.TextLayout.TextLines.Count);
+        var bounds = app.BoundsOf(intro);
+        Assert.Equal(PartA.SectionX, bounds.X, PartA.Tolerance);
+        var sevenA = new TextBlock
+        {
+            Text = PartA.Intro7a,
+            FontFamily = intro.FontFamily,
+            FontSize = intro.FontSize,
+            FontWeight = intro.FontWeight,
+            FontStyle = intro.FontStyle,
+            LineHeight = intro.LineHeight,
+            TextWrapping = TextWrapping.Wrap,
+        };
+        sevenA.Measure(new Size(bounds.Width, double.PositiveInfinity));
+        Assert.Equal(PartA.IntroLines, sevenA.TextLayout.TextLines.Count);
+        Assert.Equal(sevenA.DesiredSize.Height, bounds.Height, PartA.IntroTolerance);
+    }
+
+    /// <summary>The settings card and section list at 1100×700 (7a's A1).</summary>
+    private static void AssertFrame(ShellDriver app)
+    {
+        var (x, y, width, height) = PartA.Card;
+        Assert.Equal(new Rect(x, y, width, height), app.BoundsOf(CardNamed(app, "SettingsCard")));
+        var buttons = app.FindByAutomationId("SettingsNav").GetVisualChildren().OfType<Button>().ToList();
+        Assert.Equal(PartA.NavIds, buttons.Select(button => AutomationProperties.GetAutomationId(button)));
+        Assert.Equal(PartA.NavButtons, buttons.Select(button => AutomationProperties.GetName(button)));
+        var accounts = app.BoundsOf(buttons[4]);
+        Assert.True(
+            Math.Abs(accounts.X - PartA.AccountsButtonAt.X) <= PartA.Tolerance && Math.Abs(accounts.Y - PartA.AccountsButtonAt.Y) <= PartA.Tolerance,
+            $"SettingsNavAccounts is at ({accounts.X}, {accounts.Y}), expected {PartA.AccountsButtonAt} ±{PartA.Tolerance}.");
+        Assert.Equal((PartA.NavWidth, PartA.NavHeight), (accounts.Width, accounts.Height));
+        Assert.Contains("selected", buttons[4].Classes);
+    }
+
+    /// <summary>The dialog of <paramref name="provider"/> as it opens: 7a's card, 400 wide at x 350 to 750, centred; title, help and the provider's link(s) and boxes.</summary>
+    private static void AssertDialog(ShellDriver app, HostingProvider provider, string organization, bool noKeychain = false)
+    {
+        var view = app.SignInDialogView();
+        var card = app.BoundsOf(CardNamed(app, "SignInCard"));
+        Assert.Equal(PartA.DialogCard, (card.Left, card.Right));
+        Assert.Equal(app.Window.Bounds.Height / 2, card.Center.Y, PartA.Tolerance);
+        var title = (TextBlock)app.FindByAutomationId(view, "DialogTitle");
+        Assert.Equal(provider switch { HostingProvider.GitHub => PartA.GitHubDialogTitle, HostingProvider.GitLab => PartA.GitLabDialogTitle, _ => PartA.AzureDevOpsDialogTitle }, title.Text);
+        var help = (TextBlock)app.FindByAutomationId(view, "SignInHelp");
+        Assert.Equal(provider switch { HostingProvider.GitHub => PartA.GitHubHelp, HostingProvider.GitLab => PartA.GitLabHelp, _ => PartA.AzureDevOpsHelp }, help.Text);
+        var link = app.FindByAutomationId(view, "SignInTokenLink");
+        Assert.Equal(provider switch { HostingProvider.GitHub => PartA.GitHubTokenLink, HostingProvider.GitLab => PartA.GitLabTokenLink, _ => PartA.AzureDevOpsTokenLink }, AutomationProperties.GetName(link));
+        Assert.Equal(PartA.LinkGap, app.BoundsOf(link).Top - app.BoundsOf(help).Bottom, PartA.Tolerance);
+        Assert.Equal(PartA.Accent, ColourOf(link.GetVisualDescendants().OfType<TextBlock>().First()));
+        var legacy = app.FindByAutomationId(view, "SignInLegacyTokenLink");
+        Assert.Equal(provider == HostingProvider.GitLab, legacy.IsEffectivelyVisible);
+        if (provider == HostingProvider.GitLab)
+        {
+            Assert.Equal(PartA.GitLabLegacyLink, AutomationProperties.GetName(legacy));
+            Assert.Equal(PartA.LegacyLinkGap, app.BoundsOf(legacy).Top - app.BoundsOf(link).Bottom, PartA.Tolerance);
+            Assert.Equal(PartA.Accent, ColourOf(legacy.GetVisualDescendants().OfType<TextBlock>().First()));
+        }
+
+        var box = (TextBox)app.FindByAutomationId(view, "SignInOrganization");
+        Assert.Equal(provider == HostingProvider.AzureDevOps, box.IsEffectivelyVisible);
+        var token = (TextBox)app.FindByAutomationId(view, "SignInToken");
+        if (provider == HostingProvider.AzureDevOps)
+        {
+            Assert.Equal(organization, box.Text ?? string.Empty);
+            Assert.Equal(PartA.OrganizationLabel, AutomationProperties.GetName(box));
+            Assert.Contains("dialogBox", box.Classes);
+            Assert.True(app.BoundsOf(box).Bottom <= app.BoundsOf(token).Top);
+            Assert.True(app.BoundsOf(box).Top >= app.BoundsOf(link).Bottom);
+            Assert.Equal(organization.Length > 0, link.IsEffectivelyEnabled);
+        }
+        else
+        {
+            Assert.True(link.IsEffectivelyEnabled);
+        }
+
+        Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(token));
+        Assert.Equal(noKeychain, app.FindByAutomationId(view, "SignInNoKeychain").IsEffectivelyVisible);
+        foreach (var id in new[] { "SignInChecking", "SignInError", "SignInSaveFailed" })
+        {
+            Assert.False(app.FindByAutomationId(view, id).IsEffectivelyVisible, $"{id} shows.");
+        }
+
+        Assert.True(app.FindByAutomationId(view, "CancelButton").IsEffectivelyEnabled);
+        Assert.Equal(PartA.SignIn, AutomationProperties.GetName(app.FindByAutomationId(view, "ConfirmButton")));
+    }
+
+    /// <summary>The token box masked: one <c>•</c> per character, its automation value empty and its name <c>Token</c>.</summary>
+    private static void AssertMasked(ShellDriver app, string token)
+    {
+        var box = (SecretTextBox)app.FindByAutomationId(app.SignInDialogView(), "SignInToken");
+        Assert.Equal(PartA.Mask, box.PasswordChar);
+        Assert.Equal(token.Length, box.Text?.Length);
+        Assert.Equal(string.Empty, ValueOf(box) ?? string.Empty);
+        Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(box));
+    }
+
+    /// <summary>The dialog's error line: its text in <c>dialogError</c>.</summary>
+    private static void AssertError(ShellDriver app, string text)
+    {
+        var error = (TextBlock)app.FindByAutomationId(app.SignInDialogView(), "SignInError");
+        Assert.True(error.IsEffectivelyVisible, "SignInError does not show.");
+        Assert.Equal(text, error.Text);
+        Assert.Contains("dialogError", error.Classes);
+    }
+
+    /// <summary>A box after the service's refusal: enabled, its text kept and all of it selected, the keyboard focus in it.</summary>
+    private static void AssertSelected(ShellDriver app, string id, string text)
+    {
+        var box = (TextBox)app.FindByAutomationId(app.SignInDialogView(), id);
+        Assert.True(box.IsEffectivelyEnabled);
+        Assert.Equal(text, box.Text);
+        Assert.Equal((0, text.Length), (Math.Min(box.SelectionStart, box.SelectionEnd), Math.Max(box.SelectionStart, box.SelectionEnd)));
+        Assert.Equal(id, FocusedId(app));
+    }
+
+    /// <summary>Replaces a box's text: a click into it, Ctrl+A, then the text typed (part A's conventions).</summary>
+    private static void Replace(ShellDriver app, string id, string text)
+    {
+        app.Click(app.FindByAutomationId(app.SignInDialogView(), id));
+        app.Settle();
+        app.PressKey(Avalonia.Input.Key.A, Avalonia.Input.RawInputModifiers.Control);
+        app.Type(text);
+        app.Settle();
+    }
+
+    private static Control ConfirmOf(ShellDriver app) => app.FindByAutomationId(app.SignInDialogView(), "ConfirmButton");
+}

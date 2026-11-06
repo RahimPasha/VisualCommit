@@ -2,8 +2,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Hosting;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting;
+using VisualCommit.Hosting.AzureDevOps;
+using VisualCommit.Hosting.GitLab;
 using Texts = VisualCommit.App.ViewModels.Operations.OperationTexts.AccountTexts;
 
 namespace VisualCommit.App.ViewModels.Dialogs;
@@ -19,11 +22,21 @@ namespace VisualCommit.App.ViewModels.Dialogs;
 /// leaves one "Close" (and Enter and Esc) that closes it signed in. Cancel during the check cancels
 /// the request; if GitHub had already answered, the session completes the sign-in all the same
 /// (D288). Nothing typed is logged, and the token leaves the box only for the session.
+/// <para>
+/// Since phase 7b one dialog per provider (docs/phase-7b-design.md 10.4; D345, D360, D378, D385):
+/// "Add GitLab account" with a second link to GitLab's legacy form, and "Add Azure DevOps account"
+/// with an organization box above the token's, read by <see cref="AzureDevOpsProvider.OrganizationOf"/>
+/// alone. Sign in refuses, without a request and in this order, an organization the box does not
+/// give, D298's token and a token of another provider's form (<see cref="HostingProviders.TokenFormOf"/>);
+/// a token of its own form or of none goes on. Each failure shows in its provider's words
+/// (<see cref="Texts.SignInFailedOf"/>); <c>NotFound</c> selects the organization box's text, any other
+/// failure the token box's. GitHub's dialog keeps 7a's texts and behaviour.
+/// </para>
 /// </summary>
 public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatus?>
 {
-    /// <summary>A check that ended without GitHub's answer, for a reason the session did not word (D284).</summary>
-    private static readonly HostingFailure Unreachable = new(HostingFailureKind.Network, Texts.SignInUnreachable);
+    /// <summary>A check that ended without the service's answer, for a reason the session did not word (D284).</summary>
+    private readonly HostingFailure _unreachable;
 
     private readonly IHostingSession _hosting;
     private readonly IFileLauncher? _launcher;
@@ -32,19 +45,51 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
     private AccountStatus? _signedIn;
 
     /// <param name="hosting">The session that checks and keeps the token.</param>
-    /// <param name="launcher">Opens GitHub's page for a new token in the browser (D295); null for none.</param>
+    /// <param name="provider">The provider the dialog signs in to.</param>
+    /// <param name="launcher">Opens the provider's page for a new token in the browser (D295); null for none.</param>
     /// <param name="log">The app's log.</param>
-    public SignInDialogViewModel(IHostingSession hosting, IFileLauncher? launcher, IAppLog log)
+    /// <param name="organization">Azure DevOps' organization box's first text (10.5); null for none.</param>
+    public SignInDialogViewModel(IHostingSession hosting, HostingProvider provider, IFileLauncher? launcher, IAppLog log, string? organization = null)
     {
         ArgumentNullException.ThrowIfNull(hosting);
         ArgumentNullException.ThrowIfNull(log);
         _hosting = hosting;
+        Provider = provider;
         _launcher = launcher;
         _log = log;
+        _unreachable = new HostingFailure(HostingFailureKind.Network, Texts.SignInUnreachableOf(provider)) { Provider = provider };
+        Organization = provider == HostingProvider.AzureDevOps ? organization ?? string.Empty : string.Empty;
         Opened = AskForTheKeychainAsync();
     }
 
-    public override string Title => HostingTexts.AddAccountTitle;
+    /// <summary>The provider the dialog signs in to.</summary>
+    public HostingProvider Provider { get; }
+
+    public override string Title => HostingTexts.AddAccountTitleOf(Provider);
+
+    /// <summary><c>SignInHelp</c>: the provider's help.</summary>
+    public string HelpText => Texts.SignInHelpOf(Provider);
+
+    /// <summary><c>SignInTokenLink</c>'s words.</summary>
+    public string TokenLinkText => Texts.TokenLinkOf(Provider);
+
+    /// <summary><c>SignInTokenLink</c>'s tooltip.</summary>
+    public string TokenLinkTip => Texts.TokenLinkTipOf(Provider);
+
+    /// <summary>GitLab's second link to its legacy form (<c>SignInLegacyTokenLink</c>, D385).</summary>
+    public bool ShowsLegacyLink => Provider == HostingProvider.GitLab;
+
+    /// <summary>Azure DevOps' organization box (<c>SignInOrganization</c>, D360).</summary>
+    public bool ShowsOrganization => Provider == HostingProvider.AzureDevOps;
+
+    /// <summary>What the organization box holds (Azure DevOps'); empty for the others.</summary>
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanOpenTokenPage))]
+    [NotifyCanExecuteChangedFor(nameof(ConfirmCommand), nameof(OpenTokenPageCommand))]
+    public partial string Organization { get; set; } = string.Empty;
+
+    /// <summary>The token link is enabled: always but on Azure DevOps, where the organization box must give an organization (10.4).</summary>
+    public bool CanOpenTokenPage => !ShowsOrganization || OrganizationOrNull() is not null;
 
     /// <summary>The account once a sign-in whose save failed has signed in (ruling 19), else null: Cancel and Esc never undo a sign-in.</summary>
     protected override AccountStatus? CancelledResult => _signedIn;
@@ -79,7 +124,7 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
 
     public bool IsSaveFailed => SaveFailedText is not null;
 
-    /// <summary>The box takes typing: no check runs and no save failed.</summary>
+    /// <summary>The boxes take typing: no check runs and no save failed.</summary>
     public bool IsBoxEnabled => !IsChecking && !IsSaveFailed;
 
     /// <summary>Cancel shows until a save failed, when one "Close" is left.</summary>
@@ -110,8 +155,16 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
         }
 
         var token = Token.Trim();
-        if (token.Length == 0)
+        if (token.Length == 0 || (ShowsOrganization && Organization.Trim().Length == 0))
         {
+            return;
+        }
+
+        // Azure DevOps' organization, by the one rule (10.4): none, refused without a request.
+        var organization = ShowsOrganization ? OrganizationOrNull() : null;
+        if (ShowsOrganization && organization is null)
+        {
+            ErrorText = Texts.SignInNotAnOrganization;
             return;
         }
 
@@ -123,12 +176,19 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
             return;
         }
 
+        // Another provider's form, refused without a request (D378); its own form or none goes on.
+        if (HostingProviders.TokenFormOf(token) is { } form && form != Provider)
+        {
+            ErrorText = Texts.SignInOtherProviderTokenOf(Provider, form, organization);
+            return;
+        }
+
         ErrorText = null;
         IsChecking = true;
         SignInResult result;
         try
         {
-            result = await _hosting.SignInAsync(token, _cancellation.Token);
+            result = await _hosting.SignInAsync(new SignInRequest(Provider, token, organization), _cancellation.Token);
         }
         catch (OperationCanceledException) when (_cancellation.IsCancellationRequested)
         {
@@ -139,8 +199,8 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
         {
             // Anything else, the session's own end among it, gets WP-G's fixed text (D284); the
             // exception's words go to the log only.
-            _log.Warning("Signing in to GitHub failed.", ex);
-            result = new SignInResult(null, Unreachable, null);
+            _log.Warning($"Signing in to {HostingProviders.DisplayName(Provider)} failed.", ex);
+            result = new SignInResult(null, _unreachable, null);
         }
         finally
         {
@@ -155,8 +215,9 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
 
         if (result.Status is not { } status)
         {
-            ErrorText = Texts.SignInFailed(result.Failure ?? Unreachable);
-            FocusRequested?.Invoke(this, "SignInToken");
+            var failure = result.Failure ?? _unreachable;
+            ErrorText = Texts.SignInFailedOf(failure, organization);
+            FocusRequested?.Invoke(this, ShowsOrganization && failure.Kind == HostingFailureKind.NotFound ? "SignInOrganization" : "SignInToken");
             return;
         }
 
@@ -172,26 +233,53 @@ public sealed partial class SignInDialogViewModel : DialogViewModel<AccountStatu
         Complete(status);
     }
 
-    private bool CanConfirm() => IsSaveFailed || (!IsChecking && Token.Trim().Length > 0);
+    private bool CanConfirm() => IsSaveFailed || (!IsChecking && Token.Trim().Length > 0 && (!ShowsOrganization || Organization.Trim().Length > 0));
 
-    /// <summary>"Create a token on GitHub": GitHub's page for a new fine-grained token with the access VisualCommit needs (D295).</summary>
-    [RelayCommand]
+    /// <summary>
+    /// The token link: the provider's page for a new token (<see cref="IHostingProvider.TokenPage"/>):
+    /// GitHub's with the access VisualCommit needs (D295), GitLab's fine-grained form, Azure DevOps'
+    /// organization's page, enabled only with an organization (10.4).
+    /// </summary>
+    [RelayCommand(CanExecute = nameof(CanOpenTokenPage))]
     private async Task OpenTokenPageAsync()
     {
-        if (_launcher is null || _hosting.GitHub is not { } gitHub)
+        if (_launcher is null || _hosting.ProviderOf(Provider) is not { } provider || !CanOpenTokenPage)
         {
             return;
         }
 
         try
         {
-            await _launcher.OpenUrlAsync(gitHub.TokenPage(null));
+            await _launcher.OpenUrlAsync(provider.TokenPage(ShowsOrganization ? OrganizationOrNull() : null));
         }
         catch (Exception ex)
         {
-            _log.Warning("Opening GitHub's page for a new token failed.", ex);
+            _log.Warning($"Opening {HostingProviders.Possessive(Provider)} page for a new token failed.", ex);
         }
     }
+
+    /// <summary>"Or create a legacy token, filled in": GitLab's legacy form with the api scope (<see cref="GitLabProvider.LegacyTokenPage"/>, D385).</summary>
+    [RelayCommand]
+    private async Task OpenLegacyTokenPageAsync()
+    {
+        if (_launcher is null || _hosting.ProviderOf(Provider) is not GitLabProvider gitLab)
+        {
+            return;
+        }
+
+        try
+        {
+            await _launcher.OpenUrlAsync(gitLab.LegacyTokenPage);
+        }
+        catch (Exception ex)
+        {
+            _log.Warning("Opening GitLab's page for a legacy token failed.", ex);
+        }
+    }
+
+    /// <summary>The organization the box gives by <see cref="AzureDevOpsProvider.OrganizationOf"/> on the provider's endpoints; null without one or while Azure DevOps is off.</summary>
+    private string? OrganizationOrNull() =>
+        _hosting.ProviderOf(HostingProvider.AzureDevOps) is AzureDevOpsProvider azureDevOps ? AzureDevOpsProvider.OrganizationOf(Organization, azureDevOps.Endpoints) : null;
 
     /// <summary>Cancel and Esc, and the session's end (<c>CancelAll</c>): the check's request is cancelled.</summary>
     protected override void OnCancel()

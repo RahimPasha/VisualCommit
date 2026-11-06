@@ -484,8 +484,11 @@
                 </ItemsControl>
               </StackPanel>
 
-              <!-- Accounts (docs/phase-7a-design.md 8.3; D256, D294): the GitHub account. Sign in
-                   and sign out act at once; only "Use for git over HTTPS" waits for Save (D216). -->
+              <!-- Accounts (docs/phase-7a-design.md 8.3; docs/phase-7b-design.md 10.3; D256, D294, D353):
+                   one intro, then a block per provider in D353's order, 24 apart, each shown while its
+                   provider is on (GitHub's also while all are off), drawn by one template: 7a's two
+                   grids, each id 7a's followed by the provider's suffix. Sign in and sign out act at
+                   once; only "Use for git over HTTPS" waits for Save (D216). -->
               <Panel IsVisible="{Binding ShowsAccounts}">
               <StackPanel Name="SettingsAccounts" Spacing="18"
                           DataContext="{Binding Accounts}" x:DataType="settings:AccountsSettingsViewModel"
@@ -494,71 +497,90 @@
                            Text="{x:Static ops:OperationTexts+AccountTexts.AccountsIntro}"
                            AutomationProperties.AutomationId="AccountsIntro" />
 
-                <Grid ColumnDefinitions="132,12,*">
-                  <TextBlock Classes="settingsLabel" Text="{x:Static hosting:HostingTexts.GitHub}" Margin="0,1,0,0" />
-                  <StackPanel Grid.Column="2">
-                    <TextBlock Name="AccountsOff" TextWrapping="Wrap"
-                               Text="{x:Static ops:OperationTexts+AccountTexts.AccountsOff}"
-                               IsVisible="{Binding IsOff}"
-                               AutomationProperties.AutomationId="AccountsOff" />
-                    <TextBlock Name="AccountsSignedOut" TextWrapping="Wrap"
-                               Text="{x:Static ops:OperationTexts+AccountTexts.AccountsSignedOut}"
-                               IsVisible="{Binding IsSignedOut}"
-                               AutomationProperties.AutomationId="AccountsSignedOut" />
-                    <TextBlock Name="AccountLogin" FontWeight="SemiBold" TextWrapping="Wrap"
-                               Text="{Binding Login}"
-                               IsVisible="{Binding HasAccount}"
-                               AutomationProperties.AutomationId="AccountLogin" />
-                    <TextBlock Name="AccountTokenPlace" Classes="settingsNote"
-                               Text="{Binding TokenPlaceText}"
-                               IsVisible="{Binding ShowsTokenPlace}"
-                               AutomationProperties.AutomationId="AccountTokenPlace" />
-                    <TextBlock Name="AccountNeedsSignIn" Classes="dialogWarning"
-                               Text="{Binding NeedsSignInText}"
-                               IsVisible="{Binding ShowsNeedsSignIn}"
-                               AutomationProperties.AutomationId="AccountNeedsSignIn" />
-                    <TextBlock Name="AccountsSignOutNote" Classes="dialogWarning"
-                               Text="{Binding SignOutNote}"
-                               IsVisible="{Binding SignOutNote, Converter={x:Static ObjectConverters.IsNotNull}}"
-                               AutomationProperties.AutomationId="AccountsSignOutNote" />
-                    <!-- The buttons, 10 below, 8 apart; none while GitHub is off. -->
-                    <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0" IsVisible="{Binding ShowsButtons}">
-                      <Button Name="AccountsSignInButton"
-                              Theme="{StaticResource VcActionButton}"
-                              Content="{x:Static ops:OperationTexts+AccountTexts.AccountsSignInButton}"
-                              Command="{Binding SignInCommand}"
-                              IsVisible="{Binding ShowsSignIn}"
-                              AutomationProperties.AutomationId="AccountsSignInButton"
-                              AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.AccountsSignInButton}" />
-                      <Button Name="AccountsSignOutButton"
-                              Theme="{StaticResource VcActionButton}"
-                              Content="{x:Static ops:OperationTexts+AccountTexts.AccountsSignOutButton}"
-                              Command="{Binding SignOutCommand}"
-                              IsVisible="{Binding ShowsSignOut}"
-                              AutomationProperties.AutomationId="AccountsSignOutButton"
-                              AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.AccountsSignOutButton}" />
-                      <TextBlock Name="AccountsBusy" Classes="secondary" VerticalAlignment="Center"
-                                 Text="{Binding BusyText}"
-                                 IsVisible="{Binding IsBusy}"
-                                 AutomationProperties.AutomationId="AccountsBusy" />
-                    </StackPanel>
-                  </StackPanel>
-                </Grid>
+                <StackPanel Spacing="24">
+                  <StackPanel.DataTemplates>
+                    <DataTemplate DataType="settings:AccountBlockViewModel">
+                      <StackPanel Spacing="18">
+                        <Grid ColumnDefinitions="132,12,*">
+                          <TextBlock Classes="settingsLabel" Text="{Binding Label}" Margin="0,1,0,0" />
+                          <StackPanel Grid.Column="2">
+                            <TextBlock Name="AccountsOff" TextWrapping="Wrap"
+                                       Text="{x:Static ops:OperationTexts+AccountTexts.AccountsOff}"
+                                       IsVisible="{Binding IsOff}"
+                                       AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountsOff{0}'}" />
+                            <TextBlock Name="AccountsSignedOut" TextWrapping="Wrap"
+                                       Text="{x:Static ops:OperationTexts+AccountTexts.AccountsSignedOut}"
+                                       IsVisible="{Binding IsSignedOut}"
+                                       AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountsSignedOut{0}'}" />
+                            <TextBlock Name="AccountLogin" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Text="{Binding Login}"
+                                       IsVisible="{Binding HasAccount}"
+                                       AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountLogin{0}'}" />
+                            <!-- Azure DevOps' account's name under the organization (10.3). -->
+                            <TextBlock Name="AccountUser" Classes="secondary" TextWrapping="Wrap"
+                                       Text="{Binding UserName}"
+                                       IsVisible="{Binding ShowsUserName}"
+                                       AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountUser{0}'}" />
+                            <TextBlock Name="AccountTokenPlace" Classes="settingsNote"
+                                       Text="{Binding TokenPlaceText}"
+                                       IsVisible="{Binding ShowsTokenPlace}"
+                                       AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountTokenPlace{0}'}" />
+                            <TextBlock Name="AccountNeedsSignIn" Classes="dialogWarning"
+                                       Text="{Binding NeedsSignInText}"
+                                       IsVisible="{Binding ShowsNeedsSignIn}"
+                                       AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountNeedsSignIn{0}'}" />
+                            <TextBlock Name="AccountsSignOutNote" Classes="dialogWarning"
+                                       Text="{Binding SignOutNote}"
+                                       IsVisible="{Binding SignOutNote, Converter={x:Static ObjectConverters.IsNotNull}}"
+                                       AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountsSignOutNote{0}'}" />
+                            <!-- The buttons, 10 below, 8 apart; none while the provider is off. -->
+                            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,10,0,0" IsVisible="{Binding ShowsButtons}">
+                              <Button Name="AccountsSignInButton"
+                                      Theme="{StaticResource VcActionButton}"
+                                      Content="{x:Static ops:OperationTexts+AccountTexts.AccountsSignInButton}"
+                                      Command="{Binding SignInCommand}"
+                                      IsVisible="{Binding ShowsSignIn}"
+                                      AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountsSignInButton{0}'}"
+                                      AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.AccountsSignInButton}" />
+                              <Button Name="AccountsSignOutButton"
+                                      Theme="{StaticResource VcActionButton}"
+                                      Content="{x:Static ops:OperationTexts+AccountTexts.AccountsSignOutButton}"
+                                      Command="{Binding SignOutCommand}"
+                                      IsVisible="{Binding ShowsSignOut}"
+                                      AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountsSignOutButton{0}'}"
+                                      AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.AccountsSignOutButton}" />
+                              <TextBlock Name="AccountsBusy" Classes="secondary" VerticalAlignment="Center"
+                                         Text="{Binding BusyText}"
+                                         IsVisible="{Binding IsBusy}"
+                                         AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountsBusy{0}'}" />
+                            </StackPanel>
+                          </StackPanel>
+                        </Grid>
 
-                <!-- With an account: the switch, which stays enabled on an older git, for a newer one (D277). -->
-                <Grid ColumnDefinitions="132,12,*" IsVisible="{Binding HasAccount}">
-                  <TextBlock Classes="settingsLabel" Text="{x:Static ops:OperationTexts+AccountTexts.GitLabel}" Margin="0,1,0,0" />
-                  <StackPanel Grid.Column="2">
-                    <CheckBox Name="AccountUseForGit" Theme="{StaticResource VcCheckBox}" HorizontalAlignment="Left"
-                              Content="{x:Static ops:OperationTexts+AccountTexts.AccountUseForGit}"
-                              IsChecked="{Binding UseForGit}"
-                              AutomationProperties.AutomationId="AccountUseForGit"
-                              AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.AccountUseForGit}" />
-                    <TextBlock Name="AccountUseForGitNote" Classes="settingsNote"
-                               Text="{Binding UseForGitNote}"
-                               AutomationProperties.AutomationId="AccountUseForGitNote" />
-                  </StackPanel>
-                </Grid>
+                        <!-- With an account: the switch, which stays enabled on an older git, for a newer one (D277). -->
+                        <Grid ColumnDefinitions="132,12,*" IsVisible="{Binding HasAccount}">
+                          <TextBlock Classes="settingsLabel" Text="{x:Static ops:OperationTexts+AccountTexts.GitLabel}" Margin="0,1,0,0" />
+                          <StackPanel Grid.Column="2">
+                            <CheckBox Name="AccountUseForGit" Theme="{StaticResource VcCheckBox}" HorizontalAlignment="Left"
+                                      Content="{x:Static ops:OperationTexts+AccountTexts.AccountUseForGit}"
+                                      IsChecked="{Binding UseForGit}"
+                                      AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountUseForGit{0}'}"
+                                      AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.AccountUseForGit}" />
+                            <TextBlock Name="AccountUseForGitNote" Classes="settingsNote"
+                                       Text="{Binding UseForGitNote}"
+                                       AutomationProperties.AutomationId="{Binding IdSuffix, StringFormat='AccountUseForGitNote{0}'}" />
+                          </StackPanel>
+                        </Grid>
+                      </StackPanel>
+                    </DataTemplate>
+                  </StackPanel.DataTemplates>
+                  <ContentControl Name="AccountsGitHub" Content="{Binding GitHub}" IsVisible="{Binding GitHub.IsShown}"
+                                  AutomationProperties.AutomationId="AccountsGitHub" />
+                  <ContentControl Name="AccountsGitLab" Content="{Binding GitLab}" IsVisible="{Binding GitLab.IsShown}"
+                                  AutomationProperties.AutomationId="AccountsGitLab" />
+                  <ContentControl Name="AccountsAzureDevOps" Content="{Binding AzureDevOps}" IsVisible="{Binding AzureDevOps.IsShown}"
+                                  AutomationProperties.AutomationId="AccountsAzureDevOps" />
+                </StackPanel>
               </StackPanel>
               </Panel>
             </Panel>
