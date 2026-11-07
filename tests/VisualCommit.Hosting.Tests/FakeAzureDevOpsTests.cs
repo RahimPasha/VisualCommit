@@ -74,21 +74,27 @@ public sealed class FakeAzureDevOpsTests
             sampleOne.EnumerateObject().Select(property => property.Name));
 
         // harbor-co allows public projects: no credential, a password that is no PAT and Bearer are
-        // each the Anonymous identity (MEASURED r5 1.2; READ g1 G0.2).
+        // each the Anonymous identity, with no challenge (MEASURED r5 1.2; READ g1 G0.2). No credential
+        // with Suppress is the request the live command's probe sent on 2026-11-07 to the sandbox's
+        // organization, which allows public projects: 200 with the Anonymous identity, application/json
+        // with api-version 7.1-preview.1, and no WWW-Authenticate (MEASURED 2026-11-07).
         const string HarborConnection = "harbor-co/_apis/connectionData?api-version=7.1-preview.1";
         foreach (var edit in new Action<HttpRequestMessage>[]
         {
             _ => { },
+            Suppress,
             request => request.Headers.Authorization = Basic("x-access-token", "short-value"),
             request => request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", fixture.AuthorToken),
         })
         {
             var anonymous = await SendAsync(fake, HttpMethod.Get, HarborConnection, token: null, edit: edit);
-            Assert.Equal(200, anonymous.Status);
+            Assert.Equal((200, "application/json; charset=utf-8; api-version=7.1-preview.1"), (anonymous.Status, anonymous.Header("Content-Type")));
+            Assert.Equal(AnonymousId, anonymous.Json.GetProperty("authenticatedUser").GetProperty("id").GetString());
             Assert.Contains(
                 "{\"id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"descriptor\":\"System:PublicAccess;aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"providerDisplayName\":\"Anonymous\",\"customDisplayName\":\"Anonymous\",\"isActive\":true,\"properties\":{\"Account\":{\"$type\":\"System.String\",\"$value\":\"Anonymous\"}},\"resourceVersion\":2,\"metaTypeId\":255}",
                 anonymous.Body,
                 StringComparison.Ordinal);
+            Assert.Empty(anonymous.WwwAuthenticate);
             Assert.Null(fake.Requests[^1].Login);
         }
 

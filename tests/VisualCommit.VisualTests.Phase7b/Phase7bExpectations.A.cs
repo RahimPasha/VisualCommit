@@ -36,7 +36,12 @@ public static partial class Phase7bExpectations
         /// <summary>The fake's <c>azdo_FAKE-</c> form, never issued: no provider's form by <c>TokenFormOf</c>, PAT-shaped to the fake: the empty 401 (A8).</summary>
         public const string UnknownAzureDevOpsToken = "azdo_FAKE-nobody-9";
 
-        /// <summary>Letters, digits and hyphens, of no provider's form and in none of the fake's PAT forms: the Anonymous 200 (A9).</summary>
+        /// <summary>
+        /// Letters, digits and hyphens, of no provider's form and in none of the fake's PAT forms: in
+        /// Fernhill-Labs (private) the sign-in's 401 TF400813 and A8's text; the Anonymous 200 only under
+        /// A9's <c>AnonymousIdentity</c> fault (the fake keeps it to organizations with public projects,
+        /// MEASURED 2026-11-07).
+        /// </summary>
         public const string PlainValue = "plain-value-7";
 
         /// <summary>84 characters with <c>AZDO</c> at 0-based 76 (design 10.8's made-up form): Azure DevOps' by <c>TokenFormOf</c> (A11).</summary>
