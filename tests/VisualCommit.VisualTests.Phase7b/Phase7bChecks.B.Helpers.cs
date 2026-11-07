@@ -599,6 +599,29 @@ public sealed partial class Phase7bChecksB
         Assert.Equal(PartA.ArrowCursor, link.Cursor?.ToString());
     }
 
+    /// <summary>
+    /// Azure DevOps' token link and its two labels as a06a gives them (part A's <c>AssertDialog</c>,
+    /// <c>Phase7bChecks.A.Helpers.cs</c>, its link, box and label lines): the link named and drawn
+    /// <c>Create a token on Azure DevOps</c>; <c>Organization</c> and <c>Token</c> as the two boxes'
+    /// names and as the shown labels (<c>promptLabel</c>), each between what is above it and its box.
+    /// </summary>
+    private static void AssertAzureDevOpsLinkAndLabels(ShellDriver app, Control view)
+    {
+        var link = app.FindByAutomationId(view, "SignInTokenLink");
+        Assert.Equal(PartA.AzureDevOpsTokenLink, AutomationProperties.GetName(link));
+        Assert.Equal(PartA.AzureDevOpsTokenLink, link.GetVisualDescendants().OfType<TextBlock>().First().Text);
+        var box = (TextBox)app.FindByAutomationId(view, "SignInOrganization");
+        var token = (TextBox)app.FindByAutomationId(view, "SignInToken");
+        Assert.True(box.IsEffectivelyVisible, "SignInOrganization is hidden.");
+        Assert.Equal(PartA.OrganizationLabel, AutomationProperties.GetName(box));
+        Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(token));
+        var labels = view.GetVisualDescendants().OfType<TextBlock>().Where(block => block.Classes.Contains("promptLabel") && block.IsEffectivelyVisible).ToList();
+        var organizationLabel = Assert.Single(labels, block => block.Text == PartA.OrganizationLabel);
+        var tokenLabel = Assert.Single(labels, block => block.Text == PartA.TokenLabel);
+        Assert.True(app.BoundsOf(organizationLabel).Top >= app.BoundsOf(link).Bottom - 0.5 && app.BoundsOf(organizationLabel).Bottom <= app.BoundsOf(box).Top + 0.5, "The label Organization is not between the link and its box.");
+        Assert.True(app.BoundsOf(tokenLabel).Top >= app.BoundsOf(box).Bottom - 0.5 && app.BoundsOf(tokenLabel).Bottom <= app.BoundsOf(token).Top + 0.5, "The label Token is not between the organization's box and its own.");
+    }
+
     /// <summary>Selects all the focused box holds, with the platform's command modifier (Control headless).</summary>
     private static void PressSelectAll(ShellDriver app) =>
         app.PressKey(Key.A, app.CommandModifier == KeyModifiers.Meta ? RawInputModifiers.Meta : RawInputModifiers.Control);

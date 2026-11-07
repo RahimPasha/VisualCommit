@@ -674,6 +674,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             var signIn = app.SignInDialogView();
             Assert.Equal(PartA.AzureDevOpsHelp, ((TextBlock)app.FindByAutomationId(signIn, "SignInHelp")).Text);
             AssertDisabledLink(app.FindByAutomationId(signIn, "SignInTokenLink"));
+            AssertAzureDevOpsLinkAndLabels(app, signIn);
             Assert.Equal((string.Empty, string.Empty), (dialog.Token, ((TextBox)app.FindByAutomationId(signIn, "SignInToken")).Text ?? string.Empty));
             Assert.False(app.FindByAutomationId(signIn, "SignInNoKeychain").IsEffectivelyVisible, "SignInNoKeychain shows.");
             Assert.True(app.FindByAutomationId(signIn, "CancelButton").IsEffectivelyEnabled, "Cancel is disabled.");
