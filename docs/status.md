@@ -484,9 +484,13 @@ reads the next CI run. Part P's checks are committed (`f1ac5ac`, D244); WP-P (se
 built from that commit in `D:/Projects/Personal/vc-wt/p7b-requests` on `wip/p7b-requests`, then
 reviewed and hunted; at its merge the lead runs 12.9's runs (the lagged list, `Phase7aChecksP` and
 `Phase7aChecksG` against `phase-7a-pictures.sha256`, phase 3's `*Check_03_other_menus*`, part P, and
-part A's `a06c` again). Open point 8 is settled (Waiting on the owner, "Azure DevOps' probes"); its
-changes to the fake, the live command's fake and A9 are being built in
-`D:/Projects/Personal/vc-wt/p7b-anon-probe`.
+part A's `a06c` again). Open point 8 is settled and its changes are merged at `20e529e` (Waiting on
+the owner, "Azure DevOps' probes"): the fake keeps connectionData's Anonymous 200 to organizations with
+public projects, the live command's fake is public as the sandbox's organization is, and A9 takes the
+fault `AnonymousIdentity`; its classes pass at the merge (Hosting.Tests' five Azure DevOps classes 73
+of 73, the 7b project's `SignInDialogProvidersTests`, `Phase7bChecksA`, `Phase7bSupportTests` and
+`Phase7bExpectationTests` 52 of 52, the live command's offline classes 405 of 405), and part A's 29
+pictures are the same files as WP-B's merge run's.
 
 WP-A (design 10, part A) is merged at `b6de3cf`; its classes, lagged list and picture inspection
 passed (Notes). CI's run on it (42301846503) failed two phase 6 tests on Linux that WP-A does not
@@ -545,6 +549,7 @@ every commit.
 - **WP-LF** (merged at `22fad1b`, 2026-11-06; design 0.4, 16.1's As built): stage 1's answers in
   `FakeAzureDevOps*.cs` and `FakeGitLab*.cs`, made-up values, each marked MEASURED with its UTC date
   where the run read it and ASSUMED where it was generalised (a private organization's Anonymous 200,
+  measured otherwise on 2026-11-07 and changed at `20e529e`,
   the ratelimit values beyond `GET user`, a create with commits ahead's `labels`). Azure DevOps: a Basic
   value in none of the PAT forms (`azdo_FAKE-`, 84 with `AZDO`, the older 52 of base32, ASSUMED) gets
   connectionData's Anonymous 200; errors without `api-version` in `Content-Type`; an empty title's 400 in
@@ -574,7 +579,8 @@ every commit.
 - **Part A's checks** (`f4ae515`, 2026-11-06): A1 to A14 with 29 scripted pictures, written by one
   writer and checked by one reviewer (seven minors, all fixed; no blocker or major); the report's
   shared conventions are about 15 KB (D244's 30). Its open point 8: A9's Anonymous 200 rests on
-  WP-LF's ASSUMED reading for a private organization until `Check_1b`'s new probe runs.
+  WP-LF's ASSUMED reading for a private organization until `Check_1b`'s new probe runs (settled on
+  2026-11-07 and merged at `20e529e`: Waiting on the owner, "Azure DevOps' probes").
 - **The priority fix** (merged at `32eaee3`, 2026-11-06; D386): CI run 42216604663 found git's console
   host at Normal for the merge-tool lookup's below-normal call. An Opus investigator measured why
   (Windows takes a new process's class from its creator partway through the creation, but puts it in
@@ -981,8 +987,10 @@ every commit.
   fake answers 401: the sandbox's organization allows public projects. Every other probe answered as
   before. As 16.1 decided, the fake keeps the Anonymous 200 to public organizations, the live command's
   fake treats the sandbox's organization as public, and the lead ruled A9 through the fault
-  `AnonymousIdentity` (open point 8's second way). Built and reviewed in
-  `D:/Projects/Personal/vc-wt/p7b-anon-probe` (`wip/p7b-anon-probe`). The run's notes are outside the
+  `AnonymousIdentity` (open point 8's second way). Built in `D:/Projects/Personal/vc-wt/p7b-anon-probe`
+  (`wip/p7b-anon-probe`), reviewed by two Opus reviewers (no blocker or major; five minors, fixed: the
+  fake's own test now sends the measured request, the report records the run under "Live command") and
+  merged at `20e529e`. The run's notes are outside the
   repository, in `D:/Projects/Personal/phase7b-work/live/azure-devops-check1b-2026-11-07.txt`.
 - **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
