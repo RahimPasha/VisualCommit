@@ -120,7 +120,8 @@ public sealed partial class FakeAzureDevOps : FakeHostingService
     /// <summary>
     /// Adds the organization <paramref name="name"/> (letters, digits and hyphens, r5 6.1), answered
     /// in this spelling; with <paramref name="publicProjects"/> an anonymous <c>connectionData</c>
-    /// answers the Anonymous identity (MEASURED r5 1.3).
+    /// answers the Anonymous identity (MEASURED r5 1.3), and so does one with a Basic value in none of
+    /// the PAT forms (MEASURED 2026-11-05 and 2026-11-07); without it both get the sign-in's answer.
     /// </summary>
     /// <exception cref="ArgumentException">The name is not an organization's, or the fake has it already (without case).</exception>
     public FakeAzureOrganization AddOrganization(string name, bool publicProjects = false)

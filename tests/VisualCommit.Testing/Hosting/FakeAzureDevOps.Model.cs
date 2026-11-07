@@ -21,7 +21,7 @@ public sealed class FakeAzureOrganization
     /// <summary>The organization's name as added (<c>Fernhill-Labs</c>).</summary>
     public string Name { get; }
 
-    /// <summary>Whether the organization allows public projects: an anonymous <c>connectionData</c> then answers the Anonymous identity (MEASURED r5 1.2).</summary>
+    /// <summary>Whether the organization allows public projects: an anonymous <c>connectionData</c> then answers the Anonymous identity (MEASURED r5 1.2), as does one with a Basic value in none of the PAT forms (MEASURED 2026-11-05 and 2026-11-07 in the sandbox's organization, which allows them); else both get the sign-in's 302 or 401 (MEASURED r5 1.3; the value READ g1 G0.2).</summary>
     public bool PublicProjects { get; }
 
     /// <summary>A made-up GUID: the collection's id in a fork's <c>parentRepository.collection</c>.</summary>

@@ -354,14 +354,19 @@ public sealed class SignInDialogProvidersTests
         Assert.Equal(PartA.GitLabRefused401, gitLab.ErrorText);
         Assert.Equal(["SignInToken"], focus);
 
-        // Azure DevOps: the empty 401, the Anonymous 200 and the unknown organization's 404 (WP-LF's copies of stage 1).
-        var cases = new (string Organization, string Token, string Text, string Box)[]
+        // Azure DevOps: the empty 401; the Anonymous 200, which Fernhill-Labs (private) gives a value
+        // that is no PAT only through the AnonymousIdentity fault, as A9 sets it, since the fake keeps
+        // that 200 to organizations that allow public projects (MEASURED 2026-11-07); the same value
+        // without the fault, the sign-in's 401 TF400813 that no credential gets in a private
+        // organization (READ g1 G0.2), A8's text; and the unknown organization's 404 (WP-LF's copies of stage 1).
+        var cases = new (string Organization, string Token, FakeAzureDevOpsFault? Fault, int Status, string Text, string Box)[]
         {
-            (PartA.Organization, PartA.UnknownAzureDevOpsToken, PartA.AzureDevOpsRefused, "SignInToken"),
-            (PartA.Organization, PartA.PlainValue, PartA.AzureDevOpsAnonymous, "SignInToken"),
-            (PartA.UnknownOrganization, AzureDevOpsToken, PartA.AzureDevOpsNoOrganization, "SignInOrganization"),
+            (PartA.Organization, PartA.UnknownAzureDevOpsToken, null, 401, PartA.AzureDevOpsRefused, "SignInToken"),
+            (PartA.Organization, PartA.PlainValue, FakeAzureDevOpsFault.AnonymousIdentity, 200, PartA.AzureDevOpsAnonymous, "SignInToken"),
+            (PartA.Organization, PartA.PlainValue, null, 401, PartA.AzureDevOpsRefused, "SignInToken"),
+            (PartA.UnknownOrganization, AzureDevOpsToken, null, 404, PartA.AzureDevOpsNoOrganization, "SignInOrganization"),
         };
-        foreach (var (organization, token, text, box) in cases)
+        foreach (var (organization, token, fault, status, text, box) in cases)
         {
             var azure = setup.Dialog(HostingProvider.AzureDevOps);
             await azure.Opened;
@@ -369,6 +374,11 @@ public sealed class SignInDialogProvidersTests
             azure.FocusRequested += (_, id) => focus.Add(id);
             azure.Organization = organization;
             azure.Token = token;
+            if (fault is not null)
+            {
+                setup.Served.AzureDevOps.FailNext("connection:" + organization.ToLowerInvariant(), fault);
+            }
+
             var mark = setup.Served.AzureDevOps.Requests.Count;
             await azure.ConfirmCommand.ExecuteAsync(null);
             Assert.Equal(text, azure.ErrorText);
@@ -377,7 +387,7 @@ public sealed class SignInDialogProvidersTests
             Assert.Equal(organization, azure.Organization);
             Assert.True(string.Equals(token, azure.Token, StringComparison.Ordinal), $"The token box does not keep the token typed ({azure.Token.Length} characters, {token.Length} typed).");
             var request = Assert.Single(setup.Served.AzureDevOps.Requests.Skip(mark));
-            Assert.Equal("connection:" + organization.ToLowerInvariant(), request.Route);
+            Assert.Equal(("connection:" + organization.ToLowerInvariant(), status, (string?)null), (request.Route, request.Status, request.Login));
         }
 
         Assert.Null(setup.Session.AccountOf(HostingProvider.AzureDevOps));

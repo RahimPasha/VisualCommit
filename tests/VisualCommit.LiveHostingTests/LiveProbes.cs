@@ -697,7 +697,9 @@ internal static class LiveMadeUp
 
 /// <summary>
 /// The fake beside for Azure DevOps (15.7): <see cref="FakeAzureDevOps"/> in process with
-/// <c>fake-org</c>, the sandbox's project and repository names, a user and a token of its own, and a
+/// <c>fake-org</c>, which allows public projects as the sandbox's organization does (MEASURED
+/// 2026-11-07, Check_1b's connectionData without a credential: 200 with the Anonymous identity), the
+/// sandbox's project and repository names, a user and a token of its own, and a
 /// README on <c>main</c>; for Check_2b's probes also the run's branch, one commit ahead of <c>main</c>
 /// as the sandbox's is, and the branch with nothing ahead, at <c>main</c>. Its calls go through its
 /// in-process handler alone.
@@ -741,7 +743,10 @@ internal sealed class LiveAzureFake : IAsyncDisposable
             source = await TempRepo.CreateAsync("live-azure-source");
             var tips = await BranchesAsync(source, branch, even);
             fake = FakeAzureDevOps.InProcess(folder.Combine("azure"));
-            fake.AddOrganization(Organization);
+            // Public projects allowed, as in the sandbox's organization (MEASURED 2026-11-07: its
+            // connectionData without a credential, with Suppress, answered 200 with the Anonymous
+            // identity), so that the fake answers that probe, and D373's short value, as it does.
+            fake.AddOrganization(Organization, publicProjects: true);
             fake.AddProject(Organization, project);
             var user = fake.AddUser(Organization, "Ada Lovelace");
             var token = fake.AddToken(Organization, user);

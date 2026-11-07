@@ -3070,7 +3070,8 @@ or settles what it left open:
   `AssertDialog` asserts as 7a's the stack over the screen on Accounts, `SignInDialog` named by its
   title, no "In …" line and the buttons' order; `SignInNoKeychain`, `SignInChecking` and `SignInError`
   are asserted in their classes below the token box and above the buttons; A2 step 7 the whole intro
-  above the viewport; A2 step 3 GitHub's avatar address. Open point 8: A9 as given (ASSUMED).
+  above the viewport; A2 step 3 GitHub's avatar address. Open point 8: A9 as given (ASSUMED); settled
+  on 2026-11-07, A9 then taking its Anonymous answer from the fault `AnonymousIdentity` (16.1's As built).
 - For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` serves every provider (false while off).
   `SignInEntryProvidersTests` passes under the 1.5 s watcher lag.
 
@@ -4107,7 +4108,7 @@ the `.Router.cs` headers):
   read, gone after the abandon; `x-access-token` through the helper on both hosts.
 - Azure DevOps, corrected: a Basic value in none of the PAT forms (`azdo_FAKE-`, 84 with `AZDO`, 52
   base32, a form ASSUMED: an unknown one's 401, READ) gets connectionData's Anonymous 200 both ways (the empty user
-  measured, a user ASSUMED alike); measured errors without `api-version` in `Content-Type`; an empty
+  measured, a user ASSUMED alike), since 2026-11-07 in an organization with `PublicProjects` alone (below); measured errors without `api-version` in `Content-Type`; an empty
   title's 400 in the service's words (a CR LF), `eventId` 0; the create's `labels`; the abandon
   without `mergeStatus` or `lastMergeCommit`; the refs POST's updates without `customMessage` or
   `rejectedBy`, and a create (200 `succeeded`; a folder clash or a name's or folder's case clash
@@ -4121,11 +4122,19 @@ the `.Router.cs` headers):
 - Clients: A1 already refused the Anonymous 200 (`BadCredentials`, `AnonymousDetail`, one request) and
   A2 gives the 403 as `Forbidden` by the code (7.3), both pinned; changed: a message is one line (a
   service's CR LF never splits the log).
-- ASSUMED: the Anonymous 200 in a private organization: the run never read the sandbox organization's
-  policy, and g1 G0.2 (READ) gives a private one r5 1.3's 302 or 401. Check_1b's 17th probe reads its
-  connectionData with no credential, with Suppress; run it before part A's checks: a 401 TF400813
-  makes the rule MEASURED; on a 200 the fake keeps the 200 to `PublicProjects`, `LiveAzureFake`'s
-  organization public. A1 refuses either.
+- MEASURED 2026-11-07 (it was ASSUMED: the Anonymous 200 in a private organization, the sandbox
+  organization's policy not read, where g1 G0.2, READ, gives a private one r5 1.3's 302 or 401): the
+  sandbox's organization allows public projects. Check_1b's 17th probe (the lead's run of
+  `Check_1b_probes`, the owner agreeing) read its connectionData with no credential, with Suppress: 200
+  with the Anonymous identity (`application/json` at `7.1-preview.1`, no `WWW-Authenticate`), where the
+  fake answered 401 TF400813; the other 16 probes answered as before. So the short value's Anonymous
+  200 is a public organization's answer. The fake keeps the 200, to no credential, another scheme and a
+  value in none of the PAT forms alike, to organizations with `PublicProjects` (check 4, 3.3); in a
+  private one such a value gets what no credential gets, r5 1.3's 302 or with Suppress 401 TF400813
+  (the value READ g1 G0.2). `LiveAzureFake`'s organization allows public projects, so the probe's
+  comparison gives "the fake: same". Part A's A9, in Fernhill-Labs (private), takes its Anonymous answer
+  from the fault `AnonymousIdentity` set before its step 8 (the lead's ruling; the report's open point 8).
+  A1 refuses either answer (6.4), so no code of the app changes.
 - Kept (reasons in the headers): git's `info/refs` refusals of the made-up values (one challenge and
   realm; the helper reads no `wwwauth[]`); `queued` in a create's answer; what 3.7 and 4.7 keep (the
   expired and revoked bodies, a read-only write, the fork shapes, a legacy token, other organizations,
