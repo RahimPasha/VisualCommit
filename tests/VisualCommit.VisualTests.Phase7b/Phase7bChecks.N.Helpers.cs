@@ -88,21 +88,44 @@ public sealed partial class Phase7bChecksN
     private static string Describe(FakeServiceRequest request) => $"{request.Method} {request.Route} {request.Status}";
 
     /// <summary>
-    /// Every request of <paramref name="requests"/> sent as the scenario's signed-in user: GitLab's
-    /// <c>Bearer</c> as <c>ada</c>; Azure DevOps' <c>BasicEmptyUser</c>, as Ada on the requests whose
-    /// user the fake reads (the connection and the create; part P's <c>AssertAzureSignInList</c>).
+    /// Every request of <paramref name="requests"/> sent as the scenario's signed-in user (part N's
+    /// "Around the POST": "Every request <c>Bearer</c> with <c>Login</c> <c>ada</c>, or
+    /// <c>BasicEmptyUser</c> with <c>Login</c> Ada's"; the lists' requests as part P's scenario facts
+    /// give them; the lead's ruling R4 on hunt 3): GitLab's <c>Bearer</c> with <c>Login</c> <c>ada</c>;
+    /// Azure DevOps' <c>BasicEmptyUser</c> with <c>Login</c> Ada's (the organization and her id) on
+    /// every request but <c>areas</c>, whose <c>Login</c> the report never gives (the fake reads no
+    /// credential there).
     /// </summary>
     private static void AssertSentAsAda(ServedHosting7b served, HostingProvider p, IEnumerable<FakeServiceRequest> requests) =>
         Assert.All(requests, request =>
         {
             Assert.Equal(p == GitLab ? FakeAuthorizationForm.Bearer : FakeAuthorizationForm.BasicEmptyUser, request.Authorization);
-            if (p == GitLab || request.Route is { } route && (route.StartsWith("connection:", StringComparison.Ordinal) || route.StartsWith("create:", StringComparison.Ordinal)))
+            if (p == GitLab || request.Route != P.AzureDevOpsAreasRoute)
             {
-                Assert.Equal(p == GitLab ? AdaLogin : AdaAzureLogin(served), request.Login);
+                Assert.True(
+                    (p == GitLab ? AdaLogin : AdaAzureLogin(served)) == request.Login,
+                    $"{request.Method} {request.Route} {request.Status} was sent as {request.Login ?? "nobody"}, not as {(p == GitLab ? AdaLogin : "Ada")}.");
             }
         });
 
     private static string AdaAzureLogin(ServedHosting7b served) => $"{Organization}/{served.AzureDevOps.User(Organization, AdaName).Id:D}";
+
+    /// <summary>
+    /// A sign-in's requests and the list since its mark (methods 1 and 2 after step 1, as part P's P1;
+    /// N8 after methods 3's step 4 and 4's step 3), each 200 in order with its path and query as part
+    /// P's <c>AssertGitLabSignInList</c> and <c>AssertAzureSignInList</c> assert them (Azure DevOps'
+    /// connection with <c>api-version=7.1-preview.1</c>, <c>areas</c> as part B's B1), then
+    /// <see cref="AssertSentAsAda"/>.
+    /// </summary>
+    private static void AssertSignInRequests(ServedHosting7b served, HostingProvider p, IReadOnlyList<FakeServiceRequest> requests)
+    {
+        Assert.Equal(P.SignInRoutesOf(p).Select(route => "GET " + route + " 200"), requests.Select(Describe));
+        (string Path, string Query)[] expected = p == GitLab
+            ? [(P.GitLabUserPath, string.Empty), (P.GitLabProjectPath, string.Empty), (P.GitLabListPath, P.GitLabListQuery), ($"/api/v4/projects/{served.GitLab.Project(WebAppFork).Id}", string.Empty)]
+            : [(P.AzureDevOpsConnectionPath, P.AzureDevOpsConnectionQuery), ($"/{Organization}/_apis/resourceAreas/{PartA.CoreAreaId}", PartA.AzureDevOpsSignInQuery), (P.AzureDevOpsRepositoryPath, P.AzureDevOpsRepositoryQuery), (P.AzureDevOpsListPath, P.AzureDevOpsListQuery)];
+        Assert.Equal(expected, requests.Select(request => (request.Path, request.Query.TrimStart('?'))));
+        AssertSentAsAda(served, p, requests);
+    }
 
     /// <summary>The create's POST since <paramref name="mark"/>: exactly one.</summary>
     private static FakeServiceRequest PostSince(ServedHosting7b served, HostingProvider p, Marks mark) =>
@@ -245,12 +268,44 @@ public sealed partial class Phase7bChecksN
 
     // ---- Menus and the form (7a's part N helpers) ---------------------------------------------------
 
-    /// <summary>Right-clicks the row at <paramref name="path"/> and returns its menu once shown.</summary>
+    /// <summary>Right-clicks the row at <paramref name="path"/> at its centre and returns its menu once shown, placed by the pointer (<see cref="AssertMenuPlaced"/>).</summary>
     private static async Task<MenuSnapshot> MenuOfAsync(ShellDriver app, params string[] path)
     {
-        app.RightClick(await app.RefRowAsync(path));
+        var pointer = app.BoundsOf(await app.RefRowAsync(path)).Center;
+        app.RightClick(pointer);
         await app.WaitForAsync(() => app.Session.Shell.Menu.IsOpen, "the row's menu");
-        return app.Menu();
+        var menu = app.Menu();
+        AssertMenuPlaced(app, menu, pointer);
+        return menu;
+    }
+
+    /// <summary>
+    /// Part N's conventions, Menus: a menu opened by the pointer at <paramref name="pointer"/> has its
+    /// top-left 2 right of and below it (<see cref="Phase7bChecks.AssertMenuAtPointer"/>) where it fits
+    /// there, 4 inside the window; where it does not (a 597-px or 519-px branch menu at a row low in
+    /// the panel), phase 3's 4a rule (<c>Phase3Checks.Support.cs</c>' <c>AssertMenuPlaced</c>, copied):
+    /// flipped to the pointer's other side past the right or bottom edge, then moved to stay 4 inside
+    /// the window (±2).
+    /// </summary>
+    private static void AssertMenuPlaced(ShellDriver app, MenuSnapshot menu, Point pointer)
+    {
+        var window = app.Window.ClientSize;
+        var size = menu.Bounds.Size;
+        var gap = WindowLayout.MenuPointerGap;
+        var inset = WindowLayout.MenuEdgeInset;
+        if (pointer.X + gap + size.Width <= window.Width - inset && pointer.Y + gap + size.Height <= window.Height - inset)
+        {
+            AssertMenuAtPointer(menu, pointer);
+            return;
+        }
+
+        var x = pointer.X + gap + size.Width > window.Width ? pointer.X - gap - size.Width : pointer.X + gap;
+        var y = pointer.Y + gap + size.Height > window.Height ? pointer.Y - gap - size.Height : pointer.Y + gap;
+        x = Math.Max(Math.Min(x, window.Width - inset - size.Width), inset);
+        y = Math.Max(Math.Min(y, window.Height - inset - size.Height), inset);
+        Assert.True(
+            Math.Abs(menu.Bounds.X - x) <= 2 && Math.Abs(menu.Bounds.Y - y) <= 2,
+            string.Create(CultureInfo.InvariantCulture, $"The menu's top-left is {menu.Bounds.TopLeft}; 4a places a {size} menu opened at {pointer} at ({x}, {y})."));
     }
 
     /// <summary>The open menu is <paramref name="lines"/>, <paramref name="highlighted"/> highlighted, phase 3's shape and the report's height (±2).</summary>
@@ -263,7 +318,7 @@ public sealed partial class Phase7bChecksN
         Assert.True(Math.Abs(menu.Bounds.Height - height) <= 2, string.Create(CultureInfo.InvariantCulture, $"The menu is {menu.Bounds.Height} high; the report gives {height} ±2."));
     }
 
-    /// <summary>Drags <c>local-work</c> onto <c>Remotes › origin › main</c> (7a's N5 step 4) and waits for the drop's menu.</summary>
+    /// <summary>Drags <c>local-work</c> onto <c>Remotes › origin › main</c> (7a's N5 step 4) and waits for the drop's menu, placed by the release point (<see cref="AssertMenuPlaced"/>, phase 3's 07b).</summary>
     private static async Task DropLocalWorkOnOriginMainAsync(ShellDriver app)
     {
         // 24 px left of the row's centre, where the last right-click on it was: a press there within
@@ -275,6 +330,7 @@ public sealed partial class Phase7bChecksN
         app.MoveMouseHeld(target, steps: 6);
         app.ReleaseMouse(target);
         await app.WaitForAsync(() => app.Session.Shell.Menu.IsOpen, "the drop's menu");
+        AssertMenuPlaced(app, app.Menu(), target);
     }
 
     /// <summary>Clicks <paramref name="p"/>'s create item in the open menu and waits for the form with Into <paramref name="baseText"/>.</summary>
@@ -691,6 +747,66 @@ public sealed partial class Phase7bChecksN
         public void Dispose() => _open.CollectionChanged -= OnChanged;
 
         private void OnChanged(object? sender, NotifyCollectionChangedEventArgs e) => Opened.AddRange(e.NewItems?.OfType<DialogViewModel>() ?? []);
+    }
+
+    /// <summary>
+    /// The base of every form that opens from now on, until disposed (N4's and N8's "Into origin/main,
+    /// given", open point 45; the lead's ruling R2 on hunt 3): the form's <c>IsReadingBase</c> and
+    /// <c>BaseText</c> as it is added to <c>DialogHost.Open</c>, then at each change of either. A form
+    /// given its base shows it from the start; one that reads A3 shows <c>Reading …</c> first unless
+    /// the read completes inside its constructor.
+    /// </summary>
+    private sealed class BaseRecorder : IDisposable
+    {
+        private readonly ObservableCollection<DialogViewModel> _open;
+        private readonly List<CreatePullRequestDialogViewModel> _forms = [];
+
+        public BaseRecorder(ShellDriver app)
+        {
+            _open = app.Session.Services.DialogHost.Open;
+            _open.CollectionChanged += OnChanged;
+        }
+
+        public List<(bool IsReadingBase, string BaseText)> States { get; } = [];
+
+        public void Dispose()
+        {
+            _open.CollectionChanged -= OnChanged;
+            foreach (var form in _forms)
+            {
+                form.PropertyChanged -= OnFormChanged;
+            }
+        }
+
+        /// <summary>
+        /// At least one state recorded; every one <c>(false, origin/main)</c>, so none reads
+        /// <c>Reading {P}…</c> or is empty: the base was given from the start.
+        /// </summary>
+        public void AssertGivenFromTheStart(HostingProvider p)
+        {
+            var seen = string.Join(" ; ", States.Select(state => $"{state.IsReadingBase}|{state.BaseText}"));
+            Assert.True(States.Count > 0, "No form opened while the base was recorded.");
+            Assert.True(States.TrueForAll(state => state.BaseText != N.ReadingOf(p)), $"The drop's form read its base ({N.ReadingOf(p)}): {seen}.");
+            Assert.True(States.TrueForAll(state => state == (false, N.Base)), $"The drop's form did not show its given base {N.Base} from the start: {seen}.");
+        }
+
+        private void OnChanged(object? sender, NotifyCollectionChangedEventArgs e)
+        {
+            foreach (var form in e.NewItems?.OfType<CreatePullRequestDialogViewModel>() ?? [])
+            {
+                _forms.Add(form);
+                States.Add((form.IsReadingBase, form.BaseText));
+                form.PropertyChanged += OnFormChanged;
+            }
+        }
+
+        private void OnFormChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (sender is CreatePullRequestDialogViewModel form && e.PropertyName is nameof(CreatePullRequestDialogViewModel.BaseText) or nameof(CreatePullRequestDialogViewModel.IsReadingBase))
+            {
+                States.Add((form.IsReadingBase, form.BaseText));
+            }
+        }
     }
 
     private static long OperationMark(ShellDriver app) =>

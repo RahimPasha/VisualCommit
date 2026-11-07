@@ -58,9 +58,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             await SignInThroughSettingsAsync(app, p, TokenOf(served, p));
             await WaitForListedAsync(app, p, 3, logMark);
             await AssertNoDialogAsync(app);
-            var signIn = RequestsSince(served, p, mark);
-            Assert.Equal(P.SignInRoutesOf(p).Select(route => route + " 200"), signIn.Select(request => $"{request.Route} {request.Status}"));
-            AssertSentAsAda(served, p, signIn);
+            AssertSignInRequests(served, p, RequestsSince(served, p, mark));
             Assert.Equal(["probe", KeyOf(served, p)], StoreCallsSince(app, stored));
             Assert.Equal([$"v {P.TitleOf(p)} 3", .. P.RowsOf(p).Select(row => row.Name)], Section(app));
             var topic = (RefItemRow)app.RefRowModel("Local branches", N.TopicFolder);
@@ -167,9 +165,11 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             await AssertNoMenuAsync(app, null);
             var header = app.Find<ItemsControl>("RefList").GetVisualDescendants().OfType<Button>()
                 .First(button => button.DataContext is RefSectionRow { Section: RefSection.PullRequests } && button.IsEffectivelyVisible);
-            app.RightClick(header);
+            var headerCentre = app.BoundsOf(header).Center;
+            app.RightClick(headerCentre);
             await app.WaitForAsync(() => app.Session.Shell.Menu.IsOpen, "the section's menu");
             AssertWholeMenu(app, P.SectionMenu(p), P.RefreshOf(p), P.SectionMenuHeight);
+            AssertMenuPlaced(app, app.Menu(), headerCentre);
             app.PressKey(Key.Escape);
             await AssertNoMenuAsync(app, null);
             AssertNoRequests(served, mark);
@@ -258,9 +258,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             await AssertNewFormAsync(app, form);
             AssertForm(app, form, GitLab, N.RemoteHead, N.GitLabFullName, null, N.Base, N.GitLabFullName, N.HeadTitle);
             AssertFormPlaces(app, N.CardLeft);
-            var signedIn = RequestsSince(served, GitLab, mark);
-            Assert.Equal(P.SignInRoutesOf(GitLab).Select(route => route + " 200"), signedIn.Select(request => $"{request.Route} {request.Status}"));
-            AssertSentAsAda(served, GitLab, signedIn);
+            AssertSignInRequests(served, GitLab, RequestsSince(served, GitLab, mark));
             Assert.Equal(["probe", KeyOf(served, GitLab)], StoreCallsSince(app, stored));
             Assert.Equal([$"v {P.GitLabTitle} 3", .. P.GitLabRows.Select(row => row.Name)], Section(app));
             ShotN(app, N.N01a);
@@ -282,15 +280,23 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             ShotN(app, N.N01b);
             AssertNoRequests(served, mark);
 
-            // N4 step 6: the drop's form, pushed first.
-            form = await OpenFormFromMenuAsync(app, GitLab);
-            Assert.False(form.IsReadingBase);
+            // N4 step 6: the drop's form, pushed first, its base given (never Reading GitLab…). On
+            // GitLab, with A3's answer kept from the list's read, a form not given its base reads A3
+            // inside its constructor, so it too is (false, origin/main) when added: this recorder
+            // holds but cannot tell a given base from a dropped one; method 4's can (open point 45).
+            using (var bases = new BaseRecorder(app))
+            {
+                form = await OpenFormFromMenuAsync(app, GitLab);
+                bases.AssertGivenFromTheStart(GitLab);
+            }
+
             await AssertNewFormAsync(app, form);
             AssertForm(app, form, GitLab, N.LocalWork, N.GitLabFullName, N.PushedFirstWithUpstreamOf(GitLab), N.Base, N.GitLabFullName, N.LocalWorkTitle);
             var headNote = app.FindByAutomationId("PullRequestHeadNote");
             Assert.Contains("settingsNote", headNote.Classes);
             Assert.True(app.BoundsOf(headNote).Top >= app.BoundsOf(app.FindByAutomationId("PullRequestHead")).Bottom - 0.5, "The note is not under the head.");
             var heightWithNote = AssertFormPlaces(app, N.CardLeft);
+            AssertFormBrushes(app, light: false);
             Assert.True(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
             AssertNoRequests(served, mark);
             ShotN(app, N.N04a);
@@ -304,6 +310,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             Assert.Equal(N.LocalWorkTitle, ((TextBox)app.FindByAutomationId("PullRequestTitle")).Text);
             var sentHeight = app.BoundsOf(app.FindByAutomationId("PullRequestSentTitle")).Height;
             Assert.Equal(heightWithNote + sentHeight + N.LineGap, AssertFormPlaces(app, N.CardLeft), 1.0);
+            AssertFormBrushes(app, light: false);
             AssertNoRequests(served, mark);
             ShotN(app, N.N03a);
 
@@ -358,6 +365,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             AssertOfferShown(app, webApp);
             var requests = RequestsSince(served, GitLab, mark);
             Assert.Equal([$"GET {N.GitLabSourceRoute} 304", $"POST {N.GitLabCreateRoute} 201", $"GET {N.GitLabListRoute} 200", $"GET {N.GitLabListRoute} 304"], requests.Select(Describe));
+            AssertSentAsAda(served, GitLab, requests);
             AssertBody(PostSince(served, GitLab, mark), BodyFor(GitLab, N.LocalWork, N.LocalWorkTitle, N.Description, draft: true), ["draft", "target_project_id", "allow_collaboration"]);
             var project = served.GitLab.Project(WebAppPath);
             var request = Assert.Single(served.GitLab.MergeRequests(project), candidate => candidate.Iid == N.GitLabNext);
@@ -436,12 +444,20 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             var mark = Mark(served);
             var logMark = app.LogMark();
             app.TypeToken(served.AzureDevOpsToken);
-            app.PressKey(Key.Enter);
-            var form = await WaitForFormAsync(app);
+            CreatePullRequestDialogViewModel form;
+
+            // The drop's base given across the sign-in (open point 45): from the form's first state
+            // on, Into reads origin/main, never Reading Azure DevOps… (A3 is not kept before the
+            // sign-in's list, so a form not given its base would show that first).
+            using (var bases = new BaseRecorder(app))
+            {
+                app.PressKey(Key.Enter);
+                form = await WaitForFormAsync(app);
+                bases.AssertGivenFromTheStart(Azure);
+            }
+
             await WaitForListedAsync(app, Azure, 3, logMark);
-            var signedIn = RequestsSince(served, Azure, mark);
-            Assert.Equal(P.SignInRoutesOf(Azure).Select(route => route + " 200"), signedIn.Select(request => $"{request.Route} {request.Status}"));
-            AssertSentAsAda(served, Azure, signedIn);
+            AssertSignInRequests(served, Azure, RequestsSince(served, Azure, mark));
             Assert.Equal(["probe", KeyOf(served, Azure)], StoreCallsSince(app, stored));
 
             // N4 step 4: the drop's form after the sign-in, its base given (open point 45).
@@ -449,6 +465,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             await AssertNewFormAsync(app, form);
             AssertForm(app, form, Azure, N.LocalWork, N.AzureDevOpsFullName, N.PushedFirstWithUpstreamOf(Azure), N.Base, N.AzureDevOpsFullName, N.LocalWorkTitle);
             var height = AssertFormPlaces(app, N.CardLeft);
+            AssertFormBrushes(app, light: false);
             Assert.True(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
             ShotN(app, N.N04c);
 
@@ -489,6 +506,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             AssertOfferShown(app, mobileApp);
             var requests = RequestsSince(served, Azure, mark);
             Assert.Equal([$"POST {N.AzureDevOpsCreateRoute} 201", $"GET {N.AzureDevOpsListRoute} 200", $"GET {N.AzureDevOpsListRoute} 200"], requests.Select(Describe));
+            AssertSentAsAda(served, Azure, requests);
             AssertBody(PostSince(served, Azure, mark), BodyFor(Azure, N.LocalWork, N.LocalWorkTitle, N.Description, draft: true), ["forkSource"]);
             var request = Assert.Single(served.AzureDevOps.PullRequests(served.AzureDevOps.Repository(Organization, Project, MobileApp)), candidate => candidate.Id == N.AzureDevOpsNext);
             Assert.Equal((FakeAzurePullRequestStatus.Active, N.LocalWorkTitle, true, N.LocalWork, "main", N.Description), (request.Status, request.Title, request.IsDraft, request.SourceBranch, request.TargetBranch, request.Description));
@@ -567,24 +585,25 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             // N7 step 6: long/topic/no-request's form, then long/main from the Pick.
             await OpenFolderAsync(app, "Remotes", N.LongRemote);
             await OpenFolderAsync(app, "Remotes", N.LongRemote, N.TopicFolder);
-            var menu = await MenuOfAsync(app, "Remotes", N.LongRemote, N.TopicFolder, N.NoRequest);
-            Assert.Contains(menu.Items, item => item.Label == N.AzureDevOpsCreateItem && item.IsEnabled);
+            await MenuOfAsync(app, "Remotes", N.LongRemote, N.TopicFolder, N.NoRequest);
+            AssertWholeMenu(app, N.RemoteBranchMenuOf(Azure, N.LongRemote), $"Check out {N.LongHead}", N.RemoteBranchMenuHeight);
+            Assert.True(app.Menu().Items.Single(item => item.Label == N.AzureDevOpsCreateItem).IsEnabled);
             var form = await OpenFormFromMenuAsync(app, Azure);
-            AssertForm(app, form, Azure, "long/topic/no-request", N.LongFullName, null, N.Base, N.AzureDevOpsFullName, N.HeadTitle);
+            AssertForm(app, form, Azure, N.LongHead, N.LongFullName, null, N.Base, N.AzureDevOpsFullName, N.HeadTitle);
             Assert.True(IsCut((TextBlock)app.FindByAutomationId("PullRequestHeadRepository")), "The long head repository is not cut.");
             Assert.Equal(N.ColumnRight, app.BoundsOf(app.FindByAutomationId("PullRequestHeadRepository")).Right, 1.0);
             AssertFormPlaces(app, N.CardLeft);
             app.Click(app.FindByAutomationId("PullRequestBaseChooseButton"));
             var pick = await app.WaitForDialogAsync<PickDialogViewModel>();
             Assert.Equal(N.ChooseBaseTitle, pick.Title);
-            string[] options = ["long/main", "long/topic/no-request", "origin/docs/guide", "origin/feature/sign-in", N.Base, N.RemoteHead];
+            string[] options = ["long/main", N.LongHead, "origin/docs/guide", "origin/feature/sign-in", N.Base, N.RemoteHead];
             Assert.Equal(options, pick.Options.Select(option => option.Text));
             Assert.Equal(options.Select(option => option.StartsWith("long/", StringComparison.Ordinal) ? N.LongFullName : N.AzureDevOpsFullName), pick.Options.Select(option => option.Detail));
             Assert.Equal(N.Base, pick.Selected);
             await app.PickAsync("long/main");
             await app.WaitForAsync(() => form.BaseText == "long/main", "the chosen base");
             app.Settle();
-            AssertForm(app, form, Azure, "long/topic/no-request", N.LongFullName, null, "long/main", N.LongFullName, N.HeadTitle);
+            AssertForm(app, form, Azure, N.LongHead, N.LongFullName, null, "long/main", N.LongFullName, N.HeadTitle);
             var baseRepository = (TextBlock)app.FindByAutomationId("PullRequestBaseRepository");
             Assert.True(IsCut(baseRepository) && baseRepository.TextLayout.TextLines.Count == 1, "The long base repository is not cut on one line.");
             Assert.Equal(N.ColumnRight, app.BoundsOf(app.FindByAutomationId("PullRequestBaseChooseButton")).Right, 1.0);
@@ -653,6 +672,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
         Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
         var requests = RequestsSince(served, p, mark);
         Assert.Equal(p == GitLab ? [$"GET {N.GitLabSourceRoute} 304", $"POST {N.GitLabCreateRoute} 400"] : [$"POST {N.AzureDevOpsCreateRoute} 400"], requests.Select(Describe));
+        AssertSentAsAda(served, p, requests);
         AssertBody(PostSince(served, p, mark), shown.Body, shown.AbsentMembers);
         var missing = p == GitLab ? N.GitLabHeadUnknown : N.AzureDevOpsBranchesUnknown;
         AssertForm(app, form, p, N.Head, N.FullNameOf(p), null, N.Base, N.FullNameOf(p), N.HeadTitle, missing);
@@ -662,11 +682,9 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
         AssertStatus(app, N.FailedOf(failed), OperationStatusTone.Danger);
         Assert.False(repository.OperationStatus.HasOffer);
         Assert.Equal($"v {P.TitleOf(p)} 3", Section(app)[0]);
-        var message = p == GitLab
-            ? "source_branch does not exist"
-            : "TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches";
-        AssertWarningOnce(app, logMark, $"{HostingTexts.Name(p)}: POST {(p == GitLab ? N.GitLabCreatePath : N.AzureDevOpsCreatePath)} failed: 400 (request {{id}}).");
-        AssertWarningOnce(app, logMark, $"{HostingTexts.Name(p)}: creating a pull request on {N.FullNameOf(p)} failed: Validation, {message} (request {{id}})");
+        var message = N.MissingMessageOf(p);
+        AssertWarningOnce(app, logMark, N.CoreWarningOf(p, 400));
+        AssertWarningOnce(app, logMark, N.SessionWarningOf(p, message));
         AssertWarningOnce(app, logMark, $"{N.RepositoryOf(p)}: {failed}: the request to create it failed: Validation, {message} (request {{id}})");
         if (p == GitLab)
         {
@@ -701,6 +719,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
                 ? [$"GET {N.GitLabSourceRoute} 304", $"POST {N.GitLabCreateRoute} 409", $"GET {N.GitLabListRoute} 200"]
                 : [$"POST {N.AzureDevOpsCreateRoute} 409", $"GET {N.AzureDevOpsListRoute} 200"],
             requests.Select(Describe));
+        AssertSentAsAda(served, p, requests);
         AssertBody(PostSince(served, p, mark), shown.Body, shown.AbsentMembers);
         AssertForm(app, form, p, N.Head, N.FullNameOf(p), null, N.Base, N.FullNameOf(p), N.HeadTitle, N.AlreadyOpenOf(p, number), number);
         AssertIdle(app, form);
@@ -710,10 +729,13 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
         Assert.Equal(($"{N.NumberOf(number)} {N.HeadTitle}", octo), (PullRequestRows(app)[0].Text, PullRequestRows(app)[0].Author));
         await AssertBranchNumberAsync(app, p, number, N.HeadTitle, "Local branches", N.TopicFolder, N.NoRequest);
         Assert.Equal(1, ListedSince(app, p, logMark));
+
+        // The 409's message, which the fake's record does not hold: GitLab's, and Azure DevOps'
+        // TF401179 of the typeKey GitPullRequestExistsException, through the core's and the session's Warnings.
+        AssertWarningOnce(app, logMark, N.CoreWarningOf(p, 409));
+        AssertWarningOnce(app, logMark, N.SessionWarningOf(p, N.AlreadyOpenMessageOf(p)));
         if (p == GitLab)
         {
-            AssertWarningOnce(app, logMark, $"GitLab: POST {N.GitLabCreatePath} failed: 409 (request {{id}}).");
-            AssertWarningOnce(app, logMark, $"GitLab: creating a pull request on {N.GitLabFullName} failed: Validation, Another open merge request already exists for this source branch: !24 (request {{id}})");
             var open = served.GitLab.MergeRequests(served.GitLab.Project(WebAppPath));
             Assert.Equal([21, 22, 23, 24], open.Select(request => request.Iid).Order());
             Assert.Equal(OctoLogin, open.Single(request => request.Iid == 24).Author);

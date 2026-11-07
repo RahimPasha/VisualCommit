@@ -140,6 +140,9 @@ public static partial class Phase7bExpectations
 
         public const string LongRemote = "long";
 
+        /// <summary>N7's head, the remote branch <c>long/topic/no-request</c>.</summary>
+        public const string LongHead = "long/topic/no-request";
+
         /// <summary>N7's remote's URL before <c>WithPorts</c>.</summary>
         public const string LongUrl = "http://Fernhill-Labs@127.0.0.1:47397/Fernhill-Labs/Mobile%20App/_git/customer-onboarding-and-identity-verification-service";
 
@@ -166,7 +169,37 @@ public static partial class Phase7bExpectations
 
         public static string CreateRouteOf(HostingProvider p) => IsGitLab(p) ? GitLabCreateRoute : AzureDevOpsCreateRoute;
 
+        public static string CreatePathOf(HostingProvider p) => IsGitLab(p) ? GitLabCreatePath : AzureDevOpsCreatePath;
+
         public static string ListRouteOf(HostingProvider p) => IsGitLab(p) ? GitLabListRoute : AzureDevOpsListRoute;
+
+        // ---- A refused POST's Warnings (part N's texts, "Log lines"; N5) ----------------------------------
+
+        /// <summary>The providers' names at the head of the HTTP core's and the session's Warnings (part N's "Log lines").</summary>
+        public const string GitLabName = "GitLab";
+        public const string AzureDevOpsName = "Azure DevOps";
+
+        public static string ProviderNameOf(HostingProvider p) => IsGitLab(p) ? GitLabName : AzureDevOpsName;
+
+        /// <summary>The client's message of the missing branch (N5 step 2): GitLab's 400 by its key, Azure DevOps' TF401398.</summary>
+        public const string GitLabHeadMissingMessage = "source_branch does not exist";
+        public const string AzureDevOpsBranchesMissingMessage = "TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches";
+
+        /// <summary>The client's message of "already open" (N5 step 3): GitLab's 409 and Azure DevOps' 409 TF401179, whole.</summary>
+        public const string GitLabAlreadyOpenMessage = "Another open merge request already exists for this source branch: !24";
+        public const string AzureDevOpsAlreadyOpenMessage = "TF401179: An active pull request for the source and target branch already exists.";
+
+        public static string MissingMessageOf(HostingProvider p) => IsGitLab(p) ? GitLabHeadMissingMessage : AzureDevOpsBranchesMissingMessage;
+
+        public static string AlreadyOpenMessageOf(HostingProvider p) => IsGitLab(p) ? GitLabAlreadyOpenMessage : AzureDevOpsAlreadyOpenMessage;
+
+        /// <summary>The HTTP core's Warning (5.2): <c>GitLab: POST /api/v4/projects/5001/merge_requests failed: 400 (request {id}).</c>, <c>{id}</c> left as written.</summary>
+        public static string CoreWarningOf(HostingProvider p, int status) =>
+            string.Create(CultureInfo.InvariantCulture, $"{ProviderNameOf(p)}: POST {CreatePathOf(p)} failed: {status} (request {{id}}).");
+
+        /// <summary>The session's Warning (9.6): <c>Azure DevOps: creating a pull request on Fernhill-Labs/Mobile App/mobile-app failed: Validation, {message} (request {id})</c>.</summary>
+        public static string SessionWarningOf(HostingProvider p, string message) =>
+            $"{ProviderNameOf(p)}: creating a pull request on {FullNameOf(p)} failed: Validation, {message} (request {{id}})";
 
         /// <summary>D322's line for <paramref name="p"/>'s repository: <c>web-app: listed 4 open pull requests of northfield/platform/web-app</c>.</summary>
         public static string ListedOf(HostingProvider p, int count) =>
@@ -224,28 +257,38 @@ public static partial class Phase7bExpectations
         public const double LocalBranchMenuHeight = 597;
 
         /// <summary>Method 3's and 4's menu of <c>origin/topic/no-request</c> (13 items, 5 separators, 415 high).</summary>
-        public static string[] RemoteBranchMenuOf(HostingProvider p) =>
-        [
-            RemoteHead,
-            $"Check out {RemoteHead}",
-            $"Merge {RemoteHead} into main",
-            $"Merge {RemoteHead} into main (create a merge commit)",
-            $"Rebase main onto {RemoteHead}",
-            $"Interactive rebase of main onto {RemoteHead}…",
-            "—",
-            "Create branch here…",
-            "Create tag here…",
-            "—",
-            $"Delete {Head} on origin… (danger)",
-            "—",
-            CreateItemOf(p),
-            "—",
-            $"Compare {RemoteHead} with main",
-            $"Hide {RemoteHead}",
-            $"Solo {RemoteHead}",
-            "—",
-            "Copy branch name",
-        ];
+        public static string[] RemoteBranchMenuOf(HostingProvider p) => RemoteBranchMenuOf(p, "origin");
+
+        /// <summary>
+        /// A remote branch's menu of <c>{remote}/topic/no-request</c> (13 items, 5 separators, 415 high):
+        /// method 3's and 4's on <c>origin</c>, N7's on <c>long</c> with long's names.
+        /// </summary>
+        public static string[] RemoteBranchMenuOf(HostingProvider p, string remote)
+        {
+            var head = $"{remote}/{Head}";
+            return
+            [
+                head,
+                $"Check out {head}",
+                $"Merge {head} into main",
+                $"Merge {head} into main (create a merge commit)",
+                $"Rebase main onto {head}",
+                $"Interactive rebase of main onto {head}…",
+                "—",
+                "Create branch here…",
+                "Create tag here…",
+                "—",
+                $"Delete {Head} on {remote}… (danger)",
+                "—",
+                CreateItemOf(p),
+                "—",
+                $"Compare {head} with main",
+                $"Hide {head}",
+                $"Solo {head}",
+                "—",
+                "Copy branch name",
+            ];
+        }
 
         public const double RemoteBranchMenuHeight = 415;
 
