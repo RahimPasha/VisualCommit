@@ -148,11 +148,13 @@ Build:
   ruled `fernhill-labs`); its merge's classes and lagged list passed, 11.8's comparison found only
   what varies by nature, and its pictures were inspected (Notes). CI's run on it failed three tests,
   under investigation (CI section). (2026-11-06. Week: share not read.)
-- [ ] 12. The left panel's section for each provider (GitLab's merge requests, D351), its menu,
+- [x] 12. The left panel's section for each provider (GitLab's merge requests, D351), its menu,
   checkout, the badge on branches, open in browser.
   WP-P (section 12) merged at `1821206`, with its reviews', hunts' and the lead's fixes (`610b05a`:
-  the ruling on the two cut message rows, recorded in the report at `c5ba918`); its merge's runs are
-  under way (Next step).
+  the ruling on the two cut message rows, recorded in the report at `c5ba918`); its merge's runs
+  passed but phase 2's `Check_15_amend` once under the lag, a race in the check, fixed and merged
+  at `26b44c7`; 12.9's comparisons found only what varies by nature; part P's 22 pictures and `a06c`
+  inspected; CI 42373090316 green (Notes). (2026-11-07. Week: share not read.)
 - [ ] 13. Create a pull request or merge request from the branch menus and the drop menu, and its
   form, for each provider.
 - [ ] 14. 7a's screens and commands that name GitHub name the provider they act on (D351); the
@@ -504,20 +506,17 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-P (design 12, part P) is merged at `1821206` (Notes, "WP-P's build and merge"). Part P's methods
-4 and 5 had failed closed on the conventions' audit (D356's row and GitLab's More row cut at 260 with
-tooltips that are not their text); the lead ruled the two rows the conventions' one exception
-(`610b05a`, the report's "Changed in this report after its first commit" at `c5ba918`). 12.9's runs
-are under way through `scripts/heavy-run.sh` (the 7b and 7a projects whole, 12.7's unit classes,
-phase 3's `*Check_03_other_menus*`, then the lagged list); then 7a's P and G pictures against
-`phase-7a-pictures.sha256`, phase 3's against `phase-3-pictures.sha256`, part P's 22 pictures and part
-A's `a06c` inspected, and CI's run on `c5ba918` (42373090316) read; then step 12 is ticked. Done:
-the runs, all green but phase 2's `Check_15_amend` once under the lag (under investigation in
-`D:/Projects/Personal/vc-wt/p7b-amend-wait`); the comparisons, nothing but what varies by nature;
-CI green. Open: the investigation and the inspection. WP-N
-(section 13) is being built from `c5ba918` in `D:/Projects/Personal/vc-wt/p7b-create` on
-`wip/p7b-create`, then reviewed and hunted. 0.7's references for WP-N's merge and the gate are made
-in `D:/Projects/Personal/gate7b-reference/` (Notes, "0.7's references").
+WP-N (design 13, part N) is being built from `c5ba918` in `D:/Projects/Personal/vc-wt/p7b-create` on
+`wip/p7b-create` by the package workflow (two Opus reviews, Opus hunts by lens); at its merge the lead
+reads its result, rules on its questions, scans its diff, merges, and runs 13.9's runs through
+`scripts/heavy-run.sh`: the lagged list, then the whole default run (0.4, D245), then 7a's part N
+(`Phase7aChecksN`) and phase 3's walk-through, comparing their pictures by region with 0.7's
+references in `D:/Projects/Personal/gate7b-reference/` (made 2026-11-07, Notes), then part N with
+every picture inspected; then WP-LIVE's second stage (`Check_3`, the owner told) and the review before
+the gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
+`Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
+class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
+`c5ba918` is green; CI's run on the fix's merge is to be read.
 
 WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8's comparison and
 picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
@@ -764,8 +763,7 @@ every commit.
   `Check_15_amend`, 24 of 25: after the amend's waits for HEAD, the stage panel and the graph, the
   summary box still held the amended subject (`Phase2Checks.Stage.cs:181`); it passed at WP-A's and
   WP-B's merges, and the product clears the box only when the host's `CommitAsync` returns
-  (`WorkingChangesViewModel.cs:519`). Under investigation (one Opus investigator in
-  `D:/Projects/Personal/vc-wt/p7b-amend-wait`, three Opus skeptics). 12.9's pictures (the plain runs'
+  (`WorkingChangesViewModel.cs:519`): a race in the check, fixed (below). 12.9's pictures (the plain runs'
   copies in `D:/Projects/Personal/phase7b-work/wpp-pictures/`): 7a's 31 P and G pictures are the same
   files as `phase-7a-pictures.sha256`; of 7a's others only what differed at WP-B's merge differs (the
   23 part A pictures' intro, `b06a`'s port, `n02b`, `n06b`, `n07a`) and `b09a`, whose file differs
@@ -775,8 +773,36 @@ every commit.
   (`scripts/compare-pictures.py`, output in `D:/Projects/Personal/phase7b-work/cmp-wpp/out7a/`), 7a's
   85: 57 the same, the 23 part A pictures in the intro's box alone, `b06a` (the fake's port), `n02b`
   and `n07a` (the progress bar's segment), `n04a` (7 px one level apart) and `a09b`, whose reference
-  shows the port 59233 where 7a's list and this run show 47395. Part P's 22 pictures and part A's
-  `a06c` are being inspected by an Opus inspector.
+  shows the port 59233 where 7a's list and this run show 47395.
+- **Phase 2's `Check_15_amend` under the lag** (2026-11-07; one Opus investigator in
+  `D:/Projects/Personal/vc-wt/p7b-amend-wait`, three Opus skeptics by lens: loosening, product,
+  reproduction; traces in `D:/Projects/Personal/phase7b-work/verify/amend-wait/`): a race in the
+  check, no product defect. A commit ends after its refresh (phase 3's design 1.3, steps 7 and 8), and
+  the stage panel empties its boxes, unticks Amend and leaves "Committing…" only then
+  (`WorkingChangesViewModel.cs:519-525`). Under the lag the amend's own file events reach the watcher
+  after the queue's pause and are folded into the running refresh as one more round
+  (`RepositoryViewModel.RefreshAsync`), during which HEAD, the graph and the 6/0 panel already show the
+  amend; when that round outlasted the check's two git calls, the assertion ran before the clear (3 of
+  60 loaded lagged runs; the unfixed `15b` picture showed the filled box and "Committing…" in 16 of 20
+  lagged runs even when the check passed; never without the lag, whose window is about 15 ms). The fix
+  (`040eb65`, test only): checks 14 and 15 wait, with the driver's own limit, for the state their
+  expected results name and the panel reaches last (check 14 the disabled `Stage files to commit`,
+  check 15 Amend not ticked), before their pictures; every assertion stays, and check 15 also asserts
+  the empty description ("the boxes empty"). The skeptics refuted nothing; fixed, 35 of 35 lagged runs
+  under load passed with `14b` and `15b` the same files as 7a's list. The lead's runs on `26b44c7`
+  through `scripts/heavy-run.sh`: `Phase2Checks` 25 of 25 plain (its 66 pictures the same files as 7a's
+  list) and 25 of 25 lagged (one picture, `24c`, 21 pixels of the toolbar's labels up to 25 levels
+  apart, text anti-aliasing; check 24 is untouched). For the review before the gate: the real-window
+  check 14 (`Phase2RealWindowPass.cs:86-95`) saves `14b` after the 7/0 panel without that wait (its
+  window without the lag about 15 ms; a change there needs the real-window pass, D246); the boxes and
+  Amend stay editable during "Committing…", and the clear then drops what was typed (phase 2's UX,
+  older than 7b); a watcher event folded into a commit's refresh keeps "Committing…" for one more
+  round (RefreshAsync's contract).
+- **Part P's pictures inspected** (2026-11-07, an Opus inspector, the plain run's copies): all 22
+  (`p01a` to `p14a`) and part A's `a06c` match their expected results, the two ruled cut rows
+  included; `a06c` shows `Sign in to Azu…` behind the card as part P's "Changes to expected results"
+  says. One gap in the report's wording, fixed at `8416438`: `manifest`'s one-lane graph keeps its
+  Date column by phase 1's rule, which the conventions' sentence on the graph now names.
 - **0.7's references** (2026-11-07, in `D:/Projects/Personal/gate7b-reference/`): 7a's gate's
   real-window files, 375 copied from the main checkout's `artifacts/visual/phase-*/real-window/`
   (untouched since 2026-10-31), and phases 0 to 7a's walk-throughs run on `master` (`a29379f`) with
