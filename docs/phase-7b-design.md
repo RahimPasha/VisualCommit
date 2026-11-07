@@ -3419,6 +3419,36 @@ pictures are the same files; no `refs/merge-requests` or `refs/pull` fetch line 
 is written; git fetches no Azure DevOps request ref; nothing is sent for `OtherOrganization`; WP-P's
 files call none of 1.5's shims; CI's five jobs are green.
 
+**As built** (WP-P, `34720c2` and `4c2dd0d` to its last commit, 2026-11-07). Where the build differs
+from the text or settles what it left open:
+- `34720c2` holds 12.9's five areas in one commit, each with its class (the bound); `4c2dd0d` part P's
+  checks, `PartP` and `RequestOperationsProvidersTests`.
+- `PullRequestRow.BranchLabelOf(repository, branch, relativeTo = null)`: two arguments give Azure
+  DevOps' `{Name}:{branch}`; the base as `relativeTo` gives `{project}/{Name}:{branch}` across
+  projects (WP-N calls it with two). `RefItemRow`'s `pullRequest:` is a `PullRequest?`.
+- Azure DevOps' disabled checkout: `AddRemoteFor(p, fork)` for a fork that is no remote,
+  `HeadNotNamed(p)` without `HeadRepository`, `NotFetchedBy(the first RequestRemote of its head
+  repository, branch)` for its own branch that remote's fetch lines leave out; a fork that is a remote
+  with a fetchable line is that remote branch's checkout.
+- FETCH_HEAD after `refs/merge-requests/5/head`, measured on 2.56.0.windows.4:
+  `<sha>\t\t'refs/merge-requests/5/head' of <url>` (open point 30 holds; CI's 2.43 measures it too).
+- Report and design: P6's `More than 300 open merge requests` (a character longer than 7a's) and P8's
+  D356 row are cut with "…" at 260 while their tooltips are the action and the reason, which the
+  conventions' audit rule does not allow; `ShotPCut` lets the audit name that row alone (P6's and P8's
+  "cut with …"), the lead to rule. `Sign in` "disabled" and D356's "disabled button" are read as
+  `IsEffectivelyEnabled` (a command that cannot run leaves `IsEnabled` true). `Local branches` lists
+  folders first (`feature`, `topic`, `local-work`, `main`): P1 asserts the four as a set.
+- Badges at 1100×700 (open point 26): the remote label beside the request's local one folds into `+1`
+  on both providers; names cut to `feature…` and `origin/docs/…`. After P6's refresh `origin/topic/…`
+  shows `!24` (ByRef's lowest number on a key).
+- `PartP` uses nothing of the 7b project; WP-R reads `RepositoryOf`, `TitleOf`, `RowsOf`,
+  `SectionMenu`, `RowMenuOf`, `RowsPictureOf` and `SectionMenuPictureOf`. Outside 12.1's list: the 7b
+  csproj's one link to 7a's `GraphTestHost.cs` (WP-F's file) for `GraphRequestBadgeTests`.
+- The seven methods took 3.7 to 26.2 s to their last picture in the class's run (the script not run
+  apart). 7a's 31 P and G pictures are the same files; phase 3's `03a` to `03h` pixel-identical;
+  `a06c`'s region behind reads `Sign in to Azu…`. `RequestOperationsProvidersTests` passes under the
+  1500 ms lag.
+
 ## 13. WP-N: a new pull or merge request (part N)
 
 ### 13.1 Goal and files
