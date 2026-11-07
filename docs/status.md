@@ -143,7 +143,11 @@ Build:
   merge's classes and lagged list passed and its pictures were inspected (Notes). CI's run on it
   failed two phase 6 tests on Linux that WP-A does not touch, under investigation (CI section).
   (2026-11-06. Week: share not read.)
-- [ ] 11. Browse and clone the repositories of an Azure DevOps and a GitLab account.
+- [x] 11. Browse and clone the repositories of an Azure DevOps and a GitLab account.
+  WP-B (section 11) merged at `9409aa8`, with its reviews', hunts' and the lead's fixes (B7's owner
+  ruled `fernhill-labs`); its merge's classes and lagged list passed, 11.8's comparison found only
+  what varies by nature, and its pictures were inspected (Notes). CI's run on it failed three tests,
+  under investigation (CI section). (2026-11-06. Week: share not read.)
 - [ ] 12. The left panel's section for each provider (GitLab's merge requests, D351), its menu,
   checkout, the badge on branches, open in browser.
 - [ ] 13. Create a pull request or merge request from the branch menus and the drop menu, and its
@@ -472,15 +476,17 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-B (design 11, part B) is merged at `9409aa8`, after its reviews and three hunts, with the lead's
-ruling on B7's owner (`fernhill-labs`, the report's "Changed in this report after its first
-commit"). The lead runs its classes, part B's checks and the lagged list (as at WP-A's merge, one command at
-a time through `heavy-run.sh`), then 11.8's picture comparison (references saved before the merge in
-`D:/Projects/Personal/phase7b-work/ref-preB/`, phase 6's from `D:/Projects/Personal/gate7a-reference/`),
-has part B's pictures inspected and reads CI's run on it (42339567989). Part P's checks are being
-written and reviewed (D244), then committed before WP-P. Open point 8 is settled (Waiting on the
-owner, "Azure DevOps' probes"); its changes to the fake, the live command's fake and A9 are being
-built in `D:/Projects/Personal/vc-wt/p7b-anon-probe`.
+WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8's comparison and
+picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
+tests, each investigated in its own worktree from `9409aa8` (`wip/p7b-git243`, `wip/p7b-signout-race`,
+`wip/p7b-a9-loading`), each fix put to two skeptics; the lead merges them, runs their classes and
+reads the next CI run. Part P's checks are committed (`f1ac5ac`, D244); WP-P (section 12) is being
+built from that commit in `D:/Projects/Personal/vc-wt/p7b-requests` on `wip/p7b-requests`, then
+reviewed and hunted; at its merge the lead runs 12.9's runs (the lagged list, `Phase7aChecksP` and
+`Phase7aChecksG` against `phase-7a-pictures.sha256`, phase 3's `*Check_03_other_menus*`, part P, and
+part A's `a06c` again). Open point 8 is settled (Waiting on the owner, "Azure DevOps' probes"); its
+changes to the fake, the live command's fake and A9 are being built in
+`D:/Projects/Personal/vc-wt/p7b-anon-probe`.
 
 WP-A (design 10, part A) is merged at `b6de3cf`; its classes, lagged list and picture inspection
 passed (Notes). CI's run on it (42301846503) failed two phase 6 tests on Linux that WP-A does not
@@ -619,6 +625,23 @@ every commit.
   with its provider, so 7a's `b03a-listed` keeps its disabled button. The same commit records the
   inspection's 562 for three signed-in blocks (part A's "Changed in this report after its first
   commit").
+- **WP-B's merge runs** (2026-11-06, 21:40 to 22:29 on the laptop, on `9409aa8`, through
+  `bash scripts/heavy-run.sh`, one command at a time): the 7b project 107 of 107, 7a's 207, Hosting's
+  three clone classes 22, App.Tests' five classes 34, phase 1's `Check_13` and `Check_14`, phase 6's
+  `Check_L26`, `Check_L32` and `Check_K10`; then the lagged list (1500 ms), every command green (the 7b
+  project 107 again, 7a's 207, the providers' wiring and request classes 20). 11.8's comparison (the
+  references saved before the merge in `D:/Projects/Personal/phase7b-work/ref-preB/`, phase 6's
+  against 7a's gate copies in `D:/Projects/Personal/gate7a-reference/`): 7a's part B pictures,
+  phase 1's `13a` and `13c`, phase 6's `l26a`, `l26b` and `k10a` to `k10d` and `k10f` the same files;
+  what differed is what varies by nature: the temporary folder's name (phase 1's `13b`, `14a`,
+  `14b`; phase 6's `l32a`, `l32b`, and `k10e`'s palette detail), a caret (`n06b`), the progress bar's
+  segment (`n02b`, `n07a`), 7a's fake's fallback port (`b06a`, open point 20) and one-level
+  anti-aliasing (`a09b`, `n04a`, back to 7a's gate files). An Opus inspector opened part B's 20
+  pictures and judged each difference: no defect, no real change (crops in
+  `D:/Projects/Personal/phase7b-work/inspect-wpb/`).
+- **Part P's checks** (2026-11-06): P1 to P14 with 22 scripted pictures (7 methods; P1 and P10
+  repeated in the real window, 4 captures), written by one Opus writer and reviewed by one Opus
+  reviewer (three minors, all fixed), open points 22 to 33; committed at `f1ac5ac`.
 - **The two Linux failures of 42301846503** (2026-11-06). Investigated by an Opus agent each, every
   fix put to two Opus skeptics; the experiments' files are in
   `D:/Projects/Personal/phase7b-work/verify/close-slots/` and `.../verify/palette-growth/`.
