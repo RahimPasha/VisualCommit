@@ -19,8 +19,35 @@
                    Classes="dialogTitle"
                    Text="{Binding Title}"
                    AutomationProperties.AutomationId="CloneFromGitHubTitle" />
+        <!-- The switch between the signed-in providers (docs/phase-7b-design.md 11.4, D354, D216):
+             under the title (12 below it, where the filter is on 7a's card), 8 above the filter, one
+             flat button per provider 4 apart in the settings screen's scope switch's look, the shown
+             one selected; hidden with one provider (7a's card, the filter 12 below the title). -->
+        <ItemsControl Name="CloneFromGitHubProviders"
+                      ItemsSource="{Binding ProviderChoices}"
+                      IsVisible="{Binding ShowsSwitch}"
+                      Margin="0,12,0,0"
+                      AutomationProperties.AutomationId="CloneFromGitHubProviders">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" Spacing="4" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:CloneProviderChoice">
+              <Button Theme="{StaticResource VcFlatButton}"
+                      Classes="cloneProvider"
+                      Classes.selected="{Binding IsSelected}"
+                      Content="{Binding Name}"
+                      Command="{Binding ShowCommand}"
+                      AutomationProperties.AutomationId="{Binding AutomationId}"
+                      AutomationProperties.Name="{Binding Name}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
         <TextBox Name="CloneFromGitHubFilter"
                  Classes="dialogBox"
+                 Classes.underSwitch="{Binding ShowsSwitch}"
                  Text="{Binding Filter}"
                  PlaceholderText="{x:Static ops:OperationTexts+CloneTexts.Filter}"
                  AutomationProperties.AutomationId="CloneFromGitHubFilter"
@@ -39,12 +66,14 @@
                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                    AutomationProperties.AutomationId="CloneFromGitHubList"
                    AutomationProperties.Name="{Binding Title}">
-            <!-- The full name, then 12 apart the detail (flags and description) in the secondary
-                 colour at 11.5, cut at its end, hidden when there is none (a PickRowPanel). -->
+            <!-- The full name, cut at its start so that a nested path keeps the repository's name
+                 (docs/phase-7b-design.md 11.4, ruling 3), then 12 apart the detail (flags and
+                 description) in the secondary colour at 11.5, cut at its end, hidden when there is
+                 none (a PickRowPanel). -->
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:GitHubRepositoryRow">
                 <local:PickRowPanel>
-                  <TextBlock Text="{Binding FullName}" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding FullName}" TextTrimming="LeadingCharacterEllipsis" VerticalAlignment="Center" />
                   <TextBlock Name="CloneFromGitHubItemDetail"
                              Text="{Binding Detail}"
                              FontSize="11.5"
@@ -98,6 +127,15 @@
   <!-- Each item is a CloneFromGitHubItem named by the full name, its help text the detail and its
        tooltip both; 28 high in the pick list's colours. -->
   <local:DialogView.Styles>
+    <!-- The switch's buttons (11.4): 28 high, Padding 10,0, as the settings screen's Button.settingsScope. -->
+    <Style Selector="Button.cloneProvider">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+    <!-- Under the switch the filter is 8 below it (11.4); without one, dialogBox's 12 below the title. -->
+    <Style Selector="TextBox#CloneFromGitHubFilter.underSwitch">
+      <Setter Property="Margin" Value="0,8,0,0" />
+    </Style>
     <Style Selector="ListBox#CloneFromGitHubList ListBoxItem" x:DataType="vm:GitHubRepositoryRow">
       <Setter Property="AutomationProperties.AutomationId" Value="CloneFromGitHubItem" />
       <Setter Property="AutomationProperties.Name" Value="{Binding FullName}" />

@@ -183,23 +183,25 @@ public partial class MainWindowViewModel
     public void CloneRepository() => TabForOpening().Welcome.OpenCloneFormCommand.Execute(null);
 
     /// <summary>
-    /// The palette's <c>Clone from GitHub…</c> (docs/phase-7a-design.md 9.5; D299, D300): unless an
-    /// account is signed in, the window's sign-in entry first (8.5), and a cancelled or failed sign-in
-    /// stops there, with no tab and no form; then, as <see cref="CloneRepository"/>, the active tab
-    /// when it is empty, else a new tab at the end, shows the clone form with the repository browser
-    /// over it. Cancelling the browser leaves the form open.
+    /// The palette's <c>Clone from GitHub…</c>, <c>Clone from GitLab…</c> and <c>Clone from Azure
+    /// DevOps…</c> (docs/phase-7a-design.md 9.5, docs/phase-7b-design.md 11.5; D299, D300, D354):
+    /// unless <paramref name="provider"/>'s account is signed in, the window's sign-in entry for it
+    /// first (10.5), and a cancelled or failed sign-in stops there, with no tab and no form; then, as
+    /// <see cref="CloneRepository"/>, the active tab when it is empty, else a new tab at the end, shows
+    /// the clone form with the repository browser over it on that provider, through the form's own
+    /// browse command (open point 21's ruling). Cancelling the browser leaves the form open.
     /// </summary>
-    public async Task CloneFromGitHubAsync()
+    public async Task CloneFromAccountAsync(HostingProvider provider)
     {
-        if (_tabServices.Hosting.Account is not { State: AccountState.SignedIn }
-            && (_tabServices.SignIn is not { } signIn || !await signIn(HostingProvider.GitHub)))
+        if (_tabServices.Hosting.AccountOf(provider) is not { State: AccountState.SignedIn }
+            && (_tabServices.SignIn is not { } signIn || !await signIn(provider)))
         {
             return;
         }
 
         var welcome = TabForOpening().Welcome;
         welcome.OpenCloneFormCommand.Execute(null);
-        await welcome.BrowseGitHubCommand.ExecuteAsync(null);
+        await welcome.BrowseCommand.ExecuteAsync(provider);
     }
 
     /// <summary>

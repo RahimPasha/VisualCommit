@@ -4,8 +4,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Hosting;
@@ -16,7 +18,9 @@ namespace VisualCommit.App.ViewModels;
 /// The welcome page of a tab without a repository (D42): Open, Clone and Init, the clone form
 /// with its progress, the workspaces (docs/phase-6-design.md 13.1, D188) and the recent
 /// repositories. Since phase 7a the form's "From GitHub…" opens the repository browser while an
-/// account is signed in (docs/phase-7a-design.md 9.3, D261, D302).
+/// account is signed in (docs/phase-7a-design.md 9.3, D261, D302); since phase 7b the button names
+/// the one signed-in provider, or "From an account…" with two or three (docs/phase-7b-design.md 11.3,
+/// D354).
 /// </summary>
 public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
 {
@@ -94,16 +98,29 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     /// <summary>A clone is running: the fields are disabled and the progress shows.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditClone))]
-    [NotifyCanExecuteChangedFor(nameof(StartCloneCommand), nameof(CloseCloneFormCommand), nameof(BrowseGitHubCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StartCloneCommand), nameof(CloseCloneFormCommand), nameof(BrowseCommand))]
     public partial bool IsCloning { get; private set; }
 
     public bool CanEditClone => !IsCloning;
 
     /// <summary>
-    /// "From GitHub…" shows at the URL row's end only while an account is signed in (D261); "needs
-    /// sign-in" hides it too (D302). Collapsed, it takes no room, so the form is laid out as before.
+    /// The browse button shows at the URL row's end only while an account of any provider is signed
+    /// in (D261, D354); "needs sign-in" counts as none (D302). Collapsed, it takes no room, so the form
+    /// is laid out as before.
     /// </summary>
-    public bool ShowsGitHubButton => _services.Hosting.Account is { State: AccountState.SignedIn };
+    public bool ShowsBrowseButton => SignedInProviders().Count > 0;
+
+    /// <summary>
+    /// The button's text and automation name (11.3, D354): <see cref="OperationTexts.CloneTexts.FromButtonOf"/>
+    /// of the one signed-in provider (7a's <c>From GitHub…</c> for GitHub), <c>From an account…</c> with
+    /// two or three; 7a's text while none is (the button is collapsed then).
+    /// </summary>
+    public string BrowseButtonText => SignedInProviders() switch
+    {
+        [var one] => OperationTexts.CloneTexts.FromButtonOf(one),
+        { Count: > 1 } => OperationTexts.CloneTexts.FromAnAccount,
+        _ => OperationTexts.CloneTexts.FromGitHubButton,
+    };
 
     /// <summary>The current stage's percentage, 0 to 100.</summary>
     [ObservableProperty]
@@ -234,16 +251,32 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// "From GitHub…" (9.3): the repository browser over the form, its load started before it shows
-    /// (as <c>WorkspaceCommands</c>' search is); a chosen repository's plain clone URL fills the URL
-    /// box (and so the folder name, unless the user typed one), unless a clone started meanwhile.
-    /// The user then presses Clone as for a typed URL.
+    /// The browse button and the palette's <c>Clone from …</c> (7a design 9.3; docs/phase-7b-design.md
+    /// 11.3, 11.5, D354): the repository browser over the form on <paramref name="provider"/>, or the
+    /// first signed-in provider in D353's order for null (the button), with a switch between the
+    /// signed-in providers; nothing when none is signed in or <paramref name="provider"/> is not. Its
+    /// first load starts before it shows (as <c>WorkspaceCommands</c>' search does); a chosen
+    /// repository's clone URL fills the URL box (and so the folder name, unless the user typed one),
+    /// unless a clone started meanwhile. The user then presses Clone as for a typed URL. The palette
+    /// runs it through <see cref="BrowseCommand"/> with its provider, as 7a's ran the button's command,
+    /// so the button is drawn disabled under every browser over the form (open point 21's ruling).
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanEditClone))]
-    private async Task BrowseGitHubAsync()
+    public async Task BrowseAsync(HostingProvider? provider)
     {
         var hosting = _services.Hosting;
-        var dialog = new CloneFromGitHubDialogViewModel(hosting.ListRepositoriesAsync, _services.Log, () => hosting.Account?.Account.Login);
+        var providers = SignedInProviders();
+        if (providers.Count == 0 || (provider is { } asked && !providers.Contains(asked)))
+        {
+            return;
+        }
+
+        var dialog = new CloneFromGitHubDialogViewModel(
+            providers,
+            provider ?? providers[0],
+            hosting.ListRepositoriesAsync,
+            _services.Log,
+            each => hosting.AccountOf(each)?.Account.Login);
         _ = dialog.Start();
         var url = await _services.DialogHost.ShowAsync(dialog);
         if (url is not null && !IsCloning)
@@ -251,6 +284,13 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
             ErrorText = null;
             CloneUrl = url;
         }
+    }
+
+    /// <summary>The providers whose accounts are signed in, in D353's order; one needing sign-in is none (D302).</summary>
+    private List<HostingProvider> SignedInProviders()
+    {
+        var hosting = _services.Hosting;
+        return [.. HostingProviders.InAccountsOrder.Where(provider => hosting.AccountOf(provider) is { State: AccountState.SignedIn })];
     }
 
     [RelayCommand(CanExecute = nameof(CanEditClone))]
@@ -403,8 +443,12 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
 
     private void OnWorkspacesChanged(object? sender, NotifyCollectionChangedEventArgs e) => OnPropertyChanged(nameof(HasWorkspaces));
 
-    /// <summary>A sign-in, a sign-out or a refusal shows or hides "From GitHub…" (D261, D302); raised on the UI thread.</summary>
-    private void OnAccountChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(ShowsGitHubButton));
+    /// <summary>A sign-in, a sign-out or a refusal of any provider shows, hides or renames the browse button (D261, D302, D354); raised on the UI thread.</summary>
+    private void OnAccountChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(ShowsBrowseButton));
+        OnPropertyChanged(nameof(BrowseButtonText));
+    }
 
     /// <summary>A change of the store can set or clear its notice (a failed save, then one that succeeded, 1.3).</summary>
     private void OnWorkspaceStoreChanged(object? sender, EventArgs e)

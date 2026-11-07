@@ -47,7 +47,7 @@ public sealed class WelcomeCloneFromGitHubTests
         {
             await OpenFormAsync(app);
             AssertNoButton(app);
-            Assert.False(Welcome(app).ShowsGitHubButton);
+            Assert.False(Welcome(app).ShowsBrowseButton);
         }
         finally
         {
@@ -300,7 +300,7 @@ public sealed class WelcomeCloneFromGitHubTests
         var dialog = await app.WaitForDialogAsync<CredentialsViewModel>();
         Assert.True(welcome.IsCloning);
         Assert.False(Button(app).IsEffectivelyEnabled);
-        Assert.False(welcome.BrowseGitHubCommand.CanExecute(null));
+        Assert.False(welcome.BrowseCommand.CanExecute(null));
         Assert.True(Button(app).IsEffectivelyVisible);
 
         dialog.CancelCommand.Execute(null);

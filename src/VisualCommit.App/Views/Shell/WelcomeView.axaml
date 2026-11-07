@@ -177,18 +177,20 @@
 
         <TextBlock Classes="secondary" Text="Repository URL" />
         <!-- "From GitHub…" only while signed in (docs/phase-7a-design.md 9.3, D261, D302): collapsed,
-             it takes no room, so the URL box is laid out as before. No tooltip. -->
+             it takes no room, so the URL box is laid out as before. No tooltip. Since phase 7b it names
+             the one signed-in provider, or "From an account…" with two or three (docs/phase-7b-design.md
+             11.3, D354); a wider text narrows only the URL box. -->
         <DockPanel>
           <Button Name="CloneFromGitHubButton"
                   DockPanel.Dock="Right"
                   Theme="{StaticResource VcActionButton}"
                   Margin="6,0,0,0" Padding="10,4"
-                  Command="{Binding BrowseGitHubCommand}"
-                  IsVisible="{Binding ShowsGitHubButton}"
+                  Command="{Binding BrowseCommand}"
+                  IsVisible="{Binding ShowsBrowseButton}"
                   IsEnabled="{Binding CanEditClone}"
                   AutomationProperties.AutomationId="CloneFromGitHubButton"
-                  AutomationProperties.Name="{x:Static ops:OperationTexts+CloneTexts.FromGitHubButton}">
-            <TextBlock Text="{x:Static ops:OperationTexts+CloneTexts.FromGitHubButton}" />
+                  AutomationProperties.Name="{Binding BrowseButtonText}">
+            <TextBlock Text="{Binding BrowseButtonText}" />
           </Button>
           <TextBox Name="CloneUrlBox"
                    Text="{Binding CloneUrl}"

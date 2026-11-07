@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting;
 using static VisualCommit.App.ViewModels.Operations.OperationTexts;
@@ -15,7 +16,11 @@ namespace VisualCommit.App.ViewModels.Dialogs;
 /// </summary>
 /// <param name="FullName">"owner/name", the row's text and automation name.</param>
 /// <param name="Detail">The flags <c>Private</c>, <c>Fork</c>, <c>Archived</c> (each when true, in that order), then the description, joined with " · "; null when nothing is left.</param>
-/// <param name="CloneUrl">GitHub's plain <c>clone_url</c> without any user part (ruling 5).</param>
+/// <param name="CloneUrl">
+/// The service's clone URL without any user part (7a's ruling 5), but an Azure DevOps URL whose user
+/// part is exactly its organization (<see cref="HostedRepository.OwnerRoot"/>, without case and without
+/// a password), which is kept as the API gave it (docs/phase-7b-design.md 11.4; ruling 15).
+/// </param>
 public sealed record GitHubRepositoryRow(string FullName, string? Detail, string CloneUrl)
 {
     /// <summary>The row's tooltip: the full name, then the detail on a second line.</summary>
@@ -51,53 +56,159 @@ public sealed record GitHubRepositoryRow(string FullName, string? Detail, string
         return new GitHubRepositoryRow(
             repository.Repository.FullName,
             parts.Count == 0 ? null : string.Join(CloneTexts.DetailSeparator, parts),
-            GitCommand.RemoveCredentials(repository.CloneUrl.AbsoluteUri));
+            KeepsUserPart(repository) ? repository.CloneUrl.AbsoluteUri : GitCommand.RemoveCredentials(repository.CloneUrl.AbsoluteUri));
     }
+
+    /// <summary>An Azure DevOps clone URL whose user part is its organization, without a password (ruling 15).</summary>
+    private static bool KeepsUserPart(RepositoryInfo repository) =>
+        repository.Repository.Provider == HostingProvider.AzureDevOps
+        && repository.CloneUrl.IsAbsoluteUri
+        && repository.CloneUrl.UserInfo is { Length: > 0 } user
+        && !user.Contains(':', StringComparison.Ordinal)
+        && user.Equals(repository.Repository.OwnerRoot, StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>
+/// One provider's button of the browser's switch (docs/phase-7b-design.md 11.4, D354): its display
+/// name, its automation id <c>CloneFromGitHubProvider&lt;provider&gt;</c> (1.7, D362) and whether it is
+/// the one shown (the flat button's <c>selected</c> look).
+/// </summary>
+public sealed partial class CloneProviderChoice : ObservableObject
+{
+    internal CloneProviderChoice(HostingProvider provider, Action<HostingProvider> show)
+    {
+        Provider = provider;
+        ShowCommand = new RelayCommand(() => show(provider));
+    }
+
+    public HostingProvider Provider { get; }
+
+    /// <summary>The button's text and automation name: <c>GitHub</c>, <c>GitLab</c>, <c>Azure DevOps</c>.</summary>
+    public string Name => HostingTexts.Name(Provider);
+
+    /// <summary><c>CloneFromGitHubProviderGitHub</c>, <c>…GitLab</c>, <c>…AzureDevOps</c>.</summary>
+    public string AutomationId => "CloneFromGitHubProvider" + Provider;
+
+    /// <summary>Shows this provider's list.</summary>
+    public IRelayCommand ShowCommand { get; }
+
+    /// <summary>This provider is the one shown.</summary>
+    [ObservableProperty]
+    public partial bool IsSelected { get; set; }
 }
 
 /// <summary>
 /// The repository browser "Clone from GitHub" (docs/phase-7a-design.md 9.4, D301), over the clone
-/// form: the signed-in account's repositories in GitHub's order (most recently updated first), a
-/// filter on the full name and the detail, and "Choose", which answers the chosen row's plain clone
-/// URL (null when cancelled). A sibling of <see cref="PickDialogViewModel"/>, whose filter it
-/// follows. <see cref="Start"/> begins the one load on the dialog's own cancellation, which Cancel,
-/// Esc and the window's <c>CancelAll</c> (D234) cancel; the answer is applied on the thread that
-/// started it (the UI thread), and one that arrives after the dialog closed changes nothing.
+/// form: the signed-in account's repositories in its service's order, a filter on the full name and
+/// the detail, and "Choose", which answers the chosen row's clone URL (null when cancelled). A
+/// sibling of <see cref="PickDialogViewModel"/>, whose filter it follows. Since phase 7b it serves
+/// every signed-in provider (docs/phase-7b-design.md 11.4, D354): with two or three a switch shows
+/// one at a time, the title naming it; each provider's list is asked once, when it is first shown,
+/// and its rows, status, error and lines are kept and shown while it is; a switch keeps the filter
+/// and clears the selection. <see cref="Start"/> begins the shown provider's load; every load runs on
+/// the dialog's one cancellation, which Cancel, Esc and the window's <c>CancelAll</c> (D234) cancel;
+/// an answer is applied on the thread that started it (the UI thread), one for a provider not shown
+/// changes nothing on screen, and one that arrives after the dialog closed changes nothing.
 /// </summary>
 public sealed partial class CloneFromGitHubDialogViewModel : DialogViewModel<string?>
 {
-    private readonly Func<CancellationToken, Task<HostingResult<RepositoryList>>> _list;
+    private readonly Func<HostingProvider, CancellationToken, Task<HostingResult<RepositoryList>>> _list;
     private readonly IAppLog _log;
-    private readonly Func<string?>? _login;
+    private readonly Func<HostingProvider, string?>? _login;
     private readonly CancellationTokenSource _cancel = new();
+    private readonly Dictionary<HostingProvider, ProviderList> _lists = [];
     private IReadOnlyList<GitHubRepositoryRow> _all = [];
-    private Task? _load;
+    private HostingProvider _shown;
 
+    /// <summary>7a's browser, GitHub alone (docs/phase-7a-design.md 9.4): no switch.</summary>
     /// <param name="list">The account's list (the session's <c>ListRepositoriesAsync</c>).</param>
     /// <param name="log">The app's log: a failure once as a warning, an exception as an error.</param>
     /// <param name="login">The signed-in account's login when the list fails (open point 13), for <see cref="HostingTexts.Describe"/>; null for none.</param>
     public CloneFromGitHubDialogViewModel(Func<CancellationToken, Task<HostingResult<RepositoryList>>> list, IAppLog log, Func<string?>? login = null)
+        : this([HostingProvider.GitHub], HostingProvider.GitHub, GitHubAlone(list), log, login is null ? null : _ => login())
     {
+    }
+
+    /// <summary>The browser over the signed-in <paramref name="providers"/>, showing <paramref name="provider"/> first (11.4).</summary>
+    /// <param name="providers">The providers whose accounts are signed in; shown in D353's order, a switch with two or more.</param>
+    /// <param name="provider">The one shown first, among <paramref name="providers"/>.</param>
+    /// <param name="list">A provider's list (the session's <c>ListRepositoriesAsync(provider, …)</c>).</param>
+    /// <param name="log">The app's log: a failure once as a warning, an exception as an error.</param>
+    /// <param name="login">A provider's signed-in login (the organization on Azure DevOps) when its list fails, for <see cref="HostingTexts.Describe"/>; null for none.</param>
+    public CloneFromGitHubDialogViewModel(
+        IReadOnlyList<HostingProvider> providers,
+        HostingProvider provider,
+        Func<HostingProvider, CancellationToken, Task<HostingResult<RepositoryList>>> list,
+        IAppLog log,
+        Func<HostingProvider, string?>? login = null)
+    {
+        ArgumentNullException.ThrowIfNull(providers);
         ArgumentNullException.ThrowIfNull(list);
         ArgumentNullException.ThrowIfNull(log);
+        Providers = [.. HostingProviders.InAccountsOrder.Where(providers.Contains)];
+        if (!Providers.Contains(provider))
+        {
+            throw new ArgumentException("The provider shown first must be one of the providers.", nameof(provider));
+        }
+
         _list = list;
         _log = log;
         _login = login;
+        ProviderChoices = [.. Providers.Select(each => new CloneProviderChoice(each, ShowProvider))];
+        _shown = provider;
+        foreach (var choice in ProviderChoices)
+        {
+            choice.IsSelected = choice.Provider == provider;
+        }
     }
 
-    public override string Title => CloneTexts.DialogTitle;
+    /// <summary>The signed-in providers, in D353's order.</summary>
+    public IReadOnlyList<HostingProvider> Providers { get; }
+
+    /// <summary>The switch's buttons, one per provider of <see cref="Providers"/>.</summary>
+    public IReadOnlyList<CloneProviderChoice> ProviderChoices { get; }
+
+    /// <summary>The switch shows with two or more providers; with one the card is 7a's.</summary>
+    public bool ShowsSwitch => Providers.Count >= 2;
+
+    /// <summary>The provider shown; setting it to one of <see cref="Providers"/> shows that provider's list, asked the first time it shows.</summary>
+    public HostingProvider Provider
+    {
+        get => _shown;
+        set
+        {
+            if (value == _shown || !Providers.Contains(value))
+            {
+                return;
+            }
+
+            _shown = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(Title));
+            foreach (var choice in ProviderChoices)
+            {
+                choice.IsSelected = choice.Provider == value;
+            }
+
+            Selected = null;
+            Begin(value);
+            ShowState(value);
+        }
+    }
+
+    public override string Title => CloneTexts.DialogTitleOf(Provider);
 
     /// <summary>The rows the filter lets through, in the list's order; rebuilt in place.</summary>
     public ObservableCollection<GitHubRepositoryRow> Rows { get; } = [];
 
-    /// <summary>Every row the list gave, whatever the filter lets through.</summary>
+    /// <summary>Every row the shown provider's list gave, whatever the filter lets through.</summary>
     public IReadOnlyList<GitHubRepositoryRow> AllRows => _all;
 
-    /// <summary>What the filter box holds; enabled while loading, so it filters the rows when they come.</summary>
+    /// <summary>What the filter box holds; enabled while loading, so it filters the rows when they come; kept by a switch.</summary>
     [ObservableProperty]
     public partial string Filter { get; set; } = string.Empty;
 
-    /// <summary>The selected row, or null.</summary>
+    /// <summary>The selected row, or null; a switch clears it.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(ConfirmCommand))]
     public partial GitHubRepositoryRow? Selected { get; set; }
@@ -112,12 +223,12 @@ public sealed partial class CloneFromGitHubDialogViewModel : DialogViewModel<str
     [NotifyPropertyChangedFor(nameof(ShowsError))]
     public partial string? ErrorText { get; private set; }
 
-    /// <summary>The cap's line when more repositories exist than were listed, else null.</summary>
+    /// <summary>The cap's line when more repositories exist than were listed (<see cref="CloneTexts.MoreExistOf"/>), else null.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowsMore))]
     public partial string? MoreText { get; private set; }
 
-    /// <summary>Single sign-on's line when some organisations' repositories are hidden, else null.</summary>
+    /// <summary>Single sign-on's line when some organisations' repositories are hidden (GitHub's alone), else null.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowsSso))]
     public partial string? SsoText { get; private set; }
@@ -130,13 +241,16 @@ public sealed partial class CloneFromGitHubDialogViewModel : DialogViewModel<str
 
     public bool ShowsSso => SsoText is not null;
 
-    /// <summary>The load <see cref="Start"/> began; a completed task before it.</summary>
-    public Task Load => _load ?? Task.CompletedTask;
+    /// <summary>The shown provider's load; a completed task before it begins.</summary>
+    public Task Load => LoadOf(Provider);
+
+    /// <summary>A provider's load; a completed task before it begins.</summary>
+    public Task LoadOf(HostingProvider provider) => _lists.TryGetValue(provider, out var state) ? state.Load : Task.CompletedTask;
 
     protected override string? CancelledResult => null;
 
-    /// <summary>Begins the load (once) and returns it (<see cref="Load"/>).</summary>
-    public Task Start() => _load ??= RunAsync();
+    /// <summary>Begins the shown provider's load (once) and returns it (<see cref="Load"/>).</summary>
+    public Task Start() => Begin(Provider).Load;
 
     protected override void OnCancel()
     {
@@ -157,12 +271,33 @@ public sealed partial class CloneFromGitHubDialogViewModel : DialogViewModel<str
 
     partial void OnFilterChanged(string value) => ApplyFilter();
 
-    private async Task RunAsync()
+    private void ShowProvider(HostingProvider provider)
+    {
+        if (!IsClosed)
+        {
+            Provider = provider;
+        }
+    }
+
+    /// <summary>The provider's list, its load begun the first time.</summary>
+    private ProviderList Begin(HostingProvider provider)
+    {
+        if (!_lists.TryGetValue(provider, out var state))
+        {
+            state = new ProviderList();
+            _lists[provider] = state;
+            state.Load = RunAsync(provider, state);
+        }
+
+        return state;
+    }
+
+    private async Task RunAsync(HostingProvider provider, ProviderList state)
     {
         var token = _cancel.Token;
         try
         {
-            var result = await _list(token);
+            var result = await _list(provider, token);
             if (IsClosed)
             {
                 return;
@@ -170,48 +305,55 @@ public sealed partial class CloneFromGitHubDialogViewModel : DialogViewModel<str
 
             if (result is { Failure: null, Value: { } list })
             {
-                Show(list);
+                state.Listed(
+                    [.. list.Repositories.Select(GitHubRepositoryRow.Of)],
+                    list.MoreExist ? CloneTexts.MoreExistOf(provider) : null,
+                    list.SomeHiddenBySso && provider == HostingProvider.GitHub ? CloneTexts.SomeHiddenBySso : null);
             }
             else if (result.Failure is { } failure)
             {
                 var request = failure.RequestId is null ? string.Empty : $" (request {failure.RequestId})";
-                _log.Warning($"Listing GitHub repositories failed: {failure.Kind}: {failure.Message}{request}");
-                ShowFailure(HostingTexts.Describe(failure, _login?.Invoke()));
+                _log.Warning($"{CloneTexts.ListingFailedOf(provider)}: {failure.Kind}: {failure.Message}{request}");
+                state.Failed(HostingTexts.Describe(failure, _login?.Invoke(provider)));
             }
             else
             {
-                _log.Error("Listing GitHub repositories gave neither a list nor a failure.");
-                ShowFailure(CloneTexts.Unexpected);
+                _log.Error($"Listing {HostingTexts.Name(provider)} repositories gave neither a list nor a failure.");
+                state.Failed(CloneTexts.Unexpected);
             }
         }
         catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
             // Cancel or Esc: the dialog has closed, and nothing is shown.
+            return;
         }
         catch (Exception ex)
         {
-            _log.Error("Listing GitHub repositories failed.", ex);
-            if (!IsClosed)
+            _log.Error($"{CloneTexts.ListingFailedOf(provider)}.", ex);
+            if (IsClosed)
             {
-                ShowFailure(CloneTexts.Unexpected);
+                return;
             }
+
+            state.Failed(CloneTexts.Unexpected);
+        }
+
+        // An answer for a provider not shown is kept and changes nothing on screen (11.4).
+        if (Provider == provider)
+        {
+            ShowState(provider);
         }
     }
 
-    private void Show(RepositoryList list)
+    /// <summary>Shows a provider's kept rows, status, error and lines (loading before its answer).</summary>
+    private void ShowState(HostingProvider provider)
     {
-        _all = [.. list.Repositories.Select(GitHubRepositoryRow.Of)];
-        StatusText = _all.Count == 0 ? CloneTexts.Empty : null;
-        MoreText = list.MoreExist ? CloneTexts.MoreExist : null;
-        SsoText = list.SomeHiddenBySso ? CloneTexts.SomeHiddenBySso : null;
-        ApplyFilter();
-    }
-
-    private void ShowFailure(string text)
-    {
-        _all = [];
-        StatusText = null;
-        ErrorText = text;
+        var state = _lists.TryGetValue(provider, out var kept) ? kept : ProviderList.Waiting;
+        _all = state.All;
+        StatusText = state.Status;
+        ErrorText = state.Error;
+        MoreText = state.More;
+        SsoText = state.Sso;
         ApplyFilter();
     }
 
@@ -248,5 +390,45 @@ public sealed partial class CloneFromGitHubDialogViewModel : DialogViewModel<str
                 Rows.Insert(i, shown[i]);
             }
         }
+    }
+
+    /// <summary>One provider's list as the dialog keeps it: loading until its answer.</summary>
+    private sealed class ProviderList
+    {
+        /// <summary>A provider not asked yet: loading, as 7a's dialog before its start.</summary>
+        public static readonly ProviderList Waiting = new();
+
+        public Task Load { get; set; } = Task.CompletedTask;
+
+        public IReadOnlyList<GitHubRepositoryRow> All { get; private set; } = [];
+
+        public string? Status { get; private set; } = CloneTexts.Loading;
+
+        public string? Error { get; private set; }
+
+        public string? More { get; private set; }
+
+        public string? Sso { get; private set; }
+
+        public void Listed(IReadOnlyList<GitHubRepositoryRow> rows, string? more, string? sso)
+        {
+            All = rows;
+            Status = rows.Count == 0 ? CloneTexts.Empty : null;
+            More = more;
+            Sso = sso;
+        }
+
+        public void Failed(string text)
+        {
+            All = [];
+            Status = null;
+            Error = text;
+        }
+    }
+
+    private static Func<HostingProvider, CancellationToken, Task<HostingResult<RepositoryList>>> GitHubAlone(Func<CancellationToken, Task<HostingResult<RepositoryList>>> list)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        return (_, cancellationToken) => list(cancellationToken);
     }
 }
