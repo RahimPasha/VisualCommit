@@ -511,12 +511,13 @@ tooltips that are not their text); the lead ruled the two rows the conventions' 
 are under way through `scripts/heavy-run.sh` (the 7b and 7a projects whole, 12.7's unit classes,
 phase 3's `*Check_03_other_menus*`, then the lagged list); then 7a's P and G pictures against
 `phase-7a-pictures.sha256`, phase 3's against `phase-3-pictures.sha256`, part P's 22 pictures and part
-A's `a06c` inspected, and CI's run on `c5ba918` (42373090316) read; then step 12 is ticked. WP-N
+A's `a06c` inspected, and CI's run on `c5ba918` (42373090316) read; then step 12 is ticked. Done:
+the runs, all green but phase 2's `Check_15_amend` once under the lag (under investigation in
+`D:/Projects/Personal/vc-wt/p7b-amend-wait`); the comparisons, nothing but what varies by nature;
+CI green. Open: the investigation and the inspection. WP-N
 (section 13) is being built from `c5ba918` in `D:/Projects/Personal/vc-wt/p7b-create` on
-`wip/p7b-create`, then reviewed and hunted. 0.7's references are being made for WP-N's merge and the
-gate in `D:/Projects/Personal/gate7b-reference/`: 7a's gate's real-window files (375, copied from the
-main checkout's `artifacts/visual/phase-*/real-window/`, untouched since 2026-10-31) and phases 0 to
-7a's walk-throughs run on `master` (`a29379f`) with git 2.56 in `D:/Projects/Personal/vc-wt/master-ref`.
+`wip/p7b-create`, then reviewed and hunted. 0.7's references for WP-N's merge and the gate are made
+in `D:/Projects/Personal/gate7b-reference/` (Notes, "0.7's references").
 
 WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8's comparison and
 picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
@@ -770,8 +771,20 @@ every commit.
   23 part A pictures' intro, `b06a`'s port, `n02b`, `n06b`, `n07a`) and `b09a`, whose file differs
   from the list but whose pixels equal the copies from before WP-A and from WP-B's merge. Phase 3's
   `03a` to `03h` differ from `phase-3-pictures.sha256` (phase 3's gate, an older git in the status
-  bar's box); they are compared by region with 0.7's references once those exist. Part P's 22 pictures
-  and part A's `a06c` are being inspected by an Opus inspector.
+  bar's box) and are the same files as 0.7's references. Against those references
+  (`scripts/compare-pictures.py`, output in `D:/Projects/Personal/phase7b-work/cmp-wpp/out7a/`), 7a's
+  85: 57 the same, the 23 part A pictures in the intro's box alone, `b06a` (the fake's port), `n02b`
+  and `n07a` (the progress bar's segment), `n04a` (7 px one level apart) and `a09b`, whose reference
+  shows the port 59233 where 7a's list and this run show 47395. Part P's 22 pictures and part A's
+  `a06c` are being inspected by an Opus inspector.
+- **0.7's references** (2026-11-07, in `D:/Projects/Personal/gate7b-reference/`): 7a's gate's
+  real-window files, 375 copied from the main checkout's `artifacts/visual/phase-*/real-window/`
+  (untouched since 2026-10-31), and phases 0 to 7a's walk-throughs run on `master` (`a29379f`) with
+  git 2.56.0.windows.4 in `D:/Projects/Personal/vc-wt/master-ref` through `scripts/heavy-run.sh`
+  (`--solution walk.slnx`, the eight walk-through projects, four at once): 750 of 750 in 50 min 25 s,
+  1,057 scripted pictures, phase by phase as many as `phase-7a-pictures.sha256` lists. While they ran,
+  other runs held 7a's fake's port: the references' `a09b` and `b06a` show a fallback port (59233 in
+  `a09b`), which the gate reads as the port's region alone.
 - **The three failures of 42339567989** (2026-11-07; one Opus investigator and two Opus skeptics
   each, none refuted, minors only; the lead's rulings at the merges):
   - B7 below git 2.46 (both containers): git 2.43's clone to an `<organization>@` URL sends its first
