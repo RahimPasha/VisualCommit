@@ -67,7 +67,7 @@ public sealed partial class AccountBlockViewModel : ObservableObject
         if (hosting is not null && RunningSignOutOf(hosting, provider) is { } running)
         {
             BusyText = Texts.AccountsBusy;
-            _ = FollowRunningSignOutAsync(running);
+            _ = FollowRunningSignOutAsync(hosting, running);
         }
     }
 
@@ -290,7 +290,7 @@ public sealed partial class AccountBlockViewModel : ObservableObject
         var hosting = _hosting;
         var running = SignOutOfTheSessionAsync(hosting);
         Register(hosting, Provider, running);
-        string? reason;
+        string? reason = null;
         try
         {
             reason = await running;
@@ -298,11 +298,9 @@ public sealed partial class AccountBlockViewModel : ObservableObject
         finally
         {
             Unregister(hosting, Provider, running);
-            BusyText = null;
+            EndSignOut(hosting, reason);
         }
 
-        Follow(hosting.AccountOf(Provider));
-        SignOutNote = reason is null ? null : Texts.AccountsSignOutNote(reason);
         if (!_disposed && ShowsSignIn)
         {
             FocusRequested?.Invoke(this, IdOf("AccountsSignInButton"));
@@ -328,12 +326,26 @@ public sealed partial class AccountBlockViewModel : ObservableObject
     /// sign-out ends, then the account's state and the keychain's note, as the block that started it
     /// shows them. It moves no focus: this screen did not start the sign-out.
     /// </summary>
-    private async Task FollowRunningSignOutAsync(Task<string?> running)
+    private async Task FollowRunningSignOutAsync(IHostingSession hosting, Task<string?> running)
     {
         var reason = await running;
-        BusyText = null;
-        Follow(_hosting?.AccountOf(Provider));
+        EndSignOut(hosting, reason);
+    }
+
+    /// <summary>
+    /// The sign-out's end, the one place for the block that started it and a block that follows it:
+    /// the account's state and the keychain's note (<paramref name="reason"/>, null when it was removed
+    /// or the sign-out failed) first, busy's end last. So a block that shows not busy already shows the
+    /// end ("until it ends, then the account and the keychain's note", docs/phase-7b-design.md 10.9),
+    /// for whoever reads it when <c>IsBusy</c> changes (the section asks every block's buttons again
+    /// then) and on whatever thread the sign-out ends on when no dispatcher holds the block (the view
+    /// models' tests; CI 42339567989 read a reopened block not busy and without its note).
+    /// </summary>
+    private void EndSignOut(IHostingSession hosting, string? reason)
+    {
+        Follow(hosting.AccountOf(Provider));
         SignOutNote = reason is null ? null : Texts.AccountsSignOutNote(reason);
+        BusyText = null;
     }
 
     /// <summary>The sign-out of <paramref name="provider"/> that runs in <paramref name="hosting"/>, or null.</summary>
