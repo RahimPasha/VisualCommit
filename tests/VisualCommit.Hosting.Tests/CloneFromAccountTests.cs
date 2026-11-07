@@ -285,6 +285,69 @@ public sealed class CloneFromAccountTests
         End(app, data, served);
     }
 
+    /// <summary>
+    /// The session ends while a palette command waits for its sign-in (11.5): the dialog shows its
+    /// failed save, the account signed in for the session, when the window closes. <c>CloseAll</c>
+    /// cancels the dialog, the window's sign-in then answers true, and the command must still open
+    /// nothing: no form, no browser left on the dialog layer that nothing would close, no listing
+    /// request, and its task ends.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_palette_command_whose_sign_in_outlives_the_session_opens_nothing()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("clone from account closed");
+        var app = ShellDriver.Start(data.Path, gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
+        var disposed = false;
+        try
+        {
+            await app.WaitUntilReadyAsync();
+            var tabs = app.Session.Shell.Tabs.ToList();
+            var command = app.Session.Shell.CloneFromAccountAsync(HostingProvider.GitLab);
+            var dialog = await app.WaitForDialogAsync<SignInDialogViewModel>();
+            Assert.Equal(HostingProvider.GitLab, dialog.Provider);
+            await app.WaitForAsync(() => dialog.Opened.IsCompleted, "the dialog's keychain question");
+            dialog.Token = served.GitLabToken;
+            app.Tokens.FailNextSave("the fake keychain is full");
+            await dialog.ConfirmCommand.ExecuteAsync(null);
+            await app.WaitForAsync(() => dialog.IsSaveFailed, "the failed save");
+            Assert.Equal(AccountState.SignedIn, app.Session.Services.Hosting.AccountOf(HostingProvider.GitLab)?.State);
+            Assert.False(command.IsCompleted);
+            var requests = served.GitLab.Requests.Count;
+
+            // The window closes: the session's end.
+            app.Dispose();
+            disposed = true;
+            for (var waited = 0; waited < 50 && !command.IsCompleted; waited++)
+            {
+                app.Settle();
+                await Task.Delay(100, Cancelled);
+            }
+
+            // A little longer, so that a browser shown late would be on the layer by now.
+            for (var settled = 0; settled < 5; settled++)
+            {
+                app.Settle();
+                await Task.Delay(100, Cancelled);
+            }
+
+            Assert.True(command.IsCompletedSuccessfully, "The palette's command did not end after the session's end.");
+            Assert.Empty(app.Session.Services.DialogHost.Open);
+            Assert.Equal(tabs, app.Session.Shell.Tabs);
+            Assert.All(app.Session.Shell.Tabs, tab => Assert.False(tab.Welcome.IsCloneFormOpen));
+            Assert.Empty(served.GitLab.Requests.Skip(requests));
+        }
+        finally
+        {
+            if (!disposed)
+            {
+                app.Dispose();
+            }
+        }
+
+        End(app, data, served);
+    }
+
     /// <summary>Runs a palette command by its whole label.</summary>
     private static async Task RunAsync(ShellDriver app, string command)
     {
