@@ -192,7 +192,38 @@ public sealed partial class Phase7bChecksB
             Path.TrimEndingDirectorySeparator(Path.GetFullPath(right)),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
+    /// <summary>
+    /// The working tree <paramref name="folder"/> as git names it (<c>rev-parse --show-toplevel</c>), which
+    /// is how the tab and the recent list keep it: the physical folder (macOS: <c>/private/var/…</c> for a
+    /// temporary folder made as <c>/var/…</c>; Windows: a junction or an 8.3 short name resolved), full and
+    /// without a trailing separator; run with the tests' isolated environment, outside the app's call log
+    /// (7a's <c>TopLevelAsync</c>, <c>Phase7aChecks.B.Helpers.cs</c>).
+    /// </summary>
+    private static async Task<string> TopLevelAsync(TempDirectory home, string folder)
+    {
+        var topLevel = (await GitAsync(home, folder, "rev-parse", "--show-toplevel")).StandardOutput.TrimEnd('\r', '\n');
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(topLevel));
+    }
+
     // ---- accounts.json ---------------------------------------------------------------------------
+
+    /// <summary>Each record of <c>accounts.json</c> as its raw JSON, in the file's order (B8 step 6: "the same two records").</summary>
+    private static List<string> RecordsJson(TempDirectory data)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(data.Path, "accounts.json")));
+        return [.. document.RootElement.GetProperty("accounts").EnumerateArray().Select(record => record.GetRawText())];
+    }
+
+    /// <summary>
+    /// The one record of <paramref name="provider"/> in <c>accounts.json</c> as its members' raw JSON by
+    /// name, without the member <paramref name="except"/> (B5 method 4: "its other fields unchanged").
+    /// </summary>
+    private static SortedDictionary<string, string> RecordMembers(TempDirectory data, string provider, string except)
+    {
+        using var document = JsonDocument.Parse(File.ReadAllText(Path.Combine(data.Path, "accounts.json")));
+        var record = document.RootElement.GetProperty("accounts").EnumerateArray().Single(each => each.GetProperty("provider").GetString() == provider);
+        return new(record.EnumerateObject().Where(member => member.Name != except).ToDictionary(member => member.Name, member => member.Value.GetRawText()), StringComparer.Ordinal);
+    }
 
     /// <summary>The records of <c>accounts.json</c> as (provider, tokenState, useForGit); none without the file.</summary>
     private static List<(string Provider, string TokenState, bool UseForGit)> Records(TempDirectory data)
@@ -364,6 +395,16 @@ public sealed partial class Phase7bChecksB
             Assert.Equal("CloneFromGitHubFilter", app.FocusedAutomationId());
         }
 
+        // The id prefix is the switch's buttons' alone (1.7; WP-R's B3 R step looks for no such element):
+        // no other element of the view, shown or hidden, carries it, as its automation id or as the name
+        // an automation peer gives as its id when it has none.
+        string[] switchIds = ["CloneFromGitHubProviderGitHub", "CloneFromGitHubProviderGitLab", "CloneFromGitHubProviderAzureDevOps"];
+        Assert.All(
+            view.GetVisualDescendants().OfType<Control>()
+                .Select(control => AutomationProperties.GetAutomationId(control) ?? control.Name)
+                .OfType<string>()
+                .Where(id => id.StartsWith("CloneFromGitHubProvider", StringComparison.Ordinal)),
+            id => Assert.Contains(id, switchIds));
         var buttons = SwitchOf(app);
         Assert.Equal(switchTexts ?? [], buttons.Select(button => button.Text));
         if (buttons.Count > 0)
@@ -380,6 +421,9 @@ public sealed partial class Phase7bChecksB
                 Assert.Same(Application.Current!.FindResource("VcFlatButton"), drawn.Theme);
                 Assert.Equal(button.Text, AutomationProperties.GetName(drawn));
                 Assert.Equal(button.Selected ? palette.TextPrimary : palette.TextSecondary, (drawn.Foreground as ISolidColorBrush)?.Color);
+
+                // The selected one on the control background (#272C36), the others transparent.
+                Assert.Equal(button.Selected ? palette.Control : null, PresenterBackground(drawn));
             }
 
             foreach (var (left, right) in buttons.Zip(buttons.Skip(1)))
@@ -521,10 +565,38 @@ public sealed partial class Phase7bChecksB
         string.Concat(block.TextLayout.TextLines.SelectMany(line => line.TextRuns).Select(run => run.Text.ToString()));
 
     /// <summary>The item's background (<c>VcSelectionBrush</c> when selected), or null when transparent.</summary>
-    private static Color? BackgroundOf(ListBoxItem item)
+    private static Color? BackgroundOf(ListBoxItem item) => PresenterBackground(item);
+
+    /// <summary>The background a control's template draws (its <c>PART_ContentPresenter</c>'s), or null when transparent or none.</summary>
+    private static Color? PresenterBackground(Control control)
     {
-        var colour = (item.GetVisualDescendants().OfType<ContentPresenter>().First(presenter => presenter.Name == "PART_ContentPresenter").Background as ISolidColorBrush)?.Color;
+        var colour = (control.GetVisualDescendants().OfType<ContentPresenter>().First(presenter => presenter.Name == "PART_ContentPresenter").Background as ISolidColorBrush)?.Color;
         return colour is { A: 0 } ? null : colour;
+    }
+
+    /// <summary>
+    /// B6: the one open tooltip whole inside the window (phase 6's check, <c>Phase6Checks.W.Rows.cs</c>
+    /// <c>AssertToolTipInWindow</c>), none of its texts cut.
+    /// </summary>
+    private static void AssertToolTipInWindow(ShellDriver app)
+    {
+        var tip = Assert.Single(app.Window.GetVisualDescendants().OfType<ToolTip>(), candidate => candidate.IsEffectivelyVisible);
+        var bounds = app.BoundsOf(tip);
+        var window = app.Window.ClientSize;
+        Assert.True(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= window.Width && bounds.Bottom <= window.Height, $"The tooltip at {bounds} is not inside the window.");
+        Assert.All(tip.GetVisualDescendants().OfType<TextBlock>(), block => Assert.DoesNotContain(block.TextLayout.TextLines, line => line.HasCollapsed));
+    }
+
+    /// <summary>
+    /// A token link in its disabled look (part A's <c>AssertLinkLook(link, enabled: false)</c>,
+    /// <c>Phase7bChecks.A.Helpers.cs</c>): disabled, the theme's disabled foreground
+    /// (<c>VcTextDisabledBrush</c>) and the arrow cursor.
+    /// </summary>
+    private static void AssertDisabledLink(Control link)
+    {
+        Assert.False(link.IsEffectivelyEnabled, $"{AutomationProperties.GetAutomationId(link)} is enabled.");
+        Assert.Equal(PartA.Disabled, (link.GetVisualDescendants().OfType<TextBlock>().First().Foreground as ISolidColorBrush)?.Color);
+        Assert.Equal(PartA.ArrowCursor, link.Cursor?.ToString());
     }
 
     /// <summary>Selects all the focused box holds, with the platform's command modifier (Control headless).</summary>

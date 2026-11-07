@@ -22,12 +22,13 @@
         <!-- The switch between the signed-in providers (docs/phase-7b-design.md 11.4, D354, D216):
              under the title (12 below it, where the filter is on 7a's card), 8 above the filter, one
              flat button per provider 4 apart in the settings screen's scope switch's look, the shown
-             one selected; hidden with one provider (7a's card, the filter 12 below the title). -->
-        <ItemsControl Name="CloneFromGitHubProviders"
+             one selected; hidden with one provider (7a's card, the filter 12 below the title). Its
+             name lies outside the buttons' id prefix CloneFromGitHubProvider (1.7), which an automation
+             peer would otherwise expose as its id. -->
+        <ItemsControl Name="CloneFromGitHubSwitch"
                       ItemsSource="{Binding ProviderChoices}"
                       IsVisible="{Binding ShowsSwitch}"
-                      Margin="0,12,0,0"
-                      AutomationProperties.AutomationId="CloneFromGitHubProviders">
+                      Margin="0,12,0,0">
           <ItemsControl.ItemsPanel>
             <ItemsPanelTemplate>
               <StackPanel Orientation="Horizontal" Spacing="4" />

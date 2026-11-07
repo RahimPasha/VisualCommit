@@ -3211,34 +3211,33 @@ The lead compares `b01a`, `b03a`, `b06a`, `b07a`, phase 1's `13a` to `14b` and p
 B's pictures are inspected, nothing writes or logs a token, and no earlier picture changed beyond
 D248's box.
 
-**As built** (WP-B, `c5ebee2` to its last commit, 2026-11-06). Where the build differs from the text
-or settles what it left open:
-- `public Task BrowseAsync(HostingProvider? provider)` is the `[RelayCommand]` behind `BrowseCommand`
-  (`IAsyncRelayCommand<HostingProvider?>`): the button runs it with null, `CloneFromAccountAsync(p)`
-  with `p` (open point 21's ruling), so the button is drawn disabled under every browser; 7a's
-  `b03a-listed` is unchanged. Signed in is `AccountOf(p).State == SignedIn` in D353's order (an off
-  provider holds no account). `BrowseButtonText` is 7a's `From GitHub…` while none is (collapsed).
-- The browser's constructor orders `providers` by D353 whatever their order and throws
-  `ArgumentException` when `provider` is not among them; `Provider` ignores another value. `Load`
-  is the shown provider's, `LoadOf(p)` any one's. The switch is an `ItemsControl` of
-  `CloneProviderChoice` (`Name`, `AutomationId`, `IsSelected`, `ShowCommand`), `VcFlatButton`s of
-  class `cloneProvider`, found by automation id (no `x:Name`). It sits 12 below the title, where
-  `dialogBox` puts the filter, and the filter takes the class `underSwitch` (8 above it) only while it
-  shows: 7a's card is pixel for pixel 7a's.
-- `CloneTexts.ListingFailedOf(p)` starts the warning; the error lines name the provider too.
-  `Describe` keeps 7a's GitHub path byte for byte (its empty messages too); 11.2's empty-message
-  rows are GitLab's and Azure DevOps'; their `SsoRequired` takes the last row.
-- Report against code: B7 expects the Azure DevOps clone's binding `SharedOriginOwner`
-  `Fernhill-Labs`; it is `fernhill-labs` (WP-AZ's `CoverageOf` takes `AccountKey.Login`, lower-cased;
-  the broker compares without case). `Check_B1_B3_B6_B7_azure_…` asserts the report's value last, after
-  every other result, and fails there: the lead's call (the report, or the coverage's spelling).
-- Part B's helpers are its own (part A's are private to `Phase7bChecksA`). A row's background is
-  asserted only for the selected row (the pointer may rest on another after a click).
-  `CloneFromAccountTests` clones through the welcome page's view model, measures 7a's width by a
-  second start with GitHub alone, and asserts the `.git`-less URL's 301 in the fake's `Requests`.
-- Earlier pictures, pixel for pixel: 7a's ten part B, phase 1's `13a` to `14b`, phase 6's `k10a` to
-  `k10f` and its `l26a` to `l32b` (dark and light, against 7a's gate copies) identical.
-  No file outside 11.1's list changed.
+**As built** (WP-B, `c5ebee2` to its last commit, with its review's fixes, 2026-11-06). Where the build
+differs from the text or settles what it left open:
+- `public Task BrowseAsync(HostingProvider? provider)` is the `[RelayCommand]` behind `BrowseCommand`:
+  the button runs it with null, `CloneFromAccountAsync(p)` with `p` (open point 21), so the button is
+  drawn disabled under every browser; 7a's `b03a-listed` is unchanged. Signed in is
+  `AccountOf(p).State == SignedIn`. `BrowseButtonText` is 7a's `From GitHub…` while none is (collapsed).
+- The browser orders `providers` by D353 and throws `ArgumentException` when `provider` is not among
+  them. `Load` is the shown provider's, `LoadOf(p)` any one's. The switch is an `ItemsControl` named
+  `CloneFromGitHubSwitch` with no automation id (a peer gives a name as its id, so it stays outside the
+  buttons' prefix `CloneFromGitHubProvider`), of `CloneProviderChoice` `VcFlatButton`s (class
+  `cloneProvider`, no `x:Name`), 12 below the title; the filter takes `underSwitch` (8 above it) only
+  while it shows, so 7a's card is 7a's pixel for pixel.
+- `CloneTexts.ListingFailedOf(p)` starts the warning. `Describe` keeps 7a's GitHub path byte for byte;
+  11.2's empty-message rows are GitLab's and Azure DevOps'.
+- Report against code: B7 expects the Azure DevOps binding's `SharedOriginOwner` `Fernhill-Labs`
+  (`PartB.AzureDevOpsSharedOwner`); it is `fernhill-labs` (`CoverageOf` takes the lower-cased
+  `AccountKey.Login`; the broker compares without case). The azure method asserts it last and fails
+  there: the lead's call.
+- Part B's helpers are its own (part A's are private). B7 compares the tab's and the recent list's
+  folder with git's spelling (`TopLevelAsync`, as 7a's B6); with `TMP` and `TEMP` through a junction it
+  failed before and passes after. Backgrounds: the switch's, the selected row's, and after B6's hover
+  the other rows' (transparent). `CloneFromAccountTests` measures 7a's width by a second start with
+  GitHub alone.
+- `time-scripted-check.sh "*Phase7bChecksB.*" 7b`, one run on a loaded laptop: 2.6 to 25.0 s a method
+  (B2's the longest), each under 40 s.
+- Earlier pictures identical pixel for pixel: 7a's ten part B, phase 1's `13a` to `14b`, phase 6's
+  `k10a` to `k10f` and `l26a` to `l32b`. No file outside 11.1's list changed.
 
 ## 12. WP-P: requests in the left panel and the graph (part P)
 
