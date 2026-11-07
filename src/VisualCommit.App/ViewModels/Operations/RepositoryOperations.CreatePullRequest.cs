@@ -403,13 +403,11 @@ public sealed partial class RepositoryOperations
             OperationText text, PullRequestPlace place, HostedRepository baseRepository, PullRequestEnd baseEnd, string baseBranch, string title, string body, bool draft)
         {
             // D316's re-read tells a request this POST made from one open before it only against a
-            // list held before the POST: with none held (its read failed or has not ended), it is read
-            // first; still none, a request found after a lost answer is offered as open, never as created.
-            if (Repository.Hosting.State.List is null)
-            {
-                await RefreshAsync();
-            }
-
+            // list held before the POST: with none held, the read in flight is waited for (its answer,
+            // applied before the POST, cannot hold the POST's request), or, with none in flight (the
+            // read failed), one is made; still none, a request found after a lost answer is offered
+            // as open, never as created.
+            await ListBeforePostAsync();
             var known = Repository.Hosting.State.List is not null;
             var listedBefore = OpenFromHeadIntoBase(place, baseRepository, baseBranch).Select(pull => pull.Number).ToHashSet();
             var sameRepository = place.Repository.Equals(baseRepository);
@@ -554,6 +552,53 @@ public sealed partial class RepositoryOperations
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 Log.Warning($"{Repository.Name}: reading the pull requests after a create failed.", ex);
+            }
+        }
+
+        /// <summary>
+        /// D316's list before the POST when none is held: the run in flight (the state
+        /// <see cref="PullRequestsState.Loading"/>) waited for alone, since a refresh asked for during
+        /// it waits for one more whole run behind it (A4 and its forks' reads again); with none in
+        /// flight (the read failed), one run. The tab's closing ends the wait, as the hosting's own.
+        /// </summary>
+        private async Task ListBeforePostAsync()
+        {
+            var hosting = Repository.Hosting;
+            if (hosting.State.List is not null)
+            {
+                return;
+            }
+
+            if (hosting.State.PullRequests != PullRequestsState.Loading)
+            {
+                await RefreshAsync();
+                return;
+            }
+
+            var left = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            void OnChanged(object? sender, EventArgs e)
+            {
+                if (hosting.State.PullRequests != PullRequestsState.Loading)
+                {
+                    left.TrySetResult();
+                }
+            }
+
+            hosting.Changed += OnChanged;
+            try
+            {
+                if (hosting.State.PullRequests == PullRequestsState.Loading)
+                {
+                    await left.Task.WaitAsync(((VisualCommit.App.ViewModels.Pages.IGraphAreaPageHost)Repository).Lifetime);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // The tab closed: nothing is held, so a request found after a lost answer is only offered.
+            }
+            finally
+            {
+                hosting.Changed -= OnChanged;
             }
         }
 

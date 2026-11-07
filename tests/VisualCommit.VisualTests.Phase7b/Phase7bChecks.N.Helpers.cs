@@ -236,10 +236,10 @@ public sealed partial class Phase7bChecksN
     private static void AssertInfoOnce(ShellDriver app, int mark, string message) =>
         Assert.True(LogSince(app, mark).Count(line => line == "[INF] " + message) == 1, $"The Info \"{message}\" is not in the log once:\n" + string.Join('\n', LogSince(app, mark)));
 
-    /// <summary>Exactly one Warning (any level with <paramref name="anyLevel"/>) since <paramref name="mark"/> matches <paramref name="pattern"/> (<c>{id}</c> any request id).</summary>
-    private static void AssertWarningOnce(ShellDriver app, int mark, string pattern, bool anyLevel = false)
+    /// <summary>Exactly one Warning since <paramref name="mark"/> matches <paramref name="pattern"/> (<c>{id}</c> any request id).</summary>
+    private static void AssertWarningOnce(ShellDriver app, int mark, string pattern)
     {
-        var regex = new System.Text.RegularExpressions.Regex((anyLevel ? "^\\[[A-Z]{3}\\] " : "^\\[WRN\\] ") + System.Text.RegularExpressions.Regex.Escape(pattern).Replace("\\{id}", "[A-Za-z0-9:._-]+", StringComparison.Ordinal) + "$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        var regex = new System.Text.RegularExpressions.Regex("^\\[WRN\\] " + System.Text.RegularExpressions.Regex.Escape(pattern).Replace("\\{id}", "[A-Za-z0-9:._-]+", StringComparison.Ordinal) + "$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
         Assert.True(LogSince(app, mark).Count(regex.IsMatch) == 1, $"The Warning \"{pattern}\" is not in the log once:\n" + string.Join('\n', LogSince(app, mark)));
     }
 

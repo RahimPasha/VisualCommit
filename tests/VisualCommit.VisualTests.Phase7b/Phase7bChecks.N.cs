@@ -76,20 +76,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             // N2 step 3: the form.
             var operations = OperationMark(app);
             var form = await OpenFormFromMenuAsync(app, p);
-            await AssertNewFormAsync(app, form);
-            AssertForm(app, form, p, N.Head, N.FullNameOf(p), null, N.Base, N.FullNameOf(p), N.HeadTitle);
-            Assert.False(form.IsDraft);
-            var height = AssertFormPlaces(app, N.CardLeft);
-            if (p == GitLab)
-            {
-                var note = app.FindByAutomationId("PullRequestQuickActionsNote");
-                Assert.Equal(app.BoundsOf(app.FindByAutomationId("PullRequestDescription")).Bottom + N.LineGap, app.BoundsOf(note).Top, 1.0);
-                Assert.Single(((TextBlock)note).TextLayout.TextLines);
-            }
-            else
-            {
-                Assert.Equal(N.CardHeight, height, 1.0);
-            }
+            await AssertN2FormAsync(app, form, p, N.CardLeft);
 
             Assert.Empty(OperationsSince(app, operations));
             AssertNoRequests(served, mark);
@@ -141,6 +128,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
                 Assert.Equal((FakeAzurePullRequestStatus.Active, N.HeadTitle, false, N.Head, "main"), (created.Status, created.Title, created.IsDraft, created.SourceBranch, created.TargetBranch));
                 Assert.Same(served.AzureDevOps.User(Organization, AdaName), created.Creator);
                 Assert.Null(created.Fork);
+                Assert.Equal("succeeded", created.MergeStatus);
                 Assert.Equal(0, (await GitInAsync(Bare(served, p), "rev-parse", "--verify", "--quiet", "refs/pull/14/merge")).Exit);
                 Assert.Equal(1, (await GitInAsync(Bare(served, p), "rev-parse", "--verify", "--quiet", "refs/pull/14/head")).Exit);
             }
@@ -152,17 +140,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             Assert.Equal((number, number), (state.ByRef[N.HeadRef].Number, state.ByRef[N.RemoteHeadRef].Number));
             AssertStatus(app, shown.StatusText);
             Assert.Equal(shown.StatusText, ToolTip.GetTip(app.FindByAutomationId("OperationStatus")));
-            Assert.True(repository.OperationStatus.HasOffer);
-            var offer = (Button)app.FindByAutomationId("OperationOfferButton");
-            Assert.Equal((N.OpenInBrowser, N.OpenInBrowser), (repository.OperationStatus.OfferText, Avalonia.Automation.AutomationProperties.GetName(offer)));
-            Assert.False(repository.OperationStatus.IsIndeterminate);
-
-            // The offer shown, its left 6 right of the text's right; no progress bar, no Cancel (7a's N1).
-            app.Settle();
-            Assert.True(offer.IsEffectivelyVisible, "OperationOfferButton is not shown.");
-            Assert.Equal(app.BoundsOf(app.FindByAutomationId("OperationStatus")).Right + 6, app.BoundsOf(offer).X, 1.0);
-            Assert.False(app.FindByAutomationId("OperationProgress").IsVisible);
-            Assert.False(app.FindByAutomationId("OperationCancelButton").IsVisible);
+            var offer = AssertOfferShown(app, repository);
             var author = p == GitLab ? AdaLogin : AdaName;
             AssertSectionAfterCreate(app, p, number, N.HeadTitle, author, N.Head, draft: false);
             Assert.Equal(shown.NewRowName, PullRequestRows(app)[0].Text);
@@ -377,7 +355,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             Assert.Contains(app.GitCalls(), call => call.OperationId == records[0].Id && call.CommandText == "git push --progress --set-upstream origin refs/heads/local-work:refs/heads/local-work");
             Assert.Empty(dialogs.Opened);
             AssertStatus(app, created);
-            Assert.True(webApp.OperationStatus.HasOffer);
+            AssertOfferShown(app, webApp);
             var requests = RequestsSince(served, GitLab, mark);
             Assert.Equal([$"GET {N.GitLabSourceRoute} 304", $"POST {N.GitLabCreateRoute} 201", $"GET {N.GitLabListRoute} 200", $"GET {N.GitLabListRoute} 304"], requests.Select(Describe));
             AssertBody(PostSince(served, GitLab, mark), BodyFor(GitLab, N.LocalWork, N.LocalWorkTitle, N.Description, draft: true), ["draft", "target_project_id", "allow_collaboration"]);
@@ -508,7 +486,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             Assert.Single(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
             AssertPushedThroughHelper(app, served, Azure, gitRequests);
             AssertStatus(app, created);
-            Assert.True(mobileApp.OperationStatus.HasOffer);
+            AssertOfferShown(app, mobileApp);
             var requests = RequestsSince(served, Azure, mark);
             Assert.Equal([$"POST {N.AzureDevOpsCreateRoute} 201", $"GET {N.AzureDevOpsListRoute} 200", $"GET {N.AzureDevOpsListRoute} 200"], requests.Select(Describe));
             AssertBody(PostSince(served, Azure, mark), BodyFor(Azure, N.LocalWork, N.LocalWorkTitle, N.Description, draft: true), ["forkSource"]);
@@ -652,12 +630,14 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
         Assert.Equal(sha, await GitAsync(Clone(served, p), "rev-parse", N.RemoteHeadRef));
 
         // Step 2: Create refused, the branch missing (step 1's no-request without !n, read once its folder is open).
+        var opened = Mark(served);
         app.Click(await app.RefRowAsync("Local branches", N.TopicFolder));
         await AssertBranchNumberAsync(app, p, null, null, "Local branches", N.TopicFolder, N.NoRequest);
         await MenuOfAsync(app, "Local branches", N.TopicFolder, N.NoRequest);
         AssertWholeMenu(app, N.LocalBranchMenuOf(p), $"Check out {N.Head}", N.LocalBranchMenuHeight);
         var form = await OpenFormFromMenuAsync(app, p);
-        AssertForm(app, form, p, N.Head, N.FullNameOf(p), null, N.Base, N.FullNameOf(p), N.HeadTitle);
+        await AssertN2FormAsync(app, form, p, N.CardLeft);
+        AssertNoRequests(served, opened);
         var mark = Mark(served);
         var logMark = app.LogMark();
         var operations = OperationMark(app);
@@ -687,7 +667,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             : "TF401398: The pull request cannot be activated because the source and/or the target branch no longer exists, or the requested refs are not branches";
         AssertWarningOnce(app, logMark, $"{HostingTexts.Name(p)}: POST {(p == GitLab ? N.GitLabCreatePath : N.AzureDevOpsCreatePath)} failed: 400 (request {{id}}).");
         AssertWarningOnce(app, logMark, $"{HostingTexts.Name(p)}: creating a pull request on {N.FullNameOf(p)} failed: Validation, {message} (request {{id}})");
-        AssertWarningOnce(app, logMark, $"{N.RepositoryOf(p)}: {failed}: the request to create it failed: Validation, {message} (request {{id}})", anyLevel: true);
+        AssertWarningOnce(app, logMark, $"{N.RepositoryOf(p)}: {failed}: the request to create it failed: Validation, {message} (request {{id}})");
         if (p == GitLab)
         {
             Assert.Equal([21, 22, 23], served.GitLab.MergeRequests(served.GitLab.Project(WebAppPath)).Select(request => request.Iid).Order());
@@ -768,9 +748,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             app.Click(await app.RefRowAsync("Local branches", N.TopicFolder));
             await MenuOfAsync(app, "Local branches", N.TopicFolder, N.NoRequest);
             var form = await OpenFormFromMenuAsync(app, GitLab);
-            await AssertNewFormAsync(app, form);
-            AssertForm(app, form, GitLab, N.Head, N.GitLabFullName, null, N.Base, N.GitLabFullName, N.HeadTitle);
-            AssertFormPlaces(app, N.CardLeft1920);
+            await AssertN2FormAsync(app, form, GitLab, N.CardLeft1920);
             app.MoveMouse(rest);
             ShotN(app, N.N09a, keepPointer: true);
             app.PressKey(Key.Escape);
@@ -781,16 +759,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             app.Click(app.FindByAutomationId("ThemeSwitch"));
             await MenuOfAsync(app, "Local branches", N.TopicFolder, N.NoRequest);
             form = await OpenFormFromMenuAsync(app, GitLab);
-            await AssertNewFormAsync(app, form);
-            AssertForm(app, form, GitLab, N.Head, N.GitLabFullName, null, N.Base, N.GitLabFullName, N.HeadTitle);
-            AssertFormPlaces(app, N.CardLeft1920);
-            var card = Card(app);
-            Assert.Equal(Color.Parse("#F5F6F8"), ((ISolidColorBrush)card.Background!).Color);
-            var secondary = card.GetVisualDescendants().OfType<TextBlock>()
-                .Where(block => block.Text is N.From or N.Into || block.Name is "PullRequestHeadRepository" or "PullRequestBaseRepository" or "PullRequestQuickActionsNote")
-                .ToList();
-            Assert.Equal(5, secondary.Count);
-            Assert.All(secondary, block => Assert.Equal(Color.Parse("#5C6572"), ((ISolidColorBrush)block.Foreground!).Color));
+            await AssertN2FormAsync(app, form, GitLab, N.CardLeft1920, light: true);
             Assert.Same(app.Window.FindResource("VcPrimaryButton"), ((Button)app.FindByAutomationId("ConfirmButton")).Theme);
             app.MoveMouse(rest);
             ShotN(app, N.N09b, keepPointer: true);
@@ -807,6 +776,64 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
     }
 
     // ---- Method helpers --------------------------------------------------------------------------
+
+    /// <summary>
+    /// N2's form as the menu opens it (part N's conventions, "The form"): 7a's new form, N2's texts,
+    /// Draft unticked, part N's places; GitLab's quick-actions note 4 under the description at x 340
+    /// (its card's left plus 20) on one line, Azure DevOps' card 386 high; the theme's brushes.
+    /// </summary>
+    private static async Task AssertN2FormAsync(ShellDriver app, CreatePullRequestDialogViewModel form, HostingProvider p, double cardLeft, bool light = false)
+    {
+        await AssertNewFormAsync(app, form);
+        AssertForm(app, form, p, N.Head, N.FullNameOf(p), null, N.Base, N.FullNameOf(p), N.HeadTitle);
+        Assert.False(form.IsDraft);
+        var height = AssertFormPlaces(app, cardLeft);
+        if (p == GitLab)
+        {
+            var note = app.FindByAutomationId("PullRequestQuickActionsNote");
+            Assert.Equal(app.BoundsOf(app.FindByAutomationId("PullRequestDescription")).Bottom + N.LineGap, app.BoundsOf(note).Top, 1.0);
+            Assert.Equal(cardLeft + (340 - N.CardLeft), app.BoundsOf(note).X, 1.0);
+            Assert.Single(((TextBlock)note).TextLayout.TextLines);
+        }
+        else
+        {
+            Assert.Equal(N.CardHeight, height, 1.0);
+        }
+
+        AssertFormBrushes(app, light);
+    }
+
+    /// <summary>
+    /// Theme brushes only (part N's conventions): the card <c>#1A1D24</c> (light <c>#F5F6F8</c>);
+    /// From, Into, both repository texts and every shown note (the quick-actions note, the head's
+    /// note, the sent title) the secondary text <c>#9BA3B0</c> (light <c>#5C6572</c>).
+    /// </summary>
+    private static void AssertFormBrushes(ShellDriver app, bool light)
+    {
+        var card = Card(app);
+        Assert.Equal(Color.Parse(light ? "#F5F6F8" : "#1A1D24"), ((ISolidColorBrush)card.Background!).Color);
+        string[] notes = ["PullRequestQuickActionsNote", "PullRequestHeadNote", "PullRequestSentTitle"];
+        var secondary = card.GetVisualDescendants().OfType<TextBlock>()
+            .Where(block => block.Text is N.From or N.Into || block.Name is "PullRequestHeadRepository" or "PullRequestBaseRepository" || (notes.Contains(block.Name) && block.IsEffectivelyVisible))
+            .ToList();
+        Assert.Equal(4 + notes.Count(id => Shown(app, id)), secondary.Count);
+        Assert.All(secondary, block => Assert.Equal(Color.Parse(light ? "#5C6572" : "#9BA3B0"), ((ISolidColorBrush)block.Foreground!).Color));
+    }
+
+    /// <summary>The status bar's offer after a create (7a's N1): <c>Open in browser</c>, by its text and name, shown 6 right of the text; no progress bar, no Cancel. Returns the offer.</summary>
+    private static Button AssertOfferShown(ShellDriver app, RepositoryViewModel repository)
+    {
+        Assert.True(repository.OperationStatus.HasOffer);
+        var offer = (Button)app.FindByAutomationId("OperationOfferButton");
+        Assert.Equal((N.OpenInBrowser, N.OpenInBrowser), (repository.OperationStatus.OfferText, Avalonia.Automation.AutomationProperties.GetName(offer)));
+        Assert.False(repository.OperationStatus.IsIndeterminate);
+        app.Settle();
+        Assert.True(offer.IsEffectivelyVisible, "OperationOfferButton is not shown.");
+        Assert.Equal(app.BoundsOf(app.FindByAutomationId("OperationStatus")).Right + 6, app.BoundsOf(offer).X, 1.0);
+        Assert.False(app.FindByAutomationId("OperationProgress").IsVisible);
+        Assert.False(app.FindByAutomationId("OperationCancelButton").IsVisible);
+        return offer;
+    }
 
     /// <summary>N8 step 1: no request since the start (D257), signed out, the hosting's repository and <c>RequestRemotes</c>, the section's message row.</summary>
     private static void AssertSignedOut(ShellDriver app, ServedHosting7b served, RepositoryViewModel repository, HostingProvider p)

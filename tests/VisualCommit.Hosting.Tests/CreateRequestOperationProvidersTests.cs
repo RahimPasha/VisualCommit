@@ -364,11 +364,112 @@ public sealed class CreateRequestOperationProvidersTests
         }
 
         var (form, opening) = await OpenFormAsync(app, repository, "refs/heads/topic/no-request");
-        await CreateAsync(form, opening);
+        var fake = provider == HostingProvider.GitLab ? (FakeHostingService)served.GitLab : served.AzureDevOps;
+        var (createRoute, listRoute) = provider == HostingProvider.GitLab
+            ? ("create:northfield/platform/web-app", "mrs:northfield/platform/web-app")
+            : ("create:fernhill-labs/mobile app/mobile-app", "pulls:fernhill-labs/mobile app/mobile-app");
+        var title = Texts.Operation(provider, "topic/no-request").Title;
+        var lost = $"[WRN] {repository.Name}: {title}: the request to create it failed: Network, ";
+        var requests = fake.Requests.Count;
+        var logMark = app.LogMark();
+
+        // D316's re-read, the first list read after Create (none comes before the POST: the list is held), held:
+        // by then the drop has fired and been logged, one POST has been sent and nothing counts as created yet.
+        var hold = fake.HoldNext(listRoute);
+        try
+        {
+            var creating = CreateAsync(form, opening);
+            await hold.Arrived.WaitAsync(Cancelled);
+            await app.WaitForAsync(() => app.LogLinesSince(logMark).Any(line => line.Contains(lost, StringComparison.Ordinal)), "the lost answer's Warning");
+            var sent = fake.Requests.Skip(requests).ToList();
+            Assert.Single(Posts(sent));
+            Assert.DoesNotContain(sent, request => request.Route == listRoute);
+            Assert.DoesNotContain(app.LogLinesSince(logMark), line => line.Contains($"{title}: created ", StringComparison.Ordinal));
+            Assert.True(form.IsCreating);
+            hold.Dispose();
+            await creating;
+        }
+        finally
+        {
+            hold.Dispose();
+        }
+
         await app.WaitForIdleAsync();
 
         Assert.Equal(provider == HostingProvider.GitLab ? "Created merge request !24" : "Created pull request !14", repository.OperationStatus.Text);
         Assert.True(repository.OperationStatus.HasOffer);
+        var since = fake.Requests.Skip(requests).ToList();
+        var post = Assert.Single(Posts(since));
+        Assert.Equal(createRoute, post.Route);
+        Assert.Contains(since.Skip(since.IndexOf(post) + 1), request => request.Route == listRoute);
+        var log = app.LogLinesSince(logMark).ToList();
+        Assert.Single(log, line => line.Contains(lost, StringComparison.Ordinal));
+        var created = log.FindIndex(line => line.Contains($"{title}: created {(provider == HostingProvider.GitLab ? "!24" : "!14")} in ", StringComparison.Ordinal));
+        Assert.True(created > log.FindIndex(line => line.Contains(lost, StringComparison.Ordinal)), "No 'created' line follows the lost answer's Warning:\n" + string.Join('\n', log));
+        Assert.Equal(4, Count(served, provider));
+        End(app, data, served);
+    }
+
+    /// <summary>
+    /// D316's list before the POST is the read in flight alone (13.5): Create pressed while the first
+    /// list read after the stacked sign-in is held waits for that read's answer, which no request the
+    /// POST makes can be in, and asks for no second run of the list before the POST.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Create_pressed_while_the_first_list_is_read_waits_for_that_read_alone()
+    {
+        await using var served = await ServeAsync();
+        await served.WebApp.GitAsync("branch", "--track", "topic/no-request", "origin/topic/no-request");
+        using var data = new TempDirectory("create providers");
+        using var app = ShellDriver.StartWithTabs(data.Path, [served.WebApp.Path], promptHandler: new ScriptedPromptHandler(), gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.SignedOut, "signed out");
+        await app.WaitForWatchersQuietAsync();
+        const string listRoute = "mrs:northfield/platform/web-app";
+        var hold = served.GitLab.HoldNext(listRoute);
+        int mark;
+        try
+        {
+            var opening = repository.Operations.CreatePullRequestAsync("refs/heads/topic/no-request", null);
+            var signIn = await app.WaitForDialogAsync<SignInDialogViewModel>();
+            await signIn.Opened;
+            signIn.Token = served.GitLabToken;
+            await signIn.ConfirmCommand.ExecuteAsync(null);
+            var form = await app.WaitForDialogAsync<CreatePullRequestDialogViewModel>();
+            await form.Starting;
+            await hold.Arrived.WaitAsync(Cancelled);
+            Assert.Null(repository.Hosting.State.List);
+            Assert.Equal(PullRequestsState.Loading, repository.Hosting.State.PullRequests);
+            mark = served.GitLab.Requests.Count;
+            var creating = form.CreateCommand.ExecuteAsync(null);
+            await app.WaitForAsync(() => repository.OperationStatus.Text == Texts.CreatingRequest(HostingProvider.GitLab), "the create to reach its POST");
+            for (var i = 0; i < 10; i++)
+            {
+                await Task.Delay(50, Cancelled);
+                app.Settle();
+            }
+
+            Assert.Empty(Posts(served.GitLab.Requests.Skip(mark)));
+            hold.Dispose();
+            await creating;
+            Assert.True(form.IsClosed, form.Error ?? "The form is still open.");
+            await opening;
+        }
+        finally
+        {
+            hold.Dispose();
+        }
+
+        await app.WaitForIdleAsync();
+        var since = served.GitLab.Requests.Skip(mark).ToList();
+        var post = Assert.Single(Posts(since));
+        Assert.Equal(201, post.Status);
+        // The held run (its A4, then its fork's project), then GitLab's read of the source project: no second run.
+        Assert.Equal(
+            [$"GET {listRoute} 200", "GET project:ada/web-app 200", "GET project:northfield/platform/web-app 304"],
+            since.Take(since.IndexOf(post)).Select(request => $"{request.Method} {request.Route} {request.Status}"));
+        Assert.Equal("Created merge request !24", repository.OperationStatus.Text);
+        Assert.Equal(24, repository.HostingState.List!.PullRequests[0].Number);
         End(app, data, served);
     }
 
