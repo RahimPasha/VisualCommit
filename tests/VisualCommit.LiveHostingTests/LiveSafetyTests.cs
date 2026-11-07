@@ -1435,6 +1435,27 @@ public sealed partial class LiveSafetyTests
         Assert.Contains("deleting the leftover branches answered 200 but did not delete everything: " + LiveLeftovers.HeadsPrefix + even, Assert.Single(problems), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// The fake beside allows public projects, as the sandbox's organization does (MEASURED 2026-11-07:
+    /// Check_1b's connectionData without a credential, with Suppress, answered 200 with the Anonymous
+    /// identity, application/json at 7.1-preview.1, no WWW-Authenticate): its answer to that probe is
+    /// that 200, the same as its answer to D373's short value (MEASURED 2026-11-05 alike), so the run
+    /// notes "the fake: same" for both.
+    /// </summary>
+    [Fact]
+    public async Task The_fake_beside_answers_connection_data_without_a_credential_as_the_sandbox_s_organization_does()
+    {
+        await using var fake = await LiveAzureFake.StartAsync(Project, Repository, null, null, Cancelled);
+
+        var none = await fake.Api.ConnectionDataAsync(LiveCredential.None, Cancelled);
+        var plain = await fake.Api.ConnectionDataAsync(LiveMadeUp.ShortValue, Cancelled);
+
+        Assert.Equal((200, "application/json", "7.1-preview.1", (string?)null), (none.Status, none.MediaType, none.ApiVersion, none.Header("WWW-Authenticate")));
+        Assert.Equal(LiveScreen.AnonymousId, none.Json!.Value.GetProperty("authenticatedUser").GetProperty("id").GetString());
+        Assert.Equal("same", LiveServiceAnswer.Beside(none, plain, fake.Names, fake.Names));
+        Assert.Equal(200, (await fake.Api.ConnectionDataAsync(LiveCredential.None, Cancelled, suppress: false)).Status);
+    }
+
     [Fact]
     public async Task A_poll_stops_when_the_ref_comes_holds_each_read_to_what_is_left_and_restores_the_limit()
     {

@@ -9,12 +9,13 @@
 //   Suppress (the fake gives it to a Basic value in none of the PAT forms: azdo_FAKE-, 84 with AZDO,
 //   52 base32; the 52's empty 401 READ g1 G0.2); an 84-character PAT-shaped one, 401 with an empty
 //   body and one Basic challenge (its realm TokenRealm's form), with and without Suppress; with a
-//   user (x-access-token) both are ASSUMED alike, the user ignored (READ g1 G1.0). The fake gives
-//   the short value's 200 in a private organization too: ASSUMED, inferred from that 200, since the
-//   run did not read whether the sandbox's organization allows public projects (no read of its
-//   connectionData without a credential); g1 G0.2 (READ) takes a value that is no PAT for no credential, which a private
-//   organization answers with r5 1.3's 302 or 401 TF400813, so the next live run reads it before
-//   part A's checks copy the 200 (16.1's As built). No credential at all keeps r5 1.3's 302 and 401 (MEASURED);
+//   user (x-access-token) both are ASSUMED alike, the user ignored (READ g1 G1.0). The sandbox's
+//   organization allows public projects: its connectionData without a credential, with Suppress,
+//   answered 200 with the Anonymous identity (MEASURED 2026-11-07, Check_1b's probe), so the short
+//   value's 200 is a public organization's, and the fake gives it only where it gives no
+//   credential's, in an organization with PublicProjects. In a private one a value that is no PAT
+//   gets what no credential gets, r5 1.3's 302 or 401 TF400813 (READ g1 G0.2; 16.1's As built). No
+//   credential at all keeps r5 1.3's 302 and 401 in a private organization (MEASURED);
 // - check 1 with a token (D374's made-up organization: 404 "The resource cannot be found." both ways);
 // - the core resource area (areas), without a credential and with the token;
 // - create: 201 (CreateStatus), isDraft, createdBy.id the account's, mergeStatus succeeded and the
@@ -178,17 +179,21 @@ public sealed partial class FakeAzureDevOps
 
             if (caller is null)
             {
-                // connectionData with a Basic credential whose password is in none of the PAT forms
-                // (azdo_FAKE-, 84 with AZDO, 52 base32: IsPatShaped): 200 with the Anonymous
-                // identity, with and without Suppress (MEASURED 2026-11-05 in the sandbox's
-                // organization with the empty user, D373's short value; with a user ASSUMED alike, the
-                // user ignored, READ g1 G1.0: no path of the app's sends one there). In a private
-                // organization too: ASSUMED, the sandbox organization's public-projects policy not
-                // read, against g1 G0.2's READ (no credential, r5 1.3's 302 or 401); both are refused
-                // by A1 (6.4). With no credential at all r5 1.3's 302 or 401 stays, MEASURED; a public
-                // organization's for anyone (MEASURED r5 1.2).
-                var plainBasic = call.Authorization is FakeAuthorizationForm.Basic or FakeAuthorizationForm.BasicEmptyUser;
-                if (route.Kind == Kind.Connection && (ignored || organization.PublicProjects || plainBasic))
+                // connectionData with no credential, another scheme, or a Basic credential whose
+                // password is in none of the PAT forms (azdo_FAKE-, 84 with AZDO, 52 base32:
+                // IsPatShaped): 200 with the Anonymous identity in an organization that allows public
+                // projects, with and without Suppress, and in no other (but for the AnonymousIdentity
+                // fault, which gives it anywhere). MEASURED 2026-11-05: D373's short value, with the
+                // empty user, got the 200 in the sandbox's organization both ways (with a user ASSUMED
+                // alike, the user ignored, READ g1 G1.0: no path of the app's sends one there).
+                // MEASURED 2026-11-07: no credential, with Suppress, got the same 200 there, so the
+                // sandbox's organization allows public projects and the short value's 200 is a public
+                // organization's answer; a public organization's for anyone (MEASURED r5 1.2). In a
+                // private organization the plain value gets what no credential gets there: r5 1.3's
+                // 302, or with Suppress 401 TF400813 (MEASURED r5 1.3 for no credential; a value that
+                // is no PAT taken as none READ g1 G0.2, not read in a private organization). A1
+                // refuses either answer (6.4).
+                if (route.Kind == Kind.Connection && (ignored || organization.PublicProjects))
                 {
                     return Finish(fault, Json(200, ConnectionJson(null), served));
                 }
@@ -424,9 +429,10 @@ public sealed partial class FakeAzureDevOps
     /// (ASSUMED, r5 0.6 and 5: the docs say only to support the 84-character format, and the alphabet is
     /// inferred from r5 5's "base32-looking"; an unknown one's empty 401 READ g1 G0.2 for an invalid
     /// PAT-shaped value). Any other
-    /// value is no credential (READ g1 G0.2), but on connectionData, where a Basic one gets the
-    /// Anonymous identity (MEASURED 2026-11-05 in the sandbox's organization with the empty user; with
-    /// a user ASSUMED alike; in a private organization ASSUMED, its policy not read, see check 4).
+    /// value is no credential (READ g1 G0.2), on connectionData too: the Anonymous identity in an
+    /// organization that allows public projects (MEASURED 2026-11-05 in the sandbox's organization with
+    /// the empty user, an organization that allows them, MEASURED 2026-11-07; with a user ASSUMED
+    /// alike), else the sign-in's 302 or 401 (see check 4).
     /// </summary>
     private static bool IsPatShaped(string token) =>
         token.StartsWith("azdo_FAKE-", StringComparison.Ordinal)

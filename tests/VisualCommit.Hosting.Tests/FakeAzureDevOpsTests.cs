@@ -10,7 +10,8 @@ namespace VisualCommit.Hosting.Tests;
 /// <summary>
 /// The fake of Azure DevOps in process (docs/phase-7b-design.md 3.3, 3.4, 3.6): every route, the
 /// checks in their order, the shapes and headers a client must survive, each fault once and then the
-/// normal answer; Anonymous for no credential, a short password and <c>Bearer</c>; the empty 401 for
+/// normal answer; Anonymous for no credential, a short password and <c>Bearer</c> in an organization
+/// that allows public projects, the sign-in's 302 or 401 for them in a private one; the empty 401 for
 /// unknown, revoked and other organizations' tokens; the resource area both ways; the sign-in
 /// redirects; a 401-character description; a create at 201 and 200, queued then succeeded; a hold;
 /// and no request record holding a token. On the bare folders of a copy of "hosting7b", seeded here
@@ -73,47 +74,55 @@ public sealed class FakeAzureDevOpsTests
             sampleOne.EnumerateObject().Select(property => property.Name));
 
         // harbor-co allows public projects: no credential, a password that is no PAT and Bearer are
-        // each the Anonymous identity (MEASURED r5 1.2; READ g1 G0.2).
+        // each the Anonymous identity, with no challenge (MEASURED r5 1.2; READ g1 G0.2). No credential
+        // with Suppress is the request the live command's probe sent on 2026-11-07 to the sandbox's
+        // organization, which allows public projects: 200 with the Anonymous identity, application/json
+        // with api-version 7.1-preview.1, and no WWW-Authenticate (MEASURED 2026-11-07).
         const string HarborConnection = "harbor-co/_apis/connectionData?api-version=7.1-preview.1";
         foreach (var edit in new Action<HttpRequestMessage>[]
         {
             _ => { },
+            Suppress,
             request => request.Headers.Authorization = Basic("x-access-token", "short-value"),
             request => request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", fixture.AuthorToken),
         })
         {
             var anonymous = await SendAsync(fake, HttpMethod.Get, HarborConnection, token: null, edit: edit);
-            Assert.Equal(200, anonymous.Status);
+            Assert.Equal((200, "application/json; charset=utf-8; api-version=7.1-preview.1"), (anonymous.Status, anonymous.Header("Content-Type")));
+            Assert.Equal(AnonymousId, anonymous.Json.GetProperty("authenticatedUser").GetProperty("id").GetString());
             Assert.Contains(
                 "{\"id\":\"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"descriptor\":\"System:PublicAccess;aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa\",\"providerDisplayName\":\"Anonymous\",\"customDisplayName\":\"Anonymous\",\"isActive\":true,\"properties\":{\"Account\":{\"$type\":\"System.String\",\"$value\":\"Anonymous\"}},\"resourceVersion\":2,\"metaTypeId\":255}",
                 anonymous.Body,
                 StringComparison.Ordinal);
+            Assert.Empty(anonymous.WwwAuthenticate);
             Assert.Null(fake.Requests[^1].Login);
         }
 
-        // A Basic password that is no PAT is the Anonymous identity on connectionData: with the empty
-        // user, as the probe and the client send it, with and without Suppress (MEASURED 2026-11-05 in
-        // the sandbox's organization, D373's short value); with a user, ASSUMED alike (the user ignored,
-        // READ g1 G1.0; no path of the app's sends one to connectionData). Fernhill-Labs is private:
-        // the 200 there is ASSUMED, since the run did not read whether the sandbox's organization
-        // allows public projects (g1 G0.2, READ, would give the sign-in's 302 or 401 below); the next
-        // live run reads it (16.1's As built). A 200 that A1 refuses (6.4).
-        foreach (var edit in new Action<HttpRequestMessage>[]
-        {
-            request => request.Headers.Authorization = Basic(string.Empty, "short-value"),
-            request =>
+        // A Basic password that is no PAT is no credential on connectionData (READ g1 G0.2). In an
+        // organization that allows public projects, harbor-co here, it gets the Anonymous identity:
+        // with the empty user, as the probe and the client send it, with and without Suppress
+        // (MEASURED 2026-11-05, D373's short value in the sandbox's organization, which allows public
+        // projects: MEASURED 2026-11-07, its 200 to no credential); with a user ASSUMED alike (the
+        // user ignored, READ g1 G1.0; no path of the app's sends one to connectionData). A 200 that
+        // A1 refuses (6.4).
+        (Action<HttpRequestMessage> Edit, bool Suppressed)[] plainValues =
+        [
+            (request => request.Headers.Authorization = Basic(string.Empty, "short-value"), false),
+            (request =>
             {
                 request.Headers.Authorization = Basic(string.Empty, "short-value");
                 Suppress(request);
-            },
-            request =>
+            }, true),
+            (request => request.Headers.Authorization = Basic("x-access-token", "short-value"), false),
+            (request =>
             {
                 request.Headers.Authorization = Basic("x-access-token", "short-value");
                 Suppress(request);
-            },
-        })
+            }, true),
+        ];
+        foreach (var (edit, _) in plainValues)
         {
-            var plain = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: edit);
+            var plain = await SendAsync(fake, HttpMethod.Get, HarborConnection, token: null, edit: edit);
             Assert.Equal((200, "application/json; charset=utf-8; api-version=7.1-preview.1"), (plain.Status, plain.Header("Content-Type")));
             Assert.Equal(["authenticatedUser", "authorizedUser", "instanceId", "deploymentId", "deploymentType", "locationServiceData"], plain.Json.EnumerateObject().Select(property => property.Name));
             Assert.Equal((AnonymousId, "Anonymous"), (plain.Json.GetProperty("authenticatedUser").GetProperty("id").GetString(), plain.Json.GetProperty("authenticatedUser").GetProperty("providerDisplayName").GetString()));
@@ -121,12 +130,21 @@ public sealed class FakeAzureDevOpsTests
             Assert.Null(fake.Requests[^1].Login);
         }
 
+        // Fernhill-Labs is private: there the same value gets what no credential gets, the sign-in's
+        // 302 off the fake's origin, or with Suppress 401 TF400813 naming the anonymous user (r5 1.3's
+        // answers to no credential, MEASURED; the value taken as none READ g1 G0.2; 16.1's As built).
+        foreach (var (edit, withSuppress) in plainValues)
+        {
+            AssertSignIn(await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: edit), withSuppress);
+            Assert.Null(fake.Requests[^1].Login);
+        }
+
         // The Anonymous 200 is for a Basic value in none of the PAT forms (azdo_FAKE-, 84 with AZDO,
-        // 52 base32). The older form, 52 characters of a to z and 2 to 7, valid until it expires
-        // (ASSUMED, r5 0.6 and 5: the docs say only to support the 84-character format, and the
-        // alphabet is inferred from r5 5's "base32-looking"), unknown here, gets the empty 401 with and
-        // without Suppress (READ g1 G0.2 for an invalid PAT-shaped value); 52 characters with a 1 are
-        // no PAT and get the 200.
+        // 52 base32), where the organization allows public projects. The older form, 52 characters of a
+        // to z and 2 to 7, valid until it expires (ASSUMED, r5 0.6 and 5: the docs say only to support
+        // the 84-character format, and the alphabet is inferred from r5 5's "base32-looking"), unknown
+        // here, gets the empty 401 with and without Suppress (READ g1 G0.2 for an invalid PAT-shaped
+        // value); 52 characters with a 1 are no PAT and get harbor-co's 200 and Fernhill-Labs' sign-in.
         var legacy = new string('a', 52);
         foreach (var suppress in new[] { false, true })
         {
@@ -143,8 +161,10 @@ public sealed class FakeAzureDevOpsTests
             Assert.Null(fake.Requests[^1].Login);
         }
 
-        var notLegacy = await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: request => request.Headers.Authorization = Basic(string.Empty, new string('a', 51) + "1"));
-        Assert.Equal((200, AnonymousId), (notLegacy.Status, notLegacy.Json.GetProperty("authenticatedUser").GetProperty("id").GetString()));
+        Action<HttpRequestMessage> notLegacy = request => request.Headers.Authorization = Basic(string.Empty, new string('a', 51) + "1");
+        var notLegacyPublic = await SendAsync(fake, HttpMethod.Get, HarborConnection, token: null, edit: notLegacy);
+        Assert.Equal((200, AnonymousId), (notLegacyPublic.Status, notLegacyPublic.Json.GetProperty("authenticatedUser").GetProperty("id").GetString()));
+        AssertSignIn(await SendAsync(fake, HttpMethod.Get, Connection, token: null, edit: notLegacy), withSuppress: false);
 
         // No credential at all: the sign-in's 302 off the fake's origin, or 401 TF400813 with Suppress
         // (MEASURED r5 1.3).
@@ -158,6 +178,24 @@ public sealed class FakeAzureDevOpsTests
         Assert.Contains(Realm, suppressed.WwwAuthenticate);
         Assert.StartsWith("https://spsprodfake.vssps.visualstudio.com/_signin?", suppressed.Header("X-TFS-FedAuthRedirect"), StringComparison.Ordinal);
         Assert.Empty(fake.Errors);
+
+        // A private organization's answer to no credential (MEASURED r5 1.3): the 302, or with Suppress the 401.
+        static void AssertSignIn(Answer answer, bool withSuppress)
+        {
+            if (withSuppress)
+            {
+                AssertError(answer, 401, "UnauthorizedRequestException", $"TF400813: The user '{AnonymousId}' is not authorized to access this resource.");
+                Assert.Equal(3, answer.WwwAuthenticate.Count);
+                Assert.Contains(Realm, answer.WwwAuthenticate);
+                Assert.StartsWith("https://spsprodfake.vssps.visualstudio.com/_signin?", answer.Header("X-TFS-FedAuthRedirect"), StringComparison.Ordinal);
+            }
+            else
+            {
+                Assert.Equal(302, answer.Status);
+                Assert.StartsWith("https://spsprodfake.vssps.visualstudio.com/_signin?", answer.Header("Location"), StringComparison.Ordinal);
+                Assert.Contains("Object moved", answer.Body, StringComparison.Ordinal);
+            }
+        }
     }
 
     [Fact]
@@ -714,6 +752,12 @@ public sealed class FakeAzureDevOpsTests
         Assert.Equal((203, "text/html; charset=utf-8"), (nonAuthoritative.Status, nonAuthoritative.Header("Content-Type")));
         var anonymous = await FailOnceAsync(FakeAzureDevOpsFault.AnonymousIdentity);
         Assert.Equal((200, AnonymousId), (anonymous.Status, anonymous.Json.GetProperty("authenticatedUser").GetProperty("id").GetString()));
+        // In Fernhill-Labs, private, the fault gives the Anonymous 200 to a value that is no PAT with
+        // Suppress too, where without it the 401 TF400813 comes (part A's A9 sets it so); the next one
+        // is the 401 again.
+        var anonymousPlain = await FailOnceAsync(FakeAzureDevOpsFault.AnonymousIdentity, token: "short-value", edit: Suppress);
+        Assert.Equal((200, AnonymousId), (anonymousPlain.Status, anonymousPlain.Json.GetProperty("authenticatedUser").GetProperty("id").GetString()));
+        Assert.Equal(401, (await SendAsync(fake, HttpMethod.Get, Connection, "short-value", edit: Suppress)).Status);
         var throttled = await FailOnceAsync(FakeAzureDevOpsFault.Throttled);
         AssertError(throttled, 429, "RequestBlockedException", "TF400733: The request has been canceled: Request was blocked due to exceeding usage of resource Core in namespace User.");
         Assert.Equal(("30", "0", null), (throttled.Header("Retry-After"), throttled.Header("X-RateLimit-Remaining"), throttled.Header("X-RateLimit-Delay")));

@@ -22,7 +22,8 @@ namespace VisualCommit.Hosting.Tests;
 /// other members; and Azure DevOps named on every failure. Made-up names only.
 /// Answers these tests rest on that WP-LIVE's first stage MEASURED on 2026-11-05 (D342, design 6.8,
 /// WP-LF): connectionData's 404 for an unknown organization read with a token (D374's probe), the
-/// core resource area read with a token, the Anonymous 200 for a Basic value that is no PAT and the
+/// core resource area read with a token, the Anonymous 200 for a Basic value that is no PAT (in an
+/// organization that allows public projects, as the sandbox's does: MEASURED 2026-11-07) and the
 /// empty 401 for a PAT-shaped unknown one (D373), the create's POST by the repository's name (201) and
 /// its 409 and 400 refusals; still ASSUMED: a message naming an e-mail; kept as marked (D375): a
 /// fork's create body and the fork shapes A2 and A4 read.
@@ -119,15 +120,24 @@ public sealed class AzureDevOpsProviderTests
         Assert.Equal(HostingFailureKind.BadCredentials, (await fixture.Provider.CheckTokenAsync(patShaped, Organization, Cancelled)).Failure!.Kind);
         Assert.Equal(5, fixture.Recorder.Sent.Count);
 
-        // A value that is no PAT gets connectionData's 200 with the Anonymous identity from the service
-        // (MEASURED 2026-11-05 in the sandbox's organization, D373; in a private organization ASSUMED,
-        // the sandbox organization's policy not read, the fake's check 4), which A1 refuses as the token
-        // ignored, after that one request (6.4; WP-LF). Were it the sign-in's 401 (g1 G0.2, READ), A1
-        // would refuse it too, as BadCredentials without AnonymousDetail.
-        var plain = (await fixture.Provider.CheckTokenAsync("not-a-token-made-up-24ch", Organization, Cancelled)).Failure!;
+        // A value that is no PAT is no credential (g1 G0.2, READ). In an organization that allows public
+        // projects connectionData answers it with the Anonymous identity (MEASURED 2026-11-05 in the
+        // sandbox's organization, D373, which allows them: MEASURED 2026-11-07), which A1 refuses as the
+        // token ignored, after that one request (6.4; WP-LF).
+        fake.AddOrganization("open-docks", publicProjects: true);
+        var plain = (await fixture.Provider.CheckTokenAsync("not-a-token-made-up-24ch", "open-docks", Cancelled)).Failure!;
         Assert.Equal((HostingFailureKind.BadCredentials, AzureDevOpsProvider.AnonymousDetail, HostingProvider.AzureDevOps), (plain.Kind, plain.Detail, plain.Provider));
         Assert.Equal(6, fixture.Recorder.Sent.Count);
-        Assert.Equal(200, fake.Requests[^1].Status);
+        Assert.Equal((200, "connection:open-docks"), (fake.Requests[^1].Status, fake.Requests[^1].Route));
+
+        // In Fernhill-Labs, private, the same value gets what no credential gets there, with Suppress
+        // the sign-in's 401 TF400813 (r5 1.3, MEASURED for no credential; the fake's check 4), which A1
+        // refuses too, as BadCredentials without AnonymousDetail, after that one request.
+        var refused = (await fixture.Provider.CheckTokenAsync("not-a-token-made-up-24ch", Organization, Cancelled)).Failure!;
+        Assert.Equal((HostingFailureKind.BadCredentials, (string?)null, HostingProvider.AzureDevOps), (refused.Kind, refused.Detail, refused.Provider));
+        Assert.StartsWith("TF400813: ", refused.Message, StringComparison.Ordinal);
+        Assert.Equal(7, fixture.Recorder.Sent.Count);
+        Assert.Equal((401, "connection:fernhill-labs"), (fake.Requests[^1].Status, fake.Requests[^1].Route));
         Assert.DoesNotContain(fixture.Recorder.Sent, sent => sent.Url.AbsolutePath.Contains("resourceAreas", StringComparison.Ordinal));
     }
 

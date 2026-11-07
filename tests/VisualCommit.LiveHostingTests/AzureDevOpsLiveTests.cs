@@ -435,9 +435,11 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         await ProbeAsync(api, fake, "connectionData with the token, without Suppress", a => a.ConnectionDataAsync(LiveCredential.Token, Cancelled, suppress: false));
         await ProbeAsync(api, fake, $"connectionData with the token at {AzureDevOpsApi.Version}", a => a.ConnectionDataAsync(LiveCredential.Token, Cancelled, version: AzureDevOpsApi.Version));
         // Whether the sandbox's organization answers no credential as a private one (r5 1.3's 401
-        // TF400813 with Suppress, the fake's) or as one that allows public projects (200 with the
-        // Anonymous identity): it tells whether the Anonymous 200 that D373's short value got holds in
-        // a private organization, as the fake answers, or comes of the policy (design 16.1's As built).
+        // TF400813 with Suppress) or as one that allows public projects (200 with the Anonymous
+        // identity): it tells whether the Anonymous 200 that D373's short value got holds in a private
+        // organization or comes of the policy (design 16.1's As built). MEASURED 2026-11-07: the 200,
+        // so the organization allows public projects; the fake keeps the 200 to such organizations,
+        // and LiveAzureFake's allows them, so that it answers here as the sandbox's does.
         await ProbeAsync(api, fake, "connectionData without a credential, with Suppress", a => a.ConnectionDataAsync(LiveCredential.None, Cancelled));
         await ProbeAsync(api, fake, "the core area, as A1's spelling read sends it ({o}/_apis/resourceAreas/…), without a credential", a => a.CoreAreaAsync(LiveCredential.None, Cancelled));
         var area = await ProbeAsync(api, fake, "the core area, as A1's spelling read sends it, with the token", a => a.CoreAreaAsync(LiveCredential.Token, Cancelled));

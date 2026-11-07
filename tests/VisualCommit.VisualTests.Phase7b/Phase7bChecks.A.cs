@@ -492,7 +492,10 @@ public sealed partial class Phase7bChecksA : Phase7bChecks
             Assert.Equal(["probe"], app.Tokens.Calls);
             ShotA(app, PartA.A08AzureRefused);
 
-            // A9 step 8: a value in none of the PAT forms: the Anonymous 200 (ASSUMED in a private organization, open point 8).
+            // A9 step 8: a value in none of the PAT forms: the Anonymous 200, which Fernhill-Labs
+            // (private) gives through the AnonymousIdentity fault, as a public organization gives it
+            // (the fake keeps it to those, MEASURED 2026-11-07; open point 8).
+            served.AzureDevOps.FailNext("connection:fernhill-labs", FakeAzureDevOpsFault.AnonymousIdentity);
             mark = Mark(served);
             app.Type(PartA.PlainValue);
             app.PressKey(Key.Enter);
