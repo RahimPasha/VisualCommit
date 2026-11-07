@@ -47,7 +47,7 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     private readonly HashSet<string> _changedPaths = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _lifetime = new();
 
-    /// <summary><see cref="_lifetime"/>'s token, taken at construction: the held events' consumer still reads it once the source is disposed.</summary>
+    /// <summary><see cref="_lifetime"/>'s token, taken at construction: the held events' consumer and the ignore check still read it once the source is disposed.</summary>
     private readonly CancellationToken _lifetimeToken;
 
     /// <summary>How long each event is held before it is looked at; zero: none.</summary>
@@ -587,7 +587,10 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
         try
         {
-            return _allIgnored(paths, _lifetime.Token).GetAwaiter().GetResult();
+            // The token taken at construction: Dispose can run between the raise's check of
+            // _disposed and this, and the disposed source's Token would throw, which would read as
+            // "git cannot say" and raise the burst after Dispose. Its cancelled token drops it.
+            return _allIgnored(paths, _lifetimeToken).GetAwaiter().GetResult();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
