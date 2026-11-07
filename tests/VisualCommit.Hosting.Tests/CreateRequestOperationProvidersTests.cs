@@ -1,7 +1,9 @@
 using System.Text.Json;
 using Avalonia.Headless.XUnit;
+using VisualCommit.App.Controls;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
@@ -23,8 +25,9 @@ namespace VisualCommit.Hosting.Tests;
 /// a 403 with and without the scope code. Azure DevOps: <c>CreateStatus</c> 201 and 200; <c>isDraft</c>;
 /// a fork's <c>forkSource.repository.id</c>; TF401179 and TF401398 in the App's words. Both: a lost
 /// answer (<c>CreatedThenDropped</c>) counted as created; <c>manifest/</c> starts nothing and asks
-/// nothing; signed out, that provider's sign-in first; the tripwire after a create that pushed. On
-/// 0.4's lagged list.
+/// nothing, also when its sign-in lands in another organization; a head in another repository whose
+/// read 404s named with the base; signed out, that provider's sign-in first; the tripwire after a
+/// create that pushed. On 0.4's lagged list.
 /// </summary>
 public sealed class CreateRequestOperationProvidersTests
 {
@@ -80,6 +83,16 @@ public sealed class CreateRequestOperationProvidersTests
         var listed = repository.HostingState.List!.PullRequests[0];
         Assert.Equal((24, true, HostingProvider.GitLab), (listed.Number, listed.IsDraft, listed.BaseRepository.Provider));
         Assert.Equal(24, repository.HostingState.ByRef["refs/heads/local-work"].Number);
+
+        // The row (the section's first) and the badge (the graph's local-work label), as the window shows them.
+        await app.WaitForWatchersQuietAsync();
+        app.Settle();
+        var row = app.Session.Shell.ActiveTab.LeftPanel.Rows.OfType<PullRequestRow>().First();
+        Assert.Equal(("!24 Draft: Local change", true, "ada"), (row.Text, row.IsDraft, row.Author));
+        var graph = app.Find<CommitGraphControl>("GraphRows");
+        var labels = Enumerable.Range(0, Math.Min(repository.Graph.Count, 50)).SelectMany(index => graph.LabelsInRow(index)).ToList();
+        Assert.Equal(new PullRequestBadge(24, "Draft: Local change", true, HostingProvider.GitLab), Assert.Single(labels, label => label.FullText == "local-work").Badge);
+        Assert.Equal(1, labels.Count(label => label.Badge is { Number: 24 }));
         Assert.Contains(AppLogFile.ReadLines(data.Path), line => line.EndsWith("web-app: Create merge request for local-work: into northfield/platform/web-app main, draft yes, push to origin/local-work first", StringComparison.Ordinal));
         Assert.Contains(AppLogFile.ReadLines(data.Path), line => line.EndsWith("web-app: Create merge request for local-work: created !24 in northfield/platform/web-app.", StringComparison.Ordinal));
         Assert.DoesNotContain(AppLogFile.ReadLines(data.Path), line => line.Contains("A note for the reviewers", StringComparison.Ordinal) || line.Contains("Local change", StringComparison.Ordinal));
@@ -375,6 +388,78 @@ public sealed class CreateRequestOperationProvidersTests
         Assert.Null(app.Session.Services.DialogHost.Current);
         Assert.Equal(requests, (served.AzureDevOps.Requests.Count, served.GitLab.Requests.Count, served.GitHub.Requests.Count));
         Assert.Equal(2, app.LogLinesSince(log).Count(line => line.Contains("[INF] manifest: Create pull request for main: not started, the signed-in account is in another organization.", StringComparison.Ordinal)));
+        End(app, data, served);
+    }
+
+    /// <summary>
+    /// D356 after the sign-in the create stacks first (13.3): <c>manifest/</c> signed out, its sign-in
+    /// lands in another organization; the guard reads the hosting's own state, which its Apply has set
+    /// when the sign-in returns (the view model's copy follows later), so no form opens and nothing is asked.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Manifest_signed_out_whose_sign_in_lands_in_another_organization_opens_no_form()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("create providers");
+        using var app = ShellDriver.StartWithTabs(data.Path, [served.Manifest.Path], gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.SignedOut, "signed out");
+        await app.WaitForWatchersQuietAsync();
+        var opened = new List<DialogViewModel>();
+        app.Session.Services.DialogHost.Open.CollectionChanged += (_, change) => opened.AddRange(change.NewItems?.OfType<DialogViewModel>() ?? []);
+        var log = app.LogMark();
+
+        var opening = repository.Operations.CreatePullRequestAsync("refs/heads/main", null);
+        var signIn = await app.WaitForDialogAsync<SignInDialogViewModel>();
+        await signIn.Opened;
+        Assert.Equal(HostingProvider.AzureDevOps, signIn.Provider);
+        Assert.NotEqual(served.Organization, signIn.Organization);
+        signIn.Organization = served.Organization;
+        signIn.Token = served.AzureDevOpsToken;
+        var requests = (served.AzureDevOps.Requests.Count, served.GitLab.Requests.Count, served.GitHub.Requests.Count);
+        await signIn.ConfirmCommand.ExecuteAsync(null);
+        await app.WaitForAsync(() => opening.IsCompleted || opened.Any(dialog => dialog is CreatePullRequestDialogViewModel), "the create's end or its form");
+        Assert.DoesNotContain(opened, dialog => dialog is CreatePullRequestDialogViewModel);
+        await opening;
+        Assert.Null(app.Session.Services.DialogHost.Current);
+        await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.OtherOrganization, "another organization");
+        await app.WaitForWatchersQuietAsync();
+
+        Assert.Equal([typeof(SignInDialogViewModel)], opened.Select(dialog => dialog.GetType()));
+        Assert.Equal(1, app.LogLinesSince(log).Count(line => line.Contains("[INF] manifest: Create pull request for main: not started, the signed-in account is in another organization.", StringComparison.Ordinal)));
+        Assert.Equal(["connection:fernhill-labs", "areas"], served.AzureDevOps.Requests.Skip(requests.Item1).Select(request => request.Route));
+        Assert.Equal((requests.Item2, requests.Item3), (served.GitLab.Requests.Count, served.GitHub.Requests.Count));
+        End(app, data, served);
+    }
+
+    /// <summary>
+    /// A head in another repository whose read fails (13.5): GitLab reads the source project first and
+    /// returns its 404 as it came, which does not say which of the two repositories failed, so the
+    /// App's words name both, the head's first, never the base's alone; nothing is posted.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task GitLab_s_404_on_another_repository_s_head_names_both_repositories()
+    {
+        await using var served = await ServeAsync();
+        await served.WebApp.GitAsync("remote", "add", "gone", Scenarios.GitLabUrl("ada/gone-app", served.GitLab.Port));
+        await served.WebApp.GitAsync("update-ref", "refs/remotes/gone/idea", "refs/remotes/origin/main");
+        using var data = new TempDirectory("create providers");
+        using var app = await OpenAsync(data, served, served.WebApp, HostingProvider.GitLab);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        Assert.True(repository.HostingState.RequestRemotes.ContainsKey("gone"));
+        var requests = served.GitLab.Requests.Count;
+
+        var (form, opening) = await OpenFormAsync(app, repository, "refs/remotes/gone/idea");
+        Assert.Equal(("gone/idea", "ada/gone-app"), (form.Head.Text, form.Head.Repository));
+        Assert.Equal(("origin/main", "northfield/platform/web-app"), (form.BaseText, form.BaseRepository));
+        await form.CreateCommand.ExecuteAsync(null);
+
+        Assert.False(form.IsClosed);
+        Assert.Equal("This account cannot see ada/gone-app or northfield/platform/web-app on GitLab.", form.Error);
+        Assert.Equal(["project:ada/gone-app 404"], served.GitLab.Requests.Skip(requests).Select(request => $"{request.Route} {request.Status}"));
+        Assert.Empty(Posts(served.GitLab.Requests));
+        form.Cancel();
+        await opening;
         End(app, data, served);
     }
 

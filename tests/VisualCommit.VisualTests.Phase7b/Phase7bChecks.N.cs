@@ -156,12 +156,19 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             var offer = (Button)app.FindByAutomationId("OperationOfferButton");
             Assert.Equal((N.OpenInBrowser, N.OpenInBrowser), (repository.OperationStatus.OfferText, Avalonia.Automation.AutomationProperties.GetName(offer)));
             Assert.False(repository.OperationStatus.IsIndeterminate);
+
+            // The offer shown, its left 6 right of the text's right; no progress bar, no Cancel (7a's N1).
+            app.Settle();
+            Assert.True(offer.IsEffectivelyVisible, "OperationOfferButton is not shown.");
+            Assert.Equal(app.BoundsOf(app.FindByAutomationId("OperationStatus")).Right + 6, app.BoundsOf(offer).X, 1.0);
+            Assert.False(app.FindByAutomationId("OperationProgress").IsVisible);
             Assert.False(app.FindByAutomationId("OperationCancelButton").IsVisible);
             var author = p == GitLab ? AdaLogin : AdaName;
             AssertSectionAfterCreate(app, p, number, N.HeadTitle, author, N.Head, draft: false);
             Assert.Equal(shown.NewRowName, PullRequestRows(app)[0].Text);
             await AssertBranchNumberAsync(app, p, number, N.HeadTitle, "Local branches", N.TopicFolder, N.NoRequest);
             AssertNewBadge(app, p, 1, N.Head, number, N.HeadTitle, draft: false);
+            AssertOtherBadges(app, p, 1);
             AssertInfoOnce(app, logMark, N.IntoLineOf(p, N.Head, false, null));
             AssertInfoOnce(app, logMark, N.CreatedLineOf(p, N.Head, number));
             Assert.DoesNotContain(LogSince(app, logMark), line => line.StartsWith("[WRN]", StringComparison.Ordinal));
@@ -207,7 +214,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [TokenOf(served, p)], [N.WebUrlOf(p, number)]);
+        End(app, data, served, [TokenOf(served, p)], [N.WebUrlOf(p, number)], keptOut: [N.HeadTitle]);
     }
 
     [AvaloniaFact]
@@ -244,6 +251,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             var signIn = await app.WaitForDialogAsync<SignInDialogViewModel>();
             await app.WaitForAsync(() => app.FocusedAutomationId() == "SignInToken", "the focus in SignInToken");
             Assert.Equal(string.Empty, ((TextBox)app.FindByAutomationId("SignInToken")).Text ?? string.Empty);
+            AssertSignInFirst(app, signIn, GitLab, string.Empty);
             Assert.Same(signIn, app.Session.Services.DialogHost.Current);
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is CreatePullRequestDialogViewModel);
             Assert.Equal([signIn], app.Session.Services.DialogHost.Open.ToList());
@@ -384,6 +392,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             await AssertBranchNumberAsync(app, GitLab, N.GitLabNext, N.LocalWorkDraftTitle, "Local branches", N.LocalWork);
             await app.RefRowAsync("Remotes", "origin", N.LocalWork);
             AssertNewBadge(app, GitLab, 0, N.LocalWork, N.GitLabNext, N.LocalWorkDraftTitle, draft: true);
+            AssertOtherBadges(app, GitLab, 0);
             AssertInfoOnce(app, logMark, N.IntoLineOf(GitLab, N.LocalWork, true, "origin/local-work"));
             Assert.DoesNotContain(app.LogLines(), line => line.Contains(N.Description, StringComparison.Ordinal));
             tip = await GitAsync(served.WebApp, "rev-parse", N.LocalWorkRef);
@@ -393,7 +402,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [GitLabToken], []);
+        End(app, data, served, [GitLabToken], [], keptOut: [N.Description, N.LocalWorkTitle]);
 
         // N4 step 10: the app closed.
         await AssertPushedFirstAsync(served, GitLab, tip);
@@ -441,6 +450,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             Assert.Equal(Organization, signIn.Organization);
             Assert.Equal(Organization, ((TextBox)app.FindByAutomationId("SignInOrganization")).Text);
             Assert.False(app.FindByAutomationId(app.TopDialogView!, "ConfirmButton").IsEffectivelyEnabled);
+            AssertSignInFirst(app, signIn, Azure, Organization);
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is CreatePullRequestDialogViewModel);
             Assert.Equal([signIn], app.Session.Services.DialogHost.Open.ToList());
             AssertNoRequests(served, default);
@@ -510,6 +520,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             await app.RefRowAsync("Remotes", "origin", N.LocalWork);
             await AssertBranchNumberAsync(app, Azure, N.AzureDevOpsNext, N.LocalWorkTitle, "Local branches", N.LocalWork);
             AssertNewBadge(app, Azure, 0, N.LocalWork, N.AzureDevOpsNext, N.LocalWorkTitle, draft: true);
+            AssertOtherBadges(app, Azure, 0);
             AssertInfoOnce(app, logMark, N.IntoLineOf(Azure, N.LocalWork, true, "origin/local-work"));
             tip = await GitAsync(served.MobileApp, "rev-parse", N.LocalWorkRef);
         }
@@ -518,7 +529,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [AzureDevOpsToken], []);
+        End(app, data, served, [AzureDevOpsToken], [], keptOut: [N.Description, N.LocalWorkTitle]);
 
         // N4 step 7: the app closed.
         await AssertPushedFirstAsync(served, Azure, tip);
@@ -542,7 +553,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [GitLabToken], [N.WebUrlOf(GitLab, N.GitLabNext)], refusedPost: true);
+        End(app, data, served, [GitLabToken], [N.WebUrlOf(GitLab, N.GitLabNext)], refusedPost: true, keptOut: [N.HeadTitle]);
     }
 
     [AvaloniaFact]
@@ -621,7 +632,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [AzureDevOpsToken], [N.WebUrlOf(Azure, N.AzureDevOpsNext)], refusedPost: true);
+        End(app, data, served, [AzureDevOpsToken], [N.WebUrlOf(Azure, N.AzureDevOpsNext)], refusedPost: true, keptOut: [N.HeadTitle]);
     }
 
     /// <summary>Methods 5 and 6, N5's steps 1 to 4: the missing branch, then "already open" and its button.</summary>
@@ -792,7 +803,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [GitLabToken], []);
+        End(app, data, served, [GitLabToken], [], keptOut: [N.HeadTitle]);
     }
 
     // ---- Method helpers --------------------------------------------------------------------------

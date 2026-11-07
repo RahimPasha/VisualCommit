@@ -60,7 +60,10 @@ public sealed partial class RepositoryOperations
             }
 
             // A sign-in to another organization of Azure DevOps leaves no remote where a request can go (D350, D356).
-            if (Repository.HostingState.PullRequests == PullRequestsState.OtherOrganization)
+            // Read from the session's account now, by the rule the hosting's state follows (Covers): the
+            // account's change reaches the hosting, and then the view model's copy, only through posts
+            // that have not run yet when the sign-in returns.
+            if (Repository.Hosting.State.PullRequests == PullRequestsState.OtherOrganization || InAnotherOrganization(p))
             {
                 Log.Info($"{Repository.Name}: {title}: not started, the signed-in account is in another organization.");
                 return;
@@ -91,6 +94,18 @@ public sealed partial class RepositoryOperations
             }
         });
     }
+
+    /// <summary>
+    /// D356 as the hosting's state decides it (<c>OtherOrganization</c>), from the session's account
+    /// now: Azure DevOps' account held does not cover the listed repository.
+    /// </summary>
+    private bool InAnotherOrganization(HostingProvider p) =>
+        p == HostingProvider.AzureDevOps
+        && Repository.HostingState.Repository is { } listed
+        && Services?.Hosting is { } hosting
+        && hosting.AccountOf(p) is { } account
+        && hosting.ProviderOf(p) is { } provider
+        && !provider.Covers(listed, account.Account.Key);
 
     /// <summary>
     /// Where the head is on GitHub (12.3 step 3, D313): its repository and branch, and the push
@@ -453,6 +468,11 @@ public sealed partial class RepositoryOperations
         private string Describe(HostingFailure failure, PullRequestPlace place, HostedRepository baseRepository, PullRequestEnd baseEnd, string baseBranch, bool sameRepository)
         {
             var gitHub = provider == HostingProvider.GitHub;
+
+            // Across repositories GitLab and Azure DevOps read the head's repository first and return
+            // that read's 403 or 404 as it came (GitLab also posts to the head's project): which of the
+            // two failed is not told, so both are named, the head's first.
+            var named = gitHub || sameRepository ? baseRepository.FullName : $"{place.Repository.FullName} or {baseRepository.FullName}";
             return failure.Refusal switch
             {
                 PullRequestRefusal.NoCommits => Texts.NoCommits(baseEnd.Text, HeadText),
@@ -465,8 +485,8 @@ public sealed partial class RepositoryOperations
                 {
                     HostingFailureKind.Validation => ProviderSaid(failure),
                     HostingFailureKind.Forbidden when gitHub && !sameRepository => Texts.ForkTokenRefused(baseRepository.FullName),
-                    HostingFailureKind.Forbidden => Texts.Refused(provider, baseRepository.FullName, failure.Detail is not null),
-                    HostingFailureKind.NotFound => Texts.NotVisible(provider, baseRepository.FullName),
+                    HostingFailureKind.Forbidden => Texts.Refused(provider, named, failure.Detail is not null),
+                    HostingFailureKind.NotFound => Texts.NotVisible(provider, named),
                     _ => HostingTexts.Describe(failure, Login),
                 },
             };

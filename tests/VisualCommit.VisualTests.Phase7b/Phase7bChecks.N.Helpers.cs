@@ -4,7 +4,9 @@
 // the waits for OperationEnded and for PullRequestsListed n times since a mark, the POST's parsed body,
 // git in a bare folder) and from part P's Phase7bChecks.P.Helpers.cs (the three fakes' requests since a
 // mark, no token on screen, the sign-in through Settings, Accounts, the store's calls and the log since
-// a mark, the state without a list, the method's end), which are private to their classes.
+// a mark, the state without a list, the method's end, AssertBadges' core as AssertOtherBadges) and from
+// part A's Phase7bChecks.A.Helpers.cs (AssertDialog as AssertSignInFirst, over the window instead of the
+// settings screen; AssertLinkLook), which are private to their classes.
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Globalization;
@@ -551,6 +553,125 @@ public sealed partial class Phase7bChecksN
         Assert.All(Enumerable.Range(0, 5), index => Assert.All(graph.LabelsInRow(index), each => Assert.True(each.Bounds.Right <= P.BranchColumnWidth + 0.5, $"Row {index}'s label {each.Text} passes the column.")));
     }
 
+    /// <summary>
+    /// After a create, "the other badges as P1's" (N3, N6; part P's <c>AssertBadges</c>, its core):
+    /// the request's local label first on <see cref="P.RequestRow"/> and the draft's remote label first
+    /// on <see cref="P.DraftRow"/>, each with its badge drawn and no badge on the labels beside it; no
+    /// other row but <paramref name="newRow"/> holds a badge.
+    /// </summary>
+    private static void AssertOtherBadges(ShellDriver app, HostingProvider p, int newRow)
+    {
+        app.Settle();
+        var graph = app.Find<CommitGraphControl>("GraphRows");
+        var (requestLabel, request, draftLabel, draft) = p == GitLab
+            ? (P.GitLabRequestLabel, P.GitLabRequestBadge, P.GitLabDraftLabel, P.GitLabDraftBadge)
+            : (P.AzureDevOpsRequestLabel, P.AzureDevOpsRequestBadge, P.AzureDevOpsDraftLabel, P.AzureDevOpsDraftBadge);
+        foreach (var (row, label, badge) in new[] { (P.RequestRow, requestLabel, request), (P.DraftRow, draftLabel, draft) })
+        {
+            var labels = graph.LabelsInRow(row);
+            Assert.Equal(label, labels[0].FullText);
+            Assert.Equal(new PullRequestBadge(badge.Number, badge.Title, badge.IsDraft, badge.Provider), labels[0].Badge);
+            Assert.NotNull(graph.BadgeInRow(row, 0));
+            Assert.All(labels.Skip(1), other => Assert.Null(other.Badge));
+        }
+
+        var rows = app.Session.Shell.ActiveTab.Repository!.Graph.Count;
+        Assert.True(rows > Math.Max(P.RequestRow, newRow), $"The graph holds {rows} rows.");
+        for (var row = 0; row < Math.Min(rows, 50); row++)
+        {
+            if (row != newRow && row != P.RequestRow && row != P.DraftRow)
+            {
+                Assert.DoesNotContain(graph.LabelsInRow(row), label => label.Badge is not null);
+            }
+        }
+    }
+
+    // ---- N8's sign-in first (part A's AssertDialog, copied from Phase7bChecks.A.Helpers.cs) ----------
+
+    /// <summary>
+    /// N8: part A's dialog of <paramref name="provider"/> as the window's entry opens it (10.5), as
+    /// part A's <c>AssertDialog</c> asserts it but over the window, no settings screen under it: the
+    /// open dialogs exactly <paramref name="signIn"/>; <c>SignInDialog</c> named by its title; the card
+    /// 400 wide at x 350 to 750, centred; title, help, the provider's link(s) in their look and places,
+    /// the organization's box (Azure DevOps, holding <paramref name="organization"/>) and the token's,
+    /// each under its label; no status line; Cancel and a disabled Sign in, right-aligned.
+    /// </summary>
+    private static void AssertSignInFirst(ShellDriver app, SignInDialogViewModel signIn, HostingProvider provider, string organization)
+    {
+        app.Settle();
+        var host = app.Session.Services.DialogHost;
+        Assert.Equal([signIn], host.Open.Cast<DialogViewModel>());
+        Assert.Same(signIn, host.Current);
+        Assert.Null(app.SettingsDialog);
+        Assert.Equal(provider, signIn.Provider);
+        var titleText = provider == GitLab ? PartA.GitLabDialogTitle : PartA.AzureDevOpsDialogTitle;
+        var view = app.SignInDialogView();
+        Assert.Equal("SignInDialog", AutomationProperties.GetAutomationId(view));
+        Assert.Equal(titleText, AutomationProperties.GetName(view));
+        var card = app.BoundsOf(view.GetVisualDescendants().OfType<Border>().Single(border => border.Name == "SignInCard"));
+        Assert.Equal(PartA.DialogCard, (card.Left, card.Right));
+        Assert.Equal(app.Window.Bounds.Height / 2, card.Center.Y, PartA.Tolerance);
+        Assert.Equal(titleText, ((TextBlock)app.FindByAutomationId(view, "DialogTitle")).Text);
+        var help = (TextBlock)app.FindByAutomationId(view, "SignInHelp");
+        Assert.Equal(provider == GitLab ? PartA.GitLabHelp : PartA.AzureDevOpsHelp, help.Text);
+        var link = app.FindByAutomationId(view, "SignInTokenLink");
+        Assert.Equal(provider == GitLab ? PartA.GitLabTokenLink : PartA.AzureDevOpsTokenLink, AutomationProperties.GetName(link));
+        Assert.Equal(PartA.LinkGap, app.BoundsOf(link).Top - app.BoundsOf(help).Bottom, PartA.Tolerance);
+        AssertLinkLook(link, enabled: provider != Azure || organization.Length > 0);
+        var legacy = app.FindByAutomationId(view, "SignInLegacyTokenLink");
+        Assert.Equal(provider == GitLab, legacy.IsEffectivelyVisible);
+        if (provider == GitLab)
+        {
+            Assert.Equal(PartA.GitLabLegacyLink, AutomationProperties.GetName(legacy));
+            Assert.Equal(PartA.LegacyLinkGap, app.BoundsOf(legacy).Top - app.BoundsOf(link).Bottom, PartA.Tolerance);
+            AssertLinkLook(legacy, enabled: true);
+        }
+
+        var box = (TextBox)app.FindByAutomationId(view, "SignInOrganization");
+        Assert.Equal(provider == Azure, box.IsEffectivelyVisible);
+        var token = (TextBox)app.FindByAutomationId(view, "SignInToken");
+        Assert.Equal(PartA.TokenLabel, AutomationProperties.GetName(token));
+        var labels = view.GetVisualDescendants().OfType<TextBlock>().Where(block => block.Classes.Contains("promptLabel") && block.IsEffectivelyVisible).ToList();
+        var tokenLabel = Assert.Single(labels, block => block.Text == PartA.TokenLabel);
+        Control aboveToken = provider == Azure ? box : legacy;
+        Assert.True(app.BoundsOf(tokenLabel).Top >= app.BoundsOf(aboveToken).Bottom - 0.5 && app.BoundsOf(tokenLabel).Bottom <= app.BoundsOf(token).Top + 0.5, "The label Token is not between its box and what is above it.");
+        if (provider == Azure)
+        {
+            Assert.Equal(organization, box.Text ?? string.Empty);
+            Assert.Equal(PartA.OrganizationLabel, AutomationProperties.GetName(box));
+            Assert.Contains("dialogBox", box.Classes);
+            var organizationLabel = Assert.Single(labels, block => block.Text == PartA.OrganizationLabel);
+            Assert.True(app.BoundsOf(organizationLabel).Top >= app.BoundsOf(link).Bottom - 0.5 && app.BoundsOf(organizationLabel).Bottom <= app.BoundsOf(box).Top + 0.5, "The label Organization is not between the link and its box.");
+        }
+        else
+        {
+            Assert.DoesNotContain(labels, block => block.Text == PartA.OrganizationLabel);
+        }
+
+        foreach (var id in new[] { "SignInNoKeychain", "SignInChecking", "SignInError", "SignInSaveFailed" })
+        {
+            Assert.False(app.FindByAutomationId(view, id).IsEffectivelyVisible, $"{id} shows.");
+        }
+
+        Assert.True(string.IsNullOrEmpty(token.Text), "SignInToken is not empty as the dialog opens.");
+        var cancel = (Button)app.FindByAutomationId(view, "CancelButton");
+        var confirm = (Button)app.FindByAutomationId(view, "ConfirmButton");
+        Assert.True(cancel.IsEffectivelyEnabled);
+        Assert.Equal(PartA.SignIn, AutomationProperties.GetName(confirm));
+        Assert.False(confirm.IsEffectivelyEnabled, "Sign in is enabled as the dialog opens.");
+        Assert.Equal([PartA.Cancel, PartA.SignIn], ButtonsOf(app, view));
+        Assert.True(app.BoundsOf(confirm).Right > app.BoundsOf(cancel).Right && app.BoundsOf(confirm).Right >= card.Right - PartA.SaveRightInset, "The dialog's buttons are not right-aligned.");
+    }
+
+    /// <summary>A token link's look (part A's <c>AssertLinkLook</c>): enabled, the accent and the hand cursor; disabled, the disabled foreground and the arrow.</summary>
+    private static void AssertLinkLook(Control link, bool enabled)
+    {
+        var name = AutomationProperties.GetAutomationId(link);
+        Assert.True(enabled == link.IsEffectivelyEnabled, $"{name} is {(enabled ? "disabled" : "enabled")}.");
+        Assert.Equal(enabled ? PartA.Accent : PartA.Disabled, (link.GetVisualDescendants().OfType<TextBlock>().First().Foreground as Avalonia.Media.ISolidColorBrush)?.Color);
+        Assert.Equal(enabled ? PartA.HandCursor : PartA.ArrowCursor, link.Cursor?.ToString());
+    }
+
     // ---- The queue, dialogs and git (7a's part N helpers) --------------------------------------------
 
     /// <summary>Records every dialog that opens from now on, until disposed (D312: "no dialog at any time").</summary>
@@ -615,10 +736,20 @@ public sealed partial class Phase7bChecksN
     /// token used, over the data folder and the copy's three clones with the session's call log; each
     /// fake's errors and the harness's refusals none; no request answered 400 or 415 but the create's
     /// POST when <paramref name="refusedPost"/>; the launches exactly <paramref name="launches"/>; the
-    /// clipboard empty.
+    /// clipboard empty; the log's rules (part N's conventions): no line since the start holds any of
+    /// <paramref name="keptOut"/> (the titles and descriptions typed or sent, never logged) or
+    /// <c>showing GitHub avatars</c> (D367).
     /// </summary>
-    private static void End(ShellDriver app, TempDirectory data, ServedHosting7b served, string[] tokens, string[] launches, bool refusedPost = false)
+    private static void End(ShellDriver app, TempDirectory data, ServedHosting7b served, string[] tokens, string[] launches, bool refusedPost = false, string[]? keptOut = null)
     {
+        var lines = app.LogLines();
+        Assert.NotEmpty(lines);
+        Assert.DoesNotContain(lines, line => line.Contains("showing GitHub avatars", StringComparison.Ordinal));
+        foreach (var text in keptOut ?? throw new ArgumentNullException(nameof(keptOut), "Every method names the texts its log must not hold."))
+        {
+            Assert.DoesNotContain(lines, line => line.Contains(text, StringComparison.Ordinal));
+        }
+
         var calls = app.Session.GitCalls;
         foreach (var token in tokens)
         {
