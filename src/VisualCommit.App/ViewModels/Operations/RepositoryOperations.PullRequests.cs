@@ -18,6 +18,13 @@ public sealed partial class RepositoryOperations
     /// <summary>The requests whose checkout waits or runs in this tab, by their page's address.</summary>
     private readonly HashSet<string> _requestCheckouts = new(StringComparer.Ordinal);
 
+    /// <summary>
+    /// One request's checkout at a time in this tab, each planned once the one before has ended and
+    /// its refs are read: two requests can plan the same local branch (one fork branch, or two forks'
+    /// <c>patch-1</c>), which the first creates before the second's fetch ends.
+    /// </summary>
+    private readonly SemaphoreSlim _requestCheckoutGate = new(1, 1);
+
     /// <inheritdoc cref="IRepositoryActions.OpenPullRequestAsync"/>
     /// <remarks>Its page through the launcher (D321): not an operation; a failure is logged.</remarks>
     public Task OpenPullRequestAsync(PullRequest pullRequest)
@@ -39,12 +46,13 @@ public sealed partial class RepositoryOperations
     /// undo). Never a <c>refs/pull</c> fetch line or a <c>refs/remotes/&lt;r&gt;/pr/&lt;n&gt;</c> ref.
     /// A second start of the same request while its checkout waits or runs (two double-clicks on its
     /// row) starts nothing: both would plan from the same refs, and a second fetch's branch would
-    /// exist by then (docs/phase-7b-design.md 12's As built).
+    /// exist by then. Another request's waits for the running one and is planned from the refs it
+    /// left, so it reuses or names anew the branch that one made (docs/phase-7b-design.md 12's As built).
     /// </remarks>
     public async Task CheckOutPullRequestAsync(PullRequest pullRequest)
     {
         ArgumentNullException.ThrowIfNull(pullRequest);
-        if (IsClosed || Refs is not { } refs)
+        if (IsClosed || Refs is null)
         {
             return;
         }
@@ -63,7 +71,18 @@ public sealed partial class RepositoryOperations
 
         try
         {
-            await CheckOutPullRequestCoreAsync(pullRequest, refs, what);
+            await _requestCheckoutGate.WaitAsync();
+            try
+            {
+                if (!IsClosed && Refs is { } refs)
+                {
+                    await CheckOutPullRequestCoreAsync(pullRequest, refs, what);
+                }
+            }
+            finally
+            {
+                _requestCheckoutGate.Release();
+            }
         }
         finally
         {

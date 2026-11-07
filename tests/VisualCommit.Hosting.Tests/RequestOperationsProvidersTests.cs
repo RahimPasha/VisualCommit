@@ -17,9 +17,10 @@ namespace VisualCommit.Hosting.Tests;
 /// local configuration unchanged; Azure DevOps' !11 tracks <c>origin/feature/sign-in</c>, fetched first
 /// when unread; !13 starts no git call; open in browser, copy link and refresh ask only the listed
 /// fake; <c>manifest/</c> asks nothing after the sign-in; signed out, no request. A second start of
-/// !23's checkout while the first runs starts nothing (one fetch, no dialog), and a sign-out while
-/// GitLab's list is read sends no further page or fork lookup with its token (12's As built). On 0.4's
-/// lagged list.
+/// !23's checkout while the first runs starts nothing (one fetch, no dialog), another request of the
+/// same head started with it reuses its branch, a list or a created request that names the token is
+/// malformed (D382), and a sign-out while GitLab's list is read, its candidate there or gone, sends no
+/// further page or fork lookup with its token (12's As built). On 0.4's lagged list.
 /// </summary>
 public sealed class RequestOperationsProvidersTests
 {
@@ -106,6 +107,93 @@ public sealed class RequestOperationsProvidersTests
     }
 
     [AvaloniaFact]
+    public async Task Two_requests_of_one_head_started_together_check_out_one_branch()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("requests providers");
+        using var app = await OpenAsync(data, served, served.WebApp, HostingProvider.GitLab);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        var bare = served.GitLab.Project(Scenarios.Hosting7bWebApp).BarePath!;
+        var head = await GitAsync(served.WebApp, "--git-dir", bare, "rev-parse", "refs/merge-requests/23/head");
+
+        // A second merge request from !23's fork branch: both plan the local branch fix-typo.
+        served.GitLab.AddMergeRequest(served.GitLab.Project(Scenarios.Hosting7bWebApp), "Same head into main", "ada", "fix-typo", "main", source: served.GitLab.Project(Scenarios.Hosting7bWebAppFork));
+        await repository.Operations.RefreshPullRequestsAsync();
+        await app.WaitForAsync(() => repository.HostingState.List?.PullRequests.Count == 4, "four merge requests listed");
+        await app.WaitForWatchersQuietAsync();
+        var same = repository.HostingState.List!.PullRequests.Single(pull => pull.Title == "Same head into main");
+        Assert.Equal((head, "fix-typo"), (same.HeadSha, same.HeadRef));
+        var refsBefore = await RefsAsync(served.WebApp);
+        var logMark = app.LogMark();
+
+        // Two starts in one UI turn, as two menu clicks within the first fetch's time.
+        var first = repository.Operations.CheckOutPullRequestAsync(Request(repository, 23));
+        var second = repository.Operations.CheckOutPullRequestAsync(same);
+        await app.WaitForAsync(() => (first.IsCompleted && second.IsCompleted) || app.Session.Services.DialogHost.Current is not null, "both checkouts to end or a dialog");
+        Assert.Null(app.Session.Services.DialogHost.Current);
+        await Task.WhenAll(first, second);
+        await app.WaitForIdleAsync();
+
+        Assert.Single(app.GitCalls(), call => call.CommandText.StartsWith("git fetch", StringComparison.Ordinal));
+        Assert.Single(app.GitCalls(), call => call.CommandText == "git fetch --progress --no-tags --refmap= --write-fetch-head origin refs/merge-requests/23/head");
+        Assert.Single(app.GitCalls(), call => call.CommandText.StartsWith("git branch ", StringComparison.Ordinal));
+        Assert.Equal("fix-typo", await GitAsync(served.WebApp, "symbolic-ref", "--short", "HEAD"));
+        Assert.Equal(head, await GitAsync(served.WebApp, "rev-parse", "HEAD"));
+        Assert.Equal(refsBefore.Append("refs/heads/fix-typo").Order(StringComparer.Ordinal), await RefsAsync(served.WebApp));
+        Assert.DoesNotContain(app.LogLinesSince(logMark), line => line.Contains("[WRN]", StringComparison.Ordinal));
+        End(app, data, served);
+    }
+
+    [AvaloniaFact]
+    public async Task A_list_whose_request_names_the_token_is_malformed_and_nothing_reaches_git()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("requests providers");
+        using var app = await OpenAsync(data, served, served.WebApp, HostingProvider.GitLab);
+        var webApp = app.Session.Shell.ActiveTab.Repository!;
+
+        // D382's echo: a fork branch named as the request's token, so that A4's answer names it.
+        var fork = served.GitLab.Project(Scenarios.Hosting7bWebAppFork);
+        await served.WebApp.GitAsync("--git-dir", fork.BarePath!, "branch", served.GitLabToken, "fix-typo");
+        served.GitLab.AddMergeRequest(served.GitLab.Project(Scenarios.Hosting7bWebApp), "Echoed", "ada", served.GitLabToken, "main", source: fork);
+        var calls = await app.QuietCallMarkAsync();
+
+        await webApp.Operations.RefreshPullRequestsAsync();
+        await app.WaitForAsync(() => webApp.HostingState.PullRequests is PullRequestsState.Failed || webApp.HostingState.List?.PullRequests.Count == 4, "the refresh's answer");
+        await app.WaitForIdleAsync();
+        await app.WaitForWatchersQuietAsync();
+
+        Assert.Equal(PullRequestsState.Failed, webApp.HostingState.PullRequests);
+        Assert.Equal(HostingFailureKind.Malformed, webApp.HostingState.Failure?.Kind);
+        Assert.Null(webApp.HostingState.List);
+        Assert.Empty(webApp.HostingState.ByRef);
+        // The section keeps the rows of the list it showed (7a's design 17 item 3), none of the echoed answer.
+        Assert.Equal([23, 22, 21], webApp.LeftPanel.Rows.OfType<VisualCommit.App.ViewModels.Panels.PullRequestRow>().Select(row => row.Number));
+        GitCallBudget.AssertAtMost([.. app.GitCalls().Where(call => call.Sequence > calls)], 0, "the echoed list");
+        End(app, data, served);
+    }
+
+    [AvaloniaFact]
+    public async Task A_created_request_that_names_the_token_is_malformed_and_not_listed()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("requests providers");
+        using var app = await OpenAsync(data, served, served.WebApp, HostingProvider.GitLab);
+        var webApp = app.Session.Shell.ActiveTab.Repository!;
+        var project = served.GitLab.Project(Scenarios.Hosting7bWebApp);
+        await served.WebApp.GitAsync("--git-dir", project.BarePath!, "branch", served.GitLabToken, "main");
+        var listed = webApp.HostingState.Repository!;
+
+        var created = await webApp.Hosting.CreatePullRequestAsync(listed, new NewPullRequest("Echoed", string.Empty, served.GitLabToken, null, "main", Draft: false), Cancelled);
+        await app.WaitForIdleAsync();
+
+        Assert.Null(created.Value);
+        Assert.Equal(HostingFailureKind.Malformed, created.Failure?.Kind);
+        Assert.Equal([23, 22, 21], webApp.HostingState.List!.PullRequests.Select(pull => pull.Number));
+        End(app, data, served);
+    }
+
+    [AvaloniaFact]
     public async Task A_sign_out_while_the_list_is_read_sends_nothing_more_with_its_token()
     {
         await using var served = await ServeAsync();
@@ -145,6 +233,51 @@ public sealed class RequestOperationsProvidersTests
         Assert.Equal(["mrs:northfield/platform/web-app"], served.GitLab.Requests.Skip(mark).Select(request => request.Route));
         Assert.Equal(PullRequestsState.SignedOut, webApp.HostingState.PullRequests);
         Assert.Null(webApp.HostingState.List);
+        Assert.Empty(served.AzureDevOps.Requests);
+        Assert.Empty(served.GitHub.Requests);
+        End(app, data, served);
+    }
+
+    [AvaloniaFact]
+    public async Task A_sign_out_after_the_hosted_remotes_went_while_the_list_is_read_sends_nothing_more()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("requests providers");
+        using var app = await OpenAsync(data, served, served.WebApp, HostingProvider.GitLab);
+        var webApp = app.Session.Shell.ActiveTab.Repository!;
+        var project = served.GitLab.Project(Scenarios.Hosting7bWebApp);
+        for (var n = 1; n <= 298; n++)
+        {
+            served.GitLab.AddMergeRequest(project, $"Added request {n}", "octo", "topic/no-request", "main");
+        }
+
+        // The run's candidate goes while its first page is held (Update leaves that run going), then
+        // the account signs out: its pages 2 and 3 would go on with the signed-out token.
+        var hold = served.GitLab.HoldNext("mrs:northfield/platform/web-app");
+        Task refresh;
+        int mark;
+        try
+        {
+            refresh = webApp.Operations.RefreshPullRequestsAsync();
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(60), Cancelled);
+            await served.WebApp.GitAsync("remote", "set-url", "origin", "https://example.invalid/team/web-app.git");
+            await served.WebApp.GitAsync("remote", "remove", "upstream");
+            await app.WaitForAsync(() => webApp.HostingState.PullRequests == PullRequestsState.NoHostedRemote, "web-app without a hosted remote");
+            mark = served.GitLab.Requests.Count;
+            await app.Session.Services.Hosting.SignOutAsync(HostingProvider.GitLab, Cancelled);
+        }
+        finally
+        {
+            hold.Dispose();
+        }
+
+        await refresh.WaitAsync(TimeSpan.FromSeconds(60), Cancelled);
+        await app.WaitForAsync(() => served.GitLab.Requests.Count > mark, "the held page's answer");
+        await app.WaitForIdleAsync();
+        await app.WaitForWatchersQuietAsync();
+
+        Assert.Equal(["mrs:northfield/platform/web-app"], served.GitLab.Requests.Skip(mark).Select(request => request.Route));
+        Assert.Equal(PullRequestsState.NoHostedRemote, webApp.HostingState.PullRequests);
         Assert.Empty(served.AzureDevOps.Requests);
         Assert.Empty(served.GitHub.Requests);
         End(app, data, served);

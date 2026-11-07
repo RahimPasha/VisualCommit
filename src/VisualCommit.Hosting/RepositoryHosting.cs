@@ -243,10 +243,15 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             baseRepository.Provider,
             $"creating a pull request on {baseRepository.FullName}",
             baseRepository,
-            (provider, token, account, linked) =>
+            async (provider, token, account, linked) =>
             {
                 createdWith = account.Key;
-                return provider.CreatePullRequestAsync(token, baseRepository, request, linked);
+                var answer = await provider.CreatePullRequestAsync(token, baseRepository, request, linked).ConfigureAwait(false);
+
+                // D382 as for A4: a created request that names the token is not added or shown.
+                return answer.Value is { } created && EchoedIn(baseRepository.Provider, token, [created]) is { } echoed
+                    ? HostingResult<PullRequest>.Fail(echoed)
+                    : answer;
             },
             ct).ConfigureAwait(false);
         if (result.Value is { } created && createdWith is { } key)
@@ -280,10 +285,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// bindings again and a refresh; else its list, failure and refs' pull requests go. A list or a
     /// failure another account read goes either way, so the state is loading until this account's
     /// answer (D348). Another provider: the state and the bindings again alone. GitHub not signed
-    /// in: the avatars go (9.8). A run in flight that the candidate's provider's account no longer
-    /// holds signed in is stopped first, as <see cref="Update"/> stops another provider's: its pages
-    /// and fork lookups would go on with a token signed out or replaced, for an answer Finish drops
-    /// (D257, D348; docs/phase-7b-design.md 12's As built).
+    /// in: the avatars go (9.8). A run in flight of <paramref name="provider"/> whose account that
+    /// provider no longer holds signed in is stopped first, as <see cref="Update"/> stops another
+    /// provider's, also when its candidate went meanwhile: its pages and fork lookups would go on with
+    /// a token signed out or replaced, for an answer Finish drops (D257, D348;
+    /// docs/phase-7b-design.md 12's As built).
     /// </summary>
     internal void OnAccountChanged(HostingProvider provider)
     {
@@ -304,9 +310,11 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             avatars = AuthorAvatars.None;
         }
 
+        // Before the candidate's check: a run whose candidate went meanwhile (no hosted remote left,
+        // which Update leaves running) still sends its pages with the account it asked with.
+        var stopped = StopRunOfAnotherAccount(provider);
         if (_candidate is { } candidate && candidate.Provider == provider)
         {
-            var stopped = StopRunOfAnotherAccount(provider);
             ForgetInfoOfOthers(candidate);
             if (!HeldIs(candidate, _listAccount))
             {
@@ -321,12 +329,13 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             }
 
             ForgetList();
-            if (stopped && _again is { } waiting)
-            {
-                // The waits asked of the stopped run end with it: nothing can be listed now.
-                _again = null;
-                waiting.TrySetResult();
-            }
+        }
+
+        if (stopped && !CanList && _again is { } waiting)
+        {
+            // The waits asked of the stopped run end with it: nothing can be listed now.
+            _again = null;
+            waiting.TrySetResult();
         }
 
         Apply(avatars);
@@ -641,10 +650,17 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                         candidate.Provider,
                         $"listing the pull requests of {listed.FullName}",
                         listed,
-                        (provider, token, account, linked) =>
+                        async (provider, token, account, linked) =>
                         {
                             listedWith = account.Key;
-                            return provider.ListPullRequestsAsync(token, listed, linked);
+                            var answer = await provider.ListPullRequestsAsync(token, listed, linked).ConfigureAwait(false);
+
+                            // D382 as for A3: a request whose texts hold the token (a server that
+                            // echoes it) would reach the rows, a checkout's branch and git's
+                            // arguments, the refs and the log lines, so the answer is malformed.
+                            return answer.Value is { } list && EchoedIn(candidate.Provider, token, list.PullRequests) is { } echoed
+                                ? HostingResult<PullRequestList>.Fail(echoed)
+                                : answer;
                         },
                         stop).ConfigureAwait(false);
                 }
@@ -842,6 +858,22 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             }
         }
     }
+
+    // D382 for A4's and A5's requests: every text of theirs the tab keeps, shows, logs or hands to
+    // git (the title, the author, both branches and the head's SHA, the head and base repositories'
+    // names, the page's address as given and percent-decoded).
+    private HostingFailure? EchoedIn(HostingProvider provider, string token, IEnumerable<PullRequest> pullRequests) =>
+        _session.EchoedToken(
+            provider,
+            token,
+            [
+                .. pullRequests.SelectMany(pull => new[]
+                {
+                    pull.Title, pull.Author, pull.HeadRef, pull.HeadSha, pull.BaseRef,
+                    pull.HeadRepository?.FullName, pull.HeadRepository?.Host, pull.BaseRepository.FullName,
+                    pull.HtmlUrl.OriginalString, Uri.UnescapeDataString(pull.HtmlUrl.AbsoluteUri),
+                }),
+            ]);
 
     private bool CanListFor(HostedRepository candidate) =>
         _session.SlotOf(candidate.Provider) is { IsSignedIn: true } slot

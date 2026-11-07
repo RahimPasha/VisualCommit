@@ -118,7 +118,8 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.True(app.BoundsOf(number).Left >= app.BoundsOf(Part(search, "RefName")).Right - 0.5, "The local search row's !21 is not right of its name.");
             Assert.Equal(P.OfBranch(GitLab, 21, "Add the search box"), await app.RestPointerOnAsync(number));
             ShotP(app, P.P14a, keepPointer: true);
-            await AssertBranchNumbersAsync(app, ("search", 21), ("readme", 22), ["Remotes", "upstream", "main"]);
+            await AssertBranchNumbersAsync(app, ("search", 21), ("readme", 22), [["Remotes", "origin", "topic"], ["Remotes", "upstream"], ["Remotes", "upstream", "main"]]);
+            Assert.True(((RefItemRow)app.RefRowModel("Local branches", "main")).IsHead, "main is not in the accent.");
             await BranchMenuOpensRequestAsync(app, served, GitLab, "search", 21, launches: 3);
             app.Click(await HeaderAsync(app));
             AssertRows(app, GitLab, P.GitLabRows);
@@ -579,7 +580,12 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             app.RightClick(await app.RefRowAsync("Remotes", "origin", "topic", "no-request"));
             var topic = app.Menu().Lines();
             Assert.Equal([P.GitLabCreate], topic.Where(IsRequestLine));
-            Assert.True(topic.ToList().IndexOf(P.GitLabCreate) > topic.ToList().FindIndex(line => line.StartsWith("Delete ", StringComparison.Ordinal)), "Create merge request… is not after the delete group.");
+            // In the group of its own after the delete group, where 7a's P12 step 16 had Create pull request….
+            var create = topic.ToList().IndexOf(P.GitLabCreate);
+            Assert.True(create >= 2 && create + 1 < topic.Count, $"Create merge request… is not inside the menu: {string.Join(" | ", topic)}");
+            Assert.Equal("—", topic[create - 1]);
+            Assert.StartsWith("Delete topic/no-request on origin", topic[create - 2], StringComparison.Ordinal);
+            Assert.Equal("—", topic[create + 1]);
             app.PressKey(Key.Escape);
             await AssertNoMenuAsync(app, null);
             AssertNoRequests(served, mark);
@@ -632,6 +638,9 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.Equal(
                 ["  !25 More work 25", "  !24 More work 24", "  !23 Fix a typo in the footer", "  !22 Draft: Update the readme", "  [More] " + P.GitLabMore, "Tags 0", "Stashes 0"],
                 Panel(app)[^7..]);
+            Assert.Equal(
+                [(25, OctoLogin, false), (24, OctoLogin, false), (23, AdaLogin, false), (22, OctoLogin, true)],
+                PullRequestRows(app).TakeLast(4).Select(row => (row.Number, row.Author, row.IsDraft)));
 
             // P6 steps 4 and 5: the row's tooltip and click.
             var more = await MessageAsync(app);
@@ -662,6 +671,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             AssertRequest(none, P.GitLabListPath, P.GitLabListRoute, P.GitLabListQuery, FakeAuthorizationForm.Bearer, 200, AdaLogin);
             Assert.Empty(AzureSince(served, mark));
             Assert.Empty(GitHubSince(served, mark));
+            Assert.Equal(PullRequestsState.Loaded, webApp.HostingState.PullRequests);
             Assert.Empty(webApp.HostingState.List!.PullRequests);
             Assert.False(webApp.HostingState.List.MoreExist);
             Assert.Empty(webApp.HostingState.ByRef);
@@ -762,7 +772,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
     /// P14: the request's local and remote branch rows show its number, the draft's remote branch its
     /// own; the other branch rows and the folders none.
     /// </summary>
-    private static async Task AssertBranchNumbersAsync(ShellDriver app, (string Name, int Number) request, (string Name, int Number) draft, string[]? alsoWithout)
+    private static async Task AssertBranchNumbersAsync(ShellDriver app, (string Name, int Number) request, (string Name, int Number) draft, string[][]? alsoWithout)
     {
         Assert.Equal("!" + request.Number, Part(await app.RefRowAsync("Local branches", "feature", request.Name), "RefPullRequest").Text);
         var remote = Part(await app.RefRowAsync("Remotes", "origin", "feature", request.Name), "RefPullRequest");
@@ -776,7 +786,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
         ];
         if (alsoWithout is not null)
         {
-            without.Add(alsoWithout);
+            without.AddRange(alsoWithout);
         }
 
         foreach (var path in without)

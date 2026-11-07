@@ -49,7 +49,7 @@ public sealed partial class Phase7bChecksP
             await app.WaitForIdleAsync();
             await app.WaitForWatchersQuietAsync();
             AssertStatus(app, P.CheckedOut("feature/search"));
-            Assert.Equal([(OperationOutcome.Succeeded, P.CheckedOut("feature/search"))], ended.Select(record => (record.Outcome, record.Message)));
+            Assert.Equal([(P.CheckOut("origin/feature/search"), OperationOutcome.Succeeded, P.CheckedOut("feature/search"))], ended.Select(record => (record.Title, record.Outcome, record.Message)));
             AssertCalled(app, calls, "git switch --no-guess --no-overwrite-ignore feature/search");
             Assert.DoesNotContain(CallsSince(app, calls), call => call.StartsWith("git fetch", StringComparison.Ordinal) || call.StartsWith("git branch", StringComparison.Ordinal));
             AssertNoRequests(served, mark);
@@ -78,7 +78,7 @@ public sealed partial class Phase7bChecksP
             ShotP(app, P.P11a);
             AssertStatus(app, P.CheckedOut("fix-typo"));
             Assert.Equal(
-                [(P.FetchMergeRequest23.Title, OperationOutcome.Succeeded, P.FetchedMergeRequest23), (ended[^1].Title, OperationOutcome.Succeeded, P.CheckedOut("fix-typo"))],
+                [(P.FetchMergeRequest23.Title, OperationOutcome.Succeeded, P.FetchedMergeRequest23), (P.CheckOut("fix-typo"), OperationOutcome.Succeeded, P.CheckedOut("fix-typo"))],
                 ended.Skip(operations).Select(record => (record.Title, record.Outcome, record.Message)));
             Assert.Equal(0, dialogs);
             AssertCalledInOrder(
@@ -166,7 +166,7 @@ public sealed partial class Phase7bChecksP
             await app.WaitForIdleAsync();
             await app.WaitForWatchersQuietAsync();
             AssertStatus(app, P.CheckedOut("feature/sign-in"));
-            Assert.Equal([(OperationOutcome.Succeeded, P.CheckedOut("feature/sign-in"))], ended.Select(record => (record.Outcome, record.Message)));
+            Assert.Equal([(P.CheckOut("origin/feature/sign-in"), OperationOutcome.Succeeded, P.CheckedOut("feature/sign-in"))], ended.Select(record => (record.Title, record.Outcome, record.Message)));
             AssertCalled(app, stepTwo, "git switch --no-guess --no-overwrite-ignore feature/sign-in");
             Assert.DoesNotContain(CallsSince(app, stepTwo), call => call.StartsWith("git fetch", StringComparison.Ordinal) || call.StartsWith("git branch", StringComparison.Ordinal));
             AssertNoRequests(served, mark);
@@ -194,7 +194,7 @@ public sealed partial class Phase7bChecksP
             AssertNoRequests(served, mark);
             Assert.Equal("feature/sign-in", mobileApp.Refs?.Head.BranchName);
             Assert.DoesNotContain(mobileApp.LeftPanel.Rows, row => row is RefItemRow { IsSelected: true } or PullRequestRow { IsSelected: true });
-            Assert.Null(mobileApp.Selection.Single);
+            Assert.True(mobileApp.Selection.IsEmpty, "The graph's selection is not empty.");
             log = [.. app.GitCalls()];
         }
         finally
