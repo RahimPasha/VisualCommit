@@ -3421,8 +3421,7 @@ files call none of 1.5's shims; CI's five jobs are green.
 
 **As built** (WP-P, `34720c2` to its last commit, 2026-11-07). Where the build differs from the text
 or settles what it left open:
-- `34720c2` holds 12.9's five areas in one commit (the bound); later commits part P's checks, `PartP`,
-  `RequestOperationsProvidersTests` and the review's fixes.
+- `34720c2` holds 12.9's five areas in one commit (the bound); part P's checks and the fixes follow.
 - `BranchLabelOf(repository, branch, relativeTo)`: the base is a third, required argument (two cannot
   tell a project); WP-N passes its chosen base, so an Azure DevOps fork across projects reads
   `{project}/{Name}:{branch}`. `RefItemRow`'s `pullRequest:` is a `PullRequest?`.
@@ -3432,21 +3431,23 @@ or settles what it left open:
   lines leave it out; a fork that is a remote with a fetchable line is that remote branch's checkout.
 - FETCH_HEAD after `refs/merge-requests/5/head` on 2.56: `<sha>\t\t'refs/merge-requests/5/head' of
   <url>` (open point 30 holds; CI's 2.43 measures it too).
-- For the lead: P6's `More than 300 open merge requests` and P8's D356 row are cut with "…" at 260, as
-  their rows expect, while their tooltips (the action, the reason) do not hold their text, as the
-  conventions' audit requires. `ShotPAuditAtEnd` runs the audit in full and `End` fails on its
-  findings after every step, so methods 4 and 5 fail closed (p06a, p08a, p08b, p10d) until the lead
-  rules. "Disabled" reads `IsEffectivelyEnabled`; `Local branches` lists folders first (P1: a set).
+- For the lead: methods 4 and 5 fail closed on the conventions' audit (`ShotPAuditAtEnd` runs it in
+  full; `End` fails on it after every step). P8's row and open point 27 foresee D356's row cut with "…"
+  at 260, its tooltip the reason (p08a, p08b, p10d): that rule and P8's row cannot both hold. P6's row
+  foresees no cut: GitLab's `More than 300 open merge requests`, one character longer than 7a's, which
+  fits, overflows at 260 while its tooltip is the action (p06a), so a product change (a text that
+  fits, a tooltip that holds it) is open there too. "Disabled" reads `IsEffectivelyEnabled`;
+  `Local branches` lists folders first (P1: a set).
 - `PartP.LabelsOf(p)`, open point 26's record of rows 0 to 4: the remote label folds into `+1`, GitLab's
   `main` into `+2` with `upstream/main`; the checks assert all but `Right`.
 - `PartP` uses nothing of the 7b project; WP-R reads `RepositoryOf`, `TitleOf`, `RowsOf`, `SectionMenu`,
   `RowMenuOf`, `RowsPictureOf`, `SectionMenuPictureOf`, `LabelsOf`. Outside 12.1's list: the 7b
   csproj's link to 7a's `GraphTestHost.cs` (WP-F's) and `CommitGraphControl.Render.cs`'s one
   `BadgeText` call (12.6).
-- Alone with the script (Debug, laptop): 31.6 to 44.2 s a method by the test platform, about 28 s of it
-  the scenario's preparation that a run alone pays; 3.0 to 14.0 s to the last picture (part B's
-  measure). 7a's 31 P and G pictures are the same files; phase 3's `03a` to `03h` pixel-identical;
-  `a06c` reads `Sign in to Azu…` behind. `RequestOperationsProvidersTests` passes under the lag.
+- Alone with the script (Debug, laptop): 31.6 to 44.2 s a method, about 28 s of it the scenario's
+  preparation; 3.0 to 14.0 s to the last picture (part B's measure). 7a's 31 P and G pictures are the
+  same files; phase 3's `03a` to `03h` pixel-identical; `a06c` reads `Sign in to Azu…` behind.
+  `RequestOperationsProvidersTests` passes under the lag.
 
 ## 13. WP-N: a new pull or merge request (part N)
 

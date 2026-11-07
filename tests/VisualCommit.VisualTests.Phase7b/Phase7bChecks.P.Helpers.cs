@@ -100,12 +100,17 @@ public sealed partial class Phase7bChecksP
     }
 
     /// <summary>
-    /// <see cref="ShotP"/> for a picture whose message row the report also expects cut with "…" while
-    /// its tooltip says something else (P6's "More" row, whose tooltip is the action; P8's D356 row,
-    /// whose tooltip says why), which the conventions' audit does not let through: the audit runs in
-    /// full and its findings are kept for <see cref="End"/>, which fails on them after every step has
-    /// run. The report's two rules cannot both hold there and only the lead may change one, so the
-    /// check fails closed until the lead rules: no finding is let through here.
+    /// <see cref="ShotP"/> for a picture whose message row is cut with "…" at 260 while its tooltip
+    /// does not hold its text, which the conventions' audit does not let through. The two rows differ
+    /// in what the report says of them. P8's row and open point 27 foresee D356's row cut, with the
+    /// reason as its tooltip (p08a, p08b, p10d): there the conventions' rule and P8's row cannot both
+    /// hold. P6's row foresees no cut: it lists GitLab's <c>More than 300 open merge requests</c> and
+    /// allows only a cut by an ellipsis, but that sentence, 33 characters, one more than 7a's, which
+    /// fits, overflows the row at 260 while the row's tooltip is the action (p06a): a product change (a
+    /// text that fits, or a tooltip that holds the text) is open there as well as a change of the
+    /// report. The audit runs in full and its findings are kept for <see cref="End"/>, which fails on
+    /// them after every step has run; only the lead may rule, so the check fails closed until then: no
+    /// finding is let through here.
     /// </summary>
     private Screenshot ShotPAuditAtEnd(ShellDriver app, string name, bool keepPointer = false)
     {
@@ -481,8 +486,11 @@ public sealed partial class Phase7bChecksP
         Assert.True(
             _auditFindings.Count == 0,
             "Clipped text that part P's conventions do not let through (every picture passes LayoutAudit.FindClippedText; a row cut with an "
-            + "ellipsis only when a tooltip holds its whole text), where P6's or P8's row expects that row cut with its tooltip the action or "
-            + "the reason (docs/test-reports/phase-7b.md: part P's conventions, P6, P8, open point 27). The two cannot both hold; the lead "
-            + "rules.\n" + string.Join("\n", _auditFindings));
+            + "ellipsis only when a tooltip holds its whole text). D356's row (p08a, p08b, p10d): P8's row and open point 27 foresee it cut "
+            + "with \"…\" at 260, its tooltip the reason, so the conventions' rule and P8's row cannot both hold. GitLab's 'More than 300 "
+            + "open merge requests' (p06a): P6's row foresees no cut (it lists the row and allows only a cut by an ellipsis), but the "
+            + "sentence, 33 characters, one more than 7a's, which fits, overflows the row at 260 while its tooltip is the action; a product "
+            + "change (a text that fits, or a tooltip that holds the text) is open there too. The lead rules (docs/test-reports/phase-7b.md: "
+            + "part P's conventions, P6, P8, open point 27).\n" + string.Join("\n", _auditFindings));
     }
 }

@@ -615,8 +615,9 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             list.ScrollIntoView(webApp.LeftPanel.Rows.Count - 1);
             app.Settle();
             await app.WaitForAsync(() => list.GetLogicalDescendants().OfType<Control>().Any(control => Avalonia.Automation.AutomationProperties.GetName(control) == "Stashes"), "the list's end");
-            // P6 step 3 expects "no text cut but by an ellipsis": GitLab's sentence, one character
-            // longer than 7a's, is cut at the panel's default 260 while its tooltip is the action (step 4).
+            // P6 step 3 foresees no cut of this row ("no text cut but by an ellipsis"): GitLab's sentence,
+            // one character longer than 7a's, which fits, overflows the row at the panel's default 260
+            // while its tooltip is the action (step 4), so the audit fails closed (ShotPAuditAtEnd).
             ShotPAuditAtEnd(app, P.P06a);
             var (extent, viewport) = PanelScroll(app);
             Assert.True(extent > viewport + 1, $"The panel's list shows no scroll bar: extent {extent}, viewport {viewport}.");
