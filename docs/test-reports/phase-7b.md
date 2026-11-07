@@ -62,7 +62,8 @@ the same commit, which is named too (15.9). Filled in per provider from its `run
 date and time, the commit, the outcome, what it made in the sandbox and removed again, its findings
 about the service's answers with what each changed in that provider's fake, and the search of run.txt
 and the console output for the token. Its runs in 7b: stage 1 (status step 16), after WP-S's merge,
-whose findings WP-LF put into the fakes before part A's checks were written (design 0.4, 16.1); stage 2
+whose findings WP-LF put into the fakes before part A's checks were written (design 0.4, 16.1), and
+Azure DevOps' `Check_1b_probes` again on 2026-11-07 for open point 8, the lead's run; stage 2
 (`Check_3`, the app-driven check per provider) after WP-N's merge; at the gate one before the gate's
 pictures, whose corrections to the fakes are committed before the passes, and one on the counted
 round, after the real-window pass and the list of pictures (D335). The next run overwrites run.txt, so
@@ -93,6 +94,20 @@ answered 401; the sandbox's `info/refs` with a made-up value answered 401 with t
 the fake answered 404; the bodies of the 409 and 400 creates; the members of the abandon's and the
 create's answers. Run.txt holds neither the organization's name nor an address, checked fully decoded.
 Copy: `D:/Projects/Personal/phase7b-work/live/azure-devops-run-20261105.txt`.
+
+**Stage 1, `Check_1b_probes` again** (2026-11-07 UTC, the lead's run on the Windows machine, the owner
+agreeing; open point 8): the command with `--filter-method "*Check_1b_probes"`. Of its 17 probes,
+connectionData without a credential, with Suppress, answered 200 with the Anonymous identity
+(`application/json` at `7.1-preview.1`, no `WWW-Authenticate`) where the fake answered 401 TF400813;
+every other probe answered as on 2026-11-05: connectionData with the token 200, and at `7.1` 400
+`VssInvalidPreviewVersionException`; D373's made-up value in none of the token forms 200 with the
+Anonymous identity, and its 84-character one 401 with an empty body; the core resource area without a
+credential and with the token 200; D374's made-up organization 404; the project's list 200 with one row;
+the `info/refs` differences (401 where the fake answers 404) are the ones 16.1's As built keeps. What it
+changed in the fakes and in A9: "What stage 1 changed in the fakes" below and open point 8. The lead adds
+here the time, the commit, the offline classes' run before it, the outcome, the search of run.txt and the
+console output for the token, and the name of the copy kept outside the repository: the builder who
+wrote this entry had only the lead's summary of the run.
 
 ### GitLab (`artifacts/live/gitlab/run.txt`)
 
@@ -1072,14 +1087,16 @@ expected result goes under "Changes to expected results" with its reason. Points
    included, ASSUMED. `Check_1b`'s probe of the sandbox organization's connectionData without a credential,
    with Suppress, ran on 2026-11-07 (the lead's run of `Check_1b_probes`, the owner agreeing) and answered
    200 with the Anonymous identity: the organization allows public projects, and the short value's 200 is a
-   public organization's answer. The lead ruled the second of the three ways this point gave: the fake
-   keeps the Anonymous 200 to organizations with `PublicProjects` (16.1), so Fernhill-Labs (private)
-   answers A9's value as no credential, with the sign-in's 401 TF400813 (READ g1 G0.2), which the dialog
-   gives A8's text, as `SignInDialogProvidersTests` checks; A9 sets the fault
-   `FakeAzureDevOpsFault.AnonymousIdentity` with `served.AzureDevOps.FailNext("connection:fernhill-labs", …)`
-   before step 8 (A9 is scripted only, so a fault is allowed), which keeps A9's text, its one request and
-   `a09a` but makes the Anonymous answer the fault's; the live command's fake allows public projects, as
-   the sandbox's organization does. Recorded under "Changed in this report after its first commit".
+   public organization's answer. So, as this point said a 200 would, the fake keeps the Anonymous 200 to
+   organizations with `PublicProjects` (16.1), Fernhill-Labs (private) answers A9's value as no
+   credential, with the sign-in's 401 TF400813 (READ g1 G0.2), and the dialog gives it A8's text, as
+   `SignInDialogProvidersTests` checks; the live command's fake allows public projects, as the sandbox's
+   organization does. Of the three ways this point gave before the probe for A9 (an organization with
+   public projects added for A9; the fault `FakeAzureDevOpsFault.AnonymousIdentity` set before step 8; A9
+   re-pointed at A8's text), the lead ruled the second: A9 sets the fault with
+   `served.AzureDevOps.FailNext("connection:fernhill-labs", …)` before step 8 (A9 is scripted only, so a
+   fault is allowed), which keeps A9's text, its one request and `a09a` but makes the Anonymous answer the
+   fault's. Recorded under "Changed in this report after its first commit".
 9. **Picture names for more than one provider.** 0.3 asks a name to name its provider in its words; a
    picture of the section about all three blocks, or all three off, uses `three` (`a01a-three-signed-out`,
    `a02d-three-signed-in-end`, `a03b-three-off`), and one about two providers names both, GitLab's first
