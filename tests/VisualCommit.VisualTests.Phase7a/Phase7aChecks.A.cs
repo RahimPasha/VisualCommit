@@ -624,6 +624,10 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             await app.WaitForAccountAsync(account => account?.State == AccountState.NeedsSignIn);
             await WaitForRecordAsync(app, data, useForGit: true, "refused");
             await app.WaitForIdleAsync();
+
+            // As in step 2: the waits above can end before the refusal's post runs, and a09b's left panel
+            // shows hello's hosting signed out (the report's A9), so the check waits for that state first.
+            await app.WaitForAsync(() => hello.Hosting.State.PullRequests == PullRequestsState.SignedOut, "hello's hosting to take git's refusal (SignedOut)");
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is CredentialsViewModel or PromptDialogViewModel);
             AssertErrorDialog(
                 app,
