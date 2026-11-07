@@ -491,7 +491,10 @@ WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8'
 picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
 tests; their fixes are merged (`e49bd5c`, `eb218a3`, `7ddb928`; Notes, "The three failures of
 42339567989") and their classes pass; the lead reads the CI run of the push that carries them, which
-must be green in all five jobs. Part P's checks are committed (`f1ac5ac`, D244); WP-P (section 12) is being
+must be green in all five jobs. Part N's checks (design 13.8) are being written and reviewed in
+`D:/Projects/Personal/vc-wt/p7b-ncheck` (`wip/p7b-ncheck`, from `75a65e2`) while WP-P is built, from the
+design and part P's checks, never from WP-P's code; the lead commits them before WP-N starts (D244).
+Part P's checks are committed (`f1ac5ac`, D244); WP-P (section 12) is being
 built from that commit in `D:/Projects/Personal/vc-wt/p7b-requests` on `wip/p7b-requests`, then
 reviewed and hunted; at its merge the lead runs 12.9's runs (the lagged list, `Phase7aChecksP` and
 `Phase7aChecksG` against `phase-7a-pictures.sha256`, phase 3's `*Check_03_other_menus*`, part P, and
