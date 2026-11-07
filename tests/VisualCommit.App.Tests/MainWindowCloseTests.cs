@@ -122,6 +122,60 @@ public class MainWindowCloseTests
     }
 
     [AvaloniaFact]
+    public async Task Keep_open_given_before_the_window_has_acted_on_the_end_of_the_operations_keeps_it_open()
+    {
+        // CI run 42301846503 (ubuntu-latest): in the test above "Keep open" was given, the fetches
+        // ended, and the window closed. The window went by which of the operations' end and the
+        // dialog's answer its Task.WhenAny saw first, and both reach it through the thread pool
+        // (their sources run their continuations asynchronously), in an order that need not be the
+        // UI thread's. Here that order is made certain: the operation ends, the wait sees it first
+        // while nobody has answered, and the window's continuation is held in a context of the
+        // test's own; "Keep open" comes before it runs. The dialog's answer decides, as TryClose's
+        // own state rule does: the window stays.
+        using var provider = new FakeProvider();
+        var api = provider.Add("api");
+        var (window, dashboard) = await OpenAsync(provider, api.WorkingDirectory);
+        var summary = dashboard.Rows[0].Repository!;
+        var (running, finish) = (new TaskCompletionSource(), new TaskCompletionSource());
+        var pull = summary.Queue.RunAsync(Local("Pull", running, finish));
+        await running.Task.WaitAsync(Patience);
+        var closed = 0;
+        var held = new HeldContinuations();
+        var ui = SynchronizationContext.Current;
+        SynchronizationContext.SetSynchronizationContext(held);
+        try
+        {
+            Assert.False(window.TryClose(() => closed++));
+        }
+        finally
+        {
+            SynchronizationContext.SetSynchronizationContext(ui);
+        }
+
+        var finishing = Assert.IsType<FinishingDialogViewModel>(Assert.Single(window.Dialogs.Open));
+        Assert.Equal(0, held.Count);
+
+        // The operation ends; the window's look at that is posted to the held context, and is the
+        // only thing posted there.
+        finish.SetResult();
+        await pull.WaitAsync(Patience);
+        await held.Posted.WaitAsync(Patience);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(1, held.Count);
+        Assert.False(finishing.IsClosed);
+
+        // "Keep open", then the window acts on the operation's end: it stays open, and a later close
+        // finds nothing running and closes at once, by its caller.
+        finishing.CancelCommand.Execute(null);
+        held.RunAll();
+        Assert.Equal(0, closed);
+        Assert.False(await finishing.Result);
+        Assert.True(window.TryClose(() => closed++));
+        Assert.Equal(0, closed);
+        window.CloseAll();
+    }
+
+    [AvaloniaFact]
     public async Task A_dashboards_idle_rows_do_not_hold_the_window()
     {
         using var provider = new FakeProvider();
@@ -361,6 +415,41 @@ public class MainWindowCloseTests
             return command.Arguments is ["config", "--show-scope", "--show-origin", "-z", "--list"]
                 ? new GitResult(0, string.Empty, string.Empty, TimeSpan.Zero)
                 : throw new InvalidOperationException($"Not expected: {command.DisplayText}");
+        }
+    }
+
+    /// <summary>
+    /// A synchronization context that keeps what is posted to it, from any thread, until the test
+    /// runs it on its own thread (<see cref="RunAll"/>): an await that captured it resumes only then.
+    /// </summary>
+    private sealed class HeldContinuations : SynchronizationContext
+    {
+        private readonly System.Collections.Concurrent.ConcurrentQueue<(SendOrPostCallback Callback, object? State)> _posted = new();
+        private readonly TaskCompletionSource _first = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>How many callbacks wait to run.</summary>
+        public int Count => _posted.Count;
+
+        /// <summary>Completes when the first callback is posted.</summary>
+        public Task Posted => _first.Task;
+
+        public override void Post(SendOrPostCallback d, object? state)
+        {
+            _posted.Enqueue((d, state));
+            _first.TrySetResult();
+        }
+
+        public override void Send(SendOrPostCallback d, object? state) => throw new NotSupportedException("The window's close posts its continuations.");
+
+        public override SynchronizationContext CreateCopy() => this;
+
+        /// <summary>Runs what was posted, in order, on the calling thread.</summary>
+        public void RunAll()
+        {
+            while (_posted.TryDequeue(out var posted))
+            {
+                posted.Callback(posted.State);
+            }
         }
     }
 
