@@ -150,6 +150,9 @@ Build:
   under investigation (CI section). (2026-11-06. Week: share not read.)
 - [ ] 12. The left panel's section for each provider (GitLab's merge requests, D351), its menu,
   checkout, the badge on branches, open in browser.
+  WP-P (section 12) merged at `1821206`, with its reviews', hunts' and the lead's fixes (`610b05a`:
+  the ruling on the two cut message rows, recorded in the report at `c5ba918`); its merge's runs are
+  under way (Next step).
 - [ ] 13. Create a pull request or merge request from the branch menus and the drop menu, and its
   form, for each provider.
 - [ ] 14. 7a's screens and commands that name GitHub name the provider they act on (D351); the
@@ -494,6 +497,20 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
+WP-P (design 12, part P) is merged at `1821206` (Notes, "WP-P's build and merge"). Part P's methods
+4 and 5 had failed closed on the conventions' audit (D356's row and GitLab's More row cut at 260 with
+tooltips that are not their text); the lead ruled the two rows the conventions' one exception
+(`610b05a`, the report's "Changed in this report after its first commit" at `c5ba918`). 12.9's runs
+are under way through `scripts/heavy-run.sh` (the 7b and 7a projects whole, 12.7's unit classes,
+phase 3's `*Check_03_other_menus*`, then the lagged list); then 7a's P and G pictures against
+`phase-7a-pictures.sha256`, phase 3's against `phase-3-pictures.sha256`, part P's 22 pictures and part
+A's `a06c` inspected, and CI's run on `c5ba918` (42373090316) read; then step 12 is ticked. WP-N
+(section 13) is being built from `c5ba918` in `D:/Projects/Personal/vc-wt/p7b-create` on
+`wip/p7b-create`, then reviewed and hunted. 0.7's references are being made for WP-N's merge and the
+gate in `D:/Projects/Personal/gate7b-reference/`: 7a's gate's real-window files (375, copied from the
+main checkout's `artifacts/visual/phase-*/real-window/`, untouched since 2026-10-31) and phases 0 to
+7a's walk-throughs run on `master` (`a29379f`) with git 2.56 in `D:/Projects/Personal/vc-wt/master-ref`.
+
 WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8's comparison and
 picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
 tests; their fixes are merged (`e49bd5c`, `eb218a3`, `7ddb928`; Notes, "The three failures of
@@ -714,6 +731,22 @@ every commit.
     failure of 42301846503 stays a known, open flake of that test. For the review before the gate:
     `WithoutCollection`'s message "the budget is too small" can mislead when a collection comes
     from memory pressure. The data: `D:/Projects/Personal/phase7b-work/verify/palette-growth/round-2/`.
+- **WP-P's build and merge** (2026-11-07; design 12 and its As built): built in
+  `D:/Projects/Personal/vc-wt/p7b-requests` from `f1ac5ac` by two Opus builders (`34720c2` to
+  `7049f5b`), one review with two lenses (one major: the menus checked by `Contains` and Azure DevOps'
+  drops untested; nine minors, all fixed at `d2d27a1` and `dbbe196`) and three hunts by lens (tokens,
+  checks, state), each serious finding put to fresh Opus skeptics. Hunt 1's state lens found that a
+  sign-out while a GitLab list loads still sent the later pages with the signed-out token (refuted
+  as a major, fixed with two minors at `726ed0f`); hunt 2's eight minors were fixed at `472a1ba` (one
+  request checkout at a time per tab, the D382 echo screen on A4 and A5 lists, gaps in P4, P5, P6,
+  P9, P11 and P14). Hunt 3 confirmed one major, which was the open question: methods 4 and 5 failed
+  closed on the conventions' audit (D356's row in `p08a`, `p08b` and `p10d`; GitLab's More row in
+  `p06a`). The lead ruled the two rows the conventions' one exception and fixed hunt 3's three
+  minors (`610b05a`: the fork lookup asserted by its number's path, P11's top label, and
+  `OnAccountChanged`'s comment, which now says a replacing sign-in stops the run only after the
+  request in flight); part P's 7 methods passed on it. The lead kept `34720c2`'s five areas in one
+  commit (splitting would rewrite history) and confirmed `BranchLabelOf`'s third argument (the base,
+  required). The diff was searched for token shapes, real addresses and other identities: none.
 - **The three failures of 42339567989** (2026-11-07; one Opus investigator and two Opus skeptics
   each, none refuted, minors only; the lead's rulings at the merges):
   - B7 below git 2.46 (both containers): git 2.43's clone to an `<organization>@` URL sends its first
