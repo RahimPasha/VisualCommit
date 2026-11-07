@@ -3229,10 +3229,12 @@ differs from the text or settles what it left open:
   `underSwitch` (8 above it) only while it shows, so 7a's card is 7a's pixel for pixel.
 - `CloneTexts.ListingFailedOf(p)` starts the warning. `Describe` keeps 7a's GitHub path byte for byte;
   11.2's empty-message rows are GitLab's and Azure DevOps'.
-- Report against code: B7 expects the Azure DevOps binding's `SharedOriginOwner` `Fernhill-Labs`
-  (`PartB.AzureDevOpsSharedOwner`); it is `fernhill-labs` (`CoverageOf` takes the lower-cased
-  `AccountKey.Login`; the broker compares without case). The azure method asserts it last and fails
-  there: the lead's call.
+- Report against code: B7 expected the Azure DevOps binding's `SharedOriginOwner` `Fernhill-Labs`
+  (`PartB.AzureDevOpsSharedOwner`); the code gives `fernhill-labs` (`CoverageOf` takes the lower-cased
+  `AccountKey.Login`; the broker compares without case). The lead ruled for the key's lower-cased
+  `fernhill-labs`: the report's B7 changed (with its reason under "Changed in this report after its
+  first commit"), `PartB.AzureDevOpsSharedOwner` is `fernhill-labs`, and the assertion stands after the
+  binding's account.
 - Part B's helpers are its own (part A's are private). B7 compares the tab's and the recent list's
   folder with git's spelling (`TopLevelAsync`, as 7a's B6). B5 checks the request id's form per fake
   (`PartB.*IdPattern`: the fakes record no answer's id). `CloneFromAccountTests` measures 7a's width by

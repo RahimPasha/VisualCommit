@@ -146,12 +146,11 @@ public static partial class Phase7bExpectations
         public const string AzureDevOpsBinding = "http://127.0.0.1:47397/Fernhill-Labs/Mobile%20App/_git/mobile-app";
 
         /// <summary>
-        /// The Azure DevOps binding's <c>SharedOriginOwner</c> as B7 (method 2, after step 8) gives it,
-        /// the organization in the server's spelling (8.2 step 6). The code gives the account key's
-        /// lower-cased login (WP-AZ's <c>CoverageOf</c>), so the check fails there until the lead rules;
-        /// GitLab's binding has none.
+        /// The Azure DevOps binding's <c>SharedOriginOwner</c> as B7 (method 2, after step 8) gives it: the
+        /// coverage's organization, the account key's lower-cased login (8.2 step 6, WP-AZ's
+        /// <c>CoverageOf</c>). GitLab's binding has none.
         /// </summary>
-        public const string AzureDevOpsSharedOwner = "Fernhill-Labs";
+        public const string AzureDevOpsSharedOwner = "fernhill-labs";
 
         /// <summary>The paths git's requests of each clone lie under.</summary>
         public const string GitLabGitPath = "/northfield/platform/web-app.git/";

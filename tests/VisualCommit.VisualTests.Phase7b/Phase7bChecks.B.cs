@@ -53,7 +53,6 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
         using var data = new TempDirectory(gitLab ? "phase7b b1 gitlab" : "phase7b b1 azure");
         var app = await StartEmptyAsync(data, served);
         string clone;
-        string? sharedOwner;
         try
         {
             var session = app.Session.Services.Hosting;
@@ -291,11 +290,11 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             Assert.True(SameFolder(repository.Path, cloneTopLevel), $"The tab shows {repository.Path}, git names {cloneTopLevel}.");
             Assert.False(tab.Welcome.IsCloneFormOpen);
             Assert.Contains(app.Session.Services.Recent.Items, recent => SameFolder(recent.Path, cloneTopLevel));
-            Assert.Equal(PartB.ChosenOf(provider), repository.HostingState.Repository?.FullName);
+            Assert.Equal((provider, PartB.ChosenOf(provider)), (repository.HostingState.Repository?.Provider, repository.HostingState.Repository?.FullName));
             var binding = Assert.Single(repository.Hosting.Bindings);
             Assert.Equal(WithPorts(gitLab ? PartB.GitLabBinding : PartB.AzureDevOpsBinding, served), binding.Url);
             Assert.Equal(gitLab ? PartA.GitLabKey(served.GitLab.Port) : PartA.AzureDevOpsKey(served.AzureDevOps.Port), binding.Account.Id);
-            sharedOwner = binding.SharedOriginOwner;
+            Assert.Equal(gitLab ? null : PartB.AzureDevOpsSharedOwner, binding.SharedOriginOwner);
             account = session.AccountOf(provider);
             Assert.Equal((AccountState.SignedIn, TokenPlace.Keychain, AccountNoteKind.None), (account?.State, account?.Place, account?.NoteKind));
         }
@@ -328,11 +327,6 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
         Assert.Equal(string.Empty, (await GitAsync(home, clone, "status", "--porcelain")).StandardOutput.Trim());
         Assert.Equal([(HostingProviders.Id(provider), "keychain", true)], Records(data));
         AssertCleanEnd(app, data, served, clones.Path);
-
-        // B7 step 8's binding: the report expects SharedOriginOwner `Fernhill-Labs` (8.2 step 6), the
-        // code gives the key's `fernhill-labs` (the lead's ruling is open); asserted last, as the report
-        // gives it, so that every other expected result is checked first.
-        Assert.Equal(gitLab ? null : PartB.AzureDevOpsSharedOwner, sharedOwner);
     }
 
     private async Task LoadingAndFailedAsync(HostingProvider provider)
@@ -345,14 +339,15 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
         {
             // B4 step 1: signed in through the session; the form with the provider's button.
             await app.SignInAsync(provider, gitLab ? GitLabToken : AzureDevOpsToken, gitLab ? null : Organization, Cancelled);
-            // Requests since the start the sign-in's alone: GitLab's `user`, Azure DevOps' `connection:` and `areas`.
+            await OpenFormAsync(app);
+            var button = PartB.ButtonOf(provider);
+            AssertForm(app, button);
+            // Requests since the start the sign-in's alone, the form's opening included: GitLab's `user`,
+            // Azure DevOps' `connection:` and `areas`.
             string[] signInRoutes = gitLab ? ["user"] : ["connection:fernhill-labs", "areas"];
             Assert.Equal(signInRoutes, (gitLab ? served.GitLab.Requests : served.AzureDevOps.Requests).Select(request => request.Route));
             Assert.Empty(gitLab ? served.AzureDevOps.Requests : served.GitLab.Requests);
             Assert.Empty(served.GitHub.Requests);
-            await OpenFormAsync(app);
-            var button = PartB.ButtonOf(provider);
-            AssertForm(app, button);
             var mark = Mark(served);
             var stored = app.Tokens.Calls.Count;
             var log = app.LogMark();
@@ -504,10 +499,11 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             Assert.Equal(AccountState.SignedIn, session.AccountOf(HostingProvider.GitLab)?.State);
             Assert.Equal(AccountState.SignedIn, session.AccountOf(HostingProvider.AzureDevOps)?.State);
             Assert.Null(session.AccountOf(HostingProvider.GitHub));
+            await OpenFormAsync(app);
+            // The two sign-ins' requests alone since the start, no list; the form's opening asks none.
             Assert.Equal(["user"], served.GitLab.Requests.Select(request => request.Route));
             Assert.Equal(["connection:fernhill-labs", "areas"], served.AzureDevOps.Requests.Select(request => request.Route));
             Assert.Empty(served.GitHub.Requests);
-            await OpenFormAsync(app);
             var buttonBounds = app.BoundsOf(BrowseButton(app));
             AssertForm(app, PartB.FromAnAccount);
             ShotB(app, PartB.B02FromAnAccount);
@@ -579,6 +575,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             PressSelectAll(app);
             app.PressKey(Key.Back);
             app.Settle();
+            AssertBrowser(app, PartB.AzureDevOpsTitle, string.Empty, chooseEnabled: false, switchTexts: two, selected: PartB.AzureDevOpsName, focus: false);
             AssertRows(app, PartB.AzureDevOpsRows, cut: PartB.AzureDevOpsLongName);
             app.PressKey(Key.Escape);
             await app.WaitForAsync(() => Browser(app) is null, "the browser to close");
@@ -655,6 +652,8 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             app.TypeInPalette(PartB.GitLabQuery);
             app.PressKey(Key.Enter);
             var browser = await WaitForBrowserAsync(app, loaded: true);
+            Assert.Null(app.Session.Shell.OpenPalette);
+            Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is SignInDialogViewModel);
             await WaitForGitLabAsync(app, served, mark, PartB.GitLabListRoute);
             Assert.Equal(HostingProvider.GitLab, browser.Provider);
             AssertBrowser(app, PartB.GitLabTitle, string.Empty, chooseEnabled: false);
@@ -704,6 +703,8 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             app.TypeToken(AzureDevOpsToken);
             await app.ConfirmSignInAsync();
             browser = await WaitForBrowserAsync(app, loaded: true);
+            Assert.Null(app.Session.Shell.OpenPalette);
+            Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is SignInDialogViewModel);
             await WaitForAzureAsync(app, served, mark, PartB.AzureDevOpsListRoute);
             Assert.Equal(HostingProvider.AzureDevOps, browser.Provider);
             var requests = AzureSince(served, mark);
