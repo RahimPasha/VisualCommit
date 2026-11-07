@@ -3236,8 +3236,8 @@ or settles what it left open:
   asserted only for the selected row (the pointer may rest on another after a click).
   `CloneFromAccountTests` clones through the welcome page's view model, measures 7a's width by a
   second start with GitHub alone, and asserts the `.git`-less URL's 301 in the fake's `Requests`.
-- Earlier pictures, compared with the main checkout's: 7a's ten part B, phase 1's `13a` to `14b` and
-  phase 6's `k10a` to `k10f` identical; it held no `l26`/`l32` copy, so those were inspected only.
+- Earlier pictures, pixel for pixel: 7a's ten part B, phase 1's `13a` to `14b`, phase 6's `k10a` to
+  `k10f` and its `l26a` to `l32b` (dark and light, against 7a's gate copies) identical.
   No file outside 11.1's list changed.
 
 ## 12. WP-P: requests in the left panel and the graph (part P)
