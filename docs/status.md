@@ -341,6 +341,13 @@ containers, git 2.43.0, pass B7's three requests). Jobs and Test steps: `windows
 (29 min 44 s), `macos-latest` 31 min 40 s (29 min 54 s), `ubuntu-latest` 7 min 41 s (5 min 58 s), the
 containers 8 min 13 s and 6 min 30 s (6 min 3 s and 4 min 31 s), each under four fifths.
 
+[42373090316](https://github.com/RahimPasha/VisualCommit/actions/runs/42373090316) on `c5ba918`,
+WP-P's merge `1821206` with the report's ruling: all five jobs green (Windows' keychain step and
+"Build the opt-in projects" green, macOS' keychain step green, the containers' Secret Service steps
+green). Jobs and Test steps: `windows-latest` 29 min 20 s (27 min 7 s), `macos-latest` 33 min 14 s
+(31 min 35 s), `ubuntu-latest` 8 min 11 s (6 min 3 s), the containers 6 min 44 s and 9 min 7 s
+(4 min 46 s and 6 min 36 s), each under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -747,6 +754,24 @@ every commit.
   request in flight); part P's 7 methods passed on it. The lead kept `34720c2`'s five areas in one
   commit (splitting would rewrite history) and confirmed `BranchLabelOf`'s third argument (the base,
   required). The diff was searched for token shapes, real addresses and other identities: none.
+- **WP-P's merge runs** (2026-11-07, 05:34 to 06:31 on the laptop, on `c5ba918`'s code, through
+  `bash scripts/heavy-run.sh`, one command at a time, while WP-N's builder and the build of `master`
+  for 0.7's references ran beside them): the 7b project 149 of 149, 7a's 207, App.Tests' seven classes
+  131, Hosting's two request classes 20, `GitRepositoryPullRequestsTests` 20, phase 3's
+  `Check_03_other_menus`; then the lagged list (1500 ms): every command green (the 7b project 149
+  again, 7a's 207, App.Tests' eight classes 66, Phase6's 21, Hosting's 44 and 34) but phase 2's
+  `Check_15_amend`, 24 of 25: after the amend's waits for HEAD, the stage panel and the graph, the
+  summary box still held the amended subject (`Phase2Checks.Stage.cs:181`); it passed at WP-A's and
+  WP-B's merges, and the product clears the box only when the host's `CommitAsync` returns
+  (`WorkingChangesViewModel.cs:519`). Under investigation (one Opus investigator in
+  `D:/Projects/Personal/vc-wt/p7b-amend-wait`, three Opus skeptics). 12.9's pictures (the plain runs'
+  copies in `D:/Projects/Personal/phase7b-work/wpp-pictures/`): 7a's 31 P and G pictures are the same
+  files as `phase-7a-pictures.sha256`; of 7a's others only what differed at WP-B's merge differs (the
+  23 part A pictures' intro, `b06a`'s port, `n02b`, `n06b`, `n07a`) and `b09a`, whose file differs
+  from the list but whose pixels equal the copies from before WP-A and from WP-B's merge. Phase 3's
+  `03a` to `03h` differ from `phase-3-pictures.sha256` (phase 3's gate, an older git in the status
+  bar's box); they are compared by region with 0.7's references once those exist. Part P's 22 pictures
+  and part A's `a06c` are being inspected by an Opus inspector.
 - **The three failures of 42339567989** (2026-11-07; one Opus investigator and two Opus skeptics
   each, none refuted, minors only; the lead's rulings at the merges):
   - B7 below git 2.46 (both containers): git 2.43's clone to an `<organization>@` URL sends its first
