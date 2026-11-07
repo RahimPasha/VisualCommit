@@ -941,7 +941,12 @@ comparing no capture there (14.4 step 2). No part P step opens the browser (ruli
   `.git` included, with the session's call log (each git call's command, output and error); each fake's
   `Errors` and the harness's `RefusedRequests` empty; no request answered 400 or 415; `Launcher.Requests`
   and `Clipboard.Texts` exactly what its steps name. Every picture passes `LayoutAudit.FindClippedText`:
-  a title, a message row or a label cut with "…" whose whole text a tooltip holds is allowed.
+  a title, a message row or a label cut with "…" whose whole text a tooltip holds is allowed. Two message rows are the one
+  exception (the lead's ruling of 2026-11-07, "Changed in this report after its first commit"): D356's
+  row `In harbor-co; signed in to Fernhill-Labs` (P8: `p08a`, `p08b`, `p10d`) and GitLab's `More than
+  300 open merge requests` (P6: `p06a`) may be cut with "…" at 260 while their tooltips are the reason
+  and the action that P8 and P6 give word for word; the audit lets through its one finding on that
+  row's text and nothing else.
 
 #### Scenario facts part P uses (2.6, 3.5, 4.5, 6.5, 6.6, 7.4; the fakes as WP-FA, WP-FL and WP-LF left them)
 
@@ -1848,6 +1853,20 @@ An expected result changed after its UI existed goes here with its reason.
   URL: the first without credentials, 401) and the token's guards stand as they were. Ubuntu's own
   curl and git builds (`8.5.0-2ubuntu10`, `1:2.43.0-1ubuntu7`) were read with their patches, not run: the
   skeptics found their changes to the retry keep the URL's user, and the next CI run's containers measure it.
+- **WP-P's build** (2026-11-07, the lead's ruling; P6, P8, open point 27): **part P's conventions let
+  two message rows be cut with "…" at 260 although their tooltips are not their text.** They read
+  "Every picture passes `LayoutAudit.FindClippedText`: a title, a message row or a label cut with "…"
+  whose whole text a tooltip holds is allowed"; they now name D356's row (`p08a`, `p08b`, `p10d`) and
+  GitLab's `More than 300 open merge requests` (`p06a`) as the one exception, and the audit lets
+  through only its finding on that row's text. Reason: the report contradicted itself. P8 and open
+  point 27 foresee D356's row cut at 260, its 40 characters past the row's room of about 205 px, with
+  the reason as its tooltip; P6 step 4 makes the More row's tooltip the action, as 7a's is, and
+  GitLab's sentence, one character longer than 7a's, which fits, overflows by the end of "requests".
+  WP-P's builder left methods 4 and 5 failing closed on the audit and asked for a ruling. Neither row
+  hides what it says: D356's tooltip names both organizations, and the More row loses only the end of
+  "requests" under the header `Merge requests`. A product change (a tooltip that also holds the row's
+  text) would change P6's and P8's tooltips, written word for word, and, for GitHub, 7a's, whose
+  pictures must stay the same files. The lead opened `p06a`, `p08a`, `p08b` and `p10d`.
 
 ## Found by the gate
 
