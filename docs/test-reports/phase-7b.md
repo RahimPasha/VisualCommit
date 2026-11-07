@@ -95,8 +95,10 @@ the fake answered 404; the bodies of the 409 and 400 creates; the members of the
 create's answers. Run.txt holds neither the organization's name nor an address, checked fully decoded.
 Copy: `D:/Projects/Personal/phase7b-work/live/azure-devops-run-20261105.txt`.
 
-**Stage 1, `Check_1b_probes` again** (2026-11-07 UTC, the lead's run on the Windows machine, the owner
-agreeing; open point 8): the command with `--filter-method "*Check_1b_probes"`. Of its 17 probes,
+**Stage 1, `Check_1b_probes` again** (2026-11-07, 05:16 UTC, on `9409aa8`, the Windows machine, the owner
+agreeing; open point 8; the offline classes alone first on the same commit, 404 of 404): the command
+with `--filter-class "*AzureDevOpsLiveTests"` and `--filter-method "*Check_1b_probes"`: 1 of 1 passed,
+in 20 s with the lock, 17 reads and no write. Of its 17 probes,
 connectionData without a credential, with Suppress, answered 200 with the Anonymous identity
 (`application/json` at `7.1-preview.1`, no `WWW-Authenticate`) where the fake answered 401 TF400813;
 every other probe answered as on 2026-11-05: connectionData with the token 200, and at `7.1` 400
@@ -104,10 +106,11 @@ every other probe answered as on 2026-11-05: connectionData with the token 200, 
 Anonymous identity, and its 84-character one 401 with an empty body; the core resource area without a
 credential and with the token 200; D374's made-up organization 404; the project's list 200 with one row;
 the `info/refs` differences (401 where the fake answers 404) are the ones 16.1's As built keeps. What it
-changed in the fakes and in A9: "What stage 1 changed in the fakes" below and open point 8. The lead adds
-here the time, the commit, the offline classes' run before it, the outcome, the search of run.txt and the
-console output for the token, and the name of the copy kept outside the repository: the builder who
-wrote this entry had only the lead's summary of the run.
+changed in the fakes and in A9: "What stage 1 changed in the fakes" below and open point 8. Run.txt (585
+lines) and the console output (31 lines) hold neither the token nor the organization's name, searched
+as written and fully decoded (URL, HTML and base64); run.txt names Azure DevOps' sign-in realm in its
+challenges, as on 2026-11-05, which stays out of the repository. Copy:
+`D:/Projects/Personal/phase7b-work/live/azure-devops-check1b-2026-11-07.txt`.
 
 ### GitLab (`artifacts/live/gitlab/run.txt`)
 
