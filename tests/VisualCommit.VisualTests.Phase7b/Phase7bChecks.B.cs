@@ -243,12 +243,18 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             var gitPath = WithPorts(gitLab ? PartB.GitLabGitPath : PartB.AzureDevOpsGitPath, served);
             var git = fake.GitRequests.Skip(gitMark.Item1).Where(request => request.Path.StartsWith(gitPath, StringComparison.Ordinal)).ToList();
             Assert.NotEmpty(git);
+            // 8.6: from 2.46 the first request carries the token. Below 2.46 the first goes without
+            // credentials (git leaves libcurl CURLAUTH_ANY and no password, so libcurl sends no header)
+            // and is refused; for Azure DevOps' Fernhill-Labs@ URL libcurl then retries once with the
+            // URL's user and an empty password, refused too, before git asks the app's helper, whose
+            // token the third carries (H2, r7 H4b; the report's "Changed in this report").
             var proactive = app.Session.Shell.Git?.Version >= ProactiveAuthVersion;
+            (string? GivenUserName, int Status)[] first = proactive
+                ? [("x-access-token", 200)]
+                : gitLab ? [(null, 401)] : [(null, 401), (Organization, 401), ("x-access-token", 200)];
             Assert.True(
-                proactive
-                    ? git[0] is { GivenUserName: "x-access-token", Status: 200 }
-                    : gitLab ? git[0] is { GivenUserName: null, Status: 401 } : git[0] is { GivenUserName: Organization, Status: 401 },
-                $"The clone's first request was {git[0]}, with git {app.Session.Shell.Git?.Version}.");
+                git.Take(first.Length).Select(request => (request.GivenUserName, request.Status)).SequenceEqual(first),
+                $"The clone's first requests were {string.Join("; ", git.Take(first.Length))}, with git {app.Session.Shell.Git?.Version}.");
             Assert.Contains(git, request => request is { GivenUserName: "x-access-token", Status: 200 });
             Assert.DoesNotContain(git, request => request.Status == 200 && request.GivenUserName is not null && request.GivenUserName != "x-access-token");
             Assert.DoesNotContain(git, request => request is { GivenUserName: "x-access-token", Status: 401 });
