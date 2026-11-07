@@ -81,6 +81,8 @@ public sealed partial class AppCommands
         Add(AppCommand.OpenRepository);
         Add(AppCommand.CloneRepository);
         Add(AppCommand.CloneFromGitHub);
+        Add(AppCommand.CloneFromGitLab);
+        Add(AppCommand.CloneFromAzureDevOps);
         Add(AppCommand.InitRepository);
         Add(AppCommand.NewWorkspace);
         Add(AppCommand.ToggleActivityLog);

@@ -1,5 +1,6 @@
 using System.Globalization;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels.Hosting;
@@ -26,39 +27,69 @@ public static partial class HostingTexts
     public const string Answered = "GitHub answered: {0}.";
 
     /// <summary>
-    /// The one wording of a GitHub failure that the clone browser, the "Pull requests" section and
-    /// the create form show (D338, docs/phase-7a-design.md 1.7), shown as it is; <paramref name="login"/>
-    /// is the signed-in account's, or null:
+    /// The one wording of a hosting failure that the clone browser, the requests section and the
+    /// create form show (D338, docs/phase-7a-design.md 1.7), shown as it is, in the words of
+    /// <see cref="HostingFailure.Provider"/> (docs/phase-7b-design.md 11.2; GitHub's are 7a's word for
+    /// word); <paramref name="login"/> is the signed-in account's (the organization on Azure DevOps),
+    /// or null:
     /// <list type="bullet">
     /// <item><c>Network</c>: the message as it is (WP-G's fixed texts, D284).</item>
-    /// <item><c>BadCredentials</c>: with a login <see cref="OperationTexts.TokenRefused"/> (D276);
-    /// without, the message with a full stop, then <see cref="SignInInSettings"/>.</item>
+    /// <item><c>BadCredentials</c>: with a login <see cref="OperationTexts.TokenRefused(HostingProvider, string)"/>
+    /// (D276); without, the message with a full stop, then <see cref="SignInInSettingsOf"/>; another
+    /// provider's empty message (Azure DevOps' empty 401) that sentence alone.</item>
     /// <item><c>RateLimited</c>: the time to try again after (<c>RetryAt</c> in local time,
     /// <c>HH:mm</c>, the invariant culture), or "in a few minutes".</item>
-    /// <item><c>SsoRequired</c>: the organisation named by the path segment after <c>orgs/</c> in the
-    /// detail's URL, else "The organisation".</item>
+    /// <item><c>SsoRequired</c>: GitHub's, the organisation named by the path segment after
+    /// <c>orgs/</c> in the detail's URL, else "The organisation"; another provider's as the last item.</item>
     /// <item><c>ApiVersion</c>, <c>ServerError</c>, <c>Malformed</c>: the app's fixed sentences.</item>
-    /// <item><c>Forbidden</c>, <c>NotFound</c>, <c>Validation</c>: "GitHub answered: " and GitHub's
-    /// words, a full stop at their end dropped first.</item>
+    /// <item>Any other kind: "{name} answered: " and the service's words, a full stop at their end
+    /// dropped first; another provider's empty message "{name} answered without a reason."</item>
     /// </list>
     /// </summary>
     public static string Describe(HostingFailure failure, string? login)
     {
         ArgumentNullException.ThrowIfNull(failure);
+        return failure.Provider == HostingProvider.GitHub ? DescribeGitHub(failure, login) : DescribeOther(failure.Provider, failure, login);
+    }
+
+    /// <summary>7a's wording, unchanged (docs/phase-7a-design.md 1.7).</summary>
+    private static string DescribeGitHub(HostingFailure failure, string? login) => failure.Kind switch
+    {
+        HostingFailureKind.Network => failure.Message,
+        HostingFailureKind.BadCredentials => string.IsNullOrEmpty(login)
+            ? $"{WithFullStop(failure.Message)} {SignInInSettings}"
+            : OperationTexts.TokenRefused(HostingProvider.GitHub, login),
+        HostingFailureKind.RateLimited => failure.RetryAt is { } retryAt
+            ? string.Format(CultureInfo.InvariantCulture, RateLimitedAt, retryAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture))
+            : RateLimited,
+        HostingFailureKind.SsoRequired => string.Format(CultureInfo.InvariantCulture, SsoRequired, OrganisationOf(failure.Detail) ?? SsoOrganisation),
+        HostingFailureKind.ApiVersion => ApiVersion,
+        HostingFailureKind.ServerError => ServerError,
+        HostingFailureKind.Malformed => Malformed,
+        _ => string.Format(CultureInfo.InvariantCulture, Answered, WithoutFullStop(failure.Message)),
+    };
+
+    /// <summary>11.2's table for GitLab and Azure DevOps.</summary>
+    private static string DescribeOther(HostingProvider provider, HostingFailure failure, string? login)
+    {
+        var name = Name(provider);
+        var message = failure.Message.Trim();
         return failure.Kind switch
         {
             HostingFailureKind.Network => failure.Message,
-            HostingFailureKind.BadCredentials => string.IsNullOrEmpty(login)
-                ? $"{WithFullStop(failure.Message)} {SignInInSettings}"
-                : OperationTexts.TokenRefused(login),
+            HostingFailureKind.BadCredentials when !string.IsNullOrEmpty(login) => OperationTexts.TokenRefused(provider, login),
+            HostingFailureKind.BadCredentials => message.Length == 0
+                ? SignInInSettingsOf(provider)
+                : $"{WithFullStop(message)} {SignInInSettingsOf(provider)}",
             HostingFailureKind.RateLimited => failure.RetryAt is { } retryAt
-                ? string.Format(CultureInfo.InvariantCulture, RateLimitedAt, retryAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture))
-                : RateLimited,
-            HostingFailureKind.SsoRequired => string.Format(CultureInfo.InvariantCulture, SsoRequired, OrganisationOf(failure.Detail) ?? SsoOrganisation),
-            HostingFailureKind.ApiVersion => ApiVersion,
-            HostingFailureKind.ServerError => ServerError,
-            HostingFailureKind.Malformed => Malformed,
-            _ => string.Format(CultureInfo.InvariantCulture, Answered, WithoutFullStop(failure.Message)),
+                ? string.Create(CultureInfo.InvariantCulture, $"{Possessive(provider)} rate limit was reached. Try again after {retryAt.ToLocalTime().ToString("HH:mm", CultureInfo.InvariantCulture)}.")
+                : $"{Possessive(provider)} rate limit was reached. Try again in a few minutes.",
+            HostingFailureKind.ApiVersion => $"This version of VisualCommit needs an update to work with {name}.",
+            HostingFailureKind.ServerError => $"{name} had a problem. Try again later.",
+            HostingFailureKind.Malformed => $"{Possessive(provider)} answer could not be read.",
+            _ => WithoutFullStop(message) is { Length: > 0 } words
+                ? $"{name} answered: {words}."
+                : $"{name} answered without a reason.",
         };
     }
 

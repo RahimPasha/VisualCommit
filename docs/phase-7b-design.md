@@ -3211,6 +3211,38 @@ The lead compares `b01a`, `b03a`, `b06a`, `b07a`, phase 1's `13a` to `14b` and p
 B's pictures are inspected, nothing writes or logs a token, and no earlier picture changed beyond
 D248's box.
 
+**As built** (WP-B, `c5ebee2` to its last commit, with its reviews' fixes, 2026-11-06). Where the build
+differs from the text or settles what it left open:
+- `public Task BrowseAsync(HostingProvider? provider)` is the `[RelayCommand]` behind `BrowseCommand`:
+  the button runs it with null, `CloneFromAccountAsync(p)` with `p` (open point 21), so the button is
+  drawn disabled under every browser; 7a's `b03a-listed` is unchanged. Signed in is
+  `AccountOf(p).State == SignedIn`. `BrowseButtonText` is 7a's `From GitHub…` while none is (collapsed).
+  After its sign-in `CloneFromAccountAsync` opens nothing once the session has ended (`_closed`, set
+  first in `CloseAll`: a dialog that signed in for the session, then cancelled by `CancelAll`, answers
+  true).
+- The browser orders `providers` by D353 and throws `ArgumentException` when `provider` is not among
+  them. `Load` is the shown provider's, `LoadOf(p)` any one's. Every close cancels its one token (a
+  handler of its own `Closing`): Choose too ends another provider's load. The switch is an
+  `ItemsControl` named `CloneFromGitHubSwitch` with no automation id (a peer gives its name as its id;
+  outside the buttons' prefix `CloneFromGitHubProvider`), of
+  `CloneProviderChoice` `VcFlatButton`s (class `cloneProvider`), 12 below the title; the filter takes
+  `underSwitch` (8 above it) only while it shows, so 7a's card is 7a's pixel for pixel.
+- `CloneTexts.ListingFailedOf(p)` starts the warning. `Describe` keeps 7a's GitHub path byte for byte;
+  11.2's empty-message rows are GitLab's and Azure DevOps'.
+- Report against code: B7 expected the Azure DevOps binding's `SharedOriginOwner` `Fernhill-Labs`
+  (`PartB.AzureDevOpsSharedOwner`); the code gives `fernhill-labs` (`CoverageOf` takes the lower-cased
+  `AccountKey.Login`; the broker compares without case). The lead ruled for the key's lower-cased
+  `fernhill-labs`: the report's B7 changed (with its reason under "Changed in this report after its
+  first commit"), `PartB.AzureDevOpsSharedOwner` is `fernhill-labs`, and the assertion stands after the
+  binding's account.
+- Part B's helpers are its own (part A's are private). B7 compares the tab's and the recent list's
+  folder with git's spelling (`TopLevelAsync`, as 7a's B6). B5 checks the request id's form per fake
+  (`PartB.*IdPattern`: the fakes record no answer's id). `CloneFromAccountTests` measures 7a's width by
+  a second start with GitHub alone; its palette theory opens a repository first (5.10's new tab).
+- `time-scripted-check.sh "*Phase7bChecksB.*" 7b` on a loaded laptop: 2.6 to 25.0 s a method.
+- Earlier pictures identical pixel for pixel: 7a's ten part B, phase 1's `13a` to `14b`, phase 6's
+  `k10a` to `k10f` and `l26a` to `l32b`. Outside 11.1's list only `CloseAll`'s first line changed.
+
 ## 12. WP-P: requests in the left panel and the graph (part P)
 
 ### 12.1 Goal and files

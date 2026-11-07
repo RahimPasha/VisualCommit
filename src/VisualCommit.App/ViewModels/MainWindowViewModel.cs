@@ -251,6 +251,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void CloseAll()
     {
+        _closed = true;
         Dialogs.CancelAll();
         AutoFetch.Dispose();
         ActivityLog.Dispose();

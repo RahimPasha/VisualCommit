@@ -205,7 +205,7 @@ public sealed partial class Phase7aChecksB
         Assert.Equal(PartB.FormRight, nameBox.Right, PartB.Tolerance);
         var gitHub = GitHubButton(app);
         Assert.Equal(button, gitHub.IsEffectivelyVisible);
-        Assert.Equal(button, welcome.ShowsGitHubButton);
+        Assert.Equal(button, welcome.ShowsBrowseButton);
         if (!button)
         {
             Assert.Equal(PartB.FormRight, urlBox.Right, PartB.Tolerance);
