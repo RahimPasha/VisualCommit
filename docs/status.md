@@ -282,11 +282,13 @@ them on Windows; Windows' "Build the opt-in projects" green. Jobs and Test steps
 merge: `windows-latest` and `macos-latest` green (Windows' "Build the opt-in projects" green), the
 container with the SDK from Microsoft's installer green; `ubuntu-latest` failed one test of App.Tests,
 `MainWindowCloseTests.Closing_the_window_during_Fetch_all_ends_its_rows_in_line_and_waits_for_the_four_running`
-(line 113: `BulkSlots.Held` 1, not 0, right after the run's task ended), and the container with
+(line 113: `closed` 1, not 0: the window closed after "Keep open"; first read here as line 116's
+`BulkSlots.Held`), and the container with
 Ubuntu's SDK packages another, `PaletteGrowthTests.The_build_and_a_one_letter_query_grow_in_step_with_the_refs`
 ("10,000 tags took 7.9 times the work of 2,500 … the limit is 6.3"). Both are phase 6's; WP-A
-changed nothing they run; each passed in the other four jobs. Under investigation, each in its own
-worktree (`wip/p7b-close-slots`, `wip/p7b-palette-growth`; Notes). Jobs and Test steps:
+changed nothing they run; each passed in the other four jobs. The first was a race in the window's
+close, fixed and merged at `85d599c`; the second is still open (Notes, "The two Linux failures of
+42301846503"). Jobs and Test steps:
 `windows-latest` 40 min 52 s (37 min 44 s), `macos-latest` 37 min 30 s (35 min 16 s),
 `ubuntu-latest` 6 min 27 s (4 min 58 s), the containers 8 min 51 s and 8 min 45 s (6 min 26 s and
 6 min 27 s), each under four fifths.
@@ -449,9 +451,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 WP-A (design 10, part A) is merged at `b6de3cf`; its classes, lagged list and picture inspection
 passed (Notes). CI's run on it (42301846503) failed two phase 6 tests on Linux that WP-A does not
-touch: two Opus investigators find and fix each cause in `D:/Projects/Personal/vc-wt/p7b-close-slots`
-and `p7b-palette-growth`, each fix then put to two skeptics; the lead merges them, runs their classes
-and reads the CI run. Part B's checks are committed (`37b3ea0`, D244); WP-B (section 11) is being built from
+touch. The close race is fixed and merged (`85d599c`; its classes pass; the lead reads CI's run on
+it). The palette growth test's first fix was refuted as a loosening and is not merged; a second
+round designs a measure that is at least as strict for superlinear work, judged paired against the
+old procedure, in `D:/Projects/Personal/vc-wt/p7b-palette-growth-2` on `wip/p7b-palette-growth-2`
+(from `85d599c`), then put to skeptics; if none holds, the test stays as it is (Notes, "The two
+Linux failures of 42301846503"). Part B's checks are committed (`37b3ea0`, D244); WP-B (section 11) is being built from
 that commit in `D:/Projects/Personal/vc-wt/p7b-clone` on `wip/p7b-clone`, then reviewed and hunted; at its
 merge the lead runs 11.8's comparison, part B's checks, 11.6's classes and the lagged list. Open point 8 of the report: Azure DevOps'
 `Check_1b_probes` (17 reads, its new probe of the sandbox organization's connectionData without a
@@ -586,6 +591,31 @@ every commit.
   with its provider, so 7a's `b03a-listed` keeps its disabled button. The same commit records the
   inspection's 562 for three signed-in blocks (part A's "Changed in this report after its first
   commit").
+- **The two Linux failures of 42301846503** (2026-11-06). Investigated by an Opus agent each, every
+  fix put to two Opus skeptics; the experiments' files are in
+  `D:/Projects/Personal/phase7b-work/verify/close-slots/` and `.../verify/palette-growth/`.
+  - `MainWindowCloseTests`, line 113 (`closed`, not `BulkSlots.Held`, which is line 116): a race in
+    the app. `MainWindowViewModel.FinishThenCloseAsync` acted on whichever of the operations' end
+    and the dialog's answer `Task.WhenAny` reported first, and both reach `WhenAny` through the
+    thread pool (their sources run their continuations asynchronously), so "Keep open" could be
+    overridden by operations that ended just after it. The dialog's own state now decides, as in
+    `TryClose`; a new test forces the reverse order through a held synchronization context and
+    failed 3 of 3 before the fix. Both skeptics found no other path (minor notes only). Merged at
+    `85d599c` (`wip/p7b-close-slots`); `MainWindowCloseTests`, `MainWindowHooksTests`,
+    `DialogHostTests` and the `*DialogTests` classes passed through `heavy-run.sh` (94 of 94).
+  - `PaletteGrowthTests` (7.9 against 6.3; once in 47 CI runs since `ac08f43`). Not established
+    why; the skeptics ruled out page faults and reproduced 7.9 by emulating time taken from the
+    measuring thread that its clock still counts (on Linux `ThreadWork` reads
+    `CLOCK_THREAD_CPUTIME_ID`, which in a guest counts what the hypervisor takes). The first fix
+    (`wip/p7b-palette-growth`, `b140a0e` to `c90b862`: four small runs a measure, and twelve rounds
+    when three are over the limit) was refuted as a loosening: further rounds were taken only
+    after a failure, and the four-run small measure undercounts scans over live data, so in paired
+    trials superlinear work passed it 22 times in 120 against 15 with three fixed rounds. It is not
+    merged; that branch stays unmerged. A second round (`wip/p7b-palette-growth-2`) tries fixed
+    rounds with symmetric samples (a median of paired ratios, a robust slope over four sizes, or
+    minima over more rounds), accepted only if, paired on the same samples, superlinear work
+    passes it no more often than the old procedure and linear work fails it less often under the
+    emulated interference.
 - **Part A's pictures inspected** (2026-11-06, an Opus agent, after WP-A's merge runs): all 29 match
   their steps, no defect; 7a's 28 changed pictures as the lead read them (the intro's box only in the
   23 part A ones). Its notes, for later: the report's "about 553 of 495" for three signed-in blocks
