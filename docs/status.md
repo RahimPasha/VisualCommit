@@ -300,6 +300,22 @@ green, macOS' keychain step green, the containers' Secret Service steps green). 
 6 min 18 s (4 min 54 s), the containers 8 min 30 s and 8 min 47 s (6 min 6 s and 6 min 17 s), each
 under four fifths.
 
+[42339567989](https://github.com/RahimPasha/VisualCommit/actions/runs/42339567989) on `9409aa8`, WP-B's
+merge: `ubuntu-latest` and `macos-latest` green; three jobs failed, each in one test:
+- Both containers (git 2.43.0): `Phase7bChecksB.Check_B1_B3_B6_B7_azure_sign_in_list_and_clone` at
+  `Phase7bChecks.B.cs:247`. Below git 2.46 the clone's first request carried no credentials, where
+  the report's B7 expects the URL's user with an empty password.
+- The container with the SDK from Microsoft's installer: `AccountsProvidersViewModelTests.A_screen_reopened_while_a_sign_out_runs_shows_the_block_busy_until_it_ends`
+  at line 245 (the reopened block's sign-out note null after its busy ended).
+- `windows-latest`: 7a's `Phase7aChecksA.Check_A9_needs_sign_in_after_a_refused_token` at
+  `Phase7aChecks.A.cs:572` (the pull requests state `Loading`, not `SignedOut`).
+
+Each is being investigated in its own worktree (`wip/p7b-git243`, `wip/p7b-signout-race`,
+`wip/p7b-a9-loading`, from `9409aa8`), each fix put to two skeptics. Jobs and Test steps:
+`windows-latest` 41 min 59 s (38 min 47 s), `macos-latest` 30 min 4 s (28 min 26 s), `ubuntu-latest`
+6 min 32 s (5 min 8 s), the containers 9 min 21 s and 7 min 23 s (6 min 42 s and 5 min 14 s), each
+under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
