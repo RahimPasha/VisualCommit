@@ -24,8 +24,9 @@ namespace VisualCommit.Hosting.Tests;
 /// the fork with <c>target_project_id</c>; the 409, then <c>Open merge request !21</c>; the 400 forms;
 /// a 403 with and without the scope code. Azure DevOps: <c>CreateStatus</c> 201 and 200; <c>isDraft</c>;
 /// a fork's <c>forkSource.repository.id</c>; TF401179 and TF401398 in the App's words. Both: a lost
-/// answer (<c>CreatedThenDropped</c>) counted as created, but a 500 never counts a request open before
-/// the POST, also with no list held when Create is pressed; a GitLab title typed <c>Draft: </c>
+/// answer (<c>CreatedThenDropped</c>) counted as created after the list's re-read, but a 500 never
+/// counts a request open before the POST, also with no list held when Create is pressed, whose read in
+/// flight is waited for alone; a GitLab title typed <c>Draft: </c>
 /// without the box a draft by the answer; A3's default branch naming the token a malformed answer
 /// (D382), nothing posted; <c>manifest/</c> starts nothing and asks
 /// nothing, also when its sign-in lands in another organization; a head in another repository whose
