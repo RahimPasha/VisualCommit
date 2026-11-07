@@ -393,8 +393,9 @@ public sealed class CreateRequestOperationProvidersTests
 
     /// <summary>
     /// D356 after the sign-in the create stacks first (13.3): <c>manifest/</c> signed out, its sign-in
-    /// lands in another organization; the guard reads the hosting's own state, which its Apply has set
-    /// when the sign-in returns (the view model's copy follows later), so no form opens and nothing is asked.
+    /// lands in another organization; the guard reads the session's account through the provider's
+    /// <c>Covers</c>, the rule of the hosting's <c>StateOf</c>, because neither the hosting nor the view
+    /// model has taken the account's change when the sign-in returns; so no form opens and nothing is asked.
     /// </summary>
     [AvaloniaFact]
     public async Task Manifest_signed_out_whose_sign_in_lands_in_another_organization_opens_no_form()

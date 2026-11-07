@@ -402,7 +402,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [GitLabToken], [], keptOut: [N.Description, N.LocalWorkTitle]);
+        End(app, data, served, [GitLabToken], [], keptOut: [N.Description, N.LocalWorkTitle, N.HeadTitle]);
 
         // N4 step 10: the app closed.
         await AssertPushedFirstAsync(served, GitLab, tip);
