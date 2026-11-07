@@ -348,7 +348,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
                 Assert.False(app.FindByAutomationId("OperationCancelButton").IsVisible);
                 AssertCalledInOrder(app, calls, @"git config --null --get-regexp ^remote\.", "git push --progress --set-upstream origin refs/heads/local-work:refs/heads/local-work");
                 Assert.Single(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
-                AssertPushedThroughHelper(served, GitLab, gitRequests);
+                AssertPushedThroughHelper(app, served, GitLab, gitRequests);
                 Assert.Equal(await GitAsync(served.WebApp, "rev-parse", N.LocalWorkRef), (await GitInAsync(Bare(served, GitLab), "rev-parse", N.LocalWorkRef)).Output);
                 var held = RequestsSince(served, GitLab, mark);
                 Assert.Equal([$"GET {N.GitLabSourceRoute} 304"], held.Select(Describe));
@@ -506,7 +506,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             Assert.Contains(app.GitCalls(), call => call.OperationId == records[0].Id && call.CommandText == "git push --progress --set-upstream origin refs/heads/local-work:refs/heads/local-work");
             AssertCalledInOrder(app, calls, @"git config --null --get-regexp ^remote\.", "git push --progress --set-upstream origin refs/heads/local-work:refs/heads/local-work");
             Assert.Single(CallsSince(app, calls), call => call.StartsWith("git push", StringComparison.Ordinal));
-            AssertPushedThroughHelper(served, Azure, gitRequests);
+            AssertPushedThroughHelper(app, served, Azure, gitRequests);
             AssertStatus(app, created);
             Assert.True(mobileApp.OperationStatus.HasOffer);
             var requests = RequestsSince(served, Azure, mark);

@@ -3640,33 +3640,31 @@ credential text (outside `OperationTexts.Hosting.Credentials.cs`, which keeps th
 is clean; CI's five jobs are green, each Test step under four fifths of its limit (0.6).
 
 **As built** (WP-N, `b05fabc` to its last commit, 2026-11-07). Where the build differs or settles:
-- One commit (`b05fabc`) holds 13.9's three areas: the texts and the form, the operation, the shims.
-- `CancelledOf(p)`: 7a's const `Cancelled` cannot share its name with a method.
-- 13.4's rows: a cut text measures under its room, leaving `Choose…` at 753; `RowRepositoryText` (in
-  `CreatePullRequestDialogView.axaml.cs`) takes its whole room once cut (758 ±1); a text that fits
-  lays out as 7a's (`CreateRequestDialogProvidersTests`).
-- `PullRequestEnd`'s equality leaves `Hosted` out (7a's tests); the form compares it itself. The "already
-  open" re-read keys on `Refusal` alone (GitHub sets it on a 422 only). GitLab's scope sentence needs a
-  `Detail`. Open point 37 as the report reads it.
-- After the sign-in that a create stacks first, D356 is read from the session's account (`Covers`, as
-  the hosting's `StateOf`): the account's change reaches the hosting and the view model only by posts
-  not yet run when the sign-in returns. Across repositories GitLab's and Azure DevOps' 403 or 404 name
-  both, `{head} or {base}`: the providers return the head's read's failure unmarked (marking it is the
-  lead's to route). `CreateRequestOperationProvidersTests` pins both and the `not started` line of
-  another organization; the other `not started` Info lines no test reads.
-- Part N's checks: open points 36, 37, 38, 43 and 45 hold as the report reads them. Azure DevOps' fake
-  records `Login` on `connection:` and `create:` only (the rest asserted by credential form, as part
-  P's). The drag presses 24 px left of the row's centre (there a right-click made it a double-click).
+- One commit (`b05fabc`) holds 13.9's three areas. `CancelledOf(p)`: 7a's const `Cancelled` cannot share its name with a method.
+- 13.4's rows: a cut text measures under its room (`Choose…` at 753); `RowRepositoryText` (the view's
+  code-behind) takes its whole room once cut (758 ±1); one that fits lays out as 7a's.
+- `PullRequestEnd`'s equality leaves `Hosted` out (7a's tests); the form compares it. "Already open"
+  keys on `Refusal` alone. GitLab's scope sentence needs a `Detail`.
+- After a stacked sign-in D356 reads the session's account (`Covers`, as `StateOf`), which the hosting
+  has not taken yet. Across repositories GitLab's and Azure DevOps' 403 or 404 name both,
+  `{head} or {base}` (the providers do not mark the head's read: the lead's to route). Both, and the
+  other organization's `not started` line, are pinned by `CreateRequestOperationProvidersTests`;
+  the other `not started` lines no test reads.
+- D316: a lost or 5xx create counts a request as made only against a list held before the POST; with
+  none it is read first, and still none, one found after is offered as open, never "Created".
+- D382 screens A3's default branches too (one line of WP-S's `RepositoryHosting.cs`, the only file
+  outside 13.1): an echoed one is the malformed answer, so the tab lists nothing, the form has no base.
+- Part N's checks: open points 36, 37, 38, 43 and 45 hold as the report reads them; N4's git requests
+  follow B7's order by git's version; Azure DevOps' fake records `Login` on `connection:` and `create:`
+  only; the drag presses 24 px left of the row's centre (there a right-click made it a double-click).
 - WP-R reads `PartN.Of(p)`, its `Provider` record (`BranchRowPath`, `MenuItem`, `FormTitle`, `Head`,
   `Base`, `RepositoryText`, `Title`, `CreateRoute`, `CreateStatus`, `Body`, `AbsentMembers`,
   `PushedFirst`, `OperationTitle`, `StatusText`, `NewRowName`, `CountAfterCreate`, `FormPicture`,
   `CreatedPicture`) and `RealWindowPictures`.
-- Alone (Debug, the laptop shared): 28.8 to 67.2 s a method, 5.6 to 12.3 s of it from the app's start to
-  the last picture; the rest (the steps after it, `End`, the preparation) was not measured: methods 1,
-  2, 3 and 7 pass 0.5's 40 s, for the lead to time again rested.
-- 7a's part N pictures: `n04a` (at times `n06b`) differs from the list, pixel-equal to the main
-  checkout's run before WP-N; `n02b`, `n07a` at times in the progress bar only. No file outside 13.1's
-  list changed; no using added to another package's file.
+- Alone (Debug, laptop shared): 28.8 to 67.2 s a method, 5.6 to 12.3 s from the app's start to the
+  last picture; methods 1, 2, 3 and 7 pass 0.5's 40 s, for the lead to time again rested.
+- 7a's part N pictures: `n04a` differs from the list, pixel-equal to the main checkout's run before
+  WP-N; `n02b` and `n07a` in the progress bar's segment only.
 
 ## 14. WP-R: the real-window pass
 

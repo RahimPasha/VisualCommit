@@ -24,7 +24,10 @@ namespace VisualCommit.Hosting.Tests;
 /// the fork with <c>target_project_id</c>; the 409, then <c>Open merge request !21</c>; the 400 forms;
 /// a 403 with and without the scope code. Azure DevOps: <c>CreateStatus</c> 201 and 200; <c>isDraft</c>;
 /// a fork's <c>forkSource.repository.id</c>; TF401179 and TF401398 in the App's words. Both: a lost
-/// answer (<c>CreatedThenDropped</c>) counted as created; <c>manifest/</c> starts nothing and asks
+/// answer (<c>CreatedThenDropped</c>) counted as created, but a 500 never counts a request open before
+/// the POST, also with no list held when Create is pressed; a GitLab title typed <c>Draft: </c>
+/// without the box a draft by the answer; A3's default branch naming the token a malformed answer
+/// (D382), nothing posted; <c>manifest/</c> starts nothing and asks
 /// nothing, also when its sign-in lands in another organization; a head in another repository whose
 /// read 404s named with the base; signed out, that provider's sign-in first; the tripwire after a
 /// create that pushed. On 0.4's lagged list.
@@ -509,6 +512,260 @@ public sealed class CreateRequestOperationProvidersTests
         Assert.Empty(Posts(provider == HostingProvider.GitLab ? served.GitLab.Requests : served.AzureDevOps.Requests));
         End(app, data, served);
     }
+
+    /// <summary>
+    /// D382 on A3's default branch (13.3): a server that echoes the request's token as the default
+    /// branch gives the provider's malformed answer, so the form shows no base and its words, Create
+    /// stays off, nothing is posted and no log line, kept text or git call holds the token.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(HostingProvider.GitLab)]
+    [InlineData(HostingProvider.AzureDevOps)]
+    public async Task A3_s_default_branch_naming_the_token_is_a_malformed_answer_and_nothing_is_posted(HostingProvider provider)
+    {
+        await using var served = await ServeAsync();
+        var gitLab = provider == HostingProvider.GitLab;
+        var clone = gitLab ? served.WebApp : served.MobileApp;
+        var token = gitLab ? served.GitLabToken : served.AzureDevOpsToken;
+        var bare = gitLab
+            ? served.GitLab.Project(Scenarios.Hosting7bWebApp).BarePath!
+            : served.AzureDevOps.Repository(served.Organization, Scenarios.Hosting7bProject, "mobile-app").BarePath;
+        await clone.GitAsync("branch", "--track", "topic/no-request", "origin/topic/no-request");
+        File.WriteAllText(Path.Combine(bare, "HEAD"), "ref: refs/heads/" + token + "\n");
+        using var data = new TempDirectory("create providers");
+        using var app = ShellDriver.StartWithTabs(data.Path, [clone.Path], promptHandler: new ScriptedPromptHandler(), gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
+        var repository = await app.WaitForRepositoryAsync();
+        if (gitLab)
+        {
+            await app.SignInAsync(provider, served.GitLabToken, cancellationToken: Cancelled);
+        }
+        else
+        {
+            await app.SignInAsync(provider, served.AzureDevOpsToken, served.Organization, Cancelled);
+        }
+
+        // The list's own A3 is malformed too, so the tab lists nothing (D382 fails closed).
+        await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.Failed, "A3's malformed answer");
+        Assert.Null(repository.HostingState.List);
+        await app.WaitForWatchersQuietAsync();
+        var fake = gitLab ? (FakeHostingService)served.GitLab : served.AzureDevOps;
+        var requests = fake.Requests.Count;
+
+        var (form, opening) = await OpenFormAsync(app, repository, "refs/heads/topic/no-request");
+        Assert.Null(form.Base);
+        Assert.Equal(string.Empty, form.BaseText);
+        Assert.Equal(gitLab ? "GitLab's answer could not be read." : "Azure DevOps' answer could not be read.", form.Error);
+        Assert.False(form.CreateCommand.CanExecute(null));
+        await form.CreateCommand.ExecuteAsync(null);
+        Assert.False(form.IsClosed);
+        Assert.Contains(fake.Requests.Skip(requests), request => request.Method == "GET" && request.Status is 200 or 304);
+        Assert.Empty(Posts(fake.Requests));
+        form.Cancel();
+        await opening;
+        Assert.DoesNotContain(AppLogFile.ReadLines(data.Path), line => line.Contains(": into ", StringComparison.Ordinal));
+        End(app, data, served);
+    }
+
+    /// <summary>
+    /// D316 against a list held before the POST (13.5): the list's read failed, so none is held when
+    /// Create is pressed; it is read first, and the request open from the head into the base before
+    /// the POST (GitLab's !21, Azure DevOps' !11) is not taken for the one a 500 may have made.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(HostingProvider.GitLab)]
+    [InlineData(HostingProvider.AzureDevOps)]
+    public async Task A_500_with_the_list_failed_never_counts_a_request_open_before_it_as_created(HostingProvider provider)
+    {
+        await using var served = await ServeAsync();
+        var gitLab = provider == HostingProvider.GitLab;
+        using var data = new TempDirectory("create providers");
+        using var app = await OpenAsync(data, served, gitLab ? served.WebApp : served.MobileApp, provider);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        var fake = gitLab ? (FakeHostingService)served.GitLab : served.AzureDevOps;
+        var (list, create) = gitLab
+            ? ("mrs:northfield/platform/web-app", "create:northfield/platform/web-app")
+            : ("pulls:fernhill-labs/mobile app/mobile-app", "create:fernhill-labs/mobile app/mobile-app");
+        FailWithServerError(served, provider, list);
+        await repository.Hosting.RefreshPullRequestsAsync(Cancelled);
+        await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.Failed, "the list failed");
+        Assert.Null(repository.Hosting.State.List);
+        var count = Count(served, provider);
+
+        var (form, opening) = await OpenFormAsync(app, repository, gitLab ? "refs/heads/feature/search" : "refs/heads/feature/sign-in");
+        FailWithServerError(served, provider, create);
+        var requests = fake.Requests.Count;
+        var log = app.LogMark();
+        await form.CreateCommand.ExecuteAsync(null);
+        await app.WaitForIdleAsync();
+
+        Assert.False(form.IsClosed);
+        Assert.Equal(gitLab ? "GitLab had a problem. Try again later." : "Azure DevOps had a problem. Try again later.", form.Error);
+        Assert.False(form.HasExisting);
+        Assert.DoesNotContain("Created", repository.OperationStatus.Text, StringComparison.Ordinal);
+        Assert.False(repository.OperationStatus.HasOffer);
+        var sent = fake.Requests.Skip(requests).Select(request => (request.Method, request.Route, request.Status)).ToList();
+        var post = sent.FindIndex(request => request.Method == "POST");
+        Assert.True(post >= 0, "No POST was sent.");
+        Assert.Equal(("POST", (string?)create, 500), sent[post]);
+        Assert.Contains(sent.Take(post), request => request.Method == "GET" && request.Route == list && request.Status is 200 or 304);
+        Assert.Contains(sent.Skip(post), request => request.Method == "GET" && request.Route == list);
+        Assert.Equal(count, Count(served, provider));
+        Assert.DoesNotContain(app.LogLinesSince(log), line => line.Contains(": created ", StringComparison.Ordinal));
+        form.Cancel();
+        await opening;
+        End(app, data, served);
+    }
+
+    /// <summary>
+    /// D316 with no list at all before the POST (13.5): the read before it fails too, the 500's
+    /// re-read lists !21 from <c>feature/search</c> into <c>main</c>, which may be older than the
+    /// POST, so the form keeps the failure's words and offers it as open; nothing reads "Created".
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_500_with_no_list_before_it_offers_the_request_found_after_it_as_open()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("create providers");
+        using var app = await OpenAsync(data, served, served.WebApp, HostingProvider.GitLab);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        served.GitLab.FailNext("mrs:northfield/platform/web-app", FakeGitLabFault.ServerError);
+        await repository.Hosting.RefreshPullRequestsAsync(Cancelled);
+        await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.Failed, "the list failed");
+
+        var (form, opening) = await OpenFormAsync(app, repository, "refs/heads/feature/search");
+        served.GitLab.FailNext("mrs:northfield/platform/web-app", FakeGitLabFault.ServerError);
+        served.GitLab.FailNext("create:northfield/platform/web-app", FakeGitLabFault.ServerError);
+        var requests = served.GitLab.Requests.Count;
+        await form.CreateCommand.ExecuteAsync(null);
+        await app.WaitForIdleAsync();
+
+        Assert.False(form.IsClosed);
+        Assert.Equal("GitLab had a problem. Try again later.", form.Error);
+        Assert.Equal((true, (int?)21, "Open merge request !21"), (form.HasExisting, form.ExistingNumber, form.OpenExistingText));
+        Assert.DoesNotContain("Created", repository.OperationStatus.Text, StringComparison.Ordinal);
+        Assert.Equal(
+            [("GET", "mrs:northfield/platform/web-app", 500), ("POST", "create:northfield/platform/web-app", 500), ("GET", "mrs:northfield/platform/web-app", 304)],
+            served.GitLab.Requests.Skip(requests).Where(request => request.Route is { } route && (route.StartsWith("mrs:", StringComparison.Ordinal) || route.StartsWith("create:", StringComparison.Ordinal)))
+                .Select(request => (request.Method, request.Route!, request.Status)));
+        Assert.Equal(3, served.GitLab.MergeRequests(served.GitLab.Project(Scenarios.Hosting7bWebApp)).Count);
+        await form.OpenExistingCommand.ExecuteAsync(null);
+        await opening;
+        Assert.Equal([new Uri(served.GitLab.Endpoints.WebBase, "northfield/platform/web-app/-/merge_requests/21").AbsoluteUri], OpenedUrls(app));
+        End(app, data, served);
+    }
+
+    /// <summary>
+    /// D316 after the sign-in a create stacks first (13.3, 13.5): the list's first read is held, so
+    /// none is held when Create is pressed; the POST's 500 comes after that read, and !21, open from
+    /// <c>feature/search</c> before it, is not taken for a created one.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_500_while_the_first_list_is_read_after_the_sign_in_never_counts_an_older_request()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("create providers");
+        using var app = ShellDriver.StartWithTabs(data.Path, [served.WebApp.Path], promptHandler: new ScriptedPromptHandler(), gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.SignedOut, "signed out");
+        await app.WaitForWatchersQuietAsync();
+        var hold = served.GitLab.HoldNext("mrs:northfield/platform/web-app");
+        try
+        {
+            var opening = repository.Operations.CreatePullRequestAsync("refs/heads/feature/search", null);
+            var signIn = await app.WaitForDialogAsync<SignInDialogViewModel>();
+            await signIn.Opened;
+            signIn.Token = served.GitLabToken;
+            await signIn.ConfirmCommand.ExecuteAsync(null);
+            var form = await app.WaitForDialogAsync<CreatePullRequestDialogViewModel>();
+            await form.Starting;
+            await hold.Arrived.WaitAsync(Cancelled);
+            Assert.Null(repository.Hosting.State.List);
+            served.GitLab.FailNext("create:northfield/platform/web-app", FakeGitLabFault.ServerError);
+            var creating = form.CreateCommand.ExecuteAsync(null);
+            await app.WaitForAsync(() => repository.OperationStatus.Text == Texts.CreatingRequest(HostingProvider.GitLab), "the create to reach its POST");
+            for (var i = 0; i < 10; i++)
+            {
+                await Task.Delay(50, Cancelled);
+                app.Settle();
+            }
+
+            hold.Dispose();
+            await creating;
+            await app.WaitForIdleAsync();
+
+            Assert.False(form.IsClosed);
+            Assert.Equal("GitLab had a problem. Try again later.", form.Error);
+            Assert.False(form.HasExisting);
+            Assert.DoesNotContain("Created", repository.OperationStatus.Text, StringComparison.Ordinal);
+            Assert.Equal(3, served.GitLab.MergeRequests(served.GitLab.Project(Scenarios.Hosting7bWebApp)).Count);
+            form.Cancel();
+            await opening;
+        }
+        finally
+        {
+            hold.Dispose();
+        }
+
+        End(app, data, served);
+    }
+
+    /// <summary>
+    /// 13.5: outside GitHub the draft is the answer's. A GitLab title typed <c>Draft: Try an idea</c>
+    /// with the box unticked is posted as typed (no sent title shown, no draft member) and is a draft:
+    /// <c>Created draft merge request !24</c>, the row's draft too.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task GitLab_s_title_typed_Draft_without_the_box_is_a_draft_by_the_answer()
+    {
+        await using var served = await ServeAsync();
+        await served.WebApp.GitAsync("branch", "--track", "topic/no-request", "origin/topic/no-request");
+        using var data = new TempDirectory("create providers");
+        using var app = await OpenAsync(data, served, served.WebApp, HostingProvider.GitLab);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        var requests = served.GitLab.Requests.Count;
+
+        var (form, opening) = await OpenFormAsync(app, repository, "refs/heads/topic/no-request");
+        form.PullRequestTitle = "Draft: Try an idea";
+        Assert.False(form.IsDraft);
+        Assert.False(form.ShowsSentTitle);
+        await CreateAsync(form, opening);
+        await app.WaitForIdleAsync();
+
+        var post = Assert.Single(Posts(served.GitLab.Requests.Skip(requests)));
+        Assert.Equal((WebAppProjectPath, 201), (post.Path, post.Status));
+        using (var body = JsonDocument.Parse(post.Body!))
+        {
+            Assert.Equal(
+                ["description", "source_branch", "target_branch", "title"],
+                body.RootElement.EnumerateObject().Select(member => member.Name).Order(StringComparer.Ordinal));
+            Assert.Equal("Draft: Try an idea", body.RootElement.GetProperty("title").GetString());
+        }
+
+        Assert.Equal("Created draft merge request !24", repository.OperationStatus.Text);
+        await app.WaitForAsync(() => repository.HostingState.List?.PullRequests.Count == 4, "four merge requests listed");
+        Assert.Equal((24, true), (repository.HostingState.List!.PullRequests[0].Number, repository.HostingState.List.PullRequests[0].IsDraft));
+        await app.WaitForWatchersQuietAsync();
+        app.Settle();
+        var row = app.Session.Shell.ActiveTab.LeftPanel.Rows.OfType<PullRequestRow>().First();
+        Assert.Equal(("!24 Draft: Try an idea", true), (row.Text, row.IsDraft));
+        End(app, data, served);
+    }
+
+    private static void FailWithServerError(ServedHosting7b served, HostingProvider provider, string route)
+    {
+        if (provider == HostingProvider.GitLab)
+        {
+            served.GitLab.FailNext(route, FakeGitLabFault.ServerError);
+        }
+        else
+        {
+            served.AzureDevOps.FailNext(route, FakeAzureDevOpsFault.ServerError);
+        }
+    }
+
+    private static int Count(ServedHosting7b served, HostingProvider provider) => provider == HostingProvider.GitLab
+        ? served.GitLab.MergeRequests(served.GitLab.Project(Scenarios.Hosting7bWebApp)).Count
+        : served.AzureDevOps.PullRequests(served.AzureDevOps.Repository(served.Organization, Scenarios.Hosting7bProject, "mobile-app")).Count;
 
     private static IEnumerable<FakeServiceRequest> Posts(IEnumerable<FakeServiceRequest> requests) =>
         requests.Where(request => request.Method == "POST" && request.Route is { } route && route.StartsWith("create:", StringComparison.Ordinal));

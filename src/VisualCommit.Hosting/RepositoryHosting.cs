@@ -833,8 +833,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
                     var read = await provider.ReadRepositoryAsync(token, candidate, linked).ConfigureAwait(false);
 
                     // D382: names that hold the request's token (a server that echoes it) would reach
-                    // the log lines, A4's request and the state, so the answer is malformed.
-                    return read.Value is { } answered && _session.EchoedToken(candidate.Provider, token, answered.Repository.FullName, answered.Parent?.FullName) is { } echoed
+                    // the log lines, A4's request and the state, so the answer is malformed; so would
+                    // the default branches, which a new request's form shows, logs and posts (13.3).
+                    return read.Value is { } answered
+                        && _session.EchoedToken(candidate.Provider, token, answered.Repository.FullName, answered.Parent?.FullName, answered.DefaultBranch, answered.ParentDefaultBranch) is { } echoed
                         ? HostingResult<RepositoryInfo>.Fail(echoed)
                         : read;
                 },

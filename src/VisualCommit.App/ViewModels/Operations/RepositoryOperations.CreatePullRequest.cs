@@ -402,6 +402,15 @@ public sealed partial class RepositoryOperations
         private async Task<(OperationReport Report, string? Words)> PostAsync(
             OperationText text, PullRequestPlace place, HostedRepository baseRepository, PullRequestEnd baseEnd, string baseBranch, string title, string body, bool draft)
         {
+            // D316's re-read tells a request this POST made from one open before it only against a
+            // list held before the POST: with none held (its read failed or has not ended), it is read
+            // first; still none, a request found after a lost answer is offered as open, never as created.
+            if (Repository.Hosting.State.List is null)
+            {
+                await RefreshAsync();
+            }
+
+            var known = Repository.Hosting.State.List is not null;
             var listedBefore = OpenFromHeadIntoBase(place, baseRepository, baseBranch).Select(pull => pull.Number).ToHashSet();
             var sameRepository = place.Repository.Equals(baseRepository);
             var request = new NewPullRequest(title, body, place.Branch, sameRepository ? null : place.Repository.Owner, baseBranch, draft)
@@ -428,13 +437,16 @@ public sealed partial class RepositoryOperations
             }
             else if (failure.Kind is HostingFailureKind.Network or HostingFailureKind.ServerError)
             {
-                // The POST may have arrived (D316): one from the head into the base not listed before counts as created.
+                // The POST may have arrived (D316): one from the head into the base not listed before counts as created;
+                // with no list before the POST, one found now may be older than it, so it is only offered as open.
                 await RefreshAsync();
-                if (OpenFromHeadIntoBase(place, baseRepository, baseBranch).FirstOrDefault(pull => !listedBefore.Contains(pull.Number)) is { } found)
+                var open = OpenFromHeadIntoBase(place, baseRepository, baseBranch).ToList();
+                if (known && open.FirstOrDefault(pull => !listedBefore.Contains(pull.Number)) is { } found)
                 {
                     return (await CreatedAsync(text, baseRepository, found, found.IsDraft), null);
                 }
 
+                _existing = known ? null : open.FirstOrDefault();
                 words = HostingTexts.Describe(failure, Login);
             }
             else

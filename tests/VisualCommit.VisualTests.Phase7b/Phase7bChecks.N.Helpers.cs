@@ -24,6 +24,7 @@ using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Graph;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Operations;
 using VisualCommit.Hosting;
@@ -715,21 +716,33 @@ public sealed partial class Phase7bChecksN
     private static TempRepo Clone(ServedHosting7b served, HostingProvider p) => p == GitLab ? served.WebApp : served.MobileApp;
 
     /// <summary>
-    /// The push's git requests since <paramref name="mark"/> (part N's "Git's version"): the
-    /// receive-pack's POST answered 200 as <c>x-access-token</c>; every request with credentials sent
-    /// as <c>x-access-token</c> and answered 200, but git 2.43's first without credentials and, on an
-    /// <c>Fernhill-Labs@</c> URL, its second with that user and an empty password, each 401.
+    /// The push's git requests since <paramref name="mark"/> (part N's "Git's version", N4): from git
+    /// 2.46 the first carries the account's token (D340's <c>proactiveAuth</c>); below 2.46 the first
+    /// goes without credentials and, on Azure DevOps' <c>Fernhill-Labs@</c> URL, the second with that
+    /// user and an empty password, each 401, before the helper's (B7's order, as
+    /// <c>Phase7bChecks.B.cs</c> asserts it for a clone). After that prefix every request is
+    /// <c>x-access-token</c>'s answered 200, the receive-pack's POST among them: no other 401 and no
+    /// other user name.
     /// </summary>
-    private static void AssertPushedThroughHelper(ServedHosting7b served, HostingProvider p, int mark)
+    private static void AssertPushedThroughHelper(ShellDriver app, ServedHosting7b served, HostingProvider p, int mark)
     {
         var requests = GitRequestsOf(served, p).Skip(mark).ToList();
+        var version = app.Session.Shell.Git?.Version;
+        (string? GivenUserName, int Status)[] first = version >= ProactiveAuthVersion
+            ? [("x-access-token", 200)]
+            : p == GitLab ? [(null, 401)] : [(null, 401), (Organization, 401), ("x-access-token", 200)];
+        Assert.True(
+            requests.Take(first.Length).Select(request => (request.GivenUserName, request.Status)).SequenceEqual(first),
+            $"The push's first requests were {string.Join("; ", requests.Take(first.Length).Select(request => $"{request.Method} {request.Path} as {request.GivenUserName ?? "nobody"} {request.Status}"))}, with git {version}.");
+        Assert.All(requests.Skip(first.Length), request => Assert.True(
+            request is { GivenUserName: "x-access-token", Status: 200 },
+            $"{request.Method} {request.Path} as {request.GivenUserName ?? "nobody"} answered {request.Status} after the first requests, with git {version}."));
         var receive = Assert.Single(requests, request => request.Method == "POST" && request.Path.EndsWith("git-receive-pack", StringComparison.Ordinal));
         Assert.Equal((200, "x-access-token"), (receive.Status, receive.GivenUserName));
-        Assert.All(requests, request => Assert.True(
-            request.GivenUserName == "x-access-token" ? request.Status == 200
-                : request.Status == 401 && (request.GivenUserName is null || (p == Azure && request.GivenUserName == Organization)),
-            $"{request.Method} {request.Path} as {request.GivenUserName ?? "nobody"} answered {request.Status}."));
     }
+
+    /// <summary>Git 2.46 sends a bound URL's first request with the account's token (8.6; part B's <c>ProactiveAuthVersion</c>, private to its class).</summary>
+    private static readonly GitVersion ProactiveAuthVersion = new(2, 46, 0);
 
     /// <summary>
     /// Every method's end (part N's conventions), after the app has closed: the tripwire for each
