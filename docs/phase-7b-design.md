@@ -3657,8 +3657,9 @@ is clean; CI's five jobs are green, each Test step under four fifths of its limi
 - D382 screens A3's default branches too (one line of WP-S's `RepositoryHosting.cs`, the only file
   outside 13.1): an echoed one is the malformed answer, so the tab lists nothing, the form has no base.
 - Part N's checks: open points 36, 37, 38, 43 and 45 hold as the report reads them; N4's git requests
-  follow B7's order by git's version; Azure DevOps' fake records `Login` on `connection:` and `create:`
-  only; the drag presses 24 px left of the row's centre (there a right-click made it a double-click).
+  follow B7's order by git's version; Azure DevOps' fake records `Login` on every request with a
+  PAT-shaped token but `areas` (first read as `connection:` and `create:` only: the last bullet); the
+  drag presses 24 px left of the row's centre (there a right-click made it a double-click).
 - WP-R reads `PartN.Of(p)`, its `Provider` record (the menu item, form, routes, body, texts, rows and
   pictures of N1 to N6) and `RealWindowPictures`.
 - Alone (Debug, laptop shared): 28.8 to 67.2 s a method, 5.6 to 12.3 s from the app's start to the
@@ -3681,6 +3682,35 @@ is clean; CI's five jobs are green, each Test step under four fifths of its limi
   for 7a's GitHub (the same three), a fetch right after a sign-in held and failed, a remote the
   rules give `bob@` bound to no token (D278) and the auto-fetch. `SignInBindingsWindowTests` starts
   the app through `ShellDriver`, so it joins 0.4's lagged list.
+- The lead's rulings R2 to R4 on hunt 3 (2026-11-07), in part N's checks and, for R4, part P's and
+  part B's (files outside 13.1: `Phase7bChecks.P.cs`, `Phase7bChecks.B.cs`). R2: `BaseRecorder` (part
+  N's helpers) records a form's `IsReadingBase` and `BaseText` from its add to `DialogHost.Open` on.
+  Method 4 starts it before the sign-in's Enter and asserts every state `(false, origin/main)`, never
+  `Reading Azure DevOps…` (N8, N4, open point 45); with the drop's base thrown away
+  (`form.GivenBase = null` in a scratch copy) it fails on `True|Reading Azure DevOps… ; False| ;
+  False| ; False|origin/main`. Method 3 asserts it around the drop's form in place of the empty
+  `Assert.False(form.IsReadingBase)`, but it cannot tell a given base from a dropped one: with A3's
+  answer kept from the list's read, a form not given its base reads A3 inside its constructor and is
+  added as `(false, origin/main)` too (method 3 passed under the same mutation), so on GitLab "given
+  (never `Reading GitLab…`)" is not observable and method 4 alone proves the given base. R3: every
+  part N menu placed by the pointer (`AssertMenuPlaced`: `AssertMenuAtPointer` where it fits 4 inside
+  the window, else phase 3's 4a rule, as the 597-px branch menus at 1100×700 are moved to y 4), the
+  drop's by its release point and the section's by its header's centre; `AssertFormBrushes` with the
+  head note (method 3 step 6, method 4 step 4) and the sent title (method 3 step 7) shown; Azure
+  DevOps' 409 by the core's and the session's Warnings with TF401179, as GitLab's; the Warnings'
+  names, messages and lines from `PartN` (`ProviderNameOf`, `CoreWarningOf`, `SessionWarningOf`);
+  the sign-ins' requests with each path and query (`AssertSignInRequests`; N8's connection with
+  `api-version=7.1-preview.1`, `areas` as B1's); N7's whole menu (`RemoteBranchMenuOf(p, "long")`,
+  415 high). R4: part N asserts Ada's `Login` on every Azure DevOps request but `areas` and `ada` on
+  every GitLab one (`AssertSentAsAda`, now also after methods 3's and 4's creates and on N5's
+  refusals); part P's `AssertAzureSignInList` (`repo:`, `pulls:`), P3's held refresh, P4's A3 reads
+  and P6's pages, and B8's list, compare it too; a fault's answer (P4's 403 and 500, B5's 500 and
+  401) comes before the fakes read the credential and stays unchecked. Each kind fails on a
+  mutation in a scratch copy (every menu 3 px right, the head note's brush, TF401179's words, the
+  list reads recorded as another account, the base dropped). The pictures are unchanged but for
+  `n04b`'s progress segment and six pixels one level off in `n05b`. Alone (Debug, laptop shared,
+  timing script): methods 1 to 7 40.1, 64.2, 35.5, 30.7, 26.2, 50.5 and 42.7 s; 5.5 to 21.4 s from
+  the app's start to the last picture.
 
 ## 14. WP-R: the real-window pass
 
