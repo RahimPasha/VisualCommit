@@ -456,6 +456,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
+WP-B (design 11, part B) is merged at `9409aa8`, after its reviews and three hunts, with the lead's
+ruling on B7's owner (`fernhill-labs`, the report's "Changed in this report after its first
+commit"). The lead runs its classes, part B's checks and the lagged list (as at WP-A's merge, one command at
+a time through `heavy-run.sh`), then 11.8's picture comparison (references saved before the merge in
+`D:/Projects/Personal/phase7b-work/ref-preB/`, phase 6's from `D:/Projects/Personal/gate7a-reference/`),
+has part B's pictures inspected and reads CI's run on it (42339567989). Part P's checks are being
+written and reviewed (D244), then committed before WP-P. Open point 8 is settled (Waiting on the
+owner, "Azure DevOps' probes"); its changes to the fake, the live command's fake and A9 are being
+built in `D:/Projects/Personal/vc-wt/p7b-anon-probe`.
+
 WP-A (design 10, part A) is merged at `b6de3cf`; its classes, lagged list and picture inspection
 passed (Notes). CI's run on it (42301846503) failed two phase 6 tests on Linux that WP-A does not
 touch. The close race is fixed and merged (`85d599c`; its classes pass; CI's run on it,
@@ -463,13 +473,8 @@ touch. The close race is fixed and merged (`85d599c`; its classes pass; CI's run
 round designs a measure that is at least as strict for superlinear work, judged paired against the
 old procedure, in `D:/Projects/Personal/vc-wt/p7b-palette-growth-2` on `wip/p7b-palette-growth-2`
 (from `85d599c`), then put to skeptics; if none holds, the test stays as it is (Notes, "The two
-Linux failures of 42301846503"). Part B's checks are committed (`37b3ea0`, D244); WP-B (section 11) is being built from
-that commit in `D:/Projects/Personal/vc-wt/p7b-clone` on `wip/p7b-clone`, then reviewed and hunted; at its
-merge the lead runs 11.8's comparison, part B's checks, 11.6's classes and the lagged list. Open point 8 of the report: Azure DevOps'
-`Check_1b_probes` (17 reads, its new probe of the sandbox organization's connectionData without a
-credential among them) runs when the owner agrees (Waiting on the owner); until then A9 rests on the
-ASSUMED Anonymous 200. For the week from 2026-11-05 the owner gives the phase about all of its
-allowance.
+Linux failures of 42301846503"). For the week from 2026-11-05 the owner gives the phase about all of
+its allowance.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -927,11 +932,19 @@ every commit.
   answer); the gate's two live runs fall before 2026-11-29, or the owner makes GitHub's again first.
   GitLab's was made again on 2026-11-05 with Project: Read among its user permissions too (D385;
   the one it replaced, which expired on 2026-12-04, revoked), set with the lead's GitLab-only script
-  and checked as 15.8 says; its expiry date is still to be told by the owner.
-- **Azure DevOps' probes before WP-A's merge** (the report's open point 8; design 16.1's As built):
-  the lead asks to run `--filter-class "*AzureDevOpsLiveTests"` with `--filter-method "*Check_1b_probes*"`,
-  17 reads and no write in the sandbox's organization, after the offline classes, the owner told; its
-  new probe tells whether the organization allows public projects, which decides A9's expected result.
+  and checked as 15.8 says; it expires on 2026-12-04 (the owner's answer of 2026-11-06).
+- **Azure DevOps' probes** (the report's open point 8; design 16.1's As built): the owner agreed on
+  2026-11-06. The lead runs `--filter-class "*AzureDevOpsLiveTests"` with `--filter-method "*Check_1b_probes*"`,
+  17 reads and no write in the sandbox's organization, after the offline classes on the same commit
+  (`9409aa8`: 404 of 404); its new probe tells whether the organization allows public projects, which
+  decides A9's expected result. Run on 2026-11-07 (UTC) through `heavy-run.sh`: passed, 17 requests,
+  no write. connectionData with no credential answered 200 with the Anonymous identity, where the
+  fake answers 401: the sandbox's organization allows public projects. Every other probe answered as
+  before. As 16.1 decided, the fake keeps the Anonymous 200 to public organizations, the live command's
+  fake treats the sandbox's organization as public, and the lead ruled A9 through the fault
+  `AnonymousIdentity` (open point 8's second way). Built and reviewed in
+  `D:/Projects/Personal/vc-wt/p7b-anon-probe` (`wip/p7b-anon-probe`). The run's notes are outside the
+  repository, in `D:/Projects/Personal/phase7b-work/live/azure-devops-check1b-2026-11-07.txt`.
 - **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
   (the review before the gate and the runs after it: the avatars' lookup per author, git's
