@@ -3639,6 +3639,35 @@ Done when these classes pass, 7a's part N classes unchanged; part N passes with 
 credential text (outside `OperationTexts.Hosting.Credentials.cs`, which keeps them, 1.7); the tripwire
 is clean; CI's five jobs are green, each Test step under four fifths of its limit (0.6).
 
+**As built** (WP-N, `b05fabc` to its last commit, 2026-11-07). Where the build differs from the text
+or settles what it left open:
+- 7a's const `Cancelled` cannot share its name with a method: the provider form is `CancelledOf(p)`.
+  `QuickActionsNote` is a static property built from `HostingTexts.Name(GitLab)`. Texts as the report's.
+- 13.4's rows: a cut text measures part of a character under its room, which left `Choose…` at 753.
+  `RowRepositoryText` (a `TextBlock` styled as one, in `CreatePullRequestDialogView.axaml.cs`) takes its
+  whole room once cut, so `Choose…` ends at 758 ±1; a text that fits lays out as 7a's `StackPanel` did
+  (`CreateRequestDialogProvidersTests`, by bounds).
+- `PullRequestEnd`'s equality leaves `Hosted` out (7a's tests compare ends without it); the form
+  compares `Hosted` itself. The "already open" re-read keys on `Refusal` alone (GitHub sets it on a 422
+  only, as 7a's `Kind` check did). GitLab's `Refused` adds its scope sentence only with a `Detail`.
+- Open point 37 as the report reads it: `HeadUnknown(p, head's branch, head's repository)`,
+  `BranchesUnknown(p, head's branch, base's branch)`. Info lines no check reads: `not started` for no
+  hosted remote, another organization (before or after the sign-in) and a head no branch of P can hold.
+- Part N's checks: open points 36 (the source's GET, 304), 43 (two list reads: GitLab's 200 then 304,
+  Azure DevOps' 200 and 200), 38 (`n02b`, `n04c`: the Into repository cut by a few pixels, `Choose…`
+  at the column's right) and 45 (the drop's base kept across the sign-in) hold as the report reads them.
+  Azure DevOps' fake records `Login` on `connection:` and `create:` only, so its other requests are
+  asserted by their credential form (as part P's). The drag presses 24 px left of the row's centre: at
+  the centre, just after a right-click there, the press counted as a double-click and checked
+  `local-work` out.
+- Alone (Debug, the laptop shared with other builds): 28.8 to 67.2 s a method, of it 5.6 to 12.3 s
+  from the app's start to the last picture; the rest is the scenario's preparation per process (part
+  P's Azure DevOps method 1 took 46.9 s alone in the same hour). Methods 1, 2, 3 and 7 passed 0.5's 40 s
+  alone on that preparation, not on their steps.
+- 7a's part N pictures: 19 of 20 the files `phase-7a-pictures.sha256` lists; `n04a-already-open`
+  differs and is pixel-equal to the main checkout's run of `c5ba918`, before WP-N (the lead's judgement
+  by region). No file outside 13.1's list changed; no using was added to a 7a or another package's file.
+
 ## 14. WP-R: the real-window pass
 
 ### 14.1 Goal and files
