@@ -3,7 +3,6 @@
 // the checkout through FETCH_HEAD is an operation of its own; opening and copying are not
 // operations, and the refresh runs outside the queue.
 
-using System.Globalization;
 using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
@@ -16,6 +15,9 @@ namespace VisualCommit.App.ViewModels.Operations;
 
 public sealed partial class RepositoryOperations
 {
+    /// <summary>The requests whose checkout waits or runs in this tab, by their page's address.</summary>
+    private readonly HashSet<string> _requestCheckouts = new(StringComparer.Ordinal);
+
     /// <inheritdoc cref="IRepositoryActions.OpenPullRequestAsync"/>
     /// <remarks>Its page through the launcher (D321): not an operation; a failure is logged.</remarks>
     public Task OpenPullRequestAsync(PullRequest pullRequest)
@@ -35,6 +37,9 @@ public sealed partial class RepositoryOperations
     /// <c>FETCH_HEAD</c> only and creates the branch without upstream at its SHA, and the existing
     /// checkout follows as its own operation (its stash, detached-HEAD question, blocked dialog and
     /// undo). Never a <c>refs/pull</c> fetch line or a <c>refs/remotes/&lt;r&gt;/pr/&lt;n&gt;</c> ref.
+    /// A second start of the same request while its checkout waits or runs (two double-clicks on its
+    /// row) starts nothing: both would plan from the same refs, and a second fetch's branch would
+    /// exist by then (docs/phase-7b-design.md 12's As built).
     /// </remarks>
     public async Task CheckOutPullRequestAsync(PullRequest pullRequest)
     {
@@ -44,11 +49,37 @@ public sealed partial class RepositoryOperations
             return;
         }
 
-        var number = pullRequest.Number.ToString(CultureInfo.InvariantCulture);
+        var provider = pullRequest.BaseRepository.Provider;
+        var what = $"{Repository.Name}: checking out {HostingTexts.Request(provider)} {HostingTexts.Number(provider, pullRequest.Number)}";
+        var key = pullRequest.HtmlUrl.AbsoluteUri;
+        lock (_requestCheckouts)
+        {
+            if (!_requestCheckouts.Add(key))
+            {
+                Log.Info($"{what}: not started, its checkout is running.");
+                return;
+            }
+        }
+
+        try
+        {
+            await CheckOutPullRequestCoreAsync(pullRequest, refs, what);
+        }
+        finally
+        {
+            lock (_requestCheckouts)
+            {
+                _requestCheckouts.Remove(key);
+            }
+        }
+    }
+
+    private async Task CheckOutPullRequestCoreAsync(PullRequest pullRequest, RepoRefs refs, string what)
+    {
         var plan = PullRequestCheckout.Plan(Repository.HostingState, refs, pullRequest);
         if (plan.DisabledReason is { } reason)
         {
-            Log.Info($"{Repository.Name}: checking out pull request #{number}: not started, {reason}.");
+            Log.Info($"{what}: not started, {reason}.");
             return;
         }
 
@@ -60,7 +91,7 @@ public sealed partial class RepositoryOperations
                     await FetchAsync(plan.Remote!);
                     if (FindRef(plan.RemoteRef!) is null)
                     {
-                        Log.Info($"{Repository.Name}: checking out pull request #{number}: not started, {plan.RemoteRef} does not exist after the fetch.");
+                        Log.Info($"{what}: not started, {plan.RemoteRef} does not exist after the fetch.");
                         return;
                     }
                 }

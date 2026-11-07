@@ -3422,32 +3422,32 @@ files call none of 1.5's shims; CI's five jobs are green.
 **As built** (WP-P, `34720c2` to its last commit, 2026-11-07). Where the build differs from the text
 or settles what it left open:
 - `34720c2` holds 12.9's five areas in one commit (the bound); part P's checks and the fixes follow.
-- `BranchLabelOf(repository, branch, relativeTo)`: the base is a third, required argument (two cannot
-  tell a project); WP-N passes its chosen base, so an Azure DevOps fork across projects reads
-  `{project}/{Name}:{branch}`. `RefItemRow`'s `pullRequest:` is a `PullRequest?`.
-- Azure DevOps' plans are `PullRequestCheckoutKind.FetchHead`, always with a reason, never fetched
-  (12.7's "never FetchHead": never an enabled one): `AddRemoteFor(p, fork)`, `HeadNotNamed(p)` without
-  `HeadRepository`, `NotFetchedBy(the first RequestRemote of its head, branch)` when that remote's fetch
-  lines leave it out; a fork that is a remote with a fetchable line is that remote branch's checkout.
+- `BranchLabelOf(repository, branch, relativeTo)`: the base is a third, required argument; WP-N passes
+  its chosen base, so an Azure DevOps fork across projects reads `{project}/{Name}:{branch}`.
+  `RefItemRow`'s `pullRequest:` is a `PullRequest?`.
+- Azure DevOps' plans are `FetchHead`, always with a reason, never fetched (12.7: never an enabled
+  one): `AddRemoteFor(p, fork)`, `HeadNotNamed(p)`, or `NotFetchedBy(the first RequestRemote of its
+  head, branch)` when its fetch lines leave it out; a fork that is a fetching remote is its checkout.
 - FETCH_HEAD after `refs/merge-requests/5/head` on 2.56: `<sha>\t\t'refs/merge-requests/5/head' of
-  <url>` (open point 30 holds; CI's 2.43 measures it too).
-- For the lead: methods 4 and 5 fail closed on the conventions' audit (`ShotPAuditAtEnd` runs it in
-  full; `End` fails on it after every step). P8's row and open point 27 foresee D356's row cut with "…"
-  at 260, its tooltip the reason (p08a, p08b, p10d): that rule and P8's row cannot both hold. P6's row
-  foresees no cut: GitLab's `More than 300 open merge requests`, one character longer than 7a's, which
-  fits, overflows at 260 while its tooltip is the action (p06a), so a product change (a text that
-  fits, a tooltip that holds it) is open there too. "Disabled" reads `IsEffectivelyEnabled`;
-  `Local branches` lists folders first (P1: a set).
-- `PartP.LabelsOf(p)`, open point 26's record of rows 0 to 4: the remote label folds into `+1`, GitLab's
-  `main` into `+2` with `upstream/main`; the checks assert all but `Right`.
-- `PartP` uses nothing of the 7b project; WP-R reads `RepositoryOf`, `TitleOf`, `RowsOf`, `SectionMenu`,
-  `RowMenuOf`, `RowsPictureOf`, `SectionMenuPictureOf`, `LabelsOf`. Outside 12.1's list: the 7b
-  csproj's link to 7a's `GraphTestHost.cs` (WP-F's) and `CommitGraphControl.Render.cs`'s one
-  `BadgeText` call (12.6).
-- Alone with the script (Debug, laptop): 31.6 to 44.2 s a method, about 28 s of it the scenario's
-  preparation; 3.0 to 14.0 s to the last picture (part B's measure). 7a's 31 P and G pictures are the
-  same files; phase 3's `03a` to `03h` pixel-identical; `a06c` reads `Sign in to Azu…` behind.
-  `RequestOperationsProvidersTests` passes under the lag.
+  <url>` (open point 30 holds).
+- A second start of a request's checkout while its first waits or runs starts nothing (Info `…: not
+  started, its checkout is running.`): the queue merges only a waiting operation, so two double-clicks
+  fetched twice and the second's branch failed. The lines name the provider's request (`!n`).
+- Outside 12.1's list, WP-S's `RepositoryHosting.OnAccountChanged` stops the run in flight whose
+  account its provider no longer holds signed in (sign-out, refusal, another account) as `Update`
+  stops another provider's: no page or fork lookup goes with that token (D257). An A3 read or a create
+  in flight is not covered.
+- For the lead: methods 4 and 5 fail closed on the conventions' audit (`ShotPAuditAtEnd`, after every
+  step). D356's row is cut at 260 as P8 and open point 27 foresee, its tooltip the reason (p08a, p08b,
+  p10d); P6 foresees no cut, but GitLab's `More than 300 open merge requests` overflows while its
+  tooltip is the action (p06a): a ruling, or a product change. "Disabled" reads
+  `IsEffectivelyEnabled`; P1's local branches are a set.
+- `PartP.LabelsOf(p)` records open point 26's rows 0 to 4 (checked but `Right`). `PartP` uses nothing
+  of the 7b project; WP-R reads its `RepositoryOf`, `TitleOf`, `RowsOf`, `SectionMenu`, `RowMenuOf`,
+  `RowsPictureOf`, `SectionMenuPictureOf` and `LabelsOf`. Also outside the list: the 7b csproj's link
+  to 7a's `GraphTestHost.cs` and `CommitGraphControl.Render.cs`'s `BadgeText` call.
+- Alone (Debug, laptop): 31.6 to 44.2 s a method, about 28 s of it preparation; 3.0 to 14.0 s to the
+  last picture. 7a's P and G pictures and phase 3's `03a` to `03h` unchanged.
 
 ## 13. WP-N: a new pull or merge request (part N)
 

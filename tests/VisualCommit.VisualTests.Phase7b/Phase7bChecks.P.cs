@@ -306,6 +306,9 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.Equal([$"v {P.GitLabTitle} 0", "[Failed] " + P.GitLabForbiddenText], Section(app));
             var lines = LogSince(app, logMark);
             var id = RequestIdOf(lines, $"GitLab: GET {P.GitLabListPath} failed:");
+
+            // {id} the refused answer's: the fake's X-Request-Id form (part B's), never a counter of the app's.
+            Assert.Matches(PartB.GitLabRequestIdPattern, id);
             AssertWarningOnce(lines, P.GitLabRefusedWarning(id));
             AssertWarningOnce(lines, P.GitLabListFailedWarning(id));
             Assert.DoesNotContain(lines, line => line.Message.StartsWith("web-app: listed", StringComparison.Ordinal));
@@ -425,7 +428,6 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.Equal((AccountState.SignedIn, TokenPlace.Keychain), (account?.State, account?.Place));
             var failure = mobileApp.HostingState.Failure!;
             Assert.Equal((HostingFailureKind.ServerError, Azure, (string?)null), (failure.Kind, failure.Provider, failure.Detail));
-            Assert.StartsWith(P.AzureDevOpsServerErrorStart, failure.Message, StringComparison.Ordinal);
             Assert.Null(mobileApp.HostingState.List);
             Assert.Empty(mobileApp.HostingState.ByRef);
             // Ada's account's binding for MobileAppUrl in its bound form, git's URL without its user (CredentialBinding).
@@ -436,8 +438,14 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.Equal(P.AzureDevOpsServerErrorText, await app.RestPointerOnAsync(Part(await MessageAsync(app), "PullRequestMessageText")));
             var lines = LogSince(app, logMark);
             var id = RequestIdOf(lines, $"Azure DevOps: GET {P.AzureDevOpsListPath} failed:");
+
+            // {id} the refused answer's ActivityId (part B's form), and the fake's TF400898 message names
+            // the same {activity} (its body and its header carry one value), whole with its full stop.
+            Assert.Matches(PartB.AzureDevOpsActivityIdPattern, id);
+            var serverError = P.AzureDevOpsServerErrorStart + id + ".";
+            Assert.Equal(serverError, failure.Message);
             AssertWarningOnce(lines, P.AzureDevOpsRefusedWarning(id));
-            AssertWarningOnce(lines, P.AzureDevOpsListFailedWarning(id, failure.Message));
+            AssertWarningOnce(lines, P.AzureDevOpsListFailedWarning(id, serverError));
             Assert.DoesNotContain(lines, line => line.Message.StartsWith("mobile-app: listed", StringComparison.Ordinal));
 
             // P3 step 6: a refresh held at the fake.

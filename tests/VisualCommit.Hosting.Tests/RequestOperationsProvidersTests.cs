@@ -16,7 +16,10 @@ namespace VisualCommit.Hosting.Tests;
 /// !23 through <c>FETCH_HEAD</c> from <c>refs/merge-requests/23/head</c> adds only its branch, the
 /// local configuration unchanged; Azure DevOps' !11 tracks <c>origin/feature/sign-in</c>, fetched first
 /// when unread; !13 starts no git call; open in browser, copy link and refresh ask only the listed
-/// fake; <c>manifest/</c> asks nothing after the sign-in; signed out, no request. On 0.4's lagged list.
+/// fake; <c>manifest/</c> asks nothing after the sign-in; signed out, no request. A second start of
+/// !23's checkout while the first runs starts nothing (one fetch, no dialog), and a sign-out while
+/// GitLab's list is read sends no further page or fork lookup with its token (12's As built). On 0.4's
+/// lagged list.
 /// </summary>
 public sealed class RequestOperationsProvidersTests
 {
@@ -67,6 +70,83 @@ public sealed class RequestOperationsProvidersTests
         Assert.DoesNotContain(git, request => request.GivenUserName is { } user && user != "x-access-token");
         var fetchHead = File.ReadAllText(Path.Combine(served.WebApp.Path, ".git", "FETCH_HEAD"));
         Assert.StartsWith($"{head}\t\t'refs/merge-requests/23/head' of ", fetchHead, StringComparison.Ordinal);
+        End(app, data, served);
+    }
+
+    [AvaloniaFact]
+    public async Task A_second_checkout_of_a_request_while_its_first_runs_starts_nothing()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("requests providers");
+        using var app = await OpenAsync(data, served, served.WebApp, HostingProvider.GitLab);
+        var repository = app.Session.Shell.ActiveTab.Repository!;
+        var bare = served.GitLab.Project(Scenarios.Hosting7bWebApp).BarePath!;
+        var head = await GitAsync(served.WebApp, "--git-dir", bare, "rev-parse", "refs/merge-requests/23/head");
+        var refsBefore = await RefsAsync(served.WebApp);
+        var logMark = app.LogMark();
+        var twentyThree = Request(repository, 23);
+
+        // Two starts in one UI turn, as two double-clicks on !23's row before its fetch ends: both
+        // would plan fix-typo, and a second fetch's branch would exist by then.
+        var first = repository.Operations.CheckOutPullRequestAsync(twentyThree);
+        var second = repository.Operations.CheckOutPullRequestAsync(twentyThree);
+        await app.WaitForAsync(() => (first.IsCompleted && second.IsCompleted) || app.Session.Services.DialogHost.Current is not null, "both checkouts to end or a dialog");
+        Assert.Null(app.Session.Services.DialogHost.Current);
+        await Task.WhenAll(first, second);
+        await app.WaitForIdleAsync();
+
+        Assert.Single(app.GitCalls(), call => call.CommandText == "git fetch --progress --no-tags --refmap= --write-fetch-head origin refs/merge-requests/23/head");
+        Assert.Single(app.GitCalls(), call => call.CommandText == $"git branch --no-track fix-typo {head}");
+        Assert.Equal("fix-typo", await GitAsync(served.WebApp, "symbolic-ref", "--short", "HEAD"));
+        Assert.Equal(refsBefore.Append("refs/heads/fix-typo").Order(StringComparer.Ordinal), await RefsAsync(served.WebApp));
+        var lines = app.LogLinesSince(logMark);
+        Assert.Single(lines, line => line.Contains("[INF] web-app: checking out merge request !23: not started, its checkout is running.", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, line => line.Contains("[WRN]", StringComparison.Ordinal));
+        End(app, data, served);
+    }
+
+    [AvaloniaFact]
+    public async Task A_sign_out_while_the_list_is_read_sends_nothing_more_with_its_token()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("requests providers");
+        using var app = await OpenAsync(data, served, served.WebApp, HostingProvider.GitLab);
+        var webApp = app.Session.Shell.ActiveTab.Repository!;
+
+        // Three pages now (298 more), and !23's fork looked up again after the sign-out's ForgetKept:
+        // a run that went on would send pages 2 and 3 and the lookup with the signed-out token.
+        var project = served.GitLab.Project(Scenarios.Hosting7bWebApp);
+        for (var n = 1; n <= 298; n++)
+        {
+            served.GitLab.AddMergeRequest(project, $"Added request {n}", "octo", "topic/no-request", "main");
+        }
+
+        var hold = served.GitLab.HoldNext("mrs:northfield/platform/web-app");
+        Task refresh;
+        int mark;
+        try
+        {
+            refresh = webApp.Operations.RefreshPullRequestsAsync();
+            await hold.Arrived.WaitAsync(TimeSpan.FromSeconds(60), Cancelled);
+            mark = served.GitLab.Requests.Count;
+            await app.Session.Services.Hosting.SignOutAsync(HostingProvider.GitLab, Cancelled);
+            await app.WaitForAsync(() => webApp.HostingState.PullRequests == PullRequestsState.SignedOut, "web-app signed out");
+        }
+        finally
+        {
+            hold.Dispose();
+        }
+
+        await refresh.WaitAsync(TimeSpan.FromSeconds(60), Cancelled);
+        await app.WaitForAsync(() => served.GitLab.Requests.Count > mark, "the held page's answer");
+        await app.WaitForIdleAsync();
+        await app.WaitForWatchersQuietAsync();
+
+        Assert.Equal(["mrs:northfield/platform/web-app"], served.GitLab.Requests.Skip(mark).Select(request => request.Route));
+        Assert.Equal(PullRequestsState.SignedOut, webApp.HostingState.PullRequests);
+        Assert.Null(webApp.HostingState.List);
+        Assert.Empty(served.AzureDevOps.Requests);
+        Assert.Empty(served.GitHub.Requests);
         End(app, data, served);
     }
 
