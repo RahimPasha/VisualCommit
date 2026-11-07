@@ -158,9 +158,10 @@ Build:
 
 Checks, live trial and review:
 
-- [ ] 15. Each part's visual checks written into `docs/test-reports/phase-7b.md` just before its
+- [x] 15. Each part's visual checks written into `docs/test-reports/phase-7b.md` just before its
   package is built (D244), by one writer and one reviewer, each marked for the real-window pass or
-  not, committed before the UI they test.
+  not, committed before the UI they test. Parts A (`f4ae515`), B (`37b3ea0`), P (`f1ac5ac`) and N (`28ec097`,
+  merged at `5561548`).
 - [ ] 16. The owner's sandboxes and tokens for Azure DevOps and GitLab made as the design says
   (D346, D352), and the live command extended to both, run with them; what it finds goes into the
   fakes (D342). Under way: the sandboxes are made (2026-11-02; their first tokens replaced, Waiting
@@ -497,9 +498,8 @@ WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8'
 picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
 tests; their fixes are merged (`e49bd5c`, `eb218a3`, `7ddb928`; Notes, "The three failures of
 42339567989") and their classes pass; CI's run on them (42354014761) is green in all five jobs.
-Part N's checks (design 13.8) are being written and reviewed in
-`D:/Projects/Personal/vc-wt/p7b-ncheck` (`wip/p7b-ncheck`, from `75a65e2`) while WP-P is built, from the
-design and part P's checks, never from WP-P's code; the lead commits them before WP-N starts (D244).
+Part N's checks (design 13.8) are committed (`28ec097`, merged at `5561548`; D244), written
+while WP-P was built, from the design and part P's checks, never from WP-P's code (Notes).
 Part P's checks are committed (`f1ac5ac`, D244); WP-P (section 12) is being
 built from that commit in `D:/Projects/Personal/vc-wt/p7b-requests` on `wip/p7b-requests`, then
 reviewed and hunted; at its merge the lead runs 12.9's runs (the lagged list, `Phase7aChecksP` and
@@ -666,6 +666,17 @@ every commit.
 - **Part P's checks** (2026-11-06): P1 to P14 with 22 scripted pictures (7 methods; P1 and P10
   repeated in the real window, 4 captures), written by one Opus writer and reviewed by one Opus
   reviewer (three minors, all fixed), open points 22 to 33; committed at `f1ac5ac`.
+- **Part N's checks** (2026-11-07): N1 to N9 in 7 methods with 22 scripted pictures (N2 and N6
+  repeated in the real window, 4 captures), written by one Opus writer in
+  `D:/Projects/Personal/vc-wt/p7b-ncheck` while WP-P was built, from the design, part P's checks and the
+  merged code (never WP-P's), and reviewed by one Opus reviewer in two rounds (one major, N4's config
+  check against mobile-app's own `Fernhill-Labs@` URL, and eight minors, all fixed). Open points 34 to
+  45; the lead ruled two: the real-window twins create from the prepared `topic/no-request` (35), and
+  the phase's 29 methods and 93 scripted pictures stand, past 0.5's and 0.6's estimates and under
+  D230's 40 (44). Several points give the expected result the design reads and what changes if WP-N's
+  build shows otherwise (36, 37, 43, 45): such a change goes under "Changed in this report after its
+  first commit" with the lead's ruling. The report is about 415 KB; its shared conventions stay about
+  15 KB.
 - **The two Linux failures of 42301846503** (2026-11-06). Investigated by an Opus agent each, every
   fix put to two Opus skeptics; the experiments' files are in
   `D:/Projects/Personal/phase7b-work/verify/close-slots/` and `.../verify/palette-growth/`.
