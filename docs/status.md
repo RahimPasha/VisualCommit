@@ -328,8 +328,14 @@ point 8's merge (`20e529e`), before the three fixes: `windows-latest`, `macos-la
 alone, as on `9409aa8` (the clone's first request `UserName` null, 401: the failure `e49bd5c` fixes).
 Jobs and Test steps: `windows-latest` 33 min 44 s (31 min 7 s), `macos-latest` 29 min 21 s (27 min
 46 s), `ubuntu-latest` 8 min 5 s (6 min 2 s), the containers 6 min 48 s and 8 min 1 s (5 min 5 s and
-5 min 39 s), each under four fifths. The run of `490f77b`, which carries the three fixes, is
-[42354014761](https://github.com/RahimPasha/VisualCommit/actions/runs/42354014761), under way.
+5 min 39 s), each under four fifths.
+
+[42354014761](https://github.com/RahimPasha/VisualCommit/actions/runs/42354014761) on `490f77b`, the
+three fixes of 42339567989 merged: all five jobs green (Windows' keychain step and "Build the opt-in
+projects" green, macOS' keychain step green, the containers' Secret Service steps green; both
+containers, git 2.43.0, pass B7's three requests). Jobs and Test steps: `windows-latest` 32 min 23 s
+(29 min 44 s), `macos-latest` 31 min 40 s (29 min 54 s), `ubuntu-latest` 7 min 41 s (5 min 58 s), the
+containers 8 min 13 s and 6 min 30 s (6 min 3 s and 4 min 31 s), each under four fifths.
 
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
@@ -490,8 +496,8 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8's comparison and
 picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
 tests; their fixes are merged (`e49bd5c`, `eb218a3`, `7ddb928`; Notes, "The three failures of
-42339567989") and their classes pass; the lead reads the CI run of the push that carries them, which
-must be green in all five jobs. Part N's checks (design 13.8) are being written and reviewed in
+42339567989") and their classes pass; CI's run on them (42354014761) is green in all five jobs.
+Part N's checks (design 13.8) are being written and reviewed in
 `D:/Projects/Personal/vc-wt/p7b-ncheck` (`wip/p7b-ncheck`, from `75a65e2`) while WP-P is built, from the
 design and part P's checks, never from WP-P's code; the lead commits them before WP-N starts (D244).
 Part P's checks are committed (`f1ac5ac`, D244); WP-P (section 12) is being
