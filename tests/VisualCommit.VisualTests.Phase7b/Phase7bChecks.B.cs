@@ -115,7 +115,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
                 Assert.Equal(Organization, account?.Account.Login);
             }
 
-            Assert.Single(app.Session.Shell.Tabs);
+            AssertOneEmptyTab(app);
             Assert.Null(app.Session.Services.DialogHost.Current);
 
             // B1 step 3: the button names the one signed-in provider.
@@ -136,17 +136,31 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             if (gitLab)
             {
                 await WaitForGitLabAsync(app, served, mark, PartB.GitLabListRoute);
-                AssertGitLabList(Assert.Single(GitLabSince(served, mark)), 200);
-                Assert.Empty(AzureSince(served, mark));
             }
             else
             {
                 await WaitForAzureAsync(app, served, mark, PartB.AzureDevOpsListRoute);
-                AssertAzureList(served, Assert.Single(AzureSince(served, mark)), 200);
-                Assert.Empty(GitLabSince(served, mark));
             }
 
-            Assert.Empty(GitHubSince(served, mark));
+            // The requests since step 4's mark: its one list, the other fakes none (B3, and B6 after the hover).
+            var listMark = mark;
+            void AssertTheListAlone()
+            {
+                if (gitLab)
+                {
+                    AssertGitLabList(Assert.Single(GitLabSince(served, listMark)), 200);
+                    Assert.Empty(AzureSince(served, listMark));
+                }
+                else
+                {
+                    AssertAzureList(served, Assert.Single(AzureSince(served, listMark)), 200);
+                    Assert.Empty(GitLabSince(served, listMark));
+                }
+
+                Assert.Empty(GitHubSince(served, listMark));
+            }
+
+            AssertTheListAlone();
             Assert.Empty(StoreCallsSince(app, stored));
             Assert.Equal([provider], browser.Providers);
             Assert.False(browser.ShowsSwitch);
@@ -156,9 +170,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             AssertRows(app, rows, cut: longName);
             var scroll = InBrowser(app, "CloneFromGitHubList").GetVisualDescendants().OfType<ScrollViewer>().First();
             Assert.True(scroll.Extent.Height <= scroll.Viewport.Height + 0.5, "The list scrolls.");
-            var behind = BrowseButton(app);
-            Assert.True(behind.IsEffectivelyVisible && !behind.IsEffectivelyEnabled, $"{button} is not drawn disabled under the browser.");
-            Assert.Equal(button, AutomationProperties.GetName(behind));
+            AssertBehind(app, button);
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is SettingsDialogViewModel);
             ShotB(app, PartB.ListedPictureOf(provider));
 
@@ -166,7 +178,6 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             var item = Item(app, longName);
             AssertCut(app, item, longName);
             Assert.All(rows.Where(row => row.FullName != longName), row => Assert.DoesNotContain(NameBlock(Item(app, row.FullName)).TextLayout.TextLines, line => line.HasCollapsed));
-            var hovered = Mark(served);
             var tip = await app.RestPointerOnAsync(item);
             Assert.Equal(longName + "\n" + PartB.Private, tip);
             Assert.True(item.IsPointerOver, "The long row is not under the pointer.");
@@ -176,7 +187,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             AssertToolTipInWindow(app);
             AssertRows(app, rows, cut: longName);
             Assert.All(rows.Where(row => row.FullName != longName), row => Assert.Null(BackgroundOf(Item(app, row.FullName))));
-            AssertNoRequests(served, hovered);
+            AssertTheListAlone();
             ShotB(app, gitLab ? PartB.B06GitLab : PartB.B06Azure, keepPointer: true);
             app.MoveToNeutral();
 
@@ -258,8 +269,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             Assert.DoesNotContain(api, request => request.Route is "user" or PartB.GitLabListRoute
                 || (request.Route ?? string.Empty).StartsWith("connection:", StringComparison.Ordinal)
                 || (request.Route ?? string.Empty).StartsWith("repos:", StringComparison.Ordinal));
-            Assert.DoesNotContain(api, request => request.Status == 401);
-            Assert.All(api, request => Assert.Equal(gitLab ? FakeAuthorizationForm.Bearer : FakeAuthorizationForm.BasicEmptyUser, request.Authorization));
+            Assert.All(api, request => Assert.Equal((gitLab ? FakeAuthorizationForm.Bearer : FakeAuthorizationForm.BasicEmptyUser, 200), (request.Authorization, request.Status)));
             foreach (var route in gitLab
                 ? new[] { "project:northfield/platform/web-app", "mrs:northfield/platform/web-app" }
                 : new[] { "repo:fernhill-labs/mobile app/mobile-app", "pulls:fernhill-labs/mobile app/mobile-app" })
@@ -277,6 +287,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             clone = Path.Combine(clones.Path, folder);
             var cloneTopLevel = await TopLevelAsync(home, clone);
             var tab = Assert.Single(app.Session.Shell.Tabs);
+            Assert.Equal(folder, tab.Title);
             Assert.True(SameFolder(repository.Path, cloneTopLevel), $"The tab shows {repository.Path}, git names {cloneTopLevel}.");
             Assert.False(tab.Welcome.IsCloneFormOpen);
             Assert.Contains(app.Session.Services.Recent.Items, recent => SameFolder(recent.Path, cloneTopLevel));
@@ -363,7 +374,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
                     Assert.Equal(PartB.NoteSize, ((TextBlock)InBrowser(app, "CloneFromGitHubStatus")).FontSize);
                     AssertNoRequests(served, mark);
                     Assert.Empty(StoreCallsSince(app, stored));
-                    Assert.True(BrowseButton(app).IsEffectivelyVisible, $"{button} is not shown behind the browser.");
+                    AssertBehind(app, button);
                     ShotB(app, gitLab ? PartB.B04GitLab : PartB.B04Azure);
                 }
                 finally
@@ -435,14 +446,14 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             var start = gitLab ? PartB.GitLabListingFailedStart : PartB.AzureDevOpsListingFailedStart;
             Assert.Single(lines, line => line.Message.StartsWith(start, StringComparison.Ordinal));
             var id = RequestIdOf(lines, start);
+            Assert.Matches(gitLab ? PartB.GitLabRequestIdPattern : PartB.AzureDevOpsActivityIdPattern, id);
             if (gitLab)
             {
-                Assert.Matches(@"^FAKE-GL-\d{6}$", id);
                 Assert.Equal(AccountState.SignedIn, session.AccountOf(HostingProvider.GitLab)?.State);
                 AssertWarningOnce(lines, string.Format(System.Globalization.CultureInfo.InvariantCulture, PartB.GitLabListingFailed, id));
                 AssertWarningOnce(lines, string.Format(System.Globalization.CultureInfo.InvariantCulture, PartB.GitLabCoreWarning, id));
                 AssertWarningOnce(lines, string.Format(System.Globalization.CultureInfo.InvariantCulture, PartB.GitLabSessionWarning, id));
-                Assert.True(BrowseButton(app).IsEffectivelyVisible, $"{button} is not shown behind the browser.");
+                AssertBehind(app, button);
             }
             else
             {
@@ -652,8 +663,8 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             Assert.Empty(AzureSince(served, mark));
             Assert.Empty(GitHubSince(served, mark));
             Assert.Empty(StoreCallsSince(app, stored));
-            Assert.Single(app.Session.Shell.Tabs);
-            Assert.True(BrowseButton(app).IsEffectivelyVisible && !BrowseButton(app).IsEffectivelyEnabled, "The button is not drawn disabled under the palette's browser (open point 21).");
+            AssertOneEmptyTab(app);
+            AssertBehind(app, PartB.GitLabButton);
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is SettingsDialogViewModel);
             app.PressKey(Key.Escape);
             await app.WaitForAsync(() => Browser(app) is null, "the browser to close");
@@ -679,7 +690,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             Assert.False(app.FindByAutomationId(signIn, "SignInNoKeychain").IsEffectivelyVisible, "SignInNoKeychain shows.");
             Assert.True(app.FindByAutomationId(signIn, "CancelButton").IsEffectivelyEnabled, "Cancel is disabled.");
             Assert.False(app.FindByAutomationId(signIn, "ConfirmButton").IsEffectivelyEnabled, "Sign in is enabled.");
-            Assert.Single(app.Session.Shell.Tabs);
+            AssertOneEmptyTab(app);
             Assert.True(Welcome(app).IsCloneFormOpen, "The form is not open behind the dialog.");
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is SettingsDialogViewModel);
             Assert.Null(app.Session.Shell.OpenPalette);
@@ -707,8 +718,8 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             var records = RecordsJson(data);
             AssertBrowser(app, PartB.AzureDevOpsTitle, string.Empty, chooseEnabled: false, switchTexts: [PartB.GitLabName, PartB.AzureDevOpsName], selected: PartB.AzureDevOpsName);
             AssertRows(app, PartB.AzureDevOpsRows, cut: PartB.AzureDevOpsLongName);
-            Assert.Single(app.Session.Shell.Tabs);
-            Assert.Equal(PartB.FromAnAccount, AutomationProperties.GetName(BrowseButton(app)));
+            AssertOneEmptyTab(app);
+            AssertBehind(app, PartB.FromAnAccount);
             Assert.DoesNotContain(app.Session.Services.DialogHost.Open, open => open is SettingsDialogViewModel);
             ShotB(app, PartB.B08Browser);
 
@@ -727,7 +738,7 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             app.Click(app.FindByAutomationId("CancelButton"));
             await app.WaitForAsync(() => app.Session.Services.DialogHost.Current is null, "no dialog open");
             Assert.Null(session.AccountOf(HostingProvider.GitHub));
-            Assert.Single(app.Session.Shell.Tabs);
+            AssertOneEmptyTab(app);
             Assert.True(Welcome(app).IsCloneFormOpen, "The form closed.");
             Assert.Null(Browser(app));
             AssertNoRequests(served, mark);

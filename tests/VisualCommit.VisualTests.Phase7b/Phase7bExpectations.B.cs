@@ -65,6 +65,14 @@ public static partial class Phase7bExpectations
         public const string AzureDevOpsListingFailedStart = "Listing Azure DevOps repositories failed:";
         public const string GitHubListingFailedStart = "Listing GitHub repositories failed:";
 
+        /// <summary>
+        /// The failed answer's request id as the fakes write it: GitLab's <c>x-request-id</c>
+        /// (<c>FAKE-GL-</c> and six digits) and Azure DevOps' <c>ActivityId</c> (a GUID that begins
+        /// <c>7b0aac71-0000-4a00-8000-</c>); a real service's ids differ.
+        /// </summary>
+        public const string GitLabRequestIdPattern = @"^FAKE-GL-\d{6}$";
+        public const string AzureDevOpsActivityIdPattern = @"^7b0aac71-0000-4a00-8000-[0-9a-f]{12}$";
+
         /// <summary>The HTTP core's warnings (5.2).</summary>
         public const string GitLabCoreWarning = "GitLab: GET /api/v4/projects failed: 500 (request {0}).";
         public const string AzureDevOpsCoreWarning = "Azure DevOps: GET /Fernhill-Labs/_apis/git/repositories failed: 401 (request {0}).";
@@ -199,6 +207,9 @@ public static partial class Phase7bExpectations
         public const double ListMinHeight = 58;
         public const double SwitchHeight = 28;
         public const double SwitchGap = 4;
+
+        /// <summary>A switch button's padding left and right (<c>Padding</c> 10,0, as the settings screen's Git scope switch).</summary>
+        public const double SwitchPadding = 10;
         public const double SwitchToFilter = 8;
         public const double NoteSize = 11.5;
         public const double Tolerance = 1;

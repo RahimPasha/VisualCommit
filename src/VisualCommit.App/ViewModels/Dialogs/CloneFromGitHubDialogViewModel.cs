@@ -106,9 +106,11 @@ public sealed partial class CloneProviderChoice : ObservableObject
 /// one at a time, the title naming it; each provider's list is asked once, when it is first shown,
 /// and its rows, status, error and lines are kept and shown while it is; a switch keeps the filter
 /// and clears the selection. <see cref="Start"/> begins the shown provider's load; every load runs on
-/// the dialog's one cancellation, which Cancel, Esc and the window's <c>CancelAll</c> (D234) cancel;
-/// an answer is applied on the thread that started it (the UI thread), one for a provider not shown
-/// changes nothing on screen, and one that arrives after the dialog closed changes nothing.
+/// the dialog's one cancellation, which every close cancels (Choose as well as Cancel, Esc and the
+/// window's <c>CancelAll</c>, D234), so that no provider's list goes on paging with its token for a
+/// dialog that has closed; an answer is applied on the thread that started it (the UI thread), one
+/// for a provider not shown changes nothing on screen, and one that arrives after the dialog closed
+/// changes nothing.
 /// </summary>
 public sealed partial class CloneFromGitHubDialogViewModel : DialogViewModel<string?>
 {
@@ -160,6 +162,10 @@ public sealed partial class CloneFromGitHubDialogViewModel : DialogViewModel<str
         {
             choice.IsSelected = choice.Provider == provider;
         }
+
+        // Every close ends every load: Choose closes the dialog while another provider's list may
+        // still be loading (or paging), whose answer nothing could use (RunAsync returns when closed).
+        Closing += (_, _) => _cancel.Cancel();
     }
 
     /// <summary>The signed-in providers, in D353's order.</summary>

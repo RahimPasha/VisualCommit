@@ -232,6 +232,51 @@ public sealed class CloneFromAccountDialogViewModelTests
         Assert.DoesNotContain(log.Entries, entry => entry.Level >= LogLevel.Warning);
     }
 
+    [Fact]
+    public async Task Choose_cancels_another_provider_s_load_still_running()
+    {
+        // GitLab listed and shown; Azure DevOps' list held, observing its token as the session's does.
+        var log = new RecordingLog();
+        var asked = new List<HostingProvider>();
+        var gitLab = new TaskCompletionSource<HostingResult<RepositoryList>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = new TaskCompletionSource<HostingResult<RepositoryList>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        CancellationToken heldToken = default;
+        Task<HostingResult<RepositoryList>> Run(HostingProvider provider, CancellationToken token)
+        {
+            asked.Add(provider);
+            if (provider == HostingProvider.GitLab)
+            {
+                return gitLab.Task;
+            }
+
+            heldToken = token;
+            token.Register(() => held.TrySetCanceled(token));
+            return held.Task;
+        }
+
+        var dialog = new CloneFromGitHubDialogViewModel([HostingProvider.GitLab, HostingProvider.AzureDevOps], HostingProvider.GitLab, Run, log);
+        _ = dialog.Start();
+        gitLab.SetResult(Ok(HostingProvider.GitLab, "web-app", "tool"));
+        await dialog.Load;
+        dialog.Provider = HostingProvider.AzureDevOps;
+        dialog.Provider = HostingProvider.GitLab;
+        Assert.False(dialog.LoadOf(HostingProvider.AzureDevOps).IsCompleted);
+        Assert.False(heldToken.IsCancellationRequested);
+
+        var row = dialog.Rows[0];
+        dialog.Selected = row;
+        dialog.ConfirmCommand.Execute(null);
+
+        Assert.True(dialog.IsClosed);
+        Assert.Equal(row.CloneUrl, await dialog.Result);
+        Assert.True(heldToken.IsCancellationRequested, "Choose left Azure DevOps' load running.");
+        await dialog.LoadOf(HostingProvider.AzureDevOps).WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
+        Assert.True(dialog.LoadOf(HostingProvider.AzureDevOps).IsCompletedSuccessfully);
+        Assert.Equal([HostingProvider.GitLab, HostingProvider.AzureDevOps], asked);
+        Assert.Empty(log.Entries);
+        Assert.Equal([FullName(HostingProvider.GitLab, "web-app"), FullName(HostingProvider.GitLab, "tool")], dialog.Rows.Select(each => each.FullName));
+    }
+
     [Theory]
     [InlineData(HostingProvider.GitLab, HostingFailureKind.ServerError, "500 Internal Server Error", "FAKE-GL-000001", null, "Listing GitLab repositories failed: ServerError: 500 Internal Server Error (request FAKE-GL-000001)", "GitLab had a problem. Try again later.")]
     [InlineData(HostingProvider.AzureDevOps, HostingFailureKind.BadCredentials, "Unauthorized", "a1b2", "Fernhill-Labs", "Listing Azure DevOps repositories failed: BadCredentials: Unauthorized (request a1b2)", "Azure DevOps refused the token of Fernhill-Labs. Sign in to Azure DevOps in Settings, Accounts.")]

@@ -260,6 +260,29 @@ public sealed partial class Phase7bChecksB
 
     private static Button BrowseButton(ShellDriver app) => app.Find<Button>("CloneFromGitHubButton");
 
+    /// <summary>
+    /// The form's button behind a browser over the form (the report's "Behind the backdrop the form
+    /// with …"): shown and drawn disabled (its command waits for the browser, open point 21), its
+    /// automation name and the text it draws <paramref name="text"/>.
+    /// </summary>
+    private static void AssertBehind(ShellDriver app, string text)
+    {
+        app.Settle();
+        var behind = BrowseButton(app);
+        Assert.True(behind.IsEffectivelyVisible, $"{text} is not shown behind the browser.");
+        Assert.False(behind.IsEffectivelyEnabled, $"{text} is not drawn disabled under the browser.");
+        Assert.Equal(text, AutomationProperties.GetName(behind));
+        Assert.Equal(text, behind.GetVisualDescendants().OfType<TextBlock>().Single().Text);
+    }
+
+    /// <summary>The window's one tab, empty (the report's "one tab, empty"): <c>New tab</c>, no repository, no dashboard, as 7a's B3 names it.</summary>
+    private static void AssertOneEmptyTab(ShellDriver app)
+    {
+        var tab = Assert.Single(app.Session.Shell.Tabs);
+        Assert.Equal((PartA.NewTab, false, false), (tab.Title, tab.HasRepository, tab.IsDashboard));
+        Assert.True(tab.IsEmpty, "The one tab is not empty.");
+    }
+
     private static TextBox Box(ShellDriver app, string name) => app.Find<TextBox>(name);
 
     /// <summary>
@@ -419,6 +442,7 @@ public sealed partial class Phase7bChecksB
                 Assert.Equal(PartB.SwitchToFilter, app.BoundsOf(box).Top - button.Bounds.Bottom, PartB.Tolerance);
                 var drawn = (Button)InBrowser(app, button.Id);
                 Assert.Same(Application.Current!.FindResource("VcFlatButton"), drawn.Theme);
+                Assert.Equal(new Thickness(PartB.SwitchPadding, 0), drawn.Padding);
                 Assert.Equal(button.Text, AutomationProperties.GetName(drawn));
                 Assert.Equal(button.Selected ? palette.TextPrimary : palette.TextSecondary, (drawn.Foreground as ISolidColorBrush)?.Color);
 

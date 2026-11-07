@@ -209,6 +209,8 @@ public sealed class CloneFromAccountTests
     {
         await using var served = await ServeAsync();
         using var data = new TempDirectory("clone from account palette");
+        using var opened = await TempRepo.CreateAsync("local");
+        await opened.CommitFileAsync("README.md", "local\n", "First commit");
         var app = ShellDriver.Start(
             data.Path,
             gitHub: provider == HostingProvider.GitHub ? served.GitHub : null,
@@ -224,15 +226,21 @@ public sealed class CloneFromAccountTests
             app.PressKey(Key.Escape);
             app.Settle();
 
-            // Signed out: the provider's dialog first; cancelled, it leaves the tabs.
+            // Signed out: the provider's dialog first; cancelled, it leaves the tabs (D300: no tab). The
+            // active tab holds a repository, so that a tab taken before the sign-in would be a new one.
+            Assert.True(await app.Session.Shell.ActiveTab.OpenAsync(opened.Path), "The repository did not open.");
+            await app.WaitForRepositoryAsync();
+            await app.WaitForWatchersQuietAsync();
             var tabs = app.Session.Shell.Tabs.ToList();
+            var active = app.Session.Shell.ActiveTab;
             await RunAsync(app, command);
             var dialog = await app.WaitForDialogAsync<SignInDialogViewModel>();
             Assert.Equal(provider, dialog.Provider);
             dialog.CancelCommand.Execute(null);
             await app.WaitForAsync(() => app.Session.Services.DialogHost.Current is null, "the dialog to close");
             Assert.Equal(tabs, app.Session.Shell.Tabs);
-            Assert.False(app.Session.Shell.ActiveTab.Welcome.IsCloneFormOpen);
+            Assert.Same(active, app.Session.Shell.ActiveTab);
+            Assert.All(app.Session.Shell.Tabs, tab => Assert.False(tab.Welcome.IsCloneFormOpen));
 
             // Again, signing in through the dialog: then its browser on its provider.
             await RunAsync(app, command);
@@ -256,7 +264,13 @@ public sealed class CloneFromAccountTests
             Assert.Equal((provider, title, false), (browser.Provider, browser.Title, browser.ShowsSwitch));
             Assert.Null(browser.ErrorText);
             Assert.NotEmpty(browser.Rows);
-            Assert.Equal(tabs, app.Session.Shell.Tabs);
+
+            // The form opens where a palette command opens (5.10): a new tab at the end, the repository's kept.
+            Assert.Equal(tabs.Count + 1, app.Session.Shell.Tabs.Count);
+            Assert.Equal(tabs, app.Session.Shell.Tabs.Take(tabs.Count));
+            Assert.Same(app.Session.Shell.Tabs[^1], app.Session.Shell.ActiveTab);
+            Assert.True(active.HasRepository);
+            Assert.False(active.Welcome.IsCloneFormOpen);
             Assert.True(app.Session.Shell.ActiveTab.Welcome.IsCloneFormOpen);
             Assert.False(app.Session.Shell.ActiveTab.Welcome.BrowseCommand.CanExecute(null));
             browser.CancelCommand.Execute(null);
