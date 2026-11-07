@@ -3651,20 +3651,20 @@ is clean; CI's five jobs are green, each Test step under four fifths of its limi
   other organization's `not started` line, are pinned by `CreateRequestOperationProvidersTests`;
   the other `not started` lines no test reads.
 - D316: a lost or 5xx create counts a request as made only against a list held before the POST; with
-  none it is read first, and still none, one found after is offered as open, never "Created".
+  none, the run in flight is waited for alone (the hosting's `Changed`, ended by the tab's `Lifetime`:
+  no `IRepositoryHosting` member gives a run's own task), or, none in flight, one is made; still none,
+  one found after is offered as open, never "Created". GitHub too, where 7a sent no read.
 - D382 screens A3's default branches too (one line of WP-S's `RepositoryHosting.cs`, the only file
   outside 13.1): an echoed one is the malformed answer, so the tab lists nothing, the form has no base.
 - Part N's checks: open points 36, 37, 38, 43 and 45 hold as the report reads them; N4's git requests
   follow B7's order by git's version; Azure DevOps' fake records `Login` on `connection:` and `create:`
   only; the drag presses 24 px left of the row's centre (there a right-click made it a double-click).
-- WP-R reads `PartN.Of(p)`, its `Provider` record (`BranchRowPath`, `MenuItem`, `FormTitle`, `Head`,
-  `Base`, `RepositoryText`, `Title`, `CreateRoute`, `CreateStatus`, `Body`, `AbsentMembers`,
-  `PushedFirst`, `OperationTitle`, `StatusText`, `NewRowName`, `CountAfterCreate`, `FormPicture`,
-  `CreatedPicture`) and `RealWindowPictures`.
+- WP-R reads `PartN.Of(p)`, its `Provider` record (the menu item, form, routes, body, texts, rows and
+  pictures of N1 to N6) and `RealWindowPictures`.
 - Alone (Debug, laptop shared): 28.8 to 67.2 s a method, 5.6 to 12.3 s from the app's start to the
-  last picture; methods 1, 2, 3 and 7 pass 0.5's 40 s, for the lead to time again rested.
-- 7a's part N pictures: `n04a` differs from the list, pixel-equal to the main checkout's run before
-  WP-N; `n02b` and `n07a` in the progress bar's segment only.
+  last picture; methods 1, 2, 3 and 7 pass 0.5's 40 s: the lead's to time again rested.
+- 7a's part N pictures, last run: `n02b`, `n04a` and `n06b` differ from the list, each pixel-equal to
+  the main checkout's run before WP-N (which of them differs varies from run to run).
 
 ## 14. WP-R: the real-window pass
 
