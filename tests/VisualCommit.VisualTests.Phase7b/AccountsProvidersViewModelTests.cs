@@ -15,9 +15,13 @@ namespace VisualCommit.VisualTests.Phase7b;
 /// the blocks' order, which blocks show (all off too), 10.2's texts per state, Azure DevOps' name
 /// line, one provider's event leaving another's toggled switch, an untoggled switch following its
 /// account's changes, Save's switches one per block, one block's sign-out disabling every block's
-/// buttons, also in a screen reopened while it runs, each command's provider, the focus by
-/// <c>IdOf</c>, an old git and the unsubscription.
-/// The session is a stub; nothing here reaches a fake or the network.
+/// buttons, also in a screen reopened while it runs, a block that stops showing busy already showing
+/// the sign-out's end, each command's provider, the focus by <c>IdOf</c>, an old git and the
+/// unsubscription.
+/// The session is a stub; nothing here reaches a fake or the network. No dispatcher runs here, so a
+/// block's continuation after a sign-out runs on the thread pool, beside the test: a test reads the
+/// block's state at the sign-out's end in <c>IsBusy</c>'s own change, on that continuation's thread,
+/// never by polling it from the test's.
 /// </summary>
 public sealed class AccountsProvidersViewModelTests
 {
@@ -203,10 +207,48 @@ public sealed class AccountsProvidersViewModelTests
     }
 
     /// <summary>
+    /// The sign-out's end in the block that started it (docs/phase-7b-design.md 10.9's as built,
+    /// 7a's 8.3): when the block stops showing busy, in <c>IsBusy</c>'s change, on which every block's
+    /// buttons are asked again, it already shows the account's state and the keychain's note; the
+    /// focus moves to its "Sign in…" after that, enabled.
+    /// </summary>
+    [Fact]
+    public async Task The_block_that_signs_out_shows_the_account_and_the_note_when_it_stops_showing_busy()
+    {
+        const string Reason = "The keychain is locked.";
+        var session = new ProvidersSession { SignOutHold = new(TaskCreationOptions.RunContinuationsAsynchronously) };
+        session.Accounts[HostingProvider.GitLab] = Status(Ada, AccountState.SignedIn, TokenPlace.Keychain);
+        using var model = Model(session);
+        var atTheEnd = new List<(bool SignedOut, bool ShowsSignIn, string? Note)>();
+        model.GitLab.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AccountBlockViewModel.IsBusy) && !model.GitLab.IsBusy)
+            {
+                atTheEnd.Add((model.GitLab.IsSignedOut, model.GitLab.ShowsSignIn, model.GitLab.SignOutNote));
+            }
+        };
+        var focus = new List<(string Id, bool Busy, bool CanSignIn)>();
+        model.FocusRequested += (_, id) => focus.Add((id, model.GitLab.IsBusy, model.GitLab.SignInCommand.CanExecute(null)));
+
+        var signOut = model.GitLab.SignOutCommand.ExecuteAsync(null);
+        Assert.True(model.GitLab.IsBusy);
+        session.SignOutHold.SetResult(Reason);
+        await signOut;
+
+        var end = Assert.Single(atTheEnd);
+        Assert.True(end.SignedOut, "GitLab's block stopped showing busy before it showed the account's state.");
+        Assert.True(end.ShowsSignIn, "GitLab's block stopped showing busy before it offered Sign in….");
+        Assert.Equal(VisualCommit.App.ViewModels.Operations.OperationTexts.AccountTexts.AccountsSignOutNote(Reason), end.Note);
+        Assert.Equal([("AccountsSignInButtonGitLab", false, true)], focus);
+    }
+
+    /// <summary>
     /// A screen reopened while a sign-out runs (Hunt 3; a sign-out goes on when its screen closes,
     /// D256): the block of the sign-out's provider shows "Signing out…" and every block's buttons are
     /// disabled until it ends, so no second "Sign out…" is offered; then it shows the account's state
-    /// and the keychain's note as the screen that started it would. A screen opened after the end shows
+    /// and the keychain's note as the screen that started it would, already when it stops showing busy
+    /// (read in <c>IsBusy</c>'s change: CI 42339567989 polled <c>IsBusy</c> from the test's thread and
+    /// read the note before the block's continuation had set it). A screen opened after the end shows
     /// nothing busy. One sign-out reaches the session.
     /// </summary>
     [Fact]
@@ -232,14 +274,22 @@ public sealed class AccountsProvidersViewModelTests
             Assert.False(block.SignOutCommand.CanExecute(null), $"{block.Label}'s Sign out… can run while GitLab's sign-out runs.");
         }
 
+        var ended = new TaskCompletionSource<(bool SignedOut, bool ShowsSignIn, string? Note)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        reopened.GitLab.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AccountBlockViewModel.IsBusy) && !reopened.GitLab.IsBusy)
+            {
+                ended.TrySetResult((reopened.GitLab.IsSignedOut, reopened.GitLab.ShowsSignIn, reopened.GitLab.SignOutNote));
+            }
+        };
+
         session.SignOutHold.SetResult(Reason);
         await signOut;
-        var deadline = DateTime.UtcNow.AddSeconds(30);
-        while (reopened.GitLab.IsBusy && DateTime.UtcNow < deadline)
-        {
-            await Task.Yield();
-        }
+        var end = await ended.Task.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
 
+        Assert.True(end.SignedOut, "The reopened screen's GitLab block stopped showing busy before it showed the account's state.");
+        Assert.True(end.ShowsSignIn, "The reopened screen's GitLab block stopped showing busy before it offered Sign in….");
+        Assert.Equal(VisualCommit.App.ViewModels.Operations.OperationTexts.AccountTexts.AccountsSignOutNote(Reason), end.Note);
         Assert.False(reopened.GitLab.IsBusy, "The reopened screen's GitLab block is still busy after its sign-out ended.");
         Assert.True(reopened.GitLab.IsSignedOut);
         Assert.Equal(VisualCommit.App.ViewModels.Operations.OperationTexts.AccountTexts.AccountsSignOutNote(Reason), reopened.GitLab.SignOutNote);
