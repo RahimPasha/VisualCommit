@@ -2595,6 +2595,19 @@ is in an argument, URL, config value, log or file.
   MEASURED 2026-11-01), so the tests' host now sends it absolute, as the IDN test's did, and the
   token is taken on both gits; no assertion changed. Behind a host that redirects relatively, such
   a curl keeps another user's name and D82's order is lost instead; `Select`'s drop holds either way.
+- 8.6's first row, read again at CI's 2.43 (2026-11-07, run 42339567989's two containers): "`<organization>@`
+  sends `<organization>:` first" means first before the helper, not as the first request. Below 2.46
+  an `<organization>@` URL's first request goes without credentials, 401: v2.43.0's `get_active_slot`
+  calls `init_curl_http_auth` only with a password or `curl_empty_auth_enabled()`, which with
+  `http.emptyAuth` unset holds only once a 401 has restricted the methods to more than Basic and Digest,
+  so libcurl has `CURLAUTH_ANY`, no password and sends no header. Its own retry (`Curl_http_auth_act`)
+  sends the URL's user with an empty password, 401; git then asks the app's helper and the third
+  request carries the token, 200 (r7 H4b, g3 G2.2's H2 row; MEASURED again on the laptop with Git for
+  Windows' 2.43.0 given the install's `git-http-backend`, against the Azure DevOps fake and against a
+  server that logs each header; libcurl's Negotiate support changes nothing, the fake offering Basic
+  alone). B7 asserted the organization on the first request; the report changed it (its "Changed in
+  this report after its first commit"). 14.4 step 3's "git before 2.46 first sends the URL's
+  `<organization>`" is to be read the same way.
 
 ## 9. WP-S: the session for three providers
 
