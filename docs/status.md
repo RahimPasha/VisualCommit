@@ -322,6 +322,15 @@ requests below 2.46 at `e49bd5c` (`wip/p7b-git243`), the sign-out's end at `eb21
 6 min 32 s (5 min 8 s), the containers 9 min 21 s and 7 min 23 s (6 min 42 s and 5 min 14 s), each
 under four fifths.
 
+[42351282469](https://github.com/RahimPasha/VisualCommit/actions/runs/42351282469) on `f7ede15`, open
+point 8's merge (`20e529e`), before the three fixes: `windows-latest`, `macos-latest` and
+`ubuntu-latest` green; both containers failed `Phase7bChecksB.Check_B1_B3_B6_B7_azure_sign_in_list_and_clone`
+alone, as on `9409aa8` (the clone's first request `UserName` null, 401: the failure `e49bd5c` fixes).
+Jobs and Test steps: `windows-latest` 33 min 44 s (31 min 7 s), `macos-latest` 29 min 21 s (27 min
+46 s), `ubuntu-latest` 8 min 5 s (6 min 2 s), the containers 6 min 48 s and 8 min 1 s (5 min 5 s and
+5 min 39 s), each under four fifths. The run of `490f77b`, which carries the three fixes, is
+[42354014761](https://github.com/RahimPasha/VisualCommit/actions/runs/42354014761), under way.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
