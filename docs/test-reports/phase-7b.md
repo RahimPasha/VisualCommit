@@ -924,7 +924,9 @@ comparing no capture there (14.4 step 2). No part P step opens the browser (ruli
   graph its local label; their R pictures are taken in that state, which no row or menu of the section
   reads. Methods 3 to 7 are not prepared.
 - **The graph at 1100×700** is 7a's part G's: 440 wide, the columns Branch / Tag (x 0 to 130), Graph
-  and Message only (Date and Author give way, phase 1's rule); a badge follows the name inside its label:
+  and Message only on `web-app`'s and `mobile-app`'s four-lane graphs (Date and Author give way, phase
+  1's rule; `manifest`'s one-lane graph keeps Date, `2026-01-01 12:40`, by the same rule); a badge
+  follows the name inside its label:
   6, the icon 10 (`IconPullRequest`), 3, then `{N}` in the label's typeface, then the label's padding 6,
   all in the label's own text colour; the name is cut first, never the badge; one badge per request, on
   the first of its labels (local before remote, `BadgesOf`). Where a name is cut, where a badge lies and
@@ -1867,6 +1869,14 @@ An expected result changed after its UI existed goes here with its reason.
   "requests" under the header `Merge requests`. A product change (a tooltip that also holds the row's
   text) would change P6's and P8's tooltips, written word for word, and, for GitHub, 7a's, whose
   pictures must stay the same files. The lead opened `p06a`, `p08a`, `p08b` and `p10d`.
+- **WP-P's merge** (2026-11-07, the lead; part P's conventions, "The graph at 1100×700"): **the
+  conventions' sentence on the graph's columns is scoped to `web-app`'s and `mobile-app`'s four-lane
+  graphs, and names `manifest`'s Date column.** It read "Branch / Tag (x 0 to 130), Graph and Message
+  only (Date and Author give way, phase 1's rule)" for every part P picture. Reason: the Opus inspector
+  of WP-P's merge found `p08a`, `p08b` and `p10d` showing `manifest`'s Date column; phase 1's rule
+  (`GraphColumns`: Date gives way only when Message would fall below 120) keeps it beside a one-lane
+  graph, whose Graph column is 48 wide. No check asserts the columns, and no expected result of P1 to
+  P14 changes.
 
 ## Found by the gate
 
