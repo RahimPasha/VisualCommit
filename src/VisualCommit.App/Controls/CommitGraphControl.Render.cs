@@ -652,7 +652,7 @@ public sealed partial class CommitGraphControl
 
             var layout = LabelLayout(text, typeface, label.Kind, palette);
             var badge = badges[i];
-            var badgeLayout = badge is null ? null : LabelLayout(BadgeText(badge.Number), typeface, label.Kind, palette);
+            var badgeLayout = badge is null ? null : LabelLayout(BadgeText(badge), typeface, label.Kind, palette);
             placed.Add(new LabelVisual(text, label.Text, label.Kind, new Rect(x, labelTop, width, LabelHeight), IsOverflow: false, layout, label.RefName, badge, badgeLayout));
             x += width + LabelSpacing;
         }

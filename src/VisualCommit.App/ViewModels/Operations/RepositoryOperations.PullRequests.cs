@@ -29,7 +29,9 @@ public sealed partial class RepositoryOperations
     /// <see cref="PullRequestCheckout.Plan"/>'s way (10.5, D305); a plan with a reason does nothing (a
     /// stale menu). A head on a remote: that remote branch's existing checkout, after the remote's
     /// existing fetch when the ref is not read yet, and only if it then exists. A local branch at the
-    /// head: its checkout. Otherwise one network operation fetches <c>refs/pull/&lt;n&gt;/head</c> into
+    /// head: its checkout. Otherwise one network operation fetches the request's head ref
+    /// (<c>refs/pull/&lt;n&gt;/head</c>, GitLab's <c>refs/merge-requests/&lt;iid&gt;/head</c>; Azure DevOps'
+    /// plans of that kind are disabled, D361) into
     /// <c>FETCH_HEAD</c> only and creates the branch without upstream at its SHA, and the existing
     /// checkout follows as its own operation (its stash, detached-HEAD question, blocked dialog and
     /// undo). Never a <c>refs/pull</c> fetch line or a <c>refs/remotes/&lt;r&gt;/pr/&lt;n&gt;</c> ref.
@@ -109,9 +111,10 @@ public sealed partial class RepositoryOperations
 
     /// <inheritdoc cref="IRepositoryActions.OpenPullRequestsInBrowserAsync"/>
     /// <remarks>
-    /// <c>{web base}{owner}/{name}/pulls</c> of the repository listed (a fork's parent), else of the
-    /// first GitHub remote's, through the launcher; signed out too, asking GitHub nothing (D257); an
-    /// info line when neither is known.
+    /// The provider's <see cref="IHostingProvider.PullRequestsPage"/> of the repository listed (a
+    /// fork's parent; D356's remote too, D376), else of the first remote a request can go to, through
+    /// the launcher; signed out too, asking the provider nothing (D257); an info line when neither is
+    /// known (docs/phase-7b-design.md 12.5).
     /// </remarks>
     public Task OpenPullRequestsInBrowserAsync()
     {
@@ -121,40 +124,51 @@ public sealed partial class RepositoryOperations
         }
 
         var state = Repository.HostingState;
+        var requestRemotes = state.RequestRemotes;
         var repository = state.Repository
-            ?? HostingRemoteOrder.Of(state.Remotes.Keys).Select(remote => state.Remotes[remote]).FirstOrDefault();
+            ?? HostingRemoteOrder.Of(requestRemotes.Keys).Select(remote => requestRemotes[remote]).FirstOrDefault();
         if (repository is null || Services?.Hosting.ProviderOf(repository.Provider) is not { } provider)
         {
-            Log.Info($"{Repository.Name}: {OperationTexts.MenuTexts.OpenPullRequestsInBrowser}: the repository has no GitHub remote.");
+            Log.Info($"{Repository.Name}: {OperationTexts.MenuTexts.OpenPullRequestsInBrowser}: the repository has no hosted remote.");
             return Task.CompletedTask;
         }
 
         var pulls = provider.PullRequestsPage(repository);
-        return LaunchAsync(OperationTexts.MenuTexts.OpenPullRequestsInBrowser, launcher => launcher.OpenUrlAsync(pulls));
+        return LaunchAsync(OperationTexts.MenuTexts.OpenRequestsInBrowser(repository.Provider), launcher => launcher.OpenUrlAsync(pulls));
     }
 
     /// <inheritdoc cref="IRepositoryActions.SignInToHostAsync"/>
-    /// <remarks>The window's entry (8.5): "Add GitHub account" unless signed in; the session refreshes the pull requests at sign-in.</remarks>
+    /// <remarks>
+    /// The window's entry (8.5): the listed repository's provider's "Add … account" unless signed in;
+    /// the session refreshes the pull requests at sign-in. Nothing without a hosted remote or while
+    /// D356's other organization holds (docs/phase-7b-design.md 12.5).
+    /// </remarks>
     public async Task SignInToHostAsync()
     {
-        if (IsClosed || Services?.SignIn is not { } signIn)
+        var state = Repository.HostingState;
+        if (IsClosed || Services?.SignIn is not { } signIn
+            || state.PullRequests is PullRequestsState.NoHostedRemote or PullRequestsState.OtherOrganization
+            || state.Repository is not { } listed)
         {
             return;
         }
 
-        await signIn(HostingProvider.GitHub);
+        await signIn(listed.Provider);
     }
 
     /// <summary>
-    /// The operation "Fetch pull request #n" (10.5): <c>refs/pull/&lt;n&gt;/head</c> of
+    /// The operation "Fetch pull request #n" (10.5; GitLab's "Fetch merge request !n", 12.5): the
+    /// request's head ref (<see cref="PullRequestRefs.HeadOf"/>) of
     /// <paramref name="remote"/> into <c>FETCH_HEAD</c> only, then <paramref name="branch"/> without
     /// upstream at its SHA; it fails with <see cref="OperationTexts.FetchHeadChanged"/> and creates no
     /// branch when another fetch rewrote <c>FETCH_HEAD</c>. Its undo deletes the branch.
     /// </summary>
     private async Task<OperationResult?> FetchPullRequestAsync(PullRequest pullRequest, string remote, string branch)
     {
-        var text = OperationTexts.FetchPullRequest(pullRequest.Number, remote);
-        var sourceRef = $"refs/pull/{pullRequest.Number.ToString(CultureInfo.InvariantCulture)}/head";
+        var provider = pullRequest.BaseRepository.Provider;
+        var text = OperationTexts.FetchRequest(provider, pullRequest.Number, remote);
+        var sourceRef = PullRequestRefs.HeadOf(provider, pullRequest.Number)
+            ?? throw new InvalidOperationException("A request without a head ref is never fetched (D361).");
         OperationResult? result = null;
         await GuardAsync(text, async () => result = await RunAsync(
             text,
@@ -169,7 +183,7 @@ public sealed partial class RepositoryOperations
                 }
 
                 await Git.CreateBranchAsync(branch, sha, checkout: false, noTrack: true, keepIgnored: KeepIgnored, options, context.CancellationToken);
-                return OperationReport.Done(OperationTexts.FetchedPullRequest(pullRequest.Number, branch));
+                return OperationReport.Done(OperationTexts.FetchedRequest(provider, pullRequest.Number, branch));
             },
             NetworkRun(UndoScope.CreateBranch(branch, Refs?.Head.BranchName), "fetch-pull-request:" + sourceRef)));
         return result;

@@ -53,6 +53,9 @@ public partial class LeftPanelViewModel : ObservableObject
     /// </summary>
     private (HostedRepository Repository, AccountKey? Account, PullRequestList List)? _keptList;
 
+    /// <summary>The listed provider's account's login as <see cref="UpdatePullRequests"/> last gave it (D356's row).</summary>
+    private string? _accountLogin;
+
     public LeftPanelViewModel()
     {
         Rebuild();
@@ -112,6 +115,9 @@ public partial class LeftPanelViewModel : ObservableObject
     /// listed is no longer selected. A failure or a refresh of the repository whose list the section
     /// showed keeps that list's rows (design 17 item 3), unless <paramref name="account"/>, the
     /// session's signed-in account, is not the one it was listed with (ruling 23).
+    /// <paramref name="accountLogin"/> is that account's login in the server's spelling, which D356's
+    /// row names (docs/phase-7b-design.md 12.3); without it the key's, which <see cref="AccountKey"/>
+    /// lower-cases.
     /// </summary>
     /// <remarks>
     /// When one signed-in account replaces another, the hosting keeps the list it holds until the
@@ -119,11 +125,13 @@ public partial class LeftPanelViewModel : ObservableObject
     /// it stays tagged with the account that listed it, and a failure of the new account's first
     /// list then shows no rows.
     /// </remarks>
-    public void UpdatePullRequests(RepositoryHostingState state, AccountKey? account = null)
+    public void UpdatePullRequests(RepositoryHostingState state, AccountKey? account = null, string? accountLogin = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         HostingState = state;
-        if (state.PullRequests is PullRequestsState.NoHostedRemote or PullRequestsState.SignedOut || state.Repository is null)
+        _accountLogin = accountLogin ?? account?.Login;
+        if (state.PullRequests is PullRequestsState.NoHostedRemote or PullRequestsState.SignedOut or PullRequestsState.OtherOrganization
+            || state.Repository is null)
         {
             _keptList = null;
         }
@@ -309,9 +317,13 @@ public partial class LeftPanelViewModel : ObservableObject
 
     private bool Matches(string name) => name.Contains(Filter, StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>A pull request matches when its <c>#n</c>, title, author or head label holds the filter, ignoring case (10.3).</summary>
+    /// <summary>
+    /// A pull request matches when its number as its provider writes it (<c>#n</c>, GitLab's and
+    /// Azure DevOps' <c>!n</c>, D355), title, author or head label holds the filter, ignoring case
+    /// (10.3; docs/phase-7b-design.md 12.3).
+    /// </summary>
     private bool Matches(PullRequest pullRequest) =>
-        Matches("#" + pullRequest.Number.ToString(CultureInfo.InvariantCulture))
+        Matches(HostingTexts.Number(pullRequest.BaseRepository.Provider, pullRequest.Number))
         || Matches(pullRequest.Title)
         || (pullRequest.Author is { } author && Matches(author))
         || Matches(PullRequestRow.HeadLabelOf(pullRequest));
@@ -422,9 +434,13 @@ public partial class LeftPanelViewModel : ObservableObject
             return;
         }
 
+        // Titled by the listed repository's provider whenever there is one, signed out and D356's
+        // state included (docs/phase-7b-design.md 12.3, ruling 24): "Merge requests" on GitLab.
+        var provider = state.Repository?.Provider ?? HostingProvider.GitHub;
+        var title = state.Repository is null ? PullRequestsTitle : HostingTexts.RequestsTitle(provider);
         var list = ShownList;
         var matching = list?.PullRequests.Where(Matches).ToList() ?? [];
-        if (!AddSection(rows, RefSection.PullRequests, PullRequestsTitle, matching.Count))
+        if (!AddSection(rows, RefSection.PullRequests, title, matching.Count))
         {
             return;
         }
@@ -432,10 +448,19 @@ public partial class LeftPanelViewModel : ObservableObject
         switch (state.PullRequests)
         {
             case PullRequestsState.SignedOut:
-                rows.Add(Message(PullRequestMessageKind.SignIn, OperationTexts.SignInToSeePullRequests));
+                rows.Add(Message(PullRequestMessageKind.SignIn, OperationTexts.SignInToSee(provider)));
+                return;
+            case PullRequestsState.OtherOrganization when state.Repository is { } other:
+                // D356: the remote's organization as written, the account's login in its own case;
+                // no list, no sign-in, no click (12.3).
+                var account = _accountLogin ?? string.Empty;
+                rows.Add(Message(
+                    PullRequestMessageKind.OtherOrganization,
+                    OperationTexts.OtherOrganization(other.OwnerRoot, account),
+                    OperationTexts.OtherOrganizationToolTip(other.OwnerRoot, account)));
                 return;
             case PullRequestsState.Loading when list is null:
-                rows.Add(Message(PullRequestMessageKind.Loading, OperationTexts.LoadingPullRequests));
+                rows.Add(Message(PullRequestMessageKind.Loading, OperationTexts.LoadingRequests(provider)));
                 return;
             case PullRequestsState.Failed:
                 // HostingTexts.Describe's words as they are (D338): the state holds no login, and a
@@ -445,7 +470,7 @@ public partial class LeftPanelViewModel : ObservableObject
                 rows.Add(Message(PullRequestMessageKind.Failed, failure, toolTip));
                 break;
             case PullRequestsState.Loaded when list is { PullRequests.Count: 0 }:
-                rows.Add(Message(PullRequestMessageKind.None, OperationTexts.NoOpenPullRequests));
+                rows.Add(Message(PullRequestMessageKind.None, OperationTexts.NoOpenRequests(provider)));
                 return;
         }
 
@@ -456,7 +481,7 @@ public partial class LeftPanelViewModel : ObservableObject
 
         if (list?.MoreExist == true)
         {
-            rows.Add(Message(PullRequestMessageKind.More, OperationTexts.MorePullRequests, OperationTexts.MenuTexts.OpenPullRequestsInBrowser));
+            rows.Add(Message(PullRequestMessageKind.More, OperationTexts.MoreRequests(provider), OperationTexts.MenuTexts.OpenRequestsInBrowser(provider)));
         }
     }
 
@@ -573,13 +598,14 @@ public partial class LeftPanelViewModel : ObservableObject
     /// <summary>
     /// The open pull request of a local or remote branch's row (D308): its full name in the
     /// hosting's <see cref="RepositoryHostingState.ByRef"/> (a local branch through an upstream of
-    /// the same name, 7.8); none without a GitHub remote.
+    /// the same name, 7.8), of the listed provider (docs/phase-7b-design.md 9.7, 12.3); none without
+    /// a hosted remote.
     /// </summary>
-    private (int Number, string Title)? PullRequestOf(LeafRow leaf) =>
+    private PullRequest? PullRequestOf(LeafRow leaf) =>
         leaf.Kind is RefItemKind.LocalBranch or RefItemKind.RemoteBranch
         && leaf.Key.StartsWith(RefKeyPrefix, StringComparison.Ordinal)
         && HostingState.ByRef.TryGetValue(leaf.Key[RefKeyPrefix.Length..], out var pullRequest)
-            ? (pullRequest.Number, pullRequest.Title)
+            ? pullRequest
             : null;
 
     private void OnHiddenToggleClicked(RefItemRow row) => HiddenToggleClicked?.Invoke(this, row);

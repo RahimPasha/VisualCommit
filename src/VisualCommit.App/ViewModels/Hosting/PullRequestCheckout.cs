@@ -1,5 +1,7 @@
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels.Hosting;
@@ -13,7 +15,12 @@ public enum PullRequestCheckoutKind
     /// <summary>A local branch already at its head: that branch's checkout alone.</summary>
     LocalBranch,
 
-    /// <summary><c>refs/pull/&lt;n&gt;/head</c> fetched into <c>FETCH_HEAD</c> from the base's remote, a new branch without upstream at it, then its checkout.</summary>
+    /// <summary>
+    /// The request's head ref (<c>refs/pull/&lt;n&gt;/head</c>, GitLab's <c>refs/merge-requests/&lt;iid&gt;/head</c>,
+    /// <see cref="PullRequestRefs.HeadOf"/>) fetched into <c>FETCH_HEAD</c> from the base's remote, a
+    /// new branch without upstream at it, then its checkout. Azure DevOps has none (D361): its plans
+    /// of this kind are always disabled.
+    /// </summary>
     FetchHead,
 }
 
@@ -33,9 +40,10 @@ public sealed record PullRequestCheckoutPlan(
     string? LocalBranch);
 
 /// <summary>
-/// Plans a pull request's checkout (docs/phase-7a-design.md 10.5, D305), a pure function of the
-/// hosting's state and the refs. Remotes are tried in <see cref="HostingRemoteOrder"/>; two
-/// repositories are the same when their host and full name are equal ignoring case
+/// Plans a pull request's checkout (docs/phase-7a-design.md 10.5, D305; docs/phase-7b-design.md
+/// 12.5, D361), a pure function of the hosting's state and the refs. The remotes a request can go to
+/// (<see cref="RepositoryHostingState.RequestRemotes"/>) are tried in <see cref="HostingRemoteOrder"/>;
+/// two repositories are the same when their provider, host and full name are equal ignoring case
 /// (<see cref="HostedRepository.Equals(HostedRepository)"/>).
 /// </summary>
 public static class PullRequestCheckout
@@ -47,7 +55,8 @@ public static class PullRequestCheckout
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(refs);
         ArgumentNullException.ThrowIfNull(pullRequest);
-        var remotes = HostingRemoteOrder.Of(state.Remotes.Keys);
+        var requestRemotes = state.RequestRemotes;
+        var remotes = HostingRemoteOrder.Of(requestRemotes.Keys);
 
         // 1. The head on a remote: the first remote of the head's repository whose remote-tracking
         //    ref of the head's name its fetch lines map from that branch (the user's fork as
@@ -56,7 +65,7 @@ public static class PullRequestCheckout
         {
             foreach (var remote in remotes)
             {
-                if (!headRepository.Equals(state.Remotes[remote]))
+                if (!headRepository.Equals(requestRemotes[remote]))
                 {
                     continue;
                 }
@@ -81,13 +90,29 @@ public static class PullRequestCheckout
         }
 
         // 2. Otherwise through FETCH_HEAD from the base's remote, under a free local name or a
-        //    local branch already at the head. A deleted fork's owner is pr-<n>.
-        var owner = pullRequest.HeadRepository?.Owner ?? $"pr-{pullRequest.Number.ToString(System.Globalization.CultureInfo.InvariantCulture)}";
-        var label = OperationTexts.MenuTexts.CheckOutName(pullRequest.HeadRepository is null ? pullRequest.HeadRef : $"{owner}:{pullRequest.HeadRef}");
-        var baseRemote = remotes.FirstOrDefault(remote => pullRequest.BaseRepository.Equals(state.Remotes[remote]));
+        //    local branch already at the head. A deleted fork's owner is pr-<n> (GitLab's mr-<iid>,
+        //    a namespace path's "/" made "-"). Azure DevOps has no head ref (D361): never fetched.
+        var provider = pullRequest.BaseRepository.Provider;
+        var number = pullRequest.Number.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var label = OperationTexts.MenuTexts.CheckOutName(pullRequest.HeadRepository is { } head
+            ? PullRequestRow.BranchLabelOf(head, pullRequest.HeadRef, pullRequest.BaseRepository)
+            : pullRequest.HeadRef);
+        if (provider == HostingProvider.AzureDevOps)
+        {
+            // Its head as the row names it: its own branch alone, a fork's {Name}:{branch}.
+            var headLabel = OperationTexts.MenuTexts.CheckOutName(PullRequestRow.HeadLabelOf(pullRequest));
+            return new PullRequestCheckoutPlan(PullRequestCheckoutKind.FetchHead, headLabel, AzureDevOpsReason(requestRemotes, remotes, pullRequest), null, null, null);
+        }
+
+        var owner = provider switch
+        {
+            HostingProvider.GitLab => pullRequest.HeadRepository?.Owner.Replace('/', '-') ?? $"mr-{number}",
+            _ => pullRequest.HeadRepository?.Owner ?? $"pr-{number}",
+        };
+        var baseRemote = remotes.FirstOrDefault(remote => pullRequest.BaseRepository.Equals(requestRemotes[remote]));
         if (baseRemote is null)
         {
-            return new PullRequestCheckoutPlan(PullRequestCheckoutKind.FetchHead, label, OperationTexts.MenuTexts.AddRemoteFor(pullRequest.BaseRepository.FullName), null, null, null);
+            return new PullRequestCheckoutPlan(PullRequestCheckoutKind.FetchHead, label, OperationTexts.MenuTexts.AddRemoteFor(provider, pullRequest.BaseRepository.FullName), null, null, null);
         }
 
         var (name, reused) = LocalNameFor(refs, pullRequest, owner);
@@ -98,6 +123,25 @@ public static class PullRequestCheckout
             baseRemote,
             null,
             name);
+    }
+
+    /// <summary>
+    /// Why an Azure DevOps request that step 1 did not place cannot be checked out (D361; 12.5): its
+    /// head's repository is a remote here whose fetch lines leave the branch out
+    /// (<see cref="OperationTexts.MenuTexts.NotFetchedBy"/>), the service named no head repository
+    /// (<see cref="OperationTexts.MenuTexts.HeadNotNamed"/>), or it is a fork that is no remote here
+    /// (<see cref="OperationTexts.MenuTexts.AddRemoteFor(HostingProvider, string)"/>).
+    /// </summary>
+    private static string AzureDevOpsReason(IReadOnlyDictionary<string, HostedRepository> requestRemotes, IReadOnlyList<string> remotes, PullRequest pullRequest)
+    {
+        if (pullRequest.HeadRepository is not { } head)
+        {
+            return OperationTexts.MenuTexts.HeadNotNamed(HostingProvider.AzureDevOps);
+        }
+
+        return remotes.FirstOrDefault(remote => head.Equals(requestRemotes[remote])) is { } own
+            ? OperationTexts.MenuTexts.NotFetchedBy(own, pullRequest.HeadRef)
+            : OperationTexts.MenuTexts.AddRemoteFor(HostingProvider.AzureDevOps, head.FullName);
     }
 
     /// <summary>

@@ -34,4 +34,9 @@
     <Compile Include="..\VisualCommit.App.Tests\RecordingLog.cs" Link="AppTests\%(Filename)%(Extension)" />
   </ItemGroup>
 
+  <!-- 7a's headless graph host, for part P's badge tests (docs/phase-7b-design.md 12.7: as 7a's GraphPullRequestBadgeTests). -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.VisualTests.Phase7a\GraphTestHost.cs" Link="Phase7a\%(Filename)%(Extension)" />
+  </ItemGroup>
+
 </Project>

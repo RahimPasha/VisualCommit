@@ -27,7 +27,7 @@ public sealed partial class GitRepository
         ArgumentNullException.ThrowIfNull(options);
         if (!PullRequestRefs.IsFetchableHead(sourceRef))
         {
-            throw new ArgumentException($"Only a pull request's head (refs/pull/<number>/head) is fetched into FETCH_HEAD, not {sourceRef}.", nameof(sourceRef));
+            throw new ArgumentException($"Only a request's head (refs/pull/<number>/head or refs/merge-requests/<number>/head) is fetched into FETCH_HEAD, not {sourceRef}.", nameof(sourceRef));
         }
 
         await RunRemoteCommandAsync(["fetch", "--progress", "--no-tags", "--refmap=", "--write-fetch-head", remote, sourceRef], options, cancellationToken).ConfigureAwait(false);
