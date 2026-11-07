@@ -30,8 +30,9 @@ namespace VisualCommit.Hosting.Tests;
 /// without the box a draft by the answer; A3's default branch naming the token a malformed answer
 /// (D382), nothing posted; <c>manifest/</c> starts nothing and asks
 /// nothing, also when its sign-in lands in another organization; a head in another repository whose
-/// read 404s named with the base; signed out, that provider's sign-in first; the tripwire after a
-/// create that pushed. On 0.4's lagged list.
+/// read 404s named with the base; signed out, that provider's sign-in first, and a create pressed at
+/// once after it, or with the tab's rules read held or failed, pushing with the account's token
+/// (D388); the tripwire after a create that pushed. On 0.4's lagged list.
 /// </summary>
 public sealed class CreateRequestOperationProvidersTests
 {
@@ -616,6 +617,83 @@ public sealed class CreateRequestOperationProvidersTests
     }
 
     /// <summary>
+    /// D388 (D290's window; WP-N hunt 3, the tokens lens): signed out, Create on <c>local-work</c>,
+    /// the stacked sign-in in the provider's dialog, Create as soon as the form has its base, before
+    /// the tab's first read of the URL rules has answered. The push binds the account's URL from the
+    /// rules as they are: git's requests carry <c>x-access-token</c> alone (by git's version, part N's
+    /// "Git's version"), nothing is prompted, the broker logs one bound line and the request is
+    /// created. Before D388 the push copied the tab's empty bindings and git asked for a user name.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(HostingProvider.GitLab)]
+    [InlineData(HostingProvider.AzureDevOps)]
+    public async Task Signed_out_a_create_pressed_at_once_after_the_sign_in_pushes_with_the_account_s_token(HostingProvider provider)
+    {
+        await using var served = await ServeAsync();
+        var gitLab = provider == HostingProvider.GitLab;
+        var clone = gitLab ? served.WebApp : served.MobileApp;
+        var fake = gitLab ? (FakeHostingService)served.GitLab : served.AzureDevOps;
+        using var data = new TempDirectory("create providers");
+        var prompts = new ScriptedPromptHandler();
+        using var app = ShellDriver.StartWithTabs(data.Path, [clone.Path], promptHandler: prompts, gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.SignedOut, "signed out");
+        await app.WaitForWatchersQuietAsync();
+        var gitMark = fake.GitRequests.Count;
+        var requests = fake.Requests.Count;
+        var log = app.LogMark();
+        var calls = app.CallMark();
+
+        var opening = repository.Operations.CreatePullRequestAsync("refs/heads/local-work", null);
+        var signIn = await app.WaitForDialogAsync<SignInDialogViewModel>();
+        await signIn.Opened;
+        Assert.Equal(provider, signIn.Provider);
+        signIn.Token = gitLab ? served.GitLabToken : served.AzureDevOpsToken;
+        await signIn.ConfirmCommand.ExecuteAsync(null);
+        var form = await app.WaitForDialogAsync<CreatePullRequestDialogViewModel>();
+        await form.Starting;
+        Assert.Equal("origin/main", form.BaseText);
+        await CreateAsync(form, opening);
+        await app.WaitForIdleAsync();
+
+        Assert.Empty(prompts.Prompts);
+        AssertPushedThroughHelper(app, served, provider, gitMark);
+        Assert.Equal(201, Assert.Single(Posts(fake.Requests.Skip(requests))).Status);
+        Assert.Equal(gitLab ? "Created merge request !24" : "Created pull request !14", repository.OperationStatus.Text);
+        var title = gitLab ? "web-app: Create merge request for local-work" : "mobile-app: Create pull request for local-work";
+        var lines = app.LogLinesSince(log);
+        Assert.Single(lines, line => line.Contains(" URLs bound to the account (Ask).", StringComparison.Ordinal));
+        Assert.Single(lines, line => line.EndsWith($"{title}: 1 of 1 URLs bound to the account (Ask).", StringComparison.Ordinal));
+
+        // Before the push one rules read ran git: the tab's, whether the push waited for it or not.
+        var before = app.GitCalls().Where(call => call.Sequence > calls).OrderBy(call => call.Sequence).TakeWhile(call => !call.CommandText.StartsWith("git push", StringComparison.Ordinal)).ToList();
+        Assert.Equal(1, before.Count(call => call.CommandText == HeldRulesTab.RulesRead));
+        End(app, data, served);
+    }
+
+    /// <summary>
+    /// D388's create on a tab whose first rules read after the stacked sign-in the test holds (Create
+    /// waits for it, nothing of the operation running meanwhile, and adds no read) or fails (Create
+    /// reads the rules itself at its start), each then pushing with the account's token
+    /// (<see cref="HeldRulesTab.CreateOnLocalWorkInTheWindowAsync"/>).
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData(HostingProvider.GitLab, false)]
+    [InlineData(HostingProvider.AzureDevOps, false)]
+    [InlineData(HostingProvider.GitLab, true)]
+    [InlineData(HostingProvider.AzureDevOps, true)]
+    public async Task Signed_out_a_create_waits_for_the_held_rules_read_or_reads_them_itself_when_it_failed(HostingProvider provider, bool readFails)
+    {
+        await using var tab = await HeldRulesTab.OpenAsync(provider, Cancelled);
+        var gitLab = provider == HostingProvider.GitLab;
+        await tab.CreateOnLocalWorkInTheWindowAsync(
+            readFails,
+            gitLab ? "Create merge request for local-work" : "Create pull request for local-work",
+            gitLab ? "Created merge request !24" : "Created pull request !14",
+            Cancelled);
+    }
+
+    /// <summary>
     /// D382 on A3's default branch (13.3): a server that echoes the request's token as the default
     /// branch gives the provider's malformed answer, so the form shows no base and its words, Create
     /// stays off, nothing is posted and no log line, kept text or git call holds the token.
@@ -941,6 +1019,30 @@ public sealed class CreateRequestOperationProvidersTests
 
     private static List<string> CallsSince(ShellDriver app, long mark) =>
         [.. app.GitCalls().Where(call => call.Sequence > mark).Select(call => call.CommandText)];
+
+    /// <summary>
+    /// The push's git requests since <paramref name="mark"/> (part N's "Git's version", N4; B7's
+    /// order): from git 2.46 the first carries the account's token; below 2.46 the first goes
+    /// without credentials and, on Azure DevOps' <c>Fernhill-Labs@</c> URL, the second with that user,
+    /// each 401, before the helper's. Then only <c>x-access-token</c>'s answered 200, the
+    /// receive-pack's POST among them.
+    /// </summary>
+    private static void AssertPushedThroughHelper(ShellDriver app, ServedHosting7b served, HostingProvider provider, int mark)
+    {
+        var requests = (provider == HostingProvider.GitLab ? served.GitLab.GitRequests : served.AzureDevOps.GitRequests).Skip(mark).ToList();
+        var version = app.Session.Shell.Git?.Version;
+        (string? GivenUserName, int Status)[] first = version >= HeldRulesTab.ProactiveAuthVersion
+            ? [("x-access-token", 200)]
+            : provider == HostingProvider.GitLab ? [(null, 401)] : [(null, 401), (served.Organization, 401), ("x-access-token", 200)];
+        Assert.True(
+            requests.Take(first.Length).Select(request => (request.GivenUserName, request.Status)).SequenceEqual(first),
+            $"The push's first requests were {string.Join("; ", requests.Take(first.Length).Select(request => $"{request.Method} {request.Path} as {request.GivenUserName ?? "nobody"} {request.Status}"))}, with git {version}.");
+        Assert.All(requests.Skip(first.Length), request => Assert.True(
+            request is { GivenUserName: "x-access-token", Status: 200 },
+            $"{request.Method} {request.Path} as {request.GivenUserName ?? "nobody"} answered {request.Status} after the first requests, with git {version}."));
+        var receive = Assert.Single(requests, request => request.Method == "POST" && request.Path.EndsWith("git-receive-pack", StringComparison.Ordinal));
+        Assert.Equal((200, "x-access-token"), (receive.Status, receive.GivenUserName));
+    }
 
     private static List<string> OpenedUrls(ShellDriver app) =>
         [.. app.Launcher.Requests.Where(request => request.Kind == FileLaunchKind.OpenUrl).Select(request => request.FullPath)];

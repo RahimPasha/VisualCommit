@@ -3665,6 +3665,21 @@ is clean; CI's five jobs are green, each Test step under four fifths of its limi
   last picture; methods 1, 2, 3 and 7 pass 0.5's 40 s: the lead's to time again rested.
 - 7a's part N pictures, last run: `n02b`, `n04a` and `n06b` differ from the list, each pixel-equal to
   the main checkout's run before WP-N (which of them differs varies from run to run).
+- D388 (the lead's ruling R1 on hunt 3's tokens lens, 2026-11-07), D290's window: between a sign-in
+  (or a tab's first load signed in) and the tab's first read of the URL rewrites its bindings are
+  empty, so a Create pressed at once after the stacked sign-in pushed without the token, on every
+  provider, 7a's GitHub too. A tab's network operation started there (`RepositoryViewModel.AwaitsUrlRules`:
+  an account wants the rewrites and binds git, no read has answered) binds once the rules are known:
+  `RunAsync` waits for the tab's read in flight (`UrlRulesReadAsync`, no git call) and takes the
+  hosting's bindings, or with none in flight (not started, or failed) reads them itself through
+  D332's code, now `BindingsOnceRulesReadAsync`; one Debug line gives the count. The auto-fetch's
+  tick waits for a later one. The tab's own bindings stay empty until its read (D290). Files outside
+  13.1: `RepositoryOperations.Run.cs`, `RepositoryViewModel.Hosting.cs`, `AutoFetchScheduler.cs`,
+  Hosting.Tests' `HeldRulesTab.cs` (a tab built by hand whose rules reads a proxy holds or fails)
+  and `SignInBindingsWindowTests.cs`. Tests: `CreateRequestOperationProvidersTests`' create at once
+  through the app and with the read held or failed (GitLab, Azure DevOps); `SignInBindingsWindowTests`
+  for 7a's GitHub (the same three), a fetch right after a sign-in held and failed, a remote the
+  rules give `bob@` bound to no token (D278) and the auto-fetch.
 
 ## 14. WP-R: the real-window pass
 

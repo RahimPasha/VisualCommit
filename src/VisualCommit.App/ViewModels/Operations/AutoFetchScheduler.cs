@@ -13,7 +13,8 @@ namespace VisualCommit.App.ViewModels.Operations;
 /// Every 30 seconds of its clock it looks at the active tab (<see cref="Tick"/>): when the
 /// interval is above 0, the repository has a remote, its queue is idle, no dialog is open, no
 /// other queue and no bulk run's slot fetches from its common git folder (<see cref="CommonFolderBusy"/>,
-/// docs/phase-6-design.md 4.3), and the last fetch (a fetch or pull that succeeded, an auto-fetch started, or the moment opening
+/// docs/phase-6-design.md 4.3), the tab is not inside D290's window with an account binding git
+/// (<c>RepositoryViewModel.AwaitsUrlRules</c>, D388), and the last fetch (a fetch or pull that succeeded, an auto-fetch started, or the moment opening
 /// the repository began) is at least the interval ago, it starts the fetch of every remote, each
 /// call with <c>--no-auto-maintenance</c>, as the queue's background operation: it never prompts
 /// (<see cref="PromptMode.Deny"/>), is never pre-empted, ends by itself when its connection
@@ -152,7 +153,11 @@ public sealed class AutoFetchScheduler : IDisposable
             || repository.Queue.Waiting > 0
             || IsDialogOpen()
             || now - tracked.LastFetch < interval
-            || CommonFolderBusy(repository))
+            || CommonFolderBusy(repository)
+
+            // Inside D290's window the tab's bindings are empty until its URL rules read answers:
+            // a later tick fetches with the account's (D388).
+            || repository.AwaitsUrlRules)
         {
             return;
         }
