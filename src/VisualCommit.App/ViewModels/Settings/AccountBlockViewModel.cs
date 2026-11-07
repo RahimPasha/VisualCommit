@@ -339,13 +339,20 @@ public sealed partial class AccountBlockViewModel : ObservableObject
     /// end ("until it ends, then the account and the keychain's note", docs/phase-7b-design.md 10.9),
     /// for whoever reads it when <c>IsBusy</c> changes (the section asks every block's buttons again
     /// then) and on whatever thread the sign-out ends on when no dispatcher holds the block (the view
-    /// models' tests; CI 42339567989 read a reopened block not busy and without its note).
+    /// models' tests; CI 42339567989 read a reopened block not busy and without its note). Busy ends
+    /// even if a handler of the account's or the note's change throws, as it did when it ended first.
     /// </summary>
     private void EndSignOut(IHostingSession hosting, string? reason)
     {
-        Follow(hosting.AccountOf(Provider));
-        SignOutNote = reason is null ? null : Texts.AccountsSignOutNote(reason);
-        BusyText = null;
+        try
+        {
+            Follow(hosting.AccountOf(Provider));
+            SignOutNote = reason is null ? null : Texts.AccountsSignOutNote(reason);
+        }
+        finally
+        {
+            BusyText = null;
+        }
     }
 
     /// <summary>The sign-out of <paramref name="provider"/> that runs in <paramref name="hosting"/>, or null.</summary>
