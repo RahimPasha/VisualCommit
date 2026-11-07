@@ -56,6 +56,8 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             AssertLoaded(webApp, served, GitLab);
             AssertRows(app, GitLab, P.GitLabRows);
             Assert.Equal(["feature", "local-work", "main", "topic"], LocalBranches(app).Order(StringComparer.Ordinal));
+            var topic = LocalBranchRows(app).Single(row => row.Text == "topic");
+            Assert.Equal((true, false), (topic.IsContainer, topic.IsOpen));
             AssertBadges(app, P.GitLabRequestLabel, P.GitLabRequestBadge, P.GitLabDraftLabel, P.GitLabDraftBadge);
             Assert.DoesNotContain(app.LogLinesSince(0), line => line.Contains("showing GitHub avatars", StringComparison.Ordinal));
             var afterStep1 = Mark(served);
@@ -151,7 +153,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [GitLabToken], [P.GitLabRequestUrl(21), P.GitLabRequestsPage, P.GitLabRequestUrl(21)]);
+        End(app, data, served, [GitLabToken], [P.GitLabRequestUrl(21), P.GitLabRequestsPage, P.GitLabRequestUrl(21)], [P.GitLabRequestUrl(21)]);
     }
 
     [AvaloniaFact]
@@ -210,6 +212,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.Empty(app.Launcher.Requests);
             Assert.Empty(ended);
             Assert.Equal(selection, mobileApp.Selection);
+            Assert.DoesNotContain(mobileApp.LeftPanel.Rows, row => row is RefItemRow { IsSelected: true } or PullRequestRow { IsSelected: true });
 
             // P13 step 5.
             await OpenRequestAndPageAsync(app, served, Azure, 11);
@@ -233,7 +236,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [AzureDevOpsToken], [P.AzureDevOpsRequestUrl(11), P.AzureDevOpsRequestsPage, P.AzureDevOpsRequestUrl(11)]);
+        End(app, data, served, [AzureDevOpsToken], [P.AzureDevOpsRequestUrl(11), P.AzureDevOpsRequestsPage, P.AzureDevOpsRequestUrl(11)], [P.AzureDevOpsRequestUrl(11)]);
     }
 
     [AvaloniaFact]
@@ -357,7 +360,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [GitLabToken], [P.GitLabRequestsPage]);
+        End(app, data, served, [GitLabToken], [P.GitLabRequestsPage], []);
     }
 
     [AvaloniaFact]
@@ -425,8 +428,10 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.StartsWith(P.AzureDevOpsServerErrorStart, failure.Message, StringComparison.Ordinal);
             Assert.Null(mobileApp.HostingState.List);
             Assert.Empty(mobileApp.HostingState.ByRef);
-            Assert.NotEmpty(mobileApp.Hosting.Bindings);
-            Assert.All(mobileApp.Hosting.Bindings, binding => Assert.Equal(Azure, binding.Account.Provider));
+            // Ada's account's binding for MobileAppUrl in its bound form, git's URL without its user (CredentialBinding).
+            var bound = WithPorts(MobileAppUrl, served).Replace("//" + Organization + "@", "//", StringComparison.Ordinal);
+            Assert.Contains(mobileApp.Hosting.Bindings, binding => binding.Url == bound && binding.Account == account!.Account.Key);
+            Assert.All(mobileApp.Hosting.Bindings, binding => Assert.Equal(account!.Account.Key, binding.Account));
             Assert.Equal([$"v {P.AzureDevOpsTitle} 0", "[Failed] " + P.AzureDevOpsServerErrorText], Section(app));
             Assert.Equal(P.AzureDevOpsServerErrorText, await app.RestPointerOnAsync(Part(await MessageAsync(app), "PullRequestMessageText")));
             var lines = LogSince(app, logMark);
@@ -467,7 +472,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             var manifest = await app.WaitForRepositoryAsync();
             await WaitForStateAsync(app, manifest, PullRequestsState.OtherOrganization, PullRequestMessageKind.OtherOrganization);
             app.MoveToNeutral();
-            ShotPCut(app, P.P08a, P.OtherOrganizationRow);
+            ShotPAuditAtEnd(app, P.P08a);
             var harbor = new HostedRepository(Azure, AzureHost(served), $"{OtherOrganization}/Docks", Manifest);
             var state = manifest.HostingState;
             Assert.Equal([("origin", harbor)], state.Remotes.Select(pair => (pair.Key, pair.Value)));
@@ -488,7 +493,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.DoesNotContain(served.AzureDevOps.GitRequests.Skip(gitRequests), request => request.Path.Contains("harbor-co/Docks/_git/manifest", StringComparison.Ordinal));
             Assert.DoesNotContain(app.LogLinesSince(logMark), line => line.Contains("manifest: listed", StringComparison.Ordinal));
             Assert.Equal(P.OtherOrganizationToolTip, await app.RestPointerOnAsync(Part(row, "PullRequestMessageText")));
-            ShotPCut(app, P.P08b, P.OtherOrganizationRow, keepPointer: true);
+            ShotPAuditAtEnd(app, P.P08b, keepPointer: true);
             var launches = app.Launcher.Requests.Count;
             app.Click(row);
             await app.WaitForIdleAsync();
@@ -503,7 +508,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
 
             // P10 step 8 and P13 step 9: manifest's menu, open in browser alone.
             await SectionMenuAsync(app, P.SectionMenuOtherOrganization, P.AzureDevOpsOpenInBrowser, P.OtherOrganizationMenuHeight);
-            ShotPCut(app, P.P10d, P.OtherOrganizationRow, keepPointer: true);
+            ShotPAuditAtEnd(app, P.P10d, keepPointer: true);
             app.ClickMenuItem(P.AzureDevOpsOpenInBrowser);
             await app.WaitForAsync(() => OpenedUrls(app).Count == 2, "the launcher's address");
             Assert.Equal(WithPorts(P.ManifestRequestsPage, served), OpenedUrls(app)[^1]);
@@ -523,7 +528,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [AzureDevOpsToken], [P.AzureDevOpsRequestsPage, P.ManifestRequestsPage]);
+        End(app, data, served, [AzureDevOpsToken], [P.AzureDevOpsRequestsPage, P.ManifestRequestsPage], []);
     }
 
     [AvaloniaFact]
@@ -551,6 +556,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.Contains(webApp.Hosting.Bindings, binding => binding.Url == WithPorts(WebAppUpstreamUrl, served) && binding.Account.Provider == HostingProvider.GitHub);
             AssertRows(app, GitLab, P.GitLabRows);
             Assert.False(Part(await app.RefRowAsync("Remotes", "upstream", "main"), "RefPullRequest").IsVisible);
+            Assert.Empty(webApp.Avatars.FileByEmail);
             Assert.DoesNotContain(app.LogLinesSince(0), line => line.Contains("showing GitHub avatars", StringComparison.Ordinal));
 
             // P9 step 2: upstream/main's and origin/topic/no-request's menus.
@@ -611,7 +617,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             await app.WaitForAsync(() => list.GetLogicalDescendants().OfType<Control>().Any(control => Avalonia.Automation.AutomationProperties.GetName(control) == "Stashes"), "the list's end");
             // P6 step 3 expects "no text cut but by an ellipsis": GitLab's sentence, one character
             // longer than 7a's, is cut at the panel's default 260 while its tooltip is the action (step 4).
-            ShotPCut(app, P.P06a, P.GitLabMore);
+            ShotPAuditAtEnd(app, P.P06a);
             var (extent, viewport) = PanelScroll(app);
             Assert.True(extent > viewport + 1, $"The panel's list shows no scroll bar: extent {extent}, viewport {viewport}.");
             Assert.Equal(
@@ -661,7 +667,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             app.Dispose();
         }
 
-        End(app, data, served, [GitLabToken, GitHubToken], [P.GitLabRequestsPage]);
+        End(app, data, served, [GitLabToken, GitHubToken], [P.GitLabRequestsPage], []);
     }
 
     private static bool IsRequestLine(string line) =>
@@ -725,11 +731,14 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
     }
 
     /// <summary><c>Local branches</c>' rows at depth 1 (their names), between its header and the next.</summary>
-    private static List<string> LocalBranches(ShellDriver app)
+    private static List<string> LocalBranches(ShellDriver app) => [.. LocalBranchRows(app).Select(row => row.Text)];
+
+    /// <summary><c>Local branches</c>' rows at depth 1, between its header and the next.</summary>
+    private static List<RefItemRow> LocalBranchRows(ShellDriver app)
     {
         var rows = app.Session.Shell.ActiveTab.LeftPanel.Rows.ToList();
         var start = rows.FindIndex(row => row is RefSectionRow { Section: RefSection.LocalBranches });
-        return [.. rows.Skip(start + 1).TakeWhile(row => row is not RefSectionRow).OfType<RefItemRow>().Where(row => row.Depth == 1).Select(row => row.Text)];
+        return [.. rows.Skip(start + 1).TakeWhile(row => row is not RefSectionRow).OfType<RefItemRow>().Where(row => row.Depth == 1)];
     }
 
     /// <summary>P14 step 7: opens <c>Local branches</c> › <c>feature</c>, <c>Remotes</c> › <c>origin</c> › <c>feature</c> and › <c>docs</c>.</summary>

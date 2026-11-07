@@ -96,13 +96,12 @@ public sealed class RequestSectionProvidersTests
     [Fact]
     public void Fork_labels_by_provider()
     {
-        Assert.Equal("ada:fix-typo", PullRequestRow.BranchLabelOf(AdaWebApp, "fix-typo"));
-        Assert.Equal("northfield/team:fix-typo", PullRequestRow.BranchLabelOf(new HostedRepository(HostingProvider.GitLab, GitLabHost, "northfield/team", "web-app"), "fix-typo"));
+        Assert.Equal("ada:fix-typo", PullRequestRow.BranchLabelOf(AdaWebApp, "fix-typo", WebApp));
+        Assert.Equal("northfield/team:fix-typo", PullRequestRow.BranchLabelOf(new HostedRepository(HostingProvider.GitLab, GitLabHost, "northfield/team", "web-app"), "fix-typo", WebApp));
         Assert.Equal("mobile-app-fork:fix-typo", PullRequestRow.BranchLabelOf(MobileAppFork, "fix-typo", MobileApp));
-        Assert.Equal("mobile-app-fork:fix-typo", PullRequestRow.BranchLabelOf(MobileAppFork, "fix-typo"));
         var otherProject = new HostedRepository(HostingProvider.AzureDevOps, AzureHost, "Fernhill-Labs/Tools", "mobile-app-fork");
         Assert.Equal("Tools/mobile-app-fork:fix-typo", PullRequestRow.BranchLabelOf(otherProject, "fix-typo", MobileApp));
-        Assert.Equal("octo:main", PullRequestRow.BranchLabelOf(OctoWebApp, "main"));
+        Assert.Equal("octo:main", PullRequestRow.BranchLabelOf(OctoWebApp, "main", OctoWebApp));
 
         // A head without a repository shows its branch (7a's).
         var gone = Request(24, "Gone", "ada", "fix-typo", '7', null, WebApp);
@@ -176,7 +175,7 @@ public sealed class RequestSectionProvidersTests
     }
 
     [Fact]
-    public void D356_s_row_names_both_organizations_takes_no_click_and_keeps_no_list()
+    public void D356_s_row_names_both_organizations_and_takes_no_click()
     {
         var account = new AccountKey(HostingProvider.AzureDevOps, AzureHost, "Fernhill-Labs");
         var panel = Panel(MobileApp, Loaded(MobileApp), refs: MobileAppRefs());
@@ -202,13 +201,30 @@ public sealed class RequestSectionProvidersTests
         Assert.Equal(["> Pull requests 0"], SectionLines(panel));
         Header(panel).ActivateCommand.Execute(null);
 
-        // No kept list: a failure with the same account afterwards shows no rows.
-        panel.UpdatePullRequests(State(MobileApp, PullRequestsState.Failed, failure: AzureServerError), account, "Fernhill-Labs");
-        Assert.Empty(Rows(panel));
-
         // Without the login the key's, lower-cased.
         panel.UpdatePullRequests(OtherOrganization(), account);
         Assert.Equal("In harbor-co; signed in to fernhill-labs", Messages(panel).Single().Text);
+    }
+
+    [Fact]
+    public void D356_s_state_lets_a_kept_list_of_the_same_repository_and_account_go()
+    {
+        // A list kept for manifest itself, with the same account (and with none, as 7a's callers pass):
+        // only D356's state, as NoHostedRemote's, lets it go (12.3), so a failure afterwards shows no rows.
+        var account = new AccountKey(HostingProvider.AzureDevOps, AzureHost, "Fernhill-Labs");
+        foreach (var key in new[] { account, null })
+        {
+            var panel = Panel(Manifest, null, refs: MobileAppRefs());
+            panel.UpdatePullRequests(State(Manifest, PullRequestsState.Loaded, new PullRequestList([PR11], false)), key, "Fernhill-Labs");
+            Assert.Single(Rows(panel));
+
+            panel.UpdatePullRequests(OtherOrganization(), key, "Fernhill-Labs");
+            Assert.Empty(Rows(panel));
+
+            panel.UpdatePullRequests(State(Manifest, PullRequestsState.Failed, failure: AzureServerError), key, "Fernhill-Labs");
+            Assert.Empty(Rows(panel));
+            Assert.Equal(PullRequestMessageKind.Failed, Messages(panel).Single().Kind);
+        }
     }
 
     [Fact]

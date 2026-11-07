@@ -115,7 +115,7 @@ public sealed partial class Phase7bChecksP
             app.Dispose();
         }
 
-        End(app, data, served, [GitLabToken], []);
+        End(app, data, served, [GitLabToken], [], []);
 
         // Step 4: git's state after the app closed.
         var repo = served.WebApp;
@@ -202,7 +202,7 @@ public sealed partial class Phase7bChecksP
             app.Dispose();
         }
 
-        End(app, data, served, [AzureDevOpsToken], []);
+        End(app, data, served, [AzureDevOpsToken], [], []);
 
         // Step 4: git's state; no request ref fetched.
         Assert.Equal("refs/heads/feature/sign-in", (await repo.GitAsync("symbolic-ref", "HEAD")).StandardOutput.Trim());

@@ -102,19 +102,20 @@ public sealed partial class PullRequestRow : RefListRow
     /// 12.3), which WP-N's form also shows: GitHub and GitLab <c>{Owner}:{branch}</c> (GitLab's
     /// namespace path, <c>northfield/team:fix-typo</c>); Azure DevOps <c>{Name}:{branch}</c>, a fork
     /// being in its base's organization (r5 3.4), or <c>{project}/{Name}:{branch}</c> when
-    /// <paramref name="relativeTo"/>, the base, is in another project.
+    /// <paramref name="relativeTo"/>, the base (the request's, or the one WP-N's form chose), is in
+    /// another project. The base is required, so that no caller leaves the project out by omission.
     /// </summary>
-    public static string BranchLabelOf(HostedRepository repository, string branch, HostedRepository? relativeTo = null)
+    public static string BranchLabelOf(HostedRepository repository, string branch, HostedRepository relativeTo)
     {
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(branch);
+        ArgumentNullException.ThrowIfNull(relativeTo);
         if (repository.Provider != HostingProvider.AzureDevOps)
         {
             return $"{repository.Owner}:{branch}";
         }
 
-        var sameProject = relativeTo is null
-            || string.Equals(relativeTo.Owner, repository.Owner, StringComparison.OrdinalIgnoreCase);
+        var sameProject = string.Equals(relativeTo.Owner, repository.Owner, StringComparison.OrdinalIgnoreCase);
         var project = repository.Owner.Split('/') is [_, var named, ..] ? named : repository.Owner;
         return sameProject ? $"{repository.Name}:{branch}" : $"{project}/{repository.Name}:{branch}";
     }

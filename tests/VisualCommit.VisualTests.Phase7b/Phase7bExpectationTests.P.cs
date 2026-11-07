@@ -1,3 +1,4 @@
+using System.Globalization;
 using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting;
@@ -126,6 +127,41 @@ public sealed partial class Phase7bExpectationTests
         Assert.Equal(3, PartP.Tokens.Count);
         Assert.Equal(PartP.GitLabForbiddenText, HostingTexts.Describe(new HostingFailure(HostingFailureKind.Forbidden, PartP.GitLabForbiddenMessage, PartP.GitLabForbiddenDetail) { Provider = GitLab }, AdaLogin));
         Assert.Equal(PartP.AzureDevOpsServerErrorText, HostingTexts.Describe(new HostingFailure(HostingFailureKind.ServerError, PartP.AzureDevOpsServerErrorStart + "x.") { Provider = Azure }, Organization));
+    }
+
+    [Fact]
+    public void Part_P_s_label_table_keeps_the_report_s_rule()
+    {
+        // Open point 26's record against the report's rule: one badge per request, on the first label of
+        // the request's local row and of the draft's remote row, none elsewhere; a cut name a prefix of
+        // its full name ending "…"; a +N folding N names; every label inside the column.
+        foreach (var (provider, request, draft, requestLabel, draftLabel) in new[]
+        {
+            (GitLab, PartP.GitLabRequestBadge, PartP.GitLabDraftBadge, PartP.GitLabRequestLabel, PartP.GitLabDraftLabel),
+            (Azure, PartP.AzureDevOpsRequestBadge, PartP.AzureDevOpsDraftBadge, PartP.AzureDevOpsRequestLabel, PartP.AzureDevOpsDraftLabel),
+        })
+        {
+            var table = PartP.LabelsOf(provider);
+            Assert.Equal(5, table.Count);
+            Assert.Equal((requestLabel, request.Number), (table[PartP.RequestRow][0].FullText, table[PartP.RequestRow][0].Badge));
+            Assert.Equal((draftLabel, draft.Number), (table[PartP.DraftRow][0].FullText, table[PartP.DraftRow][0].Badge));
+            Assert.Equal(2, table.SelectMany(row => row).Count(label => label.Badge != 0));
+            Assert.All(table.SelectMany(row => row), label =>
+            {
+                Assert.True(label.Right <= PartP.BranchColumnWidth, $"{label.Text} ends past the column.");
+                if (label.Text.StartsWith('+'))
+                {
+                    Assert.Equal((int.Parse(label.Text[1..], CultureInfo.InvariantCulture), (string?)null), (label.FullText.Split('\n').Length, label.RefName));
+                }
+                else if (label.Text != label.FullText)
+                {
+                    Assert.EndsWith("…", label.Text, StringComparison.Ordinal);
+                    Assert.StartsWith(label.Text[..^1], label.FullText, StringComparison.Ordinal);
+                }
+            });
+        }
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => PartP.LabelsOf(GitHub));
     }
 
     [Fact]

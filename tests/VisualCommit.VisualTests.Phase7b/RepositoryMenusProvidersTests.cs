@@ -78,39 +78,108 @@ public sealed class RepositoryMenusProvidersTests
     public void Branch_items_per_provider_and_none_on_github_s_upstream()
     {
         var (actions, recorder) = RecordingActions.Create();
+        foreach (var (repository, branch, number, create) in new[] { (WebApp, "feature/search", 21, "Create merge request…"), (MobileApp, "feature/sign-in", 11, "Create pull request…") })
+        {
+            var refs = RefsOf(repository);
+            var words = repository == WebApp ? "merge" : "pull";
+            List<string> Local(RepositoryHostingState? state, string name) => Lines(RepositoryMenus.ForLocalBranch(Context(state, refs), "refs/heads/" + name, actions));
+            List<string> Remote(RepositoryHostingState? state, string name) => Lines(RepositoryMenus.ForRemoteBranch(Context(state, refs), "refs/remotes/" + name, actions));
+            var signedOut = State(repository, PullRequestsState.SignedOut);
 
-        var search = Lines(RepositoryMenus.ForLocalBranch(Context(Loaded(WebApp)), "refs/heads/feature/search", actions));
-        Assert.Equal(["Push feature/search to origin/feature/search", "Force push feature/search… (danger)", "Open merge request !21", "—"], search.Skip(8).Take(4));
-        Assert.Contains("Create merge request…", Lines(RepositoryMenus.ForLocalBranch(Context(Loaded(WebApp)), "refs/heads/local-work", actions)));
-        Assert.Contains("Open merge request !22", Lines(RepositoryMenus.ForRemoteBranch(Context(Loaded(WebApp)), "refs/remotes/origin/docs/readme", actions)));
-        Assert.Contains("Create merge request…", Lines(RepositoryMenus.ForRemoteBranch(Context(Loaded(WebApp)), "refs/remotes/origin/topic/no-request", actions)));
-        Assert.Contains("Create merge request…", Lines(RepositoryMenus.ForLocalBranch(Context(State(WebApp, PullRequestsState.SignedOut)), "refs/heads/local-work", actions)));
+            // The request's branch: "Open {R} {N}" ends its push group; signed out (no map) the create; without hosting none.
+            Assert.Equal(TrackedLocalMenu(branch, $"Open {words} request !{number}"), Local(Loaded(repository), branch));
+            Assert.Equal(TrackedLocalMenu(branch, create), Local(signedOut, branch));
+            Assert.Equal(TrackedLocalMenu(branch, null), Local(null, branch));
 
-        // upstream is GitHub's, no key of RequestRemotes (ruling 5, 12.4): no request item.
+            // A branch without upstream: the create after its push, signed in or out (the create signs in first).
+            Assert.Equal(LocalWorkMenu(create), Local(Loaded(repository), "local-work"));
+            Assert.Equal(LocalWorkMenu(create), Local(signedOut, "local-work"));
+            Assert.Equal(LocalWorkMenu(null), Local(null, "local-work"));
+
+            // Remote branches: the item in a group of its own after the delete group.
+            var (draftBranch, draftNumber) = repository == WebApp ? ("docs/readme", 22) : ("docs/guide", 12);
+            Assert.Equal(RemoteBranchMenu("origin", draftBranch, $"Open {words} request !{draftNumber}"), Remote(Loaded(repository), "origin/" + draftBranch));
+            Assert.Equal(RemoteBranchMenu("origin", "topic/no-request", create), Remote(Loaded(repository), "origin/topic/no-request"));
+            Assert.Equal(RemoteBranchMenu("origin", "topic/no-request", create), Remote(signedOut, "origin/topic/no-request"));
+            Assert.Equal(RemoteBranchMenu("origin", "topic/no-request", null), Remote(null, "origin/topic/no-request"));
+        }
+
+        // upstream is GitHub's, no key of RequestRemotes (ruling 5, 12.4): no request item, the menu as without hosting.
         var upstream = Lines(RepositoryMenus.ForRemoteBranch(Context(Loaded(WebApp)), "refs/remotes/upstream/main", actions));
-        Assert.Equal("upstream/main", upstream[0]);
-        Assert.DoesNotContain(upstream, line => line.Contains("request", StringComparison.Ordinal));
+        Assert.Equal(RemoteBranchMenu("upstream", "main", null), upstream);
         Assert.Equal(Lines(RepositoryMenus.ForRemoteBranch(Context(null), "refs/remotes/upstream/main", actions)), upstream);
 
-        Assert.Contains("Open pull request !11", Lines(RepositoryMenus.ForLocalBranch(Context(Loaded(MobileApp), MobileAppRefs()), "refs/heads/feature/sign-in", actions)));
-        Assert.Contains("Create pull request…", Lines(RepositoryMenus.ForRemoteBranch(Context(Loaded(MobileApp), MobileAppRefs()), "refs/remotes/origin/topic/no-request", actions)));
+        // A remote of another Azure DevOps organization beside the listed origin is no request remote (1.4, D356).
+        var (harbor, harborRefs) = WithHarborCo();
+        Assert.Equal(["origin"], harbor.RequestRemotes.Keys);
+        var harborMain = Lines(RepositoryMenus.ForRemoteBranch(Context(harbor, harborRefs), "refs/remotes/harbor/main", actions));
+        Assert.Equal(RemoteBranchMenu("harbor", "main", null), harborMain);
+        Assert.Equal(Lines(RepositoryMenus.ForRemoteBranch(Context(null, harborRefs), "refs/remotes/harbor/main", actions)), harborMain);
+        Assert.Equal(RemoteBranchMenu("origin", "topic/no-request", "Create pull request…"), Lines(RepositoryMenus.ForRemoteBranch(Context(harbor, harborRefs), "refs/remotes/origin/topic/no-request", actions)));
 
         RepositoryMenus.ForLocalBranch(Context(Loaded(WebApp)), "refs/heads/feature/search", actions).Items.Single(item => item.Label == "Open merge request !21").Invoke();
-        Assert.Same(MR21, recorder.Calls.Single().Arguments[0]);
+        RepositoryMenus.ForLocalBranch(Context(Loaded(MobileApp), MobileAppRefs()), "refs/heads/feature/sign-in", actions).Items.Single(item => item.Label == "Open pull request !11").Invoke();
+        RepositoryMenus.ForLocalBranch(Context(Loaded(MobileApp), MobileAppRefs()), "refs/heads/local-work", actions).Items.Single(item => item.Label == "Create pull request…").Invoke();
+        Assert.Equal(["OpenPullRequestAsync", "OpenPullRequestAsync", "CreatePullRequestAsync"], recorder.Calls.Select(call => call.Method));
+        Assert.Same(MR21, recorder.Calls[0].Arguments[0]);
+        Assert.Same(PR11, recorder.Calls[1].Arguments[0]);
+        Assert.Equal(("refs/heads/local-work", (object?)null), (recorder.Calls[2].Arguments[0], recorder.Calls[2].Arguments[1]));
     }
 
     [Fact]
     public void Drops_onto_a_request_base_only()
     {
-        var (actions, _) = RecordingActions.Create();
-        List<string> Drop(string source, string target, RepositoryHostingState? state = null) =>
-            Lines(RepositoryMenus.ForDrop(Context(state ?? Loaded(WebApp)), source, target, actions));
+        var (actions, recorder) = RecordingActions.Create();
+        foreach (var (repository, branch, number, create) in new[] { (WebApp, "feature/search", 21, "Create merge request…"), (MobileApp, "feature/sign-in", 11, "Create pull request…") })
+        {
+            var refs = RefsOf(repository);
+            List<string> Drop(string source, string target, RepositoryHostingState? state, RepoRefs? with = null) =>
+                Lines(RepositoryMenus.ForDrop(Context(state, with ?? refs), "refs/heads/" + source, target, actions));
+            string[] ontoOriginMain = ["Push local-work to origin/main", "Push local-work to origin/main and track it"];
+            string[] OntoMain(string source) => [$"Merge {source} into main", $"Merge {source} into main (create a merge commit)", $"Fast-forward main to {source}"];
+            string[] ontoTracked = [$"Fast-forward {branch} to local-work", $"Check out {branch} and merge local-work into it"];
+            var open = $"Open {(repository == WebApp ? "merge" : "pull")} request !{number}";
 
-        Assert.Contains("Create merge request…", Drop("refs/heads/local-work", "refs/remotes/origin/main"));
-        Assert.Contains("Create merge request…", Drop("refs/heads/local-work", "refs/heads/main"));
-        Assert.Contains("Open merge request !21", Drop("refs/heads/feature/search", "refs/heads/main"));
-        Assert.DoesNotContain(Drop("refs/heads/local-work", "refs/remotes/upstream/main"), line => line.Contains("request", StringComparison.Ordinal));
-        Assert.Equal(Lines(RepositoryMenus.ForDrop(Context(null), "refs/heads/local-work", "refs/remotes/upstream/main", actions)), Drop("refs/heads/local-work", "refs/remotes/upstream/main"));
+            // Onto origin's branch, onto main and onto the request's branch (both tracking one of the same name), signed in or out.
+            foreach (var state in new[] { Loaded(repository), State(repository, PullRequestsState.SignedOut) })
+            {
+                Assert.Equal(DropMenu("local-work", "origin/main", ontoOriginMain, create), Drop("local-work", "refs/remotes/origin/main", state));
+                Assert.Equal(DropMenu("local-work", "main", OntoMain("local-work"), create), Drop("local-work", "refs/heads/main", state));
+                Assert.Equal(DropMenu("local-work", branch, ontoTracked, create), Drop("local-work", "refs/heads/" + branch, state));
+            }
+
+            Assert.Equal(DropMenu(branch, "main", OntoMain(branch), open), Drop(branch, "refs/heads/main", Loaded(repository)));
+
+            // Without hosting every drop as before; onto a branch without upstream, or one whose upstream has another name, none.
+            Assert.Equal(DropMenu("local-work", "origin/main", ontoOriginMain, null), Drop("local-work", "refs/remotes/origin/main", null));
+            Assert.Equal(DropMenu(branch, "main", OntoMain(branch), null), Drop(branch, "refs/heads/main", null));
+            var ontoNoUpstream = Drop("main", "refs/heads/local-work", Loaded(repository));
+            Assert.DoesNotContain(ontoNoUpstream, IsRequestLine);
+            Assert.Equal(Drop("main", "refs/heads/local-work", null), ontoNoUpstream);
+            var renamed = WithRefspecs(refs with { Refs = [.. refs.Refs.Where(r => r.Name != branch), Local(branch, '3', "origin/main")] });
+            var ontoRenamed = Drop("local-work", "refs/heads/" + branch, Loaded(repository), renamed);
+            Assert.DoesNotContain(ontoRenamed, IsRequestLine);
+            Assert.Equal(Drop("local-work", "refs/heads/" + branch, null, renamed), ontoRenamed);
+        }
+
+        // Onto GitHub's upstream beside a listed GitLab origin: none.
+        var ontoUpstream = Lines(RepositoryMenus.ForDrop(Context(Loaded(WebApp)), "refs/heads/local-work", "refs/remotes/upstream/main", actions));
+        Assert.Equal(DropMenu("local-work", "upstream/main", ["Push local-work to upstream/main", "Push local-work to upstream/main and track it"], null), ontoUpstream);
+        Assert.Equal(Lines(RepositoryMenus.ForDrop(Context(null), "refs/heads/local-work", "refs/remotes/upstream/main", actions)), ontoUpstream);
+
+        // Onto a remote of another Azure DevOps organization beside the listed origin: none; onto origin's still the create.
+        var (harbor, harborRefs) = WithHarborCo();
+        var ontoHarbor = Lines(RepositoryMenus.ForDrop(Context(harbor, harborRefs), "refs/heads/local-work", "refs/remotes/harbor/main", actions));
+        Assert.Equal(DropMenu("local-work", "harbor/main", ["Push local-work to harbor/main", "Push local-work to harbor/main and track it"], null), ontoHarbor);
+        Assert.Equal(Lines(RepositoryMenus.ForDrop(Context(null, harborRefs), "refs/heads/local-work", "refs/remotes/harbor/main", actions)), ontoHarbor);
+        var ontoOrigin = RepositoryMenus.ForDrop(Context(harbor, harborRefs), "refs/heads/local-work", "refs/remotes/origin/main", actions);
+        Assert.Equal(DropMenu("local-work", "origin/main", ["Push local-work to origin/main", "Push local-work to origin/main and track it"], "Create pull request…"), Lines(ontoOrigin));
+
+        ontoOrigin.Items.Single(item => item.Label == "Create pull request…").Invoke();
+        RepositoryMenus.ForDrop(Context(Loaded(MobileApp), MobileAppRefs()), "refs/heads/feature/sign-in", "refs/heads/main", actions).Items.Single(item => item.Label == "Open pull request !11").Invoke();
+        Assert.Equal(("CreatePullRequestAsync", "refs/heads/local-work", (object?)"refs/remotes/origin/main"), (recorder.Calls[0].Method, recorder.Calls[0].Arguments[0], recorder.Calls[0].Arguments[1]));
+        Assert.Equal("OpenPullRequestAsync", recorder.Calls[1].Method);
+        Assert.Same(PR11, recorder.Calls[1].Arguments[0]);
     }
 
     [Fact]
@@ -129,7 +198,7 @@ public sealed class RepositoryMenusProvidersTests
             Lines(RepositoryMenus.ForDrop(context, "refs/heads/local-work", "refs/heads/main", actions)),
         })
         {
-            Assert.DoesNotContain(lines, line => line.Contains("request", StringComparison.Ordinal));
+            Assert.DoesNotContain(lines, IsRequestLine);
         }
 
         // Even with a map and remotes that a request could go to, D356's state offers none (12.4).
@@ -158,6 +227,68 @@ public sealed class RepositoryMenusProvidersTests
         Assert.Contains(azure, item => item.Label == "Check out mobile-app-fork:fix-typo" && item.Detail == "!13 Fix a typo in the greeting");
         Assert.DoesNotContain(AppCommands.RepositoryItems(Context(OtherOrganization(), MobileAppRefs()), actions, keys, false, null, null, []), item => item.Detail?.StartsWith('!') == true);
     }
+
+    /// <summary>A line that names a request: a create or an open, in either provider's words.</summary>
+    private static bool IsRequestLine(string line) => line.Contains(" request", StringComparison.Ordinal);
+
+    /// <summary>
+    /// mobile-app's state and refs with a remote <c>harbor</c> of harbor-co's <c>manifest</c> beside
+    /// <c>origin</c>: another organization than the listed one's, so no key of <c>RequestRemotes</c>.
+    /// </summary>
+    private static (RepositoryHostingState State, RepoRefs Refs) WithHarborCo() =>
+    (
+        Loaded(MobileApp) with { Remotes = new Dictionary<string, HostedRepository>(StringComparer.Ordinal) { ["origin"] = MobileApp, ["harbor"] = Manifest } },
+        WithRefspecs(MobileAppRefs(extra: [Remote("harbor/main", '2')]) with { Remotes = ["harbor", "origin"] })
+    );
+
+    /// <summary>A local branch tracking <c>origin/{branch}</c>, up to date, HEAD on <c>main</c>: 7a's lines, the request item ending the push group.</summary>
+    private static string[] TrackedLocalMenu(string branch, string? item) =>
+    [
+        branch, $"Check out {branch}", $"Merge {branch} into main", $"Merge {branch} into main (create a merge commit)",
+        $"Rebase main onto {branch}", $"Interactive rebase of main onto {branch}…",
+        $"Fast-forward {branch} to origin/{branch} (disabled: \"{branch} is up to date with origin/{branch}\")", "—",
+        $"Push {branch} to origin/{branch}", $"Force push {branch}… (danger)", .. Optional(item), "—",
+        "Create branch here…", "Create tag here…", $"Rename {branch}…", $"Delete {branch}… (danger)", "—",
+        "Change upstream…", $"Stop tracking origin/{branch}", "—",
+        $"Compare {branch} with main", $"Show reflog of {branch}", $"Hide {branch}", $"Solo {branch}", "—",
+        "Copy branch name",
+    ];
+
+    /// <summary><c>local-work</c>, without upstream: the request item after its push.</summary>
+    private static string[] LocalWorkMenu(string? item) =>
+    [
+        "local-work", "Check out local-work", "Merge local-work into main", "Merge local-work into main (create a merge commit)",
+        "Rebase main onto local-work", "Interactive rebase of main onto local-work…", "—",
+        "Push local-work…", .. Optional(item), "—",
+        "Create branch here…", "Create tag here…", "Rename local-work…", "Delete local-work… (danger)", "—",
+        "Set upstream…", "—",
+        "Compare local-work with main", "Show reflog of local-work", "Hide local-work", "Solo local-work", "—",
+        "Copy branch name",
+    ];
+
+    /// <summary>A remote branch's menu, HEAD on <c>main</c>: the request item in a group of its own after the delete group (7a's).</summary>
+    private static string[] RemoteBranchMenu(string remote, string branch, string? item) =>
+    [
+        $"{remote}/{branch}", branch == "main" ? $"Check out {remote}/main (disabled: \"main is already checked out\")" : $"Check out {remote}/{branch}",
+        $"Merge {remote}/{branch} into main", $"Merge {remote}/{branch} into main (create a merge commit)",
+        $"Rebase main onto {remote}/{branch}", $"Interactive rebase of main onto {remote}/{branch}…", "—",
+        "Create branch here…", "Create tag here…", "—",
+        $"Delete {branch} on {remote}… (danger)", "—",
+        .. item is null ? [] : new[] { item, "—" },
+        $"Compare {remote}/{branch} with main", $"Hide {remote}/{branch}", $"Solo {remote}/{branch}", "—",
+        "Copy branch name",
+    ];
+
+    /// <summary>A drop's menu: its first group, the rebase group, the request item's group between them and the compare (7a's).</summary>
+    private static string[] DropMenu(string source, string target, string[] first, string? item) =>
+    [
+        $"{source} → {target}", .. first, "—",
+        $"Check out {source} and rebase it onto {target}", $"Check out {source} and rebase it onto {target} interactively…", "—",
+        .. item is null ? [] : new[] { item, "—" },
+        $"Compare {source} with {target}",
+    ];
+
+    private static string[] Optional(string? item) => item is null ? [] : [item];
 
     private static RepositoryMenuContext Context(RepositoryHostingState? hosting, RepoRefs? refs = null)
     {

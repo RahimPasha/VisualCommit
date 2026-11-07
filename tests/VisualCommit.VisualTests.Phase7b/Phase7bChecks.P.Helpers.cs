@@ -100,18 +100,23 @@ public sealed partial class Phase7bChecksP
     }
 
     /// <summary>
-    /// <see cref="ShotP"/> for a picture whose message row the report expects cut with "…" while its
-    /// tooltip says something else (P6's "More" row, whose tooltip is the action; P8's D356 row, whose
-    /// tooltip says why): the audit's only finding may be that row's <paramref name="cut"/> text.
+    /// <see cref="ShotP"/> for a picture whose message row the report also expects cut with "…" while
+    /// its tooltip says something else (P6's "More" row, whose tooltip is the action; P8's D356 row,
+    /// whose tooltip says why), which the conventions' audit does not let through: the audit runs in
+    /// full and its findings are kept for <see cref="End"/>, which fails on them after every step has
+    /// run. The report's two rules cannot both hold there and only the lead may change one, so the
+    /// check fails closed until the lead rules: no finding is let through here.
     /// </summary>
-    private static Screenshot ShotPCut(ShellDriver app, string name, string cut, bool keepPointer = false)
+    private Screenshot ShotPAuditAtEnd(ShellDriver app, string name, bool keepPointer = false)
     {
         AssertNoTokenOnScreen(app);
         var screenshot = Shot(app, name, keepPointer);
-        var problems = LayoutAudit.FindClippedText(app.Window, allowShortenedWithToolTip: true, allowScrolledOutOfView: true);
-        Assert.All(problems, problem => Assert.Equal($"\"{cut}\" is shortened with an ellipsis.", problem));
+        _auditFindings.AddRange(LayoutAudit.FindClippedText(app.Window, allowShortenedWithToolTip: true, allowScrolledOutOfView: true).Select(problem => $"{name}: {problem}"));
         return screenshot;
     }
+
+    /// <summary>What <see cref="ShotPAuditAtEnd"/>'s audits found, for <see cref="End"/>.</summary>
+    private readonly List<string> _auditFindings = [];
 
     /// <summary>No visible text, automation value or name holds one of part P's tokens; a failure names the control and the token's constant, never the token.</summary>
     private static void AssertNoTokenOnScreen(ShellDriver app)
@@ -301,7 +306,9 @@ public sealed partial class Phase7bChecksP
         var dialog = await app.OpenSignInDialogAsync(provider);
         if (provider == HostingProvider.AzureDevOps)
         {
+            // P1 method 2: the organization prefilled, the focus in SignInToken.
             Assert.Equal(Organization, dialog.Organization);
+            await app.WaitForAsync(() => app.FocusedAutomationId() == "SignInToken", "the focus in SignInToken");
         }
 
         app.TypeToken(token);
@@ -408,6 +415,15 @@ public sealed partial class Phase7bChecksP
         {
             Assert.All(graph.LabelsInRow(index), label => Assert.True(label.Bounds.Right <= P.BranchColumnWidth + 0.5, $"Row {index}'s label {label.Text} ends at {label.Bounds.Right}, past the column."));
         }
+
+        // Open point 26's record: each label's text, full text, kind, ref and badge as PartP writes them (no pixel).
+        var table = P.LabelsOf(request.Provider);
+        foreach (var index in Enumerable.Range(0, table.Count))
+        {
+            Assert.Equal(
+                table[index].Select(label => (label.Text, label.FullText, label.Kind, label.RefName, label.Badge)),
+                graph.LabelsInRow(index).Select(label => (label.Text, label.FullText, label.Kind.ToString(), label.RefName, label.Badge?.Number ?? 0)));
+        }
     }
 
     /// <summary>No label of any row the graph holds shows a badge.</summary>
@@ -441,9 +457,11 @@ public sealed partial class Phase7bChecksP
     /// passed, so that a step's failure is the one reported: the tripwire for each token the method
     /// used, over the data folder and the copy's three clones with the session's call log; each fake's
     /// errors and the harness's refusals none; no request answered 400 or 415; the launcher's requests
-    /// exactly the <c>OpenUrl</c> launches of <paramref name="launches"/>.
+    /// exactly the <c>OpenUrl</c> launches of <paramref name="launches"/> and the clipboard's texts
+    /// exactly <paramref name="clipboard"/> (both with the fakes' ports); last, that the audits
+    /// <see cref="ShotPAuditAtEnd"/> kept found nothing.
     /// </summary>
-    private static void End(ShellDriver app, TempDirectory data, ServedHosting7b served, string[] tokens, string[] launches)
+    private void End(ShellDriver app, TempDirectory data, ServedHosting7b served, string[] tokens, string[] launches, string[] clipboard)
     {
         var calls = app.Session.GitCalls;
         foreach (var token in tokens)
@@ -459,5 +477,12 @@ public sealed partial class Phase7bChecksP
         Assert.DoesNotContain(served.GitLab.Requests, request => request.Status is 400 or 415);
         Assert.DoesNotContain(served.GitHub.Requests, request => request.Status is 400 or 415);
         Assert.Equal(launches.Select(url => $"{FileLaunchKind.OpenUrl} {WithPorts(url, served)}"), app.Launcher.Requests.Select(request => $"{request.Kind} {request.FullPath}"));
+        Assert.Equal(clipboard.Select(url => WithPorts(url, served)), app.Clipboard.Texts);
+        Assert.True(
+            _auditFindings.Count == 0,
+            "Clipped text that part P's conventions do not let through (every picture passes LayoutAudit.FindClippedText; a row cut with an "
+            + "ellipsis only when a tooltip holds its whole text), where P6's or P8's row expects that row cut with its tooltip the action or "
+            + "the reason (docs/test-reports/phase-7b.md: part P's conventions, P6, P8, open point 27). The two cannot both hold; the lead "
+            + "rules.\n" + string.Join("\n", _auditFindings));
     }
 }

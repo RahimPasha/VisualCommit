@@ -215,6 +215,44 @@ public static partial class Phase7bExpectations
         /// <summary>The graph's Branch / Tag column at 1100×700 (7a's part G): every label inside x 0 to 130.</summary>
         public const double BranchColumnWidth = 130;
 
+        /// <summary>
+        /// A label of the prepared graph as the control draws it (open point 26, as 7a's open point 41
+        /// did): its drawn text, its full text (a <c>+N</c>'s the names it folds, one per line), its kind,
+        /// its ref (none for a <c>+N</c>), its right edge and its badge's number (0: none). Read from
+        /// <c>LabelsInRow</c> on the Windows machine at 1100×700, signed in, each from x 6 (a
+        /// <c>+N</c> 4 after the label before it). The checks assert every member but
+        /// <see cref="Right"/>: the report asserts no pixel, and <see cref="Right"/> is the record for
+        /// WP-R and the gate's inspection.
+        /// </summary>
+        public sealed record Label(string Text, string FullText, string Kind, string? RefName, double Right, int Badge = 0);
+
+        /// <summary>
+        /// The prepared clone's rows 0 to 4 per provider (2.7): the request's remote label beside its
+        /// local one folds into <c>+1</c>, names cut to <c>feature…</c>, <c>origin/docs/…</c> and
+        /// <c>topic/no-requ…</c>; one badge per request, on its first label; on GitLab's <c>main</c> row
+        /// <c>+2</c> folds <c>origin/main</c> and GitHub's <c>upstream/main</c>.
+        /// </summary>
+        public static IReadOnlyList<IReadOnlyList<Label>> LabelsOf(HostingProvider provider) => provider switch
+        {
+            HostingProvider.GitLab =>
+            [
+                [new("local-work", "local-work", "LocalBranch", "refs/heads/local-work", 74.6)],
+                [new("topic/no-requ…", "topic/no-request", "LocalBranch", "refs/heads/topic/no-request", 100.6), new("+1", "origin/topic/no-request", "RemoteBranch", null, 129.3)],
+                [new("origin/docs/…", "origin/docs/readme", "RemoteBranch", "refs/remotes/origin/docs/readme", 127.2, 22)],
+                [new("feature…", "feature/search", "LocalBranch", "refs/heads/feature/search", 99.7, 21), new("+1", "origin/feature/search", "RemoteBranch", null, 128.3)],
+                [new("main", "main", "CurrentBranch", "refs/heads/main", 56.8), new("+2", "origin/main\nupstream/main", "RemoteBranch", null, 86.7)],
+            ],
+            HostingProvider.AzureDevOps =>
+            [
+                [new("local-work", "local-work", "LocalBranch", "refs/heads/local-work", 74.6)],
+                [new("topic/no-requ…", "topic/no-request", "LocalBranch", "refs/heads/topic/no-request", 100.6), new("+1", "origin/topic/no-request", "RemoteBranch", null, 129.3)],
+                [new("origin/docs/…", "origin/docs/guide", "RemoteBranch", "refs/remotes/origin/docs/guide", 125.7, 12)],
+                [new("feature…", "feature/sign-in", "LocalBranch", "refs/heads/feature/sign-in", 98.1, 11), new("+1", "origin/feature/sign-in", "RemoteBranch", null, 126.8)],
+                [new("main", "main", "CurrentBranch", "refs/heads/main", 56.8), new("+1", "origin/main", "RemoteBranch", null, 85.5)],
+            ],
+            _ => throw new ArgumentOutOfRangeException(nameof(provider), provider, "Part P's prepared graphs are GitLab's and Azure DevOps'."),
+        };
+
         // ---- Menus (12.4) -------------------------------------------------------------------------------
 
         public static string[] SectionMenu(HostingProvider p) => [TitleOf(p), RefreshOf(p), OpenInBrowserOf(p)];
