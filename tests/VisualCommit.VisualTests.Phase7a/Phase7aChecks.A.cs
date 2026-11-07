@@ -555,6 +555,14 @@ public sealed partial class Phase7aChecksA : Phase7aChecks
             await WaitForRecordAsync(app, data, useForGit: true, "refused");
             await app.WaitForWatchersQuietAsync();
             var hello = app.Session.Shell.ActiveTab.Repository ?? throw new Xunit.Sdk.XunitException("hello's tab is not open.");
+
+            // The refusal writes the record and swaps the session's slot, which Account reads
+            // lock-free, off the UI thread, and only then posts AccountChanged and each hosting's
+            // OnAccountChanged (design 7.3, 7.6); hello's hosting takes its state on the UI thread
+            // when that post runs (7.8). So the waits above can end before the post is made, and the
+            // check waits for the state the report gives, as part A's conventions wait for the record
+            // and A11 for the bindings.
+            await app.WaitForAsync(() => hello.Hosting.State.PullRequests == PullRequestsState.SignedOut, "hello's hosting to take the account's refusal (SignedOut)");
             var refusedReads = RequestsSince(served, requests);
             Assert.NotEmpty(refusedReads);
             Assert.All(refusedReads, request => Assert.True(request.TokenPresent && request.Status == 401, $"{request.Method} {request.Path}: {request.Status}, token {request.TokenPresent}"));
