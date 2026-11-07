@@ -3679,7 +3679,8 @@ is clean; CI's five jobs are green, each Test step under four fifths of its limi
   and `SignInBindingsWindowTests.cs`. Tests: `CreateRequestOperationProvidersTests`' create at once
   through the app and with the read held or failed (GitLab, Azure DevOps); `SignInBindingsWindowTests`
   for 7a's GitHub (the same three), a fetch right after a sign-in held and failed, a remote the
-  rules give `bob@` bound to no token (D278) and the auto-fetch.
+  rules give `bob@` bound to no token (D278) and the auto-fetch. `SignInBindingsWindowTests` starts
+  the app through `ShellDriver`, so it joins 0.4's lagged list.
 
 ## 14. WP-R: the real-window pass
 
