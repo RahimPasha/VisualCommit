@@ -2,6 +2,8 @@ using System.Globalization;
 using Avalonia;
 using Avalonia.Media;
 using VisualCommit.App.ViewModels.Graph;
+using VisualCommit.App.ViewModels.Hosting;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting;
 
 namespace VisualCommit.App.Controls;
@@ -61,7 +63,8 @@ public sealed partial class CommitGraphControl
 
     private static readonly IReadOnlyDictionary<string, PullRequest> EmptyPullRequests = new Dictionary<string, PullRequest>(StringComparer.Ordinal);
 
-    private static PullRequestBadge BadgeOf(PullRequest pull) => new(pull.Number, pull.Title, pull.IsDraft);
+    /// <summary>A request's badge, with its base repository's provider (docs/phase-7b-design.md 12.6).</summary>
+    private static PullRequestBadge BadgeOf(PullRequest pull) => new(pull.Number, pull.Title, pull.IsDraft, pull.BaseRepository.Provider);
 
     /// <summary>A branch label's pull request (a local, current or remote branch whose ref the map holds), or null.</summary>
     private PullRequest? PullRequestOf(RefLabel label) =>
@@ -96,12 +99,12 @@ public sealed partial class CommitGraphControl
         return badges;
     }
 
-    /// <summary>The badge's text: <c>#</c> and the number (invariant).</summary>
-    private static string BadgeText(int number) => "#" + number.ToString(CultureInfo.InvariantCulture);
+    /// <summary>The badge's text: its provider's number, GitHub's <c>#1</c>, GitLab's and Azure DevOps' <c>!21</c> (D355; invariant).</summary>
+    private static string BadgeText(PullRequestBadge badge) => HostingTexts.Number(badge.Provider, badge.Number);
 
     /// <summary>What a badge adds to its label's width: the gap, the icon, the gap and <c>#n</c>; 0 without one.</summary>
     private static double BadgeWidth(PullRequestBadge? badge, Typeface typeface) =>
-        badge is null ? 0 : BadgeGap + LabelIconSize + BadgeIconGap + MeasureLabelText(BadgeText(badge.Number), typeface);
+        badge is null ? 0 : BadgeGap + LabelIconSize + BadgeIconGap + MeasureLabelText(BadgeText(badge), typeface);
 
     /// <summary>
     /// Draws a label's badge at its <paramref name="places"/>, after the name's right edge: the icon
@@ -153,19 +156,28 @@ public sealed partial class CommitGraphControl
 
     /// <summary>
     /// A label's line in the tooltip: its name, followed when the map holds its ref by
-    /// " (pull request #1: Add the login form)" or " (draft pull request #2: …)" (11.2).
+    /// " (pull request #1: Add the login form)" or " (draft pull request #2: …)" (11.2), in the
+    /// request's provider's words: " (merge request !21: …)" (docs/phase-7b-design.md 12.6).
     /// </summary>
-    private string LabelTipLine(RefLabel label) =>
-        PullRequestOf(label) is { } pull
-            ? string.Create(CultureInfo.InvariantCulture, $"{label.Text} ({(pull.IsDraft ? "draft pull request" : "pull request")} #{pull.Number}: {pull.Title})")
-            : label.Text;
+    private string LabelTipLine(RefLabel label)
+    {
+        if (PullRequestOf(label) is not { } pull)
+        {
+            return label.Text;
+        }
+
+        var provider = pull.BaseRepository.Provider;
+        var request = (pull.IsDraft ? "draft " : string.Empty) + HostingTexts.Request(provider);
+        return string.Create(CultureInfo.InvariantCulture, $"{label.Text} ({request} {HostingTexts.Number(provider, pull.Number)}: {pull.Title})");
+    }
 }
 
 /// <summary>The pull request a label's badge stands for (docs/phase-7a-design.md 11.2, D309).</summary>
-/// <param name="Number">Its number, drawn as <c>#n</c>.</param>
+/// <param name="Number">Its number, drawn as <c>#n</c> (GitLab's and Azure DevOps' <c>!n</c>, D355).</param>
 /// <param name="Title">Its title, which the tooltip names.</param>
 /// <param name="IsDraft">It is a draft, which the tooltip says.</param>
-public sealed record PullRequestBadge(int Number, string Title, bool IsDraft);
+/// <param name="Provider">Its base repository's provider (docs/phase-7b-design.md 12.6); 7a's badges are GitHub's.</param>
+public sealed record PullRequestBadge(int Number, string Title, bool IsDraft, HostingProvider Provider = HostingProvider.GitHub);
 
 /// <summary>Where a label draws its name and its pull request's badge (<see cref="CommitGraphControl.BadgeInRow"/>), in the control's coordinates.</summary>
 /// <param name="Name">The name's laid-out text: from the label's padding (and its icon, if any) to the name's right edge, its height centred in the label.</param>

@@ -10,7 +10,8 @@ namespace VisualCommit.Git.Tests;
 /// A pull request's head fetched into <c>FETCH_HEAD</c> only (docs/phase-7a-design.md 10.5, 10.6;
 /// D305): the command's form, that it writes no ref, tag or configuration whatever the remote's
 /// fetch lines, <c>fetch.prune</c> and <c>tagOpt</c> say, and that the SHA comes from the file's
-/// one line of this fetch, never from a <c>rev-parse</c> of its own.
+/// one line of this fetch, never from a <c>rev-parse</c> of its own. Since phase 7b also GitLab's
+/// head ref <c>refs/merge-requests/&lt;iid&gt;/head</c> (docs/phase-7b-design.md 12.5, 12.7; D361).
 /// </summary>
 public sealed class GitRepositoryPullRequestsTests
 {
@@ -78,6 +79,11 @@ public sealed class GitRepositoryPullRequestsTests
     [InlineData("refs/pull//head")]
     [InlineData("refs/pull/8/head/more")]
     [InlineData("pull/8/head")]
+    [InlineData("refs/pull/5/merge")]
+    [InlineData("refs/merge-requests/x/head")]
+    [InlineData("refs/merge-requests//head")]
+    [InlineData("refs/merge-requests/5/merge")]
+    [InlineData("refs/merge-requests/5/head/more")]
     public async Task Any_other_source_ref_is_refused_without_a_call(string sourceRef)
     {
         using var server = await ServerAsync();
@@ -86,9 +92,45 @@ public sealed class GitRepositoryPullRequestsTests
         var repository = await GitRepository.OpenAsync(runner, clone.Path, TestCancelled);
         runner.Clear();
 
-        await Assert.ThrowsAsync<ArgumentException>(() => repository.FetchToFetchHeadAsync("origin", sourceRef, NetworkOptions.None, TestCancelled));
+        var refused = await Assert.ThrowsAsync<ArgumentException>(() => repository.FetchToFetchHeadAsync("origin", sourceRef, NetworkOptions.None, TestCancelled));
 
         Assert.Empty(runner.Calls);
+        Assert.StartsWith(
+            $"Only a request's head (refs/pull/<number>/head or refs/merge-requests/<number>/head) is fetched into FETCH_HEAD, not {sourceRef}.",
+            refused.Message,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Gitlab_s_head_ref_with_its_fetch_line_prune_and_tag_opt_writes_no_ref_and_no_configuration()
+    {
+        using var server = await ServerAsync();
+        await server.Author.PushAsync("origin", false, "contributor:refs/merge-requests/5/head");
+        using var clone = await server.Author.CloneSiblingAsync("clone", server.Bare);
+        await clone.GitAsync("config", "--add", "remote.origin.fetch", "+refs/merge-requests/*/head:refs/remotes/origin/merge-requests/*");
+        await clone.ConfigAsync("fetch.prune", "true");
+        await clone.ConfigAsync("remote.origin.tagOpt", "--tags");
+        await clone.GitAsync("update-ref", "refs/remotes/origin/stale", await RevAsync(clone, "HEAD"));
+        await server.Author.TagAsync("v9");
+        await server.Author.PushAsync("origin", false, "refs/tags/v9");
+        var refsBefore = await GitLinesAsync(clone, "for-each-ref", "--format=%(refname) %(objectname)");
+        var configBefore = await GitTextAsync(clone, "config", "--local", "--list");
+        var runner = new RecordingRunner(NewRunner());
+        var repository = await GitRepository.OpenAsync(runner, clone.Path, TestCancelled);
+        runner.Clear();
+
+        var sha = await repository.FetchToFetchHeadAsync("origin", "refs/merge-requests/5/head", NetworkOptions.None, TestCancelled);
+
+        Assert.Equal(server.Head8, sha);
+        Assert.Equal(["fetch --progress --no-tags --refmap= --write-fetch-head origin refs/merge-requests/5/head"], runner.Calls);
+        Assert.Equal(refsBefore, await GitLinesAsync(clone, "for-each-ref", "--format=%(refname) %(objectname)"));
+        Assert.Equal(configBefore, await GitTextAsync(clone, "config", "--local", "--list"));
+
+        // The line as git writes it (12.5, ASSUMED from 7a's refs/pull line; measured here): the SHA,
+        // a tab, an empty field, a tab, then the source ref quoted, of the remote's URL.
+        var fetchHead = ReadGitFile(clone, "FETCH_HEAD");
+        Assert.StartsWith($"{server.Head8}\t\t'refs/merge-requests/5/head' of ", fetchHead, StringComparison.Ordinal);
+        Assert.Single(fetchHead.Split('\n', StringSplitOptions.RemoveEmptyEntries));
     }
 
     [Theory]

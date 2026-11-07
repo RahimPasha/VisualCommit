@@ -3438,6 +3438,41 @@ pictures are the same files; no `refs/merge-requests` or `refs/pull` fetch line 
 is written; git fetches no Azure DevOps request ref; nothing is sent for `OtherOrganization`; WP-P's
 files call none of 1.5's shims; CI's five jobs are green.
 
+**As built** (WP-P, `34720c2` to its last commit, 2026-11-07). Where the build differs from the text
+or settles what it left open:
+- `34720c2` holds 12.9's five areas in one commit (the bound).
+- `BranchLabelOf(repository, branch, relativeTo)`: the base is a third, required argument; WP-N passes
+  its chosen base, so an Azure DevOps fork across projects reads `{project}/{Name}:{branch}`.
+  `RefItemRow`'s `pullRequest:` is a `PullRequest?`.
+- Azure DevOps' plans are `FetchHead`, always with a reason, never fetched (12.7: never an enabled
+  one): `AddRemoteFor(p, fork)`, `HeadNotNamed(p)`, or `NotFetchedBy(the first RequestRemote of its
+  head, branch)` when its fetch lines leave it out; a fork that is a fetching remote is its checkout.
+- FETCH_HEAD after `refs/merge-requests/5/head` on 2.56: `<sha>\t\t'refs/merge-requests/5/head' of
+  <url>` (open point 30 holds).
+- A tab's request checkouts run one at a time, each planned once the one before ended and its refs
+  are read: the same request again starts nothing (Info `…: not started, its checkout is running.`),
+  another of the same head reuses its branch. The lines name the provider's request (`!n`).
+- Outside 12.1's list, in WP-S's `RepositoryHosting`: `OnAccountChanged` stops the run in flight whose
+  account its provider no longer holds signed in, also when its candidate went (D257); an A3 read or a
+  create in flight is not covered. Any provider's A4 list or A5 request with a text that names the
+  token is malformed as A3's is (D382 extended, for the lead and WP-N); a refresh keeps the rows shown.
+- The two message rows cut at 260 whose tooltips are not their text, D356's row (P8: p08a, p08b, p10d,
+  its tooltip the reason) and GitLab's `More than 300 open merge requests` (P6: p06a, its tooltip the
+  action), are the conventions' one exception by the lead's ruling (the report's "Changed in this
+  report after its first commit", 2026-11-07): `ShotPCutRow` lets through the audit's one finding on
+  that row's text alone. The builder had left methods 4 and 5 failing closed until the ruling.
+  "Disabled" reads `IsEffectivelyEnabled`; P1's local branches are a set.
+- `OnAccountChanged`'s stop (above): a sign-out stops the run at once; a sign-in that replaces the
+  account stops it after the request in flight, which the new token's check waits behind (7a's one
+  request at a time per provider), so only the later pages and lookups are spared (hunt 3, minor).
+- One commit for 12.9's five areas stands (the lead): splitting it would rewrite history.
+- `PartP.LabelsOf(p)` records open point 26's rows 0 to 4 (checked but `Right`). `PartP` uses nothing
+  of the 7b project; WP-R reads its `RepositoryOf`, `TitleOf`, `RowsOf`, `SectionMenu`, `RowMenuOf`,
+  `RowsPictureOf`, `SectionMenuPictureOf` and `LabelsOf`. Also outside the list: the 7b csproj's link
+  to 7a's `GraphTestHost.cs` and `CommitGraphControl.Render.cs`'s `BadgeText` call.
+- Alone (Debug): 31.6 to 44.2 s a method, about 28 s of it preparation; 3.0 to 14.0 s to the last
+  picture. 7a's P and G pictures and phase 3's `03a` to `03h` unchanged.
+
 ## 13. WP-N: a new pull or merge request (part N)
 
 ### 13.1 Goal and files
