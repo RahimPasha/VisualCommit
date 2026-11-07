@@ -13,7 +13,8 @@ namespace VisualCommit.Git.Tests;
 /// tests watch a plain folder and write files into it; what a repository's own git calls do is
 /// tested against real repositories. The tests of the quiet period and the maximum delay hold the
 /// watcher's clock (<see cref="ManualTimeProvider"/>) and move it only once the watcher has
-/// counted every event they wait for, so that a slow machine cannot split a burst (D160).
+/// counted every event they wait for, so that a slow machine cannot split a burst (D160). The
+/// test of Dispose holds it too, so that a slow machine cannot end a quiet period before Dispose.
 /// </summary>
 public class RepositoryWatcherTests
 {
@@ -181,23 +182,51 @@ public class RepositoryWatcherTests
     [Fact]
     public async Task Nothing_is_raised_before_start_or_after_dispose()
     {
+        // On a clock the test holds, whose timers queue their callbacks as the system's queue theirs
+        // for the thread pool: no quiet period ends unless the test moves the clock. On the system's
+        // clock, a busy machine that held the test up for a quiet period between a counted write
+        // and Dispose (inside the write, or after it) got that write raised before Dispose, a
+        // second raise (CI run 42386428809).
         using var folder = new TempDirectory("watch");
-        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet);
+        var clock = new QueuingClock();
+        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, time: clock);
         var changed = new Counter(watcher);
+        var counted = new CountedEvents(watcher);
 
+        // The watcher's maximum delay: a burst counted before the clock moves this far is due,
+        // also when a second notice of a write (Windows reports a new file, then its write) came
+        // after the first and started its quiet period again.
+        var due = RepositoryWatcher.DefaultMaximumDelay;
+
+        // Had the watcher counted this write, moving the clock here would raise it.
         File.WriteAllText(folder.Combine("before-start"), "x");
         await Task.Delay(Quiet * 2, TestCancelled);
+        clock.Advance(due);
+        clock.RunQueued();
         Assert.Equal(0, changed.Count);
 
         watcher.Start();
         File.WriteAllText(folder.Combine("while-watching"), "x");
+        Assert.True(await counted.WaitForAsync(["while-watching"], Timeout), $"The watcher did not count an event for {counted.Missing(["while-watching"])}.");
+        clock.Advance(due);
+        clock.RunQueued();
         Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
 
-        // A change just before Dispose, still waiting for its quiet period, is dropped too.
+        // A change just before Dispose is dropped too: counted, and its timer's callback queued
+        // but not run when Dispose comes, as on a busy machine, where the system's timer can run
+        // a callback queued before its Dispose after it.
         File.WriteAllText(folder.Combine("just-before-dispose"), "x");
+        Assert.True(await counted.WaitForAsync(["just-before-dispose"], Timeout), $"The watcher did not count an event for {counted.Missing(["just-before-dispose"])}.");
+        Assert.False(watcher.IsQuiet, "The watcher is quiet: the change just before Dispose does not wait to be raised.");
+        clock.Advance(due);
         watcher.Dispose();
+        clock.RunQueued();
+
+        // Nor is a change after Dispose raised, however far the clock moves.
         File.WriteAllText(folder.Combine("after-dispose"), "x");
         await Task.Delay(Settle, TestCancelled);
+        clock.Advance(due);
+        clock.RunQueued();
         Assert.Equal(1, changed.Count);
     }
 
@@ -473,5 +502,40 @@ public class RepositoryWatcherTests
         }
 
         public string Missing(IEnumerable<string> names) => string.Join(", ", names.Where(name => !_names.ContainsKey(name)));
+    }
+
+    /// <summary>
+    /// A clock the test holds (<see cref="ManualTimeProvider"/>) whose timers queue their callbacks
+    /// when they fall due, as the system's timers queue theirs for the thread pool: a callback runs
+    /// only when the test runs the queue, on its thread, and one queued before its timer was
+    /// disposed still runs after, as the system's can.
+    /// </summary>
+    private sealed class QueuingClock : TimeProvider
+    {
+        private readonly ManualTimeProvider _clock = new();
+        private readonly ConcurrentQueue<Action> _queued = new();
+
+        public override long TimestampFrequency => _clock.TimestampFrequency;
+
+        public override TimeZoneInfo LocalTimeZone => _clock.LocalTimeZone;
+
+        public override long GetTimestamp() => _clock.GetTimestamp();
+
+        public override DateTimeOffset GetUtcNow() => _clock.GetUtcNow();
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            _clock.CreateTimer(_ => _queued.Enqueue(() => callback(state)), null, dueTime, period);
+
+        /// <summary>Moves the clock; each timer that falls due on the way queues its callback.</summary>
+        public void Advance(TimeSpan by) => _clock.Advance(by);
+
+        /// <summary>Runs the queued callbacks on this thread, in the order they were queued.</summary>
+        public void RunQueued()
+        {
+            while (_queued.TryDequeue(out var callback))
+            {
+                callback();
+            }
+        }
     }
 }
