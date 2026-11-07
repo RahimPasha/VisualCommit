@@ -350,6 +350,20 @@ green). Jobs and Test steps: `windows-latest` 29 min 20 s (27 min 7 s), `macos-l
 (31 min 35 s), `ubuntu-latest` 8 min 11 s (6 min 3 s), the containers 6 min 44 s and 9 min 7 s
 (4 min 46 s and 6 min 36 s), each under four fifths.
 
+[42386428809](https://github.com/RahimPasha/VisualCommit/actions/runs/42386428809) on `8cb5ecc`
+(phase 2's `Check_15_amend` fix merged at `26b44c7`, with status): `ubuntu-latest` and both
+containers green (the containers' Secret Service steps green); `windows-latest` and `macos-latest`
+each failed one test that `c5ba918..8cb5ecc` did not touch (their keychain steps green, Windows'
+"Build the opt-in projects" green). On Windows phase 1's
+`RepositoryWatcherTests.Nothing_is_raised_before_start_or_after_dispose` (line 201: `Changed`
+counted 2, not 1, after the dispose; Notes, "The watcher's dispose test on CI"); on macOS
+`PaletteGrowthTests.The_build_and_a_one_letter_query_grow_in_step_with_the_refs` ("10,000 tags took
+6.7 times the work of 2,500 … the limit is 6.3"), the known open flake (Notes, "The two Linux
+failures of 42301846503"), its second failure in about 50 runs and its first on macOS. Jobs and
+Test steps: `windows-latest` 39 min 7 s (35 min 59 s), `macos-latest` 45 min 0 s (42 min 2 s),
+`ubuntu-latest` 6 min 11 s (4 min 59 s), the containers 7 min 26 s and 8 min 46 s (5 min 14 s and
+6 min 15 s), each under four fifths. Not rerun (CLAUDE.md: the owner's).
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -506,9 +520,14 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-N (design 13, part N) is being built from `c5ba918` in `D:/Projects/Personal/vc-wt/p7b-create` on
-`wip/p7b-create` by the package workflow (two Opus reviews, Opus hunts by lens); at its merge the lead
-reads its result, rules on its questions, scans its diff, merges, and runs 13.9's runs through
+WP-N (design 13, part N) is built in `D:/Projects/Personal/vc-wt/p7b-create` on `wip/p7b-create`
+(`c5ba918..d831812`, the package workflow; Notes, "WP-N's build"); the lead's rulings on its hunt 3
+are being applied there by a fix workflow (R1 to R5: the stacked sign-in's bindings window fixed in
+the product as D388, the open point 45 check, six minors, Ada's Login asserted), then reviewed,
+refuted and verified. CI's run on `8cb5ecc` (42386428809) failed two older tests (CI section); the
+watcher's dispose test is being investigated in `D:/Projects/Personal/vc-wt/p7b-watcher` on
+`wip/p7b-watcher-dispose`, with three skeptics. At the fix workflow's end the lead reads its result,
+writes D388, scans the diff, merges WP-N (and the watcher's fix, if any), and runs 13.9's runs through
 `scripts/heavy-run.sh`: the lagged list, then the whole default run (0.4, D245), then 7a's part N
 (`Phase7aChecksN`) and phase 3's walk-through, comparing their pictures by region with 0.7's
 references in `D:/Projects/Personal/gate7b-reference/` (made 2026-11-07, Notes), then part N with
@@ -516,7 +535,7 @@ every picture inspected; then WP-LIVE's second stage (`Check_3`, the owner told)
 the gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
-`c5ba918` is green; CI's run on the fix's merge is to be read.
+`c5ba918` is green; CI's run on the fix's merge, 42386428809, failed the two older tests above.
 
 WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8's comparison and
 picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
@@ -811,6 +830,42 @@ every commit.
   1,057 scripted pictures, phase by phase as many as `phase-7a-pictures.sha256` lists. While they ran,
   other runs held 7a's fake's port: the references' `a09b` and `b06a` show a fallback port (59233 in
   `a09b`), which the gate reads as the port's region alone.
+- **WP-N's build** (2026-11-07; design 13): built in `D:/Projects/Personal/vc-wt/p7b-create` from
+  `c5ba918` by two Opus builders (`b05fabc` to `fefdb6b`: 13.2 to 13.6, the shims of 1.5 removed,
+  part N's seven methods), one review with two lenses (eight findings, two major: N8's sign-in dialog
+  unasserted, D356 after the sign-in; fixed at `9734d72` and `4184565`) and three hunts by lens
+  (tokens, checks, state), each serious finding put to fresh Opus skeptics. Hunt 1 confirmed three
+  majors (A3's default branch shown and logged unscreened, D382's echo; D316 against a list not held
+  before the POST; N4's git requests asserted for one git version), fixed at `653350a`; hunt 2 seven
+  minors, fixed at `6f399d9` to `d831812` (D316 waits for the list read in flight alone). Hunt 3 left
+  one confirmed major (open point 45: a drop's given base never asserted; a mutation dropping it
+  passed), six minors of the checks lens, and the tokens lens's finding rated minor by its skeptic:
+  a network operation started before the tab's first read of its URL rules since a sign-in copies
+  D290's empty bindings, so a create pressed within about 85 to 250 ms of a stacked sign-in's form
+  pushes without the account's token and git asks for credentials (10 of 10 at once, 9 of 9 after
+  300 ms; GitHub on `8cb5ecc` the same, so older than WP-N). The lead's rulings: R1, that window is
+  fixed in the product for every network operation (the operation awaits the tab's read in flight,
+  or reads the rules at its start as D332's dashboard row does; the tab's own bindings stay empty
+  until its read, D290 unchanged), recorded as D388; R2, open point 45's base recorded from the
+  form's first moment; R3, the six minors; R4, the report stands on Ada's Login (the fake records it
+  on every Azure DevOps request with a valid token but `areas`, `FakeAzureDevOps.Router.cs:164-178`),
+  so part N's checks and part P's and B's, where they pass `null` (part P's helper takes it as not
+  checked), assert it where the report gives it; R5, accepted as built: `CancelledOf(p)` (a const and
+  a method cannot share 7a's name `Cancelled`), `RowRepositoryText` (Choose… at the column's right,
+  proven by bounds), the four methods over 0.5's 40 s alone (52, 67, 49 and 50 s on a loaded laptop,
+  5.6 to 12.3 s of their own steps; timed again rested after the merge, split by D237 only if their
+  own steps pass about 40 s), and `n04a-already-open` (differs from 7a's list, equal to `c5ba918`'s
+  own run before WP-N; judged by region in the merge runs). Hunt 3's findings and verdicts:
+  `D:/Projects/Personal/phase7b-work/verify/wpn-lead/hunt3.md`.
+- **The watcher's dispose test on CI** (2026-11-07, run 42386428809, `windows-latest`):
+  `RepositoryWatcherTests.Nothing_is_raised_before_start_or_after_dispose` counted two `Changed`, not
+  one, 2.9 s in, with seven other projects on the runner. The test runs the watcher on the wall clock
+  (quiet period 250 ms) and writes "just-before-dispose" just before `Dispose`; `Dispose` does not
+  wait for a raise in progress (`RepositoryWatcher.cs:174`), so a test thread held back longer than
+  the quiet period, or a late second event of the first write, would raise a second time before the
+  dispose. Not established yet: one Opus investigator in `D:/Projects/Personal/vc-wt/p7b-watcher`
+  (`wip/p7b-watcher-dispose` from `8cb5ecc`) and three skeptics (loosening, product, reproduction);
+  experiments in `D:/Projects/Personal/phase7b-work/verify/watcher-dispose/`.
 - **The three failures of 42339567989** (2026-11-07; one Opus investigator and two Opus skeptics
   each, none refuted, minors only; the lead's rulings at the merges):
   - B7 below git 2.46 (both containers): git 2.43's clone to an `<organization>@` URL sends its first
