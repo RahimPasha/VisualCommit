@@ -14,7 +14,10 @@ namespace VisualCommit.Git.Tests;
 /// tested against real repositories. The tests of the quiet period and the maximum delay hold the
 /// watcher's clock (<see cref="ManualTimeProvider"/>) and move it only once the watcher has
 /// counted every event they wait for, so that a slow machine cannot split a burst (D160). The
-/// test of Dispose holds it too, so that a slow machine cannot end a quiet period before Dispose.
+/// two tests of Dispose hold it too, so that a slow machine cannot end a quiet period before
+/// Dispose. Each disposes the watcher with a change counted just before: in one the change is due
+/// when Dispose comes, its timer's callback queued but not run, in the other it is still inside its
+/// quiet period, and its timer has not fallen due.
 /// </summary>
 public class RepositoryWatcherTests
 {
@@ -214,12 +217,51 @@ public class RepositoryWatcherTests
 
         // A change just before Dispose is dropped too: counted, and its timer's callback queued
         // but not run when Dispose comes, as on a busy machine, where the system's timer can run
-        // a callback queued before its Dispose after it.
+        // a callback queued before its Dispose after it. A change still inside its quiet period
+        // when Dispose comes is the next test's.
         File.WriteAllText(folder.Combine("just-before-dispose"), "x");
         Assert.True(await counted.WaitForAsync(["just-before-dispose"], Timeout), $"The watcher did not count an event for {counted.Missing(["just-before-dispose"])}.");
         Assert.False(watcher.IsQuiet, "The watcher is quiet: the change just before Dispose does not wait to be raised.");
         clock.Advance(due);
         watcher.Dispose();
+        clock.RunQueued();
+
+        // Nor is a change after Dispose raised, however far the clock moves.
+        File.WriteAllText(folder.Combine("after-dispose"), "x");
+        await Task.Delay(Settle, TestCancelled);
+        clock.Advance(due);
+        clock.RunQueued();
+        Assert.Equal(1, changed.Count);
+    }
+
+    [Fact]
+    public async Task A_watcher_disposed_while_a_change_waits_for_its_quiet_period_drops_it()
+    {
+        // The other change just before Dispose: counted, and still inside its quiet period when
+        // Dispose comes, so its timer has queued nothing. The clock moves only after Dispose. A
+        // Dispose that raised what still waits would raise this change; the test above, whose
+        // change is due when Dispose comes, cannot see that. On the clock the test holds, as there.
+        using var folder = new TempDirectory("watch");
+        var clock = new QueuingClock();
+        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, time: clock);
+        var changed = new Counter(watcher);
+        var counted = new CountedEvents(watcher);
+
+        // As in the test above: a burst counted before the clock moves this far is due.
+        var due = RepositoryWatcher.DefaultMaximumDelay;
+
+        watcher.Start();
+        File.WriteAllText(folder.Combine("while-watching"), "x");
+        Assert.True(await counted.WaitForAsync(["while-watching"], Timeout), $"The watcher did not count an event for {counted.Missing(["while-watching"])}.");
+        clock.Advance(due);
+        clock.RunQueued();
+        Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
+
+        File.WriteAllText(folder.Combine("just-before-dispose"), "x");
+        Assert.True(await counted.WaitForAsync(["just-before-dispose"], Timeout), $"The watcher did not count an event for {counted.Missing(["just-before-dispose"])}.");
+        Assert.False(watcher.IsQuiet, "The watcher is quiet: the change just before Dispose does not wait to be raised.");
+        watcher.Dispose();
+        clock.Advance(due);
         clock.RunQueued();
 
         // Nor is a change after Dispose raised, however far the clock moves.
