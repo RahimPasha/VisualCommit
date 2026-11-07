@@ -293,6 +293,13 @@ close, fixed and merged at `85d599c`; the second is still open (Notes, "The two 
 `ubuntu-latest` 6 min 27 s (4 min 58 s), the containers 8 min 51 s and 8 min 45 s (6 min 26 s and
 6 min 27 s), each under four fifths.
 
+[42335370821](https://github.com/RahimPasha/VisualCommit/actions/runs/42335370821) on `85d599c`, the
+close fix's merge: all five jobs green (Windows' keychain step and "Build the opt-in projects"
+green, macOS' keychain step green, the containers' Secret Service steps green). Jobs and Test steps:
+`windows-latest` 33 min 1 s (29 min 55 s), `macos-latest` 39 min 52 s (37 min 14 s), `ubuntu-latest`
+6 min 18 s (4 min 54 s), the containers 8 min 30 s and 8 min 47 s (6 min 6 s and 6 min 17 s), each
+under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -451,8 +458,8 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 WP-A (design 10, part A) is merged at `b6de3cf`; its classes, lagged list and picture inspection
 passed (Notes). CI's run on it (42301846503) failed two phase 6 tests on Linux that WP-A does not
-touch. The close race is fixed and merged (`85d599c`; its classes pass; the lead reads CI's run on
-it). The palette growth test's first fix was refuted as a loosening and is not merged; a second
+touch. The close race is fixed and merged (`85d599c`; its classes pass; CI's run on it,
+42335370821, green in all five jobs). The palette growth test's first fix was refuted as a loosening and is not merged; a second
 round designs a measure that is at least as strict for superlinear work, judged paired against the
 old procedure, in `D:/Projects/Personal/vc-wt/p7b-palette-growth-2` on `wip/p7b-palette-growth-2`
 (from `85d599c`), then put to skeptics; if none holds, the test stays as it is (Notes, "The two
