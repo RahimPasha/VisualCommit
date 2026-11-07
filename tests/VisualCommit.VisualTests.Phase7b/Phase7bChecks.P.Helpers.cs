@@ -77,14 +77,17 @@ public sealed partial class Phase7bChecksP
     private static string AdaAzureLogin(ServedHosting7b served) => $"{Organization}/{served.AzureDevOps.User(Organization, AdaName).Id:D}";
 
     /// <summary>A sign-in's GitLab requests and the list (P1 step 1, P9 step 1): user, A3, A4, the fork's lookup, each 200, Bearer, ada.</summary>
-    private static void AssertGitLabSignInList(IReadOnlyList<FakeServiceRequest> requests)
+    private static void AssertGitLabSignInList(IReadOnlyList<FakeServiceRequest> requests, ServedHosting7b served)
     {
         Assert.Equal(P.SignInRoutesOf(HostingProvider.GitLab).Select(route => route + " 200"), requests.Select(request => $"{request.Route} {request.Status}"));
         AssertRequest(requests[0], P.GitLabUserPath, P.GitLabUserRoute, string.Empty, FakeAuthorizationForm.Bearer, 200, AdaLogin);
         AssertRequest(requests[1], P.GitLabProjectPath, P.GitLabProjectRoute, string.Empty, FakeAuthorizationForm.Bearer, 200, AdaLogin);
         AssertRequest(requests[2], P.GitLabListPath, P.GitLabListRoute, P.GitLabListQuery, FakeAuthorizationForm.Bearer, 200, AdaLogin);
-        Assert.Equal((FakeAuthorizationForm.Bearer, AdaLogin), (requests[3].Authorization, requests[3].Login));
+        AssertRequest(requests[3], GitLabForkPath(served), P.GitLabForkRoute, string.Empty, FakeAuthorizationForm.Bearer, 200, AdaLogin);
     }
+
+    /// <summary>The fork's lookup by its number (design 7.4): <c>/api/v4/projects/&lt;ada/web-app's number&gt;</c>, never by its path.</summary>
+    private static string GitLabForkPath(ServedHosting7b served) => $"/api/v4/projects/{served.GitLab.Project(WebAppFork).Id}";
 
     /// <summary>
     /// A picture of part P: before it, no visible text, automation value or name in the window holds
@@ -100,28 +103,23 @@ public sealed partial class Phase7bChecksP
     }
 
     /// <summary>
-    /// <see cref="ShotP"/> for a picture whose message row is cut with "…" at 260 while its tooltip
-    /// does not hold its text, which the conventions' audit does not let through. The two rows differ
-    /// in what the report says of them. P8's row and open point 27 foresee D356's row cut, with the
-    /// reason as its tooltip (p08a, p08b, p10d): there the conventions' rule and P8's row cannot both
-    /// hold. P6's row foresees no cut: it lists GitLab's <c>More than 300 open merge requests</c> and
-    /// allows only a cut by an ellipsis, but that sentence, 33 characters, one more than 7a's, which
-    /// fits, overflows the row at 260 while the row's tooltip is the action (p06a): a product change (a
-    /// text that fits, or a tooltip that holds the text) is open there as well as a change of the
-    /// report. The audit runs in full and its findings are kept for <see cref="End"/>, which fails on
-    /// them after every step has run; only the lead may rule, so the check fails closed until then: no
-    /// finding is let through here.
+    /// <see cref="ShotP"/> for a picture that holds one of the two message rows that part P's
+    /// conventions let be cut with "…" at 260 although their tooltips are not their text (the lead's
+    /// ruling of 2026-11-07, the report's "Changed in this report after its first commit"): D356's row
+    /// (P8: p08a, p08b, p10d), whose tooltip is the reason and names both organizations, and GitLab's
+    /// <c>More than 300 open merge requests</c> (P6: p06a), whose tooltip is the action and which loses
+    /// only the end of "requests" under the header <c>Merge requests</c>. The audit runs in full and
+    /// lets through the one finding on <paramref name="cutRow"/>'s text alone, where that row is cut;
+    /// any other finding fails the picture.
     /// </summary>
-    private Screenshot ShotPAuditAtEnd(ShellDriver app, string name, bool keepPointer = false)
+    private static Screenshot ShotPCutRow(ShellDriver app, string name, string cutRow, bool keepPointer = false)
     {
         AssertNoTokenOnScreen(app);
         var screenshot = Shot(app, name, keepPointer);
-        _auditFindings.AddRange(LayoutAudit.FindClippedText(app.Window, allowShortenedWithToolTip: true, allowScrolledOutOfView: true).Select(problem => $"{name}: {problem}"));
+        var allowed = $"\"{cutRow}\" is shortened with an ellipsis.";
+        Assert.Equal([], LayoutAudit.FindClippedText(app.Window, allowShortenedWithToolTip: true, allowScrolledOutOfView: true).Where(problem => problem != allowed));
         return screenshot;
     }
-
-    /// <summary>What <see cref="ShotPAuditAtEnd"/>'s audits found, for <see cref="End"/>.</summary>
-    private readonly List<string> _auditFindings = [];
 
     /// <summary>No visible text, automation value or name holds one of part P's tokens; a failure names the control and the token's constant, never the token.</summary>
     private static void AssertNoTokenOnScreen(ShellDriver app)
@@ -463,8 +461,7 @@ public sealed partial class Phase7bChecksP
     /// used, over the data folder and the copy's three clones with the session's call log; each fake's
     /// errors and the harness's refusals none; no request answered 400 or 415; the launcher's requests
     /// exactly the <c>OpenUrl</c> launches of <paramref name="launches"/> and the clipboard's texts
-    /// exactly <paramref name="clipboard"/> (both with the fakes' ports); last, that the audits
-    /// <see cref="ShotPAuditAtEnd"/> kept found nothing.
+    /// exactly <paramref name="clipboard"/> (both with the fakes' ports).
     /// </summary>
     private void End(ShellDriver app, TempDirectory data, ServedHosting7b served, string[] tokens, string[] launches, string[] clipboard)
     {
@@ -483,14 +480,5 @@ public sealed partial class Phase7bChecksP
         Assert.DoesNotContain(served.GitHub.Requests, request => request.Status is 400 or 415);
         Assert.Equal(launches.Select(url => $"{FileLaunchKind.OpenUrl} {WithPorts(url, served)}"), app.Launcher.Requests.Select(request => $"{request.Kind} {request.FullPath}"));
         Assert.Equal(clipboard.Select(url => WithPorts(url, served)), app.Clipboard.Texts);
-        Assert.True(
-            _auditFindings.Count == 0,
-            "Clipped text that part P's conventions do not let through (every picture passes LayoutAudit.FindClippedText; a row cut with an "
-            + "ellipsis only when a tooltip holds its whole text). D356's row (p08a, p08b, p10d): P8's row and open point 27 foresee it cut "
-            + "with \"…\" at 260, its tooltip the reason, so the conventions' rule and P8's row cannot both hold. GitLab's 'More than 300 "
-            + "open merge requests' (p06a): P6's row foresees no cut (it lists the row and allows only a cut by an ellipsis), but the "
-            + "sentence, 33 characters, one more than 7a's, which fits, overflows the row at 260 while its tooltip is the action; a product "
-            + "change (a text that fits, or a tooltip that holds the text) is open there too. The lead rules (docs/test-reports/phase-7b.md: "
-            + "part P's conventions, P6, P8, open point 27).\n" + string.Join("\n", _auditFindings));
     }
 }

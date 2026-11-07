@@ -3437,11 +3437,16 @@ or settles what it left open:
   account its provider no longer holds signed in, also when its candidate went (D257); an A3 read or a
   create in flight is not covered. Any provider's A4 list or A5 request with a text that names the
   token is malformed as A3's is (D382 extended, for the lead and WP-N); a refresh keeps the rows shown.
-- For the lead: methods 4 and 5 fail closed on the conventions' audit (`ShotPAuditAtEnd`, after every
-  step). D356's row is cut at 260 as P8 and open point 27 foresee, its tooltip the reason (p08a, p08b,
-  p10d); P6 foresees no cut, but GitLab's `More than 300 open merge requests` overflows while its
-  tooltip is the action (p06a): a ruling, or a product change. "Disabled" reads
-  `IsEffectivelyEnabled`; P1's local branches are a set.
+- The two message rows cut at 260 whose tooltips are not their text, D356's row (P8: p08a, p08b, p10d,
+  its tooltip the reason) and GitLab's `More than 300 open merge requests` (P6: p06a, its tooltip the
+  action), are the conventions' one exception by the lead's ruling (the report's "Changed in this
+  report after its first commit", 2026-11-07): `ShotPCutRow` lets through the audit's one finding on
+  that row's text alone. The builder had left methods 4 and 5 failing closed until the ruling.
+  "Disabled" reads `IsEffectivelyEnabled`; P1's local branches are a set.
+- `OnAccountChanged`'s stop (above): a sign-out stops the run at once; a sign-in that replaces the
+  account stops it after the request in flight, which the new token's check waits behind (7a's one
+  request at a time per provider), so only the later pages and lookups are spared (hunt 3, minor).
+- One commit for 12.9's five areas stands (the lead): splitting it would rewrite history.
 - `PartP.LabelsOf(p)` records open point 26's rows 0 to 4 (checked but `Right`). `PartP` uses nothing
   of the 7b project; WP-R reads its `RepositoryOf`, `TitleOf`, `RowsOf`, `SectionMenu`, `RowMenuOf`,
   `RowsPictureOf`, `SectionMenuPictureOf` and `LabelsOf`. Also outside the list: the 7b csproj's link

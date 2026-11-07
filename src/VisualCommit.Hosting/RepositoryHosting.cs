@@ -289,7 +289,10 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     /// provider no longer holds signed in is stopped first, as <see cref="Update"/> stops another
     /// provider's, also when its candidate went meanwhile: its pages and fork lookups would go on with
     /// a token signed out or replaced, for an answer Finish drops (D257, D348;
-    /// docs/phase-7b-design.md 12's As built).
+    /// docs/phase-7b-design.md 12's As built). A sign-out stops the run at once. A sign-in that
+    /// replaces the account stops it only after the request in flight, because the new token's check
+    /// waits behind that request (7a's one request at a time per provider), so only the later pages
+    /// and lookups are spared.
     /// </summary>
     internal void OnAccountChanged(HostingProvider provider)
     {

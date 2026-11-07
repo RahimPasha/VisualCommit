@@ -102,6 +102,9 @@ public sealed partial class Phase7bChecksP
             Assert.Empty(GitHubSince(served, mark));
             var top = webApp.Graph.CommitAt(0);
             Assert.Equal((head, "Fix a typo in the footer", AdaName), (top.Sha, top.Subject, top.AuthorName));
+            var topLabel = Assert.Single(Graph(app).LabelsInRow(0));
+            Assert.Equal(("fix-typo", "refs/heads/fix-typo", "CurrentBranch"), (topLabel.FullText, topLabel.RefName, topLabel.Kind.ToString()));
+            Assert.Null(topLabel.Badge);
             var fixTypo = (RefItemRow)app.RefRowModel("Local branches", "fix-typo");
             Assert.Equal((true, false), (fixTypo.IsHead, fixTypo.ShowsPullRequest));
             Assert.Equal([$"v {P.GitLabTitle} 3", .. P.GitLabRows.Select(row => row.Name)], Section(app));

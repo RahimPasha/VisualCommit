@@ -48,7 +48,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             await WaitForListedAsync(app, WebApp, 3, P.GitLabListed, logMark);
             await AssertNoDialogAsync(app);
             ShotP(app, P.P01a);
-            AssertGitLabSignInList(GitLabSince(served, mark));
+            AssertGitLabSignInList(GitLabSince(served, mark), served);
             Assert.Empty(AzureSince(served, mark));
             Assert.Empty(GitHubSince(served, mark));
             Assert.Equal(["probe", "save " + WithPorts(P.GitLabKey, served)], StoreCallsSince(app, stored));
@@ -355,7 +355,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             var refreshed = GitLabSince(served, mark);
             Assert.Equal([P.GitLabListRoute + " 200", P.GitLabForkRoute + " 200"], refreshed.Select(request => $"{request.Route} {request.Status}"));
             AssertRequest(refreshed[0], P.GitLabListPath, P.GitLabListRoute, P.GitLabListQuery, FakeAuthorizationForm.Bearer, 200, AdaLogin);
-            Assert.Equal((FakeAuthorizationForm.Bearer, AdaLogin), (refreshed[1].Authorization, refreshed[1].Login));
+            AssertRequest(refreshed[1], GitLabForkPath(served), P.GitLabForkRoute, string.Empty, FakeAuthorizationForm.Bearer, 200, AdaLogin);
             Assert.Equal(PullRequestsState.Loaded, webApp.HostingState.PullRequests);
             Assert.Equal([$"v {P.GitLabTitle} 3", .. P.GitLabRows.Select(row => row.Name)], Section(app));
         }
@@ -481,7 +481,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             var manifest = await app.WaitForRepositoryAsync();
             await WaitForStateAsync(app, manifest, PullRequestsState.OtherOrganization, PullRequestMessageKind.OtherOrganization);
             app.MoveToNeutral();
-            ShotPAuditAtEnd(app, P.P08a);
+            ShotPCutRow(app, P.P08a, P.OtherOrganizationRow);
             var harbor = new HostedRepository(Azure, AzureHost(served), $"{OtherOrganization}/Docks", Manifest);
             var state = manifest.HostingState;
             Assert.Equal([("origin", harbor)], state.Remotes.Select(pair => (pair.Key, pair.Value)));
@@ -502,7 +502,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.DoesNotContain(served.AzureDevOps.GitRequests.Skip(gitRequests), request => request.Path.Contains("harbor-co/Docks/_git/manifest", StringComparison.Ordinal));
             Assert.DoesNotContain(app.LogLinesSince(logMark), line => line.Contains("manifest: listed", StringComparison.Ordinal));
             Assert.Equal(P.OtherOrganizationToolTip, await app.RestPointerOnAsync(Part(row, "PullRequestMessageText")));
-            ShotPAuditAtEnd(app, P.P08b, keepPointer: true);
+            ShotPCutRow(app, P.P08b, P.OtherOrganizationRow, keepPointer: true);
             var launches = app.Launcher.Requests.Count;
             app.Click(row);
             await app.WaitForIdleAsync();
@@ -517,7 +517,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
 
             // P10 step 8 and P13 step 9: manifest's menu, open in browser alone.
             await SectionMenuAsync(app, P.SectionMenuOtherOrganization, P.AzureDevOpsOpenInBrowser, P.OtherOrganizationMenuHeight);
-            ShotPAuditAtEnd(app, P.P10d, keepPointer: true);
+            ShotPCutRow(app, P.P10d, P.OtherOrganizationRow, keepPointer: true);
             app.ClickMenuItem(P.AzureDevOpsOpenInBrowser);
             await app.WaitForAsync(() => OpenedUrls(app).Count == 2, "the launcher's address");
             Assert.Equal(WithPorts(P.ManifestRequestsPage, served), OpenedUrls(app)[^1]);
@@ -553,7 +553,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             await WaitForListedAsync(app, WebApp, 3, P.GitLabListed, 0);
             ShotP(app, P.P09a);
             var start = new Marks(0, 0, 0);
-            AssertGitLabSignInList(GitLabSince(served, start));
+            AssertGitLabSignInList(GitLabSince(served, start), served);
             var gitHub = Assert.Single(GitHubSince(served, start));
             Assert.Equal(("GET", "user", 200, OctoLogin), (gitHub.Method, gitHub.Route, gitHub.Status, gitHub.Login));
             Assert.Empty(AzureSince(served, start));
@@ -629,10 +629,10 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             list.ScrollIntoView(webApp.LeftPanel.Rows.Count - 1);
             app.Settle();
             await app.WaitForAsync(() => list.GetLogicalDescendants().OfType<Control>().Any(control => Avalonia.Automation.AutomationProperties.GetName(control) == "Stashes"), "the list's end");
-            // P6 step 3 foresees no cut of this row ("no text cut but by an ellipsis"): GitLab's sentence,
-            // one character longer than 7a's, which fits, overflows the row at the panel's default 260
-            // while its tooltip is the action (step 4), so the audit fails closed (ShotPAuditAtEnd).
-            ShotPAuditAtEnd(app, P.P06a);
+            // GitLab's sentence, one character longer than 7a's, which fits, is cut at the panel's 260
+            // while its tooltip is the action (step 4): the conventions' exception for this row (the
+            // lead's ruling of 2026-11-07), which lets that one finding through and no other.
+            ShotPCutRow(app, P.P06a, P.GitLabMore);
             var (extent, viewport) = PanelScroll(app);
             Assert.True(extent > viewport + 1, $"The panel's list shows no scroll bar: extent {extent}, viewport {viewport}.");
             Assert.Equal(
