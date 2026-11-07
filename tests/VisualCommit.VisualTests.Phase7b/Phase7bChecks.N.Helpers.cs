@@ -263,7 +263,9 @@ public sealed partial class Phase7bChecksN
     /// <summary>Drags <c>local-work</c> onto <c>Remotes › origin › main</c> (7a's N5 step 4) and waits for the drop's menu.</summary>
     private static async Task DropLocalWorkOnOriginMainAsync(ShellDriver app)
     {
-        var source = app.BoundsOf(await app.RefRowAsync("Local branches", N.LocalWork)).Center;
+        // 24 px left of the row's centre, where the last right-click on it was: a press there within
+        // the double-tap time would count as a double-click and check local-work out.
+        var source = app.BoundsOf(await app.RefRowAsync("Local branches", N.LocalWork)).Center - new Point(24, 0);
         var target = app.BoundsOf(await app.RefRowAsync("Remotes", "origin", "main")).Center;
         app.PressMouse(source);
         app.MoveMouseHeld(source + new Point(0, 12), steps: 3);

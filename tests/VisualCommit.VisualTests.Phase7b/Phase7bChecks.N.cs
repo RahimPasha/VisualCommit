@@ -637,12 +637,12 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
         var sha = (await GitInAsync(bare, "rev-parse", N.HeadRef)).Output;
         Assert.Equal(0, (await GitInAsync(bare, "update-ref", "-d", N.HeadRef)).Exit);
         Assert.Equal($"v {P.TitleOf(p)} 3", Section(app)[0]);
-        await AssertBranchNumberAsync(app, p, null, null, "Local branches", N.TopicFolder, N.NoRequest);
         Assert.Equal(1, (await GitInAsync(bare, "rev-parse", "--verify", "--quiet", N.HeadRef)).Exit);
         Assert.Equal(sha, await GitAsync(Clone(served, p), "rev-parse", N.RemoteHeadRef));
 
-        // Step 2: Create refused, the branch missing.
+        // Step 2: Create refused, the branch missing (step 1's no-request without !n, read once its folder is open).
         app.Click(await app.RefRowAsync("Local branches", N.TopicFolder));
+        await AssertBranchNumberAsync(app, p, null, null, "Local branches", N.TopicFolder, N.NoRequest);
         await MenuOfAsync(app, "Local branches", N.TopicFolder, N.NoRequest);
         AssertWholeMenu(app, N.LocalBranchMenuOf(p), $"Check out {N.Head}", N.LocalBranchMenuHeight);
         var form = await OpenFormFromMenuAsync(app, p);
