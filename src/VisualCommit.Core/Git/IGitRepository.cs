@@ -1021,6 +1021,14 @@ public interface IRepositoryWatcher : IDisposable
     /// Raised on a thread-pool thread after something the views show may have changed: once per
     /// burst of changes, after the burst has been quiet for the debounce time. The arguments say
     /// where: the git folder (refs, HEAD, the index, the stash) or the working tree.
+    /// <para>
+    /// It can still be raised after Dispose has returned: Dispose does not wait for a raise that
+    /// has already passed its checks, and that raise can end after it. Such a raise carries only
+    /// changes counted before Dispose began; no change counted after Dispose began is ever raised.
+    /// A subscriber that must not act once it has disposed the watcher checks its own state in
+    /// its handler, as <c>RepositoryViewModel</c> does: its Dispose marks it disposed before it
+    /// disposes the watcher, and its handler returns once it is.
+    /// </para>
     /// </summary>
     event EventHandler<RepositoryChangedEventArgs>? Changed;
 
