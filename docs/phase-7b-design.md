@@ -3085,6 +3085,11 @@ or settles what it left open:
   are asserted in their classes below the token box and above the buttons; A2 step 7 the whole intro
   above the viewport; A2 step 3 GitHub's avatar address. Open point 8: A9 as given (ASSUMED); settled
   on 2026-11-07, A9 then taking its Anonymous answer from the fault `AnonymousIdentity` (16.1's As built).
+- After WP-B's merge (CI 42339567989's container read a reopened block not busy and without its
+  note): a block's sign-out ends in one place, `AccountBlockViewModel.EndSignOut`, for the block that
+  started it and a block that follows it: the account and the keychain's note first, busy's end last
+  (in a `finally`), so a block that shows not busy shows the end, as 10.9 says;
+  `AccountsProvidersViewModelTests` reads each block's state in `IsBusy`'s change, never by a poll.
 - For WP-B, WP-P and WP-N: `TabServices.SignIn(p)` serves every provider (false while off).
   `SignInEntryProvidersTests` passes under the 1.5 s watcher lag.
 

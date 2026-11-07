@@ -314,8 +314,10 @@ merge: `ubuntu-latest` and `macos-latest` green; three jobs failed, each in one 
 - `windows-latest`: 7a's `Phase7aChecksA.Check_A9_needs_sign_in_after_a_refused_token` at
   `Phase7aChecks.A.cs:572` (the pull requests state `Loading`, not `SignedOut`).
 
-Each is being investigated in its own worktree (`wip/p7b-git243`, `wip/p7b-signout-race`,
-`wip/p7b-a9-loading`, from `9409aa8`), each fix put to two skeptics. Jobs and Test steps:
+Each was investigated in its own worktree from `9409aa8`, each fix put to two skeptics (none
+refuted; minors only) and merged (Notes, "The three failures of 42339567989"): B7's expected
+requests below 2.46 at `e49bd5c` (`wip/p7b-git243`), the sign-out's end at `eb218a3`
+(`wip/p7b-signout-race`), A9's waits at `7ddb928` (`wip/p7b-a9-loading`). Jobs and Test steps:
 `windows-latest` 41 min 59 s (38 min 47 s), `macos-latest` 30 min 4 s (28 min 26 s), `ubuntu-latest`
 6 min 32 s (5 min 8 s), the containers 9 min 21 s and 7 min 23 s (6 min 42 s and 5 min 14 s), each
 under four fifths.
@@ -478,9 +480,9 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8's comparison and
 picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
-tests, each investigated in its own worktree from `9409aa8` (`wip/p7b-git243`, `wip/p7b-signout-race`,
-`wip/p7b-a9-loading`), each fix put to two skeptics; the lead merges them, runs their classes and
-reads the next CI run. Part P's checks are committed (`f1ac5ac`, D244); WP-P (section 12) is being
+tests; their fixes are merged (`e49bd5c`, `eb218a3`, `7ddb928`; Notes, "The three failures of
+42339567989") and their classes pass; the lead reads the CI run of the push that carries them, which
+must be green in all five jobs. Part P's checks are committed (`f1ac5ac`, D244); WP-P (section 12) is being
 built from that commit in `D:/Projects/Personal/vc-wt/p7b-requests` on `wip/p7b-requests`, then
 reviewed and hunted; at its merge the lead runs 12.9's runs (the lagged list, `Phase7aChecksP` and
 `Phase7aChecksG` against `phase-7a-pictures.sha256`, phase 3's `*Check_03_other_menus*`, part P, and
@@ -495,11 +497,9 @@ pictures are the same files as WP-B's merge run's.
 WP-A (design 10, part A) is merged at `b6de3cf`; its classes, lagged list and picture inspection
 passed (Notes). CI's run on it (42301846503) failed two phase 6 tests on Linux that WP-A does not
 touch. The close race is fixed and merged (`85d599c`; its classes pass; CI's run on it,
-42335370821, green in all five jobs). The palette growth test's first fix was refuted as a loosening and is not merged; a second
-round designs a measure that is at least as strict for superlinear work, judged paired against the
-old procedure, in `D:/Projects/Personal/vc-wt/p7b-palette-growth-2` on `wip/p7b-palette-growth-2`
-(from `85d599c`), then put to skeptics; if none holds, the test stays as it is (Notes, "The two
-Linux failures of 42301846503"). For the week from 2026-11-05 the owner gives the phase about all of
+42335370821, green in all five jobs). The palette growth test's first fix was refuted as a
+loosening and is not merged; the second round found no measure that holds, so the test stays as it
+is and its rare Linux failure stays open (Notes, "The two Linux failures of 42301846503"). For the week from 2026-11-05 the owner gives the phase about all of
 its allowance.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
@@ -672,7 +672,45 @@ every commit.
     rounds with symmetric samples (a median of paired ratios, a robust slope over four sizes, or
     minima over more rounds), accepted only if, paired on the same samples, superlinear work
     passes it no more often than the old procedure and linear work fails it less often under the
-    emulated interference.
+    emulated interference. Its outcome (2026-11-07, one Opus agent, 414 paired trials on the loaded
+    laptop, each a fresh process): none holds. Medians of per-round ratios (5, 7, 9 rounds), medians
+    of each side, Theil-Sen slopes and the smaller measures against 10,000 tags failed linear work
+    less often but passed a superlinear cost (a 40 to 50 % scan) more often than the old procedure in
+    at least one setting; minima over more rounds failed linear work more often; the forms against
+    20,000 tags lost linear trials to collections inside the no-GC region (under memory pressure, not
+    a short budget). Only medians of nine at 625 against 20,000 tags improved without an extra
+    superlinear pass, on 4 to 7 trials a setting, too few to decide (about 8 to 10 h on a quiet
+    machine, and a 20,000-tag context that would amend phase 6's design 5.12). So `63d2d80`'s test
+    stays, `wip/p7b-palette-growth-2` is clean at `85d599c` with nothing committed, and the CI
+    failure of 42301846503 stays a known, open flake of that test. For the review before the gate:
+    `WithoutCollection`'s message "the budget is too small" can mislead when a collection comes
+    from memory pressure. The data: `D:/Projects/Personal/phase7b-work/verify/palette-growth/round-2/`.
+- **The three failures of 42339567989** (2026-11-07; one Opus investigator and two Opus skeptics
+  each, none refuted, minors only; the lead's rulings at the merges):
+  - B7 below git 2.46 (both containers): git 2.43's clone to an `<organization>@` URL sends its first
+    request without credentials (401), libcurl's own retry with the URL's user and an empty password
+    second (401), and the helper's `x-access-token` third (200); design 8.6's "first" meant before
+    the helper (r7 H4b, g3 G2.2's H2). B7 now asserts those three in order, stricter than the one it
+    asserted; the report's part B convention and B7 changed, with the reason under "Changed in this
+    report after its first commit". Reproduced on the laptop with Git for Windows' 2.43.0 first on
+    `PATH` (`D:/Projects/Personal/phase7b-work/verify/git243/git-2.43.0-hb`, kept for such runs):
+    `Phase7bChecksB` 6 of 6 there after the fix. Ubuntu's patched curl and git were read, not run;
+    the next CI run's containers measure them.
+  - The sign-out's end (the container with Microsoft's SDK): a reopened block could read not busy
+    before its account and note were set (2,000 runs of the old test: 10 failures). The production
+    code now ends a sign-out in one place, `AccountBlockViewModel.EndSignOut`, busy last in a
+    `finally`; the tests read the state in `IsBusy`'s change (two tests failed every time before,
+    pass every time after). Design 10's As built says so.
+  - A9 (Windows): a refusal swaps the session's slot before it posts each hosting's change to the
+    UI thread, so the check's waits could end before hello's hosting took `SignedOut`. A9 waits for
+    that state in steps 2 and 5 (`a09b` after it); no production change. The report's part A
+    "Earlier tests" says so; 7a's report is unchanged.
+  - At the merges, through `heavy-run.sh` on 2.56: the 7b project's `Phase7bChecksB`,
+    `AccountsProvidersViewModelTests` and `Phase7bChecksA` 30 of 30; 7a's `Phase7aChecksA` and
+    `AccountsSettingsViewModelTests` 27 of 27; `SignInEntryProvidersTests` and `SignInEntryTests` 13
+    of 13; `SettingsDialogViewTests` 11 of 11; and on 2.43.0 `Phase7bChecksB` 6 of 6. Part A's and
+    part B's 49 pictures are the same files as WP-B's merge run's; of 7a's 24 part A pictures only
+    `a09b` differs from 7a's gate list, in 2 pixels by one level at (350, 206), anti-aliasing.
 - **Part A's pictures inspected** (2026-11-06, an Opus agent, after WP-A's merge runs): all 29 match
   their steps, no defect; 7a's 28 changed pictures as the lead read them (the intro's box only in the
   23 part A ones). Its notes, for later: the report's "about 553 of 495" for three signed-in blocks

@@ -1200,6 +1200,12 @@ The 7a report's A1 row (its step 2's `AccountsIntro`) and its part A "Texts thes
 - `SettingsScreenServices.SignIn` takes the provider and `MainWindowViewModel.Settings.cs` sets `SignIn =
   SignInAsync` (10.1); 7a's part A classes, `SignInEntryTests`, `SettingsDialogViewTests`,
   `Phase6ChecksS` and `Check_L31*` keep their expected results (10.8, 10.9).
+- `tests/VisualCommit.VisualTests.Phase7a/Phase7aChecks.A.cs`'s `Check_A9` waits, in its steps 2 and 5,
+  for hello's hosting to show signed out (`PullRequestsState.SignedOut`) before it asserts that state and
+  before `a09b` (CI 42339567989 on Windows read `Loading`): a refusal swaps the session's slot, which the
+  account's waits read without the UI thread, and only then posts each hosting's change to the UI thread
+  (7a design 7.3, 7.8), so those waits can end before the post runs. 7a's report gives A9's steps and
+  expected results; they stay as written there, this wait added.
 
 ### Part B: no earlier picture changes (D354, D362; design 0.7, 11.1, 11.3 to 11.5, 11.8)
 
