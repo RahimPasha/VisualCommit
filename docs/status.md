@@ -525,9 +525,9 @@ WP-N (design 13, part N) is built in `D:/Projects/Personal/vc-wt/p7b-create` on 
 are being applied there by a fix workflow (R1 to R5: the stacked sign-in's bindings window fixed in
 the product as D388, the open point 45 check, six minors, Ada's Login asserted), then reviewed,
 refuted and verified. CI's run on `8cb5ecc` (42386428809) failed two older tests (CI section); the
-watcher's dispose test is being investigated in `D:/Projects/Personal/vc-wt/p7b-watcher` on
-`wip/p7b-watcher-dispose`, with three skeptics. At the fix workflow's end the lead reads its result,
-writes D388, scans the diff, merges WP-N (and the watcher's fix, if any), and runs 13.9's runs through
+watcher's dispose test was a race in the test, fixed with one product fix and merged at `abc6df7`
+(Notes, "The watcher's dispose test on CI"); its CI run is the lead's to read. At the fix workflow's
+end the lead reads its result, writes D388, scans the diff, merges WP-N, and runs 13.9's runs through
 `scripts/heavy-run.sh`: the lagged list, then the whole default run (0.4, D245), then 7a's part N
 (`Phase7aChecksN`) and phase 3's walk-through, comparing their pictures by region with 0.7's
 references in `D:/Projects/Personal/gate7b-reference/` (made 2026-11-07, Notes), then part N with
@@ -863,9 +863,30 @@ every commit.
   (quiet period 250 ms) and writes "just-before-dispose" just before `Dispose`; `Dispose` does not
   wait for a raise in progress (`RepositoryWatcher.cs:174`), so a test thread held back longer than
   the quiet period, or a late second event of the first write, would raise a second time before the
-  dispose. Not established yet: one Opus investigator in `D:/Projects/Personal/vc-wt/p7b-watcher`
-  (`wip/p7b-watcher-dispose` from `8cb5ecc`) and three skeptics (loosening, product, reproduction);
-  experiments in `D:/Projects/Personal/phase7b-work/verify/watcher-dispose/`.
+  dispose. Established (one Opus investigator, three Opus skeptics, two follow-up rounds each with a
+  verifier; experiments in `D:/Projects/Personal/phase7b-work/verify/watcher-dispose/`): a race in
+  the test, not the product. A hold of the test thread of 250 ms or more, inside or after the write
+  of "just-before-dispose", or a second notice of the first write after its raise followed by such a
+  hold, raised a burst before `Dispose`; a 400 ms hold injected there failed the test every time with
+  CI's message, while natural load on the laptop never did (0 of about 400 runs and traced rounds).
+  Fixed on `wip/p7b-watcher-dispose` (`80d5f41..8cc8c00`), merged at `abc6df7`:
+  - The test runs on `QueuingClock` (a held clock whose due callbacks wait in a queue for the test,
+    as a timer's wait for the thread pool) and moves it by the maximum delay before each assertion;
+    its three assertions are kept word for word. A second test disposes while the change still waits
+    for its quiet period (the case the original named; one of the two catches each of the
+    skeptics' mutations of `Dispose` and `OnTimer`).
+  - `A_burst_of_changes_raises_changed_once` and `It_is_not_quiet_from_a_bursts_first_change_until_its_raise_has_ended`
+    wait in real time until the watcher has counted nothing for 1 s before the clock moves: a late
+    notice between their two advances (Quiet minus a tick, then a tick) re-armed the burst; it
+    failed the first once on the laptop under load, and failed both every time when injected.
+  - One product fix: the watcher's ignore check (`AllIgnored`) passed `_lifetime.Token`, whose
+    getter throws once `Dispose` has disposed the source; the check took that as "git cannot say"
+    and the burst was raised after `Dispose` returned. It passes `_lifetimeToken` now (the burst is
+    dropped), tested through an internal hook in `EventCounted`'s style (`RaisePassedChecks`).
+  - `IRepositoryWatcher.Changed`'s doc says a raise already under way can finish after `Dispose`
+    returns, with only changes counted before `Dispose` marked the watcher disposed.
+  - Left: the lag tests (`:234`, `:259`) keep 1 s and 2 s windows on the system's clock by design
+    (D262); the laptop showed a 1.1 s stall inside a write under file load. Recorded, not changed.
 - **The three failures of 42339567989** (2026-11-07; one Opus investigator and two Opus skeptics
   each, none refuted, minors only; the lead's rulings at the merges):
   - B7 below git 2.46 (both containers): git 2.43's clone to an `<organization>@` URL sends its first
