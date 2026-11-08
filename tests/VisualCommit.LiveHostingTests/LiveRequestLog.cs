@@ -69,9 +69,10 @@ internal sealed record LiveRequest(
 /// <summary>
 /// The app's requests in the live command (docs/phase-7a-design.md 14.5): a handler between the
 /// session's clients and GitHub that records each request as a <see cref="LiveRequest"/> and passes
-/// the request and the answer on unchanged. It reads no body but the one a new provider's guard asks
-/// for (<see cref="LiveReach.ReadsAnswer"/>: GitLab's sandbox read, D393), which it buffers whole and
-/// passes on to be read from its start; of the headers only the four
+/// the request and the answer on unchanged. It reads no body but those a new provider's guard asks
+/// for (<see cref="LiveReach.ReadsAnswer"/>: GitLab's sandbox read; <see cref="LiveReach.ReadsContent"/>:
+/// the content of GitLab's requests, D393), which it buffers whole and passes on to be read, or sent,
+/// from its start; of the headers only the four
 /// <see cref="LiveRequest"/> names, and of <c>Authorization</c> only whether it was sent. One
 /// <see cref="Store"/> serves every handler the session creates (its client's and the avatar
 /// cache's). A request that would break D327's reach (<see cref="RefusalOf"/>) is recorded and
@@ -169,7 +170,13 @@ internal sealed class LiveRequestLog : DelegatingHandler
                 KeptHeaders = response is null ? new Dictionary<string, string>() : KeptOf(response),
             };
 
-        if ((LiveReach.HostRefusalOf(request, within) ?? LiveReach.OverrideRefusalOf(request, within) ?? within.RefusalOf(request.Method, uri, form)) is { } refusal)
+        var refusal = LiveReach.HostRefusalOf(request, within) ?? LiveReach.OverrideRefusalOf(request, within) ?? within.RefusalOf(request.Method, uri, form);
+        if (refusal is null && request.Content is { } content && within.ReadsContent(request.Method, uri))
+        {
+            refusal = await ContentRefusalAsync(within, request.Method, uri, content, cancellationToken).ConfigureAwait(false);
+        }
+
+        if (refusal is not null)
         {
             store.Add(Record(null, "refused: " + refusal, null));
             within.Refused(uri, form);
@@ -225,6 +232,29 @@ internal sealed class LiveRequestLog : DelegatingHandler
         }
 
         within.AnswerRead(method, uri, (int)response.StatusCode, body);
+    }
+
+    /// <summary>
+    /// What <paramref name="within"/> says of a request's content before it leaves
+    /// (<see cref="LiveReach.ContentRefusalOf"/>; D393: GitLab's writes, whose content could name
+    /// another project), the content buffered whole, at most <see cref="LiveReach.MaxAnswerRead"/>
+    /// bytes, so that it still goes out whole. Content that cannot be read so is refused, the refusal
+    /// naming the origin alone.
+    /// </summary>
+    private static async Task<string?> ContentRefusalAsync(LiveReach within, HttpMethod method, Uri uri, HttpContent content, CancellationToken cancellationToken)
+    {
+        byte[] body;
+        try
+        {
+            await content.LoadIntoBufferAsync(LiveReach.MaxAnswerRead, cancellationToken).ConfigureAwait(false);
+            body = await content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return $"its content could not be read for the guard on {within.Origin}: {ex.GetType().Name} (D393)";
+        }
+
+        return within.ContentRefusalOf(method, uri, content.Headers, body);
     }
 
     /// <summary>
@@ -617,8 +647,17 @@ internal abstract class LiveReach
     {
     }
 
-    /// <summary>The most of an answer's body <see cref="LiveRequestLog"/> reads for <see cref="AnswerRead"/>: 10 MiB, the app's core's limit for a body (<c>HostingHttpClient.MaxBodyBytes</c>).</summary>
+    /// <summary>The most of a body <see cref="LiveRequestLog"/> reads for the guard, an answer's for <see cref="AnswerRead"/> or a request's content for <see cref="ContentRefusalOf"/>: 10 MiB, the app's core's limit for a body (<c>HostingHttpClient.MaxBodyBytes</c>).</summary>
     internal const int MaxAnswerRead = 10 * 1024 * 1024;
+
+    /// <summary>Whether the guard reads the content of a request that every other check let through, before it leaves (<see cref="ContentRefusalOf"/>): none but GitLab's (D393).</summary>
+    public virtual bool ReadsContent(HttpMethod method, Uri uri) => false;
+
+    /// <summary>
+    /// Why a request's content, read whole by <see cref="LiveRequestLog"/> with its headers, keeps it
+    /// from leaving, or null. Names the origin, never the path, the content or a value of it.
+    /// </summary>
+    public virtual string? ContentRefusalOf(HttpMethod method, Uri uri, System.Net.Http.Headers.HttpContentHeaders headers, ReadOnlyMemory<byte> content) => null;
 
     /// <summary>Whether the guard reads the body of this answer to a request it let through (<see cref="AnswerRead"/>): none but GitLab's sandbox read (D393).</summary>
     public virtual bool ReadsAnswer(HttpMethod method, Uri uri, int status) => false;
@@ -672,8 +711,8 @@ internal abstract class LiveReach
     /// <summary>A decoded segment that is <c>.</c> or <c>..</c>.</summary>
     protected static bool IsDotSegment(string raw) => Uri.UnescapeDataString(raw) is "." or "..";
 
-    /// <summary>The query's parameters as written, split at <c>&amp;</c> and at <c>;</c>, which a server may read as a separator too.</summary>
-    private static string[] QueryPairs(Uri uri) => uri.Query.TrimStart('?').Split(['&', ';'], StringSplitOptions.RemoveEmptyEntries);
+    /// <summary>The query's parameters as sent (<see cref="Uri.Query"/>), split at <c>&amp;</c> and at <c>;</c>, which a server may read as a separator too.</summary>
+    protected static string[] QueryPairs(Uri uri) => uri.Query.TrimStart('?').Split(['&', ';'], StringSplitOptions.RemoveEmptyEntries);
 
     /// <summary>The names of the query's parameters, decoded, in order (a repeated one as often as it shows).</summary>
     protected static IReadOnlyList<string> QueryNames(Uri uri) =>
@@ -1004,8 +1043,13 @@ internal sealed class AzureDevOpsReach : LiveReach
 /// to a GET of <c>projects/&lt;the sandbox's path&gt;</c> whose own <c>id</c> and
 /// <c>path_with_namespace</c> name the sandbox (<see cref="AnswerRead"/>, the app's A3 and A5 reads and
 /// the command's own). Before that every number is refused, and after it every other number; a second
-/// answer with another id bars every number for good. A refusal names the origin, never the path, the
-/// namespace or an id.
+/// answer with another id bars every number for good. GitLab also reads a project from the query and
+/// from a write's content (<c>target_project_id</c> of A5's create across projects), so these are
+/// judged too (<see cref="QueryRefusalOf"/>, <see cref="ContentRefusalOf"/>): no query on any method but
+/// GET; under a project, a query parameter that may name a project names the sandbox, as a next page's
+/// <c>id</c> does; content on POST and PUT alone, one JSON object sent as <c>application/json</c>, a
+/// top-level member that may name a project null or the learned id. A refusal names the origin, never
+/// the path, the namespace, a parameter, the content or an id.
 /// </summary>
 internal sealed class GitLabReach : LiveReach
 {
@@ -1079,8 +1123,118 @@ internal sealed class GitLabReach : LiveReach
                 : $"the path is none that the app or the command sends under {Origin}/api/v4/ (D349)";
         }
 
-        return methods.All(each => Takes(each!, method)) ? null : MethodRefusal(method);
+        return methods.All(each => Takes(each!, method)) ? QueryRefusalOf(method, uri, segments) : MethodRefusal(method);
     }
+
+    /// <summary>
+    /// Why the query keeps a request on an admitted path from leaving, or null (D393): any query on a
+    /// method other than GET, since no write of the app's or the command's carries one and GitLab reads
+    /// a POST's query as its parameters (<c>target_project_id</c> among them); and below
+    /// <c>projects/&lt;project&gt;</c>, any parameter that may name a project (<see cref="MayNameProject"/>)
+    /// whose raw value does not name the sandbox (<see cref="NamesSandbox"/>), each of a repeated one,
+    /// as written and as sent: GitLab's <c>Link</c> to a project's next page keeps <c>id</c>, the
+    /// project as the request named it. Names the origin and the method, never the path, a parameter or
+    /// a value.
+    /// </summary>
+    private string? QueryRefusalOf(HttpMethod method, Uri uri, List<string[]> segments)
+    {
+        if (!string.Equals(method.Method, "GET", StringComparison.Ordinal)
+            && (!string.IsNullOrEmpty(uri.Query) || uri.OriginalString.Contains('?', StringComparison.Ordinal)))
+        {
+            return $"a {method.Method} under {Origin}/api/v4/ carries a query, which no write of the app's or the command's does (D393)";
+        }
+
+        if (!segments.Any(raw => raw is [_, _, "projects", _, ..]))
+        {
+            return null;
+        }
+
+        return RawQueries(uri).SelectMany(pairs => pairs).Select(pair => pair.Split('=', 2)).Any(parts => MayNameProject(Uri.UnescapeDataString(parts[0].Replace('+', ' '))) && !NamesSandbox(parts.Length == 2 ? parts[1] : string.Empty, inQuery: true))
+            ? $"a query parameter names another project than the sandbox, or an id not learned from the sandbox's own read, under {Origin}/api/v4/ (D393)"
+            : null;
+    }
+
+    /// <summary>The query as sent (<see cref="LiveReach.QueryPairs"/>) and as written (the original text's, before .NET removes an escape of an unreserved character), each split into its parameters.</summary>
+    private static IEnumerable<string[]> RawQueries(Uri uri)
+    {
+        yield return QueryPairs(uri);
+        var text = uri.OriginalString;
+        if (text.IndexOf('?', StringComparison.Ordinal) is var start and >= 0)
+        {
+            var end = text.IndexOf('#', start);
+            yield return (end < 0 ? text[(start + 1)..] : text[(start + 1)..end]).Split(['&', ';'], StringSplitOptions.RemoveEmptyEntries);
+        }
+    }
+
+    /// <summary>Every request's content is read (<see cref="ContentRefusalOf"/>).</summary>
+    public override bool ReadsContent(HttpMethod method, Uri uri) => true;
+
+    /// <summary>
+    /// Why a request's content keeps it from leaving, or null (D393): content on any method but POST and
+    /// PUT, the only ones that carry it from the app (A5's create) and the command (its create and its
+    /// close); content not sent as <c>application/json</c> (UTF-8 or no charset), or not one JSON object;
+    /// and a top-level member, each of a repeated one, that may name a project
+    /// (<see cref="MayNameProject"/>: A5's <c>target_project_id</c>, which it sends across projects
+    /// alone) whose value is not null or the learned id as a whole number. Names the origin and the
+    /// method, never the path, the content or a value.
+    /// </summary>
+    public override string? ContentRefusalOf(HttpMethod method, Uri uri, System.Net.Http.Headers.HttpContentHeaders headers, ReadOnlyMemory<byte> content)
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(headers);
+        if (method.Method is not ("POST" or "PUT"))
+        {
+            return $"a {method.Method} under {Origin}/api/v4/ carries content, which none of the app's or the command's does (D393)";
+        }
+
+        var notJson = $"the content of a {method.Method} under {Origin}/api/v4/ is not one JSON object sent as application/json (D393)";
+        if (!headers.NonValidated.TryGetValues("Content-Type", out var types) || types.Count != 1
+            || !System.Net.Http.Headers.MediaTypeHeaderValue.TryParse(types.ToString(), out var type)
+            || !string.Equals(type.MediaType, "application/json", StringComparison.OrdinalIgnoreCase)
+            || (type.CharSet is { } charset && !string.Equals(charset.Trim('"'), "utf-8", StringComparison.OrdinalIgnoreCase)))
+        {
+            return notJson;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(content);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return notJson;
+            }
+
+            return document.RootElement.EnumerateObject().Any(member => MayNameProject(member.Name) && !NamesSandbox(member.Value))
+                ? $"the content of a {method.Method} names another project than the sandbox, or an id not learned from the sandbox's own read, under {Origin}/api/v4/ (D393)"
+                : null;
+        }
+        catch (JsonException)
+        {
+            return notJson;
+        }
+    }
+
+    /// <summary>
+    /// Whether a parameter's name (decoded; a member's name) may name a project as GitLab reads it: its
+    /// first key as Rack reads it (brackets before it skipped, up to the next bracket), blanks trimmed,
+    /// is <c>id</c> or ends in <c>_id</c> or <c>_ids</c>, case ignored: <c>target_project_id</c>,
+    /// <c>source_project_id</c>, <c>namespace_id</c>, a next page's <c>id</c>. None that the app or the
+    /// command sends but that <c>id</c>.
+    /// </summary>
+    private static bool MayNameProject(string name)
+    {
+        var key = name.TrimStart('[', ']');
+        var end = key.IndexOfAny(['[', ']']);
+        key = (end < 0 ? key : key[..end]).Trim();
+        return key.Equals("id", StringComparison.OrdinalIgnoreCase)
+            || key.EndsWith("_id", StringComparison.OrdinalIgnoreCase)
+            || key.EndsWith("_ids", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Whether a member's value names the sandbox for <see cref="ContentRefusalOf"/>: null, or the learned id as a whole number.</summary>
+    private bool NamesSandbox(JsonElement value) =>
+        value.ValueKind == JsonValueKind.Null
+        || (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var id) && SandboxId is { } learned && id == learned);
 
     /// <summary>
     /// A 200 to a GET of <c>projects/&lt;the sandbox's path&gt;</c> on the guard's origin, as written and
@@ -1163,14 +1317,15 @@ internal sealed class GitLabReach : LiveReach
     };
 
     /// <summary>
-    /// Whether the raw segment after <c>projects</c> names the sandbox (D393): a plain decimal number
-    /// that is the learned id, written as <see cref="long.ToString()"/> writes it (no sign, no leading
-    /// zero, no escape); else its path decoded once, as GitLab decodes it.
+    /// Whether the raw segment after <c>projects</c>, or a query parameter's raw value
+    /// (<paramref name="inQuery"/>), names the sandbox (D393): a plain decimal number that is the
+    /// learned id, written as <see cref="long.ToString()"/> writes it (no sign, no leading zero, no
+    /// escape); else its path decoded once, as GitLab decodes it (in a query <c>+</c> a blank).
     /// </summary>
-    private bool NamesSandbox(string raw) =>
+    private bool NamesSandbox(string raw, bool inQuery = false) =>
         IsNumber(raw)
             ? SandboxId is { } id && string.Equals(raw, id.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
-            : NamesSandboxPath(Uri.UnescapeDataString(raw));
+            : NamesSandboxPath(Uri.UnescapeDataString(inQuery ? raw.Replace('+', ' ') : raw));
 
     /// <summary>Whether <paramref name="path"/> is the sandbox's full path: ASCII alone (no letter elsewhere that folds to one of the sandbox's), compared without case as GitLab compares paths.</summary>
     private bool NamesSandboxPath(string? path) =>

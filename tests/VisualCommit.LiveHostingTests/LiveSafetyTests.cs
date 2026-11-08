@@ -3583,9 +3583,18 @@ public sealed partial class LiveSafetyTests
         AssertRehearsed(run, notes, appRequests, ownRequests, token, Organization, "Created draft pull request !" + pull.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), "The left panel's section \"Pull requests\"");
     }
 
-    /// <summary>GitLab's Check_3 rehearsed (15.6) as <see cref="Check_3_s_steps_pass_over_the_fake_of_Azure_DevOps"/> is, over <see cref="VisualCommit.Testing.Hosting.FakeGitLab"/>: "Merge requests", the form's <c>Draft: </c> title, the merge request closed and deleted.</summary>
-    [Avalonia.Headless.XUnit.AvaloniaFact]
-    public async Task Check_3_s_steps_pass_over_the_fake_of_GitLab()
+    /// <summary>
+    /// GitLab's Check_3 rehearsed (15.6) as <see cref="Check_3_s_steps_pass_over_the_fake_of_Azure_DevOps"/> is, over <see cref="VisualCommit.Testing.Hosting.FakeGitLab"/>: "Merge requests", the form's <c>Draft: </c> title, the merge request closed and deleted.
+    /// Twice (D393): on a new run, as Check_3 run alone starts, where the command's own read of the
+    /// sandbox teaches the guard its id; and on the run as Check_1 leaves it (<paramref name="afterCheck1"/>:
+    /// the identity read and the sandbox kept), as Check_2 and Check_3 of a whole run start, where the
+    /// command reads neither again and only the app's own read of the sandbox can teach the id its
+    /// create (A5, a POST by the source's number) needs.
+    /// </summary>
+    [Avalonia.Headless.XUnit.AvaloniaTheory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Check_3_s_steps_pass_over_the_fake_of_GitLab(bool afterCheck1)
     {
         using var folder = new TempDirectory("live-rehearsal");
         await using var fake = await VisualCommit.Testing.Hosting.FakeGitLab.StartAsync(folder.Combine("gitlab"), ct: Cancelled);
@@ -3597,6 +3606,13 @@ public sealed partial class LiveSafetyTests
         var reach = LiveReach.GitLabRehearsal(fake.Endpoints.WebBase, project.Path);
         var notes = new List<string>();
         var run = new GitLabLiveRun(token, folder.Combine("gitlab", "run.txt"), notes.Add, LiveRun.ScreenOf(HostingProvider.GitLab, null, RehearsalLogin));
+        if (afterCheck1)
+        {
+            // As GitLabLiveTests' IdentityAsync and ReadSandboxAsync leave the run in Check_1.
+            run.IdentityRead = true;
+            run.Repository = new LiveRepository(project.Path, true, "private", LiveAzureFake.DefaultBranch, true);
+        }
+
         var appRequests = new LiveRequestLog.Store();
         var ownRequests = new LiveRequestLog.Store();
         using var api = new GitLabLiveApi(new LiveGitLabSandbox(RehearsalLogin, Project, token), new LiveRequestLog(LiveServiceApi.NewHandler(), ownRequests, reach), fake.Endpoints.ApiBase, LiveServiceApi.CallLimit, run.Screener!, run.Withheld);
@@ -3623,9 +3639,15 @@ public sealed partial class LiveSafetyTests
         Assert.Contains(notes, note => note.StartsWith("With Draft ticked the form shows \"Title on GitLab: Draft: VisualCommit live test ", StringComparison.Ordinal));
 
         // D393: the guard learned the fake's sandbox's id from a read of its path, and the app's create
-        // (A5, a POST by the source's number) passed the narrowed guard by that id.
+        // (A5, a POST by the source's number) passed the narrowed guard by that id, after the app's own
+        // read of the sandbox by its path; after Check_1 the command read the sandbox not at all.
         Assert.Equal(project.Id, reach.SandboxId);
-        Assert.Contains(appRequests.Snapshot(), request => request.Method == "POST" && request.Path == $"/api/v4/projects/{project.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)}/merge_requests" && request.Status is 200 or 201);
+        var app = appRequests.Snapshot().ToList();
+        var post = app.FindIndex(request => request.Method == "POST" && request.Path == $"/api/v4/projects/{project.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)}/merge_requests" && request.Status is 200 or 201);
+        Assert.True(post >= 0, "The app's create by the sandbox's id did not pass.");
+        bool ReadsTheSandbox(LiveRequest request) => request.Method == "GET" && string.Equals(Uri.UnescapeDataString(request.Path), "/api/v4/projects/" + project.Path, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(app.Take(post), request => ReadsTheSandbox(request) && request.Status == 200);
+        Assert.Equal(!afterCheck1, ownRequests.Snapshot().Any(ReadsTheSandbox));
     }
 
     /// <summary>
@@ -3894,6 +3916,8 @@ public sealed partial class LiveSafetyTests
     [InlineData("PUT", "https://gitlab.com/api/v4/projects/9876543/merge_requests/7")]
     [InlineData("DELETE", "https://gitlab.com/api/v4/projects/bob%2Fsecret-project/repository/branches/visualcommit-live%2Fx")]
     [InlineData("GET", "https://gitlab.com/api/v4/projects/bob%2Fsandbox-secret%2Fvisualcommit-sandbox/repository/branches")]
+    [InlineData("POST", "https://gitlab.com/api/v4/projects/ada%2Fvisualcommit-sandbox/merge_requests?target_project_id=9876543")]
+    [InlineData("GET", "https://gitlab.com/api/v4/projects/ada%2Fvisualcommit-sandbox/merge_requests?state=opened&id=bob%2Fsecret-project")]
     public async Task D393_a_refusal_under_another_project_names_the_origin_and_neither_the_path_the_namespace_nor_an_id(string method, string url)
     {
         var reach = LiveReach.GitLab(GitLabSandbox);
@@ -3921,6 +3945,7 @@ public sealed partial class LiveSafetyTests
             "https://gitlab.com/api/v4/projects?membership=true&archived=false&order_by=last_activity_at&sort=desc&per_page=100",
             "https://gitlab.com/api/v4/projects?archived=false&membership=true&order_by=last_activity_at&page=2&per_page=100&sort=desc",
             "https://gitlab.com/api/v4/projects?membership=true&simple=false&per_page=1&order_by=last_activity_at",
+            "https://gitlab.com/api/v4/projects?archived=false&include_hidden=false&membership=true&order_by=last_activity_at&page=2&per_page=100&simple=false&sort=desc&with_custom_attributes=false",
             "https://gitlab.com/api/v4/user",
             "https://gitlab.com/api/v4/personal_access_tokens/self",
         })
@@ -3950,5 +3975,256 @@ public sealed partial class LiveSafetyTests
         Assert.DoesNotContain("ada/", refused.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Throws<ArgumentException>(() => LiveReach.GitLabRehearsal(new Uri(FakeOrigin), sandbox));
         Assert.Throws<ArgumentNullException>(() => LiveReach.GitLab(null!));
+    }
+
+    // ---- D393: GitLab reads a project from the query and from a write's content too ---------------
+
+    /// <summary>Each GET the app or the command sends under the sandbox with a query; <c>{0}</c> is a parameter added to it. The last names the sandbox by its made-up id.</summary>
+    private static readonly string[] GetsUnderTheSandbox =
+    [
+        GitLabProject + "?{0}",
+        GitLabProject + "/merge_requests?state=opened&per_page=100&{0}",
+        GitLabProject + "/merge_requests/7?{0}",
+        GitLabProject + "/repository/branches?search=%5Evisualcommit-live%2F&per_page=100&{0}",
+        "https://gitlab.com/api/v4/projects/4242/merge_requests?state=opened&per_page=100&{0}",
+    ];
+
+    /// <summary>Words that no refusal of a query or of content names: the made-up ids, the parameters, the namespaces, the paths.</summary>
+    private static readonly string[] HiddenFromARefusal = ["9876543", "4242", "9001", "target_project", "source_project", "namespace", "state_event", "bob", "secret", "visualcommit", "%2F", "/api/v4/projects", "merge_requests", "branches"];
+
+    [Theory]
+    [InlineData("id=bob%2Fother-project")]
+    [InlineData("id=bob/other-project")]
+    [InlineData("id=ada%2Fvisualcommit-sandbox-2")]
+    [InlineData("id=ada%2Fgroup%2Fvisualcommit-sandbox")]
+    [InlineData("id=ada%252Fvisualcommit-sandbox")]
+    [InlineData("id=9876543")]
+    [InlineData("id=04242")]
+    [InlineData("id=%34242")]
+    [InlineData("id=+4242")]
+    [InlineData("id=4242.0")]
+    [InlineData("id=")]
+    [InlineData("id")]
+    [InlineData("ID=bob%2Fother-project")]
+    [InlineData("%69d=bob%2Fother-project")]
+    [InlineData("id+=bob%2Fother-project")]
+    [InlineData("[id]=bob%2Fother-project")]
+    [InlineData("id=ada%2Fvisualcommit-sandbox&id=bob%2Fother-project")]
+    [InlineData("x=1;id=bob%2Fother-project")]
+    [InlineData("target_project_id=9876543")]
+    [InlineData("Target_Project_Id=9876543")]
+    [InlineData("target%5Fproject%5Fid=9876543")]
+    [InlineData("target_project_id[]=9876543")]
+    [InlineData("%5Btarget_project_id%5D=9876543")]
+    [InlineData("target_project_ids=9876543")]
+    [InlineData("source_project_id=9876543")]
+    [InlineData("namespace_id=9001")]
+    public void D393_under_the_sandbox_a_query_parameter_that_may_name_a_project_is_refused_unless_it_names_the_sandbox_before_and_after_the_id_is_learned(string parameter)
+    {
+        var fresh = LiveReach.GitLab(GitLabSandbox);
+        var learned = LiveReach.GitLab(GitLabSandbox);
+        Learn(learned, MadeUpSandboxId);
+        foreach (var path in GetsUnderTheSandbox)
+        {
+            var url = new Uri(path.Replace("{0}", parameter, StringComparison.Ordinal));
+            Assert.True(fresh.RefusalOf(HttpMethod.Get, url, LiveCredentialForm.Bearer) is not null, $"GET {url} was admitted before the id was learned.");
+            Assert.True(learned.RefusalOf(HttpMethod.Get, url, LiveCredentialForm.Bearer) is not null, $"GET {url} was admitted after the id was learned.");
+        }
+    }
+
+    [Theory]
+    [InlineData("id=ada%2Fvisualcommit-sandbox&order_by=created_at&page=2&sort=desc&with_labels_details=false&with_merge_status_recheck=false", false)]
+    [InlineData("id=ADA%2FVisualCommit-Sandbox", false)]
+    [InlineData("id=ada/visualcommit-sandbox", false)]
+    [InlineData("id=4242", true)]
+    [InlineData("id=4242&target_project_id=4242", true)]
+    public void D393_a_query_parameter_that_names_the_sandbox_by_its_path_or_its_learned_id_is_admitted(string parameter, bool needsTheId)
+    {
+        var fresh = LiveReach.GitLab(GitLabSandbox);
+        var learned = LiveReach.GitLab(GitLabSandbox);
+        Learn(learned, MadeUpSandboxId);
+        foreach (var path in GetsUnderTheSandbox)
+        {
+            var url = new Uri(path.Replace("{0}", parameter, StringComparison.Ordinal));
+            var after = learned.RefusalOf(HttpMethod.Get, url, LiveCredentialForm.Bearer);
+            Assert.True(after is null, $"GET {url} was refused after the id was learned: {after}");
+            if (!path.Contains("/4242/", StringComparison.Ordinal))
+            {
+                var before = fresh.RefusalOf(HttpMethod.Get, url, LiveCredentialForm.Bearer);
+                Assert.True(needsTheId == before is not null, $"GET {url} before the id was learned: {before ?? "admitted"}");
+            }
+        }
+    }
+
+    [Fact]
+    public void D393_no_parameter_the_app_or_the_command_sends_and_none_of_a_next_page_s_link_is_taken_for_a_project()
+    {
+        var reach = LiveReach.GitLab(GitLabSandbox);
+        foreach (var name in new[] { "membership", "archived", "order_by", "sort", "per_page", "page", "simple", "state", "search", "with_labels_details", "with_merge_status_recheck" })
+        {
+            var url = new Uri($"{GitLabProject}/merge_requests?{name}=x");
+            Assert.True(reach.RefusalOf(HttpMethod.Get, url, LiveCredentialForm.Bearer) is null, $"GET {url} was refused.");
+        }
+    }
+
+    [Theory]
+    [InlineData("POST", GitLabProject + "/merge_requests?target_project_id=9876543")]
+    [InlineData("POST", "https://gitlab.com/api/v4/projects/4242/merge_requests?target_project_id=9876543")]
+    [InlineData("POST", "https://gitlab.com/api/v4/projects/4242/merge_requests?target_project_id=4242")]
+    [InlineData("POST", GitLabProject + "/merge_requests?title=made-up")]
+    [InlineData("POST", GitLabProject + "/merge_requests?id=ada%2Fvisualcommit-sandbox")]
+    [InlineData("PUT", GitLabProject + "/merge_requests/7?state_event=close")]
+    [InlineData("PUT", GitLabProject + "/merge_requests/7?target_project_id=9876543")]
+    [InlineData("DELETE", GitLabProject + "/merge_requests/7?id=9876543")]
+    [InlineData("DELETE", GitLabProject + "/repository/branches/visualcommit-live%2Fx?x=1")]
+    public void D393_a_write_that_carries_a_query_is_refused_whatever_it_names_and_admitted_without_it(string method, string url)
+    {
+        var reach = LiveReach.GitLab(GitLabSandbox);
+        Learn(reach, MadeUpSandboxId);
+        var refusal = reach.RefusalOf(new HttpMethod(method), new Uri(url), LiveCredentialForm.Bearer);
+        Assert.NotNull(refusal);
+        foreach (var hidden in HiddenFromARefusal)
+        {
+            Assert.DoesNotContain(hidden, refusal, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var bare = url.Split('?')[0];
+        Assert.True(reach.RefusalOf(new HttpMethod(method), new Uri(bare), LiveCredentialForm.Bearer) is null, $"{method} {bare} was refused.");
+    }
+
+    /// <summary>A request with <paramref name="body"/> as its content, sent as <paramref name="contentType"/> (none when null), and the made-up Bearer token.</summary>
+    private static HttpRequestMessage WithContent(string method, string url, string? contentType, string body)
+    {
+        var request = Request(method, url, "Bearer");
+        request.Content = new ByteArrayContent(Encoding.UTF8.GetBytes(body));
+        if (contentType is not null)
+        {
+            Assert.True(request.Content.Headers.TryAddWithoutValidation("Content-Type", contentType));
+        }
+
+        return request;
+    }
+
+    /// <summary>An in-process handler that answers 201 and keeps each request's method, content type and content as it arrived.</summary>
+    private sealed class ContentStub : HttpMessageHandler
+    {
+        public List<(string Method, string? ContentType, string? Body)> Sent { get; } = [];
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var body = request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken);
+            lock (Sent)
+            {
+                Sent.Add((request.Method.Method, request.Content?.Headers.ContentType?.ToString(), body));
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.Created) { Content = new StringContent("{}") };
+        }
+    }
+
+    private const string JsonUtf8 = "application/json; charset=utf-8";
+
+    [Theory]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"source_branch":"visualcommit-live/x","target_branch":"main","title":"t","description":"d","target_project_id":9876543}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"source_branch":"visualcommit-live/x","target_branch":"main","title":"t","target_project_id":"4242"}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"target_project_id":4242.0}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"target_project_id":-4242}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"target_project_id":[4242]}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"target_project_id":true}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"Target_Project_Id":9876543}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"target_project_id":9876543}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{" target_project_id ":9876543}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"target_project_id":null,"target_project_id":9876543}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"source_project_id":9876543}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"id":9876543}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """{"namespace_id":9001}""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, """[{"target_project_id":9876543}]""")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, "target_project_id=9876543")]
+    [InlineData("POST", "/merge_requests", JsonUtf8, "")]
+    [InlineData("POST", "/merge_requests", "application/x-www-form-urlencoded", "source_branch=a&target_project_id=9876543")]
+    [InlineData("POST", "/merge_requests", "text/plain", "{}")]
+    [InlineData("POST", "/merge_requests", null, "{}")]
+    [InlineData("POST", "/merge_requests", "application/json; charset=utf-16", "{}")]
+    [InlineData("PUT", "/merge_requests/7", JsonUtf8, """{"state_event":"close","target_project_id":9876543}""")]
+    [InlineData("DELETE", "/merge_requests/7", JsonUtf8, "{}")]
+    [InlineData("DELETE", "/repository/branches/visualcommit-live%2Fx", JsonUtf8, "{}")]
+    [InlineData("GET", "", JsonUtf8, "{}")]
+    [InlineData("GET", "/merge_requests?state=opened&per_page=100", JsonUtf8, """{"target_project_id":9876543}""")]
+    public async Task D393_content_that_may_name_another_project_or_is_not_one_JSON_object_is_refused_before_and_after_the_id_is_learned_naming_the_origin_alone(string method, string below, string? contentType, string body)
+    {
+        foreach (var learn in new[] { false, true })
+        {
+            var reach = LiveReach.GitLab(GitLabSandbox);
+            if (learn)
+            {
+                Learn(reach, MadeUpSandboxId);
+            }
+
+            var store = new LiveRequestLog.Store();
+            var stub = new ContentStub();
+            using var client = new HttpClient(new LiveRequestLog(stub, store, reach));
+            var refused = await Assert.ThrowsAsync<HttpRequestException>(() => client.SendAsync(WithContent(method, GitLabProject + below, contentType, body), Cancelled));
+            Assert.Empty(stub.Sent);
+            var record = Assert.Single(store.Snapshot());
+            Assert.True(record.Refused);
+            foreach (var text in new[] { refused.Message, record.FailedWith!, record.DescribeForRun(), string.Join(' ', LiveRequestLog.ReachProblems(store.Snapshot(), reach)) })
+            {
+                Assert.Contains("https://gitlab.com", text, StringComparison.Ordinal);
+                foreach (var hidden in HiddenFromARefusal)
+                {
+                    Assert.DoesNotContain(hidden, text, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(false, "POST", GitLabProject + "/merge_requests", """{"source_branch":"visualcommit-live/x","target_branch":"main","title":"Draft: made-up","description":"made-up"}""")]
+    [InlineData(false, "PUT", GitLabProject + "/merge_requests/7", """{"state_event":"close"}""")]
+    [InlineData(false, "POST", GitLabProject + "/merge_requests", """{"source_branch":"visualcommit-live/x","target_branch":"main","title":"t","target_project_id":null,"allow_collaboration":null}""")]
+    [InlineData(true, "POST", GitLabProject + "/merge_requests", """{"source_branch":"visualcommit-live/x","target_branch":"main","title":"t","target_project_id":4242}""")]
+    [InlineData(true, "POST", "https://gitlab.com/api/v4/projects/4242/merge_requests", """{"source_branch":"visualcommit-live/x","target_branch":"main","title":"t","target_project_id":4242}""")]
+    public async Task D393_the_app_s_and_the_command_s_content_and_the_sandbox_s_learned_id_in_it_are_admitted_and_reach_the_service_whole(bool needsTheId, string method, string url, string body)
+    {
+        var fresh = LiveReach.GitLab(GitLabSandbox);
+        var (freshStub, _, freshRefused) = await SendWithContentAsync(fresh, WithContent(method, url, JsonUtf8, body));
+        Assert.Equal(needsTheId, freshRefused is not null);
+        Assert.Equal(needsTheId ? 0 : 1, freshStub.Sent.Count);
+
+        var learned = LiveReach.GitLab(GitLabSandbox);
+        Learn(learned, MadeUpSandboxId);
+        var (stub, store, refused) = await SendWithContentAsync(learned, WithContent(method, url, JsonUtf8, body));
+        Assert.Null(refused);
+        Assert.Equal((method, JsonUtf8, body), Assert.Single(stub.Sent));
+        Assert.False(Assert.Single(store.Snapshot()).Refused);
+    }
+
+    [Fact]
+    public async Task D393_content_too_large_for_the_guard_to_read_is_refused_and_never_leaves()
+    {
+        var request = Request("POST", GitLabProject + "/merge_requests", "Bearer");
+        request.Content = new ByteArrayContent(new byte[LiveReach.MaxAnswerRead + 1]);
+        request.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/json");
+        var (stub, store, refused) = await SendWithContentAsync(LiveReach.GitLab(GitLabSandbox), request);
+        Assert.NotNull(refused);
+        Assert.Empty(stub.Sent);
+        Assert.Contains("could not be read", Assert.Single(store.Snapshot()).FailedWith, StringComparison.Ordinal);
+    }
+
+    /// <summary>Sends one request through <paramref name="reach"/>'s log over a <see cref="ContentStub"/>; the stub, the store and the refusal, if any.</summary>
+    private static async Task<(ContentStub Stub, LiveRequestLog.Store Store, HttpRequestException? Refused)> SendWithContentAsync(LiveReach reach, HttpRequestMessage request)
+    {
+        var store = new LiveRequestLog.Store();
+        var stub = new ContentStub();
+        using var client = new HttpClient(new LiveRequestLog(stub, store, reach));
+        try
+        {
+            using var answer = await client.SendAsync(request, Cancelled);
+            return (stub, store, null);
+        }
+        catch (HttpRequestException refused)
+        {
+            return (stub, store, refused);
+        }
     }
 }
