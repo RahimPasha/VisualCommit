@@ -375,6 +375,12 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     /// repository around its folder) and the URL git will use is bound. A rule that rewrites it to
     /// another user leaves it unbound (D82's order). No configuration service, or a failed read, binds
     /// nothing and is logged once. Signed out nothing is read, so no earlier count of git calls moves.
+    /// <para>
+    /// The outside read sees no file of a conditional include, while <c>git clone</c> applies those of
+    /// the new folder and of its URL (fixed at phase 7b's review before the gate): when the read lists
+    /// any, <see cref="WhyIncludesUnbindAsync"/> reads their files, and a reason it gives binds nothing
+    /// (D82's order) with one Debug line. Without such a directive no further git call is made.
+    /// </para>
     /// </summary>
     private async Task<IReadOnlyList<CredentialBinding>> BindingsForCloneAsync(string url, CancellationToken cancellationToken)
     {
@@ -384,23 +390,87 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
             return [];
         }
 
+        IGitConfiguration settings;
+        List<GitConfigValue> outside;
+        string? effective;
         try
         {
-            var settings = _services.GitSettings ?? throw new InvalidOperationException("No git configuration service.");
+            settings = _services.GitSettings ?? throw new InvalidOperationException("No git configuration service.");
             var read = await settings.ReadAsync(null, cancellationToken);
-            var rules = UrlRewrites.Parse(read.Values
-                .Where(value => value.Scope is not (GitConfigScope.Local or GitConfigScope.Worktree) && value.Value is not null)
-                .Select(value => (value.Key, value.Value!)));
-            return rules.Apply([new RemoteUrl("origin", url, false)]) is [{ Fetch: [var effective, ..] }]
-                ? hosting.BindingsForClone(effective)
-                : [];
+            outside = [.. read.Values.Where(value => value.Scope is not (GitConfigScope.Local or GitConfigScope.Worktree))];
+            effective = CloneUrlAfterRules(outside, url);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _services.Log.Warning($"Cloning {GitCommand.HideCredentials(url)}: git's configuration could not be read; the clone goes without the account's token.", ex);
             return [];
         }
+
+        if (effective is null)
+        {
+            return [];
+        }
+
+        if (await WhyIncludesUnbindAsync(settings, outside, url, effective, cancellationToken) is { } why)
+        {
+            _services.Log.Debug($"Cloning: {why}; the clone goes without the account's token (D82's order).");
+            return [];
+        }
+
+        return hosting.BindingsForClone(effective);
     }
+
+    /// <summary>
+    /// Why a conditional include of <paramref name="outside"/> (<see cref="GitConfigIncludes.IsConditional"/>,
+    /// whatever its condition) keeps the clone of <paramref name="url"/> unbound; null when none does, or
+    /// there is none (then no git call is made). Each directive's file is read
+    /// (<see cref="IGitConfiguration.ReadIncludedAsync"/>): one git cannot read, one that holds a
+    /// conditional directive of its own (its condition is the new repository's to judge), or one whose
+    /// <c>url.</c> rules, read where git reads them, right after the directive, give the URL another
+    /// result than the outside rules alone, is a reason. Each include is judged with the outside rules
+    /// alone, since only the new repository knows which conditions hold: whichever rule wins among
+    /// several includes also wins beside the outside rules alone. A missing file counts as empty, as
+    /// git ignores it. The reason names no path or URL.
+    /// </summary>
+    private static async Task<string?> WhyIncludesUnbindAsync(IGitConfiguration settings, List<GitConfigValue> outside, string url, string effective, CancellationToken cancellationToken)
+    {
+        for (var i = 0; i < outside.Count; i++)
+        {
+            if (!GitConfigIncludes.IsConditional(outside[i]))
+            {
+                continue;
+            }
+
+            IReadOnlyList<GitConfigValue> included;
+            try
+            {
+                included = await settings.ReadIncludedAsync(outside[i], cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return "a conditional include of git's configuration could not be read";
+            }
+
+            if (included.Any(GitConfigIncludes.IsConditional))
+            {
+                return "a conditional include of git's configuration holds a conditional include of its own";
+            }
+
+            if (CloneUrlAfterRules([.. outside[..(i + 1)], .. included, .. outside[(i + 1)..]], url) != effective)
+            {
+                return "a conditional include of git's configuration rewrites the clone's URL";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The URL git clones <paramref name="url"/> from after the <c>insteadOf</c> rules of <paramref name="values"/>, in their order (<see cref="UrlRewrites"/>).</summary>
+    private static string? CloneUrlAfterRules(IEnumerable<GitConfigValue> values, string url) =>
+        UrlRewrites.Parse(values.Where(value => value.Value is not null).Select(value => (value.Key, value.Value!)))
+            .Apply([new RemoteUrl("origin", url, false)]) is [{ Fetch: [var effective, ..] }]
+            ? effective
+            : null;
 
     public void Dispose()
     {
