@@ -133,11 +133,15 @@ Build:
   provider, section 7) merged at `e8a5abf`, with its reviews', hunts' and the lead's fixes; the
   core's `MalformedAnswer` and `Failed` take the request's token since (section 7's As built).
   (2026-11-01. Week: share not read.)
-- [ ] 9. The account's token on the app's git calls to the remotes it covers (D350): gitlab.com's,
+- [x] 9. The account's token on the app's git calls to the remotes it covers (D350): gitlab.com's,
   and Azure DevOps' signed-in organization's alone; the push guard and the prompt group for the new
-  hosts, as the design decides. Tests. Under way: WP-C (`Select` with a coverage, the push guard
+  hosts, as the design decides. Tests. WP-C (`Select` with a coverage, the push guard
   and the prompts, section 8) merged at `6586066`, with wave 1's adversarial fixes (D379, D381);
-  the session's union of the coverages is WP-S's (section 9, wave 3).
+  the session's union of the coverages is WP-S's, merged at `bdc92c3` (section 9, wave 3); an
+  operation started inside D290's window binds once the URL rules are known (D388, WP-N's merge),
+  and D278's test reads the URL's user by the measured git (D389, `98cdd86`; plan risk 43). Their
+  classes green in every job of CI 42454621322 on `d127fef` (CI section). (2026-11-08. Week: share
+  not read.)
 - [x] 10. Sign-in dialog and the Accounts section with an account of each provider (D345, D348).
   WP-A (section 10) merged at `b6de3cf`, with its reviews', hunts' and the lead's fixes (D387); its
   merge's classes and lagged list passed and its pictures were inspected (Notes). CI's run on it
@@ -155,11 +159,18 @@ Build:
   passed but phase 2's `Check_15_amend` once under the lag, a race in the check, fixed and merged
   at `26b44c7`; 12.9's comparisons found only what varies by nature; part P's 22 pictures and `a06c`
   inspected; CI 42373090316 green (Notes). (2026-11-07. Week: share not read.)
-- [ ] 13. Create a pull request or merge request from the branch menus and the drop menu, and its
+- [x] 13. Create a pull request or merge request from the branch menus and the drop menu, and its
   form, for each provider.
-- [ ] 14. 7a's screens and commands that name GitHub name the provider they act on (D351); the
+  WP-N (section 13) merged at `a6952d2`, with its reviews', hunts' and the lead's fixes (D388);
+  13.9's runs passed once P11's budget was fixed (D390, `98cdd86`), 13.9's comparison found only
+  what varies by nature, and part N's 22 pictures were inspected (Notes, "WP-N's merge runs"); CI
+  42454621322 on `d127fef` green but phase 6's open palette flake (CI section). (2026-11-08. Week:
+  share not read.)
+- [x] 14. 7a's screens and commands that name GitHub name the provider they act on (D351); the
   earlier checks whose pictures change updated in the same commits, under "Changes to expected
-  results".
+  results". Built by WP-A, WP-B, WP-P and WP-N for their surfaces and WP-C for the credential
+  texts, all merged; each merge's comparison with 0.7's references found only what varies by
+  nature or the report's recorded changes (Notes). (2026-11-08. Week: share not read.)
 
 Checks, live trial and review:
 
@@ -382,6 +393,20 @@ macOS"). Jobs and Test steps: `windows-latest` 25 min 32 s (23 min 34 s), `macos
 21 s (31 min 1 s), `ubuntu-latest` 7 min 12 s (5 min 39 s), the containers 9 min 17 s and 8 min
 37 s (6 min 38 s and 6 min 12 s), each under four fifths. Not rerun (CLAUDE.md: the owner's).
 
+[42454621322](https://github.com/RahimPasha/VisualCommit/actions/runs/42454621322) on `d127fef`
+(the fix of D388's test and P11's budget merged at `98cdd86`, D389 and D390, with docs):
+`windows-latest`, `macos-latest`, `ubuntu-latest` and the container with the SDK from Microsoft's
+installer green, both D278 cases among them on macOS; the container with Ubuntu's SDK packages failed
+1 of 7,817 tests, phase 6's `PaletteGrowthTests.The_build_and_a_one_letter_query_grow_in_step_with_the_refs`
+("10,000 tags took 6.5 times the work of 2,500 … the limit is 6.3"), the open flake of 42301846503
+(Notes, "The two Linux failures of 42301846503"), which nothing of the fix runs. Each job's
+`git-url-user.txt` (D389): `macos-latest` Lost (`/opt/homebrew/bin/git`, 2.56.0, "could not read
+Username for 'http://127.0.0.1:<port>'"), the four others Kept (`windows-latest` 2.56.0.windows.4,
+`ubuntu-latest` 2.56.0, both containers 2.43.0), as the investigation predicted. Jobs and Test steps:
+`windows-latest` 43 min 17 s (40 min 11 s), `macos-latest` 32 min 8 s (29 min 57 s), `ubuntu-latest`
+6 min 53 s (5 min 28 s), the containers 9 min 10 s and 7 min 31 s (6 min 36 s and 5 min 22 s), each
+under four fifths. Not rerun (CLAUDE.md: the owner's).
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -550,10 +575,9 @@ default run and the two runs alone passed, the lagged list but part P's `Check_P
 D388's test on macOS alone: git 2.56.0 over curl 8.23.0 loses the URL's user (Notes, "D388's test
 on macOS"). Both are fixed and merged at `98cdd86` (D389, D390; plan risk 43), and its classes pass
 plain and lagged; 13.9's picture comparison and part N's inspection passed (Notes, "WP-N's merge
-runs"). Next: read CI's run on the push of `98cdd86` and the docs after it (the CI section; the
-macOS job above all, and its `git-url-user.txt` among the job's pictures, which should read Lost).
-If it is green, tick steps 9 (WP-C's, WP-S's and D388's tests, green in every job), 13 and 14.
-Meanwhile WP-LIVE's second stage (design 15.6, `Check_3` per provider) is being built in
+runs"). CI 42454621322 on `d127fef` is green but phase 6's open palette flake in one container,
+and macOS read Lost and passed (CI section); steps 9, 13 and 14 are ticked. Next: WP-LIVE's second
+stage (design 15.6, `Check_3` per provider) is being built in
 `D:/Projects/Personal/vc-wt/p7b-live2` (`wip/p7b-live2`, from `d127fef`; the session's
 `phase7b-live2-pkg.js`, the wave-4 script with the package L2: an Opus builder, two Opus reviewers,
 fix rounds and three lensed hunts, screen, guard and flow, each serious finding put to an Opus
@@ -783,7 +807,9 @@ every commit.
     superlinear pass, on 4 to 7 trials a setting, too few to decide (about 8 to 10 h on a quiet
     machine, and a 20,000-tag context that would amend phase 6's design 5.12). So `63d2d80`'s test
     stays, `wip/p7b-palette-growth-2` is clean at `85d599c` with nothing committed, and the CI
-    failure of 42301846503 stays a known, open flake of that test. For the review before the gate:
+    failure of 42301846503 stays a known, open flake of that test. It failed again in CI
+  42454621322 on `d127fef` (2026-11-08), in the same container (Ubuntu's SDK packages): 6.5 against
+  6.3 (138,010,834 against 21,166,593, 3.4 times the items). For the review before the gate:
     `WithoutCollection`'s message "the budget is too small" can mislead when a collection comes
     from memory pressure. The data: `D:/Projects/Personal/phase7b-work/verify/palette-growth/round-2/`.
 - **WP-P's build and merge** (2026-11-07; design 12 and its As built): built in
@@ -942,7 +968,10 @@ every commit.
   2.56.0.windows.4 (Kept), on 2.56.0.windows.2 as shipped (Kept) and on windows.2 over curl 8.23's
   library (Lost, macOS's form), reproduced the old test's failure at `93999d6` on the last (2 of 2
   failed at line 246, as on macOS), and an inverted prediction failed both cases on every git. Notes
-  in `D:/Projects/Personal/phase7b-work/verify/ci-42437572741/fix/`.
+  in `D:/Projects/Personal/phase7b-work/verify/ci-42437572741/fix/`. CI 42454621322 on `d127fef`
+  passed both cases on macOS, whose measure read Lost, by the server's two requests (the security
+  review's open point: the sequence had not been seen on real macOS); every other job read Kept.
+  Each job's file is kept in `D:/Projects/Personal/phase7b-work/verify/ci-42454621322/`.
 - **WP-N's merge runs** (2026-11-07, 18:58 to 21:15 on the laptop, on `cf82d50`'s code, through
   `bash scripts/heavy-run.sh`, one command at a time, the session's `wpn-runs.sh`): the lagged list
   (1500 ms) green but one test: phase 2's 25 of 25, App.Tests' eight classes 66, Phase6's 21, the 7a
