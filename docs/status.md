@@ -432,6 +432,12 @@ under four fifths. Not rerun (CLAUDE.md: the owner's).
 41 s (32 min 8 s), `macos-latest` 43 min 20 s (40 min 57 s), `ubuntu-latest` 8 min 36 s (6 min 47 s),
 the containers 7 min 35 s and 9 min 0 s (5 min 34 s and 6 min 45 s), each under four fifths.
 
+[42480966359](https://github.com/RahimPasha/VisualCommit/actions/runs/42480966359) on `c233091`
+(WP-R's merge, `f016bdf`, and its docs): all five jobs green. Jobs and Test steps: `windows-latest`
+44 min 21 s (41 min 6 s), `macos-latest` 31 min 10 s (29 min 2 s), `ubuntu-latest` 7 min 34 s
+(5 min 59 s), the containers 7 min 55 s and 8 min 24 s (5 min 45 s and 5 min 56 s), each under four
+fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -611,18 +617,17 @@ needs D237's split (Notes, "The lead's runs after the review's fixes"); step 17 
 it, 42472105974, failed one phase 1 harness test on macOS alone (`ShellDriverTests`' 0.3 s wait, a
 stall under load), whose wait is now 2 s with its assertions kept (Notes; CI section). WP-R (design
 14) is merged at `f016bdf` with CLAUDE.md's rows (Notes, "WP-R"); it has only been compiled. CI 42477551563 on
-`6f7199d` is green in all five jobs (CI section). Next: read CI's run on WP-R's merge; the owner's answer on the GitLab account's five
-projects, given on 2026-11-08: (b), the guard narrowed to the sandbox project (D393), built in
-`D:/Projects/Personal/vc-wt/p7b-gitlab-guard` (branch `wip/p7b-gitlab-guard`; the session's workflow
-`p7b-gitlab-guard`: an Opus builder, two Opus reviewers, a refix) and merged before the live runs;
-the owner said to start the gate now and is at the machine; then the gate (step 18), in 7a design 13.7's order with D335's live runs: the offline classes and the live
-command for the three providers with the owner told, corrections to the fakes committed before any
-picture; the 7b walk-through so that its pictures exist; `Phase7bRealWindowPass` twice on its own
+`6f7199d` is green in all five jobs, and 42480966359 on `c233091` (WP-R's merge) too (CI section).
+The owner's answer on the GitLab account's five projects, given on 2026-11-08, is (b): the live
+command's GitLab guard narrowed to the sandbox project (D393), built, reviewed and refixed (Notes,
+"D393's guard") and merged at `ee0aeeb`, where the offline classes pass (582). The owner said to
+start the gate now and is at the machine. Next, the gate (step 18), in 7a design 13.7's order with
+D335's live runs: the live command for the three providers on `ee0aeeb` with the owner told,
+corrections to the fakes committed before any picture; the 7b walk-through so that its pictures exist; `Phase7bRealWindowPass` twice on its own
 with the owner told and present (D246); then the counted round on one commit: the whole default run
 through `scripts/heavy-run.sh`, the real-window pass, the list of pictures, the live command again,
 and the inspection of every picture in batches of at most about 150, the earlier ones compared with
-`D:/Projects/Personal/gate7b-reference/` (0.7). The GitLab account's five projects wait on the owner and decide whether the gate's live
-runs need a change first (Waiting on the owner). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
+`D:/Projects/Personal/gate7b-reference/` (0.7). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
 `c5ba918` is green; CI's run on the fix's merge, 42386428809, failed the two older tests above.
@@ -1084,6 +1089,26 @@ every commit.
   7b's part P (22 of 22 the same files at the panel's fix; on the refixer's fresh build 21, `p11a`
   differing in 5 pixels of the status bar's git box, its recorded variation) were run by the fixers;
   no fix changes a scripted picture.
+- **D393's guard** (2026-11-08; the session's workflow `p7b-gitlab-guard`, four Opus agents in
+  `D:/Projects/Personal/vc-wt/p7b-gitlab-guard`, branch `wip/p7b-gitlab-guard` from `c233091`; merged
+  with `--no-ff` at `ee0aeeb`; design 15.9's two "As built" notes). The builder (`67c691e`): below
+  `projects/` the guard admits the sandbox alone, by its escaped path (decoded once, ASCII, without
+  case) or by its id once learned from a 200 to a GET of the sandbox by path whose own `id` and
+  `path_with_namespace` name it (the log reads that one answer's body, buffered whole, 10 MiB at most);
+  every number is refused before that and every other number after it; a refusal names the origin
+  alone; 79 new cases, all failing against the old rule. Two Opus reviewers: "bypass" (38 crafted
+  addresses with each method, 24 mutations in a private copy; no way to another project's path or id)
+  found that the query and a write's content were not judged (a `target_project_id` there), minor;
+  "live-path" (every request of Check_1 to Check_3 walked, the app's and the command's) found the
+  rehearsal did not run as Check_1 leaves the run, where the app's own read alone teaches the id,
+  minor. The refix (`9a5800f`): no query on a write; under a project a query parameter that may
+  name a project (`id`, `…_id`, `…_ids`, read as Rack reads a key) names the sandbox, as a next
+  page's `id` does; content only on POST and PUT, one JSON object as `application/json`, a top-level
+  member that may name a project null or the learned id; the rehearsal is a theory, fresh and after
+  Check_1, the second shown to fail under the reviewer's regression; 73 new rows, 66 failing without
+  the fix. Still refused, by design: a merge request from a fork open in the sandbox (the app's look
+  at the fork's project) and a moved sandbox (its redirect to `projects/<id>`). The offline classes
+  pass 582 of 582 on `ee0aeeb` (54 s, Release).
 - **WP-R** (design 14; 2026-11-08, `D:/Projects/Personal/vc-wt/p7b-real-window`, branch
   `wip/p7b-real-window` from `8649316`, one Opus builder): written without a build while the lead's
   timed runs ran, then built: `dotnet build tests/VisualCommit.RealWindowTests -c Release` and the
