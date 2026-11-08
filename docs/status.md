@@ -543,13 +543,14 @@ owner's identity alone and none of the sandboxes' names or tokens. CI's run on `
 (42386428809) failed two older tests (CI section); the watcher's dispose test was a race in the
 test, fixed with one product fix and merged at `abc6df7` (Notes, "The watcher's dispose test on
 CI"); its CI run, 42434720040 on `07c0445`, is green in all five jobs, and the WP-N merge is
-pushed after it. The lead is running 13.9's runs on `cf82d50` through
-`scripts/heavy-run.sh` (started 2026-11-07 about 19:00): the lagged list, then the whole default
-run (0.4, D245), then 7a's part N (`Phase7aChecksN`) and phase 3's walk-through on their own
-(script: the session's `wpn-runs.sh`), comparing their pictures by region with 0.7's
-references in `D:/Projects/Personal/gate7b-reference/` (made 2026-11-07, Notes), then part N with
-every picture inspected; then WP-LIVE's second stage (`Check_3`, the owner told) and the review before
-the gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
+pushed after it. 13.9's runs on `cf82d50` are done (Notes, "WP-N's merge runs"): the whole
+default run and the two runs alone passed, the lagged list but part P's `Check_P11` under the lag
+(an exact budget of 0 that a late whole refresh broke). CI's run on the merge, 42437572741, failed
+D388's test on macOS alone: git 2.56.0 over curl 8.23.0 loses the URL's user (Notes, "D388's test
+on macOS"). Both are being fixed in `wip/p7b-macos-prompt` (test only; D389 to record); after its
+merge the lead runs the touched classes plain and lagged, pushes, reads CI, and finishes 13.9's
+picture comparison and part N's inspection (running), then steps 13 and 14; then WP-LIVE's second
+stage (`Check_3`, the owner told) and the review before the gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
 `c5ba918` is green; CI's run on the fix's merge, 42386428809, failed the two older tests above.
@@ -896,12 +897,49 @@ every commit.
   `Assert.All(prompts, contains "bob@")`: git's one prompt was "Username for
   'http://127.0.0.1:<port>': ", so git no longer had the user the URL rule put in when it asked.
   The test's other assertions passed there (bindings empty, git's requests carry no `x-access-token`
-  and none answered 200). Under investigation, read-only while 13.9's runs hold the laptop (one Opus
+  and none answered 200). Investigated read-only while 13.9's runs held the laptop (one Opus
   investigator, two Opus skeptics, cause and security; notes in
-  `D:/Projects/Personal/phase7b-work/verify/ci-42437572741/`): why git on macOS drops the URL's
-  user (one hypothesis: git takes curl's effective URL without the userinfo as a redirect and
-  resets its credential from it), and whether any path lets a token reach a URL the rules give
-  another user where git does so.
+  `D:/Projects/Personal/phase7b-work/verify/ci-42437572741/`). The cause, established and not
+  refuted, lies in git and curl, not in the product: git v2.56.0 compares the URL it asked for with
+  curl's effective URL as plain text, and curl 8.23.0 (its fix of CVE-2026-94266) strips the user
+  from the effective URL, so git takes its own request for bob's URL as a redirect and rebuilds its
+  credential from the stripped URL, without bob. Git's fix (`76524c2604bc`, "http: handle curl
+  stripping creds from effective url") is on its `master` and in no tag. Homebrew's git 2.56.0_2,
+  linked to Homebrew's curl 8.23.0 since 2026-10-28, is CI's macOS git; Git for Windows
+  2.56.0.windows.4 (backport), `ubuntu-latest`'s PPA git and the containers' Ubuntu 2.43 carry the
+  fix, so macOS alone failed. Reproduced on the laptop with Git for Windows 2.56.0.windows.2 over
+  2.56.0.windows.4's curl 8.23.0 DLL. Security: no token went out in this case on any git (D278's
+  drop binds nothing for bob's URL). The security skeptic refuted the investigator's wider claim:
+  on such a git the broker never sees the other user, so D275's refusal is blind there; design
+  16.3's accepted GitHub cases (a reserved character escaped in the binding and raw in the other
+  URL) then give the account's token for bob's URL on git 2.56 too (measured on the reproduction),
+  and stale bindings or submodule URLs on git 2.31 to 2.45 over such a curl (no CI git is one); the
+  token reaches the bound host only. The lead's ruling: a test change (the test measures which kind
+  of git runs and asserts the one prompt it gives, git's own `remote get-url`, the server's two
+  requests and that no credential request reached the broker) and a risk with D389; no product
+  change, since hardening reopens design 16.3, which is the owner's (Waiting on the owner). The fix
+  is being built in `D:/Projects/Personal/vc-wt/p7b-macos` (`wip/p7b-macos-prompt`, from `93999d6`)
+  by an Opus fixer, three Opus reviewers by lens and an Opus verifier, proven on the laptop's three
+  gits (2.56.0.windows.4, windows.2, and windows.2 over curl 8.23).
+- **WP-N's merge runs** (2026-11-07, 18:58 to 21:15 on the laptop, on `cf82d50`'s code, through
+  `bash scripts/heavy-run.sh`, one command at a time, the session's `wpn-runs.sh`): the lagged list
+  (1500 ms) green but one test: phase 2's 25 of 25, App.Tests' eight classes 66, Phase6's 21, the 7a
+  project 207, 7a's Hosting classes 44, 7b's Hosting classes with `SignInBindingsWindowTests` 74, and
+  the 7b project 175 of 176: `Check_P11_azure_checkout_of_11_and_13s_reason` saw one whole refresh
+  with no operation id (the seven refresh forms once each) in "!13's double-click"'s exact budget of
+  0 (`Phase7bChecks.P.Checkout.cs:196`). A write reported late, as the lag stands for macOS, can put
+  a whole refresh into any step (the watcher's `IsQuiet` cannot know a held event), and the recorded
+  rule is to let such refreshes through only whole (7a design 5.3, D280, D281), as phase 6's checks
+  do with `GitCallBudget.AssertOnlyWholeRefreshes(await app.QuietCallsSinceAsync(mark), …)`; the
+  same exact 0 stands in `RequestOperationsProvidersTests.cs:172` and `:339`. All three go to that
+  form in the same fix as D388's test above. Then the whole default run, 7,817 tests, 7,813 passed,
+  4 skipped (the real keychains' tests), none failed, in 1 h 37 min 45 s at four projects at once
+  (`VisualCommit.App.Tests` ended last, 1 h 32 min 56 s of its own; 7a's gate took 1 h 12 min 18 s
+  for 5,952); then 7a's `Phase7aChecksN` alone 7 of 7 and phase 3's walk-through alone 82 of 82
+  (8 min 10 s). Their pictures are kept in `D:/Projects/Personal/phase7b-work/wpn-pictures/`
+  (`default/` and `alone/`); their comparison with 0.7's references and part N's inspection are
+  running (a Sonnet comparer, an Opus judge and an Opus inspector; output in
+  `D:/Projects/Personal/phase7b-work/cmp-wpn/`).
 - **The watcher's dispose test on CI** (2026-11-07, run 42386428809, `windows-latest`):
   `RepositoryWatcherTests.Nothing_is_raised_before_start_or_after_dispose` counted two `Changed`, not
   one, 2.9 s in, with seven other projects on the runner. The test runs the watcher on the wall clock
@@ -1301,6 +1339,20 @@ every commit.
   in a terminal the banner can read "Conflicts resolved" for about 0.3 s and one refresh. Removing
   it takes a status read that checks the in-progress files before and after `git status`; no
   requirement asks for it. Whether to build it is the owner's.
+- **A git that loses the URL's user** (Notes, "D388's test on macOS"; D389 and its risk, once
+  recorded; no answer needed for the gate): git 2.56.0 without git's own fix `76524c2604bc`, over a
+  curl that strips the user from its effective URL (curl 8.23.0, CI's macOS Homebrew git today),
+  asks for credentials without the URL's user, so the broker's refusal of another user (D275) does
+  not see bob. Where Select's drop misses a spelling (design 16.3's accepted GitHub cases: a reserved
+  character escaped in the binding and raw in the other URL), the account's token then answers for a
+  URL that names another user, on the bound host alone (github.com names no repository with such
+  characters); on git 2.31 to 2.45 over such a curl, stale bindings and submodule URLs too (no known
+  distribution ships that pairing). Git's fix reaches Homebrew with git 2.57.0 or a formula patch.
+  Should the app harden now, which reopens design 16.3 (bind nothing on such a git, measured at
+  start, where any remote names another user on the host; or move GitHub onto `SelectCovered`'s
+  credential-view drop; or read the URL rules at every bound operation, amending D388)? The lead
+  recommends leaving it as a recorded risk until a report, since the token never leaves the bound
+  host.
 - **The start reading has grown** (the cold read at phase 7a's close): CLAUDE.md's step 4 reads
   `architecture.md` (about 622 KB, about 429 KB at 7a's start) and `decisions.md` (about 262 KB)
   whole. The review before phase 7 set aside P6 (start reading by index, `architecture.md` split by
