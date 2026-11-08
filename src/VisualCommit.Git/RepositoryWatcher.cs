@@ -137,6 +137,15 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     /// </summary>
     internal Action<string?>? EventCounted { get; set; }
 
+    /// <summary>
+    /// For tests: called once a burst's raise has passed its checks, the last of them Dispose's,
+    /// and before its ignore check (whether that runs or not), inside the raise's lock, on the
+    /// thread that raises it. Dispose does not take that lock and can run whole there, as on a busy
+    /// machine between those two steps; a test that disposes the watcher in this sees what the
+    /// raise does then.
+    /// </summary>
+    internal Action? RaisePassedChecks { get; set; }
+
     /// <summary>For tests of the lag (R8): how many events have been held so far; zero without a lag.</summary>
     internal int HeldEvents => Volatile.Read(ref _heldEvents);
 
@@ -551,6 +560,7 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
                 try
                 {
+                    RaisePassedChecks?.Invoke();
                     if (workingTree && !gitFolder && !tooMany && paths.Count > 0 && AllIgnored(paths))
                     {
                         return;

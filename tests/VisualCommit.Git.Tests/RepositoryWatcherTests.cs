@@ -14,10 +14,11 @@ namespace VisualCommit.Git.Tests;
 /// tested against real repositories. The tests of the quiet period and the maximum delay hold the
 /// watcher's clock (<see cref="ManualTimeProvider"/>) and move it only once the watcher has
 /// counted every event they wait for, so that a slow machine cannot split a burst (D160). The
-/// two tests of Dispose hold it too, so that a slow machine cannot end a quiet period before
-/// Dispose. Each disposes the watcher with a change counted just before: in one the change is due
+/// three tests of Dispose hold it too, so that a slow machine cannot end a quiet period before
+/// Dispose. Two dispose the watcher with a change counted just before: in one the change is due
 /// when Dispose comes, its timer's callback queued but not run, in the other it is still inside its
-/// quiet period, and its timer has not fallen due.
+/// quiet period, and its timer has not fallen due. The third disposes it inside a raise, once the
+/// raise has passed its checks and before its ignore check.
 /// </summary>
 public class RepositoryWatcherTests
 {
@@ -270,6 +271,65 @@ public class RepositoryWatcherTests
         clock.Advance(due);
         clock.RunQueued();
         Assert.Equal(1, changed.Count);
+    }
+
+    [Fact]
+    public async Task A_watcher_disposed_just_before_a_bursts_ignore_check_drops_the_burst()
+    {
+        // Dispose does not take the raise's lock, so it can run whole between the raise's last
+        // check of Dispose and the ignore check: the test hook disposes the watcher there, in the
+        // first raise. The ignore check is then asked with the lifetime's token, cancelled, and
+        // answers as the git runner does, with a cancel: the burst is dropped. Read from the
+        // disposed source, the token would throw ObjectDisposedException, which the watcher takes
+        // as "git cannot say": a Debug line, and the burst raised after Dispose. Asked with a token
+        // that is not cancelled, the ignore check says every path is ignored, so only that would
+        // raise the burst. On the clock the test holds, as in the tests above; the git folder is a
+        // folder of its own where nothing is written, so the burst is the working tree's alone.
+        using var gitFolder = new TempDirectory("watch-git");
+        using var workingTree = new TempDirectory("watch-tree");
+        var clock = new QueuingClock();
+        var log = new ListLog();
+        var asked = new ConcurrentQueue<CancellationToken>();
+        using var watcher = new RepositoryWatcher(
+            gitFolder.Path,
+            gitFolder.Path,
+            log,
+            quietPeriod: Quiet,
+            workingDirectory: workingTree.Path,
+            allIgnored: (_, token) =>
+            {
+                asked.Enqueue(token);
+                return token.IsCancellationRequested ? Task.FromCanceled<bool>(token) : Task.FromResult(true);
+            },
+            time: clock);
+        var changed = new Counter(watcher);
+        var counted = new CountedEvents(watcher);
+        var raises = 0;
+        watcher.RaisePassedChecks = () =>
+        {
+            if (Interlocked.Increment(ref raises) == 1)
+            {
+                watcher.Dispose();
+            }
+        };
+
+        // As in the tests above: a burst counted before the clock moves this far is due.
+        var due = RepositoryWatcher.DefaultMaximumDelay;
+
+        watcher.Start();
+        File.WriteAllText(workingTree.Combine("just-before-dispose"), "x");
+        Assert.True(await counted.WaitForAsync(["just-before-dispose"], Timeout), $"The watcher did not count an event for {counted.Missing(["just-before-dispose"])}.");
+
+        // The raise runs on this thread, within the run of the queue, and Dispose within it.
+        clock.Advance(due);
+        clock.RunQueued();
+
+        Assert.True(Volatile.Read(ref raises) == 1, $"{Volatile.Read(ref raises)} raises passed their checks, not one.");
+        Assert.True(changed.Count == 0, $"The burst was raised {changed.Count} times after the watcher was disposed before its ignore check.");
+        Assert.True(asked.Count == 1, $"The ignore check was asked {asked.Count} times, not once.");
+        Assert.True(asked.Single().IsCancellationRequested, "The ignore check was asked with a token that is not cancelled.");
+        Assert.DoesNotContain(log.Entries, entry => entry.Message.Contains("Could not ask git which changed files it ignores", StringComparison.Ordinal));
+        Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Error);
     }
 
     [Fact]
