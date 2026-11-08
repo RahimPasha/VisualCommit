@@ -4409,6 +4409,14 @@ the `.Router.cs` headers):
   addresses (15.3), and what reaches a note goes through the screen.
 - D356's row is cut at 260 px, its tooltip whole; a GitLab fork's label is `{Owner}:{branch}`: part P's
   writer records how both read. The live screen over-screens an organization named by a common word.
+- Fixed at the review before the gate: a clone's binding (7a's D331) missed the conditional includes
+  `git clone` applies (`gitdir:`, `gitdir/i:`, `onbranch:`, `hasconfig:remote.*.url:`), whose files the
+  outside read never sees (git-1). Now each `includeif.*.path` it lists has its file's `url.` and
+  `includeif.` keys read (`IGitConfiguration.ReadIncludedAsync`, path as git resolves it); an
+  unreadable file, a nested conditional include, or a rule that changes the clone's URL beside the
+  outside rules binds nothing (D82's order), with one Debug line; a missing file counts as empty.
+  Without a directive no git call is added. Tests: `WelcomeCloneFromGitHubTests` (gitdir, hasconfig,
+  relative path, unreadable, nested, email-only), `GitConfigIncludeReadTests`.
 
 ### 16.4 Waiting on the owner
 

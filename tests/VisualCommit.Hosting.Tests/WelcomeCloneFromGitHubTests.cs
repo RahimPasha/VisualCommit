@@ -21,8 +21,13 @@ namespace VisualCommit.Hosting.Tests;
 /// and the folder name and keeps a typed name; a clone of the private octo/hello through the app's
 /// helper without a dialog and without a credential in the clone; another user's URL, and a global
 /// rule that rewrites to one, open git's credentials dialog as before; signed out, no configuration
-/// read; the tab not empty while that read is held. The fake of GitHub serves on a free port (design
-/// 16.3), so that git reaches it; the held read's test serves it in process and runs no git.
+/// read; the tab not empty while that read is held. A conditional include (fixed at phase 7b's review
+/// before the gate, docs/phase-7b-design.md 16.3) whose file rewrites the URL to another user, through
+/// <c>gitdir:</c>, <c>hasconfig:remote.*.url:</c> or a relative path, that git cannot read, or that
+/// holds a conditional include of its own, binds nothing and git asks the user's own helper first;
+/// one that holds only an email, or names no file, still binds. The fake of GitHub serves on a free
+/// port (design 16.3), so that git reaches it; the held read's test serves it in process and runs no
+/// git.
 /// </summary>
 public sealed class WelcomeCloneFromGitHubTests
 {
