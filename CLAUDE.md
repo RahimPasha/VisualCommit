@@ -435,7 +435,7 @@ What to know about them:
   on GitHub, Azure DevOps and GitLab it signs in, clones, lists pull or merge requests and creates one
   in a private sandbox. GitHub's token is a fine-grained one for that repository alone; Azure
   DevOps' reaches D352's organization, which holds other work, so D352's guard keeps every request
-  to the sandbox; GitLab's is a fine-grained token of an account that holds only the sandbox. It
+  to the sandbox; GitLab's is a fine-grained token of an account that holds the sandbox and four other projects, so D393's guard admits the sandbox project alone (and the account's project list). It
   reads six Windows user variables, never typed in a shell or pasted anywhere:
   `VISUALCOMMIT_LIVE_GITHUB_TOKEN` and `VISUALCOMMIT_LIVE_GITHUB_REPO` (`<owner>/<name>`;
   `docs/phase-7a-design.md` 14.6), `VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN` and

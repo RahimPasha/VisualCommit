@@ -612,8 +612,10 @@ it, 42472105974, failed one phase 1 harness test on macOS alone (`ShellDriverTes
 stall under load), whose wait is now 2 s with its assertions kept (Notes; CI section). WP-R (design
 14) is merged at `f016bdf` with CLAUDE.md's rows (Notes, "WP-R"); it has only been compiled. CI 42477551563 on
 `6f7199d` is green in all five jobs (CI section). Next: read CI's run on WP-R's merge; the owner's answer on the GitLab account's five
-projects (Waiting on the owner), and the change it asks for before the gate's live runs; then the
-gate (step 18), in 7a design 13.7's order with D335's live runs: the offline classes and the live
+projects, given on 2026-11-08: (b), the guard narrowed to the sandbox project (D393), built in
+`D:/Projects/Personal/vc-wt/p7b-gitlab-guard` (branch `wip/p7b-gitlab-guard`; the session's workflow
+`p7b-gitlab-guard`: an Opus builder, two Opus reviewers, a refix) and merged before the live runs;
+the owner said to start the gate now and is at the machine; then the gate (step 18), in 7a design 13.7's order with D335's live runs: the offline classes and the live
 command for the three providers with the owner told, corrections to the fakes committed before any
 picture; the 7b walk-through so that its pictures exist; `Phase7bRealWindowPass` twice on its own
 with the owner told and present (D246); then the counted round on one commit: the whole default run
@@ -1570,7 +1572,8 @@ every commit.
   D290's window binds once the URL rules are known), D389 (D278's checks read the URL's user by the
   measured git; risk 43), D390 (a check of no git call sets aside only the watchers' refreshes),
   D391 (a clone's bindings read the URL rules of git's conditional includes) and D392 (the review
-  before the gate's rulings). The next decision number is D393.
+  before the gate's rulings) and D393 (the live command's GitLab guard admits the sandbox project alone,
+  the owner's choice). The next decision number is D394.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -1580,7 +1583,7 @@ every commit.
   in a terminal the banner can read "Conflicts resolved" for about 0.3 s and one refresh. Removing
   it takes a status read that checks the in-progress files before and after `git status`; no
   requirement asks for it. Whether to build it is the owner's.
-- **The GitLab sandbox account lists five projects** (2026-11-08; seen in stage 1's run of
+- **Answered 2026-11-08: (b), narrow the guard only; the account stays as it is (D393).** **The GitLab sandbox account lists five projects** (2026-11-08; seen in stage 1's run of
   2026-11-06 too, and not reported then): the app's list of the account's projects
   (`GET projects?membership=true`, with the fine-grained token) gave five rows, the sandbox and four
   others, where the owner's accepted recommendation 2 (above) has a new account "that holds only the
