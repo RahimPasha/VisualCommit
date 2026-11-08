@@ -189,8 +189,11 @@ Checks, live trial and review:
   (2026-11-08): 11 of 11, `Check_3` passed on both providers, nothing new for the fakes (Notes,
   "WP-LIVE's second stage"). The GitLab account lists five projects, not the sandbox alone
   (Waiting on the owner). (2026-11-08. Week: share not read.)
-- [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
-  tests.
+- [x] 17. An independent review of the code before the gate; every confirmed finding fixed with
+  tests. Ran on `fdb2c05` (Notes, "The review before the gate"): 9 of 19 findings stood, ruled in
+  D391 and D392; the six fixed are merged at `6333de6` with tests that fail without them (Notes,
+  "The review's fixes"), their classes pass plain and lagged, design 0.6's timing report is taken
+  and no test needs D237's split (Notes, "The lead's runs after the review's fixes"). (2026-11-08.)
 
 Closing (`CLAUDE.md`, "Closing a phase"):
 
@@ -416,6 +419,14 @@ them (the live project with `Check_3`). Jobs and Test steps: `windows-latest` 43
 40 s), `macos-latest` 20 min 29 s (19 min 34 s), `ubuntu-latest` 8 min 31 s (6 min 37 s), the
 containers 9 min 43 s and 7 min 7 s (7 min 5 s and 5 min 5 s), each under four fifths.
 
+[42472105974](https://github.com/RahimPasha/VisualCommit/actions/runs/42472105974) on `6333de6`
+(the review's fixes merged): failed on `macos-latest` alone, one test of 7,874:
+`ShellDriverTests.WaitForAsync_times_out_with_a_message_that_says_what_it_waited_for`, a stall under
+load (Notes, "`ShellDriverTests`' wait on CI"); the other four jobs green. Jobs and Test steps:
+`windows-latest` 43 min 14 s (40 min 5 s), `macos-latest` 41 min 22 s (38 min 43 s), `ubuntu-latest`
+7 min 8 s (5 min 33 s), the containers 9 min 13 s and 9 min 40 s (6 min 43 s and 7 min 7 s), each
+under four fifths. Not rerun (CLAUDE.md: the owner's).
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -590,14 +601,14 @@ is merged at `fdb2c05` and passed with the tokens (step 16 ticked; Notes, "WP-LI
 stage"); CI 42459591309 on `fdb2c05` is green in all five jobs (CI section). The review before the gate
 (step 17) ran on `fdb2c05` (Notes, "The review before the gate"): 9 of its 19 findings stood, the
 lead's rulings are D391 and D392. Its fixes are merged at `6333de6` (Notes, "The review's fixes"),
-pushed; CI's run on it is 42472105974. The lead's runs on `6333de6` go one at a time through
-`scripts/heavy-run.sh` (2026-11-08, from 10:36; log and outputs in
-`D:/Projects/Personal/phase7b-work/timing/`): design 0.6's timing report for
-`VisualCommit.Hosting.Tests` and `VisualCommit.VisualTests.Phase7b` (`--report-xunit`; they are also
-the touched classes' plain runs), 7a's walk-through, the touched Git.Tests and App.Tests classes, the
-lagged lists of 7b (0.4) and of 7a (D334's six), then `VisualCommit.App.Tests` alone with its timing
-report. Next: read them and CI's run; split any test of 25 s or more by D237's rule (the review's
-tests-5); tick step 17; then WP-R and the gate. The GitLab account's five projects wait on the owner and decide whether the gate's live
+pushed. The lead's runs on `6333de6` all passed, design 0.6's timing report among them, and no test
+needs D237's split (Notes, "The lead's runs after the review's fixes"); step 17 is ticked. CI's run on
+it, 42472105974, failed one phase 1 harness test on macOS alone (`ShellDriverTests`' 0.3 s wait, a
+stall under load), whose wait is now 2 s with its assertions kept (Notes; CI section). WP-R (design
+14) is written in `D:/Projects/Personal/vc-wt/p7b-real-window` (branch `wip/p7b-real-window`, from
+`8649316`; one Opus builder) without a build while the timed runs ran; next its builder builds it in
+Release and runs part's expectation classes, an Opus review follows, then the lead merges it and adds
+CLAUDE.md's rows (14.5). Then the gate (step 18). The GitLab account's five projects wait on the owner and decide whether the gate's live
 runs need a change first (Waiting on the owner). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
@@ -1060,6 +1071,32 @@ every commit.
   7b's part P (22 of 22 the same files at the panel's fix; on the refixer's fresh build 21, `p11a`
   differing in 5 pixels of the status bar's git box, its recorded variation) were run by the fixers;
   no fix changes a scripted picture.
+- **The lead's runs after the review's fixes** (2026-11-08 03:35 to 04:42 local time, on `6333de6`,
+  one at a time through `scripts/heavy-run.sh`, nothing else on the laptop; log and xUnit reports in
+  `D:/Projects/Personal/phase7b-work/timing/`), all passed: `VisualCommit.Hosting.Tests` with its
+  timing report 1,522 passed and 4 skipped (the real keychains') in 13 min 42 s alone (46 min of its
+  own beside the others in WP-N's default run); `VisualCommit.VisualTests.Phase7b` with its timing report
+  179 in 3 min 47 s; 7a's walk-through 207 in 3 min 24 s (its GitHub code changed); `GitConfigIncludeReadTests`
+  and `GitConfigReadTests` 35; the growth classes, `GitSettingsViewModelTests` and
+  `SettingsDialogViewModelTests` 98; under `VISUALCOMMIT_WATCHER_LAG_MS=1500` 7b's walk-through 179,
+  7b's six Hosting classes (0.4) 75 and 7a's D334 six 51; then `VisualCommit.App.Tests` alone with
+  its timing report, 2,233 in 28 min 24 s (59 min 31 s of its own at 7a's gate, under contention;
+  its slowest, all earlier phases', 30 to 63 s with their templates). Design 0.6's split (the
+  review's tests-5): the tests of 25 s or more in the two reports (Hosting.Tests' five, at 61, 46,
+  46, 38 and 37 s, and the 7b project's three, at 31, 29 and 25 s, with two just under) were timed
+  alone (`--filter-method`, each its own run): only `FakeAzureDevOpsGitTests.A_repository_named_with_a_final_dot_git_is_public_pushed_to_and_given_its_merge_ref`
+  took 25 s or more, 28.4 s, of which about 18 s is the "hosting7b" template that the first test of a
+  process builds (the same run's GitLab cancel case took 20.5 s, its two Azure DevOps cases 2 s
+  each); its own work, one repository's clone, listing and push, is about 10 s, one scenario, so D237
+  splits nothing; the others took 11 to 24 s alone, template included. The times in the reports are
+  run beside the project's other tests and include the template's wait.
+- **`ShellDriverTests`' wait on CI** (run 42472105974 on `6333de6`, macOS alone):
+  `WaitForAsync_times_out_with_a_message_that_says_what_it_waited_for` (phase 1's, `84550a8`, never
+  failed before) found "It looked at the condition 2 times": its wait of 0.3 s, at a 15 ms interval
+  about twenty looks, had room for two under a stall of the UI thread or the thread pool's timer while
+  `VisualCommit.App.Tests` ran beside the other projects (37 min 50 s there). The fix, a test-only
+  change: the wait is 2 s, its message and both assertions as they were (more than two looks, the
+  time up), the failure now lists when each look came. Passed alone in 6 s.
 - **For the review before the gate** (step 17; collected 2026-11-01 to 2026-11-08 from the
   packages' hand-offs, the inspections and the CI runs): GitLab's 100 requests a minute against
   the app's lists; whether the providers' own refusals in `src/VisualCommit.Hosting/` should use the

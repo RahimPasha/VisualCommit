@@ -95,27 +95,34 @@ public class ShellDriverTests
         Assert.True(counted.Value <= elapsed - TimeSpan.FromMilliseconds(1000), $"Counted {counted.Value.TotalMilliseconds:F0} ms of {elapsed.TotalMilliseconds:F0} ms.");
     }
 
+    /// <summary>
+    /// The wait gives up with a message that names what it waited for, and keeps looking until its
+    /// time is up. The limit is 2 s, not the 0.3 s it was until phase 7b: under CI's load (macOS,
+    /// run 42472105974) one stall of the UI thread or of the thread pool's timer left room for only
+    /// two looks in 0.3 s, where the 15 ms interval gives about twenty; the failure lists when each
+    /// look came, so that a stall shows as one.
+    /// </summary>
     [AvaloniaFact]
     public async Task WaitForAsync_times_out_with_a_message_that_says_what_it_waited_for()
     {
         using var data = new TempDirectory("data");
         using var app = ShellDriver.Start(data.Path);
         await app.WaitUntilReadyAsync();
-        var looks = 0;
+        var looks = new List<TimeSpan>();
         var clock = Stopwatch.StartNew();
 
         var error = await Assert.ThrowsAsync<TimeoutException>(() => app.WaitForAsync(
             () =>
             {
-                looks++;
+                looks.Add(clock.Elapsed);
                 return false;
             },
             "a condition that never comes true",
-            TimeSpan.FromMilliseconds(300)));
+            TimeSpan.FromSeconds(2)));
 
-        Assert.Equal("Timed out after 0.3 s waiting for a condition that never comes true.", error.Message);
-        Assert.True(clock.Elapsed >= TimeSpan.FromMilliseconds(300), $"It gave up after {clock.Elapsed.TotalMilliseconds} ms.");
-        Assert.True(looks > 2, $"It looked at the condition {looks} times; it should keep looking until the time is up.");
+        Assert.Equal("Timed out after 2 s waiting for a condition that never comes true.", error.Message);
+        Assert.True(clock.Elapsed >= TimeSpan.FromSeconds(2), $"It gave up after {clock.Elapsed.TotalMilliseconds} ms.");
+        Assert.True(looks.Count > 2, $"It looked at the condition {looks.Count} times, at {string.Join(", ", looks.Select(look => $"{look.TotalMilliseconds:F0}"))} ms; it should keep looking until the time is up.");
     }
 
     [AvaloniaFact]
