@@ -293,8 +293,10 @@ public sealed class FakeGitHubFault
     public static FakeGitHubFault ApiVersionGone { get; } = new(FakeGitHubFaultKind.ApiVersionGone);
 
     /// <summary>
-    /// 500 "Server Error". This body is not observed on GitHub: the one 500 the live run of
-    /// 2026-10-30 saw had none (A6's lookup of a commit GitHub lacks, which the route answers so itself).
+    /// 500 "Server Error". This body is not observed on GitHub: the one 500 the live runs of
+    /// 2026-10-30 and 31 saw had none (A6's lookup of a commit GitHub lacks, which GitHub answered
+    /// 404 in the live run of 2026-11-08 and the route answers so itself, or as that 500 with
+    /// <see cref="FakeGitHub.UnknownRevisionBesideAuthorAnswers500"/>; D342, D394).
     /// </summary>
     public static FakeGitHubFault ServerError { get; } = new(FakeGitHubFaultKind.ServerError);
 

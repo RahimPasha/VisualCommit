@@ -128,7 +128,8 @@ internal static class LivePremises
     /// <summary>
     /// A lookup's status after which the provider leaves out only its own address on the listed
     /// repository and goes on (D342, amending D339): 422, a 5xx (GitHub's 500 for an unknown SHA
-    /// beside <c>author</c>) or 404.
+    /// beside <c>author</c> in the live runs of 2026-10-30 and 31) or 404 (its answer in the live run
+    /// of 2026-11-08, D394).
     /// </summary>
     internal static bool LeavesOutOnlyItsAddress(LiveAnswer answer)
     {

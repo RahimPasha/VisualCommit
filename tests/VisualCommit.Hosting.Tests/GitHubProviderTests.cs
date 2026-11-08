@@ -334,16 +334,20 @@ public sealed class GitHubProviderTests
         Assert.Equal(("commits:ada/hello", $"sha={fix}&author=ada%40example.com&per_page=1"), (lookup.Route, lookup.Query));
     }
 
-    [Fact]
-    public async Task A6_a_repository_github_does_not_give_is_asked_once_a_commit_it_lacks_leaves_out_one_address_and_the_others_go_on()
+    [Theory]
+    [InlineData(404)]
+    [InlineData(500)]
+    public async Task A6_a_repository_github_does_not_give_is_asked_once_a_commit_it_lacks_leaves_out_one_address_and_the_others_go_on(int lacking)
     {
         await using var setup = await Setup.StartAsync();
+        setup.Fake.UnknownRevisionBesideAuthorAnswers500 = lacking == 500;
         var main = await TipAsync(setup, "octo/hello", "main");
 
         // A repository GitHub does not have (404) and an empty one (409), each asked once for its two
-        // addresses (ada/gone's second in another case); a commit octo/hello does not have (500
-        // without a body, as github.com answers it beside author, D342), which leaves out its
-        // address alone; then octo on main.
+        // addresses (ada/gone's second in another case); a commit octo/hello, the listed repository,
+        // does not have, which leaves out its address alone: 404 "Not Found" as github.com answered
+        // it beside author in the live run of 2026-11-08 (D394), or 500 without a body as it did on
+        // 2026-10-30 and 31, a 5xx (D342); then octo on main.
         var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null,
             [
                 new AuthorCommit(Scenarios.AdaEmail, main, Repository("ada", "gone")),
@@ -357,7 +361,7 @@ public sealed class GitHubProviderTests
 
         Assert.Equal(new AuthorAvatar(1001, "octo", new Uri("http://127.0.0.1:1/avatars/u/1001?v=4")), Assert.Single(authors.Value!.ByEmail).Value);
         Assert.Equal(
-            [("commits:ada/gone", 404), ("commits:octo/notes", 409), ("commits:octo/hello", 500), ("commits:octo/hello", 200)],
+            [("commits:ada/gone", 404), ("commits:octo/notes", 409), ("commits:octo/hello", lacking), ("commits:octo/hello", 200)],
             setup.Fake.Requests.Select(request => (request.Route, request.Status)));
     }
 
@@ -397,10 +401,11 @@ public sealed class GitHubProviderTests
     [Fact]
     public async Task A6_a_lookup_github_cannot_answer_leaves_out_its_address_and_a_404_on_another_repository_leaves_out_that_repository()
     {
-        // github.com's answers to a commit it lacks beside author= (D342): a 500 without a body (the
-        // live run of 2026-10-30), and a 422 is taken the same, on the listed repository or the fork
-        // a lookup goes to; a 404 on the listed repository is taken the same. A 404 on another
-        // repository leaves out the rest of that repository's; a 401 stops them.
+        // github.com's answers to a commit it lacks beside author= (D342, D394): a 500 without a body
+        // (the live runs of 2026-10-30 and 31), and a 422 is taken the same, on the listed repository
+        // or the fork a lookup goes to; a 404 on the listed repository, github.com's answer since the
+        // live run of 2026-11-08, is taken the same. A 404 on another repository leaves out the rest
+        // of that repository's; a 401 stops them.
         static string Found(string login, int id) =>
             $$$"""[{"sha":"x","commit":{"author":{"email":"x@example.com"}},"author":{"login":"{{{login}}}","id":{{{id}}},"avatar_url":"https://avatars.githubusercontent.com/u/{{{id}}}?v=4"}}]""";
         var recorder = new RecordingHttpHandler(request => request.RequestUri!.Query.Split('&')[0] switch

@@ -266,7 +266,8 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// (empty, or one GitHub does not let the token read), is left out with the rest of that
     /// repository's, asked no more in this call, and the others go on. One answered 422, 404 in
     /// <paramref name="repository"/> or a server error (GitHub lacks its commit: 500 without a body
-    /// beside <c>author</c>, the live run of 2026-10-30) is left out alone and the others go on
+    /// beside <c>author</c> in the live runs of 2026-10-30 and 31, 404 "Not Found" in that of
+    /// 2026-11-08, D394) is left out alone and the others go on
     /// (D342, amending D339). Any other failure (the token refused or limited, the API version,
     /// no answer, an answer not read) stops them and is left out. A lookup left out is not in the
     /// map, so it is asked again at a later run.
@@ -332,7 +333,8 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             {
                 // An empty repository, or another remote's that is gone or private to others: none of
                 // its addresses is found there, so its other lookups are not asked in this call; the
-                // rest go on.
+                // rest go on. Since the live run of 2026-11-08 github.com also answers a commit it
+                // lacks 404 (D394), which here cannot be told from a repository it does not give.
                 unreadable.Add(lookup.Repository);
                 continue;
             }
@@ -340,11 +342,12 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             if (kind is HostingFailureKind.Validation or HostingFailureKind.ServerError or HostingFailureKind.NotFound)
             {
                 // A commit GitHub does not have (a remote-tracking branch GitHub has since lost or
-                // rewritten, a remote pointed elsewhere): github.com answers such a lookup 500 without
-                // a body (the live run of 2026-10-30), and a 422 is taken the same, in any repository.
-                // A 404 in the listed repository (the tab's own: A3's, or for a fork the parent A3
-                // names) is taken as this commit's, not the repository's (not measured). Only this
-                // address is not found, and it is asked again at a later run (D342).
+                // rewritten, a remote pointed elsewhere): github.com answered such a lookup 500
+                // without a body in the live runs of 2026-10-30 and 31, and 404 "Not Found" in that
+                // of 2026-11-08 (D394); a 422 is taken as the 500, in any repository. A 404 in the
+                // listed repository (the tab's own: A3's, or for a fork the parent A3 names) is taken
+                // as this commit's, not the repository's. Only this address is not found, and it is
+                // asked again at a later run (D342).
                 continue;
             }
 

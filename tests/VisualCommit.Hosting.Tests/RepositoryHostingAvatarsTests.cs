@@ -11,7 +11,8 @@ namespace VisualCommit.Hosting.Tests;
 /// A tab's authors' avatars (docs/phase-7a-design.md 7.9, 7.13; D252, D291, D339, ruling 22): one
 /// commits page; the 20 lookups a repository has per app session, shared by its tabs, each from the
 /// author's own commit on the remote that holds it (a feature branch's, a fork's); an unknown e-mail
-/// not asked again; one whose commit GitHub lacks left out alone and asked again (D342); the map
+/// not asked again; one whose commit GitHub lacks left out alone and asked again, answered 404 or
+/// 500 (D342, D394); the map
 /// used within 7 days (no page asked) and read again after; images fetched
 /// without the token; nothing at all while signed out; the avatars gone with the GitHub remote, a
 /// run in flight then applying nothing, and kept when the remote names another GitHub repository.
@@ -124,21 +125,26 @@ public sealed class RepositoryHostingAvatarsTests
         Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
     }
 
-    [Fact]
-    public async Task An_address_whose_commit_github_lacks_holds_up_no_other_in_this_run_or_the_next_session()
+    [Theory]
+    [InlineData(404)]
+    [InlineData(500)]
+    public async Task An_address_whose_commit_github_lacks_holds_up_no_other_in_this_run_or_the_next_session(int status)
     {
         await using var setup = await HostingSessionSetup.StartAsync();
         await setup.SignInAsync();
+        setup.Fake.UnknownRevisionBesideAuthorAnswers500 = status == 500;
         var hosting = await OpenHelloAsync(setup);
         var sha = await PushNewbieAsync(setup, "octo/hello", "feature/newbie");
         var lost = new string('f', 40);
         AuthorCommit[] authors = [new("stranger@example.com", lost, OctoHello), new(NewbieEmail, sha, OctoHello)];
 
-        // A remote-tracking branch GitHub no longer has: the lookup from its commit is answered 500
-        // without a body, as github.com did in the live run of 2026-10-30; the next is still asked (D342).
+        // A remote-tracking branch GitHub no longer has: the lookup from its commit, in the listed
+        // repository, is answered 404 "Not Found" as github.com did in the live run of 2026-11-08
+        // (D394), or 500 without a body as it did on 2026-10-30 and 31, a 5xx; either way the next
+        // is still asked (D342).
         await ShowAsync(setup, hosting, authors);
 
-        var stranger = ($"sha={lost}&author=stranger%40example.com&per_page=1", 500);
+        var stranger = ($"sha={lost}&author=stranger%40example.com&per_page=1", status);
         Assert.Equal([("sha=main&per_page=100", 200), stranger, ($"sha={sha}&author=newbie%40example.com&per_page=1", 200)], Commits(setup).Select(request => (request.Query, request.Status)));
         Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
         using (var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(setup.Paths.AvatarsDirectory, "authors", "github_127.0.0.1_1_octo_hello.json"))))

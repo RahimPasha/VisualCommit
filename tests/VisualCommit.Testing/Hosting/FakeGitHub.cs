@@ -49,6 +49,7 @@ public sealed partial class FakeGitHub : IAsyncDisposable
     private int _tokenCount;
     private int _requestCount;
     private int _maxPerPage = 100;
+    private bool _unknownRevisionBesideAuthorAnswers500;
 
     private FakeGitHub(string root)
     {
@@ -80,6 +81,19 @@ public sealed partial class FakeGitHub : IAsyncDisposable
             ArgumentOutOfRangeException.ThrowIfLessThan(value, 1);
             Volatile.Write(ref _maxPerPage, value);
         }
+    }
+
+    /// <summary>
+    /// Whether A6's <c>commits</c> answers a revision git cannot resolve beside <c>author</c> 500
+    /// without a body, as github.com did in the live runs of 2026-10-30 and 31 (D342), in place of
+    /// the 404 "Not Found" it answered in the live run of 2026-11-08 (D394): false unless a test
+    /// sets it, to drive the avatars' lookups through a 5xx (D342 (2)). Without <c>author</c> the
+    /// answer is 404 either way.
+    /// </summary>
+    public bool UnknownRevisionBesideAuthorAnswers500
+    {
+        get => Volatile.Read(ref _unknownRevisionBesideAuthorAnswers500);
+        set => Volatile.Write(ref _unknownRevisionBesideAuthorAnswers500, value);
     }
 
     /// <summary>
