@@ -57,6 +57,15 @@ internal abstract class HostingHttpProfile
     /// <summary>The next page an answer names, followed by <see cref="HostingHttpClient.GetPagesAsync{T}"/>; null: the last page.</summary>
     public virtual Uri? NextPage(HostingExchange exchange) => null;
 
+    /// <summary>
+    /// Asked of every next page that keeps <see cref="TokenOrigin"/>'s origin and path, before
+    /// anything is sent there or it is given as <see cref="HostingReply{T}.Next"/>, as
+    /// <see cref="RefuseRedirect"/> is of a redirect: false ends the list
+    /// <see cref="HostingFailureKind.Malformed"/>, warning <c>Link outside the API</c>; true leaves it
+    /// to the core's rule.
+    /// </summary>
+    public virtual bool FollowsPage(Uri next) => true;
+
     /// <summary>The request id an answer's headers carry, for the failure and the log; null: none.</summary>
     public virtual string? RequestIdOf(IReadOnlyDictionary<string, string> headers) => null;
 

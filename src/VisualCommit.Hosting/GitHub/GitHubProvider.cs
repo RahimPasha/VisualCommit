@@ -420,12 +420,15 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
     private Uri Api(string relative) => new(Endpoints.ApiBase, relative);
 
-    /// <summary>A repository as A2 and A3 describe it; null when a field the app needs is missing or unreadable.</summary>
+    /// <summary>
+    /// A repository as A2 and A3 describe it; null when a field the app needs is missing or
+    /// unreadable, <c>clone_url</c> and <c>html_url</c> among them unless <see cref="WebAddress"/> reads them.
+    /// </summary>
     private RepositoryInfo? Info(GitHubRepositoryJson json, bool withParent)
     {
         if (json.DefaultBranch is not { Length: > 0 } defaultBranch
-            || !Uri.TryCreate(json.CloneUrl, UriKind.Absolute, out var cloneUrl)
-            || !Uri.TryCreate(json.HtmlUrl, UriKind.Absolute, out var htmlUrl)
+            || WebAddress(json.CloneUrl) is not { } cloneUrl
+            || WebAddress(json.HtmlUrl) is not { } htmlUrl
             || json.UpdatedAt is not { } updatedAt)
         {
             return null;
@@ -447,10 +450,13 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             parent is null ? null : json.Parent!.DefaultBranch);
     }
 
-    /// <summary>A pull request of A4 or A5 on <paramref name="baseRepository"/> (its <c>base.repo</c> when given); null when it cannot be read.</summary>
+    /// <summary>
+    /// A pull request of A4 or A5 on <paramref name="baseRepository"/> (its <c>base.repo</c> when
+    /// given); null when it cannot be read, its <c>html_url</c> among them unless <see cref="WebAddress"/> reads it.
+    /// </summary>
     private PullRequest? Pull(GitHubPullRequestJson json, HostedRepository baseRepository)
     {
-        if (!Uri.TryCreate(json.HtmlUrl, UriKind.Absolute, out var htmlUrl))
+        if (WebAddress(json.HtmlUrl) is not { } htmlUrl)
         {
             return null;
         }
@@ -468,6 +474,19 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             json.Base.Repo is { } @base ? Hosted(@base) : baseRepository,
             json.CreatedAt);
     }
+
+    /// <summary>
+    /// An address an answer gives, used only once its scheme is <c>http</c> or <c>https</c>, as wave
+    /// 2's clients read theirs (docs/phase-7b-design.md 5.6): on Windows .NET reads <c>//host/share</c>
+    /// as <c>file://host/share</c>, which a clone would reach over SMB; else null.
+    /// </summary>
+    private static Uri? WebAddress(string? text) =>
+        text is not null
+        && (text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        && Uri.TryCreate(text, UriKind.Absolute, out var url)
+        && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps)
+            ? url
+            : null;
 
     private HostedRepository Hosted(GitHubRepositoryJson json) => new(HostingProvider.GitHub, Endpoints.Host, json.Owner.Login, json.Name);
 

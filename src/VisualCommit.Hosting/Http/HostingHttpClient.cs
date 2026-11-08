@@ -128,7 +128,7 @@ internal sealed partial class HostingHttpClient : IDisposable
     /// <summary>
     /// The pages of a list from <paramref name="first"/>, following the profile's
     /// <see cref="HostingHttpProfile.NextPage"/> as given while it stays on the token's origin and
-    /// under its path, up to <paramref name="maxPages"/> (<see cref="HostingReply{T}.Next"/> is
+    /// under its path and <see cref="HostingHttpProfile.FollowsPage"/> takes it, up to <paramref name="maxPages"/> (<see cref="HostingReply{T}.Next"/> is
     /// the next page left then). A failing page fails the whole list. <paramref name="pageHeaders"/>
     /// is given each page's headers whose answer succeeded, in order, before the next is asked.
     /// </summary>
@@ -431,6 +431,23 @@ internal sealed partial class HostingHttpClient : IDisposable
             {
                 var failure = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, reply.RequestId, secrets);
                 Warn(HttpMethod.Get.Method, exchange.Url, $"Link to {OriginOf(next)}", failure.RequestId, secrets);
+                return reply with { Value = default, Failure = failure };
+            }
+
+            bool follows;
+            try
+            {
+                follows = _profile.FollowsPage(next);
+            }
+            catch (Exception ex)
+            {
+                return reply with { Value = default, Failure = Unreadable(exchange, ex, secrets) };
+            }
+
+            if (!follows)
+            {
+                var failure = Finish(new HostingFailure(HostingFailureKind.Malformed, HostingHttpTexts.Malformed(_profile.Provider)), exchange.Url, reply.RequestId, secrets);
+                Warn(HttpMethod.Get.Method, exchange.Url, "Link outside the API", failure.RequestId, secrets);
                 return reply with { Value = default, Failure = failure };
             }
 

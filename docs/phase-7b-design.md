@@ -2242,6 +2242,15 @@ recognition takes no other host or port; 1.4's signatures hold; CI's five jobs a
   GitHub A1 takes any username, its A2 and A4 throw on `[null]` and take any number; the core follows
   a non-GET's redirect for GitHub and WP-AZ, and a next URL that repeats, to the page cap.
 
+**Fixed at the review before the gate** (tokens-1): the core asks a new profile hook, `FollowsPage(next)`
+(true by default), of every next page on `TokenOrigin`'s origin and path, before it is sent or given as
+`Next`; false ends the list `Malformed`, warning `Link outside the API`, nothing sent; a hook that
+throws, `Malformed (<type>)` (D380). `GitLabProfile` answers with its redirect rule (`InApi`), so a
+`Link` to `/api/v4/..%2F..%2Foauth%2Ftoken`, which the core's raw-path test kept under `/api/v4/`, no
+longer takes the token. GitHub's and Azure DevOps' paging is unchanged.
+`GitLabClientTests`: five such `Link`s, one request each, the plain next page followed;
+`HostingHttpClientTests`: a refusal, one at the page cap, a hook that throws.
+
 ## 8. WP-C: credentials, push guard and prompts on the new hosts
 
 ### 8.1 Goal and files
@@ -2859,6 +2868,15 @@ what was open:
   `HostingContractsTests` (passed to WP-S): one test renamed.
 - For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without one. For
   WP-N: `IHostingSession.cs` changed `NullRepositoryHosting`'s text and three docs.
+
+**Fixed at the review before the gate** (life-1): 9.5's `GetAsync` waits for its own provider's read at
+the start, not for the whole start. Each `Entry` has a `StartRead` signal, completed when that
+provider's `ReadAccountAsync` ends (whatever its outcome), at once after `accounts.json` is read when
+it has no record, and for all at the latest when the start ends; still at most 10 s on the session's
+clock, with 7a's warning. The reads run one after another, so an earlier provider's slot binds git
+while a later one's keychain read runs; its get waited on `_started` and went without the token after
+10 s. `_started`, `AccountChanged`'s order and timing, `BindsGit` and the bindings are unchanged.
+`HostingSessionStartTests`: with GitLab's read held, GitHub's get answers at once.
 
 ## 10. WP-A: accounts and sign-in (part A)
 
@@ -4431,6 +4449,13 @@ the `.Router.cs` headers):
   addresses (15.3), and what reaches a note goes through the screen.
 - D356's row is cut at 260 px, its tooltip whole; a GitLab fork's label is `{Owner}:{branch}`: part P's
   writer records how both read. The live screen over-screens an organization named by a common word.
+- Fixed at the review before the gate (tokens-2), 7a's code: `GitHubProvider.Info` reads `clone_url` and
+  `html_url`, and `Pull` a pull's `html_url`, only by wave 2's rule (5.6's As built): the text begins
+  with `http://` or `https://` and `Uri.TryCreate` gives an absolute `http` or `https` address (a private
+  `WebAddress`, as Azure DevOps' and GitLab's). Any other (`//h/s`, which .NET reads on Windows as the
+  share `file://h/s`, `file:///x`, `ext::sh -c x`) is unreadable as 7a's unreadable fields are: A2's
+  list, A3, A4's list and A5 `Malformed`. `clone_url` is not held to the listed repository. The fake's
+  `http` loopback answers read as before; 7a's checks and pictures unchanged.
 
 ### 16.4 Waiting on the owner
 

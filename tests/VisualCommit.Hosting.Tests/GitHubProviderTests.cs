@@ -477,6 +477,73 @@ public sealed class GitHubProviderTests
             Assert.Single(log.Lines).Message);
     }
 
+    // Made up, a broken or hostile server's (the review before the gate, tokens-2): an address of
+    // another scheme than http or https. On Windows .NET reads //h/s as file://h/s, a share a clone
+    // would reach over SMB. The same answers with https addresses are read first, so the scheme alone
+    // makes them Malformed: A2 and A3 for clone_url or html_url, A4 and A5 for a pull's html_url,
+    // as 7a's unreadable fields do.
+    [Theory]
+    [InlineData("clone_url", "//h/s")]
+    [InlineData("clone_url", "file:///x")]
+    [InlineData("clone_url", "ext::sh -c x")]
+    [InlineData("html_url", "//h/s")]
+    [InlineData("html_url", "file:///x")]
+    [InlineData("html_url", "ext::sh -c x")]
+    public async Task An_address_of_another_scheme_than_http_or_https_is_unreadable_in_A2_to_A5(string field, string address)
+    {
+        var bad = false;
+        string Of(string name, string https) => bad && name == field ? address : https;
+        string Repo() => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["name"] = "hello",
+            ["owner"] = new Dictionary<string, string> { ["login"] = "octo" },
+            ["default_branch"] = "main",
+            ["clone_url"] = Of("clone_url", "https://github.com/octo/hello.git"),
+            ["html_url"] = Of("html_url", "https://github.com/octo/hello"),
+            ["updated_at"] = "2026-01-02T03:04:05Z",
+            ["permissions"] = new Dictionary<string, bool> { ["push"] = true },
+        });
+        string Pull() => System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["number"] = 7,
+            ["title"] = "T",
+            ["user"] = new Dictionary<string, string> { ["login"] = "octo" },
+            ["html_url"] = Of("html_url", "https://github.com/octo/hello/pull/7"),
+            ["head"] = new Dictionary<string, object?> { ["ref"] = "fix", ["sha"] = new string('a', 40), ["repo"] = null },
+            ["base"] = new Dictionary<string, object?> { ["ref"] = "main", ["sha"] = new string('b', 40), ["repo"] = null },
+            ["created_at"] = "2026-01-02T03:04:05Z",
+        });
+        var recorder = new RecordingHttpHandler(request => (request.Method.Method, request.RequestUri!.AbsolutePath) switch
+        {
+            ("GET", "/user/repos") => RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Repo() + "]"),
+            ("GET", "/repos/octo/hello") => RecordingHttpHandler.Json(HttpStatusCode.OK, Repo()),
+            ("GET", "/repos/octo/hello/pulls") => RecordingHttpHandler.Json(HttpStatusCode.OK, "[" + Pull() + "]"),
+            ("POST", "/repos/octo/hello/pulls") => RecordingHttpHandler.Json(HttpStatusCode.Created, Pull()),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}"),
+        });
+        var log = new ListLog();
+        using var provider = new GitHubProvider(GitHubEndpoints.GitHubCom, () => recorder, log, new ManualTimeProvider());
+        var hello = new HostedRepository(HostingProvider.GitHub, "github.com", "octo", "hello");
+        var newPull = new NewPullRequest("T", "", "fix", null, "main", Draft: false);
+        async Task<HostingFailure?[]> AllAsync() =>
+        [
+            (await provider.ListRepositoriesAsync("github_pat_FAKE-octo-1", Cancelled)).Failure,
+            (await provider.ReadRepositoryAsync("github_pat_FAKE-octo-1", hello, Cancelled)).Failure,
+            (await provider.ListPullRequestsAsync("github_pat_FAKE-octo-1", hello, Cancelled)).Failure,
+            (await provider.CreatePullRequestAsync("github_pat_FAKE-octo-1", hello, newPull, Cancelled)).Failure,
+        ];
+
+        Assert.All(await AllAsync(), Assert.Null);
+        bad = true;
+        var failures = await AllAsync();
+
+        HostingFailureKind? pulls = field == "html_url" ? HostingFailureKind.Malformed : null;
+        Assert.Equal([HostingFailureKind.Malformed, HostingFailureKind.Malformed, pulls, pulls], failures.Select(failure => failure?.Kind));
+        Assert.All(failures.OfType<HostingFailure>(), failure => Assert.Equal(("GitHub's answer could not be read.", HostingProvider.GitHub), (failure.Message, failure.Provider)));
+        Assert.Equal(8, recorder.Sent.Count);
+        Assert.All(log.Lines, line => Assert.DoesNotContain("h/s", line.Message, StringComparison.Ordinal));
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
