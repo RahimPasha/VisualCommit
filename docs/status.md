@@ -937,9 +937,24 @@ every commit.
   (`VisualCommit.App.Tests` ended last, 1 h 32 min 56 s of its own; 7a's gate took 1 h 12 min 18 s
   for 5,952); then 7a's `Phase7aChecksN` alone 7 of 7 and phase 3's walk-through alone 82 of 82
   (8 min 10 s). Their pictures are kept in `D:/Projects/Personal/phase7b-work/wpn-pictures/`
-  (`default/` and `alone/`); their comparison with 0.7's references and part N's inspection are
-  running (a Sonnet comparer, an Opus judge and an Opus inspector; output in
-  `D:/Projects/Personal/phase7b-work/cmp-wpn/`).
+  (`default/` and `alone/`). 13.9's comparison (a Sonnet comparer with `scripts/compare-pictures.py`
+  and SHA-256, an Opus judge who opened every changed pair with its crops; output in
+  `D:/Projects/Personal/phase7b-work/cmp-wpn/`, `judgement.md`): against 0.7's references, phases 0
+  to 7a, every picture there on both sides; changed 4 of phase 1's 43, 12 of phase 3's 265, 1 of
+  phase 4's 122, 5 of phase 5's 264, 17 of phase 6's 198 and 27 of 7a's 85 (phase 0's and 2's all the
+  same files); alone, 2 of 7a's 20 part N pictures and 19 of phase 3's 265; 7b's 71 earlier pictures
+  against WP-P's merge copies, 3 changed, and part N's 22 new. All 90 allowed, none failed: part A's
+  23 in the intro alone (the report's change), the fake's port (`a09b`, `b06a`), temporary folders'
+  names, carets, a held fetch's percentage and bar (phase 3's "any N"), the indeterminate bar's
+  segment, and anti-aliased edges and icons of 1 to 25 levels (7a's ruling 19); nothing in the git box
+  or right of x 485 in the status bar, no offer anywhere. `n04a` (7a's): 7 px one level apart, two
+  forms on the same code, the current one 7a's list's file, so WP-N changed nothing there.
+  Anti-aliasing forms not seen before, for the gate's inspection: `l27e-menu-item-tooltip-dark` (8 px,
+  the lane's curve, up to 22 levels) and phase 3's `15b3` (22 px up to 25 levels) beside `15b2`. Part
+  N's 22 pictures inspected (an Opus inspector, `part-n-inspection.md`): all pass. Its remarks: the
+  report's notes missed two carets (`n01a`, `n04c`), named at this commit; `n05b`'s GitLab error
+  wraps inside `origin/main` (whole, cosmetic; for the review before the gate); `n07a` and `n07b`
+  keep N5's failed status text, as the method's order gives it.
 - **The watcher's dispose test on CI** (2026-11-07, run 42386428809, `windows-latest`):
   `RepositoryWatcherTests.Nothing_is_raised_before_start_or_after_dispose` counted two `Changed`, not
   one, 2.9 s in, with seven other projects on the runner. The test runs the watcher on the wall clock
