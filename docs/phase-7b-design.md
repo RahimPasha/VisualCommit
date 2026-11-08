@@ -2869,6 +2869,15 @@ what was open:
 - For WP-P: the left panel gets the key of `AccountOf(Repository.Provider)`, null without one. For
   WP-N: `IHostingSession.cs` changed `NullRepositoryHosting`'s text and three docs.
 
+**Fixed at the review before the gate** (life-1): 9.5's `GetAsync` waits for its own provider's read at
+the start, not for the whole start. Each `Entry` has a `StartRead` signal, completed when that
+provider's `ReadAccountAsync` ends (whatever its outcome), at once after `accounts.json` is read when
+it has no record, and for all at the latest when the start ends; still at most 10 s on the session's
+clock, with 7a's warning. The reads run one after another, so an earlier provider's slot binds git
+while a later one's keychain read runs; its get waited on `_started` and went without the token after
+10 s. `_started`, `AccountChanged`'s order and timing, `BindsGit` and the bindings are unchanged.
+`HostingSessionStartTests`: with GitLab's read held, GitHub's get answers at once.
+
 ## 10. WP-A: accounts and sign-in (part A)
 
 ### 10.1 Goal and files

@@ -25,7 +25,7 @@ namespace VisualCommit.Hosting;
 /// </summary>
 public sealed class HostingSession : IHostingSession
 {
-    /// <summary>How long a request for a token waits for the start's keychain read (ruling 6); git's cannot come before it ends (<see cref="GetAsync"/>).</summary>
+    /// <summary>How long a request for a token waits for its provider's keychain read at the start (ruling 6); git's cannot come before it ends (<see cref="GetAsync"/>).</summary>
     internal static readonly TimeSpan CredentialWait = TimeSpan.FromSeconds(10);
 
     private readonly AppPaths _paths;
@@ -218,6 +218,11 @@ public sealed class HostingSession : IHostingSession
         }
         finally
         {
+            foreach (var entry in _entries)
+            {
+                entry.StartRead.TrySetResult();
+            }
+
             _started.TrySetResult();
         }
 
@@ -403,10 +408,13 @@ public sealed class HostingSession : IHostingSession
     /// <summary>
     /// git's <c>get</c> for a bound URL (7.6, ruling 6): the token while <paramref name="account"/>
     /// is the signed-in account of its provider and "Use for git over HTTPS" is on; else null. Never
-    /// UI. It waits for the start's read, at most 10 s by the session's clock, but through git no get
-    /// comes before that read ends: nothing is bound until the read has put the token in the slot
-    /// (7.4), and a tab's bindings also wait for its next refs read with the rules, so an operation
-    /// started meanwhile goes D82's order. The wait guards a direct call.
+    /// UI. It waits for its own provider's read at the start (at once without a record; at the latest
+    /// when the start ends), at most 10 s by the session's clock, never for another provider's: the
+    /// reads run one after another, and an earlier provider's account binds git as soon as its own
+    /// read has put the token in the slot (docs/phase-7b-design.md 9.5). Through git no get comes
+    /// before that provider's read ends: none of its URLs is bound until then (7.4), and a tab's
+    /// bindings also wait for its next refs read with the rules, so an operation started meanwhile
+    /// goes D82's order. The wait guards a direct call.
     /// </summary>
     public async Task<GitCredential?> GetAsync(AccountKey account, CancellationToken cancellationToken)
     {
@@ -418,7 +426,7 @@ public sealed class HostingSession : IHostingSession
 
         try
         {
-            await _started.Task.WaitAsync(CredentialWait, Clock, cancellationToken).ConfigureAwait(false);
+            await entry.StartRead.Task.WaitAsync(CredentialWait, Clock, cancellationToken).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -735,9 +743,24 @@ public sealed class HostingSession : IHostingSession
             _file = _accounts.Load();
             foreach (var entry in _entries)
             {
-                if (await ReadAccountAsync(entry, linked.Token).ConfigureAwait(false))
+                if (RecordOf(entry) is null)
                 {
-                    changed.Add(entry.Kind);
+                    entry.StartRead.TrySetResult();
+                }
+            }
+
+            foreach (var entry in _entries)
+            {
+                try
+                {
+                    if (await ReadAccountAsync(entry, linked.Token).ConfigureAwait(false))
+                    {
+                        changed.Add(entry.Kind);
+                    }
+                }
+                finally
+                {
+                    entry.StartRead.TrySetResult();
                 }
             }
 
@@ -753,7 +776,7 @@ public sealed class HostingSession : IHostingSession
     // a "keychain" record with the run's only keychain read for it (ruling 6).
     private async Task<bool> ReadAccountAsync(Entry entry, CancellationToken ct)
     {
-        if (_file.For(entry.Kind, entry.Host) is not { Login: { } login } record || string.IsNullOrWhiteSpace(login))
+        if (RecordOf(entry) is not { Login: { } login } record)
         {
             _log.Info($"{entry.Name}: no account on {entry.Host}.");
             return false;
@@ -792,6 +815,10 @@ public sealed class HostingSession : IHostingSession
         _log.Info($"{entry.Name} account {login} on {entry.Host}: {outcome}.");
         return true;
     }
+
+    // Under _gate: the provider's record with a login, as the start reads it; null without one.
+    private AccountRecord? RecordOf(Entry entry) =>
+        _file.For(entry.Kind, entry.Host) is { Login: { } login } record && !string.IsNullOrWhiteSpace(login) ? record : null;
 
     // Under _gate: the record written, then the slot replaced (7.5 step 7), so that whoever sees
     // the new slot finds its record on the disk. One provider's record; the others are kept.
@@ -1117,6 +1144,12 @@ public sealed class HostingSession : IHostingSession
             get => Volatile.Read(ref _slot);
             set => Volatile.Write(ref _slot, value);
         }
+
+        /// <summary>
+        /// Completed when the start's read of this provider's account has ended, whatever its outcome,
+        /// at once when it has no record, and at the latest when the start ends: what git's get waits for.
+        /// </summary>
+        public TaskCompletionSource StartRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
         /// <summary>The last check of git's refusal; under the session's lock.</summary>
         public Task? RefusalCheck { get; set; }
