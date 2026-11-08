@@ -11,8 +11,8 @@ namespace VisualCommit.Hosting.Tests;
 /// A tab's authors' avatars (docs/phase-7a-design.md 7.9, 7.13; D252, D291, D339, ruling 22): one
 /// commits page; the 20 lookups a repository has per app session, shared by its tabs, each from the
 /// author's own commit on the remote that holds it (a feature branch's, a fork's); an unknown e-mail
-/// not asked again; one whose commit GitHub lacks left out alone and asked again, answered 404 or
-/// 500 (D342, D394); the map
+/// not asked again; one whose commit GitHub lacks, in the listed repository or a fork, left out alone
+/// and asked again, answered 404 or 500 (D342, D394, D395); the map
 /// used within 7 days (no page asked) and read again after; images fetched
 /// without the token; nothing at all while signed out; the avatars gone with the GitHub remote, a
 /// run in flight then applying nothing, and kept when the remote names another GitHub repository.
@@ -188,6 +188,47 @@ public sealed class RepositoryHostingAvatarsTests
         using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(authors, "github_127.0.0.1_1_octo_hello.json")));
         var newbie = json.RootElement.GetProperty("authors").EnumerateArray().Single(author => author.GetProperty("email").GetString() == NewbieEmail);
         Assert.Equal((1010L, "newbie"), (newbie.GetProperty("userId").GetInt64(), newbie.GetProperty("login").GetString()));
+    }
+
+    [Theory]
+    [InlineData(404)]
+    [InlineData(500)]
+    public async Task A_fork_tabs_address_whose_commit_github_lacks_holds_up_no_other_on_the_fork(int status)
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        setup.Fake.UnknownRevisionBesideAuthorAnswers500 = status == 500;
+        var hosting = await setup.Thread.RunAsync(() => (RepositoryHosting)setup.Session.ForRepository(setup.Served.Hello.Path));
+        await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.Refs(("origin", "http://127.0.0.1:1/ada/hello.git")), UrlRewrites.None));
+        var sha = await PushNewbieAsync(setup, "ada/hello", "newbie-work");
+        var lost = new string('f', 40);
+
+        // A fork's tab: the lookups go to the fork, ada/hello, which is not the listed repository.
+        // A stale remote-tracking branch's commit, which GitHub lacks, comes first: answered 404
+        // "Not Found" as github.com answered such a commit on 2026-11-08 (D394; in the listed
+        // repository, a fork presumed the same), or 500 without a body as on 2026-10-30 and 31. The
+        // 404 is followed by one read of the fork, which reads, so only that address is left out
+        // (D395); A3 read the fork for the tab, so that read is a conditional one, answered 304.
+        // Newbie, after it on the fork, is still asked and found, as after the 500 (D342).
+        await ShowAsync(setup, hosting, new AuthorCommit("stranger@example.com", lost, AdaHello), new AuthorCommit(NewbieEmail, sha, AdaHello));
+
+        var first = setup.Fake.Requests.ToList().FindIndex(request => request.Route == "commits:ada/hello");
+        (string?, string, int)[] sent = status == 404
+            ? [
+                ("commits:ada/hello", $"sha={lost}&author=stranger%40example.com&per_page=1", 404),
+                ("repo:ada/hello", string.Empty, 304),
+                ("commits:ada/hello", $"sha={sha}&author=newbie%40example.com&per_page=1", 200),
+            ]
+            : [
+                ("commits:ada/hello", $"sha={lost}&author=stranger%40example.com&per_page=1", 500),
+                ("commits:ada/hello", $"sha={sha}&author=newbie%40example.com&per_page=1", 200),
+            ];
+        Assert.Equal(sent, setup.Fake.Requests.Skip(first).Where(request => request.Route is "commits:ada/hello" or "repo:ada/hello").Select(request => (request.Route, request.Query, request.Status)));
+        Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(setup.Paths.AvatarsDirectory, "authors", "github_127.0.0.1_1_octo_hello.json")));
+        var emails = json.RootElement.GetProperty("authors").EnumerateArray().Select(author => author.GetProperty("email").GetString()).ToList();
+        Assert.Contains(NewbieEmail, emails);
+        Assert.DoesNotContain("stranger@example.com", emails);
     }
 
     [Fact]

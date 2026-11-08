@@ -3942,13 +3942,16 @@ supported (D258).
     409 (an empty repository) ending the call with an empty map and no lookup; without a branch, no
     page. Then at most 20 lookups (`MaxAuthorLookups`) of the given `AuthorCommit`s whose e-mail the
     map lacks, in order, each `repos/{owner}/{name}/commits?sha={sha}&author={e-mail}&per_page=1` in
-    its own repository from its own commit. A lookup answered 409, or 404 in a repository other than
-    the listed one, leaves out the rest of that repository's in the call; one answered 422, a 5xx or
-    404 in the listed repository (a commit GitHub lacks: github.com answered it 500 with an empty body
+    its own repository from its own commit. A lookup answered 409 leaves out the rest of that
+    repository's in the call. GitHub's 404 is the same for a repository it does not give and a commit
+    it lacks, so one answered 404 in a repository other than the listed one, which no lookup of the
+    call has answered, is followed by one read of that repository (A3's request, a conditional one
+    where A3 read it in the session, as for a fork's tab; D395): one that does not read is left out
+    with the rest of its lookups in the call, one that reads is readable. One answered 422, a 5xx or
+    404 in a readable repository (a commit GitHub lacks: github.com answered it 500 with an empty body
     beside `author` on 2026-10-30 and 31, and 404 "Not Found" on 2026-11-08, D394) leaves out its own
-    address and the others go on (D342); any other failure stops them. In another repository that
-    404 cannot be told from a repository GitHub does not give, and is taken as such. An address left
-    out is not in the map, so it is asked again at a later run.
+    address and the others go on (D342); any other failure stops them. An address left out is not in
+    the map, so it is asked again at a later run.
   - Avatars' addresses are kept only when `https` on `avatars.githubusercontent.com` (github.com) or
     on the web address's own origin (the fake); any other makes the author unknown, with one warning
     per provider that names that address's scheme, host and port only.
