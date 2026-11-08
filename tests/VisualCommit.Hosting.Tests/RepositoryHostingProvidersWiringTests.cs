@@ -2,8 +2,11 @@ using System.Text.RegularExpressions;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
+using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -21,7 +24,8 @@ namespace VisualCommit.Hosting.Tests;
 /// refreshing the listed provider's list alone. Another organization's repository sends nothing after
 /// the sign-in's requests and stays unbound, and its fetch sends git no account's token: no
 /// <c>x-access-token</c> user and no "answered from the account." line until git's dialog is
-/// cancelled. On 0.4's lagged list.
+/// cancelled. Its row says when the held Azure DevOps account needs sign-in (D366), refused or
+/// kept for the last session only. On 0.4's lagged list.
 /// </summary>
 public sealed class RepositoryHostingProvidersWiringTests
 {
@@ -128,6 +132,89 @@ public sealed class RepositoryHostingProvidersWiringTests
         Assert.Equal(PullRequestsState.OtherOrganization, repository.HostingState.PullRequests);
         End(app, data, served);
     }
+
+    [AvaloniaFact]
+    public async Task Another_organizations_row_says_the_held_account_needs_sign_in_once_refused_and_after_a_session_only_token()
+    {
+        // D366 keeps D356's state for an Azure DevOps account that needs signing in again; the tab's
+        // row then says so (the review before the gate, ui-1). Refused with GitLab signed in, so that
+        // only the account's state changes; then at a start whose record says the token was kept for
+        // the last session only.
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("providers wiring");
+        var app = ShellDriver.StartWithTabs(data.Path, [served.Manifest.Path], gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
+        try
+        {
+            var repository = await app.WaitForRepositoryAsync();
+            await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.SignedOut, "the section signed out");
+            await app.SignInAsync(HostingProvider.GitLab, served.GitLabToken, cancellationToken: Cancelled);
+            await app.SignInAsync(HostingProvider.AzureDevOps, served.AzureDevOpsToken, served.Organization, Cancelled);
+            await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.OtherOrganization && repository.IsWatcherQuiet, "another organization's state");
+            await AssertRowAsync(app, repository, SignedInRow, SignedInToolTip);
+
+            served.AzureDevOps.Revoke(served.AzureDevOpsToken);
+            var listed = await app.Session.Services.Hosting.ListRepositoriesAsync(HostingProvider.AzureDevOps, Cancelled);
+            Assert.Equal(HostingFailureKind.BadCredentials, listed.Failure!.Kind);
+            await app.WaitForAsync(() => app.Session.Services.Hosting.AccountOf(HostingProvider.AzureDevOps) is { State: AccountState.NeedsSignIn }, "Azure DevOps' account needing sign-in");
+            Assert.Equal(AccountState.SignedIn, app.Session.Services.Hosting.AccountOf(HostingProvider.GitLab)!.State);
+            await AssertRowAsync(app, repository, NeedsSignInRow, NeedsSignInToolTip);
+            Assert.Equal(PullRequestsState.OtherOrganization, repository.HostingState.PullRequests);
+        }
+        finally
+        {
+            app.Dispose();
+        }
+
+        // The next start with Azure DevOps' token kept for the last session only (D287): nothing sent.
+        var accounts = new JsonAccountStore(new AppPaths(data.Path).AccountsFile, NullAppLog.Instance);
+        var file = accounts.Load();
+        var record = file.For(HostingProvider.AzureDevOps, served.AzureDevOps.Endpoints.Host)!;
+        Assert.Equal(AccountTokenStates.Refused, record.TokenState);
+        accounts.Save(file.With(record with { TokenState = AccountTokenStates.Session }));
+        var requests = served.AzureDevOps.Requests.Count;
+        app = ShellDriver.StartWithTabs(data.Path, [served.Manifest.Path], gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
+        var again = await app.WaitForRepositoryAsync();
+        await app.WaitForAsync(() => again.HostingState.PullRequests == PullRequestsState.OtherOrganization && again.IsWatcherQuiet, "another organization's state after the start");
+        var held = app.Session.Services.Hosting.AccountOf(HostingProvider.AzureDevOps)!;
+        Assert.Equal((AccountState.NeedsSignIn, AccountNoteKind.SessionEnded, "Fernhill-Labs"), (held.State, held.NoteKind, held.Account.Login));
+        await AssertRowAsync(app, again, NeedsSignInRow, NeedsSignInToolTip);
+        Assert.Equal(requests, served.AzureDevOps.Requests.Count);
+        End(app, data, served);
+    }
+
+    private const string SignedInRow = "In harbor-co; signed in to Fernhill-Labs";
+
+    private const string SignedInToolTip =
+        "This repository is in the Azure DevOps organization harbor-co; the signed-in account is in Fernhill-Labs, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts.";
+
+    private const string NeedsSignInRow = "In harbor-co; the account for Fernhill-Labs needs sign-in";
+
+    private const string NeedsSignInToolTip =
+        "This repository is in the Azure DevOps organization harbor-co; the account VisualCommit holds is in Fernhill-Labs and needs signing in again, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts.";
+
+    /// <summary>
+    /// The tab's one message row in the requests section, D356's, once it reads <paramref name="text"/>
+    /// (at most 5 s: the hosting's Changed is posted), then its kind and tooltip word for word; a
+    /// row that never reads it fails on the comparison, which shows what it reads.
+    /// </summary>
+    private static async Task AssertRowAsync(ShellDriver app, RepositoryViewModel repository, string text, string toolTip)
+    {
+        try
+        {
+            await app.WaitForAsync(() => MessageRows(repository).SingleOrDefault()?.Text == text, "D356's row", TimeSpan.FromSeconds(5));
+        }
+        catch (TimeoutException)
+        {
+            // The comparison below shows what the row reads instead.
+        }
+
+        var row = Assert.Single(MessageRows(repository));
+        Assert.Equal((PullRequestMessageKind.OtherOrganization, text, toolTip), (row.Kind, row.Text, row.ToolTip));
+        Assert.False(row.CanActivate);
+    }
+
+    private static List<PullRequestMessageRow> MessageRows(RepositoryViewModel repository) =>
+        [.. repository.LeftPanel.Rows.OfType<PullRequestMessageRow>()];
 
     /// <summary>"hosting7b" served on port 0 (D265): the clones' remotes name the fakes' ports, so the app recognises them.</summary>
     private static async Task<ServedHosting7b> ServeAsync()

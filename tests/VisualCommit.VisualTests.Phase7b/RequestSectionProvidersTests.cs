@@ -10,8 +10,8 @@ namespace VisualCommit.VisualTests.Phase7b;
 /// The left panel's requests section for each provider (docs/phase-7b-design.md 12.3, 12.7; D351,
 /// D355, D356; ruling 24): each state's title and rows on GitLab and Azure DevOps, 7a's placeholder
 /// without a hosted remote, <c>!21</c>, a draft and the fork labels, past 300, the filter on
-/// <c>!21</c> and <c>21</c> but never <c>#21</c>, a branch row's <c>!21</c>, D356's row and the
-/// section's open or closed state kept from GitHub's state to GitLab's.
+/// <c>!21</c> and <c>21</c> but never <c>#21</c>, a branch row's <c>!21</c>, D356's row (its words for a
+/// held account needing sign-in too, D366) and the section's open or closed state kept from GitHub's state to GitLab's.
 /// </summary>
 public sealed class RequestSectionProvidersTests
 {
@@ -204,6 +204,45 @@ public sealed class RequestSectionProvidersTests
         // Without the login the key's, lower-cased.
         panel.UpdatePullRequests(OtherOrganization(), account);
         Assert.Equal("In harbor-co; signed in to fernhill-labs", Messages(panel).Single().Text);
+    }
+
+    [Theory]
+    [InlineData(AccountNoteKind.Refused)]
+    [InlineData(AccountNoteKind.SessionEnded)]
+    public void D356_s_row_for_a_held_account_that_needs_sign_in_never_says_signed_in(AccountNoteKind note)
+    {
+        // D366 keeps the state for an account needing sign-in (refused, or kept for the last session
+        // only); the row and its tooltip then say so (the review before the gate, ui-1), as
+        // RepositoryViewModel passes the held account's state.
+        var account = new HostingAccount(new AccountKey(HostingProvider.AzureDevOps, AzureHost, "Fernhill-Labs"), "Fernhill-Labs", 0, "Fernhill-Labs", null, true);
+        var held = new AccountStatus(account, AccountState.NeedsSignIn, null, note, null);
+        var panel = Panel(MobileApp, Loaded(MobileApp), refs: MobileAppRefs());
+
+        panel.UpdatePullRequests(OtherOrganization(), held.Account.Key, held.Account.Login, held.State);
+
+        Assert.Equal(["v Pull requests 0", "  [OtherOrganization] In harbor-co; the account for Fernhill-Labs needs sign-in"], SectionLines(panel));
+        var row = Messages(panel).Single();
+        Assert.False(row.CanActivate);
+        Assert.False(row.ActivateCommand.CanExecute(null));
+        Assert.Equal(RefRowTarget.None, LeftPanelViewModel.TargetOf(row));
+        Assert.Equal(
+            "This repository is in the Azure DevOps organization harbor-co; the account VisualCommit holds is in Fernhill-Labs and needs signing in again, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts.",
+            row.ToolTip);
+        Assert.Empty(Rows(panel));
+        Assert.All(panel.Rows.OfType<RefItemRow>(), item => Assert.False(item.ShowsPullRequest));
+
+        // Signed in again: D356's signed-in texts, word for word; and back.
+        panel.UpdatePullRequests(OtherOrganization(), held.Account.Key, held.Account.Login, AccountState.SignedIn);
+        Assert.Equal(["v Pull requests 0", "  [OtherOrganization] In harbor-co; signed in to Fernhill-Labs"], SectionLines(panel));
+        Assert.Equal(
+            "This repository is in the Azure DevOps organization harbor-co; the signed-in account is in Fernhill-Labs, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts.",
+            Messages(panel).Single().ToolTip);
+        panel.UpdatePullRequests(OtherOrganization(), held.Account.Key, held.Account.Login, held.State);
+        Assert.Equal("In harbor-co; the account for Fernhill-Labs needs sign-in", Messages(panel).Single().Text);
+
+        // Without the login the key's, lower-cased.
+        panel.UpdatePullRequests(OtherOrganization(), held.Account.Key, accountState: held.State);
+        Assert.Equal("In harbor-co; the account for fernhill-labs needs sign-in", Messages(panel).Single().Text);
     }
 
     [Fact]

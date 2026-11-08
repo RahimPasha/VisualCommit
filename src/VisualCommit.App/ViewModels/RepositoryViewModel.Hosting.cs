@@ -218,9 +218,9 @@ public sealed partial class RepositoryViewModel
         if (!IsSummary)
         {
             // The listed repository's provider's account (docs/phase-7b-design.md 9.9), and its
-            // login in the server's spelling for D356's row (12.3).
-            var account = HostingState.Repository is { } listed ? _services?.Hosting.AccountOf(listed.Provider)?.Account : null;
-            LeftPanel.UpdatePullRequests(HostingState, account?.Key, account?.Login);
+            // login in the server's spelling and its state for D356's row (12.3, D366).
+            var held = HostingState.Repository is { } listed ? _services?.Hosting.AccountOf(listed.Provider) : null;
+            LeftPanel.UpdatePullRequests(HostingState, held?.Account.Key, held?.Account.Login, held?.State ?? AccountState.SignedIn);
         }
 
         // Signed out the rewrites are forgotten; a sign-in while the tab is open starts their read.

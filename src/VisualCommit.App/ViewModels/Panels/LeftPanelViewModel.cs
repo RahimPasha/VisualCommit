@@ -56,6 +56,9 @@ public partial class LeftPanelViewModel : ObservableObject
     /// <summary>The listed provider's account's login as <see cref="UpdatePullRequests"/> last gave it (D356's row).</summary>
     private string? _accountLogin;
 
+    /// <summary>Whether that account needs signing in again, as <see cref="UpdatePullRequests"/> last gave it (D366: D356's row then says so).</summary>
+    private bool _accountNeedsSignIn;
+
     public LeftPanelViewModel()
     {
         Rebuild();
@@ -117,7 +120,8 @@ public partial class LeftPanelViewModel : ObservableObject
     /// session's signed-in account, is not the one it was listed with (ruling 23).
     /// <paramref name="accountLogin"/> is that account's login in the server's spelling, which D356's
     /// row names (docs/phase-7b-design.md 12.3); without it the key's, which <see cref="AccountKey"/>
-    /// lower-cases.
+    /// lower-cases. <paramref name="accountState"/> is that account's state: D356's row says the
+    /// account needs sign-in when it does (D366, which keeps the state for such an account).
     /// </summary>
     /// <remarks>
     /// When one signed-in account replaces another, the hosting keeps the list it holds until the
@@ -125,11 +129,13 @@ public partial class LeftPanelViewModel : ObservableObject
     /// it stays tagged with the account that listed it, and a failure of the new account's first
     /// list then shows no rows.
     /// </remarks>
-    public void UpdatePullRequests(RepositoryHostingState state, AccountKey? account = null, string? accountLogin = null)
+    public void UpdatePullRequests(
+        RepositoryHostingState state, AccountKey? account = null, string? accountLogin = null, AccountState accountState = AccountState.SignedIn)
     {
         ArgumentNullException.ThrowIfNull(state);
         HostingState = state;
         _accountLogin = accountLogin ?? account?.Login;
+        _accountNeedsSignIn = accountState == AccountState.NeedsSignIn;
         if (state.PullRequests is PullRequestsState.NoHostedRemote or PullRequestsState.SignedOut or PullRequestsState.OtherOrganization
             || state.Repository is null)
         {
@@ -452,12 +458,18 @@ public partial class LeftPanelViewModel : ObservableObject
                 return;
             case PullRequestsState.OtherOrganization when state.Repository is { } other:
                 // D356: the remote's organization as written, the account's login in its own case;
-                // no list, no sign-in, no click (12.3).
+                // no list, no sign-in, no click (12.3). An account that needs signing in again
+                // (D366) is not called signed in.
                 var account = _accountLogin ?? string.Empty;
-                rows.Add(Message(
-                    PullRequestMessageKind.OtherOrganization,
-                    OperationTexts.OtherOrganization(other.OwnerRoot, account),
-                    OperationTexts.OtherOrganizationToolTip(other.OwnerRoot, account)));
+                rows.Add(_accountNeedsSignIn
+                    ? Message(
+                        PullRequestMessageKind.OtherOrganization,
+                        OperationTexts.OtherOrganizationNeedsSignIn(other.OwnerRoot, account),
+                        OperationTexts.OtherOrganizationNeedsSignInToolTip(other.OwnerRoot, account))
+                    : Message(
+                        PullRequestMessageKind.OtherOrganization,
+                        OperationTexts.OtherOrganization(other.OwnerRoot, account),
+                        OperationTexts.OtherOrganizationToolTip(other.OwnerRoot, account)));
                 return;
             case PullRequestsState.Loading when list is null:
                 rows.Add(Message(PullRequestMessageKind.Loading, OperationTexts.LoadingRequests(provider)));
