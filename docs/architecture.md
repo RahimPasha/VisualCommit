@@ -3944,9 +3944,11 @@ supported (D258).
     map lacks, in order, each `repos/{owner}/{name}/commits?sha={sha}&author={e-mail}&per_page=1` in
     its own repository from its own commit. A lookup answered 409, or 404 in a repository other than
     the listed one, leaves out the rest of that repository's in the call; one answered 422, a 5xx or
-    404 in the listed repository (a commit GitHub lacks: github.com answers it 500 with an empty body
-    beside `author`) leaves out its own address and the others go on (D342); any other failure stops
-    them. An address left out is not in the map, so it is asked again at a later run.
+    404 in the listed repository (a commit GitHub lacks: github.com answered it 500 with an empty body
+    beside `author` on 2026-10-30 and 31, and 404 "Not Found" on 2026-11-08, D394) leaves out its own
+    address and the others go on (D342); any other failure stops them. In another repository that
+    404 cannot be told from a repository GitHub does not give, and is taken as such. An address left
+    out is not in the map, so it is asked again at a later run.
   - Avatars' addresses are kept only when `https` on `avatars.githubusercontent.com` (github.com) or
     on the web address's own origin (the fake); any other makes the author unknown, with one warning
     per provider that names that address's scheme, host and port only.
@@ -5416,7 +5418,7 @@ in `HoldNext`, `FailNext` and the records:
 | `pulls:o/r` | `GET …/pulls` | paged, number descending; `state` (`open` by default), `head` as `owner:ref`, `base` |
 | `create:o/r` | `POST …/pulls` | 201, author the token's login, `refs/pull/<n>/head` written; 422 "Validation Failed" for a missing title, a base or head that is no branch, an open pull request with that head and base ("A pull request already exists for …") or nothing ahead ("No commits between …"); 403 "Resource not accessible by personal access token" with `X-Accepted-GitHub-Permissions: pull_requests=write` for a fine-grained token whose login cannot push to the base |
 | `update:o/r` | `PATCH …/pulls/<n>` | 200; `{"state":"closed"}` closes |
-| `commits:o/r` | `GET …/commits` | one `git log` from `sha` (the default branch when absent), filtered by `author` (an e-mail, or a login through `LinkEmail`), paged; a revision git cannot resolve 404 "Not Found", or beside `author` 500 with an empty body (both as github.com answers, D342); 409 "Git Repository is empty." |
+| `commits:o/r` | `GET …/commits` | one `git log` from `sha` (the default branch when absent), filtered by `author` (an e-mail, or a login through `LinkEmail`), paged; a revision git cannot resolve 404 "Not Found" on list-commits' documentation, beside `author` too (as github.com answered in the live run of 2026-11-08, D394; with `UnknownRevisionBesideAuthorAnswers500` set, beside `author` 500 with an empty body, its answer of 2026-10-30 and 31, D342); 409 "Git Repository is empty." |
 | `avatar:<id>` | `GET avatars/u/<id>` (any query) | the user's `AvatarBytes`, without auth |
 | `page:o/r` | `GET o/r`, `o/r/pulls`, `o/r/pull/<n>` (and `page:settings` for `settings/…`) | `text/html`, `<!doctype html><title>…</title>` |
 | `git:o/r` | git, over TCP only | `AuthRemoteServer`'s host mode (below) |
