@@ -364,6 +364,12 @@ Test steps: `windows-latest` 39 min 7 s (35 min 59 s), `macos-latest` 45 min 0 s
 `ubuntu-latest` 6 min 11 s (4 min 59 s), the containers 7 min 26 s and 8 min 46 s (5 min 14 s and
 6 min 15 s), each under four fifths. Not rerun (CLAUDE.md: the owner's).
 
+[42434720040](https://github.com/RahimPasha/VisualCommit/actions/runs/42434720040) on `07c0445`
+(the watcher's fix merged at `abc6df7`, with status): all five jobs green. Jobs and Test steps:
+`windows-latest` 39 min 21 s (36 min 26 s), `macos-latest` 37 min 58 s (35 min 37 s),
+`ubuntu-latest` 8 min 3 s (5 min 59 s), the containers 7 min 23 s and 7 min 15 s (5 min 15 s and
+5 min 26 s), each under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -525,8 +531,8 @@ reviewed and verified (D388 recorded at `cf82d50`; Notes, "WP-N's build"); its d
 owner's identity alone and none of the sandboxes' names or tokens. CI's run on `8cb5ecc`
 (42386428809) failed two older tests (CI section); the watcher's dispose test was a race in the
 test, fixed with one product fix and merged at `abc6df7` (Notes, "The watcher's dispose test on
-CI"); its CI run, 42434720040 on `07c0445`, is running, and the WP-N merge is pushed once it has
-ended (a newer push would cancel it). The lead is running 13.9's runs on `cf82d50` through
+CI"); its CI run, 42434720040 on `07c0445`, is green in all five jobs, and the WP-N merge is
+pushed after it. The lead is running 13.9's runs on `cf82d50` through
 `scripts/heavy-run.sh` (started 2026-11-07 about 19:00): the lagged list, then the whole default
 run (0.4, D245), then 7a's part N (`Phase7aChecksN`) and phase 3's walk-through on their own
 (script: the session's `wpn-runs.sh`), comparing their pictures by region with 0.7's
