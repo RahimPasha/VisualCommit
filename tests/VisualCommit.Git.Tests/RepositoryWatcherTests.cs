@@ -13,7 +13,19 @@ namespace VisualCommit.Git.Tests;
 /// tests watch a plain folder and write files into it; what a repository's own git calls do is
 /// tested against real repositories. The tests of the quiet period and the maximum delay hold the
 /// watcher's clock (<see cref="ManualTimeProvider"/>) and move it only once the watcher has
-/// counted every event they wait for, so that a slow machine cannot split a burst (D160).
+/// counted every event they wait for, so that a slow machine cannot split a burst (D160). The two
+/// that move it in two steps, to a tick before the quiet period's end and then to its end, also
+/// wait until the watcher has counted nothing more for a while in real time: a later notice of a
+/// counted file (Windows reports a new file, then its write) that landed between the steps would
+/// start the quiet period again a tick before its end. The test of the maximum delay moves it in
+/// steps too, but there a late notice only puts off the quiet period's end, which the test never
+/// reaches, and not the maximum delay's. The three tests of Dispose hold it too, so that a slow
+/// machine cannot end a quiet period before Dispose. Two dispose the watcher with a change counted
+/// just before: in one the change is due when Dispose comes, its timer's callback queued but not
+/// run, in the other it is still inside its quiet period, and its timer has not fallen due. The
+/// third disposes it inside a raise, once the raise has passed its checks and before its ignore
+/// check. Those three move the clock once, by the maximum delay, which a late notice of a counted
+/// write cannot put off.
 /// </summary>
 public class RepositoryWatcherTests
 {
@@ -106,6 +118,13 @@ public class RepositoryWatcherTests
         }
 
         Assert.True(await counted.WaitForAsync(names, Timeout), $"The watcher did not count events for {counted.Missing(names)}.");
+
+        // Each name counted once is not the whole burst: on Windows a new file's write follows its
+        // creation, tens of milliseconds later on a loaded machine and some 400 ms with a stall,
+        // and other systems send other sequences. A notice that landed between the two advances
+        // below would start the quiet period again a tick before its end, and the second advance
+        // would raise nothing. So the clock moves only once the burst has ended in real time.
+        Assert.True(await counted.WaitForQuietAsync(Settle, Timeout), $"The watcher did not go {Settle.TotalMilliseconds:F0} ms without counting an event within {Timeout.TotalSeconds:F0} s of the burst ({counted.Total} counted in all).");
         Assert.Equal(0, changed.Count);
 
         clock.Advance(Quiet - TimeSpan.FromTicks(1));
@@ -127,7 +146,9 @@ public class RepositoryWatcherTests
     {
         // IsQuiet, which the harnesses wait for before they mark a check's next calls: a burst
         // waiting for its quiet period and one being raised are not quiet. On a clock the test
-        // holds; a folder made gives one event, so no late notice starts a second burst.
+        // holds; a folder made gives one event, so no late notice starts a second burst. Should a
+        // system send a second, the clock moves only once the watcher has counted nothing more for
+        // a while in real time, as in the test above.
         using var folder = new TempDirectory("watch");
         var clock = new ManualTimeProvider();
         using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, time: clock);
@@ -139,6 +160,7 @@ public class RepositoryWatcherTests
 
         Directory.CreateDirectory(folder.Combine("made"));
         Assert.True(await counted.WaitForAsync(["made"], Timeout), $"The watcher did not count an event for {counted.Missing(["made"])}.");
+        Assert.True(await counted.WaitForQuietAsync(Settle, Timeout), $"The watcher did not go {Settle.TotalMilliseconds:F0} ms without counting an event within {Timeout.TotalSeconds:F0} s of making the folder ({counted.Total} counted in all).");
         Assert.False(watcher.IsQuiet, "A change waits for its quiet period, and the watcher is quiet.");
         clock.Advance(Quiet - TimeSpan.FromTicks(1));
         Assert.False(watcher.IsQuiet);
@@ -181,24 +203,152 @@ public class RepositoryWatcherTests
     [Fact]
     public async Task Nothing_is_raised_before_start_or_after_dispose()
     {
+        // On a clock the test holds, whose timers queue their callbacks as the system's queue theirs
+        // for the thread pool: no quiet period ends unless the test moves the clock. On the system's
+        // clock, a busy machine that held the test up for a quiet period between a counted write
+        // and Dispose (inside the write, or after it) got that write raised before Dispose, a
+        // second raise (CI run 42386428809).
         using var folder = new TempDirectory("watch");
-        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet);
+        var clock = new QueuingClock();
+        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, time: clock);
         var changed = new Counter(watcher);
+        var counted = new CountedEvents(watcher);
 
+        // The watcher's maximum delay: a burst counted before the clock moves this far is due,
+        // also when a second notice of a write (Windows reports a new file, then its write) came
+        // after the first and started its quiet period again.
+        var due = RepositoryWatcher.DefaultMaximumDelay;
+
+        // Had the watcher counted this write, moving the clock here would raise it.
         File.WriteAllText(folder.Combine("before-start"), "x");
         await Task.Delay(Quiet * 2, TestCancelled);
+        clock.Advance(due);
+        clock.RunQueued();
         Assert.Equal(0, changed.Count);
 
         watcher.Start();
         File.WriteAllText(folder.Combine("while-watching"), "x");
+        Assert.True(await counted.WaitForAsync(["while-watching"], Timeout), $"The watcher did not count an event for {counted.Missing(["while-watching"])}.");
+        clock.Advance(due);
+        clock.RunQueued();
         Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
 
-        // A change just before Dispose, still waiting for its quiet period, is dropped too.
+        // A change just before Dispose is dropped too: counted, and its timer's callback queued
+        // but not run when Dispose comes, as on a busy machine, where the system's timer can run
+        // a callback queued before its Dispose after it. A change still inside its quiet period
+        // when Dispose comes is the next test's.
         File.WriteAllText(folder.Combine("just-before-dispose"), "x");
+        Assert.True(await counted.WaitForAsync(["just-before-dispose"], Timeout), $"The watcher did not count an event for {counted.Missing(["just-before-dispose"])}.");
+        Assert.False(watcher.IsQuiet, "The watcher is quiet: the change just before Dispose does not wait to be raised.");
+        clock.Advance(due);
         watcher.Dispose();
+        clock.RunQueued();
+
+        // Nor is a change after Dispose raised, however far the clock moves.
         File.WriteAllText(folder.Combine("after-dispose"), "x");
         await Task.Delay(Settle, TestCancelled);
+        clock.Advance(due);
+        clock.RunQueued();
         Assert.Equal(1, changed.Count);
+    }
+
+    [Fact]
+    public async Task A_watcher_disposed_while_a_change_waits_for_its_quiet_period_drops_it()
+    {
+        // The other change just before Dispose: counted, and still inside its quiet period when
+        // Dispose comes, so its timer has queued nothing. The clock moves only after Dispose. A
+        // Dispose that raised what still waits would raise this change; the test above, whose
+        // change is due when Dispose comes, cannot reliably see that: it does only when a second
+        // notice of the write lands between its Advance and its Dispose. On the clock the test
+        // holds, as there.
+        using var folder = new TempDirectory("watch");
+        var clock = new QueuingClock();
+        using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, time: clock);
+        var changed = new Counter(watcher);
+        var counted = new CountedEvents(watcher);
+
+        // As in the test above: a burst counted before the clock moves this far is due.
+        var due = RepositoryWatcher.DefaultMaximumDelay;
+
+        watcher.Start();
+        File.WriteAllText(folder.Combine("while-watching"), "x");
+        Assert.True(await counted.WaitForAsync(["while-watching"], Timeout), $"The watcher did not count an event for {counted.Missing(["while-watching"])}.");
+        clock.Advance(due);
+        clock.RunQueued();
+        Assert.True(await changed.WaitForAsync(1, Timeout), "Changed was not raised.");
+
+        File.WriteAllText(folder.Combine("just-before-dispose"), "x");
+        Assert.True(await counted.WaitForAsync(["just-before-dispose"], Timeout), $"The watcher did not count an event for {counted.Missing(["just-before-dispose"])}.");
+        Assert.False(watcher.IsQuiet, "The watcher is quiet: the change just before Dispose does not wait to be raised.");
+        watcher.Dispose();
+        clock.Advance(due);
+        clock.RunQueued();
+
+        // Nor is a change after Dispose raised, however far the clock moves.
+        File.WriteAllText(folder.Combine("after-dispose"), "x");
+        await Task.Delay(Settle, TestCancelled);
+        clock.Advance(due);
+        clock.RunQueued();
+        Assert.Equal(1, changed.Count);
+    }
+
+    [Fact]
+    public async Task A_watcher_disposed_just_before_a_bursts_ignore_check_drops_the_burst()
+    {
+        // Dispose does not take the raise's lock, so it can run whole between the raise's last
+        // check of Dispose and the ignore check: the test hook disposes the watcher there, in the
+        // first raise. The ignore check is then asked with the lifetime's token, cancelled, and
+        // answers as the git runner does, with a cancel: the burst is dropped. Read from the
+        // disposed source, the token would throw ObjectDisposedException, which the watcher takes
+        // as "git cannot say": a Debug line, and the burst raised after Dispose. Asked with a token
+        // that is not cancelled, the ignore check says every path is ignored, so only that would
+        // raise the burst. On the clock the test holds, as in the tests above; the git folder is a
+        // folder of its own where nothing is written, so the burst is the working tree's alone.
+        using var gitFolder = new TempDirectory("watch-git");
+        using var workingTree = new TempDirectory("watch-tree");
+        var clock = new QueuingClock();
+        var log = new ListLog();
+        var asked = new ConcurrentQueue<CancellationToken>();
+        using var watcher = new RepositoryWatcher(
+            gitFolder.Path,
+            gitFolder.Path,
+            log,
+            quietPeriod: Quiet,
+            workingDirectory: workingTree.Path,
+            allIgnored: (_, token) =>
+            {
+                asked.Enqueue(token);
+                return token.IsCancellationRequested ? Task.FromCanceled<bool>(token) : Task.FromResult(true);
+            },
+            time: clock);
+        var changed = new Counter(watcher);
+        var counted = new CountedEvents(watcher);
+        var raises = 0;
+        watcher.RaisePassedChecks = () =>
+        {
+            if (Interlocked.Increment(ref raises) == 1)
+            {
+                watcher.Dispose();
+            }
+        };
+
+        // As in the tests above: a burst counted before the clock moves this far is due.
+        var due = RepositoryWatcher.DefaultMaximumDelay;
+
+        watcher.Start();
+        File.WriteAllText(workingTree.Combine("just-before-dispose"), "x");
+        Assert.True(await counted.WaitForAsync(["just-before-dispose"], Timeout), $"The watcher did not count an event for {counted.Missing(["just-before-dispose"])}.");
+
+        // The raise runs on this thread, within the run of the queue, and Dispose within it.
+        clock.Advance(due);
+        clock.RunQueued();
+
+        Assert.True(Volatile.Read(ref raises) == 1, $"{Volatile.Read(ref raises)} raises passed their checks, not one.");
+        Assert.True(changed.Count == 0, $"The burst was raised {changed.Count} times after the watcher was disposed before its ignore check.");
+        Assert.True(asked.Count == 1, $"The ignore check was asked {asked.Count} times, not once.");
+        Assert.True(asked.Single().IsCancellationRequested, "The ignore check was asked with a token that is not cancelled.");
+        Assert.DoesNotContain(log.Entries, entry => entry.Message.Contains("Could not ask git which changed files it ignores", StringComparison.Ordinal));
+        Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Error);
     }
 
     [Fact]
@@ -441,10 +591,11 @@ public class RepositoryWatcherTests
         }
     }
 
-    /// <summary>The names of the events the watcher counted in a burst, through its test hook (<see cref="RepositoryWatcher.EventCounted"/>).</summary>
+    /// <summary>The names of the events the watcher counted in a burst, and how many it counted, through its test hook (<see cref="RepositoryWatcher.EventCounted"/>).</summary>
     private sealed class CountedEvents
     {
         private readonly ConcurrentDictionary<string, bool> _names = new(StringComparer.Ordinal);
+        private int _total;
 
         public CountedEvents(RepositoryWatcher watcher) =>
             watcher.EventCounted = name =>
@@ -453,7 +604,12 @@ public class RepositoryWatcherTests
                 {
                     _names[name] = true;
                 }
+
+                Interlocked.Increment(ref _total);
             };
+
+        /// <summary>How many events the watcher has counted, those without a name (lost events) included.</summary>
+        public int Total => Volatile.Read(ref _total);
 
         /// <summary>Waits, polling, until an event for each of <paramref name="names"/> has been counted; false if that does not happen within <paramref name="timeout"/>.</summary>
         public async Task<bool> WaitForAsync(IReadOnlyCollection<string> names, TimeSpan timeout)
@@ -472,6 +628,71 @@ public class RepositoryWatcherTests
             return true;
         }
 
+        /// <summary>
+        /// Waits, polling, until the watcher has counted no event for <paramref name="quiet"/> in
+        /// real time; false if that does not happen within <paramref name="timeout"/>. An event is
+        /// seen at the first poll after it was counted, and the quiet measured starts there (or at
+        /// the call, for those counted before it), so it is never longer than the real one.
+        /// </summary>
+        public async Task<bool> WaitForQuietAsync(TimeSpan quiet, TimeSpan timeout)
+        {
+            var waited = Stopwatch.StartNew();
+            var quietFor = Stopwatch.StartNew();
+            var seen = Total;
+            while (quietFor.Elapsed < quiet)
+            {
+                if (waited.Elapsed > timeout)
+                {
+                    return false;
+                }
+
+                await Task.Delay(10, TestCancelled);
+                var total = Total;
+                if (total != seen)
+                {
+                    seen = total;
+                    quietFor.Restart();
+                }
+            }
+
+            return true;
+        }
+
         public string Missing(IEnumerable<string> names) => string.Join(", ", names.Where(name => !_names.ContainsKey(name)));
+    }
+
+    /// <summary>
+    /// A clock the test holds (<see cref="ManualTimeProvider"/>) whose timers queue their callbacks
+    /// when they fall due, as the system's timers queue theirs for the thread pool: a callback runs
+    /// only when the test runs the queue, on its thread, and one queued before its timer was
+    /// disposed still runs after, as the system's can.
+    /// </summary>
+    private sealed class QueuingClock : TimeProvider
+    {
+        private readonly ManualTimeProvider _clock = new();
+        private readonly ConcurrentQueue<Action> _queued = new();
+
+        public override long TimestampFrequency => _clock.TimestampFrequency;
+
+        public override TimeZoneInfo LocalTimeZone => _clock.LocalTimeZone;
+
+        public override long GetTimestamp() => _clock.GetTimestamp();
+
+        public override DateTimeOffset GetUtcNow() => _clock.GetUtcNow();
+
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period) =>
+            _clock.CreateTimer(_ => _queued.Enqueue(() => callback(state)), null, dueTime, period);
+
+        /// <summary>Moves the clock; each timer that falls due on the way queues its callback.</summary>
+        public void Advance(TimeSpan by) => _clock.Advance(by);
+
+        /// <summary>Runs the queued callbacks on this thread, in the order they were queued.</summary>
+        public void RunQueued()
+        {
+            while (_queued.TryDequeue(out var callback))
+            {
+                callback();
+            }
+        }
     }
 }
