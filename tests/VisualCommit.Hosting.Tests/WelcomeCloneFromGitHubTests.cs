@@ -517,13 +517,13 @@ public sealed class WelcomeCloneFromGitHubTests
         var log = app.LogMark();
         await AssertAsksAsync(app, Scenarios.HostingUrl("octo/hello", served.GitHub.Port), parent, readsConfiguration: true);
 
-        var calls = app.GitCalls().Where(call => call.Sequence > mark).Select(call => call.CommandText).ToList();
-        Assert.Equal(includeReads, calls.Count(call => call.StartsWith(IncludeRead, StringComparison.Ordinal)));
         var lines = app.LogLinesSince(log);
-        Assert.Contains(lines, line => line.Contains($"Cloning: a conditional include of git's configuration {reason}; the clone goes without the account's token (D82's order).", StringComparison.Ordinal));
-        Assert.DoesNotContain(lines, line => line.Contains("Clone: ", StringComparison.Ordinal) && line.Contains("URLs bound to the account", StringComparison.Ordinal));
         Assert.True(File.Exists(helper), "Git did not ask the user's own helper.");
         Assert.Contains($"host=127.0.0.1:{served.GitHub.Port}", File.ReadAllText(helper), StringComparison.Ordinal);
+        Assert.DoesNotContain(lines, line => line.Contains("Clone: ", StringComparison.Ordinal) && line.Contains("URLs bound to the account", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains($"Cloning: a conditional include of git's configuration {reason}; the clone goes without the account's token (D82's order).", StringComparison.Ordinal));
+        var calls = app.GitCalls().Where(call => call.Sequence > mark).Select(call => call.CommandText).ToList();
+        Assert.Equal(includeReads, calls.Count(call => call.StartsWith(IncludeRead, StringComparison.Ordinal)));
     }
 
     /// <summary>A rule that rewrites the fake's URLs to the user alice, as a multi-account set-up keeps it in an included file.</summary>
