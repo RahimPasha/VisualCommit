@@ -156,7 +156,7 @@ public sealed class RequestOperationsProvidersTests
         var fork = served.GitLab.Project(Scenarios.Hosting7bWebAppFork);
         await served.WebApp.GitAsync("--git-dir", fork.BarePath!, "branch", served.GitLabToken, "fix-typo");
         served.GitLab.AddMergeRequest(served.GitLab.Project(Scenarios.Hosting7bWebApp), "Echoed", "ada", served.GitLabToken, "main", source: fork);
-        var calls = await app.QuietCallMarkAsync();
+        var mark = await app.QuietStepMarkAsync();
 
         await webApp.Operations.RefreshPullRequestsAsync();
         await app.WaitForAsync(() => webApp.HostingState.PullRequests is PullRequestsState.Failed || webApp.HostingState.List?.PullRequests.Count == 4, "the refresh's answer");
@@ -169,7 +169,7 @@ public sealed class RequestOperationsProvidersTests
         Assert.Empty(webApp.HostingState.ByRef);
         // The section keeps the rows of the list it showed (7a's design 17 item 3), none of the echoed answer.
         Assert.Equal([23, 22, 21], webApp.LeftPanel.Rows.OfType<VisualCommit.App.ViewModels.Panels.PullRequestRow>().Select(row => row.Number));
-        GitCallBudget.AssertAtMost([.. app.GitCalls().Where(call => call.Sequence > calls)], 0, "the echoed list");
+        await app.AssertNoStepCallsAsync(mark, "the echoed list");
         End(app, data, served);
     }
 
@@ -329,14 +329,14 @@ public sealed class RequestOperationsProvidersTests
         using var data = new TempDirectory("requests providers");
         using var app = await OpenAsync(data, served, served.MobileApp, HostingProvider.AzureDevOps);
         var repository = app.Session.Shell.ActiveTab.Repository!;
-        var mark = await app.QuietCallMarkAsync();
+        var mark = await app.QuietStepMarkAsync();
         var (azure, gitLab) = (served.AzureDevOps.Requests.Count, served.GitLab.Requests.Count);
 
         await repository.Operations.CheckOutPullRequestAsync(Request(repository, 13));
         await app.WaitForIdleAsync();
         await app.WaitForWatchersQuietAsync();
 
-        GitCallBudget.AssertAtMost([.. app.GitCalls().Where(call => call.Sequence > mark)], 0, "!13's checkout");
+        await app.AssertNoStepCallsAsync(mark, "!13's checkout");
         Assert.Equal("main", await GitAsync(served.MobileApp, "symbolic-ref", "--short", "HEAD"));
         Assert.Equal((azure, gitLab), (served.AzureDevOps.Requests.Count, served.GitLab.Requests.Count));
         End(app, data, served);
