@@ -547,10 +547,14 @@ pushed after it. 13.9's runs on `cf82d50` are done (Notes, "WP-N's merge runs"):
 default run and the two runs alone passed, the lagged list but part P's `Check_P11` under the lag
 (an exact budget of 0 that a late whole refresh broke). CI's run on the merge, 42437572741, failed
 D388's test on macOS alone: git 2.56.0 over curl 8.23.0 loses the URL's user (Notes, "D388's test
-on macOS"). Both are being fixed in `wip/p7b-macos-prompt` (test only; D389 to record); after its
-merge the lead runs the touched classes plain and lagged, pushes, reads CI, and finishes 13.9's
-picture comparison and part N's inspection (running), then steps 13 and 14; then WP-LIVE's second
-stage (`Check_3`, the owner told) and the review before the gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
+on macOS"). Both are fixed and merged at `98cdd86` (D389, D390; plan risk 43), and its classes pass
+plain and lagged; 13.9's picture comparison and part N's inspection passed (Notes, "WP-N's merge
+runs"). Next: read CI's run on the push of `98cdd86` and the docs after it (the CI section; the
+macOS job above all, and its `git-url-user.txt` among the job's pictures, which should read Lost).
+If it is green, tick steps 9 (WP-C's, WP-S's and D388's tests, green in every job), 13 and 14.
+Meanwhile WP-LIVE's second stage (design 15, `Check_3`, `wip/p7b-live2`) is built; it runs with the
+tokens only with the owner told, its offline classes first on the same commit. Then the review
+before the gate (step 17), WP-R and the gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
 `c5ba918` is green; CI's run on the fix's merge, 42386428809, failed the two older tests above.
@@ -918,9 +922,20 @@ every commit.
   of git runs and asserts the one prompt it gives, git's own `remote get-url`, the server's two
   requests and that no credential request reached the broker) and a risk with D389; no product
   change, since hardening reopens design 16.3, which is the owner's (Waiting on the owner). The fix
-  is being built in `D:/Projects/Personal/vc-wt/p7b-macos` (`wip/p7b-macos-prompt`, from `93999d6`)
-  by an Opus fixer, three Opus reviewers by lens and an Opus verifier, proven on the laptop's three
-  gits (2.56.0.windows.4, windows.2, and windows.2 over curl 8.23).
+  was built in `D:/Projects/Personal/vc-wt/p7b-macos` (`wip/p7b-macos-prompt`, from `93999d6`) by an
+  Opus fixer, reviewed by three Opus reviewers by lens (loosening, security, harness) and checked by
+  an Opus verifier, and merged at `98cdd86` (D389; D390 for the budgets in the next note).
+  `GitUrlUser` measures once per test process whether the tests' git keeps a URL's user (`Kept`) or
+  loses it (`Lost`) and writes the measure to `artifacts/visual/git-url-user.txt`, which CI uploads
+  for each job (the security reviewer's finding: the change had removed CI's only sign of such a
+  git). The D278 test asserts the one prompt the measure predicts, bob's URL from `git remote
+  get-url`, the server's exact requests (none, then bob, both 401) and no broker credential line;
+  the octo fetch test asserts such a line, so that check cannot pass empty; its other assertions
+  are kept word for word. The verifier ran `SignInBindingsWindowTests` 11 of 11 on the laptop's
+  2.56.0.windows.4 (Kept), on 2.56.0.windows.2 as shipped (Kept) and on windows.2 over curl 8.23's
+  library (Lost, macOS's form), reproduced the old test's failure at `93999d6` on the last (2 of 2
+  failed at line 246, as on macOS), and an inverted prediction failed both cases on every git. Notes
+  in `D:/Projects/Personal/phase7b-work/verify/ci-42437572741/fix/`.
 - **WP-N's merge runs** (2026-11-07, 18:58 to 21:15 on the laptop, on `cf82d50`'s code, through
   `bash scripts/heavy-run.sh`, one command at a time, the session's `wpn-runs.sh`): the lagged list
   (1500 ms) green but one test: phase 2's 25 of 25, App.Tests' eight classes 66, Phase6's 21, the 7a
@@ -931,8 +946,17 @@ every commit.
   a whole refresh into any step (the watcher's `IsQuiet` cannot know a held event), and the recorded
   rule is to let such refreshes through only whole (7a design 5.3, D280, D281), as phase 6's checks
   do with `GitCallBudget.AssertOnlyWholeRefreshes(await app.QuietCallsSinceAsync(mark), …)`; the
-  same exact 0 stands in `RequestOperationsProvidersTests.cs:172` and `:339`. All three go to that
-  form in the same fix as D388's test above. Then the whole default run, 7,817 tests, 7,813 passed,
+  same exact 0 stands in `RequestOperationsProvidersTests.cs:172` and `:339`. The fixer of D388's
+  test (above) stopped at that form: the queue's refresh after an operation runs once the
+  operation's scope has ended, so its calls carry no operation id, and it would have let a refresh
+  of the step's own through. The three went instead to `AssertNoStepCallsAsync` (D390), which sets
+  aside only as many whole refreshes as the watchers asked for and fails on any operation; with the
+  lag P11's step saw 7 calls, one whole refresh, the watchers' count 1, in three of three runs, and
+  passes; a refresh added after !13's checkout fails with and without the lag. The merge's runs
+  (2026-11-07, 23:13 to 23:23, on `98cdd86`, git 2.56.0.windows.4, through
+  `bash scripts/heavy-run.sh`): `SignInBindingsWindowTests` with `RequestOperationsProvidersTests`
+  25 of 25, `GitCallBudgetTests` with `RepositoryWatcherQuietTests` 10 of 10 and part P's
+  `Check_P11` 2 of 2, each plain and with the 1500 ms lag; the measure read Kept. Then the whole default run, 7,817 tests, 7,813 passed,
   4 skipped (the real keychains' tests), none failed, in 1 h 37 min 45 s at four projects at once
   (`VisualCommit.App.Tests` ended last, 1 h 32 min 56 s of its own; 7a's gate took 1 h 12 min 18 s
   for 5,952); then 7a's `Phase7aChecksN` alone 7 of 7 and phase 3's walk-through alone 82 of 82
@@ -1343,8 +1367,12 @@ every commit.
   D380 the lead's rulings on wave 1's adversarial check, D381 and D382 on its second round, D383
   the lead's on WP-S's hunts (an account switch within a provider drops the tab's list and A3
   answer), D384 the lead's at WP-LIVE's stage 1 (the screen hides GitLab's sandbox namespace), D385
-  stage 1's measurement (a GitLab token's Project: Read among its user permissions too). The next
-  decision number is D386.
+  stage 1's measurement (a GitLab token's Project: Read among its user permissions too), and the
+  lead's: D386 (git's calls at below-normal priority on Windows, held by a job), D387 (the sign-in
+  dialog finds another provider's token inside a pasted value), D388 (a network operation inside
+  D290's window binds once the URL rules are known), D389 (D278's checks read the URL's user by the
+  measured git; risk 43) and D390 (a check of no git call sets aside only the watchers' refreshes).
+  The next decision number is D391.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -1354,8 +1382,8 @@ every commit.
   in a terminal the banner can read "Conflicts resolved" for about 0.3 s and one refresh. Removing
   it takes a status read that checks the in-progress files before and after `git status`; no
   requirement asks for it. Whether to build it is the owner's.
-- **A git that loses the URL's user** (Notes, "D388's test on macOS"; D389 and its risk, once
-  recorded; no answer needed for the gate): git 2.56.0 without git's own fix `76524c2604bc`, over a
+- **A git that loses the URL's user** (Notes, "D388's test on macOS"; D389, plan risk 43, design
+  16.3's bullet on D275; no answer needed for the gate): git 2.56.0 without git's own fix `76524c2604bc`, over a
   curl that strips the user from its effective URL (curl 8.23.0, CI's macOS Homebrew git today),
   asks for credentials without the URL's user, so the broker's refusal of another user (D275) does
   not see bob. Where Select's drop misses a spelling (design 16.3's accepted GitHub cases: a reserved
