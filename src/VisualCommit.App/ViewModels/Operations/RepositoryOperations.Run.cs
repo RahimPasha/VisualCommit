@@ -458,8 +458,12 @@ public sealed partial class RepositoryOperations
     /// (one <c>git config --null --get-regexp ^url\.</c>) and binds the remotes' URLs through them:
     /// <paramref name="hosting"/>'s <c>BindingsFor</c>, the rules the tab's hosting applies, so a URL
     /// the rules give another user or host is not bound (D278). A failed read binds nothing. A cancel
-    /// or the tab's closing meanwhile binds nothing; the caller then starts nothing. Each way logs one
-    /// Debug line with the count.
+    /// or the tab's closing meanwhile binds nothing; the caller then starts nothing. The account
+    /// signed out meanwhile binds nothing too, and the caller starts the operation unbound, as in a
+    /// signed-out tab. One Debug line gives the count whenever it took the tab's bindings or began its
+    /// own read (0 when that read failed or was cancelled); none when the wait ended by a cancel, the
+    /// tab's closing or a sign-out, nor for a tab whose refs are not read yet, which binds nothing
+    /// (its toolbar and the bulk runs start no network operation then).
     /// </summary>
     private async Task<IReadOnlyList<CredentialBinding>> BindingsOnceRulesReadAsync(OperationText text, VisualCommit.Hosting.IHostingSession hosting, CancellationToken cancellation)
     {

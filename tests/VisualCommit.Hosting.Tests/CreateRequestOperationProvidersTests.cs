@@ -31,8 +31,9 @@ namespace VisualCommit.Hosting.Tests;
 /// (D382), nothing posted; <c>manifest/</c> starts nothing and asks
 /// nothing, also when its sign-in lands in another organization; a head in another repository whose
 /// read 404s named with the base; signed out, that provider's sign-in first, and a create pressed at
-/// once after it, or with the tab's rules read held or failed, pushing with the account's token
-/// (D388); the tripwire after a create that pushed. On 0.4's lagged list.
+/// once after it (not always inside D290's window), or with the tab's rules read held or failed
+/// (always inside it), pushing with the account's token (D388); the tripwire after a create that
+/// pushed. On 0.4's lagged list.
 /// </summary>
 public sealed class CreateRequestOperationProvidersTests
 {
@@ -617,12 +618,18 @@ public sealed class CreateRequestOperationProvidersTests
     }
 
     /// <summary>
-    /// D388 (D290's window; WP-N hunt 3, the tokens lens): signed out, Create on <c>local-work</c>,
-    /// the stacked sign-in in the provider's dialog, Create as soon as the form has its base, before
-    /// the tab's first read of the URL rules has answered. The push binds the account's URL from the
-    /// rules as they are: git's requests carry <c>x-access-token</c> alone (by git's version, part N's
-    /// "Git's version"), nothing is prompted, the broker logs one bound line and the request is
-    /// created. Before D388 the push copied the tab's empty bindings and git asked for a user name.
+    /// The hunt's case (D290's window; WP-N hunt 3, the tokens lens): signed out, Create on
+    /// <c>local-work</c>, the stacked sign-in in the provider's dialog, Create as soon as the form has
+    /// its base. The push binds the account's URL from the rules as they are: git's requests carry
+    /// <c>x-access-token</c> alone (by git's version, part N's "Git's version"), nothing is prompted,
+    /// the broker logs one bound line and the request is created. Before D388 a push started before
+    /// the tab's first read of the URL rules had answered copied the tab's empty bindings and git
+    /// asked for a user name. Through the app the press does not always come inside that window: the
+    /// tab's read may answer before the push starts (in WP-N's product review 2 of 15 runs of the three
+    /// at-once tests did not reach it), and such a run passes on the code before D388 too. So this
+    /// proves that the at-once flow pushes with the account's token; D388's proof is the held and
+    /// failed variants (<see cref="Signed_out_a_create_waits_for_the_held_rules_read_or_reads_them_itself_when_it_failed"/>),
+    /// which are always inside the window.
     /// </summary>
     [AvaloniaTheory]
     [InlineData(HostingProvider.GitLab)]

@@ -3673,15 +3673,29 @@ is clean; CI's five jobs are green, each Test step under four fifths of its limi
   an account wants the rewrites and binds git, no read has answered) binds once the rules are known:
   `RunAsync` waits for the tab's read in flight (`UrlRulesReadAsync`, no git call) and takes the
   hosting's bindings, or with none in flight (not started, or failed) reads them itself through
-  D332's code, now `BindingsOnceRulesReadAsync`; one Debug line gives the count. The auto-fetch's
-  tick waits for a later one. The tab's own bindings stay empty until its read (D290). Files outside
-  13.1: `RepositoryOperations.Run.cs`, `RepositoryViewModel.Hosting.cs`, `AutoFetchScheduler.cs`,
-  Hosting.Tests' `HeldRulesTab.cs` (a tab built by hand whose rules reads a proxy holds or fails)
-  and `SignInBindingsWindowTests.cs`. Tests: `CreateRequestOperationProvidersTests`' create at once
-  through the app and with the read held or failed (GitLab, Azure DevOps); `SignInBindingsWindowTests`
-  for 7a's GitHub (the same three), a fetch right after a sign-in held and failed, a remote the
-  rules give `bob@` bound to no token (D278) and the auto-fetch. `SignInBindingsWindowTests` starts
-  the app through `ShellDriver`, so it joins 0.4's lagged list.
+  D332's code, now `BindingsOnceRulesReadAsync`. One Debug line gives the count whenever the
+  bindings were taken or the rules read. The wait also ends with a cancel or the tab's closing, and
+  then nothing starts, or with the account signed out meanwhile, and then the operation starts
+  unbound, as signed out; neither logs a count line. A tab whose refs are not read yet binds nothing
+  (its toolbar and the bulk runs start no network operation then). The auto-fetch's tick starts no
+  fetch inside the window: it waits for the tab's read in flight, or with none asks the tab for one
+  (`RequestUrlRules`), at most once an interval and only when a fetch is due, with the Debug line
+  `{repo}: auto-fetch not started, the URL rules are read again`; a later tick fetches with the
+  account's credentials. Without that ask a failed read kept GitLab's and Azure DevOps' auto-fetch
+  waiting until the refs changed, since their hostings change no more once the list has answered
+  (WP-N's review of the lead's fixes, finding 1). The tab's own bindings stay empty until its read
+  (D290). Files outside 13.1: `RepositoryOperations.Run.cs`, `RepositoryViewModel.Hosting.cs`,
+  `AutoFetchScheduler.cs`, Hosting.Tests' `HeldRulesTab.cs` (a tab built by hand whose rules reads a
+  proxy holds or fails, or fails once let go) and `SignInBindingsWindowTests.cs`. Tests:
+  `CreateRequestOperationProvidersTests`' create at once through the app and with the read held or
+  failed (GitLab, Azure DevOps); `SignInBindingsWindowTests` for 7a's GitHub (the same three), a
+  fetch right after a sign-in held and failed, a remote the rules give `bob@` bound to no token
+  (D278) and the auto-fetch: with the read held; after the tab's only read failed once the list had
+  answered (GitLab, Azure DevOps: the due tick reads, the next fetches with the token); with every
+  read failing (one read an interval, no fetch). The three creates at once through the app do not
+  always press inside the window (in that review 2 of 15 runs did not, and such a run passes on the
+  code before D388 too), so the held and failed variants are D388's proof. `SignInBindingsWindowTests`
+  starts the app through `ShellDriver`, so it joins 0.4's lagged list.
 - The lead's rulings R2 to R4 on hunt 3 (2026-11-07), in part N's checks and, for R4, part P's and
   part B's (files outside 13.1: `Phase7bChecks.P.cs`, `Phase7bChecks.B.cs`). R2: `BaseRecorder` (part
   N's helpers) records a form's `IsReadingBase` and `BaseText` from its add to `DialogHost.Open` on.

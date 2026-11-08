@@ -5,7 +5,8 @@
 // `git config --null --get-regexp ^url\.`, D281, D290) and gives them to the hosting; a succeeded
 // network operation of its queue refreshes the pull requests (D289). A dashboard row's view model
 // in summary mode holds none (NullRepositoryHosting) until a tab adopts it. Until the first read
-// answers after a sign-in, a network operation awaits the read in flight (D388).
+// answers after a sign-in, a network operation awaits the read in flight, and the auto-fetch's
+// tick asks for one when none is (D388).
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.Core.Git;
@@ -53,10 +54,30 @@ public sealed partial class RepositoryViewModel
     /// rewrites and none of the tab's reads has answered since (a sign-in with none signed in, or the
     /// tab's first load signed in), so its hosting's bindings are empty. A network operation started
     /// now binds once the rules are known (<see cref="UrlRulesReadAsync"/>, or its own read), and the
-    /// auto-fetch waits for a later tick. On the UI thread. False signed out, in summary mode (a
-    /// dashboard row reads the rules itself, D332), once read, closed, or with no account binding git.
+    /// auto-fetch's tick starts no fetch (<see cref="RequestUrlRules"/>). On the UI thread. False signed
+    /// out, in summary mode (a dashboard row reads the rules itself, D332), once read, closed, or with
+    /// no account binding git.
     /// </summary>
     internal bool AwaitsUrlRules => !IsSummary && !_disposed && Hosting.WantsUrlRewrites && !_rulesRead && _services?.Hosting.BindsGit == true;
+
+    /// <summary>
+    /// For the auto-fetch's tick inside D290's window (<see cref="AwaitsUrlRules"/>, D388), on the UI
+    /// thread: with no read in flight, which after a failed read stays so until the next refs read or
+    /// hosting change, starts the tab's read of the URL rules (one
+    /// <c>git config --null --get-regexp ^url\.</c>), whose answer ends the window, and returns true.
+    /// False, starting nothing, outside the window, while a read is in flight, or before the first
+    /// refs read.
+    /// </summary>
+    internal bool RequestUrlRules()
+    {
+        if (!AwaitsUrlRules || !IsHostingQuiet || Refs is not { } refs)
+        {
+            return false;
+        }
+
+        ReadRules(refs);
+        return true;
+    }
 
     /// <summary>
     /// Waits for the tab's URL-rewrites reads in flight (D388), on the UI thread, until one has given

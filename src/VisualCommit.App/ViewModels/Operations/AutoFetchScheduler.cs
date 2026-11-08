@@ -14,7 +14,9 @@ namespace VisualCommit.App.ViewModels.Operations;
 /// interval is above 0, the repository has a remote, its queue is idle, no dialog is open, no
 /// other queue and no bulk run's slot fetches from its common git folder (<see cref="CommonFolderBusy"/>,
 /// docs/phase-6-design.md 4.3), the tab is not inside D290's window with an account binding git
-/// (<c>RepositoryViewModel.AwaitsUrlRules</c>, D388), and the last fetch (a fetch or pull that succeeded, an auto-fetch started, or the moment opening
+/// (<c>RepositoryViewModel.AwaitsUrlRules</c>, D388: there the tick waits for the tab's read of the
+/// URL rules in flight, or with none asks for one, at most once an interval, and a later tick
+/// fetches), and the last fetch (a fetch or pull that succeeded, an auto-fetch started, or the moment opening
 /// the repository began) is at least the interval ago, it starts the fetch of every remote, each
 /// call with <c>--no-auto-maintenance</c>, as the queue's background operation: it never prompts
 /// (<see cref="PromptMode.Deny"/>), is never pre-empted, ends by itself when its connection
@@ -153,12 +155,23 @@ public sealed class AutoFetchScheduler : IDisposable
             || repository.Queue.Waiting > 0
             || IsDialogOpen()
             || now - tracked.LastFetch < interval
-            || CommonFolderBusy(repository)
-
-            // Inside D290's window the tab's bindings are empty until its URL rules read answers:
-            // a later tick fetches with the account's (D388).
-            || repository.AwaitsUrlRules)
+            || CommonFolderBusy(repository))
         {
+            return;
+        }
+
+        // Inside D290's window the tab's bindings are empty until its URL rules read answers (D388):
+        // no fetch starts. With no read in flight (the last one failed, and the hosting may not change
+        // again) the tick asks the tab for one, at most once an interval, as often as it would have
+        // fetched; a later tick fetches with the account's credentials.
+        if (repository.AwaitsUrlRules)
+        {
+            if ((tracked.RulesAsked is not { } asked || now - asked >= interval) && repository.RequestUrlRules())
+            {
+                tracked.RulesAsked = now;
+                Log.Debug($"{repository.Name}: auto-fetch not started, the URL rules are read again");
+            }
+
             return;
         }
 
@@ -292,6 +305,9 @@ public sealed class AutoFetchScheduler : IDisposable
     private sealed class Tracked(AutoFetchScheduler owner, RepositoryViewModel repository, DateTimeOffset opened)
     {
         private long _lastFetch = opened.UtcTicks;
+
+        /// <summary>When a tick last asked the tab to read its URL rules inside D290's window (D388); on the UI thread.</summary>
+        public DateTimeOffset? RulesAsked { get; set; }
 
         public DateTimeOffset LastFetch
         {

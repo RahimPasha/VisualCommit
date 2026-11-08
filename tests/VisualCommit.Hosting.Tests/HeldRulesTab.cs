@@ -443,14 +443,18 @@ internal sealed class HeldRulesTab : IAsyncDisposable
 /// <c>IGraphAreaPageHost.Lifetime</c>); an operation's own read at its start (D332, D388) under the
 /// operation's cancellation, and that read runs. Failing the tab's reads for good, not once,
 /// keeps the window open: after a failed read the tab reads again at its hosting's next change while
-/// the rules are not known, which would close it, or be in flight, when the operation starts. Every
-/// other call goes straight to the real repository (as App.Tests' <c>HeldReads</c>).
+/// the rules are not known, which would close it, or be in flight, when the operation starts.
+/// <see cref="Hold"/> with <c>failTabReadOnRelease</c> fails the one tab read it held, once let go,
+/// and lets every later read run: the case where the tab's only read since the sign-in failed after
+/// its hosting had stopped changing. Every other call goes straight to the real repository (as
+/// App.Tests' <c>HeldReads</c>).
 /// </summary>
 internal class RulesReads : DispatchProxy
 {
     private IGitRepository _inner = null!;
     private TaskCompletionSource _gate = Released();
     private volatile bool _failTabReads;
+    private int _failHeldTabRead;
     private int _reads;
     private int _waiting;
 
@@ -469,8 +473,16 @@ internal class RulesReads : DispatchProxy
         return (proxy, reads);
     }
 
-    /// <summary>From now on, the reads wait for <see cref="Release"/>.</summary>
-    public void Hold() => _gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    /// <summary>
+    /// From now on, the reads wait for <see cref="Release"/>. With <paramref name="failTabReadOnRelease"/>
+    /// the first of the tab's reads that waited fails once let go, as git's would, without running git;
+    /// the reads after it run.
+    /// </summary>
+    public void Hold(bool failTabReadOnRelease = false)
+    {
+        Volatile.Write(ref _failHeldTabRead, failTabReadOnRelease ? 1 : 0);
+        _gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+    }
 
     /// <summary>The reads that wait run now, and those that come later run at once.</summary>
     public void Release() => _gate.TrySetResult();
@@ -516,6 +528,11 @@ internal class RulesReads : DispatchProxy
             finally
             {
                 Interlocked.Decrement(ref _waiting);
+            }
+
+            if (cancellationToken.CanBeCanceled && cancellationToken == TabLifetime && Interlocked.Exchange(ref _failHeldTabRead, 0) == 1)
+            {
+                throw new GitException(HeldRulesTab.RulesRead, 128, "fatal: bad config line 1 in file .git/config");
             }
         }
 
