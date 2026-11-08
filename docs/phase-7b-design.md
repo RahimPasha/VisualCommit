@@ -4241,28 +4241,28 @@ stage 1 only; where the build differs or settles what was open:
 settles what was open:
 - `Check_3_the_app_signs_in_clones_lists_pushes_and_creates` follows `Check_2b_probes` in both orders
   (Azure DevOps' before `Check_4`). Its steps are `AppDrivenAsync(api, reach, hosting, appRequests,
-  ownRequests)`, which the live method calls with the service's guard, API and `AppOptions` (GitLab's
-  `AppOptions(requests, reach)` serves Check_2 too). `LiveApp` gains `SignInThroughDialogAsync`,
-  `ChooseAsync` (the button `FromButtonOf(p)`, the row by `FullName` without case, Choose filling
-  `row.CloneUrl`), `CloneChosenAsync`, `LoadSectionAsync`
-  (`RequestsTitle(p)`, a row per listed request or `NoOpenRequests(p)`) and `CreateThroughFormAsync`
-  (`DialogTitleOf(p)`, head and base in the sandbox, GitLab's `SentTitle`, `Created(p, n, true)` as the
-  create operation's message, the POST 200 or 201, `ByRef` a draft). Read back: Azure DevOps `isDraft`,
-  `status`, `title`, both ref names, `createdBy.id`; GitLab `draft`, `state`, `TitleFor(title, true)`,
-  both branches. The clean-up is Check_2b's.
+  ownRequests)`, which the live method calls with the service's guard, API and `AppOptions`. `LiveApp`
+  gains `SignInThroughDialogAsync`, `ChooseAsync` (`FromButtonOf(p)`, the row by `FullName` without
+  case, Choose filling `row.CloneUrl`), `CloneChosenAsync`, `LoadSectionAsync` (`RequestsTitle(p)`, a
+  row per listed request or `NoOpenRequests(p)`) and `CreateThroughFormAsync` (`DialogTitleOf(p)`,
+  GitLab's `SentTitle`, `Created(p, n, true)` as the create operation's message, the POST 200 or 201,
+  `ByRef` a draft). Read back: Azure DevOps `isDraft`, `status`, `title`, both refs, `createdBy.id`;
+  GitLab `draft`, `state`, `TitleFor(title, true)`, both branches. The clean-up is Check_2b's.
 - `LiveSteps.Sums`: 570 s each, `Own(3 + 4) + App(4)` and the clone, whose 120 s the requests' load
   shares (`CloneLeft`): a load step of its own would pass 600 s.
 - The guard is not widened: both rehearsals' requests pass it. The seam is internal:
-  `LiveReach.AzureDevOpsRehearsal(fake, o, p, r)` and `GitLabRehearsal(fake)` take only
-  `http://127.0.0.1:<port>/` and judge paths, methods, queries and credentials as the services' guards
-  do, on that origin alone; `Host`, `Scheme` and `Origin` follow it, and `ReachProblems` compares the
-  guard's scheme. `AzureDevOps(…)` and `GitLab()` are unchanged. `LiveServiceApi.BaseAddress` gives
+  `LiveReach.AzureDevOpsRehearsal(fake, o, p, r)` and `GitLabRehearsal(fake)`. The base constructor
+  checks any origin a guard is built with, so a guard's constructor called directly also takes
+  `http://127.0.0.1:<port>/` alone; on it paths, methods, queries and credentials are judged as on the
+  service, and `Host`, `Scheme`, `Origin` and `ReachProblems` follow it. `AzureDevOps(…)` and
+  `GitLab()` are unchanged. A pin reads every `*.cs` of the project but the guard's and the safety
+  tests' for a rehearsal's factory or a guard's constructor. `LiveServiceApi.BaseAddress` gives
   `ReadSandboxAsync`'s `remoteUrl` check its scheme (https on the service).
 - `LiveSafetyTests.Check_3_s_steps_pass_over_the_fake_of_Azure_DevOps` and `…_GitLab` (about 15 s
-  each) serve the fakes on port 0 and run `AppDrivenAsync` with a run screened as the live one, the
-  fake's token, the API and the app behind the rehearsal's guard; they assert run.txt without
-  the token, the organization or the namespace, each step's note, no refusal, the request abandoned or
-  closed and deleted, the branch gone. `LiveScreenTests` screens Check_3's notes.
+  each) run `AppDrivenAsync` over the fakes on port 0 behind the rehearsal's guard, screened as the
+  live run, with the fake's token; they assert run.txt without the token, the organization or the
+  namespace, each step's note, no refusal, the request abandoned or closed and deleted (out of the
+  fake's list, a 204), the branch gone. `LiveScreenTests` screens Check_3's notes.
 - For the lead: Check_3 is built, never run with the tokens; on the service its risks are the dialog's
   sign-in and the browser's list, which a fake only imitates.
 

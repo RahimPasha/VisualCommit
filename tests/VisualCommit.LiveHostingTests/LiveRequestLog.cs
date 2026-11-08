@@ -418,9 +418,16 @@ internal abstract class LiveReach
     /// </summary>
     private readonly Uri? _rehearsal;
 
+    /// <summary>
+    /// A guard with the service's origin (<paramref name="rehearsal"/> null) or a rehearsal's. Every
+    /// constructor of a guard comes through here, so a rehearsal's origin is checked wherever a guard
+    /// is built, not only in <see cref="AzureDevOpsRehearsal"/> and <see cref="GitLabRehearsal"/>: a
+    /// guard that admits an origin other than the service's admits a fake's loopback origin alone.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="rehearsal"/> is not <c>http://127.0.0.1:&lt;port&gt;/</c>.</exception>
     protected LiveReach(Uri? rehearsal)
     {
-        _rehearsal = rehearsal;
+        _rehearsal = rehearsal is null ? null : RehearsalOrigin(rehearsal);
     }
 
     public abstract HostingProvider Provider { get; }
@@ -452,11 +459,11 @@ internal abstract class LiveReach
     /// </summary>
     /// <exception cref="ArgumentException"><paramref name="fake"/> is not <c>http://127.0.0.1:&lt;port&gt;/</c>.</exception>
     internal static AzureDevOpsReach AzureDevOpsRehearsal(Uri fake, string organization, string project, string repository) =>
-        new(organization, project, repository, AzureDevOpsReach.DrawMadeUpOrganization(), RehearsalOrigin(fake));
+        new(organization, project, repository, AzureDevOpsReach.DrawMadeUpOrganization(), fake ?? throw new ArgumentNullException(nameof(fake)));
 
     /// <summary>GitLab's guard with <paramref name="fake"/>'s loopback origin in place of the service's (<see cref="AzureDevOpsRehearsal"/>).</summary>
     /// <exception cref="ArgumentException"><paramref name="fake"/> is not <c>http://127.0.0.1:&lt;port&gt;/</c>.</exception>
-    internal static GitLabReach GitLabRehearsal(Uri fake) => new(RehearsalOrigin(fake));
+    internal static GitLabReach GitLabRehearsal(Uri fake) => new(fake ?? throw new ArgumentNullException(nameof(fake)));
 
     /// <summary>A fake's origin as a rehearsal takes it: <c>http</c>, the loopback address <c>127.0.0.1</c> written so, a port of its own, no user, nothing after the root.</summary>
     /// <exception cref="ArgumentException">Any other origin, a service's or a name's that a resolver could send elsewhere.</exception>

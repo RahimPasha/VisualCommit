@@ -3434,15 +3434,96 @@ public sealed partial class LiveSafetyTests
         Assert.Equal(2, LiveRequestLog.ReachProblems([Sent(gitLabService)], gitLabService).Count);
     }
 
+    /// <summary>
+    /// A guard built with an origin of its own, however it is built (the factories, either guard's
+    /// constructor called directly), takes a fake's <c>http://127.0.0.1:&lt;port&gt;/</c> alone: the base
+    /// constructor checks it, so no guard admits a service's origin, another name's or plain http to a
+    /// service in place of the one it was made for. Without an origin it is the service's guard.
+    /// </summary>
+    [Fact]
+    public void A_guard_built_directly_with_an_origin_of_its_own_takes_a_fake_s_loopback_origin_alone()
+    {
+        foreach (var bad in new[] { "https://dev.azure.com/", "https://gitlab.com/", "http://gitlab.com/", "http://dev.azure.com:47123/", "http://fake.example:47123/", "http://localhost:1/", "http://127.0.0.1/", "https://127.0.0.1:47123/", "http://u@127.0.0.1:47123/", "http://127.0.0.1:47123/api/v4/", "http://[::1]:47123/" })
+        {
+            Assert.Throws<ArgumentException>(() => new AzureDevOpsReach(Organization, Project, Repository, MadeUpOrganization, new Uri(bad)));
+            Assert.Throws<ArgumentException>(() => new GitLabReach(new Uri(bad)));
+        }
+
+        Assert.Throws<ArgumentNullException>(() => LiveReach.AzureDevOpsRehearsal(null!, Organization, Project, Repository));
+        Assert.Throws<ArgumentNullException>(() => LiveReach.GitLabRehearsal(null!));
+
+        var azure = new AzureDevOpsReach(Organization, Project, Repository, MadeUpOrganization, new Uri(FakeOrigin));
+        var gitLab = new GitLabReach(new Uri(FakeOrigin));
+        Assert.Equal(("http://127.0.0.1:47123", "127.0.0.1:47123", "http"), (azure.Origin, azure.Host, azure.Scheme));
+        Assert.Equal(("http://127.0.0.1:47123", "127.0.0.1:47123", "http"), (gitLab.Origin, gitLab.Host, gitLab.Scheme));
+        var azureService = new AzureDevOpsReach(Organization, Project, Repository, MadeUpOrganization, null);
+        var gitLabService = new GitLabReach(null);
+        Assert.Equal(("https://dev.azure.com:443", "dev.azure.com", "https"), (azureService.Origin, azureService.Host, azureService.Scheme));
+        Assert.Equal(("https://gitlab.com:443", "gitlab.com", "https"), (gitLabService.Origin, gitLabService.Host, gitLabService.Scheme));
+    }
+
+    /// <summary>
+    /// No file of the live project but this one and the guard's own (<c>LiveRequestLog.cs</c>, where
+    /// the factories are) builds a rehearsal's guard or a guard by its constructor: every <c>*.cs</c> of
+    /// the project is read, so a file added later is too. The live methods build theirs with
+    /// <see cref="LiveReach.AzureDevOps"/> and <see cref="LiveReach.GitLab"/> alone.
+    /// </summary>
     [Fact]
     public void No_live_method_builds_a_rehearsal_s_guard()
     {
         var root = typeof(LiveSafetyTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().First(attribute => attribute.Key == "RepoRoot").Value!;
-        foreach (var file in new[] { "AzureDevOpsLiveTests.cs", "GitLabLiveTests.cs", "GitHubLiveTests.cs", "LiveProbes.cs", "LiveRun.cs", "LiveSettings.cs", "LiveScreen.cs", "AzureDevOpsLiveApi.cs", "GitLabLiveApi.cs", "GitHubLiveApi.cs" })
+        var project = Path.Combine(root, "tests", "VisualCommit.LiveHostingTests");
+        var files = Directory.EnumerateFiles(project, "*.cs", SearchOption.AllDirectories)
+            .Where(file => !Path.GetRelativePath(project, file).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0].Equals("bin", StringComparison.OrdinalIgnoreCase)
+                && !Path.GetRelativePath(project, file).Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)[0].Equals("obj", StringComparison.OrdinalIgnoreCase))
+            .Where(file => Path.GetFileName(file) is not ("LiveSafetyTests.cs" or "LiveRequestLog.cs"))
+            .ToList();
+        Assert.Contains(files, file => Path.GetFileName(file) == "AzureDevOpsLiveTests.cs");
+        Assert.Contains(files, file => Path.GetFileName(file) == "GitLabLiveTests.cs");
+        Assert.Contains(files, file => Path.GetFileName(file) == "AssemblyInfo.cs");
+        foreach (var file in files)
         {
-            var text = File.ReadAllText(Path.Combine(root, "tests", "VisualCommit.LiveHostingTests", file));
-            Assert.DoesNotContain("Rehearsal(", text, StringComparison.Ordinal);
+            var built = BuildsAGuard(File.ReadAllText(file));
+            Assert.True(built is null, $"{Path.GetFileName(file)} builds a guard other than through LiveReach.AzureDevOps(…) or LiveReach.GitLab(): {built}");
         }
+    }
+
+    /// <summary>What <see cref="BuildsAGuard"/> sees: a rehearsal's factory, either guard's constructor named or target-typed; not the services' factories.</summary>
+    [Theory]
+    [InlineData("var reach = LiveReach.GitLabRehearsal(origin);", true)]
+    [InlineData("var reach = LiveReach.AzureDevOpsRehearsal(origin, o, p, r);", true)]
+    [InlineData("var reach = new GitLabReach(new Uri(\"https://other.example/\"));", true)]
+    [InlineData("var reach = new AzureDevOpsReach (o, p, r, m, origin);", true)]
+    [InlineData("GitLabReach reach = new(new Uri(\"https://other.example/\"));", true)]
+    [InlineData("AzureDevOpsReach reach = new (o, p, r, m, origin);", true)]
+    [InlineData("private static GitLabReach Reach() => new(origin);", true)]
+    [InlineData("LiveReach reach = new GitLabReach(null);", true)]
+    [InlineData("private static GitLabReach Reach(Uri origin)\n        => new(origin);", true)]
+    [InlineData("private GitLabReach Reach => new(origin);", true)]
+    [InlineData("private readonly AzureDevOpsReach? _reach = new(o, p, r, m, origin);", true)]
+    [InlineData("var reach = LiveReach.GitLab();", false)]
+    [InlineData("var reach = LiveReach.AzureDevOps(organization, project, repository);", false)]
+    [InlineData("GitLabReach reach = LiveReach.GitLab();", false)]
+    [InlineData("var store = new LiveRequestLog.Store();", false)]
+    [InlineData("internal static HostingOptions Options(LiveRequestLog.Store requests, LiveReach reach) => new(requests, reach);", false)]
+    public void The_pin_sees_a_guard_built_by_a_rehearsal_s_factory_or_a_constructor(string text, bool builds)
+    {
+        Assert.Equal(builds, BuildsAGuard(text) is not null);
+    }
+
+    /// <summary>
+    /// The first text in <paramref name="text"/> that builds a guard other than through the services'
+    /// factories, or null: a rehearsal's factory, <c>new</c> naming a guard's type, or a target-typed
+    /// <c>new(</c> given to a variable, field, property or expression-bodied method of a guard's type. A
+    /// text pin is not a parser (a block body's <c>return new(…)</c> passes it); the base constructor's
+    /// check is what keeps any guard so built on a fake's loopback origin.
+    /// </summary>
+    private static string? BuildsAGuard(string text)
+    {
+        var found = System.Text.RegularExpressions.Regex.Match(
+            text,
+            @"Rehearsal\s*\(|\bnew\s+(?:AzureDevOpsReach|GitLabReach|LiveReach)\s*\(|\b(?:AzureDevOpsReach|GitLabReach|LiveReach)\??\s+\w+\s*(?:\([^)]*\))?\s*(?:=>|=)\s*new\s*\(");
+        return found.Success ? found.Value : null;
     }
 
     [Fact]
@@ -3525,7 +3606,13 @@ public sealed partial class LiveSafetyTests
 
         await new GitLabLiveTests(run).AppDrivenAsync(api, reach, hosting, appRequests, ownRequests);
 
-        Assert.DoesNotContain(fake.MergeRequests(project), request => request.State == "opened");
+        // Closed and deleted, not only closed: the fake leaves a deleted merge request out of its list,
+        // and its owner's DELETE answers 204, so a request kept (a 403 the live clean-up notes as
+        // "closed, kept", or a DELETE never sent) fails here.
+        Assert.Empty(fake.MergeRequests(project));
+        var cleaned = Assert.Single(notes, note => System.Text.RegularExpressions.Regex.IsMatch(note, @"^Merge request !\d+: closed "));
+        Assert.Matches(@"^Merge request !\d+: closed 200\b.*, deleted 204\b", cleaned);
+        Assert.DoesNotContain("(closed, kept", cleaned, StringComparison.Ordinal);
         Assert.Empty(await LiveBranchesAsync(project.BarePath!));
         Assert.Empty(fake.Errors);
         var created = Assert.Single(notes, note => note.StartsWith("The status: ", StringComparison.Ordinal));
