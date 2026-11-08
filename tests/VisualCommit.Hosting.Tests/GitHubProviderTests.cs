@@ -507,6 +507,61 @@ public sealed class GitHubProviderTests
                 : $"read {sent.Url.AbsolutePath["/repos/".Length..]}"));
     }
 
+    [Theory]
+    [InlineData("401", true)]
+    [InlineData("403 rate limit", true)]
+    [InlineData("429 secondary limit", true)]
+    [InlineData("400 version", true)]
+    [InlineData("no answer", true)]
+    [InlineData("not read", true)]
+    [InlineData("403", false)]
+    [InlineData("403 single sign-on", false)]
+    public async Task A6_a_read_after_a_404_that_the_token_fails_stops_the_lookups_and_one_the_repository_refuses_leaves_that_repository_out(string answer, bool stops)
+    {
+        // Recorded answers. A lookup in eve/gone, a repository other than the listed one, answered
+        // 404, so eve/gone is read (D395), and the read answers as a lookup could. The token refused
+        // (401) or limited (403 with no request left, 429 with Retry-After), the API version
+        // refused, no answer, or an answer not read stop the lookups, as the same failure of a lookup
+        // does: nothing is sent after the read. A 403 of the repository's own (a permission, single
+        // sign-on) leaves eve/gone out with its other lookup, and the listed repository's go on, as
+        // after a read answered 404 or 500 (the recorded answers above).
+        var recorder = new RecordingHttpHandler(request => (request.RequestUri!.AbsolutePath, answer) switch
+        {
+            ("/repos/eve/gone", "401") => RecordingHttpHandler.Json(HttpStatusCode.Unauthorized, """{"message":"Bad credentials"}"""),
+            ("/repos/eve/gone", "403 rate limit") => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, """{"message":"API rate limit exceeded for user ID 1001."}""", ("X-RateLimit-Remaining", "0"), ("X-RateLimit-Reset", "1798761600")),
+            ("/repos/eve/gone", "429 secondary limit") => RecordingHttpHandler.Json(HttpStatusCode.TooManyRequests, """{"message":"You have exceeded a secondary rate limit."}""", ("Retry-After", "60")),
+            ("/repos/eve/gone", "400 version") => RecordingHttpHandler.Json(HttpStatusCode.BadRequest, """{"message":"Bad Request","errors":"The version you specified in the \"X-GitHub-Api-Version\" request header is not a supported version."}"""),
+            ("/repos/eve/gone", "no answer") => throw new HttpRequestException("No such host is known. (api.github.com:443)"),
+            ("/repos/eve/gone", "not read") => RecordingHttpHandler.Json(HttpStatusCode.OK, """{"name":"""),
+            ("/repos/eve/gone", "403") => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, """{"message":"Resource not accessible by personal access token"}"""),
+            ("/repos/eve/gone", "403 single sign-on") => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, """{"message":"Resource protected by organization SAML enforcement."}""", ("X-GitHub-SSO", "required; url=https://github.com/orgs/eve/sso?authorization_request=1")),
+            ("/repos/eve/gone/commits", _) => RecordingHttpHandler.Json(HttpStatusCode.NotFound, """{"message":"Not Found"}"""),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.OK, "[]"),
+        });
+        using var provider = new GitHubProvider(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), new ManualTimeProvider());
+        var listed = new HostedRepository(HostingProvider.GitHub, "github.com", "octo", "hello");
+        var gone = new HostedRepository(HostingProvider.GitHub, "github.com", "eve", "gone");
+
+        var authors = await provider.ReadAuthorsAsync("github_pat_FAKE-octo-1", listed, null,
+            [
+                new AuthorCommit("m@example.com", "13", gone),
+                new AuthorCommit("n@example.com", "14", gone),
+                new AuthorCommit("i@example.com", "9", listed),
+                new AuthorCommit("j@example.com", "10", listed),
+            ],
+            Cancelled);
+
+        string[] found = stops ? [] : ["i@example.com", "j@example.com"];
+        string[] requests = stops ? ["eve/gone 13", "read eve/gone"] : ["eve/gone 13", "read eve/gone", "octo/hello 9", "octo/hello 10"];
+        Assert.True(authors.Succeeded);
+        Assert.Equal(found, authors.Value!.ByEmail.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            requests,
+            recorder.Sent.Select(sent => sent.Url.AbsolutePath.EndsWith("/commits", StringComparison.Ordinal)
+                ? $"{sent.Url.AbsolutePath["/repos/".Length..^"/commits".Length]} {sent.Url.Query.Split('&')[0]["?sha=".Length..]}"
+                : $"read {sent.Url.AbsolutePath["/repos/".Length..]}"));
+    }
+
     [Fact]
     public async Task A6_an_empty_or_null_author_is_unknown_the_first_commit_wins_and_a_foreign_avatar_is_dropped_once()
     {

@@ -163,16 +163,19 @@ public sealed partial class RepositoryHosting
         if (commitsDue || due.Count > 0)
         {
             // The map stays the listed repository's; each address due is looked up through its own
-            // commit, on the remote whose branch reaches it (D339).
+            // commit, on the remote whose branch reaches it (D339). The candidate, which A3 has read
+            // with this account (under its remotes' name and GitHub's), is readable: a 404 of a
+            // lookup there, a fork tab's own fork, is the commit's and asks no read of it (D395).
             var byEmail = authors.ToDictionary(author => author.Email, StringComparer.Ordinal);
             IReadOnlyList<AuthorCommit> lookups = [.. due.Select(email => byEmail[email])];
+            IReadOnlyList<HostedRepository> readable = [candidate, info.Repository];
             HostingResult<AuthorMap>? answer = null;
             try
             {
                 answer = await _session.CallGitHubAsync(
                     $"reading the authors of {listed.FullName}",
                     null,
-                    (provider, token, linked) => provider.ReadAuthorsAsync(token, listed, commitsDue ? branch : null, lookups, linked),
+                    (provider, token, linked) => provider.ReadAuthorsAsync(token, listed, commitsDue ? branch : null, lookups, readable, linked),
                     ct).ConfigureAwait(false);
             }
             finally

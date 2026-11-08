@@ -255,6 +255,10 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             : HostingResult<PullRequest>.Fail(Malformed(HttpMethod.Post, url, reply.RequestId));
     }
 
+    /// <summary>A6 with no repository known readable but <paramref name="repository"/> (the overload below).</summary>
+    public Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, CancellationToken ct) =>
+        ReadAuthorsAsync(token, repository, branch, lookups, [], ct);
+
     /// <summary>
     /// A6 (D252): with <paramref name="branch"/>, the first page of its commits in
     /// <paramref name="repository"/>, each lower-cased author e-mail to its GitHub user (the first
@@ -263,21 +267,29 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// the map, in order, each in its own repository's history from its own commit (D339):
     /// <c>repos/{owner}/{name}/commits?sha=&lt;SHA&gt;&amp;author=&lt;e-mail&gt;&amp;per_page=1</c>.
     /// A lookup answered 409 (an empty repository) is left out with the rest of that repository's,
-    /// asked no more in this call, and the others go on. One answered 404 in a repository other
-    /// than <paramref name="repository"/> that no lookup of the call has answered is followed by
-    /// one <see cref="ReadRepositoryAsync"/> of that repository: when the read fails (one GitHub
-    /// does not let the token read), the same as a 409; when it succeeds, as below (D395). One
-    /// answered 422, 404 in a readable repository (<paramref name="repository"/>, or one that
-    /// answered or read in this call) or a server error (GitHub lacks its commit: 500 without a
-    /// body beside <c>author</c> in the live runs of 2026-10-30 and 31, 404 "Not Found" in that of
-    /// 2026-11-08, D394) is left out alone and the others go on (D342, amending D339). Any other
-    /// failure (the token refused or limited, the API version, no answer, an answer not read) stops
-    /// them and is left out. A lookup left out is not in the map, so it is asked again at a later run.
+    /// asked no more in this call, and the others go on. One answered 404 in a repository not known
+    /// to be readable (not <paramref name="repository"/>, not in <paramref name="readable"/>, and
+    /// not one that answered a lookup of this call) is followed by one
+    /// <see cref="ReadRepositoryAsync"/> of that repository (D395): when it succeeds, the repository
+    /// is readable and the 404 is taken as below; when it answers 404, 403 (single sign-on's
+    /// included) or a server error (a repository GitHub does not give or does not let the token
+    /// read, or cannot answer for), the same as a 409; any other failure of the read stops the
+    /// lookups, as the same failure of a lookup does. One answered 422, 404 in a readable
+    /// repository or a server error (GitHub lacks its commit: 500 without a body beside
+    /// <c>author</c> in the live runs of 2026-10-30 and 31, 404 "Not Found" in that of 2026-11-08,
+    /// D394) is left out alone and the others go on (D342, amending D339). Any other failure (the
+    /// token refused or limited, the API version, no answer, an answer not read) stops them and is
+    /// left out. A lookup left out is not in the map, so it is asked again at a later run.
     /// </summary>
-    public async Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, CancellationToken ct)
+    /// <param name="readable">
+    /// Repositories the caller knows the token reads, for which a lookup's 404 is the commit's and
+    /// asks no read: a tab's own, which A3 has read (D395).
+    /// </param>
+    public async Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, IReadOnlyCollection<HostedRepository> readable, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(lookups);
+        ArgumentNullException.ThrowIfNull(readable);
         if (Refusal(token) is { } refused)
         {
             return HostingResult<AuthorMap>.Fail(refused);
@@ -321,7 +333,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             .Take(MaxAuthorLookups)
             .ToList();
         var unreadable = new HashSet<HostedRepository>();
-        var readable = new HashSet<HostedRepository> { repository };
+        var known = new HashSet<HostedRepository>(readable) { repository };
         foreach (var lookup in asked)
         {
             if (unreadable.Contains(lookup.Repository))
@@ -332,21 +344,30 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             var url = Api($"{RepositoryPath(lookup.Repository)}/commits?sha={Uri.EscapeDataString(lookup.Sha)}&author={Uri.EscapeDataString(lookup.Email)}&per_page=1");
             var reply = await _client.SendAsync(HttpMethod.Get, token, url, null, GitHubJsonContext.Default.ListGitHubCommitItemJson, ct).ConfigureAwait(false);
             var kind = reply.Failure?.Kind;
-            if (kind is HostingFailureKind.NotFound && !readable.Contains(lookup.Repository))
+            if (kind is HostingFailureKind.NotFound && !known.Contains(lookup.Repository))
             {
-                // Another remote's repository, not yet known in this call to be readable: its 404 is
-                // the repository's (gone, or private to others) or, since the live run of 2026-11-08
-                // (D394), a commit GitHub lacks, and GitHub answers both alike. The repository's own
-                // read, A3's request, tells them apart, once a call (D395): one that does not read is
-                // left out with the rest of its lookups in this call; one that reads is readable.
-                if ((await ReadRepositoryAsync(token, lookup.Repository, ct).ConfigureAwait(false)).Succeeded)
+                // Another remote's repository, not known to be readable: its 404 is the repository's
+                // (gone, or private to others) or, since the live run of 2026-11-08 (D394), a commit
+                // GitHub lacks, and GitHub answers both alike. The repository's own read, A3's
+                // request, tells them apart, once a call (D395).
+                var read = await ReadRepositoryAsync(token, lookup.Repository, ct).ConfigureAwait(false);
+                if (read.Succeeded)
                 {
-                    readable.Add(lookup.Repository);
+                    known.Add(lookup.Repository);
+                }
+                else if (read.Failure!.Kind is HostingFailureKind.NotFound or HostingFailureKind.Forbidden or HostingFailureKind.SsoRequired or HostingFailureKind.ServerError)
+                {
+                    // The repository's own answer (gone, private to others, closed to this token by
+                    // its owner), or GitHub failing on it: left out with the rest of its lookups in
+                    // this call, as its 404 alone left it out before D395; the others go on.
+                    unreadable.Add(lookup.Repository);
+                    continue;
                 }
                 else
                 {
-                    unreadable.Add(lookup.Repository);
-                    continue;
+                    // The token refused or limited, the API version, no answer or an answer not
+                    // read: the lookups stop, as for a lookup's own such failure.
+                    break;
                 }
             }
 
@@ -364,10 +385,11 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
                 // rewritten, a remote pointed elsewhere): github.com answered such a lookup 500
                 // without a body in the live runs of 2026-10-30 and 31, and 404 "Not Found" in that
                 // of 2026-11-08 (D394); a 422 is taken as the 500, in any repository. A 404 in a
-                // readable repository (the listed one, the tab's own: A3's, or for a fork the parent
-                // A3 names; one that answered a lookup of this call; one whose read above succeeded)
-                // is taken as this commit's, not the repository's. Only this address is not found,
-                // and it is asked again at a later run (D342, D395).
+                // readable repository (the listed one: the tab's own, or for a fork the parent A3
+                // names; one the caller knows readable, a fork tab's own fork, which A3 read; one
+                // that answered a lookup of this call; one whose read above succeeded) is taken as
+                // this commit's, not the repository's. Only this address is not found, and it is
+                // asked again at a later run (D342, D395).
                 continue;
             }
 
@@ -376,7 +398,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
                 break;
             }
 
-            readable.Add(lookup.Repository);
+            known.Add(lookup.Repository);
             map[lookup.Email] = reply.Value is [var first, ..] ? Author(first.Author) : null;
         }
 
