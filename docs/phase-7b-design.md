@@ -3639,6 +3639,104 @@ Done when these classes pass, 7a's part N classes unchanged; part N passes with 
 credential text (outside `OperationTexts.Hosting.Credentials.cs`, which keeps them, 1.7); the tripwire
 is clean; CI's five jobs are green, each Test step under four fifths of its limit (0.6).
 
+**As built** (WP-N, `b05fabc` to its last commit, 2026-11-07). Where the build differs or settles:
+- One commit (`b05fabc`) holds 13.9's three areas. `CancelledOf(p)`: 7a's const `Cancelled` cannot share its name with a method.
+- 13.4's rows: a cut text measures under its room (`Choose…` at 753); `RowRepositoryText` (the view's
+  code-behind) takes its whole room once cut (758 ±1); one that fits lays out as 7a's.
+- `PullRequestEnd`'s equality leaves `Hosted` out (7a's tests); the form compares it. "Already open"
+  keys on `Refusal` alone. GitLab's scope sentence needs a `Detail`.
+- After a stacked sign-in D356 reads the session's account (`Covers`, as `StateOf`), which the hosting
+  has not taken yet. Across repositories GitLab's and Azure DevOps' 403 or 404 name both,
+  `{head} or {base}` (the providers do not mark the head's read: the lead's to route). Both, and the
+  other organization's `not started` line, are pinned by `CreateRequestOperationProvidersTests`;
+  the other `not started` lines no test reads.
+- D316: a lost or 5xx create counts a request as made only against a list held before the POST; with
+  none, the run in flight is waited for alone (the hosting's `Changed`, ended by the tab's `Lifetime`:
+  no `IRepositoryHosting` member gives a run's own task), or, none in flight, one is made; still none,
+  one found after is offered as open, never "Created". GitHub too, where 7a sent no read.
+- D382 screens A3's default branches too (one line of WP-S's `RepositoryHosting.cs`, the only file
+  outside 13.1): an echoed one is the malformed answer, so the tab lists nothing, the form has no base.
+- Part N's checks: open points 36, 37, 38, 43 and 45 hold as the report reads them; N4's git requests
+  follow B7's order by git's version; Azure DevOps' fake records `Login` on every request with a
+  PAT-shaped token but `areas` (first read as `connection:` and `create:` only: the last bullet); the
+  drag presses 24 px left of the row's centre (there a right-click made it a double-click).
+- WP-R reads `PartN.Of(p)`, its `Provider` record (the menu item, form, routes, body, texts, rows and
+  pictures of N1 to N6) and `RealWindowPictures`.
+- Alone (Debug, laptop shared): 28.8 to 67.2 s a method, 5.6 to 12.3 s from the app's start to the
+  last picture; methods 1, 2, 3 and 7 pass 0.5's 40 s: the lead's to time again rested.
+- 7a's part N pictures, last run: `n02b`, `n04a` and `n06b` differ from the list, each pixel-equal to
+  the main checkout's run before WP-N (which of them differs varies from run to run).
+- D388 (the lead's ruling R1 on hunt 3's tokens lens, 2026-11-07), D290's window: between a sign-in
+  (or a tab's first load signed in) and the tab's first read of the URL rewrites its bindings are
+  empty, so a Create pressed at once after the stacked sign-in pushed without the token, on every
+  provider, 7a's GitHub too. A tab's network operation started there (`RepositoryViewModel.AwaitsUrlRules`:
+  an account wants the rewrites and binds git, no read has answered) binds once the rules are known:
+  `RunAsync` waits for the tab's read in flight (`UrlRulesReadAsync`, no git call) and takes the
+  hosting's bindings, or with none in flight (not started, or failed) reads them itself through
+  D332's code, now `BindingsOnceRulesReadAsync`. One Debug line gives the count whenever the
+  bindings were taken or the rules read. The wait also ends with a cancel or the tab's closing, and
+  then nothing starts, or with the account signed out meanwhile, and then the operation starts
+  unbound, as signed out; neither logs a count line. A tab whose refs are not read yet binds nothing
+  (its toolbar and the bulk runs start no network operation then). The auto-fetch's tick starts no
+  fetch inside the window: it waits for the tab's read in flight, or with none asks the tab for one
+  (`RequestUrlRules`), at most once an interval and only when a fetch is due, with the Debug line
+  `{repo}: auto-fetch not started, the URL rules are read again`; a later tick fetches with the
+  account's credentials. Without that ask a failed read kept GitLab's and Azure DevOps' auto-fetch
+  waiting until the refs changed, since their hostings change no more once the list has answered
+  (WP-N's review of the lead's fixes, finding 1). The tab's own bindings stay empty until its read
+  (D290). Files outside 13.1: `RepositoryOperations.Run.cs`, `RepositoryViewModel.Hosting.cs`,
+  `AutoFetchScheduler.cs`, Hosting.Tests' `HeldRulesTab.cs` (a tab built by hand whose rules reads a
+  proxy holds or fails, or fails once let go) and `SignInBindingsWindowTests.cs`. Tests:
+  `CreateRequestOperationProvidersTests`' create at once through the app and with the read held or
+  failed (GitLab, Azure DevOps); `SignInBindingsWindowTests` for 7a's GitHub (the same three), a
+  fetch right after a sign-in held and failed, a remote the rules give `bob@` bound to no token
+  (D278) and the auto-fetch: with the read held; after the tab's only read failed once the list had
+  answered (GitLab, Azure DevOps: the due tick reads, the next fetches with the token); with every
+  read failing (one read an interval, no fetch). The three creates at once through the app do not
+  always press inside the window (in that review 2 of 15 runs did not, and such a run passes on the
+  code before D388 too), so the held and failed variants are D388's proof. `SignInBindingsWindowTests`
+  starts the app through `ShellDriver`, so it joins 0.4's lagged list.
+- The lead's rulings R2 to R4 on hunt 3 (2026-11-07), in part N's checks and, for R4, part P's and
+  part B's (files outside 13.1: `Phase7bChecks.P.cs`, `Phase7bChecks.B.cs`). R2: `BaseRecorder` (part
+  N's helpers) records a form's `IsReadingBase` and `BaseText` from its add to `DialogHost.Open` on.
+  Method 4 starts it before the sign-in's Enter and asserts every state `(false, origin/main)`, never
+  `Reading Azure DevOps…` (N8, N4, open point 45); with the drop's base thrown away
+  (`form.GivenBase = null` in a scratch copy) it fails on `True|Reading Azure DevOps… ; False| ;
+  False| ; False|origin/main`. Method 3 asserts it around the drop's form in place of the empty
+  `Assert.False(form.IsReadingBase)`, but it cannot tell a given base from a dropped one: with A3's
+  answer kept from the list's read, a form not given its base reads A3 inside its constructor and is
+  added as `(false, origin/main)` too (method 3 passed under the same mutation), so on GitLab "given
+  (never `Reading GitLab…`)" is not observable and method 4 alone proves the given base. R3: every
+  part N menu placed by the pointer (`AssertMenuPlaced`: `AssertMenuAtPointer` where it fits 4 inside
+  the window, else phase 3's 4a rule, as the 597-px branch menus at 1100×700 are moved to y 4), the
+  drop's by its release point and the section's by its header's centre; `AssertFormBrushes` with the
+  head note (method 3 step 6, method 4 step 4) and the sent title (method 3 step 7) shown; Azure
+  DevOps' 409 by the core's and the session's Warnings with TF401179, as GitLab's; the Warnings'
+  names, messages and lines from `PartN` (`ProviderNameOf`, `CoreWarningOf`, `SessionWarningOf`);
+  the sign-ins' requests with each path and query (`AssertSignInRequests`; N8's connection with
+  `api-version=7.1-preview.1`, `areas` as B1's); N7's whole menu (`RemoteBranchMenuOf(p, "long")`,
+  415 high). R4: part N asserts Ada's `Login` on every Azure DevOps request but `areas` and `ada` on
+  every GitLab one (`AssertSentAsAda`, now also after methods 3's and 4's creates and on N5's
+  refusals); part P's `AssertAzureSignInList` (`repo:`, `pulls:`), P3's held refresh, P4's A3 reads
+  and P6's pages, and B8's list, compare it too; a fault's answer (P4's 403 and 500, B5's 500 and
+  401) comes before the fakes read the credential and stays unchecked. Each kind fails on a
+  mutation in a scratch copy (every menu 3 px right, the head note's brush, TF401179's words, the
+  list reads recorded as another account, the base dropped). The pictures are unchanged but for
+  `n04b`'s progress segment and six pixels one level off in `n05b`. Alone (Debug, laptop shared,
+  timing script): methods 1 to 7 40.1, 64.2, 35.5, 30.7, 26.2, 50.5 and 42.7 s; 5.5 to 21.4 s from
+  the app's start to the last picture.
+- WP-N's review of the lead's fixes (2026-11-07): the product's findings are in D388's bullet above
+  (the tick's ask, the at-once tests' reach, when the count line is logged). Part N's
+  `AssertFormBrushes` now also runs on `n01a` (method 3, N8 step 4), on method 3 step 5's
+  `local-work` form and on `n07a`, so every form part N checks has its brush check; N5 step 3
+  asserts the App's Warning for the 409 (`{repo}: {Title}: the request to create it failed:
+  Validation, {message} (request {id})`) as step 2 does for the 400, a refused POST's three lines.
+  Mutations in a scratch copy: the quick-actions note's brush fails method 3 at `n01a` and the head
+  note's at step 5's form (with the earlier checks both only at `n04a`); a cut head repository
+  text's brush fails method 6 at `n07a`, and the App's Warning left out for an "already open"
+  refusal fails methods 5 and 6 at step 3 (with the earlier checks all three passed). Part N's
+  steps and pictures are as they were: only assertions were added.
+
 ## 14. WP-R: the real-window pass
 
 ### 14.1 Goal and files

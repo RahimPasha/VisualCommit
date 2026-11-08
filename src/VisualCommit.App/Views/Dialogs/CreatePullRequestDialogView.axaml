@@ -13,7 +13,11 @@
        its repository and Choose... (as the merge tool's row); the title (32 high, focused, the caret
        at its end, Enter creates), the description (120 high, Mod+Enter creates), Draft, the error
        line and "Open pull request #n", then Cancel and Create. While creating every control is
-       disabled but Cancel within the create's cancel window (ruling 59). -->
+       disabled but Cancel within the create's cancel window (ruling 59). docs/phase-7b-design.md
+       13.4: the From and Into rows are DockPanels sized to their content, which place each child
+       where 7a's Spacing="8" did; past the column a repository text is cut with "...", its whole
+       text its tooltip (ruling 3). GitLab's two lines, collapsed otherwise: the title GitLab is
+       sent under Draft while it is ticked, and the quick-actions note under the description. -->
   <Panel Classes="dialogBackdrop">
     <Border Name="CreatePullRequestDialogCard" Classes="dialogCard wide">
       <StackPanel>
@@ -31,17 +35,21 @@
                      Text="{x:Static ops:OperationTexts+CreatePullRequestTexts.From}"
                      VerticalAlignment="Top" />
           <StackPanel Grid.Row="0" Grid.Column="1">
-            <StackPanel Orientation="Horizontal" Spacing="8">
+            <DockPanel HorizontalAlignment="Left">
               <TextBlock Name="PullRequestHead"
+                         DockPanel.Dock="Left"
                          Text="{Binding Head.Text}"
                          MaxWidth="220"
                          TextTrimming="CharacterEllipsis"
                          ToolTip.Tip="{Binding Head.Text}"
                          AutomationProperties.AutomationId="PullRequestHead" />
-              <TextBlock Name="PullRequestHeadRepository" Classes="secondary"
+              <local:RowRepositoryText Name="PullRequestHeadRepository" Classes="secondary"
                          Text="{Binding Head.Repository}"
+                         Margin="8,0,0,0"
+                         TextTrimming="CharacterEllipsis"
+                         ToolTip.Tip="{Binding Head.Repository}"
                          AutomationProperties.AutomationId="PullRequestHeadRepository" />
-            </StackPanel>
+            </DockPanel>
             <TextBlock Name="PullRequestHeadNote" Classes="settingsNote"
                        Text="{Binding HeadNote}"
                        IsVisible="{Binding HasHeadNote}"
@@ -50,8 +58,9 @@
           <TextBlock Grid.Row="1" Grid.Column="0" Classes="secondary"
                      Text="{x:Static ops:OperationTexts+CreatePullRequestTexts.Into}"
                      Margin="0,8,0,0" VerticalAlignment="Center" />
-          <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" Spacing="8" Margin="0,8,0,0">
+          <DockPanel Grid.Row="1" Grid.Column="1" HorizontalAlignment="Left" Margin="0,8,0,0">
             <TextBlock Name="PullRequestBase"
+                       DockPanel.Dock="Left"
                        Text="{Binding BaseText}"
                        Classes.secondary="{Binding IsReadingBase}"
                        MaxWidth="220"
@@ -59,16 +68,20 @@
                        ToolTip.Tip="{Binding BaseText}"
                        VerticalAlignment="Center"
                        AutomationProperties.AutomationId="PullRequestBase" />
-            <TextBlock Name="PullRequestBaseRepository" Classes="secondary"
-                       Text="{Binding BaseRepository}"
-                       VerticalAlignment="Center"
-                       AutomationProperties.AutomationId="PullRequestBaseRepository" />
             <Button Name="PullRequestBaseChooseButton" Theme="{StaticResource VcActionButton}"
+                    DockPanel.Dock="Right"
                     Content="{x:Static ops:OperationTexts+SettingsTexts.Choose}"
                     Command="{Binding ChooseBaseCommand}"
                     AutomationProperties.AutomationId="PullRequestBaseChooseButton"
                     AutomationProperties.Name="{x:Static ops:OperationTexts+SettingsTexts.Choose}" />
-          </StackPanel>
+            <local:RowRepositoryText Name="PullRequestBaseRepository" Classes="secondary"
+                       Text="{Binding BaseRepository}"
+                       Margin="8,0,8,0"
+                       TextTrimming="CharacterEllipsis"
+                       ToolTip.Tip="{Binding BaseRepository}"
+                       VerticalAlignment="Center"
+                       AutomationProperties.AutomationId="PullRequestBaseRepository" />
+          </DockPanel>
         </Grid>
         <TextBox Name="PullRequestTitle"
                  Classes="dialogBox"
@@ -90,6 +103,11 @@
                  VerticalContentAlignment="Top"
                  AutomationProperties.AutomationId="PullRequestDescription"
                  AutomationProperties.Name="{x:Static ops:OperationTexts+CreatePullRequestTexts.DescriptionPlaceholder}" />
+        <TextBlock Name="PullRequestQuickActionsNote" Classes="settingsNote"
+                   Text="{Binding QuickActionsNote}"
+                   IsVisible="{Binding ShowsQuickActionsNote}"
+                   Margin="0,4,0,0"
+                   AutomationProperties.AutomationId="PullRequestQuickActionsNote" />
         <CheckBox Name="PullRequestDraft"
                   Theme="{StaticResource VcCheckBox}"
                   Content="{x:Static ops:OperationTexts+CreatePullRequestTexts.Draft}"
@@ -98,6 +116,11 @@
                   Margin="0,12,0,0"
                   AutomationProperties.AutomationId="PullRequestDraft"
                   AutomationProperties.Name="{x:Static ops:OperationTexts+CreatePullRequestTexts.Draft}" />
+        <TextBlock Name="PullRequestSentTitle" Classes="settingsNote"
+                   Text="{Binding SentTitle}"
+                   IsVisible="{Binding ShowsSentTitle}"
+                   Margin="0,4,0,0"
+                   AutomationProperties.AutomationId="PullRequestSentTitle" />
         <TextBlock Name="PullRequestError"
                    Classes="dialogError"
                    Text="{Binding Error}"

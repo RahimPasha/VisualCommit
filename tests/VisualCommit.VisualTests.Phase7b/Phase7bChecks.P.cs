@@ -290,6 +290,10 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             Assert.Equal([P.GitLabUserRoute + " 200", P.GitLabProjectRoute + " 200", P.GitLabListRoute + " 403"], gitLab.Select(request => $"{request.Route} {request.Status}"));
             Assert.All(gitLab, request => Assert.Equal(("GET", FakeAuthorizationForm.Bearer), (request.Method, request.Authorization)));
             Assert.Equal(AdaLogin, gitLab[0].Login);
+
+            // A3's read as web-app's list sends it (part P's scenario facts: "each Bearer, Login ada");
+            // the 403 is the fault's answer, given before the fake reads the credential: no Login.
+            Assert.Equal(AdaLogin, gitLab[1].Login);
             AssertRequest(gitLab[2], P.GitLabListPath, P.GitLabListRoute, P.GitLabListQuery, FakeAuthorizationForm.Bearer, 403, null);
             Assert.Empty(AzureSince(served, mark));
             Assert.Empty(GitHubSince(served, mark));
@@ -420,6 +424,10 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
                 azure.Select(request => $"{request.Route} {request.Status}"));
             Assert.All(azure, request => Assert.Equal(("GET", FakeAuthorizationForm.BasicEmptyUser), (request.Method, request.Authorization)));
             Assert.Equal(AdaAzureLogin(served), azure[0].Login);
+
+            // A3's read as mobile-app's list sends it (part P's scenario facts: "each BasicEmptyUser,
+            // Login Ada's"); the 500 is the fault's answer, given before the fake reads the credential: no Login.
+            Assert.Equal(AdaAzureLogin(served), azure[2].Login);
             AssertRequest(azure[3], P.AzureDevOpsListPath, P.AzureDevOpsListRoute, P.AzureDevOpsListQuery, FakeAuthorizationForm.BasicEmptyUser, 500, null);
             Assert.DoesNotContain(served.AzureDevOps.Requests, IsHarborCo);
             Assert.Empty(GitLabSince(served, mark));
@@ -469,7 +477,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
 
             await WaitForListedAsync(app, MobileApp, 3, P.AzureDevOpsListed, logMark);
             var refreshed = Assert.Single(AzureSince(served, mark));
-            AssertRequest(refreshed, P.AzureDevOpsListPath, P.AzureDevOpsListRoute, P.AzureDevOpsListQuery, FakeAuthorizationForm.BasicEmptyUser, 200, null);
+            AssertRequest(refreshed, P.AzureDevOpsListPath, P.AzureDevOpsListRoute, P.AzureDevOpsListQuery, FakeAuthorizationForm.BasicEmptyUser, 200, AdaAzureLogin(served));
             Assert.Equal(PullRequestsState.Loaded, mobileApp.HostingState.PullRequests);
             Assert.Equal([$"v {P.AzureDevOpsTitle} 3", .. P.AzureDevOpsRows.Select(row => row.Name)], Section(app));
 
@@ -604,7 +612,7 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
             await WaitForListedAsync(app, WebApp, 300, P.GitLabListed, logMark);
             var pages = GitLabSince(served, mark);
             Assert.Equal(3, pages.Count);
-            Assert.All(pages, page => Assert.Equal(("GET", P.GitLabListPath, P.GitLabListRoute, FakeAuthorizationForm.Bearer, 200), (page.Method, page.Path, page.Route, page.Authorization, page.Status)));
+            Assert.All(pages, page => Assert.Equal(("GET", P.GitLabListPath, P.GitLabListRoute, FakeAuthorizationForm.Bearer, 200, AdaLogin), (page.Method, page.Path, page.Route, page.Authorization, page.Status, page.Login)));
             Assert.Equal(P.GitLabListQuery, pages[0].Query);
             for (var page = 2; page <= 3; page++)
             {
@@ -825,13 +833,17 @@ public sealed partial class Phase7bChecksP : Phase7bChecks
         Assert.DoesNotContain(app.LogLinesSince(warnings), line => line.Contains("[WRN]", StringComparison.Ordinal));
     }
 
-    /// <summary>P1 method 2 step 1: Azure DevOps' sign-in and list, in order, each Basic with an empty user.</summary>
+    /// <summary>
+    /// P1 method 2 step 1: Azure DevOps' sign-in and list, in order, each Basic with an empty user;
+    /// the connection's <c>Login</c> Ada's (P1), and the list's <c>repo:</c> and <c>pulls:</c> too
+    /// (part P's scenario facts, mobile-app's list: "each <c>BasicEmptyUser</c>, <c>Login</c> Ada's").
+    /// </summary>
     private static void AssertAzureSignInList(ServedHosting7b served, IReadOnlyList<FakeServiceRequest> requests)
     {
         Assert.Equal(P.SignInRoutesOf(Azure).Select(route => route + " 200"), requests.Select(request => $"{request.Route} {request.Status}"));
         Assert.All(requests, request => Assert.Equal(FakeAuthorizationForm.BasicEmptyUser, request.Authorization));
         AssertRequest(requests[0], P.AzureDevOpsConnectionPath, P.AzureDevOpsConnectionRoute, P.AzureDevOpsConnectionQuery, FakeAuthorizationForm.BasicEmptyUser, 200, AdaAzureLogin(served));
-        AssertRequest(requests[2], P.AzureDevOpsRepositoryPath, P.AzureDevOpsRepositoryRoute, P.AzureDevOpsRepositoryQuery, FakeAuthorizationForm.BasicEmptyUser, 200, null);
-        AssertRequest(requests[3], P.AzureDevOpsListPath, P.AzureDevOpsListRoute, P.AzureDevOpsListQuery, FakeAuthorizationForm.BasicEmptyUser, 200, null);
+        AssertRequest(requests[2], P.AzureDevOpsRepositoryPath, P.AzureDevOpsRepositoryRoute, P.AzureDevOpsRepositoryQuery, FakeAuthorizationForm.BasicEmptyUser, 200, AdaAzureLogin(served));
+        AssertRequest(requests[3], P.AzureDevOpsListPath, P.AzureDevOpsListRoute, P.AzureDevOpsListQuery, FakeAuthorizationForm.BasicEmptyUser, 200, AdaAzureLogin(served));
     }
 }

@@ -128,27 +128,6 @@ public interface IHostingSession : IGitCredentialSource, IDisposable
 
     /// <summary>The hosting of one repository tab; <see cref="NullRepositoryHosting.Instance"/> while all are off.</summary>
     IRepositoryHosting ForRepository(string workingDirectory);
-
-    // 7a's GitHub-named members (ruling 1; docs/phase-7b-design.md 0.4, 1.5), kept while a caller
-    // uses them; WP-N removes what is left.
-
-    /// <summary>GitHub's provider; null while off.</summary>
-    IHostingProvider? GitHub => ProviderOf(HostingProvider.GitHub);
-
-    /// <summary>GitHub's account, signed in or needing sign-in; null without one.</summary>
-    AccountStatus? Account => AccountOf(HostingProvider.GitHub);
-
-    /// <summary>A1 on GitHub with <paramref name="token"/>.</summary>
-    Task<SignInResult> SignInAsync(string token, CancellationToken ct) => SignInAsync(new SignInRequest(HostingProvider.GitHub, token), ct);
-
-    /// <summary>Signs GitHub's account out and deletes <c>avatars/</c> (D291).</summary>
-    Task<string?> SignOutAsync(CancellationToken ct) => SignOutAsync(HostingProvider.GitHub, ct);
-
-    /// <summary>GitHub's "Use for git over HTTPS".</summary>
-    void SetUseForGit(bool useForGit) => SetUseForGit(HostingProvider.GitHub, useForGit);
-
-    /// <summary>A2 with GitHub's account's token.</summary>
-    Task<HostingResult<RepositoryList>> ListRepositoriesAsync(CancellationToken ct) => ListRepositoriesAsync(HostingProvider.GitHub, ct);
 }
 
 /// <summary>Where a repository's pull requests stand (docs/phase-7a-design.md 1.5, docs/phase-7b-design.md 1.5).</summary>

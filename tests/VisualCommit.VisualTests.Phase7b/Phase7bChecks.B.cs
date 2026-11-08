@@ -717,6 +717,9 @@ public sealed partial class Phase7bChecksB : Phase7bChecks
             Assert.Equal(["connection:fernhill-labs", "areas", PartB.AzureDevOpsListRoute], requests.Select(request => request.Route));
             Assert.All(requests, request => Assert.Equal((FakeAuthorizationForm.BasicEmptyUser, 200), (request.Authorization, request.Status)));
             Assert.Equal(AdaAzureLogin(served), requests[0].Login);
+
+            // The list (part B's scenario facts, Azure DevOps' list: "BasicEmptyUser, Login Ada's").
+            AssertAzureList(served, requests[2], 200);
             Assert.Empty(GitLabSince(served, mark));
             Assert.Empty(GitHubSince(served, mark));
             Assert.Equal(["save " + PartA.AzureDevOpsKey(served.AzureDevOps.Port)], StoreCallsSince(app, stored));
