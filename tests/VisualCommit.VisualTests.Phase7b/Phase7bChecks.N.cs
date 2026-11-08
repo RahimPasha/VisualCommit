@@ -258,6 +258,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             await AssertNewFormAsync(app, form);
             AssertForm(app, form, GitLab, N.RemoteHead, N.GitLabFullName, null, N.Base, N.GitLabFullName, N.HeadTitle);
             AssertFormPlaces(app, N.CardLeft);
+            AssertFormBrushes(app, light: false);
             AssertSignInRequests(served, GitLab, RequestsSince(served, GitLab, mark));
             Assert.Equal(["probe", KeyOf(served, GitLab)], StoreCallsSince(app, stored));
             Assert.Equal([$"v {P.GitLabTitle} 3", .. P.GitLabRows.Select(row => row.Name)], Section(app));
@@ -272,6 +273,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             form = await OpenFormFromMenuAsync(app, GitLab);
             await AssertNewFormAsync(app, form);
             AssertForm(app, form, GitLab, N.LocalWork, N.GitLabFullName, N.PushedFirstWithUpstreamOf(GitLab), N.Base, N.GitLabFullName, N.LocalWorkTitle);
+            AssertFormBrushes(app, light: false);
             app.PressKey(Key.Escape);
             await app.WaitForAsync(() => form.IsClosed, "the form closed");
             Assert.Empty(OperationsSince(app, operations));
@@ -608,6 +610,7 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
             Assert.True(IsCut(baseRepository) && baseRepository.TextLayout.TextLines.Count == 1, "The long base repository is not cut on one line.");
             Assert.Equal(N.ColumnRight, app.BoundsOf(app.FindByAutomationId("PullRequestBaseChooseButton")).Right, 1.0);
             Assert.Equal(N.CardHeight, AssertFormPlaces(app, N.CardLeft), 1.0);
+            AssertFormBrushes(app, light: false);
             Assert.True(app.FindByAutomationId("ConfirmButton").IsEffectivelyEnabled);
             ShotN(app, N.N07a);
             AssertNoRequests(served, mark);
@@ -731,9 +734,11 @@ public sealed partial class Phase7bChecksN : Phase7bChecks
         Assert.Equal(1, ListedSince(app, p, logMark));
 
         // The 409's message, which the fake's record does not hold: GitLab's, and Azure DevOps'
-        // TF401179 of the typeKey GitPullRequestExistsException, through the core's and the session's Warnings.
+        // TF401179 of the typeKey GitPullRequestExistsException, through the core's, the session's and
+        // the App's Warnings (part N's "Log lines": a refused POST's three).
         AssertWarningOnce(app, logMark, N.CoreWarningOf(p, 409));
         AssertWarningOnce(app, logMark, N.SessionWarningOf(p, N.AlreadyOpenMessageOf(p)));
+        AssertWarningOnce(app, logMark, $"{N.RepositoryOf(p)}: {failed}: the request to create it failed: Validation, {N.AlreadyOpenMessageOf(p)} (request {{id}})");
         if (p == GitLab)
         {
             var open = served.GitLab.MergeRequests(served.GitLab.Project(WebAppPath));
