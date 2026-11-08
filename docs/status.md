@@ -605,10 +605,16 @@ pushed. The lead's runs on `6333de6` all passed, design 0.6's timing report amon
 needs D237's split (Notes, "The lead's runs after the review's fixes"); step 17 is ticked. CI's run on
 it, 42472105974, failed one phase 1 harness test on macOS alone (`ShellDriverTests`' 0.3 s wait, a
 stall under load), whose wait is now 2 s with its assertions kept (Notes; CI section). WP-R (design
-14) is written in `D:/Projects/Personal/vc-wt/p7b-real-window` (branch `wip/p7b-real-window`, from
-`8649316`; one Opus builder) without a build while the timed runs ran; next its builder builds it in
-Release and runs part's expectation classes, an Opus review follows, then the lead merges it and adds
-CLAUDE.md's rows (14.5). Then the gate (step 18). The GitLab account's five projects wait on the owner and decide whether the gate's live
+14) is merged at `f016bdf` with CLAUDE.md's rows (Notes, "WP-R"); it has only been compiled. Next:
+read CI's runs on `6f7199d` and on WP-R's merge; the owner's answer on the GitLab account's five
+projects (Waiting on the owner), and the change it asks for before the gate's live runs; then the
+gate (step 18), in 7a design 13.7's order with D335's live runs: the offline classes and the live
+command for the three providers with the owner told, corrections to the fakes committed before any
+picture; the 7b walk-through so that its pictures exist; `Phase7bRealWindowPass` twice on its own
+with the owner told and present (D246); then the counted round on one commit: the whole default run
+through `scripts/heavy-run.sh`, the real-window pass, the list of pictures, the live command again,
+and the inspection of every picture in batches of at most about 150, the earlier ones compared with
+`D:/Projects/Personal/gate7b-reference/` (0.7). The GitLab account's five projects wait on the owner and decide whether the gate's live
 runs need a change first (Waiting on the owner). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
@@ -1071,6 +1077,19 @@ every commit.
   7b's part P (22 of 22 the same files at the panel's fix; on the refixer's fresh build 21, `p11a`
   differing in 5 pixels of the status bar's git box, its recorded variation) were run by the fixers;
   no fix changes a scripted picture.
+- **WP-R** (design 14; 2026-11-08, `D:/Projects/Personal/vc-wt/p7b-real-window`, branch
+  `wip/p7b-real-window` from `8649316`, one Opus builder): written without a build while the lead's
+  timed runs ran, then built: `dotnet build tests/VisualCommit.RealWindowTests -c Release` and the
+  root, 0 warnings, at the first try; `Phase7bExpectationTests` 24 of 24. Five files,
+  `Phase7bRealWindowPass{,.Accounts,.GitLab,.AzureDevOps}.cs` and `RealApp.Phase7b.cs`; the five
+  launches in `Phase7bOrder`, 13 captures under their twins' names (`a02d`, `a05b`, `a06b`, `b03a`,
+  `b03b`, `p01a`, `p01c`, `p10a`, `p10c`, `n02a`, `n02b`, `n06a`, `n06b`), every R step of A2, A5, A6,
+  B1, B3, B7, P1, P10, N1, N2 and N6; its departures, some stricter than 14.4, are 14.5's As built. The
+  review (the session's workflow `p7b-wpr-review`, three read-only Opus reviewers by lens: conformance
+  to 14.4 and the twins, robustness in the real window, safety) found nothing; the robustness lens
+  read that Avalonia 12.1.3's Win32 bridge serves the Scroll pattern `ScrollAccountsToEnd` reads.
+  Merged at `f016bdf`; CLAUDE.md's rows of 14.5 added. Not run: the pass takes the mouse, so its
+  first run is D246's at the gate.
 - **The lead's runs after the review's fixes** (2026-11-08 03:35 to 04:42 local time, on `6333de6`,
   one at a time through `scripts/heavy-run.sh`, nothing else on the laptop; log and xUnit reports in
   `D:/Projects/Personal/phase7b-work/timing/`), all passed: `VisualCommit.Hosting.Tests` with its
