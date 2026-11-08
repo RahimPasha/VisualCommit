@@ -204,7 +204,7 @@ ANDs kinds):
 
 ```
 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7b
-bash scripts/heavy-run.sh --project tests/VisualCommit.Hosting.Tests --filter-class "*RepositoryHostingProvidersWiringTests" --filter-class "*SignInEntryProvidersTests" --filter-class "*CloneFromAccountTests" --filter-class "*RequestOperationsProvidersTests" --filter-class "*CreateRequestOperationProvidersTests"
+bash scripts/heavy-run.sh --project tests/VisualCommit.Hosting.Tests --filter-class "*RepositoryHostingProvidersWiringTests" --filter-class "*SignInEntryProvidersTests" --filter-class "*CloneFromAccountTests" --filter-class "*RequestOperationsProvidersTests" --filter-class "*CreateRequestOperationProvidersTests" --filter-class "*SignInBindingsWindowTests"
 ```
 
 A failure under the lag is the fault class R8 imitates: it gets a fix, never a looser test.
@@ -3674,9 +3674,10 @@ is clean; CI's five jobs are green, each Test step under four fifths of its limi
   `RunAsync` waits for the tab's read in flight (`UrlRulesReadAsync`, no git call) and takes the
   hosting's bindings, or with none in flight (not started, or failed) reads them itself through
   D332's code, now `BindingsOnceRulesReadAsync`. One Debug line gives the count whenever the
-  bindings were taken or the rules read. The wait also ends with a cancel or the tab's closing, and
-  then nothing starts, or with the account signed out meanwhile, and then the operation starts
-  unbound, as signed out; neither logs a count line. A tab whose refs are not read yet binds nothing
+  bindings were taken or its own read of the rules began (0 when that read failed or was
+  cancelled). The wait also ends with a cancel or the tab's closing, and then nothing starts, or
+  with the account signed out meanwhile, and then the operation starts unbound, as signed out; a
+  wait that ends so logs no count line. A tab whose refs are not read yet binds nothing
   (its toolbar and the bulk runs start no network operation then). The auto-fetch's tick starts no
   fetch inside the window: it waits for the tab's read in flight, or with none asks the tab for one
   (`RequestUrlRules`), at most once an interval and only when a fetch is due, with the Debug line
