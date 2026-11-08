@@ -4485,6 +4485,23 @@ the `.Router.cs` headers):
   is added. The rewrite tests' `username=alice` in the user's helper is asserted only on a git that
   keeps a URL's user (`GitUrlUser`, D389); alice's request at the server on every git (hasconfig's on
   2.36 and later). Test: `Two_includes_that_rewrite_the_url_only_together_bind_nothing`.
+- Fixed at the review before the gate (tests-2, phase 6's growth harness): `GrowthMeasures.WithoutCollection`
+  blames the budget only when the process allocated at least it during the measure
+  (`GC.GetTotalAllocatedBytes(precise: true)` before the region and after the work); otherwise its
+  failure names what was allocated of the budget and the last collection's memory load and high-load
+  threshold (another thread's collection or memory pressure). It fails in the same cases.
+  `PaletteGrowthTests`' build test keeps phase 6's 5.12 bound, rounds, sizes and measure; each run,
+  passed or failed, appends a line to `artifacts/visual/palette-growth.txt` (CI uploads it per job), and
+  its failures give each measure's work, the counts, the framework and the runtime identifier, so the
+  open flake (status Notes, 42301846503) leaves data.
+- Fixed at the review before the gate (tests-2's review): the build test's measures moved into
+  `PaletteGrowthWorks`, same order, sizes, rounds and bound. Each work is kept as its measure returns, so
+  a round whose 10,000 tags' measure fails keeps its 2,500 tags' work (`104/failed`), and a failed
+  warm-up names its sizes (`100/failed`, `failed/-`); items read "not counted" until a context's first
+  measure returns. Every failed measure fails the test as an `XunitException` with the measure's
+  message, `The data: …` and, when the record was not written, its note: the data is in the failure
+  even when the file has it. `PaletteGrowthWorksTests` drives made-up measures (4 of 5 fail on the old
+  code).
 
 ### 16.4 Waiting on the owner
 

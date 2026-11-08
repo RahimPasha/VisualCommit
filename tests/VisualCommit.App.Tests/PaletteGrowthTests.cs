@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.Testing.Headless;
 using Xunit;
 
 namespace VisualCommit.App.Tests;
@@ -93,27 +94,43 @@ public class PaletteGrowthTests
                 return (work, milliseconds, items.Count);
             });
 
-        Measure(small);
-        Measure(large);
-        var (bestSmall, bestLarge) = (ulong.MaxValue, ulong.MaxValue);
-        var (fastestSmall, fastestLarge) = (double.MaxValue, double.MaxValue);
-        var (smallCount, largeCount) = (0, 0);
-        for (var round = 0; round < 3; round++)
-        {
-            var (work, milliseconds, count) = Measure(small);
-            (bestSmall, fastestSmall, smallCount) = (Math.Min(bestSmall, work), Math.Min(fastestSmall, milliseconds), count);
-            (work, milliseconds, count) = Measure(large);
-            (bestLarge, fastestLarge, largeCount) = (Math.Min(bestLarge, work), Math.Min(fastestLarge, milliseconds), count);
-        }
+        // Every run leaves its data (RecordFile): the works of each measure are kept as each measure
+        // returns, written and given in the failures, a failed measure's among them
+        // (PaletteGrowthWorks), so that a rare failure on CI (status Notes, "The two Linux failures
+        // of 42301846503") can be set beside the runs that passed. Keeping them changes nothing of
+        // the measure: they are taken between measures, outside the regions without collection.
+        var works = PaletteGrowthWorks.Measure(small, large, Measure, Record);
+        var (bestSmall, bestLarge) = (works.BestSmall, works.BestLarge);
+        var (fastestSmall, fastestLarge) = (works.FastestSmall, works.FastestLarge);
+        var (smallCount, largeCount) = (works.SmallCount, works.LargeCount);
 
         var ratio = (double)bestLarge / Math.Max(bestSmall, 1);
         var limit = Math.Pow((double)largeCount / smallCount, 1.5);
+        var unwritten = Record(string.Create(CultureInfo.InvariantCulture, $"ratio {ratio:F2}, limit {limit:F2}; {works.Describe()}; the fastest {fastestSmall:F0} ms and {fastestLarge:F0} ms"));
+        var data = $" The data: {works.Describe()}." + (unwritten is null ? string.Empty : " " + unwritten);
         TestContext.Current.SendDiagnosticMessage(string.Create(CultureInfo.InvariantCulture, $"Built and ranked: 2,500 tags ({smallCount} items) in {fastestSmall:F0} ms, 10,000 tags ({largeCount} items) in {fastestLarge:F0} ms; the thread's work {ratio:F1} times as much (limit {limit:F1})."));
-        Assert.True(largeCount > 60_000, $"The large context gave {largeCount} items.");
-        Assert.True(ratio < limit, string.Create(CultureInfo.InvariantCulture, $"10,000 tags took {ratio:F1} times the work of 2,500 ({bestLarge} against {bestSmall}), {(double)largeCount / smallCount:F1} times the items; the limit is {limit:F1}."));
+        Assert.True(largeCount > 60_000, $"The large context gave {largeCount} items.{data}");
+        Assert.True(ratio < limit, string.Create(CultureInfo.InvariantCulture, $"10,000 tags took {ratio:F1} times the work of 2,500 ({bestLarge} against {bestSmall}), {(double)largeCount / smallCount:F1} times the items; the limit is {limit:F1}.{data}"));
 
         // A gross ceiling on the time, as the diff view's: a stopwatch also counts the waits for a
         // processor, which another test process beside this one (CI's Git.Tests) makes long.
-        Assert.True(fastestLarge < 20_000, string.Create(CultureInfo.InvariantCulture, $"10,000 tags took {fastestLarge:F0} ms."));
+        Assert.True(fastestLarge < 20_000, string.Create(CultureInfo.InvariantCulture, $"10,000 tags took {fastestLarge:F0} ms.{data}"));
     }
+
+    /// <summary>
+    /// Where <see cref="The_build_and_a_one_letter_query_grow_in_step_with_the_refs"/> appends a line
+    /// for each run, passed or failed: <c>artifacts/visual/palette-growth.txt</c> under the
+    /// repository's root, which CI uploads with each job's screenshots.
+    /// </summary>
+    internal static string RecordFile => Path.Combine(VisualRun.RepoRoot, "artifacts", "visual", "palette-growth.txt");
+
+    /// <summary>Appends a run's line, after the time in UTC, to <see cref="RecordFile"/>; returns null, or what failed (<see cref="GrowthMeasures.AppendRecord"/>).</summary>
+    private static string? Record(string run) => GrowthMeasures.AppendRecord(
+        RecordFile,
+        "One line for each run of PaletteGrowthTests.The_build_and_a_one_letter_query_grow_in_step_with_the_refs, passed or failed: "
+            + "the time in UTC; the ratio of the thread's work at 10,000 tags to its work at 2,500 (the best of three rounds each) and its limit; "
+            + "each measure's work at 2,500/10,000 tags, the warm-up's and then each round's (processor cycles on Windows, nanoseconds elsewhere), "
+            + "a measure that failed written \"failed\" and the 10,000 tags' measure it left unmeasured \"-\"; "
+            + "the items of each context; the framework and the runtime identifier; the fastest times.",
+        DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " UTC; " + run);
 }
