@@ -4417,6 +4417,13 @@ the `.Router.cs` headers):
   outside rules binds nothing (D82's order), with one Debug line; a missing file counts as empty.
   Without a directive no git call is added. Tests: `WelcomeCloneFromGitHubTests` (gitdir, hasconfig,
   relative path, unreadable, nested, email-only), `GitConfigIncludeReadTests`.
+- Fixed at the review before the gate (git-1's review): judging each include beside the outside rules
+  alone missed two includes that rewrite the URL only together, by putting a base first that wins git's
+  tie of equal prefixes. Each included `insteadOf` rule that matches the URL with a prefix at least as
+  long as the longest outside match, and rewrites it to another URL, now binds nothing too; no git call
+  is added. The rewrite tests' `username=alice` in the user's helper is asserted only on a git that
+  keeps a URL's user (`GitUrlUser`, D389); alice's request at the server on every git (hasconfig's on
+  2.36 and later). Test: `Two_includes_that_rewrite_the_url_only_together_bind_nothing`.
 
 ### 16.4 Waiting on the owner
 

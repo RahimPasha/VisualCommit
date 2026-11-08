@@ -4367,8 +4367,11 @@ binding), `MainWindowViewModel.Commands.cs` (`CloneFromGitHubAsync`),
   --show-scope --show-origin -z --get-regexp ^(url|includeif)\.`, run as the outside read runs, the
   path worked out as git does by `GitConfigIncludes.Resolve`: `~` under the home folder, a relative
   path beside the file that holds the directive). A file git cannot read, a path the app cannot
-  work out, a conditional directive inside the file, or a rule that, read right after its
-  directive, gives the URL another result than the outside rules alone binds nothing (D82's
+  work out, a conditional directive inside the file, a rule that, read right after its
+  directive, gives the URL another result than the outside rules alone, or an `insteadOf` rule of
+  the file that matches the URL with a prefix at least as long as the longest outside match (any,
+  when none matches outside) and rewrites it to another URL (another include may put that rule's
+  base first, and git breaks a tie of equal prefixes by the base it saw first) binds nothing (D82's
   order) with one Debug line that names no path or URL (`Cloning: a conditional include of git's
   configuration …; the clone goes without the account's token (D82's order).`); a missing file
   counts as empty, as git ignores it. Without such a directive no further git call is made. The read runs under the clone's own cancellation, and `RunningClone` is a completed task
