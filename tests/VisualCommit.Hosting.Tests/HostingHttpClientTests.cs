@@ -868,6 +868,35 @@ public sealed class HostingHttpClientTests
         Assert.Equal($"GitLab: GET /api/v4/items failed: Link to {origin} (request R-1).", Assert.Single(setup.Log.Lines).Message);
     }
 
+    // The review before the gate, tokens-1: the profile is asked of a next page on the origin and
+    // under its path, before it is asked for or given as Next at the cap; a refusal or a hook that
+    // throws (D380) ends the list Malformed with one warning and nothing sent there.
+    [Theory]
+    [InlineData("refused", 10)]
+    [InlineData("refused", 1)]
+    [InlineData("throws", 10)]
+    public async Task A_next_page_the_profile_does_not_follow_is_malformed_and_not_asked_for(string hook, int maxPages)
+    {
+        using var setup = Setup.Scripted(_ => RecordingHttpHandler.Json(HttpStatusCode.OK, "[{\"number\":1}]", ("Link", "<https://gitlab.example/api/v4/items?page=2>; rel=\"next\""), ("X-Request-Id", "R-1")));
+        var asked = new List<string>();
+        setup.Profile.OnPage = next =>
+        {
+            asked.Add(next.AbsoluteUri);
+            return hook == "throws" ? throw new OverflowException("Too large.") : false;
+        };
+
+        var reply = await setup.Client.GetPagesAsync(Token, new Uri(Origin, "items?page=1"), CoreTestJsonContext.Default.ListCoreTestJson, maxPages, Cancelled);
+
+        Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", (List<CoreTestJson>?)null, (Uri?)null, "R-1"),
+            (reply.Failure!.Kind, reply.Failure.Message, reply.Value, reply.Next, reply.Failure.RequestId));
+        Assert.Equal(["https://gitlab.example/api/v4/items?page=2"], asked);
+        Assert.Single(setup.Recorder.Sent);
+        Assert.Equal(
+            hook == "throws" ? "GitLab: GET /api/v4/items failed: Malformed (OverflowException) (request R-1)." : "GitLab: GET /api/v4/items failed: Link outside the API (request R-1).",
+            Assert.Single(setup.Log.Lines).Message);
+        Assert.All(setup.Log.Entries, entry => Assert.Null(entry.Exception));
+    }
+
     [Fact]
     public async Task A_failing_page_fails_the_list()
     {
@@ -1404,6 +1433,9 @@ public sealed class HostingHttpClientTests
 
         public Func<HostingExchange, HostingFailure, string?>? OnWarning { get; set; }
 
+        /// <summary>Whether a next page is followed; every one unless set.</summary>
+        public Func<Uri, bool>? OnPage { get; set; }
+
         /// <summary>Every exchange given to <see cref="Classify"/> or <see cref="RefuseSuccess"/>, in order.</summary>
         public IReadOnlyList<HostingExchange> Seen
         {
@@ -1466,6 +1498,8 @@ public sealed class HostingHttpClientTests
         public override bool SucceedsEmpty(int status) => status == 409;
 
         public override Uri? NextPage(HostingExchange exchange) => HostingLinks.Next(exchange.Headers);
+
+        public override bool FollowsPage(Uri next) => OnPage?.Invoke(next) ?? true;
 
         public override string? RequestIdOf(IReadOnlyDictionary<string, string> headers) => headers.GetValueOrDefault("X-Request-Id");
 

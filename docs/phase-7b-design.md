@@ -2245,11 +2245,12 @@ recognition takes no other host or port; 1.4's signatures hold; CI's five jobs a
 **Fixed at the review before the gate** (tokens-1): the core asks a new profile hook, `FollowsPage(next)`
 (true unless a profile says otherwise), of every next page that keeps `TokenOrigin`'s origin and path,
 before anything is sent there or it is given as `Next`; false ends the list `Malformed`, warning `Link
-outside the API`, nothing sent. `GitLabProfile` answers with its redirect rule (`InApi`: under the API's
-path read decoded, no dot segment or backslash), so a `Link` to `/api/v4/..%2F..%2Foauth%2Ftoken`, which
-the core's test of the path as .NET leaves it kept under `/api/v4/`, no longer takes the token. GitHub's
-and Azure DevOps' paging is unchanged. `GitLabClientTests`' five such `Link`s send one request each; the
-plain next page is still followed.
+outside the API`, nothing sent; a hook that throws, `Malformed (<type>)` (D380). `GitLabProfile` answers
+with its redirect rule (`InApi`: the API's path read decoded, no dot segment or backslash), so a `Link`
+to `/api/v4/..%2F..%2Foauth%2Ftoken`, which the core's test of the path as .NET leaves it kept under
+`/api/v4/`, no longer takes the token. GitHub's and Azure DevOps' paging is unchanged.
+`GitLabClientTests`: five such `Link`s, one request each, the plain next page followed;
+`HostingHttpClientTests`: a refusal, one at the page cap, a hook that throws.
 
 ## 8. WP-C: credentials, push guard and prompts on the new hosts
 
