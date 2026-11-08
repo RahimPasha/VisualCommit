@@ -4418,6 +4418,13 @@ the `.Router.cs` headers):
   addresses (15.3), and what reaches a note goes through the screen.
 - D356's row is cut at 260 px, its tooltip whole; a GitLab fork's label is `{Owner}:{branch}`: part P's
   writer records how both read. The live screen over-screens an organization named by a common word.
+- Fixed at the review before the gate (tokens-2), 7a's code: `GitHubProvider.Info` reads `clone_url` and
+  `html_url`, and `Pull` a pull's `html_url`, only by wave 2's rule (5.6's As built): the text begins
+  with `http://` or `https://` and `Uri.TryCreate` gives an absolute `http` or `https` address (a private
+  `WebAddress`, as Azure DevOps' and GitLab's). Any other (`//h/s`, which .NET reads on Windows as the
+  share `file://h/s`, `file:///x`, `ext::sh -c x`) is unreadable as 7a's unreadable fields are: A2's
+  list, A3, A4's list and A5 `Malformed`. `clone_url` is not held to the listed repository. The fake's
+  `http` loopback answers read as before; 7a's checks and pictures unchanged.
 
 ### 16.4 Waiting on the owner
 
