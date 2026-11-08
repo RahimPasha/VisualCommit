@@ -370,6 +370,17 @@ Test steps: `windows-latest` 39 min 7 s (35 min 59 s), `macos-latest` 45 min 0 s
 `ubuntu-latest` 8 min 3 s (5 min 59 s), the containers 7 min 23 s and 7 min 15 s (5 min 15 s and
 5 min 26 s), each under four fifths.
 
+[42437572741](https://github.com/RahimPasha/VisualCommit/actions/runs/42437572741) on `0a25226`
+(WP-N's merge `a6952d2` with D388, and status): `windows-latest`, `ubuntu-latest` and both
+containers green; `macos-latest` failed 2 of 7,814 tests, both cases of D388's
+`SignInBindingsWindowTests.Inside_the_window_a_remote_the_rules_give_another_user_is_bound_to_no_token`
+at its last assertion but one (line 246): git 2.56.0 (Homebrew) asked "Username for
+'http://127.0.0.1:<port>': " without `bob@`, where the test expects every prompt to name bob; every
+earlier assertion, no `x-access-token` and no 200 among them, passed (Notes, "D388's test on
+macOS"). Jobs and Test steps: `windows-latest` 25 min 32 s (23 min 34 s), `macos-latest` 33 min
+21 s (31 min 1 s), `ubuntu-latest` 7 min 12 s (5 min 39 s), the containers 9 min 17 s and 8 min
+37 s (6 min 38 s and 6 min 12 s), each under four fifths. Not rerun (CLAUDE.md: the owner's).
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -880,6 +891,17 @@ every commit.
   lack of a time limit of its own (as D332's), are accepted and written into D388. Merged at
   `a6952d2`; D388 recorded and 0.4's lagged list given `SignInBindingsWindowTests` at `cf82d50`.
   Results and evidence: `D:/Projects/Personal/phase7b-work/verify/wpn-lead/`.
+- **D388's test on macOS** (2026-11-07, run 42437572741, `macos-latest` alone): both cases of
+  `Inside_the_window_a_remote_the_rules_give_another_user_is_bound_to_no_token` failed at
+  `Assert.All(prompts, contains "bob@")`: git's one prompt was "Username for
+  'http://127.0.0.1:<port>': ", so git no longer had the user the URL rule put in when it asked.
+  The test's other assertions passed there (bindings empty, git's requests carry no `x-access-token`
+  and none answered 200). Under investigation, read-only while 13.9's runs hold the laptop (one Opus
+  investigator, two Opus skeptics, cause and security; notes in
+  `D:/Projects/Personal/phase7b-work/verify/ci-42437572741/`): why git on macOS drops the URL's
+  user (one hypothesis: git takes curl's effective URL without the userinfo as a redirect and
+  resets its credential from it), and whether any path lets a token reach a URL the rules give
+  another user where git does so.
 - **The watcher's dispose test on CI** (2026-11-07, run 42386428809, `windows-latest`):
   `RepositoryWatcherTests.Nothing_is_raised_before_start_or_after_dispose` counted two `Changed`, not
   one, 2.9 s in, with seven other projects on the runner. The test runs the watcher on the wall clock
