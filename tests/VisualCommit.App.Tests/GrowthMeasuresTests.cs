@@ -1,4 +1,5 @@
 using System.Runtime;
+using VisualCommit.Testing;
 using Xunit;
 using Xunit.Sdk;
 
@@ -6,8 +7,9 @@ namespace VisualCommit.App.Tests;
 
 /// <summary>
 /// The growth measures' own harness (<see cref="GrowthMeasures"/>): what its failure says when a
-/// garbage collection ends the region without collection. It starts and ends such regions, which
-/// the whole process shares, so it runs in <see cref="GrowthCollection"/>, alone in the process.
+/// garbage collection ends the region without collection, and the record a measure appends to.
+/// It starts and ends such regions, which the whole process shares, so it runs in
+/// <see cref="GrowthCollection"/>, alone in the process.
 /// </summary>
 [Collection(GrowthCollection.Name)]
 public class GrowthMeasuresTests
@@ -67,6 +69,35 @@ public class GrowthMeasuresTests
         Assert.Contains("memory load", failure.Message, StringComparison.Ordinal);
         Assert.Contains("the high-load threshold", failure.Message, StringComparison.Ordinal);
         Assert.NotEqual(GCLatencyMode.NoGCRegion, GCSettings.LatencyMode);
+    }
+
+    [Fact]
+    public void A_record_starts_with_its_heading_and_then_takes_one_line_a_run()
+    {
+        using var folder = new TempDirectory("growth record");
+        var file = folder.Combine("artifacts", "visual", "growth.txt");
+
+        Assert.Null(GrowthMeasures.AppendRecord(file, "What the file holds.", "first run"));
+        Assert.Null(GrowthMeasures.AppendRecord(file, "What the file holds.", "second run"));
+
+        Assert.Equal("What the file holds.\nfirst run\nsecond run\n", File.ReadAllText(file));
+    }
+
+    [Fact]
+    public void A_record_that_cannot_be_written_says_so_and_throws_nothing()
+    {
+        // The record's folder is a file: the write fails, and the measure's test goes on.
+        using var folder = new TempDirectory("growth record");
+        var blocker = folder.Combine("visual");
+        File.WriteAllText(blocker, "a file where the folder should be");
+        var file = Path.Combine(blocker, "growth.txt");
+
+        var unwritten = GrowthMeasures.AppendRecord(file, "What the file holds.", "a run");
+
+        Assert.NotNull(unwritten);
+        Assert.StartsWith($"The record {file} was not written (", unwritten, StringComparison.Ordinal);
+        Assert.Contains("Exception: ", unwritten, StringComparison.Ordinal);
+        Assert.Equal("a file where the folder should be", File.ReadAllText(blocker));
     }
 
     /// <summary>Allocates about <paramref name="bytes"/> in arrays of a kilobyte, each left for the collector.</summary>

@@ -58,6 +58,27 @@ internal static class GrowthMeasures
         allocated >= budget
             ? string.Create(CultureInfo.InvariantCulture, $"A garbage collection ran during the measure, which allocated {allocated:N0} bytes of the budget's {budget:N0}: the budget is too small.")
             : string.Create(CultureInfo.InvariantCulture, $"A garbage collection ran during the measure with {allocated:N0} bytes of the budget's {budget:N0} allocated: another thread's collection or memory pressure ended the region (memory load {memory.MemoryLoadBytes:N0} bytes, the high-load threshold {memory.HighMemoryLoadThresholdBytes:N0} bytes).");
+
+    /// <summary>
+    /// Appends <paramref name="line"/> to <paramref name="file"/>, after <paramref name="heading"/>
+    /// when the file does not exist yet, and returns null. A write that fails returns what failed
+    /// instead of throwing: a measure's record never fails its test, which names the failed write
+    /// only when it fails anyway.
+    /// </summary>
+    internal static string? AppendRecord(string file, string heading, string line)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            var text = (File.Exists(file) ? string.Empty : heading + "\n") + line + "\n";
+            File.AppendAllText(file, text);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return $"The record {file} was not written ({ex.GetType().Name}: {ex.Message}).";
+        }
+    }
 }
 
 /// <summary>
