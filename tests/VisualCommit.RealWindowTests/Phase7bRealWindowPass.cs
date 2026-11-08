@@ -1121,21 +1121,22 @@ public partial class Phase7bRealWindowPass(Phase7bRun fixture) : IClassFixture<P
         Assert.DoesNotContain(body, member => shown.AbsentMembers.Contains(member.Member));
         AssertNoRequestsBut(served, provider, mark, "The create asked another fake");
 
-        // A receive-pack as x-access-token only if the branch was pushed first (it was not, part N's open point 35).
-        var pushes = fake.GitRequests.Skip(gitRequests).Where(request => request.Path.EndsWith("git-receive-pack", StringComparison.Ordinal)).ToList();
-        foreach (var request in pushes)
+        // A receive-pack as x-access-token only if the branch was pushed first; it was not (part N's
+        // open point 35), so git asked the fake nothing at all, as the twin counts it.
+        var gitSince = fake.GitRequests.Skip(gitRequests).ToList();
+        foreach (var request in gitSince)
         {
-            AssertNoToken(served, request.Path, "The path of a push to the fake");
-            AssertNoToken(served, request.Query, "The query of a push to the fake");
+            AssertNoToken(served, request.Path, "The path of a git request to the fake");
+            AssertNoToken(served, request.Query, "The query of a git request to the fake");
         }
 
         if (shown.PushedFirst)
         {
-            Assert.Contains(pushes, request => request is { GivenUserName: "x-access-token", Status: 200 });
+            Assert.Contains(gitSince, request => request is { GivenUserName: "x-access-token", Status: 200 } && request.Path.EndsWith("git-receive-pack", StringComparison.Ordinal));
         }
         else
         {
-            Assert.Empty(pushes);
+            Assert.True(gitSince.Count == 0, $"The create made {gitSince.Count} git requests to the fake of {fake.DisplayName}, though {shown.Head} was not pushed: {string.Join(" | ", gitSince.Select(request => $"{request.Method} {request.Path} {request.Status}"))}.");
         }
 
         // The status bar's text and its offer, never clicked (ruling 29); the new row first in the section.
