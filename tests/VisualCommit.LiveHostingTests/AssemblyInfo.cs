@@ -31,12 +31,17 @@ namespace VisualCommit.LiveHostingTests
         /// POST), 300 s; its Check_1b_probes 17 calls, the first of them the identity read, and 17 to
         /// the fake, 595 s; its Check_2 the identity and the sandbox's reads and five app steps and the
         /// clone, 480 s; its Check_2b_probes 9 probes, two polls and the clean-up's 5 calls, with 10 to
-        /// the fake (its refs delete beside the clean-up's among them), 530 s; its Check_4 the identity, three app steps and the clone, 330 s. GitLab's
+        /// the fake (its refs delete beside the clean-up's among them), 530 s; its Check_3 (stage 2,
+        /// 15.6) the identity, the sandbox and the read back, the clean-up's 4 calls (the active list,
+        /// an abandon, the refs read and POST), four app steps (the sign-in through the dialog, the
+        /// browser's list, the push, the create through the form) and the clone, whose limit its
+        /// requests' load shares, 570 s; its Check_4 the identity, three app steps and the clone, 330 s. GitLab's
         /// Check_1 sends 4 calls and 15 for five leftovers (each request's close and delete, each
         /// branch's delete), 570 s; its Check_1b_probes 6 calls and 7 to the fake, 215 s; its Check_2
         /// the two reads, six app steps (two pushes) and the clone, 540 s; its Check_2b_probes 5 probes
-        /// and the clean-up's 7 calls, with 5 to the fake, 385 s. The fakes' start, a few git calls, is
-        /// outside the sums, as in 7a's.
+        /// and the clean-up's 7 calls, with 5 to the fake, 385 s; its Check_3 as Azure DevOps' (the
+        /// clean-up's 4 calls the opened list, the request's close and delete and the branch's delete),
+        /// 570 s. The fakes' start, a few git calls, is outside the sums, as in 7a's.
         /// </summary>
         [ModuleInitializer]
         internal static void Isolate()

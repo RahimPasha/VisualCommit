@@ -3327,4 +3327,243 @@ public sealed class LiveScreenTests
             text = next;
         }
     }
+
+    [Fact]
+    public void Check_3_s_notes_of_the_app_s_texts_are_screened_and_leave_no_survivor()
+    {
+        // Azure DevOps: the browser's row and the form's repositories name the organization in
+        // FullName, in any case; the section's title and the status name none.
+        var azure = LiveRun.ScreenOf(HostingProvider.AzureDevOps, Org, null);
+        foreach (var (note, expected) in new[]
+        {
+            ($"The browser \"Clone from Azure DevOps\": 1 rows, more exist: no; the sandbox's row {Org.ToLowerInvariant()}/visualcommit-sandbox/visualcommit-sandbox (Private).",
+                "The browser \"Clone from Azure DevOps\": 1 rows, more exist: no; the sandbox's row <the organization>/visualcommit-sandbox/visualcommit-sandbox (Private)."),
+            ($"Step 7, the create through the form failed with XunitException: The form would create in {Org.ToUpperInvariant()}/p/r from {Org}/p/r, not in and from {Org}/p/r.",
+                "Step 7, the create through the form failed with XunitException: The form would create in <the organization>/p/r from <the organization>/p/r, not in and from <the organization>/p/r."),
+            ($"The chosen URL https://{Org}@dev.azure.com/{Org}/p/_git/r.", "The chosen URL https://<the organization>@dev.azure.com/<the organization>/p/_git/r."),
+            ("The left panel's section \"Pull requests\" shows \"No open pull requests\".", "The left panel's section \"Pull requests\" shows \"No open pull requests\"."),
+            ("The status: Created draft pull request !12; the app's POST answered 201 (request 7b0a0201-0000-4a00-8000-000000000009).", "The status: Created draft pull request !12; the app's POST answered 201 (request 7b0a0201-0000-4a00-8000-000000000009)."),
+        })
+        {
+            Assert.Equal(expected, LiveRun.ScreenedBy(azure, note, out var kind));
+            Assert.Null(kind);
+        }
+
+        // GitLab: the namespace in the row and in a login, in any case; the form's Draft: title kept.
+        var gitLab = LiveRun.ScreenOf(HostingProvider.GitLab, null, "ada");
+        foreach (var (note, expected) in new[]
+        {
+            ("The browser \"Clone from GitLab\": 1 rows, more exist: no; the sandbox's row Ada/visualcommit-sandbox (Private).", "The browser \"Clone from GitLab\": 1 rows, more exist: no; the sandbox's row <the namespace>/visualcommit-sandbox (Private)."),
+            ("The account's login is ADA, not ada.", "The account's login is <the namespace>, not <the namespace>."),
+            ("With Draft ticked the form shows \"Title on GitLab: Draft: VisualCommit live test 20261108-064604Z\".", "With Draft ticked the form shows \"Title on GitLab: Draft: VisualCommit live test 20261108-064604Z\"."),
+            ("The left panel's section \"Merge requests\" shows 2 rows.", "The left panel's section \"Merge requests\" shows 2 rows."),
+        })
+        {
+            Assert.Equal(expected, LiveRun.ScreenedBy(gitLab, note, out var kind));
+            Assert.Null(kind);
+        }
+    }
+}
+
+/// <summary>
+/// Stage 2's offline cases (docs/phase-7b-design.md 15.6, 15.9): the rehearsal's guard, which judges
+/// a fake's loopback origin as the services' guards judge theirs and admits nothing elsewhere, and the
+/// rehearsal of each provider's Check_3, which runs its steps, the same code the live method runs, over
+/// 7b's fakes on 127.0.0.1 (the app headless, git over the fake's server, the test's own calls), with
+/// the fakes' made-up names and tokens, so that a defect in the test shows before the run with the
+/// owner's tokens. Nothing leaves the machine.
+/// </summary>
+public sealed partial class LiveSafetyTests
+{
+    private const string FakeOrigin = "http://127.0.0.1:47123/";
+
+    /// <summary>The GitLab fake's user, the rehearsal's namespace (15.7's fake beside has the same).</summary>
+    private const string RehearsalLogin = "ada";
+
+    [Fact]
+    public void A_rehearsal_s_guard_admits_its_fake_s_loopback_origin_alone_and_the_services_guards_are_unchanged()
+    {
+        var fake = new Uri(FakeOrigin);
+        var azure = LiveReach.AzureDevOpsRehearsal(fake, Organization, Project, Repository);
+        var gitLab = LiveReach.GitLabRehearsal(fake);
+        var azureService = LiveReach.AzureDevOps(Organization, Project, Repository, MadeUpOrganization);
+        var gitLabService = LiveReach.GitLab();
+        Assert.Equal(("https://dev.azure.com:443", "dev.azure.com", "https"), (azureService.Origin, azureService.Host, azureService.Scheme));
+        Assert.Equal(("https://gitlab.com:443", "gitlab.com", "https"), (gitLabService.Origin, gitLabService.Host, gitLabService.Scheme));
+        Assert.Equal(("http://127.0.0.1:47123", "127.0.0.1:47123", "http"), (azure.Origin, azure.Host, azure.Scheme));
+        Assert.Equal(("http://127.0.0.1:47123", "127.0.0.1:47123", "http"), (gitLab.Origin, gitLab.Host, gitLab.Scheme));
+
+        string AzurePath(string origin) => $"{origin}{Organization}/{Project}/_apis/git/repositories/{Repository}/pullrequests?searchCriteria.status=active&$top=100&api-version=7.1";
+        string GitLabPath(string origin) => $"{origin}api/v4/projects/ada%2Fvisualcommit-sandbox/merge_requests";
+
+        // On its fake's origin the rehearsal's guard admits what the service's admits on the service's.
+        Assert.Null(azure.RefusalOf(HttpMethod.Get, new Uri(AzurePath(FakeOrigin)), LiveCredentialForm.Basic));
+        Assert.Null(azureService.RefusalOf(HttpMethod.Get, new Uri(AzurePath("https://dev.azure.com/")), LiveCredentialForm.Basic));
+        Assert.Null(gitLab.RefusalOf(HttpMethod.Post, new Uri(GitLabPath(FakeOrigin)), LiveCredentialForm.Bearer));
+        Assert.Null(gitLabService.RefusalOf(HttpMethod.Post, new Uri(GitLabPath("https://gitlab.com/")), LiveCredentialForm.Bearer));
+
+        // And refuses there what the service's refuses: another path, method or credential.
+        Assert.NotNull(azure.RefusalOf(HttpMethod.Get, new Uri($"{FakeOrigin}{Organization}/_apis/git/repositories?api-version=7.1"), LiveCredentialForm.Basic));
+        Assert.NotNull(azure.RefusalOf(HttpMethod.Delete, new Uri(AzurePath(FakeOrigin)), LiveCredentialForm.Basic));
+        Assert.NotNull(azure.RefusalOf(HttpMethod.Get, new Uri(AzurePath(FakeOrigin)), LiveCredentialForm.Bearer));
+        Assert.NotNull(gitLab.RefusalOf(HttpMethod.Get, new Uri($"{FakeOrigin}ada/visualcommit-sandbox"), LiveCredentialForm.Bearer));
+        Assert.NotNull(gitLab.RefusalOf(HttpMethod.Get, new Uri(GitLabPath(FakeOrigin)), LiveCredentialForm.PrivateToken));
+
+        // Nowhere but its fake's origin: not the service's, another port, https, a name, a user.
+        foreach (var other in new[] { "https://dev.azure.com/", "https://gitlab.com/", "http://127.0.0.1:47124/", "https://127.0.0.1:47123/", "http://localhost:47123/", "http://user@127.0.0.1:47123/" })
+        {
+            Assert.NotNull(azure.RefusalOf(HttpMethod.Get, new Uri(AzurePath(other)), LiveCredentialForm.Basic));
+            Assert.NotNull(gitLab.RefusalOf(HttpMethod.Post, new Uri(GitLabPath(other)), LiveCredentialForm.Bearer));
+        }
+
+        // The services' guards refuse the fake's origin.
+        Assert.NotNull(azureService.RefusalOf(HttpMethod.Get, new Uri(AzurePath(FakeOrigin)), LiveCredentialForm.Basic));
+        Assert.NotNull(gitLabService.RefusalOf(HttpMethod.Post, new Uri(GitLabPath(FakeOrigin)), LiveCredentialForm.Bearer));
+
+        // A rehearsal's origin is a fake's http://127.0.0.1:<port>/ alone.
+        foreach (var bad in new[] { "https://dev.azure.com/", "https://gitlab.com/", "http://localhost:47123/", "http://127.0.0.1/", "http://127.0.0.1:80/", "https://127.0.0.1:47123/", "http://u@127.0.0.1:47123/", "http://127.0.0.1:47123/api/v4/", "http://127.0.0.1:47123/?x=1", "http://127.0.0.2:47123/", "http://[::1]:47123/" })
+        {
+            Assert.Throws<ArgumentException>(() => LiveReach.AzureDevOpsRehearsal(new Uri(bad), Organization, Project, Repository));
+            Assert.Throws<ArgumentException>(() => LiveReach.GitLabRehearsal(new Uri(bad)));
+        }
+
+        // ReachProblems takes the guard's scheme and host: a rehearsal's http request on its origin is
+        // none; the same record under the service's guard is two (not https, a credential elsewhere).
+        LiveRequest Sent(LiveReach reach) => new(DateTimeOffset.UtcNow, "GET", "http", "127.0.0.1:47123", "/api/v4/user", 200, true, null, null, false, null, null) { Provider = reach.Provider, Form = LiveCredentialForm.Bearer };
+        Assert.Empty(LiveRequestLog.ReachProblems([Sent(gitLab)], gitLab));
+        Assert.Equal(2, LiveRequestLog.ReachProblems([Sent(gitLabService)], gitLabService).Count);
+    }
+
+    [Fact]
+    public void No_live_method_builds_a_rehearsal_s_guard()
+    {
+        var root = typeof(LiveSafetyTests).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>().First(attribute => attribute.Key == "RepoRoot").Value!;
+        foreach (var file in new[] { "AzureDevOpsLiveTests.cs", "GitLabLiveTests.cs", "GitHubLiveTests.cs", "LiveProbes.cs", "LiveRun.cs", "LiveSettings.cs", "LiveScreen.cs", "AzureDevOpsLiveApi.cs", "GitLabLiveApi.cs", "GitHubLiveApi.cs" })
+        {
+            var text = File.ReadAllText(Path.Combine(root, "tests", "VisualCommit.LiveHostingTests", file));
+            Assert.DoesNotContain("Rehearsal(", text, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void Check_3_is_ordered_after_Check_2b_probes_and_its_limits_sum_under_the_watchdog_s_600_s()
+    {
+        foreach (var (type, methods) in new[] { (nameof(AzureDevOpsLiveTests), AzureDevOpsLiveOrder.Methods), (nameof(GitLabLiveTests), GitLabLiveOrder.Methods) })
+        {
+            var list = methods.ToList();
+            Assert.Equal(list.IndexOf("Check_2b_probes") + 1, list.IndexOf("Check_3_the_app_signs_in_clones_lists_pushes_and_creates"));
+            Assert.Equal(TimeSpan.FromSeconds(570), LiveSteps.Sums[type + ".Check_3_the_app_signs_in_clones_lists_pushes_and_creates"]);
+        }
+    }
+
+    /// <summary>
+    /// Azure DevOps' Check_3 rehearsed (15.6): <see cref="AzureDevOpsLiveTests.AppDrivenAsync"/> over
+    /// <see cref="VisualCommit.Testing.Hosting.FakeAzureDevOps"/> served on 127.0.0.1, the app's and the
+    /// test's requests behind the rehearsal's guard, which judges them as the service's guard does. It
+    /// passes only as the live method would: signed in through the dialog with the organization typed,
+    /// the sandbox chosen in "From Azure DevOps…" and cloned through the app's helper, "Pull requests"
+    /// shown, the push, the draft created through the form with its status, read back, the pull request
+    /// abandoned and the branch deleted, no request refused, the tripwires and the screen quiet, and
+    /// run.txt written without the organization or the token.
+    /// </summary>
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public async Task Check_3_s_steps_pass_over_the_fake_of_Azure_DevOps()
+    {
+        using var folder = new TempDirectory("live-rehearsal");
+        await using var fake = await VisualCommit.Testing.Hosting.FakeAzureDevOps.StartAsync(folder.Combine("azure"), ct: Cancelled);
+        fake.AddOrganization(Organization);
+        fake.AddProject(Organization, Project);
+        var token = fake.AddToken(Organization, fake.AddUser(Organization, "Ada Lovelace"));
+        using var source = await TempRepo.CreateAsync("live-rehearsal-source");
+        await LiveAzureFake.BranchesAsync(source, null, null);
+        var repository = await fake.AddRepositoryAsync(Organization, Project, Repository, source.Path, ct: Cancelled);
+        var origin = fake.Endpoints.WebBase;
+        var reach = LiveReach.AzureDevOpsRehearsal(origin, Organization, Project, Repository);
+        var notes = new List<string>();
+        var run = new AzureDevOpsLiveRun(token, folder.Combine("azure-devops", "run.txt"), notes.Add, LiveRun.ScreenOf(HostingProvider.AzureDevOps, Organization, null));
+        var appRequests = new LiveRequestLog.Store();
+        var ownRequests = new LiveRequestLog.Store();
+        using var api = new AzureDevOpsLiveApi(new LiveAzureSandbox(Organization, Project, Repository, token), new LiveRequestLog(LiveServiceApi.NewHandler(), ownRequests, reach), origin, LiveServiceApi.CallLimit, run.Screener!, run.Withheld);
+        var hosting = VisualCommit.Hosting.HostingOptions.Off with
+        {
+            AzureDevOps = fake.Endpoints with { ListProject = Project },
+            CreateAzureDevOpsHandler = () => new LiveRequestLog(VisualCommit.Hosting.HostingOptions.DefaultHandler(fake.Endpoints.WebBase)(), appRequests, reach),
+        };
+
+        await new AzureDevOpsLiveTests(run).AppDrivenAsync(api, reach, hosting, appRequests, ownRequests);
+
+        var pull = Assert.Single(fake.PullRequests(repository));
+        Assert.StartsWith(LiveLeftovers.Prefix, pull.SourceBranch, StringComparison.Ordinal);
+        Assert.Equal((true, VisualCommit.Testing.Hosting.FakeAzurePullRequestStatus.Abandoned), (pull.IsDraft, pull.Status));
+        Assert.Empty(await LiveBranchesAsync(repository.BarePath));
+        Assert.Empty(fake.Errors);
+        AssertRehearsed(run, notes, appRequests, ownRequests, token, Organization, "Created draft pull request !" + pull.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), "The left panel's section \"Pull requests\"");
+    }
+
+    /// <summary>GitLab's Check_3 rehearsed (15.6) as <see cref="Check_3_s_steps_pass_over_the_fake_of_Azure_DevOps"/> is, over <see cref="VisualCommit.Testing.Hosting.FakeGitLab"/>: "Merge requests", the form's <c>Draft: </c> title, the merge request closed and deleted.</summary>
+    [Avalonia.Headless.XUnit.AvaloniaFact]
+    public async Task Check_3_s_steps_pass_over_the_fake_of_GitLab()
+    {
+        using var folder = new TempDirectory("live-rehearsal");
+        await using var fake = await VisualCommit.Testing.Hosting.FakeGitLab.StartAsync(folder.Combine("gitlab"), ct: Cancelled);
+        fake.AddUser(RehearsalLogin, 1001, "Ada Lovelace");
+        var token = fake.AddToken(RehearsalLogin);
+        using var source = await TempRepo.CreateAsync("live-rehearsal-source");
+        await LiveAzureFake.BranchesAsync(source, null, null);
+        var project = await fake.AddProjectAsync($"{RehearsalLogin}/{Project}", source.Path, ct: Cancelled);
+        var reach = LiveReach.GitLabRehearsal(fake.Endpoints.WebBase);
+        var notes = new List<string>();
+        var run = new GitLabLiveRun(token, folder.Combine("gitlab", "run.txt"), notes.Add, LiveRun.ScreenOf(HostingProvider.GitLab, null, RehearsalLogin));
+        var appRequests = new LiveRequestLog.Store();
+        var ownRequests = new LiveRequestLog.Store();
+        using var api = new GitLabLiveApi(new LiveGitLabSandbox(RehearsalLogin, Project, token), new LiveRequestLog(LiveServiceApi.NewHandler(), ownRequests, reach), fake.Endpoints.ApiBase, LiveServiceApi.CallLimit, run.Screener!, run.Withheld);
+        var hosting = VisualCommit.Hosting.HostingOptions.Off with
+        {
+            GitLab = fake.Endpoints,
+            CreateGitLabHandler = () => new LiveRequestLog(VisualCommit.Hosting.HostingOptions.DefaultHandler(fake.Endpoints.ApiBase)(), appRequests, reach),
+        };
+
+        await new GitLabLiveTests(run).AppDrivenAsync(api, reach, hosting, appRequests, ownRequests);
+
+        Assert.DoesNotContain(fake.MergeRequests(project), request => request.State == "opened");
+        Assert.Empty(await LiveBranchesAsync(project.BarePath!));
+        Assert.Empty(fake.Errors);
+        var created = Assert.Single(notes, note => note.StartsWith("The status: ", StringComparison.Ordinal));
+        Assert.Matches(@"^The status: Created draft merge request !\d+; ", created);
+        AssertRehearsed(run, notes, appRequests, ownRequests, token, RehearsalLogin, "Created draft merge request !", "The left panel's section \"Merge requests\"");
+        Assert.Contains(notes, note => note.StartsWith("With Draft ticked the form shows \"Title on GitLab: Draft: VisualCommit live test ", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// What a rehearsal of Check_3 must show once it passed: run.txt written (the run disposed without a
+    /// failure) and holding neither the token nor <paramref name="hidden"/> (the organization, the
+    /// namespace); notes for each step; every request of the app's and the test's admitted by the guard,
+    /// the app's credential-bearing ones none before the sign-in.
+    /// </summary>
+    private static void AssertRehearsed(LiveRun run, List<string> notes, LiveRequestLog.Store appRequests, LiveRequestLog.Store ownRequests, string token, string hidden, string status, string section)
+    {
+        Assert.Empty(run.Failures);
+        run.Dispose();
+        var text = File.ReadAllText(run.File);
+        Assert.DoesNotContain(token, text, StringComparison.Ordinal);
+        Assert.DoesNotMatch($"(?i)(?<![A-Za-z0-9-]){System.Text.RegularExpressions.Regex.Escape(hidden)}(?![A-Za-z0-9-])", text);
+        Assert.Contains(notes, note => note.StartsWith("The sign-in through \"Add ", StringComparison.Ordinal));
+        Assert.Contains(notes, note => note.StartsWith("The browser \"Clone from ", StringComparison.Ordinal));
+        Assert.Contains(notes, note => note.StartsWith(section, StringComparison.Ordinal));
+        Assert.Contains(notes, note => note.StartsWith("The status: " + status, StringComparison.Ordinal));
+        Assert.Contains(notes, note => note.StartsWith("Read back (", StringComparison.Ordinal));
+        Assert.Contains(notes, note => note.StartsWith("The token's tripwire: not in", StringComparison.Ordinal));
+        Assert.DoesNotContain(notes, note => note.StartsWith("Problem: ", StringComparison.Ordinal) || note.StartsWith("Check_3 failed", StringComparison.Ordinal));
+        Assert.All(appRequests.Snapshot().Concat(ownRequests.Snapshot()), request => Assert.False(request.Refused, request.DescribeOrigin()));
+        Assert.Contains(appRequests.Snapshot(), request => request.Method == "POST");
+    }
+
+    /// <summary>The <c>visualcommit-live/</c> branches of the bare repository at <paramref name="bare"/>.</summary>
+    private static async Task<IReadOnlyList<string>> LiveBranchesAsync(string bare)
+    {
+        var git = new VisualCommit.Git.GitRunner(VisualCommit.Git.GitLocator.FindExecutable(VisualCommit.Git.GitSearchContext.FromSystem()) ?? throw new InvalidOperationException("The rehearsal needs git."));
+        var result = await git.RunAsync(new VisualCommit.Core.Git.GitCommand(["for-each-ref", "--format=%(refname)", LiveLeftovers.HeadsPrefix + LiveLeftovers.Prefix]) { WorkingDirectory = bare }, Cancelled);
+        Assert.True(result.Succeeded, result.StandardError);
+        return [.. result.StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)];
+    }
 }
