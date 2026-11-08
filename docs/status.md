@@ -173,7 +173,8 @@ Checks, live trial and review:
   on the owner); stage 1 (15.1) merged at `b377aa3`, built, reviewed and hunted, offline classes
   404 of 404; its first run with the tokens (2026-11-05) passed 8 of 9 (Notes, D385), and GitLab's
   again with a new token (2026-11-06) 4 of 4, so stage 1's 9 tests have passed; WP-LF (0.4), which
-  put what they found into the fakes, merged at `22fad1b` (Notes); stage 2 (`Check_3`) follows WP-N.
+  put what they found into the fakes, merged at `22fad1b` (Notes); stage 2 (`Check_3`, 15.6) is being
+  built on `wip/p7b-live2` from `d127fef` (2026-11-07).
 - [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
   tests.
 
@@ -552,9 +553,15 @@ plain and lagged; 13.9's picture comparison and part N's inspection passed (Note
 runs"). Next: read CI's run on the push of `98cdd86` and the docs after it (the CI section; the
 macOS job above all, and its `git-url-user.txt` among the job's pictures, which should read Lost).
 If it is green, tick steps 9 (WP-C's, WP-S's and D388's tests, green in every job), 13 and 14.
-Meanwhile WP-LIVE's second stage (design 15, `Check_3`, `wip/p7b-live2`) is built; it runs with the
-tokens only with the owner told, its offline classes first on the same commit. Then the review
-before the gate (step 17), WP-R and the gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
+Meanwhile WP-LIVE's second stage (design 15.6, `Check_3` per provider) is being built in
+`D:/Projects/Personal/vc-wt/p7b-live2` (`wip/p7b-live2`, from `d127fef`; the session's
+`phase7b-live2-pkg.js`, the wave-4 script with the package L2: an Opus builder, two Opus reviewers,
+fix rounds and three lensed hunts, screen, guard and flow, each serious finding put to an Opus
+refuter), with an offline rehearsal of `Check_3` over 7b's fakes in `LiveSafetyTests`. At its merge
+the lead runs the offline classes, then, the owner told, the classes of Azure DevOps and GitLab
+with the tokens, `Check_3` now among their methods (15.9's "stage 2 likewise"), checks each run.txt fully decoded before anything from it enters the repository, and
+records the times in CLAUDE.md's live row. Then the review before the gate (step 17), WP-R and the
+gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
 `c5ba918` is green; CI's run on the fix's merge, 42386428809, failed the two older tests above.
