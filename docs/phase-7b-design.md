@@ -3725,6 +3725,17 @@ is clean; CI's five jobs are green, each Test step under four fifths of its limi
   `n04b`'s progress segment and six pixels one level off in `n05b`. Alone (Debug, laptop shared,
   timing script): methods 1 to 7 40.1, 64.2, 35.5, 30.7, 26.2, 50.5 and 42.7 s; 5.5 to 21.4 s from
   the app's start to the last picture.
+- WP-N's review of the lead's fixes (2026-11-07): the product's findings are in D388's bullet above
+  (the tick's ask, the at-once tests' reach, when the count line is logged). Part N's
+  `AssertFormBrushes` now also runs on `n01a` (method 3, N8 step 4), on method 3 step 5's
+  `local-work` form and on `n07a`, so every form part N checks has its brush check; N5 step 3
+  asserts the App's Warning for the 409 (`{repo}: {Title}: the request to create it failed:
+  Validation, {message} (request {id})`) as step 2 does for the 400, a refused POST's three lines.
+  Mutations in a scratch copy: the quick-actions note's brush fails method 3 at `n01a` and the head
+  note's at step 5's form (with the earlier checks both only at `n04a`); a cut head repository
+  text's brush fails method 6 at `n07a`, and the App's Warning left out for an "already open"
+  refusal fails methods 5 and 6 at step 3 (with the earlier checks all three passed). Part N's
+  steps and pictures are as they were: only assertions were added.
 
 ## 14. WP-R: the real-window pass
 
