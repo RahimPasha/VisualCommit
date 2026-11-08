@@ -142,6 +142,22 @@ as written and fully decoded (URL, HTML and base64); run.txt names Azure DevOps'
 challenges, as on 2026-11-05, which stays out of the repository. Copy:
 `D:/Projects/Personal/phase7b-work/live/azure-devops-check1b-2026-11-07.txt`.
 
+**Stage 2** (2026-11-08, 07:39 UTC, on `fdb2c05`, the Windows machine, the owner told; the offline
+classes alone first on the same commit, 428 of 428): the command with `--filter-class
+"*AzureDevOpsLiveTests" --filter-class "*GitLabLiveTests"`: 11 of 11 passed in 1 min 26 s (91 s with
+the lock and the build up to date). Azure DevOps' 6 passed, `Check_3_the_app_signs_in_clones_lists_pushes_and_creates`
+among them: the sign-in through "Add Azure DevOps account" with the Organization box, the browser's
+one row by its full name, the clone through the clone form and the app's helper with no dialog
+(2.4 s), "Pull requests" with none open, the push, a draft pull request created through the form
+(201, the status "Created draft pull request !n"), read back, then abandoned and its branch deleted;
+the app's 9 requests and the test's own 5 each with Basic, none refused. With `Check_2` and the
+probes it made two pull requests and their branches and removed them again. Of the probes' 24
+answers beside the fake, 20 matched; the 4 that differed are the `info/refs` answers to made-up
+values (401 with challenges where the fake answers 404), which 16.1's As built keeps. Run.txt (650
+lines) and the console output (17 lines) hold neither a token, nor 16 of a token's characters in a
+row, nor the organization's name, the namespace or an address, searched as written and fully
+decoded. Copy: `D:/Projects/Personal/phase7b-work/live/azure-devops-stage2-20261108.txt`.
+
 ### GitLab (`artifacts/live/gitlab/run.txt`)
 
 **Stage 1, first run** (the same command and run as Azure DevOps' above): `Check_1` and `Check_1b_probes`
@@ -163,6 +179,18 @@ and the probes' answers held a subset of GitLab's members. GitLab's rate limit w
 burst of 100 a minute, 304s counted (for the review before the gate, 16.1). Run.txt (48 lines) holds
 neither the namespace nor an address, fully decoded; `glpat-` only in the command's own words, nothing
 token-shaped. Copy: `D:/Projects/Personal/phase7b-work/live/gitlab-run-20261106.txt`.
+
+**Stage 2** (the same command and run as Azure DevOps' above): GitLab's 5 passed, `Check_3` among
+them: the sign-in through "Add GitLab account", the browser's row by its full name (the list held
+five rows: the account is a member of four projects besides the sandbox, which the owner is asked
+about, status "Waiting on the owner"), the clone (2.1 s, its URL without a user), "Merge requests"
+with none open, the push, "Title on GitLab: Draft: …" with Draft ticked, a draft merge request
+created through the form (201), read back, closed, deleted and its branch deleted; the app's 9
+requests and the test's own 5 each with Bearer, none refused. Of the probes' 10 answers beside the
+fake, 9 matched; the duplicate's 409 differed only in the number it names (the sandbox's counter, `!3`
+against the fake's `!1`), its form the fake's. Nothing new for the fake. Run.txt (68 lines) holds
+neither a token nor the namespace nor an address, fully decoded. Copy:
+`D:/Projects/Personal/phase7b-work/live/gitlab-stage2-20261108.txt`.
 
 ### What stage 1 changed in the fakes (WP-LF, merged at `22fad1b`; design 16.1's As built)
 
@@ -1941,6 +1969,8 @@ to 10 are part A's, 11 to 21 part B's, 22 to 33 part P's, 34 to 45 part N's.
    `NotFound` and `SignInToken` for the other failures; `SignInNotAnOrganization` (A11's `a11b`) names
    neither. The step asserts neither focus nor selection there, and the next step clicks the box it
    changes. D378's refusal is read as D298's: the focus stays in the token box, its text as typed.
+   The lead's ruling at the review before the gate (2026-11-08, D392): as built, local refusals move
+   no focus (10.9's As built); `a11b` shows no focus ring, and the step asserts none.
 6. **The organization box during the check.** 7a's 8.4 disables the token box while the check runs; A7
    reads it for both boxes.
 7. **Azure DevOps' card height.** "At most about 345 high" (10.4, r3 4.2): asserted at most 345 in A6's

@@ -4389,7 +4389,29 @@ the `.Router.cs` headers):
   host only. Reopened by the owner (status, "Waiting on the owner").
 - Submodules (D379's R4): the scope's `GIT_CONFIG_COUNT` pairs reach a submodule's fetch through git's
   on-demand recursion, as in 7a for GitHub; only a submodule URL at or under a bound URL takes the
-  token. Reopened by O10.
+  token. Reopened by O10. It also covers an out-of-form submodule URL under an Azure DevOps binding,
+  such as X4's `…/r/..%5C..%5Cotherorg/…`, which git's key matches while the service may read its path
+  as another organization's, the case D359 and D369 refuse for remotes; the token still reaches only
+  dev.azure.com (the review before the gate, D392).
+- 7a's GitHub gaps, from 7.7's As built (the review before the gate, D392): `GitHubUrls`' three
+  authority gaps and the empty port's; GitHub's A1 takes any username (a login naming the token is
+  refused by D382's echo check, and `TokenEntryNames` refuses white space, control characters, `'` and
+  `\` in keychain names); its A2 and A4 throw on `[null]` (caught by the browser and by
+  `RepositoryHosting`) and take any number; the core follows a non-GET's same-origin redirect for
+  GitHub and Azure DevOps, so A5's POST would be sent again on a 301 or 302 (none measured), and a
+  next URL that repeats, up to the page cap. Reopened by a measured redirect of an API POST, or a later
+  phase that moves GitHub onto the core's checks.
+- An Azure DevOps 401 that is a scope failure (TF400813 naming the caller, g1 G2.1) signs the account
+  out like any API 401 (6.3, 9.5, D330), though A1 still accepts the token; only a token narrower than
+  the dialog's help asks for (Code, Read & write) reaches it, and the texts say "refused the token",
+  which fits both (the review before the gate's providers-1, refuted two to one; D392). Reopened by a
+  measured scope 401 on a token made as the help says.
+- A request of the provider's queued for its turn when the account signs out or is replaced is sent
+  with that account's token (12.9's As built; the review's life-2, refuted; D392).
+- D387's reading of a pasted value stays the sign-in dialog's, the one path by which a raw value reaches
+  a provider (the settings block, the welcome's clone and the palette all go through
+  `SignInDialogViewModel.ConfirmAsync`); the providers keep D378's whole-value check. Hardening, if
+  wanted, moves the reading into Core and applies it once in `HostingSession.SignInAsync` (D392).
 - A cross-host redirect into a bound path (D381's R6): a remote on a host no coverage covers that
   redirects into an out-of-form path under a binding (X4's `..%5C` shape) gets the account's token
   there, because git builds the credential again from the redirect's target, which `Select` never

@@ -588,12 +588,14 @@ runs"). CI 42454621322 on `d127fef` is green but phase 6's open palette flake in
 and macOS read Lost and passed (CI section); steps 9, 13 and 14 are ticked. WP-LIVE's second stage
 is merged at `fdb2c05` and passed with the tokens (step 16 ticked; Notes, "WP-LIVE's second
 stage"); CI 42459591309 on `fdb2c05` is green in all five jobs (CI section). The review before the gate
-(step 17) runs on `fdb2c05` in the detached worktree `D:/Projects/Personal/vc-wt/p7b-review`, built
-in Debug (2026-11-08; the session's workflow `p7b-review-before-gate`): six read-only Opus
-reviewers by subject (tokens, git, lifetimes, providers, screens, tests and CI), with the items in
-the Notes' "For the review before the gate" given out among them, each finding put to Opus
-refuters (three for a blocker or major, one for a minor). Then the lead rules on what stands,
-fixers by area fix it with tests, each fix reviewed by another agent, then WP-R and the gate. The GitLab account's five projects wait on the owner and decide whether the gate's live
+(step 17) ran on `fdb2c05` (Notes, "The review before the gate"): 9 of its 19 findings stood, the
+lead's rulings are D391 and D392, and four Opus fixers by area are fixing six of them in
+`D:/Projects/Personal/vc-wt/p7b-fix-{hosting,clone,panel,tests}` (branches `wip/p7b-fix-*`, from
+`77a76cb`; the session's workflow `p7b-review-fixes`), each fix reviewed by another Opus agent and
+refixed. At their merges the lead runs the touched classes plain and lagged; then design 0.6's
+timing report (`--report-xunit` for `VisualCommit.Hosting.Tests` and `VisualCommit.VisualTests.Phase7b`
+through `scripts/heavy-run.sh`) and the split of any test of 25 s or more by D237's rule (the review's
+tests-5), and `VisualCommit.App.Tests` timed alone once; push, read CI; then WP-R and the gate. The GitLab account's five projects wait on the owner and decide whether the gate's live
 runs need a change first (Waiting on the owner). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
@@ -1005,6 +1007,26 @@ every commit.
   characters in a row), the organization, the namespace and any address: none. The run files are
   kept in `D:/Projects/Personal/phase7b-work/live/` (`*-stage2-20261108.txt`). Nothing new for the
   fakes: Check_3 sends no probe, and its answers are the shapes stage 1 measured.
+- **The review before the gate** (2026-11-08, on `fdb2c05`, the detached worktree
+  `D:/Projects/Personal/vc-wt/p7b-review`; the session's workflow `p7b-review-before-gate`, 31 Opus
+  agents; results in `D:/Projects/Personal/phase7b-work/review/review-before-gate.json`): six read-only
+  reviewers by subject (tokens, git, lifetimes, providers, screens, tests and CI) found 19 problems
+  and judged the queued items below; refuters (three for a blocker or major, one for a minor) let 9
+  stand: git-1 (a clone's bindings miss conditional includes; one refuter major, two minor; D391),
+  tokens-1 (GitLab's next page outside the API path), tokens-2 (7a's GitHub `clone_url` of any
+  scheme, a `//host/share` read as a UNC path on Windows), life-1 (a credential request waits for all
+  three providers' start reads), life-3 (GitLab's 100 a minute: plan risk 44), ui-1 (D356's row says
+  "signed in" for an account that needs sign-in), ui-7 (phase 2's commit boxes: phase 8), tests-2
+  (the growth tests' message) and tests-5 (0.6's timing report not taken). Refuted: providers-1 (two
+  to one; the design's choice, now in 16.3), life-2, ui-2 to ui-6, tests-1, tests-3, tests-4. The
+  queued items' judgements: D387's reading stays the dialog's; the palette flake is not explained by
+  the Ubuntu-packages container (it failed on macOS too, 6.7 in 42386428809, and three failures in five
+  jobs fall two in one job by chance about half the time), so its runs now leave their measures in a
+  file CI uploads; the watcher lag tests cover every new class that starts the app; the default run's
+  1 h 37 min is `VisualCommit.App.Tests`' own time under contention (it gained about 13 tests since
+  7a; Hosting.Tests grew from 17 to 46 min of its own and Git.Tests to 56); a06c is settled (part P's
+  recorded change); a11b stays as built. The lead's rulings: D391 and D392, plan risks 43 (extended)
+  and 44, design 16.3's new bullets, the report's open point 5.
 - **For the review before the gate** (step 17; collected 2026-11-01 to 2026-11-08 from the
   packages' hand-offs, the inspections and the CI runs): GitLab's 100 requests a minute against
   the app's lists; whether the providers' own refusals in `src/VisualCommit.Hosting/` should use the
@@ -1452,8 +1474,9 @@ every commit.
   lead's: D386 (git's calls at below-normal priority on Windows, held by a job), D387 (the sign-in
   dialog finds another provider's token inside a pasted value), D388 (a network operation inside
   D290's window binds once the URL rules are known), D389 (D278's checks read the URL's user by the
-  measured git; risk 43) and D390 (a check of no git call sets aside only the watchers' refreshes).
-  The next decision number is D391.
+  measured git; risk 43), D390 (a check of no git call sets aside only the watchers' refreshes),
+  D391 (a clone's bindings read the URL rules of git's conditional includes) and D392 (the review
+  before the gate's rulings). The next decision number is D393.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
