@@ -139,11 +139,11 @@ public sealed class RepositoryHostingProvidersWiringTests
         // D366 keeps D356's state for an Azure DevOps account that needs signing in again; the tab's
         // row then says so (the review before the gate, ui-1). Refused with GitLab signed in, so that
         // only the account's state changes; then at a start whose record says the token was kept for
-        // the last session only.
+        // the last session only. Each app ends through End, the signing-in one too: its git calls
+        // are the ones a token could reach.
         await using var served = await ServeAsync();
         using var data = new TempDirectory("providers wiring");
-        var app = ShellDriver.StartWithTabs(data.Path, [served.Manifest.Path], gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
-        try
+        using (var app = ShellDriver.StartWithTabs(data.Path, [served.Manifest.Path], gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab))
         {
             var repository = await app.WaitForRepositoryAsync();
             await app.WaitForAsync(() => repository.HostingState.PullRequests == PullRequestsState.SignedOut, "the section signed out");
@@ -159,10 +159,7 @@ public sealed class RepositoryHostingProvidersWiringTests
             Assert.Equal(AccountState.SignedIn, app.Session.Services.Hosting.AccountOf(HostingProvider.GitLab)!.State);
             await AssertRowAsync(app, repository, NeedsSignInRow, NeedsSignInToolTip);
             Assert.Equal(PullRequestsState.OtherOrganization, repository.HostingState.PullRequests);
-        }
-        finally
-        {
-            app.Dispose();
+            End(app, data, served);
         }
 
         // The next start with Azure DevOps' token kept for the last session only (D287): nothing sent.
@@ -172,14 +169,14 @@ public sealed class RepositoryHostingProvidersWiringTests
         Assert.Equal(AccountTokenStates.Refused, record.TokenState);
         accounts.Save(file.With(record with { TokenState = AccountTokenStates.Session }));
         var requests = served.AzureDevOps.Requests.Count;
-        app = ShellDriver.StartWithTabs(data.Path, [served.Manifest.Path], gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
-        var again = await app.WaitForRepositoryAsync();
-        await app.WaitForAsync(() => again.HostingState.PullRequests == PullRequestsState.OtherOrganization && again.IsWatcherQuiet, "another organization's state after the start");
-        var held = app.Session.Services.Hosting.AccountOf(HostingProvider.AzureDevOps)!;
+        using var restarted = ShellDriver.StartWithTabs(data.Path, [served.Manifest.Path], gitHub: served.GitHub, azureDevOps: served.AzureDevOps, gitLab: served.GitLab);
+        var again = await restarted.WaitForRepositoryAsync();
+        await restarted.WaitForAsync(() => again.HostingState.PullRequests == PullRequestsState.OtherOrganization && again.IsWatcherQuiet, "another organization's state after the start");
+        var held = restarted.Session.Services.Hosting.AccountOf(HostingProvider.AzureDevOps)!;
         Assert.Equal((AccountState.NeedsSignIn, AccountNoteKind.SessionEnded, "Fernhill-Labs"), (held.State, held.NoteKind, held.Account.Login));
-        await AssertRowAsync(app, again, NeedsSignInRow, NeedsSignInToolTip);
+        await AssertRowAsync(restarted, again, NeedsSignInRow, NeedsSignInToolTip);
         Assert.Equal(requests, served.AzureDevOps.Requests.Count);
-        End(app, data, served);
+        End(restarted, data, served);
     }
 
     private const string SignedInRow = "In harbor-co; signed in to Fernhill-Labs";
