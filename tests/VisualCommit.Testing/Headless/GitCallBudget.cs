@@ -15,7 +15,10 @@ public sealed record RefreshForm(string Name, Func<string, bool> Matches, bool O
 /// <see cref="ShellDriver.QuietCallsSinceAsync"/>); the refreshes the watcher started for a change
 /// reported late are set aside only whole (<see cref="NotWholeRefreshes"/>), so that no other call
 /// slips past with them; a count that is a cost is held to a budget (<see cref="AssertAtMost(IReadOnlyCollection{GitCallRecord}, int, string, bool)"/>),
-/// one that is the test's meaning stays exact.
+/// one that is the test's meaning stays exact. A step that starts no git call sets aside no more
+/// whole refreshes than the watchers asked for (<see cref="AssertOnlyWatcherRefreshes"/>,
+/// <see cref="ShellDriver.AssertNoStepCallsAsync"/>), so that a refresh the step asked for
+/// itself, which is whole too, does not pass as one.
 /// </summary>
 public static class GitCallBudget
 {
@@ -44,7 +47,39 @@ public static class GitCallBudget
     /// form 0 times or as often. A refresh the watcher starts for a write the system reports late
     /// (macOS) can land in any step's calls; it is let through only whole.
     /// </summary>
-    public static string? NotWholeRefreshes(IReadOnlyCollection<GitCallRecord> calls, IReadOnlyList<RefreshForm>? forms = null)
+    public static string? NotWholeRefreshes(IReadOnlyCollection<GitCallRecord> calls, IReadOnlyList<RefreshForm>? forms = null) =>
+        WholeRefreshes(calls, forms, out _);
+
+    /// <summary>
+    /// Fails unless <paramref name="calls"/> are whole refreshes (<see cref="NotWholeRefreshes"/>),
+    /// none included, and no more of them than <paramref name="watcherRefreshes"/>: the refreshes
+    /// the watchers asked for over the same calls (<see cref="QuietStepMark"/>). A step
+    /// that starts no git call of its own sees only the refreshes of writes reported late; a
+    /// refresh the step asked for (an operation's end, which runs outside the operation, the Refresh
+    /// command, a filter) is a whole refresh too, and only the watchers' count tells it apart.
+    /// </summary>
+    /// <exception cref="GitCallBudgetException">A call is no whole refresh's, or there are more whole refreshes than the watchers asked for.</exception>
+    public static void AssertOnlyWatcherRefreshes(IReadOnlyCollection<GitCallRecord> calls, int watcherRefreshes, string what)
+    {
+        ArgumentNullException.ThrowIfNull(calls);
+        if (WholeRefreshes(calls, null, out var refreshes) is { } reason)
+        {
+            throw new GitCallBudgetException($"{what} made git calls that are no whole refresh ({reason}):\n  " + string.Join("\n  ", calls.Select(Describe)));
+        }
+
+        if (refreshes > watcherRefreshes)
+        {
+            throw new GitCallBudgetException(
+                $"{what} made {refreshes} whole {(refreshes == 1 ? "refresh" : "refreshes")} where the watchers asked for {watcherRefreshes}: a refresh nothing reported to the watchers started. The calls:\n  "
+                + string.Join("\n  ", calls.Select(Describe)));
+        }
+    }
+
+    /// <summary>
+    /// <see cref="NotWholeRefreshes"/>, with <paramref name="refreshes"/> set to how many whole
+    /// refreshes the calls are when they are whole (each required form's count), else -1.
+    /// </summary>
+    private static string? WholeRefreshes(IReadOnlyCollection<GitCallRecord> calls, IReadOnlyList<RefreshForm>? forms, out int refreshes)
     {
         ArgumentNullException.ThrowIfNull(calls);
         forms ??= RefreshForms;
@@ -63,12 +98,13 @@ public static class GitCallBudget
         }
 
         var required = counts.Where(entry => !entry.Key.Optional).Select(entry => entry.Value).Distinct().ToList();
-        var refreshes = required.Count == 1 ? required[0] : -1;
-        if (required.Count > 1 || counts.Any(entry => entry.Key.Optional && entry.Value != 0 && entry.Value != refreshes))
+        var whole = required.Count == 1 ? required[0] : -1;
+        if (required.Count > 1 || counts.Any(entry => entry.Key.Optional && entry.Value != 0 && entry.Value != whole))
         {
             problems.Add("the refresh calls are not whole refreshes: " + string.Join(", ", counts.Select(entry => $"{entry.Key.Name} {entry.Value}")));
         }
 
+        refreshes = problems.Count == 0 ? whole : -1;
         return problems.Count == 0 ? null : string.Join("; ", problems);
     }
 

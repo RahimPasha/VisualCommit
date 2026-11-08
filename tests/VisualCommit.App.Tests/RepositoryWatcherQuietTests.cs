@@ -12,7 +12,8 @@ namespace VisualCommit.App.Tests;
 /// a check's next calls (the review's finding on part S's read-backs, macOS's late watcher
 /// refresh): false while the watcher holds a change, while a change it raised waits for its
 /// refresh, and while the refresh it starts, or a status read, still runs; true otherwise. With a
-/// watcher and reads the test holds.
+/// watcher and reads the test holds. And <see cref="RepositoryViewModel.WatcherRefreshes"/>, with
+/// which they tell the watcher's refreshes from a step's own.
 /// </summary>
 public class RepositoryWatcherQuietTests
 {
@@ -56,6 +57,36 @@ public class RepositoryWatcherQuietTests
         Assert.Equal(refsBefore, repository.RefsReads);
         status.SetResult(WorkingTreeStatus.Clean);
         await WaitUntilAsync(() => viewModel.IsWatcherQuiet, "the status read to end");
+    }
+
+    /// <summary>
+    /// <see cref="RepositoryViewModel.WatcherRefreshes"/>, which the harnesses read to tell the
+    /// watcher's refreshes from a step's own (docs/phase-7a-design.md 5.3): one for each change the
+    /// watcher raises in the git folder, none for a change in the working tree alone (a status read)
+    /// or for a refresh asked for otherwise.
+    /// </summary>
+    [Fact]
+    public async Task The_watchers_refreshes_count_its_changes_in_the_git_folder_alone()
+    {
+        var repository = new HeldRepository();
+        using var viewModel = new RepositoryViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc));
+        await viewModel.StartAsync();
+        Assert.Equal(0, viewModel.WatcherRefreshes);
+
+        var refsBefore = repository.RefsReads;
+        await Task.Run(() => repository.Watcher.Raise(gitFolder: true), TestContext.Current.CancellationToken);
+        await WaitUntilAsync(() => repository.RefsReads > refsBefore && viewModel.IsWatcherQuiet, "the watcher's refresh");
+        Assert.Equal(1, viewModel.WatcherRefreshes);
+
+        var (statusBefore, refsAfter) = (repository.StatusReads, repository.RefsReads);
+        await Task.Run(() => repository.Watcher.Raise(gitFolder: false), TestContext.Current.CancellationToken);
+        await WaitUntilAsync(() => repository.StatusReads > statusBefore && viewModel.IsWatcherQuiet, "the watcher's status read");
+        Assert.Equal(refsAfter, repository.RefsReads);
+        Assert.Equal(1, viewModel.WatcherRefreshes);
+
+        await viewModel.RefreshAsync();
+        Assert.True(repository.RefsReads > refsAfter, "The refresh asked for read no refs.");
+        Assert.Equal(1, viewModel.WatcherRefreshes);
     }
 
     private static async Task WaitUntilAsync(Func<bool> condition, string what)

@@ -182,7 +182,7 @@ public sealed partial class Phase7bChecksP
             // Step 3: !13's reason; its double-click starts nothing.
             mark = Mark(served);
             var operations = ended.Count;
-            var calls = await app.QuietCallMarkAsync();
+            var stepThree = await app.QuietStepMarkAsync();
             app.RightClick(await RequestAsync(app, 13));
             AssertWholeMenu(app, P.RequestMenu(P.AzureDevOpsRows[0]), P.OpenInBrowser, P.RequestMenuHeight);
             Assert.Equal(P.AzureDevOpsForkReason, await app.RestPointerOnMenuItemAsync(P.CheckOut("mobile-app-fork:fix-typo")));
@@ -193,7 +193,7 @@ public sealed partial class Phase7bChecksP
             await app.WaitForIdleAsync();
             await app.WaitForWatchersQuietAsync();
             Assert.Equal(operations, ended.Count);
-            GitCallBudget.AssertAtMost([.. app.GitCalls().Where(call => call.Sequence > calls)], 0, "!13's double-click");
+            await app.AssertNoStepCallsAsync(stepThree, "!13's double-click");
             AssertNoRequests(served, mark);
             Assert.Equal("feature/sign-in", mobileApp.Refs?.Head.BranchName);
             Assert.DoesNotContain(mobileApp.LeftPanel.Rows, row => row is RefItemRow { IsSelected: true } or PullRequestRow { IsSelected: true });
