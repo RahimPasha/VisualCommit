@@ -241,7 +241,9 @@ public class RepositoryWatcherTests
         // The other change just before Dispose: counted, and still inside its quiet period when
         // Dispose comes, so its timer has queued nothing. The clock moves only after Dispose. A
         // Dispose that raised what still waits would raise this change; the test above, whose
-        // change is due when Dispose comes, cannot see that. On the clock the test holds, as there.
+        // change is due when Dispose comes, cannot reliably see that: it does only when a second
+        // notice of the write lands between its Advance and its Dispose. On the clock the test
+        // holds, as there.
         using var folder = new TempDirectory("watch");
         var clock = new QueuingClock();
         using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, time: clock);

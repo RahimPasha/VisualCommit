@@ -1024,10 +1024,12 @@ public interface IRepositoryWatcher : IDisposable
     /// <para>
     /// It can still be raised after Dispose has returned: Dispose does not wait for a raise that
     /// has already passed its checks, and that raise can end after it. Such a raise carries only
-    /// changes counted before Dispose began; no change counted after Dispose began is ever raised.
-    /// A subscriber that must not act once it has disposed the watcher checks its own state in
-    /// its handler, as <c>RepositoryViewModel</c> does: its Dispose marks it disposed before it
-    /// disposes the watcher, and its handler returns once it is.
+    /// changes counted before Dispose marked the watcher disposed (the first thing it does under
+    /// the watcher's lock); no change counted after that is ever raised. A subscriber that must
+    /// not act once it has disposed the watcher checks its own state, as <c>RepositoryViewModel</c>
+    /// does: its Dispose marks it disposed before it disposes the watcher, and its handler counts
+    /// the change and posts it to the UI thread (without one, as in tests, it runs it at once),
+    /// where <c>OnRepositoryChanged</c> returns without a refresh once the view model is disposed.
     /// </para>
     /// </summary>
     event EventHandler<RepositoryChangedEventArgs>? Changed;
