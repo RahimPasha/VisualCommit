@@ -444,6 +444,12 @@ fifths.
 6 min 27 s (5 min 5 s), the containers 8 min 14 s and 7 min 35 s (5 min 53 s and 5 min 21 s), each
 under four fifths.
 
+[42522049151](https://github.com/RahimPasha/VisualCommit/actions/runs/42522049151) on `9b044af`
+(D394 and D395 merged at `cb9af6d`, and its docs): all five jobs green. Jobs and Test steps:
+`windows-latest` 25 min 42 s (23 min 41 s), `macos-latest` 35 min 9 s (33 min 9 s), `ubuntu-latest`
+8 min 28 s (6 min 23 s), the containers 8 min 19 s and 7 min 41 s (5 min 51 s and 5 min 28 s), each
+under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
