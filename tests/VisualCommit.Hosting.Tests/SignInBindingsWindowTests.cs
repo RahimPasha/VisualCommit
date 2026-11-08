@@ -148,6 +148,9 @@ public sealed class SignInBindingsWindowTests
         Assert.Equal(["hello: Fetch origin: 1 URLs bound to the account once the tab's URL rules were read."], messages.Where(message => message.Contains(" URLs bound to the account once ", StringComparison.Ordinal)));
         Assert.Equal(["hello: Fetch origin: 1 of 1 URLs bound to the account (Ask)."], messages.Where(message => message.EndsWith(" URLs bound to the account (Ask).", StringComparison.Ordinal)));
 
+        // Git asked the app's helper, and the broker logged its answer (what D278's case asserts it never logs).
+        Assert.Contains(messages.Where(IsBrokerCredentialLine), message => message.StartsWith("hello: Fetch origin: git's credential get for 127.0.0.1:", StringComparison.Ordinal) && message.EndsWith(" answered from the account.", StringComparison.Ordinal));
+
         // Before the fetch's own calls one rules read ran git: the tab's, held.
         Assert.Equal(1, tab.CallsSince(callMark).TakeWhile(call => call.OperationId is null).Count(call => call.CommandText == HeldRulesTab.RulesRead));
     }
@@ -186,19 +189,32 @@ public sealed class SignInBindingsWindowTests
     /// <summary>
     /// D278 inside the window: the user's rule rewrites <c>origin</c> to a URL that names another user
     /// (<c>bob@</c>, the URL itself left as it was). Whether the fetch waits for the tab's held read or
-    /// reads the rules itself after it failed, it binds the URL git uses, bob's, to nothing: no
-    /// request carries <c>x-access-token</c>, and git's prompt (refused) names bob; bindings made from
-    /// the unrewritten URL would have answered bob's with octo's token.
+    /// reads the rules itself after it failed, it binds the URL git uses, bob's, to nothing: git reads
+    /// origin as bob's URL; the fake sees the fetch's request without credentials and libcurl's retry
+    /// as bob with an empty password, both refused, none with <c>x-access-token</c>; no credential
+    /// request of git's reaches the app's broker; and git's one prompt, refused, ends the fetch.
+    /// Bindings made from the unrewritten URL would have answered bob's with octo's token.
+    /// <para>
+    /// The prompt's text depends on the git that runs, not on the app, so the test asks
+    /// <see cref="GitUrlUser"/> (measured once per process) which one to expect. A git that keeps a
+    /// URL's user after a refusal asks bob's password: <c>Password for 'http://bob@127.0.0.1:&lt;port&gt;': </c>.
+    /// Git v2.56.0 and older without git's 76524c2604bc, over a libcurl that strips the credentials
+    /// from <c>CURLINFO_EFFECTIVE_URL</c> (curl 8.23.0, CVE-2026-94266's fix), takes its own request
+    /// for a redirect and loses bob: <c>Username for 'http://127.0.0.1:&lt;port&gt;': </c>, as Homebrew's
+    /// 2.56.0_2 did on CI's macOS (run 42437572741). Either way the retry as bob shows that git
+    /// fetched bob's URL.
+    /// </para>
     /// </summary>
     [AvaloniaTheory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task Inside_the_window_a_remote_the_rules_give_another_user_is_bound_to_no_token(bool readFails)
     {
+        string authority = null!, bob = null!;
         await using var tab = await HeldRulesTab.OpenAsync(HostingProvider.GitHub, Cancelled, async (clone, webBase) =>
         {
-            var authority = webBase.GetLeftPart(UriPartial.Authority);
-            var bob = new UriBuilder(webBase) { UserName = "bob" }.Uri.GetLeftPart(UriPartial.Authority);
+            authority = webBase.GetLeftPart(UriPartial.Authority);
+            bob = new UriBuilder(webBase) { UserName = "bob" }.Uri.GetLeftPart(UriPartial.Authority);
             await clone.GitAsync("config", $"url.{bob}/.insteadOf", authority + "/");
         });
         var repository = tab.Repository;
@@ -243,7 +259,26 @@ public sealed class SignInBindingsWindowTests
         Assert.NotEmpty(requests);
         Assert.DoesNotContain(requests, request => request.GivenUserName == "x-access-token" || request.Status == 200);
         Assert.NotEmpty(tab.Prompts.Prompts);
-        Assert.All(tab.Prompts.Prompts, prompt => Assert.Contains("bob@", prompt.Text, StringComparison.Ordinal));
+
+        // Git's own reading of origin's URL goes through the user's rule: bob's.
+        Assert.Equal($"{bob}/octo/hello.git", (await tab.Clone.GitAsync("remote", "get-url", "origin")).StandardOutput.Trim());
+
+        // The fetch's requests: without credentials, then libcurl's retry with the URL's user, bob, and
+        // an empty password (docs/phase-7b-design.md 8.6, H2), each refused; git's prompt ends the fetch.
+        (string? GivenUserName, string? UserName, int Status)[] expectedRequests = [(null, null, 401), ("bob", null, 401)];
+        Assert.Equal(expectedRequests, requests.Select(request => (request.GivenUserName, request.UserName, request.Status)));
+
+        // Git's one prompt: bob's password, or on a git that loses a URL's user after a refusal a user
+        // name for the bare origin (GitUrlUser, measured).
+        var urlUser = await GitUrlUser.AfterRefusalAsync();
+        var expectedPrompt = urlUser == UrlUserAfterRefusal.Kept ? $"Password for '{bob}': " : $"Username for '{authority}': ";
+        var prompt = Assert.Single(tab.Prompts.Prompts);
+        Assert.True(
+            prompt.Text == expectedPrompt,
+            $"Git's prompt was \"{prompt.Text}\" where \"{expectedPrompt}\" was expected: the git that runs ({tab.Version}) measures {urlUser} for a URL's user after a refusal (GitUrlUser).");
+
+        // No credential request of git's reached the app's broker: the scope had no key for git to match.
+        Assert.DoesNotContain(tab.MessagesSince(logMark), IsBrokerCredentialLine);
         var messages = tab.MessagesSince(logMark);
         Assert.Equal(
             [readFails ? "hello: Fetch origin: 0 URLs bound to the account once the URL rules were read." : "hello: Fetch origin: 0 URLs bound to the account once the tab's URL rules were read."],
@@ -390,6 +425,19 @@ public sealed class SignInBindingsWindowTests
     }
 
     private static string FailedOf(string name) => $"{name}: the URL rewrites could not be read; the last ones read are kept.";
+
+    /// <summary>
+    /// Whether a log line is the app's askpass broker's about a credential request of git's (its
+    /// helper's credential mode, docs/phase-7a-design.md 4.6; <c>AskPassBroker.AnswerCredentialAsync</c>):
+    /// a request refused for a wrong token or for no open scope bound to an account
+    /// (<c>A credential request for …</c>), a scope's every line about a get or an erase
+    /// (<c>hello: Fetch origin: git's credential get for 127.0.0.1:&lt;port&gt; …</c>), and a refused token's mark.
+    /// </summary>
+    private static bool IsBrokerCredentialLine(string message) =>
+        message.Contains(": git's credential ", StringComparison.Ordinal)
+        || message.StartsWith("A credential request for ", StringComparison.Ordinal)
+        || message.StartsWith("The prompt channel received a credential request ", StringComparison.Ordinal)
+        || message.EndsWith(" refused the account's token.", StringComparison.Ordinal);
 
     /// <summary>An auto-fetch scheduler on the tab, every 10 minutes, whose first tick is due (the tab opened an hour ago).</summary>
     private static AutoFetchScheduler DueScheduler(HeldRulesTab tab)
