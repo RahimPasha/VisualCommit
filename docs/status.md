@@ -438,6 +438,12 @@ the containers 7 min 35 s and 9 min 0 s (5 min 34 s and 6 min 45 s), each under 
 (5 min 59 s), the containers 7 min 55 s and 8 min 24 s (5 min 45 s and 5 min 56 s), each under four
 fifths.
 
+[42487421403](https://github.com/RahimPasha/VisualCommit/actions/runs/42487421403) on `d85d3db`
+(D393's guard merged at `ee0aeeb`, and its docs): all five jobs green. Jobs and Test steps:
+`windows-latest` 44 min 19 s (41 min 3 s), `macos-latest` 49 min 9 s (46 min 21 s), `ubuntu-latest`
+6 min 27 s (5 min 5 s), the containers 8 min 14 s and 7 min 35 s (5 min 53 s and 5 min 21 s), each
+under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -625,10 +631,11 @@ start the gate now and is at the machine. The gate (step 18) has begun, in 7a de
 with D335's live runs. The live command for the three providers ran on `ee0aeeb`, the owner told:
 GitHub's and Azure DevOps' classes passed, and GitLab's after two stalls of the network to gitlab.com
 (the report's "Live command", "The gate's first run"). It found one correction for a fake: github.com
-now answers a commit it lacks beside `author` 404, not D342's 500. That correction (D394) is being
-built in `D:/Projects/Personal/vc-wt/p7b-fake-github` (branch `wip/p7b-fake-github`, from `d85d3db`;
-the session's workflow `p7b-fake-github-404`: an Opus builder, two Opus reviewers, a refix). Next: merge
-it before any picture; the 7b walk-through so that its pictures exist; `Phase7bRealWindowPass` twice on its own
+now answers a commit it lacks beside `author` 404, not D342's 500. That correction (D394) is merged at
+`cb9af6d`, with the fix to the client that GitHub's change called for (D395: a 404 in a repository not
+known to be readable is checked against that repository's read; the owner approved it, since it amends
+D342 (2)); Notes, "D394 and D395". Next: the lead's runs at that merge; the 7b walk-through so that its
+pictures exist; `Phase7bRealWindowPass` twice on its own
 with the owner told and present (D246); then the counted round on one commit: the whole default run
 through `scripts/heavy-run.sh`, the real-window pass, the list of pictures, the live command again,
 and the inspection of every picture in batches of at most about 150, the earlier ones compared with
@@ -1094,6 +1101,29 @@ every commit.
   7b's part P (22 of 22 the same files at the panel's fix; on the refixer's fresh build 21, `p11a`
   differing in 5 pixels of the status bar's git box, its recorded variation) were run by the fixers;
   no fix changes a scripted picture.
+- **D394 and D395** (2026-11-08; the session's workflows `p7b-fake-github-404` and `p7b-d395-review`,
+  seven Opus agents in `D:/Projects/Personal/vc-wt/p7b-fake-github`, branch `wip/p7b-fake-github` from
+  `d85d3db`; merged with `--no-ff` at `cb9af6d`). The builder (`affc0e4`, `83168b0`, D394): the fake of
+  GitHub answers an unknown revision beside `author` 404 with GitHub's body, byte for byte; D342's empty
+  500 stays as an option a test sets (`FakeGitHub.UnknownRevisionBesideAuthorAnswers500`), so that the
+  two tests that drove the lookups through the fake's 500 are Theories over 404 and 500. A temporary
+  record of every commits request through 7a's and 7b's walk-through classes found no lookup of a commit
+  the fake lacks, so no picture changes. Its two reviewers: no test loosened, five mutations each caught;
+  and, major, on github.com a fork's lookup of a commit the fork lacks now takes the fork as unreadable
+  (D339's 404 rule), so in a fork's tab one stale branch leaves every later address on the fork without a
+  picture in every session, D342's defect back. The refix (`acefefc`, `2562ad8`): a fork's lookup through
+  the fake tested, D394's fork sentence marked unmeasured, plan risk 38 and the architecture brought up to
+  date; and D395, a 404 in a repository not known to be readable followed by one read of it (A3's
+  request). The owner approved D395 (2026-11-08), asked because it amends D342 (2). Its two reviewers
+  (`p7b-d395-review`): bounded (one read a repository and call; the listed repository never read), no
+  side effect on the tab, no picture changed (7a's parts A, B, G, N and P at both commits, the
+  differences the report's "varies by nature" ones), and three minor points: a read the token fails must
+  stop the lookups, a fork's tab need not read its own fork, and `2562ad8`'s message claims too much of its
+  500 rows. The refix (`af31667`): the read's 404, 403 and 5xx leave the repository out, any other
+  failure stops the lookups; the avatar run passes the candidate and A3's repository as readable, so the
+  read is sent only after a 404 on a third remote, which no scenario has; D395's row says exactly which
+  tests fail on which code. Its runs: the hosting classes 156 of 156, the live command's offline classes
+  582 of 582, 7a's part P pictures all equal to `phase-7a-pictures.sha256`.
 - **The gate's first live run** (2026-11-08, from 13:58 UTC, on `ee0aeeb`; the report's "Live command"
   holds each provider's paragraph). The whole project passed 595 of 596 tests; GitLab's `Check_2` failed in
   the push (60 s). The class alone at 14:02 UTC failed `Check_2` in the load (a request with no answer in
@@ -1614,7 +1644,9 @@ every commit.
   measured git; risk 43), D390 (a check of no git call sets aside only the watchers' refreshes),
   D391 (a clone's bindings read the URL rules of git's conditional includes) and D392 (the review
   before the gate's rulings) and D393 (the live command's GitLab guard admits the sandbox project alone,
-  the owner's choice). The next decision number is D394.
+  the owner's choice), D394 (the fake of GitHub answers a commit it lacks beside `author` 404, as
+  github.com did at the gate's first live run) and D395 (a lookup's 404 in a repository not known to be
+  readable is checked against its read; the owner's approval). The next decision number is D396.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
