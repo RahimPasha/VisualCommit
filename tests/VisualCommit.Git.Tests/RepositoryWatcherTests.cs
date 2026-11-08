@@ -13,12 +13,19 @@ namespace VisualCommit.Git.Tests;
 /// tests watch a plain folder and write files into it; what a repository's own git calls do is
 /// tested against real repositories. The tests of the quiet period and the maximum delay hold the
 /// watcher's clock (<see cref="ManualTimeProvider"/>) and move it only once the watcher has
-/// counted every event they wait for, so that a slow machine cannot split a burst (D160). The
-/// three tests of Dispose hold it too, so that a slow machine cannot end a quiet period before
-/// Dispose. Two dispose the watcher with a change counted just before: in one the change is due
-/// when Dispose comes, its timer's callback queued but not run, in the other it is still inside its
-/// quiet period, and its timer has not fallen due. The third disposes it inside a raise, once the
-/// raise has passed its checks and before its ignore check.
+/// counted every event they wait for, so that a slow machine cannot split a burst (D160). The two
+/// that move it in two steps, to a tick before the quiet period's end and then to its end, also
+/// wait until the watcher has counted nothing more for a while in real time: a later notice of a
+/// counted file (Windows reports a new file, then its write) that landed between the steps would
+/// start the quiet period again a tick before its end. The test of the maximum delay moves it in
+/// steps too, but there a late notice only puts off the quiet period's end, which the test never
+/// reaches, and not the maximum delay's. The three tests of Dispose hold it too, so that a slow
+/// machine cannot end a quiet period before Dispose. Two dispose the watcher with a change counted
+/// just before: in one the change is due when Dispose comes, its timer's callback queued but not
+/// run, in the other it is still inside its quiet period, and its timer has not fallen due. The
+/// third disposes it inside a raise, once the raise has passed its checks and before its ignore
+/// check. Those three move the clock once, by the maximum delay, which a late notice of a counted
+/// write cannot put off.
 /// </summary>
 public class RepositoryWatcherTests
 {
@@ -111,6 +118,13 @@ public class RepositoryWatcherTests
         }
 
         Assert.True(await counted.WaitForAsync(names, Timeout), $"The watcher did not count events for {counted.Missing(names)}.");
+
+        // Each name counted once is not the whole burst: on Windows a new file's write follows its
+        // creation, tens of milliseconds later on a loaded machine and some 400 ms with a stall,
+        // and other systems send other sequences. A notice that landed between the two advances
+        // below would start the quiet period again a tick before its end, and the second advance
+        // would raise nothing. So the clock moves only once the burst has ended in real time.
+        Assert.True(await counted.WaitForQuietAsync(Settle, Timeout), $"The watcher did not go {Settle.TotalMilliseconds:F0} ms without counting an event within {Timeout.TotalSeconds:F0} s of the burst ({counted.Total} counted in all).");
         Assert.Equal(0, changed.Count);
 
         clock.Advance(Quiet - TimeSpan.FromTicks(1));
@@ -132,7 +146,9 @@ public class RepositoryWatcherTests
     {
         // IsQuiet, which the harnesses wait for before they mark a check's next calls: a burst
         // waiting for its quiet period and one being raised are not quiet. On a clock the test
-        // holds; a folder made gives one event, so no late notice starts a second burst.
+        // holds; a folder made gives one event, so no late notice starts a second burst. Should a
+        // system send a second, the clock moves only once the watcher has counted nothing more for
+        // a while in real time, as in the test above.
         using var folder = new TempDirectory("watch");
         var clock = new ManualTimeProvider();
         using var watcher = new RepositoryWatcher(folder.Path, folder.Path, quietPeriod: Quiet, time: clock);
@@ -144,6 +160,7 @@ public class RepositoryWatcherTests
 
         Directory.CreateDirectory(folder.Combine("made"));
         Assert.True(await counted.WaitForAsync(["made"], Timeout), $"The watcher did not count an event for {counted.Missing(["made"])}.");
+        Assert.True(await counted.WaitForQuietAsync(Settle, Timeout), $"The watcher did not go {Settle.TotalMilliseconds:F0} ms without counting an event within {Timeout.TotalSeconds:F0} s of making the folder ({counted.Total} counted in all).");
         Assert.False(watcher.IsQuiet, "A change waits for its quiet period, and the watcher is quiet.");
         clock.Advance(Quiet - TimeSpan.FromTicks(1));
         Assert.False(watcher.IsQuiet);
@@ -574,10 +591,11 @@ public class RepositoryWatcherTests
         }
     }
 
-    /// <summary>The names of the events the watcher counted in a burst, through its test hook (<see cref="RepositoryWatcher.EventCounted"/>).</summary>
+    /// <summary>The names of the events the watcher counted in a burst, and how many it counted, through its test hook (<see cref="RepositoryWatcher.EventCounted"/>).</summary>
     private sealed class CountedEvents
     {
         private readonly ConcurrentDictionary<string, bool> _names = new(StringComparer.Ordinal);
+        private int _total;
 
         public CountedEvents(RepositoryWatcher watcher) =>
             watcher.EventCounted = name =>
@@ -586,7 +604,12 @@ public class RepositoryWatcherTests
                 {
                     _names[name] = true;
                 }
+
+                Interlocked.Increment(ref _total);
             };
+
+        /// <summary>How many events the watcher has counted, those without a name (lost events) included.</summary>
+        public int Total => Volatile.Read(ref _total);
 
         /// <summary>Waits, polling, until an event for each of <paramref name="names"/> has been counted; false if that does not happen within <paramref name="timeout"/>.</summary>
         public async Task<bool> WaitForAsync(IReadOnlyCollection<string> names, TimeSpan timeout)
@@ -600,6 +623,36 @@ public class RepositoryWatcherTests
                 }
 
                 await Task.Delay(10, TestCancelled);
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Waits, polling, until the watcher has counted no event for <paramref name="quiet"/> in
+        /// real time; false if that does not happen within <paramref name="timeout"/>. An event is
+        /// seen at the first poll after it was counted, and the quiet measured starts there (or at
+        /// the call, for those counted before it), so it is never longer than the real one.
+        /// </summary>
+        public async Task<bool> WaitForQuietAsync(TimeSpan quiet, TimeSpan timeout)
+        {
+            var waited = Stopwatch.StartNew();
+            var quietFor = Stopwatch.StartNew();
+            var seen = Total;
+            while (quietFor.Elapsed < quiet)
+            {
+                if (waited.Elapsed > timeout)
+                {
+                    return false;
+                }
+
+                await Task.Delay(10, TestCancelled);
+                var total = Total;
+                if (total != seen)
+                {
+                    seen = total;
+                    quietFor.Restart();
+                }
             }
 
             return true;
