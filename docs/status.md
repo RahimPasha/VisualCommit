@@ -621,9 +621,14 @@ stall under load), whose wait is now 2 s with its assertions kept (Notes; CI sec
 The owner's answer on the GitLab account's five projects, given on 2026-11-08, is (b): the live
 command's GitLab guard narrowed to the sandbox project (D393), built, reviewed and refixed (Notes,
 "D393's guard") and merged at `ee0aeeb`, where the offline classes pass (582). The owner said to
-start the gate now and is at the machine. Next, the gate (step 18), in 7a design 13.7's order with
-D335's live runs: the live command for the three providers on `ee0aeeb` with the owner told,
-corrections to the fakes committed before any picture; the 7b walk-through so that its pictures exist; `Phase7bRealWindowPass` twice on its own
+start the gate now and is at the machine. The gate (step 18) has begun, in 7a design 13.7's order
+with D335's live runs. The live command for the three providers ran on `ee0aeeb`, the owner told:
+GitHub's and Azure DevOps' classes passed, and GitLab's after two stalls of the network to gitlab.com
+(the report's "Live command", "The gate's first run"). It found one correction for a fake: github.com
+now answers a commit it lacks beside `author` 404, not D342's 500. That correction (D394) is being
+built in `D:/Projects/Personal/vc-wt/p7b-fake-github` (branch `wip/p7b-fake-github`, from `d85d3db`;
+the session's workflow `p7b-fake-github-404`: an Opus builder, two Opus reviewers, a refix). Next: merge
+it before any picture; the 7b walk-through so that its pictures exist; `Phase7bRealWindowPass` twice on its own
 with the owner told and present (D246); then the counted round on one commit: the whole default run
 through `scripts/heavy-run.sh`, the real-window pass, the list of pictures, the live command again,
 and the inspection of every picture in batches of at most about 150, the earlier ones compared with
@@ -1089,6 +1094,17 @@ every commit.
   7b's part P (22 of 22 the same files at the panel's fix; on the refixer's fresh build 21, `p11a`
   differing in 5 pixels of the status bar's git box, its recorded variation) were run by the fixers;
   no fix changes a scripted picture.
+- **The gate's first live run** (2026-11-08, from 13:58 UTC, on `ee0aeeb`; the report's "Live command"
+  holds each provider's paragraph). The whole project passed 595 of 596 tests; GitLab's `Check_2` failed in
+  the push (60 s). The class alone at 14:02 UTC failed `Check_2` in the load (a request with no answer in
+  30 s); at 14:05 UTC it passed 5 of 5. A tokenless loop of plain requests to gitlab.com beside the
+  third run saw one stall of its own: connected over IPv6, then no answer for 20 s. So the cause was the
+  network, not the app or the command, and nothing was changed for it; the counted round's live run may
+  meet it again, and is run again if so. GitHub's probes found that a commit it lacks, asked for beside
+  `author`, is now 404, where the fake answers D342's 500 (D394, being built). Every run file and console
+  output was screened, counts only, by `screen_live.py` in the session's scratchpad: no token, no 16 of
+  its characters in a row, no organization or namespace, as written or decoded. Copies are in
+  `D:/Projects/Personal/phase7b-work/live-gate/`.
 - **D393's guard** (2026-11-08; the session's workflow `p7b-gitlab-guard`, four Opus agents in
   `D:/Projects/Personal/vc-wt/p7b-gitlab-guard`, branch `wip/p7b-gitlab-guard` from `c233091`; merged
   with `--no-ff` at `ee0aeeb`; design 15.9's two "As built" notes). The builder (`67c691e`): below

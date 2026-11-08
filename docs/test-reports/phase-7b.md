@@ -104,10 +104,33 @@ they are.
 
 ### GitHub (`artifacts/live/github/run.txt`)
 
-No run in phase 7b yet: stage 1 ran Azure DevOps' and GitLab's classes alone (15.9). GitHub's classes
-run at the gate with the other two. GitHub's token expires on 2026-11-29 (plan risk 42): the gate's two
-runs fall before that date, or the owner makes the token again first. Phase 7a's report holds its three
-runs.
+No run in phase 7b before the gate: stage 1 ran Azure DevOps' and GitLab's classes alone (15.9).
+GitHub's token expires on 2026-11-29 (plan risk 42): the gate's two runs fall before that date, or the
+owner makes the token again first. Phase 7a's report holds its three runs.
+
+**The gate's first run** (2026-11-08, from 13:58 UTC, on `ee0aeeb`, the Windows machine, the owner told
+and at the machine; the offline classes alone first on the same commit, 582 of 582): the whole project
+(D335), the three providers' 14 live tests with the 582 offline ones: 595 of 596 passed in 3 min 3 s
+(199 s with the lock and the build up to date); the one failure was GitLab's (below). GitHub's 3
+passed. `Check_1`: the sandbox private, the token fine-grained and allowed to push, no leftovers.
+`Check_2`: the sign-in, the browser's 12 rows, the clone in 2.3 s, no open pull request, one author's
+avatar, a draft pull request created through the app, read back, its duplicate refused with 422 "A pull
+request already exists", then closed and its branch deleted; the app's 9 requests to the API with the
+token and 1 to the avatars without, none refused. `Check_3`: the provider's own A1 asking for an
+unsupported version got `ApiVersion` with GitHub's explanation, and its A6 lookups got 404 then 200,
+the 404's address left out and the other one linked. Of the probes' 10 answers beside the fake, 6
+matched and 1 was not tried (the commits of an empty repository: the sandbox has a commit). The other 3
+are a finding. A commit GitHub does not have, asked for beside `author`, is now answered 404
+`{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#list-commits","status":"404"}`,
+as without `author`. The three probes were all f's with a made-up address, all f's with the latest
+commit's author's address, and another unknown 40-digit SHA with that address. On 2026-10-30 and 31
+GitHub answered these with 500 and an empty body, and the fake still does so (D342 (3)). The client
+already takes a 404 in the listed repository as it takes a 5xx (D342 (2)), as `Check_3`'s lookups show.
+The fake is corrected before the gate's pictures ("What the gate's first live run changed in the
+fakes" below). Run.txt (47 lines) and the console output (47 lines) hold no token, nor 16 of a token's
+characters in a row, nor the organization's name or the namespace, searched as written and fully
+decoded (URL, HTML, JSON escapes and base64). Copy: `D:/Projects/Personal/phase7b-work/live-gate/github-run.txt`;
+the console output: `D:/Projects/Personal/phase7b-work/live-gate/first.log`.
 
 ### Azure DevOps (`artifacts/live/azure-devops/run.txt`)
 
@@ -158,6 +181,19 @@ lines) and the console output (17 lines) hold neither a token, nor 16 of a token
 row, nor the organization's name, the namespace or an address, searched as written and fully
 decoded. Copy: `D:/Projects/Personal/phase7b-work/live/azure-devops-stage2-20261108.txt`.
 
+**The gate's first run** (the same command and run as GitHub's above): Azure DevOps' 6 passed.
+`Check_1` found no leftovers. `Check_1b_probes` ran its 17 reads. `Check_2` signed in, cloned in 2.2 s
+and created a draft through the app (201). `Check_2b_probes` read it back, made the duplicate and
+missing-branch probes and a create with nothing ahead (201), then abandoned both pull requests.
+`Check_3` signed in through the dialog, cloned in 1.8 s, created a draft through the form ("Created
+draft pull request !n"), read it back and abandoned it. `Check_4` cloned through the organization's
+host. None of the app's or the test's requests was refused. Of the probes' 24 answers beside the
+fake, 20 matched; the 4 that differed are the `info/refs` answers to made-up values that 16.1's As
+built keeps, as at stage 2. Nothing new for the fake. Run.txt (650 lines) holds no token, nor 16 of a
+token's characters in a row, nor the organization's name or the namespace, fully decoded; it names
+Azure DevOps' sign-in realm in its challenges, as before, which stays out of the repository. Copy:
+`D:/Projects/Personal/phase7b-work/live-gate/azure-devops-run.txt`.
+
 ### GitLab (`artifacts/live/gitlab/run.txt`)
 
 **Stage 1, first run** (the same command and run as Azure DevOps' above): `Check_1` and `Check_1b_probes`
@@ -191,6 +227,28 @@ fake, 9 matched; the duplicate's 409 differed only in the number it names (the s
 against the fake's `!1`), its form the fake's. Nothing new for the fake. Run.txt (68 lines) holds
 neither a token nor the namespace nor an address, fully decoded. Copy:
 `D:/Projects/Personal/phase7b-work/live/gitlab-stage2-20261108.txt`.
+
+**The gate's first run** (the same command and run as GitHub's above), and GitLab's class twice more
+alone on the same commit, the owner told. In the first run `Check_1` and `Check_1b_probes` passed.
+`Check_2_the_providers_and_the_session` failed in step 6, the push: "Timed out after 60 s waiting for the
+push to end". The branch had reached GitLab all the same: `Check_2b_probes`, with no merge request to
+probe, deleted it (204), while its sibling with nothing ahead had not been pushed yet (404). The app's 4
+requests to the API before it were all answered 200 and none was refused. `Check_3` passed (a draft
+created through the form, read back, closed and deleted with its branch). The class alone at 14:02 UTC
+failed `Check_2` again, this time in step 5, the load: one of the app's requests got no answer from
+GitLab within its 30 s ("GitLab did not answer within 30 seconds."; the log saw the request leave and
+end in `TaskCanceledException`); the other 4 tests passed. The class alone at 14:05 UTC passed 5 of 5
+in 38 s. That time a loop beside it, outside the app, sent a plain request without a token to
+`https://gitlab.com/api/v4/version` every second. Its first request, at 14:05:21 UTC, connected over
+IPv6 in 0.03 s and then got no answer for 20 s; its other 22 were answered (401) within 0.25 s. So the
+two stalls were the network's to gitlab.com, not the app's: the same stall hit git's own push in one
+run and the app's HTTP client in the other, and it hit the plain loop too. Nothing changed in the app
+or the command for it. The third run's probes: of 10 answers beside the fake, 9 matched; the duplicate's
+409 differed only in the number it names, as at stage 2. Nothing new for the fake. The three run.txt
+files (56, 55 and 68 lines), the two console outputs and the loop's record hold no token, nor 16 of a
+token's characters in a row, nor the namespace or an address, fully decoded. Copies:
+`D:/Projects/Personal/phase7b-work/live-gate/` (`gitlab-first-run.txt`, `gitlab-again-run.txt` and
+`.log`, `gitlab-third-run.txt` and `.log`, `netmon.txt`).
 
 ### What stage 1 changed in the fakes (WP-LF, merged at `22fad1b`; design 16.1's As built)
 
