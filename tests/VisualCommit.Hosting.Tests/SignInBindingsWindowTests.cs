@@ -193,7 +193,10 @@ public sealed class SignInBindingsWindowTests
     /// origin as bob's URL; the fake sees the fetch's request without credentials and libcurl's retry
     /// as bob with an empty password, both refused, none with <c>x-access-token</c>; no credential
     /// request of git's reaches the app's broker; and git's one prompt, refused, ends the fetch.
-    /// Bindings made from the unrewritten URL would have answered bob's with octo's token.
+    /// Bindings made from the unrewritten URL would give git a helper key that matches bob's URL too
+    /// (a key without a user matches every user's URL, D278's reason): git would ask the app's broker
+    /// for bob, which refuses with a line of its own (D275), and a git below 2.46 that loses a URL's
+    /// user after a refusal would ask without bob and be answered with octo's token.
     /// <para>
     /// The prompt's text depends on the git that runs, not on the app, so the test asks
     /// <see cref="GitUrlUser"/> (measured once per process) which one to expect. A git that keeps a
@@ -270,12 +273,12 @@ public sealed class SignInBindingsWindowTests
 
         // Git's one prompt: bob's password, or on a git that loses a URL's user after a refusal a user
         // name for the bare origin (GitUrlUser, measured).
-        var urlUser = await GitUrlUser.AfterRefusalAsync();
-        var expectedPrompt = urlUser == UrlUserAfterRefusal.Kept ? $"Password for '{bob}': " : $"Username for '{authority}': ";
+        var urlUser = await GitUrlUser.MeasuredAsync();
+        var expectedPrompt = urlUser.Kind == UrlUserAfterRefusal.Kept ? $"Password for '{bob}': " : $"Username for '{authority}': ";
         var prompt = Assert.Single(tab.Prompts.Prompts);
         Assert.True(
             prompt.Text == expectedPrompt,
-            $"Git's prompt was \"{prompt.Text}\" where \"{expectedPrompt}\" was expected: the git that runs ({tab.Version}) measures {urlUser} for a URL's user after a refusal (GitUrlUser).");
+            $"Git's prompt was \"{prompt.Text}\" where \"{expectedPrompt}\" was expected: the tab's git is {tab.Version}, and GitUrlUser measured a URL's user after a refusal as {urlUser}.");
 
         // No credential request of git's reached the app's broker: the scope had no key for git to match.
         Assert.DoesNotContain(tab.MessagesSince(logMark), IsBrokerCredentialLine);

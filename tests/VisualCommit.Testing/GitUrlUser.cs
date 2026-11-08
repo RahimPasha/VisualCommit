@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Text;
 using VisualCommit.Core.Git;
 using VisualCommit.Git;
+using VisualCommit.Testing.Headless;
 
 namespace VisualCommit.Testing;
 
@@ -16,6 +17,17 @@ public enum UrlUserAfterRefusal
 
     /// <summary>Git loses the URL's user and asks for a user name for the bare origin: <c>Username for 'http://127.0.0.1:&lt;port&gt;': </c>.</summary>
     Lost,
+}
+
+/// <summary>
+/// One measure of <see cref="GitUrlUser"/>: what git did with the probe's user, the git that ran
+/// (its path and <c>git version</c>), git's one line on standard error and the requests the
+/// listener saw (user names only).
+/// </summary>
+public sealed record UrlUserMeasure(UrlUserAfterRefusal Kind, string GitPath, string GitVersion, string Line, string Requests)
+{
+    /// <summary>The measure in one line, as a failure prints it.</summary>
+    public override string ToString() => $"{Kind}, measured with {GitVersion} at {GitPath}: \"{Line}\" (the listener saw: {Requests})";
 }
 
 /// <summary>
@@ -48,6 +60,14 @@ public enum UrlUserAfterRefusal
 /// (<see cref="UrlUserAfterRefusal.Lost"/>). Anything else fails, with git's output and the
 /// listener's requests: nothing is guessed.
 /// </para>
+/// <para>
+/// Each measure, a failed one too, is written to <c>artifacts/visual/git-url-user.txt</c> under the
+/// repository's root (<see cref="RecordFile"/>), which CI uploads with each job's screenshots: D278's
+/// test passes on a git that loses a URL's user as on one that keeps it, and the file says which
+/// git each job ran. On a git that loses it, a credential request git makes after a refusal no
+/// longer names the URL's user, so the app's check of that user (D275) cannot see it there (CI run
+/// 42437572741, macOS).
+/// </para>
 /// </summary>
 public static class GitUrlUser
 {
@@ -57,11 +77,14 @@ public static class GitUrlUser
     /// <summary>How long the probe's git may take before the measure fails.</summary>
     private static readonly TimeSpan Limit = TimeSpan.FromSeconds(60);
 
-    private static readonly Lazy<Task<UrlUserAfterRefusal>> Measured = new(MeasureAsync);
+    private static readonly Lazy<Task<UrlUserMeasure>> Measured = new(MeasureAsync);
 
-    /// <summary>What the tests' git does with a URL's user after a refusal, measured at the first call of the process and then kept.</summary>
+    /// <summary>Where each measure is written: <c>artifacts/visual/git-url-user.txt</c> under the repository's root, in the folder CI uploads.</summary>
+    public static string RecordFile => Path.Combine(VisualRun.RepoRoot, "artifacts", "visual", "git-url-user.txt");
+
+    /// <summary>What the tests' git does with a URL's user after a refusal, measured at the first call of the process and then kept, with the git that ran and what it printed.</summary>
     /// <exception cref="InvalidOperationException">Git printed neither form, or did not end in time.</exception>
-    public static Task<UrlUserAfterRefusal> AfterRefusalAsync() => Measured.Value;
+    public static Task<UrlUserMeasure> MeasuredAsync() => Measured.Value;
 
     /// <summary>
     /// The classification of the probe's result on <paramref name="port"/>: exit 128 and exactly the
@@ -83,7 +106,7 @@ public static class GitUrlUser
         };
     }
 
-    private static async Task<UrlUserAfterRefusal> MeasureAsync()
+    private static async Task<UrlUserMeasure> MeasureAsync()
     {
         using var folder = new TempDirectory("url user probe");
         await using var listener = RefusingListener.Start();
@@ -100,23 +123,65 @@ public static class GitUrlUser
         };
 
         GitResult result;
+        string version;
+        var runner = new GitRunner(TempRepo.GitPath);
         using (var limit = new CancellationTokenSource(Limit))
         {
             try
             {
-                result = await new GitRunner(TempRepo.GitPath).RunAsync(command, limit.Token).ConfigureAwait(false);
+                var versionResult = await runner.RunAsync(new GitCommand("version") { WorkingDirectory = folder.Path, Environment = environment }, limit.Token).ConfigureAwait(false);
+                version = versionResult.ExitCode == 0
+                    ? versionResult.StandardOutput.Trim()
+                    : $"(git version exited {versionResult.ExitCode.ToString(CultureInfo.InvariantCulture)})";
+                result = await runner.RunAsync(command, limit.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
             {
-                throw new InvalidOperationException(
-                    $"{command.DisplayText} with the git at {TempRepo.GitPath} did not end within {Limit.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s. The listener saw: {listener.Describe()}.");
+                var timedOut = $"{command.DisplayText} with the git at {TempRepo.GitPath} did not end within {Limit.TotalSeconds.ToString(CultureInfo.InvariantCulture)} s. The listener saw: {listener.Describe()}.";
+                throw await FailedAsync(timedOut).ConfigureAwait(false);
             }
         }
 
-        return Classify(result, listener.Port) ?? throw new InvalidOperationException(
-            $"{command.DisplayText} with the git at {TempRepo.GitPath} exited {result.ExitCode.ToString(CultureInfo.InvariantCulture)}, "
-            + $"which tells neither whether git keeps a URL's user after a refusal nor that it loses it. The listener saw: {listener.Describe()}. "
-            + $"Standard error:\n{result.StandardError}");
+        var requests = listener.Describe();
+        if (Classify(result, listener.Port) is not { } kind)
+        {
+            var unclassified = $"{command.DisplayText} with the git at {TempRepo.GitPath} ({version}) exited {result.ExitCode.ToString(CultureInfo.InvariantCulture)}, "
+                + $"which tells neither whether git keeps a URL's user after a refusal nor that it loses it. The listener saw: {requests}. "
+                + $"Standard error:\n{result.StandardError}";
+            throw await FailedAsync(unclassified).ConfigureAwait(false);
+        }
+
+        var measure = new UrlUserMeasure(kind, TempRepo.GitPath, version, result.StandardError.Trim(), requests);
+        await RecordAsync(
+            $"Result: {measure.Kind}\nGit: {measure.GitPath}\nVersion: {measure.GitVersion}\nStandard error: {measure.Line}\nThe listener saw: {measure.Requests}").ConfigureAwait(false);
+        return measure;
+    }
+
+    /// <summary>
+    /// The exception of a failed measure, whose message is also written to <see cref="RecordFile"/>;
+    /// when that write fails, its error is the inner exception and the message stays the measure's.
+    /// </summary>
+    private static async Task<InvalidOperationException> FailedAsync(string message)
+    {
+        try
+        {
+            await RecordAsync($"Result: none, the measure failed\n{message}").ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new InvalidOperationException(message, ex);
+        }
+
+        return new InvalidOperationException(message);
+    }
+
+    /// <summary>Writes a measure's lines to <see cref="RecordFile"/>, after a line that says what the file holds and when it was measured.</summary>
+    private static Task RecordAsync(string lines)
+    {
+        Directory.CreateDirectory(Path.GetDirectoryName(RecordFile)!);
+        var heading = "What the tests' git does with a URL's user after the server refused it (GitUrlUser, for D278's test in SignInBindingsWindowTests), measured "
+            + DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture) + " UTC.";
+        return File.WriteAllTextAsync(RecordFile, heading + "\n" + lines + "\n");
     }
 
     /// <summary>A listener on 127.0.0.1, port 0, that answers every request 401 with a Basic challenge and <c>Connection: close</c>, one connection at a time, and records each request's line and the user name of its Basic header (never the password).</summary>
