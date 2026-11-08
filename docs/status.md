@@ -589,13 +589,15 @@ and macOS read Lost and passed (CI section); steps 9, 13 and 14 are ticked. WP-L
 is merged at `fdb2c05` and passed with the tokens (step 16 ticked; Notes, "WP-LIVE's second
 stage"); CI 42459591309 on `fdb2c05` is green in all five jobs (CI section). The review before the gate
 (step 17) ran on `fdb2c05` (Notes, "The review before the gate"): 9 of its 19 findings stood, the
-lead's rulings are D391 and D392, and four Opus fixers by area are fixing six of them in
-`D:/Projects/Personal/vc-wt/p7b-fix-{hosting,clone,panel,tests}` (branches `wip/p7b-fix-*`, from
-`77a76cb`; the session's workflow `p7b-review-fixes`), each fix reviewed by another Opus agent and
-refixed. At their merges the lead runs the touched classes plain and lagged; then design 0.6's
-timing report (`--report-xunit` for `VisualCommit.Hosting.Tests` and `VisualCommit.VisualTests.Phase7b`
-through `scripts/heavy-run.sh`) and the split of any test of 25 s or more by D237's rule (the review's
-tests-5), and `VisualCommit.App.Tests` timed alone once; push, read CI; then WP-R and the gate. The GitLab account's five projects wait on the owner and decide whether the gate's live
+lead's rulings are D391 and D392. Its fixes are merged at `6333de6` (Notes, "The review's fixes"),
+pushed; CI's run on it is 42472105974. The lead's runs on `6333de6` go one at a time through
+`scripts/heavy-run.sh` (2026-11-08, from 10:36; log and outputs in
+`D:/Projects/Personal/phase7b-work/timing/`): design 0.6's timing report for
+`VisualCommit.Hosting.Tests` and `VisualCommit.VisualTests.Phase7b` (`--report-xunit`; they are also
+the touched classes' plain runs), 7a's walk-through, the touched Git.Tests and App.Tests classes, the
+lagged lists of 7b (0.4) and of 7a (D334's six), then `VisualCommit.App.Tests` alone with its timing
+report. Next: read them and CI's run; split any test of 25 s or more by D237's rule (the review's
+tests-5); tick step 17; then WP-R and the gate. The GitLab account's five projects wait on the owner and decide whether the gate's live
 runs need a change first (Waiting on the owner). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
@@ -1027,6 +1029,37 @@ every commit.
   7a; Hosting.Tests grew from 17 to 46 min of its own and Git.Tests to 56); a06c is settled (part P's
   recorded change); a11b stays as built. The lead's rulings: D391 and D392, plan risks 43 (extended)
   and 44, design 16.3's new bullets, the report's open point 5.
+- **The review's fixes** (2026-11-08; the session's workflow `p7b-review-fixes`, 14 Opus agents: a
+  fixer per area in `D:/Projects/Personal/vc-wt/p7b-fix-{hosting,clone,panel,tests}`, from `77a76cb`,
+  each fix reviewed by another agent, refixed where the review found something and checked again).
+  Merged with `--no-ff` at `b4117fc` (hosting), `eedffe3` (clone), `8bf5e99` (panel) and `6333de6`
+  (tests); design 16.3's appended bullets were the only conflict, both sides kept. Each fix has a test
+  shown to fail without it. Hosting: tokens-1 (`HostingHttpProfile.FollowsPage`, GitLab's decoded
+  API-path rule), tokens-2 (`GitHubProvider.WebAddress`), life-1 (each provider's `StartRead`); its
+  review found nothing. Clone (D391): `IGitConfiguration.ReadIncludedAsync` and `GitConfigIncludes`;
+  an include path the app cannot work out as git would (`~user/`, `%(prefix)/`) fails closed as
+  unreadable. Its review found two problems, both fixed: the rewrite tests asserted `username=alice` in the
+  user's helper, which a git that loses the URL's user (CI's macOS, D389) never sends, so that
+  assertion is made only where `GitUrlUser` reads Kept and alice's request at the server is asserted on
+  every git (the assertion was the first fixer's, never merged); and two includes that rewrite the URL
+  only together, by a tie of equal prefixes, were missed, so any included rule matching with a prefix
+  at least as long as the outside's longest now binds nothing too. Panel (ui-1): the texts are in
+  design 12.2's table and the report's list; `RepositoryHosting.Apply` now raises `Changed` when the
+  listed provider's account alone changes its signed-in state (without it a refusal while GitLab is
+  signed in left the row unchanged; no covered tab gets a new `Changed`); its review's minor point,
+  the wiring test's two apps not ended through `End` (the token tripwire) and a `using`, is fixed. The
+  panel's refixer found the fixer's build stale (a scratch revert put back with its old time, so an
+  incremental build kept the old DLL); the main checkout's merge writes every changed file anew, and
+  its build is the one the lead's runs use. Tests (tests-2): `GrowthMeasures.WithoutCollection` blames
+  the budget only when the measure allocated it, else names the memory load (a fixer's run on the
+  laptop saw 16.2 GB against the 15.4 GB high-load threshold); the palette test's measures moved to
+  `PaletteGrowthWorks`, kept as each returns, written to `artifacts/visual/palette-growth.txt` and
+  given in every failure; its bound, rounds and sizes unchanged; its review's minor point (a failed
+  measure dropped its round's small work and its message the data) is fixed. Pictures: 7a's part B
+  (8 of 10 the same files, b06a and b09a varying by nature, their pixels equal to earlier copies) and
+  7b's part P (22 of 22 the same files at the panel's fix; on the refixer's fresh build 21, `p11a`
+  differing in 5 pixels of the status bar's git box, its recorded variation) were run by the fixers;
+  no fix changes a scripted picture.
 - **For the review before the gate** (step 17; collected 2026-11-01 to 2026-11-08 from the
   packages' hand-offs, the inspections and the CI runs): GitLab's 100 requests a minute against
   the app's lists; whether the providers' own refusals in `src/VisualCommit.Hosting/` should use the

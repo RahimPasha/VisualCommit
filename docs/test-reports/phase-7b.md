@@ -1103,6 +1103,11 @@ checkout. Each stays well under 40 s alone, timed with `bash scripts/time-script
     `FetchedRequest`: `Fetched !23 into fix-typo` (no Azure DevOps request is fetched, D361);
   - `OtherOrganization(repo, account)`: `In harbor-co; signed in to Fernhill-Labs`; its tooltip
     `This repository is in the Azure DevOps organization harbor-co; the signed-in account is in Fernhill-Labs, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts.`;
+  - `OtherOrganizationNeedsSignIn(repo, account)`, added after part P's checks (the review before the
+    gate's ui-1, D392: the row said "signed in" for a held account that needs sign-in; no check of
+    part P shows that state, so no expected result changes): `In harbor-co; the account for
+    Fernhill-Labs needs sign-in`; its tooltip `This repository is in the Azure DevOps organization harbor-co; the account VisualCommit holds is in Fernhill-Labs and needs signing in again, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts.`
+    (tested headless: `RequestSectionProvidersTests`, `RepositoryHostingProvidersWiringTests`);
   - `MenuTexts`: `RefreshRequests` `Refresh merge requests`, `Refresh pull requests`;
     `OpenRequestsInBrowser` `Open merge requests in browser`, `Open pull requests in browser`;
     `CreateRequest` `Create merge request…` (WP-N's action; part P reads it in one menu, P9);
