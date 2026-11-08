@@ -334,16 +334,21 @@ public sealed class GitHubProviderTests
         Assert.Equal(("commits:ada/hello", $"sha={fix}&author=ada%40example.com&per_page=1"), (lookup.Route, lookup.Query));
     }
 
-    [Fact]
-    public async Task A6_a_repository_github_does_not_give_is_asked_once_a_commit_it_lacks_leaves_out_one_address_and_the_others_go_on()
+    [Theory]
+    [InlineData(404)]
+    [InlineData(500)]
+    public async Task A6_a_repository_github_does_not_give_is_asked_and_read_once_a_commit_it_lacks_leaves_out_one_address_and_the_others_go_on(int lacking)
     {
         await using var setup = await Setup.StartAsync();
+        setup.Fake.UnknownRevisionBesideAuthorAnswers500 = lacking == 500;
         var main = await TipAsync(setup, "octo/hello", "main");
 
-        // A repository GitHub does not have (404) and an empty one (409), each asked once for its two
-        // addresses (ada/gone's second in another case); a commit octo/hello does not have (500
-        // without a body, as github.com answers it beside author, D342), which leaves out its
-        // address alone; then octo on main.
+        // A repository GitHub does not have (404, and 404 again when it is read, D395) and an empty
+        // one (409), each asked once for its two addresses (ada/gone's second in another case); a
+        // commit octo/hello, the listed repository, does not have, which leaves out its address alone
+        // without a read: 404 "Not Found" as github.com answered it beside author in the live run of
+        // 2026-11-08 (D394), or 500 without a body as it did on 2026-10-30 and 31, a 5xx (D342); then
+        // octo on main.
         var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null,
             [
                 new AuthorCommit(Scenarios.AdaEmail, main, Repository("ada", "gone")),
@@ -357,8 +362,39 @@ public sealed class GitHubProviderTests
 
         Assert.Equal(new AuthorAvatar(1001, "octo", new Uri("http://127.0.0.1:1/avatars/u/1001?v=4")), Assert.Single(authors.Value!.ByEmail).Value);
         Assert.Equal(
-            [("commits:ada/gone", 404), ("commits:octo/notes", 409), ("commits:octo/hello", 500), ("commits:octo/hello", 200)],
+            [("commits:ada/gone", 404), ("repo:ada/gone", 404), ("commits:octo/notes", 409), ("commits:octo/hello", lacking), ("commits:octo/hello", 200)],
             setup.Fake.Requests.Select(request => (request.Route, request.Status)));
+    }
+
+    [Theory]
+    [InlineData(404)]
+    [InlineData(500)]
+    public async Task A6_a_commit_a_fork_lacks_leaves_out_its_own_address_alone_the_fork_read_once_when_answered_404(int lacking)
+    {
+        await using var setup = await Setup.StartAsync();
+        setup.Fake.UnknownRevisionBesideAuthorAnswers500 = lacking == 500;
+        var fix = await TipAsync(setup, "ada/hello", "fix-typo");
+
+        // Listed as octo/hello; every lookup goes to ada/hello, its fork, which the token reads: from
+        // a commit the fork lacks, then Ada's from her fix-typo, then another commit it lacks.
+        // github.com answered such a lookup 500 without a body on 2026-10-30 and 31 (D342), and 404
+        // "Not Found" on 2026-11-08 (D394; in the listed repository, a fork presumed the same). The
+        // first 404 in the fork, not yet known readable, is followed by the fork's read, which
+        // succeeds, so the 404 is the commit's (D395): Ada is still asked and found, and the second
+        // 404 is taken so without another read.
+        var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null,
+            [
+                new AuthorCommit("stranger@example.com", new string('0', 40), Repository("ada", "hello")),
+                new AuthorCommit(Scenarios.AdaEmail, fix, Repository("ada", "hello")),
+                new AuthorCommit("lost@example.com", new string('1', 40), Repository("ada", "hello")),
+            ],
+            Cancelled);
+
+        Assert.Equal(new AuthorAvatar(1003, "ada", new Uri("http://127.0.0.1:1/avatars/u/1003?v=4")), Assert.Single(authors.Value!.ByEmail).Value);
+        (string?, int)[] sent = lacking == 404
+            ? [("commits:ada/hello", 404), ("repo:ada/hello", 200), ("commits:ada/hello", 200), ("commits:ada/hello", 404)]
+            : [("commits:ada/hello", 500), ("commits:ada/hello", 200), ("commits:ada/hello", 500)];
+        Assert.Equal(sent, setup.Fake.Requests.Select(request => (request.Route, request.Status)));
     }
 
     [Fact]
@@ -395,27 +431,39 @@ public sealed class GitHubProviderTests
     }
 
     [Fact]
-    public async Task A6_a_lookup_github_cannot_answer_leaves_out_its_address_and_a_404_on_another_repository_leaves_out_that_repository()
+    public async Task A6_a_lookup_github_cannot_answer_leaves_out_its_address_and_a_404_on_another_repository_that_does_not_read_leaves_out_that_repository()
     {
-        // github.com's answers to a commit it lacks beside author= (D342): a 500 without a body (the
-        // live run of 2026-10-30), and a 422 is taken the same, on the listed repository or the fork
-        // a lookup goes to; a 404 on the listed repository is taken the same. A 404 on another
-        // repository leaves out the rest of that repository's; a 401 stops them.
+        // Recorded answers, each standing for one of github.com's. A 422, or a 500 without a body
+        // (github.com's answer to a commit it lacks beside author= in the live runs of 2026-10-30
+        // and 31, D342), leaves out its own address, on the listed repository or on the fork a lookup
+        // goes to; so does a 404 on the listed repository, github.com's answer to such a commit in the
+        // live run of 2026-11-08 (D394), and on another repository known readable: the fork, once it
+        // has answered a lookup. A 404 on another repository not yet known readable is followed by
+        // that repository's read, once (D395): eve/gone's 404 and cal/hello's 500 leave out the rest
+        // of that repository's; bob/hello reads, so its 404 was the commit's and its next address is
+        // asked. A 401 stops them.
         static string Found(string login, int id) =>
             $$$"""[{"sha":"x","commit":{"author":{"email":"x@example.com"}},"author":{"login":"{{{login}}}","id":{{{id}}},"avatar_url":"https://avatars.githubusercontent.com/u/{{{id}}}?v=4"}}]""";
-        var recorder = new RecordingHttpHandler(request => request.RequestUri!.Query.Split('&')[0] switch
+        const string bobHello = """{"name":"hello","owner":{"login":"bob"},"default_branch":"main","clone_url":"https://github.com/bob/hello.git","html_url":"https://github.com/bob/hello","updated_at":"2026-01-02T03:04:05Z","permissions":{"push":false}}""";
+        var recorder = new RecordingHttpHandler(request => (request.RequestUri!.AbsolutePath, request.RequestUri.Query.Split('&')[0]) switch
         {
-            "?sha=1" or "?sha=5" => RecordingHttpHandler.Json(HttpStatusCode.UnprocessableContent, "{\"message\":\"No commit found for SHA\"}"),
-            "?sha=2" or "?sha=7" => RecordingHttpHandler.Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}"),
-            "?sha=3" or "?sha=4" => new HttpResponseMessage(HttpStatusCode.InternalServerError),
-            "?sha=6" => RecordingHttpHandler.Json(HttpStatusCode.OK, Found("ada", 1003)),
-            "?sha=9" => RecordingHttpHandler.Json(HttpStatusCode.OK, Found("eff", 1006)),
-            "?sha=11" => RecordingHttpHandler.Json(HttpStatusCode.Unauthorized, "{\"message\":\"Bad credentials\"}"),
+            ("/repos/eve/gone", _) => RecordingHttpHandler.Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}"),
+            ("/repos/cal/hello", _) => new HttpResponseMessage(HttpStatusCode.InternalServerError),
+            ("/repos/bob/hello", _) => RecordingHttpHandler.Json(HttpStatusCode.OK, bobHello),
+            (_, "?sha=1" or "?sha=5") => RecordingHttpHandler.Json(HttpStatusCode.UnprocessableContent, "{\"message\":\"No commit found for SHA\"}"),
+            (_, "?sha=2" or "?sha=7" or "?sha=13" or "?sha=15" or "?sha=17") => RecordingHttpHandler.Json(HttpStatusCode.NotFound, "{\"message\":\"Not Found\"}"),
+            (_, "?sha=3" or "?sha=4") => new HttpResponseMessage(HttpStatusCode.InternalServerError),
+            (_, "?sha=6") => RecordingHttpHandler.Json(HttpStatusCode.OK, Found("ada", 1003)),
+            (_, "?sha=9") => RecordingHttpHandler.Json(HttpStatusCode.OK, Found("eff", 1006)),
+            (_, "?sha=11") => RecordingHttpHandler.Json(HttpStatusCode.Unauthorized, "{\"message\":\"Bad credentials\"}"),
             _ => RecordingHttpHandler.Json(HttpStatusCode.OK, "[]"),
         });
         using var provider = new GitHubProvider(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), new ManualTimeProvider());
         var listed = new HostedRepository(HostingProvider.GitHub, "github.com", "octo", "hello");
         var fork = new HostedRepository(HostingProvider.GitHub, "github.com", "ada", "hello");
+        var gone = new HostedRepository(HostingProvider.GitHub, "github.com", "eve", "gone");
+        var other = new HostedRepository(HostingProvider.GitHub, "github.com", "bob", "hello");
+        var failing = new HostedRepository(HostingProvider.GitHub, "github.com", "cal", "hello");
 
         var authors = await provider.ReadAuthorsAsync("github_pat_FAKE-octo-1", listed, null,
             [
@@ -427,6 +475,12 @@ public sealed class GitHubProviderTests
                 new AuthorCommit("f@example.com", "6", fork),
                 new AuthorCommit("g@example.com", "7", fork),
                 new AuthorCommit("h@example.com", "8", fork),
+                new AuthorCommit("m@example.com", "13", gone),
+                new AuthorCommit("n@example.com", "14", gone),
+                new AuthorCommit("o@example.com", "15", other),
+                new AuthorCommit("p@example.com", "16", other),
+                new AuthorCommit("q@example.com", "17", failing),
+                new AuthorCommit("r@example.com", "18", failing),
                 new AuthorCommit("i@example.com", "9", listed),
                 new AuthorCommit("j@example.com", "10", listed),
                 new AuthorCommit("k@example.com", "11", listed),
@@ -435,13 +489,77 @@ public sealed class GitHubProviderTests
             Cancelled);
 
         Assert.True(authors.Succeeded);
-        Assert.Equal(new[] { "f@example.com", "i@example.com", "j@example.com" }, authors.Value!.ByEmail.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(new[] { "f@example.com", "h@example.com", "i@example.com", "j@example.com", "p@example.com" }, authors.Value!.ByEmail.Keys.Order(StringComparer.Ordinal));
         Assert.Equal(new AuthorAvatar(1003, "ada", new Uri("https://avatars.githubusercontent.com/u/1003?v=4")), authors.Value.ByEmail["f@example.com"]);
         Assert.Equal(new AuthorAvatar(1006, "eff", new Uri("https://avatars.githubusercontent.com/u/1006?v=4")), authors.Value.ByEmail["i@example.com"]);
+        Assert.Null(authors.Value.ByEmail["h@example.com"]);
         Assert.Null(authors.Value.ByEmail["j@example.com"]);
+        Assert.Null(authors.Value.ByEmail["p@example.com"]);
         Assert.Equal(
-            new[] { "octo/hello 1", "Octo/HELLO 2", "octo/hello 3", "ada/hello 4", "ada/hello 5", "ada/hello 6", "ada/hello 7", "octo/hello 9", "octo/hello 10", "octo/hello 11" },
-            recorder.Sent.Select(sent => $"{sent.Url.AbsolutePath["/repos/".Length..^"/commits".Length]} {sent.Url.Query.Split('&')[0]["?sha=".Length..]}"));
+            new[]
+            {
+                "octo/hello 1", "Octo/HELLO 2", "octo/hello 3", "ada/hello 4", "ada/hello 5", "ada/hello 6", "ada/hello 7", "ada/hello 8",
+                "eve/gone 13", "read eve/gone", "bob/hello 15", "read bob/hello", "bob/hello 16", "cal/hello 17", "read cal/hello",
+                "octo/hello 9", "octo/hello 10", "octo/hello 11",
+            },
+            recorder.Sent.Select(sent => sent.Url.AbsolutePath.EndsWith("/commits", StringComparison.Ordinal)
+                ? $"{sent.Url.AbsolutePath["/repos/".Length..^"/commits".Length]} {sent.Url.Query.Split('&')[0]["?sha=".Length..]}"
+                : $"read {sent.Url.AbsolutePath["/repos/".Length..]}"));
+    }
+
+    [Theory]
+    [InlineData("401", true)]
+    [InlineData("403 rate limit", true)]
+    [InlineData("429 secondary limit", true)]
+    [InlineData("400 version", true)]
+    [InlineData("no answer", true)]
+    [InlineData("not read", true)]
+    [InlineData("403", false)]
+    [InlineData("403 single sign-on", false)]
+    public async Task A6_a_read_after_a_404_that_the_token_fails_stops_the_lookups_and_one_the_repository_refuses_leaves_that_repository_out(string answer, bool stops)
+    {
+        // Recorded answers. A lookup in eve/gone, a repository other than the listed one, answered
+        // 404, so eve/gone is read (D395), and the read answers as a lookup could. The token refused
+        // (401) or limited (403 with no request left, 429 with Retry-After), the API version
+        // refused, no answer, or an answer not read stop the lookups, as the same failure of a lookup
+        // does: nothing is sent after the read. A 403 of the repository's own (a permission, single
+        // sign-on) leaves eve/gone out with its other lookup, and the listed repository's go on, as
+        // after a read answered 404 or 500 (the recorded answers above).
+        var recorder = new RecordingHttpHandler(request => (request.RequestUri!.AbsolutePath, answer) switch
+        {
+            ("/repos/eve/gone", "401") => RecordingHttpHandler.Json(HttpStatusCode.Unauthorized, """{"message":"Bad credentials"}"""),
+            ("/repos/eve/gone", "403 rate limit") => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, """{"message":"API rate limit exceeded for user ID 1001."}""", ("X-RateLimit-Remaining", "0"), ("X-RateLimit-Reset", "1798761600")),
+            ("/repos/eve/gone", "429 secondary limit") => RecordingHttpHandler.Json(HttpStatusCode.TooManyRequests, """{"message":"You have exceeded a secondary rate limit."}""", ("Retry-After", "60")),
+            ("/repos/eve/gone", "400 version") => RecordingHttpHandler.Json(HttpStatusCode.BadRequest, """{"message":"Bad Request","errors":"The version you specified in the \"X-GitHub-Api-Version\" request header is not a supported version."}"""),
+            ("/repos/eve/gone", "no answer") => throw new HttpRequestException("No such host is known. (api.github.com:443)"),
+            ("/repos/eve/gone", "not read") => RecordingHttpHandler.Json(HttpStatusCode.OK, """{"name":"""),
+            ("/repos/eve/gone", "403") => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, """{"message":"Resource not accessible by personal access token"}"""),
+            ("/repos/eve/gone", "403 single sign-on") => RecordingHttpHandler.Json(HttpStatusCode.Forbidden, """{"message":"Resource protected by organization SAML enforcement."}""", ("X-GitHub-SSO", "required; url=https://github.com/orgs/eve/sso?authorization_request=1")),
+            ("/repos/eve/gone/commits", _) => RecordingHttpHandler.Json(HttpStatusCode.NotFound, """{"message":"Not Found"}"""),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.OK, "[]"),
+        });
+        using var provider = new GitHubProvider(GitHubEndpoints.GitHubCom, () => recorder, new ListLog(), new ManualTimeProvider());
+        var listed = new HostedRepository(HostingProvider.GitHub, "github.com", "octo", "hello");
+        var gone = new HostedRepository(HostingProvider.GitHub, "github.com", "eve", "gone");
+
+        var authors = await provider.ReadAuthorsAsync("github_pat_FAKE-octo-1", listed, null,
+            [
+                new AuthorCommit("m@example.com", "13", gone),
+                new AuthorCommit("n@example.com", "14", gone),
+                new AuthorCommit("i@example.com", "9", listed),
+                new AuthorCommit("j@example.com", "10", listed),
+            ],
+            Cancelled);
+
+        string[] found = stops ? [] : ["i@example.com", "j@example.com"];
+        string[] requests = stops ? ["eve/gone 13", "read eve/gone"] : ["eve/gone 13", "read eve/gone", "octo/hello 9", "octo/hello 10"];
+        Assert.True(authors.Succeeded);
+        Assert.Equal(found, authors.Value!.ByEmail.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(
+            requests,
+            recorder.Sent.Select(sent => sent.Url.AbsolutePath.EndsWith("/commits", StringComparison.Ordinal)
+                ? $"{sent.Url.AbsolutePath["/repos/".Length..^"/commits".Length]} {sent.Url.Query.Split('&')[0]["?sha=".Length..]}"
+                : $"read {sent.Url.AbsolutePath["/repos/".Length..]}"));
     }
 
     [Fact]

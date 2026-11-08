@@ -266,12 +266,33 @@ public sealed class FakeGitHubTests
         Assert.Equal(["Initial commit octo@example.com octo"], Commits(await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?author=OCTO@example.com&per_page=1", token)));
         Assert.Contains("rel=\"next\"", (await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?per_page=1", token)).Header("Link"), StringComparison.Ordinal);
 
-        // A revision GitHub does not have: 404 alone, 500 without a body beside author (the live
-        // run of 2026-10-30), counted like any answer; an empty repository's 409 comes first.
+        // A revision GitHub does not have: 404 "Not Found" alone and, since the live run of
+        // 2026-11-08, beside author too, body for body as github.com's in its three probes (an
+        // unknown SHA of all f's beside a made-up address and beside a linked one, one that is not
+        // all f's beside the linked one; D394); a branch name it lacks the same. Each counted like any
+        // answer; an empty repository's 409 comes first.
+        const string NotFound = """{"message":"Not Found","documentation_url":"https://docs.github.com/rest/commits/commits#list-commits","status":"404"}""";
         var unknown = new string('f', 40);
+        const string Other = "0123456789abcdef0123456789abcdef01234567";
         await AssertErrorAsync(fake, HttpMethod.Get, $"repos/octo/hello/commits?sha={unknown}", 404, "Not Found", token, documentationUrl: "https://docs.github.com/rest/commits/commits#list-commits");
         await AssertErrorAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?sha=nope", 404, "Not Found", token, documentationUrl: "https://docs.github.com/rest/commits/commits#list-commits");
         var used = int.Parse((await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?per_page=1", token)).Header("X-RateLimit-Used")!, System.Globalization.CultureInfo.InvariantCulture);
+        foreach (var query in new[] { $"sha={unknown}", $"sha={unknown}&author=nobody%40example.invalid&per_page=1", $"sha={unknown}&author=octo%40example.com&per_page=1", $"sha={Other}&author=octo%40example.com&per_page=1", "sha=nope&author=ada" })
+        {
+            var failed = await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?" + query, token);
+            Assert.Equal((HttpStatusCode.NotFound, NotFound, "application/json; charset=utf-8"), (failed.Status, failed.Body, failed.Header("Content-Type")));
+            Assert.Matches("^FAKE-[0-9]{4}$", failed.Header("X-GitHub-Request-Id"));
+            Assert.Equal((++used).ToString(System.Globalization.CultureInfo.InvariantCulture), failed.Header("X-RateLimit-Used"));
+            Assert.Equal(("commits:octo/hello", 404), (fake.Requests[^1].Route, fake.Requests[^1].Status));
+        }
+
+        await AssertErrorAsync(fake, HttpMethod.Get, "repos/octo/notes/commits", 409, "Git Repository is empty.", token);
+        await AssertErrorAsync(fake, HttpMethod.Get, $"repos/octo/notes/commits?sha={unknown}&author=octo%40example.com", 409, "Git Repository is empty.", token);
+
+        // Asked for, beside author the answer of the live runs of 2026-10-30 and 31 (D342): 500
+        // without a body, Content-Type all the same, counted; alone still 404; the 409 first.
+        fake.UnknownRevisionBesideAuthorAnswers500 = true;
+        used = int.Parse((await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?per_page=1", token)).Header("X-RateLimit-Used")!, System.Globalization.CultureInfo.InvariantCulture);
         foreach (var query in new[] { $"sha={unknown}&author=octo%40example.com&per_page=1", "sha=nope&author=ada" })
         {
             var failed = await SendAsync(fake, HttpMethod.Get, "repos/octo/hello/commits?" + query, token);
@@ -281,7 +302,8 @@ public sealed class FakeGitHubTests
             Assert.Equal(("commits:octo/hello", 500), (fake.Requests[^1].Route, fake.Requests[^1].Status));
         }
 
-        await AssertErrorAsync(fake, HttpMethod.Get, "repos/octo/notes/commits", 409, "Git Repository is empty.", token);
+        var alone = await SendAsync(fake, HttpMethod.Get, $"repos/octo/hello/commits?sha={unknown}", token);
+        Assert.Equal((HttpStatusCode.NotFound, NotFound), (alone.Status, alone.Body));
         await AssertErrorAsync(fake, HttpMethod.Get, $"repos/octo/notes/commits?sha={unknown}&author=octo%40example.com", 409, "Git Repository is empty.", token);
         Assert.Empty(fake.Errors);
     }

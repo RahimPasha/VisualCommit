@@ -3936,17 +3936,27 @@ supported (D258).
     (300, ruling 14).
   - A5 `CreatePullRequestAsync`: one `POST repos/{o}/{r}/pulls` on the base repository, never
     retried: `head` the branch, or `owner:branch` across forks with `maintainer_can_modify: true`.
-  - A6 `ReadAuthorsAsync(token, repository, branch, lookups)` (D252, D339): with a branch, the first
-    page of `repos/{o}/{r}/commits?sha={branch}&per_page=100`, each commit's lower-cased author
-    e-mail to its GitHub user (the first commit of an e-mail wins; null where GitHub links none), a
-    409 (an empty repository) ending the call with an empty map and no lookup; without a branch, no
-    page. Then at most 20 lookups (`MaxAuthorLookups`) of the given `AuthorCommit`s whose e-mail the
-    map lacks, in order, each `repos/{owner}/{name}/commits?sha={sha}&author={e-mail}&per_page=1` in
-    its own repository from its own commit. A lookup answered 409, or 404 in a repository other than
-    the listed one, leaves out the rest of that repository's in the call; one answered 422, a 5xx or
-    404 in the listed repository (a commit GitHub lacks: github.com answers it 500 with an empty body
-    beside `author`) leaves out its own address and the others go on (D342); any other failure stops
-    them. An address left out is not in the map, so it is asked again at a later run.
+  - A6 `ReadAuthorsAsync(token, repository, branch, lookups[, readable])` (D252, D339): with a
+    branch, the first page of `repos/{o}/{r}/commits?sha={branch}&per_page=100`, each commit's
+    lower-cased author e-mail to its GitHub user (the first commit of an e-mail wins; null where
+    GitHub links none), a 409 (an empty repository) ending the call with an empty map and no lookup;
+    without a branch, no page. Then at most 20 lookups (`MaxAuthorLookups`) of the given
+    `AuthorCommit`s whose e-mail the map lacks, in order, each
+    `repos/{owner}/{name}/commits?sha={sha}&author={e-mail}&per_page=1` in its own repository from
+    its own commit. A lookup answered 409 leaves out the rest of that repository's in the call.
+    GitHub's 404 is the same for a repository it does not give and a commit it lacks, so one answered
+    404 in a repository not known to be readable is followed by one read of that repository (A3's
+    request, conditional where the client keeps an answer; D395). Known to be readable: the listed
+    `repository`, those in `readable` (the avatar run passes the tab's candidate, which A3 has read,
+    so a fork's tab reads its fork no more), one that answered a lookup of the call and one whose
+    read succeeded. A read answered 404, 403 (single sign-on's too) or a 5xx leaves the repository out
+    with the rest of its lookups in the call and the others go on; any other failure of the read
+    stops the lookups, as a lookup's own does. One answered 422, a 5xx or 404 in a readable
+    repository (a commit GitHub lacks: github.com answered it 500 with an empty body beside `author`
+    on 2026-10-30 and 31, and 404 "Not Found" on 2026-11-08, D394) leaves out its own address and the
+    others go on (D342); any other failure (the token refused or limited, the API version, no
+    answer, an answer not read) stops them. An address left out is not in the map, so it is asked
+    again at a later run.
   - Avatars' addresses are kept only when `https` on `avatars.githubusercontent.com` (github.com) or
     on the web address's own origin (the fake); any other makes the author unknown, with one warning
     per provider that names that address's scheme, host and port only.
@@ -4170,9 +4180,14 @@ e-mail maps.
   applies nothing once a sign-out, the tab's close or a lost GitHub remote has moved its generation.
   Off the UI thread: A3 (kept); the branch, the parent's default branch for a fork, else the default
   branch; `AuthorMapStore.Plan` for the listed repository; when anything is due, one A6 with the
-  branch when the commits page is due and the due e-mails' `AuthorCommit`s as lookups, its answer
-  taken into the map (`AuthorMapStore.Merge`, which gives back the lookups not reached, all of them
-  when A6 failed); a failed A6 applies nothing. Then `AvatarCache.FileOfAsync` for each e-mail the
+  branch when the commits page is due, the due e-mails' `AuthorCommit`s as lookups and the candidate
+  (under its remotes' name and A3's) as readable, its answer taken into the map
+  (`AuthorMapStore.Merge`, which gives back the lookups not reached, all of them when A6 failed); a
+  failed A6 applies nothing. Besides the commits page, the lookups and the images, a run can send
+  A3's `GET repos/{o}/{r}` of another remote's repository, once a repository and run, after a lookup
+  there answered 404 (D395): the walk-throughs' rule that leaves out the avatars' requests by their routes
+  (`commits:` and `avatar:`) does not leave it out, and none of their scenarios sends it. Then
+  `AvatarCache.FileOfAsync` for each e-mail the
   map links to a user, four at a time; the files found become `Avatars`. An address GitHub does not
   know, or whose image could not be had, gets no entry and looks as before phase 7a.
 - **The e-mail maps** (`AuthorMapStore.cs`, internal; D291, D336): one per listed repository, shared
@@ -5416,7 +5431,7 @@ in `HoldNext`, `FailNext` and the records:
 | `pulls:o/r` | `GET …/pulls` | paged, number descending; `state` (`open` by default), `head` as `owner:ref`, `base` |
 | `create:o/r` | `POST …/pulls` | 201, author the token's login, `refs/pull/<n>/head` written; 422 "Validation Failed" for a missing title, a base or head that is no branch, an open pull request with that head and base ("A pull request already exists for …") or nothing ahead ("No commits between …"); 403 "Resource not accessible by personal access token" with `X-Accepted-GitHub-Permissions: pull_requests=write` for a fine-grained token whose login cannot push to the base |
 | `update:o/r` | `PATCH …/pulls/<n>` | 200; `{"state":"closed"}` closes |
-| `commits:o/r` | `GET …/commits` | one `git log` from `sha` (the default branch when absent), filtered by `author` (an e-mail, or a login through `LinkEmail`), paged; a revision git cannot resolve 404 "Not Found", or beside `author` 500 with an empty body (both as github.com answers, D342); 409 "Git Repository is empty." |
+| `commits:o/r` | `GET …/commits` | one `git log` from `sha` (the default branch when absent), filtered by `author` (an e-mail, or a login through `LinkEmail`), paged; a revision git cannot resolve 404 "Not Found" on list-commits' documentation, beside `author` too (as github.com answered in the live run of 2026-11-08, D394; with `UnknownRevisionBesideAuthorAnswers500` set, beside `author` 500 with an empty body, its answer of 2026-10-30 and 31, D342); 409 "Git Repository is empty." |
 | `avatar:<id>` | `GET avatars/u/<id>` (any query) | the user's `AvatarBytes`, without auth |
 | `page:o/r` | `GET o/r`, `o/r/pulls`, `o/r/pull/<n>` (and `page:settings` for `settings/…`) | `text/html`, `<!doctype html><title>…</title>` |
 | `git:o/r` | git, over TCP only | `AuthRemoteServer`'s host mode (below) |
@@ -5441,8 +5456,10 @@ the `type` 422, the create's 422s (whose `errors` items carry `resource` first) 
 Avatars and pages are answered before any check; an avatar request that carries `Authorization` is
 answered and recorded `TokenPresent`, which the checks assert never happens. The texts of the
 version, `type`, unknown-SHA and duplicate-create answers are GitHub's own, as the live command
-recorded them on 2026-10-30 (D342), and its runs at phase 7a's gate found every probe the same; the empty repository's 409, `ApiVersionGone`'s 410 and the
-`ServerError` fault's body are still from memory (its sandbox has a commit, and GitHub's one 500 had
+recorded them on 2026-10-30 (D342), and its runs at phase 7a's gate found every probe the same; the answer to an
+unknown SHA beside `author` is as the run of 2026-11-08, at phase 7b's gate, recorded it (404, D394), where 2026-10-30 and
+31 had an empty 500, and that run found every other probe the same; the empty repository's 409, `ApiVersionGone`'s 410 and the
+`ServerError` fault's body are still from memory (its sandbox has a commit, and the 500 of 2026-10-30 and 31 had
 no body). A fine-grained token reaches every repository its login owns or may push to: GitHub's "Only
 select repositories" is not modelled.
 

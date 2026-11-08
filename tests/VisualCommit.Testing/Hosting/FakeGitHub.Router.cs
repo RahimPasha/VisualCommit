@@ -411,7 +411,9 @@ public sealed partial class FakeGitHub
     /// <summary>
     /// A6: one <c>git log</c> from <c>sha</c> (the default branch), filtered by <c>author</c> (an
     /// e-mail, or a login through <see cref="LinkEmail"/>), paged; 409 when empty; for a revision
-    /// git cannot resolve, 404 "Not Found", or 500 without a body beside <c>author</c> (D342).
+    /// git cannot resolve, 404 "Not Found" on list-commits' documentation, beside <c>author</c> too
+    /// since the live run of 2026-11-08 (D394, amending D342's 500 without a body there, which
+    /// <see cref="UnknownRevisionBesideAuthorAnswers500"/> still gives).
     /// </summary>
     private async Task<AuthRemoteResponse> CommitsAsync(Call call, FakeRepository repository, CancellationToken ct)
     {
@@ -423,12 +425,16 @@ public sealed partial class FakeGitHub
         var sha = call.Query.Value("sha") ?? repository.DefaultBranch;
         if (await LogAsync(bare, sha, ct).ConfigureAwait(false) is not { } commits)
         {
-            // github.com, the same in four runs of 2026-10-30 and 31: a SHA it does not have is 404
-            // alone and 500 with an empty body beside author, whether or not GitHub links the address
-            // to an account; a branch name it lacks is 404 alone, as an unknown SHA.
-            return call.Query.Value("author") is null
-                ? Error(call, 404, "Not Found", documentationUrl: ListCommitsDocumentationUrl)
-                : Empty(call, 500);
+            // github.com: a SHA it does not have is 404 "Not Found" alone, and a branch name it lacks
+            // is 404 as an unknown SHA. Beside author it answered 500 with an empty body in four runs
+            // of 2026-10-30 and 31, whether or not GitHub linked the address to an account (D342);
+            // in the live run of 2026-11-08 it answered the 404 it gives alone, body for body, in
+            // three probes (all f's beside a made-up address and beside a real author's, a SHA that is
+            // not all f's beside that address; D394). A branch name beside author was not probed: it
+            // is answered as a SHA.
+            return call.Query.Value("author") is not null && UnknownRevisionBesideAuthorAnswers500
+                ? Empty(call, 500)
+                : Error(call, 404, "Not Found", documentationUrl: ListCommitsDocumentationUrl);
         }
 
         if (call.Query.Value("author") is { } author)
@@ -551,8 +557,9 @@ public sealed partial class FakeGitHub
 
     /// <summary>
     /// An answer of <paramref name="status"/> without a body, with GitHub's common headers and
-    /// counted (A6's 500, D342): github.com sent it with <c>Content-Type: application/json; charset=utf-8</c>
-    /// all the same (the live run of 2026-10-31).
+    /// counted (A6's 500 of 2026-10-30 and 31, D342, now given only with
+    /// <see cref="UnknownRevisionBesideAuthorAnswers500"/>, D394): github.com sent it with
+    /// <c>Content-Type: application/json; charset=utf-8</c> all the same (the live run of 2026-10-31).
     /// </summary>
     private AuthRemoteResponse Empty(Call call, int status)
     {

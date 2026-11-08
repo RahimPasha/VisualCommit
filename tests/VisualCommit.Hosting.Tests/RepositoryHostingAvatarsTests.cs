@@ -11,7 +11,9 @@ namespace VisualCommit.Hosting.Tests;
 /// A tab's authors' avatars (docs/phase-7a-design.md 7.9, 7.13; D252, D291, D339, ruling 22): one
 /// commits page; the 20 lookups a repository has per app session, shared by its tabs, each from the
 /// author's own commit on the remote that holds it (a feature branch's, a fork's); an unknown e-mail
-/// not asked again; one whose commit GitHub lacks left out alone and asked again (D342); the map
+/// not asked again; one whose commit GitHub lacks, in the listed repository, a fork's tab's own fork
+/// or another remote's repository (read once after its 404), left out alone and asked again,
+/// answered 404 or 500 (D342, D394, D395); the map
 /// used within 7 days (no page asked) and read again after; images fetched
 /// without the token; nothing at all while signed out; the avatars gone with the GitHub remote, a
 /// run in flight then applying nothing, and kept when the remote names another GitHub repository.
@@ -124,21 +126,26 @@ public sealed class RepositoryHostingAvatarsTests
         Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
     }
 
-    [Fact]
-    public async Task An_address_whose_commit_github_lacks_holds_up_no_other_in_this_run_or_the_next_session()
+    [Theory]
+    [InlineData(404)]
+    [InlineData(500)]
+    public async Task An_address_whose_commit_github_lacks_holds_up_no_other_in_this_run_or_the_next_session(int status)
     {
         await using var setup = await HostingSessionSetup.StartAsync();
         await setup.SignInAsync();
+        setup.Fake.UnknownRevisionBesideAuthorAnswers500 = status == 500;
         var hosting = await OpenHelloAsync(setup);
         var sha = await PushNewbieAsync(setup, "octo/hello", "feature/newbie");
         var lost = new string('f', 40);
         AuthorCommit[] authors = [new("stranger@example.com", lost, OctoHello), new(NewbieEmail, sha, OctoHello)];
 
-        // A remote-tracking branch GitHub no longer has: the lookup from its commit is answered 500
-        // without a body, as github.com did in the live run of 2026-10-30; the next is still asked (D342).
+        // A remote-tracking branch GitHub no longer has: the lookup from its commit, in the listed
+        // repository, is answered 404 "Not Found" as github.com did in the live run of 2026-11-08
+        // (D394), or 500 without a body as it did on 2026-10-30 and 31, a 5xx; either way the next
+        // is still asked (D342).
         await ShowAsync(setup, hosting, authors);
 
-        var stranger = ($"sha={lost}&author=stranger%40example.com&per_page=1", 500);
+        var stranger = ($"sha={lost}&author=stranger%40example.com&per_page=1", status);
         Assert.Equal([("sha=main&per_page=100", 200), stranger, ($"sha={sha}&author=newbie%40example.com&per_page=1", 200)], Commits(setup).Select(request => (request.Query, request.Status)));
         Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
         using (var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(setup.Paths.AvatarsDirectory, "authors", "github_127.0.0.1_1_octo_hello.json"))))
@@ -182,6 +189,80 @@ public sealed class RepositoryHostingAvatarsTests
         using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(authors, "github_127.0.0.1_1_octo_hello.json")));
         var newbie = json.RootElement.GetProperty("authors").EnumerateArray().Single(author => author.GetProperty("email").GetString() == NewbieEmail);
         Assert.Equal((1010L, "newbie"), (newbie.GetProperty("userId").GetInt64(), newbie.GetProperty("login").GetString()));
+    }
+
+    [Theory]
+    [InlineData(404)]
+    [InlineData(500)]
+    public async Task A_fork_tabs_address_whose_commit_github_lacks_holds_up_no_other_on_the_fork(int status)
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        setup.Fake.UnknownRevisionBesideAuthorAnswers500 = status == 500;
+        var hosting = await setup.Thread.RunAsync(() => (RepositoryHosting)setup.Session.ForRepository(setup.Served.Hello.Path));
+        await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.Refs(("origin", "http://127.0.0.1:1/ada/hello.git")), UrlRewrites.None));
+        var sha = await PushNewbieAsync(setup, "ada/hello", "newbie-work");
+        var lost = new string('f', 40);
+
+        // A fork's tab: the lookups go to the fork, ada/hello, which is not the listed repository.
+        // A stale remote-tracking branch's commit, which GitHub lacks, comes first: answered 404
+        // "Not Found" as github.com answered such a commit on 2026-11-08 (D394; in the listed
+        // repository, a fork presumed the same), or 500 without a body as on 2026-10-30 and 31. A3
+        // has read the fork for the tab, so the fork is known readable: the 404 is the commit's,
+        // only that address is left out, and the fork is not read again (D395). Newbie, after it on
+        // the fork, is still asked and found, as after the 500 (D342).
+        await ShowAsync(setup, hosting, new AuthorCommit("stranger@example.com", lost, AdaHello), new AuthorCommit(NewbieEmail, sha, AdaHello));
+
+        var first = setup.Fake.Requests.ToList().FindIndex(request => request.Route == "commits:ada/hello");
+        (string?, string, int)[] sent =
+        [
+            ("commits:ada/hello", $"sha={lost}&author=stranger%40example.com&per_page=1", status),
+            ("commits:ada/hello", $"sha={sha}&author=newbie%40example.com&per_page=1", 200),
+        ];
+        Assert.Equal(sent, setup.Fake.Requests.Skip(first).Where(request => request.Route is "commits:ada/hello" or "repo:ada/hello").Select(request => (request.Route, request.Query, request.Status)));
+        Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(setup.Paths.AvatarsDirectory, "authors", "github_127.0.0.1_1_octo_hello.json")));
+        var emails = json.RootElement.GetProperty("authors").EnumerateArray().Select(author => author.GetProperty("email").GetString()).ToList();
+        Assert.Contains(NewbieEmail, emails);
+        Assert.DoesNotContain("stranger@example.com", emails);
+    }
+
+    [Fact]
+    public async Task Another_remotes_address_whose_commit_github_lacks_has_its_repository_read_once_and_holds_up_no_other_there()
+    {
+        await using var setup = await HostingSessionSetup.StartAsync();
+        await setup.SignInAsync();
+        var hosting = await setup.Thread.RunAsync(() => (RepositoryHosting)setup.Session.ForRepository(setup.Served.Hello.Path));
+        await setup.Thread.RunAsync(() => hosting.Update(RepositoryHostingTests.Refs(("origin", "http://127.0.0.1:1/octo/hello.git"), ("ada", "http://127.0.0.1:1/ada/hello.git")), UrlRewrites.None));
+        var sha = await PushNewbieAsync(setup, "ada/hello", "newbie-work");
+        var lost = new string('f', 40);
+        var gone = new string('e', 40);
+
+        // A tab of octo/hello, the listed repository, with a remote `ada` of ada/hello, which A3 has
+        // not read. A lookup there of a commit GitHub lacks is answered 404 "Not Found" (D394), which
+        // GitHub also gives for a repository it does not let the token read, so the avatar run reads
+        // ada/hello once, on A3's route (D395): it reads, so only that address is left out; newbie,
+        // after it on ada/hello, is asked and found; and a second commit ada/hello lacks is left out
+        // without another read.
+        await ShowAsync(setup, hosting,
+            new AuthorCommit("stranger@example.com", lost, AdaHello),
+            new AuthorCommit(NewbieEmail, sha, AdaHello),
+            new AuthorCommit("lost@example.com", gone, AdaHello));
+
+        (string?, string, bool, int)[] sent =
+        [
+            ("commits:ada/hello", $"sha={lost}&author=stranger%40example.com&per_page=1", false, 404),
+            ("repo:ada/hello", string.Empty, false, 200),
+            ("commits:ada/hello", $"sha={sha}&author=newbie%40example.com&per_page=1", false, 200),
+            ("commits:ada/hello", $"sha={gone}&author=lost%40example.com&per_page=1", false, 404),
+        ];
+        Assert.Equal(sent, setup.Fake.Requests.Where(request => request.Route is "commits:ada/hello" or "repo:ada/hello").Select(request => (request.Route, request.Query, request.Conditional, request.Status)));
+        Assert.True(File.Exists(hosting.Avatars.FileOf(NewbieEmail)));
+        using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(setup.Paths.AvatarsDirectory, "authors", "github_127.0.0.1_1_octo_hello.json")));
+        var emails = json.RootElement.GetProperty("authors").EnumerateArray().Select(author => author.GetProperty("email").GetString()).ToList();
+        Assert.Contains(NewbieEmail, emails);
+        Assert.DoesNotContain("stranger@example.com", emails);
+        Assert.DoesNotContain("lost@example.com", emails);
     }
 
     [Fact]

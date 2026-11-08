@@ -851,8 +851,9 @@ public sealed partial class LiveSafetyTests
         Assert.Equal(10, probes.Count);
 
         // The fake answers a wrong version before it reads the token, so without the rate limit's
-        // headers, and may answer a lookup without a body, so without Content-Type.
-        Assert.All(probes.SkipLast(1), note => Assert.Matches(@"^GitHub's text for .+: \d{3} \(request FAKE-\d{4}\); Content-Type (application/json; charset=utf-8|not sent), API version selected not sent, X-RateLimit-Remaining (\d+|not sent); the fake: same\. GitHub's body", note));
+        // headers. Every answer has a JSON body, so each note names its Content-Type: an unknown
+        // SHA's lookup's too, 404 since the live run of 2026-11-08 where it was an empty 500 (D394).
+        Assert.All(probes.SkipLast(1), note => Assert.Matches(@"^GitHub's text for .+: \d{3} \(request FAKE-\d{4}\); Content-Type application/json; charset=utf-8, API version selected not sent, X-RateLimit-Remaining (\d+|not sent); the fake: same\. GitHub's body", note));
         Assert.Equal("GitHub's text for the commits of an empty repository: not tried (the sandbox has a commit); the fake: status 409, message \"Git Repository is empty.\".", probes[^1]);
 
         // The latest commit's author's address, which three of the lookups asked with, is in no note.
