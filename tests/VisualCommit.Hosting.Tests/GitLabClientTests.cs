@@ -493,6 +493,45 @@ public sealed class GitLabClientTests
             Assert.Single(log.Lines).Message);
     }
 
+    // Made up, a broken or hostile server's: a next page by the redirect rule above (the review
+    // before the gate, tokens-1). The core's own test reads the path as .NET leaves it, which keeps
+    // /api/v4/..%2F..%2Foauth%2Ftoken under /api/v4/; GitLab's reads it decoded. The plain next
+    // page is still followed with the token.
+    [Theory]
+    [InlineData("https://gitlab.com/api/v4/..%2F..%2Foauth%2Ftoken")]
+    [InlineData("https://gitlab.com/api/v4/..%5C..%5Coauth/token")]
+    [InlineData("https://gitlab.com/api/v4/%2e%2e%2f%2e%2e%2foauth/token")]
+    [InlineData("https://gitlab.com/api/v4/projects/5001%2F..%2F..%2F..%2Foauth/token")]
+    [InlineData("https://gitlab.com/api/v4/projects%5C5001")]
+    public async Task A_Link_outside_the_API_read_decoded_is_Malformed_and_nothing_is_sent_there(string link)
+    {
+        var log = new ListLog();
+        var recorder = new RecordingHttpHandler(request => request.RequestUri!.AbsolutePath switch
+        {
+            "/api/v4/projects" when request.RequestUri.Query.Contains("off", StringComparison.Ordinal) =>
+                RecordingHttpHandler.Json(HttpStatusCode.OK, "[]", ("Link", "<" + link + ">; rel=\"next\""), ("x-request-id", "01JFAKELINK0000000000000")),
+            "/api/v4/projects" when request.RequestUri.Query.Contains("page=2", StringComparison.Ordinal) => RecordingHttpHandler.Json(HttpStatusCode.OK, "[]"),
+            "/api/v4/projects" => RecordingHttpHandler.Json(HttpStatusCode.OK, "[]", ("Link", "<https://gitlab.com/api/v4/projects?page=2>; rel=\"next\"")),
+            _ => RecordingHttpHandler.Json(HttpStatusCode.NotFound, "{\"error\":\"404 Not Found\"}"),
+        });
+        using var client = GitLabClient.Create(GitLabEndpoints.GitLabCom, () => recorder, log, new ManualTimeProvider());
+        var api = GitLabEndpoints.GitLabCom.ApiBase.AbsoluteUri;
+
+        var refused = await client.GetPagesAsync("glpat-FAKE-ada-1", new Uri(api + "projects?off=1"), GitLabJsonContext.Default.ListGitLabProjectJson, 10, Cancelled);
+
+        Assert.Equal((HostingFailureKind.Malformed, "GitLab's answer could not be read.", "https://gitlab.com/api/v4/projects", "01JFAKELINK0000000000000"),
+            (refused.Failure!.Kind, refused.Failure.Message, refused.Failure.Url!.AbsoluteUri, refused.Failure.RequestId));
+        Assert.Equal("/api/v4/projects?off=1", Assert.Single(recorder.Sent).Url.PathAndQuery);
+        Assert.Equal("GitLab: GET /api/v4/projects failed: Link outside the API (request 01JFAKELINK0000000000000).", Assert.Single(log.Lines).Message);
+
+        var followed = await client.GetPagesAsync("glpat-FAKE-ada-1", new Uri(api + "projects"), GitLabJsonContext.Default.ListGitLabProjectJson, 10, Cancelled);
+
+        Assert.True(followed.Succeeded);
+        Assert.Equal(["/api/v4/projects?off=1", "/api/v4/projects", "/api/v4/projects?page=2"], recorder.Sent.Select(sent => sent.Url.PathAndQuery));
+        Assert.All(recorder.Sent, sent => Assert.Equal("Bearer glpat-FAKE-ada-1", sent.Header("Authorization")));
+        Assert.Single(log.Lines);
+    }
+
     [Fact]
     public async Task A_warning_names_GitLab_and_no_query_token_or_address_and_a_failures_words_are_screened()
     {

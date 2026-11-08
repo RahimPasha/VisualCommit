@@ -30,7 +30,8 @@ internal static class GitLabClient
 /// and kinds from the status and shape F's <c>error</c> code alone, never from a sentence or the
 /// <c>scope</c> list, whose members vary by route (g2 G0.4). A moved project's GET is 301 to
 /// <c>projects/&lt;id&gt;</c> on the same origin (r6 3.2, MEASURED), which the core follows; any other
-/// method's redirect, and a GET's outside the API's path, is refused (<see cref="RefuseRedirect"/>); a 304
+/// method's redirect, and a GET's outside the API's path, is refused (<see cref="RefuseRedirect"/>), and
+/// a next page outside it is not followed (<see cref="FollowsPage"/>); a 304
 /// counts against GitLab's limit (r6 8, MEASURED): kept answers save bytes, not budget.
 /// </summary>
 internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider clock) : HostingHttpProfile
@@ -80,6 +81,13 @@ internal sealed class GitLabProfile(GitLabEndpoints endpoints, TimeProvider cloc
     public override void AddHeaders(HttpRequestMessage request) => request.Headers.TryAddWithoutValidation("Accept", "application/json");
 
     public override Uri? NextPage(HostingExchange exchange) => HostingLinks.Next(exchange.Headers);
+
+    /// <summary>
+    /// A next page by <see cref="RefuseRedirect"/>'s path rule: under the API's path, read decoded,
+    /// with no dot segment or backslash. The core tests the path as .NET leaves it, so a <c>Link</c> to
+    /// <c>/api/v4/..%2F..%2Foauth%2Ftoken</c> would take the token where a redirect there does not.
+    /// </summary>
+    public override bool FollowsPage(Uri next) => InApi(next);
 
     public override string? RequestIdOf(IReadOnlyDictionary<string, string> headers) => headers.GetValueOrDefault(RequestIdHeader);
 
