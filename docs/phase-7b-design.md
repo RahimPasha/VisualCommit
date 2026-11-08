@@ -4362,7 +4362,53 @@ other projects too), and the owner kept them and narrowed the guard instead.
 - For the lead: no request of Check_1 to Check_3 to the sandbox is refused by the narrowing, unless the
   sandbox holds an opened merge request from a fork (A4's lookup above) or was moved. The guard reads no
   request body: a create's `target_project_id` is not judged (neither the app's same-project create nor
-  the command's sends one).
+  the command's sends one); the review's fix below judges it.
+
+**As built after the review** (D393; `9a5800f`): GitLab reads a project from the query and from a
+write's content too. Its API takes a POST's query as its parameters, so
+`POST projects/<the sandbox>/merge_requests?target_project_id=<another id>` passed the guard before
+and after the id was learned, and would open the merge request in that other project if the sandbox
+were a fork of it (D326's sandbox is none); the same held for that member in the create's JSON. Neither
+the app nor the command sends one (A5 sets `target_project_id` across projects alone). Now:
+- The query: none on any method but GET. Below `projects/<project>`, a parameter that may name a
+  project names the sandbox, each of a repeated one, as written and as sent: its path decoded once
+  (ASCII, case ignored) or the learned id as a plain decimal number. A parameter may name a project
+  when its first key as Rack reads it (decoded, `+` a blank, brackets before it skipped, up to the next
+  bracket, blanks trimmed) is `id` or ends in `_id` or `_ids`, case ignored. GitLab's `Link` to a
+  project's next page keeps `id`, the project as the request named it, so a next page of A4 stays
+  admitted. The account's list `projects`, `user` and `personal_access_tokens/self` are not judged so
+  (A2's next page keeps GitLab's defaults, such as `include_hidden`).
+- The content: `LiveRequestLog` reads a request's content before it leaves when the guard asks
+  (`LiveReach.ReadsContent`, `ContentRefusalOf`; GitLab's guard always asks), buffered whole (10 MiB at
+  most) and sent whole; content it cannot read so is refused. GitLab's guard admits content on POST and
+  PUT alone: one JSON object sent as `application/json` (UTF-8 or no charset), each top-level member
+  that may name a project (the rule above) null or the learned id as a whole number (a string, a
+  fraction or an array is refused). Nested members are not judged: GitLab reads none of them as the
+  target.
+- A refusal names the origin and the method alone: "a POST under https://gitlab.com:443/api/v4/ carries
+  a query, which no write of the app's or the command's does (D393)", "a query parameter names another
+  project than the sandbox, or an id not learned from the sandbox's own read, …", "the content of a
+  POST names another project than the sandbox, …", "the content of a POST … is not one JSON object sent
+  as application/json (D393)".
+- The GitLab rehearsal of Check_3 runs twice: on a new run, as Check_3 run alone starts, where the
+  command's own read teaches the id; and on the run as Check_1 leaves it (`IdentityRead` and
+  `Repository` set), as Check_2 and Check_3 of a whole run start, where the command reads neither again
+  and only the app's own read of the sandbox can teach the id its create by number needs. It asserts
+  that the app's read by path (200) came before its POST by number, and that the command read the
+  sandbox on the new run alone. With the review's scratch regression (answers read for the guard only
+  when they carry the command's `User-Agent`) the second run fails ("Could not reach GitLab": the
+  create was refused) and the first passes.
+- `LiveSafetyTests` gains 75 rows: 26 query parameters refused under the sandbox before and after the
+  id is learned, 5 admitted (a next page's `id`, case, an unescaped slash, the learned id), the
+  parameters the app, the command and a next page send, 9 writes with a query, 25 contents refused, 5
+  admitted and passed on whole, content too large to read, two rows of the refusal's text, and the
+  rehearsal's second run. Against the guard without the query and content checks (a scratch revert,
+  restored byte for byte) 66 rows fail: every refusal row and the two admissions that need the id. The
+  offline classes count 582 tests.
+- For the lead: none of these checks refuses a request of Check_1 to Check_3. The app's and the
+  command's queries name no project (a next page of A4 would name the sandbox), no write carries a
+  query, and their content (A5's create without `target_project_id`, the command's create and close)
+  names none.
 
 ## 16. Open points
 
