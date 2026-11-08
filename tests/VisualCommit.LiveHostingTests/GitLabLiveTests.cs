@@ -68,7 +68,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
     {
         var sandbox = Sandbox;
         var store = new LiveRequestLog.Store();
-        var reach = LiveReach.GitLab();
+        var reach = LiveReach.GitLab(sandbox.FullName);
         var step = "1, the variables";
         var problems = new List<string>();
         try
@@ -109,7 +109,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
     {
         var sandbox = Sandbox;
         var store = new LiveRequestLog.Store();
-        var reach = LiveReach.GitLab();
+        var reach = LiveReach.GitLab(sandbox.FullName);
         var step = "1b, the probes";
         var problems = new List<string>();
         try
@@ -181,7 +181,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
         var title = "VisualCommit live test " + stamp;
         var appRequests = new LiveRequestLog.Store();
         var ownRequests = new LiveRequestLog.Store();
-        var reach = LiveReach.GitLab();
+        var reach = LiveReach.GitLab(sandbox.FullName);
         using var api = new GitLabLiveApi(sandbox, reach, ownRequests, run.Screener!, run.Withheld);
         using var app = new LiveApp(run, sandbox, AppOptions(appRequests, reach));
         var step = "1, the identity";
@@ -245,7 +245,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
     {
         var sandbox = Sandbox;
         var store = new LiveRequestLog.Store();
-        var reach = LiveReach.GitLab();
+        var reach = LiveReach.GitLab(sandbox.FullName);
         using var api = new GitLabLiveApi(sandbox, reach, store, run.Screener!, run.Withheld);
         var made = run.Made;
         run.Made = null;
@@ -300,7 +300,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
         var sandbox = Sandbox;
         var appRequests = new LiveRequestLog.Store();
         var ownRequests = new LiveRequestLog.Store();
-        var reach = LiveReach.GitLab();
+        var reach = LiveReach.GitLab(sandbox.FullName);
         using var api = new GitLabLiveApi(sandbox, reach, ownRequests, run.Screener!, run.Withheld);
         await AppDrivenAsync(api, reach, AppOptions(appRequests, reach), appRequests, ownRequests);
     }

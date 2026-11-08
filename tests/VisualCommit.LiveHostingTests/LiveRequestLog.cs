@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Security.Cryptography;
+using System.Text.Json;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting.AzureDevOps;
 
@@ -68,7 +69,9 @@ internal sealed record LiveRequest(
 /// <summary>
 /// The app's requests in the live command (docs/phase-7a-design.md 14.5): a handler between the
 /// session's clients and GitHub that records each request as a <see cref="LiveRequest"/> and passes
-/// the request and the answer on unchanged. It reads no body, and of the headers only the four
+/// the request and the answer on unchanged. It reads no body but the one a new provider's guard asks
+/// for (<see cref="LiveReach.ReadsAnswer"/>: GitLab's sandbox read, D393), which it buffers whole and
+/// passes on to be read from its start; of the headers only the four
 /// <see cref="LiveRequest"/> names, and of <c>Authorization</c> only whether it was sent. One
 /// <see cref="Store"/> serves every handler the session creates (its client's and the avatar
 /// cache's). A request that would break D327's reach (<see cref="RefusalOf"/>) is recorded and
@@ -187,7 +190,41 @@ internal sealed class LiveRequestLog : DelegatingHandler
 
         store.Add(Record((int)response.StatusCode, null, response));
         within.Answered(uri, form, (int)response.StatusCode);
+        if (within.ReadsAnswer(request.Method, uri, (int)response.StatusCode))
+        {
+            await ReadForGuardAsync(within, request.Method, uri, response, cancellationToken).ConfigureAwait(false);
+        }
+
         return response;
+    }
+
+    /// <summary>
+    /// The body of an answer <paramref name="within"/> reads (<see cref="LiveReach.ReadsAnswer"/>; D393:
+    /// GitLab's sandbox read, whose id the guard learns), buffered whole, at most
+    /// <see cref="LiveReach.MaxAnswerRead"/> bytes, so that the caller still reads it from its start. A
+    /// body that cannot be read so is no answer: the response is disposed and the request fails as a
+    /// network failure whose message names the method and the origin alone.
+    /// </summary>
+    private static async Task ReadForGuardAsync(LiveReach within, HttpMethod method, Uri uri, HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        byte[] body;
+        try
+        {
+            await response.Content.LoadIntoBufferAsync(LiveReach.MaxAnswerRead, cancellationToken).ConfigureAwait(false);
+            body = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            response.Dispose();
+            if (ex is OperationCanceledException)
+            {
+                throw;
+            }
+
+            throw new HttpRequestException($"The live command could not read the answer of {method.Method} {uri.Scheme}://{uri.Authority} for its guard: {ex.GetType().Name} (D393).");
+        }
+
+        within.AnswerRead(method, uri, (int)response.StatusCode, body);
     }
 
     /// <summary>
@@ -448,8 +485,14 @@ internal abstract class LiveReach
     public static AzureDevOpsReach AzureDevOps(string organization, string project, string repository, string? madeUpOrganization = null) =>
         new(organization, project, repository, madeUpOrganization ?? AzureDevOpsReach.DrawMadeUpOrganization(), null);
 
-    /// <summary>GitLab's guard: the app's and the command's paths under <c>https://gitlab.com:443/api/v4/</c> alone, each with their methods, Bearer or no credential (D349).</summary>
-    public static GitLabReach GitLab() => new(null);
+    /// <summary>
+    /// GitLab's guard: the app's and the command's paths under <c>https://gitlab.com:443/api/v4/</c>
+    /// alone, each with their methods, Bearer or no credential (D349); below <c>projects/</c> the
+    /// sandbox <paramref name="sandbox"/> (<c>&lt;namespace path&gt;/&lt;project&gt;</c>, as
+    /// <c>VISUALCOMMIT_LIVE_GITLAB_REPO</c> gives it) alone (D393).
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="sandbox"/> is not <c>&lt;namespace path&gt;/&lt;project&gt;</c>; the message never names it.</exception>
+    public static GitLabReach GitLab(string sandbox) => new(sandbox, null);
 
     /// <summary>
     /// Azure DevOps' guard with <paramref name="fake"/>'s loopback origin in place of the service's, for
@@ -461,9 +504,9 @@ internal abstract class LiveReach
     internal static AzureDevOpsReach AzureDevOpsRehearsal(Uri fake, string organization, string project, string repository) =>
         new(organization, project, repository, AzureDevOpsReach.DrawMadeUpOrganization(), fake ?? throw new ArgumentNullException(nameof(fake)));
 
-    /// <summary>GitLab's guard with <paramref name="fake"/>'s loopback origin in place of the service's (<see cref="AzureDevOpsRehearsal"/>).</summary>
-    /// <exception cref="ArgumentException"><paramref name="fake"/> is not <c>http://127.0.0.1:&lt;port&gt;/</c>.</exception>
-    internal static GitLabReach GitLabRehearsal(Uri fake) => new(fake ?? throw new ArgumentNullException(nameof(fake)));
+    /// <summary>GitLab's guard over the fake's sandbox <paramref name="sandbox"/> with <paramref name="fake"/>'s loopback origin in place of the service's (<see cref="AzureDevOpsRehearsal"/>).</summary>
+    /// <exception cref="ArgumentException"><paramref name="fake"/> is not <c>http://127.0.0.1:&lt;port&gt;/</c>, or <paramref name="sandbox"/> not <c>&lt;namespace path&gt;/&lt;project&gt;</c>.</exception>
+    internal static GitLabReach GitLabRehearsal(Uri fake, string sandbox) => new(sandbox, fake ?? throw new ArgumentNullException(nameof(fake)));
 
     /// <summary>A fake's origin as a rehearsal takes it: <c>http</c>, the loopback address <c>127.0.0.1</c> written so, a port of its own, no user, nothing after the root.</summary>
     /// <exception cref="ArgumentException">Any other origin, a service's or a name's that a resolver could send elsewhere.</exception>
@@ -571,6 +614,17 @@ internal abstract class LiveReach
 
     /// <summary>Sees the answer of a request the guard let through.</summary>
     public virtual void Answered(Uri uri, LiveCredentialForm form, int status)
+    {
+    }
+
+    /// <summary>The most of an answer's body <see cref="LiveRequestLog"/> reads for <see cref="AnswerRead"/>: 10 MiB, the app's core's limit for a body (<c>HostingHttpClient.MaxBodyBytes</c>).</summary>
+    internal const int MaxAnswerRead = 10 * 1024 * 1024;
+
+    /// <summary>Whether the guard reads the body of this answer to a request it let through (<see cref="AnswerRead"/>): none but GitLab's sandbox read (D393).</summary>
+    public virtual bool ReadsAnswer(HttpMethod method, Uri uri, int status) => false;
+
+    /// <summary>Sees the body of an answer <see cref="ReadsAnswer"/> chose, read whole by <see cref="LiveRequestLog"/> and passed on unchanged.</summary>
+    public virtual void AnswerRead(HttpMethod method, Uri uri, int status, ReadOnlyMemory<byte> body)
     {
     }
 
@@ -942,6 +996,16 @@ internal sealed class AzureDevOpsReach : LiveReach
 /// <c>projects</c>, <c>projects/{id}</c>, <c>projects/{id}/merge_requests</c>'s list and create) and
 /// the command (<c>personal_access_tokens/self</c>, a merge request's read, close and delete, the
 /// branches' list and a branch's delete) send, each with those methods alone, as written and as sent.
+/// The account's list <c>projects</c> stays admitted (the clone browser's); below <c>projects/</c> the
+/// project is the sandbox alone (D393, amending D371, whose premise that the account holds the sandbox
+/// alone did not hold): its full path as the app and the command escape it (<c>%2F</c> between its
+/// segments), read decoded once, ASCII alone and compared without case, as GitLab compares paths; or
+/// its numeric id, written as a plain decimal number, once the guard has learned it from a 200 answer
+/// to a GET of <c>projects/&lt;the sandbox's path&gt;</c> whose own <c>id</c> and
+/// <c>path_with_namespace</c> name the sandbox (<see cref="AnswerRead"/>, the app's A3 and A5 reads and
+/// the command's own). Before that every number is refused, and after it every other number; a second
+/// answer with another id bars every number for good. A refusal names the origin, never the path, the
+/// namespace or an id.
 /// </summary>
 internal sealed class GitLabReach : LiveReach
 {
@@ -951,14 +1015,41 @@ internal sealed class GitLabReach : LiveReach
 
     private static readonly string[] Delete = ["DELETE"];
 
-    internal GitLabReach(Uri? rehearsal)
+    /// <summary>The sandbox's <c>&lt;namespace path&gt;/&lt;project&gt;</c> as the variable gives it (D393).</summary>
+    private readonly string _sandbox;
+
+    private readonly Lock _gate = new();
+
+    /// <summary>The sandbox's id, from the first answer that gave one (<see cref="AnswerRead"/>).</summary>
+    private long? _learnedId;
+
+    /// <summary>Set for good by an answer that gave another id than <see cref="_learnedId"/>: no number is admitted after it.</summary>
+    private bool _idBarred;
+
+    internal GitLabReach(string sandbox, Uri? rehearsal)
         : base(rehearsal)
     {
+        ArgumentNullException.ThrowIfNull(sandbox);
+        _sandbox = IsSandboxForm(sandbox)
+            ? sandbox
+            : throw new ArgumentException("GitLab's guard takes the sandbox as <namespace path>/<project>, each segment of letters, digits, '.', '-' and '_'.", nameof(sandbox));
     }
 
     public override HostingProvider Provider => HostingProvider.GitLab;
 
     protected override string ServiceHost => "gitlab.com";
+
+    /// <summary>The sandbox's numeric id once the guard learned it (D393), or null: before its read's 200, or once two answers gave different ids.</summary>
+    public long? SandboxId
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _idBarred ? null : _learnedId;
+            }
+        }
+    }
 
     public override string? RefusalOf(HttpMethod method, Uri uri, LiveCredentialForm form)
     {
@@ -983,23 +1074,112 @@ internal sealed class GitLabReach : LiveReach
         var methods = segments.Select(raw => MethodsOf(raw[2..])).ToList();
         if (methods.Any(each => each is null))
         {
-            return $"the path is none that the app or the command sends under {Origin}/api/v4/ (D349)";
+            return segments.Any(raw => raw is [_, _, "projects", var project, ..] && !NamesSandbox(project))
+                ? $"the path names another project than the sandbox, or an id not learned from the sandbox's own read, under {Origin}/api/v4/ (D393)"
+                : $"the path is none that the app or the command sends under {Origin}/api/v4/ (D349)";
         }
 
         return methods.All(each => Takes(each!, method)) ? null : MethodRefusal(method);
     }
 
-    /// <summary>The methods the app and the command send to <paramref name="path"/>, the raw segments below <c>api/v4/</c>, or null for a path they never send.</summary>
-    private static string[]? MethodsOf(string[] path) => path switch
+    /// <summary>
+    /// A 200 to a GET of <c>projects/&lt;the sandbox's path&gt;</c> on the guard's origin, as written and
+    /// as sent (the query aside): the read whose answer teaches the sandbox's id (D393). A read that names
+    /// a project by a number teaches nothing, the sandbox's own id included.
+    /// </summary>
+    public override bool ReadsAnswer(HttpMethod method, Uri uri, int status)
+    {
+        ArgumentNullException.ThrowIfNull(method);
+        ArgumentNullException.ThrowIfNull(uri);
+        return status == 200
+            && string.Equals(method.Method, "GET", StringComparison.Ordinal)
+            && OnOrigin(uri)
+            && RawSegments(uri).All(raw => raw is ["api", "v4", "projects", var project] && !IsNumber(project) && NamesSandboxPath(Uri.UnescapeDataString(project)));
+    }
+
+    /// <summary>
+    /// Learns the sandbox's id from an answer <see cref="ReadsAnswer"/> chose: its own <c>id</c>, a
+    /// positive whole number, when its <c>path_with_namespace</c> is the sandbox's, each named once at
+    /// the answer's top level; any other answer teaches nothing. The first id stands; a later answer
+    /// with another bars every number for good. Safe from any thread.
+    /// </summary>
+    public override void AnswerRead(HttpMethod method, Uri uri, int status, ReadOnlyMemory<byte> body)
+    {
+        if (!ReadsAnswer(method, uri, status) || IdOf(body) is not { } id)
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (_learnedId is null)
+            {
+                _learnedId = id;
+            }
+            else if (_learnedId != id)
+            {
+                _idBarred = true;
+            }
+        }
+    }
+
+    /// <summary>The sandbox's id in a project's answer, or null (<see cref="AnswerRead"/>).</summary>
+    private long? IdOf(ReadOnlyMemory<byte> body)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            {
+                return null;
+            }
+
+            var members = document.RootElement.EnumerateObject().ToList();
+            var ids = members.Where(member => member.NameEquals("id")).ToList();
+            var paths = members.Where(member => member.NameEquals("path_with_namespace")).ToList();
+            return ids is [{ Value.ValueKind: JsonValueKind.Number } idMember] && idMember.Value.TryGetInt64(out var id) && id > 0
+                && paths is [{ Value.ValueKind: JsonValueKind.String } pathMember] && NamesSandboxPath(pathMember.Value.GetString())
+                ? id
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The methods the app and the command send to <paramref name="path"/>, the raw segments below <c>api/v4/</c>, or null for a path they never send or one under another project than the sandbox (<see cref="NamesSandbox"/>).</summary>
+    private string[]? MethodsOf(string[] path) => path switch
     {
         ["user"] => Get,
         ["personal_access_tokens", "self"] => Get,
         ["projects"] => Get,
-        ["projects", _] => Get,
-        ["projects", _, "merge_requests"] => GetOrPost,
-        ["projects", _, "merge_requests", var iid] when iid.Length <= 10 && iid.All(char.IsAsciiDigit) => GetPutOrDelete,
-        ["projects", _, "repository", "branches"] => Get,
-        ["projects", _, "repository", "branches", _] => Delete,
+        ["projects", var project] when NamesSandbox(project) => Get,
+        ["projects", var project, "merge_requests"] when NamesSandbox(project) => GetOrPost,
+        ["projects", var project, "merge_requests", var iid] when NamesSandbox(project) && iid.Length <= 10 && iid.All(char.IsAsciiDigit) => GetPutOrDelete,
+        ["projects", var project, "repository", "branches"] when NamesSandbox(project) => Get,
+        ["projects", var project, "repository", "branches", _] when NamesSandbox(project) => Delete,
         _ => null,
     };
+
+    /// <summary>
+    /// Whether the raw segment after <c>projects</c> names the sandbox (D393): a plain decimal number
+    /// that is the learned id, written as <see cref="long.ToString()"/> writes it (no sign, no leading
+    /// zero, no escape); else its path decoded once, as GitLab decodes it.
+    /// </summary>
+    private bool NamesSandbox(string raw) =>
+        IsNumber(raw)
+            ? SandboxId is { } id && string.Equals(raw, id.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
+            : NamesSandboxPath(Uri.UnescapeDataString(raw));
+
+    /// <summary>Whether <paramref name="path"/> is the sandbox's full path: ASCII alone (no letter elsewhere that folds to one of the sandbox's), compared without case as GitLab compares paths.</summary>
+    private bool NamesSandboxPath(string? path) =>
+        path is not null && path.All(char.IsAscii) && string.Equals(path, _sandbox, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsNumber(string raw) => raw.Length > 0 && raw.All(char.IsAsciiDigit);
+
+    /// <summary>15.2's form: two or more segments of ASCII letters, digits, <c>.</c>, <c>-</c> and <c>_</c>, none of dots alone (<c>LiveSettings.ResolveGitLab</c>'s).</summary>
+    private static bool IsSandboxForm(string sandbox) =>
+        sandbox.Split('/') is { Length: >= 2 } parts
+        && parts.All(part => part.Length > 0 && part.Any(c => c != '.') && part.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '-' or '_'));
 }
