@@ -4324,6 +4324,46 @@ settles what was open:
 - For the lead: Check_3 is built, never run with the tokens; on the service its risks are the dialog's
   sign-in and the browser's list, which a fake only imitates.
 
+**As built** (D393, the owner's decision of 2026-11-08, amending D371; `67c691e`), GitLab's guard
+narrowed to the sandbox: D371's premise that the account holds the sandbox alone did not hold (it lists
+other projects too), and the owner kept them and narrowed the guard instead.
+- `LiveReach.GitLab(sandbox)` and `GitLabRehearsal(fake, sandbox)` take the sandbox's `<namespace
+  path>/<project>` (`VISUALCOMMIT_LIVE_GITLAB_REPO`'s, 15.2's form; the rehearsal's is the fake's own);
+  the live methods pass `sandbox.FullName`. Below `api/v4/projects/` every path names the sandbox, as
+  written and as sent: by its path escaped as the app and the command send it (`%2F` between segments),
+  decoded once, ASCII alone and compared without case, as GitLab compares paths; or by its numeric id
+  written as a plain decimal number, admitted only once the guard has learned it. Another project, by
+  path or by number, is refused on every path the app and the command send under a project
+  (`merge_requests`, `merge_requests/{iid}`, `repository/branches`, a branch), and so is the sandbox's
+  own id before it is learned. `projects` (the account's list and its pages, the clone browser's),
+  `user` and `personal_access_tokens/self` stay as they were.
+- The id is learned from a 200 answer to a GET of `projects/<the sandbox's path>` alone (the command's
+  sandbox read, the app's A3 and A5 reads): its top-level `id`, a positive whole number, when its
+  `path_with_namespace` is the sandbox's, each named once; a read by number, another project's read or
+  any other answer teaches nothing. The first id stands; a second answer with another bars every number
+  for good. `LiveReach.ReadsAnswer` and `AnswerRead` are the seam: `LiveRequestLog` buffers that one
+  answer's body (10 MiB at most, the core's limit) and passes it on whole; a body it cannot read so
+  fails the request as a network failure naming the origin. Learning is under a lock.
+- A refusal under another project says "the path names another project than the sandbox, or an id not
+  learned from the sandbox's own read, under https://gitlab.com:443/api/v4/ (D393)": the origin, never
+  the path, the namespace or an id (D372, D384).
+- The app names a project by number twice: A5's `POST projects/<the source's id>/merge_requests`, which
+  follows A5's own read of the source by path in the same call (200, or a 304 after an earlier 200
+  through the same guard), so the id is learned first; and A4's lookup of a fork's project
+  (`GET projects/<source_project_id>`) for an opened merge request from a fork, which is now refused,
+  so that list fails. A moved sandbox's 301 to `projects/<id>` would be refused too (a 301 teaches
+  nothing). The command's own calls and probes name the sandbox by its path alone.
+- `LiveSafetyTests` gains the `D393_` cases (79 rows: another project by path, number, near namesake,
+  case, escaping and look-alike letters, before and after the id is learned; the sandbox by its path in
+  any case and in a nested group; what teaches the id and what does not; the log end to end with
+  sixteen reads at once; the refusal's text; the list; the sandbox's form), each shown to fail against
+  the old rule. `Each_admitted_path_takes_the_methods_the_app_and_the_command_send_it` learns the id
+  before its `projects/123` paths. The GitLab rehearsal asserts the learned id and the app's POST by it.
+- For the lead: no request of Check_1 to Check_3 to the sandbox is refused by the narrowing, unless the
+  sandbox holds an opened merge request from a fork (A4's lookup above) or was moved. The guard reads no
+  request body: a create's `target_project_id` is not judged (neither the app's same-project create nor
+  the command's sends one).
+
 ## 16. Open points
 
 Each point names what settles it and who meets it.
