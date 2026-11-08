@@ -520,16 +520,16 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-N (design 13, part N) is built in `D:/Projects/Personal/vc-wt/p7b-create` on `wip/p7b-create`
-(`c5ba918..d831812`, the package workflow; Notes, "WP-N's build"); the lead's rulings on its hunt 3
-are being applied there by a fix workflow (R1 to R5: the stacked sign-in's bindings window fixed in
-the product as D388, the open point 45 check, six minors, Ada's Login asserted), then reviewed,
-refuted and verified. CI's run on `8cb5ecc` (42386428809) failed two older tests (CI section); the
-watcher's dispose test was a race in the test, fixed with one product fix and merged at `abc6df7`
-(Notes, "The watcher's dispose test on CI"); its CI run is the lead's to read. At the fix workflow's
-end the lead reads its result, writes D388, scans the diff, merges WP-N, and runs 13.9's runs through
-`scripts/heavy-run.sh`: the lagged list, then the whole default run (0.4, D245), then 7a's part N
-(`Phase7aChecksN`) and phase 3's walk-through, comparing their pictures by region with 0.7's
+WP-N (design 13, part N) is merged at `a6952d2`, with the lead's rulings on its hunt 3 applied,
+reviewed and verified (D388 recorded at `cf82d50`; Notes, "WP-N's build"); its diff carries the
+owner's identity alone and none of the sandboxes' names or tokens. CI's run on `8cb5ecc`
+(42386428809) failed two older tests (CI section); the watcher's dispose test was a race in the
+test, fixed with one product fix and merged at `abc6df7` (Notes, "The watcher's dispose test on
+CI"); its CI run, 42434720040 on `07c0445`, is running, and the WP-N merge is pushed once it has
+ended (a newer push would cancel it). The lead is running 13.9's runs on `cf82d50` through
+`scripts/heavy-run.sh` (started 2026-11-07 about 19:00): the lagged list, then the whole default
+run (0.4, D245), then 7a's part N (`Phase7aChecksN`) and phase 3's walk-through on their own
+(script: the session's `wpn-runs.sh`), comparing their pictures by region with 0.7's
 references in `D:/Projects/Personal/gate7b-reference/` (made 2026-11-07, Notes), then part N with
 every picture inspected; then WP-LIVE's second stage (`Check_3`, the owner told) and the review before
 the gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
@@ -857,6 +857,23 @@ every commit.
   own steps pass about 40 s), and `n04a-already-open` (differs from 7a's list, equal to `c5ba918`'s
   own run before WP-N; judged by region in the merge runs). Hunt 3's findings and verdicts:
   `D:/Projects/Personal/phase7b-work/verify/wpn-lead/hunt3.md`.
+  The rulings were applied by one fix workflow (two Opus fixers, two Opus reviewers, a fix round
+  and an Opus verifier; `8c107c2..774438d`): D388 in the product (`8c107c2`; the auto-fetch's ask
+  for the read once an interval after a failed read, `83379c5`, from the review's first finding),
+  R2 to R4 in the checks (`d9c20ba`, `426cb83`: `BaseRecorder`, `AssertMenuPlaced`, the brushes on
+  every form, the 409 Warnings of the core, the session and the App, `PartN`'s provider names, N8's
+  routes with their queries, N7's whole menu, Ada's Login). Each new check and the D388 tests fail
+  on mutations or on `d831812`'s code (14 of 14) and pass on the merge's; D388's tests pass on git
+  2.43 and 2.56, with and without the lag. The lead's rulings on its questions: the auto-fetch's
+  bound of one ask an interval and its Debug line are accepted; the three creates "at once" through
+  the app do not always press inside the window (2 of 15 runs in the review did not), so their
+  summaries say so and the held and failed variants are D388's proof (a `ShellDriver` seam that
+  would hold the app's rules read needs a product change: not now); B7's refresh after a clone keeps
+  no Login (its row gives none) and `areas` stays unchecked (the report gives none, the fake reads
+  no credential there); the two cases outside `AwaitsUrlRules` that no click reaches, and the wait's
+  lack of a time limit of its own (as D332's), are accepted and written into D388. Merged at
+  `a6952d2`; D388 recorded and 0.4's lagged list given `SignInBindingsWindowTests` at `cf82d50`.
+  Results and evidence: `D:/Projects/Personal/phase7b-work/verify/wpn-lead/`.
 - **The watcher's dispose test on CI** (2026-11-07, run 42386428809, `windows-latest`):
   `RepositoryWatcherTests.Nothing_is_raised_before_start_or_after_dispose` counted two `Changed`, not
   one, 2.9 s in, with seven other projects on the runner. The test runs the watcher on the wall clock
