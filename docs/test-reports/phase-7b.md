@@ -250,6 +250,24 @@ token's characters in a row, nor the namespace or an address, fully decoded. Cop
 `D:/Projects/Personal/phase7b-work/live-gate/` (`gitlab-first-run.txt`, `gitlab-again-run.txt` and
 `.log`, `gitlab-third-run.txt` and `.log`, `netmon.txt`).
 
+### What the gate's first live run changed in the fakes (merged at `cb9af6d`; D394, D395)
+
+Before any of the gate's pictures (D335). The fake of GitHub now answers an unknown revision beside
+`author` with 404 and GitHub's recorded body, member for member, as it already did without `author`
+(D394). D342's empty 500 stays as an option a test sets (`FakeGitHub.UnknownRevisionBesideAuthorAnswers500`),
+so the avatars' lookups are still tested through a 5xx: the two tests that used the fake's 500 are now
+Theories over 404 and 500. A record of every commits request through 7a's and 7b's walk-through classes
+found no lookup of a commit the fake lacks, so no scripted picture changes. GitHub's change reached
+the client too. A fork's lookup of a commit the fork lacks now gets the 404 that D339 takes as the
+repository's own. In a fork's tab, whose lookups go mostly to the fork, one stale branch then left
+every later address on the fork without a picture in every session: the defect D342 fixed. The fix is
+D395, approved by the owner because it amends D342 (2). A 404 in a repository not known to be readable
+is followed by one read of that repository, A3's request: if the read succeeds, that address alone is
+left out; if it answers 404, 403 or a 5xx, the repository is left out with its other lookups; any other
+failure stops the lookups. A fork's tab passes its own fork as readable, so the read is sent only after
+a 404 on a third remote, which no scenario has. The fakes of Azure DevOps and GitLab are unchanged:
+their differences are the ones kept above.
+
 ### What stage 1 changed in the fakes (WP-LF, merged at `22fad1b`; design 16.1's As built)
 
 Made-up copies of the measured shapes and texts, each marked MEASURED with its date in the fakes'
@@ -1972,6 +1990,14 @@ An expected result changed after its UI existed goes here with its reason.
 ## Found by the gate
 
 Faults the gate found, and the commit that fixed each.
+
+- The fake of GitHub answered a commit it lacks, asked for beside `author`, with 500 and an empty body;
+  github.com now answers it 404 (the gate's first live run, "Live command", GitHub). Fixed at `affc0e4`
+  (D394), merged at `cb9af6d`.
+- With GitHub's new 404, the avatars' lookups took a fork that lacks one commit as unreadable, so a
+  fork's tab with one stale branch lost every later author's picture on the fork in every session
+  (D342's defect, back for a fork's tab; found by the review of D394's fix). Fixed at `2562ad8` and
+  `af31667` (D395, the owner's approval), merged at `cb9af6d`.
 
 ## Could not run
 
