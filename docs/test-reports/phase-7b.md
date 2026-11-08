@@ -108,6 +108,40 @@ machine; local times, -07:00):
   only), and the two runs agree within 0.01 %. Their pictures are inspected with the counted round's
   pass. Copies: `D:/Projects/Personal/phase7b-work/gate/d246/`.
 
+**The counted round** (2026-11-08, the same machine, the owner at the machine; local times, -07:00). Both
+passes ran on one code, `cb9af6d`'s: the default run on the branch at `af9b563`, the rest at `3dc0887`,
+which changed only `docs/status.md` (`git diff --stat cb9af6d 3dc0887 -- . ':(exclude)docs'
+':(exclude)*.md'` prints nothing).
+
+- The default run: `bash scripts/heavy-run.sh`, 14:26 to 15:59, straight after D246's second run, at
+  most four projects at once (D343): 7,888 of the 7,892 tests passed and 4 were skipped (the three real
+  keychains' tests and `WindowsCredentialStoreTests`' Off-Windows test, D270), in 1 h 31 min 48 s
+  (5,598 s with the build and the lock), no watchdog stop. Counted from the run's start, from each
+  project's own time in the order the run started and ended them, the projects ended after about:
+  phase 7a's walk-through 13 min 42 s, phase 6's 38 min 18 s, `VisualCommit.Hosting.Tests` 53 min 14 s
+  (all of it its own), phase 7b's walk-through 53 min 51 s (15 min 33 s of its own), phases 0 to 2's
+  65 min 56 s, `VisualCommit.Git.Tests` 69 min 29 s, phase 4's 79 min 0 s, phase 3's 83 min 8 s, phase
+  5's 85 min 6 s, `VisualCommit.App.Tests` 85 min 59 s (all of it its own), part L's 87 min 0 s and phase
+  5's undo walk-through 91 min 41 s.
+- The real-window pass: `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c
+  Release`, 16:00 to 16:35, straight after the default run, the owner told: 77 of 77 passed in 33 min
+  35 s (2,091 s with its build). Display scaling 200 %, the work area 1500×952 logical pixels, so phase
+  0's 1920×1080 window (its check D) was not run, as the plan allows. Q1: the 100k-commit repository's
+  first graph rows after 1,827 ms (at most 2,000), its 459 frames at a 95th percentile of 1 ms and the
+  longest 10 ms; the pass started without a rest after the default run (plan risk 10). The 198
+  captures compared with their scripted twins differ in at most 2.35 % of their pixels (4.08 % compared
+  in place only), as at 7a's gate; phase 7b's 13 in 0.32 % to 0.86 % (0.80 % to 2.50 %).
+- The list of pictures, written right after the pass: 1,551 pictures, 1,150 scripted and 401 real-window
+  files (`phase-7b-pictures.sha256`).
+- The live command, after the list, the owner told: its offline classes alone at 16:35, 582 of 582; then
+  the whole project, 16:37 to 16:39, 596 of 596 ("Live command", "The counted round's run").
+- The comparison with the references (design 0.7): `python scripts/compare-pictures.py
+  D:/Projects/Personal/gate7b-reference <the round's copy>/visual <folder>`: 1,112 the same file, 320
+  changed, 119 new (phase 7b's 93 scripted pictures and 26 real-window files), none in the reference only.
+- Copies: `D:/Projects/Personal/phase7b-work/gate/counted/` (the outputs) and
+  `D:/Projects/Personal/phase7b-work/gate/round-3dc0887/` (the round's pictures, the comparison, the
+  inspection's batches and verdicts).
+
 ## Live command
 
 The opt-in command against the real services (`tests/VisualCommit.LiveHostingTests`; D250, D335; for
@@ -158,6 +192,22 @@ fakes" below). Run.txt (47 lines) and the console output (47 lines) hold no toke
 characters in a row, nor the organization's name or the namespace, searched as written and fully
 decoded (URL, HTML, JSON escapes and base64). Copy: `D:/Projects/Personal/phase7b-work/live-gate/github-run.txt`;
 the console output: `D:/Projects/Personal/phase7b-work/live-gate/first.log`.
+
+**The counted round's run** (2026-11-08, from 23:37 UTC, on `3dc0887`, whose code is `cb9af6d`'s, after
+the real-window pass and the list of pictures, the owner told; the offline classes alone first on the
+same commit, 582 of 582): the whole project, 596 of 596 in 2 min 20 s (146 s with the lock and the build
+up to date). GitHub's 3 passed. `Check_1`: the sandbox private, the token fine-grained and allowed to
+push, no leftovers. Of the probes' 10 answers beside the fake, 9 matched and 1 was not tried (the
+commits of an empty repository); the four lookups of a commit GitHub lacks, with and without `author`,
+now match the fake (D394). `Check_2`: the sign-in, the browser's 12 rows, the clone in 1.8 s, no open
+pull request, one author's avatar, a draft pull request created through the app, read back, its
+duplicate refused with 422 "A pull request already exists", then closed and its branch deleted; the
+app's 9 requests to the API with the token and 1 to the avatars without, none refused. `Check_3`: the
+provider's A1 asking for an unsupported version got `ApiVersion`, its A6 lookups 404 then 200, one
+address linked. Nothing new for the fake. Run.txt (47 lines) and the console output (17 lines) hold no
+token, nor 16 of a token's characters in a row, nor the organization's name or the namespace, fully
+decoded. Copies: `D:/Projects/Personal/phase7b-work/gate/counted/live-files/github-run.txt`, the console
+output `D:/Projects/Personal/phase7b-work/gate/counted/live.out`.
 
 ### Azure DevOps (`artifacts/live/azure-devops/run.txt`)
 
@@ -221,6 +271,19 @@ token's characters in a row, nor the organization's name or the namespace, fully
 Azure DevOps' sign-in realm in its challenges, as before, which stays out of the repository. Copy:
 `D:/Projects/Personal/phase7b-work/live-gate/azure-devops-run.txt`.
 
+**The counted round's run** (the same command and run as GitHub's above): Azure DevOps' 6 passed.
+`Check_1` found no leftovers. `Check_1b_probes` ran its 17 reads. `Check_2` signed in, cloned in 3.7 s
+and created a draft through the app (201). `Check_2b_probes` read it back, saw its merge ref come and,
+after the abandon, go, made the duplicate (409) and missing-branch (400) probes and a create with nothing
+ahead (201), then abandoned both pull requests and deleted their branches. `Check_3` signed in through
+the dialog, cloned in 2.5 s, created a draft through the form ("Created draft pull request !n"), read it
+back and abandoned it. `Check_4` cloned through the organization's host in 2.1 s with no credentials
+dialog. None of the app's or the test's requests was refused. Of the probes' 24 answers beside the fake,
+20 matched; the 4 that differed are the same `info/refs` answers to made-up values as in the first run,
+which 16.1's As built keeps. Nothing new for the fake. Run.txt (650 lines) holds no token, nor 16 of a
+token's characters in a row, nor the organization's name or the namespace, fully decoded. Copy:
+`D:/Projects/Personal/phase7b-work/gate/counted/live-files/azure-devops-run.txt`.
+
 ### GitLab (`artifacts/live/gitlab/run.txt`)
 
 **Stage 1, first run** (the same command and run as Azure DevOps' above): `Check_1` and `Check_1b_probes`
@@ -276,6 +339,20 @@ files (56, 55 and 68 lines), the two console outputs and the loop's record hold 
 token's characters in a row, nor the namespace or an address, fully decoded. Copies:
 `D:/Projects/Personal/phase7b-work/live-gate/` (`gitlab-first-run.txt`, `gitlab-again-run.txt` and
 `.log`, `gitlab-third-run.txt` and `.log`, `netmon.txt`).
+
+**The counted round's run** (the same command and run as GitHub's above): GitLab's 5 passed, with no
+stall. `Check_1` found no leftovers. `Check_2` signed in, listed 5 rows, cloned in 2.3 s through the
+app's helper with no dialog, pushed both branches and created a draft through the app (201).
+`Check_2b_probes` read it back (draft, its title starting `Draft:`, its head the pushed commit), made the
+duplicate (409), missing-branch (400) and nothing-ahead (201) probes, then closed and deleted both merge
+requests and their branches. `Check_3` signed in through "Add GitLab account", listed the sandbox
+(Private) among 5 rows, cloned in 2.1 s, showed "No open merge requests", pushed, showed the title
+`Draft: …` with Draft ticked, created a draft through the form ("Created draft merge request !n"), read it
+back, then closed and deleted it and its branch. None of the app's or the test's requests was refused.
+Of the probes' 10 answers beside the fake, 9 matched; the duplicate's 409 differed only in the number it
+names, as before. Nothing new for the fake. Run.txt (68 lines) holds no token, nor 16 of a token's
+characters in a row, nor the namespace or an address, fully decoded. Copy:
+`D:/Projects/Personal/phase7b-work/gate/counted/live-files/gitlab-run.txt`.
 
 ### What the gate's first live run changed in the fakes (merged at `cb9af6d`; D394, D395)
 

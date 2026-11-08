@@ -642,10 +642,14 @@ now answers a commit it lacks beside `author` 404, not D342's 500. That correcti
 known to be readable is checked against that repository's read; the owner approved it, since it amends
 D342 (2)); Notes, "D394 and D395". The lead's runs at that merge passed, phase 7b's walk-through among
 them, and `Phase7bRealWindowPass` passed twice on its own, 5 of 5 each time, the owner told and present
-(D246; the report's "Run", "Before the gate"). Next, the counted round on one commit: the whole default run
-through `scripts/heavy-run.sh`, the real-window pass, the list of pictures, the live command again,
-and the inspection of every picture in batches of at most about 150, the earlier ones compared with
-`D:/Projects/Personal/gate7b-reference/` (0.7). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
+(D246; the report's "Run", "Before the gate"). The counted round's passes ran on `cb9af6d`'s code (the
+branch at `af9b563` and `3dc0887`): the default run 7,888 of 7,892 with 4 skipped, the real-window pass
+77 of 77 (Q1 1,827 ms), the list of 1,551 pictures written (kept uncommitted until the inspection
+passes), the live command 596 of 596 with nothing new for the fakes (the report's "Run", "The counted
+round", and "Live command"). Next: the inspection of every picture in batches of at most about 150, the
+earlier ones compared with `D:/Projects/Personal/gate7b-reference/` (0.7; the session's workflow
+`p7b-gate-inspection`, its batches and verdicts in `D:/Projects/Personal/phase7b-work/gate/round-3dc0887/inspect/`);
+if it passes, commit the list and fill the Checks table's results. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
 `c5ba918` is green; CI's run on the fix's merge, 42386428809, failed the two older tests above.
