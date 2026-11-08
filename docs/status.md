@@ -581,9 +581,13 @@ plain and lagged; 13.9's picture comparison and part N's inspection passed (Note
 runs"). CI 42454621322 on `d127fef` is green but phase 6's open palette flake in one container,
 and macOS read Lost and passed (CI section); steps 9, 13 and 14 are ticked. WP-LIVE's second stage
 is merged at `fdb2c05` and passed with the tokens (step 16 ticked; Notes, "WP-LIVE's second
-stage"). Next: read CI's run on `fdb2c05` (42459591309; the CI section), then the review before the
-gate (step 17; its items are listed in the Notes, "For the review before the gate"), then WP-R and
-the gate. The GitLab account's five projects wait on the owner and decide whether the gate's live
+stage"). Next: read CI's run on `fdb2c05` (42459591309; the CI section). The review before the gate
+(step 17) runs on `fdb2c05` in the detached worktree `D:/Projects/Personal/vc-wt/p7b-review`, built
+in Debug (2026-11-08; the session's workflow `p7b-review-before-gate`): six read-only Opus
+reviewers by subject (tokens, git, lifetimes, providers, screens, tests and CI), with the items in
+the Notes' "For the review before the gate" given out among them, each finding put to Opus
+refuters (three for a blocker or major, one for a minor). Then the lead rules on what stands,
+fixers by area fix it with tests, each fix reviewed by another agent, then WP-R and the gate. The GitLab account's five projects wait on the owner and decide whether the gate's live
 runs need a change first (Waiting on the owner). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
