@@ -4350,6 +4350,14 @@ the `.Router.cs` headers):
   can lose D82's order, because git reaches
   github.com and asks for the credential without that user (the token reaches github.com only).
   Reopened by the owner or a later phase that moves GitHub onto `SelectCovered`.
+- D275's refusal of another user assumes git keeps the URL's user in its credential request. Git up
+  to 2.56.0 without its commit 76524c2604bc, over a libcurl that strips that user (curl 8.23.0, CI's
+  macOS), asks after the first 401 with none, and the broker answers as for the account (D389, plan
+  risk 43). On such a git the first bullet's gaps give the token without a prompt instead of losing
+  D82's order: on 2.46 and later the reserved character escaped in the binding and raw in the other
+  URL, which D340's proactive fill does not cover; on 2.31 to 2.45 every gap there and a stale
+  binding. MEASURED with made-up credentials on a loopback stub; the token still reaches the bound
+  host only. Reopened by the owner (status, "Waiting on the owner").
 - Submodules (D379's R4): the scope's `GIT_CONFIG_COUNT` pairs reach a submodule's fetch through git's
   on-demand recursion, as in 7a for GitHub; only a submodule URL at or under a bound URL takes the
   token. Reopened by O10.
