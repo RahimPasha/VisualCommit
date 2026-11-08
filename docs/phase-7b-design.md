@@ -4456,6 +4456,21 @@ the `.Router.cs` headers):
   share `file://h/s`, `file:///x`, `ext::sh -c x`) is unreadable as 7a's unreadable fields are: A2's
   list, A3, A4's list and A5 `Malformed`. `clone_url` is not held to the listed repository. The fake's
   `http` loopback answers read as before; 7a's checks and pictures unchanged.
+- Fixed at the review before the gate: a clone's binding (7a's D331) missed the conditional includes
+  `git clone` applies (`gitdir:`, `gitdir/i:`, `onbranch:`, `hasconfig:remote.*.url:`), whose files the
+  outside read never sees (git-1). Now each `includeif.*.path` it lists has its file's `url.` and
+  `includeif.` keys read (`IGitConfiguration.ReadIncludedAsync`, path as git resolves it); an
+  unreadable file, a nested conditional include, or a rule that changes the clone's URL beside the
+  outside rules binds nothing (D82's order), with one Debug line; a missing file counts as empty.
+  Without a directive no git call is added. Tests: `WelcomeCloneFromGitHubTests` (gitdir, hasconfig,
+  relative path, unreadable, nested, email-only), `GitConfigIncludeReadTests`.
+- Fixed at the review before the gate (git-1's review): judging each include beside the outside rules
+  alone missed two includes that rewrite the URL only together, by putting a base first that wins git's
+  tie of equal prefixes. Each included `insteadOf` rule that matches the URL with a prefix at least as
+  long as the longest outside match, and rewrites it to another URL, now binds nothing too; no git call
+  is added. The rewrite tests' `username=alice` in the user's helper is asserted only on a git that
+  keeps a URL's user (`GitUrlUser`, D389); alice's request at the server on every git (hasconfig's on
+  2.36 and later). Test: `Two_includes_that_rewrite_the_url_only_together_bind_nothing`.
 
 ### 16.4 Waiting on the owner
 

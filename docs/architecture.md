@@ -494,7 +494,7 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `RemoteBranchNames` (Core) | Phase 6 (the review at status step 22, design 10.6): the one place a remote-tracking ref's name is split by its remote's name where the fetch lines are not asked or do not tell, remote names holding slashes as they may: `WithoutRemote(name, remote)`, `RemotesOf(name, remotes)` (every configured remote it starts with, longest first; more than one means the name alone does not tell), `LongestRemoteOf`, `RemoteOf` (the longest, else the first part). The refs read, `RepoRefs` (its phase 5 assumption and its local names), `GraphFilter.RemoteOf`, the left panel, the menus, the backups list's texts and the push backs call it. `RemoteBranchNamesTests` |
 | `PullConfiguration`, `PullFastForwardSetting`, `PullRebaseSetting`, `PullIntegrationOptions` (Core, `Git/PullConfiguration.cs`) | Phase 6: Pull's settings as read before its fetch (D219, design 8.9): what `pull.ff` asks, what the rebase setting asks and which key decided it, the values as set, and `Problem` and `ProblemKey` for a value Pull does not understand, whose `NotUnderstood()` is the failure Pull reports (command `git config --get <key>`). `PullIntegrationOptions(Configuration, KeepIgnored)` is `IntegratePullAsync`'s optional last option (null: phase 4's pull) |
 | `PullModes`, `PullMode`, `GitBoolean` (Core) | Phase 6: the settings screen's pull modes (D218, design 8.7): `PullModes.Read` names the mode `pull.rebase` and `pull.ff` give together, by their effect, and `Writes(mode)` the two keys a mode writes; `GitBoolean.TryParse`, git's reading of a boolean (the words ignoring case, integers with a unit), which the pull modes and the identity's `user.useConfigOnly` use |
-| `IGitConfiguration` (Core), `GitConfiguration` (Git), `GitConfigRead`, `GitConfigValue`, `GitConfigScope`, `GitConfigWrite`, `GitIdentityRead`, `MergeToolHelp`, `MergeTool`, `GitConfigLocations` | Phase 6: git's own settings as the settings screen reads and writes them, and the merge-tool lookup (D190, D202, D217); see "Git's own settings" |
+| `IGitConfiguration` (Core), `GitConfiguration` (Git), `GitConfigRead`, `GitConfigValue`, `GitConfigScope`, `GitConfigWrite`, `GitIdentityRead`, `MergeToolHelp`, `MergeTool`, `GitConfigLocations`, `GitConfigIncludes` | Phase 6: git's own settings as the settings screen reads and writes them, and the merge-tool lookup (D190, D202, D217); see "Git's own settings". Phase 7b's review before the gate: a conditional include's file read for a clone's binding (`ReadIncludedAsync`, `GitConfigIncludes`; see "The clone's credentials") |
 | `UrlRewrite`, `UrlRewrites`, `RemoteEffectiveUrls` (Core, `Git/UrlRewrites.cs`); `GitRepository.ReadUrlRewritesAsync` (`GitRepository.Hosting.cs`) | Phase 7a: git's URL rewrites (design 4.2, 4.3), by which the URLs bound to the hosting account are git's own (see "Prompts and credentials"). `Parse(entries)`: each `url.<base>.insteadOf` or `.pushInsteadOf` entry (the key without case, the base as written; an entry without a value skipped), in order. `Apply(remoteUrls)`, of `RepoRefs.RemoteUrls` (the refs read's `url` and `pushurl` values as configured, each a `RemoteUrl`): per remote, in order of first appearance, the URLs git uses, as measured on 2.56: the fetch URLs, each `url` after `insteadOf`; the push URLs, each `pushurl` after `insteadOf`, else the `pushInsteadOf` rewrites of the `url` values when any has one (those alone), else the fetch URLs. A rule is a plain case-sensitive prefix (an empty one matches every URL), the longest wins, a tie goes to the base first seen and then to its earlier value, nothing is rewritten twice, and `pushInsteadOf` never applies after `insteadOf`; a remote without `url` has no fetch URL. `ReadUrlRewritesAsync`: one `git config --null --get-regexp ^url\.` in the working folder as a read, with `GIT_CONFIG_PARAMETERS` removed as in a bound scope (D329), so that it sees the rules the bound calls apply; exit 1 is `UrlRewrites.None`, another failure throws. It runs only while the account binds git (a tab's read after its refs, a dashboard row's network operation, D290, D332), so no earlier count of git calls moves. `UrlRewritesTests`, `UrlRewritesParityTests` (against `git remote get-url --all` and `--push --all`) |
 
 Rules the runner follows (see D30, D31, D36, D37, D56 and D59):
@@ -2247,9 +2247,13 @@ the session and the account"; where tokens are kept, in "Tokens and the keychain
   clone opens its own scope with the bindings of `WelcomeViewModel.BindingsForCloneAsync`: none
   unless `IHostingSession.BindingsForClone` binds the URL as typed; then git's configuration is read
   once with phase 6's outside read (`GitConfiguration.ReadAsync(null)`, local and worktree entries
-  dropped, since `git clone` applies none of a repository around its folder) and the URL its `url.`
-  rules give is bound (D331); a failed read binds nothing and logs a Warning. Local operations,
-  reads and phase 2's writes carry none.
+  dropped, since `git clone` applies none of a repository around its folder, but it does apply the
+  conditional includes of the new folder and of its URL, `includeIf "gitdir:"`, `"gitdir/i:"`,
+  `"onbranch:"` and `"hasconfig:remote.*.url:"`, whose files the outside read does not see; each such
+  directive's file is then read with `GitConfiguration.ReadIncludedAsync`) and the URL its `url.`
+  rules give is bound (D331); a failed read binds nothing and logs a Warning, and an include that
+  could change the URL binds nothing with a Debug line. Local operations, reads and phase 2's
+  writes carry none.
 - **The scope's variables** (`AskPassBroker.Begin`; D274, D277, D329, D340). A scope uses its
   bindings only when the helper was found, a credential source was given, the inherited
   `GIT_CONFIG_COUNT` is valid, the mode is `Ask` or `Deny` and the detected git is 2.31 or newer (a
@@ -3735,6 +3739,9 @@ runner (`TabServices.GitSettings`); the screen's half is `GitSettingsViewModel`.
   includes, nor a global value read inside a repository, which can be an `includeIf`'s.
   `ReadIdentityAsync(workingTree)` is `git var GIT_AUTHOR_IDENT` and `GIT_COMMITTER_IDENT`, in the
   repository scope only (outside a repository git names the machine's user and computer).
+  `ReadIncludedAsync(directive)` (phase 7b's review before the gate) reads the file of one
+  conditional include the outside read lists (`GitConfigIncludes`), for a clone's binding only; see
+  "The clone's credentials".
 - **Files by what they are** (design 8.2, `GitConfigLocations`): `GlobalFile` (what `git config
   --global` writes: `GIT_CONFIG_GLOBAL` when set, else `~/.gitconfig` when it exists, else the XDG
   file when it exists, else `~/.gitconfig`, the home folder found as Git for Windows finds it) and
@@ -4352,7 +4359,22 @@ binding), `MainWindowViewModel.Commands.cs` (`CloneFromGitHubAsync`),
   another user leaves it unbound (D82's order). A failed read binds nothing and logs one Warning
   (`Cloning {url}: git's configuration could not be read; the clone goes without the account's
   token.`, the URL's credentials hidden by `GitCommand.HideCredentials`); signed out nothing is
-  read. The read runs under the clone's own cancellation, and `RunningClone` is a completed task
+  read. `git clone` does apply the conditional includes of the new folder and of its URL
+  (`includeIf "gitdir:"`, `"gitdir/i:"`, `"onbranch:"`, `"hasconfig:remote.*.url:"`), whose files the
+  outside read lists only as directives (fixed at phase 7b's review before the gate). For each
+  `includeif.<condition>.path` it lists, whatever the condition, `GitSettings.ReadIncludedAsync`
+  reads that file's `url.` and `includeif.` keys (`git config --file <path> --includes
+  --show-scope --show-origin -z --get-regexp ^(url|includeif)\.`, run as the outside read runs, the
+  path worked out as git does by `GitConfigIncludes.Resolve`: `~` under the home folder, a relative
+  path beside the file that holds the directive). A file git cannot read, a path the app cannot
+  work out, a conditional directive inside the file, a rule that, read right after its
+  directive, gives the URL another result than the outside rules alone, or an `insteadOf` rule of
+  the file that matches the URL with a prefix at least as long as the longest outside match (any,
+  when none matches outside) and rewrites it to another URL (another include may put that rule's
+  base first, and git breaks a tie of equal prefixes by the base it saw first) binds nothing (D82's
+  order) with one Debug line that names no path or URL (`Cloning: a conditional include of git's
+  configuration …; the clone goes without the account's token (D82's order).`); a missing file
+  counts as empty, as git ignores it. Without such a directive no further git call is made. The read runs under the clone's own cancellation, and `RunningClone` is a completed task
   while it runs, so that no opening takes the tab. The bindings go into the clone's prompt scope
   (`Prompts.Begin("Clone", name, PromptMode.Ask, bindings)`); what git does with them is in "Prompts
   and credentials".

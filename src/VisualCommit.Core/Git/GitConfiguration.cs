@@ -15,6 +15,18 @@ public interface IGitConfiguration : IDisposable
     /// </summary>
     Task<GitConfigRead> ReadAsync(string? workingTree, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// The <c>url.</c> rules and include directives of the file that <paramref name="directive"/>, a
+    /// conditional include of the outside read (<see cref="GitConfigIncludes.IsConditional"/>), names:
+    /// its path worked out as git does (<see cref="GitConfigIncludes.Resolve"/>), then one <c>git config
+    /// --file &lt;path&gt; --includes</c> read of those keys, run as the outside read runs; the files it
+    /// includes without condition count as its own. Each entry takes the directive's scope. Empty when
+    /// the file holds none or is not there (git ignores a missing include). Throws
+    /// <see cref="GitException"/> when git cannot read it or the path cannot be worked out as git would
+    /// (a clone's binding, D331, fixed at phase 7b's review before the gate).
+    /// </summary>
+    Task<IReadOnlyList<GitConfigValue>> ReadIncludedAsync(GitConfigValue directive, CancellationToken cancellationToken = default);
+
     /// <summary><c>git var GIT_AUTHOR_IDENT</c> and <c>GIT_COMMITTER_IDENT</c> in the working tree (8.6).</summary>
     Task<GitIdentityRead> ReadIdentityAsync(string workingTree, CancellationToken cancellationToken = default);
 
