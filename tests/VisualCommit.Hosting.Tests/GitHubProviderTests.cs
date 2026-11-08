@@ -365,6 +365,40 @@ public sealed class GitHubProviderTests
             setup.Fake.Requests.Select(request => (request.Route, request.Status)));
     }
 
+    [Theory]
+    [InlineData(404)]
+    [InlineData(500)]
+    public async Task A6_a_commit_a_fork_lacks_answered_404_leaves_out_the_forks_other_lookups_and_answered_500_its_own_address_alone(int lacking)
+    {
+        await using var setup = await Setup.StartAsync();
+        setup.Fake.UnknownRevisionBesideAuthorAnswers500 = lacking == 500;
+        var fix = await TipAsync(setup, "ada/hello", "fix-typo");
+
+        // Listed as octo/hello; both lookups go to ada/hello, its fork, which the token reads: first
+        // from a commit the fork lacks, then Ada's from her fix-typo. github.com answered such a lookup
+        // 500 without a body on 2026-10-30 and 31 (D342), which leaves out its address alone, and 404
+        // "Not Found" on 2026-11-08 (D394; in the listed repository, a fork presumed the same), which
+        // in a repository other than the listed one is taken as that repository being unreadable
+        // (D339, D342 (2)), so Ada is not asked in this call (plan risk 38).
+        var authors = await setup.Provider.ReadAuthorsAsync(setup.Served.OctoToken, Repository("octo", "hello"), null,
+            [
+                new AuthorCommit("stranger@example.com", new string('0', 40), Repository("ada", "hello")),
+                new AuthorCommit(Scenarios.AdaEmail, fix, Repository("ada", "hello")),
+            ],
+            Cancelled);
+
+        if (lacking == 404)
+        {
+            Assert.Empty(authors.Value!.ByEmail);
+            Assert.Equal([("commits:ada/hello", 404)], setup.Fake.Requests.Select(request => (request.Route, request.Status)));
+        }
+        else
+        {
+            Assert.Equal(new AuthorAvatar(1003, "ada", new Uri("http://127.0.0.1:1/avatars/u/1003?v=4")), Assert.Single(authors.Value!.ByEmail).Value);
+            Assert.Equal([("commits:ada/hello", 500), ("commits:ada/hello", 200)], setup.Fake.Requests.Select(request => (request.Route, request.Status)));
+        }
+    }
+
     [Fact]
     public async Task A6_an_empty_repository_is_an_empty_map_a_server_error_leaves_out_one_lookup_and_a_refusal_stops_them()
     {
@@ -401,11 +435,13 @@ public sealed class GitHubProviderTests
     [Fact]
     public async Task A6_a_lookup_github_cannot_answer_leaves_out_its_address_and_a_404_on_another_repository_leaves_out_that_repository()
     {
-        // github.com's answers to a commit it lacks beside author= (D342, D394): a 500 without a body
-        // (the live runs of 2026-10-30 and 31), and a 422 is taken the same, on the listed repository
-        // or the fork a lookup goes to; a 404 on the listed repository, github.com's answer since the
-        // live run of 2026-11-08, is taken the same. A 404 on another repository leaves out the rest
-        // of that repository's; a 401 stops them.
+        // Recorded answers, each standing for one of github.com's. A 422, or a 500 without a body
+        // (github.com's answer to a commit it lacks beside author= in the live runs of 2026-10-30
+        // and 31, D342), leaves out its own address, on the listed repository or on the fork a lookup
+        // goes to; so does a 404 on the listed repository, github.com's answer to such a commit in the
+        // live run of 2026-11-08 (D394). A 404 on another repository leaves out the rest of that
+        // repository's, whether the repository is unreadable or, since GitHub answers a commit it
+        // lacks 404 (D394), the fork lacks that commit (plan risk 38); a 401 stops them.
         static string Found(string login, int id) =>
             $$$"""[{"sha":"x","commit":{"author":{"email":"x@example.com"}},"author":{"login":"{{{login}}}","id":{{{id}}},"avatar_url":"https://avatars.githubusercontent.com/u/{{{id}}}?v=4"}}]""";
         var recorder = new RecordingHttpHandler(request => request.RequestUri!.Query.Split('&')[0] switch

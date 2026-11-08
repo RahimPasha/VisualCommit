@@ -5443,8 +5443,10 @@ the `type` 422, the create's 422s (whose `errors` items carry `resource` first) 
 Avatars and pages are answered before any check; an avatar request that carries `Authorization` is
 answered and recorded `TokenPresent`, which the checks assert never happens. The texts of the
 version, `type`, unknown-SHA and duplicate-create answers are GitHub's own, as the live command
-recorded them on 2026-10-30 (D342), and its runs at phase 7a's gate found every probe the same; the empty repository's 409, `ApiVersionGone`'s 410 and the
-`ServerError` fault's body are still from memory (its sandbox has a commit, and GitHub's one 500 had
+recorded them on 2026-10-30 (D342), and its runs at phase 7a's gate found every probe the same; the answer to an
+unknown SHA beside `author` is as the run of 2026-11-08, at phase 7b's gate, recorded it (404, D394), where 2026-10-30 and
+31 had an empty 500, and that run found every other probe the same; the empty repository's 409, `ApiVersionGone`'s 410 and the
+`ServerError` fault's body are still from memory (its sandbox has a commit, and the 500 of 2026-10-30 and 31 had
 no body). A fine-grained token reaches every repository its login owns or may push to: GitHub's "Only
 select repositories" is not modelled.
 
