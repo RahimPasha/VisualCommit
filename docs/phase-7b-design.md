@@ -3883,6 +3883,31 @@ parts has its step and its comparison under its twin's name; each launch's state
 state that all the twins it compares share; no browser or "Copy …" click; and, at the gate, D246's two
 runs and the counted pass are green, every capture within 3 % and inspected.
 
+**As built** (WP-R, `317db99` to its last commit, 2026-11-08; built in Release with no warning, the pass
+not run). Where the build differs from the text above or settles what it left open:
+- `WaitForFake(served, fake, mark, match, what, timeout)` takes `served` first, so that the records are
+  checked for tokens before a message prints them (7a's form); GitHub's fake has `WaitForGitHub`.
+- The launches declare `using var copy` and pass `ownsCopy: true` as 14.2 writes; the second dispose of
+  the copy does nothing.
+- `AssertCleanEnd` also runs the tripwire over the copy's `mobile-app/`, `manifest/` and `web-app/`, as
+  every twin and 7a do; "a request a fake refused for its headers" is the twins' rule, none answered 400
+  or 415; with GitHub never signed in, no `avatars/` and no "showing GitHub avatars" line.
+- B7 also waits for the clone's tab's D322 line before the close, so that the close cuts none of its
+  requests.
+- GitLab's dialog gets its real click on `SignInToken` before the typing too (14.4 step 1), where the
+  twin of `a05b` types without one: the caret alone may differ, which the report lets vary.
+- `OpenSignInDialog(provider)` opens Accounts only while the screen is closed (an open one shows
+  Accounts in every launch); on a repository's tab it first waits for the focus on the window (7a's open
+  point 30). `SignInThroughSettings` with no organization waits for Azure DevOps' prefill and the focus in
+  `SignInToken`; with one, an empty dialog must have the focus in `SignInOrganization`.
+- Azure DevOps' two methods are `Check_AzureDevOps_sign_in_browse_and_clone` and
+  `Check_AzureDevOps_requests_and_create`.
+- Stricter than the text, as the twins count it: no git request at all after the create of the unpushed
+  `topic/no-request`; no request after launch A's last Esc.
+- `ScrollAccountsToEnd` reads UI Automation's Scroll pattern on `SettingsSection` (`VerticalScrollPercent`
+  at least 99.95); a block is found by its container (`AccountsGitLab` …) or, when UI Automation lists
+  none, by its "Sign in…" or its login. Both are first tried at the gate.
+
 ## 15. WP-LIVE: the live command for Azure DevOps and GitLab
 
 ### 15.1 Goal, stages, files
