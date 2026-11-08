@@ -4409,6 +4409,15 @@ the `.Router.cs` headers):
   addresses (15.3), and what reaches a note goes through the screen.
 - D356's row is cut at 260 px, its tooltip whole; a GitLab fork's label is `{Owner}:{branch}`: part P's
   writer records how both read. The live screen over-screens an organization named by a common word.
+- Fixed at the review before the gate (tests-2, phase 6's growth harness): `GrowthMeasures.WithoutCollection`
+  blames the budget only when the process allocated at least it during the measure
+  (`GC.GetTotalAllocatedBytes(precise: true)` before the region and after the work); otherwise its
+  failure names what was allocated of the budget and the last collection's memory load and high-load
+  threshold (another thread's collection or memory pressure). It fails in the same cases.
+  `PaletteGrowthTests`' build test keeps phase 6's 5.12 bound, rounds, sizes and measure; each run,
+  passed or failed, appends a line to `artifacts/visual/palette-growth.txt` (CI uploads it per job), and
+  its failures give each measure's work, the counts, the framework and the runtime identifier, so the
+  open flake (status Notes, 42301846503) leaves data.
 
 ### 16.4 Waiting on the owner
 
