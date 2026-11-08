@@ -23,7 +23,7 @@ using Xunit.v3;
 
 namespace VisualCommit.LiveHostingTests;
 
-/// <summary>Runs <see cref="AzureDevOpsLiveTests"/>' methods in 15.5's order (stage 1; stage 2's Check_3 takes its place after Check_2b_probes).</summary>
+/// <summary>Runs <see cref="AzureDevOpsLiveTests"/>' methods in 15.5's order, with stage 2's Check_3 (15.6) after Check_2b_probes.</summary>
 public sealed class AzureDevOpsLiveOrder : ITestCaseOrderer
 {
     public static IReadOnlyList<string> Methods { get; } =
@@ -32,6 +32,7 @@ public sealed class AzureDevOpsLiveOrder : ITestCaseOrderer
         nameof(AzureDevOpsLiveTests.Check_1b_probes),
         nameof(AzureDevOpsLiveTests.Check_2_the_providers_and_the_session),
         nameof(AzureDevOpsLiveTests.Check_2b_probes),
+        nameof(AzureDevOpsLiveTests.Check_3_the_app_signs_in_clones_lists_pushes_and_creates),
         nameof(AzureDevOpsLiveTests.Check_4_a_clone_through_the_organization_host),
     ];
 
@@ -269,6 +270,139 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     }
 
     /// <summary>
+    /// Check_3 (15.6, stage 2): 7a 14.4's Check_2 on 7b's surfaces. The app starts as Check_2's does
+    /// (<see cref="AppOptions"/>: <c>ListProject</c> the sandbox's project, without which A2's
+    /// <c>{o}/_apis/git/repositories</c> would meet the guard's refusal); then, as a user does, it signs in
+    /// through "Add Azure DevOps account" with the organization in its Organization box and the token
+    /// in its masked box, picks the sandbox's row by <c>FullName</c> in "From Azure DevOps…" and clones
+    /// it through the app's helper, shows the section "Pull requests", pushes D325's commit with "Push
+    /// {branch}…", and creates a draft through "Create pull request…" and its form, ending with the
+    /// status "Created draft pull request !n"; the test reads it back, cleans up in <c>finally</c> (D324)
+    /// and ends with Check_2's tripwires. <see cref="AppDrivenAsync"/> holds the steps.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Check_3_the_app_signs_in_clones_lists_pushes_and_creates()
+    {
+        var sandbox = Sandbox;
+        var appRequests = new LiveRequestLog.Store();
+        var ownRequests = new LiveRequestLog.Store();
+        var reach = LiveReach.AzureDevOps(sandbox.Organization, sandbox.Project, sandbox.Repository);
+        using var api = new AzureDevOpsLiveApi(sandbox, reach, ownRequests, run.Screener!, run.Withheld);
+        await AppDrivenAsync(api, reach, AppOptions(sandbox, appRequests, reach), appRequests, ownRequests);
+    }
+
+    /// <summary>
+    /// Check_3's steps (15.6) with <paramref name="api"/>, the test's own calls into
+    /// <paramref name="ownRequests"/>, and the app started with <paramref name="hosting"/>, whose requests
+    /// go into <paramref name="appRequests"/>, both behind <paramref name="reach"/>: on the service from
+    /// <see cref="Check_3_the_app_signs_in_clones_lists_pushes_and_creates"/>, over the fake from
+    /// <see cref="LiveSafetyTests"/>' rehearsal, which runs this same code. Each step that waits for the
+    /// app has a limit of its own (<see cref="LiveSteps.Sums"/>), and a failure names its step.
+    /// </summary>
+    internal async Task AppDrivenAsync(AzureDevOpsLiveApi api, LiveReach reach, HostingOptions hosting, LiveRequestLog.Store appRequests, LiveRequestLog.Store ownRequests)
+    {
+        ArgumentNullException.ThrowIfNull(api);
+        var sandbox = api.Sandbox;
+        var stamp = LiveSteps.Stamp();
+        var branch = LiveLeftovers.Prefix + stamp;
+        var title = "VisualCommit live test " + stamp;
+        using var app = new LiveApp(run, sandbox, hosting);
+        var step = "1, the identity";
+        var problems = new List<string>();
+        ExceptionDispatchInfo? failure = null;
+        try
+        {
+            await IdentityAsync(api, problems);
+            run.Note($"Check_3. The branch {branch}.");
+            var repository = await ReadSandboxAsync(api);
+            step = "1, the start";
+            await app.StartAsync(appRequests);
+
+            step = "2, the sign-in through the dialog";
+            var account = await app.SignInThroughDialogAsync(sandbox.Organization, appRequests, problems);
+            run.Check(string.Equals(account.Login, sandbox.Organization, StringComparison.OrdinalIgnoreCase), () => $"The account's login is {account.Login}, not the sandbox's organization.");
+            run.Check(LiveProviderPremises.IsMemberId(account.UserId), () => "The account's UserId is not a member's GUID (g1 G0.3).");
+
+            step = "3, the browser";
+            var url = await app.ChooseAsync(sandbox.FullName);
+            run.Check(Uri.TryCreate(url, UriKind.Absolute, out var chosen) && string.Equals(chosen.UserInfo, sandbox.Organization, StringComparison.OrdinalIgnoreCase), () => "The chosen clone URL's user is not the organization (ruling 15).");
+
+            step = "4, the clone";
+            var opened = await app.CloneChosenAsync(url);
+
+            step = "5, the section";
+            await app.LoadSectionAsync(opened, app.CloneLeft);
+
+            step = "6, the push";
+            var head = await app.PushAsync(opened, branch, stamp, title);
+
+            step = "7, the create through the form";
+            var pull = await app.CreateThroughFormAsync(opened, branch, repository.DefaultBranch, title, appRequests, "/pullrequests", problems);
+
+            step = "8, the read back";
+            await ReadBackAsync(api, pull.Number, branch, repository.DefaultBranch, title, account.UserId, head);
+        }
+        catch (Exception ex)
+        {
+            failure = run.FailureOf(ex, step);
+            run.Note($"Check_3 failed in step {step}: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            try
+            {
+                // Step 9: the clean-up (D324), each call on its own, before the app closes.
+                await CleanUpAsync(api, null, [branch], problems, beside: false);
+            }
+            finally
+            {
+                app.Close();
+            }
+        }
+
+        app.Tripwires(problems);
+        LiveSteps.Finish(run, appRequests, reach, problems, failure, ownRequests, signInStarted: app.SignInStarted);
+    }
+
+    /// <summary>
+    /// Check_3's step 8: the draft the app created, as Azure DevOps reads it back: active, a draft,
+    /// the title as typed, from the run's branch into the default branch, created by the account; its
+    /// head noted. A difference fails the test after the clean-up.
+    /// </summary>
+    private async Task ReadBackAsync(AzureDevOpsLiveApi api, int number, string branch, string target, string title, string? userId, string head)
+    {
+        var read = await api.PullRequestAsync(number, Cancelled);
+        if (read.Status != 200 || read.Json is not { ValueKind: JsonValueKind.Object } json)
+        {
+            throw new LiveServiceException(api.Describe(read, $"the read back of !{Show(number)}") + ".");
+        }
+
+        var differences = new List<string>();
+        void Expect(string field, string? actual, string expected)
+        {
+            if (!string.Equals(actual, expected, StringComparison.Ordinal))
+            {
+                differences.Add($"{field} is {actual ?? "missing"}, not {expected}");
+            }
+        }
+
+        Expect("isDraft", read.Member("isDraft"), "true");
+        Expect("status", read.Member("status"), "active");
+        Expect("title", read.Member("title"), title);
+        Expect("sourceRefName", read.Member("sourceRefName"), LiveLeftovers.HeadsPrefix + branch);
+        Expect("targetRefName", read.Member("targetRefName"), LiveLeftovers.HeadsPrefix + target);
+        string? Inner(string name, string member) => json.TryGetProperty(name, out var outer) && outer.ValueKind == JsonValueKind.Object && outer.TryGetProperty(member, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        if (!string.Equals(Inner("createdBy", "id"), userId, StringComparison.OrdinalIgnoreCase))
+        {
+            differences.Add("createdBy.id is not the account's UserId");
+        }
+
+        var source = Inner("lastMergeSourceCommit", "commitId");
+        run.Check(differences.Count == 0, () => $"Azure DevOps' !{Show(number)} is not what the app created: {string.Join("; ", differences)}.");
+        run.Note($"Read back ({read}): !{Show(number)} is an active draft from {branch} into {target}, its title as typed, created by the account; its head {(source is null ? "not given" : string.Equals(source, head, StringComparison.OrdinalIgnoreCase) ? "the pushed commit" : "another commit")}.");
+    }
+
+    /// <summary>
     /// Check_4 (15.5, D363): after the identity read, started and signed in as Check_2, the app clones
     /// <c>https://&lt;organization&gt;.visualstudio.com/&lt;project&gt;/_git/&lt;repository&gt;</c> with no
     /// credentials dialog, then lists from <c>dev.azure.com</c>: the only test of
@@ -375,7 +509,8 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
 
         var visibility = json.TryGetProperty("project", out var project) && project.TryGetProperty("visibility", out var seen) ? seen.GetString() ?? "not given" : "not given";
         var branch = json.TryGetProperty("defaultBranch", out var head) ? head.GetString() ?? string.Empty : string.Empty;
-        var remote = json.TryGetProperty("remoteUrl", out var url) && Uri.TryCreate(url.GetString(), UriKind.Absolute, out var parsed) && parsed.Scheme == Uri.UriSchemeHttps ? parsed : null;
+        // The scheme the calls go with: https on the service; the fake's http in LiveSafetyTests' rehearsal of Check_3.
+        var remote = json.TryGetProperty("remoteUrl", out var url) && Uri.TryCreate(url.GetString(), UriKind.Absolute, out var parsed) && parsed.Scheme == api.BaseAddress.Scheme ? parsed : null;
         run.Note($"The sandbox repository: {answer}; project visibility {visibility}, default branch {branch}; remoteUrl's user {(remote is null ? "unreadable" : string.Equals(remote.UserInfo, api.Sandbox.Organization, StringComparison.Ordinal) ? "the organization, spelled as the variable does" : string.Equals(remote.UserInfo, api.Sandbox.Organization, StringComparison.OrdinalIgnoreCase) ? "the organization, spelled otherwise" : "not the organization")}.");
         run.Check(remote is not null && string.Equals(remote.UserInfo, api.Sandbox.Organization, StringComparison.OrdinalIgnoreCase), () => "The sandbox's remoteUrl's user is not the organization (15.7's premise).");
         run.Check(string.Equals(visibility, "private", StringComparison.OrdinalIgnoreCase), () => $"The sandbox's project is {visibility}: D326 wants it private, so that the clone proves the token reached git.");
@@ -641,7 +776,7 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
     /// never a fork's), then one refs POST deleting the run's branches, beside the fake's own refs POST
     /// deleting its namesakes (15.7; null: the fake did not start, or Check_2 created nothing to probe).
     /// </summary>
-    internal async Task CleanUpAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, IReadOnlyList<string> branches, List<string> problems)
+    internal async Task CleanUpAsync(AzureDevOpsLiveApi api, LiveAzureFake? fake, IReadOnlyList<string> branches, List<string> problems, bool beside = true)
     {
         var active = await LiveSteps.AttemptAsync(api, problems, "the clean-up's read of the active pull requests", () => api.ActivePullRequestsAsync(CancellationToken.None));
         foreach (var pull in (active ?? []).Where(pull => !pull.FromFork && branches.Any(branch => pull.SourceRef == LiveLeftovers.HeadsPrefix + branch)))
@@ -655,7 +790,7 @@ public sealed class AzureDevOpsLiveTests(AzureDevOpsLiveRun run) : IClassFixture
         {
             await LiveSteps.AttemptAsync(api, problems, "the clean-up's refs POST", async () =>
             {
-                await DeleteRefsAsync(run, api, mine, $"Clean-up: the refs POST deleting {Show(mine.Count)} branches", "deleting the run's branches", problems, CancellationToken.None, beside: true, fake: fake);
+                await DeleteRefsAsync(run, api, mine, $"Clean-up: the refs POST deleting {Show(mine.Count)} branches", "deleting the run's branches", problems, CancellationToken.None, beside: beside, fake: fake);
                 return string.Empty;
             });
         }
@@ -872,6 +1007,10 @@ internal static class LiveSteps
         // refs read and refs POST; the fake's draft, the six probes beside, its two merge-ref reads and
         // its refs POST beside the clean-up's.
         [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_2b_probes)] = Own(9) + (PollBudget * 2) + Own(5) + Fake(1 + 6 + 2 + 1),
+        // The identity, the sandbox, the read back; the clean-up's active list, abandon, refs read and
+        // refs POST; the sign-in, the browser's list, the push, the create; the clone, its load sharing
+        // the clone's limit (570 s).
+        [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_3_the_app_signs_in_clones_lists_pushes_and_creates)] = Own(3 + 4) + App(4) + LiveApp.CloneLimit,
         // The identity; sign-in, list, load; the clone.
         [nameof(AzureDevOpsLiveTests) + "." + nameof(AzureDevOpsLiveTests.Check_4_a_clone_through_the_organization_host)] = Own(1) + App(3) + LiveApp.CloneLimit,
         // The identity, the sandbox, the opened list, the branches' list; five leftovers' close, delete and branch delete.
@@ -883,6 +1022,10 @@ internal static class LiveSteps
         // The identity, the read, the duplicate, the missing branch, nothing ahead; the clean-up's
         // opened list, two requests' close and delete, two branches' delete; the fake's draft and four beside.
         [nameof(GitLabLiveTests) + "." + nameof(GitLabLiveTests.Check_2b_probes)] = Own(5) + Own(1 + 4 + 2) + Fake(1 + 4),
+        // The identity, the sandbox, the read back; the clean-up's opened list, the request's close and
+        // delete, the branch's delete; the sign-in, the browser's list, the push, the create; the
+        // clone, its load sharing the clone's limit (570 s).
+        [nameof(GitLabLiveTests) + "." + nameof(GitLabLiveTests.Check_3_the_app_signs_in_clones_lists_pushes_and_creates)] = Own(3 + 4) + App(4) + LiveApp.CloneLimit,
     };
 
     private static TimeSpan Own(int calls) => LiveServiceApi.CallLimit * calls;

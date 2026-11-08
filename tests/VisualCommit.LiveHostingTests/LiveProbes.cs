@@ -476,6 +476,9 @@ internal abstract class LiveServiceApi : IDisposable
     /// <summary>The screen every answer is learned by.</summary>
     public LiveScreen ScreenOfAnswers { get; }
 
+    /// <summary>Where the calls go: the service's base for a public constructor's (<c>https</c>), a fake's for an internal one's.</summary>
+    public Uri BaseAddress => _client.BaseAddress!;
+
     /// <summary>The handler the calls go through: for a public constructor's, <see cref="LiveRequestLog"/> over <see cref="NewHandler"/>'s (15.9).</summary>
     internal HttpMessageHandler Handler { get; }
 

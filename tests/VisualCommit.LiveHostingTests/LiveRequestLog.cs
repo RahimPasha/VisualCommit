@@ -236,9 +236,9 @@ internal sealed class LiveRequestLog : DelegatingHandler
                 continue;
             }
 
-            if (!string.Equals(request.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal))
+            if (!string.Equals(request.Scheme, within.Scheme, StringComparison.Ordinal))
             {
-                problems.Add($"A request was not https: {request.DescribeOrigin()}.");
+                problems.Add($"A request was not {within.Scheme}: {request.DescribeOrigin()}.");
             }
 
             if (request.Form != LiveCredentialForm.None && !string.Equals(request.Host, within.Host, StringComparison.OrdinalIgnoreCase))
@@ -411,20 +411,74 @@ internal abstract class LiveReach
 {
     protected static readonly string[] Get = ["GET"];
 
+    /// <summary>
+    /// The loopback origin of a fake that stands for the service in <see cref="LiveSafetyTests"/>'
+    /// rehearsal of Check_3 (docs/phase-7b-design.md 15.6), or null: the service's origin, which every
+    /// guard the live methods build has (<see cref="AzureDevOps"/>, <see cref="GitLab"/>).
+    /// </summary>
+    private readonly Uri? _rehearsal;
+
+    /// <summary>
+    /// A guard with the service's origin (<paramref name="rehearsal"/> null) or a rehearsal's. Every
+    /// constructor of a guard comes through here, so a rehearsal's origin is checked wherever a guard
+    /// is built, not only in <see cref="AzureDevOpsRehearsal"/> and <see cref="GitLabRehearsal"/>: a
+    /// guard that admits an origin other than the service's admits a fake's loopback origin alone.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="rehearsal"/> is not <c>http://127.0.0.1:&lt;port&gt;/</c>.</exception>
+    protected LiveReach(Uri? rehearsal)
+    {
+        _rehearsal = rehearsal is null ? null : RehearsalOrigin(rehearsal);
+    }
+
     public abstract HostingProvider Provider { get; }
 
-    /// <summary>The one host a credential may go to: <c>dev.azure.com</c>, <c>gitlab.com</c>.</summary>
-    public abstract string Host { get; }
+    /// <summary>The one host a credential may go to: <c>dev.azure.com</c>, <c>gitlab.com</c>; a rehearsal's <c>127.0.0.1:&lt;port&gt;</c>.</summary>
+    public string Host => _rehearsal?.Authority ?? ServiceHost;
 
-    /// <summary><c>https://&lt;host&gt;:443</c>, what a refusal names.</summary>
-    public string Origin => $"https://{Host}:443";
+    /// <summary>The scheme every request must have: <c>https</c>; a rehearsal's <c>http</c>.</summary>
+    public string Scheme => _rehearsal?.Scheme ?? Uri.UriSchemeHttps;
+
+    /// <summary><c>https://&lt;host&gt;:443</c>, what a refusal names; a rehearsal's <c>http://127.0.0.1:&lt;port&gt;</c>.</summary>
+    public string Origin => _rehearsal is { } fake ? $"{fake.Scheme}://{fake.Host}:{fake.Port.ToString(System.Globalization.CultureInfo.InvariantCulture)}" : $"https://{ServiceHost}:443";
+
+    /// <summary>The service's host: <c>dev.azure.com</c>, <c>gitlab.com</c>.</summary>
+    protected abstract string ServiceHost { get; }
 
     /// <summary>Azure DevOps' guard over the sandbox <paramref name="organization"/>/<paramref name="project"/>/<paramref name="repository"/>, with D374's made-up organization drawn for this run unless given.</summary>
     public static AzureDevOpsReach AzureDevOps(string organization, string project, string repository, string? madeUpOrganization = null) =>
-        new(organization, project, repository, madeUpOrganization ?? AzureDevOpsReach.DrawMadeUpOrganization());
+        new(organization, project, repository, madeUpOrganization ?? AzureDevOpsReach.DrawMadeUpOrganization(), null);
 
     /// <summary>GitLab's guard: the app's and the command's paths under <c>https://gitlab.com:443/api/v4/</c> alone, each with their methods, Bearer or no credential (D349).</summary>
-    public static GitLabReach GitLab() => new();
+    public static GitLabReach GitLab() => new(null);
+
+    /// <summary>
+    /// Azure DevOps' guard with <paramref name="fake"/>'s loopback origin in place of the service's, for
+    /// <see cref="LiveSafetyTests"/>' rehearsal of Check_3 over the fake alone: the same paths, methods,
+    /// queries and credentials, judged on that origin; it admits nothing on any other origin, the
+    /// service's among them. No live method builds one.
+    /// </summary>
+    /// <exception cref="ArgumentException"><paramref name="fake"/> is not <c>http://127.0.0.1:&lt;port&gt;/</c>.</exception>
+    internal static AzureDevOpsReach AzureDevOpsRehearsal(Uri fake, string organization, string project, string repository) =>
+        new(organization, project, repository, AzureDevOpsReach.DrawMadeUpOrganization(), fake ?? throw new ArgumentNullException(nameof(fake)));
+
+    /// <summary>GitLab's guard with <paramref name="fake"/>'s loopback origin in place of the service's (<see cref="AzureDevOpsRehearsal"/>).</summary>
+    /// <exception cref="ArgumentException"><paramref name="fake"/> is not <c>http://127.0.0.1:&lt;port&gt;/</c>.</exception>
+    internal static GitLabReach GitLabRehearsal(Uri fake) => new(fake ?? throw new ArgumentNullException(nameof(fake)));
+
+    /// <summary>A fake's origin as a rehearsal takes it: <c>http</c>, the loopback address <c>127.0.0.1</c> written so, a port of its own, no user, nothing after the root.</summary>
+    /// <exception cref="ArgumentException">Any other origin, a service's or a name's that a resolver could send elsewhere.</exception>
+    private static Uri RehearsalOrigin(Uri fake)
+    {
+        ArgumentNullException.ThrowIfNull(fake);
+        return fake.IsAbsoluteUri
+            && string.Equals(fake.Scheme, Uri.UriSchemeHttp, StringComparison.Ordinal)
+            && string.Equals(fake.Host, "127.0.0.1", StringComparison.Ordinal)
+            && !fake.IsDefaultPort && fake.Port > 0
+            && string.IsNullOrEmpty(fake.UserInfo)
+            && fake.AbsolutePath == "/" && string.IsNullOrEmpty(fake.Query) && string.IsNullOrEmpty(fake.Fragment)
+            ? new Uri(fake.GetLeftPart(UriPartial.Authority) + "/")
+            : throw new ArgumentException("A rehearsal's origin is a fake's http://127.0.0.1:<port>/ alone.", nameof(fake));
+    }
 
     /// <summary>
     /// The credential's form: a query token (any parameter whose decoded name, <c>+</c> read as a
@@ -537,12 +591,16 @@ internal abstract class LiveReach
     protected string MethodRefusal(HttpMethod method) =>
         $"{method.Method} is none of the methods the app or the command sends to that path on {Origin} (D352, D371)";
 
-    /// <summary>Whether <paramref name="uri"/> is <c>https</c> on <see cref="Host"/> at port 443.</summary>
-    protected bool OnOrigin(Uri uri) =>
-        string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)
-        && string.Equals(uri.Host, Host, StringComparison.OrdinalIgnoreCase)
-        && uri.Port == 443
-        && string.IsNullOrEmpty(uri.UserInfo);
+    /// <summary>Whether <paramref name="uri"/> is <c>https</c> on the service's host at port 443 (a rehearsal's: on its fake's origin alone).</summary>
+    protected bool OnOrigin(Uri uri) => _rehearsal is { } fake
+        ? string.Equals(uri.Scheme, fake.Scheme, StringComparison.Ordinal)
+            && string.Equals(uri.Host, fake.Host, StringComparison.Ordinal)
+            && uri.Port == fake.Port
+            && string.IsNullOrEmpty(uri.UserInfo)
+        : string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.Ordinal)
+            && string.Equals(uri.Host, ServiceHost, StringComparison.OrdinalIgnoreCase)
+            && uri.Port == 443
+            && string.IsNullOrEmpty(uri.UserInfo);
 
     /// <summary>The path as written (the original text's, before .NET removes a dot segment) and as sent, each split into its raw segments.</summary>
     protected static IEnumerable<string[]> RawSegments(Uri uri)
@@ -628,7 +686,8 @@ internal sealed class AzureDevOpsReach : LiveReach
 
     private bool _madeUpTokenAdmitted;
 
-    internal AzureDevOpsReach(string organization, string project, string repository, string madeUpOrganization)
+    internal AzureDevOpsReach(string organization, string project, string repository, string madeUpOrganization, Uri? rehearsal)
+        : base(rehearsal)
     {
         _organization = organization;
         _project = project;
@@ -638,7 +697,7 @@ internal sealed class AzureDevOpsReach : LiveReach
 
     public override HostingProvider Provider => HostingProvider.AzureDevOps;
 
-    public override string Host => "dev.azure.com";
+    protected override string ServiceHost => "dev.azure.com";
 
     /// <summary>D374's organization for this run: <c>vc-none-</c> and 12 random lower-case hex digits. It is no secret: run.txt names it.</summary>
     public string MadeUpOrganization { get; }
@@ -892,9 +951,14 @@ internal sealed class GitLabReach : LiveReach
 
     private static readonly string[] Delete = ["DELETE"];
 
+    internal GitLabReach(Uri? rehearsal)
+        : base(rehearsal)
+    {
+    }
+
     public override HostingProvider Provider => HostingProvider.GitLab;
 
-    public override string Host => "gitlab.com";
+    protected override string ServiceHost => "gitlab.com";
 
     public override string? RefusalOf(HttpMethod method, Uri uri, LiveCredentialForm form)
     {

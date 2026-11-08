@@ -6,6 +6,7 @@ using System.Text.Json;
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Git;
@@ -23,7 +24,7 @@ using Xunit.v3;
 
 namespace VisualCommit.LiveHostingTests;
 
-/// <summary>Runs <see cref="GitLabLiveTests"/>' methods in 15.5's order (stage 1; stage 2's Check_3 takes its place after Check_2b_probes).</summary>
+/// <summary>Runs <see cref="GitLabLiveTests"/>' methods in 15.5's order, with stage 2's Check_3 (15.6) after Check_2b_probes.</summary>
 public sealed class GitLabLiveOrder : ITestCaseOrderer
 {
     public static IReadOnlyList<string> Methods { get; } =
@@ -32,6 +33,7 @@ public sealed class GitLabLiveOrder : ITestCaseOrderer
         nameof(GitLabLiveTests.Check_1b_probes),
         nameof(GitLabLiveTests.Check_2_the_providers_and_the_session),
         nameof(GitLabLiveTests.Check_2b_probes),
+        nameof(GitLabLiveTests.Check_3_the_app_signs_in_clones_lists_pushes_and_creates),
     ];
 
     public IReadOnlyCollection<TTestCase> OrderTestCases<TTestCase>(IReadOnlyCollection<TTestCase> testCases)
@@ -181,12 +183,7 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
         var ownRequests = new LiveRequestLog.Store();
         var reach = LiveReach.GitLab();
         using var api = new GitLabLiveApi(sandbox, reach, ownRequests, run.Screener!, run.Withheld);
-        var hosting = HostingOptions.Off with
-        {
-            GitLab = GitLabEndpoints.GitLabCom,
-            CreateGitLabHandler = () => new LiveRequestLog(HostingOptions.DefaultHandler(GitLabEndpoints.GitLabCom.ApiBase)(), appRequests, reach),
-        };
-        using var app = new LiveApp(run, sandbox, hosting);
+        using var app = new LiveApp(run, sandbox, AppOptions(appRequests, reach));
         var step = "1, the identity";
         var problems = new List<string>();
         ExceptionDispatchInfo? failure = null;
@@ -285,6 +282,139 @@ public sealed class GitLabLiveTests(GitLabLiveRun run) : IClassFixture<GitLabLiv
         }
 
         LiveSteps.Finish(run, store, reach, problems, failure);
+    }
+
+    /// <summary>
+    /// Check_3 (15.6, stage 2): 7a 14.4's Check_2 on 7b's surfaces. The app starts as Check_2's does
+    /// (<see cref="AppOptions"/>); then, as a user does, it signs in through "Add GitLab account" with
+    /// the token in its masked box, picks the sandbox's row by <c>FullName</c> in "From GitLab…" and
+    /// clones it through the app's helper, shows the section "Merge requests", pushes D325's commit with
+    /// "Push {branch}…", and creates a draft through "Create merge request…" and its form, Draft ticked
+    /// (the form then shows the title GitLab gets, <c>Draft: …</c>), ending with the status "Created
+    /// draft merge request !n"; the test reads it back, cleans up in <c>finally</c> (D324) and ends with
+    /// Check_2's tripwires. <see cref="AppDrivenAsync"/> holds the steps.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Check_3_the_app_signs_in_clones_lists_pushes_and_creates()
+    {
+        var sandbox = Sandbox;
+        var appRequests = new LiveRequestLog.Store();
+        var ownRequests = new LiveRequestLog.Store();
+        var reach = LiveReach.GitLab();
+        using var api = new GitLabLiveApi(sandbox, reach, ownRequests, run.Screener!, run.Withheld);
+        await AppDrivenAsync(api, reach, AppOptions(appRequests, reach), appRequests, ownRequests);
+    }
+
+    /// <summary>Check_2's and Check_3's options (15.5 step 1): GitLab alone, its handler the log over the default one behind the guard.</summary>
+    internal static HostingOptions AppOptions(LiveRequestLog.Store requests, LiveReach reach) =>
+        HostingOptions.Off with
+        {
+            GitLab = GitLabEndpoints.GitLabCom,
+            CreateGitLabHandler = () => new LiveRequestLog(HostingOptions.DefaultHandler(GitLabEndpoints.GitLabCom.ApiBase)(), requests, reach),
+        };
+
+    /// <summary>
+    /// Check_3's steps (15.6) with <paramref name="api"/>, the test's own calls into
+    /// <paramref name="ownRequests"/>, and the app started with <paramref name="hosting"/>, whose requests
+    /// go into <paramref name="appRequests"/>, both behind <paramref name="reach"/>: on the service from
+    /// <see cref="Check_3_the_app_signs_in_clones_lists_pushes_and_creates"/>, over the fake from
+    /// <see cref="LiveSafetyTests"/>' rehearsal, which runs this same code. Each step that waits for the
+    /// app has a limit of its own (<see cref="LiveSteps.Sums"/>), and a failure names its step.
+    /// </summary>
+    internal async Task AppDrivenAsync(GitLabLiveApi api, LiveReach reach, HostingOptions hosting, LiveRequestLog.Store appRequests, LiveRequestLog.Store ownRequests)
+    {
+        ArgumentNullException.ThrowIfNull(api);
+        var sandbox = api.Sandbox;
+        var stamp = LiveSteps.Stamp();
+        var branch = LiveLeftovers.Prefix + stamp;
+        var title = "VisualCommit live test " + stamp;
+        using var app = new LiveApp(run, sandbox, hosting);
+        var step = "1, the identity";
+        var problems = new List<string>();
+        ExceptionDispatchInfo? failure = null;
+        try
+        {
+            await IdentityAsync(api);
+            run.Note($"Check_3. The branch {branch}.");
+            var project = await ReadSandboxAsync(api);
+            step = "1, the start";
+            await app.StartAsync(appRequests);
+
+            step = "2, the sign-in through the dialog";
+            var account = await app.SignInThroughDialogAsync(null, appRequests, problems);
+            run.Check(string.Equals(account.Login, sandbox.Login, StringComparison.OrdinalIgnoreCase), () => $"The account's login is {account.Login}, not {sandbox.Login}.");
+
+            step = "3, the browser";
+            var url = await app.ChooseAsync(sandbox.FullName);
+            run.Note($"The chosen clone URL's path {(Uri.TryCreate(url, UriKind.Absolute, out var chosen) && string.Equals(Uri.UnescapeDataString(chosen.AbsolutePath), "/" + sandbox.FullName + ".git", StringComparison.OrdinalIgnoreCase) ? "is" : "is not")} the sandbox's full name and .git, {(chosen is { UserInfo.Length: > 0 } ? "with" : "without")} a user.");
+
+            step = "4, the clone";
+            var opened = await app.CloneChosenAsync(url);
+
+            step = "5, the section";
+            await app.LoadSectionAsync(opened, app.CloneLeft);
+
+            step = "6, the push";
+            var head = await app.PushAsync(opened, branch, stamp, title);
+
+            step = "7, the create through the form";
+            var request = await app.CreateThroughFormAsync(opened, branch, project.DefaultBranch, title, appRequests, "/merge_requests", problems);
+
+            step = "8, the read back";
+            await ReadBackAsync(api, request.Number, branch, project.DefaultBranch, title, head);
+        }
+        catch (Exception ex)
+        {
+            failure = run.FailureOf(ex, step);
+            run.Note($"Check_3 failed in step {step}: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            try
+            {
+                // Step 9: the clean-up (D324), each call on its own, before the app closes.
+                await CleanUpAsync(api, [branch], problems);
+            }
+            finally
+            {
+                app.Close();
+            }
+        }
+
+        app.Tripwires(problems);
+        LiveSteps.Finish(run, appRequests, reach, problems, failure, ownRequests, signInStarted: app.SignInStarted);
+    }
+
+    /// <summary>
+    /// Check_3's step 8: the draft the app created, as GitLab reads it back: opened, a draft, its title
+    /// <c>Draft: </c> and the title as typed (7.4), from the run's branch into the default branch; its
+    /// head noted. A difference fails the test after the clean-up.
+    /// </summary>
+    private async Task ReadBackAsync(GitLabLiveApi api, int iid, string branch, string target, string title, string head)
+    {
+        var read = await api.MergeRequestAsync(iid, Cancelled);
+        if (read.Status != 200 || read.Json is not { ValueKind: JsonValueKind.Object })
+        {
+            throw new LiveServiceException(api.Describe(read, $"the read back of !{Show(iid)}") + ".");
+        }
+
+        var differences = new List<string>();
+        void Expect(string field, string? actual, string expected)
+        {
+            if (!string.Equals(actual, expected, StringComparison.Ordinal))
+            {
+                differences.Add($"{field} is {actual ?? "missing"}, not {expected}");
+            }
+        }
+
+        Expect("draft", read.Member("draft"), "true");
+        Expect("state", read.Member("state"), "opened");
+        Expect("title", read.Member("title"), GitLabProvider.TitleFor(title, true));
+        Expect("source_branch", read.Member("source_branch"), branch);
+        Expect("target_branch", read.Member("target_branch"), target);
+        var sha = read.Member("sha");
+        run.Check(differences.Count == 0, () => $"GitLab's !{Show(iid)} is not what the app created: {string.Join("; ", differences)}.");
+        run.Note($"Read back ({read}): !{Show(iid)} is an opened draft from {branch} into {target}, its title Draft: and the title as typed; its head {(sha is null ? "not given" : string.Equals(sha, head, StringComparison.OrdinalIgnoreCase) ? "the pushed commit" : "another commit")}.");
     }
 
     /// <summary>
@@ -545,6 +675,7 @@ internal sealed class LiveApp : IDisposable
     private readonly GitRunner _git = new(GitLocator.FindExecutable(GitSearchContext.FromSystem()) ?? throw new InvalidOperationException("The live command needs git."));
     private ShellDriver? _app;
     private string? _clone;
+    private Stopwatch? _cloneClock;
     private bool _closed;
 
     public LiveApp(LiveRun run, LiveHostSandbox sandbox, HostingOptions hosting)
@@ -591,6 +722,51 @@ internal sealed class LiveApp : IDisposable
             throw new XunitException(_run.Screen(ex.Message));
         }
 
+        return SignedIn(requests, problems);
+    }
+
+    /// <summary>
+    /// Check_3's step 2 (15.6): the sign-in as a user signs in, through Settings, Accounts and the
+    /// provider's own dialog ("Add Azure DevOps account", "Add GitLab account"; ShellDriver's provider
+    /// forms of 1.9): on Azure DevOps <paramref name="organization"/> typed into its Organization box,
+    /// the token typed into the masked token box, the dialog's Confirm; then the settings screen closed.
+    /// The dialog's check and the account's state share one step's limit. Then as
+    /// <see cref="SignInAsync"/>: only the sign-in's reads left, each 200, each in the log's store;
+    /// <c>accounts.json</c> as 1.8.
+    /// </summary>
+    public async Task<HostingAccount> SignInThroughDialogAsync(string? organization, LiveRequestLog.Store requests, List<string> problems)
+    {
+        SignInStarted = DateTimeOffset.UtcNow;
+        var clock = Stopwatch.StartNew();
+        var screen = await App.OpenAccountsAsync();
+        var dialog = await App.OpenSignInDialogAsync(Provider);
+        _run.Check(dialog.Title == HostingTexts.AddAccountTitleOf(Provider), () => $"The dialog is {dialog.Title}, not {HostingTexts.AddAccountTitleOf(Provider)}.");
+        _run.Check(dialog.ShowsOrganization == (organization is not null), () => $"The dialog {(dialog.ShowsOrganization ? "shows" : "does not show")} the Organization box.");
+        if (organization is not null)
+        {
+            App.TypeOrganization(organization);
+        }
+
+        var box = App.Find<Avalonia.Controls.TextBox>("SignInToken");
+        _run.Check(box.PasswordChar == PromptDialogViewModel.MaskCharacter, () => "The token box does not mask what is typed.");
+        App.TypeToken(_sandbox.Token);
+        await App.ConfirmSignInAsync(Left(NetworkStep, clock));
+        if (dialog.ErrorText is { } refused)
+        {
+            throw new XunitException(_run.Screen($"The dialog \"{dialog.Title}\" says: {refused}"));
+        }
+
+        _run.Check(!dialog.IsSaveFailed, () => "The sign-in kept the token for the session only: the fake keychain refused it.");
+        await App.WaitForAccountAsync(Provider, account => account is { State: AccountState.SignedIn }, Left(NetworkStep, clock));
+        _run.Note($"The sign-in through \"{dialog.Title}\"{(organization is null ? string.Empty : ", the organization typed into its Organization box")}, the token into its masked box: signed in.");
+        App.PressKey(Avalonia.Input.Key.Escape);
+        await App.WaitForAsync(() => screen.IsClosed, "the settings screen to close");
+        return SignedIn(requests, problems);
+    }
+
+    /// <summary>After a sign-in: its requests noted, each 200 and each in the log's store; the account; <c>accounts.json</c> as 1.8.</summary>
+    private HostingAccount SignedIn(LiveRequestLog.Store requests, List<string> problems)
+    {
         var signIn = requests.Snapshot();
         _run.Note($"The sign-in: {string.Join("; ", signIn.Select(request => request.DescribeForRun()))}.");
         _run.Check(signIn.Count > 0, () => "The sign-in's requests bypassed LiveRequestLog, so the guard did not judge them (15.5 step 2).");
@@ -622,13 +798,80 @@ internal sealed class LiveApp : IDisposable
     public async Task<RepositoryViewModel> CloneAsync(string url)
     {
         var tab = App.Session.Shell.ActiveTab;
+        await OpenCloneFormAsync();
+        App.ReplaceText("CloneUrlBox", url);
+        return await StartCloneAsync(tab, url);
+    }
+
+    /// <summary>
+    /// Check_3's step 3 (15.6): the clone form's button names the provider ("From Azure DevOps…",
+    /// "From GitLab…"); its browser lists the account's repositories within a step's limit; the row
+    /// whose <c>FullName</c> is <paramref name="fullName"/>, without case, is filtered for, clicked and
+    /// chosen, which fills the URL box with the row's clone URL as the API gave it. Returns that URL;
+    /// <see cref="CloneChosenAsync"/> clones it.
+    /// </summary>
+    public async Task<string> ChooseAsync(string fullName)
+    {
+        var clock = Stopwatch.StartNew();
+        await OpenCloneFormAsync();
+        var button = App.Find<Avalonia.Controls.Button>("CloneFromGitHubButton");
+        await App.WaitForAsync(() => button.IsEffectivelyVisible, "the clone form's browse button");
+        var text = OperationTexts.CloneTexts.FromButtonOf(Provider);
+        var shown = button.Content is Avalonia.Controls.TextBlock block ? block.Text : button.Content as string;
+        _run.Check(shown == text, () => $"The clone form's browse button says {shown}, not {text}.");
+        App.Click(button);
+        await App.WaitForAsync(() => Browser() is not null, "the repository browser");
+        var browser = Browser()!;
+        _run.Check(browser.Provider == Provider && browser.Title == OperationTexts.CloneTexts.DialogTitleOf(Provider), () => $"The browser is {browser.Title}, not {OperationTexts.CloneTexts.DialogTitleOf(Provider)}.");
+        await App.WaitForAsync(() => browser.Load.IsCompleted, "the browser's list", Left(NetworkStep, clock));
+        if (browser.ErrorText is { } error)
+        {
+            throw new XunitException(_run.Screen("The browser's list failed: " + error));
+        }
+
+        var rows = browser.AllRows;
+        var row = rows.FirstOrDefault(candidate => string.Equals(candidate.FullName, fullName, StringComparison.OrdinalIgnoreCase))
+            ?? throw new XunitException(_run.Screen($"The browser does not list {fullName}: {(rows.Count == 0 ? browser.StatusText ?? "no row" : rows.Count.ToString(CultureInfo.InvariantCulture) + " other rows")}."));
+        _run.Note($"The browser \"{browser.Title}\": {rows.Count.ToString(CultureInfo.InvariantCulture)} rows, more exist: {(browser.MoreText is null ? "no" : "yes")}; the sandbox's row {row.FullName} ({row.Detail ?? "no detail"}).");
+        App.TypeInto("CloneFromGitHubFilter", fullName.Split('/')[^1]);
+        Avalonia.Controls.ListBoxItem? item = null;
+        await App.WaitForAsync(() => (item = BrowserItem(row.FullName)) is not null, "the sandbox's row in the filtered list");
+        App.Click(item!);
+        await App.WaitForAsync(() => Equals(browser.Selected, row), "the sandbox's row selected");
+        App.Click(App.FindByAutomationId(App.TopDialogView!, "ConfirmButton"));
+        await App.WaitForAsync(() => browser.IsClosed, "the browser to close");
+        var url = App.Find<Avalonia.Controls.TextBox>("CloneUrlBox").Text ?? string.Empty;
+        _run.Check(string.Equals(url, row.CloneUrl, StringComparison.Ordinal), () => "Choose did not fill the URL box with the row's clone URL.");
+        return url;
+    }
+
+    /// <summary>Check_3's step 4 (15.6): the URL <see cref="ChooseAsync"/> filled in, cloned as <see cref="CloneAsync"/> clones, within <see cref="CloneLimit"/>.</summary>
+    public Task<RepositoryViewModel> CloneChosenAsync(string url) => StartCloneAsync(App.Session.Shell.ActiveTab, url);
+
+    /// <summary>What is left of <see cref="CloneLimit"/> since the click on Clone: Check_3's load shares the clone's limit (15.6's sums).</summary>
+    public TimeSpan CloneLeft => _cloneClock is null ? CloneLimit : Left(CloneLimit, _cloneClock);
+
+    private async Task OpenCloneFormAsync()
+    {
         App.Click(App.FindByAutomationId("CloneRepoButton"));
         await App.WaitForAsync(() => App.FocusedAutomationId() == "CloneUrlBox", "the focus in the clone form's URL box");
-        App.ReplaceText("CloneUrlBox", url);
+    }
+
+    private CloneFromGitHubDialogViewModel? Browser() =>
+        App.Session.Services.DialogHost.Open.OfType<CloneFromGitHubDialogViewModel>().LastOrDefault();
+
+    /// <summary>The browser's shown item named <paramref name="fullName"/> (its automation name), or null.</summary>
+    private Avalonia.Controls.ListBoxItem? BrowserItem(string fullName) =>
+        Avalonia.VisualTree.VisualExtensions.GetVisualDescendants(App.Window).OfType<Avalonia.Controls.ListBoxItem>()
+            .FirstOrDefault(item => item.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetName(item) == fullName);
+
+    /// <summary>The clone from the form as filled: the parent folder typed, Clone clicked, its two waits within <see cref="CloneLimit"/>, then 7a 14.4 step 4's checks.</summary>
+    private async Task<RepositoryViewModel> StartCloneAsync(RepoTabViewModel tab, string url)
+    {
         App.ReplaceText("CloneParentBox", _clones.Path);
         var clone = Path.Combine(_clones.Path, App.Find<Avalonia.Controls.TextBox>("CloneNameBox").Text ?? "clone");
         var mark = App.LogMark();
-        var clock = Stopwatch.StartNew();
+        var clock = _cloneClock = Stopwatch.StartNew();
         App.Click(App.FindByAutomationId("CloneStartButton"));
         await WaitWatchingAsync(() => tab.Repository is not null || (!tab.Welcome.IsCloning && tab.Welcome.HasError), "the clone to open its repository", CloneLimit);
         if (tab.Repository is null)
@@ -650,10 +893,10 @@ internal sealed class LiveApp : IDisposable
         return opened;
     }
 
-    /// <summary>Step 5: the requests reach <c>Loaded</c>.</summary>
-    public async Task LoadAsync(RepositoryViewModel opened)
+    /// <summary>Step 5: the requests reach <c>Loaded</c>, within <paramref name="limit"/> (a step's, unless given).</summary>
+    public async Task LoadAsync(RepositoryViewModel opened, TimeSpan? limit = null)
     {
-        await App.WaitForAsync(() => opened.HostingState.PullRequests is PullRequestsState.Loaded or PullRequestsState.Failed or PullRequestsState.OtherOrganization, "the sandbox's requests", NetworkStep);
+        await App.WaitForAsync(() => opened.HostingState.PullRequests is PullRequestsState.Loaded or PullRequestsState.Failed or PullRequestsState.OtherOrganization, "the sandbox's requests", limit ?? NetworkStep);
         _run.Check(opened.HostingState.PullRequests == PullRequestsState.Loaded, () => $"The requests are {opened.HostingState.PullRequests}: {opened.HostingState.Failure?.Kind}: {opened.HostingState.Failure?.Message}.");
         _run.Note($"Open requests the app listed: {(opened.HostingState.List?.PullRequests.Count ?? 0).ToString(CultureInfo.InvariantCulture)}.");
     }
@@ -723,8 +966,99 @@ internal sealed class LiveApp : IDisposable
         return pull;
     }
 
-    /// <summary>"Push {branch}…" from the branch's row under Local branches, the push dialog's Confirm, and the push's own record, which must have succeeded.</summary>
-    private async Task PushBranchAsync(string branch)
+    /// <summary>
+    /// Check_3's step 3 (15.6), within <paramref name="limit"/> (what is left of the clone's): the
+    /// requests reach <c>Loaded</c>, as <see cref="LoadAsync"/>; the left panel's section is titled
+    /// <c>RequestsTitle(p)</c> ("Pull requests", "Merge requests") and shows a row per listed request,
+    /// or "No open {requests}" when none is listed.
+    /// </summary>
+    public async Task LoadSectionAsync(RepositoryViewModel opened, TimeSpan limit)
+    {
+        var clock = Stopwatch.StartNew();
+        await LoadAsync(opened, limit);
+        var panel = App.Session.Shell.ActiveTab.LeftPanel;
+        var title = HostingTexts.RequestsTitle(Provider);
+        var none = OperationTexts.NoOpenRequests(Provider);
+        var listed = opened.HostingState.List?.PullRequests.Count ?? 0;
+        bool Shown() =>
+            panel.Rows.OfType<RefSectionRow>().FirstOrDefault(row => row.Section == RefSection.PullRequests) is { } section && section.Text == title
+            && (listed == 0
+                ? panel.Rows.OfType<PullRequestMessageRow>().Any(message => message.Kind == PullRequestMessageKind.None && message.Text == none) && !panel.Rows.OfType<PullRequestRow>().Any()
+                : panel.Rows.OfType<PullRequestRow>().Count() == listed);
+        await App.WaitForAsync(Shown, $"the section titled {title} to show {listed.ToString(CultureInfo.InvariantCulture)} listed", Left(limit, clock));
+        var shown = panel.Rows.OfType<RefSectionRow>().First(row => row.Section == RefSection.PullRequests);
+        _run.Note($"The left panel's section \"{shown.Text}\" shows {(listed == 0 ? $"\"{none}\"" : listed.ToString(CultureInfo.InvariantCulture) + " rows")}.");
+    }
+
+    /// <summary>
+    /// Check_3's step 5 (15.6): from the branch's menu, <c>CreateRequest(p)</c> ("Create pull
+    /// request…", "Create merge request…") opens the form, whose head and base are the run's branch
+    /// and the sandbox's default branch in the sandbox; the title and description typed, Draft ticked
+    /// (on GitLab the form then shows the title GitLab gets, <c>Draft: …</c>); Create; the form closes and
+    /// the operation's status is <c>CreatePullRequestTexts.Created(p, n, true)</c>; <c>ByRef</c> holds the
+    /// draft. The base's read, the create, its record and the list's refresh share one step's limit;
+    /// the app's POST must answer 200 or 201 (15.7's premise).
+    /// </summary>
+    public async Task<PullRequest> CreateThroughFormAsync(RepositoryViewModel opened, string branch, string baseBranch, string title, LiveRequestLog.Store requests, string createPath, List<string> problems)
+    {
+        await App.WaitForWatchersQuietAsync();
+        await OpenBranchMenuAsync(branch);
+        var operationMark = App.Session.Operations.Snapshot().Select(record => record.Sequence).DefaultIfEmpty(0).Max();
+        var clock = Stopwatch.StartNew();
+        App.ClickMenuItem(OperationTexts.MenuTexts.CreateRequest(Provider));
+        var form = await App.WaitForDialogAsync<CreatePullRequestDialogViewModel>();
+        await WaitWatchingAsync(() => form.Base is not null || (!form.IsReadingBase && form.Error is not null), "the form's base", Left(NetworkStep, clock));
+        if (form.Base is not { } baseEnd)
+        {
+            throw new XunitException(_run.Screen("The form found no base: " + form.Error));
+        }
+
+        _run.Check(form.Title == OperationTexts.CreatePullRequestTexts.DialogTitleOf(Provider), () => $"The form is {form.Title}, not {OperationTexts.CreatePullRequestTexts.DialogTitleOf(Provider)}.");
+        _run.Check(form.Head.Text == branch && baseEnd.Branch == baseBranch, () => $"The form would create from {form.Head.Text} into {baseEnd.Branch}, not from {branch} into {baseBranch}.");
+        _run.Check(
+            string.Equals(form.Head.Repository, baseEnd.Repository, StringComparison.Ordinal) && string.Equals(baseEnd.Repository, _sandbox.FullName, StringComparison.OrdinalIgnoreCase),
+            () => $"The form would create in {baseEnd.Repository} from {form.Head.Repository}, not in and from {_sandbox.FullName}.");
+        App.ReplaceText("PullRequestTitle", title);
+        App.TypeInto("PullRequestDescription", LiveSteps.Description);
+        App.Click(App.FindByAutomationId("PullRequestDraft"));
+        _run.Check(form.PullRequestTitle == title && form.Description == LiveSteps.Description && form.IsDraft, () => "The form does not hold the title, the description and Draft as typed and ticked.");
+        if (Provider == HostingProvider.GitLab)
+        {
+            var sent = OperationTexts.CreatePullRequestTexts.SentTitle(Provider, GitLabProvider.TitleFor(title, true));
+            _run.Check(form.ShowsSentTitle && form.SentTitle == sent, () => $"With Draft ticked the form shows {(form.ShowsSentTitle ? form.SentTitle : "no sent title")}, not {sent}.");
+            _run.Note($"With Draft ticked the form shows \"{form.SentTitle}\".");
+        }
+
+        App.Click(App.FindByAutomationId(App.TopDialogView!, "ConfirmButton"));
+        await WaitWatchingAsync(() => form.IsClosed || (!form.IsCreating && form.Error is not null), "the create to end", Left(NetworkStep, clock));
+        if (!form.IsClosed)
+        {
+            throw new XunitException(_run.Screen("The form says: " + form.Error));
+        }
+
+        var operation = OperationTexts.CreatePullRequestTexts.Operation(Provider, branch).Title;
+        OperationRecord? created = null;
+        await App.WaitForAsync(() => (created = App.Session.Operations.Snapshot().FirstOrDefault(record => record.Sequence > operationMark && record.Title == operation)) is not null, "the create's status", Left(NetworkStep, clock));
+        var prefix = OperationTexts.CreatePullRequestTexts.Created(Provider, 0, true)[..^1];
+        var number = created!.Message is { } message && message.StartsWith(prefix, StringComparison.Ordinal) && int.TryParse(message[prefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : (int?)null;
+        _run.Check(
+            created.Outcome == OperationOutcome.Succeeded && number is { } made && created.Message == OperationTexts.CreatePullRequestTexts.Created(Provider, made, true),
+            () => $"The create ended {created.Outcome}: {created.Message}");
+        var post = requests.Snapshot().LastOrDefault(request => request.Method == "POST" && request.Path.EndsWith(createPath, StringComparison.Ordinal));
+        _run.Note($"The status: {created.Message}; the app's POST answered {post?.Status?.ToString(CultureInfo.InvariantCulture) ?? "nothing recorded"} (request {post?.RequestId ?? "none"}).");
+        if (post?.Status is not (200 or 201))
+        {
+            problems.Add($"The app's create POST answered {post?.Status?.ToString(CultureInfo.InvariantCulture) ?? "nothing recorded"}, not 200 or 201 (15.7's premise).");
+        }
+
+        PullRequest? listed = null;
+        await App.WaitForAsync(() => opened.HostingState.ByRef.TryGetValue(LiveLeftovers.HeadsPrefix + branch, out listed) && listed.Number == number, $"!{number!.Value.ToString(CultureInfo.InvariantCulture)} in ByRef", Left(NetworkStep, clock));
+        _run.Check(listed!.IsDraft, () => $"!{listed.Number.ToString(CultureInfo.InvariantCulture)} is not a draft in the app.");
+        return listed;
+    }
+
+    /// <summary>The branch's row under Local branches (its folder opened), right-clicked: its menu open.</summary>
+    private async Task OpenBranchMenuAsync(string branch)
     {
         string[] row = [LeftPanelViewModel.LocalBranchesTitle, .. branch.Split('/')];
         await App.WaitForAsync(() => HasRow(row[..2]), "the branch's folder under Local branches");
@@ -737,6 +1071,12 @@ internal sealed class LiveApp : IDisposable
         await App.WaitForAsync(() => HasRow(row), "the branch's row");
         App.RightClick(await App.RefRowAsync(row));
         await App.WaitForAsync(() => App.Session.Shell.Menu.IsOpen, "the branch's menu");
+    }
+
+    /// <summary>"Push {branch}…" from the branch's row under Local branches, the push dialog's Confirm, and the push's own record, which must have succeeded.</summary>
+    private async Task PushBranchAsync(string branch)
+    {
+        await OpenBranchMenuAsync(branch);
         var mark = App.Session.Operations.Snapshot().Select(record => record.Sequence).DefaultIfEmpty(0).Max();
         App.ClickMenuItem(OperationTexts.MenuTexts.PushWithDialog(branch));
         await App.WaitForDialogAsync<PushDialogViewModel>();
