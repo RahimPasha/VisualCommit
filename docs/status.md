@@ -178,14 +178,17 @@ Checks, live trial and review:
   package is built (D244), by one writer and one reviewer, each marked for the real-window pass or
   not, committed before the UI they test. Parts A (`f4ae515`), B (`37b3ea0`), P (`f1ac5ac`) and N (`28ec097`,
   merged at `5561548`).
-- [ ] 16. The owner's sandboxes and tokens for Azure DevOps and GitLab made as the design says
+- [x] 16. The owner's sandboxes and tokens for Azure DevOps and GitLab made as the design says
   (D346, D352), and the live command extended to both, run with them; what it finds goes into the
   fakes (D342). Under way: the sandboxes are made (2026-11-02; their first tokens replaced, Waiting
   on the owner); stage 1 (15.1) merged at `b377aa3`, built, reviewed and hunted, offline classes
   404 of 404; its first run with the tokens (2026-11-05) passed 8 of 9 (Notes, D385), and GitLab's
   again with a new token (2026-11-06) 4 of 4, so stage 1's 9 tests have passed; WP-LF (0.4), which
-  put what they found into the fakes, merged at `22fad1b` (Notes); stage 2 (`Check_3`, 15.6) is being
-  built on `wip/p7b-live2` from `d127fef` (2026-11-07).
+  put what they found into the fakes, merged at `22fad1b` (Notes); stage 2 (`Check_3`, 15.6) merged
+  at `fdb2c05`, its offline classes 428 of 428 there, and run with the tokens on that commit
+  (2026-11-08): 11 of 11, `Check_3` passed on both providers, nothing new for the fakes (Notes,
+  "WP-LIVE's second stage"). The GitLab account lists five projects, not the sandbox alone
+  (Waiting on the owner). (2026-11-08. Week: share not read.)
 - [ ] 17. An independent review of the code before the gate; every confirmed finding fixed with
   tests.
 
@@ -576,16 +579,12 @@ D388's test on macOS alone: git 2.56.0 over curl 8.23.0 loses the URL's user (No
 on macOS"). Both are fixed and merged at `98cdd86` (D389, D390; plan risk 43), and its classes pass
 plain and lagged; 13.9's picture comparison and part N's inspection passed (Notes, "WP-N's merge
 runs"). CI 42454621322 on `d127fef` is green but phase 6's open palette flake in one container,
-and macOS read Lost and passed (CI section); steps 9, 13 and 14 are ticked. Next: WP-LIVE's second
-stage (design 15.6, `Check_3` per provider) is being built in
-`D:/Projects/Personal/vc-wt/p7b-live2` (`wip/p7b-live2`, from `d127fef`; the session's
-`phase7b-live2-pkg.js`, the wave-4 script with the package L2: an Opus builder, two Opus reviewers,
-fix rounds and three lensed hunts, screen, guard and flow, each serious finding put to an Opus
-refuter), with an offline rehearsal of `Check_3` over 7b's fakes in `LiveSafetyTests`. At its merge
-the lead runs the offline classes, then, the owner told, the classes of Azure DevOps and GitLab
-with the tokens, `Check_3` now among their methods (15.9's "stage 2 likewise"), checks each run.txt fully decoded before anything from it enters the repository, and
-records the times in CLAUDE.md's live row. Then the review before the gate (step 17), WP-R and the
-gate. WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
+and macOS read Lost and passed (CI section); steps 9, 13 and 14 are ticked. WP-LIVE's second stage
+is merged at `fdb2c05` and passed with the tokens (step 16 ticked; Notes, "WP-LIVE's second
+stage"). Next: read CI's run on `fdb2c05` (42459591309; the CI section), then the review before the
+gate (step 17; its items are listed in the Notes, "For the review before the gate"), then WP-R and
+the gate. The GitLab account's five projects wait on the owner and decide whether the gate's live
+runs need a change first (Waiting on the owner). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
 `Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
 class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
 `c5ba918` is green; CI's run on the fix's merge, 42386428809, failed the two older tests above.
@@ -972,6 +971,42 @@ every commit.
   passed both cases on macOS, whose measure read Lost, by the server's two requests (the security
   review's open point: the sequence had not been seen on real macOS); every other job read Kept.
   Each job's file is kept in `D:/Projects/Personal/phase7b-work/verify/ci-42454621322/`.
+- **WP-LIVE's second stage** (2026-11-08; design 15.6 and its stage 2 As built): built in
+  `D:/Projects/Personal/vc-wt/p7b-live2` (`wip/p7b-live2`, from `d127fef`) by the session's
+  `phase7b-live2-pkg.js` (the wave-4 script with the package L2): one Opus builder, two Opus reviewers
+  (conformance, correctness) whose three minors were fixed with tests (the rehearsal guard's origin
+  now checked in its base constructor; GitLab's rehearsal asserts the merge request deleted), and one
+  hunt round of three Opus skeptics (screen, guard, flow) that showed nothing: the screen held 26
+  Check_3-shaped texts with made-up names; every request `Check_3` sends was traced through the
+  guard (no widening needed: the app's 9 requests and the test's own per provider pass it); six
+  sandbox states, two injected server errors and a lagged run over the fakes held, each failure still
+  cleaning up. `Check_3` (`AppDrivenAsync`) signs in through the provider's dialog, picks the row by
+  `FullName` in the browser, clones, checks the section's title, pushes D325's commit, creates a
+  draft through the form, reads it back and cleans up in `finally`; `LiveSafetyTests` rehearses the
+  same code over `FakeAzureDevOps` and `FakeGitLab` behind loopback-only guards. `LiveSteps.Sums`:
+  570 s for each `Check_3`. Merged at `fdb2c05`; the offline classes 428 of 428 there through
+  `scripts/heavy-run.sh`; then, the owner told, the classes of Azure DevOps and GitLab with the
+  tokens: 11 of 11 in 1 min 26 s (91 s with the build up to date). Azure DevOps: the dialog with
+  the Organization box, the browser's one row, the clone (2.4 s, no dialog), the push, draft pull
+  request !11 created (201), read back, abandoned and its branch deleted. GitLab: the dialog, the
+  browser's five rows, the clone (2.1 s), the push, "Title on GitLab: Draft: …", draft merge request
+  !5 created (201), read back, closed, deleted and its branch deleted. Tripwires clean. The lead's
+  check of both run.txt files, every decoding searched for the three tokens (whole and any 16
+  characters in a row), the organization, the namespace and any address: none. The run files are
+  kept in `D:/Projects/Personal/phase7b-work/live/` (`*-stage2-20261108.txt`). Nothing new for the
+  fakes: Check_3 sends no probe, and its answers are the shapes stage 1 measured.
+- **For the review before the gate** (step 17; collected 2026-11-01 to 2026-11-08 from the
+  packages' hand-offs, the inspections and the CI runs): GitLab's 100 requests a minute against
+  the app's lists; whether the providers' own refusals in `src/VisualCommit.Hosting/` should use the
+  sign-in dialog's reading (D387); `a11b`'s focus; `a06c`'s "Sign in to Git…"; `WithoutCollection`'s
+  "the budget is too small" when a collection comes from memory pressure; phase 2's items
+  (real-window check 14, the boxes editable while committing, the length of "Committing…"); the
+  `PaletteGrowthTests` flake (two CI failures, both in the container with Ubuntu's SDK packages);
+  the windows of the watcher lag tests; the D388 seam in `ShellDriver`; `n05b`'s GitLab error that
+  wraps inside `origin/main`; the anti-aliasing forms of `l27e-menu-item-tooltip-dark` and phase 3's
+  `15b3`; the default run's 1 h 37 min against CLAUDE.md's "about 1 h 10 min"; D390's
+  `WatcherRefreshes` seam in the app; and the live guard's GitLab project scope, if the owner's
+  answer on the account's five projects asks for it.
 - **WP-N's merge runs** (2026-11-07, 18:58 to 21:15 on the laptop, on `cf82d50`'s code, through
   `bash scripts/heavy-run.sh`, one command at a time, the session's `wpn-runs.sh`): the lagged list
   (1500 ms) green but one test: phase 2's 25 of 25, App.Tests' eight classes 66, Phase6's 21, the 7a
@@ -1418,6 +1453,23 @@ every commit.
   in a terminal the banner can read "Conflicts resolved" for about 0.3 s and one refresh. Removing
   it takes a status read that checks the in-progress files before and after `git status`; no
   requirement asks for it. Whether to build it is the owner's.
+- **The GitLab sandbox account lists five projects** (2026-11-08; seen in stage 1's run of
+  2026-11-06 too, and not reported then): the app's list of the account's projects
+  (`GET projects?membership=true`, with the fine-grained token) gave five rows, the sandbox and four
+  others, where the owner's accepted recommendation 2 (above) has a new account "that holds only the
+  sandbox, so that its token, which reaches every project its account can, reaches the sandbox
+  alone". The live command's code touches the sandbox alone (its clean-up selects by the sandbox's
+  path and project id, and the three hunts of both stages found no other path), but D371's GitLab
+  guard admits any project under `https://gitlab.com/api/v4/`, resting on that premise. The other
+  projects' names are not read or recorded here. Which is wanted? (a) The owner looks at the
+  account's projects on gitlab.com and deletes those that are not the sandbox (onboarding may have
+  made some), then nothing changes in the code; (b) the lead narrows the live command's GitLab
+  guard to the sandbox's own project, by path and by the id the sandbox read gives, beside the
+  account's project list, which the app's browser needs (amending D371; a change to
+  `tests/VisualCommit.LiveHostingTests` alone, which re-runs only the live command, D335); (c) both,
+  which the lead recommends: the token then reaches the sandbox alone and the guard refuses the rest
+  even if the account gains a project. No answer is needed before the review before the gate; one is
+  before the gate's live runs.
 - **A git that loses the URL's user** (Notes, "D388's test on macOS"; D389, plan risk 43, design
   16.3's bullet on D275; no answer needed for the gate): git 2.56.0 without git's own fix `76524c2604bc`, over a
   curl that strips the user from its effective URL (curl 8.23.0, CI's macOS Homebrew git today),
