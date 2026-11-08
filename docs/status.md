@@ -427,6 +427,11 @@ load (Notes, "`ShellDriverTests`' wait on CI"); the other four jobs green. Jobs 
 7 min 8 s (5 min 33 s), the containers 9 min 13 s and 9 min 40 s (6 min 43 s and 7 min 7 s), each
 under four fifths. Not rerun (CLAUDE.md: the owner's).
 
+[42477551563](https://github.com/RahimPasha/VisualCommit/actions/runs/42477551563) on `6f7199d`
+(`ShellDriverTests`' wait of 2 s): all five jobs green. Jobs and Test steps: `windows-latest` 34 min
+41 s (32 min 8 s), `macos-latest` 43 min 20 s (40 min 57 s), `ubuntu-latest` 8 min 36 s (6 min 47 s),
+the containers 7 min 35 s and 9 min 0 s (5 min 34 s and 6 min 45 s), each under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -605,8 +610,8 @@ pushed. The lead's runs on `6333de6` all passed, design 0.6's timing report amon
 needs D237's split (Notes, "The lead's runs after the review's fixes"); step 17 is ticked. CI's run on
 it, 42472105974, failed one phase 1 harness test on macOS alone (`ShellDriverTests`' 0.3 s wait, a
 stall under load), whose wait is now 2 s with its assertions kept (Notes; CI section). WP-R (design
-14) is merged at `f016bdf` with CLAUDE.md's rows (Notes, "WP-R"); it has only been compiled. Next:
-read CI's runs on `6f7199d` and on WP-R's merge; the owner's answer on the GitLab account's five
+14) is merged at `f016bdf` with CLAUDE.md's rows (Notes, "WP-R"); it has only been compiled. CI 42477551563 on
+`6f7199d` is green in all five jobs (CI section). Next: read CI's run on WP-R's merge; the owner's answer on the GitLab account's five
 projects (Waiting on the owner), and the change it asks for before the gate's live runs; then the
 gate (step 18), in 7a design 13.7's order with D335's live runs: the offline classes and the live
 command for the three providers with the owner told, corrections to the fakes committed before any
