@@ -634,9 +634,9 @@ GitHub's and Azure DevOps' classes passed, and GitLab's after two stalls of the 
 now answers a commit it lacks beside `author` 404, not D342's 500. That correction (D394) is merged at
 `cb9af6d`, with the fix to the client that GitHub's change called for (D395: a 404 in a repository not
 known to be readable is checked against that repository's read; the owner approved it, since it amends
-D342 (2)); Notes, "D394 and D395". Next: the lead's runs at that merge; the 7b walk-through so that its
-pictures exist; `Phase7bRealWindowPass` twice on its own
-with the owner told and present (D246); then the counted round on one commit: the whole default run
+D342 (2)); Notes, "D394 and D395". The lead's runs at that merge passed, phase 7b's walk-through among
+them, and `Phase7bRealWindowPass` passed twice on its own, 5 of 5 each time, the owner told and present
+(D246; the report's "Run", "Before the gate"). Next, the counted round on one commit: the whole default run
 through `scripts/heavy-run.sh`, the real-window pass, the list of pictures, the live command again,
 and the inspection of every picture in batches of at most about 150, the earlier ones compared with
 `D:/Projects/Personal/gate7b-reference/` (0.7). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's

@@ -81,6 +81,33 @@ If a cloud session ran the scripted pass earlier, its run is listed here too, ma
 session, before the gate", and its results stand in the Scripted column until the Windows
 session replaces them with its own. It does not count as the gate's scripted pass.
 
+**Before the gate** (2026-11-08, the Windows machine, Windows 11 Pro 10.0.26300, the owner at the
+machine; local times, -07:00):
+
+- The live command's first run (D335), on `ee0aeeb`, from 06:58: 595 of 596 tests, and GitLab's class
+  twice more alone ("Live command" gives what it found). Its correction to the fake of GitHub (D394)
+  and the client's fix that GitHub's change called for (D395) were merged at `cb9af6d` before any
+  picture.
+- The lead's runs at that merge, on `9b044af` (whose code is `cb9af6d`'s), 13:49 to 14:17, one at a
+  time through `scripts/heavy-run.sh`, all passed:
+  - the touched hosting classes, 239;
+  - the live command's offline classes, 582;
+  - phase 7a's walk-through, 207. Its pictures are the files `phase-7a-pictures.sha256` lists,
+    except part A's 23, which D353 changed ("Changes to expected results"), and b06a, b09a, n02b and
+    n04a, which vary by nature;
+  - the lagged lists, 51 and 75;
+  - phase 7b's walk-through, 179. The real-window checks compare their captures with its 93
+    pictures under `artifacts/visual/phase-7b/scripted/`.
+- Phase 7b's real-window checks on their own, twice (D246), on the same commit, the owner told and
+  present:
+  - 14:17 to 14:21: 5 of 5 passed in 3 min 50 s (250 s with the build and the lock);
+  - 14:21 to 14:25: 5 of 5 passed in 3 min 26 s (214 s).
+
+  Display scaling was 200 %, the work area 1500×952 logical pixels. Each of the 13 captures differed
+  from its scripted picture in 0.32 % to 0.86 % of its pixels (0.80 % to 2.50 % compared in place
+  only), and the two runs agree within 0.01 %. Their pictures are inspected with the counted round's
+  pass. Copies: `D:/Projects/Personal/phase7b-work/gate/d246/`.
+
 ## Live command
 
 The opt-in command against the real services (`tests/VisualCommit.LiveHostingTests`; D250, D335; for
