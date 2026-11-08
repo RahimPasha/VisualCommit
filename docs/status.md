@@ -410,6 +410,12 @@ Username for 'http://127.0.0.1:<port>'"), the four others Kept (`windows-latest`
 6 min 53 s (5 min 28 s), the containers 9 min 10 s and 7 min 31 s (6 min 36 s and 5 min 22 s), each
 under four fifths. Not rerun (CLAUDE.md: the owner's).
 
+[42459591309](https://github.com/RahimPasha/VisualCommit/actions/runs/42459591309) on `fdb2c05`
+(WP-LIVE's second stage merged): all five jobs green, Windows' "Build the opt-in projects" among
+them (the live project with `Check_3`). Jobs and Test steps: `windows-latest` 43 min 8 s (39 min
+40 s), `macos-latest` 20 min 29 s (19 min 34 s), `ubuntu-latest` 8 min 31 s (6 min 37 s), the
+containers 9 min 43 s and 7 min 7 s (7 min 5 s and 5 min 5 s), each under four fifths.
+
 The run for phase 7a's merge on `master` is
 [41243213784](https://github.com/RahimPasha/VisualCommit/actions/runs/41243213784), for `b486372`
 (the merge commit `019e68a` and the commit that set phase 7a to "Done"): all five jobs succeeded,
@@ -581,7 +587,7 @@ plain and lagged; 13.9's picture comparison and part N's inspection passed (Note
 runs"). CI 42454621322 on `d127fef` is green but phase 6's open palette flake in one container,
 and macOS read Lost and passed (CI section); steps 9, 13 and 14 are ticked. WP-LIVE's second stage
 is merged at `fdb2c05` and passed with the tokens (step 16 ticked; Notes, "WP-LIVE's second
-stage"). Next: read CI's run on `fdb2c05` (42459591309; the CI section). The review before the gate
+stage"); CI 42459591309 on `fdb2c05` is green in all five jobs (CI section). The review before the gate
 (step 17) runs on `fdb2c05` in the detached worktree `D:/Projects/Personal/vc-wt/p7b-review`, built
 in Debug (2026-11-08; the session's workflow `p7b-review-before-gate`): six read-only Opus
 reviewers by subject (tokens, git, lifetimes, providers, screens, tests and CI), with the items in
