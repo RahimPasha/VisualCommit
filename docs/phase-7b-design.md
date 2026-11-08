@@ -3479,6 +3479,13 @@ or settles what it left open:
   p08b, p10d unchanged). `UpdatePullRequests` takes `AccountState accountState = SignedIn` after the
   login, from `OnHostingChanged`. `RepositoryHosting.Apply` counts the account's signed-in state as a
   change: a refusal with another provider signed in raised none. Cut at 260, its tooltip whole.
+- Fixed at the review before the gate (the review of ui-1's fix): that row's test in
+  `RepositoryHostingProvidersWiringTests` holds each of its two apps by a `using` and ends each
+  through `End`, as the class's other tests do. The first app, which signs in to GitLab and Azure
+  DevOps, had only a `finally` that disposed it, so its git calls were never tripwired; the second
+  had neither, so a failed assertion left it running on the assembly's shared headless thread. In
+  scratch, a token added to the first app's calls passed before and fails now; a failed assertion
+  after the second start left that app undisposed before and disposes it now.
 
 ## 13. WP-N: a new pull or merge request (part N)
 
