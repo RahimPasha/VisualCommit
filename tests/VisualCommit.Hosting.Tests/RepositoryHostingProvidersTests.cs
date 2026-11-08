@@ -17,7 +17,8 @@ namespace VisualCommit.Hosting.Tests;
 /// GitHub upstream asking neither fake while GitHub alone is signed in, and no avatars; GitHub's
 /// avatars taking GitHub remotes' authors alone, kept through GitLab's sign-out and gone once
 /// GitLab's repository is listed; another organization's remote sending
-/// nothing and its tab's state swapped by a sign-in there, and its Changed at a swap of organizations;
+/// nothing and its tab's state swapped by a sign-in there, and its Changed at a swap of organizations
+/// and when the held account comes to need sign-in (D366);
 /// A3's answer and the list kept for their account alone, so another user signed in over the first
 /// (D348) never shows the first one's list, and GitHub's reads the repository again; the rewrites as
 /// each Changed raised them, through a refusal raced by a sign-in; GitHub's sign-in refreshing no GitLab-listed
@@ -313,6 +314,41 @@ public sealed class RepositoryHostingProvidersTests
         Assert.Equal(["other-org"], await setup.Thread.RunAsync(() => logins.Skip(changes).ToList()));
         Assert.Equal(PullRequestsState.OtherOrganization, hosting.State.PullRequests);
         Assert.DoesNotContain(setup.AzureDevOps!.Requests, request => request.Path.Contains("unlisted", StringComparison.OrdinalIgnoreCase));
+        await setup.Thread.RunAsync(hosting.Dispose);
+    }
+
+    [Fact]
+    public async Task Another_organizations_tab_raises_changed_when_its_held_azure_devops_account_comes_to_need_sign_in()
+    {
+        // The state stays OtherOrganization for the held account signed in or needing sign-in (D366),
+        // yet the tab's row says which (the review before the gate, ui-1): the account's state alone
+        // changing is a change. GitLab signed in, so that the rewrites stay wanted and raise nothing.
+        await using var setup = await ProvidersSessionSetup.StartAsync(gitHub: false, gitLab: true);
+        await setup.Session.StartAsync(Cancelled);
+        await setup.SignInAsync(HostingProvider.GitLab);
+        var hosting = await OpenAsync(setup, "unlisted");
+        var states = new List<AccountState?>();
+        await setup.Thread.RunAsync(() =>
+        {
+            hosting.Changed += (_, _) => states.Add(setup.Session.AccountOf(HostingProvider.AzureDevOps)?.State);
+            hosting.Update(RefsOf(("origin", "http://unlisted-org@127.0.0.1:2/unlisted-org/P/_git/r")), UrlRewrites.None);
+        });
+        await setup.SignInAsync(HostingProvider.AzureDevOps);
+        await setup.Thread.WaitForAsync(() => states.Count > 0 && states[^1] == AccountState.SignedIn, "the Changed after fake-org's sign-in");
+        Assert.Equal(PullRequestsState.OtherOrganization, hosting.State.PullRequests);
+        var before = await setup.Thread.RunAsync(() => states.Count);
+
+        setup.AzureDevOps!.Revoke(setup.AzureDevOpsToken);
+        var listed = await setup.Session.ListRepositoriesAsync(HostingProvider.AzureDevOps, Cancelled);
+        Assert.Equal(HostingFailureKind.BadCredentials, listed.Failure!.Kind);
+
+        await setup.Thread.WaitForAsync(() => states.Count > before, "the Changed after fake-org's refusal");
+        await setup.Thread.IdleAsync();
+        await setup.Thread.IdleAsync();
+        Assert.Equal([AccountState.NeedsSignIn], await setup.Thread.RunAsync(() => states.Skip(before).ToList()));
+        Assert.Equal(PullRequestsState.OtherOrganization, hosting.State.PullRequests);
+        Assert.True(hosting.WantsUrlRewrites);
+        Assert.DoesNotContain(setup.AzureDevOps.Requests, request => request.Path.Contains("unlisted", StringComparison.OrdinalIgnoreCase));
         await setup.Thread.RunAsync(hosting.Dispose);
     }
 

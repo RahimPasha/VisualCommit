@@ -1,6 +1,14 @@
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Media;
+using Avalonia.Threading;
+using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.Views.Shell;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting;
+using VisualCommit.Testing.Headless;
 using Xunit;
 using static VisualCommit.VisualTests.Phase7b.RequestTestData;
 
@@ -10,8 +18,8 @@ namespace VisualCommit.VisualTests.Phase7b;
 /// The left panel's requests section for each provider (docs/phase-7b-design.md 12.3, 12.7; D351,
 /// D355, D356; ruling 24): each state's title and rows on GitLab and Azure DevOps, 7a's placeholder
 /// without a hosted remote, <c>!21</c>, a draft and the fork labels, past 300, the filter on
-/// <c>!21</c> and <c>21</c> but never <c>#21</c>, a branch row's <c>!21</c>, D356's row and the
-/// section's open or closed state kept from GitHub's state to GitLab's.
+/// <c>!21</c> and <c>21</c> but never <c>#21</c>, a branch row's <c>!21</c>, D356's row (its words for a
+/// held account needing sign-in too, D366) and the section's open or closed state kept from GitHub's state to GitLab's.
 /// </summary>
 public sealed class RequestSectionProvidersTests
 {
@@ -204,6 +212,84 @@ public sealed class RequestSectionProvidersTests
         // Without the login the key's, lower-cased.
         panel.UpdatePullRequests(OtherOrganization(), account);
         Assert.Equal("In harbor-co; signed in to fernhill-labs", Messages(panel).Single().Text);
+    }
+
+    [Theory]
+    [InlineData(AccountNoteKind.Refused)]
+    [InlineData(AccountNoteKind.SessionEnded)]
+    public void D356_s_row_for_a_held_account_that_needs_sign_in_never_says_signed_in(AccountNoteKind note)
+    {
+        // D366 keeps the state for an account needing sign-in (refused, or kept for the last session
+        // only); the row and its tooltip then say so (the review before the gate, ui-1), as
+        // RepositoryViewModel passes the held account's state.
+        var account = new HostingAccount(new AccountKey(HostingProvider.AzureDevOps, AzureHost, "Fernhill-Labs"), "Fernhill-Labs", 0, "Fernhill-Labs", null, true);
+        var held = new AccountStatus(account, AccountState.NeedsSignIn, null, note, null);
+        var panel = Panel(MobileApp, Loaded(MobileApp), refs: MobileAppRefs());
+
+        panel.UpdatePullRequests(OtherOrganization(), held.Account.Key, held.Account.Login, held.State);
+
+        Assert.Equal(["v Pull requests 0", "  [OtherOrganization] In harbor-co; the account for Fernhill-Labs needs sign-in"], SectionLines(panel));
+        var row = Messages(panel).Single();
+        Assert.False(row.CanActivate);
+        Assert.False(row.ActivateCommand.CanExecute(null));
+        Assert.Equal(RefRowTarget.None, LeftPanelViewModel.TargetOf(row));
+        Assert.Equal(
+            "This repository is in the Azure DevOps organization harbor-co; the account VisualCommit holds is in Fernhill-Labs and needs signing in again, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts.",
+            row.ToolTip);
+        Assert.Empty(Rows(panel));
+        Assert.All(panel.Rows.OfType<RefItemRow>(), item => Assert.False(item.ShowsPullRequest));
+
+        // Signed in again: D356's signed-in texts, word for word; and back.
+        panel.UpdatePullRequests(OtherOrganization(), held.Account.Key, held.Account.Login, AccountState.SignedIn);
+        Assert.Equal(["v Pull requests 0", "  [OtherOrganization] In harbor-co; signed in to Fernhill-Labs"], SectionLines(panel));
+        Assert.Equal(
+            "This repository is in the Azure DevOps organization harbor-co; the signed-in account is in Fernhill-Labs, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts.",
+            Messages(panel).Single().ToolTip);
+        panel.UpdatePullRequests(OtherOrganization(), held.Account.Key, held.Account.Login, held.State);
+        Assert.Equal("In harbor-co; the account for Fernhill-Labs needs sign-in", Messages(panel).Single().Text);
+
+        // Without the login the key's, lower-cased.
+        panel.UpdatePullRequests(OtherOrganization(), held.Account.Key, accountState: held.State);
+        Assert.Equal("In harbor-co; the account for fernhill-labs needs sign-in", Messages(panel).Single().Text);
+    }
+
+    [AvaloniaFact]
+    public void D356_s_row_needing_sign_in_is_cut_at_260_and_its_tooltip_is_the_whole_sentence()
+    {
+        // 16.3: the row is cut with "…" in the panel's 260 px, its tooltip whole; the audit's one
+        // finding is that row's text, as part P's ShotPCutRow lets through for the signed-in row.
+        var account = new AccountKey(HostingProvider.AzureDevOps, AzureHost, "Fernhill-Labs");
+        foreach (var (state, text, toolTip) in new[]
+        {
+            (AccountState.NeedsSignIn, "In harbor-co; the account for Fernhill-Labs needs sign-in",
+                "This repository is in the Azure DevOps organization harbor-co; the account VisualCommit holds is in Fernhill-Labs and needs signing in again, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts."),
+            (AccountState.SignedIn, "In harbor-co; signed in to Fernhill-Labs",
+                "This repository is in the Azure DevOps organization harbor-co; the signed-in account is in Fernhill-Labs, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to harbor-co in Settings, Accounts."),
+        })
+        {
+            var panel = Panel(MobileApp, null, refs: MobileAppRefs());
+            panel.UpdatePullRequests(OtherOrganization(), account, "Fernhill-Labs", state);
+            var window = new Window { Width = 260, Height = 700 - 36 - 52 - 26, Content = new LeftPanelView { DataContext = panel } };
+            window.Show();
+            try
+            {
+                Dispatcher.UIThread.RunJobs();
+                window.UpdateLayout();
+                Dispatcher.UIThread.RunJobs();
+
+                var message = Assert.Single(window.GetVisualDescendants().OfType<Control>(), control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == "PullRequestMessage");
+                Assert.False(message.IsEffectivelyEnabled);
+                var textBlock = message.GetVisualDescendants().OfType<TextBlock>().Single(block => block.Name == "PullRequestMessageText");
+                Assert.Equal((text, TextTrimming.CharacterEllipsis), (textBlock.Text, textBlock.TextTrimming));
+                Assert.Equal(toolTip, ToolTip.GetTip(textBlock));
+                Assert.True(ToolTip.GetShowOnDisabled(textBlock));
+                Assert.Equal([$"\"{text}\" is shortened with an ellipsis."], LayoutAudit.FindClippedText(window, allowShortenedWithToolTip: true, allowScrolledOutOfView: true));
+            }
+            finally
+            {
+                window.Close();
+            }
+        }
     }
 
     [Fact]

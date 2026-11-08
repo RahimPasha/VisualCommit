@@ -143,6 +143,22 @@ public static partial class OperationTexts
             + $"sign out and sign in to {repository} in Settings, Accounts.";
     }
 
+    /// <summary>
+    /// D356's row when the held account needs signing in again (D366; the review before the gate,
+    /// ui-1): <c>In {repo}; the account for {account} needs sign-in</c>.
+    /// </summary>
+    public static string OtherOrganizationNeedsSignIn(string repository, string account) =>
+        $"In {repository}; the account for {account} needs sign-in";
+
+    /// <summary><see cref="OtherOrganizationNeedsSignIn"/>'s tooltip: why nothing is asked, and how to see the requests.</summary>
+    public static string OtherOrganizationNeedsSignInToolTip(string repository, string account)
+    {
+        var azure = HostingTexts.Name(HostingProvider.AzureDevOps);
+        return $"This repository is in the {azure} organization {repository}; the account VisualCommit holds is in {account} "
+            + $"and needs signing in again, so nothing is asked of {azure} for it. To see its {HostingTexts.Requests(HostingProvider.AzureDevOps)}, "
+            + $"sign out and sign in to {repository} in Settings, Accounts.";
+    }
+
     private static string Number(int number) => number.ToString(CultureInfo.InvariantCulture);
 
     public static partial class MenuTexts

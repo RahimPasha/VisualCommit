@@ -59,12 +59,13 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     private IReadOnlyList<CredentialBinding> _bindings = [];
     private AuthorAvatars _avatars = AuthorAvatars.None;
 
-    // On the UI thread: WantsUrlRewrites as last raised, and the listed provider's account (its key
-    // and its login as given) as last raised. While a Changed is delivered, _raising holds the value that
-    // Changed carries (1 wanted, 0 not, -1 none delivered), which WantsUrlRewrites gives then.
+    // On the UI thread: WantsUrlRewrites as last raised, and the listed provider's account (its key,
+    // its login as given and whether it is signed in) as last raised. While a Changed is delivered,
+    // _raising holds the value that Changed carries (1 wanted, 0 not, -1 none delivered), which
+    // WantsUrlRewrites gives then.
     private bool _wantsRewrites;
     private volatile int _raising = -1;
-    private (AccountKey Key, string Login)? _account;
+    private (AccountKey Key, string Login, bool SignedIn)? _account;
     private volatile bool _disposed;
 
     internal RepositoryHosting(HostingSession session, string workingDirectory)
@@ -522,7 +523,8 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
     // Changed posted when any of them differs, or WantsUrlRewrites: a sign-in that changes nothing
     // else (a remote GitHub's only through the user's insteadOf) still starts the tab's rules read;
     // or the listed provider's account, which the tab shows (D356: another organization's account
-    // swapped for a third leaves the state as it was).
+    // swapped for a third leaves the state as it was), and whether it is signed in (D366: it coming to
+    // need sign-in leaves OtherOrganization as it was, yet the row says it; the review before the gate).
     private void Apply(AuthorAvatars? avatars = null)
     {
         var changed = false;
@@ -538,9 +540,9 @@ public sealed partial class RepositoryHosting : IRepositoryHosting
             changed = true;
         }
 
-        var account = _candidate is { } listed && _session.SlotOf(listed.Provider)?.Status.Account is { } held
-            ? (held.Key, held.Login)
-            : ((AccountKey Key, string Login)?)null;
+        var account = _candidate is { } listed && _session.SlotOf(listed.Provider) is { Status.Account: { } held } slot
+            ? (held.Key, held.Login, slot.IsSignedIn)
+            : ((AccountKey Key, string Login, bool SignedIn)?)null;
         if (!Nullable.Equals(account, _account))
         {
             _account = account;

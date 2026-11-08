@@ -3490,6 +3490,20 @@ or settles what it left open:
   to 7a's `GraphTestHost.cs` and `CommitGraphControl.Render.cs`'s `BadgeText` call.
 - Alone (Debug): 31.6 to 44.2 s a method, about 28 s of it preparation; 3.0 to 14.0 s to the last
   picture. 7a's P and G pictures and phase 3's `03a` to `03h` unchanged.
+- Fixed at the review before the gate (ui-1, the lead's texts): a held account needing sign-in
+  (D366) gets `OtherOrganizationNeedsSignIn`, `In {repo}; the account for {account} needs sign-in`,
+  and its tooltip `… {repo}; the account VisualCommit holds is in {account} and needs signing in
+  again, so nothing is asked …`, the rest as 12.2's. 12.2's texts stay for a signed-in one (p08a,
+  p08b, p10d unchanged). `UpdatePullRequests` takes `AccountState accountState = SignedIn` after the
+  login, from `OnHostingChanged`. `RepositoryHosting.Apply` counts the account's signed-in state as a
+  change: a refusal with another provider signed in raised none. Cut at 260, its tooltip whole.
+- Fixed at the review before the gate (the review of ui-1's fix): that row's test in
+  `RepositoryHostingProvidersWiringTests` holds each of its two apps by a `using` and ends each
+  through `End`, as the class's other tests do. The first app, which signs in to GitLab and Azure
+  DevOps, had only a `finally` that disposed it, so its git calls were never tripwired; the second
+  had neither, so a failed assertion left it running on the assembly's shared headless thread. In
+  scratch, a token added to the first app's calls passed before and fails now; a failed assertion
+  after the second start left that app undisposed before and disposes it now.
 
 ## 13. WP-N: a new pull or merge request (part N)
 
