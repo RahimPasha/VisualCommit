@@ -71,7 +71,9 @@ merged) and built on the Windows machine to 2026-11-08. The last commit that cha
 tests is `cb9af6d` (the merge of D394 and D395), 346 commits on top of `a29379f`; the counted round
 ran on the branch at `af9b563` (the default run) and `3dc0887` (the rest), which change only docs
 after it. The Gate commit is `cb9af6d`, the code both passes ran on; every commit after it
-changes docs only, the last one the one that sets the phase to "Awaiting acceptance" (status.md).
+changes docs only, the last one the one that set the phase to "Awaiting acceptance" (status.md on the
+phase's branch). The owner accepted the phase on 2026-11-08 and it is merged into `master` (merge
+commit `3dc7f79`).
 
 Before the merges: L1 `a88b84d` and WP0 `e8a275d` (pushed at `e3a8999`), in the main checkout. The
 33 merges (`git log --oneline --merges a29379f..cb9af6d`): wave 1 WP-F `564dad4`, WP-H `3591dc4`,
@@ -462,8 +464,8 @@ Risks to watch:
 
 ## Waiting on the owner
 
-- **Acceptance of phase 7b**: the whole gate passed on the Gate commit, `cb9af6d`,
-  and the commits after it change only docs. The macOS checklist in the
+- **Acceptance of phase 7b**: given on 2026-11-08; merged into `master` (merge commit `3dc7f79`).
+  The whole gate passed on the Gate commit, `cb9af6d`, and the commits after it change only docs. The macOS checklist in the
   [phase 7b report](../test-reports/phase-7b.md) ("macOS checklist for the owner", seven steps) is the
   owner's, by hand on a Mac, beside 7a's and those of phases 0 to 6.
 - **A sign-in dialog in a bound tab** (plan risk 39), now for three providers: should the broker
