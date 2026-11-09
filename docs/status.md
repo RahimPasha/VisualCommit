@@ -57,6 +57,16 @@ file as of `3dc7f79`'s second parent (`git show 1c2eca3:docs/status.md`).
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
+The run for phase 7b's merge on `master` is
+[42574680274](https://github.com/RahimPasha/VisualCommit/actions/runs/42574680274), for `1a4a555`
+(the merge commit `3dc7f79` and the commit that set phase 7b to "Done"): all five jobs succeeded,
+none failed a test: `windows-latest` 7,892 tests with 4 skipped, 27 min 33 s (Test step 25 min 33 s
+of 70; its keychain step green; "Build the opt-in projects" 18 s), `macos-latest` 7,889 with 3
+skipped, 23 min 47 s (Test step 22 min 49 s; its keychain step green), `ubuntu-latest` 7,889 with 3
+skipped, 8 min 40 s (Test step 6 min 40 s), and the two "bare ubuntu container" jobs 7,889 with 3
+skipped each: Ubuntu's packages 7 min 17 s (Test step 5 min 25 s) and Microsoft's installer 7 min
+57 s (Test step 5 min 51 s), their Secret Service steps green.
+
 The last run on `phase/7b-hosting-azure-gitlab` was
 [42522049151](https://github.com/RahimPasha/VisualCommit/actions/runs/42522049151), for the Gate
 commit's code `cb9af6d` (D394 and D395's merge; the branch at `9b044af`, which changes only docs
