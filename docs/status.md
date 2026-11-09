@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-08
+Last updated: 2026-11-09
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -236,10 +236,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-Wait for the owner's "Start phase 8". The [phase 7b handoff](handoffs/phase-7b.md), "For the next
-phase", says what to reuse, what to do first and which risks to watch. The owner's answers before
-phase 8's design are still to come ("Waiting on the owner", "For phase 8, before its design"), and
-the share of the week's allowance (D241). The phase's branch is `phase/8-release` (Phases above).
+The owner said "Start phase 8" on 2026-11-09 and gave the first answers before its design ("Waiting
+on the owner", "For phase 8, before its design"). No phase branch exists yet. Next: the owner's
+conversation with the lead on some legal and professional points, which the two signing answers
+wait for; then the questions not yet asked; then the split's decision (D397) and phase 8a's start.
+The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
+first and which risks to watch.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -383,6 +385,19 @@ every commit.
   token store with the signing (risk 34); the icons, the branding and the user guide's form; the
   placeholder contrast's move into the accessibility pass (phase 6's question, below); and whether
   the phase is split, as D241 split phase 7. With them, the share of the week's allowance (D241).
+  Answered on 2026-11-09: 61 % of the week's allowance used (it resets on Thursday 2026-11-12 at
+  2:00), and the phase is to be split, 8a the in-app work (the first-run Git check, the
+  accessibility and performance passes, the small fixes, icons, notices and the user guide) and 8b
+  the packaging (installers, auto-update, signing, notarisation, the beta and the full regression
+  against the installed build). The split's decision (D397, amending D241) is still to be written,
+  with the phases' names and branches and CLAUDE.md's counting of phases in the same commit. **On
+  hold at the owner's word**: the Windows code signing and the Apple Developer membership, until
+  the owner has talked through some legal and professional points with the lead. The other
+  questions above have not been asked yet. Found for the two signing questions on 2026-11-09, to
+  be checked again before any choice: Azure Artifact Signing bills from the account's creation and
+  its price could not be read; a Microsoft Q&A answer of March 2026, marked AI-generated, limits
+  new individual sign-ups to the US and Canada; SignPath Foundation signs open source for free
+  after approval and is itself the publisher shown; the Apple Developer Program costs $99 a year.
 - **Phase 7a's acceptance**: given on 2026-10-31; merged into `master` (`019e68a`); its gate ran on
   `a2c312a`. The tab the real-window pass opened on the fake's page was closed by the owner the
   same day (D321). Still open from the phase, below: risk 39's sign-in dialog in a bound tab and
