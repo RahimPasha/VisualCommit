@@ -316,10 +316,10 @@ twice more in a bare Ubuntu container that it sets up with that script.
 | Time scripted checks alone (step times from `artifacts/visual/phase-N/timings/`) | `bash scripts/time-scripted-check.sh "<method filter>" [phase]`, for example `bash scripts/time-scripted-check.sh "*Check_01_commit_menu" 3` (the phase is 7b when left out, which runs `VisualCommit.VisualTests.Phase7b`, and `7a` runs `VisualCommit.VisualTests.Phase7a`; a phase it does not know, `7` among them, exits 2 before anything is built; for phase 6, given as `6`, it runs `VisualCommit.VisualTests.Phase6`, or `VisualCommit.VisualTests.Phase6Look` when the filter names part L, such as `"*Check_L27*"`; for phase 5, given as `5`, it runs `VisualCommit.VisualTests.Phase5Undo` when the filter names part U, such as `"*Check_U16*"`, and `VisualCommit.VisualTests.Phase5` otherwise) |
 | Tests with the watcher's events held back (R8, D262; the lead's lagged runs at a wave's merges) | `VISUALCOMMIT_WATCHER_LAG_MS=1500` in front of a test command: every repository watcher then holds each file-system event for 1.5 s (0 to 10,000 ms; the app logs it at Info). Each phase's design keeps the list of tests the lead runs so: phase 7a's is `docs/phase-7a-design.md` 0.4 (first run at WP1's merge, `a4a388e`, with plain `dotnet test`), phase 7b's `docs/phase-7b-design.md` 0.4 (run through `scripts/heavy-run.sh`, one command at a time), and a later phase's design names its own, with the walk-through and the classes that start the app which that phase adds. For example `VISUALCOMMIT_WATCHER_LAG_MS=1500 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests --filter-class "*Phase2Checks"` |
 | The real keychains' own tests (D270): on Windows and macOS only CI's steps "Keychain (…)" run them, because they write in the machine's real store, so never on the owner's laptop; on Linux the Secret Service's under a private bus with a throwaway keyring, safe on any machine (run so far only in CI's two containers, first on `8b02805`) | The Secret Service's command is under "What to know" below: a table cell cannot hold its pipe (it needs `dbus` and `gnome-keyring`, which `scripts/setup-linux.sh` installs; a container needs `--cap-add=IPC_LOCK`). CI's Windows and macOS steps run `--filter-class "*WindowsTokenStoreRealTests"` with `VISUALCOMMIT_KEYCHAIN_TESTS=windows` and `"*MacKeychainTokenStoreRealTests"` with `macos` |
-| Real-window pass (Windows only) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`: the pass is a whole-project run, so on the laptop it runs under the heavy-run lock (D245) and no other heavy run starts beside it; without the lock it is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (run through the script at phase 7a's gate, 2026-10-31: 72 tests in 31 min 6 s) |
+| Real-window pass (Windows only) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release`: the pass is a whole-project run, so on the laptop it runs under the heavy-run lock (D245) and no other heavy run starts beside it; without the lock it is `dotnet test --project tests/VisualCommit.RealWindowTests -c Release` (run through the script at phase 7b's gate, 2026-11-08: 77 tests in 33 min 35 s; 72 in 31 min 6 s at phase 7a's) |
 | One real-window check alone (Windows only) | `dotnet test --project tests/VisualCommit.RealWindowTests -c Release --filter-method "*<test name>*"`, for example `--filter-method "*Check_S14*"` (run so at phase 6's gate for S14) |
-| A phase's own real-window checks alone (Windows only; D246's two runs) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`: it takes the mouse like the pass and empties `artifacts/visual/phase-7a/real-window/` (first run for D246's two runs at phase 7a's gate, 2026-10-30: 2 min 55 s, 3 min 17 s with the build); phase 7b's: `--filter-class "*Phase7bRealWindowPass"`, which empties `artifacts/visual/phase-7b/real-window/` (five launches, design 14; first run at phase 7b's gate) |
-| The opt-in live command against real GitHub, Azure DevOps and GitLab (Windows only; the owner's sandbox tokens, D250, D260, D346) | `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`, the whole project (a gate's runs, D335); one provider's classes with `--filter-class "*GitHubLiveTests"`, `"*AzureDevOpsLiveTests"` or `"*GitLabLiveTests"` (phase 7b's stage 1 is the last two, `docs/phase-7b-design.md` 15.9). Always run the offline row below first, on the same commit: its failure stops the run with the tokens. GitHub's alone took about a minute with its build (63 s on 2026-10-30, 33 s with the build up to date), and Azure DevOps' and GitLab's classes with stage 2's `Check_3` 91 s together with the build up to date (11 tests in 1 min 26 s, 2026-11-08); its findings in `artifacts/live/github/run.txt`, `artifacts/live/azure-devops/run.txt` and `artifacts/live/gitlab/run.txt`; without the variables every live test fails at once by design (a session started before the owner set them: "What to know") |
+| A phase's own real-window checks alone (Windows only; D246's two runs) | `bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase7aRealWindowPass"`: it takes the mouse like the pass and empties `artifacts/visual/phase-7a/real-window/` (first run for D246's two runs at phase 7a's gate, 2026-10-30: 2 min 55 s, 3 min 17 s with the build); phase 7b's: `--filter-class "*Phase7bRealWindowPass"`, which empties `artifacts/visual/phase-7b/real-window/` (five launches, design 14; first run for D246's two runs at phase 7b's gate, 2026-11-08: 3 min 50 s and 3 min 26 s, 250 s and 214 s with the build and the lock) |
+| The opt-in live command against real GitHub, Azure DevOps and GitLab (Windows only; the owner's sandbox tokens, D250, D260, D346) | `bash scripts/heavy-run.sh --project tests/VisualCommit.LiveHostingTests -c Release`, the whole project (a gate's runs, D335); one provider's classes with `--filter-class "*GitHubLiveTests"`, `"*AzureDevOpsLiveTests"` or `"*GitLabLiveTests"` (phase 7b's stage 1 is the last two, `docs/phase-7b-design.md` 15.9). Always run the offline row below first, on the same commit: its failure stops the run with the tokens. GitHub's alone took about a minute with its build (63 s on 2026-10-30, 33 s with the build up to date), and Azure DevOps' and GitLab's classes with stage 2's `Check_3` 91 s together with the build up to date (11 tests in 1 min 26 s, 2026-11-08); the whole project, the gate's run, 596 tests in 2 min 20 s (146 s with the lock and the build up to date, 2026-11-08); its findings in `artifacts/live/github/run.txt`, `artifacts/live/azure-devops/run.txt` and `artifacts/live/gitlab/run.txt`; without the variables every live test fails at once by design (a session started before the owner set them: "What to know") |
 | The live command's offline safety tests (Windows; no variables, no network) | `dotnet test --project tests/VisualCommit.LiveHostingTests -c Release --filter-class "*LiveSafetyTests" --filter-class "*LiveScreenTests"`: the token search, the request log and D352's guard, the clean-up's selection, and the screen of the Azure DevOps organization's name, GitLab's namespace and addresses (D372, D384), with made-up values, in process (404 tests at phase 7b's stage 1) |
 | Compare pictures with reference pictures (a gate's inspection; needs Python with Pillow and NumPy) | `python scripts/compare-pictures.py <reference folder> artifacts/visual <output folder>`: a difference picture per changed picture and `summary.md`, grouped by the window regions the changes lie in |
 | Prepare a Linux machine: .NET SDK and system libraries | `bash scripts/setup-linux.sh` |
@@ -336,10 +336,10 @@ What to know about them:
 - `global.json` accepts any 10.0 SDK, and its `version` has to stay in the first feature band
   (10.0.1xx): Ubuntu's packages, which a cloud session builds with, never leave that band,
   while the Windows machine and most CI jobs use newer ones.
-- The default tests take about 1 h 10 min on the Windows machine with nothing else running (1 h 12
-  min 18 s at phase 7a's gate on 2026-10-31, rested, 5,952 tests at four projects at once through
-  the script, D343; 56 min 25 s at phase 6's gate on 2026-10-24, 5,037 tests; 43 min 22 s at phase
-  5's, 3,233 tests).
+- The default tests take about 1 h 30 min on the Windows machine with nothing else running (1 h 31
+  min 48 s at phase 7b's gate on 2026-11-08, 7,892 tests at four projects at once through the script,
+  D343; 1 h 12 min 18 s at phase 7a's gate on 2026-10-31, rested, 5,952 tests; 56 min 25 s at phase
+  6's gate on 2026-10-24, 5,037 tests; 43 min 22 s at phase 5's, 3,233 tests).
   Since D343 (phase 7a's gate) the whole run through `scripts/heavy-run.sh` runs at most four of
   the test projects side by side (twelve since phase 7b's walk-through, eleven before); plain `dotnet test` and CI run as many as the machine has
   processors (eight on the laptop). Before that,
@@ -347,22 +347,24 @@ What to know about them:
   and `.Phase6Look`), and the run is bound by the processors,
   which git's processes and the virus scanner keep busy: more tests side by side do not shorten
   it, and other load or a hot laptop lengthens it (a git call took 10 to 15 times as long as alone
-  at phase 6's gate, D237). In phase 7a's counted default run (on `a9d02c1`'s code, 2026-10-31
-  00:51 to 02:06, four projects at once; the report's "Run") the projects ended after:
-  `VisualCommit.Hosting.Tests` 12 min 44 s, phase 7a's walk-through 14 min 2 s, phases 0 to 2's
-  24 min 4 s, phase 6's (`VisualCommit.VisualTests.Phase6`) 30 min 50 s, `VisualCommit.Git.Tests`
-  41 min 5 s, phase 5's (`VisualCommit.VisualTests.Phase5`) 43 min 25 s, part L's walk-through
-  (`VisualCommit.VisualTests.Phase6Look`) 46 min 35 s, phase 4's 58 min 29 s, phase 5's undo
-  walk-through (`VisualCommit.VisualTests.Phase5Undo`) 59 min 0 s, phase 3's 69 min 38 s and
-  `VisualCommit.App.Tests` 72 min 15 s (59 min 31 s of its own). With four at once a project
+  at phase 6's gate, D237). In phase 7b's counted default run (on `cb9af6d`'s code, 2026-11-08
+  14:26 to 15:59, four projects at once; the report's "Run") the projects ended after about: phase
+  7a's walk-through 13 min 42 s, phase 6's (`VisualCommit.VisualTests.Phase6`) 38 min 18 s,
+  `VisualCommit.Hosting.Tests` 53 min 14 s (all of it its own; 12 min 44 s at phase 7a's gate),
+  phase 7b's walk-through 53 min 51 s (15 min 33 s of its own), phases 0 to 2's 65 min 56 s,
+  `VisualCommit.Git.Tests` 69 min 29 s, phase 4's 79 min 0 s, phase 3's 83 min 8 s, phase 5's
+  (`VisualCommit.VisualTests.Phase5`) 85 min 6 s, `VisualCommit.App.Tests` 85 min 59 s (all of it its
+  own), part L's walk-through (`VisualCommit.VisualTests.Phase6Look`) 87 min 0 s and phase 5's undo
+  walk-through (`VisualCommit.VisualTests.Phase5Undo`) 91 min 41 s. With four at once a project
   after the first four starts only when another ends, so these are ends, not each project's own
   time.
-  `dotnet build` at the root takes about 2 minutes on the laptop. At phase 7a's gate (run
-  41190572421, on the gate's commit `a2c312a`) CI's jobs took 24 min 6 s on Windows (its Test
-  step 21 min 48 s), 34 min 11 s on macOS (Test step 32 min 16 s), 6 min 26 s on Linux (Test
-  step 4 min 54 s) and 6 min 28 s and 6 min 6 s in the containers (Test steps 4 min 43 s and
-  4 min 21 s); during phase 7a the Windows Test step took up to 35 min 21 s and macOS's up to
-  37 min 57 s (`docs/plan.md`'s risk 8). The Test steps of Windows, macOS and Linux have a limit of 70 minutes and their jobs
+  `dotnet build` at the root takes about 2 minutes on the laptop. At phase 7b's gate (run
+  42522049151, on `9b044af`, the gate's code `cb9af6d`) CI's jobs took 25 min 42 s on Windows (its
+  Test step 23 min 41 s), 35 min 9 s on macOS (Test step 33 min 9 s), 8 min 28 s on Linux (Test step
+  6 min 23 s) and 7 min 41 s and 8 min 19 s in the containers (Test steps 5 min 28 s and 5 min 51 s);
+  at phase 7a's gate (run 41190572421) 24 min 6 s, 34 min 11 s, 6 min 26 s, 6 min 28 s and 6 min 6 s;
+  during phase 7b the Windows Test step took up to 41 min 6 s and macOS's up to 46 min 21 s
+  (`docs/plan.md`'s risk 8). The Test steps of Windows, macOS and Linux have a limit of 70 minutes and their jobs
   80 (D377, amending D232); the containers' limits stay (14 and 25). The lead raises a limit when a
   Test step passes four fifths of it, 56 minutes, or 11 min 12 s in a container, and records it,
   but only at a merge before the counted round: no CI limit changes after the counted round's
@@ -408,7 +410,7 @@ What to know about them:
   (`tr -d '\r' < docs/test-reports/phase-N-pictures.sha256 | grep '/scripted/' | sha256sum -c --quiet`
   prints nothing); it writes the list again after that pass.
 - The real-window pass is Windows-only and is not part of `dotnet test` at the root. It opens the
-  app on the desktop and moves the real mouse for about 31 minutes (phases 0 to 7a; 31 min 6 s at phase 7a's gate, 27 min 39 s for phases 0 to 6 at phase 6's): tell the
+  app on the desktop and moves the real mouse for about 34 minutes (phases 0 to 7b; 33 min 35 s at phase 7b's gate, 31 min 6 s for phases 0 to 7a at phase 7a's): tell the
   owner before starting it, and run it only as part of the gate. It needs an unlocked desktop,
   Windows' high contrast off and the scripted screenshots, so run `dotnet test` first. The command builds the app and the
   pass in Release; do not add `--no-build`: the solution leaves the pass's project out, so
@@ -423,7 +425,8 @@ What to know about them:
   owner's default browser, on the fake's page (D321); the owner closes it before the next run of
   the pass. The part adds about 3 minutes (2 min 55 s alone in D246's second run). Run the pass
   rested and away from the night's scheduled tasks of other programs: at phase 7a's gate a pass at
-  02:18 measured Q1 at 2,456 ms while they ran, and 1,400 ms an hour later (plan.md's risk 10).
+  02:18 measured Q1 at 2,456 ms while they ran, and 1,400 ms an hour later; at phase 7b's, started
+  straight after the default run without a rest, 1,827 ms (plan.md's risk 10).
 - Phase 7b's walk-through serves its three fakes, of Azure DevOps, GitLab and its own of GitHub, on
   ports 47397, 47398 and 47399, each falling back to a free port when its own is taken (D363, D265's
   fallback); 47396 stays reserved. Every other test uses port 0 or a fake in process.
