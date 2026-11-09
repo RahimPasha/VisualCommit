@@ -36,8 +36,8 @@ run of the offline classes alone on the same commit, which is named too. Its run
 during the phase; at the gate, one before the gate's pictures, whose corrections to the fakes are
 committed before the passes, and one on the counted round, after the real-window pass and the
 list of pictures. The next run overwrites run.txt, so each run's copy is kept outside the
-repository and named here. The tokens, the owner's addresses and the Azure DevOps organization's
-name are written here in no form (D346, D352).
+repository and named here. The tokens, the owner's addresses, the Azure DevOps organization's
+name and GitLab's namespace are written here in no form (D346, D352, D384).
 
 ## Checks
 

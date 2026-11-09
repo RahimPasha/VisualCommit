@@ -17,7 +17,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 5. History, traceability and undo | Done | `phase/5-history` | [phase-5](handoffs/phase-5.md) | [phase-5](test-reports/phase-5.md) |
 | 6. Multi-repo and productivity | Done | `phase/6-multi-repo` | [phase-6](handoffs/phase-6.md) | [phase-6](test-reports/phase-6.md) |
 | 7a. Hosting foundation and GitHub | Done | `phase/7a-hosting-github` | [phase-7a](handoffs/phase-7a.md) | [phase-7a](test-reports/phase-7a.md) |
-| 7b. Azure DevOps and GitLab | In progress | `phase/7b-hosting-azure-gitlab` | | |
+| 7b. Azure DevOps and GitLab | Awaiting acceptance | `phase/7b-hosting-azure-gitlab` | [phase-7b](handoffs/phase-7b.md) | [phase-7b](test-reports/phase-7b.md) |
 | 8. Public release | Not started | `phase/8-release` | | |
 
 States: Not started, In progress, Blocked (cannot continue or close without the owner, or without
@@ -26,9 +26,10 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-Phase 7b, Azure DevOps and GitLab: in progress since 2026-10-31, on `phase/7b-hosting-azure-gitlab`,
-made from `master` at `a29379f`. Its design is `docs/phase-7b-design.md`, its report
-`docs/test-reports/phase-7b.md`.
+Phase 7b, Azure DevOps and GitLab: awaiting acceptance since 2026-11-08, when the whole gate
+passed; built from 2026-10-31 on `phase/7b-hosting-azure-gitlab`, made from `master` at `a29379f`.
+Its design is `docs/phase-7b-design.md`, its report `docs/test-reports/phase-7b.md`, its handoff
+`docs/handoffs/phase-7b.md`.
 
 Phase 7a was accepted by the owner on 2026-10-31 and merged into `master` (merge
 commit `019e68a`); its gate ran on `a2c312a`. Phase 6 was accepted on 2026-10-24 (merge commit
@@ -37,7 +38,11 @@ commit `019e68a`); its gate ran on `a2c312a`. Phase 6 was accepted on 2026-10-24
 `e039070`), phase 1 on 2026-10-10 (merge commit `b5eb1ed`) and phase 0 on 2026-10-06 (merge commit
 `b5f4723`). Phase 7b is the second half of phase 7 (D241).
 
-Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
+Gate commit: `cb9af6d`, the merge of D394 and D395, whose code both passes of the gate ran on: the
+default run with the branch at `af9b563` and the real-window pass, the list of pictures and the live
+command at `3dc0887`, both of which change only docs after it (`git diff --stat cb9af6d 3dc0887 -- .
+':(exclude)docs' ':(exclude)*.md'` prints nothing). Every commit after it changes docs only. When a
+phase is set to "Awaiting acceptance", this line names the commit
 that both passes of the gate ran on (or, by D246, the real-window pass's commit when it changes
 only `tests/VisualCommit.RealWindowTests` after the commit the default run ran on); "Phase N accepted" checks that
 nothing but docs changed after it.
@@ -214,15 +219,43 @@ Closing (`CLAUDE.md`, "Closing a phase"):
   reviewed, its 8 findings applied. (2026-11-08. Week: share not read.)
 - [x] 21. `docs/handoffs/phase-7b.md` written from the template; reviewed as the session that starts
   phase 8 would read it, its 13 findings applied. (2026-11-08. Week: share not read.)
-- [ ] 22. Cold-read check by a fresh agent; every gap fixed.
-- [ ] 23. The CI run of the gate's commit read, with each job's result.
-- [ ] 24. `docs/status.md`: links, the CI run, the "Gate commit", and "Awaiting acceptance" only if
-  the whole gate passed; the owner told what passed and what needs a decision.
+- [x] 22. Cold-read check by a fresh agent; every gap fixed. Two fresh Opus agents, given only the
+  repository and told to assume 7b accepted and merged, one asked chiefly how to build, run and test,
+  the other how to begin phase 8, found 14 and 17 gaps, 22 distinct. Fixed: CLAUDE.md's
+  step 1 would have pushed the `backup/` branches that must stay local (D396); the Docs map lacked
+  7b's design; the README and `cloud-sessions.md` still described GitHub alone; pointers into this
+  file's checklist, Notes and CI section, which acceptance removes from `master`, now go to the
+  branch's copy (plan.md's Workflow says how); the decision numbers, sizes, the allowance and the Mac
+  list below; the handoff's risks, questions, branch tips and the inspection script's method; small
+  wording. Left: `VisualCommit.slnx`'s comment, for phase 8's first code commit (a change after the
+  Gate commit would show in the acceptance check; the handoff's Known issues), and a Commands row for
+  running the app isolated, since a row is added only once its command has worked. (2026-11-08. Week:
+  share not read.) Three Opus verifiers then checked the fixes, the status's readiness for acceptance
+  and D396 against the files and GitHub; their findings, all minor or misleading wording, are
+  applied (D396's clause reordered so that step 1's fallback to `master` is reached).
+- [x] 23. The CI run of the gate's commit read, with each job's result: 42522049151 on `9b044af`,
+  `cb9af6d`'s code, all five jobs green (CI section). The pushes after it change only docs and start
+  no run. (2026-11-08.)
+- [x] 24. `docs/status.md`: links, the CI run, the "Gate commit", and "Awaiting acceptance" only if
+  the whole gate passed; the owner told what passed and what needs a decision. (2026-11-08. Week:
+  share not read.)
 
 ### CI
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
+
+Phase 7b's run for the gate's code, the Gate commit `cb9af6d` (D394 and D395's merge; the branch at
+`9b044af`, which changes only docs after it), is
+[42522049151](https://github.com/RahimPasha/VisualCommit/actions/runs/42522049151): all five jobs
+succeeded, none failed a test: `windows-latest` (git 2.56.0.windows.4) 7,892 tests with 4 skipped, 25
+min 42 s (Test step 23 min 41 s of 70; its keychain step green; "Build the opt-in projects" 19 s),
+`macos-latest` (2.56.0) 7,889 with 3 skipped, 35 min 9 s (Test step 33 min 9 s; its keychain step
+green), `ubuntu-latest` (2.56.0, image `ubuntu-26.04`) 7,889 with 3 skipped, 8 min 28 s (Test step 6
+min 23 s), and the two "bare ubuntu container" jobs (2.43.0) 7,889 with 3 skipped each: Ubuntu's
+packages (SDK 10.0.114) 7 min 41 s (Test step 5 min 28 s) and Microsoft's installer (SDK 10.0.403) 8
+min 19 s (Test step 5 min 51 s), their Secret Service steps green. Every Test step is under four
+fifths of its limit (D377). The commits after `9b044af` change only docs and started no run.
 
 Phase 7b's runs on `phase/7b-hosting-azure-gitlab` so far, every job green, none failed a test (each
 Test step against four fifths of its limit, 56 of 70 minutes and 11 min 12 s of the containers' 14;
@@ -614,18 +647,13 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-The gate (step 18) passed on `cb9af6d`'s code, the Gate commit: the counted round's default run
-7,888 of 7,892 tests with 4 skipped, the real-window pass 77 of 77 (Q1 1,827 ms), the list of 1,551
-pictures (`docs/test-reports/phase-7b-pictures.sha256`), the live command 596 of 596 with nothing new
-for the fakes, and the inspection: 1,594 of 1,596 pictures passed and the 2 in doubt (phase 5's
-`a2g`, two reads started together in another order) were judged no defect (the report's "Run", "Live
-command" and "Other platforms"). CI's run on that code, 42522049151 on `9b044af`, is green in all five
-jobs (CI section). Closing steps 19 to 21 are done: `docs/architecture.md`, `docs/plan.md` and
-`docs/handoffs/phase-7b.md`. Next: the cold-read check (step 22), a fresh agent given only the
-repository, told to assume phase 7b accepted and merged; every gap it hits fixed in the docs. Then
-step 23 (CI 42522049151 recorded with each job's result) and step 24 (this file: the links, the Gate
-commit, "Awaiting acceptance"), and the owner told what passed and what needs a decision. The
-history of the build's steps is in the Progress items above, the Notes below and the CI section.
+Phase 7b is "Awaiting acceptance": wait for the owner's "Phase 7b accepted", then do what
+CLAUDE.md's table says for it (the merge into `master` with `--no-ff`, "Done", this file reset as
+the earlier phases' acceptances reset it, and the CI run of the push of `master` recorded). The
+phase's build and gate are recorded in the Progress items' notes above, the Notes below, the CI
+section, `docs/phase-7b-design.md`'s As built notes and section 16, and the report's "Run", "Live
+command" and "Found by the gate"; what phase 8 needs first is in the
+[handoff](handoffs/phase-7b.md), "For the next phase", and "Waiting on the owner" below.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.
@@ -1481,6 +1509,20 @@ every commit.
 
 ## Waiting on the owner
 
+- **Phase 7b's acceptance**: the gate passed on 2026-11-08 on the Gate commit `cb9af6d` (the
+  report's "Run"; the handoff's "State of the repo"); "Phase 7b accepted" merges the branch into
+  `master`. The real-window pass opened the default browser once, on the fake of GitHub's page
+  (phase 7a's part, P15, D321): close that tab before the next run of the pass; no 7b step opens
+  it. The live command closed and deleted what it made in the three sandboxes. Before a later live run: GitHub's token expires on 2026-11-29, Azure
+  DevOps' and GitLab's on 2026-12-04 (below, "The Azure DevOps sandbox's organization").
+- **For phase 8, before its design** (the 7b handoff's "For the next phase", "Do first", step 2;
+  each answer becomes a decision, D397 on, carried into plan.md): the code-signing certificate and
+  the Apple Developer membership (risk 6); the installers per platform and where the installers,
+  the updates and the beta are published (a release on GitHub is the owner's to allow); whether to
+  bundle git on Windows and the git versions the release supports (risks 15, 31, 35); the macOS
+  token store with the signing (risk 34); the icons, the branding and the user guide's form; the
+  placeholder contrast's move into the accessibility pass (phase 6's question, below); and whether
+  the phase is split, as D241 split phase 7. With them, the share of the week's allowance (D241).
 - **Phase 7a's acceptance**: given on 2026-10-31; merged into `master` (`019e68a`); its gate ran on
   `a2c312a`. The tab the real-window pass opened on the fake's page was closed by the owner the
   same day (D321). Still open from the phase, below: risk 39's sign-in dialog in a bound tab and
@@ -1544,7 +1586,7 @@ every commit.
   (D352, which sets D260's reason aside for that token alone); the live command keeps to the
   sandbox by its own guard, the token's scopes and a short expiry, as the design names them. The
   owner makes the Azure DevOps token, the GitLab account and its token when the design names their
-  scopes and variables (step 16). The design names them in 15.8 (D364): the Azure DevOps project
+  scopes and variables (phase 7b's status step 16). The design names them in 15.8 (D364): the Azure DevOps project
   and token, the GitLab account, project and fine-grained token, and the four Windows user
   variables `VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN`, `…_AZURE_DEVOPS_REPO`, `…_GITLAB_TOKEN` and
   `…_GITLAB_REPO`, then VS Code quit and started again, or, without the restart, the lead gives
@@ -1581,7 +1623,7 @@ every commit.
   fake's own test now sends the measured request, the report records the run under "Live command") and
   merged at `20e529e`. The run's notes are outside the
   repository, in `D:/Projects/Personal/phase7b-work/live/azure-devops-check1b-2026-11-07.txt`.
-- **Decisions made during phase 7a without the owner**, which the owner may want to look at: the
+- **Decisions made during phases 7a and 7b without the owner**, which the owner may want to look at: the
   design's D265 to D338 (after its reviews, with the owner's answers of 2026-10-29); D339 to D341
   (the review before the gate and the runs after it: the avatars' lookup per author, git's
   `proactiveAuth` and the netrc, D237's 60 s for every wait); D342 (the live run's corrections of
@@ -1603,7 +1645,9 @@ every commit.
   before the gate's rulings) and D393 (the live command's GitLab guard admits the sandbox project alone,
   the owner's choice), D394 (the fake of GitHub answers a commit it lacks beside `author` 404, as
   github.com did at the gate's first live run) and D395 (a lookup's 404 in a repository not known to be
-  readable is checked against its read; the owner's approval). The next decision number is D396.
+  readable is checked against its read; the owner's approval), and D396 the cold read's at the close
+  (CLAUDE.md's step 1 never checks out or pushes a local `wip/...` or `backup/...` branch). The next
+  decision number is D397.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -1630,7 +1674,7 @@ every commit.
   which the lead recommends: the token then reaches the sandbox alone and the guard refuses the rest
   even if the account gains a project. No answer is needed before the review before the gate; one is
   before the gate's live runs.
-- **A git that loses the URL's user** (Notes, "D388's test on macOS"; D389, plan risk 43, design
+- **A git that loses the URL's user** (the Notes of phase 7b's `status.md`, "D388's test on macOS"; D389, plan risk 43, design
   16.3's bullet on D275; no answer needed for the gate): git 2.56.0 without git's own fix `76524c2604bc`, over a
   curl that strips the user from its effective URL (curl 8.23.0, CI's macOS Homebrew git today),
   asks for credentials without the URL's user, so the broker's refusal of another user (D275) does
@@ -1644,33 +1688,34 @@ every commit.
   credential-view drop; or read the URL rules at every bound operation, amending D388)? The lead
   recommends leaving it as a recorded risk until a report, since the token never leaves the bound
   host.
-- **The start reading has grown** (the cold read at phase 7a's close): CLAUDE.md's step 4 reads
-  `architecture.md` (about 622 KB, about 429 KB at 7a's start) and `decisions.md` (about 262 KB)
-  whole. The review before phase 7 set aside P6 (start reading by index, `architecture.md` split by
-  area) with "reconsider it if the start reading keeps growing" (review-before-phase-7.md, section
-  on the proposals not taken); until the owner decides, the 7a handoff's "Do first" names the
-  sections 7b needs.
-- **The weekly allowance** (D241): a session cannot read `/usage` itself, so phase 7a's checkpoints
-  record "share not read"; for 7b the owner gave the share before the start (48 % used on
-  2026-10-31) and lets the phase use the rest of that week (D344): the session asks for the share
-  before each stage to record it, but until the reset of 2026-11-05 no stage waits for it
-  (plan.md's "Workflow"). For the week from 2026-11-05 the owner gives the phase about all of it
-  (the owner's answer of 2026-11-05).
+- **The start reading has grown** (the cold reads at phase 7a's and 7b's close): CLAUDE.md's step 4
+  reads `architecture.md` (about 836 KB at 7b's close, 622 KB at 7a's, 429 KB at 7a's start) and
+  `decisions.md` (about 353 KB, 262 KB at 7a's close) whole. The review before phase 7 set aside P6
+  (start reading by index, `architecture.md` split by area) with "reconsider it if the start reading
+  keeps growing" (review-before-phase-7.md, section on the proposals not taken); until the owner
+  decides, the 7b handoff's "Do first", step 1, names the sections phase 8 needs (about 240 KB).
+- **The weekly allowance** (D241): a session cannot read `/usage` itself, so phase 7a's and 7b's
+  checkpoints record "share not read". For 7b the owner gave the share before the start (48 % used on
+  2026-10-31) and let the phase use the rest of that week (D344), then gave it about all of the week
+  from 2026-11-05 (the owner's answer of 2026-11-05). From phase 8, D241's rule applies unless the
+  owner says otherwise: the session asks for the share at the phase's start and before each stage,
+  and records it (plan.md's "Workflow").
 - **The live command's sandbox for GitHub (D250)**: the private `RahimPasha/visualcommit-sandbox`
   and a fine-grained token for it alone, expiring 2026-11-29, in the two Windows user variables
   `VISUALCOMMIT_LIVE_GITHUB_TOKEN` and `VISUALCOMMIT_LIVE_GITHUB_REPO` (set on 2026-10-30; the
-  live command passed 80 of 80 at status step 16 and 112 of 112 twice at the gate). A gate after
-  2026-11-29 needs a new token, made as design 14.6 says.
+  live command passed 80 of 80 at phase 7a's status step 16 and 112 of 112 twice at 7a's gate, and
+  GitHub's class passed in both of 7b's gate runs). A gate after 2026-11-29 needs a new token, made
+  as phase 7a's design 14.6 says.
 - **D240's connectors switch** (Notes): `ENABLE_CLAUDEAI_MCP_SERVERS=false` in
   `.claude/settings.local.json` did not keep the claude.ai connectors out of this session. Turning
   them off another way (the variable set in Windows' user environment before VS Code starts, or
   the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D386 on, since D239 to D248 went to the review before
+  owner"; each answer becomes a decision, D397 on, since D239 to D248 went to the review before
   phase 7, D249 to D264 to phase 7a's start, D265 to D338 to its design, D339 to D343 to its build
-  and gate D344 to D356 to 7b's start and its research, D357 to D378 to its design and D379 on to its
-  build): design 17.5's reading of "ten repos can be checked and
+  and gate, D344 to D356 to 7b's start and its research, D357 to D378 to its design, D379 to D395 to
+  its build, review and gate, and D396 to its close): design 17.5's reading of "ten repos can be checked and
   updated from one screen" (one dashboard of the ten, one Fetch all and one Pull all deciding every
   row); the report's by-hand System step (switch Windows' app mode while the app runs with System
   chosen, D224); and the move of the text boxes' placeholder contrast (Fluent's watermark opacity,
@@ -1701,14 +1746,14 @@ every commit.
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D386 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D397 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,
   N4, S11 and T8/P12's trial of a lower effort level. The review's section 5, step 11 (one default
   run re-measured on a quiet laptop) was made on 2026-10-28 and failed on load, and so did S10's
   run with at most 5 projects at once (Notes); phase 7a's baseline, after the reboot, failed in G23
-  alone (step 2), and the owner chose to split the check (D264).
+  alone (phase 7a's status step 2), and the owner chose to split the check (D264).
 - **Git Credential Manager since git 2.56** (2026-10-28): the new install's system configuration
   sets `credential.helper=manager`, and a `git push` from Claude Code waited on its sign-in window.
   The pushes of 2026-10-28 used `gh`'s login for that command only
@@ -1746,8 +1791,9 @@ every commit.
 - Settled on 2026-10-12: the working-changes row's dashed line crossing another branch's node
   (06f) is left for now; case-only branch renames on Windows and macOS stay refused (D131);
   auto-fetch gets no ssh timeout, only Cancel by hand (D125).
-- When you have a Mac at hand: the eight-step checklist at the end of the
-  [phase 7a test report](test-reports/phase-7a.md), the seven-step one at the end of the
+- When you have a Mac at hand: the seven-step checklist in the
+  [phase 7b test report](test-reports/phase-7b.md)'s "macOS checklist for the owner", the eight-step
+  one at the end of the [phase 7a test report](test-reports/phase-7a.md), the seven-step one at the end of the
   [phase 6 test report](test-reports/phase-6.md), the thirteen-step one at the end of the
   [phase 5 test report](test-reports/phase-5.md), the eight-step one at the end of the
   [phase 4 test report](test-reports/phase-4.md), the eleven-step one at the end of the

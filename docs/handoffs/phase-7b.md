@@ -9,7 +9,7 @@ in [decisions.md](../decisions.md): D344 to D351 are the owner's answers before 
 answer at it, D353 to D356 the owner's rulings on the research's questions of taste, D357 to D372 the
 design's, D367's amendment and D373 to D376 the owner's answers on the design, D377 and D378 its
 review's, D379 to D390 the build's, D391 and D392 the review before the gate's, D393 the owner's choice
-before the gate's live runs, and D394 and D395 the gate's. The design is
+before the gate's live runs, D394 and D395 the gate's, and D396 the close's cold-read check. The design is
 [phase-7b-design.md](../phase-7b-design.md): section 0 the scope, the packages, the parts, the cost in
 time and the earlier pictures, 1 the shared contracts, 2 to 15 one brief per work package with its "As
 built" notes and the lead's rulings, 16 the open points and how each was settled ("design N.N" below).
@@ -224,12 +224,14 @@ As in phase 7a's handoff, with 7b's numbers:
    rest the laptop (risk 10).
 7. **Comparison and inspection** (D247):
    `python scripts/compare-pictures.py D:/Projects/Personal/gate7b-reference <round copy>/visual <folder>`.
-   A script outside the repo then counted each changed picture's pixels outside the window's two bottom
-   corners, where the desktop shows through the rounded corners (209 real-window files changed only
-   there), and made side-by-side sheets of the 111 changed beyond them. Its result for each picture is
-   the `status` in the round's copy's `inspect/batch-*.json` (the corners taken as 16×16 squares), and
-   its sheets are in `inspect/sheets/`; the script itself is the round's copy's
-   `inspect/inspect_prep.py` (`CORNER = 16`), not in the repo. 19 Opus inspectors: 7b's 93
+   A script outside the repo, the round's copy's `inspect/inspect_prep.py`, then compared each changed
+   picture with its reference pixel by pixel. One whose changed pixels all lie in two 16×16 squares at
+   the window's bottom corners, where the desktop shows through the rounded corners (209 real-window
+   files), is marked changed only there; for each of the 111 changed beyond them it made a sheet of
+   the capture, the reference and the changed pixels outside the corners in red, cropped to their box.
+   Each picture's result is the `status` in the round's copy's `inspect/batch-*.json`, beside the
+   batch it went to, and the sheets are in `inspect/sheets/`; CI's pictures got the share of pixels
+   that differ from their Windows twins. 19 Opus inspectors: 7b's 93
    scripted pictures in four batches by part against the report, its 26 real-window files in one,
    phases 0 to 7a's 1,057 scripted pictures in nine and their 375 real-window files in four, and CI's
    45 (`gh run download <run id> -D <folder>`) in one; three skeptics for each picture in doubt.
@@ -318,6 +320,7 @@ Rules worth keeping:
 | A network operation inside D290's window binds once the URL rules are known (extends D332); D278's checks by the measured git; a no-call step sets aside only the watchers' refreshes | D388 to D390 |
 | A clone's bindings read git's conditional includes; the review before the gate's rulings (phase 2's commit boxes to phase 8, risk 44) | D391, D392 |
 | The fake of GitHub answers a commit it lacks beside `author` 404 (amends D342 (3)); a lookup's 404 in a repository not known to be readable is checked against its read (amends D339 and D342 (2), the owner's approval) | D394, D395 |
+| CLAUDE.md's start of a session never checks out or pushes a local `wip/...` or `backup/...` branch (the close's cold read) | D396 |
 
 ## Known issues
 
@@ -337,6 +340,7 @@ Rules worth keeping:
 | Q1 1,827 ms of 2,000 in the counted pass, which started straight after the default run | A hot laptop fails a gate by itself | plan risk 10 |
 | Pictures that vary by nature, besides 7a's: phase 5's `a2g` (two reads that start together), the fakes' fallback port where a port is taken (7a's `b06a` and `a09b`), anti-aliasing forms in phase 6's `l27e` and phase 3's `15b3` | Ordinary: an inspection expects them | the report's "Run"; the Notes of status.md on the phase's branch |
 | Leftovers at this writing: seven worktrees under `D:/Projects/Personal/vc-wt/`, 24 `wip/p7b-*` branches (all merged but `wip/p7b-palette-growth`), two local `backup/*` branches with WP-A's commits from before the token-shaped literals were split (never to be pushed), and the empty folder `D:/Projects/Personal/vc-wt/p7b-live-fix/src/VisualCommit.App` | Disk and clutter | For the Do first below |
+| `VisualCommit.slnx`'s comment on the live project still says it acts on the owner's GitHub account; since 7b it acts on three services (D346) | None; a change to it after the Gate commit would show in the acceptance check, so it waits | Phase 8's first code commit |
 | Phase 7a's known issues still stand, but for `scripts/heavy-run.sh`'s comment (L1); its row on GitHub's empty 500 for an unknown commit now reads as plan risk 38 says, since github.com answers 404 (D394, D395) | As there | [phase 7a's handoff](phase-7a.md) |
 
 ## Things that cost time
@@ -409,16 +413,16 @@ Reuse:
 Do first:
 
 1. The start-of-session steps. CLAUDE.md's step 4 names `architecture.md` and `decisions.md` whole
-   (about 830 and 350 KB; whether to read them by an index instead is the owner's, Waiting on the
+   (about 836 and 353 KB; whether to read them by an index instead is the owner's, Waiting on the
    owner). What phase 8 needs of them, about 240 KB: in `architecture.md` "Design", "Solution layout",
    "As built (after phase 7b)", "Start-up and composition", "Prompts and credentials" with "The
    account's credentials in git", "Keyboard shortcuts", "Tokens and the keychains", "Q1 measurements",
    "Settings, session, log and data folder", "Shell and views", "Theme", "Conventions", "Tests", "CI"
    and "Package versions"; in `decisions.md` D241 to D248 and the decisions that plan.md's phase 8
    cites (D82, D198, D239, D255, D340 and D392 among them), any other by its number where a
-   section cites it. Then plan.md's phase 8 and its risks 1, 6, 9, 14, 15, 34, 35 and 41, with 8, 10,
-   12, 18, 26, 42, 43 and 46; the Known issues above and 7a's and 6's; CI's run on `master` after the
-   merge. On the Windows machine push in the form CLAUDE.md's Commands give until the owner settles Git
+   section cites it. Then plan.md's phase 8 and its risks 1, 6, 9, 14, 15, 31, 34, 35 and 41, with 3,
+   8, 10, 12, 18, 26, 27, 42, 43 and 46, and 38 and 44, which name phase 8 unless a report comes
+   first; the Known issues above and 7a's and 6's; CI's run on `master` after the merge. On the Windows machine push in the form CLAUDE.md's Commands give until the owner settles Git
    Credential Manager.
 2. Before the design, the owner's answers, each recorded as a decision and carried into plan.md:
    the code-signing certificate and the Apple Developer membership, which cost money (risk 6); the
@@ -426,10 +430,14 @@ Do first:
    release on GitHub is the owner's to allow, CLAUDE.md's Rules); whether to bundle git on Windows,
    and the git versions the release supports, with risk 35's netrc note and risk 15's OpenSSH; the
    macOS token store with the signing (risk 34); the icons, the branding and the user guide's form;
-   and whether the phase is split (D241's rule).
+   the confirmation that the text boxes' placeholder contrast moves into the accessibility pass
+   (plan.md's phase 8, "for the owner to confirm"; the phase 6 handoff's Waiting on the owner); and
+   whether the phase is split as D241 split phase 7, by a decision that amends D241, names the
+   phases and their branches and changes CLAUDE.md's counting of phases in the same commit.
 3. The leftovers in Known issues, if the closing session did not remove them: the worktrees, the
-   merged `wip/p7b-*` branches and the empty folder; `wip/p7b-palette-growth` and the two `backup/*`
-   branches stay local or go, never pushed. Then fsmonitor daemons and room on C: and D:. A baseline
+   merged `wip/p7b-*` branches and the empty folder; `wip/p7b-palette-growth` (at `c90b862`) and the
+   two `backup/*` branches (`backup/phase-before-split` at `d3a5780`, `backup/p7b-accounts-before-split`
+   at `bf6383c`) stay local or go, never pushed; CLAUDE.md's step 1 leaves them out (D396). Then fsmonitor daemons and room on C: and D:. A baseline
    whole run only as D245 allows.
 4. The design: 7b's is the model (section 0 with the lagged list in 0.4, the cost in 0.6 and the
    earlier pictures in 0.7, section 1's contracts, then a brief per package). Estimate what the phase
@@ -455,9 +463,9 @@ Risks to watch:
 ## Waiting on the owner
 
 - **Acceptance of phase 7b**: the whole gate passed on the Gate commit, `cb9af6d`,
-  and the commits after it change only docs. The macOS checklist at the end of the
-  [phase 7b report](../test-reports/phase-7b.md) is the owner's, by hand on a Mac, beside 7a's and
-  those of phases 0 to 6.
+  and the commits after it change only docs. The macOS checklist in the
+  [phase 7b report](../test-reports/phase-7b.md) ("macOS checklist for the owner", seven steps) is the
+  owner's, by hand on a Mac, beside 7a's and those of phases 0 to 6.
 - **A sign-in dialog in a bound tab** (plan risk 39), now for three providers: should the broker
   refuse such a prompt without a dialog, from what the session knows (amending D273 and D340)?
 - **The banner's brief torn state** (plan risk 40): leave it, or read the in-progress files before and
@@ -470,8 +478,9 @@ Risks to watch:
   refinements of D345, D346 and D350 after the owner's acceptance; the design's D357 to D372 (after
   its review, with the owner's answers of 2026-11-01); D377 and D378 of its review; D379 to D392, the
   lead's rulings in the build and the review before the gate, D385 among them from stage 1's
-  measurement; D394 from the gate (D393 is the owner's choice, D395 the owner's approval); and the
-  lead's rulings in the design's As built notes and the report's open points.
+  measurement; D394 from the gate (D393 is the owner's choice, D395 the owner's approval); D396 from
+  the close's cold read; and the lead's rulings in the design's As built notes and the report's open
+  points.
 - **For phase 8**: the questions under "Do first", step 2.
 - **Still open from earlier** (status.md's "Waiting on the owner" gives each): phase 6's three
   questions asked at its acceptance; D240's connectors switch; the review before phase 7's questions
