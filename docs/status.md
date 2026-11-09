@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-01
+Last updated: 2026-11-08
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -202,10 +202,18 @@ Closing (`CLAUDE.md`, "Closing a phase"):
   walk-through's pictures on this machine, then the new real-window checks twice on their own with
   the owner told and present (D246); `dotnet test` and the real-window pass on one commit; the live
   command on the counted round; every picture inspected, in batches of at most about 150 (D247);
-  `docs/test-reports/phase-7b.md` completed.
-- [ ] 19. `docs/architecture.md` describes what is built.
-- [ ] 20. `docs/plan.md`: what 7b did not deliver moved to the phase that owns it; risks updated.
-- [ ] 21. `docs/handoffs/phase-7b.md` written from the template.
+  `docs/test-reports/phase-7b.md` completed. Passed on `cb9af6d`'s code (the report's "Run", "Live
+  command" and "Other platforms"). (2026-11-08. Week: share not read.)
+- [x] 19. `docs/architecture.md` describes what is built: drafted by area by six Opus writers
+  (the hosting core, the two providers, git and the credentials, the screens, the tests, the live
+  command with CI and the layout), integrated, reviewed against the code at `cb9af6d` by six Opus
+  reviewers whose 33 findings were all applied (the session's workflow `p7b-closing-docs`).
+  (2026-11-08. Week: share not read.)
+- [x] 20. `docs/plan.md`: what 7b did not deliver moved to the phase that owns it; risks updated.
+  Phase 7b's Outcome, phase 8's items and the backlog, the risks it touched updated and 45 to 47 new;
+  reviewed, its 8 findings applied. (2026-11-08. Week: share not read.)
+- [x] 21. `docs/handoffs/phase-7b.md` written from the template; reviewed as the session that starts
+  phase 8 would read it, its 13 findings applied. (2026-11-08. Week: share not read.)
 - [ ] 22. Cold-read check by a fresh agent; every gap fixed.
 - [ ] 23. The CI run of the gate's commit read, with each job's result.
 - [ ] 24. `docs/status.md`: links, the CI run, the "Gate commit", and "Awaiting acceptance" only if
@@ -606,81 +614,18 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 
 ### Next step
 
-WP-N (design 13, part N) is merged at `a6952d2`, with the lead's rulings on its hunt 3 applied,
-reviewed and verified (D388 recorded at `cf82d50`; Notes, "WP-N's build"); its diff carries the
-owner's identity alone and none of the sandboxes' names or tokens. CI's run on `8cb5ecc`
-(42386428809) failed two older tests (CI section); the watcher's dispose test was a race in the
-test, fixed with one product fix and merged at `abc6df7` (Notes, "The watcher's dispose test on
-CI"); its CI run, 42434720040 on `07c0445`, is green in all five jobs, and the WP-N merge is
-pushed after it. 13.9's runs on `cf82d50` are done (Notes, "WP-N's merge runs"): the whole
-default run and the two runs alone passed, the lagged list but part P's `Check_P11` under the lag
-(an exact budget of 0 that a late whole refresh broke). CI's run on the merge, 42437572741, failed
-D388's test on macOS alone: git 2.56.0 over curl 8.23.0 loses the URL's user (Notes, "D388's test
-on macOS"). Both are fixed and merged at `98cdd86` (D389, D390; plan risk 43), and its classes pass
-plain and lagged; 13.9's picture comparison and part N's inspection passed (Notes, "WP-N's merge
-runs"). CI 42454621322 on `d127fef` is green but phase 6's open palette flake in one container,
-and macOS read Lost and passed (CI section); steps 9, 13 and 14 are ticked. WP-LIVE's second stage
-is merged at `fdb2c05` and passed with the tokens (step 16 ticked; Notes, "WP-LIVE's second
-stage"); CI 42459591309 on `fdb2c05` is green in all five jobs (CI section). The review before the gate
-(step 17) ran on `fdb2c05` (Notes, "The review before the gate"): 9 of its 19 findings stood, the
-lead's rulings are D391 and D392. Its fixes are merged at `6333de6` (Notes, "The review's fixes"),
-pushed. The lead's runs on `6333de6` all passed, design 0.6's timing report among them, and no test
-needs D237's split (Notes, "The lead's runs after the review's fixes"); step 17 is ticked. CI's run on
-it, 42472105974, failed one phase 1 harness test on macOS alone (`ShellDriverTests`' 0.3 s wait, a
-stall under load), whose wait is now 2 s with its assertions kept (Notes; CI section). WP-R (design
-14) is merged at `f016bdf` with CLAUDE.md's rows (Notes, "WP-R"); it has only been compiled. CI 42477551563 on
-`6f7199d` is green in all five jobs, and 42480966359 on `c233091` (WP-R's merge) too (CI section).
-The owner's answer on the GitLab account's five projects, given on 2026-11-08, is (b): the live
-command's GitLab guard narrowed to the sandbox project (D393), built, reviewed and refixed (Notes,
-"D393's guard") and merged at `ee0aeeb`, where the offline classes pass (582). The owner said to
-start the gate now and is at the machine. The gate (step 18) has begun, in 7a design 13.7's order
-with D335's live runs. The live command for the three providers ran on `ee0aeeb`, the owner told:
-GitHub's and Azure DevOps' classes passed, and GitLab's after two stalls of the network to gitlab.com
-(the report's "Live command", "The gate's first run"). It found one correction for a fake: github.com
-now answers a commit it lacks beside `author` 404, not D342's 500. That correction (D394) is merged at
-`cb9af6d`, with the fix to the client that GitHub's change called for (D395: a 404 in a repository not
-known to be readable is checked against that repository's read; the owner approved it, since it amends
-D342 (2)); Notes, "D394 and D395". The lead's runs at that merge passed, phase 7b's walk-through among
-them, and `Phase7bRealWindowPass` passed twice on its own, 5 of 5 each time, the owner told and present
-(D246; the report's "Run", "Before the gate"). The counted round's passes ran on `cb9af6d`'s code (the
-branch at `af9b563` and `3dc0887`): the default run 7,888 of 7,892 with 4 skipped, the real-window pass
-77 of 77 (Q1 1,827 ms), the list of 1,551 pictures (`docs/test-reports/phase-7b-pictures.sha256`), the live
-command 596 of 596 with nothing new for the fakes, and the inspection: every picture opened by 19 Opus
-inspectors in batches of at most 150, with 45 of CI's; 1,594 of 1,596 passed, and the 2 in doubt
-(phase 5's `a2g`, two reads started together in another order) were judged no defect by three skeptics
-each. So the gate passed (step 18; the report's "Run", "The counted round", "Live command" and "Other
-platforms"; CI 42522049151 on `9b044af`, the gate's code, all five jobs green). Next: closing steps 19
-to 21 are being drafted by the session's workflow `p7b-closing-docs` (architecture by area, the plan,
-the handoff, each reviewed and corrected); then the cold-read check (22), CI (23) and status (24). WP-P (design 12) is merged and step 12 ticked: its merge's runs passed but phase 2's
-`Check_15_amend` once under the lag, a race in the check fixed at `040eb65` (merged at `26b44c7`; its
-class 25 of 25 with and without the lag through `scripts/heavy-run.sh`), and CI 42373090316 on
-`c5ba918` is green; CI's run on the fix's merge, 42386428809, failed the two older tests above.
-
-WP-B (design 11, part B) is merged at `9409aa8`; its classes, lagged list, 11.8's comparison and
-picture inspection passed (Notes, "WP-B's merge runs"). CI's run on it (42339567989) failed three
-tests; their fixes are merged (`e49bd5c`, `eb218a3`, `7ddb928`; Notes, "The three failures of
-42339567989") and their classes pass; CI's run on them (42354014761) is green in all five jobs.
-Part N's checks (design 13.8) are committed (`28ec097`, merged at `5561548`; D244), written
-while WP-P was built, from the design and part P's checks, never from WP-P's code (Notes).
-Part P's checks are committed (`f1ac5ac`, D244); WP-P (section 12) is being
-built from that commit in `D:/Projects/Personal/vc-wt/p7b-requests` on `wip/p7b-requests`, then
-reviewed and hunted; at its merge the lead runs 12.9's runs (the lagged list, `Phase7aChecksP` and
-`Phase7aChecksG` against `phase-7a-pictures.sha256`, phase 3's `*Check_03_other_menus*`, part P, and
-part A's `a06c` again). Open point 8 is settled and its changes are merged at `20e529e` (Waiting on
-the owner, "Azure DevOps' probes"): the fake keeps connectionData's Anonymous 200 to organizations with
-public projects, the live command's fake is public as the sandbox's organization is, and A9 takes the
-fault `AnonymousIdentity`; its classes pass at the merge (Hosting.Tests' five Azure DevOps classes 73
-of 73, the 7b project's `SignInDialogProvidersTests`, `Phase7bChecksA`, `Phase7bSupportTests` and
-`Phase7bExpectationTests` 52 of 52, the live command's offline classes 405 of 405), and part A's 29
-pictures are the same files as WP-B's merge run's.
-
-WP-A (design 10, part A) is merged at `b6de3cf`; its classes, lagged list and picture inspection
-passed (Notes). CI's run on it (42301846503) failed two phase 6 tests on Linux that WP-A does not
-touch. The close race is fixed and merged (`85d599c`; its classes pass; CI's run on it,
-42335370821, green in all five jobs). The palette growth test's first fix was refuted as a
-loosening and is not merged; the second round found no measure that holds, so the test stays as it
-is and its rare Linux failure stays open (Notes, "The two Linux failures of 42301846503"). For the week from 2026-11-05 the owner gives the phase about all of
-its allowance.
+The gate (step 18) passed on `cb9af6d`'s code, the Gate commit: the counted round's default run
+7,888 of 7,892 tests with 4 skipped, the real-window pass 77 of 77 (Q1 1,827 ms), the list of 1,551
+pictures (`docs/test-reports/phase-7b-pictures.sha256`), the live command 596 of 596 with nothing new
+for the fakes, and the inspection: 1,594 of 1,596 pictures passed and the 2 in doubt (phase 5's
+`a2g`, two reads started together in another order) were judged no defect (the report's "Run", "Live
+command" and "Other platforms"). CI's run on that code, 42522049151 on `9b044af`, is green in all five
+jobs (CI section). Closing steps 19 to 21 are done: `docs/architecture.md`, `docs/plan.md` and
+`docs/handoffs/phase-7b.md`. Next: the cold-read check (step 22), a fresh agent given only the
+repository, told to assume phase 7b accepted and merged; every gap it hits fixed in the docs. Then
+step 23 (CI 42522049151 recorded with each job's result) and step 24 (this file: the links, the Gate
+commit, "Awaiting acceptance"), and the owner told what passed and what needs a decision. The
+history of the build's steps is in the Progress items above, the Notes below and the CI section.
 
 Once a phase is running, this always names the single next thing to do and is kept accurate in
 every commit.

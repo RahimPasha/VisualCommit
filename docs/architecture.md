@@ -41,7 +41,8 @@ it are not built yet, and "As built" says which are. The reasons behind the main
   a helper program, `visualcommit-askpass`, set as `GIT_ASKPASS` and `SSH_ASKPASS`; it asks the
   running app over a named pipe, and the app answers through a dialog in the window (D82).
   Since phase 7a the same helper is git's only credential helper for the URLs bound to a signed-in
-  GitHub account, answered from the account's token without a dialog (D255).
+  GitHub account, and since phase 7b to a GitLab or an Azure DevOps account (D350), answered from
+  the account's token without a dialog (D255).
   Editors never open: every call runs with `GIT_EDITOR=:` and `GIT_SEQUENCE_EDITOR=:` (D68,
   D102). The interactive rebase alone sets its own sequence editor, for its one call: a shell
   function that copies a todo and message files the app wrote (D143).
@@ -52,7 +53,10 @@ it are not built yet, and "As built" says which are. The reasons behind the main
   Tokens live in the OS keychain. Since phase 7a the interface and GitHub's provider are built, for
   github.com only (D258), with one account at a time (D263), whose token is kept in the keychain or,
   where none can be reached, in memory for the session (D253); nothing is asked of GitHub while no
-  account is signed in (D257). Azure DevOps and GitLab come in phase 7b (D241).
+  account is signed in (D257). Since phase 7b Azure DevOps' and GitLab's providers are built too, for
+  Azure DevOps Services (`dev.azure.com` and `<organization>.visualstudio.com`) and gitlab.com only
+  (D347), with one account per provider (D348), the three clients on one HTTP core, and nothing is
+  asked of a provider while no account of it is signed in (D350).
 - **Storage.** Settings and session state as JSON in the per-user app-data folder, and since phase
   6 the workspaces in a file of their own (D189). Logs are local files.
   The data folder can be overridden (`VISUALCOMMIT_DATA_DIR`). Every test uses a temporary one, so
@@ -61,9 +65,10 @@ it are not built yet, and "As built" says which are. The reasons behind the main
   repositories on disk, and a small HTTP server in the tests (`AuthRemoteServer`) for sign-ins.
   UI tests use Avalonia's headless mode and capture screenshots; the real-window pass repeats
   some checks on the real desktop. Since phase 7a that server also stands in for GitHub: git, the
-  REST API, avatars and web pages on one loopback port (`FakeGitHub`, D250, D266), so no test of
-  the default run or CI reaches a real host or keychain; an opt-in command, Windows-only, tries
-  real GitHub with the owner's token for a sandbox repository.
+  REST API, avatars and web pages on one loopback port (`FakeGitHub`, D250, D266), and since phase
+  7b for Azure DevOps and GitLab (`FakeAzureDevOps`, `FakeGitLab`, D346, D363), so no test of the
+  default run or CI reaches a real host or keychain; an opt-in command, Windows-only, tries the real
+  services with the owner's tokens for a sandbox on each.
 - **CI.** GitHub Actions builds and tests on Windows, macOS and Linux on every push that changes
   more than docs, with a time limit on each job and on its test step; since phase 7a it also tests
   the real keychain stores against throw-away entries (D259, D270).
@@ -78,15 +83,15 @@ centrally in `Directory.Packages.props`.
 
 | Project | Contents | State |
 |---|---|---|
-| `src/VisualCommit.Core` | Domain models and interfaces (git calls, repositories, commits, refs, the working-tree status with its conflicts and the operation in progress, rebases, lists of picks, the backups' retention, the lane layout, settings, session state, logging, data-folder paths, how dates are shown); diffs: parsing them, building patches for chosen lines, comparing the words of paired lines; ref-name rules (`RefNameRules`); the interactive rebase's todo (`Git/RebaseTodo`); `Conflicts/`: a conflicted file's blocks (`ConflictText`); `Operations/`: the operation queue, its contracts and the operation log, failure classification and output cleaning, the prompt contracts, the lock-file scan; phase 5's `Undo/` (the undo history, its scopes, effects, sequences and checks), `Graph/GraphFilter` (what the graph hides or solos), the result records of file history, blame, reflog, backups, compare and search, the record and backup clocks (`AppClocks`, `Git/BackupClock`) and the worktree key; phase 6's `Workspaces/` (the workspaces, `IWorkspaceStore`, `WorkspacePaths`, `WorkspaceEdits`, the folder scan `RepositoryScanner`), `Git/FetchRefspecs` (the remotes' fetch lines and their mapping), the contracts and records of git's own settings (`IGitConfiguration`, `GitConfigLocations`, `PullConfiguration`, `PullModes`, `GitBoolean`), `Operations/PromptGroup` (a bulk run's prompts), `ToolCatalogues` (what the machine has installed) and `DurableFile` (how the app's own files are written); phase 7a's `Hosting/AccountKey` (an account's provider, host and login), the account's bindings for git and the credential git gets (`Operations/CredentialBinding`), git's URL rewrites (`Git/UrlRewrites`) and the remotes' configured URLs (`Git/RemoteUrl`), and the status bar's offer (`OperationOffer`); no UI, no process calls | Built |
-| `src/VisualCommit.Git` | Git runner, git locator, call log; reading a repository and writing to it (`GitRepository`: status, diffs, stage, unstage, patches, snapshots, discard, commit; phase 3's branches, history, in-progress state, backups, remotes and the network, stash, tags, ignore; phase 4's rebases, lists of picks and reverts, Continue and Skip, conflicts and the merge tool, the backups' clean-up; phase 5's file history, blame, reflog, backups list, compare, search, the filtered graph, C12's checkout and stash members, and the undo history's reads and steps; phase 6's `OpenedAtTopAsync`, the refs read's fetch lines, the reads of Keep ignored files, the pull's settings and the repository's own configuration writes; phase 7a's remotes' URLs in the refs read, the read of git's URL rewrites and a pull request's fetch into `FETCH_HEAD`), cloning, the repository watcher (since phase 7a with a test switch that holds its events, D262), the progress parser, the blame parser; since phase 6 `GitConfiguration` (git's own settings as the settings screen reads and writes them, and the merge-tool lookup) and `GitMergeTools`; `Prompts/`: the askpass broker (since phase 7a also answering git's credential requests for the URLs bound to the hosting account), its locator and the prompt classifier | Built |
-| `src/VisualCommit.AskPass` | The askpass helper `visualcommit-askpass` (D82): a small framework-dependent console program with no project references, run by git and ssh; its pipe protocol (`AskPassProtocol`) is shared with the broker. Since phase 7a also git's credential helper for the URLs bound to the hosting account (`CredentialMode`, run as `--vc-credential <action>`, D255), whose request line, reading of git's input and answer text `AskPassProtocol` holds too. `VisualCommit.Git` references it, so its app host lands next to the app and in every test project's output | Built |
-| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (the commit graph, the diff text, the conflict panes and result, the blame's text and gutter, the context menu's item, the masked text box), the code font; settings and session stores, log file, folder dialog, file launcher, clipboard, prompt dialogs; the operations of every repository (`RepositoryOperations`), menus, dialogs, toolbar, status bar, conflict banner, auto-fetch; the interactive rebase's list, the conflict resolver, the message dialog; phase 5's undo and redo, the activity log, the graph area's pages (file history, blame, reflog and backups), the search bar, the comparison, hide and solo, C12's automatic stash and refusals; phase 6's workspaces (the welcome page's section, the dashboard tab, summary mode and the registry `OpenRepositories`), the bulk fetch and pull, the command palette and the keys (`ViewModels/Commands`, `Views/KeyRouter`), the settings screen (`ViewModels/Settings`), Open in editor, the workspace store, the System theme, the tab strip's overflow; phase 7a's Accounts section of the settings screen and its sign-in dialog, "Clone from GitHub" and its repository browser, the pull requests' section, their badges in the graph, their checkout and the create form (`ViewModels/Hosting`, `RepositoryOperations.PullRequests.cs` and `.CreatePullRequest.cs`), the authors' avatars in the graph and the details panel, and the status bar's offer. Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
-| `src/VisualCommit.Hosting` | The hosting services, since phase 7a: the provider model (`IHostingProvider`, `HostingOptions` with `GitHubEndpoints`, the records of `HostingRecords.cs`, `HostingRules`); `GitHub/`: `GitHubProvider`, its REST client `GitHubClient` (kept answers, redirects, paging, failures), recognition `GitHubUrls` and GitHub's JSON shapes; the session (`IHostingSession`, `HostingSession`, `JsonAccountStore` for `accounts.json`), each repository's hosting (`RepositoryHosting`), the avatars' images (`AvatarCache`) and e-mail maps (`AuthorMapStore`); `Tokens/`: the keychain stores and `TokenVault`. References Core only, and `Tmds.DBus.Protocol` for Linux's Secret Service; no UI and no git process. The App references it | Built: GitHub (phase 7a). Azure DevOps and GitLab in 7b (D241) |
-| `tests/VisualCommit.Testing` | Shared test helpers: temporary-repo builder, scenario repos, the 100k-commit repo, the credential test server, fakes (file launcher, clipboard, prompt handler, ssh), a clock tests move by hand (`ManualTimeProvider`), the hang watchdog, helpers that drive the app in headless mode, the window layout both harnesses share; since phase 6 the workspace "Web" of ten repositories (`TempWorkspace`, built by `LeanRepositories`), the fetch hold (`FetchHold`), the system's theme as a fake (`FakeSystemTheme`), the contrast and ink readers (`Contrast`, `TextInk`); since phase 7a (it references `VisualCommit.Hosting`) the fake of GitHub (`Hosting/`: `FakeGitHub`, its in-process handler, `LoopbackOnlyHandler`, `TokenTripwire`), `AuthRemoteServer`'s host mode, the scenario "hosting" (`Scenarios.Phase7a.cs`), the fake keychain (`FakeTokenStore`), the git-call budgets (`GitCallBudget`) and `RecordingCredentialSource`. Not a test project | Built |
-| `tests/VisualCommit.Git.Tests` | Tests of Core and Git against real git and temporary repos, the askpass helper and the test server included; since phase 6 the workspace model and the folder scan, the fetch lines against git, git's own settings, Keep ignored files' reads; since phase 7a the scenario "hosting" (`Phase7aScenarioTests`), `AuthRemoteServer`'s host mode, the watcher's lag, a pull request's fetch, and the credential helper, its bindings, the URL rewrites and the prompt channel (see "Prompts and credentials") | Built |
-| `tests/VisualCommit.App.Tests` | Settings, session, log, data-folder and view-model tests, the operations against real git through scenarios (since phase 5 the undo history's recording, steps and restores, and C12), and headless UI tests of behaviour (menus, dialogs, drag, selection, toolbar, status bar, banner, and since phase 5 the activity log, the pages, the search bar, the comparison, the window's keys; since phase 6 the workspaces, the dashboard, summary mode, the bulk runs, the palette, the keys, the settings screen, the editor and the theme); since phase 7a `GitCallBudgetTests`, the watcher lag's log line (`GitRepositoryProviderTests`), the credential tests of the operations, the dashboard and the push guard, and a pull request's fetch whose `FETCH_HEAD` another fetch rewrote (`PullRequestFetchHeadTests`); 7a's view-model, menu and view tests are in `VisualCommit.VisualTests.Phase7a` and `VisualCommit.Hosting.Tests` instead, so that App.Tests, which ends last in the default run, gained only 7a's operation, credential and budget tests (design 0.6) | Built |
-| `tests/VisualCommit.Hosting.Tests` | Phase 7a: the hosting's tests (the options, the token stores, GitHub's client and provider, the avatar cache, the hosting session, the fake of GitHub and the fake keychain) and the six classes with real git that D334 moved there (five start the app through `ShellDriver`; `RepositoryHostingWiringTests` builds a tab's `TabServices` by hand with a `HostingSession`), on a headless UI thread of its own beside the 7a walk-through's; every fake there on port 0 or in process (D265). Part of the default test run and CI; CI's keychain steps run its real-store classes | Built |
+| `src/VisualCommit.Core` | Domain models and interfaces (git calls, repositories, commits, refs, the working-tree status with its conflicts and the operation in progress, rebases, lists of picks, the backups' retention, the lane layout, settings, session state, logging, data-folder paths, how dates are shown); diffs: parsing them, building patches for chosen lines, comparing the words of paired lines; ref-name rules (`RefNameRules`); the interactive rebase's todo (`Git/RebaseTodo`); `Conflicts/`: a conflicted file's blocks (`ConflictText`); `Operations/`: the operation queue, its contracts and the operation log, failure classification and output cleaning, the prompt contracts, the lock-file scan; phase 5's `Undo/` (the undo history, its scopes, effects, sequences and checks), `Graph/GraphFilter` (what the graph hides or solos), the result records of file history, blame, reflog, backups, compare and search, the record and backup clocks (`AppClocks`, `Git/BackupClock`) and the worktree key; phase 6's `Workspaces/` (the workspaces, `IWorkspaceStore`, `WorkspacePaths`, `WorkspaceEdits`, the folder scan `RepositoryScanner`), `Git/FetchRefspecs` (the remotes' fetch lines and their mapping), the contracts and records of git's own settings (`IGitConfiguration`, `GitConfigLocations`, `PullConfiguration`, `PullModes`, `GitBoolean`), `Operations/PromptGroup` (a bulk run's prompts), `ToolCatalogues` (what the machine has installed) and `DurableFile` (how the app's own files are written); phase 7a's `Hosting/AccountKey` (an account's provider, host and login), the account's bindings for git and the credential git gets (`Operations/CredentialBinding`), git's URL rewrites (`Git/UrlRewrites`) and the remotes' configured URLs (`Git/RemoteUrl`), and the status bar's offer (`OperationOffer`); phase 7b's `Hosting/HostingProviders` (each provider's name, possessive and id, the order of the Accounts section's blocks and which provider's form a token has, D378), `Hosting/PullRequestRefs` (each provider's request refs and the push guard's rule for them), the coverage of an account's token for git (`GitCoverage` in `Operations/CredentialBinding`, D359, D369) and git's conditional includes as a clone's binding judges them (`Git/GitConfigIncludes`, D391); no UI, no process calls | Built |
+| `src/VisualCommit.Git` | Git runner (since phase 7b on Windows a below-normal call's git joins a job that holds it at below normal, and the runner adds to that job each descendant it finds, `WindowsJob`, D386), git locator, call log; reading a repository and writing to it (`GitRepository`: status, diffs, stage, unstage, patches, snapshots, discard, commit; phase 3's branches, history, in-progress state, backups, remotes and the network, stash, tags, ignore; phase 4's rebases, lists of picks and reverts, Continue and Skip, conflicts and the merge tool, the backups' clean-up; phase 5's file history, blame, reflog, backups list, compare, search, the filtered graph, C12's checkout and stash members, and the undo history's reads and steps; phase 6's `OpenedAtTopAsync`, the refs read's fetch lines, the reads of Keep ignored files, the pull's settings and the repository's own configuration writes; phase 7a's remotes' URLs in the refs read, the read of git's URL rewrites and a pull request's fetch into `FETCH_HEAD`, since phase 7b also a GitLab merge request's `refs/merge-requests/<n>/head`), cloning, the repository watcher (since phase 7a with a test switch that holds its events, D262), the progress parser, the blame parser; since phase 6 `GitConfiguration` (git's own settings as the settings screen reads and writes them, and the merge-tool lookup; since phase 7b also the `url.` rules of a conditional include's file, `ReadIncludedAsync`, D391) and `GitMergeTools`; `Prompts/`: the askpass broker (since phase 7a also answering git's credential requests for the URLs bound to the hosting account, since phase 7b to each provider's account, and on dev.azure.com taking a prompt for the account only when its URL names the binding's organization), its locator and the prompt classifier | Built |
+| `src/VisualCommit.AskPass` | The askpass helper `visualcommit-askpass` (D82): a small framework-dependent console program with no project references, run by git and ssh; its pipe protocol (`AskPassProtocol`) is shared with the broker. Since phase 7a also git's credential helper for the URLs bound to a hosting account (`CredentialMode`, run as `--vc-credential <action>`, D255), whose request line, reading of git's input and answer text `AskPassProtocol` holds too. `VisualCommit.Git` references it, so its app host lands next to the app and in every test project's output | Built |
+| `src/VisualCommit.App` | Avalonia views, view models, theme, custom controls (the commit graph, the diff text, the conflict panes and result, the blame's text and gutter, the context menu's item, the masked text box), the code font; settings and session stores, log file, folder dialog, file launcher, clipboard, prompt dialogs; the operations of every repository (`RepositoryOperations`), menus, dialogs, toolbar, status bar, conflict banner, auto-fetch; the interactive rebase's list, the conflict resolver, the message dialog; phase 5's undo and redo, the activity log, the graph area's pages (file history, blame, reflog and backups), the search bar, the comparison, hide and solo, C12's automatic stash and refusals; phase 6's workspaces (the welcome page's section, the dashboard tab, summary mode and the registry `OpenRepositories`), the bulk fetch and pull, the command palette and the keys (`ViewModels/Commands`, `Views/KeyRouter`), the settings screen (`ViewModels/Settings`), Open in editor, the workspace store, the System theme, the tab strip's overflow; phase 7a's Accounts section of the settings screen and its sign-in dialog, "Clone from GitHub" and its repository browser, the pull requests' section, their badges in the graph, their checkout and the create form (`ViewModels/Hosting`, `RepositoryOperations.PullRequests.cs` and `.CreatePullRequest.cs`), the authors' avatars in the graph and the details panel, and the status bar's offer; phase 7b's Accounts section with a block per provider (`ViewModels/Settings/AccountBlockViewModel`), the sign-in dialog per provider (Azure DevOps' with its Organization box), the repository browser per provider with a switch between the signed-in ones and the palette's three clone commands, the requests' section, badges, checkout and create form in each provider's words (GitLab's merge requests and its Draft title), and the texts that name the provider (`ViewModels/Hosting/HostingTexts.Provider.cs`, D351, D362). Its assembly and executable are named `VisualCommit` (`VisualCommit.exe`); its namespace is `VisualCommit.App` | Built |
+| `src/VisualCommit.Hosting` | The hosting services, since phase 7a: the provider model (`IHostingProvider`, `HostingOptions` with each provider's endpoints and handler, the records of `HostingRecords.cs`, `HostingRules`); since phase 7b `Http/`: the HTTP core every provider's REST client is built on (`HostingHttpClient`, driven by a `HostingHttpProfile` per provider: kept answers, redirects, paging, failures); `GitHub/`: `GitHubProvider`, its REST client `GitHubClient` (on that core since phase 7b), recognition `GitHubUrls` and GitHub's JSON shapes; since phase 7b `AzureDevOps/` (`AzureDevOpsProvider`, its client `AzureDevOpsClient`, recognition `AzureDevOpsUrls`, `AzureDevOpsEndpoints`, the API's versions and area id in `AzureDevOpsApi`, and its JSON shapes) and `GitLab/` (`GitLabProvider`, `GitLabClient`, `GitLabUrls`, `GitLabEndpoints` and its JSON shapes); the session (`IHostingSession`, `HostingSession`, `JsonAccountStore` for `accounts.json`; since phase 7b a slot per provider, D348), each repository's hosting (`RepositoryHosting`), the avatars' images (`AvatarCache`, GitHub's alone, D349) and e-mail maps (`AuthorMapStore`); `Tokens/`: the keychain stores and `TokenVault`. References Core only, and `Tmds.DBus.Protocol` for Linux's Secret Service; no UI and no git process. The App references it | Built: GitHub (phase 7a); Azure DevOps Services and gitlab.com (phase 7b, D347) |
+| `tests/VisualCommit.Testing` | Shared test helpers: temporary-repo builder, scenario repos, the 100k-commit repo, the credential test server, fakes (file launcher, clipboard, prompt handler, ssh), a clock tests move by hand (`ManualTimeProvider`), the hang watchdog, helpers that drive the app in headless mode, the window layout both harnesses share; since phase 6 the workspace "Web" of ten repositories (`TempWorkspace`, built by `LeanRepositories`), the fetch hold (`FetchHold`), the system's theme as a fake (`FakeSystemTheme`), the contrast and ink readers (`Contrast`, `TextInk`); since phase 7a (it references `VisualCommit.Hosting`) the fake of GitHub (`Hosting/`: `FakeGitHub`, its in-process handler, `LoopbackOnlyHandler`, `TokenTripwire`), `AuthRemoteServer`'s host mode, the scenario "hosting" (`Scenarios.Phase7a.cs`), the fake keychain (`FakeTokenStore`), the git-call budgets (`GitCallBudget`) and `RecordingCredentialSource`; since phase 7b the fakes of Azure DevOps and GitLab (`FakeAzureDevOps`, `FakeGitLab`) on a core taken out of `FakeGitHub` (`FakeHostingService*.cs`, D363), `AuthRemoteServer`'s host mode by URL path, the scenario "hosting7b" (`Scenarios.Phase7b*.cs`), the harness's seams for the new providers (`ShellDriver.Phase7b.cs`), 7a's GitHub-named session calls for 7a's tests (`HostingSessionGitHubForms`) and the measure of what the tests' git does with a URL's user after a 401 (`GitUrlUser`, D389). Not a test project | Built |
+| `tests/VisualCommit.Git.Tests` | Tests of Core and Git against real git and temporary repos, the askpass helper and the test server included; since phase 6 the workspace model and the folder scan, the fetch lines against git, git's own settings, Keep ignored files' reads; since phase 7a the scenario "hosting" (`Phase7aScenarioTests`), `AuthRemoteServer`'s host mode, the watcher's lag, a pull request's fetch, and the credential helper, its bindings, the URL rewrites and the prompt channel (see "Prompts and credentials"); since phase 7b the new providers' coverages through real git's credential matching, offline (`CoverageGitMatchTests`, `AzureDevOpsCoverageVectorsTests`), and in `CredentialBindingSelectTests`, the broker's organization check (`AskPassBrokerBindingTests`), the request refs (`PullRequestRefsTests`), the read of a conditional include's file (`GitConfigIncludeReadTests`), `AuthRemoteServer`'s paths and git's priority on Windows (`GitRunnerPriorityTests`, D386) | Built |
+| `tests/VisualCommit.App.Tests` | Settings, session, log, data-folder and view-model tests, the operations against real git through scenarios (since phase 5 the undo history's recording, steps and restores, and C12), and headless UI tests of behaviour (menus, dialogs, drag, selection, toolbar, status bar, banner, and since phase 5 the activity log, the pages, the search bar, the comparison, the window's keys; since phase 6 the workspaces, the dashboard, summary mode, the bulk runs, the palette, the keys, the settings screen, the editor and the theme); since phase 7a `GitCallBudgetTests`, the watcher lag's log line (`GitRepositoryProviderTests`), the credential tests of the operations, the dashboard and the push guard, and a pull request's fetch whose `FETCH_HEAD` another fetch rewrote (`PullRequestFetchHeadTests`); 7a's view-model, menu and view tests are in `VisualCommit.VisualTests.Phase7a` and `VisualCommit.Hosting.Tests` instead, so that App.Tests, which ends last in the default run, gained only 7a's operation, credential and budget tests (design 0.6); phase 7b likewise added only the push guard's rules for the new providers' request refs (`PushGuardProvidersTests`), new cases of the prompt group, the refused token's text and the budgets, a case of D390's count of the watcher's refreshes (`RepositoryWatcherQuietTests`), and the tests of two fixes, the window's close during Fetch all (`MainWindowCloseTests`) and the palette's growth measure (`PaletteGrowthWorksTests`, `GrowthMeasuresTests`; 7b design 0.6, 16.3) | Built |
+| `tests/VisualCommit.Hosting.Tests` | Phase 7a: the hosting's tests (the options, the token stores, GitHub's client and provider, the avatar cache, the hosting session, the fake of GitHub and the fake keychain) and the six classes with real git that D334 moved there (five start the app through `ShellDriver`; `RepositoryHostingWiringTests` builds a tab's `TabServices` by hand with a `HostingSession`), on a headless UI thread of its own beside the 7a walk-through's; every fake there on port 0 or in process (D265). Since phase 7b also the shared HTTP core (`HostingHttpClientTests`), Azure DevOps' and GitLab's clients, providers, recognition and JSON, their fakes and the fakes' core (`FakeAzureDevOpsTests`, `FakeGitLabTests`, each with its `…GitTests`, `FakeHostingServiceTests`), the session and a repository's hosting for three providers (`HostingSessionProvidersTests`, `RepositoryHostingProvidersTests` and its wiring), the clone from an account, the request and create operations per provider, the sign-in entries, and a network operation started right after a sign-in (`SignInBindingsWindowTests`, D388). Part of the default test run and CI; CI's keychain steps run its real-store classes | Built |
 | `tests/VisualCommit.VisualTests` | Scripted walk-throughs of phases 0 to 2 in headless mode with screenshots, for the visual test gate. Part of the default test run and CI | Built |
 | `tests/VisualCommit.VisualTests.Phase3` | Phase 3's scripted walk-through, a project of its own so that it runs beside phases 0 to 2's with a headless UI thread of its own. Part of the default test run and CI | Built |
 | `tests/VisualCommit.VisualTests.Phase4` | Phase 4's scripted walk-through, a project of its own for the same reason (D151). Part of the default test run and CI | Built |
@@ -95,8 +100,9 @@ centrally in `Directory.Packages.props`.
 | `tests/VisualCommit.VisualTests.Phase6` | Phase 6's scripted walk-through of parts W (workspaces and the dashboard), K (keys and the palette), S (settings and the theme's following) and G (ignored files and refspecs), 38 test methods (40 since phase 7a's first package split G23's part B into three, D264, D283), with the base class, support and common expectations (D230). Part of the default test run and CI | Built |
 | `tests/VisualCommit.VisualTests.Phase6Look` | Phase 6's part L, the look (every main screen in both themes, the light colours, the long folder, the tab strip), 9 test methods: a project of its own beside `Phase6`, whose base class, support and common expectations it compiles; both save their pictures in phase 6's one folder, and its test server has a port of its own (the report's ruling 1, D230). Part of the default test run and CI | Built |
 | `tests/VisualCommit.VisualTests.Phase7a` | Phase 7a's scripted walk-through of parts A (accounts and sign-in), B (browse and clone), P (pull requests), G (the graph's badge and avatars) and N (a new pull request), 27 test methods, against the fake of GitHub on port 47395 (D265), and 7a's expectation, view-model, menu and headless view tests, linking App.Tests' `RecordingActions.cs` and `RecordingLog.cs` (design 0.6, 2.8). Part of the default test run and CI | Built |
-| `tests/VisualCommit.RealWindowTests` | The real-window pass (FlaUI), since phase 7a with a part for 7a that serves the fake of GitHub on 47395 in the test process. Windows-only and opt-in. It is **not in the solution file**; that is what keeps it out of `dotnet build`, `dotnet test` and CI test runs (D25); CI's Windows job builds it (D337) | Built |
-| `tests/VisualCommit.LiveHostingTests` | Phase 7a's opt-in command against real GitHub with the owner's token for a sandbox repository (D250, "The live command"). Windows-only; **not in the solution file**, run only by its own command; CI's Windows job builds it and never runs it (D337) | Built |
+| `tests/VisualCommit.VisualTests.Phase7b` | Phase 7b's scripted walk-through of parts A (accounts and sign-in), B (browse and clone), P (requests in the left panel and the graph) and N (a new pull or merge request), 29 test methods, against the fakes of Azure DevOps, GitLab and a GitHub of its own on ports 47397 to 47399 (D363), and 7b's expectation, view-model, menu, text and headless view tests, linking App.Tests' `RecordingActions.cs` and `RecordingLog.cs` and phase 7a's `GraphTestHost.cs`; the real-window pass compiles its `Phase7bExpectations*.cs` (design 0.3, 2.7). Part of the default test run and CI | Built |
+| `tests/VisualCommit.RealWindowTests` | The real-window pass (FlaUI), since phase 7a with a part for 7a that serves the fake of GitHub on 47395 in the test process, and since phase 7b a part for 7b (`Phase7bRealWindowPass`, five launches) that serves the fakes of Azure DevOps, GitLab and GitHub on 47397 to 47399 in the test process. Windows-only and opt-in. It is **not in the solution file**; that is what keeps it out of `dotnet build`, `dotnet test` and CI test runs (D25); CI's Windows job builds it (D337) | Built |
+| `tests/VisualCommit.LiveHostingTests` | The opt-in command against the real services with the owner's tokens for a sandbox on each: GitHub since phase 7a (D250), Azure DevOps Services and gitlab.com since phase 7b (D346, D352; "The live command"). Windows-only; **not in the solution file**, run only by its own command; CI's Windows job builds it and never runs it (D337) | Built |
 
 All projects target `net10.0`, except `VisualCommit.RealWindowTests` and, since phase 7a,
 `VisualCommit.LiveHostingTests` (`net10.0-windows`).
@@ -121,7 +127,7 @@ about 589 without (2026-10-28), and its `runtimes/` holds only `win-x64/native`
 real-window project keeps `runtimes/win` for FlaUI's `System.Management.dll`. On macOS and Linux
 only the `.pdb` part applies, so their builds, CI's included, keep every platform's libraries.
 
-## As built (after phase 7a)
+## As built (after phase 7b)
 
 Phase 0 built the foundation: an empty shell, the git runner, settings, the log and both test
 harnesses. Phase 1 added repositories in tabs: open, init and clone on a welcome page, the commit
@@ -179,6 +185,20 @@ the graph, a checkout of each and a new pull request from a branch; and the auth
 in the graph and the details panel. The tests stand in for GitHub with a fake of their own
 (`FakeGitHub`), and an opt-in command, outside the default run and CI, tries real GitHub with the
 owner's token for a sandbox repository.
+Phase 7b added Azure DevOps Services (`dev.azure.com` and `<organization>.visualstudio.com`) and
+gitlab.com on 7a's provider model, with one account per provider, so that a GitHub, a GitLab and an
+Azure DevOps account can be signed in at once: a sign-in with each service's personal access token
+(Azure DevOps' for one organization, named in the dialog above the token), kept in the keychain as
+GitHub's is; while the account's "Use for git over HTTPS" is on, its token on the app's git calls to
+the remotes it covers, on Azure DevOps its own organization's alone; a browser of each account's
+repositories to clone from, with a switch between the signed-in providers; a repository's open pull
+requests, on GitLab merge requests, in the left panel with their badge in the graph, a checkout of
+each (on Azure DevOps through a remote's branch alone, D361) and a new one, a draft or not, from a
+branch; and 7a's screens and commands naming the provider of the account or remote they act on,
+GitHub's in 7a's words. Author avatars stay GitHub's. The tests stand in for both services with fakes
+of their own (`FakeAzureDevOps`, `FakeGitLab`) on a core taken out of `FakeGitHub`, and the opt-in
+command tries both services too, with the owner's tokens for a sandbox on each, behind a guard that
+keeps its requests to that sandbox.
 
 ### Start-up and composition
 
@@ -207,10 +227,11 @@ Program.Main                        src/VisualCommit.App/Program.cs
             ├─ DialogHostViewModel  the window's dialog stack (D69, D104)
             ├─ PromptDialogPresenter, PromptDialogs
             │                       git's and ssh's prompts as dialogs ("Prompts and credentials")
-            ├─ HostingSession       phase 7a: GitHub's endpoints (HostingOptions) and the token
-            │                       store (TokenStores), from the process's environment unless
-            │                       given; the account, its token, GitHub's provider ("Hosting:
-            │                       the session and the account")
+            ├─ HostingSession       phase 7a: where the providers are (HostingOptions) and the
+            │                       token store (TokenStores), from the process's environment
+            │                       unless given; since phase 7b one provider per endpoint given
+            │                       (GitHub, GitLab, Azure DevOps), each with one account and its
+            │                       token ("Hosting: the session and the account")
             ├─ AskPassBroker        the session's prompt channel (PromptDialogs.CreateBroker); since
             │                       phase 7a with the hosting session as its credential source
             ├─ GitConfiguration     phase 6: git's own settings over the session's runner, with
@@ -268,15 +289,24 @@ Program.Main                        src/VisualCommit.App/Program.cs
   `tokens` (`ITokenStore`); null reads each from the process's environment
   (`HostingOptions.FromEnvironment` and `TokenStores.FromEnvironment` over
   `Environment.GetEnvironmentVariable`), never through `readEnvironment`, which stays auto-fetch's
-  reader. Every test process starts with `VISUALCOMMIT_GITHUB_URL=none` and
+  reader. Every test process starts with `VISUALCOMMIT_GITHUB_URL=none`, since phase 7b also
+  `VISUALCOMMIT_AZURE_DEVOPS_URL=none` and `VISUALCOMMIT_GITLAB_URL=none`, and
   `VISUALCOMMIT_KEYCHAIN=memory` (see "Tests"). The session makes one `HostingSession` over them,
   with `Dispatcher.UIThread.Post` as its post delegate and `TimeProvider.System` as its clock,
   before the prompt broker, which takes it as its `IGitCredentialSource`, and hands it to
   `TabServices` (`Hosting`; `NullHostingSession.Instance` where tests build `TabServices` by hand).
   The constructor starts `AppSession.HostingStarted`, the hosting session's `StartAsync` on the
   thread pool, once `Initialization` has begun and the window exists: it reads `accounts.json` and
-  at most one keychain entry and asks GitHub nothing (ruling 6). `ShellDriver.Start` pumps the UI
-  thread until it completes.
+  at most one keychain entry for each provider that is on, and asks no service anything (ruling 6;
+  7b design 9.4). `ShellDriver.Start` pumps the UI thread until it completes.
+- Phase 7b (7b design 1.4, 9.2): `AppSession.Start` and its parameters are unchanged.
+  `HostingOptions.FromEnvironment` reads three variables, so a run that sets none of them has
+  GitHub, GitLab and Azure DevOps on (github.com, gitlab.com, and dev.azure.com with its
+  `<organization>.visualstudio.com` hosts), each with its default handler. The hosting session makes
+  one provider for each endpoint the options give, and at its construction logs one line per
+  provider, `{Name}: {host}.` or `{Name}: off.`, in D353's order (GitHub, GitLab, Azure DevOps). In
+  the tests' environment all three are off unless a check gives a fake (see "Hosting: the provider
+  and GitHub's API" and "Hosting: the session and the account").
 - `AppSession.Initialization` is `MainWindowViewModel.InitializeAsync`: it looks for git, then
   opens the repositories of the tabs restored from the session and loads their whole history.
   Since phase 6 it also awaits the first read of a restored dashboard that is the active tab, beside
@@ -294,20 +324,20 @@ Program.Main                        src/VisualCommit.App/Program.cs
   releases its rows' repositories), disposes what the registry still holds
   (`OpenRepositories.DisposeAll`) and waits a few seconds for a cancelled clone to remove its folder;
   then it disposes, since phase 7a, the hosting session (the tabs' hostings went with their view
-  models; its lifetime is cancelled, which stops the start's read, a sign-in's second half, the
-  refreshes, the refusal check and the avatar runs, and its two HTTP clients are disposed; a begun
-  sign-out goes on), then the prompt broker, git's settings (which stops the merge-tool lookup) and
-  the theme service before the platform's theme it owns, and closes the log (`FileAppLog.Close`), so
-  that a git call that ends later writes nothing (D132).
+  models; its lifetime is cancelled, which stops the start's read, the sign-ins' second halves, the
+  refreshes, the refusal checks and the avatar runs, and each provider's API client and the avatars'
+  client are disposed; a begun sign-out goes on), then the prompt broker, git's settings (which stops
+  the merge-tool lookup) and the theme service before the platform's theme it owns, and closes the
+  log (`FileAppLog.Close`), so that a git call that ends later writes nothing (D132).
 - `Program.Main` logs unhandled exceptions to the same log file.
 
 ### Repository tabs (D45)
 
 | Type | Role |
 |---|---|
-| `MainWindowViewModel` | `Tabs` (never empty) and `ActiveTab`; `NewTab`, `ActivateTab`, `CloseTab`; saves the tabs and the active one to the session whenever they change; the theme switch and the git status as in phase 0; `Dialogs`, the window's dialog layer; `Menu`, the menu layer; `AutoFetch`; `NamesRepositoryInDialogs` (more than one tab has a repository: dialogs name their repository, "In &lt;repo&gt;"); since phase 5 `ActivityLog` (the panel's view model; its being open is the window's, see "Activity log"); `TryClose` and `ConfirmClose` (closing the window while operations run, see "Operation queue"). A tab closed while an operation the user started runs in it is kept until its queue is idle. Since phase 6, in partial files: `.Workspaces.cs` (`IWorkspaceHost.ShowWorkspace`, a row's open, a deleted workspace's tab, what the close waits for), `.Session.cs` (the restore with the dashboards first, `ActiveTabIndex`), `.Commands.cs` (`Commands`, the palette, the repositories a key or the palette opens), `.Settings.cs` (`OpenSettingsCommand`, the merge-tool lookup) and `.Theme.cs` (`Theme`, `UseTheme`); `NamesRepositoryInDialogs` is true while a dashboard tab is open or more than one tab has a repository (design 3.8); `OnWindowActivated` (the window's `Activated`) reads the active dashboard's stale rows. Since phase 7a `.Hosting.cs` (`SignInToGitHubAsync`, the window's sign-in entry, see "The settings screen") and, in `.Commands.cs`, `CloneFromGitHubAsync` (see "Clone from GitHub") |
+| `MainWindowViewModel` | `Tabs` (never empty) and `ActiveTab`; `NewTab`, `ActivateTab`, `CloseTab`; saves the tabs and the active one to the session whenever they change; the theme switch and the git status as in phase 0; `Dialogs`, the window's dialog layer; `Menu`, the menu layer; `AutoFetch`; `NamesRepositoryInDialogs` (more than one tab has a repository: dialogs name their repository, "In &lt;repo&gt;"); since phase 5 `ActivityLog` (the panel's view model; its being open is the window's, see "Activity log"); `TryClose` and `ConfirmClose` (closing the window while operations run, see "Operation queue"). A tab closed while an operation the user started runs in it is kept until its queue is idle. Since phase 6, in partial files: `.Workspaces.cs` (`IWorkspaceHost.ShowWorkspace`, a row's open, a deleted workspace's tab, what the close waits for), `.Session.cs` (the restore with the dashboards first, `ActiveTabIndex`), `.Commands.cs` (`Commands`, the palette, the repositories a key or the palette opens), `.Settings.cs` (`OpenSettingsCommand`, the merge-tool lookup) and `.Theme.cs` (`Theme`, `UseTheme`); `NamesRepositoryInDialogs` is true while a dashboard tab is open or more than one tab has a repository (design 3.8); `OnWindowActivated` (the window's `Activated`) reads the active dashboard's stale rows. Since phase 7a `.Hosting.cs` (the window's sign-in entry, since phase 7b `SignInAsync(provider)` for any provider, see "The settings screen") and, in `.Commands.cs`, the palette's clone from an account (since phase 7b `CloneFromAccountAsync(provider)`, see "Clone from an account") |
 | `RepoTabViewModel` | One tab: `Title` ("New tab" or the repository's folder name), `CanClose`, the `Welcome` page, the open `Repository` or null. `LeftPanel`, `Details`, `Changes` (the stage panel), `ShowsWorkingChanges`, `BranchText`, `Toolbar` and `OperationStatus` are the repository's, or empty ones (an empty toolbar has every command disabled; an empty status says "Ready"). Since phase 4 `ShowsRightPanel` (false while the conflict resolver is open), `ShowsDetailsPanel`, `ShowsStagePanel` and `GraphColumnSpan` (2 while the resolver is open, else 1) say what the right-hand columns show (D140). A tab restored from the session shows its folder's name at once (`ShowPending`) and opens it once git is found; one that fails keeps its folder in the session (`FailedPath`) until the user opens something else in it. Since phase 6 a tab can be a workspace's dashboard (`ShowDashboard(workspace)`, once): `Dashboard`, `IsDashboard`, `ShowsDashboard`, `ShowsLeftPanel` (false on a dashboard), `GraphColumn` (0 on a dashboard, else 1), `SavedWorkspaceId` and `TabAutomationId` (`DashboardTab` or `RepoTab`); on a dashboard `Title` and `BranchText` are the workspace's name and follow a rename, `GraphColumnSpan` is 3, `ShowsRightPanel` is false, `Toolbar` is the dashboard's (`ToolbarViewModel.ForDashboard`) and `OperationStatus`, typed `IStatusBarOperation`, its `DashboardBulkViewModel`. `CloseToolTip` and `CloseKeyText` give the close button Mod+W on the active tab only. `ShowAsync` waits while a closed tab's or a released summary's queue still runs on the worktree (`WaitingText`, "Waiting for {title} to finish…"), then adopts the worktree's summary-mode view model when a dashboard holds one (see "Summary mode, the registry and adoption") and registers what it shows |
-| `WelcomeViewModel` | The welcome page (D42): Open and Init through `IFolderPicker`, the clone form with its progress (`CloneProgress` from git's stderr) and Cancel, the shared recent list. A clone opens a prompt scope ("Clone", `PromptMode.Ask`) and passes its variables to `CloneAsync`, so an ssh or HTTPS clone asks in the window. Since phase 6 its "Workspaces" section (see "Workspaces"), and `InitAtAsync`, which the palette's and the key's Init share. Since phase 7a the form's "From GitHub…" while signed in (`ShowsGitHubButton`, `BrowseGitHubCommand`), and a GitHub URL's binding to the account in the clone's prompt scope (see "Clone from GitHub") |
+| `WelcomeViewModel` | The welcome page (D42): Open and Init through `IFolderPicker`, the clone form with its progress (`CloneProgress` from git's stderr) and Cancel, the shared recent list. A clone opens a prompt scope ("Clone", `PromptMode.Ask`) and passes its variables to `CloneAsync`, so an ssh or HTTPS clone asks in the window. Since phase 6 its "Workspaces" section (see "Workspaces"), and `InitAtAsync`, which the palette's and the key's Init share. Since phase 7a the form's browse button while an account is signed in (since phase 7b of any provider: `ShowsBrowseButton`, `BrowseButtonText`, `BrowseCommand` over `BrowseAsync(provider)`), and a URL's binding to the signed-in accounts in the clone's prompt scope (see "Clone from an account") |
 | `RepositoryViewModel` | One open repository: its `Graph` (`CommitGraphData`), `SelectedIndex`, `Selection` (`GraphSelection`, by SHA, D88) and `MultiSelection`, `IsWorkingRowSelected` and `WorkingRowText`, `ScrollOffset` (kept per tab), `LeftPanel`, `Details`, `Status` (`WorkingTreeStatus`) with `HasWorkingChanges`, `Changes` (the stage panel), the open `Diff`, `Refs` as last read, `BranchText`, the watcher and the refreshes, the Q1 measurements; phase 3's `Queue`, `Operations` (`RepositoryOperations`), `OperationStatus`, `Toolbar`, `Banner` (`ConflictBannerViewModel`), `MenuContext` and the menus' entry points; phase 4's `InteractiveRebase` (the list, or null), `Resolver` and `IsResolverOpen`, `ShowsGraph`, `ShowsInteractiveRebase` and `ShowsDiff` (what the graph area shows), `MergeTool`, `BackupsToKeep` (see "The graph area: the list, the resolver and the pages"); phase 5's `UndoHistory` (its worktree's, from `TabServices.UndoHistories`), `Page` and `ShowsPage`, `Search` and `SearchMarks`, `Comparison`, `Filters`, `GraphFilter` and `IsReloadingGraph`, `ShowCommit`, `ShowInGraph`, `Reveal`. Split over `RepositoryViewModel.cs`, `.Menus.cs` (menus, double-clicks, the drop), `.Selection.cs` (multi-selection), `.InProgress.cs` (banner with Abort, Continue and Skip and their questions, working-row text, left-panel sync, the stopped commit's message, the questions about conflict markers), `.GraphArea.cs` (phase 4's hooks: the list, the resolver, leaving the graph area, the focus when they close, `merge.tool`, the clean-up at opening), and phase 5's `.Pages.cs` (the pages and their host, a commit shown from a page, the search bar's place and marks, the filter's reload, the restore bar's tie to the undo history), `.Find.cs` (the search's and the comparison's hosts) and `.Filters.cs` (hide and solo), and phase 6's `.Palette.cs` (the palette's items from the menus) and `.Settings.cs` (whether an editor is chosen, for the file menus). Since phase 6 it has a summary mode for a dashboard's rows (`ForSummary`, `IsSummary`, `Promote`, `FirstRead` and `HasFirstRead`; see "Summary mode, the registry and adoption"), and `IsWatcherQuiet`, which the harnesses wait for (see "Watching and refreshing"). Disposing it (`IsClosed` from then on) disposes its queue and cancels all its other work |
 | `RecentRepositories` | The recent list, newest first, at most 10, kept in the session |
 | `GitRepositoryProvider` | `IRepositoryProvider` with real git: `OpenAsync`, `InitAsync`, `CloneAsync` (with the clone's prompt variables) through `GitRepository`. Since phase 6 an open and an init run whole on the thread pool, so that `GitRepository.OpenAsync`'s own folder check never holds the UI thread, also for a folder on a share that does not answer (design 2.10, D59) |
@@ -446,7 +476,7 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | Type | Role |
 |---|---|
 | `GitCommand` | One call: arguments (passed one by one, no shell quoting), working directory, optional standard input, extra environment variables (a null value removes a variable), optional line handlers for streamed output, and the `Encoding` of standard input and output (UTF-8, or `GitCommand.Latin1` for byte-exact content, D66). `DisplayText`, used in logs and errors, hides the credentials of a URL; `HideCredentials(text)` turns every URL's user information into `***`, `RemoveCredentials(text)` removes it (what "Copy URL" copies, D103). Since phase 7a an authority ends at a control character too (`EndsAuthority(c)`: `/`, `?`, `#`, white space or a control character; public for the runner's cut, `RecordedOutput`), so the `\0` between `config --null`'s entries ends a URL that has no trailing `/`, and the next entry's user information is hidden as well (design 4.2, 4.3). Since phase 5 `RecordsStandardInput`: the call's record keeps its standard input; set only for `update-ref --stdin`, whose lines name refs and SHAs and carry no secret. Since phase 6 `BelowNormalPriority`: on Windows the runner puts git, and what it has started by then, at below-normal priority right after the start (the merge-tool lookup, design 8.10); since phase 7b git first joins a job whose priority-class limit Windows applies to each process as it joins, and the lowering adds to the job what git started before it joined. Windows puts a new process in its creator's job, so what git's tree starts once its creator is in the job runs below normal, however its class was chosen. CI run 42216604663 found git's console host at normal priority; on the laptop, Windows took a new process's class from its creator partway through the creation and listed it in a snapshot only at the end, so a process whose class was taken before the lowering and that showed only after the runner's last snapshot kept it (D386). One case is left: a process whose creation read its creator's job before the creator joined it, and that shows only after the lowering's last snapshot, stays out of the job and keeps the class it was given (none did in about 480 trials, D386); ignored elsewhere |
-| `IGitRunner` / `GitRunner` | Runs a command without blocking. A non-zero exit code is returned in the `GitResult`, not thrown; `GitResult.EnsureSuccess` turns it into a `GitException` that carries git's own standard error and, since phase 3, its standard output (`StandardOutput`: a merge writes its messages there). Since phase 5 it takes the record clock (`GitRunner(path, callLog, log, recordClock)`) for the times the activity log shows; since phase 6 also the session's git environment (`environment`, kept as a copy in `SessionEnvironment`), applied to every call after the runner's defaults and before the command's own (D220), and its defaults remove the variables that select another repository (D233, below) |
+| `IGitRunner` / `GitRunner` | Runs a command without blocking. A non-zero exit code is returned in the `GitResult`, not thrown; `GitResult.EnsureSuccess` turns it into a `GitException` that carries git's own standard error and, since phase 3, its standard output (`StandardOutput`: a merge writes its messages there). Since phase 5 it takes the record clock (`GitRunner(path, callLog, log, recordClock)`) for the times the activity log shows; since phase 6 also the session's git environment (`environment`, kept as a copy in `SessionEnvironment`), applied to every call after the runner's defaults and before the command's own (D220), and its defaults remove the variables that select another repository (D233, below). Since phase 7b (D386) on Windows it puts every call's git in its job right after the start, before a `BelowNormalPriority` call's lowering; `StartObserver`, an internal seam for the tests, sees git's process just before that (`GitRunnerPriorityTests`) |
 | `GitResult` | Exit code, standard output, standard error, duration |
 | `GitCallRecord` | The record of a call: command, folder, outcome, exit code, start and duration by the system clock, the first 16 KiB of each output stream with credentials hidden (D103), and `OperationId`, the queue's operation the call belongs to, or null for a read outside one. Phase 5 (D173): `Sequence` (a number from `RecordSequence`, the process's one counter, which operations take theirs from too, taken when the call starts), `DisplayedStart` and `DisplayedDuration` (by the record clock), `StandardInput` (for `RecordsStandardInput`, cut and with credentials hidden as the output is) and `OnTemporaryIndex` (the call ran with `GIT_INDEX_FILE` set: a snapshot's index) |
 | `IGitCallLog` / `GitCallLog` | Keeps the session's call records in two stores (phase 5, D173): an operation's calls as long as its `OperationRecord` stays in the `OperationLog` (it listens to `Evicted`), within a budget of 64 MB for all of them that drops the oldest operation's calls first (`HasDroppedCalls`); the reads, calls outside an operation, in a ring of their own of the newest 2,000. So a burst of reads never takes an operation's commands away. Events `Added` and `Removed` |
@@ -462,7 +492,7 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `ConflictEntry`, `ConflictKind`, `ConflictSide`, `ConflictContent`, `MergeToolResult` | A conflicted path as `git status --porcelain=v2` prints its `u` line: the kind in git's words (both modified, both added, deleted by them or us, added by us or them, both deleted), whether it is a submodule, each stage's mode and id (`HasBase`, `HasOurs`, `HasTheirs`); what the resolver reads of it (the working-tree bytes, the marker size, whether a side is binary or a symbolic link); whether the merge tool staged it |
 | `ConflictText` (Core, `Conflicts/`) | Pure: a conflicted file split into common segments and blocks (`Parse(text, markerSize)`: a `<` line, an optional `|` base section, one `=` line, a `>` line, each of the marker size, as strictly as git's rerere reads them; anything else is common text), each block's ours, theirs and base lines and labels, `Choose(block, BlockChoice)` (`Ours`, `Theirs`, `OursThenTheirs`, `TheirsThenOurs`), the whole ours and theirs files, `HasMarkerLines` (any marker line of the size, the markers question's test), `Decode` and `Encode` byte for byte (UTF-8, else Latin-1, line ends kept). `ConflictTextTests` |
 | `BackupRetention`, `RemovedBackup`, `BackupRemovalReason` | The backups' clean-up (D139): `BackupRetention.Default` is 30 days and 50 backups; what it removed and why (older than the days, beyond the count) |
-| `NetworkOptions` | What a phase 3 call is given beyond its token: the prompt scope's variables (`Environment`), where progress goes (`Progress`), settings passed as `git -c` before a remote command (`Configuration`: auto-fetch's network timeout, D125), and `PromptCancelled`. `NetworkOptions.From(context)` builds it from a running operation. Local writes take it too: a filter or hook they run can prompt (git-lfs). Since phase 7a the `Environment` of a network operation bound to the hosting account holds its scope's credential pairs (see "Prompts and credentials"), and `Configuration` never holds a `credential.*` or `include.*` key, which git would read after those pairs (D329) |
+| `NetworkOptions` | What a phase 3 call is given beyond its token: the prompt scope's variables (`Environment`), where progress goes (`Progress`), settings passed as `git -c` before a remote command (`Configuration`: auto-fetch's network timeout, D125), and `PromptCancelled`. `NetworkOptions.From(context)` builds it from a running operation. Local writes take it too: a filter or hook they run can prompt (git-lfs). Since phase 7a the `Environment` of a network operation bound to a hosting account holds its scope's credential pairs (see "Prompts and credentials"), and `Configuration` never holds a `credential.*` or `include.*` key, which git would read after those pairs (D329) |
 | `PushRequest` | One push of a local branch: remote, branch, the branch's full name on the remote, `SetUpstream`, `ForceWithLease` |
 | `RemoteInfo`, `WorktreeInfo` | A remote with its URLs as configured (`ShownUrl` hides credentials); a worktree and the branch it has checked out |
 | `BackupRequest`, `BackupEntry`, `BackupResult` | A backup batch (see "Backup refs") |
@@ -478,8 +508,8 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `CommitDetails`, `ChangedFile`, `FileChangeKind` | What the details panel shows; files compared with the first parent, renames detected |
 | `CommitPager` | Internal: turns `git log` lines into pages and merges the stashes in. A date git cannot print (an ident without a time zone) is read as 1970-01-01 UTC, as git does, so such a commit is not lost. For a filtered graph (phase 5, D178, amending D54 while a filter is on) it keeps the commits it knows will be shown (the shown refs' tips and HEAD's, then the parents of every commit added while a stash waits): a stash whose base is known is placed by date as before, any other waits and goes in just above its base, and one whose base never comes is left out |
 | `CloneProgressParser`, `CloneProgress` | Git's clone progress lines as stage and percentage |
-| `RepositoryWatcher` | `IRepositoryWatcher` (D52, D71): `FileSystemWatcher`s on the git folder, the common folder and the working tree. In the git folders, changes under `objects/` and to `*.lock` files are ignored; in the working tree, changes under `.git` are left to the others, and a burst whose paths `git check-ignore` calls all ignored is dropped. 300 ms of quiet before `Changed`, at most 2 s while changes keep coming, measured on a `TimeProvider` (the system's; since phase 5 a test passes `ManualTimeProvider` and moves it by hand, so that a slow machine cannot split a burst, D160); `RepositoryChangedEventArgs` says whether the git folder or the working tree changed. `Pause()` stops it reporting while an operation of the repository's queue runs (the queue calls it). Changes under the file-system monitor's `fsmonitor--daemon/` are ignored too: it writes a cookie there for every `git status`. `Start()` walks the working tree's folders on Linux, so the view model calls it on a background thread. Since phase 6 `IsQuiet` (a default member of `IRepositoryWatcher` that returns true): false from a burst's first change until its raise has ended, so that a harness can wait for the refresh a change starts (see "Watching and refreshing") |
-| `WindowsJob` | Internal: a Windows job object, used on Windows to stop git together with everything it started; for a `BelowNormalPriority` call it also holds every process in it at below-normal priority (`HoldsBelowNormal`, Windows' `JOB_OBJECT_LIMIT_PRIORITY_CLASS`), and the runner's lowering adds to it what git started before it joined (`TryAdd`) |
+| `RepositoryWatcher` | `IRepositoryWatcher` (D52, D71): `FileSystemWatcher`s on the git folder, the common folder and the working tree. In the git folders, changes under `objects/` and to `*.lock` files are ignored; in the working tree, changes under `.git` are left to the others, and a burst whose paths `git check-ignore` calls all ignored is dropped. 300 ms of quiet before `Changed`, at most 2 s while changes keep coming, measured on a `TimeProvider` (the system's; since phase 5 a test passes `ManualTimeProvider` and moves it by hand, so that a slow machine cannot split a burst, D160); `RepositoryChangedEventArgs` says whether the git folder or the working tree changed. `Pause()` stops it reporting while an operation of the repository's queue runs (the queue calls it). Changes under the file-system monitor's `fsmonitor--daemon/` are ignored too: it writes a cookie there for every `git status`. `Start()` walks the working tree's folders on Linux, so the view model calls it on a background thread. Since phase 6 `IsQuiet` (a default member of `IRepositoryWatcher` that returns true): false from a burst's first change until its raise has ended, so that a harness can wait for the refresh a change starts (see "Watching and refreshing"). Since phase 7b a raise that has passed its checks can end after `Dispose` returns, with only changes counted before `Dispose`; its ignore check takes the lifetime token taken at construction, which `Dispose` cancels, so a burst whose check has not answered by then is dropped rather than raised as one git could not judge (`RaisePassedChecks`, an internal hook for the tests; see "Watching and refreshing") |
+| `WindowsJob` | Internal: a Windows job object, used on Windows to stop git together with everything it started; for a `BelowNormalPriority` call it also holds every process in it at below-normal priority (`HoldsBelowNormal`, Windows' `JOB_OBJECT_LIMIT_PRIORITY_CLASS`, set before git joins), and the runner's lowering adds to it what git started before it joined (`TryAdd`, which `Contains` checks first). The limit and `TryAdd` are phase 7b's (D386); should Windows refuse the limit, the job is made without it and a below-normal call keeps phase 6's lowering alone |
 | `FileHistoryRow`, `BlameResult`, `BlameLine`, `BlameCommit`, `BlameIgnoreRevsFileMissingException` (Core); `BlameParser`, `GitQuotedPaths`, `GitRawDates` (Git) | Phase 5's file history and blame (design 4): a history row is the commit as the graph's `CommitInfo`, the entry's status, the path at that commit and the old path of an `R` or `C`; a blame is the lines' bytes as Latin-1 strings (D66), each with its commit (SHA, author, e-mail, author time and zone, summary, the path at that commit, `previous`, `boundary`; the zero SHA for lines not committed yet), and `IsSubmodule` for a gitlink, which has no lines. `BlameParser` reads `--porcelain` as a three-state machine (a header, metadata lines, a tab line) and checks that the final line numbers run 1 to N; `GitQuotedPaths` unquotes git's C-quoted paths; `GitRawDates` reads `--date=raw`'s `<seconds> <zone>` |
 | `ReflogResult`, `ReflogEntry`, `BackupInfo`, `BackupRefInfo` | Phase 5's reflog page (design 5): the entries newest first (selector, number, commit, parents, git's message, the commit's subject, the entry's own time), how many numbers git skipped (`Skipped`: entries that name no commit that exists), `More` (the walk went past the limit), `ForcePushLease` (a force push's lease from the remote-tracking reflog); a backup is one operation's refs (kind, time, retry number), each ref with its object, message and the commit it keeps |
 | `CompareResult`, `CompareBase`, `CompareCounts` | Phase 5's comparison (design 6): both SHAs as resolved, which side the list was read from (`Trees`, `MergeBase`, `SeveralMergeBases`, `NoCommonHistory`), that side's SHA, the changed files, whether `diff.renameLimit` stopped the rename search, and for branches the commits only on each side |
@@ -494,8 +524,9 @@ Contracts are in `src/VisualCommit.Core/Git`, implementations in `src/VisualComm
 | `RemoteBranchNames` (Core) | Phase 6 (the review at status step 22, design 10.6): the one place a remote-tracking ref's name is split by its remote's name where the fetch lines are not asked or do not tell, remote names holding slashes as they may: `WithoutRemote(name, remote)`, `RemotesOf(name, remotes)` (every configured remote it starts with, longest first; more than one means the name alone does not tell), `LongestRemoteOf`, `RemoteOf` (the longest, else the first part). The refs read, `RepoRefs` (its phase 5 assumption and its local names), `GraphFilter.RemoteOf`, the left panel, the menus, the backups list's texts and the push backs call it. `RemoteBranchNamesTests` |
 | `PullConfiguration`, `PullFastForwardSetting`, `PullRebaseSetting`, `PullIntegrationOptions` (Core, `Git/PullConfiguration.cs`) | Phase 6: Pull's settings as read before its fetch (D219, design 8.9): what `pull.ff` asks, what the rebase setting asks and which key decided it, the values as set, and `Problem` and `ProblemKey` for a value Pull does not understand, whose `NotUnderstood()` is the failure Pull reports (command `git config --get <key>`). `PullIntegrationOptions(Configuration, KeepIgnored)` is `IntegratePullAsync`'s optional last option (null: phase 4's pull) |
 | `PullModes`, `PullMode`, `GitBoolean` (Core) | Phase 6: the settings screen's pull modes (D218, design 8.7): `PullModes.Read` names the mode `pull.rebase` and `pull.ff` give together, by their effect, and `Writes(mode)` the two keys a mode writes; `GitBoolean.TryParse`, git's reading of a boolean (the words ignoring case, integers with a unit), which the pull modes and the identity's `user.useConfigOnly` use |
-| `IGitConfiguration` (Core), `GitConfiguration` (Git), `GitConfigRead`, `GitConfigValue`, `GitConfigScope`, `GitConfigWrite`, `GitIdentityRead`, `MergeToolHelp`, `MergeTool`, `GitConfigLocations`, `GitConfigIncludes` | Phase 6: git's own settings as the settings screen reads and writes them, and the merge-tool lookup (D190, D202, D217); see "Git's own settings". Phase 7b's review before the gate: a conditional include's file read for a clone's binding (`ReadIncludedAsync`, `GitConfigIncludes`; see "The clone's credentials") |
-| `UrlRewrite`, `UrlRewrites`, `RemoteEffectiveUrls` (Core, `Git/UrlRewrites.cs`); `GitRepository.ReadUrlRewritesAsync` (`GitRepository.Hosting.cs`) | Phase 7a: git's URL rewrites (design 4.2, 4.3), by which the URLs bound to the hosting account are git's own (see "Prompts and credentials"). `Parse(entries)`: each `url.<base>.insteadOf` or `.pushInsteadOf` entry (the key without case, the base as written; an entry without a value skipped), in order. `Apply(remoteUrls)`, of `RepoRefs.RemoteUrls` (the refs read's `url` and `pushurl` values as configured, each a `RemoteUrl`): per remote, in order of first appearance, the URLs git uses, as measured on 2.56: the fetch URLs, each `url` after `insteadOf`; the push URLs, each `pushurl` after `insteadOf`, else the `pushInsteadOf` rewrites of the `url` values when any has one (those alone), else the fetch URLs. A rule is a plain case-sensitive prefix (an empty one matches every URL), the longest wins, a tie goes to the base first seen and then to its earlier value, nothing is rewritten twice, and `pushInsteadOf` never applies after `insteadOf`; a remote without `url` has no fetch URL. `ReadUrlRewritesAsync`: one `git config --null --get-regexp ^url\.` in the working folder as a read, with `GIT_CONFIG_PARAMETERS` removed as in a bound scope (D329), so that it sees the rules the bound calls apply; exit 1 is `UrlRewrites.None`, another failure throws. It runs only while the account binds git (a tab's read after its refs, a dashboard row's network operation, D290, D332), so no earlier count of git calls moves. `UrlRewritesTests`, `UrlRewritesParityTests` (against `git remote get-url --all` and `--push --all`) |
+| `IGitConfiguration` (Core), `GitConfiguration` (Git), `GitConfigRead`, `GitConfigValue`, `GitConfigScope`, `GitConfigWrite`, `GitIdentityRead`, `MergeToolHelp`, `MergeTool`, `GitConfigLocations`, `GitConfigIncludes` | Phase 6: git's own settings as the settings screen reads and writes them, and the merge-tool lookup (D190, D202, D217); see "Git's own settings". Since phase 7b's review before the gate (D391): `ReadIncludedAsync(directive)`, the `url.` rules and conditional directives of the file that one conditional include of the outside read names, for a clone's binding alone, and `GitConfigIncludes` (`IsConditional`; `Resolve`, the include's path as git works it out); see "Git's own settings" and "The clone's credentials" |
+| `UrlRewrite`, `UrlRewrites`, `RemoteEffectiveUrls` (Core, `Git/UrlRewrites.cs`); `GitRepository.ReadUrlRewritesAsync` (`GitRepository.Hosting.cs`) | Phase 7a: git's URL rewrites (design 4.2, 4.3), by which the URLs bound to a hosting account are git's own (see "Prompts and credentials"). `Parse(entries)`: each `url.<base>.insteadOf` or `.pushInsteadOf` entry (the key without case, the base as written; an entry without a value skipped), in order. `Apply(remoteUrls)`, of `RepoRefs.RemoteUrls` (the refs read's `url` and `pushurl` values as configured, each a `RemoteUrl`): per remote, in order of first appearance, the URLs git uses, as measured on 2.56: the fetch URLs, each `url` after `insteadOf`; the push URLs, each `pushurl` after `insteadOf`, else the `pushInsteadOf` rewrites of the `url` values when any has one (those alone), else the fetch URLs. A rule is a plain case-sensitive prefix (an empty one matches every URL), the longest wins, a tie goes to the base first seen and then to its earlier value, nothing is rewritten twice, and `pushInsteadOf` never applies after `insteadOf`; a remote without `url` has no fetch URL. `ReadUrlRewritesAsync`: one `git config --null --get-regexp ^url\.` in the working folder as a read, with `GIT_CONFIG_PARAMETERS` removed as in a bound scope (D329), so that it sees the rules the bound calls apply; exit 1 is `UrlRewrites.None`, another failure throws. It runs only while an account binds git (a tab's read after its refs, a dashboard row's network operation, D290, D332, and since phase 7b, inside D290's window, a tab's network operation with no read of the tab's in flight and the auto-fetch tick's request for the tab's read, D388), so no earlier count of git calls moves. `UrlRewritesTests`, `UrlRewritesParityTests` (against `git remote get-url --all` and `--push --all`) |
+| `PullRequestRefs` (Core, `Hosting/PullRequestRefs.cs`) | Phase 7b (ruling 14, D361, phase 7b's design 8.4): a request's refs on each provider, pure. `HeadOf(provider, number)`: the head a checkout fetches into `FETCH_HEAD` (D305), `refs/pull/<n>/head` on GitHub, `refs/merge-requests/<n>/head` on GitLab, and null on Azure DevOps, which has no head ref (D361); a number below 1 throws. `IsFetchableHead(ref)`: one of those two forms, one or more ASCII digits and nothing after (`FetchToFetchHeadAsync`'s guard). `SourceCanExist(provider, remoteRef)`: the push guard's rule, false only for a request ref that cannot exist on the provider: on GitHub 7a's rule, moved here from `GitHubUrls` (`refs/pull/<x>/head` or `/merge` whose `<x>` is not all ASCII digits), on GitLab `refs/merge-requests/<x>/…` whose first segment is not all digits, on Azure DevOps `refs/pull/<x>/…` with such an `<x>` and every `refs/pull/<digits>/head`; true otherwise, since an unknown suffix (`/train`) may exist. The providers' `SourceCanExist` (GitHub's through `GitHubUrls.SourceCanExist`) and `HeadOf` call it. `PullRequestRefsTests` |
 
 Rules the runner follows (see D30, D31, D36, D37, D56 and D59):
 
@@ -522,7 +553,7 @@ Rules the runner follows (see D30, D31, D36, D37, D56 and D59):
   temporary `GIT_INDEX_FILE`): the interactive rebase's
   `GIT_SEQUENCE_EDITOR` (D143) and the stopped commit's `GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL` and
   `GIT_AUTHOR_DATE` for a rebase's Continue (D144); since phase 7a those of a prompt scope bound to
-  the hosting account, whose `GIT_CONFIG_PARAMETERS` set to null thus drops the session's value and
+  a hosting account, whose `GIT_CONFIG_PARAMETERS` set to null thus drops the session's value and
   the process's (D329; see "Prompts and credentials"). Input and output are UTF-8, unless the
   command asks for Latin-1 (`GitCommand.Encoding`, D66): diffs, patches and blobs then travel byte
   for byte. Standard error is always UTF-8.
@@ -736,14 +767,21 @@ into `FETCH_HEAD`.
 
 | Group | Members and their git commands |
 |---|---|
-| The refs read (`.Refs.cs`, design 1.2) | The one `config --null --get-regexp ^remote\.` of `ReadRefsAsync` also keeps every remote's `url` and `pushurl` values as configured, before `insteadOf`, in its order (`RepoRefs.RemoteUrls`, each a `RemoteUrl(Remote, Url, IsPushUrl)`; a key without a value gives none; never shown), so the refs read stays at five processes. The hosting recognises GitHub's remotes and binds git's URLs from them |
+| The refs read (`.Refs.cs`, design 1.2) | The one `config --null --get-regexp ^remote\.` of `ReadRefsAsync` also keeps every remote's `url` and `pushurl` values as configured, before `insteadOf`, in its order (`RepoRefs.RemoteUrls`, each a `RemoteUrl(Remote, Url, IsPushUrl)`; a key without a value gives none; never shown), so the refs read stays at five processes. The hosting recognises GitHub's remotes, and since phase 7b GitLab's and Azure DevOps' too, and binds git's URLs from them |
 | URL rewrites (`.Hosting.cs`, D290, D329) | `ReadUrlRewritesAsync()`: see `UrlRewrites` above |
-| A pull request's head (`.PullRequests.cs`, D305, design 10.5) | `FetchToFetchHeadAsync(remote, sourceRef, options)`, for `refs/pull/<digits>/head` only (anything else is an `ArgumentException`): one network call `fetch --progress --no-tags --refmap= --write-fetch-head <remote> <sourceRef>`, in which `--refmap=` keeps the remote's fetch lines from writing a ref, `--no-tags` its `tagOpt` from fetching tags, and no `--prune` lets a `fetch.prune` delete anything (D99): no ref and no configuration is written. It then reads the worktree's own `FETCH_HEAD`, never through a `rev-parse FETCH_HEAD`: the SHA when the file is one line of a full SHA, an empty second field and `'<sourceRef>' of …`, else null, since another fetch can rewrite it in between (plan.md's risk 33) |
+| A pull request's head (`.PullRequests.cs`, D305, design 10.5) | `FetchToFetchHeadAsync(remote, sourceRef, options)`, for a head `PullRequestRefs.IsFetchableHead` takes alone: `refs/pull/<digits>/head`, and since phase 7b GitLab's `refs/merge-requests/<digits>/head` (D361; anything else is an `ArgumentException` that names both forms): one network call `fetch --progress --no-tags --refmap= --write-fetch-head <remote> <sourceRef>`, in which `--refmap=` keeps the remote's fetch lines from writing a ref, `--no-tags` its `tagOpt` from fetching tags, and no `--prune` lets a `fetch.prune` delete anything (D99): no ref and no configuration is written. It then reads the worktree's own `FETCH_HEAD`, never through a `rev-parse FETCH_HEAD`: the SHA when the file is one line of a full SHA, an empty second field and `'<sourceRef>' of …`, else null, since another fetch can rewrite it in between (plan.md's risk 33) |
+
+Phase 7b adds no member to `IGitRepository`. It widens `FetchToFetchHeadAsync`'s guard to GitLab's
+head (above; `GitRepositoryPullRequestsTests` fetch it beside its fetch line, `fetch.prune` and
+`tagOpt`, and no ref or configuration is written), and documents that the watcher's `Changed` can be
+raised after `Dispose` returns (see "Watching and refreshing"). Its git calls for the credentials of
+the new hosts are those of "Prompts and credentials".
 
 **Git versions** that the code handles. The development machine runs Git 2.56.0.windows.4 since
 2026-10-28 (D248); it ran 2.36.0.windows.1 before, on which phases 3 to 6 derived their facts. CI
-runs Git 2.56.0.windows.2 (Windows, since 2026-10-15), 2.56.0 (macOS, and `ubuntu-latest` since
-2026-10-29; 2.55.0 before) and 2.43.0 (the two containers), so since then no CI job runs 2.55;
+runs Git 2.56.0.windows.4 (Windows, since 2026-11-02; 2.56.0.windows.2 from 2026-10-15), 2.56.0
+(macOS, and `ubuntu-latest` since 2026-10-29; 2.55.0 before) and 2.43.0 (the two containers), so
+since then no CI job runs 2.55;
 Git 2.55 is still on the development machine, inside Visual
 Studio (phase 5's research used it; a trimmed one, plan risk 28). Phase 4 found Git 2.55's
 differences: at a conflict stop `rebase-merge/message` ends with a `# Conflicts:` block, left out
@@ -771,6 +809,18 @@ valid repository", where earlier gits say "not a git repository" (the opening ta
 files' rebase check reads the side branches' points whenever the range holds a merge); a unit
 letter alone as a boolean (`k`) is false on 2.36 and refused by newer gits, and the settings screen
 shows such a value as Other.
+
+Phase 7b found, for the credentials on the new hosts (see "Prompts and credentials"): Git for
+Windows' system configuration sets `credential.https://dev.azure.com.usehttppath true` (read on
+2.56.0.windows.4), so with it git's prompts and credential requests for dev.azure.com name the path,
+while elsewhere, and in every test run (`GIT_CONFIG_NOSYSTEM=1`), they name none (phase 7b's design
+8.3); below 2.46 an `<organization>@` URL's first request goes without credentials (401), libcurl's
+own retry sends the organization with an empty password (401), and only then does git ask the app's
+helper, whose token goes with the third request (CI's 2.43, phase 7b's design 8.8, As built); git
+2.56's curl maps a host written outside ASCII (fullwidth letters and digits, U+FF0E, U+3002) to
+ASCII, where 2.43's refused fullwidth letters (the same As built); and git up to 2.56.0 without its
+commit 76524c2604bc, over a libcurl that strips the user from its effective URL (curl 8.23.0),
+asks for the credential after the first 401 with no user (D389, plan risk 43).
 
 ### Lane layout (D48, D54, D55)
 
@@ -880,22 +930,25 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   search's match is scrolled into view without centring it (`ScrollIntoViewRequested` →
   `ScrollIntoView`); `RepositoryViewModel.Reveal(sha)` scrolls a row to the middle of the view
   without selecting it (a comparison's links).
-- **Pull-request badges (phase 7a, D309, `CommitGraphControl.Badges.cs`).** The styled property
-  `PullRequests` (the open pull requests by full ref name) is bound to the repository's
-  `HostingState.ByRef`; a new map lays the rows out again only when a ref gains or loses a pull
-  request or its number, title or draft changes (an equal map keeps the row cache, as `Search`
-  does). A `CurrentBranch`, `LocalBranch` or `RemoteBranch` label whose ref the map holds carries,
-  inside the label after its name, Lucide's "git-pull-request" icon (`IconPullRequest`, 10 px, 6
-  after the name, `BadgeGap`) and, 3 further (`BadgeIconGap`), `#1` in the label's font and
-  colours. Only a row's first label of each pull request gets one (local before remote), so a branch
-  level with its upstream shows one badge and one ahead of it a badge on each row; a label folded
-  into "+N" has none. `PlaceLabels` counts the badge in the label's width, so labels fold into "+N"
-  sooner, and the first label's name is cut with "…" to make room, never the badge. The label's
-  bounds include the badge: a click, right-click, drag or drop on it is one on its label.
-  `PlacedLabel` gains a last member `Badge` (`PullRequestBadge(Number, Title, IsDraft)`); `Text` and
-  `FullText` stay the branch's name, which the menus, the drag and the drop use. The labels' tooltip
-  follows each label whose ref has a pull request with " (pull request #1: Add the login form)" or
-  " (draft pull request #2: …)", also for labels in "+N". `BadgeInRow(index, label)`
+- **Pull-request badges (phase 7a, D309, `CommitGraphControl.Badges.cs`; since phase 7b every
+  provider's, D355).** The styled property `PullRequests` (the open requests by full ref name) is
+  bound to the repository's `HostingState.ByRef`; a new map lays the rows out again only when a ref
+  gains or loses a request or its number, title, draft or provider changes (an equal map keeps the
+  row cache, as `Search` does). A `CurrentBranch`, `LocalBranch` or `RemoteBranch` label whose ref
+  the map holds carries, inside the label after its name, Lucide's "git-pull-request" icon
+  (`IconPullRequest`, 10 px, 6 after the name, `BadgeGap`) and, 3 further (`BadgeIconGap`), the
+  number in its provider's form (`HostingTexts.Number`: GitHub's `#1`, GitLab's and Azure DevOps'
+  `!21`) in the label's font and colours. Only a row's first label of each request gets one (local
+  before remote), so a branch level with its upstream shows one badge and one ahead of it a badge on
+  each row; a label folded into "+N" has none. `PlaceLabels` counts the badge in the label's width,
+  so labels fold into "+N" sooner, and the first label's name is cut with "…" to make room, never the
+  badge. The label's bounds include the badge: a click, right-click, drag or drop on it is one on its
+  label. `PlacedLabel` gains a last member `Badge` (`PullRequestBadge(Number, Title, IsDraft,
+  Provider)`, its `Provider` the request's base repository's, GitHub by default, so that 7a's badges
+  are equal as they were); `Text` and `FullText` stay the branch's name, which the menus, the drag and
+  the drop use. The labels' tooltip follows each label whose ref has a request with " ({draft }{R}
+  {N}: {title})" in its provider's words: " (pull request #1: Add the login form)", " (draft pull
+  request #2: …)", " (merge request !21: …)", also for labels in "+N". `BadgeInRow(index, label)`
   (`PlacedBadge`) gives the tests the places the drawing uses. With no map, or an empty one, every
   label is drawn as before.
 - **Avatars (phase 7a, D252, D310, D322; `CommitGraphControl.Avatars.cs`).** The styled property
@@ -917,18 +970,21 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   authors` at Debug, the second of D322's two lines, after which pictures of an opened GitHub
   repository are taken (the first, the list's, is the hosting's); only the active tab writes it,
   since the window has one graph.
-- **The authors told** (`RepositoryViewModel.Avatars.cs`; D311, D339). The tab tells its hosting
-  which authors to look up (`Hosting.ShowAvatarsFor`; what the hosting asks GitHub and keeps is in
-  "Hosting: a repository's pull requests and avatars") only in full mode and while the section is
-  `Loading`, `Failed` or `Loaded` (signed in, with a GitHub remote, D257); only once its graph is
-  whole or has 2,000 rows (a loading graph is followed through `CommitGraphData.Changed` until
-  then); and only when the e-mails differ from those sent last, which a sign-out or the loss of the
-  GitHub remote forgets. `AuthorsOnGitHub` makes the set in one pass over the first 2,000 rows: the
-  tips of the GitHub remotes' remote-tracking branches start it, a reached row adds its parents, and
-  each reached row's author e-mail, lower-case, is taken once, newest first, at most 200, with its
-  newest reached commit and the repository of the first remote in `HostingRemoteOrder` that reaches
-  it (`AuthorCommit`). The address of a commit that is only local, or only on another remote, is
-  never sent. The e-mails are the graph's, after `.mailmap` (`%aE`). The partial's
+- **The authors told** (`RepositoryViewModel.Avatars.cs`; D311, D339; since phase 7b D367). The tab
+  tells its hosting which authors to look up (`Hosting.ShowAvatarsFor`; what the hosting asks GitHub
+  and keeps is in "Hosting: a repository's pull requests and avatars") only in full mode, while the
+  section is `Loading`, `Failed` or `Loaded` and the listed repository is GitHub's (signed in, with a
+  GitHub remote listed, D257; a repository listed on GitLab or Azure DevOps shows no avatars, even
+  with a GitHub remote beside it, D367); only once its graph is whole or has 2,000 rows (a loading
+  graph is followed through `CommitGraphData.Changed` until then); and only when the e-mails differ
+  from those sent last, which a sign-out, the loss of the hosted remote, `OtherOrganization` or a
+  listed repository of another provider forgets. `AuthorsOnGitHub` makes the set in one pass over
+  the first 2,000 rows: the tips of the GitHub remotes' remote-tracking branches (of the remotes whose
+  repository is GitHub's; another provider's remote reaches nothing) start it, a reached row adds its
+  parents, and each reached row's author e-mail, lower-case, is taken once, newest first, at most
+  200, with its newest reached commit and the repository of the first remote in `HostingRemoteOrder`
+  that reaches it (`AuthorCommit`). The address of a commit that is only local, or only on another
+  remote, is never sent. The e-mails are the graph's, after `.mailmap` (`%aE`). The partial's
   `OnPropertyChanged`, the class's only override, also hands `Avatars` to the details panel.
 
 ### Left panel and commit details
@@ -992,11 +1048,13 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
   hidden branch whose commit is no row of the graph selects nothing (`NothingActivated`: no commit,
   no working row, a diff closed, the details placeholder) and its tooltip says "{b} is hidden in the
   graph".
-- **Pull requests (phase 7a).** With a GitHub remote the "Pull requests" section lists the open pull
-  requests or says why it does not, its menu and its rows' menus are real, a click on a pull request
-  selects its head commit and a double-click checks it out, and a branch row shows its open pull
-  request's `#n` (`RefPullRequest`); see "Pull requests". Without one the section is phase 1's
-  closed, empty header and no row changes.
+- **Pull requests (phase 7a; since phase 7b of every provider).** With a hosted remote the "Pull
+  requests" section, titled by the listed repository's provider ("Merge requests" on GitLab), lists
+  the open requests or says why it does not (on Azure DevOps with the account in another
+  organization, D356's row), its menu and its rows' menus are real, a click on a request selects its
+  head commit and a double-click checks it out, and a branch row shows its open request's number
+  (`RefPullRequest`, `#n`, or `!n` on GitLab and Azure DevOps); see "Pull requests". Without one the
+  section is phase 1's closed, empty header and no row changes.
 - **The author's avatar (phase 7a, D310).** `CommitDetailsViewModel.Avatars` (set by the repository
   when its avatars change, `None` by default) gives `AuthorAvatarFile`, the local image of the shown
   commit's author e-mail, case ignored; null without one and while no commit is shown. In
@@ -1241,6 +1299,17 @@ for 1500 ms before it counts it (a test switch, D262).` Nothing in the app sets 
 the lagged list with it (see "Tests"); CI runs without it (D262), and its macOS job meets the real
 late watcher.
 
+Since phase 7b `IRepositoryWatcher.Changed` says what holds at `Dispose`: a raise that has passed its
+checks when `Dispose` runs can still end after `Dispose` returns, and carries only changes counted
+before `Dispose` marked the watcher disposed, the first thing it does under the watcher's lock; no
+change counted after that is raised. `RepositoryViewModel` marks itself disposed before it disposes
+its watcher, and `OnRepositoryChanged` then returns without a refresh. Such a raise's ignore check
+(`git check-ignore`, for a burst in the working tree alone) takes the lifetime token taken at
+construction, which `Dispose` cancels, so a burst whose check has not answered when `Dispose` runs is
+dropped; before, it read the disposed source's
+token, which threw, and the burst was raised as one git could not judge (`RaisePassedChecks`, an
+internal hook for the tests; `RepositoryWatcherTests`).
+
 ### Operation queue (D81, D107, D123, D125, D126, D149)
 
 Contracts and the queue are in `src/VisualCommit.Core/Operations` (namespace
@@ -1250,7 +1319,7 @@ or a UI (`OperationQueueTests`, `OperationQueueUiTests`).
 
 | Type | Role |
 |---|---|
-| `GitOperation` | One operation: `Title` ("Push main", "Fetch origin": the log line, the status bar's "&lt;Title&gt; failed" and "&lt;Title&gt; cancelled", the finishing dialog), `RunningText` ("Fetching from origin…"), `Kind` (`Local` or `Network`), `Refresh` (`RefreshScope`: `None`, `Status`, `Refs`), `Run` (the delegate). Init properties: `DedupeKey`, `Errors` (`ErrorDisplay.Dialog`, or `StagePanel` for phase 2's writes), `IsBackground` (auto-fetch, the backups' clean-up at opening), `Prompts` (`PromptMode`; null: `Ask`, or `Deny` for a background operation), `HasSeveralSteps`, and since phase 4 `CanBeCancelled`: a local operation that only waits for another program (the merge tool, D149); since phase 6 `PromptGroup`, the bulk run it belongs to, which the queue passes to `IGitPromptBroker.Begin`; since phase 7a `CredentialBindings`, the URLs whose credentials come from the hosting account (empty by default), which it passes there too (see "Prompts and credentials") |
+| `GitOperation` | One operation: `Title` ("Push main", "Fetch origin": the log line, the status bar's "&lt;Title&gt; failed" and "&lt;Title&gt; cancelled", the finishing dialog), `RunningText` ("Fetching from origin…"), `Kind` (`Local` or `Network`), `Refresh` (`RefreshScope`: `None`, `Status`, `Refs`), `Run` (the delegate). Init properties: `DedupeKey`, `Errors` (`ErrorDisplay.Dialog`, or `StagePanel` for phase 2's writes), `IsBackground` (auto-fetch, the backups' clean-up at opening), `Prompts` (`PromptMode`; null: `Ask`, or `Deny` for a background operation), `HasSeveralSteps`, and since phase 4 `CanBeCancelled`: a local operation that only waits for another program (the merge tool, D149); since phase 6 `PromptGroup`, the bulk run it belongs to, which the queue passes to `IGitPromptBroker.Begin`; since phase 7a `CredentialBindings`, the URLs whose credentials come from a hosting account (empty by default), which it passes there too (see "Prompts and credentials") |
 | `OperationContext` | What `Run` is given: `OperationId` (`op-<n>`, unique in the process; also the prompt scope's id), `CancellationToken` (`CancellationToken.None` for a local operation that cannot be cancelled, and after `EndCancelWindow`), `Environment` (the prompt scope's variables), `Progress` (at most one update per 100 ms reaches the queue's `Changed`), `EndCancelWindow()` (from now on Cancel is no longer offered; it throws `OperationCanceledException` when the user had already cancelled, so a pull never integrates after Cancel), `PromptCancelled`, and since phase 4 `SetRunningText(text)`: an operation of several steps names the step it is at ("Checking out {A}…", then "Rebasing {A} onto {B}…"); the progress of the step before is dropped, the title and log lines stay |
 | `OperationReport` | What `Run` returns: `Done(message)`, `Warning(message)` (since phase 4: a success the status bar shows in the warning colour, logged `Succeeded`, such as a pull whose rebase left out commits the upstream once had), `Conflicts(message)` (a stop with conflicts is no failure, D95), `Failed(message, GitFailure)` (a failure the operation reports itself); since phase 7a `Offer`, what the status bar offers beside a success (`OperationOffer(Label, Run)`, D317; see "Toolbar, status bar, conflict banner and auto-fetch") |
 | `OperationResult`, `OperationSnapshot`, `OperationFinishedEventArgs` | How an operation ended (outcome `Succeeded`, `Conflicts`, `Failed` or `Cancelled`, the status bar's message, `IsWarning`, the `GitFailure`, and `StaleLockFiles` after a cancel; since phase 7a `RefusedAccount`, the account whose token git refused through the app's helper in a failed operation's scope, D273, and `Offer`, a succeeded report's offer for the status bar, D317); what runs now (title, running text or the step's, kind, `IsBackground`, progress, `CanCancel`, `HasSeveralSteps`) |
@@ -1261,7 +1330,7 @@ or a UI (`OperationQueueTests`, `OperationQueueUiTests`).
 | `LockFiles` | The lock-file scan after a cancel (below) |
 | `IGitPromptBroker`, `PromptScope`, `IGitPromptHandler`, `GitPrompt`, `PromptAnswer`, `NullGitPromptBroker` | The prompt contracts (see "Prompts and credentials"); since phase 6 `Begin` takes the operation's prompt group and every `GitPrompt` of the scope carries it (`Group`); since phase 7a `Begin` takes the operation's bindings too (`NullGitPromptBroker` ignores them), `GitPrompt.Account` names the account of the binding that a user name or password prompt is for, and `PromptScope.RefusedAccount` the account git refused in the scope (D273) |
 | `PromptGroup` | Phase 6 (D210, design 4.4): the prompts of one bulk run, one per run from its start to its end (`Id` `bulk-<n>`, `Ended`, `Dispose` ends it); since phase 7a `AnswersVersion` and `ForgetAnswers()`, after which no answer kept before is used (ruling 9) |
-| `CredentialBinding`, `GitCredential`, `IGitCredentialSource`, `NullGitCredentialSource` | Phase 7a (D255): a URL bound to the hosting account, the credential git gets for it and where that comes from; see "Prompts and credentials" |
+| `CredentialBinding`, `GitCredential`, `IGitCredentialSource`, `NullGitCredentialSource` | Phase 7a (D255): a URL bound to a hosting account, the credential git gets for it and where that comes from; since phase 7b also `GitCoverage`, what an account's token covers for git, which its provider builds (D359); see "Prompts and credentials" |
 
 Each `RepositoryViewModel` creates its queue in its constructor, with its watcher's pause (since
 phase 6 the view model's own `PauseWatcher`, design 3.3) and its `RefreshAsync` /
@@ -1329,15 +1398,18 @@ mode, the registry and adoption"). Its rules:
   (`DropWaiting`; they do not come back), and "Finishing operations" (`FinishingDialogViewModel`)
   lists one line per running operation, "&lt;Title&gt; — &lt;repo&gt;", with "Its remaining steps will
   not run if you quit now" under a local operation of several steps. When the queues are idle the
-  dialog closes and the window closes by itself. "Keep open" closes the dialog only; "Quit now"
-  closes the window, and the session's disposal then disposes every tab, which cancels network
-  operations; a local one's running git call ends after the process has gone, but its later steps
-  do not run. A background auto-fetch never holds the window. Since phase 6 the close also waits
-  for the dashboards' summary-mode view models and those released while running (design 3.7), each
-  dashboard's bulk run first starts no more rows, and the window waits for an open settings
-  screen's global git writes, which no queue holds ("Saving the settings — all repositories", with
-  the remaining-steps line when more than one key is written; the screen starts no further step,
-  D234).
+  dialog closes and the window closes by itself, unless the user answered it first: since phase 7b
+  an answer the dialog took stands (`FinishThenCloseAsync` goes by the dialog's own state, not by
+  which of its two waits ended first), so "Keep open" keeps the window also when the queues became
+  idle before the answer was acted on (CI run 42301846503 had closed it). "Keep open" closes the
+  dialog only; "Quit now" closes the window, and the session's disposal then disposes every tab,
+  which cancels network operations; a local one's running git call ends after the process has gone,
+  but its later steps do not run. A background auto-fetch never holds the window. Since phase 6 the
+  close also waits for the dashboards' summary-mode view models and those released while running
+  (design 3.7), each dashboard's bulk run first starts no more rows, and the window waits for an
+  open settings screen's global git writes, which no queue holds ("Saving the settings — all
+  repositories", with the remaining-steps line when more than one key is written; the screen starts
+  no further step, D234).
 - **Stale locks after a cancel (D126).** A git that is killed while it updates refs leaves
   `<name>.lock` files, after which every fetch fails. After a network operation, or a local one
   that can be cancelled, ends `Cancelled` (a background one only when the user cancelled it), the
@@ -1371,8 +1443,9 @@ hide and solo, `RestoreBackupAsync`, the actions on a kept commit (`CreateBranch
 `IRepositoryActions` `OpenInEditorAsync` (the file menus' "Open in editor", see "Open in editor and
 Open file"), and phase 7a the pull requests' actions (`CreatePullRequestAsync`,
 `OpenPullRequestAsync`, `CheckOutPullRequestAsync`, `CopyPullRequestLinkAsync`,
-`RefreshPullRequestsAsync`, `OpenPullRequestsInBrowserAsync`) and `SignInToGitHubAsync` (see "Pull
-requests"). Tests give recording fakes for these interfaces.
+`RefreshPullRequestsAsync`, `OpenPullRequestsInBrowserAsync`) and `SignInToGitHubAsync`, since phase
+7b `SignInToHostAsync`, which signs in to the listed repository's provider (see "Pull requests").
+Tests give recording fakes for these interfaces.
 
 | File | What it holds |
 |---|---|
@@ -1390,9 +1463,9 @@ requests"). Tests give recording fakes for these interfaces.
 | `RepositoryOperations.Undo.cs` | Phase 5: the undo history's recording around every recorded operation, the toolbar's Undo and Redo as one operation each with their states and questions, what each status read does to the history, the restore bar's tie, the backups the histories keep from the clean-up, the backups list's restores (see "Undo and redo") |
 | `RepositoryOperations.Protect.cs` | Phase 5: C12, the automatic stash's checkout, the refusals before git, the refusal message of every checkout path and of the merges, picks and reverts git refuses for changes in the way, the check before a stash's apply or pop (see "Protected changes"); since phase 6 Keep ignored files' setting (`KeepIgnored`), every checkout's refusal display (`CheckoutRefusalDisplayAsync`) and the app's own check before git (`RefuseIfIgnoredInTheWayAsync`, see "The ignored-files guard") |
 | `RepositoryOperations.Pages.cs`, `.Filters.cs` | Phase 5: opening the pages and "Show in graph" (none is an operation: a page only reads); a comparison of branches, hide and solo (a filter reloads the graph through the refresh, no operation either) |
-| `RepositoryOperations.PullRequests.cs`, `.CreatePullRequest.cs` | Phase 7a: a pull request's "Open in browser" and "Copy link" (neither an operation), "Refresh pull requests" (outside the queue), its checkout (`PullRequestCheckout`'s plan; a new branch through the operation "Fetch pull request #n"), the section's "Open pull requests in browser" and "Sign in to GitHub…"; a new pull request: `CreatePullRequestAsync` and the form's side, the nested `PullRequestForm` (`ICreatePullRequestActions`: the head's place, the bases, the push and the POST as one network operation); see "Pull requests" |
+| `RepositoryOperations.PullRequests.cs`, `.CreatePullRequest.cs` | Phase 7a: a pull request's "Open in browser" and "Copy link" (neither an operation), "Refresh pull requests" (outside the queue), its checkout (`PullRequestCheckout`'s plan; a new branch through the operation "Fetch pull request #n"), the section's "Open pull requests in browser" and "Sign in to GitHub…"; a new pull request: `CreatePullRequestAsync` and the form's side, the nested `PullRequestForm` (`ICreatePullRequestActions`: the head's place, the bases, the push and the POST as one network operation). Since phase 7b for the listed repository's provider and in its words (GitLab's "Fetch merge request !n", "Sign in to {name}…" through `SignInToHostAsync`), a tab's request checkouts one at a time; see "Pull requests" |
 | `DeferredDialog.cs` | Phase 6: `DeferredDialog`, a result's dialog a bulk run's row keeps for its Details…, and `BulkPart`, a row's part in a run (its cancellation, prompt group and deferral) |
-| `OperationTexts.cs` and `.Branches.cs`, `.Menus.cs`, `.Remotes.cs`, `.StashTags.cs`, `.Rebase.cs`, `.Conflicts.cs`, phase 5's `.Undo.cs`, `.Protect.cs`, `.Menus.ActivityLog.cs`, `.Menus.Pages.cs`, `.Menus.Filters.cs`, and phase 6's `.Bulk.cs`, `.Menus.Refspecs.cs` (R1 to R4), `.Settings.cs`, and phase 7a's `.Hosting.Accounts.cs`, `.Hosting.Clone.cs`, `.Hosting.Credentials.cs`, `.Hosting.PullRequests.cs` and `.Hosting.Create.cs` (the texts several parts share are in `ViewModels/Hosting/HostingTexts.cs`) | Every text: an `OperationText(Title, RunningText, ErrorTitle, FailureSummary)` per operation (design 2.33, phase 4 design section 10), the success, conflict and refusal messages, the confirmations, the error dialogs' own titles and summaries, the menus' labels and disabled reasons. Counts use the singular for one ("1 file has conflicts", D113) |
+| `OperationTexts.cs` and `.Branches.cs`, `.Menus.cs`, `.Remotes.cs`, `.StashTags.cs`, `.Rebase.cs`, `.Conflicts.cs`, phase 5's `.Undo.cs`, `.Protect.cs`, `.Menus.ActivityLog.cs`, `.Menus.Pages.cs`, `.Menus.Filters.cs`, and phase 6's `.Bulk.cs`, `.Menus.Refspecs.cs` (R1 to R4), `.Settings.cs`, and phase 7a's `.Hosting.Accounts.cs`, `.Hosting.Clone.cs`, `.Hosting.Credentials.cs`, `.Hosting.PullRequests.cs` and `.Hosting.Create.cs` (the texts several parts share are in `ViewModels/Hosting/HostingTexts.cs`, and since phase 7b each provider's words in `HostingTexts.Provider.cs`; each of the hosting files' texts that names a provider has a form that takes it first and returns 7a's text for GitHub) | Every text: an `OperationText(Title, RunningText, ErrorTitle, FailureSummary)` per operation (design 2.33, phase 4 design section 10), the success, conflict and refusal messages, the confirmations, the error dialogs' own titles and summaries, the menus' labels and disabled reasons. Counts use the singular for one ("1 file has conflicts", D113) |
 
 The helpers of `.Run.cs`:
 
@@ -1426,11 +1499,23 @@ The helpers of `.Run.cs`:
   null object) while `IHostingSession.BindsGit`, `BindingsFor(Refs.RemoteUrls, rules)` after one
   `ReadUrlRewritesAsync` made before it queues (cancelled by `RunOptions.Cancellation` alone; a
   failed read binds nothing and logs a Warning; the closed and cancelled checks are made again
-  after it). A local operation gets none: its git calls carry no credential pair and keep an
-  inherited `GIT_CONFIG_PARAMETERS`, and a hook or a git-lfs filter it runs asks the user's helpers
-  in D82's order, as before phase 7a. A failed result that carries `RefusedAccount` shows, in
-  `ShowResultAsync` and in a bulk row's `DeferredOf`, the refused credentials' dialog before
-  `DescribeFailure` (`RefusedDisplay`; see "Prompts and credentials").
+  after it). Since phase 7b (D388) a tab inside D290's window binds once the rules are known, never
+  from URLs not yet rewritten: between a sign-in, or the tab's first load signed in, and the tab's
+  first read of the URL rewrites that answers, its hosting's bindings are empty
+  (`RepositoryViewModel.AwaitsUrlRules`: full mode, an account binding git, the rewrites wanted and
+  not read since). Before it queues, such an operation waits for the tab's read in flight
+  (`UrlRulesReadAsync`, which adds no git call) and takes the hosting's bindings; with none in flight
+  (not started yet, or failed) it reads the rules itself as a dashboard row does
+  (`BindingsOnceRulesReadAsync` holds D332's code for both). A cancel or the tab's closing meanwhile
+  starts nothing; a sign-out meanwhile starts the operation unbound, as in a signed-out tab; a tab
+  whose refs are not read yet binds nothing. One Debug line gives the count whenever the bindings
+  were taken (`{repo}: {title}: {n} URLs bound to the account once the tab's URL rules were read.`)
+  or the operation's own read began (`… once the URL rules were read.`, 0 when that read failed or
+  was cancelled); a wait that ends otherwise logs none. A local operation gets none: its git calls
+  carry no credential pair and keep an inherited `GIT_CONFIG_PARAMETERS`, and a hook or a git-lfs
+  filter it runs asks the user's helpers in D82's order, as before phase 7a. A failed result that
+  carries `RefusedAccount` shows, in `ShowResultAsync` and in a bulk row's `DeferredOf`, the refused
+  credentials' dialog before `DescribeFailure` (`RefusedDisplay`; see "Prompts and credentials").
 - `ReadHeadAtStartAsync()` (phase 5's review): inside a recorded operation, HEAD as the
   recording read it just before the work, otherwise read now; the operation's own checks of HEAD
   made before anything can move it share that read (D124's "HEAD moved while this waited", C12's
@@ -1539,12 +1624,17 @@ Phase 6's changes to these operations:
   already filled by a branch the remote has. Since phase 7a (ruling 8, D279) the guard asks
   `FetchRefspecs.SourceOf(trackingRef, remote, sourceCanExist)` with
   `IHostingSession.SourceCanExist(url, source)` for the remote's first configured `url` (before
-  `insteadOf`; a remote without one keeps phase 6's question): on a remote recognised as GitHub's,
-  which needs no account and makes no request, `refs/pull/<x>/head` and `/merge` count as sources
-  only when `<x>` is all digits (`GitHubUrls.SourceCanExist`), so `pr/fix-typo` pushed beside
-  `+refs/pull/*/head:refs/remotes/origin/pr/*` is no longer refused, while `pr/7` still is; no git
-  call is added (`PushGuardGitHubTests`). Push and Force push to an upstream that is no branch
-  on its remote (`UpstreamRemoteRef` outside `refs/heads/`) are disabled with R4
+  `insteadOf`; a remote without one keeps phase 6's question): on a remote a provider recognises,
+  which needs no account (another Azure DevOps organization's included) and makes no request, a
+  request ref that cannot exist on that provider counts as no source
+  (`PullRequestRefs.SourceCanExist`, since phase 7b for the three providers, ruling 14): on GitHub
+  `refs/pull/<x>/head` and `/merge` whose `<x>` is not all digits, so `pr/fix-typo` pushed beside
+  `+refs/pull/*/head:refs/remotes/origin/pr/*` is no longer refused, while `pr/7` still is; on
+  GitLab `refs/merge-requests/<x>/…` whose `<x>` is not all digits; on Azure DevOps
+  `refs/pull/<x>/…` with such an `<x>` and every `refs/pull/<digits>/head`, which Azure DevOps never
+  has, so there `pr/7` pushed beside a `pull/*/head` line is not refused either; no git call is
+  added (`PushGuardGitHubTests`, `PushGuardProvidersTests`). Push and Force push to an upstream that
+  is no branch on its remote (`UpstreamRemoteRef` outside `refs/heads/`) are disabled with R4
   (`ToolbarViewModel.UpstreamNotABranchReason`, in the toolbar and the branch's menu) and refused
   before git with R4 as a sentence (`PushToNotABranch`). A remote branch's or tag's backup is pushed
   back to the one configured remote its name starts with (`RemoteBranchNames.RemotesOf`); when more
@@ -1552,10 +1642,10 @@ Phase 6's changes to these operations:
   remote this backup came from cannot be told: team/fork/main fits team/fork and team"). A force
   push's backup restored when no local branch tracks it finds its remote and branch by the fetch
   lines, else is refused with "The remote this backup came from cannot be found". The resolver's
-  remote branch name (`MergedRemoteBranch`) matches by the mapping. An upstream is named by git's `%(upstream)`
-  without `refs/remotes/` (`ToolbarViewModel.UpstreamText`, design 10.4's GD15), else
-  `{remote}/{remote ref}`, so `pr/7` tracking `refs/pull/7/head` on `upstream` reads
-  `upstream/pr/7` in every text that names an upstream.
+  remote branch name (`MergedRemoteBranch`) matches by the mapping. An upstream is named by git's
+  `%(upstream)` without `refs/remotes/` (`ToolbarViewModel.UpstreamText`, design 10.4's GD15), else
+  `{remote}/{remote ref}`, so `pr/7` tracking `refs/pull/7/head` on `upstream` reads `upstream/pr/7`
+  in every text that names an upstream.
 - **Pull** reads its settings inside its operation before its fetch (D219, D231; see "Phase 3's
   repository members") and refuses there with Pull's text for a value it does not understand,
   nothing fetched; a `git merge --ff-only` that `pull.ff=only` asked for and that git refused
@@ -2091,7 +2181,7 @@ The undo's Keep move and pop take the distinct ignored files of `FindIgnoredAtAs
 `DirectoryRenamesTests`, `KeepIgnoredCheckoutTests`, `IntegratePullTests`, `RebaseTodoTests` (Git);
 `RepositoryOperationsKeepIgnoredTests` (App); the walk-through's G22 to G24 and S21.
 
-### Prompts and credentials (D82, D115, D118, D130, D255, D273 to D279)
+### Prompts and credentials (D82, D115, D118, D130, D255, D273 to D279, D350, D359)
 
 - **The helper** (`src/VisualCommit.AskPass`, `visualcommit-askpass <prompt>`): git runs it as
   `GIT_ASKPASS` and OpenSSH as `SSH_ASKPASS`, directly, without a shell, with the prompt as its one
@@ -2109,22 +2199,22 @@ The undo's Keep move and pop take the distinct ignored files of `FindIgnoredAtAs
   logged at Error at start-up, and every prompt then fails as git or ssh fails without an answer.
 - **The helper's credential mode** (phase 7a, `CredentialMode.cs`, D255, D273, design 4.5): with
   `--vc-credential` as its first argument the helper is git's credential helper for the URLs bound
-  to the hosting account (below); git runs it through `sh` with `get`, `store` or `erase` appended
-  and its request on standard input. It reads standard input to the end (at most 64 KiB kept, the
-  rest drained, so that git's write never meets a closed pipe) and keeps `protocol`, `host`,
-  `username` and `password` of git's `key=value` lines, ignoring every other key (`capability[]`,
-  `wwwauth[]`, `path`, …). `store`, an unknown action, too much input, a missing `protocol` or
-  `host`, a missing pipe or secret, and an `erase` without a password do nothing. Otherwise it
-  connects as a prompt does (5 s; the pipe's owner checked on Windows), sends one
-  `AskPassCredentialRequest` line (`token`, `operation`, `credential` `get` or `erase`, `protocol`,
-  `host`, `username` and, for an erase, `secretHash`: the lower-case hex SHA-256 of the refused
-  password, never the password) and waits at most 30 s (`CredentialAnswerTimeout`) for the answer.
-  A `get` answered with a token prints `username=x-access-token` and `password=<token>`, each with
-  a line feed, in UTF-8; a token holding CR, LF or NUL prints nothing, and it never announces
-  `capability[]`. It always exits 0 and writes nothing to standard error, so that git goes on as
-  with a helper that knows nothing. `VISUALCOMMIT_ASKPASS_DENY` does not stop this mode: a `Deny`
-  scope's bound URLs are answered too (D274). `AskPassProtocol.ParseRequest` refuses its line, and
-  `ParseCredentialRequest` a prompt's.
+  to a hosting account, any of the three providers' since phase 7b (below); git runs it through `sh`
+  with `get`, `store` or `erase` appended and its request on standard input. It reads standard input
+  to the end (at most 64 KiB kept, the rest drained, so that git's write never meets a closed pipe)
+  and keeps `protocol`, `host`, `username` and `password` of git's `key=value` lines, ignoring every
+  other key (`capability[]`, `wwwauth[]`, `path`, …). `store`, an unknown action, too much input, a
+  missing `protocol` or `host`, a missing pipe or secret, and an `erase` without a password do
+  nothing. Otherwise it connects as a prompt does (5 s; the pipe's owner checked on Windows), sends
+  one `AskPassCredentialRequest` line (`token`, `operation`, `credential` `get` or `erase`,
+  `protocol`, `host`, `username` and, for an erase, `secretHash`: the lower-case hex SHA-256 of the
+  refused password, never the password) and waits at most 30 s (`CredentialAnswerTimeout`) for the
+  answer. A `get` answered with a token prints `username=x-access-token` and `password=<token>`,
+  each with a line feed, in UTF-8; a token holding CR, LF or NUL prints nothing, and it never
+  announces `capability[]`. It always exits 0 and writes nothing to standard error, so that git goes
+  on as with a helper that knows nothing. `VISUALCOMMIT_ASKPASS_DENY` does not stop this mode: a
+  `Deny` scope's bound URLs are answered too (D274). `AskPassProtocol.ParseRequest` refuses its
+  line, and `ParseCredentialRequest` a prompt's.
 - **The broker** (`VisualCommit.Git/Prompts/AskPassBroker`, `IGitPromptBroker`, one per app
   session, made by `PromptDialogs.CreateBroker` in `AppSession.Start`): a named pipe `vc-<16 hex>`
   (on macOS and Linux .NET makes it a Unix socket under the temp folder, whose path must stay
@@ -2161,9 +2251,10 @@ The undo's Keep move and pop take the distinct ignored files of `FindIgnoredAtAs
   included (one that changes a remote is a network operation); auto-fetch (`Deny`); reads, phase
   2's writes, the fast-forward's `git fetch .` and the background clean-up of the backups (`None`). Credential
   helpers, Git Credential Manager included, are left as configured and asked first by git (Q5),
-  except, since phase 7a, by a network operation's or a clone's calls to a URL bound to the hosting
-  account, which ask the app's helper alone (D255, a second exception to Q5 beside D193);
-  auto-fetch's `Deny` scope is answered from the account too.
+  except, since phase 7a, by a network operation's or a clone's calls to a URL bound to a hosting
+  account (GitHub's, and since phase 7b GitLab's and Azure DevOps', D350), which ask the app's helper
+  alone (D255, a second exception to Q5 beside D193); auto-fetch's `Deny` scope is answered from the
+  account too.
 - **Classification** (`GitPromptClassifier.Classify(prompt, sshPrompt)`, pure,
   `PromptClassifierTests`): `Username for '<url>': ` → `Username`; `Password for '<url>': ` →
   `Password` (with the URL's user); `Enter passphrase…` → `Passphrase` (with the key's path when
@@ -2207,53 +2298,143 @@ The undo's Keep move and pop take the distinct ignored files of `FindIgnoredAtAs
   Git Credential Manager's own window are checked by hand (the report's manual checklist). Since
   phase 7a the pass's part B clones the fake's private repository through the real helper's
   credential mode, and the opt-in live command's `Check_2` clones a private sandbox repository on
-  github.com so (D326); both look for the broker's "answered from the account" line.
+  github.com so (D326); both look for the broker's "answered from the account" line. Since phase 7b
+  the pass's part for phase 7b (`Phase7bRealWindowPass`) clones the GitLab and Azure DevOps fakes'
+  repositories through the real helper, Azure DevOps' at its `<organization>@` URL, with no
+  credentials dialog and a 200 git request as `x-access-token` (phase 7b's design 14.4), and the
+  live command's `Check_2` clones each new sandbox through it, Azure DevOps'
+  `Check_4_a_clone_through_the_organization_host` also through `<organization>.visualstudio.com`
+  (D346; see "The live command").
 
-#### The account's credentials in git (phase 7a, D255, D273 to D279, D329 to D332, D340)
+#### The account's credentials in git (phase 7a, D255, D273 to D279, D329 to D332, D340; phase 7b, D350, D359, D369, D379, D381, D388, D389, D391)
 
-Since phase 7a (D255, amending D82), while a GitHub account is signed in with its token in hand and
+Since phase 7a (D255, amending D82), while a hosting account is signed in with its token in hand and
 its "Use for git over HTTPS" on, the app's own git calls to a URL bound to it take their credentials
 from the account through the helper's credential mode (above), and from none of the user's
 credential helpers: clone, fetch, pull, push, auto-fetch, the dashboard's Fetch all and Pull all, a
-pull request's checkout fetch and the create form's push. Nothing is written to a git configuration
-or a credential store, and git in a terminal still uses the user's helpers. The token is in no
-argument, URL, configuration value, environment variable, log line or file: it goes from the
-hosting session to the helper over the prompt pipe, and from the helper to git on its standard
-output. ssh, other hosts, and github.com while nobody is signed in or the switch is off keep D82's
-order. The account, its token and git's `get` and `erase` on the session's side are in "Hosting:
-the session and the account"; where tokens are kept, in "Tokens and the keychains".
+request's checkout fetch and the create form's push. Phase 7a bound GitHub's account; since phase 7b
+(D350, D359) GitLab's and Azure DevOps' accounts bind the remotes they cover in the same way, one
+account per provider and all three at once (D348): gitlab.com's, and on Azure DevOps the signed-in
+organization's alone (`https://dev.azure.com/<organization>/…` and
+`https://<organization>.visualstudio.com/…`). Nothing is written to a git configuration or a
+credential store, and git in a terminal still uses the user's helpers. The token is in no argument,
+URL, configuration value, environment variable, log line or file: it goes from the hosting session
+to the helper over the prompt pipe, and from the helper to git on its standard output. ssh, other
+hosts, another Azure DevOps organization's remotes (which count as having no account, D350), and a
+provider's host while nobody is signed in to it or its switch is off keep D82's order. The accounts,
+their tokens and git's `get` and `erase` on the session's side are in "Hosting: the session and the
+account"; where tokens are kept, in "Tokens and the keychains".
 
 - **Bindings** (`Core/Operations/CredentialBinding.cs`). `CredentialBinding(Url, Account)`: a URL
-  whose credentials come from the account, git's URL after `insteadOf` with only `user@` removed.
-  `CredentialBinding.Select(remotes, webBase, account)` (D278) takes every fetch and push URL of the
-  remotes, in order, that parses as an absolute URI with the web address's scheme, host (without
-  case) and port (the default port the same as none) and whose user information is empty or exactly
-  the login (without case); a password, another user, another scheme, host or port leaves it
-  unbound (ruling 1). A binding is then dropped when another URL of the remotes on that scheme, host
-  and port names a user other than the login with a path equal to the binding's or under it at a
-  `/`, since git's key without a user would answer that user too. Distinct by `Url`, ordinal.
-  `GitCredential` is what git gets: the user name `x-access-token`, never the login, and the token
-  (its text `GitCredential(***)`); `IGitCredentialSource` (`GetAsync(account, ct)` for git's `get`,
+  whose credentials come from the account, git's URL after `insteadOf` with only `user@` removed;
+  since phase 7b with `SharedOriginOwner`, the organization on an origin that serves other accounts
+  (below). What one account's token covers is a `GitCoverage(Account, Origin)` (phase 7b, D359),
+  which the account's provider builds (`IHostingProvider.CoverageOf`): GitHub's is its web address
+  alone; GitLab's adds `GitTwin` and `HelperUserIsAccounts`; Azure DevOps' adds `Organization` (the
+  account's login, which is its organization), `OrganizationHost` (on the service, not on the fake)
+  and `HelperUserIsAccounts`. `CredentialBinding.Select(remotes, coverage)` applies it to every fetch
+  and push URL of the remotes, in order; `Select(remotes, webBase, account)` is 7a's form, the
+  coverage with its origin alone. With the origin alone (GitHub) the rule is 7a's, byte for byte
+  (D278, frozen by phase 7b's design 1.2): a URL is bound when it parses as an absolute URI with the
+  web address's scheme, host (without case) and port (the default port the same as none) and its
+  user information is empty or exactly the login (without case); a password, another user, another
+  scheme, host or port leaves it unbound (ruling 1). A binding is then dropped when another URL of
+  the remotes on that scheme, host and port names a user other than the login with a path equal to
+  the binding's or under it at a `/`, since git's key without a user would answer that user too.
+  With any other member set the new hosts' rule (below) applies. Either way the result is distinct
+  by `Url`, ordinal, in the remotes' order. `GitCredential` is what git gets: the user name
+  `x-access-token`, never the login, on all three providers (D359), and the token (its text
+  `GitCredential(***)`); `IGitCredentialSource` (`GetAsync(account, ct)` for git's `get`,
   `Refused(account)` for its `erase`) is where it comes from: the hosting session, or
   `NullGitCredentialSource`, which answers nothing. Which URLs a repository binds, and when, is the
-  hosting's (`HostingRules.Bindings`: none unless signed in with the token in hand, the switch on
-  and the user's URL rewrites known, D290; see "Hosting: a repository's pull requests and
-  avatars"); the URLs are git's after those rewrites (`UrlRewrites`, see "Git layer").
+  hosting's: per provider `HostingRules.Bindings` with that provider's coverage (none unless its
+  account is signed in with the token in hand, the switch on and the user's URL rewrites known,
+  D290), and the session's union of every provider's, in D353's order (`HostingSession.BindingsOf`;
+  see "Hosting: a repository's pull requests and avatars"); the URLs are git's after those rewrites
+  (`UrlRewrites`, see "Git layer").
+- **The new hosts' rule** (`Select` with a coverage beyond its origin, `SelectCovered`; D359, D369,
+  D379, D381, phase 7b's design 8.2 and its As built). GitHub's coverage never reaches it. In order:
+  1. **Covered hosts.** The coverage's origin (scheme, host without case, port), and with
+     `OrganizationHost` `https://<organization>.visualstudio.com` on port 443, the host without case;
+     never a wildcard. `OrganizationHost` without `Organization`, or `GitTwin` with it, throws
+     `ArgumentException`; an organization outside `[A-Za-z0-9-]+` binds nothing.
+  2. **URLs that fail every covered host**, never bound, whatever their user: a URL in git's
+     remote-helper grammar, `<name>::<address>` with a name of `[A-Za-z0-9][A-Za-z0-9+.-]*` or none,
+     whatever its address (git hands the address to `git-remote-<name>`, and `ftp`, `ftps` and
+     Windows' `http.exe` or `https.exe` are remote-curl on it, D381); an `http` or `https` URL, the
+     scheme in any case, that .NET cannot read (a percent-encoded host such as `%64ev.azure.com`,
+     which git's credential code and curl decode, D379); and an `http` or `https` URL whose host, as
+     .NET or as git's credential code reads it (after the first `@` before the first `/`, `?` or `#`),
+     holds a character outside U+0021 to U+007E, which git's curl may map into a covered host (D381).
+  3. **On a covered host.** A URL exactly on one; a URL on its scheme and port whose host is the
+     covered host with one trailing dot (git's `match_host` reads it as the host), which counts as
+     another user's whatever its user; and a URL a measured redirect may lead into the origin (`http`
+     or `https`, any port, the host or `www.` followed by it, without case and with one trailing dot
+     removed: gitlab.com's 301 and 308, dev.azure.com's 302), which counts for the drop and the
+     failure below (D379). Only a URL exactly on a covered host is ever bound.
+  4. **The form** (`CredentialBinding.InPlainForm`, public, D369; Azure DevOps' recognition and its
+     client's redirect check apply it too): only U+0021 to U+007E and no `\`, `?` or `#`; a scheme in
+     RFC 3986's grammar before `://` (so not git's `ftp::https`); after `://` a `%` only before two
+     hex digits that encode none of `2E`, `2F`, `5C`, `25`, `00` to `1F` and `7F`; a path that is
+     empty or `/`-separated segments, none `.` or `..`, none empty but a trailing one, each valid
+     UTF-8 once its escapes are decoded (no overlong form, no surrogate, nothing above U+10FFFF). On
+     the origin with an organization (dev.azure.com and the fake) a URL is in the form only with a
+     first segment in the organization's grammar too.
+  5. **Users.** The account's are none, the login without case (Azure DevOps' organization, GitLab's
+     username) and, with `HelperUserIsAccounts`, `x-access-token`. A user is also read as git's
+     credential code reads it (up to the first `@` before the first `/`, `?` or `#`, cut at a `:`);
+     where that differs from the app's reading (white space or a control character in the user part,
+     `bob<U+00A0>@`), the URL is another user's and out of the form (D381). Another user's URL in the
+     form gives its path, in git's credential view (7 below), to the host's list of other users'
+     paths; out of the form it leaves nothing on its host bound (fail closed, ruling 10). On the origin
+     with an organization a URL out of the form fails the host whatever its user, unless it is the
+     account's user's with a password, `https://dev.azure.com` and `https://dev.azure.com/` among
+     them: their key would make git ask the app's helper for every organization's URL that has no
+     user. A URL of the account's user with a password is neither bound nor another user's.
+  6. **Candidates and twins.** On a host not failed, a URL exactly on it, of the account's user,
+     without a password, in the form, and on the origin with an organization with that organization,
+     without case, as its first segment. Each adds its twins: with `GitTwin`, a URL of two or more
+     segments whose path, one trailing `/` removed, does not end in `.git` is followed by its `.git`
+     twin (its text without that `/`, plus `.git`; D359); and a URL, a `.git` twin included, whose
+     path holds a raw `!`, `$`, `&`, `'`, `(`, `)`, `*`, `+`, `,`, `;`, `=`, `:`, `@`, `[` or `]` is
+     followed by its credential twin, each such character written `%XX` in upper-case hex (D369). Per
+     URL: it, its credential twin, its `.git` twin, that twin's credential twin.
+  7. **The drop.** A bound URL or twin is dropped when another user's path on its host equals its
+     own or lies under it at a `/`, both in git's credential view, and with `GitTwin` also when their
+     projects do (one final `.git` after a non-empty segment removed, D379), so another user's
+     `…/g/p`, `…/g/p/`, `…/g/p.git` or `…/g/p.git/` drops all four spellings. Git's credential view
+     of a path: every `%XX` decoded, one trailing `/` removed, then every byte outside
+     `A-Z a-z 0-9 - . _ ~ /` written `%XX` in upper-case hex, case kept; the leading `/` stays, so an
+     empty-path binding (`https://gitlab.com`) drops beside any other user's URL on its host. A URL
+     and its credential twin have one view and drop together.
+  8. **The result.** Distinct by `Url`, ordinal, in the remotes' order; `SharedOriginOwner` is the
+     organization on the bindings on the origin with one (dev.azure.com and the fake), else null.
+
+  `CredentialBindingSelectTests` holds the cases on strings; `AzureDevOpsCoverageVectorsTests` checks
+  the 48 rows of `AzureDevOpsCoverageVectors` (the research's 38 measured vectors and ten of the
+  design review's), and `CoverageGitMatchTests` checks in git that each key reaches the app's helper
+  exactly where `Select` says (see "Tests" below).
 - **The calls that carry them.** `GitOperation.CredentialBindings` goes through the queue to
   `IGitPromptBroker.Begin`. `RepositoryOperations.RunAsync` gives them to network operations only
-  (the tab's, or a dashboard row's after its own read of the rewrites, D332, with a Debug line of
-  how many URLs it bound; see "Operations"), and `AutoFetchScheduler.CreateOperation(repository,
-  bindings)` to auto-fetch's `Deny` scope (bound URLs take the token and still never prompt, D79). A
-  clone opens its own scope with the bindings of `WelcomeViewModel.BindingsForCloneAsync`: none
-  unless `IHostingSession.BindingsForClone` binds the URL as typed; then git's configuration is read
-  once with phase 6's outside read (`GitConfiguration.ReadAsync(null)`, local and worktree entries
-  dropped, since `git clone` applies none of a repository around its folder, but it does apply the
-  conditional includes of the new folder and of its URL, `includeIf "gitdir:"`, `"gitdir/i:"`,
-  `"onbranch:"` and `"hasconfig:remote.*.url:"`, whose files the outside read does not see; each such
-  directive's file is then read with `GitConfiguration.ReadIncludedAsync`) and the URL its `url.`
-  rules give is bound (D331); a failed read binds nothing and logs a Warning, and an include that
-  could change the URL binds nothing with a Debug line. Local operations, reads and phase 2's
-  writes carry none.
+  (the tab's, or a dashboard row's after its own read of the rewrites, D332, with a Debug line of how
+  many URLs it bound; see "Operations"). Since phase 7b (D388) a tab inside D290's window (an account
+  binds git and none of the tab's reads of the rewrites has answered since the account began to want
+  them, `RepositoryViewModel.AwaitsUrlRules`) binds once the rules are known: before it is queued, the
+  operation waits for the tab's read in flight, which adds no git call, or with none makes D332's
+  read itself (`BindingsOnceRulesReadAsync`); a failed read binds nothing.
+  `AutoFetchScheduler.CreateOperation(repository, bindings)` gives them to auto-fetch's `Deny` scope
+  (bound URLs take the token and still never prompt, D79); inside the window the tick starts no fetch
+  and, with no read in flight, asks the tab for one, at most once an interval (`RequestUrlRules`,
+  D388). A clone opens its own scope with the bindings of `WelcomeViewModel.BindingsForCloneAsync`:
+  none unless `IHostingSession.BindingsForClone`, the union of every account's that binds git, binds
+  the URL as typed; then git's configuration is read once with phase 6's outside read
+  (`GitConfiguration.ReadAsync(null)`, local and worktree entries dropped, since `git clone` applies
+  none of a repository around its folder, but it does apply the conditional includes of the new
+  folder and of its URL, `includeIf "gitdir:"`, `"gitdir/i:"`, `"onbranch:"` and
+  `"hasconfig:remote.*.url:"`, whose files the outside read does not see; each such directive's file
+  is then read with `GitConfiguration.ReadIncludedAsync`, D391) and the URL its `url.` rules give is
+  bound (D331); a failed read binds nothing and logs a Warning, and an include that could change the
+  URL binds nothing with a Debug line. Local operations, reads and phase 2's writes carry none.
 - **The scope's variables** (`AskPassBroker.Begin`; D274, D277, D329, D340). A scope uses its
   bindings only when the helper was found, a credential source was given, the inherited
   `GIT_CONFIG_COUNT` is valid, the mode is `Ask` or `Deny` and the detected git is 2.31 or newer (a
@@ -2261,7 +2442,7 @@ the session and the account"; where tokens are kept, in "Tokens and the keychain
   Otherwise the scope's variables are phase 3's, byte for byte. The inherited count is the
   session's git environment's `GIT_CONFIG_COUNT` when it names the variable, else the process's;
   empty or absent is 0, and any other value that is not a whole number turns every binding off with
-  one Warning ("GIT_CONFIG_COUNT is not a number git accepts; GitHub's token is not given to git.").
+  one Warning ("GIT_CONFIG_COUNT is not a number git accepts; no account's token is given to git.").
   A scope with used bindings gets `Ask`'s variables, or `Deny`'s with the pipe, the secret and its
   id (only such a `Deny` scope is registered; its prompts stay refused), and for binding `i`,
   numbered after the inherited count `n`:
@@ -2275,7 +2456,11 @@ the session and the account"; where tokens are kept, in "Tokens and the keychain
   then `GIT_CONFIG_COUNT` `n+3k` for `k` bindings, `GIT_TRACE_REDACT=1` (ruling 7) and
   `GIT_CONFIG_PARAMETERS` removed (D329). The command's environment is applied last, so the
   removal drops the session's value and the process's. Debug lines give how many of a scope's
-  URLs it binds, and say when an inherited `GIT_CONFIG_PARAMETERS` was left out.
+  URLs it binds, and say when an inherited `GIT_CONFIG_PARAMETERS` was left out. Since phase 7b
+  one scope holds the bindings of every account that covers its URLs, GitHub's, GitLab's and Azure
+  DevOps' alike, and a twin is a binding of its own (D340's count): 6 pairs for a `.git`-less GitLab
+  URL or for a URL with a credential twin, 12 for both. No `credential.<url>.useHttpPath` pair is
+  added (D359).
 - **Why these variables** (measured on 2.56, design 4.2 and 19 item 4). Git reads the pairs after
   every configuration file and before an inherited `GIT_CONFIG_PARAMETERS` and `-c`, so a helper
   listed there, or brought in there by an `include.path`, would be asked after the app's and get its
@@ -2298,50 +2483,99 @@ the session and the account"; where tokens are kept, in "Tokens and the keychain
   record keeps. An `http.<url>.extraHeader` with an `Authorization` header (left in `.git/config`
   by actions/checkout) replaces the helper's credential, and git then erases a valid token; a
   redirect to another host does the same.
+- **Why the twins and git's credential view** (phase 7b; measured on 2.31.1, 2.43.0 and 2.56 by the
+  design review, phase 7b's design 8.2). Git matches a `credential.<url>` key against a request in
+  its credential view: `credential_from_url` decodes the request's path and trims its slashes, and
+  `credential_format` writes it again with every reserved character escaped, while `url_normalize`
+  keeps a raw reserved character of the key raw. So a key whose path holds one never matches its own
+  URL there: its `credential.<url>.*` pairs would leave the URL to the user's helpers, while its
+  `http.<url>.proactiveAuth` pair still applies; the credential twin's pairs give the reset and the
+  app's helper on every git. The same view lets one key answer other spellings of a URL (a key
+  `…/r%28x%29` answers `evil@…/r(x)`, `…/r/` answers `evil@…/r`, on gitlab.com too), which is why the
+  drop compares in it; 7a's raw comparison misses an unreserved escape such as `…/_git/%52`.
+  gitlab.com answers a `.git`-less URL with 301 to its `.git` URL, and git 2.31 to 2.45 then ask for
+  the `.git` URL's credential, which without the `.git` twin goes to the user's helpers.
+- **What each git does on a bound URL of the new hosts** (phase 7b's design 8.6, measured on 2.31.1,
+  2.43.0 and 2.56; accepted):
+
+  | | 2.31 to 2.45 (the containers' 2.43) | 2.46 on (2.56) |
+  |---|---|---|
+  | A bound URL's first request | without credentials, 401, then the app's helper and the token; for an `<organization>@` URL libcurl's own retry with the organization and an empty password comes second (401), and the token goes with the third | carries the token (`proactiveAuth`, D340) |
+  | A netrc entry for the host | answers the first 401, user-less URLs too (plan risk 35) | never asked for git's own requests |
+  | gitlab.com's 301 to the `.git` URL | the token through the `.git` twin (without it, the user's helpers) | the token |
+  | A moved GitLab project's old path (served directly, 200) | as the first row | the token |
+  | A same-host redirect of a git URL out of a binding (none known; a dot segment, which old git takes for a redirect, is never bound) | the user's helpers | the token |
+
+  git-lfs inside a bound operation asks the user's helpers, not the app's (D359, accepted as for
+  7a's bindings).
 - **Answering git** (`AskPassBroker.AnswerCredentialAsync`; D273, D275). A line that
   `AskPassProtocol.ParseCredentialRequest` reads is answered without UI on the connection's own
   task: nothing unless the secret matches (compared in fixed time; a wrong one is a Warning) and the
   scope is open with used bindings. The binding is the first whose `scheme://host[:port]` (lower
-  case, the scheme's default port dropped) equals the request's `protocol` and `host`; with none,
-  or with a `username` other than none, the login (without case) or `x-access-token`
-  (`AskPassBroker.IsAccountUser`, the one rule for the broker and the prompt group), git gets
-  nothing and asks through the dialog (`Ask`) or fails (`Deny`, D275). A `get` for an account git
-  refused in this scope gets nothing; otherwise the source's `GetAsync(account)`, cancelled when the
-  scope closes: the session waits at most 10 s for its start's keychain read and answers only while
-  that account binds git. A token holding CR, LF or NUL is not given (a Warning); the SHA-256 of a
-  token given is kept in the scope's handed-out set. An `erase` whose hash is in that set marks the
-  account refused in the scope, once: `PromptScope.RefusedAccount`, the source's `Refused(account)`
-  and the Info line "{repo}: {title}: {host} refused the account's token."; any other erase marks
-  nothing, so a token replaced during an operation is never marked by the old one. Debug lines name
-  each outcome ("answered from the account", "has no token", "is not bound", "names another user"),
-  never a URL's path, the token or its hash. An answer holds a connection at most as long as the
-  source waits (10 s), so `MaxConnections`' 16 stay enough.
+  case, the scheme's default port dropped) equals the request's `protocol` and `host`: one account
+  per origin (phase 7b's design 9.2), so in a scope that binds several providers each host's request
+  goes to its own account. With none, or with a `username` other than none, the login (without case:
+  Azure DevOps' organization, GitLab's username) or `x-access-token` (`AskPassBroker.IsAccountUser`,
+  the one rule for the broker and the prompt group), git gets nothing and asks through the dialog
+  (`Ask`) or fails (`Deny`, D275). A `get` for an account git refused in this scope gets nothing (a
+  refusal is that account's alone: another provider's account in the same scope still answers);
+  otherwise the source's `GetAsync(account)`, cancelled when the scope closes: the session waits for
+  that provider's own keychain read at its start, at most 10 s, never for another provider's (the
+  review before the gate's life-1, D392), and answers only while that account is its provider's
+  signed-in account and binds git. A token holding CR, LF or NUL is not given (a Warning); the
+  SHA-256 of a token given is kept in the scope's handed-out set. An `erase` whose hash is in that
+  set marks the account refused in the scope, once: `PromptScope.RefusedAccount`, the source's
+  `Refused(account)` and the Info line "{repo}: {title}: {host} refused the account's token."; any
+  other erase marks nothing, so a token replaced during an operation is never marked by the old one.
+  Debug lines name each outcome ("answered from the account", "has no token", "is not bound", "names
+  another user"), never a URL's path, the token or its hash. An answer holds a connection at most as
+  long as the source waits (10 s), so `MaxConnections`' 16 stay enough.
 - **Prompts in a bound scope** (`Scope.AskAsync`). A `Deny` scope's prompt is refused at once,
   without the handler. A `Username` or `Password` prompt whose URL's origin is a binding's and whose
   user is the account's (by `IsAccountUser`) carries the account (`GitPrompt.Account`), by which a
-  prompt group keeps its answers (above); once git has refused the account in the scope, such a
-  prompt is refused without a dialog, and the error dialog follows. No prompt is ever answered from
-  the account (D277).
+  prompt group keeps its answers (above). Since phase 7b, on an origin that serves other accounts (a
+  binding's `SharedOriginOwner`: dev.azure.com and the Azure DevOps fake), the prompt must also name
+  the organization (`NamesOwner`, phase 7b's design 8.3): its raw path as the prompt writes it (never
+  .NET's `AbsolutePath`, which resolves `..`), split at `/` after its leading one, has no segment that
+  is empty, `.` or `..` or holds `%` or `\`, and its first segment is the organization without case;
+  or the path is empty and the user is the organization without case or `x-access-token`. Git writes
+  the path only with `credential.<url>.useHttpPath` on, which the app never sets (D359) and Git for
+  Windows' system configuration sets for dev.azure.com; elsewhere, and in every test run,
+  `Username for 'https://dev.azure.com': ` carries no account, while
+  `Password for 'https://<organization>@dev.azure.com': ` and
+  `Password for 'https://x-access-token@dev.azure.com': ` do. A prompt group keeps the password typed
+  with such a path-less user name under no account, so the `Password` prompt after it, which carries
+  the account when the typed user is the organization or `x-access-token`, asks once more
+  (`PromptDialogs`). Once git has refused the account in the scope, a prompt that carries it is
+  refused without a dialog, and the error dialog follows; a path-less dev.azure.com `Username` prompt
+  still shows git's dialog then (accepted, plan risk 39), and typing the organization or
+  `x-access-token` there makes the next `Password` prompt the account's, refused without a dialog
+  (D273). No prompt is ever answered from the account (D277).
 - **A refusal** (ruling 4, D276, D330). The queue copies a failed operation's scope's
   `RefusedAccount` into its result (`OperationResult.RefusedAccount`), and
   `RepositoryOperations.ShowResultAsync` and a bulk row's `DeferredOf` show it before any other
   description (`RefusedDisplay`): the operation's error title,
-  `OperationTexts.GitCredentialsRefused(login)` ("GitHub refused git's credentials for {login}. If
-  the token has expired or was revoked, sign in to GitHub again in Settings, Accounts.", with the
-  signed-in login in its own case when its key is the refused one), git's output, and "Open
-  settings…", which opens the settings screen on Accounts, when the window can open it; auto-fetch
-  shows nothing new, and the create form's error line says the same for its push (see "Pull
-  requests"). The text names git's credentials, not the token, since a stale `extraHeader` or a
-  redirect makes git erase a valid token: the session's `Refused` checks the token with one `GET
-  /user` and marks the account "needs sign-in" only on its 401 (D330). The API's own 401 is certain
-  and says `OperationTexts.TokenRefused(login)`, "GitHub refused the token of {login}. Sign in to
-  GitHub in Settings, Accounts." (both in `OperationTexts.Hosting.Credentials.cs`).
-- **Limits** (D275, D277; plan risks 35 and 39). Git older than 2.31 ignores `GIT_CONFIG_COUNT`, so
-  no binding is used there and the token never reaches git; the Accounts section says that the
+  `OperationTexts.GitCredentialsRefused(provider, login)` ("{Provider} refused git's credentials for
+  {login}. If the token has expired or was revoked, sign in to {Provider} again in Settings,
+  Accounts.", with the refused account's provider by name, and that provider's signed-in login
+  (`IHostingSession.AccountOf(provider)`) in its own case when its key is the refused one, else the
+  key's; Azure DevOps' login is the organization), git's output, and "Open settings…", which opens
+  the settings screen on Accounts, when the window can open it; auto-fetch shows nothing new, and the
+  create form's error line says the same for its push (see "Pull requests"). The text names git's
+  credentials, not the token, since a stale `extraHeader` or a redirect makes git erase a valid
+  token: the session's `Refused` checks the token with one A1 of the account's provider (GitHub's
+  `GET /user`; Azure DevOps' names the organization) and marks the account "needs sign-in" only on
+  its 401 or on an answer for another user (D330, D357; see "Hosting: the session and the account").
+  The API's own 401 is certain and says `OperationTexts.TokenRefused(provider, login)`, "{Provider}
+  refused the token of {login}. Sign in to {Provider} in Settings, Accounts." Both are in
+  `OperationTexts.Hosting.Credentials.cs`; GitHub's are 7a's word for word ("GitHub refused git's
+  credentials for {login}. …"), and 7a's one-argument forms stay, for GitHub (D351, D362).
+- **Limits** (D275, D277; plan risks 35, 39 and 43). Git older than 2.31 ignores `GIT_CONFIG_COUNT`,
+  so no binding is used there and the token never reaches git; the Accounts section says that the
   option needs Git 2.31 (see "The settings screen"). Answering git's prompts from the account there
   (ruling 3's fallback) is not built, since after an answer that succeeds git sends it to every
   helper of the list with `store`, which would put the token in Git Credential Manager or a plain
-  file. On 2.31 to 2.45 a netrc entry for github.com answers a bound call's first 401 before the
+  file. On 2.31 to 2.45 a netrc entry for a bound host answers a bound call's first 401 before the
   app's helper, and git-lfs's own HTTP client reads neither the key nor `NETRC` and asks HOME's
   netrc before any helper on every version (risk 35): design 4.1's "and from nothing else" holds for
   git's own requests from 2.46 on (D340). When the session refuses the account through the API, or
@@ -2353,9 +2587,29 @@ the session and the account"; where tokens are kept, in "Tokens and the keychain
   The refusal of another user (D275) needs git to keep a URL's user in its credential request: git
   up to 2.56.0 without its commit 76524c2604bc, over a libcurl that strips the user from its
   effective URL (curl 8.23.0, CI's macOS), asks after the first 401 with no user, and a binding
-  whose key git matches to another user's URL is then answered (plan risk 43, D389); `Select`'s
-  drop (D278) is the guard there. `GitUrlUser` in the tests' library measures which kind of git a
-  run has.
+  whose key git matches to another user's URL is then answered, the token given without a prompt
+  (plan risk 43, D389); `Select`'s drop (D278) is the guard there. The new hosts' rule drops in
+  git's credential view, so GitHub's raw comparison (below) is the exposed one: on such a git, from
+  2.46 on, a reserved character escaped in the binding and raw in the other URL, which D340's
+  proactive fill does not cover, gives that URL the token, and on 2.31 to 2.45 so do the trailing
+  `/`, the unreserved escape and a stale binding (phase 7b's design 16.3); the token reaches only the
+  bound key's host. `GitUrlUser` in the tests' library measures which kind of git a run has.
+  Accepted in phase 7b (phase 7b's design 16.3; D379, D381, D392): GitHub's rule stays
+  7a's raw comparison, which misses an unreserved escape, an unsafe character raw on one side and
+  escaped on the other, a reserved character escaped in the binding and raw in the other URL, and a
+  trailing `/`, and keeps the trailing-dot, `www.`, `http://`, white-space user, non-ASCII host and
+  `<name>::` spellings that the new hosts' rule closes (the token reaches github.com only); the
+  scope's pairs reach a submodule's fetch through git's on-demand recursion, so a submodule URL at
+  or under a bound URL takes the token, an out-of-form one under an Azure DevOps binding included
+  (O10); a remote on a host no coverage covers that redirects into an out-of-form path under a
+  binding gets the token there, since git builds the credential again from the target, which
+  `Select` never sees (stopping it with `http.followRedirects` would cost D340's pair count and every
+  unbound remote's redirect in a bound scope); D379's "any port" makes a local server's URL whose
+  first segment is outside the organization's grammar fail the Azure DevOps fake's host on
+  `127.0.0.1` (a binding lost, never a token); a name with a literal `%` is neither recognised nor
+  bound; and bindings are taken when an operation is queued and used when it runs, so a URL changed
+  in a terminal before the watcher's refs read, or an `includeIf onbranch:` rule for the one read
+  after a branch switch, can leave them stale (plan risk 43).
 - **Tests**: `CredentialHelperTests` (the helper's mode through `AskPassRunner.RunCredentialAsync`),
   `AskPassBrokerBindingTests` (the variables), `AskPassChannelTests` (a `get`, an `erase` and a
   prompt queued behind a credential answer), `AccountCredentialTests` (fetch, push and clone
@@ -2367,7 +2621,20 @@ the session and the account"; where tokens are kept, in "Tokens and the keychain
   `AutoFetchCredentialTests`, `DashboardCredentialTests`, `RefusedTokenDisplayTests`,
   `PromptGroupAccountTests`, `BulkRunForgetAnswersTests` (App, through `HostingSessionStub` and
   `RecordingCredentialSource`); part A pictures the refused credentials' dialog, part B a clone
-  through the helper (see "Tests").
+  through the helper (see "Tests"). Since phase 7b: `CredentialBindingSelectTests` also holds the
+  new hosts' rule (GitLab's and Azure DevOps' cases beside 7a's, through both overloads);
+  `AzureDevOpsCoverageVectorsTests` (the 48 rows); `CoverageGitMatchTests` (offline
+  `git credential fill` in the broker's scope: each row's key reaches the app's helper as the row
+  says, the twins, the credential view's drops, the remote-helper and non-ASCII spellings, and,
+  against two local servers, another user's URL that a redirect leads into a binding; CI's 2.43
+  too); `AskPassBrokerBindingTests` (three providers' bindings in one scope, the warning,
+  `NamesOwner`'s forms); `PullRequestRefsTests`, `GitConfigIncludeReadTests` (Git);
+  `SignInBindingsWindowTests` (D388's window: a network operation's wait or its own read, the
+  auto-fetch's request for the tab's read, and D278's case asserted by `GitUrlUser`'s measure, D389)
+  and `WelcomeCloneFromGitHubTests`' cases of the clone's conditional includes (D391) (Hosting);
+  `PushGuardProvidersTests`, and `RefusedTokenDisplayTests` and `PromptGroupAccountTests` per
+  provider (App, `HostingSessionStub` with a coverage); phase 7b's part B and its real-window part
+  clone GitLab's and Azure DevOps' fakes through the helper (see "Tests").
 
 ### Context menus (D86, D92, D105, D106, D114, D131, D142)
 
@@ -2378,15 +2645,14 @@ the session and the account"; where tokens are kept, in "Tokens and the keychain
   selected commits as `CommitMenuInfo` with `IsReachableFromHead`, the toolbar's states, whether
   an operation runs, the other worktrees, a drop's `DropFacts`) and an `IRepositoryActions`:
   `ForCommit`, `ForCommits`, `ForStash`, `ForWorkingChanges`, `ForLocalBranch`, `ForRemoteBranch`,
-  `ForRemote`, `ForTag`, `ForSection` (null for "Pull requests" without a GitHub remote),
+  `ForRemote`, `ForTag`, `ForSection` (null for "Pull requests" without a hosted remote),
   `ForUnstagedFile`, `ForStagedFile`, `ForCommitFile`, `ForDiff`, `ForEmptyGraphArea`, `ForDrop`.
   Items act on the full ref names and SHAs captured when the menu opened, never on rows. Items for
   later phases are left out, not disabled (D77, D92); folder rows, repository tabs and, without a
-  GitHub remote, "Pull requests" have no menu. `Build(header, groups…)` never leaves a separator
-  after the header, at the end or two in a
-  row. A disabled item's reason is its tooltip; reasons, where several apply, follow the design's
-  order (the object's own first, then HEAD's state). Items that open a dialog or ask first end in
-  "…". Tested without a UI (`RepositoryMenusTests`).
+  hosted remote, "Pull requests" have no menu. `Build(header, groups…)` never leaves a separator
+  after the header, at the end or two in a row. A disabled item's reason is its tooltip; reasons,
+  where several apply, follow the design's order (the object's own first, then HEAD's state). Items
+  that open a dialog or ask first end in "…". Tested without a UI (`RepositoryMenusTests`).
 - **Phase 4's items** (phase 4 design 7.1, D142, D147): the commit menu gains "Rebase {cur} onto
   this commit" and "Interactive rebase of {cur} from here…" after "Revert this commit"; several
   commits "Squash {N} commits…" first; a local branch other than the current one and a remote
@@ -2468,6 +2734,27 @@ the session and the account"; where tokens are kept, in "Tokens and the keychain
   `RepositoryViewModel.OpenRefRowMenu` opens `ForPullRequest` for a `PullRequestRow`; a right-click
   there, as on every left-panel row, selects nothing (D114). See "Pull requests" for what the items
   do.
+- **Phase 7b's items** (D350, D351, D355, D356, D376; phase 7b's design 12.4;
+  `RepositoryMenus.Hosting.cs`, still pure). `RepositoryMenuContext.Hosting` is null while
+  `NoHostedRemote` (7a's `NotGitHub`), so a repository without a hosted remote keeps every earlier
+  menu. Every text is the listed repository's provider's, GitHub's 7a's word for word:
+  `ForPullRequest`'s header is `RequestHeader` (`#1 Add the login form`, GitLab's `!21 Add the
+  search box`; a request neither listed nor kept, its number alone in the listed provider's form)
+  and its "Check out {head}" the checkout plan's label and reason (see "Pull requests"); the
+  section's menu is headed by the section's title ("Merge requests" on GitLab) and holds, signed
+  out, `HostingTexts.SignInToItemOf(p)` ("Sign in to GitLab…") and "Open {Rs} in browser"; while
+  `OtherOrganization` "Open pull requests in browser" alone, the user's own browser on the remote's
+  page, the app sending nothing (D376); otherwise "Refresh {Rs}" (disabled "{RsT} are loading" while
+  they load, `Merge requests are loading`) and "Open {Rs} in browser". The branch and drop items
+  read `RequestRemotes` (the remotes of the listed repository's provider and host, on Azure DevOps
+  of its organization too) in place of 7a's GitHub remotes: a remote branch has an item only when
+  its remote is one of them, so GitHub's `upstream/main` beside a listed GitLab `origin` has none; a
+  local branch only while there is one; a drop only onto a branch of one of them, or onto a local
+  branch whose upstream is such a branch of the same name (`IsRequestBase`, 7a's `IsGitHubBase`).
+  While `OtherOrganization` none has an item, so no menu offers a create there (D350). The items
+  read "Open {R} {N}" (`OpenRequest`, in the open request's provider's words: "Open merge request
+  !21") or "Create {R}…" (`CreateRequest`: "Create merge request…"). The palette's request items
+  come through `ForPullRequest`.
 - **Entry points.** Views handle Avalonia's `ContextRequested` (a right-click, the Menu key,
   Shift+F10) and call the repository's `OpenCommitMenu`, `OpenLabelMenu`,
   `OpenWorkingChangesMenu`, `OpenEmptyGraphAreaMenu`, `OpenRefRowMenu`, `OpenFileMenu`,
@@ -2585,9 +2872,9 @@ the session and the account"; where tokens are kept, in "Tokens and the keychain
 | `AddRepositoriesDialog` (phase 6) | `AddRepositoriesDialogViewModel` / `AddRepositoriesDialogView` | "Add repositories to {workspace}": the folder scan's progress, then the checklist of what it found (`FoundList`, `FoundRepository`), see "Workspaces" |
 | `SettingsDialog` (phase 6) | `SettingsDialogViewModel` / `SettingsDialogView` | The settings screen, see "The settings screen" |
 | `CommandPalette` (phase 6) | `CommandPaletteViewModel` / `CommandPaletteView` | The command palette, see "The command palette" |
-| `SignInDialog` (phase 7a) | `SignInDialogViewModel` (`DialogViewModel<AccountStatus?>`) / `SignInDialogView` | "Add GitHub account": a personal access token, masked, checked with GitHub; see "The settings screen" |
-| `CloneFromGitHubDialog` (phase 7a) | `CloneFromGitHubDialogViewModel` (`DialogViewModel<string?>`) / `CloneFromGitHubDialogView` | "Clone from GitHub": the account's repositories, a filter and "Choose"; see "Clone from GitHub" |
-| `CreatePullRequestDialog` (phase 7a) | `CreatePullRequestDialogViewModel` (`DialogViewModel<bool>`) / `CreatePullRequestDialogView` | "Create pull request": From, Into, the title, the description, Draft and the error line; see "Pull requests" |
+| `SignInDialog` (phase 7a) | `SignInDialogViewModel` (`DialogViewModel<AccountStatus?>`) / `SignInDialogView` | "Add GitHub account": a personal access token, masked, checked with GitHub; since phase 7b one per provider, "Add GitLab account" (with a second link, to GitLab's legacy token form) and "Add Azure DevOps account" (with the organization's box above the token's); see "The settings screen" |
+| `CloneFromGitHubDialog` (phase 7a) | `CloneFromGitHubDialogViewModel` (`DialogViewModel<string?>`) / `CloneFromGitHubDialogView` | "Clone from GitHub": the account's repositories, a filter and "Choose"; since phase 7b also "Clone from GitLab" and "Clone from Azure DevOps", with a switch between the signed-in providers while two or three are; see "Clone from an account" |
+| `CreatePullRequestDialog` (phase 7a) | `CreatePullRequestDialogViewModel` (`DialogViewModel<bool>`) / `CreatePullRequestDialogView` | "Create pull request": From, Into, the title, the description, Draft and the error line; since phase 7b also GitLab's "Create merge request", with the title GitLab is sent under Draft and the quick-actions note; see "Pull requests" |
 
 Each title has an automation id of its own (`ConfirmTitle`, `NameDialogTitle`, `ResetTitle`,
 `PickTitle`, `ChoiceTitle`, `PushTitle`, `RemotesTitle`, `ErrorTitle`, `FinishingTitle`,
@@ -2609,7 +2896,11 @@ nothing. Phase 6's titles are `AddRepositoriesTitle` and `SettingsTitle`. Phase 
 is "Sign out of GitHub?" (button "Sign out", primary, not destructive: nothing in a repository is
 lost, D296); the create form shows its failures on its own line, not in the error dialog (D312).
 Phase 7a's titles are `CloneFromGitHubTitle` and `CreatePullRequestDialogTitle`; "Add GitHub
-account"'s is `DialogTitle`, as the prompt dialogs'.
+account"'s is `DialogTitle`, as the prompt dialogs'. Phase 7b's questions are the other providers'
+sign-outs, "Sign out of GitLab?" and "Sign out of Azure DevOps?" (button "Sign out", primary, as
+GitHub's); its dialogs keep 7a's titles' ids on every provider ("Add GitLab account" and "Add Azure
+DevOps account" `DialogTitle`, the browser `CloneFromGitHubTitle`, the form
+`CreatePullRequestDialogTitle`, D362).
 
 ### Drag a branch onto a branch (D87, D120)
 
@@ -2923,8 +3214,9 @@ pages (below). All belong to the `RepositoryViewModel`, like the diff, so a tab 
   `DashboardBulkViewModel` has none (null, false, a command that never runs), and `CompactText` is
   unchanged. `StatusBarView`'s `OperationOfferButton` (a `VcFlatButton`, its text at 11.5 and its
   automation name the offer's label) lies 6 after `OperationStatus`, before `OperationProgress`;
-  hidden, it takes no room, so a status bar without an offer is as before. In 7a only a created pull
-  request makes an offer: "Open in browser", which opens it (see "Pull requests").
+  hidden, it takes no room, so a status bar without an offer is as before. Only a created request
+  makes an offer, since phase 7b on every provider (`Created merge request !24` too): "Open in
+  browser", which opens it (see "Pull requests").
 - **Conflict banner (D89, D110, D122, D144).** `ViewModels/Operations/ConflictBannerViewModel`
   (`RepositoryViewModel.Banner`, constructed with the repository's Abort, Continue and Skip) shows
   each status read (`OnStatusApplied` → `Show(state, conflicts, ontoName, currentName,
@@ -2994,7 +3286,13 @@ pages (below). All belong to the `RepositoryViewModel`, like the diff, so a tab 
   `BulkSlots.IsCommonFolderBusy`: two fetches of one common folder that overlap lose one of them on
   its remote-tracking refs, D210), and the interval's environment variable is read through
   `ReadEnvironment`, the session's reader; auto-fetch looks only at the active tab's repository, so
-  a dashboard tab has none. The settings screen sets the interval (D85's "no screen" ended).
+  a dashboard tab has none. The settings screen sets the interval (D85's "no screen" ended). Since
+  phase 7b (D388) a tick that would fetch starts no fetch while the active tab is inside D290's
+  window (`RepositoryViewModel.AwaitsUrlRules`, see "Operations"): while the tab's read of the URL
+  rewrites is in flight it waits, and with none in flight it asks the tab for one
+  (`RequestUrlRules`), at most once an interval (`Tracked.RulesAsked`), logging `{repo}: auto-fetch
+  not started, the URL rules are read again` at Debug; a later tick fetches with the account's
+  credentials.
 
 ### Activity log (T4, D156, D173)
 
@@ -3387,7 +3685,7 @@ texts, Cancel, error dialog, dedupe keys and undo recording.
   queue fetches from its common folder.
 - **Prompts** form one group per run (`BulkRun.PromptGroup`; see "Prompts and credentials"); since
   phase 7a a row that fails with `AuthenticationFailed` makes the group forget its kept answers
-  (ruling 9), and a row without a tab binds its fetch or pull to the hosting account as a tab does
+  (ruling 9), and a row without a tab binds its fetch or pull to the hosting accounts as a tab does
   (D332).
 - **Cancel all** (`DashboardCancelAll`, the status bar's Cancel on a dashboard tab, and closing the
   dashboard tab) stops starting rows (`StopStarting`: rows in line or being read end "Fetch
@@ -3451,27 +3749,29 @@ Phase 6. `ViewModels/Commands/CommandPaletteViewModel.cs`, `PaletteEntry.cs`, `P
   Pull (Fetch all, Pull all) and the workspace's own edits (Add repository…, Add open tabs, Rename
   workspace…, Delete workspace…); then the window's (New tab, Close tab, Next and Previous tab, Go to
   the next dashboard while one is open, Open, Clone and Init repository… (since phase 7a "Clone from
-  GitHub…" after Clone while GitHub is not off, see "Clone from GitHub"), New workspace…, Show or
-  hide the activity log, Open settings…, Show keyboard shortcuts…, "Choose an editor…" while none is
-  chosen, and the two themes and System not chosen now). Each state comes from `AppCommands`, which
-  the keys share, and a state taken from a menu builder from that builder on the same
-  `MenuContext` snapshot, so a key, its entry and its menu item are enabled together.
+  GitHub…" after Clone while GitHub is not off, and since phase 7b "Clone from GitLab…" and "Clone
+  from Azure DevOps…" after it, each while its provider is not off; see "Clone from an account"),
+  New workspace…, Show or hide the activity log, Open settings…, Show keyboard shortcuts…, "Choose
+  an editor…" while none is chosen, and the two themes and System not chosen now). Each state comes
+  from `AppCommands`, which the keys share, and a state taken from a menu builder from that builder
+  on the same `MenuContext` snapshot, so a key, its entry and its menu item are enabled together.
 - **The items** (`AppCommands.PaletteItems`, once the user types; an empty box would list some 1,500
   "Copy SHA" lines): on a repository tab the items of its menus, built by the `RepositoryMenus`
   builders on one snapshot (`RepositoryViewModel.PaletteItems`: every local branch, the checked-out
   one first then the left panel's order, every remote branch, tag, stash and remote, since phase 7a
-  every listed pull request's menu (`ForPullRequest`, all 300 when the list is full), the selection's
-  commit or commits, the working changes when there are any, the open diff's menu and the open page's
-  selected row's), each with its menu's header as detail; what a menu leaves out the palette lacks
-  too, an item whose command is a listed command of the same label is left out, and items of one key
-  are one. Then the window's: "Go to {title}" for every tab but the active one (detail "Tab {n}",
-  with Mod+{n} up to 8 and Mod+9 for a last tab at 9 or later), "Open repository {name}" for every
-  recent repository and then every workspace's repository not listed yet, but the active tab's (the
-  detail its folder, a workspace's as saved; a folder its open dashboard found in a folder state
-  disabled with the row's reason), and "Open workspace {name}" (detail its count). The palette opens
-  with the worktrees last read and reads them again (`ReadMenuContextAsync`); when they differ while it
-  is still open, the items are built again (`ReplaceItems`). `RepositoryMenuContext.FindRef` looks a
-  ref up in an index by full name, built at the first call, so the build is linear in the refs.
+  every listed pull request's menu (`ForPullRequest`, all 300 when the list is full; since phase 7b
+  every listed request of the listed provider, in its words), the selection's commit or commits, the
+  working changes when there are any, the open diff's menu and the open page's selected row's), each
+  with its menu's header as detail; what a menu leaves out the palette lacks too, an item whose
+  command is a listed command of the same label is left out, and items of one key are one. Then the
+  window's: "Go to {title}" for every tab but the active one (detail "Tab {n}", with Mod+{n} up to 8
+  and Mod+9 for a last tab at 9 or later), "Open repository {name}" for every recent repository and
+  then every workspace's repository not listed yet, but the active tab's (the detail its folder, a
+  workspace's as saved; a folder its open dashboard found in a folder state disabled with the row's
+  reason), and "Open workspace {name}" (detail its count). The palette opens with the worktrees last
+  read and reads them again (`ReadMenuContextAsync`); when they differ while it is still open, the
+  items are built again (`ReplaceItems`). `RepositoryMenuContext.FindRef` looks a ref up in an index
+  by full name, built at the first call, so the build is linear in the refs.
 - **Matching** (`PaletteMatcher`, pure, D212): the query is trimmed and split at white space; an
   empty one lists the commands only, those run this session first; otherwise an entry matches when
   every word occurs in its label or detail, ignoring case, and the matches rank by tier (0 the label
@@ -3494,7 +3794,8 @@ Phase 6. `ViewModels/Commands/CommandPaletteViewModel.cs`, `PaletteEntry.cs`, `P
 - Tests: `PaletteMatcherTests`, `CommandPaletteViewModelTests`, `PaletteEntriesTests`,
   `CommandPaletteViewTests`, `PaletteGrowthTests` (App); check K10; since phase 7a
   `PaletteCloneFromGitHubTests` (Hosting.Tests), `RepositoryMenusHostingTests` (Phase7a) and checks
-  B7, B8 and P11.
+  B7, B8 and P11; since phase 7b `CloneFromAccountTests` (Hosting.Tests),
+  `RepositoryMenusProvidersTests` (Phase7b) and phase 7b's check B8.
 
 ### Keyboard shortcuts (D163, D192, D199, D213 to D215)
 
@@ -3523,7 +3824,9 @@ by it (`Views/KeyRouter.cs`); every key text comes from one formatter; no screen
   Cmd+R on macOS, Redo Ctrl+Y but Cmd+Shift+Z, the matches F3 but Cmd+G), `All`, `ShownFirst`, and
   `Groups(platform)` the settings screen's list. The commands left without a key (D199, D213) are
   reached through the palette; since phase 7a "Clone from GitHub…" (`AppCommand.CloneFromGitHub`,
-  after `FollowSystemTheme`) is one of them (D299). The keys left free are D213's.
+  after `FollowSystemTheme`) is one of them (D299), and since phase 7b "Clone from GitLab…" and
+  "Clone from Azure DevOps…" (`CloneFromGitLab`, `CloneFromAzureDevOps`, right after it, so that
+  only the keys-only values moved) are too (D354). The keys left free are D213's.
 - **One formatter** (D214): `ShortcutText.Format(shortcut, platform)` writes every key text in words,
   also on macOS, joined by `+` (`Ctrl+Shift+P`, `Cmd+Shift+P`, `Option+Up`, `Ctrl+,`, `Esc`; on macOS
   Backspace as `Delete` and Delete as `Forward Delete`), and `FormatAll` joins several (`Ctrl+1 to
@@ -3600,7 +3903,10 @@ Phase 6. `ViewModels/Dialogs/SettingsDialogViewModel.cs` with `ViewModels/Settin
 `ViewModels/Settings/AccountsSettingsViewModel.cs`, the dialog "Add GitHub account"
 (`ViewModels/Dialogs/SignInDialogViewModel.cs`, `Views/Dialogs/SignInDialogView`), the window's
 sign-in entry (`MainWindowViewModel.Hosting.cs`) and their texts
-(`OperationTexts.Hosting.Accounts.cs`, `AccountTexts`).
+(`OperationTexts.Hosting.Accounts.cs`, `AccountTexts`). Since phase 7b
+`ViewModels/Settings/AccountBlockViewModel.cs`, one block per provider, and one sign-in dialog per
+provider (phase 7b's design 10); `AccountTexts`' forms that take a provider first (`…Of(p)`) return
+7a's constants for GitHub, word for word (D362).
 
 - **A large dialog of the dialog layer** (`SettingsDialog`, `DialogViewModel<bool>`: true after a
   Save that closed it), so both harnesses capture and drive it and "This repository" stays fixed
@@ -3618,8 +3924,9 @@ sign-in entry (`MainWindowViewModel.Hosting.cs`) and their texts
   tab's repository (none on an empty or a dashboard tab, in summary mode or before its refs are read),
   git's settings, the tool catalogues and the key list; since phase 7a also the session's hosting,
   the window's sign-in entry and the detected git's version (`SettingsScreenServices.Hosting`,
-  `SignIn`, `GitVersion`). The error dialog of git's credentials that GitHub refused opens the
-  screen on Accounts ("Open settings…", see "Prompts and credentials").
+  `SignIn`, since phase 7b a `Func<HostingProvider, Task<bool>>`, `GitVersion`). The error dialog of
+  git's credentials that a provider refused opens the screen on Accounts ("Open settings…", see
+  "Prompts and credentials").
 - **General**: the theme (Dark, Light, System), auto-fetch (`AutoFetchCheckBox` and
   `AutoFetchMinutesBox`, 1 to 60 minutes; 0 off; a file's value above 60 kept until edited), Keep
   ignored files (`KeepIgnoredCheckBox`), "Include untracked files when stashing"
@@ -3631,80 +3938,153 @@ sign-in entry (`MainWindowViewModel.Hosting.cs`) and their texts
   `EditorChooseButton`, Other's `EditorProgramBox`, `EditorBrowseButton` and `EditorArgumentsBox`;
   see "Open in editor and Open file"). **Keyboard shortcuts**: `AppShortcuts.Groups` read-only, a
   `ShortcutGroup` heading per group and a `ShortcutRow` per action, the keys in the code font (D192).
-- **Accounts** (since phase 7a; D256, D277, D294, D296, D297; design 8.3). `AccountsSettingsViewModel`
-  (`Accounts`, made with the screen, disposed at its Cancel and at a Save that closes it) reads the
-  session's account when the screen opens and follows `AccountChanged`; it makes no git call and no
-  request then. The section (`SettingsAccounts`, inside a `Panel` that carries `ShowsAccounts`) holds
-  `AccountsIntro` and two rows with the screen's 132-px label column. "GitHub": with GitHub off
-  `AccountsOff` ("GitHub is turned off for this session.") and no button; signed out
-  `AccountsSignedOut` ("Not signed in.") and `AccountsSignInButton` ("Sign in…"); with an account
-  `AccountLogin` (semibold), then `AccountTokenPlace` (`settingsNote`: "The token is kept in this
-  computer's keychain.", D253's no-keychain text for a token kept for the session, or the failed
-  save's note) or, while it needs sign-in, `AccountNeedsSignIn` (`dialogWarning`: the token refused,
-  gone from the keychain, unreadable there, or kept for the last session only), and
-  `AccountsSignOutButton` ("Sign out…"), with "Sign in…" beside it while the account needs sign-in
-  (D294). "Sign in…" runs the window's sign-in entry, whose dialog stacks over the screen, and then,
-  signed in, focuses "Sign out…". "Sign out…" asks "Sign out of GitHub?" (design 8.2's question,
-  naming the login and saying that the token and the saved avatars go, D291; its last sentence, on
-  git's own helpers, left out with a detected git older than 2.31; the button "Sign out", primary,
-  D296), then shows `AccountsBusy` ("Signing out…") with both buttons disabled while
-  `IHostingSession.SignOutAsync` runs with `CancellationToken.None`: sign-in and sign-out act at
-  once, and the screen's Cancel cannot undo them (D256). A reason the keychain kept its entry shows
-  as `AccountsSignOutNote` until the next sign-in or the screen's close; the focus goes to "Sign
-  in…". "Git", with an account: `AccountUseForGit` ("Use for git over HTTPS") and
-  `AccountUseForGitNote`, which with a detected git older than 2.31 reads "This needs Git 2.31 or
-  newer. …" (D277; the switch stays enabled, kept for a newer git). The switch is a setting: it
-  starts as the account's, resets when `AccountChanged` brings another account, and Save applies it
-  (`IsChanged`; `IHostingSession.SetUseForGit`, which the session writes off the UI thread); Cancel
-  and Esc drop it. No scope or expiry is shown or warned of (D297).
-- **"Add GitHub account"** (`SignInDialog`; D253, D288, D295, D297, D298; design 8.4).
-  `SignInDialogViewModel : DialogViewModel<AccountStatus?>` with its own `CancellationTokenSource`,
-  which Cancel, Esc and `CancelAll` cancel. At its opening it asks `KeychainAvailableAsync`
+- **Accounts** (since phase 7a; D256, D277, D294, D296, D297; design 8.3; since phase 7b one block
+  per provider, D348, D353, D362, phase 7b's design 10.3). `AccountsSettingsViewModel` (`Accounts`,
+  made with the screen, disposed at its Cancel and at a Save that closes it) holds `Blocks`, one
+  `AccountBlockViewModel` per provider in `HostingProviders.InAccountsOrder` (`GitHub`, `GitLab`,
+  `AzureDevOps`), each 7a's GitHub section over its provider's account (`IHostingSession.AccountOf`),
+  read when the screen opens. It subscribes to `AccountChanged` once and hands each event to its
+  provider's block alone (`Follow`), so another provider's event never resets a toggled switch; it
+  makes no git call and no request when the screen opens. The view (`SettingsAccounts`, inside a
+  `Panel` that carries `ShowsAccounts`) holds `AccountsIntro`, one sentence for the three providers
+  ("With a GitHub, GitLab or Azure DevOps account, VisualCommit lists and creates pull requests
+  (merge requests on GitLab) and clones your repositories."), then, 18 below, three `ContentControl`s
+  24 apart, `AccountsGitHub`, `AccountsGitLab` and `AccountsAzureDevOps`, each shown while its block's
+  `IsShown` (its provider on; GitHub's also while every provider is off or there is no session, D362)
+  and drawn by one `DataTemplate`: 7a's two rows, 18 apart, with the screen's 132-px label column,
+  every automation id 7a's followed by the block's `IdSuffix` (none for GitHub, whose block keeps
+  7a's ids; `GitLab`, `AzureDevOps`: `AccountLoginGitLab`, `AccountsSignInButtonAzureDevOps`). The
+  first row's label is the provider's name (`Label`). With every provider off GitHub's block shows
+  `AccountsOff` ("GitHub is turned off for this session.") and no button, and the block of a provider
+  that is off is not shown (`IsShown` false), GitHub's too while another provider is on; signed out
+  `AccountsSignedOut` ("Not signed in.") and `AccountsSignInButton` ("Sign in…"); with an account `AccountLogin` (semibold; on Azure DevOps the organization), on Azure DevOps
+  `AccountUser` under it (`secondary`, the account's name, while it has one), then
+  `AccountTokenPlace` (`settingsNote`: "The token is kept in this computer's keychain.", D253's
+  no-keychain text for a token kept for the session, or the failed save's note) or, while it needs
+  sign-in, `AccountNeedsSignIn` (`dialogWarning`: the token refused, "{name} refused the token. Sign
+  in again with a new token.", gone from the keychain, unreadable there, or kept for the last session
+  only), and `AccountsSignOutButton` ("Sign out…"), with "Sign in…" beside it while the account needs
+  sign-in (D294). "Sign in…" runs the window's sign-in entry for the block's provider, whose dialog
+  stacks over the screen, and then, signed in, focuses that block's "Sign out…". "Sign out…" asks the
+  provider's question (`SignOutTitleOf`, `SignOutQuestionOf`): "Sign out of GitHub?", design 8.2's
+  question, naming the login and saying that the token and the saved avatars go (D291); "Sign out of
+  GitLab?", "Sign out of GitLab as {login}? VisualCommit removes its token from this computer and no
+  longer lists merge requests."; "Sign out of Azure DevOps?", the same "for {organization}" and with
+  pull requests; each one's last sentence, on git's own helpers, left out with a detected git older
+  than 2.31; the button "Sign out", primary (D296). Then it shows `AccountsBusy` ("Signing out…")
+  while `IHostingSession.SignOutAsync(provider, CancellationToken.None)` runs: sign-in and sign-out
+  act at once, and the screen's Cancel cannot undo them (D256). While any block signs out, every
+  block's buttons are disabled (`Joins`). A sign-out outlives its screen: the blocks keep the running
+  sign-outs per session and provider (a `ConditionalWeakTable`), so a block made while one runs, in a
+  screen reopened meanwhile, shows "Signing out…", every block's buttons disabled, until it ends, then
+  the account and the keychain's note, moving no focus. A sign-out ends in one place (`EndSignOut`):
+  the account's state and the note first, the busy text's end last. A reason the keychain kept its
+  entry shows as `AccountsSignOutNote` until the next sign-in or the screen's close; the focus goes to
+  the block's "Sign in…". "Git", with an account: `AccountUseForGit` ("Use for git over HTTPS") and
+  `AccountUseForGitNote` (`AccountUseForGitNoteOf`: GitHub's 7a's; GitLab's naming GitLab; Azure
+  DevOps' "Clone, fetch, pull and push to {organization}'s repositories on Azure DevOps over HTTPS use
+  this account's token …", D350), which with a detected git older than 2.31 reads, for every
+  provider, "This needs Git 2.31 or newer. …" (D277; the switch stays enabled, kept for a newer git).
+  Each switch is a setting: it starts as its account's, resets when `AccountChanged` brings another
+  account of its provider and, while not toggled, follows its account's own value; Save applies each
+  changed one (`IsChanged`; `ApplySwitches`: `IHostingSession.SetUseForGit(provider, value)` per
+  changed block, which the session writes off the UI thread); Cancel and Esc drop them. No scope or
+  expiry is shown or warned of (D297). With two or three accounts signed in the section scrolls at
+  1100×700 (D353).
+- **"Add … account"** (`SignInDialog`; D253, D288, D295, D297, D298; design 8.4; since phase 7b one
+  per provider, D345, D360, D378, D385, D387, phase 7b's design 10.4).
+  `SignInDialogViewModel(hosting, provider, launcher, log, organization)` is a
+  `DialogViewModel<AccountStatus?>` with its own `CancellationTokenSource`, which Cancel, Esc and
+  `CancelAll` cancel; its title is `HostingTexts.AddAccountTitleOf(provider)` ("Add GitHub account",
+  "Add GitLab account", "Add Azure DevOps account"). At its opening it asks `KeychainAvailableAsync`
   (`Opened`) and, when no keychain can be reached, shows `SignInNoKeychain` (D253's text) before
-  anything is typed. The 400-wide card holds the title (`DialogTitle`); `SignInHelp` (the access a
-  fine-grained or a classic token needs); the link `SignInTokenLink` ("Create a token on GitHub", a
-  `Button` with its own theme `SignInLinkButton` in `VcAccentBrush`, underlined on pointer-over and
-  while focused, reached by Tab, with a tooltip), which opens GitHub's page for a new fine-grained
-  token (`settings/personal-access-tokens/new?name=VisualCommit&contents=write&pull_requests=write`
-  on the web base, D295) through `IFileLauncher.OpenUrlAsync`; the label "Token" and `SignInToken`,
-  a `SecretTextBox` masked with the prompts' character, whose automation peer hides the text (D103,
-  D130), the first focus; the lines of its state; Cancel and "Sign in". "Sign in" (Enter too) is
-  enabled while the trimmed token is not empty and no check runs. A trimmed token with any
-  character outside printable ASCII (U+0021 to U+007E) is refused before any request (D298). Otherwise
-  `SignInChecking` ("Checking the token…") shows, with the box and "Sign in" disabled, while
-  `IHostingSession.SignInAsync` runs. A refusal shows `SignInError` ("GitHub refused the token: Bad
-  credentials.", a network failure's text as it is, or "GitHub answered: {message}."; an unexpected
-  exception "Could not reach GitHub.", its words in the log only) and gives the box the focus with
-  its text selected. A sign-in closes the dialog with the account's status and clears the box; one
-  whose keychain save failed (ruling 19) keeps it open with `SignInSaveFailed` ("Signed in as
-  {login}, but the token could not be saved …"), the box disabled and cleared, Cancel hidden and
-  one "Close", focused, which closes it signed in, as Enter and Esc do. Cancel during the check
-  closes it and cancels the request; if GitHub had already answered, the session completes the
-  sign-in (D288). It has no "In {repo}" line, and nothing typed is logged; the token's own rules are
-  in "Prompts and credentials".
-- **The window's sign-in entry** (design 8.5). `MainWindowViewModel.SignInToGitHubAsync`
-  (`MainWindowViewModel.Hosting.cs`), set as `TabServices.SignInToGitHub` and given to the screen as
-  `SignIn`: GitHub off, false without a dialog; signed in already, true without a dialog; a sign-in
-  dialog already open, its end awaited; else "Add GitHub account" on top of whatever is open (D104).
-  It answers whether an account is signed in afterwards; a failure is logged and gives false. Every
-  sign-in of the app ends here: Accounts' "Sign in…", the "Pull requests" section's sign-in row and
-  "Sign in to GitHub…" item, "Create pull request…" and the palette's "Clone from GitHub…" while
-  signed out. No other palette command signs in, and none opens Accounts (D299): "Clone from
-  GitHub…" opens the sign-in dialog only as its own first step.
+  anything is typed. The 400-wide card holds the title (`DialogTitle`); `SignInHelp` (`SignInHelpOf`:
+  the access a fine-grained or a classic GitHub token needs; on GitLab the user, project, merge
+  request and code permissions of a fine-grained token, or a legacy token's api scope, D385; on Azure
+  DevOps the organization and a token made for it with the scope Code (Read & write)); the link
+  `SignInTokenLink` (`TokenLinkOf`: "Create a token on GitHub", "Create a fine-grained token on
+  GitLab", "Create a token on Azure DevOps"; a `Button` with its own theme `SignInLinkButton` in
+  `VcAccentBrush`, underlined on pointer-over and while focused, reached by Tab, with the provider's
+  tooltip), which opens the provider's `IHostingProvider.TokenPage(organization)` through
+  `IFileLauncher.OpenUrlAsync`: GitHub's page for a new fine-grained token
+  (`settings/personal-access-tokens/new?name=VisualCommit&contents=write&pull_requests=write` on the
+  web base, D295), GitLab's `-/user_settings/personal_access_tokens/granular/new`, Azure DevOps'
+  `{organization}/_usersSettings/tokens` on its web base, enabled only while the organization box
+  gives an organization (`CanOpenTokenPage`; disabled, the theme's `:disabled` gives
+  `VcTextDisabledBrush` and the arrow cursor, and no underline); on GitLab, 4 below it,
+  `SignInLegacyTokenLink` ("Or create a legacy token, filled in"), which opens
+  `GitLabProvider.LegacyTokenPage`
+  (`-/user_settings/personal_access_tokens?name=VisualCommit&scopes=api`, D385); on Azure DevOps the
+  label "Organization" and `SignInOrganization` (`dialogBox`, no margin), above the token's, the
+  first focus while it is empty (prefilled by the window's sign-in entry, D360); the label "Token"
+  and `SignInToken`, a `SecretTextBox` masked with the prompts' character, whose automation peer
+  hides the text (D103, D130), the first focus otherwise; the lines of its state; Cancel and "Sign
+  in". "Sign in" (Enter too) is enabled while the trimmed token, and on Azure DevOps the
+  organization box, are not empty and no check runs. Refused before any request, in this order: on
+  Azure DevOps a box that gives no organization ("Type the organization's name, of letters, digits
+  and hyphens, or its address on dev.azure.com or visualstudio.com."), by
+  `AzureDevOpsProvider.OrganizationOf` on the session's Azure DevOps endpoints alone, the dialog
+  parsing nothing itself, and also a name of a provider's token form, of the shape of a token of no
+  form (52 base32 or 40 hexadecimal characters, any case) or equal to the token box's text, so that
+  a token pasted there is never sent, opened or shown; a trimmed token with any character outside
+  printable ASCII (U+0021 to U+007E) (D298); and a token that holds another provider's form,
+  `SignInOtherProviderTokenOf` ("This looks like a GitLab token. Paste a token made on GitHub.", "…
+  an Azure DevOps token. …", Azure DevOps' "Paste a token made for {organization} on Azure DevOps.";
+  D378, D387). `OtherProviderFormIn` reads the whole value's form first
+  (`HostingProviders.TokenFormOf`), then the value as typed and with its escapes read, up to three
+  times, cut into runs of token characters (letters, digits, `_`, `-`, `.`); in each run another
+  provider's signature counts where it begins before the dialog's own token (GitHub's six prefixes,
+  GitLab's `glpat-`, `AZDO` with 76 letters and digits before it and 4 after it), and the first by
+  its place names the provider; a token of the dialog's own form or of none goes on. A local refusal
+  moves no focus. Otherwise `SignInChecking` ("Checking the token…") shows, with the boxes and "Sign
+  in" disabled, while `IHostingSession.SignInAsync(new SignInRequest(provider, token,
+  organization))` runs. A refusal shows `SignInError` in the provider's words (`SignInFailedOf`):
+  GitHub's 7a's ("GitHub refused the token: Bad credentials.", a network failure's text as it is, or
+  "GitHub answered: {message}."), GitLab's the same with its name; on Azure DevOps fixed texts,
+  since its 401 bodies say nothing: an unknown organization (`NotFound`, "Azure DevOps has no
+  organization named {organization}."), the Anonymous identity ("Azure DevOps did not take the token
+  as a sign-in and answered as it does for a visitor. Paste the whole token, made for
+  {organization}.") and any other `BadCredentials` ("Azure DevOps refused the token for
+  {organization}. Check that it was made for this organization and has not expired."), and for any
+  other kind GitLab's forms with its name (a network failure's text as it is, "Azure DevOps answered:
+  {message}."); an unexpected exception "Could not
+  reach {name}.", its words in the log only. It then gives a box the focus with its text selected:
+  the organization's after `NotFound`, else the token's. A sign-in closes the dialog with the
+  account's status and clears the box; one whose keychain save failed (ruling 19) keeps it open with
+  `SignInSaveFailed` ("Signed in as {login}, but the token could not be saved …"), the boxes
+  disabled and the token's cleared, Cancel hidden and one "Close", focused, which closes it signed
+  in, as Enter and Esc do. Cancel during the check closes it and cancels the request; if the service
+  had already answered, the session completes the sign-in (D288). It has no "In {repo}" line, and
+  nothing typed is logged; the token's own rules are in "Prompts and credentials".
+- **The window's sign-in entry** (design 8.5; since phase 7b per provider, phase 7b's design 10.5,
+  ruling 22). `MainWindowViewModel.SignInAsync(provider)` (`MainWindowViewModel.Hosting.cs`), set as
+  `TabServices.SignIn` and given to the screen as `SignIn` (`Func<HostingProvider, Task<bool>>`): the
+  provider off, false without a dialog; its account signed in already, true without a dialog; a
+  sign-in dialog of any provider already open, its end awaited and then the answer for the provider
+  asked, with no second dialog; else that provider's dialog on top of whatever is open (D104), Azure
+  DevOps' organization box prefilled with the held account's login, else with the organization
+  (`OwnerRoot`) of the active tab's first Azure DevOps remote in `HostingRemoteOrder` (D360). It
+  answers whether that provider's account is signed in afterwards; a failure is logged and gives
+  false. Every sign-in of the app ends here: each Accounts block's "Sign in…", the requests section's
+  sign-in row and "Sign in to {name}…" item (the listed repository's provider), "Create {R}…" while
+  signed out, and the palette's "Clone from {name}…" while that provider is signed out. No other
+  palette command signs in, and none opens Accounts (D299): each "Clone from …" opens the sign-in
+  dialog only as its own first step.
 - **Save** (design 7.8), in order: validate every section (an error marks its section, shows it and
   focuses its first wrong field; the editor's disk checks run off the UI thread); the app's settings
-  in one `ISettingsStore.Update`; since phase 7a Accounts' switch when changed
-  (`IHostingSession.SetUseForGit`); the theme through `UseTheme`; the global git writes, one at a time
-  through the app-level writer; this repository's writes as one operation of its queue
-  (`RepositoryOperations.SaveRepositorySettingsAsync`, no undo entry; while it waits behind another
-  operation `SettingsSaving` says "Waiting for {title} to finish…", and Cancel drops it through
-  `RunOptions.Cancellation`); the read back; the tabs told (`TabServices.RaiseGitSettingsChanged`:
-  every full-mode view model reads `merge.tool` again while it shows conflicts); then the close,
-  unless a changed key is still decided by another file of its scope or a write failed, which leaves
-  the screen open on Git with its notices. A failed git write opens the error dialog over the screen
-  ("Saving the settings failed" for the global writes, without an "In" line). Cancel and Esc change
-  nothing but Accounts' sign-in and sign-out, which act at once (D256). `ISettingsStore` has no change
-  event: readers read `Current` when they need it.
+  in one `ISettingsStore.Update`; since phase 7a Accounts' switch when changed, since phase 7b each
+  block's changed switch alone (`AccountsSettingsViewModel.ApplySwitches`:
+  `IHostingSession.SetUseForGit(provider, value)`); the theme through `UseTheme`; the global git
+  writes, one at a time through the app-level writer; this repository's writes as one operation of
+  its queue (`RepositoryOperations.SaveRepositorySettingsAsync`, no undo entry; while it waits
+  behind another operation `SettingsSaving` says "Waiting for {title} to finish…", and Cancel drops
+  it through `RunOptions.Cancellation`); the read back; the tabs told
+  (`TabServices.RaiseGitSettingsChanged`: every full-mode view model reads `merge.tool` again while
+  it shows conflicts); then the close, unless a changed key is still decided by another file of its
+  scope or a write failed, which leaves the screen open on Git with its notices. A failed git write
+  opens the error dialog over the screen ("Saving the settings failed" for the global writes,
+  without an "In" line). Cancel and Esc change nothing but Accounts' sign-in and sign-out, which act
+  at once (D256). `ISettingsStore` has no change event: readers read `Current` when they need it.
 - **Its work ends with it** (D234): Cancel, Esc and the session's end (`DialogHostViewModel.CancelAll`)
   cancel one lifetime token, which stops the reads, the editor search and the global writes before
   their next key; while the global writes run, `GlobalWrites` lets the window's close wait for them
@@ -3720,7 +4100,9 @@ sign-in entry (`MainWindowViewModel.Hosting.cs`) and their texts
   `SettingsEntryTests`, `GitSettingsViewModelTests`, `RepositoryOperationsSettingsTests`,
   `GitSettingsChangedTests`, `JsonSettingsStoreTests`, `AppSessionTests` (App); checks S14 and S16
   to S21. Since phase 7a `AccountsSettingsViewModelTests`, `SignInDialogViewModelTests` (Phase7a),
-  `SignInEntryTests` (Hosting.Tests, D334) and checks A1 to A11.
+  `SignInEntryTests` (Hosting.Tests, D334) and checks A1 to A11; since phase 7b
+  `AccountsProvidersViewModelTests`, `SignInDialogProvidersTests` (Phase7b),
+  `SignInEntryProvidersTests` (Hosting.Tests) and phase 7b's checks A1 to A14.
 
 ### Git's own settings (D190, D200, D202, D217 to D219)
 
@@ -3814,45 +4196,102 @@ this computer), `EditorCommands.cs` (how one starts), `FileLauncher.OpenInEditor
 - Tests: `KnownEditorsTests`, `EditorCatalogTests`, `EditorCommandsTests`, `FileMenuEditorTests`,
   `FileLauncherTests`, `RepositoryOperationsFilesTests` (App); check S17.
 
-### Hosting: the provider and GitHub's API (D252, D257, D258, D284 to D286)
+### Hosting: the provider and GitHub's API (D252, D257, D258, D284 to D286, D347, D357, D358, D378)
 
-Phase 7a. `src/VisualCommit.Hosting` references Core alone (and `Tmds.DBus.Protocol` for Linux's
-Secret Service, see "Tokens and the keychains"): no UI and no git process. Its namespaces are
-`VisualCommit.Hosting` (the model, the session, `RepositoryHosting`, `AvatarCache`,
-`AuthorMapStore`, `JsonAccountStore`), `.GitHub` (the provider, its client, recognition, GitHub's
-JSON shapes) and `.Tokens`. `AssemblyInfo.cs` opens its internal types (the client, `GitHubUrls`,
-`AuthorMapStore`, the stores' parsers) to `VisualCommit.Hosting.Tests`. Only github.com is
-supported (D258).
+Phase 7a; since phase 7b for three providers. `src/VisualCommit.Hosting` references Core alone (and
+`Tmds.DBus.Protocol` for Linux's Secret Service, see "Tokens and the keychains"): no UI and no git
+process. Its namespaces are `VisualCommit.Hosting` (the model, the options, the session,
+`RepositoryHosting`, `AvatarCache`, `AuthorMapStore`, `JsonAccountStore`), `.Http` (phase 7b: the
+shared HTTP core), `.GitHub` (the provider, its client, recognition, GitHub's JSON shapes),
+`.AzureDevOps` and `.GitLab` (phase 7b: each provider's endpoints, provider, client, recognition
+and JSON shapes, and Azure DevOps' API constants, `AzureDevOpsApi`) and `.Tokens`; Core's `Hosting/`
+holds `HostingProvider`, `AccountKey` and, since phase 7b, `HostingProviders` and `PullRequestRefs`. `AssemblyInfo.cs` opens its internal types (the core and
+the clients, `GitHubUrls`, `AuthorMapStore`, the stores' parsers) to `VisualCommit.Hosting.Tests`.
+Supported are github.com (D258), Azure DevOps Services on `dev.azure.com` and its older
+`<organization>.visualstudio.com` addresses, and gitlab.com (D347); GitHub Enterprise Server, Azure
+DevOps Server and self-managed GitLab are in the backlog. This section holds what the three
+providers share and GitHub's provider and client; the HTTP core that every client drives, and Azure
+DevOps' and GitLab's providers and clients, have sections of their own after it. A design section or
+ruling named here without its phase is phase 7a's.
 
-- **Where GitHub is** (`HostingOptions.cs`): `GitHubEndpoints(WebBase, ApiBase)`, the web address
-  (which also serves git and the fake's avatars) and the REST API's: `GitHubCom`
+- **Where the providers are** (`HostingOptions.cs`): `GitHubEndpoints(WebBase, ApiBase)`, the web
+  address (which also serves git and the fake's avatars) and the REST API's: `GitHubCom`
   (`https://github.com/`, `https://api.github.com/`) or `Local(port)` (`http://127.0.0.1:<port>/`
   and its `api/v3/`, the tests' fake); `Host` is the web address's authority, `github.com` or
-  `127.0.0.1:<port>`. `HostingOptions(GitHub, CreateHandler)`: the endpoints, null while GitHub is
-  off, and the handler every client is built on. `FromEnvironment` reads `VISUALCOMMIT_GITHUB_URL`:
-  unset, empty or blank, github.com; `none` (any case), `Off`; `http://127.0.0.1:<port>/`, the final
-  `/` optional and the port not 80 (no user part, path, query or fragment), `Local(port)`; anything
-  else `Off` with a warning that names the variable, never its value. `Off`'s handler refuses every
-  request. `DefaultHandler`: a `SocketsHttpHandler` that follows no redirect, takes every
-  compression, keeps no cookies, has 10 s to connect, and uses no proxy for a loopback API (the
-  system's otherwise).
-- **The model** (`IHostingProvider.cs`, `HostingRecords.cs`, Core's `Hosting/AccountKey.cs`):
-  `HostingProvider` (`GitHub`; 7b adds two); `AccountKey(Provider, Host, Login)`, host and login
-  lower-cased, `Id` `github:github.com:octocat` (D263); `HostedRepository(Provider, Host, Owner,
-  Name)`, equal without case as GitHub compares, `FullName` `owner/name`; `HostingAccount` (the key,
-  the login in its own case, the user's id, name and avatar, `UseForGit`; never a token);
-  `RepositoryInfo` (A2, A3: default branch, private, fork, archived, description, clone and web
-  URLs, `UpdatedAt`, `CanPush`, a fork's `Parent` and `ParentDefaultBranch`); `RepositoryList`
-  (`MoreExist`, `SomeHiddenBySso`) and `PullRequestList` (`MoreExist`); `PullRequest`
-  (`HeadRepository` null for a deleted fork, `IsFromFork`); `NewPullRequest` (`HeadOwner` only
-  across forks); `AuthorAvatar`, `AuthorMap` and `AuthorCommit(Email, Sha, Repository)` (D339);
-  `HostingResult<T>`, a value or a `HostingFailure(Kind, Message, Detail, RetryAt, Url, RequestId)`
-  of kind `Network`, `BadCredentials`, `SsoRequired`, `RateLimited`, `Forbidden`, `NotFound`,
-  `ApiVersion`, `Validation`, `ServerError` or `Malformed`. `IHostingProvider` has `Kind`,
-  `Endpoints`, `Recognise(url)`, `SourceCanExist(remoteRef)` and A1 to A6 below, each taking the
-  token as an argument; the provider keeps none. The repository browser, the pull requests' section
-  and the create form word a failure through `HostingTexts.Describe` (D338); the sign-in dialog has
-  texts of its own.
+  `127.0.0.1:<port>`. Since phase 7b also `AzureDevOpsEndpoints(WebBase, OrganizationHosts)`
+  (`Service`, `https://dev.azure.com/` with the organizations' `<organization>.visualstudio.com`
+  hosts; `Local(port)` without them) and `GitLabEndpoints(WebBase, ApiBase)` (`GitLabCom`,
+  `https://gitlab.com/` and its `api/v4/`; `Local(port)`), described with their providers.
+  `HostingOptions(GitHub, CreateHandler)`: GitHub's endpoints, null while GitHub is off, and the
+  handler that GitHub's client and the avatars' client are built on; since phase 7b with
+  `AzureDevOps` and `GitLab` (null: off) and their handlers `CreateAzureDevOpsHandler` and
+  `CreateGitLabHandler` (null: every request refused, so a provider given without its handler
+  reaches no service), `AllOff`, and `Off`, all three off, whose handler refuses every request
+  (`RefusingHandler`, whose message names no provider). `FromEnvironment` reads
+  `VISUALCOMMIT_GITHUB_URL`, `VISUALCOMMIT_AZURE_DEVOPS_URL` and `VISUALCOMMIT_GITLAB_URL`, each in
+  the same way: unset, empty or blank, the service; `none` (any case), off;
+  `http://127.0.0.1:<port>/`, the final `/` optional and the port not 80 (no user part, path, query
+  or fragment), the provider's `Local(port)`; anything else off, with the warning "{variable} is
+  neither none nor http://127.0.0.1:<port>/: {Name} is off.", which never repeats the value. A
+  provider whose web origin (scheme, host and port, without case) an earlier one in D353's order
+  (GitHub, GitLab, Azure DevOps) already has is off, with the warning "{its variable} names the
+  origin of {the earlier provider}: {Name} is off." (the session itself throws on such options).
+  Each provider it turns on gets its handler explicitly, `DefaultHandler` of GitHub's API base,
+  Azure DevOps' web base or GitLab's API base: a `SocketsHttpHandler` that follows no redirect,
+  takes every compression, keeps no cookies, has 10 s to connect, and uses no proxy for a loopback
+  address (the system's otherwise). All three off is `Off` itself.
+- **The model** (`IHostingProvider.cs`, `HostingRecords.cs`, Core's `Hosting/AccountKey.cs` and,
+  since phase 7b, `Hosting/HostingProviders.cs` and `Hosting/PullRequestRefs.cs`): `HostingProvider`
+  (`GitHub`, `AzureDevOps`, `GitLab`; phase 7b's appended, so GitHub keeps its ordinal);
+  `HostingProviders`, the one place in Core and Hosting for a provider's words (7b design 1.2):
+  `DisplayName` ("GitHub", "GitLab", "Azure DevOps"), `Possessive` ("GitHub's", "GitLab's",
+  "Azure DevOps'"), `Id` (`github`, `azure-devops`, `gitlab`) and `FromId` (without case),
+  `InAccountsOrder` (GitHub, GitLab, Azure DevOps, D353: the order of the session's providers, its
+  log lines and the settings screen's blocks) and `TokenFormOf(token)` (D378: GitHub for
+  `github_pat_`, `ghp_`, `gho_`, `ghu_`, `ghs_` or `ghr_`, GitLab for `glpat-`, case kept, Azure
+  DevOps for exactly 84 characters with `AZDO` at the 0-based characters 76 to 79; null otherwise,
+  such as GitHub's 40-hex classic tokens and Azure DevOps' 52-character legacy ones);
+  `AccountKey(Provider, Host, Login)`, host and login lower-cased, `Id` `github:github.com:octocat`,
+  `gitlab:gitlab.com:ada` or `azure-devops:dev.azure.com:<organization>` (D263; D357: an Azure
+  DevOps account's login is its organization); `HostedRepository(Provider, Host, Owner, Name)`,
+  equal when provider, host, owner and name are, without case, and never compared by `FullName`
+  alone (D358): `Owner` is the namespace path (GitHub's owner, GitLab's group path of up to 21
+  segments, Azure DevOps' `<organization>/<project>`), `FullName` `owner/name` (`group/sub/project`,
+  `<organization>/<project>/<repository>`) and `OwnerRoot` its first segment (GitHub's owner,
+  GitLab's top namespace, Azure DevOps' organization), and an Azure DevOps repository's host is
+  `dev.azure.com` whichever host its URL names; `HostingAccount` (the key, the login in its own
+  case, the user's id, name and avatar, `UseForGit`, and since phase 7b `UserId`, Azure DevOps' user
+  GUID, whose `Id` is 0; never a token); `RepositoryInfo` (A2, A3: default branch, private, fork,
+  archived, description, clone and web URLs, `UpdatedAt`, `CanPush`, a fork's `Parent` and
+  `ParentDefaultBranch`; a service that gives no `UpdatedAt` or `CanPush` gives
+  `DateTimeOffset.MinValue` and true); `RepositoryList` (`MoreExist`, `SomeHiddenBySso`) and
+  `PullRequestList` (`MoreExist`); `PullRequest` (`HeadRepository` null for a deleted fork,
+  `IsFromFork`); `NewPullRequest` (`HeadOwner` only across forks, GitHub's; since phase 7b
+  `HeadRepository`, the head's repository across forks); `AuthorAvatar`, `AuthorMap` and
+  `AuthorCommit(Email, Sha, Repository)` (D339); `HostingResult<T>`, a value or a
+  `HostingFailure(Kind, Message, Detail, RetryAt, Url, RequestId)` of kind `Network`,
+  `BadCredentials`, `SsoRequired`, `RateLimited`, `Forbidden`, `NotFound`, `ApiVersion`,
+  `Validation`, `ServerError` or `Malformed`. Since phase 7b a failure carries its `Provider`
+  (GitHub by default; every client sets it) and A5's `Refusal`, a `PullRequestRefusal` (`None`,
+  `AlreadyExists`, `NoCommits`, `HeadMissing`, `BaseMissing`, `BranchesMissing`) that the provider
+  reads from its service's answer, so that the App parses no service's sentence (D358); its
+  `RequestId` is GitHub's `X-GitHub-Request-Id`, Azure DevOps' `ActivityId` (else `X-VSS-E2EID`) or
+  GitLab's `x-request-id`. `IHostingProvider` has `Kind`, `Host` (its accounts' `AccountKey.Host`),
+  `WebBase` (the web and git origin), `Recognise(url)`, `SourceCanExist(remoteRef)`
+  (`PullRequestRefs.SourceCanExist` of its kind), `CoverageOf(account)` (what the account's token
+  covers for git, D359; see "Prompts and credentials"), `Covers(repository, account)` (its host; on
+  Azure DevOps the account's organization, D350), `TokenPage(organization)` (the sign-in dialog's
+  link; Azure DevOps' needs the organization), `PullRequestsPage(repository)` ("Open … in
+  browser"), `PullRequestHeadRef(pull)` (`PullRequestRefs.HeadOf` of its kind) and A1 to A5 below,
+  each taking the token as an argument; the provider keeps none. Since phase 7b A1 is
+  `CheckTokenAsync(token, organization, ct)` (Azure DevOps' organization; the others ignore it) and
+  A2 `ListRepositoriesAsync(token, account, ct)`; `Endpoints` left the interface (each provider
+  keeps its own), and so did A6, which is `GitHubProvider`'s alone (D349). `PullRequestRefs` (Core)
+  holds the three providers' request refs, `HeadOf`, `IsFetchableHead` and the push guard's
+  `SourceCanExist` (GitHub's rule 7a's, moved here from `GitHubUrls`; see "Git layer" and
+  "Operations"). The repository browser, the pull requests' section and the create form
+  word a failure through `HostingTexts.Describe` (D338), in the words of the failure's provider;
+  the sign-in dialog has texts of its own.
 - **Recognition** (`GitHub/GitHubUrls.cs`, internal, through `GitHubProvider.Recognise`): no
   network, and read by hand, not through `Uri`, which unescapes and normalises where git does not.
   On github.com the host is `github.com` or `www.github.com` (any case) in
@@ -3867,63 +4306,80 @@ supported (D258).
   owner and name are kept as written, the user part never. An SSH or `git://` URL is recognised (the
   API goes by owner and name) but never bound (see "Prompts and credentials"). `SourceCanExist` is
   the push guard's rule (ruling 8): false only for `refs/pull/<x>/head` or `/merge` whose `<x>` is
-  not all ASCII digits.
-- **The client** (`GitHub/GitHubClient.cs`, internal, D285): one per provider, so one per session,
-  over one `HttpClient` with no time-out of its own. `SendAsync` (one request, a body serialised
-  through `GitHubJsonContext`) and `GetPagesAsync` (a list's pages) run on the thread pool.
-  - Every request sends `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2026-03-10`
-    (`GitHubApi`) and `User-Agent: VisualCommit/<version>` (the Hosting assembly's informational
-    version up to its `+`); `Authorization: Bearer <token>` goes only to the API's own scheme, host
-    and port.
-  - One request at a time (a `SemaphoreSlim(1)` waited with the caller's cancellation), as GitHub
-    asks. From then on a request has 30 s in all, for its hops and its body: the caller's
-    cancellation throws `OperationCanceledException`, the 30 s running out is `Network` "GitHub did
-    not answer within 30 seconds.", and no answer at all (or a cancellation that is neither, such as
-    the handler's connect time-out) `Network` "Could not reach GitHub." (D284). A body over 10 MB is
-    `Malformed`.
-  - Redirects by hand: 301, 302, 307 and 308 are repeated to `Location` with the same method and
-    body, at most three hops, and only while the target keeps the API's scheme, host and port; a
-    target elsewhere, a fourth redirect or one without `Location` is `Malformed`, and nothing is
-    sent there. A renamed or transferred repository's 301 to `repositories/<id>` is followed so.
-  - Pages: `Link: rel="next"` is followed as given while it stays on the API's origin and under its
-    path (else `Malformed`), up to the caller's cap; `MoreExist` when a next page is left; a failing
-    page fails the list.
-  - **Kept answers and conditional requests** (D285; design 16.10 and 19.2's leak-1): a GET's 200
-    with an `ETag` is kept in memory under (the token's SHA-256 fingerprint, the URL that answered),
-    with its body and its `Link`, `X-GitHub-SSO` and `X-OAuth-Scopes` headers. The next GET of that
-    URL with that token sends `If-None-Match`, and a 304, which costs nothing of GitHub's rate
-    limit, gives the kept body and the kept headers it lacks, so a repeated list still pages on and
-    keeps "more exist". At most 512 answers and 32 MB of their bodies are kept, the oldest stored
-    going first; a new 200 for a kept URL takes the newest place, and a body larger than the whole
-    budget is not kept. Never on disk. A sign-out forgets them all (`GitHubProvider.ForgetKept`); an
-    answer that a request still in flight brings is kept under its own token's fingerprint, which no
-    other token's request finds, so a sign-in that replaces the account forgets nothing.
+  not all ASCII digits; since phase 7b it is `PullRequestRefs.SourceCanExist(GitHub, ref)`.
+  `GitHubUrls.SameOrigin` and `OriginOf` are the HTTP core's since phase 7b (D380): a host without
+  an IDN form is on no origin and is named `(an unreadable host)`.
+- **The client** (`GitHub/GitHubClient.cs`, internal, D285; 7b design 5.3): one per provider, so
+  one per session. Since phase 7b it is GitHub's profile on the shared HTTP core (see "Hosting: the
+  shared HTTP core"), which keeps 7a's rules for every provider: one `HttpClient` with no time-out
+  of its own, one request at a time, 30 s, redirects by hand, the 10 MB bound, pages, kept answers
+  and conditional requests, and one warning per failure. `GitHubClient` keeps 7a's surface:
+  `SendAsync` (one request, a body serialised through `GitHubJsonContext`) and `GetPagesAsync` (a
+  list's pages) on the thread pool, each giving a `GitHubReply<T>` (`Value`, `Failure`, `Status`,
+  `MoreExist` when a next page is left at the cap, `OAuthScopes` the first page's `X-OAuth-Scopes`,
+  `Sso` the first `partial-results` `X-GitHub-SSO`, else the last page's, and `RequestId`);
+  `ForgetKept`; `UserAgent`; `Endpoints`; and the constants `NetworkText` "Could not reach
+  GitHub.", `TimeoutText` "GitHub did not answer within 30 seconds." and `MalformedText` "GitHub's
+  answer could not be read.", which are the core's texts for GitHub (D284). Its statics
+  (`SameOrigin`, `IsRedirect`, `ReadBoundedAsync`, `Resolve`) forward to the core's; `AvatarCache`
+  calls `IsRedirect`, `Resolve` and `ReadBoundedAsync` through them. GitHub's profile:
+  - The token's origin is the API's address: `Authorization: Bearer <token>` goes only to its
+    scheme, host and port, and only there are redirects followed (a renamed or transferred
+    repository's 301 to `repositories/<id>` is followed so). Every request sends
+    `Accept: application/vnd.github+json` and `X-GitHub-Api-Version: 2026-03-10` (`GitHubApi`),
+    after the core's `User-Agent: VisualCommit/<version>`.
+  - Pages by `Link: rel="next"` (`HostingLinks.Next`), followed while they stay on the API's origin
+    and under its path, up to the caller's cap.
+  - Kept with an answer (D285; design 16.10 and 19.2's leak-1): `Link`, `X-GitHub-SSO` and
+    `X-OAuth-Scopes`, so a repeated list answered 304, which costs nothing of GitHub's rate limit,
+    still pages on and keeps "more exist". GitHub's sign-out forgets every kept answer of GitHub's
+    client (`GitHubProvider.ForgetKept`; another provider's sign-out forgets its own client's alone,
+    see "Hosting: the session and the account"); an answer that a request still in flight brings is
+    kept under its own token's fingerprint, which no other token's request finds, so a sign-in that
+    replaces the account forgets nothing.
   - Classification, in this order: 401 `BadCredentials`; 403 with `X-GitHub-SSO: required; url=…`
     `SsoRequired` (`Detail` the URL); 403 or 429 with `X-RateLimit-Remaining: 0` `RateLimited`
-    (`RetryAt` from `X-RateLimit-Reset`); 403 or 429 with `Retry-After`, or with a message naming
-    the secondary rate limit, `RateLimited` (`RetryAt` now plus `Retry-After`'s seconds, at most a
-    day, or its date, or 60 s); any other 403 `Forbidden` (`Detail`
-    `X-Accepted-GitHub-Permissions`); 404 `NotFound`; 410, or a 400 whose first `errors` item or
-    else whose `message` names `X-GitHub-Api-Version` (GitHub's refusal of a version: "Bad Request"
-    with its explanation in `errors` as one string, D342), `ApiVersion` with that text; 422
-    `Validation` (`Detail` the first error's `message`,
+    (`RetryAt` from `X-RateLimit-Reset`; a reset of digits past 9999-12-31 23:59:59 UTC is
+    `Malformed`, D380); 403 or 429 with `Retry-After`, or with a message naming the secondary rate
+    limit, `RateLimited` (`RetryAt` now plus `Retry-After`'s seconds, at most a day, or its date,
+    or 60 s); any other 403 `Forbidden` (`Detail` `X-Accepted-GitHub-Permissions`); 404 `NotFound`;
+    410, or a 400 whose first `errors` item or else whose `message` names `X-GitHub-Api-Version`
+    (GitHub's refusal of a version: "Bad Request" with its explanation in `errors` as one string,
+    D342), `ApiVersion` with that text; 422 `Validation` (`Detail` the first error's `message`,
     else `<field> is invalid`, `is missing` or `already exists` by its code, else GitHub's
     `message`); 5xx `ServerError`; anything else (a 429 with none of the above included) and a body
     that does not parse `Malformed`, "GitHub's answer could not be read.". `errors` is read by
     `GitHubErrorsConverter` as an array of objects, an array of strings or one string, each string an
     item with that `message`; any other value is skipped, so it never costs the body its `message`.
-    `Message` is GitHub's own
-    `message` (ruling 15), else the reason phrase or `HTTP <status>` (a 5xx's "GitHub had a problem:
-    HTTP <status>."); `Url` the address that answered, after any redirects (a renamed repository's
-    `repositories/<id>`), without its query; `RequestId` `X-GitHub-Request-Id`. A 409 is no failure:
-    its `Status` without a value (A6's empty repository). "Now" is the client's clock.
+    `Message` is GitHub's own `message` (ruling 15), else the reason phrase or `HTTP <status>` (a
+    5xx's "GitHub had a problem: HTTP <status>."). A 409 is no failure: its `Status` without a value
+    (A6's empty repository; the profile's `SucceedsEmpty`). The request id is
+    `X-GitHub-Request-Id`. The core sets `Url`, the address that answered after any redirects (a
+    renamed repository's `repositories/<id>`), without its userinfo and query, and screens e-mail
+    addresses out of `Message` and `Detail`, which changes no GitHub text but a branch name that
+    holds an `@` (7b design 5.6). "Now" is the client's clock.
   - GitHub's JSON (`GitHub/GitHubJson.cs`): internal classes read through the source-generated
-    `GitHubJsonContext` (snake_case, unknown fields ignored, nullable annotations respected); a
-    field the app needs is `required`, so an answer without it is `Malformed`, never a half-filled
-    record.
+    `GitHubJsonContext` (snake_case, unknown fields ignored, nullable annotations respected), after
+    the core has removed a leading byte order mark; a field the app needs is `required`, so an
+    answer without it is `Malformed`, never a half-filled record. A request body of a type the
+    context lacks is an `ArgumentException`.
 - **The provider** (`GitHub/GitHubProvider.cs`): paths relative to the API's address, each segment
   escaped. A token that is blank, or holds anything but visible ASCII, is refused without a request
-  (`BadCredentials`, "The token is empty." or "Bad credentials").
+  (`BadCredentials`, "The token is empty." or "Bad credentials"); since phase 7b so is a token of
+  GitLab's or Azure DevOps' form (`HostingProviders.TokenFormOf`; D378, amending D298):
+  `BadCredentials` "Bad credentials" with the `Detail` `other-provider:gitlab` or
+  `other-provider:azure-devops` (`OtherProviderDetail`), so that it is disclosed to no other
+  service. Every method asks this first. Since phase 7b the interface's members are 7a's rules,
+  moved here: `Host` and `WebBase` the endpoints'; `CoverageOf` 7a's binding rule on the web base
+  (`new GitCoverage(account, WebBase)`, D278); `Covers` a GitHub repository and account on its own
+  host; `TokenPage` D295's page (`TokenPagePath`, equal to the App's `TokenPage` text, which
+  `HostingContractsTests` pins); `PullRequestsPage` `{web}{owner}/{name}/pulls`;
+  `PullRequestHeadRef` `refs/pull/<n>/head`. The interface's A1 and A2 call 7a's
+  `CheckTokenAsync(token, ct)` and `ListRepositoriesAsync(token, ct)`, which stay public. An
+  answer's `clone_url` and `html_url` (A2 to A5) are taken only as `http` or `https`
+  (`WebAddress`; D392's tokens-2: on Windows .NET reads `//host/share` as a `file:` URL, which a
+  clone would reach over SMB), else the answer is `Malformed`. An answer that succeeded but lacks
+  what the app needs is the core's `MalformedAnswer`, with its warning.
   - A1 `CheckTokenAsync`: `GET user`, the account keyed by the endpoints' host and its login,
     `UseForGit` true.
   - A2 `ListRepositoriesAsync`: `GET user/repos?per_page=100&sort=updated`, never `type`, up to 10
@@ -3936,6 +4392,10 @@ supported (D258).
     (300, ruling 14).
   - A5 `CreatePullRequestAsync`: one `POST repos/{o}/{r}/pulls` on the base repository, never
     retried: `head` the branch, or `owner:branch` across forks with `maintainer_can_modify: true`.
+    Since phase 7b a 422's `Refusal` is read from its detail (`RefusalOf`, 7b design 5.4): starting
+    "A pull request already exists" `AlreadyExists`, starting "No commits between" `NoCommits`,
+    "head is invalid" `HeadMissing`, "base is invalid" `BaseMissing`, else `None`; its `Message`
+    and `Detail` stay GitHub's.
   - A6 `ReadAuthorsAsync(token, repository, branch, lookups[, readable])` (D252, D339): with a
     branch, the first page of `repos/{o}/{r}/commits?sha={branch}&per_page=100`, each commit's
     lower-cased author e-mail to its GitHub user (the first commit of an e-mail wins; null where
@@ -3960,7 +4420,8 @@ supported (D258).
   - Avatars' addresses are kept only when `https` on `avatars.githubusercontent.com` (github.com) or
     on the web address's own origin (the fake); any other makes the author unknown, with one warning
     per provider that names that address's scheme, host and port only.
-- **The avatars' images** (`AvatarCache.cs`, D286; one per session, made anew at each sign-out):
+- **The avatars' images** (`AvatarCache.cs`, D286; one per session while GitHub is on, made anew at
+  each of GitHub's sign-outs):
   `FileOfAsync(AuthorAvatar)` gives the local image's path or null. Images are `avatars/<user
   id>.png` or `.jpg` beside `index.json` (`{"users":{"1003":{"file":"1003.png","fetchedAt":"…"}}}`,
   camelCase through a context of its own, D336). A kept image is used while its fetch date, by the
@@ -3975,221 +4436,865 @@ supported (D258).
   that is not a user's id naming that user's image is dropped with a warning, one whose image is
   gone silently (one listing of the folder, design 19.3's perf-2). Every file operation runs on the
   thread pool; a failure is a warning that names the user's id (and a redirect's scheme, host and
-  port), never the image's address, and null.
-- Tests: `HostingOptionsTests`, `GitHubRecognitionTests`, `GitHubClientTests`,
-  `GitHubProviderTests`, `AvatarCacheTests`, `HostingSmokeTests` (`VisualCommit.Hosting.Tests`, over
-  `FakeGitHub`'s in-process handler or a recording one; see "The fake of GitHub").
+  port), never the image's address, and null; since phase 7b an exception of the HTTP stack is
+  named by its type and codes alone (`HostingHttpClient.Describe`, D380). The cache is GitHub's
+  alone: it exists only while GitHub is on, and only GitHub's sign-out makes it anew (D349).
+- Tests: `HostingOptionsTests` (since phase 7b the two new variables and the new endpoints, and
+  their handlers), `GitHubRecognitionTests`, `GitHubClientTests`, `GitHubProviderTests` (since phase 7b
+  A5's refusals, another provider's token refused without a request, and D395's reads),
+  `AvatarCacheTests`, `HostingSmokeTests` (`VisualCommit.Hosting.Tests`, over `FakeGitHub`'s
+  in-process handler or a recording one; see "The fake of GitHub"); since phase 7b
+  `HostingProvidersTests` (the names, ids, order and `TokenFormOf`'s forms), `HostingContractsTests`
+  (the members phase 7b's first commit moved, the records' defaults, `RequestRemotes`, the null
+  session) and Git.Tests' `PullRequestRefsTests`.
 
-### Hosting: the session and the account (D253, D255, D256, D263, D287, D288, D291, D292, D330)
+### Hosting: the shared HTTP core (D284, D285, D358, D368, D380, D382)
 
-Phase 7a. `IHostingSession` (`IHostingSession.cs`) is the app session's hosting, one per
-`AppSession` (`TabServices.Hosting`), and `HostingSession` (`HostingSession.cs`) the one
-implementation; `NullHostingSession` (GitHub off: no account, no binding, nothing recognised, no
-request) stands in where tests build `TabServices` by hand. The interface extends Core's
-`IGitCredentialSource`, so the prompt broker asks the session for a bound URL's credential and
-tells it of git's `erase` (see "Prompts and credentials").
+Phase 7b (7b design 5). `src/VisualCommit.Hosting/Http/`, namespace `VisualCommit.Hosting.Http`,
+internal and seen by `VisualCommit.Hosting.Tests`: `HostingHttpClient`, which every provider's API
+client drives through a `HostingHttpProfile` of its own (D358). 7a's rules for GitHub's client moved
+here unchanged, so `GitHubClient` is GitHub's profile on the core (see "Hosting: the provider and
+GitHub's API"), and Azure DevOps' and GitLab's clients are the other two profiles. Nothing under
+`Http/` names a provider but through `HostingProviders`.
 
-- **Off and on**: `HostingSession(paths, options, tokens, log, post, clock)`. While `options.GitHub`
-  is null (`IsOff`) it makes nothing and logs "GitHub: off.": nothing is recognised, no store is
-  touched, `StartAsync` reads nothing, `ForRepository` gives `NullRepositoryHosting.Instance`. On,
-  it logs "GitHub: {host}." and makes one `GitHubProvider`, one `TokenVault` over the store (see
-  "Tokens and the keychains"), one `AvatarCache` over `avatars/` and one `AuthorMapStore` over
-  `avatars/authors/`.
-- **`accounts.json`** (`JsonAccountStore.cs`; D287, D292, D336): `{"version": 1, "accounts":
-  [{"provider": "github", "host": "github.com", "login": …, "id": …, "name": …, "avatarUrl": …,
-  "useForGit": true, "tokenState": "keychain"}]}`, camelCase and indented, comments and trailing
-  commas read; never a token, nor a field that could hold one. `tokenState` (`AccountTokenStates`)
-  is `keychain` (saved in the keychain), `session` (kept in memory only) or `refused` (GitHub
-  refused it); missing or unknown reads as `keychain`, and a missing `useForGit` as true
-  (`AccountRecord.UseForGit` has a setter, not `init`, for that). The session uses the first
-  `github` record of its host (`AccountsFile.GitHubOn`); a save replaces that record or appends one,
-  and other hosts' records are kept and ignored. A missing file is no account; an unreadable one is
-  moved to `accounts.unreadable.json` with a warning and the session starts with none. The file is
-  written whole through `DurableFile.Replace`, under the session's gate and off the UI thread; a
-  failed write is logged as an error and the state in memory changes anyway.
-- **The slot and the gate** (design 7.3): the account is one `AccountSlot` (internal: its
-  `AccountStatus`, the token while signed in, the record's `tokenState`; a class whose `ToString`
-  gives the login and the state only), swapped whole (`Volatile.Write`) and read without a lock, so
-  git's credential requests and the bindings never wait on anything. `AccountStatus(Account, State,
-  Place, NoteKind, Note)`: `SignedIn` or `NeedsSignIn`; `TokenPlace.Keychain` or `Session`; which of
-  the window's notes applies (`AccountNoteKind`: `NoKeychain`, `SaveFailed`, `Refused`,
-  `TokenMissing`, `ReadFailed`, `SessionEnded`) with the store's reason. One `SemaphoreSlim(1)` runs
-  the start's read, a sign-in's second half, a sign-out, a refusal and the switch one at a time; no
-  request to GitHub runs under it. A change writes the record first, then the slot
-  (`SetSlotLocked`), and posts `AccountChanged` and every live `RepositoryHosting`'s
-  `OnAccountChanged` through the post delegate (`Dispatcher.UIThread.Post` in the app), which drops
-  them once the session is disposed.
-- **`StartAsync`** (ruling 6, D287), once (`AppSession.HostingStarted`; a second call waits for the
-  first): under the gate it loads `accounts.json`. Without a record for the host no store is touched
-  ("GitHub: no account on {host}."). A `session` record needs sign-in (`SessionEnded`), a `refused`
-  one too (`Refused`), neither touching the store; for a `keychain` one the vault reads the store,
-  the run's only read: a token signs it in (`Keychain`), none gives `TokenMissing`, a failed read
-  `ReadFailed` with the store's reason. No request to GitHub. Logged as "GitHub account {login} on
-  {host}: token read from the keychain." or the outcome's other words. Until it ends `Account` is
-  null.
-- **`SignInAsync(token)`** (D256: at once; D263: replaces; D288): A1, under the caller's
-  cancellation linked to the session's lifetime and outside the gate; a failure changes nothing (a
-  new token's 401 never marks the current account) and is a warning. Once GitHub has answered, the
-  rest runs under the session's lifetime alone, so a dialog's Cancel no longer stops it: it waits
-  for the start, takes the gate, forgets the previous record's keychain entry when that login
-  differs, carries the previous record's `useForGit` (true without one), and keeps the token through
-  the vault: in the keychain (`keychain`); in memory where no keychain exists (`session`,
-  `NoKeychain`, D253); or in memory after a failed save (`session`, `SaveFailed`, the reason as note
-  and as `SignInResult.SaveFailedReason`, ruling 19). Logged as "… signed in; the token is kept in
-  the keychain." or "… kept for this session: {reason}.".
-- **`SignOutAsync`** (D291), on the thread pool: it waits for the start and the gate under the
-  caller's cancellation, and from then on neither that nor the session's disposal stops it (the
-  process's exit can: an exit during the store's delete leaves the record and its entry, and the
-  next start is signed in; design 19.2's life-1). The vault forgets the entry and its reason is
-  returned; a run without a keychain that finds a `keychain` record returns
-  `TokenStoreReasons.NoKeychain` and warns, naming the entry to remove by hand (tokens-1). The
-  record goes even when the entry stays; the slot is cleared, the client's kept answers forgotten
-  and the events posted. Then, still under the gate, the avatar runs are cancelled and awaited, the
-  e-mail maps leave memory (their lookup counts stay), the `AvatarCache` is replaced by a new one,
-  and `avatars/` is deleted whole; a file that stays gets one warning naming it.
-- **`SetUseForGit`** (D216, D255; the settings screen's Save): on the thread pool, after the switch
-  before it; under the gate, no slot or the same value changes nothing; else the record, the slot
-  and the events, and every binding follows.
-- **git's `get` and `erase`** (rulings 4 and 6, D330): `GetAsync(account)` waits for the start's
-  read at most 10 s by the session's clock (then a warning and null) and gives
-  `GitCredential(token)` only while that account is signed in with "Use for git over HTTPS" on.
-  Through git no `get` comes before the read ends, since nothing is bound until the slot holds the
-  token (design 19.2); the wait guards a direct call. `Refused(account)` returns at once; for the
-  signed-in account it starts one A1 with its token, one at a time (an `erase` meanwhile joins it;
-  `RefusalCheck` for tests): a 401 marks the account refused; a 200 keeps it signed in with the
-  warning "… git was refused, yet the token is valid (an http.extraHeader, a proxy or a
-  redirect?).", any other answer with "… git was refused; the token could not be checked: …".
-- **Calls with the account's token** (`CallAsync`, internal; D257): every API request after the
-  sign-in but the refusal check's A1 (above, which marks the account itself) goes through it. Off,
-  or without a signed-in token, it fails at once without a request ("GitHub is turned off.", or
-  `BadCredentials` "Not signed in."). Otherwise the provider runs with the account's token, under
-  the caller's cancellation linked to the session's lifetime. A `BadCredentials` answer marks the
+- **The profile** (`HostingHttpProfile.cs`, with `HostingLinks`): `Provider`,
+  which every failure names; `TokenOrigin`, the one origin the token goes to and redirects are
+  followed on, whose path a next page must stay under; `Json`, the request bodies'
+  `JsonSerializerContext` (a body of another type is an `ArgumentException`); `Authorize(request,
+  token)`, called only for a request to `TokenOrigin`'s scheme, host and port; `AddHeaders`, on
+  every request and hop, after the core's `User-Agent`; `Classify(exchange)`, for any status but a
+  2xx, a 304, a redirect and what `SucceedsEmpty` takes; `RefuseSuccess(exchange)`, asked of every
+  2xx and 304 before it is parsed; `RefuseRedirect(exchange, location)`, asked of every redirect
+  with a `Location`, a same-origin one and a fourth included, before the core's own rule (its
+  exchange has an empty body and the request's URL with its query); `SucceedsEmpty(status)`
+  (GitHub's 409); `NextPage(exchange)`; `FollowsPage(next)`, asked of a next page that keeps the
+  origin and its path, whose false ends the list `Malformed`, warning `Link outside the API`
+  (D392's tokens-1: GitLab's answers by its redirect rule); `RequestIdOf(headers)`;
+  `KeptHeaderNames`; and `WarningOf(exchange, failure)`, the warning's `<status or kind>` for a
+  failure the profile gave (the status unless the profile says otherwise). `HostingExchange(Method,
+  Url, Status, Body, Headers)` with `Reason` is one answer before anything parsed it: the body at
+  most 10 MB without a leading UTF-8 byte order mark (System.Text.Json refuses one), the headers
+  and the content's headers without case, a header given twice joined with `, `.
+  `HostingLinks.Next(headers)` reads `Link`'s `rel="next"` and takes only a text that begins with a
+  scheme (RFC 3986): off Windows .NET reads `/p?page=2` as a `file:` URL (CI run 41311809889).
+- **Sending** (`HostingHttpClient(profile, createHandler, log, clock[, timeout, keptBytes])`): one
+  `HttpClient` over `createHandler()` with no time-out of its own. `SendAsync<T>` (one request; its
+  reply's `Next` is always null) and `GetPagesAsync<T>` (a list's pages; an optional observer sees
+  each page's headers that gave a value, before the next is asked) run on the thread pool and give a
+  `HostingReply<T>(Value, Failure, Status, Next, Headers, RequestId)`. One request at a time (a
+  `SemaphoreSlim(1)` waited with the caller's cancellation); a request cancelled while it waits
+  sends nothing, even when it is given the turn. Once sent a request has 30 s in all, for its hops
+  and its body (`DefaultTimeout`, on real time whatever the clock is): the caller's cancellation
+  throws `OperationCanceledException`, the 30 s running out is `Network` with
+  `HostingHttpTexts.Timeout`, and no answer (or a cancellation that is neither, such as the
+  handler's connect time-out) `Network` with `HostingHttpTexts.Network` (D284). Every request has
+  `User-Agent: VisualCommit/<version>` (`HostingHttpClient.UserAgent`, the Hosting assembly's
+  informational version up to its `+`), then the profile's headers; a body goes as
+  `application/json; charset=utf-8`.
+- **Redirects** by hand: a 301, 302, 307 or 308 that `RefuseRedirect` lets through is repeated to
+  its `Location` with the same method and body, at most three hops (`MaxRedirects`), and only on
+  `TokenOrigin`'s origin; none, a fourth or another origin is `Malformed`, warning
+  `<status> without Location`, `<status>, a fourth redirect` or `redirected to <origin>`, and
+  nothing is sent there.
+- **Bodies and answers**: a body over 10 MB (`MaxBodyBytes`, by `Content-Length` or by reading) is
+  `Malformed`, warning `an answer over 10 MB`, and so is one that its `Content-Encoding` does not
+  decode, warning `a body that could not be decompressed (<type>)` (D380). Then, in this order:
+  `RefuseSuccess` for a 2xx or 304; `SucceedsEmpty`; the parse through the caller's type (no value:
+  `Malformed`) or, for any other status, `Classify`. A 304 to a kept answer gives the kept body, and
+  the kept headers under the 304's own. A profile hook that throws on what the server sent (a header
+  value out of range) is `Malformed`, warning `Malformed (<type>)`, never an exception out of the
+  core (D380).
+- **Kept answers and conditional requests** (7a's, D285): a GET's 200 with an `ETag` of visible
+  ASCII alone (`!` to `~`; one with other characters, which .NET refuses to send back, is not
+  kept, D380) is kept in memory under (the token's SHA-256 fingerprint, the URL), with its body and
+  the profile's `KeptHeaderNames`, and the next GET of that URL with that token sends
+  `If-None-Match`. At most 512 answers (`MaxKeptAnswers`) and 32 MB of their bodies
+  (`DefaultKeptBytes`) are kept, the oldest stored going first; a new 200 for a kept URL takes the
+  newest place, and a body larger than the whole budget is not kept. Never on disk. `ForgetKept()`
+  forgets them all, whatever their token.
+- **Pages**: `NextPage` is followed as given while it keeps `TokenOrigin`'s origin and its path
+  begins with `TokenOrigin`'s (else `Malformed`, warning `Link to <origin>`) and `FollowsPage`
+  takes it, up to the caller's cap; at the cap with a page left, the reply's `Next` is it. A failing
+  page fails the list.
+- **Every failure the core finishes** (its own, a profile's, and one a client passes to `Failed` or
+  `MalformedAnswer`): `Provider` the profile's; `Url` the failure's own or else the request's,
+  without its userinfo, query and fragment (D380) and with each path segment that holds an
+  e-mail-shaped run once percent-decoded written `<e-mail>` (`ScreenPath`, D382); `RequestId` (the
+  profile's `RequestIdOf` where the failure left none) kept only when it matches
+  `^[A-Za-z0-9:._-]{1,128}$` (`ShapedRequestId`, D382); and each e-mail-shaped run in `Message` and
+  `Detail` (the whole non-blank run around an `@` or a full-width U+FF20) written `<e-mail>`
+  (`ScreenEmail`, D368, D382), since Azure DevOps' messages name identities. The request's token,
+  and the credential that `Authorize` sends when it does not hold the token as given (Azure DevOps'
+  `Basic` Base64; `SecretsOf`), is written `<token>` in each of them, in any case, and no request id
+  that holds it is kept, since a server can echo it (D382); `Failed` and `MalformedAnswer` screen a
+  token only when the client passes the request's, as Azure DevOps' and GitLab's do and GitHub's,
+  7a's, does not. The fixed texts (`HostingHttpTexts`, through `HostingProviders`): "Could not reach
+  {Name}.", "{Name} did not answer within 30 seconds.", "{Possessive} answer could not be read."
+  and "{Name} had a problem: HTTP {status}.", GitHub's 7a's word for word.
+- **The log** (D380, D382): one warning per failure, `{Name}: <method> <path> failed: <status or
+  kind> (request <id>).`, the path screened as `Url`'s, the id only of its shape, and the token
+  screened. Never a header, a body, a query, a token or an exception's text, and no exception object
+  reaches the log: `HostingHttpClient.Describe(exception)` names one by its type, its
+  `HttpRequestError` when not `Unknown` and the first inner `SocketException`'s code (`Network
+  (HttpRequestException ConnectionError, SocketException ConnectionRefused)`), since .NET's
+  messages quote what a proxy or a server sent (a proxy's password, a token echoed back, a cookie,
+  an address, body bytes). Every catch-all of `src/VisualCommit.Hosting/` and every log call there on
+  an exception names it by its type and codes and passes none (through `Describe`: the session's,
+  `RepositoryHosting`'s, `AvatarCache`'s download, `TokenVault`'s, the Windows store's and the Secret
+  Service's probe; the macOS store's, and the Secret Service's save, read and delete, by its type's
+  name alone, as in 7a); the typed file and JSON
+  catches of `JsonAccountStore`, `AuthorMapStore` and `AvatarCache`'s index and save keep theirs,
+  whose text names a path or a parser's position, not a server's bytes (D382).
+- **Helpers**, public on the internal class: `SameOrigin` and `OriginOf` (through `IdnHostOf`:
+  `Uri.IdnHost` throws on some hosts `Uri.TryCreate` takes, so such a host is on no origin and is
+  named `(an unreadable host)`, and a redirect or next page there is `Malformed`, D380),
+  `IsRedirect`, `Resolve`, `ReadBoundedAsync`, `WithoutQuery`, `ScreenEmail`, `ScreenPath`,
+  `ShapedRequestId` and `Describe`; `GitHubClient`'s and `GitHubUrls`' statics of the same names
+  forward to them.
+- Tests: `HostingHttpClientTests` (`VisualCommit.Hosting.Tests`: a test profile naming GitLab over
+  `RecordingHttpHandler`'s scripts, and D380's rows also over a raw socket on 127.0.0.1 with the real
+  handler, `RawHttpServer`); `GitHubClientTests` keep 7a's cases but the few D380 changed (7b design
+  5.6's As built), and D382's catch-alls are tested in the classes of their callers
+  (`RepositoryHostingTests`, `RepositoryHostingAvatarsTests`, `HostingSessionCredentialTests`,
+  `HostingSessionSignInTests`, `SecretServiceStoreTests`, `TokenVaultTests`).
+
+### Hosting: GitLab's API (D345, D347, D358, D359, D361, D378, D385)
+
+Phase 7b (design 7). The namespace `VisualCommit.Hosting.GitLab` holds GitLab's provider on the
+shared HTTP core (see "Hosting: the shared HTTP core"): `GitLabEndpoints` and `GitLabProvider` are
+public; `GitLabUrls`, `GitLabProfile` (in `GitLabClient.cs`, beside a static `GitLabClient.Create`
+that only the tests call) and GitLab's JSON are internal. Only gitlab.com is supported; self-managed
+GitLab is in the backlog (D347). In this section "design" is phase 7b's.
+
+- **Where GitLab is** (`GitLab/GitLabEndpoints.cs`): `GitLabEndpoints(WebBase, ApiBase)`, the web
+  address (which also serves git) and the REST API v4's: `GitLabCom` (`https://gitlab.com/`,
+  `https://gitlab.com/api/v4/`) or `Local(port)` (`http://127.0.0.1:<port>/` and its `api/v4/`, the
+  tests' fake); `Host` is the web address's authority, `gitlab.com` or `127.0.0.1:<port>`.
+  `HostingOptions.GitLab` and `CreateGitLabHandler` hold them, read from `VISUALCOMMIT_GITLAB_URL`.
+- **Recognition** (`GitLab/GitLabUrls.cs`, internal, through `GitLabProvider.Recognise`): no network,
+  and read by hand, as `GitHubUrls` reads GitHub's. A URL holding a control character, a space or
+  DEL is no one's. On gitlab.com the host is `gitlab.com` or `www.gitlab.com` (any case; the second
+  answers 308 to the first, measured) in `https://[user[:password]@]host[:443]/p`,
+  `http://[user@]host[:80]/p`, `ssh://[user@]host[:22]/p` and scp-like `user@host:p`, and
+  `ssh://[user@]altssh.gitlab.com:443/p`; no `git://`. An empty port (`host:/p`) is the scheme's, as
+  git and curl read it; a password is accepted in `https` only, an empty user part nowhere. On other
+  endpoints (the fake) only the web address's own scheme, host and port, with no user part. An
+  authority holding `?`, `#` or `\`, an `ssh` or scp-like one holding `%`, `[` or `]`, and an `https`
+  or `http` one with two or more `@` are refused: git or curl would reach another host than the one
+  after the last `@`, or none (measured with git 2.56.0.windows.4 by the build's reviews, design 7.7).
+  The path loses one final `/`, then one final `.git`; it has 2 to 22 segments (`MaxSegments`: a
+  namespace of up to 21, since subgroups nest up to 20 levels), each of `[A-Za-z0-9_.-]` and none
+  `.`, `..` or `-` (a web address's `/-/`), with no `%`, `?`, `#` or `\`. The owner is the namespace
+  path and the name the last segment, both as written (D358); the user part is never kept. An SSH URL
+  is recognised but never bound. `IsSegment` is that segment rule, by which A1 and A4 also read a
+  username, and `SplitPathWithNamespace` reads an answer's `path_with_namespace` by the same rules.
+- **The profile** (`GitLabProfile`, internal, design 7.3): the core's `HostingHttpClient` with
+  GitLab's rules, one client per provider, made in the provider's constructor, so GitLab's requests
+  go one at a time beside the other providers', with the core's 30 s and 10 MB.
+  - The token's origin is `ApiBase`'s. Every request sends `Authorization: Bearer <token>`, which both
+    of GitLab's token kinds take, and `Accept: application/json` beside the core's `User-Agent`; no
+    version header. An address is `ApiBase` followed by the relative path as text (`Url`), and a
+    project's id is its full path through `Uri.EscapeDataString` (`ProjectId`), whose `%2F` reaches
+    the request line as written (measured), or its number.
+  - Pages: `Link: rel="next"` (`HostingLinks.Next`, as GitHub's), which the core follows while it
+    keeps the API's origin and path and `FollowsPage` finds its path, read decoded, under `ApiBase`'s
+    with no dot segment or backslash; a `Link` to `/api/v4/..%2F..%2Foauth%2Ftoken` ends the list
+    `Malformed` with nothing sent there (the review before the gate's tokens-1, D392). `per_page=100`
+    is GitLab's most (measured: it clamps a larger one).
+  - Kept answers: GitLab sends `ETag`s, so the core keeps its 200s and asks again with
+    `If-None-Match` (D285), keeping `Link` with each answer (`KeptHeaderNames`), since a 304 has no
+    body. A 304 counts against GitLab's rate limit (measured): kept answers save bytes, not requests.
+  - Redirects: only a GET's whose `Location` has a path, read decoded, under `ApiBase`'s with no dot
+    segment or backslash is left to the core's rule (followed on the API's origin, at most three
+    hops), so a moved project's 301 to `projects/<id>` is followed (measured); another method's
+    redirect, or a GET's elsewhere, is `Malformed` and nothing is sent to its `Location` (GitLab
+    answers a non-GET to a moved project 405 and redirects none). The warning's `<status or kind>` is
+    then `<status>, a redirected <method>` or `<status>, redirected outside the API`.
+  - The request id is `x-request-id`.
+  - GitLab's words (`GitLabError.Of` in `GitLabJson.cs`, read without a shape, since `message` is a
+    string, an array or an object): `error_description` (rack-oauth2's shape) ?? `message` as a string
+    ?? its first item, when that is a non-blank string ?? for an object `message`, its `error` when
+    that is a string, else each of its fields whose value is an array, with the field's first string
+    message (the field's name alone without one), `"; "` between ?? `error`. Only an object `message`
+    without an `error` string has its fields read, so only such a body gives a create's `Refusal`
+    (below). A body that is not JSON, not valid UTF-8 or of another shape
+    holds none. A message is kept on one line: each run of control characters and line or paragraph
+    separators becomes one space, so a service's line break never splits the log (design 16.1).
+  - Classification, by the status alone, with the rack-oauth2 `error` code as a 403's `Detail` and
+    an object `message`'s keys as a create's refusal, never by GitLab's English or its `scope` list,
+    whose members vary by route: 401 `BadCredentials`; 403 `Forbidden`,
+    `Detail` the code when it is `insufficient_scope` or `insufficient_granular_scope` (the token lacks
+    a permission, D385); 404 `NotFound`; 409 `Validation`, with `Refusal` `AlreadyExists` on a create's
+    POST to `…/merge_requests`; 400 `Validation`, on that POST with `Refusal` by the keys of an object
+    `message`: `source_branch` `HeadMissing`, `target_branch` `BaseMissing`, both `BranchesMissing`;
+    405 and 422 `Validation`; 429 `RateLimited`; 408 and 5xx `ServerError`; anything else `Malformed`,
+    "GitLab's answer could not be read.". `Message` is GitLab's words, else `<status> <reason
+    phrase>` or `HTTP <status>`, and for a 408 or 5xx without words "GitLab had a problem: HTTP
+    <status>."; `Detail` is null but for a 403's code. A 403 is never a rate limit; there is no
+    `SsoRequired`, `ApiVersion` or `NoCommits` (GitLab creates a request with nothing ahead: 201,
+    measured by the live command). The create's 409 and its missing branch's 400 are as gitlab.com
+    answered them on 2026-11-06.
+  - `RetryAt` of a 429: now plus `Retry-After`'s seconds (a day at most, `MaxRetrySeconds`) or its
+    HTTP-date (IMF-fixdate), else `ratelimit-reset` (Unix seconds), else `ratelimit-resettime` (an
+    HTTP-date), else now plus 60 s; a value in neither form gives way to the next, and every end lies
+    between now and a day ahead. A `ratelimit-reset` past year 9999 is `Malformed` (D380).
+  - GitLab's JSON (`GitLab/GitLabJson.cs`): internal classes read through the source-generated
+    `GitLabJsonContext` (snake_case, unknown fields ignored, nullable annotations respected, nothing
+    null written); `required` only what every answer has: a project's `id` and `path_with_namespace`,
+    a merge request's `iid`, `title`, `web_url`, `source_branch`, `target_branch`, `created_at`,
+    `source_project_id` and `target_project_id`. No shape has an address member: `GET user`'s
+    addresses and an author's `public_email` are never read (D346).
+- **The provider** (`GitLab/GitLabProvider.cs`, design 7.4). A token that is blank ("The token is
+  empty."), holds anything but visible ASCII, or has GitHub's or Azure DevOps' form
+  (`HostingProviders.TokenFormOf`, with `Detail` `other-provider:<id>`, D378) is `BadCredentials`
+  without a request, the last two "401 Unauthorized", GitLab's own text for a refused token; a `glpat-`
+  token, or one of no known form, is sent. Every failure it makes itself carries `Provider` GitLab;
+  one it builds from an answer that succeeded goes through the core's `MalformedAnswer` with the
+  request's token, which is screened there (D382).
+  - A1 `CheckTokenAsync`: `GET user` for both token kinds, never `personal_access_tokens/self`; the
+    organization argument is ignored. The account: key (GitLab, the endpoints' host, `username`),
+    `Login` the username in its own case, `Id` GitLab's `id`, `Name` unless it holds an e-mail-shaped
+    run (D368's screen would change it; then null), no avatar (D349), `UseForGit` true. A `username`
+    that is not one segment by `IsSegment`, or that holds the token in any case, is `Malformed`.
+  - A2 `ListRepositoriesAsync`: `GET
+    projects?membership=true&archived=false&order_by=last_activity_at&sort=desc&per_page=100`, never
+    `simple`, up to 10 pages (`RepositoryPages`), in GitLab's order: the first row of each `id` alone
+    and at most 1,000 rows, `MoreExist` when a next page was left or rows were cut. The account
+    argument is not read: the list is the token's. A row: the repository from `path_with_namespace`;
+    `default_branch`, or empty for an empty project; private unless `visibility` is `public` (so
+    `internal` too); a fork when `forked_from_project` is there, with no `Parent` in the list;
+    `archived`; `description`; `http_url_to_repo` and `web_url`, each taken only as an absolute `http`
+    or `https` address; `last_activity_at`, or `MinValue`; `CanPush` when the higher of `permissions`'
+    project and group `access_level` is 30 (Developer) or more (ASSUMED), or when the answer has no
+    `permissions`. A null row is left out with the warning "GitLab listed a project as null: it is
+    left out of the list.", and one whose path or addresses cannot be read with "GitLab listed
+    project <id> without a path or an address the app can read: it is left out of the list.". A
+    fine-grained token needs Project: Read among its user permissions for this request, else 403 `insufficient_granular_scope` (measured 2026-11-05, D385).
+  - A3 `ReadRepositoryAsync`: `GET projects/<escaped path>`, a moved project's 301 followed, named by
+    the answer's `path_with_namespace`; a fork's `forked_from_project` gives `Parent` and
+    `ParentDefaultBranch`.
+  - A4 `ListPullRequestsAsync`: `GET projects/<id>/merge_requests?state=opened&per_page=100` (`open`
+    is a 400), up to 3 pages (`RequestPages`): the first row of each `iid` alone and at most 300,
+    `MoreExist` as A2's. A request: `Number` `iid`, `Title`, `Author` `author.username` when it is one
+    segment (else null), `IsDraft` `draft`, `HtmlUrl` `web_url`, `HeadRef` `source_branch`, `HeadSha`
+    `sha` or empty, `BaseRef` `target_branch`, the repository asked as `BaseRepository`, `CreatedAt`
+    `created_at`. A list with a request that is null, numbered below 1 or without an absolute `http`
+    or `https` `web_url` among the rows kept fails whole, `Malformed`. The head repository is the base
+    when `source_project_id` is `target_project_id`, with no request; else the fork that `GET
+    projects/<source id>` names, asked once per id in list order, at most 20 a call
+    (`MaxForkLookups`). A lookup is kept under (the token's SHA-256 fingerprint, the id) until
+    `ForgetKept`, at most 512 (`MaxKeptForks`), the oldest stored going first, so no token is shown a
+    lookup another made. A fork answered 403 or 404 (one the token cannot read; kept so) and one past
+    the cap (not kept) give a null head repository, which the App takes as a deleted fork's; the
+    request's head ref is still in the base. Any other failure of a lookup fails the call.
+  - A5 `CreatePullRequestAsync`, never retried: `GET projects/<path>` of the source (`HeadRepository`,
+    else the base; `HeadOwner` is not read) and, when the source is another repository, of the base,
+    a 301 followed; a failure there is returned and nothing is posted, nor is anything when, across
+    projects, the source's path cannot be read. Then one `POST projects/<the source's
+    number>/merge_requests` (by number, so a moved source gives no 405): `source_branch`,
+    `target_branch`, `title` by `TitleFor`, `description` as typed (its quick actions run on
+    GitLab), and, when the source's id is not the base's, `target_project_id` and, for a `public`
+    source, `allow_collaboration: true` (GitHub's `maintainer_can_modify`); never `draft`, which
+    GitLab does not take. `TitleFor(title, draft)`, GitLab's `draft_title`: the title as it is
+    unless `draft`, and then too when it starts `Draft:`, `[Draft]` or `(Draft)` in any case, else
+    with `Draft: ` before it, never trimmed; the create form shows it. A 2xx gives the request as A4
+    reads one, its head the source across projects and the base otherwise; one A4 could not read is
+    `Malformed`.
+  - Other members: `Kind` GitLab, `Host` and `WebBase` the endpoints'. `SourceCanExist` and
+    `PullRequestHeadRef` (`refs/merge-requests/<iid>/head`, in the target project for a fork's request
+    too, measured; D361) are Core's `PullRequestRefs`'. `CoverageOf(account)` is a `GitCoverage` on the
+    web base with `GitTwin` (a URL without `.git` bound with its `.git` twin) and
+    `HelperUserIsAccounts` (D359; see "Prompts and credentials"); `Covers` goes by host alone, without
+    case: every GitLab repository on the account's host is the account's. `TokenPage(_)` is the
+    fine-grained token's form, `{web}-/user_settings/personal_access_tokens/granular/new`, which takes
+    no prefill, and `LegacyTokenPage`
+    `{web}-/user_settings/personal_access_tokens?name=VisualCommit&scopes=api`, which GitLab
+    redirects to the legacy form prefilled; `PullRequestsPage`
+    `{web}{namespace}/{name}/-/merge_requests`, each segment escaped. `ForgetKept` (internal, at the
+    provider's sign-out) forgets the core's kept answers and A4's forks; `SecretsOf` (internal)
+    gives the forms the token is sent in, for the session's D382 check. No A6: avatars stay GitHub's
+    (D349, D367).
+- **The service's limit**: with a token, gitlab.com answered a burst limit of 100 requests a minute,
+  304s counted (`burst_traffic_per_user_free_plan`; the live command, 2026-11-06, design 16.1), which
+  supersedes the 2,000 a minute that design 7.3 read. The client reads the limit's headers only on a
+  429.
+- **Beside GitHub's client**: `Bearer` as GitHub's, but on gitlab.com's own origin under `/api/v4/`;
+  `Accept: application/json` and no version header (no `ApiVersion`); pages by `Link` as GitHub's, a
+  next page also held to the API's path read decoded; a kept answer keeps `Link` alone, and its 304
+  costs GitLab's limit; only a GET's redirect is followed, and only under the API's path; a 403 is
+  never a rate limit, there is no `SsoRequired` and no 409 as success, and a 408 is a server error;
+  the words come from GitLab's error shapes; a token refused before a request for its characters or
+  its form reads "401 Unauthorized", not "Bad credentials"; a draft is made by its title, a request
+  across forks by `target_project_id`; A4 looks up a fork's project itself; no avatars.
+- Tests: `GitLabRecognitionTests`, `GitLabClientTests`, `GitLabProviderTests`
+  (`VisualCommit.Hosting.Tests`, over `FakeGitLab`'s in-process handler or `RecordingHttpHandler`
+  scripts).
+
+### Hosting: Azure DevOps' API (D345, D347, D350, D358 to D361, D378)
+
+Phase 7b (design 6). The namespace `VisualCommit.Hosting.AzureDevOps` holds Azure DevOps' provider
+on the shared HTTP core (see "Hosting: the shared HTTP core"): `AzureDevOpsEndpoints`,
+`AzureDevOpsApi` and `AzureDevOpsProvider` are public; `AzureDevOpsUrls`, `AzureDevOpsClient` (with
+its profile) and the JSON are internal. Only Azure DevOps Services is supported, on `dev.azure.com`
+and on the older `<organization>.visualstudio.com` addresses, which are the same service; Azure
+DevOps Server is in the backlog (D347). An account is one organization (D345, D348), and its login
+is the organization's name. In this section "design" is phase 7b's.
+
+- **Where Azure DevOps is** (`AzureDevOps/AzureDevOpsEndpoints.cs`): `AzureDevOpsEndpoints(WebBase,
+  OrganizationHosts)`: web, git and the API on one origin (D285), each organization under its own first
+  path segment. `Service` is `https://dev.azure.com/` with `OrganizationHosts` (the organizations'
+  `visualstudio.com` hosts are the service's too); `Local(port)` is `http://127.0.0.1:<port>/` without
+  them (the tests' fake; `<organization>.visualstudio.com` has none, D363). `Host` is the web
+  address's authority, `dev.azure.com` or `127.0.0.1:<port>`, for repositories of either host family
+  (D358). `ApiOf(organization)` is the web base, the escaped organization and `/`. `ListProject`,
+  which the app never sets and the live command sets to its sandbox project, holds A2 to that
+  project's repositories (D352).
+  `HostingOptions.AzureDevOps` and `CreateAzureDevOpsHandler` hold them, read from
+  `VISUALCOMMIT_AZURE_DEVOPS_URL`. `AzureDevOpsApi` (public, as 7a's `GitHubApi`, and what the live
+  command's probes send) holds `Version` `7.1` for the git routes, `ConnectionDataVersion`
+  `7.1-preview.1` for connectionData and the resource area (`7.1` is a 400 there, measured) and
+  `CoreAreaId` `79134c72-4a58-4b42-976c-04e7115f32bf`, the core resource area's published id.
+- **Recognition** (`AzureDevOps/AzureDevOpsUrls.cs`, internal, through `AzureDevOpsProvider.Recognise`):
+  no network and any organization. The path is read by hand, never through `Uri`; an `http` or
+  `https` URL's host and port are read as .NET reads them, as `CredentialBinding.Select` does (an
+  empty user or port, a port's leading zeros, `127.1`), so that recognition and the binding agree on
+  which host a URL names. On the web base's scheme, host (any case) and port:
+  `[user@]host/<org>/<project>/_git/<repo>` and `…/<org>/_git/<repo>` (the project then the
+  repository's name, measured). With `OrganizationHosts` also
+  `https://[user@]<org>.visualstudio.com[:443]/[DefaultCollection/]<project>/_git/<repo>` and
+  `…/[DefaultCollection/]_git/<repo>`, the label one in the organization's grammar and none of the
+  service's own `vssps`, `app` and `vs-ssh`; and SSH, recognised but never bound:
+  `[user@]ssh.dev.azure.com:v3/<org>/<project>/<repo>`, its `ssh://…[:22]/v3/…` form, and both on
+  `vs-ssh.visualstudio.com`. After `_git/` an optional `_full/` or `_optimized/` before the name is
+  skipped; one trailing `/` is allowed; `.git` belongs to the name (measured). A user part (never a
+  password) is allowed and never kept. An `http` or `https` URL must pass
+  `CredentialBinding.InPlainForm` (D359's form; see "Prompts and credentials"), and an SSH one's
+  path after `v3/` the same rules, in visible ASCII without `\`, `?` or `#`. The organization (the
+  first segment, the label, or the first segment after `v3/`) matches `^[A-Za-z0-9-]+$` (D360) and
+  is kept as written; `DefaultCollection` is no organization of dev.azure.com's. `_git`, `_full`,
+  `_optimized` and `DefaultCollection` match without case and with their escapes decoded (`%5Fgit`
+  is `_git`, as git and .NET read it); a project or repository that is empty or starts with `_` once
+  decoded is refused (no Azure DevOps name does), and both are percent-decoded as UTF-8. The result
+  is `HostedRepository(AzureDevOps, Host, "<org>/<project>", <repo>)`, `Host` `dev.azure.com` for
+  every form. An overload also gives the URL's user part as written, by which A2 and A3 hold an
+  answer's `remoteUrl` to its repository. On the fake's endpoints only the web base's forms are
+  taken. `NamesOf(repository)` gives the organization, project and name when the owner is two
+  segments, the organization in the grammar and the project and name each one segment (`IsName`: not
+  empty, `.` or `..`, and without `/` or `\`); `WebUrlOf` is `{web base}<org>/<project>/_git/<repo>`
+  and `ApiPath(repository, rest)` `{web base}<org>/<project>/_apis/git/repositories/<repo><rest>`,
+  each segment `Uri.EscapeDataString`d.
+- **The organization a text names** (`AzureDevOpsProvider.OrganizationOf`, which the sign-in dialog's
+  Organization box uses): trimmed, a text without `://` is the name; an `http` or `https` URL, cut at
+  `?` or `#` and its user part (a password too) ignored, gives its first path segment on the web
+  base's host and port, or with `OrganizationHosts` the label of `https://<label>.visualstudio.com`
+  on port 443; a URL holding `\` names none. The result must match the grammar, else null, and is kept
+  as written.
+- **The client** (`AzureDevOps/AzureDevOpsClient.cs`, internal, design 6.3): the core's
+  `HostingHttpClient` with Azure DevOps' profile, one per provider, so its requests go one at a time
+  beside the other providers', with the core's 30 s and 10 MB. `SendAsync` gives an
+  `AzureDevOpsReply<T>`: the core's value, failure, status and request id, and `MoreExist` for a walk.
+  - The token's origin is the web base's, for `<organization>.visualstudio.com` remotes too (the API
+    answers for them on dev.azure.com, measured). Every request sends `Authorization: Basic` of UTF-8
+    `":" + token`, `X-TFS-FedAuthRedirect: Suppress` (the sign-in's 302 becomes a 401, measured) and
+    `Accept: application/json`, beside the core's `User-Agent`; every URL names its `api-version`.
+    The request id is `ActivityId`, else `X-VSS-E2EID`. The service sends no `ETag` (measured), so no
+    answer is kept in practice.
+  - An answer that is the sign-in's, not the API's, is `BadCredentials` "Azure DevOps answered with
+    its sign-in page." (`SignInPageText`), and nothing is followed: on A1's connectionData every
+    redirect, whatever its status (D360); elsewhere a redirect whose `Location` is an `http` or
+    `https` address with the path `/_signin` or a host (its IDN form, a trailing dot removed) ending
+    `.vssps.visualstudio.com`; and a 203, or a 2xx or 304 whose `Content-Type` is `text/html` or whose
+    body starts with `<` (`RefuseSuccess`).
+  - Any other redirect on the token's origin is `Malformed`, with nothing sent to its `Location`,
+    when the `Location` leaves the organization (its first path segment another, without case),
+    leaves `InPlainForm` (an encoded slash or backslash that a server could decode before resolving
+    dot segments, and so serve another organization), or, inside the organization, is no API path
+    (the first segment after the organization that starts with `_` once decoded is not `_apis`: a web
+    page, which dev.azure.com serves on the API's origin). The warning's `<status or kind>` is then
+    `redirected outside the organization` or `<status>, redirected outside the API`; a redirect
+    elsewhere is left to the core's rule.
+  - Classification, by the status and the error body's `typeKey`, never by the service's words: 401
+    `BadCredentials`, whatever its body; 400 with `VssInvalidPreviewVersionException`,
+    `VssVersionOutOfRangeException` or `VssInvalidApiResourceVersionException` `ApiVersion`; 403
+    `Forbidden`; 404 `NotFound`, JSON or not (an unknown organization's is text); 409
+    `GitPullRequestExistsException` `Validation` with `Refusal` `AlreadyExists`, and 400
+    `GitPullRequestCannotBeActivated` `Validation` with `BranchesMissing` (it names no side; both
+    measured on 2026-11-05); any other 400, 409 or 422 `Validation`; 429 `RateLimited`; 5xx
+    `ServerError`; anything else `Malformed`, "Azure DevOps' answer could not be read.". A 3xx the
+    core does not repeat (300, 303, 305) is `BadCredentials` with `SignInPageText` when it answers
+    connectionData or names the sign-in. `Message` is the body's `message`, else `value.Message`
+    (TF400677's shape), else `X-TFS-ServiceError` URL-decoded, else the reason phrase, else `HTTP
+    <status>` ("Azure DevOps had a problem: HTTP <status>." for a 5xx), each on one line as GitLab's
+    (the service's .NET texts hold line breaks: an empty title's 400, measured 2026-11-05). `Detail`
+    is null on every classified failure. The warning reads, for example, `Azure DevOps: GET
+    /<org>/_apis/… failed: 401 (request <id>).`.
+  - `RetryAt` of a 429: now plus `Retry-After`'s seconds (a day at most) or its date (any form
+    .NET's `DateTimeOffset.TryParse` reads, where GitLab's takes the IMF-fixdate alone), else
+    `X-RateLimit-Reset` (Unix seconds; one past year 9999 gives way to the 60 s, where GitLab's
+    `ratelimit-reset` past 9999 is `Malformed`), else now plus 60 s, held between now and a day
+    ahead. Only a
+    429 is a rate limit; its form is not measured (the fake keeps it as read, design 16.1).
+  - Pages (`GetPagesAsync`): a `{"count", "value"}` list is walked with `$top=100&$skip=<rows so
+    far>` added to its query, up to the caller's number of pages; a short page ends it, and after
+    that many full pages one `$top=1` request says whether more exist (`MoreExist`, also when the row
+    it finds was shown already, since a request made during the walk shifts the list). At most
+    `PageSize` rows of a page are taken, whatever it holds, and each row once by its id; a null row
+    (D380), or a failing page or probe, fails the whole list.
+  - Azure DevOps' JSON (`AzureDevOps/AzureDevOpsJson.cs`): internal classes read through the
+    source-generated `AzureDevOpsJsonContext` (camelCase, unknown members ignored, nullable
+    annotations respected, nothing null written); `required` only what every answer has: a list's
+    `value`; a repository's `id`, `name` and `project.name`; a pull request's `pullRequestId`,
+    `title`, `sourceRefName` and `targetRefName` (one empty repository without `defaultBranch` would
+    otherwise make a whole list `Malformed`). An identity's `properties.Account`, `$type` and `$value`
+    are named as the service writes them (camelCase would miss `Account` silently). Dates are text,
+    read by `AzureDevOpsDates.DateOf` as UTC when they name no offset and as `MinValue` when missing
+    or unreadable; no member is a `DateTimeOffset`, which fails on a date without an offset east of
+    UTC. `createdBy.uniqueName`, an address, is never read.
+- **The provider** (`AzureDevOps/AzureDevOpsProvider.cs`, design 6.4 to 6.6). Every request is on the
+  web base's origin and inside one organization: A1's two reads in the typed one, A2's list in the
+  account's, and A3 to A5 below the repository's own `ApiPath`, never an organization-wide route, so
+  the live command's guard (D352, D371) lets the app's requests through. A token that is blank ("The
+  token is empty."), holds anything but visible ASCII ("The token holds characters that no token
+  has.") or has GitHub's or GitLab's form ("The token is another provider's.", `Detail`
+  `other-provider:<id>`, D378) is `BadCredentials` without a request; an account or a repository of
+  another provider or host, or one that is not `<org>/<project>/<repo>` by `NamesOf`, is
+  `Validation` "That is not a repository or an account of this Azure DevOps." without one. Every
+  failure it makes itself carries `Provider` Azure DevOps; one it builds from an answer that
+  succeeded goes through the core's `MalformedAnswer` or `Failed` with the request's token, which is
+  screened there (D382).
+  - A1 `CheckTokenAsync(token, organization)` (D360): an organization `OrganizationOf` refuses is
+    `Validation` "That is not the name or the address of an Azure DevOps organization." without a
+    request. Then, always with the token, `GET <org>/_apis/connectionData?api-version=7.1-preview.1`:
+    a 404 is `NotFound`, no such organization (with a token as without, measured with D374's made-up
+    organization), and every redirect `BadCredentials` as above. A 200 whose `authenticatedUser` is
+    missing or has no GUID `id`, has the Anonymous id `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`, a
+    `descriptor` starting `System:PublicAccess;` (without case) or `properties.Account.$value`
+    `Anonymous` is `BadCredentials` "Azure DevOps answered as it does for a visitor.", `Detail`
+    `anonymous` (`AnonymousDetail`), never told by `metaTypeId`: an organization that allows public
+    projects answers so a value the service does not take as a token (measured 2026-11-05 and
+    2026-11-07, design 16.1). Only then `GET
+    <org>/_apis/resourceAreas/<CoreAreaId>?api-version=7.1-preview.1`: a `locationUrl` on the web
+    base's origin whose path is one segment, in the grammar and equal to the typed name without case,
+    gives the organization's spelling; any other answer or failure but the caller's cancellation keeps
+    the typed name with one warning ("Azure DevOps: the organization's resource area did not name it;
+    the name as typed is kept.", or the core's for a failure), and the sign-in goes on. The account:
+    key (Azure DevOps, the endpoints' host, the organization), `Login` its spelling, `Id` 0, `UserId`
+    the member's GUID as lower-case text, no avatar, `UseForGit` true, and `Name` the first of
+    `customDisplayName` and `providerDisplayName` that is neither e-mail-shaped (an `@` or a
+    full-width one with a non-blank character on each side, D368) nor the sign-in name
+    (`properties.Account.$value`, an address, which serves this comparison alone and is never kept or
+    logged, D346); else null.
+  - A2 `ListRepositoriesAsync`: one `GET <org>/_apis/git/repositories?api-version=7.1`, or
+    `<org>/<ListProject>/…`, unpaged (measured) within the core's 10 MB, never `includeLinks`; the
+    account must be this provider's, its login in the grammar. A disabled repository (it cannot be
+    cloned, measured) and a row the provider cannot read are left out, with no warning; a null row
+    makes the list `Malformed`. Sorted by name, then project, without case; `MoreExist` and
+    `SomeHiddenBySso` false. A row: the repository from the account's organization, `project.name`
+    and `name`; `defaultBranch` without `refs/heads/`, empty when absent (an empty repository,
+    measured); private when `project.visibility` is `private`; `isFork`; never archived; no
+    description; `UpdatedAt` `MinValue` and `CanPush` true (the service gives neither); `remoteUrl` as
+    the clone URL and `webUrl` as the web URL only when each is an `http` or `https` address that
+    `Recognise` reads as this very repository, `remoteUrl` with no user or the organization as its
+    user (without case) and `webUrl` with none, so no other host, path, account or address rides into
+    the record; `parentRepository`, when it names a project and a name, as `Parent` in the same
+    organization, with `ParentDefaultBranch` null.
+  - A3 `ReadRepositoryAsync`: `GET ApiPath(repository, "?api-version=7.1")`, read as A2's row
+    (`Malformed` when it cannot be), in the organization asked; a fork's parent is read by a second
+    `GET`, whose `defaultBranch` gives `ParentDefaultBranch`, null when that read fails.
+  - A4 `ListPullRequestsAsync`: `ApiPath(repository,
+    "/pullrequests?searchCriteria.status=active&api-version=7.1")` through the walk, 3 pages of 100
+    (`PullRequestPages`): at most 300 pull requests, in at most four HTTP requests with the probe. A
+    pull request: `Number` `pullRequestId` (one below 1 makes the list `Malformed`), `Title`, `Author`
+    `createdBy.displayName` unless blank or e-mail-shaped, never `uniqueName`; `IsDraft` `isDraft`;
+    `HtmlUrl` built as `WebUrlOf(base)/pullrequest/<id>` (the answer has none, measured); `HeadSha`
+    `lastMergeSourceCommit.commitId` or empty; `BaseRef` `targetRefName` without `refs/heads/`; the
+    repository asked as `BaseRepository`; `CreatedAt` `creationDate`. Without `forkSource` the head is
+    `sourceRefName` without `refs/heads/`, in the base; with it (a fork's request, whose
+    `sourceRefName` is `refs/pull/<id>/source`; read, not measured, since the sandbox has no fork,
+    D375) `HeadRef` is `forkSource.name` without `refs/heads/` and `HeadRepository` its repository's
+    project and name in the base's organization, null when it names none.
+  - A5 `CreatePullRequestAsync`, once and never retried: a `HeadRepository` other than the base must
+    be in the base's organization (else `Validation` "A pull request's head must be in its base's
+    organization." without a request) and is read first by one `GET` for its `id`, a failure there
+    returned. Then one `POST ApiPath(base, "/pullrequests?api-version=7.1")`: `sourceRefName` and
+    `targetRefName` as `refs/heads/…`, `title`, `description`, `isDraft`, and across forks
+    `forkSource.repository.id` (that shape ASSUMED, D375). 200 and 201 give the request as A4 reads
+    one. A refusal carries `AlreadyExists` or `BranchesMissing` by its `typeKey`; `HeadMissing` and
+    `NoCommits` are never given (a request with nothing ahead is created, 201, measured by the live
+    command). `HeadOwner` is not read. Unlike GitLab's, the POST's redirect is not refused: a 301,
+    302, 307 or 308 that stays on the web base's origin, in the organization and on an API path
+    (`_apis`) is repeated by the core with the same body, as GitHub's would be (none measured;
+    accepted at the review before the gate, design 16.3, D392).
+  - Other members: `Kind` Azure DevOps, `Host` and `WebBase` the endpoints'. `SourceCanExist` is
+    Core's `PullRequestRefs`', and `PullRequestHeadRef` is null: Azure DevOps has no head ref, so a
+    request is checked out only through a remote's branch (D361). `CoverageOf(account)` is a
+    `GitCoverage` on the web base with the account's organization, the organization hosts when the
+    endpoints have them, and `HelperUserIsAccounts` (D359; see "Prompts and credentials"); `Covers` an
+    Azure DevOps repository on this host whose organization (`OwnerRoot`) is the account's, without
+    case, for an account of this provider and host (D350). `TokenPage(organization)` is
+    `{web base}<org>/_usersSettings/tokens`, an `ArgumentException` where `OrganizationOf` gives
+    null; `PullRequestsPage` `WebUrlOf(repository)/pullrequests`. `ForgetKept` (internal, at the
+    provider's sign-out) forgets the core's kept answers; `SecretsOf` (internal) gives the token and
+    its `Basic` credential's Base64, for the session's D382 check. No A6 and no avatars (D349, D367).
+- **Beside GitHub's client**: the token goes to the web base's origin, not to a separate API host,
+  and as `Basic`, not `Bearer`; the API version is in each URL's query, not a header, and a refused
+  one is told by `typeKey`; a list is walked by `$top` and `$skip` in the client, not by `Link`, and A2
+  is one unpaged request; nothing is kept (no `ETag`); a 403 is never a rate limit, and there is no
+  `SsoRequired` and no 409 as success; the sign-in's answers (its redirects, a 203, an HTML page) are
+  refused credentials, a redirect out of the organization or onto a web page is refused, and one of
+  any method inside the organization's API is followed, as GitHub's is; the
+  account is an organization, with `Id` 0, a GUID as `UserId` and no avatar; no A6 and no head ref.
+- Tests: `AzureDevOpsRecognitionTests`, `AzureDevOpsClientTests`, `AzureDevOpsProviderTests`,
+  `AzureDevOpsJsonTests` (`VisualCommit.Hosting.Tests`, over `FakeAzureDevOps`'s in-process handler
+  or `RecordingHttpHandler` scripts; the JSON tests over made-up copies of the service's shapes).
+
+### Hosting: the session and the account (D253, D255, D256, D263, D287, D288, D291, D292, D330, D348, D357, D382)
+
+Phase 7a; since phase 7b one account per provider (D348, D357; 7b design 9). `IHostingSession`
+(`IHostingSession.cs`) is the app session's hosting, one per `AppSession` (`TabServices.Hosting`),
+and `HostingSession` (`HostingSession.cs`) the one implementation; `NullHostingSession` (every
+provider off: no provider, no account, no binding, nothing recognised, no request; a sign-in or a
+list fails with "{Name} is off.") stands in where tests build `TabServices` by hand. The interface
+extends Core's `IGitCredentialSource`, so the prompt broker asks the session for a bound URL's
+credential and tells it of git's `erase` (see "Prompts and credentials"). Since phase 7b its members
+take the provider: `IsOff` (every provider off), `Providers` (those on, in
+`HostingProviders.InAccountsOrder`), `IsOn`, `ProviderOf`, `AccountOf`, `SignInAsync(SignInRequest)`
+(the provider, the token and Azure DevOps' organization; its text hides the token),
+`SignOutAsync(provider)`, `SetUseForGit(provider, value)`, `ListRepositoriesAsync(provider)` and
+`AccountChanged`, whose `HostingAccountChangedEventArgs` names the provider. 7a's GitHub-named
+members are gone: the tests reach them as C# 14 extension members on `IHostingSession` and
+`AccountsFile` that delegate with `HostingProvider.GitHub` (`HostingSessionGitHubForms`, in
+`tests/VisualCommit.Testing` but in namespace `VisualCommit.Hosting`).
+
+- **The providers and the first log lines** (7b design 9.2): `HostingSession(paths, options,
+  tokens, log, post, clock)` makes, in `HostingProviders.InAccountsOrder`, one provider for each
+  endpoint `options` give, with its handler (one without a handler gets
+  `HostingOptions.RefusingHandler`), and disposes them with the session. It logs `{Name}: {host}.`
+  for each provider on and `{Name}: off.` for each off ("GitHub: github.com." or "GitHub: off.",
+  GitHub's 7a's byte for byte; the real-window pass waits for them). Two providers on one web origin
+  (scheme, host and port, without case) throw `ArgumentException`, since the broker answers a
+  prompt from the first binding on an origin. All off (`IsOff`), it makes no provider and no vault:
+  nothing is recognised, no store is touched, `StartAsync` reads nothing, `ForRepository` gives
+  `NullRepositoryHosting.Instance` and `KeychainAvailableAsync` answers false. With any provider on
+  there is one `TokenVault` over the store (see "Tokens and the keychains"); one `AvatarCache` over
+  `avatars/` and one `AuthorMapStore` over `avatars/authors/` exist only while GitHub is on (D349).
+- **`accounts.json`** (`JsonAccountStore.cs`; D287, D292, D336; 7b design 9.3): `{"version": 1,
+  "accounts": [{"provider": "github", "host": "github.com", "login": …, "id": …, "name": …,
+  "avatarUrl": …, "useForGit": true, "tokenState": "keychain"}]}`, camelCase and indented, comments
+  and trailing commas read; never a token, nor a field that could hold one. Since phase 7b a
+  record's `provider` is `github`, `gitlab` or `azure-devops`, one record per provider and host;
+  `id` stays a JSON number (GitLab's numeric id, 0 for Azure DevOps), and Azure DevOps' record adds
+  `userId`, the user's GUID as lower-case text, written only when it is not null
+  (`AccountRecord.UserId`), so GitHub's and GitLab's records keep 7a's eight names. A new provider's
+  `avatarUrl` is null, and one that a hand-edited file gives is not read (D349). 7a's reader reads a
+  file 7b wrote with GitHub's record equal, and 7a's save drops `userId`, which the next check of
+  git's refusal takes again (below). `tokenState` (`AccountTokenStates`) is `keychain` (saved in the
+  keychain), `session` (kept in memory only) or `refused` (the service refused it); missing or
+  unknown reads as `keychain`, and a missing `useForGit` as true (`AccountRecord.UseForGit` has a
+  setter, not `init`, for that). For each provider on the session uses the first record of its
+  provider id and host, both without case (`AccountsFile.For(provider, host)`); a save replaces that
+  record or appends one (`With`), a sign-out removes it (`Without`), and every other record, an off
+  or unknown provider's or another host's, is kept and ignored. A missing file is no account; an
+  unreadable one is moved to `accounts.unreadable.json` with a warning and the session starts with
+  none. The file is written whole through `DurableFile.Replace`, under the session's gate and off
+  the UI thread; a failed write is logged as an error and the state in memory changes anyway.
+- **The entries, the slots and the gate** (7a design 7.3, 7b design 9.2): each provider on has one
+  `Entry` (private: its provider, its account's slot, its `StartRead` signal, its refusal check and
+  its switch chain). Its account is one `AccountSlot` (internal: its `AccountStatus`, the token while
+  signed in, the record's `tokenState`; a class whose `ToString` gives the login and the state only),
+  swapped whole (`Volatile.Write`) and read without a lock, so git's credential requests and the
+  bindings never wait on anything. `AccountStatus(Account, State, Place, NoteKind, Note)`:
+  `SignedIn` or `NeedsSignIn`; `TokenPlace.Keychain` or `Session`; which of the window's notes
+  applies (`AccountNoteKind`: `NoKeychain`, `SaveFailed`, `Refused`, `TokenMissing`, `ReadFailed`,
+  `SessionEnded`) with the store's reason. One `SemaphoreSlim(1)` for all providers runs the start's
+  read and every provider's sign-in second half, sign-out, refusal and switch one at a time, so the
+  file changes one write at a time; no request to a service runs under it. A change writes the
+  record first, then the slot (`SetSlotLocked`), and posts `AccountChanged` with its provider and
+  every live `RepositoryHosting`'s `OnAccountChanged(provider)` through the post delegate
+  (`Dispatcher.UIThread.Post` in the app), which drops them once the session is disposed; the other
+  providers' slots are untouched. Internal: `SlotOf(provider)`, which `RepositoryHosting` reads, and
+  for the tests `SwitchingOf`, `RefusalCheckOf` and 7a's `Slot`, `Switching` and `RefusalCheck`,
+  which stay GitHub's.
+- **`StartAsync`** (ruling 6, D287; 7b design 9.4), once (`AppSession.HostingStarted`; a second call
+  waits for the first): all off, nothing is read. Else, under the gate, it loads `accounts.json`
+  once; then, provider by provider in D353's order, one after another, the provider's record takes
+  7a's states by its `tokenState`. Without a record no store is touched ("{Name}: no account on
+  {host}."); a `session` record needs sign-in (`SessionEnded`), a `refused` one too (`Refused`),
+  neither touching the store; for a `keychain` one the vault reads the store, that key's only read
+  in the run: a token signs it in (`Keychain`), none gives `TokenMissing`, a failed read
+  `ReadFailed` with the store's reason. No request to any service. Logged as "{Name} account {login}
+  on {host}: token read from the keychain." or the outcome's other words. Each entry's `StartRead`
+  completes when its own read ends, whatever its outcome, at once after the file is read when the
+  provider has no record, and for all at the latest when the start ends (fixed at phase 7b's review
+  before the gate, life-1, D392). Then the events, one per provider whose record was read, in that
+  order. Until a provider's read ends, its `AccountOf` is null.
+- **`SignInAsync(request)`** (D256: at once; D263, D348: it replaces that provider's account; D288;
+  7b design 9.4): a provider that is off is a `Validation` failure, "{Name} is turned off.", without
+  a request. Else A1 (`CheckTokenAsync(token, organization)`, Azure DevOps' with the organization
+  the dialog gives), under the caller's cancellation linked to the session's lifetime and outside
+  the gate; a failure changes nothing (a new token's 401 never marks the current account) and is a
+  warning. So is an answer that names the token (D382), ignoring case and in any form the request
+  sent it in (the core's `SecretsOf`, Azure DevOps' `Basic` credential too), in the login, the
+  key's login, the display name, the user id or the avatar's address as given, as written or
+  percent-decoded: it is the provider's `Malformed`, "{Possessive} answer could not be read.",
+  before anything is kept or logged. Once the service has answered, the rest runs under the
+  session's lifetime alone, so a dialog's Cancel no longer stops it: it waits for the start, takes
+  the gate, forgets the keychain entry of that provider's previous record when its login differs
+  (an entry the keychain keeps is a warning), carries that record's `useForGit` (true
+  without one), and keeps the token through the vault: in the keychain (`keychain`); in memory where
+  no keychain exists (`session`, `NoKeychain`, D253); or in memory after a failed save (`session`,
+  `SaveFailed`, the reason as note and as `SignInResult.SaveFailedReason`, ruling 19). The key is
+  the provider, its host and the login A1 answered, for all three (D357). The other providers'
+  accounts are untouched, and two sign-ins to two providers at once keep both records. Logged as
+  "{Name} account {login} on {host}: signed in; the token is kept in the keychain." or "… kept for
+  this session: {reason}.".
+- **`SignOutAsync(provider)`** (D291), on the thread pool: off or without an account, null, and
+  nothing happens. It waits for the start and the gate under the caller's cancellation, and from
+  then on neither that nor the session's disposal stops it (the process's exit can: an exit during
+  the store's delete leaves the record and its entry, and the next start is signed in; 7a design
+  19.2's life-1). The vault forgets the entry and its reason is returned; a run without a keychain
+  that finds a `keychain` record returns `TokenStoreReasons.NoKeychain` and warns, naming the entry
+  to remove by hand (7a design 19.2's tokens-1). That provider's record goes even when the entry
+  stays; its slot is cleared, its client's kept answers forgotten (each provider's `ForgetKept`) and the events posted.
+  Only GitHub's sign-out then, still under the gate, cancels and awaits the avatar runs, drops the
+  e-mail maps from memory (their lookup counts stay), replaces the `AvatarCache` with a new one and
+  deletes `avatars/` whole; a file that stays gets one warning that names it, with the exception by
+  its type alone (D382). Another provider's sign-out keeps `avatars/` and GitHub's account (D349,
+  D357).
+- **`SetUseForGit(provider, value)`** (D216, D255; the settings screen's Save): on the thread pool,
+  after that provider's switch before it; under the gate, no account or the same value changes
+  nothing; else that provider's record, its slot and the events, and every binding follows. Logged
+  as "{Name} account {login} on {host}: used for git over HTTPS." or "… not used for git over
+  HTTPS.".
+- **git's `get` and `erase`** (rulings 4 and 6, D330, D357; 7b design 9.5): `GetAsync(account)`
+  waits for the start's read of the account's own provider (its `StartRead`), never another
+  provider's, at most 10 s by the session's clock (then the warning "{Name}: the keychain's read had
+  not ended after 10 s; git's request for {host} went without the account's token." and null), and
+  gives `GitCredential(token)` only while that account is its provider's signed-in account with
+  "Use for git over HTTPS" on. The reads run one after another, so an earlier provider's account
+  binds git as soon as its own read has put the token in its slot. Through git no `get` comes before
+  that read ends, since none of the provider's URLs is bound until the slot holds the token (7a
+  design 19.2); the wait guards a direct call. `Refused(account)` returns at once; for the signed-in
+  account of its provider it starts one A1 with its token (Azure DevOps' with the account's login as
+  the organization), one at a time per provider (an `erase` meanwhile joins it; `RefusalCheckOf` for
+  the tests), so one provider's check never waits on another's. A 401 marks the account refused
+  (source "git"); a 200 for another user (Azure DevOps' `UserId` without case, GitHub's and
+  GitLab's `Id`) marks it too (source "git, another user", D357); the same user keeps it signed in
+  with the warning "… git was refused, yet the token is valid (an http.extraHeader, a proxy or a
+  redirect?).", and an account held without its user (a 7a save: no `userId`, an `Id` of 0) then
+  takes the check's, under the gate while the slot holds that token, with its record written and the
+  event posted; any other answer keeps it, with "… git was refused; the token could not be checked:
+  …". A prompt for another organization on `dev.azure.com` never reaches the session
+  (`CredentialBinding.SharedOriginOwner`, see "Prompts and credentials").
+- **Calls with the account's token** (`CallAsync(provider, what, about, call, ct)`, internal; D257,
+  D350; 7b design 9.6): every API request after the sign-in but the refusal check's A1 (above, which
+  marks the account itself) goes through it, on that provider's slot. Without a request: the
+  provider off, `Validation` "{Name} is turned off."; its account not signed in with its token,
+  `BadCredentials` "Not signed in."; `about` a repository the account does not `Covers` (another
+  Azure DevOps organization's), `Validation` "Not the signed-in account's repository."; each with
+  `Provider` set. Otherwise the provider runs with the account's token and account, under the
+  caller's cancellation linked to the session's lifetime. A `BadCredentials` answer marks the
   account (`MarkRefusedAsync`, under the gate and only while the same key and the same token are
   signed in, so a stale call's 401 never marks a newer token: `NeedsSignIn`, `Refused`, the token
-  dropped, `tokenState` `refused`, a warning naming its source, "git" or "the API, request {id}");
-  any other failure is a warning naming what was asked. `ListRepositoriesAsync` (A2, the repository
-  browser's) and `RepositoryHosting`'s reads and create go through it.
-- **For the rest of the app**: `Recognise(url)`; `SourceCanExist(remoteUrl, remoteRef)` (true while
-  off or for a URL that is not GitHub's); `BindsGit` (signed in, the token in hand, "Use for git
-  over HTTPS" on); `BindingsForClone(url)` (a clone's URL after the user's `insteadOf`, D331) and
-  `BindingsFor(remoteUrls, rewrites)` (a dashboard row without a tab, D332), each
-  `CredentialBinding.Select` with the account's key while `BindsGit`, else empty;
-  `KeychainAvailableAsync` (the vault's cached probe, which never prompts); `ForRepository`.
+  dropped, `tokenState` `refused`, a warning naming its source, "the API, request {id}" or "the API,
+  request without an id"); any other failure is a warning naming what was asked, an address in it
+  written `<e-mail>` (D368). `CallGitHubAsync` is the same on GitHub with its typed provider, for A6
+  (D349). `ListRepositoriesAsync(provider)` (A2, the repository browser's) and `RepositoryHosting`'s
+  reads and create go through them. A request already waiting for its provider's turn when the
+  account signs out or is replaced is sent with that account's token (accepted at phase 7b's review
+  before the gate, D392's life-2; 7b design 16.3).
+- **For the rest of the app**: `Recognise(url)`, the first answer of the providers on, in D353's
+  order; `SourceCanExist(remoteUrl, remoteRef)`, the rule of the provider that recognises the
+  remote's first configured URL, another organization's included (D279, D359), true while all are
+  off or for a URL no provider recognises; `BindsGit` (some provider's account signed in, its token
+  in hand, "Use for git over HTTPS" on); `BindingsForClone(url)` (a clone's URL after the user's
+  `insteadOf`, D331) and `BindingsFor(remoteUrls, rewrites)` (a dashboard row without a tab, D332;
+  empty unless `BindsGit`), each the union, in D353's order, of every provider's
+  `HostingRules.Bindings` with its `CoverageOf` (`BindingsOf`, which the tabs share; see "Prompts and
+  credentials"); `KeychainAvailableAsync` (the vault's cached probe, which never prompts; false while
+  all are off); `ForRepository`.
 - **Avatar work** (`RunAvatarWork`, internal): a tab's avatar run starts on the thread pool only
-  while signed in and not disposed, under the tab's lifetime linked to the session's avatar work,
-  and is tracked, so that a sign-out cancels and awaits it before deleting `avatars/` (D291).
-- **`Dispose`** (`AppSession.Dispose`, after the tabs) cancels the lifetime (the start's read, a
-  sign-in's second half, the refreshes, the refusal check) and the avatar work, disposes the API's
-  and the avatars' clients and posts nothing more; a begun sign-out goes on (above).
-- **What the hosting logs, and never** (design 7.12, 17.1): "GitHub: {host}." or "GitHub: off." at
-  the start (the real-window pass waits for it); the start's outcome, a sign-in with the token's
-  place and any reason, a sign-out, the switch, each as "GitHub account {login} on {host}: …";
-  warnings for a failed sign-in ("GitHub: signing in on {host} failed: {kind}, {message} (request
-  {id})"), for a refusal (its source and request id), for git's `erase` of a token the check found
-  valid or could not check, for a `get` that went without the token after the 10 s wait for the
-  keychain's read, for a keychain entry kept (a replaced account's, or one to remove by hand), for a
-  failed call ("GitHub: {what} failed: {kind}, {message} (request {id})"), for a tab's unexpected
-  failure of its pull requests or avatars ("{repo}: the pull requests could not be read: …", "… the
-  authors' avatars could not be read: …") and, from the client, one per failed request: `GitHub:
-  <method> <path> failed: <status or kind> (request <id>).`, the path without its query (so no
-  e-mail address of A6's lookups) and, for a request that got no answer, the exception; the avatars'
-  warnings name the user's id, and the provider warns once of an avatar on another host; Debug
-  `{repo}: listed {n} open pull requests of {owner/name}` (D322). Never a token, a `GitCredential`,
-  a slot, an `Authorization` value, a query or an HTTP request or response: of an answer only its
-  status, GitHub's `message`, the request id and the scheme, host and port of a refused `Location`
-  or `Link` or of an avatar's address. The API's requests are not git calls: the call log and the
-  activity log hold none of them.
-- Tests: `JsonAccountStoreTests`, `HostingSessionStartTests`, `HostingSessionSignInTests`,
-  `HostingSessionCredentialTests` (`VisualCommit.Hosting.Tests`, through `HostingSessionSetup`: the
-  fake in process, a `FakeTokenStore`, a data folder of its own, a `ManualTimeProvider` and a
-  `HostingTestThread` as the post delegate); `AppSessionTests` (App: a session in the tests'
-  environment logs "GitHub: off.").
+  while GitHub's account is signed in and the session is not disposed, under the tab's token (its
+  lifetime and its own stop, 7b design 9.8) linked to the session's avatar work, and is tracked, so
+  that GitHub's sign-out cancels and awaits it before deleting `avatars/` (D291).
+- **`Dispose`** (`AppSession.Dispose`, after the tabs) cancels the lifetime (the start's read, the
+  sign-ins' second halves, the refreshes, the refusal checks) and the avatar work, disposes each
+  provider, and with it its API client, and the avatars' client, and posts nothing more; a begun
+  sign-out goes on (above).
+- **What the hosting logs, and never** (7a design 7.12, 17.1; 7b design 1.9, 5.2, 9.9; D368, D380,
+  D382): at the session's construction one line per provider, "{Name}: {host}." or "{Name}: off."
+  (the real-window pass waits for them), and `HostingOptions.FromEnvironment`'s warnings; the
+  start's outcome, a sign-in with the token's place and any reason, a sign-out, the switch, each as
+  "{Name} account {login} on {host}: …" (Azure DevOps' login is the organization, in the service's
+  spelling); warnings for a failed sign-in ("{Name}: signing in on {host} failed: {kind}, {message}
+  (request {id})"), for a refusal ("{Name} account {login} on {host}: {Name} refused the token
+  ({source}); it needs signing in again."), for git's `erase` of a token the check found valid or
+  could not check, for a `get` that went without the token after the 10 s wait for its provider's
+  read, for a keychain entry kept (a replaced account's, or one to remove by hand), for a failed
+  call ("{Name}: {what} failed: {kind}, {message} (request {id})"), for a tab's unexpected failure of
+  its pull requests or avatars ("{repo}: the pull requests could not be read (<type and codes>).",
+  "{repo}: the authors' avatars could not be read (<type and codes>).") and, from the shared core,
+  one per failed request, `{Name}: <method> <path> failed: <status or kind> (request <id>).` (see
+  "Hosting: the shared HTTP core"); the avatars' warnings name the user's id, and GitHub's provider
+  warns once of an avatar on another host; Debug `{repo}: listed {n} open pull requests of {full
+  name}` for every provider, its name at any depth and "pull requests" for GitLab's too (D322; 7b
+  design 1.9). Never a token in any form it was sent in, a `GitCredential`, a slot, an
+  `Authorization` value, a query, an e-mail address an answer names, or an HTTP request or response:
+  of an answer only its status, the service's `message` (addresses as `<e-mail>`), a request id of
+  the shape the core keeps, and the scheme, host and port of a refused `Location` or `Link` or of an
+  avatar's address; and never an exception's text from the HTTP stack, nor an exception object from
+  a catch-all of `src/VisualCommit.Hosting/`, which names one by its type and codes alone
+  (`HostingHttpClient.Describe`; the typed file and JSON catches of `JsonAccountStore`,
+  `AuthorMapStore` and `AvatarCache` keep theirs, D382). The API's requests are not git calls: the
+  call log and the activity log hold none of them.
+- Tests: `JsonAccountStoreTests` (since phase 7b three records' round trip, `For`, `With` and
+  `Without`, and 7a's reader and its save, copied word for word into `JsonAccountStore7a.cs`),
+  `HostingSessionStartTests`, `HostingSessionSignInTests`, `HostingSessionCredentialTests`
+  (`VisualCommit.Hosting.Tests`, through `HostingSessionSetup`: the fake in process, a
+  `FakeTokenStore`, a data folder of its own, a `ManualTimeProvider` and a `HostingTestThread` as
+  the post delegate); since phase 7b `HostingSessionProvidersTests` (the construction lines and the
+  shared origin, the start's three reads in order, each provider's sign-in and record, GitLab's
+  sign-out keeping `avatars/`, the push guard by provider) and the 7b tests of the start and
+  credential classes, through `ProvidersSessionSetup`, 7a's setup over the three fakes in process,
+  each optional, whose disposal seeks every token it minted in the data folder and the log in the
+  tripwire's forms; `AppSessionTests` (App: a session in the tests' environment logs "GitHub: off."
+  and "Token store: memory.").
 
-### Hosting: a repository's pull requests and avatars (D251, D289, D290, D293, D311, D339)
+### Hosting: a repository's pull requests and avatars (D251, D289, D290, D293, D311, D339, D356, D357, D366, D367, D383)
 
-Phase 7a. `RepositoryHosting` (`RepositoryHosting.cs`, `.Avatars.cs`) is a repository's hosting
-behind `IRepositoryHosting`, one per full-mode `RepositoryViewModel`, made by
-`IHostingSession.ForRepository(workingDirectory)` and told of the account's changes until its
-`Dispose`. While GitHub is off, in summary mode (until a tab adopts the view model) and without
-services the view model holds `NullRepositoryHosting.Instance`, which is `NotGitHub`, binds nothing
-and never changes. `HostingRules` holds its pure functions, and the session's `AuthorMapStore` the
-e-mail maps.
+Phase 7a; since phase 7b for every provider (7b design 9.7 to 9.9). `RepositoryHosting`
+(`RepositoryHosting.cs`, `.Avatars.cs`) is a repository's hosting behind `IRepositoryHosting`, one
+per full-mode `RepositoryViewModel`, made by `IHostingSession.ForRepository(workingDirectory)` and
+told of the accounts' changes until its `Dispose`. While every provider is off, in summary mode
+(until a tab adopts the view model) and without services the view model holds
+`NullRepositoryHosting.Instance`, which is `NoHostedRemote`, binds nothing and never changes (its
+read and create fail with "This repository has no hosted remote."). `HostingRules` holds its pure
+functions, and the session's `AuthorMapStore` the e-mail maps. The types keep "pull request" for
+GitLab's merge requests too; the screens word each provider's (D351).
 
-- **What it holds**: `State`, a `RepositoryHostingState` of `PullRequests` (`NotGitHub`,
-  `SignedOut`, `Loading`, `Failed`, `Loaded`), `Remotes` (each GitHub remote to its repository),
-  `Repository` (the listed one), `List`, `Failure` and `ByRef`; `Bindings` (which auto-fetch's
-  operations also carry); `Avatars` (`AuthorAvatars`, lower-case e-mail to a local PNG or JPEG);
-  `WantsUrlRewrites` (signed in with the token in hand). The first three are swapped whole and read
-  from any thread; they change on the UI thread, and `Changed` is posted only when one of them
-  differs, compared by content, or `WantsUrlRewrites` does. Network work runs off the UI thread
-  under the hosting's lifetime, linked to the session's and cancelled at `Dispose`, and comes back
-  through the post delegate.
-- **`Update(refs, rewrites)`**, after each refs read, on the UI thread (design 7.8): the URLs git
+- **What it holds**: `State`, a `RepositoryHostingState` of `PullRequests` (`NoHostedRemote`, 7a's
+  `NotGitHub`; `SignedOut`, `Loading`, `Failed`, `Loaded`; since phase 7b `OtherOrganization`),
+  `Remotes` (each remote recognised by any provider on, to its repository), `Repository` (the
+  listed one; while `OtherOrganization` the remote's), `List`, `Failure` and `ByRef` (the listed
+  provider's), and `RequestRemotes`, computed and never stored: the remotes of the listed
+  repository's provider and host (on Azure DevOps of its organization too, without case), where a
+  request can go, empty without a listed repository and while `OtherOrganization`; `Bindings`
+  (which auto-fetch's operations also carry); `Avatars` (`AuthorAvatars`, lower-case e-mail to a
+  local PNG or JPEG); `WantsUrlRewrites` (some provider's account signed in with its token in hand,
+  as last raised with `Changed`; within a handler of `Changed`, the value that event carries). The
+  first three are swapped whole and read from any thread; they change on the UI thread, and
+  `Changed` is posted only when one of them differs, compared by content, or `WantsUrlRewrites`
+  does, or the listed provider's account (its key, its login as given, whether it is signed in)
+  does, which the left panel's row shows. Network work runs off the UI thread under the hosting's
+  lifetime, linked to the session's and cancelled at `Dispose`, and comes back through the post
+  delegate.
+- **`Update(refs, rewrites)`**, after each refs read, on the UI thread (7a design 7.8): the URLs git
   uses (`rewrites.Apply(refs.RemoteUrls)`), the rewrites counting as known only when they were
   wanted for this read (D290); each remote recognised by its first fetch URL after the rewrites,
-  else by its first configured `url` (`HostingRules.Remotes`); the candidate, the first GitHub
-  remote in `HostingRemoteOrder` (`origin`, `upstream`, then by ordinal name;
-  `HostingRules.ListedCandidate`). A changed candidate drops the list and its failure and, while
-  signed in, starts a refresh (D289). A candidate gone also stops the avatar runs and drops the
-  avatars (D252); a change to another GitHub repository keeps them, since the tab sends its authors
-  again only after `NotGitHub` or a sign-out.
-- **States**: no candidate `NotGitHub`; not signed in `SignedOut`, with no request (D257); signed
-  in, `Loaded` with a list, else `Failed` with a failure, else `Loading`. A refresh shows `Loading`
-  over an earlier failure but keeps a held list (`Loaded`) until its answer, and a failure carries
-  no list (the left panel keeps its rows itself; see "Left panel and commit details").
-- **The listed repository** (`ListedOf`, `RemotesOf`; design 19.2's integration-1): the candidate
-  before A3 has answered for it; then A3's parent when A3 says fork, else A3's own repository, which
-  is the candidate under the name GitHub gives it now (renamed or transferred, the client having
-  followed GitHub's 301). Once A3 names the candidate otherwise, every remote equal to it takes A3's
-  name in `State.Remotes` (equal without case; the listed repository shows GitHub's case), so the
-  list, `ByRef`, a pull request's checkout, the create form and the avatars compare one name with
-  GitHub's answers; the recognised remotes and the candidate stay as the URLs say, so an `Update`
-  does not change with A3. Not covered: a renamed parent reached through an `upstream` remote under
-  its old name (plan.md's risk 36). A3's last answer is kept with its candidate for the hosting's
-  life (a failure is not kept), and one read in flight is shared; `ReadRepositoryAsync`, which the
-  create form calls, gives it.
-- **`RefreshPullRequestsAsync`** (D289): not signed in or without a candidate, nothing. One run at a
-  time: A3 (kept), then A4 on the listed repository through the session's `CallAsync`; a call during
-  a run asks for one more, whose applied answer completes its task, and the caller's cancellation
-  ends only its wait. The answer is applied on the UI thread while the candidate is still the run's
-  and an account is signed in, and a list then writes the Debug line `{repo}: listed {n} open pull
-  requests of {owner/name}` after the state's `Changed` (D322). An unexpected exception becomes a
-  `Network` failure with its message, never a section left loading. The triggers, never a timer: the
-  first `Update` with a candidate while signed in, a changed candidate, a sign-in
-  (`OnAccountChanged`), each succeeded network operation of the view model's queue (auto-fetch and a
-  create included; the repeated read is answered 304), and the section's menu.
-- **Bindings** (`HostingRules.Bindings`, D290): none unless signed in with the token in hand, "Use
-  for git over HTTPS" on and the rewrites known for the last `Update`; else
-  `CredentialBinding.Select` of the URLs git uses on GitHub's web address with the account's key
-  (D278; see "Prompts and credentials"). The tab's network operations carry them.
+  else by its first configured `url` (`HostingRules.Remotes`, through the session's `Recognise`);
+  the candidate, the first recognised remote in `HostingRemoteOrder` (`origin`, `upstream`, then by
+  ordinal name; `HostingRules.ListedCandidate`), whatever its provider and whether it has an account
+  (D357). A changed candidate drops the list and its failure and, while it can be listed, starts a
+  refresh (D289). A changed candidate gives up every A3 read in flight of another provider than its
+  own, whether or not a run is in flight (each keeps nothing, and one that a `ReadRepositoryAsync`
+  caller waits on goes on for that caller alone), and a candidate of another provider than the run
+  in flight also cancels that run, which then applies and warns nothing; the reads are given up
+  before the run's stop frees that provider's turn, so that the new candidate's list waits on no
+  other provider's answer (7b design 9.11's As built). A candidate gone, or one of another
+  provider than GitHub, also stops the avatar run and drops the avatars (D252, D367); a change to
+  another GitHub repository keeps them, since the tab sends its authors again only after
+  `NoHostedRemote`, `OtherOrganization`, another provider's listed repository or a sign-out.
+- **States** (7b design 9.7): by the candidate's provider's account. No candidate,
+  `NoHostedRemote`. An account of the candidate's provider held, signed in or needing sign-in, that
+  does not `Covers` it: on Azure DevOps (another organization's remote) `OtherOrganization`, its
+  `Repository` the candidate, no list, failure or `ByRef`, and no request (D356, D366); elsewhere
+  `SignedOut`, which cannot happen, since GitHub and GitLab cover by host. Else 7a's states: not
+  signed in `SignedOut`, with no request (D257); signed in, `Loaded` with a list, else `Failed` with
+  a failure, else `Loading`. A refresh shows `Loading` over an earlier failure but keeps a held list
+  (`Loaded`) until its answer, and a failure carries no list (the left panel keeps its rows itself;
+  see "Left panel and commit details"); a list or failure read with another account of the same
+  provider is not shown, so the state is `Loading` until this account's answer (D383).
+- **The listed repository** (`ListedOf`, `RemotesOf`; 7a design 19.2's integration-1): the
+  candidate before A3 has answered for it; then A3's parent when A3 says fork, else A3's own
+  repository, which is the candidate under the name the service gives it now (on GitHub renamed or
+  transferred, the client having followed GitHub's 301). Once A3 names the candidate otherwise,
+  every remote equal to it takes A3's name in `State.Remotes` (equal without case; the listed
+  repository shows the service's case), so the list, `ByRef`, a pull request's checkout, the create
+  form and the avatars compare one name with the service's answers; the recognised remotes and the
+  candidate stay as the URLs say, so an `Update` does not change with A3. Not covered: a renamed
+  parent reached through an `upstream` remote under its old name (plan.md's risk 36). A3's last
+  answer is kept with its candidate and the account it was read with for the hosting's life (a
+  failure is not kept), and one read in flight per candidate and account is shared; another account
+  of the candidate's provider uses neither and reads again (D383). An A3 answer whose names (the
+  repository's, the parent's, either default branch) hold the token, in any form it was sent in, is
+  the provider's `Malformed` (D382). `ReadRepositoryAsync`, which the create form calls, gives it.
+- **`RefreshPullRequestsAsync`** (D289): unless the candidate's provider's account is signed in and
+  covers it (`CanList`), nothing. One run at a time: A3 (kept), then A4 on the listed repository
+  through the session's `CallAsync` (the candidate's provider, `about` the listed repository); a
+  call during a run asks for one more, whose applied answer completes its task, and the caller's
+  cancellation ends only its wait. The answer is applied on the UI thread while the run is still the
+  tab's, the candidate is still the run's and can be listed, and the account the run asked with is
+  still held and is the one A4 was sent with (D383: another user's answer is dropped); a list then
+  writes the Debug line `{repo}: listed {n} open pull requests of {full name}` after the state's
+  `Changed`, for every provider, an address in the name written `<e-mail>` (D322, D368). A list
+  whose texts (a title, the author, both branches, the head's SHA, the repositories' names and host,
+  the page's address) hold the token is `Malformed` (D382). An unexpected exception becomes a
+  `Network` failure with the provider's "Could not reach {Name}." and a warning naming the
+  exception by its type and codes (D382), never a section left loading. The triggers, never a timer:
+  the first `Update` with a candidate that can be listed, a changed candidate, a sign-in of the
+  candidate's provider (`OnAccountChanged`), each succeeded network operation of the view model's
+  queue (auto-fetch and a create included; on GitHub the repeated read is answered 304), and the
+  section's menu.
+- **Bindings** (`HostingRules.Bindings`, D290, D359): for each provider on, none unless its account
+  is signed in with the token in hand, "Use for git over HTTPS" on and the rewrites known for the
+  last `Update`; else `CredentialBinding.Select` of the URLs git uses with the provider's
+  `CoverageOf(account key)` (D278; see "Prompts and credentials"). The hosting's `Bindings` are their
+  union in D353's order (`HostingSession.BindingsOf`), so a repository with an Azure DevOps `origin`
+  and a GitLab `upstream` binds both. The tab's network operations carry them.
 - **`ByRef`** (`HostingRules.ByRef`, D313): the open pull requests by head repository and head ref,
+  the head repository compared by the record's equality (provider, host, owner and name, without
+  case), never by its full name alone (7b design 9.7: a GitHub mirror of a GitLab head's path maps
+  nothing, and an `<organization>.visualstudio.com` remote maps a `dev.azure.com` head, one host);
   the lowest number winning and a deleted fork's mapping nothing; a local branch `refs/heads/x` maps
-  through an upstream of the same name on a GitHub remote, a remote branch through the source branch
-  of its fetch line (`RepoRefs.SourceOf`); one pass over the refs. The graph's badges, the branch
-  rows and the menus read it.
-- **`CreatePullRequestAsync`** (A5 through `CallAsync`, D293): a pull request created on the listed
-  repository goes on top of the held list at once, before the refresh that confirms it.
-- **`OnAccountChanged`**, on the UI thread: signed in, the bindings and the state again and a
-  refresh; signed out or needing sign-in, the list, its failure, `ByRef`, the avatars and the
-  bindings go, and the rewrites count as unknown until an `Update` that wants them.
-- **Avatars** (`ShowAvatarsFor(IReadOnlyCollection<AuthorCommit>)`; D252, D311, D339; design 7.9,
-  19.3): the tab gives the authors of the first 2,000 rows of its graph whose commits a GitHub
-  remote's remote-tracking branch reaches, at most 200, each with its newest such commit and that
-  remote's repository (see "Commit graph"); copied, lower-cased, one per e-mail. Signed out, nothing
-  happens. One run at a time, a call during a run folding into one more with the latest set; a run
-  applies nothing once a sign-out, the tab's close or a lost GitHub remote has moved its generation.
-  Off the UI thread: A3 (kept); the branch, the parent's default branch for a fork, else the default
-  branch; `AuthorMapStore.Plan` for the listed repository; when anything is due, one A6 with the
-  branch when the commits page is due, the due e-mails' `AuthorCommit`s as lookups and the candidate
-  (under its remotes' name and A3's) as readable, its answer taken into the map
-  (`AuthorMapStore.Merge`, which gives back the lookups not reached, all of them when A6 failed); a
-  failed A6 applies nothing. Besides the commits page, the lookups and the images, a run can send
-  A3's `GET repos/{o}/{r}` of another remote's repository, once a repository and run, after a lookup
-  there answered 404 (D395): the walk-throughs' rule that leaves out the avatars' requests by their routes
-  (`commits:` and `avatar:`) does not leave it out, and none of their scenarios sends it. Then
-  `AvatarCache.FileOfAsync` for each e-mail the
-  map links to a user, four at a time; the files found become `Avatars`. An address GitHub does not
-  know, or whose image could not be had, gets no entry and looks as before phase 7a.
+  through an upstream of the same name on a recognised remote, a remote branch through the source
+  branch of its fetch line (`RepoRefs.SourceOf`); one pass over the refs. The graph's badges, the
+  branch rows and the menus read it.
+- **`CreatePullRequestAsync`** (A5 through `CallAsync`, the base's provider, `about` the base;
+  D293): a request created on the listed repository goes on top of the held list at once, before the
+  refresh that confirms it, when the account that created it read that list and is still held
+  (D383); one whose texts hold the token is `Malformed` and is not added (D382).
+- **`OnAccountChanged(provider)`**, on the UI thread (7b design 9.7): with no provider's account
+  signed in, the rewrites count as unknown until an `Update` that wants them. A run in flight of
+  that provider whose account the provider no longer holds signed in is stopped first, also when its
+  candidate went: a sign-out stops it at once, and a sign-in that replaces the account stops it
+  after its request in flight, which the new token's check waits behind (7b design 12.9's As built).
+  The candidate's provider: A3's answer and a read in flight of another account are forgotten, and
+  so are a list and failure of another account; signed in and covering it, the bindings and the
+  state again and a refresh; else the list, its failure and `ByRef` go. Another provider's change:
+  the state and the bindings again alone. GitHub's account not signed in: the avatar run stops and
+  the avatars go (7b design 9.8).
+- **Avatars** (`ShowAvatarsFor(IReadOnlyCollection<AuthorCommit>)`; D252, D311, D339, D349, D367;
+  7a design 7.9, 19.3): GitHub's alone. They are read only while the candidate is GitHub's and
+  GitHub's account is signed in, and only authors whose repository is GitHub's are kept; else
+  nothing happens, and GitHub is asked about no other address. The tab gives the authors of the
+  first 2,000 rows of its graph whose commits a GitHub remote's remote-tracking branch reaches, at
+  most 200, each with its newest such commit and that remote's repository (see "Commit graph");
+  copied, lower-cased, one per e-mail. One run at a time, a call during a run folding into one more
+  with the latest set; a run applies nothing once GitHub's sign-out, the tab's close, or a candidate
+  that is none or another provider's has moved its generation, and each of these cancels the run in
+  flight. Off the UI thread: A3 (kept); the branch, the parent's default branch for a fork, else
+  the default branch; `AuthorMapStore.Plan` for the listed repository; when anything is due, one A6
+  (`CallGitHubAsync`) with the branch when the commits page is due, the due e-mails' `AuthorCommit`s
+  as lookups and the candidate (under its remotes' name and A3's) as readable, its answer taken into
+  the map (`AuthorMapStore.Merge`, which gives back the lookups not reached, all of them when A6
+  failed); a failed A6 applies nothing. Besides the commits page, the lookups and the images, a run
+  can send A3's `GET repos/{o}/{r}` of another remote's repository, once a repository and run, after
+  a lookup there answered 404 (D395): the walk-throughs' rule that leaves out the avatars' requests
+  by their routes (`commits:` and `avatar:`) does not leave it out, and none of their scenarios
+  sends it. Then `AvatarCache.FileOfAsync` for each e-mail the map links to a user, four at a time;
+  the files found become `Avatars`. An address GitHub does not know, or whose image could not be
+  had, gets no entry and looks as before phase 7a, as does every author of a repository whose listed
+  remote is GitLab's or Azure DevOps' (D349, D367).
 - **The e-mail maps** (`AuthorMapStore.cs`, internal; D291, D336): one per listed repository, shared
   by its tabs, in `avatars/authors/github_<host>_<owner>_<name>.json` (lower case, `:` as `_`):
   `{"fetchedAt": …, "authors": [{"email", "userId", "login", "avatarUrl", "checkedAt"}]}`, the
@@ -4198,30 +5303,53 @@ e-mail maps.
   many as the repository's 20 lookups per app session have left (the addresses passed into the one
   A6 count, those the page then answers included; design 17.1). Read from the disk at first use (an
   unreadable file is a warning and made again), written whole through `DurableFile.Replace` under
-  one lock; a sign-out drops the maps from memory but not the counts.
-- **The tab's side** (`ViewModels/RepositoryViewModel.Hosting.cs`, design 7.10): after each refs
-  read `ApplyHosting` gives the refs to `Update`, signed out with no rewrites. Signed in it gives
-  them with the user's URL rewrites as last read and reads those again (one `git config --null
-  --get-regexp ^url\.`, D281, off the UI thread; a newer read drops an older one's answer), calling
-  `Update` once more after its first read and whenever they changed; before its first read it calls
-  nothing, so it has no bindings from URLs not yet rewritten (D290). A sign-in while the tab is open
-  starts the read, and `IsWatcherQuiet` is false while one runs (`IsHostingQuiet`). A succeeded
-  network operation of the queue refreshes the pull requests. A summary-mode view model gets a real
-  hosting when a tab adopts it (`PromoteHosting`).
-- Tests: `HostingRulesTests`, `RepositoryHostingTests` (a renamed repository among them, through the
-  fake's `Rename`), `RepositoryHostingAvatarsTests`, `RepositoryHostingWiringTests`
-  (`VisualCommit.Hosting.Tests`); `RepositoryAvatarsTests` (`VisualCommit.VisualTests.Phase7a`);
-  parts P, N and G of the walk-through show them.
+  one lock; GitHub's sign-out drops the maps from memory but not the counts.
+- **The tab's side** (`ViewModels/RepositoryViewModel.Hosting.cs`, `.Avatars.cs`; 7a design 7.10,
+  7b design 9.9): after each refs read `ApplyHosting` gives the refs to `Update`, with no rewrites
+  while no account wants them. While any account is signed in it gives them with the user's URL
+  rewrites as last read and reads those again (one `git config --null --get-regexp ^url\.`, D281,
+  off the UI thread; a newer read drops an older one's answer), calling `Update` once more after its
+  first read and whenever they changed; before its first read it calls nothing, so it has no
+  bindings from URLs not yet rewritten (D290). A sign-in while the tab is open starts the read, and
+  `IsWatcherQuiet` is false while one runs (`IsHostingQuiet`). Since phase 7b a network operation
+  started while an account binds git and none of the tab's reads of the rules has answered since
+  the account began to want them (`AwaitsUrlRules`) waits for the read in flight, or reads the rules
+  itself, before it binds, and auto-fetch's tick asks the tab for the read instead of fetching
+  (`RequestUrlRules`; D388, `RepositoryOperations.BindingsOnceRulesReadAsync`, `AutoFetchScheduler`;
+  see "Operations" and "Toolbar, status bar, conflict banner and auto-fetch"). A succeeded network
+  operation of the queue refreshes the pull requests. The left panel gets the state with the key,
+  the login in the service's spelling and the state of the listed repository's provider's account
+  (`AccountOf(Repository.Provider)`; none without one). The authors are sent only while the listed
+  repository is GitHub's, and forgotten when the state is `SignedOut`, `NoHostedRemote` or
+  `OtherOrganization` or the listed repository is another provider's; `AuthorsOnGitHub` follows only
+  the remotes whose repository is GitHub's. A summary-mode view model gets a real hosting when a tab
+  adopts it (`PromoteHosting`).
+- Tests: `HostingRulesTests` (since phase 7b a GitLab `origin` listed before a GitHub `upstream`,
+  and `ByRef` by records), `RepositoryHostingTests` (a renamed repository among them, through the
+  fake's `Rename`), `RepositoryHostingAvatarsTests`, `RepositoryHostingWiringTests`; since phase 7b
+  `RepositoryHostingProvidersTests` (each provider's states, `OtherOrganization` sending nothing, a
+  sign-in to the other organization swapping two tabs' states, an `<organization>.visualstudio.com`
+  remote listed through dev.azure.com, D383's account switch, another provider's candidate giving up
+  the run and the A3 reads in flight, GitHub's avatars beside a GitLab remote) and
+  `RepositoryHostingProvidersWiringTests` (`[AvaloniaFact]`, `ShellDriver.Start` with the
+  `hosting7b` scenario's fakes on port 0: an Azure DevOps `origin` and a GitLab `upstream` both
+  bound, a fetch refreshing the listed provider's list alone, and another organization's remote
+  sending nothing and giving git no account's token) (`VisualCommit.Hosting.Tests`);
+  `RepositoryAvatarsTests` (`VisualCommit.VisualTests.Phase7a`; since phase 7b a GitLab remote
+  reaches no author); parts P, N and G of phase 7a's walk-through show them, and phase 7b's part P
+  the three providers' sections.
 
 ### Tokens and the keychains (D249, D253, D259, D268 to D272, D333)
 
-Phase 7a. `src/VisualCommit.Hosting/Tokens/`, namespace `VisualCommit.Hosting.Tokens`. A GitHub
-token is kept in this computer's keychain and never in a file (R3); where no keychain can be
-reached, or a save fails, it is kept in memory for the app session only (D253). The stores are the
-app's own: advapi32's credential calls on Windows, `/usr/bin/security` on macOS, the Secret Service
-over D-Bus on Linux (Tmds.DBus.Protocol 0.94.1). The hosting session holds the one `TokenVault`,
-over the store `AppSession.Start` was given or chose (see "Hosting: the session and the account");
-nothing else calls a store, and no request of git reads one (ruling 6).
+Phase 7a; since phase 7b for every provider's account, with no new store, vault member or variable
+(7b design 1.6). `src/VisualCommit.Hosting/Tokens/`, namespace `VisualCommit.Hosting.Tokens`. An
+account's token, GitHub's, GitLab's or Azure DevOps', is kept in this computer's keychain and never
+in a file (R3, D345); where no keychain can be reached, or a save fails, it is kept in memory for
+the app session only (D253). The stores are the app's own: advapi32's credential calls on Windows,
+`/usr/bin/security` on macOS, the Secret Service over D-Bus on Linux (Tmds.DBus.Protocol 0.94.1).
+The hosting session holds the one `TokenVault`, over the store `AppSession.Start` was given or chose
+(see "Hosting: the session and the account"), for the three providers (D357); nothing else calls a
+store, and no request of git reads one (ruling 6).
 
 | Type | Role |
 |---|---|
@@ -4232,7 +5360,7 @@ nothing else calls a store, and no request of git reads one (ruling 6).
 | `WindowsCredentialStore`, `WindowsCredentialNative` | Windows Credential Manager ("Windows Credential Manager", design 3.4): one generic credential per key, kept for the local machine (`CRED_PERSIST_LOCAL_MACHINE`), its blob the token's UTF-16LE bytes, through `CredWriteW` (which replaces an entry of the same target), `CredReadW`, `CredDeleteW` and `CredFree`, each on the thread pool. A save first asks `Fits`: a token over 1,280 characters (2,560 bytes, `CRED_MAX_CREDENTIAL_BLOB_SIZE`) is `TooLong` before any call. The probe calls `CredGetSessionTypes` and is available when the logon session keeps generic credentials at local machine, else `CannotUse`. Error 1168 is `NotFound`, 1312 (no logon session) `CannotUse`, any other `Refused`; a blob that is not whole UTF-16 is `Unreadable`. The unmanaged blob and every buffer that held the token are cleared. Off Windows every call past the length check answers `NoKeychain` |
 | `MacKeychainStore`, `ITokenProcessRunner`, `TokenProcessRunner`, `TokenProcessResult` | The macOS keychain ("macOS keychain", design 3.5) through `/usr/bin/security`, always by full path: one generic password per key, whose secret is the token's UTF-8 in base64. A save runs `security -i` and writes one line to its standard input, `add-generic-password -U -s '<service>' -a '<account>' -l '<label>' -w '<base64>'`, so the token is never an argument and the quotes hold only base64; `security -i`'s exit code after a failed command is not known, so the entry is read back and compared (another token or none is `Refused`, a read that fails gives its own reason), unless standard error said "User interaction is not allowed" (`CannotUse`) or "User canceled the operation" (an unlock dialog dismissed, `Locked`). A read is `find-generic-password -s … -a … -w`, its output strict base64 of strict UTF-8 (else `Unreadable`); a delete `delete-generic-password -s … -a …`; exit 44 or "could not be found" is `NotFound`. Each command has 60 s, since macOS may show its own unlock dialog (past it `NoAnswer`). The probe: no `security` is `NoKeychain`; else `security default-keychain -d user` within 5 s, available on exit 0 with output. A keychain file (the real-store test's) is named in every command and is available when it exists; a path holding `'`, `\` or a control character is refused. `TokenProcessRunner` starts the program with `ArgumentList` and UTF-8 streams, kills its process tree at the limit (the result then has no exit code) or on a cancel, and logs nothing; `TokenProcessResult`'s text gives the exit code only, since a read's output is the token in base64. Tests put a recording runner in its place |
 | `SecretServiceStore`, `SecretServiceOptions`, `SecretServiceLimits`, `SecretServiceAddress`, `SecretServiceCalls` | The Secret Service on Linux ("Secret Service", design 3.6, D271) through Tmds.DBus.Protocol's message reader and writer. The bus (`SecretServiceAddress.Resolve`): a non-empty `DBUS_SESSION_BUS_ADDRESS`, else `unix:path=$XDG_RUNTIME_DIR/bus` when that socket exists, else none, so a machine without a bus finds no keychain at once (never Tmds.DBus's own lookup, whose X11 fallback this store must not try). The probe connects (2 s), asks `NameHasOwner("org.freedesktop.secrets")`, else `ListActivatableNames` (5 s each), and opens and closes a `plain` session (10 s); it never unlocks, creates or reads, so it shows no dialog. Each operation opens one connection and one `plain` session, closed in `finally`; each call has 25 s and each prompt of the service (an unlock, a new collection) 120 s, past which, or on a cancel, the prompt is dismissed. A read searches every collection by four attributes (`application`, `provider`, `host`, `account`), unlocks only when only locked items match, and reads the first item's secret as strict UTF-8 (else `Unreadable`). A save goes into the `default` alias's collection, else `collection/login` when its `Locked` can be read, else a new collection "Login" made the default; it unlocks a locked one, then `CreateItem(…, replace: true)` with all five attributes, the item's path taken from the prompt's result when the call gives none. A delete searches, unlocks the locked matches and deletes every one. A dismissed prompt or `IsLocked` is `Locked`, any other error reply `Refused`, a limit `NoAnswer`, a failed connection `NoKeychain`; the secret's bytes are cleared |
-| `TokenEntryNames` | Every entry's names (design 3.3, below), all starting with the application's name and never with `git:` or `gh:`, so the app never touches an entry of Git Credential Manager or GitHub CLI. A key part that is empty or holds white space, a control character, `'` or `\` is refused before any call (`Failed`, `Refused`): it could break `security -i`'s quoting or name another entry. `ForLog(key)` gives the log's `{host}/{account}`, a control, separator or format character and `\` written as `\uXXXX` |
+| `TokenEntryNames` | Every entry's names (design 3.3, below), all starting with the application's name and never with `git:` or `gh:`, so the app never touches an entry of Git Credential Manager or GitHub CLI. A key part that is empty or holds white space, a control character, `'` or `\` is refused before any call (`Failed`, `Refused`): it could break `security -i`'s quoting or name another entry. `ForLog(key)` gives the log's `{host}/{account}`, a control, separator or format character and `\` written as `\uXXXX`. Since phase 7b the provider's name in a label or a comment is `HostingProviders.DisplayName` of the key's provider id (7b design 1.6) |
 | `TokenStoreReasons` | Why a store could not keep, read or delete a token: one of seven fixed texts that name no store and no operating system (D268), so that the Accounts section may show one and the pictures are the same on every system: `NoKeychain` "no keychain was found on this computer", `CannotUse` "the keychain cannot be used in this session", `Locked` "the keychain stayed locked", `NoAnswer` "the keychain did not answer in time", `TooLong` "the token is too long for the keychain" (Windows), `Unreadable` "the keychain's entry could not be read", `Refused` "the keychain refused it" |
 | `TokenVault` | Where the hosting session keeps tokens: memory first, the store behind it (below) |
 
@@ -4246,6 +5374,17 @@ The names of `TokenKey("github", "github.com", "octocat")`'s entry:
 
 The fake of GitHub's host gives `VisualCommit:github:127.0.0.1:47395:octocat`; the real stores'
 tests name their entries with the application `VisualCommit-test:<guid>`.
+
+Since phase 7b a GitLab account's key holds its username and an Azure DevOps account's its
+organization, both lower-cased (D357). `TokenKey("gitlab", "gitlab.com", "ada")` is named
+`VisualCommit:gitlab:gitlab.com:ada` on Windows (user `ada`, comment `GitLab token for ada, kept by
+VisualCommit`), service `VisualCommit:gitlab:gitlab.com`, account `ada` and label `VisualCommit:
+GitLab (ada)` on macOS, and `provider=gitlab`, `host=gitlab.com`, `account=ada` with the label
+`VisualCommit: GitLab token for ada` on Linux. `TokenKey("azure-devops", "dev.azure.com",
+"fernhill-labs")` is named so too: `VisualCommit:azure-devops:dev.azure.com:fernhill-labs`, comment
+`Azure DevOps token for fernhill-labs, kept by VisualCommit`, macOS label `VisualCommit: Azure
+DevOps (fernhill-labs)`, whose space is safe inside `security -i`'s quotes, and Secret Service label
+`VisualCommit: Azure DevOps token for fernhill-labs`.
 
 - **The choice** (`TokenStores.FromEnvironment(readEnvironment, log)`, D253, D269):
   `VISUALCOMMIT_KEYCHAIN` unset or empty gives the platform's store (`WindowsCredentialStore`,
@@ -4277,378 +5416,545 @@ tests name their entries with the application `VisualCommit-test:<guid>`.
     Warning "The keychain kept the entry {VisualCommit:github:github.com:octocat}: {reason}. Remove
     it by hand.". The caller's token ends its wait, never the delete.
 - **The hosting session's calls** (see "Hosting: the session and the account"): the start reads
-  the store once, and only for a record whose token state is `keychain`, so a user who never signs
-  in never touches a keychain; a sign-in keeps the token; a sign-out, and a sign-in that replaces
-  another account, forget its key, and when this run reached no keychain while the record says
-  `keychain` the session warns with the entry's name, since the entry may stay (design 19 item 2).
+  the store at most once per provider, one provider after another, and only for a record whose
+  token state is `keychain`, so a user who never signs in never touches a keychain; a sign-in keeps
+  the token under its provider's key; a sign-out, and a sign-in that replaces that provider's
+  account, forget its key, and when this run reached no keychain while the record says `keychain`
+  the session warns with the entry's name, since the entry may stay (design 19 item 2). One vault,
+  one probe and one store serve the three providers (D357).
 - **Secrets in records** (design 3.2): no token, nor its base64, in a log line, an exception's
   message, a process argument, an environment variable, a file or a `ToString()`. Each store logs
   its platform's detail itself, a failure at Warning and a success at Debug, naming the key as
   `{host}/{account}`: the Win32 error; `security`'s exit code and first error line with the token
   and its base64 replaced by `***`; the D-Bus error's name. Of an unexpected exception during a
   save, a read or a delete the macOS and Linux stores log the type alone, since its text could
-  quote what was sent.
+  quote what was sent; since phase 7b the vault's catch-alls, the Windows store's and the Secret
+  Service's probe name one by `HostingHttpClient.Describe` (its type and codes) and pass no
+  exception to the log (D382).
 - **macOS's exposure** (ruling 20, plan risk 34): an item made through `security` trusts
   `/usr/bin/security`, so any process of the user can read it through `security` without a prompt,
   as on Windows and Linux; accepted until phase 8 signs the app.
-- **Tests** (D270): in `tests/VisualCommit.Hosting.Tests/Tokens/`, `TokenEntryNamesTests`,
-  `TokenVaultTests` (a scripted store with held calls), `TokenStoresTests`,
-  `WindowsCredentialStoreTests` (`Fits` as a pure method; on Windows no call reaches the Credential
-  Manager: the only calls made are refused before it, a save that `Fits` refuses and the calls of a
-  key that cannot name an entry), `MacKeychainStoreTests` (a recording runner: the program by full
-  path, the standard input line, the read-back, the error texts) and `SecretServiceStoreTests` (the
-  address, a missing socket, a silent bus); none reaches a keychain, and each asserts that no log
-  line holds the token. The real stores' own classes, `WindowsTokenStoreRealTests`,
-  `MacKeychainTokenStoreRealTests` and `SecretServiceTokenStoreRealTests`, skip
-  (`Assert.SkipUnless`) unless `VISUALCOMMIT_KEYCHAIN_TESTS` names them (`windows`, `macos`,
-  `secret-service`): under a `VisualCommit-test:<guid>` application with dummy secrets they probe,
-  read nothing, save, read, save another, read, delete, read nothing and delete nothing, and delete
-  again in `finally` (`RealTokenStoreSteps`); Windows' also saves 1,280 characters, and macOS's
-  makes a keychain file of its own and deletes it. A default run shows four skipped tests on Windows
+- **Tests** (D270): in `tests/VisualCommit.Hosting.Tests/Tokens/`, `TokenEntryNamesTests` (since
+  phase 7b the GitLab and Azure DevOps keys' names too), `TokenVaultTests` (a scripted store with
+  held calls), `TokenStoresTests`, `WindowsCredentialStoreTests` (`Fits` as a pure method; on Windows
+  no call reaches the Credential Manager: the only calls made are refused before it, a save that
+  `Fits` refuses and the calls of a key that cannot name an entry), `MacKeychainStoreTests` (a
+  recording runner: the program by full path, the standard input line, since phase 7b the Azure
+  DevOps key's with its spaced label within its quotes, the read-back, the error texts) and
+  `SecretServiceStoreTests` (the address, a missing socket, a silent bus); none reaches a keychain,
+  and each asserts that no log line holds the token. The real stores' own classes,
+  `WindowsTokenStoreRealTests`, `MacKeychainTokenStoreRealTests` and
+  `SecretServiceTokenStoreRealTests`, skip (`Assert.SkipUnless`) unless
+  `VISUALCOMMIT_KEYCHAIN_TESTS` names them (`windows`, `macos`, `secret-service`): under a
+  `VisualCommit-test:<guid>` application with dummy secrets they probe, read nothing, save, read,
+  save another, read, delete, read nothing and delete nothing, and delete again in `finally`
+  (`RealTokenStoreSteps`); since phase 7b they also read nothing, save, read, delete and read
+  nothing for one `azure-devops` key on `dev.azure.com`, so that macOS' spaced label goes through
+  `security -i` in CI (7b design 1.10); Windows' also saves 1,280 characters, and macOS's makes a
+  keychain file of its own and deletes it. A default run shows four skipped tests on Windows
   (`WindowsCredentialStoreTests.Off_Windows_every_call_finds_no_keychain` among them, whose calls
   would reach the Credential Manager there) and three on macOS and Linux. Only CI's three keychain
   steps run the real classes, also after a failed Test step (see "CI"); on their first run the
   Windows runner kept credentials (no error 1312), so D333's fallback of taking the class off that
   job was not needed.
 
-### Clone from GitHub (D261, D299 to D302, D331)
+### Clone from an account (D261, D299 to D302, D331, D354)
 
-Phase 7a. `ViewModels/Dialogs/CloneFromGitHubDialogViewModel.cs`,
+Phase 7a, for GitHub, as "Clone from GitHub"; since phase 7b for every provider whose account is
+signed in (D354; phase 7b's design 11). `ViewModels/Dialogs/CloneFromGitHubDialogViewModel.cs`,
 `Views/Dialogs/CloneFromGitHubDialogView`, `WelcomeViewModel` (the form's button and the clone's
-binding), `MainWindowViewModel.Commands.cs` (`CloneFromGitHubAsync`),
-`ViewModels/Operations/OperationTexts.Hosting.Clone.cs` (`CloneTexts`).
+binding), `MainWindowViewModel.Commands.cs` (`CloneFromAccountAsync`),
+`ViewModels/Operations/OperationTexts.Hosting.Clone.cs` (`CloneTexts`, whose forms that take a
+provider return 7a's constants for GitHub). The types and automation ids keep 7a's `CloneFromGitHub`
+names on every provider (D362).
 
-- **The form's "From GitHub…"** (D261, D302). The clone form's URL row is a `DockPanel`:
-  `CloneFromGitHubButton` ("From GitHub…", `VcActionButton`, 6 right of the box, no tooltip) docked
-  right of `CloneUrlBox`. It shows only while the account is signed in
-  (`WelcomeViewModel.ShowsGitHubButton`; an account that needs sign-in hides it too), raised again
-  at every `AccountChanged`; collapsed it takes no room, so the form signed out or with GitHub off
-  is laid out as before. It is enabled while `CanEditClone` and runs `BrowseGitHubCommand`, an
-  `AsyncRelayCommand`, so it is drawn disabled while its browser is open. The command makes the
-  browser on the session's `ListRepositoriesAsync`, starts its load (`Start()`) before
+- **The form's button** (D261, D302, D354). The clone form's URL row is a `DockPanel`:
+  `CloneFromGitHubButton` (`VcActionButton`, 6 right of the box, no tooltip) docked right of
+  `CloneUrlBox`. It shows only while an account of any provider is signed in
+  (`WelcomeViewModel.ShowsBrowseButton`; an account that needs sign-in counts as none), and its text
+  and automation name are `BrowseButtonText`: the one signed-in provider's `CloneTexts.FromButtonOf`
+  ("From GitHub…", "From GitLab…", "From Azure DevOps…"), or "From an account…" with two or three;
+  both are raised again at every `AccountChanged`. Collapsed it takes no room, so the form signed out
+  or with every provider off is laid out as before; a wider text narrows only the URL box. It is
+  enabled while `CanEditClone` and runs `BrowseCommand` without a provider, the `AsyncRelayCommand` of
+  `BrowseAsync(provider)`, so it is drawn disabled while a browser that it or the palette opened is
+  open. `BrowseAsync` takes the signed-in providers in `HostingProviders.InAccountsOrder` (GitHub,
+  GitLab, Azure DevOps): with none, or with a provider asked that is not among them, it does nothing;
+  else it makes the browser on the session's `ListRepositoriesAsync(provider, …)`, showing the
+  provider asked or, without one, the first signed-in provider, starts its load (`Start()`) before
   `DialogHost.ShowAsync`, and on an answer, unless a clone started meanwhile, clears `ErrorText` and
-  sets `CloneUrl`, which fills the folder name unless the user typed one; the user then presses
-  Clone as for a typed URL. After "Choose" no control of the form has the keyboard focus (design 17
-  item 5; left to phase 8's keyboard pass).
-- **The browser** (`CloneFromGitHubDialog`, D301), a sibling of `PickDialogViewModel`, which stays
-  as it was. `CloneFromGitHubDialogViewModel : DialogViewModel<string?>` takes the list's delegate,
-  the log and an optional `Func<string?>` for the signed-in login, read when a failure is applied
-  (after the API's 401 the account keeps its login). `Start()` begins the one load (`Load`) on the
-  dialog's own `CancellationTokenSource`, which Cancel, Esc and `CancelAll` (D234) cancel; the
-  answer is applied on the UI thread, and one that arrives after the dialog closed changes nothing.
-  `Rows`, the rows the filter lets through in GitHub's order (most recently updated first), is
-  rebuilt in place as the pick dialog's items are; `Filter` keeps a row whose full name or detail
-  holds it, ignoring case, a selected row it hides is no longer selected, and it is enabled while
-  loading, so what it holds filters the rows when they come. A `GitHubRepositoryRow(FullName,
-  Detail, CloneUrl)`: `Detail` joins with " · " the flags `Private`, `Fork` and `Archived` (each
-  when true, in that order) and the description, its runs of white space and line ends made one
-  space (null when nothing is left); `CloneUrl` is GitHub's `clone_url` with any user part removed
-  (`GitCommand.RemoveCredentials`, ruling 5); `ToolTip` is the name, then the detail on a second
-  line. "Choose" (`ConfirmCommand`, enabled with a selection; Enter too) answers the row's
-  `CloneUrl`. Under the list one line says the list's state:
+  sets `CloneUrl`, which fills the folder name unless the user typed one; the user then presses Clone
+  as for a typed URL. After "Choose" no control of the form has the keyboard focus (design 17 item 5;
+  left to phase 8's keyboard pass).
+- **The browser** (`CloneFromGitHubDialog`, D301; since phase 7b one dialog for the signed-in
+  providers, phase 7b's design 11.4), a sibling of `PickDialogViewModel`, which stays as it was.
+  `CloneFromGitHubDialogViewModel : DialogViewModel<string?>` takes the signed-in providers, the one
+  shown first (an `ArgumentException` when it is not among them), a provider's list delegate, the log
+  and an optional `Func<HostingProvider, string?>` for a provider's signed-in login (the organization
+  on Azure DevOps), read when a failure is applied (after the API's 401 the account keeps its login);
+  7a's constructor, with GitHub's list, the log and the login, makes it for GitHub alone. `Providers`
+  are in `InAccountsOrder`, and `Provider` is the one shown; `Title` is
+  `CloneTexts.DialogTitleOf(Provider)` ("Clone from GitHub", "Clone from GitLab", "Clone from Azure
+  DevOps"), raised with it. `Start()` begins the shown provider's load. Each provider's list is asked
+  once, when it is first shown (`Load` is the shown provider's, `LoadOf(provider)` any one's), every
+  load on the dialog's one `CancellationTokenSource`, which Cancel, Esc, `CancelAll` (D234) and every
+  close, "Choose" included (a handler of its own `Closing`), cancel, so that no list goes on paging for
+  a dialog that has closed. Each provider's rows, status, error and lines are kept and shown while it
+  is; an answer is applied on the UI thread, one for a provider not shown changes nothing on screen,
+  and one that arrives after the dialog closed changes nothing. `Rows`, the rows the filter lets
+  through in the list's order (GitHub's most recently updated first, GitLab's most recently active
+  first, Azure DevOps' by name, then project, as its provider sorts them), is rebuilt in place as the
+  pick dialog's items are; `Filter` keeps a row whose full name or detail holds it, ignoring case, a
+  selected row it hides is no longer selected, and it is enabled while loading, so what it holds
+  filters the rows when they come; a switch to another provider keeps `Filter` and clears the
+  selection. A `GitHubRepositoryRow(FullName, Detail, CloneUrl)`: `FullName` is the repository's
+  `HostedRepository.FullName` (`owner/name`, GitLab's `group/sub/project`, Azure DevOps'
+  `<organization>/<project>/<repository>`); `Detail` joins with " · " the flags `Private`, `Fork` and
+  `Archived` (each when true, in that order) and the description, its runs of white space and line
+  ends made one space (null when nothing is left); `CloneUrl` is the service's clone URL with any user
+  part removed (`GitCommand.RemoveCredentials`, ruling 5), but an Azure DevOps URL whose user part is
+  exactly its organization, ignoring case and without a password, which is kept as the API gave it
+  (`<organization>@`, ruling 15); `ToolTip` is the name, then the detail on a second line. "Choose"
+  (`ConfirmCommand`, enabled with a selection; Enter too) answers the row's `CloneUrl`. Under the list
+  one line says the shown provider's list's state:
 
 | State | Line |
 |---|---|
 | Loading | `CloneFromGitHubStatus`: "Loading repositories…" |
 | Listed, none | `CloneFromGitHubStatus`: "No repositories to list" |
-| Failed | `CloneFromGitHubError`: `HostingTexts.Describe(failure, login)` (see "Pull requests", D338); a Warning `Listing GitHub repositories failed: {Kind}: {Message} (request {id})`, the request left out without an id |
+| Failed | `CloneFromGitHubError`: `HostingTexts.Describe(failure, login)` (see "Pull requests", D338); a Warning `Listing {name} repositories failed: {Kind}: {Message} (request {id})` (`CloneTexts.ListingFailedOf`; GitHub's 7a's byte for byte), the request left out without an id |
 | An exception, or neither list nor failure | `CloneFromGitHubError`: "The repositories could not be loaded.", logged as an Error |
 
-- **The browser's other lines and its view.** `CloneFromGitHubMore` ("Only the 1,000 most recently
-  updated repositories are listed.", when the provider stopped at its cap) and
-  `CloneFromGitHubSso` ("Some organisations' repositories are hidden until the token is authorised
-  for single sign-on.") follow, each only with text, all four lines in `settingsNote` but the error
-  (`dialogError`). The view copies the pick dialog's on the
-  `wide` card (460): `CloneFromGitHubTitle`; the filter `CloneFromGitHubFilter` (placeholder and
-  name "Filter", the first focus); the bordered `CloneFromGitHubList` (`MaxHeight` 232, `MinHeight`
-  58, no horizontal scroll bar: eight rows before it scrolls), its items `CloneFromGitHubItem`, 28
-  high in the pick list's colours, named by the full name with the detail as help text and the
-  tooltip above, each a `PickRowPanel` of the name and, 12 apart, the detail at 11.5 in
-  `VcTextSecondaryBrush`, cut at its end and hidden when null; `CancelButton` and `ConfirmButton`
-  ("Choose").
-- **The clone's credentials** (D331). When the account binds the URL as typed
-  (`Hosting.BindingsForClone(url)` is not empty), the clone first reads git's configuration once
-  with the settings screen's outside read (`GitSettings.ReadAsync(null)`, its local and worktree
-  entries dropped, since `git clone` applies none of a repository around its folder), applies the
-  `insteadOf` rules (`UrlRewrites`) and binds the URL git will use; a rule that rewrites it to
-  another user leaves it unbound (D82's order). A failed read binds nothing and logs one Warning
-  (`Cloning {url}: git's configuration could not be read; the clone goes without the account's
-  token.`, the URL's credentials hidden by `GitCommand.HideCredentials`); signed out nothing is
-  read. `git clone` does apply the conditional includes of the new folder and of its URL
-  (`includeIf "gitdir:"`, `"gitdir/i:"`, `"onbranch:"`, `"hasconfig:remote.*.url:"`), whose files the
-  outside read lists only as directives (fixed at phase 7b's review before the gate). For each
-  `includeif.<condition>.path` it lists, whatever the condition, `GitSettings.ReadIncludedAsync`
-  reads that file's `url.` and `includeif.` keys (`git config --file <path> --includes
-  --show-scope --show-origin -z --get-regexp ^(url|includeif)\.`, run as the outside read runs, the
-  path worked out as git does by `GitConfigIncludes.Resolve`: `~` under the home folder, a relative
-  path beside the file that holds the directive). A file git cannot read, a path the app cannot
-  work out, a conditional directive inside the file, a rule that, read right after its
-  directive, gives the URL another result than the outside rules alone, or an `insteadOf` rule of
-  the file that matches the URL with a prefix at least as long as the longest outside match (any,
-  when none matches outside) and rewrites it to another URL (another include may put that rule's
-  base first, and git breaks a tie of equal prefixes by the base it saw first) binds nothing (D82's
-  order) with one Debug line that names no path or URL (`Cloning: a conditional include of git's
-  configuration …; the clone goes without the account's token (D82's order).`); a missing file
-  counts as empty, as git ignores it. Without such a directive no further git call is made. The read runs under the clone's own cancellation, and `RunningClone` is a completed task
-  while it runs, so that no opening takes the tab. The bindings go into the clone's prompt scope
-  (`Prompts.Begin("Clone", name, PromptMode.Ask, bindings)`); what git does with them is in "Prompts
-  and credentials".
-- **The palette's "Clone from GitHub…"** (D299, D300): `AppCommand.CloneFromGitHub`, after
-  `FollowSystemTheme` so that no earlier value moves, a command without a key, listed right after
-  "Clone repository…" and only while GitHub is not off (`AppCommands.Resolve`). It runs
-  `MainWindowViewModel.CloneFromGitHubAsync`: unless an account is signed in, the window's sign-in
-  entry first (see "The settings screen"), and a cancelled or failed sign-in stops there, with no
-  tab and no form; then, as "Clone repository…", the active tab when it is empty, else a new tab at
-  the end (`TabForOpening`), opens the clone form and awaits `BrowseGitHubCommand`. Cancelling the
-  browser leaves the form open. No other palette command signs in to GitHub, and none opens
-  Accounts, in 7a (D299).
+- **The browser's other lines and its view.** `CloneFromGitHubMore` (`CloneTexts.MoreExistOf`, when the
+  provider stopped at its cap: GitHub's "Only the 1,000 most recently updated repositories are
+  listed.", GitLab's "Only the 1,000 most recently active repositories are listed."; none for Azure
+  DevOps, whose list is not paged) and `CloneFromGitHubSso` ("Some organisations' repositories are
+  hidden until the token is authorised for single sign-on.", GitHub's alone) follow, each only with
+  text, all four lines in `settingsNote` but the error (`dialogError`). The view copies the pick
+  dialog's on the `wide` card (460): `CloneFromGitHubTitle`; with two or three providers the switch,
+  12 below the title (an `ItemsControl` named `CloneFromGitHubSwitch`, outside the buttons' id prefix,
+  of `CloneProviderChoice`s: one `VcFlatButton` per provider, class `cloneProvider`, 28 high with
+  `Padding="10,0"` as the settings screen's scope switch, 4 apart, `selected` on the shown one, its
+  automation id `CloneFromGitHubProviderGitHub`, `…GitLab` or `…AzureDevOps` and its name the
+  provider's; no combo box, D216), hidden with one provider, which leaves 7a's card; the filter
+  `CloneFromGitHubFilter` (placeholder and name "Filter", the first focus; 8 below the switch while it
+  shows, class `underSwitch`, else 12 below the title); the bordered `CloneFromGitHubList`
+  (`MaxHeight` 232, `MinHeight` 58, no horizontal scroll bar: eight rows before it scrolls), its items
+  `CloneFromGitHubItem`, 28 high in the pick list's colours, named by the full name with the detail as
+  help text and the tooltip above, each a `PickRowPanel` of the name, since phase 7b cut at its start
+  (`LeadingCharacterEllipsis`, so that a nested path keeps the repository's name), and, 12 apart, the
+  detail at 11.5 in `VcTextSecondaryBrush`, cut at its end and hidden when null; `CancelButton` and
+  `ConfirmButton` ("Choose").
+- **The clone's credentials** (D331; since phase 7b every provider's, D350). When an account binds the
+  URL as typed (`Hosting.BindingsForClone(url)`, the union of the signed-in accounts' bindings in
+  `InAccountsOrder`, is not empty), the clone first reads git's configuration once with the settings
+  screen's outside read (`GitSettings.ReadAsync(null)`, its local and worktree entries dropped, since
+  `git clone` applies none of a repository around its folder), applies the `insteadOf` rules
+  (`UrlRewrites`) and binds the URL git will use; a rule that rewrites it to another user leaves it
+  unbound (D82's order). A failed read binds nothing and logs one Warning (`Cloning {url}: git's
+  configuration could not be read; the clone goes without the account's token.`, the URL's
+  credentials hidden by `GitCommand.HideCredentials`); signed out nothing is read. `git clone` does
+  apply the conditional includes of the new folder and of its URL (`includeIf "gitdir:"`,
+  `"gitdir/i:"`, `"onbranch:"`, `"hasconfig:remote.*.url:"`), whose files the outside read lists only
+  as directives (fixed at phase 7b's review before the gate). For each `includeif.<condition>.path` it
+  lists, whatever the condition, `GitSettings.ReadIncludedAsync` reads that file's `url.` and
+  `includeif.` keys (`git config --file <path> --includes --show-scope --show-origin -z --get-regexp
+  ^(url|includeif)\.`, run as the outside read runs, the path worked out as git does by
+  `GitConfigIncludes.Resolve`: `~` under the home folder, a relative path beside the file that holds
+  the directive). A file git cannot read, a path the app cannot work out, a conditional directive
+  inside the file, a rule that, read right after its directive, gives the URL another result than the
+  outside rules alone, or an `insteadOf` rule of the file that matches the URL with a prefix at least
+  as long as the longest outside match (any, when none matches outside) and rewrites it to another URL
+  (another include may put that rule's base first, and git breaks a tie of equal prefixes by the base
+  it saw first) binds nothing (D82's order) with one Debug line that names no path or URL (`Cloning: a
+  conditional include of git's configuration …; the clone goes without the account's token (D82's
+  order).`); a missing file counts as empty, as git ignores it. Without such a directive no further
+  git call is made. The read runs under the clone's own cancellation, and `RunningClone` is a
+  completed task while it runs, so that no opening takes the tab. The bindings go into the clone's
+  prompt scope (`Prompts.Begin("Clone", name, PromptMode.Ask, bindings)`); what git does with them is
+  in "Prompts and credentials". An Azure DevOps URL chosen in the browser keeps its `<organization>@`,
+  which the account's coverage binds (see "Prompts and credentials").
+- **The palette's three commands** (D299, D300, D354): `AppCommand.CloneFromGitHub`, after
+  `FollowSystemTheme` so that no earlier value moves, and since phase 7b `CloneFromGitLab` and
+  `CloneFromAzureDevOps` right after it (only the keys-only values after them moved), commands without
+  a key, listed right after "Clone repository…" in that order, each only while its provider is not off
+  (`AppCommands.Resolve`, `CloneFromAccount`): "Clone from GitHub…", "Clone from GitLab…" and "Clone
+  from Azure DevOps…" (`CloneTexts.PaletteCommandOf`). Each runs
+  `MainWindowViewModel.CloneFromAccountAsync(provider)`: unless that provider's account is signed in,
+  the window's sign-in entry for it first (see "The settings screen"), and a cancelled or failed
+  sign-in stops there, with no tab and no form; a session that ended meanwhile opens nothing
+  (`CloseAll` sets `_closed` first: a sign-in whose save failed answers true after `CancelAll` closed
+  its dialog); then, as "Clone repository…", the active tab when it is empty, else a new tab at the
+  end (`TabForOpening`), opens the clone form and awaits the form's `BrowseCommand` with the provider,
+  so that the browser opens on it and the form's button is drawn disabled under it. Cancelling the
+  browser leaves the form open. No other palette command signs in, and none opens Accounts (D299).
 - Tests: `CloneFromGitHubDialogViewModelTests`, `CloneFromGitHubDialogViewTests`,
   `HostingTextsDescribeTests` (Phase7a); `WelcomeCloneFromGitHubTests`,
   `PaletteCloneFromGitHubTests` (Hosting.Tests, D334); `AppShortcutsTests` (App); checks B1 to B9.
+  Since phase 7b `CloneFromAccountDialogViewModelTests`, `HostingTextsDescribeProvidersTests`
+  (Phase7b); `CloneFromAccountTests` (Hosting.Tests); phase 7b's checks B1 to B8.
 
-### Pull requests (D251, D303 to D318, D338)
+### Pull requests (D251, D303 to D318, D338, D351, D355, D356, D361, D366)
 
-Phase 7a. The left panel's "Pull requests" section, the branch rows' `#n`, a pull request's
-actions and checkout, and a new pull request. The graph's badge is in "Commit graph", the menus'
-items in "Context menus", the status bar's offer in "Toolbar, status bar, conflict banner and
-auto-fetch". Files: `ViewModels/Panels/PullRequestRows.cs` and `LeftPanelViewModel.cs`,
+Phase 7a, for GitHub; since phase 7b for the listed repository's provider, GitHub, GitLab or Azure
+DevOps (phase 7b's design 12 and 13). The left panel's "Pull requests" section, the branch rows'
+number, a request's actions and checkout, and a new request. The graph's badge is in "Commit graph",
+the menus' items in "Context menus", the status bar's offer in "Toolbar, status bar, conflict banner
+and auto-fetch". Files: `ViewModels/Panels/PullRequestRows.cs` and `LeftPanelViewModel.cs`,
 `Views/Shell/LeftPanelView`, `ViewModels/Hosting/PullRequestCheckout.cs`,
 `ViewModels/Menus/RepositoryMenus.Hosting.cs`,
 `ViewModels/Operations/RepositoryOperations.PullRequests.cs` and `.CreatePullRequest.cs`,
 `ViewModels/Dialogs/CreatePullRequestDialogViewModel.cs`,
 `Views/Dialogs/CreatePullRequestDialogView`, the texts `OperationTexts.Hosting.PullRequests.cs` and
-`OperationTexts.Hosting.Create.cs`, and `ViewModels/Hosting/HostingTexts.cs` and
-`HostingTexts.Describe.cs`.
+`OperationTexts.Hosting.Create.cs`, and `ViewModels/Hosting/HostingTexts.cs`,
+`HostingTexts.Describe.cs` and, since phase 7b, `HostingTexts.Provider.cs`. The types, members and
+automation ids keep 7a's `PullRequest` names on every provider (D362).
 
+- **Each provider's words** (D351, D355, D362). A text that names a provider takes `p`, the listed
+  repository's provider (or a request's base repository's), and its words from `HostingTexts`:
+  `Name` ("GitHub", "GitLab", "Azure DevOps"), `Possessive`, `Request` and `Requests` ("pull request",
+  GitLab's "merge request"), `RequestTitle`, `RequestsTitle` ("Pull requests", GitLab's "Merge
+  requests") and `Number` (GitHub's `#12`, GitLab's and Azure DevOps' `!12`). Each text of
+  `OperationTexts.Hosting.PullRequests.cs` and `.Create.cs` that names a provider has a form that
+  takes `p` first and returns 7a's text for GitHub, word for word; below `{P}`, `{R}`, `{Rs}`,
+  `{RT}`, `{RsT}` and `{N}` stand for those words, and an example without a provider is GitHub's.
 - **What they show.** `RepositoryViewModel.HostingState`, a `RepositoryHostingState` (the section's
-  state `PullRequests`: `NotGitHub`, `SignedOut`, `Loading`, `Failed` or `Loaded`; the `List` with
-  `MoreExist`; `ByRef`, each open pull request by its branch's full ref name, a local branch only
-  through an upstream of the same name, D313; the GitHub `Remotes`, the listed `Repository` and the
-  `Failure`), is the hosting's state as last applied on the UI thread; how the hosting lists and
-  refreshes it is in "Hosting: a repository's pull requests and avatars". At every change the tab
-  passes it to its left panel (`LeftPanel.UpdatePullRequests(state, account)`, not in summary mode),
-  the graph binds its `ByRef`, and `MenuContext.Hosting` carries it for the menus (null while
-  `NotGitHub`). A repository without a GitHub remote, and every tab while GitHub is off, stays
-  `NotGitHub`: its panel, graph and menus are as before phase 7a.
+  state `PullRequests`: `NoHostedRemote` (7a's `NotGitHub`), `SignedOut`, `Loading`, `Failed`,
+  `Loaded` or, since phase 7b, `OtherOrganization`, the listed remote an Azure DevOps remote of
+  another organization than the held account's (D356, D366); the `List` with `MoreExist`; `ByRef`,
+  each open request of the listed provider by its branch's full ref name, a local branch only
+  through an upstream of the same name, D313; the recognised `Remotes`, of any provider;
+  `RequestRemotes`, those of the listed repository's provider and host, on Azure DevOps of its
+  organization too, where a request can go, empty while `OtherOrganization`; the listed
+  `Repository`, while `OtherOrganization` the remote's; and the `Failure`), is the hosting's state as
+  last applied on the UI thread; how the hosting lists and refreshes it is in "Hosting: a
+  repository's pull requests and avatars". At every change the tab passes it to its left panel
+  (`LeftPanel.UpdatePullRequests(state, account, accountLogin, accountState)`: the listed provider's
+  account's key, its login in the server's spelling and its state; not in summary mode), the graph
+  binds its `ByRef`, and `MenuContext.Hosting` carries it for the menus (null while
+  `NoHostedRemote`). A repository without a remote that a provider which is on recognises, and every
+  tab while all three are off, stays `NoHostedRemote`: its panel, graph and menus are as before phase
+  7a.
 
-**The section** (D303). `LeftPanelViewModel.HostingState` is `NotGitHub` until the first
-`UpdatePullRequests`, so a panel that never had hosting is phase 1's. `AddPullRequests` builds the
-section:
+**The section** (D303; since phase 7b ruling 24, D356, D366). `LeftPanelViewModel.HostingState` is
+`NoHostedRemote` until the first `UpdatePullRequests`, so a panel that never had hosting is phase 1's.
+`AddPullRequests` builds the section, its key `section:PullRequests` in every state and its title
+`HostingTexts.RequestsTitle(p)` whenever the state has a listed repository ("Merge requests" on
+GitLab), else "Pull requests":
 
 | State | Header (`section:PullRequests`) | Rows while open, at depth 1 |
 |---|---|---|
-| `NotGitHub` | phase 1's: closed, 0, `CanToggle` false | none |
-| `SignedOut` | 0 | `Sign in to GitHub to see pull requests…`, clickable |
-| `Loading`, no list | 0 | `Loading pull requests…` |
+| `NoHostedRemote` | phase 1's: "Pull requests", closed, 0, `CanToggle` false | none |
+| `SignedOut` | 0 | `Sign in to {P} to see {Rs}…` (`Sign in to GitHub to see pull requests…`, `Sign in to GitLab to see merge requests…`), clickable |
+| `OtherOrganization` (D356) | 0 | one row that takes no click: `In {organization}; signed in to {account}`, or while that account needs sign-in (D366) `In {organization}; the account for {account} needs sign-in`; its tooltip says why nothing is asked and how to see the requests (`This repository is in the Azure DevOps organization {organization}; the signed-in account is in {account}, so nothing is asked of Azure DevOps for it. To see its pull requests, sign out and sign in to {organization} in Settings, Accounts.`, or with `the account VisualCommit holds is in {account} and needs signing in again`) |
+| `Loading`, no list | 0 | `Loading {Rs}…` |
 | `Loading`, a list (the state's or the kept one) | the matches | the rows and no message: a refresh does not flicker |
-| `Failed` | the kept list's matches, else 0 | `HostingTexts.Describe(failure, null)` as it is (its tooltip that text and GitHub's `Detail` on a second line), then the kept rows |
-| `Loaded`, none open | 0 | `No open pull requests` |
-| `Loaded` | the matches | the matching rows, newest first, then `More than 300 open pull requests` when the list stopped at 300 |
+| `Failed` | the kept list's matches, else 0 | `HostingTexts.Describe(failure, null)` as it is (its tooltip that text and the failure's `Detail` on a second line), then the kept rows |
+| `Loaded`, none open | 0 | `No open {Rs}` |
+| `Loaded` | the matches | the matching rows, newest first, then `More than 300 open {Rs}` when the list stopped at 300 |
 
-- With a GitHub remote the header opens and closes as the other sections' do, open at first.
-  Message rows show while filtering too; a pull request matches when its `#n`, title, author or head
-  label holds the filter, ignoring case. The panel keeps the last list it showed (`_keptList`),
-  tagged with its repository and the account that listed it (design 17 item 3, ruling 23): a
-  loading or failed refresh of that repository with that account shows its rows, while the hosting's
-  state then holds no list; a sign-out, no GitHub remote, another repository or another account
-  drops it.
-- **Rows** (`PullRequestRows.cs`). `PullRequestRow : RefListRow` (key `pr:{n}`, text `#{n}
-  {title}`) holds the `PullRequest`, `NumberText`, `Title`, `Author` (empty when GitHub gave none),
-  `IsDraft`, `HeadLabel` (the branch, `{owner}:{branch}` for a fork, the branch alone for a deleted
-  fork), `TargetSha` (the head) and `ToolTip` (`#1 Add the login form`, then `{author} · {head
-  label} → {base ref}`, the author left out when there is none, and ` · Draft` for a draft), and the
-  observable `IsSelected`. `PullRequestMessageRow` (key `pr-message:{Kind}`, `PullRequestMessageKind`
-  `SignIn`, `Loading`, `Failed`, `None` or `More`) holds `Text` and `ToolTip` (the "more" row's says
-  "Open pull requests in browser"); only `SignIn` and `More` can be activated. `ShowsSameAs`
+- With a hosted remote the header opens and closes as the other sections' do, open at first.
+  Message rows show while filtering too; a request matches when its number as its provider writes it
+  (`#n`; `!n` on GitLab and Azure DevOps, so that `21` and `!21` match there and `#21` does not),
+  title, author or head label holds the filter, ignoring case. The panel keeps the last list it
+  showed (`_keptList`), tagged with its repository and the account that listed it (design 17 item 3,
+  ruling 23): a loading or failed refresh of that repository with that account shows its rows, while
+  the hosting's state then holds no list; a sign-out, no hosted remote, `OtherOrganization`, another
+  repository or another account drops it. In D356's row `{organization}` is the listed remote's
+  organization as written (`OwnerRoot`) and `{account}` the account's login in its own case (the
+  key's, which `AccountKey` lower-cases, when none is given); the state offers no list and no
+  sign-in, and nothing is asked of Azure DevOps for that remote (D350).
+- **Rows** (`PullRequestRows.cs`). `PullRequestRow : RefListRow` (key `pr:{n}`, text
+  `RequestHeader(p, n, title)`: `#1 Add the login form`, GitLab's `!21 Add the search box`) holds the
+  `PullRequest`, `Provider` (its base repository's), `NumberText` (`#1`, `!21`), `Title`, `Author`
+  (empty when the service gave none), `IsDraft`, `HeadLabel` (the branch; a fork's
+  `PullRequestRow.BranchLabelOf(head repository, branch, base repository)`, which the create form
+  also uses: GitHub's and GitLab's `{owner}:{branch}`, GitLab's owner its namespace path
+  (`northfield/team:fix-typo`), Azure DevOps' `{name}:{branch}`, a fork being in its base's
+  organization, or `{project}/{name}:{branch}` when the fork is in another project than the base;
+  the branch alone for a deleted fork or one the service does not name), `TargetSha` (the head) and
+  `ToolTip` (`#1 Add the login form`, then `{author} · {head label} → {base ref}`, the author left
+  out when there is none, and ` · Draft` for a draft), and the observable `IsSelected`.
+  `PullRequestMessageRow` (key `pr-message:{Kind}`, `PullRequestMessageKind` `SignIn`, `Loading`,
+  `Failed`, `None`, `More` or, since phase 7b, `OtherOrganization`) holds `Text` and `ToolTip` (the
+  "more" row's says "Open {Rs} in browser"); only `SignIn` and `More` can be activated. `ShowsSameAs`
   compares every shown member, so a rebuild replaces only rows that changed. In `LeftPanelView` both
   templates are `RefRowButton`s 26 high, with the indent and the chevron's 18 px: `PullRequestItem`
   (named by its text, no `RefDrag.Source`, so no drag starts there) docks at its right the author
   (`PullRequestAuthor`, at most 90, cut with "…") and `Draft` (`PullRequestDraft`, a draft only), at
-  its left `#1` (`PullRequestNumber`), all three in the secondary colour, then the title
+  its left the number (`PullRequestNumber`), all three in the secondary colour, then the title
   (`PullRequestTitle`), which is cut first; its tooltip lies on the row's `DockPanel`.
   `PullRequestMessage` holds `PullRequestMessageText`, secondary and cut with "…"; a row that takes
   no click is a disabled button, which keeps its look and, through `ToolTip.ShowOnDisabled`, its
-  tooltip. No new token or icon.
-- **Click, double-click, menu** (D304). A click on a pull request selects and reveals its head
-  commit (`RefActivated(HeadSha)`), and the row keeps the selection background while the graph's
-  single selection is that commit (`SyncSelection`, D98): the panel's one selected key spans
-  branches, tags, stashes and `pr:` keys (`MarkSelected`), and `TargetOf` and `Update` know a listed
-  pull request's key, so the selection survives `Update` and `UpdatePullRequests`. A head that is no
-  row of the graph (a fork's head not fetched) selects nothing (`NothingActivated`, FD19's rule); a
-  pull request no longer listed is no longer selected. A click on the sign-in or "more" row of the
-  active repository's panel goes, through a `Button.ClickEvent` handler on `RefList`, to
-  `RepositoryViewModel.ActivatePullRequestMessage`: the sign-in row runs the window's sign-in entry
-  (see "The settings screen"), the "more" row opens the list in the browser. A double-click checks
-  the pull request out as its menu's item does, unless that item would be disabled
+  tooltip. No new token or icon; phase 7b changed neither view.
+- **Click, double-click, menu** (D304). A click on a request selects and reveals its head commit
+  (`RefActivated(HeadSha)`), and the row keeps the selection background while the graph's single
+  selection is that commit (`SyncSelection`, D98): the panel's one selected key spans branches, tags,
+  stashes and `pr:` keys (`MarkSelected`), and `TargetOf` and `Update` know a listed request's key, so
+  the selection survives `Update` and `UpdatePullRequests`. A head that is no row of the graph (a
+  fork's head not fetched) selects nothing (`NothingActivated`, FD19's rule); on Azure DevOps the head
+  is the source commit of the service's last merge (`lastMergeSourceCommit`), which may lag the
+  branch's tip, so a click can select an older commit, and a request without it selects nothing
+  (phase 7b's design 12.9); a request no longer listed is no longer selected. A click on the sign-in
+  or "more" row of the active repository's panel goes, through a `Button.ClickEvent` handler on `RefList`, to
+  `RepositoryViewModel.ActivatePullRequestMessage`: the sign-in row signs in to the listed
+  repository's provider (`IRepositoryActions.SignInToHostAsync`, the window's sign-in entry, see "The
+  settings screen"), the "more" row opens the list in the browser; D356's row takes no click. A
+  double-click checks the request out as its menu's item does, unless that item would be disabled
   (`DoubleTapRefRow`). `RefRowTarget.PullRequest` opens `ForPullRequest`; the section's header is
-  `RefRowTarget.Section` with a GitHub remote and `None` without one (`TargetOf`). The palette lists
-  every listed pull request's items (see "The command palette").
-- **The branch row's `#n`** (D308). `RefItemRow` takes an optional `(Number, Title)` for a local or
-  remote branch whose full name `HostingState.ByRef` holds: `RefPullRequest` (`#1`, classes
-  `secondary count`, 6 after the name, left of the toggles and counts, tooltip `Pull request #1: Add
-  the login form`), docked right before `RefName`, so the name is cut first. Collapsed without a
-  pull request, it takes no room, and no earlier row changes.
+  `RefRowTarget.Section` with a hosted remote and `None` without one, and D356's row is `None`
+  (`TargetOf`). The palette lists every listed request's items (see "The command palette").
+- **The branch row's number** (D308, D355). `RefItemRow` takes the open `PullRequest?` of a local or
+  remote branch whose full name `HostingState.ByRef` holds: `RefPullRequest` (its provider's number,
+  `#1` or `!21`, classes `secondary count`, 6 after the name, left of the toggles and counts, tooltip
+  `RequestOfBranch`: `Pull request #1: Add the login form`, GitLab's `Merge request !21: Add the search
+  box`), docked right before `RefName`, so the name is cut first. Collapsed without a request, it
+  takes no room, and no earlier row changes. `ByRef` holds the listed provider's requests alone, so a
+  branch of another provider's remote (GitHub's `upstream` beside a listed GitLab `origin`) shows
+  none.
 - **The actions** (`RepositoryOperations.PullRequests.cs`, D251, D307). "Open in browser" hands the
-  pull request's `HtmlUrl` to `IFileLauncher.OpenUrlAsync` and "Copy link" puts it on the
-  clipboard, neither an operation, a failure logged. `IFileLauncher.OpenUrlAsync` (since phase 7a)
-  opens only an absolute `http` or `https` address (else `ArgumentException`, from
+  request's `HtmlUrl` to `IFileLauncher.OpenUrlAsync` and "Copy link" puts it on the clipboard,
+  neither an operation, a failure logged. `IFileLauncher.OpenUrlAsync` (since phase 7a) opens only an
+  absolute `http` or `https` address (else `ArgumentException`, from
   `FileLauncher.ThrowIfNotWebAddress`, which the tests' fake shares) through Avalonia's
   `TopLevel.Launcher.LaunchUriAsync` on the UI thread, and logs a Warning when the system could not
-  open it; it is the app's only way into the default browser (D321). "Refresh pull requests" runs
-  the hosting's refresh outside the queue, a failure logged as a Warning. "Open pull requests in
-  browser" opens `{web base}{owner}/{name}/pulls` of the listed repository (a fork's parent), else of
-  the first GitHub remote's in `HostingRemoteOrder`, also signed out, asking GitHub nothing (D257);
-  an Info line when neither is known. "Sign in to GitHub…" runs `TabServices.SignInToGitHub`.
-- **Checkout** (D305). `PullRequestCheckout.Plan(state, refs, pullRequest)` is pure; the menu, the
-  double-click and the operation share it. Remotes are tried in `HostingRemoteOrder`; two
-  repositories are the same when host and full name are equal ignoring case. (1) The head on a
-  remote: the first remote of the head's repository whose `refs/remotes/{r}/{head ref}` its fetch
-  lines map from that remote's `refs/heads/{head ref}`: label `Check out {local}`, the ref's local
-  name, disabled "{local} is already checked out" while HEAD is on it; it runs phase 3's checkout of
-  that remote branch (a tracking branch, D93, D201), after phase 3's fetch of that remote when the
-  ref is not read yet, and only if the ref then exists. (2) Otherwise from the base's remote, the
-  first whose repository is the base: label `Check out {owner}:{head ref}` (`{head ref}` alone for a
-  deleted fork, whose owner is then `pr-{n}`); without a remote for the base the item is disabled
-  with `Add a remote for {owner/name} to check out this pull request` (a fork cloned without its
-  parent; there is no fetch by URL). The local name is the first of `{head ref}`, `{owner}-{head
-  ref}`, `{owner}-{head ref}-2`, `-3`, … that no local branch takes or conflicts with as a path or in
-  another case, or a local branch of that exact name already at the head, which is reused: its
-  checkout alone, disabled while it is current. A new name runs the network operation "Fetch pull
-  request #n" (`Fetching pull request #n from {remote}…`, `RefreshScope.Refs`, undo
-  `UndoScope.CreateBranch`): `Git.FetchToFetchHeadAsync(remote, "refs/pull/{n}/head")`, which reads
-  its own line of `FETCH_HEAD` and gives null when another fetch rewrote it (see "Git layer"), then
-  `CreateBranchAsync` without upstream at that SHA, reported `Fetched #5 into fix-typo`; a null fails
-  it with `Another fetch changed FETCH_HEAD; try again.` and creates no branch. On success phase 3's
-  checkout of the new branch follows as its own operation, with its automatic stash, detached-HEAD
-  question, blocked dialog and undo. No `refs/pull` fetch line and no `refs/remotes/<r>/pr/<n>` ref
-  is ever written. A plan with a reason does nothing when it runs (a stale menu) and logs an Info
-  line.
-- **A new pull request: how it starts** (`RepositoryOperations.CreatePullRequestAsync(headRef,
-  baseRef)`, D313). From a branch's or a drop's "Create pull request…" (see "Context menus"), on the
-  UI thread: without a GitHub remote nothing starts (an Info line); signed out, the window's sign-in
-  entry comes first, and a refused or cancelled one stops it; the head, from the refs now, must be a
-  local branch or a remote branch of a GitHub remote that its fetch line maps from a branch (else an
-  Info line). The form's side is `PullRequestForm : ICreatePullRequestActions`, a private class of
-  `RepositoryOperations`; the form itself never runs git or HTTP. The form opens with the head's tip's
-  subject as its title (`ReadSubjectAsync`, empty without one) and, for a drop, the target as its
-  base (a GitHub remote's branch, or a local branch whose upstream is a GitHub remote's branch of the
-  same name; else an Info line and no form), through `ShowDialogAsync`, which names the repository
-  when dialogs do; its answer is not used.
-- **The head's place on GitHub** (D313), computed from the refs when the form opens, again at every
-  Create and after every outcome but a success, never kept from before (design 19 item 4). A remote
-  branch: its remote's repository and branch, never pushed. A local branch `x` whose upstream is a
-  branch of a GitHub remote under the same name: that repository and branch, pushed first to its
-  upstream without `--set-upstream` while it is ahead (`2 commits are not on GitHub yet: Create
-  pushes them to origin/feature first.`) or its upstream is gone (`origin/feature is gone: Create
-  pushes the branch to it again first.`). Any other local branch: the first GitHub remote in
-  `HostingRemoteOrder`, under its own name; without an upstream it is always pushed first with
-  `--set-upstream` (`Not on GitHub yet: Create pushes it to origin/local-work first and sets that as
-  its upstream.`); with an upstream elsewhere (a local one, another host's, a GitHub branch of
-  another name, as "Create branch here" on `origin/main` makes) the upstream is left as it is, and
-  the branch is pushed only when that remote lacks it (`Not on GitHub yet: Create pushes it to
-  origin/topic first.`) or lacks commits of it, which `Git.CountCommitsAsync` counts only when the
-  remote branch exists and is not at the branch's tip. That note is the form's `HeadNote()`, null
-  when GitHub has the head as it is.
+  open it; it is the app's only way into the default browser (D321). "Refresh {Rs}" runs the
+  hosting's refresh outside the queue, a failure logged as a Warning. "Open {Rs} in browser" opens
+  the provider's `IHostingProvider.PullRequestsPage` of the listed repository (a fork's parent; while
+  `OtherOrganization` the remote's, D376), else of the first remote of `RequestRemotes` in
+  `HostingRemoteOrder`, also signed out, asking the service nothing (D257): GitHub's `{web
+  base}{owner}/{name}/pulls`, GitLab's `{web base}{path}/-/merge_requests`, Azure DevOps' repository
+  page followed by `/pullrequests`; an Info line (`… the repository has no hosted remote.`) when
+  neither is known. "Sign in to {P}…" runs `SignInToHostAsync`: the window's sign-in entry
+  (`TabServices.SignIn`) for the listed repository's provider; nothing without a hosted remote or
+  while `OtherOrganization`.
+- **Checkout** (D305; since phase 7b D361). `PullRequestCheckout.Plan(state, refs, pullRequest)` is
+  pure; the menu, the double-click and the operation share it. The remotes of `RequestRemotes` are
+  tried in `HostingRemoteOrder`; two repositories are the same when provider, host and full name are
+  equal ignoring case. (1) The head on a remote, on every provider: the first remote of the head's
+  repository whose `refs/remotes/{r}/{head ref}` its fetch lines map from that remote's
+  `refs/heads/{head ref}`: label `Check out {local}`, the ref's local name, disabled "{local} is
+  already checked out" while HEAD is on it; it runs phase 3's checkout of that remote branch (a
+  tracking branch, D93, D201), after phase 3's fetch of that remote when the ref is not read yet, and
+  only if the ref then exists. (2) Otherwise, on GitHub and GitLab, from the base's remote, the first
+  whose repository is the base, through the request's head ref (`PullRequestRefs.HeadOf`: GitHub's
+  `refs/pull/{n}/head`, GitLab's `refs/merge-requests/{iid}/head`, which gitlab.com keeps in the
+  target project for a fork's request too): label `Check out {label}`, the head's `BranchLabelOf`
+  (`{owner}:{head ref}`, GitLab's owner its namespace path) or `{head ref}` alone without a head
+  repository (a deleted fork, whose owner is then `pr-{n}`, on GitLab `mr-{iid}`); without a remote
+  for the base the item is disabled with `Add a remote for {full name} to check out this {R}` (a fork
+  cloned without its parent; there is no fetch by URL). The local name is the first of `{head ref}`,
+  `{owner}-{head ref}`, `{owner}-{head ref}-2`, `-3`, … (GitLab's owner with each `/` made `-`) that
+  no local branch takes or conflicts with as a path or in another case, or a local branch of that
+  exact name already at the head, which is reused: its checkout alone, disabled while it is current.
+  A new name runs the network operation "Fetch {R} {N}" (`Fetching pull request #n from {remote}…`,
+  GitLab's `Fetching merge request !n from {remote}…`, `RefreshScope.Refs`, undo
+  `UndoScope.CreateBranch`): `Git.FetchToFetchHeadAsync(remote, head ref)`, which reads its own line
+  of `FETCH_HEAD` and gives null when another fetch rewrote it (see "Git layer"), then
+  `CreateBranchAsync` without upstream at that SHA, reported `Fetched #5 into fix-typo` (`Fetched !23
+  into …` on GitLab); a null fails it with `Another fetch changed FETCH_HEAD; try again.` and creates
+  no branch. On success phase 3's checkout of the new branch follows as its own operation, with its
+  automatic stash, detached-HEAD question, blocked dialog and undo. (3) Azure DevOps has no head ref
+  (D361): a request that step 1 does not place is never fetched, and nothing is asked of the service
+  for it; its plan is disabled, labelled `Check out {head label}` as its row names the head, with
+  `{remote} does not fetch {branch}` (`NotFetchedBy`) when its head repository is a remote here whose
+  fetch lines leave the branch out, `Azure DevOps names no repository for this pull request's branch`
+  (`HeadNotNamed`) when the service names no head repository, else `Add a remote for {fork's full
+  name} to check out this pull request`. No `refs/pull` or `refs/merge-requests` fetch line and no
+  `refs/remotes/<r>/pr/<n>` ref is ever written. A plan with a reason does nothing when it runs (a
+  stale menu) and logs an Info line. A tab's checkouts of requests run one at a time, each planned
+  once the one before has ended, from the refs it left, so that a second request of the same head
+  reuses or names anew the branch the first made; the same request started again while its checkout
+  waits or runs (two double-clicks on its row) starts nothing (Info `{repo}: checking out {R} {N}: not
+  started, its checkout is running.`).
+- **A new request: how it starts** (`RepositoryOperations.CreatePullRequestAsync(headRef, baseRef)`,
+  D313; phase 7b's design 13.3). From a branch's or a drop's "Create {R}…" (see "Context menus"), on
+  the UI thread, `p` being the listed repository's provider: without a hosted remote, or while
+  `OtherOrganization` (D350, D356), nothing starts (an Info line); signed out, the window's sign-in
+  entry for `p` comes first, and a refused or cancelled one stops it, as does one that leaves the
+  listed repository outside the Azure DevOps account's organization (read from the session's account
+  through the provider's `Covers`, since the hosting's state follows the account only through posts
+  that have not run yet); the head, from the refs now, must be a local branch or a remote branch of a
+  remote of `RequestRemotes` that its fetch line maps from a branch of that remote (else an Info
+  line). Head and base are so on the listed provider, on Azure DevOps in its organization: a GitLab
+  head never meets a GitHub base. The form's side is `PullRequestForm : ICreatePullRequestActions`, a
+  private class of `RepositoryOperations`, made with `p`, which it gives the form as `Provider`; the
+  form itself never runs git or HTTP. The form opens with the head's tip's subject as its title
+  (`ReadSubjectAsync`, empty without one) and, for a drop, the target as its base (a remote branch of
+  a remote of `RequestRemotes`, or a local branch whose upstream is such a remote's branch of the same
+  name; else an Info line and no form), through `ShowDialogAsync`, which names the repository when
+  dialogs do; its answer is not used.
+- **The head's place on the provider** (D313), computed from the refs when the form opens, again at
+  every Create and after every outcome but a success, never kept from before (design 19 item 4). A
+  remote branch: its remote's repository and branch, never pushed. A local branch `x` whose upstream
+  is a branch of a remote of `RequestRemotes` under the same name: that repository and branch, pushed
+  first to its upstream without `--set-upstream` while it is ahead (`2 commits are not on GitHub yet:
+  Create pushes them to origin/feature first.`) or its upstream is gone (`origin/feature is gone:
+  Create pushes the branch to it again first.`). Any other local branch: the first remote of
+  `RequestRemotes` in `HostingRemoteOrder`, under its own name; without an upstream it is always
+  pushed first with `--set-upstream` (`Not on GitHub yet: Create pushes it to origin/local-work first
+  and sets that as its upstream.`); with an upstream elsewhere (a local one, another host's, a branch
+  of another name on the provider, as "Create branch here" on `origin/main` makes) the upstream is
+  left as it is, and the branch is pushed only when that remote lacks it (`Not on GitHub yet: Create
+  pushes it to origin/topic first.`) or lacks commits of it, which `Git.CountCommitsAsync` counts
+  only when the remote branch exists and is not at the branch's tip. Each note but the gone
+  upstream's, which names no provider, names `p` (`Not on GitLab yet: …`, `2 commits are not on
+  GitLab yet: …`). That note is the form's `HeadNote()`, null when the provider has the head as it
+  is.
 - **The bases** (D318). Without a drop's base, the default comes from `StartAsync`: A3 of the
   hosting (`Hosting.ReadRepositoryAsync`), the parent's default branch for a fork, else the
-  repository's own, shown as the remote branch of the remote that is that repository when the refs
-  hold it, else as `owner:branch` (`octo:main`); a failed read leaves Into empty, with the failure in
-  `HostingTexts.Describe`'s words on the error line. "Choose…" stacks phase 6's Pick dialog ("Choose
-  the branch to merge into", D104; Esc closes the Pick only) over every remote branch of a GitHub
-  remote that its fetch line maps from a branch, in the refs' order, each with its repository as its
-  detail, and, when no GitHub remote is the listed repository (a fork cloned without its parent),
-  that repository's default branch as `owner:branch`. A `PullRequestEnd(Text, Repository)` carries
-  `Branch`, GitHub's name of the branch, for the POST and for `IsSameBranch`: head and base one
-  branch of one repository is refused in the form before GitHub is asked.
-- **The form** (`CreatePullRequestDialogViewModel : DialogViewModel<bool>`, true when created).
+  repository's own, shown as the remote branch of the remote of `RequestRemotes` that is that
+  repository when the refs hold it, else as its `BranchLabelOf` label (`octo:main`; Azure DevOps'
+  `{name}:{branch}`); a failed read leaves Into empty, with the failure in `HostingTexts.Describe`'s
+  words on the error line. "Choose…" stacks phase 6's Pick dialog ("Choose the branch to merge
+  into", D104; Esc closes the Pick only) over every remote branch of a remote of `RequestRemotes`
+  that its fetch line maps from a branch, in the refs' order, each with its repository as its
+  detail, and, when no such remote is the listed repository (a fork cloned without its parent), that
+  repository's default branch, labelled so. A `PullRequestEnd(Text, Repository)` carries `Branch`,
+  the provider's name of the branch, for the POST and for `IsSameBranch`, and since phase 7b
+  `Hosted`, the repository as a record, set wherever the operations make an end: `IsSameBranch`, the
+  base's repository at Create (still a remote of `RequestRemotes`, or the listed repository) and the
+  re-read's match compare records, never full names, while an end's equality leaves `Hosted` out (as
+  7a's tests compare ends). Head and base one branch of one repository is refused in the form before
+  the provider is asked.
+- **The form** (`CreatePullRequestDialogViewModel : DialogViewModel<bool>`, true when created), worded
+  for `ICreatePullRequestActions.Provider` (`p`; GitHub by default, so that 7a's test fakes need
+  none): its title is `DialogTitleOf(p)` ("Create pull request", GitLab's "Create merge request").
   States: loading (`StartAsync` on the form's own token, which Cancel, Esc and `CancelAll` cancel;
-  Into reads `Reading GitHub…` in the secondary colour; a base chosen meanwhile wins; a drop's
-  given base skips it), ready, creating (`IsCreating`: every control disabled, Create reads
-  `Creating…`, Esc ignored), failed (the error line, the controls enabled again, the head's note
-  read again) and done. Changing the title, the description, the base or Draft clears the error
-  line and the existing pull request's button; `Choose a branch other than {branch} to merge into.`
-  stays while the base is the head's own branch. Create runs when not creating, with a base, a title
-  that is not blank and not the same branch; its disabled reason is its tooltip
-  (`ToolTip.ShowOnDisabled`: `Choose the branch to merge into.`, the same branch's text, `Enter a
-  title.`). The title and the description are sent with trailing white space trimmed; nothing else
-  is checked locally. The form's Cancel (`CancelFormCommand`) closes it when idle; while creating it
-  is enabled only inside the create's cancel window, the push (`ICreatePullRequestActions.
-  CanCancelCreate`, design 17 item 8), where it cancels the operation through
-  `RunOptions.Cancellation` and the form stays open with `Cancelled before the pull request was
-  created.`: the status bar's Cancel lies under the form's backdrop (D69).
-- **Its view** (`CreatePullRequestDialog`, the `wide` card, 460, about 386 high, centred): the title
-  `CreatePullRequestDialogTitle` ("Create pull request") and `DialogRepository` when shown; a grid of
-  48 and the rest with "From" (`PullRequestHead`, at most 220 and cut, its whole name as tooltip;
-  `PullRequestHeadRepository` in the secondary colour; under them `PullRequestHeadNote`) and "Into"
-  (`PullRequestBase`, `PullRequestBaseRepository` and `PullRequestBaseChooseButton` "Choose…", as
-  the merge tool's row); `PullRequestTitle` (32 high, placeholder and name "Title", the first focus
+  Into reads `Reading {P}…`, `Reading GitHub…`, in the secondary colour; a base chosen meanwhile
+  wins; a drop's given base skips it), ready, creating (`IsCreating`: every control disabled, Create
+  reads `Creating…`, Esc ignored), failed (the error line, the controls enabled again, the head's
+  note read again) and done. Changing the title, the description, the base or Draft clears the error
+  line and the existing request's button; `Choose a branch other than {branch} to merge into.` stays
+  while the base is the head's own branch. Create runs when not creating, with a base, a title that
+  is not blank and not the same branch; its disabled reason is its tooltip (`ToolTip.ShowOnDisabled`:
+  `Choose the branch to merge into.`, the same branch's text, `Enter a title.`). The title and the
+  description are sent with trailing white space trimmed; nothing else is checked locally. On GitLab
+  the form has two lines more, which the other providers' forms lack: while Draft is ticked
+  `SentTitle`, `Title on GitLab: {title}` with the title as GitLab's provider sends it
+  (`GitLabProvider.TitleFor(title.TrimEnd(), true)`: `Draft: ` before it unless it starts with
+  `Draft:`, `[Draft]` or `(Draft)` in any case), so that one rule shows and sends it (ruling 20); and
+  `QuickActionsNote`, `GitLab runs quick actions in the description, such as /close.`, since the
+  description goes as typed. The form's Cancel (`CancelFormCommand`) closes it when idle; while
+  creating it is enabled only inside the create's cancel window, the push
+  (`ICreatePullRequestActions.CanCancelCreate`, design 17 item 8), where it cancels the operation
+  through `RunOptions.Cancellation` and the form stays open with `Cancelled before the pull request was
+  created.` (`CancelledOf(p)`: the merge request on GitLab): the status bar's Cancel lies under the
+  form's backdrop (D69).
+- **Its view** (`CreatePullRequestDialog`, the `wide` card, 460, about 386 high on GitHub, centred):
+  the title `CreatePullRequestDialogTitle` and `DialogRepository` when shown; a grid of 48 and the
+  rest with "From" (a `DockPanel` sized to its content, `HorizontalAlignment="Left"`:
+  `PullRequestHead` docked left, at most 220 and cut, its whole name as tooltip, then
+  `PullRequestHeadRepository` 8 after it in the secondary colour; under them `PullRequestHeadNote`)
+  and "Into" (a `DockPanel` likewise: `PullRequestBase` docked left, `PullRequestBaseChooseButton`
+  "Choose…" docked right, and `PullRequestBaseRepository` between them, 8 from each, as the merge
+  tool's row). Since phase 7b each repository text is a `RowRepositoryText` (the view's code-behind:
+  a `TextBlock`, styled as one): past its column it is cut with "…" (`CharacterEllipsis`), its whole
+  text as its tooltip, and once cut it measures the whole room its row leaves it, so that a text that
+  fits lays out where 7a's `StackPanel`s with `Spacing="8"` put it and a cut one ends at the column's
+  right (ruling 3). Then `PullRequestTitle` (32 high, placeholder and name "Title", the first focus
   with the caret at its end; Enter creates); `PullRequestDescription` (120 high, wrapping, accepting
-  Return; Mod+Enter creates, D215); `PullRequestDraft` ("Draft", unticked); `PullRequestError`
-  (`dialogError`); `PullRequestOpenExisting` ("Open pull request #n", after a 422 that found the
-  pull request open: it opens it and closes the form with false); `CancelButton` and `ConfirmButton`
-  ("Create", `VcPrimaryButton`). Existing tokens only.
-- **The operation** (D312, D314, D315, D316). `PullRequestForm.CreateAsync` runs one operation of
-  the queue, `Create pull request for {head}` (the local branch's name, or the remote branch's,
+  Return; Mod+Enter creates, D215); on GitLab `PullRequestQuickActionsNote` (`settingsNote`, 4 below
+  it); `PullRequestDraft` ("Draft", unticked); on GitLab while Draft is ticked `PullRequestSentTitle`
+  (`settingsNote`, 4 below it); `PullRequestError` (`dialogError`); `PullRequestOpenExisting` ("Open
+  {R} {N}", after an "already exists" refusal that found the request open: it opens it and closes the
+  form with false); `CancelButton` and `ConfirmButton` ("Create", `VcPrimaryButton`). Existing tokens
+  only.
+- **The operation** (D312, D314, D315, D316; phase 7b's design 13.5). `PullRequestForm.CreateAsync`
+  runs one operation of the queue, `Create {R} for {head}` (`Create pull request for topic`, GitLab's
+  `Create merge request for topic`; the local branch's name, or the remote branch's,
   `origin/topic/no-pr`): `OperationKind.Network`, so the hosting's refresh follows it (see "Hosting:
-  a repository's pull requests and avatars"); `RefreshScope.Refs` when it pushes, else `None`;
+  a repository's pull requests and avatars") and, started inside D290's window, it binds once the URL
+  rules are known (D388, see "Operations"); `RefreshScope.Refs` when it pushes, else `None`;
   `PromptMode.Ask`, `ShowsErrorDialog = false`, no dedupe key, and when it pushes the undo entry of
   any push (`UndoScope.Push`, D314); the create itself has none. Pushing, its running text is the
   push's from the start, and it runs the guards a push to a remote runs (`RefuseIfNotABranch`,
   `RefuseIfPushStopsFetchAsync`), then `Git.PushAsync` with the tab's bindings (see "Prompts and
-  credentials"). Then `Creating pull request…` and `EndCancelWindow()` (D315): Cancel is offered
-  during the push only, and the POST (`Hosting.CreatePullRequestAsync`; a head in another repository
-  than the base, a fork's, with its owner) runs to its answer or its 30-s limit with
-  `CancellationToken.None`. Created: the list is read again when the base is the listed repository
-  (the section and the badge follow), and the report `Created pull request #9` (`Created draft pull
-  request #9`) carries the status bar's offer "Open in browser" (D317); the browser never opens by
-  itself. A 422 "A pull request already exists" reads the list again and gives `Pull request #1 is
-  already open from feature/login into origin/main.` with "Open pull request #1" when it is open; a
-  `Network` or `ServerError` failure, after which the POST may have arrived, reads the list again
-  and counts a pull request from the head into the base that was not listed before as created
-  (D316). Every failure's words go to the form's error line (D312). In the report a guard's refusal
-  is the guard's own and git's failure of the push is git's, as for any push; a failure of GitHub's
-  is a stopped failure with the form's words. A failure of git's or GitHub's makes the status bar
-  say "Create pull request for topic failed" in `VcDangerBrush`; git's output stays in the activity
-  log. Nothing of it holds the UI thread; the window's close waits for the operation, and
-  `CancelAll` closes the form, never the operation.
+  credentials"). Then `Creating {R}…` and `EndCancelWindow()` (D315): Cancel is offered during the
+  push only, and the POST (`Hosting.CreatePullRequestAsync` with a `NewPullRequest`; a head in another
+  repository than the base, a fork's, with its owner as `HeadOwner` and, since phase 7b, the
+  repository as `HeadRepository`, which GitHub's provider does not read, GitLab's posts to and Azure
+  DevOps' sends as the fork source) runs to its answer or its 30-s limit with
+  `CancellationToken.None`. Before the POST the form makes sure a list is held (D316): with none, it
+  waits alone for the read in flight until the hosting's state leaves `Loading` (the tab's closing
+  ends the wait), or with none in flight reads the list once. Created: the list is read again when
+  the base is the listed repository (the section and the badge follow), and the report `Created
+  {draft }{R} {N}` (`Created pull request #9`, `Created draft merge request !24`; the draft the box's
+  on GitHub, the answer's elsewhere, so that a GitLab title typed `Draft: x` without the box is a
+  draft) carries the status bar's offer "Open in browser" (D317); the browser never opens by itself.
+  A refusal is read from the failure's `Refusal`, then its kind, never from the service's words,
+  which are only shown: `AlreadyExists` reads the list again and gives `{RT} {N} is already open from
+  {head} into {base}.` with "Open {R} {N}" when it is open; a `Network` or `ServerError` failure,
+  after which the POST may have arrived, reads the list again and counts as created a request from
+  the head into the base that the list held before the POST did not have, and, when no list was
+  held before it, offers one found then as open ("Open {R} {N}"), never as created (D316). Every
+  failure's words go to the form's error line (D312). In the report a guard's refusal is the guard's
+  own and git's failure of the push is git's, as for any push; a failure of the provider's is a
+  stopped failure with the form's words. A failure of git's or the provider's makes the status bar
+  say "Create {R} for topic failed" in `VcDangerBrush`; git's output stays in the activity log.
+  Nothing of it holds the UI thread; the window's close waits for the operation, and `CancelAll`
+  closes the form, never the operation.
 
 | When | The form's error line |
 |---|---|
-| Cancelled during the push | `Cancelled before the pull request was created.` |
+| Cancelled during the push | `Cancelled before the pull request was created.` (`… the merge request …` on GitLab) |
 | A push guard refused | the guard's own summary |
 | The push rejected | `OperationTexts.PushRejected(remote, branch)` |
-| Git's credentials refused during the push (`RefusedAccount`) | `OperationTexts.GitCredentialsRefused(login)` (D276, D330) |
+| Git's credentials refused during the push (`RefusedAccount`) | `OperationTexts.GitCredentialsRefused(provider, login)`, the refused account's provider and login (D276, D330) |
 | Any other git failure of the push | `Git could not push topic to origin/topic: {line}`, the first line of git's cleaned output that is neither a pack line nor `To {url}` (`PushReportLine`) |
-| 422, already open and found in the list | `Pull request #1 is already open from feature/login into origin/main.` |
-| 422 "No commits between" | `origin/main already has every commit of topic: there is nothing to merge.` |
-| 422 "head is invalid" | `GitHub does not accept me:topic as the branch to merge from. It must be in octo/hello or in a fork of it.` |
-| 422 "base is invalid" | `GitHub has no branch release in octo/hello. Choose another branch to merge into.` |
-| Any other 422, or "already exists" not found | GitHub's words, `{Message}: {Detail}` or the message alone (ruling 15) |
-| 403, head and base in different repositories | `GitHub refused to create a pull request in octo/hello with this token. A fine-grained token cannot open pull requests in another owner's repository; sign in with a classic token that has the repo scope to do that.` |
-| Any other 403 | `GitHub refused to create a pull request in octo/hello with this token.`, and ` It needs the permission pull_requests=write.` when GitHub named it |
-| 404 | `This account cannot see octo/hello on GitHub.` |
-| Anything else, a 401 included | `HostingTexts.Describe(failure, login)` |
+| `AlreadyExists`, the request found open in the list read again | `Pull request #1 is already open from feature/login into origin/main.` (`Merge request !21 is already open from …` on GitLab) |
+| `AlreadyExists` not found, or any other `Validation` | the provider's words, `{Message}: {Detail}` or the message alone (ruling 15) |
+| `NoCommits` (GitHub's) | `origin/main already has every commit of topic: there is nothing to merge.` |
+| `HeadMissing` on GitHub | `GitHub does not accept me:topic as the branch to merge from. It must be in octo/hello or in a fork of it.` |
+| `HeadMissing` on GitLab or Azure DevOps | `GitLab has no branch topic in northfield/platform/web-app to merge from. Fetch, then try again.` |
+| `BaseMissing` | `GitHub has no branch release in octo/hello. Choose another branch to merge into.`, with the provider's name |
+| `BranchesMissing` (the service names neither alone) | `{P} cannot find {head branch} or {base branch}. Fetch, then try again.` |
+| `Forbidden` on GitHub, head and base in different repositories | `GitHub refused to create a pull request in octo/hello with this token. A fine-grained token cannot open pull requests in another owner's repository; sign in with a classic token that has the repo scope to do that.` |
+| Any other `Forbidden` | `{P} refused to create a {R} in {repository} with this token.`, and with the failure's `Detail` GitHub's ` It needs the permission pull_requests=write.` or GitLab's ` It needs the api scope, or Merge Request: Create.` |
+| `NotFound` | `This account cannot see octo/hello on GitHub.`, with the provider's name |
+| `Network` or `ServerError` not counted as created, and anything else, a 401 included | `HostingTexts.Describe(failure, login)` |
 
-- Logged: Info `{repo}: Create pull request for {head}: into {owner/name} {branch}, draft yes|no,
-  push to {target} first` (or `no push`) and `… created #{n} in {owner/name}.`; a Warning with the
-  failed request's kind, GitHub's message and request id; an Info line for each create not started.
-  Neither the title nor the description is logged, nor a token, a request or a response.
-- **One wording of GitHub's failures** (D338). `HostingTexts.Describe(failure, login)` is the text
-  the browser, the section's failed row and the form show: `Network` as it is (the client's fixed
-  texts, D284); `BadCredentials` as `OperationTexts.TokenRefused(login)` with a login, else the
-  message and `Sign in to GitHub in Settings, Accounts.`; `RateLimited` with the time to try again
-  after (`RetryAt` in local time, `HH:mm`) or "in a few minutes"; `SsoRequired` naming the
-  organisation after `orgs/` in the detail's URL, else "The organisation"; the app's fixed sentences
-  for `ApiVersion`, `ServerError` and `Malformed`; `GitHub answered: {message}.` for the rest. The
-  sign-in dialog keeps its own texts. `HostingTexts` holds the texts that more than one part shows
-  ("GitHub", "Accounts", "this computer's keychain", "Add GitHub account", "Sign in to GitHub…",
-  "Sign in to GitHub in Settings, Accounts."); each part's others are in
-  `OperationTexts.Hosting.<Area>.cs`.
+- On GitLab and Azure DevOps, with head and base in different repositories, the `Forbidden` and
+  `NotFound` lines name both, `{head repository} or {base repository}`: those services read the
+  head's repository first and do not tell which read failed.
+- Logged: Info `{repo}: Create {R} for {head}: into {owner/name} {branch}, draft yes|no, push to
+  {target} first` (or `no push`) and `… created {N} in {owner/name}.`; a Warning `{repo}: Create {R}
+  for {head}: the request to create it failed: {Kind}, {message} (request {id})`; an Info line for
+  each create not started (`… not started, the repository has no hosted remote.`, `… the signed-in
+  account is in another organization.`, `… it is no branch {P} can hold.`, `… {base} is no branch on
+  {P}.`). Neither the title nor the description is logged, nor a token, a request or a response.
+- **One wording of a provider's failures** (D338; since phase 7b phase 7b's design 11.2).
+  `HostingTexts.Describe(failure, login)` is the text the browser, the section's failed row and the
+  form show, in the words of `failure.Provider`; `login` is the signed-in account's (the organization
+  on Azure DevOps), or null. GitHub's are 7a's byte for byte: `Network` as it is (the client's fixed
+  texts, D284); `BadCredentials` as `OperationTexts.TokenRefused(p, login)` with a login (`GitHub
+  refused the token of {login}. Sign in to GitHub in Settings, Accounts.`), else the message and `Sign
+  in to GitHub in Settings, Accounts.`; `RateLimited` with the time to try again after (`RetryAt` in
+  local time, `HH:mm`) or "in a few minutes"; `SsoRequired` naming the organisation after `orgs/` in
+  the detail's URL, else "The organisation"; the app's fixed sentences for `ApiVersion`,
+  `ServerError` and `Malformed`; `GitHub answered: {message}.` for the rest. GitLab's and Azure
+  DevOps' take their name in the same forms (`Sign in to GitLab in Settings, Accounts.`, `GitLab's
+  rate limit was reached. …`, `This version of VisualCommit needs an update to work with GitLab.`,
+  `Azure DevOps had a problem. Try again later.`, `GitLab's answer could not be read.`, `GitLab
+  answered: {message}.`), an `SsoRequired` among the rest; an empty message, as Azure DevOps' empty
+  401 gives, reads `Sign in to Azure DevOps in Settings, Accounts.` alone for `BadCredentials` and
+  `Azure DevOps answered without a reason.` for the rest. The sign-in dialogs keep their own texts.
+  `HostingTexts` holds the texts that more than one part shows ("GitHub", "Accounts", "this
+  computer's keychain", "Add GitHub account", "Sign in to GitHub…", "Sign in to GitHub in Settings,
+  Accounts.") and, in `HostingTexts.Provider.cs`, each provider's words (`Name`, `Possessive`,
+  `Request`, `Requests`, `RequestTitle`, `RequestsTitle`, `Number`, `AddAccountTitleOf`,
+  `SignInToItemOf`, `SignInInSettingsOf`); each part's others are in `OperationTexts.Hosting.<Area>.cs`.
 - Tests: `PullRequestSectionTests`, `LeftPanelPullRequestsViewTests`, `PullRequestCheckoutTests`,
   `RepositoryMenusHostingTests`, `CreatePullRequestDialogViewModelTests`, `StatusBarOfferTests`,
   `HostingTextsDescribeTests` (Phase7a); `PullRequestOperationsTests`,
   `CreatePullRequestOperationTests` (Hosting.Tests, D334); `PullRequestFetchHeadTests` (App);
   `GitRepositoryPullRequestsTests`, `OperationQueueOfferTests` (Git); checks P1 to P15 and N1 to N10.
+  Since phase 7b `RequestSectionProvidersTests`, `RequestCheckoutProvidersTests`,
+  `RepositoryMenusProvidersTests`, `GraphRequestBadgeTests`, `CreateRequestDialogProvidersTests`,
+  `HostingTextsDescribeProvidersTests` (Phase7b); `RequestOperationsProvidersTests`,
+  `CreateRequestOperationProvidersTests`, `RepositoryHostingProvidersWiringTests`,
+  `SignInBindingsWindowTests` (Hosting.Tests); `GitRepositoryPullRequestsTests` with GitLab's
+  `refs/merge-requests/<iid>/head` (Git); phase 7b's checks P1 to P14 and N1 to N9.
 
 ### Q1 measurements (D50)
 
@@ -4672,15 +5978,23 @@ measured 1,826 ms, with the graph's frames after the load at a 95th percentile o
 longest of 9.8 ms. Phase 5 left the graph's command unchanged when nothing is hidden or soloed
 (D178).
 
+Phase 6's gate measured 1,805 ms. At phase 7a's gate a pass at 02:18, while other programs'
+scheduled tasks ran, measured 2,456 ms, over the limit, and the pass run again after a 10-minute
+rest 1,400 ms, its 459 frames after the load at a 95th percentile of 1.3 ms and a longest of
+21.2 ms (plan risk 10). At phase 7b's gate the pass, started straight after the default run without
+a rest, measured 1,827 ms, its 459 frames at a 95th percentile of 1 ms and a longest of 10 ms. Phase
+7b changed neither the lines nor how the pass reads them.
+
 ### Settings, session, log and data folder
 
 - `AppPaths` (Core) names everything in the data folder: `settings.json`, `session.json` and
   `logs/`, since phase 6 `workspaces.json` (`WorkspacesFile`, D189) and `merge-tools.json`
   (`MergeToolsFile`, the kept list of merge tools, D202), and since phase 7a `accounts.json`
-  (`AccountsFile`, the hosting account's record, never its token, D287) and `avatars/`
-  (`AvatarsDirectory`: the avatars' images and `index.json`, and the e-mail maps in `authors/`;
-  D286, D291). `AppPaths.Resolve()` uses `VISUALCOMMIT_DATA_DIR` when it is set, otherwise the
-  per-user folder (`%APPDATA%\VisualCommit`, `~/Library/Application Support/VisualCommit`,
+  (`AccountsFile`, the hosting accounts' records, since phase 7b one per provider, never a token,
+  D287, D357) and `avatars/` (`AvatarsDirectory`: GitHub's avatars' images and `index.json`, and
+  the e-mail maps in `authors/`; D286, D291, D349). Phase 7b added no path. `AppPaths.Resolve()`
+  uses `VISUALCOMMIT_DATA_DIR` when it is set, otherwise the per-user folder
+  (`%APPDATA%\VisualCommit`, `~/Library/Application Support/VisualCommit`,
   `~/.config/VisualCommit`).
 - `AppSettings` (Core) is an immutable record of preferences: `Theme`, `FileList` (D44),
   `DiffMode` (D61), `AutoFetchMinutes` (default 5, 0 turns auto-fetch off; no screen sets it
@@ -4694,8 +6008,9 @@ longest of 9.8 ms. Phase 5 left the graph's command unchanged when nothing is hi
   still load; a setting missing from `settings.json` gets its
   default (`JsonSettingsStore` lays the file's values over the defaults' JSON before reading it,
   D107), not 0 or false. `ISettingsStore.Update(settings => settings with { ... })` changes and
-  saves it. Phase 7a added no setting: "Use for git over HTTPS", which the settings screen's
-  Accounts section saves, is the account's, in `accounts.json` (D255, D287).
+  saves it. Phase 7a added no setting, and neither did phase 7b: "Use for git over HTTPS", which the
+  settings screen's Accounts section saves for each provider, is each account's, in its record in
+  `accounts.json` (D255, D287, D350).
 - `SessionState` (Core) is what changes as the app is used (D46): `Tabs` and `ActiveTab`,
   `Recent`, `Window` (`WindowPlacement`: position, client size, maximised) and the panels'
   preferred widths. `JsonSessionStore` (App) keeps it like the settings: written through a
@@ -4707,13 +6022,14 @@ longest of 9.8 ms. Phase 5 left the graph's command unchanged when nothing is hi
   see "Solo and hide"); an older file without them still loads. The undo histories are not kept:
   they last for the app's session (D154). Phase 6 added `TabState.WorkspaceId`: a dashboard tab is
   kept as `TabState(null, WorkspaceId)` (see "Workspaces"); the workspaces themselves are in
-  `workspaces.json`, never in the session (D189). Phase 7a added nothing to the session.
-- Since phase 7a (D287, D291, D292): `accounts.json` holds the GitHub account's record (an
-  unreadable file is set aside as `accounts.unreadable.json`), and `avatars/` the avatars' images,
-  their `index.json` and the e-mail maps; see "Hosting: the session and the account", "Hosting: a
+  `workspaces.json`, never in the session (D189). Phase 7a and phase 7b added nothing to the session.
+- Since phase 7a (D287, D291, D292): `accounts.json` holds the hosting accounts' records, since
+  phase 7b one per provider, GitHub's, GitLab's and Azure DevOps' (D348, D357; an unreadable file
+  is set aside as `accounts.unreadable.json`), and `avatars/` GitHub's avatars' images, their
+  `index.json` and the e-mail maps (D349); see "Hosting: the session and the account", "Hosting: a
   repository's pull requests and avatars" (the e-mail maps) and "Hosting: the provider and GitHub's
-  API". A sign-out deletes `avatars/` whole and removes the record. No file of the data folder ever
-  holds a token (the tests' `TokenTripwire`, see "The fake of GitHub").
+  API". A sign-out removes its provider's record; GitHub's also deletes `avatars/` whole. No file of
+  the data folder ever holds a token (the tests' `TokenTripwire`, see "The fake of GitHub").
 - `JsonSettingsStore` (App) writes camel-case JSON with enums as text, through a temporary file,
   so a crash cannot leave half a file. Since phase 6 every file of the app's own (`settings.json`,
   `session.json`, `workspaces.json`, `merge-tools.json`, and since phase 7a `accounts.json`,
@@ -4730,7 +6046,7 @@ longest of 9.8 ms. Phase 5 left the graph's command unchanged when nothing is hi
   instances can share it. Files older than 14 days are deleted at start-up. A log that cannot
   write never throws. `Close()` (at the session's end) makes it write nothing more. An entry's
   exception is written whole after its line. What the hosting writes there, and never, is in
-  "Hosting: the session and the account".
+  "Hosting: the session and the account" and "Hosting: the shared HTTP core".
 
 ### Shell and views
 
@@ -4741,7 +6057,7 @@ region is a `UserControl` in `Views/Shell`.
 |---|---|---|---|---|
 | Repo tabs | `RepoTabsView` | 36 high | `RepoTabs` | Real: one tab per repository (`RepoTab` buttons named by title, `CloseTabButton`), and "+" (`AddRepoButton`, since phase 6 named "Open a new tab") for a new tab. Since phase 6 a dashboard's tab first (`DashboardTab`, `TabIcon` `IconWorkspace`, `ItemStatus` `Workspace`), and the tabs laid out by `RepoTabStripPanel` (D228): they keep 120 to 220 while they and "+" fit, then the widest shrink first down to 80, then they scroll with the active tab whole in view and "+" at the right end (a wheel notch 80, no arrow buttons) |
 | Toolbar | `ToolbarView` | 52 high | `Toolbar` | `FetchButton`, `PullButton`, `PushButton`, `BranchButton`, `StashButton`, `PopButton` are real (see "Toolbar, status bar, conflict banner and auto-fetch"); since phase 5 `UndoButton`, `RedoButton` and `SearchButton` too, with their tooltips as automation help text; since phase 6 `SettingsButton` at the start of the right group, every button's tooltip as help text and its key as `AcceleratorKey`. `ThemeSwitch` works |
-| Left panel | `LeftPanelView` | 260 wide by default; 180 to 520; hidden on a dashboard tab | `LeftPanel` | Real: `FilterBox` and the list `RefList` (`Section`, `RefItem`), with menus, double-clicks and branch drags, and since phase 5 the marks of hidden and soloed branches (`RefHiddenToggle`, `RefSoloToggle`); since phase 7a, with a GitHub remote, the "Pull requests" section's rows (`PullRequestItem` with `PullRequestNumber`, `PullRequestTitle`, `PullRequestDraft`, `PullRequestAuthor`; `PullRequestMessage`) and a branch row's `RefPullRequest`, see "Pull requests"; without one "Pull requests" stays phase 1's closed, empty header |
+| Left panel | `LeftPanelView` | 260 wide by default; 180 to 520; hidden on a dashboard tab | `LeftPanel` | Real: `FilterBox` and the list `RefList` (`Section`, `RefItem`), with menus, double-clicks and branch drags, and since phase 5 the marks of hidden and soloed branches (`RefHiddenToggle`, `RefSoloToggle`); since phase 7a, with a hosted remote (since phase 7b of any provider, the section titled "Merge requests" on GitLab), the "Pull requests" section's rows (`PullRequestItem` with `PullRequestNumber`, `PullRequestTitle`, `PullRequestDraft`, `PullRequestAuthor`; `PullRequestMessage`) and a branch row's `RefPullRequest`, see "Pull requests"; without one "Pull requests" stays phase 1's closed, empty header |
 | Commit graph | `CommitGraphView` | The rest; at least 320; while the resolver is open, the right panel's column too; on a dashboard tab all three columns | `CommitGraph` | Real: `WelcomeView` (`OpenRepoButton`, `CloneRepoButton`, `InitRepoButton`, the clone form, since phase 7a with `CloneFromGitHubButton` while signed in, since phase 6 the Workspaces section `WorkspacesHeading`, `NewWorkspaceButton`, `WorkspaceList`, `WorkspaceItem`, `NoWorkspacesText`, `WorkspacesNotice`), since phase 6 `DashboardView` (`Dashboard` and its parts, see "The dashboard tab") and `TabWaitingText`, `RepositoryGraphView` (`GraphRows`, `GraphScrollBar`, and since phase 5 the search bar `SearchBar` with `SearchModeButton`, `SearchBox`, `SearchCount`, `SearchProgress`, `SearchPrevious`, `SearchNext`, `SearchClose`, and `GraphReloading`), or in its place `InteractiveRebaseView` (`InteractiveRebaseView`, `RebaseRow`, …), `DiffView` (`DiffView`, `DiffText`, see "Diff view"), `ConflictResolverView` (`ConflictResolver`, `ConflictOurs`, `ConflictTheirs`, `ConflictResult`, …, see "The graph area") or a page of phase 5 (`FileHistory`, `Blame`, `Reflog` and their parts); above any of them, while one shows, `ConflictBanner` (`BannerText`, `BannerContinueButton`, `BannerSkipButton`, `BannerAbortButton`); under them, while the window has it open, the activity log (`ActivityLogSplitter`, `ActivityLog` with `ActivityLogHeader`, `ActivityLogShowReads`, `ActivityLogClose`, `ActivityLogList`, `ActivityLogOperation`, `ActivityLogCall`, `ActivityLogOutput`) |
 | Right panel | `RightPanelView` or `WorkingChangesView` | 400 wide by default; 280 to 720; hidden while the resolver is open and on a dashboard tab | `RightPanel` or `StagePanel` | Real: commit details (`DetailsSubject`, `ParentLink`, `FlatFilesButton`, `TreeFilesButton`, `ChangedFilesTitle`, `FileList` with `ChangedFile` rows, and since phase 5 `AllFilesButton`; since phase 7a `DetailsAuthorAvatar` before `DetailsAuthor`), `CompareView` while two commits are selected or branches are compared (`Compare`, `CompareFrom`, `CompareTo`, `CompareSwap`, `CompareClose`, `CompareAllDifferences`, `CompareCounts`, `CompareFileList`), `MultiSelectionView` while three or more are selected, or the placeholder; while the working-changes row is selected, the stage panel (`UnstagedFileList` and `StagedFileList` with `StageFileRow` rows and their `RowStageButton`, `RowDiscardButton`, `RowUnstageButton`; `CommitSummary`, `CommitDescription`, `AmendCheckBox`, `CommitButton`, which reads "Continue …" during a list or a rebase, `RestoreBar`) |
 | Status bar | `StatusBarView` | 26 high | `StatusBar` | `CurrentBranch`, `GitStatus`, `OperationStatus`, `OperationProgress`, `OperationCancelButton` and `OperationWaiting` are real, and since phase 5 `ActivityLogToggle`; since phase 6 `StatusWorkspaceIcon` before the workspace's name on a dashboard tab; since phase 7a `OperationOfferButton` after `OperationStatus` while a result carries an offer (see "Toolbar, status bar, conflict banner and auto-fetch") |
@@ -4771,7 +6087,9 @@ region is a `UserControl` in `Views/Shell`.
   event (a dashboard's reads, Q4).
 - Since phase 6 a dashboard tab shows `DashboardView` across the three columns (see "Repository
   tabs"); the palette and the settings screen are dialogs of the dialog layer, and since phase 7a so
-  are "Add GitHub account", "Clone from GitHub" and "Create pull request".
+  are "Add GitHub account", "Clone from GitHub" and "Create pull request", since phase 7b each
+  provider's ("Add GitLab account", "Clone from Azure DevOps", "Create merge request" and the
+  others).
 
 Custom controls, in `Controls/`:
 
@@ -4950,6 +6268,14 @@ and dialogs have files of their own, `Theme/Menus.axaml` and `Theme/Dialogs.axam
   (`TabServices.FileExists`) and the settings screen's program checks run on the thread pool.
 - Since phase 6 the app's own files are written through `DurableFile` (D236), and a
   `workspaces.json` that cannot be read is never written over (D203).
+- Since phase 7b a text that names a hosting service takes the provider's name, its word for a
+  request ("pull request", GitLab's "merge request", D351) and its number notation (GitHub's `#12`,
+  the others' `!12`, D355) from one place: `HostingTexts` in the App (`HostingTexts.Provider.cs`),
+  `HostingProviders` in Core and Hosting. GitHub's texts keep 7a's words, through 7a's constants
+  where 7a has one (D362). Automation ids stay 7a's on the surfaces that now name their provider;
+  only the Accounts section's blocks (`AccountsGitHub`, `AccountsGitLab`, `AccountsAzureDevOps`,
+  whose inner ids end in the provider's name but GitHub's, which keep 7a's) and the repository
+  browser's provider switch (`CloneFromGitHubProvider<provider>`) have ids per provider (D362).
 
 ### Tests
 
@@ -4959,25 +6285,25 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 |---|---|---|
 | `TempDirectory` | `tests/VisualCommit.Testing` | A folder under the system temp folder, deleted on dispose |
 | `TempRepo` | same | Builds a real git repo for a test, cut off from the machine's git configuration, with a fixed author and a clock that advances one minute per commit, so the same steps give the same SHAs everywhere; `user.name` and `user.email` in the repo's own configuration give the app's commits an identity (D72). Helpers for text and byte files, commits, branches, tags (lightweight and annotated), merges, stashes, a bare remote next to the repo and pushes; `CopyAsync` makes an independent copy with its remotes pointed at the copy (http URLs left alone, linked worktrees joined to the copy) and a clock that carries on from the template's; anything else goes through `GitAsync`, `GitWithInputAsync` or `GitAllowingFailureAsync` (a step meant to stop). Phase 3 added `ConfigAsync`, `RefTargetAsync`, `BackupRefsAsync`, `StashListAsync`, `CloneSiblingAsync` and `OpenSibling` (siblings share the clock), `IsolatedEnvironment(home)`, `ClockTime` and `MoveClockTo` (forward only, for a step that must look newer in the reflog than an app operation, D111). Its git calls drop the machine's askpass, ssh and proxy variables too (D116), and since phase 4 run with `GIT_EDITOR=:` and `GIT_SEQUENCE_EDITOR=:`, so that a step such as `git rebase --continue` never starts the machine's editor (D151); `GitWithEnvironmentAsync(extra, args)` and its "allowing failure" twin add variables for one call (a sequence editor that writes a todo) and keep the clock's dates. Phase 5's speed-ups (`7e7d99d`), which every test project gets: a repository is a copy of a blank git folder that `git init` and the repository settings made once per test process and initial branch (a bare remote likewise), which saves six git processes per repository; a commit's SHA is read from git's summary line (`CommitArguments`, which adds `-c core.abbrev=no`, and `CommittedSha`), with no `rev-parse` after it; `maintenance.auto=false` in every repository and `receive.autogc=false` on bare remotes, so no commit, merge or push starts git's automatic maintenance. `ExactStateAsync()` is part P's "exact state" (HEAD, every ref, the index, the status with untracked and ignored files, every file's contents), which the scenario pins (`Phase5ScenarioTests`), both harnesses and the App and Git tests compare. Phase 6: the blank git folders leave out git's `hooks/*.sample` (a copy then has some 220 files fewer, D229), `AddBareRemoteAsync(name, relative: true)` gives the remote the URL `../<name>.git`, so a copy fetches from its own remote with nothing rewritten, and `Over(root, path, clock)` wraps a repository made by other means (the lean builder) with the class's isolation. Phase 7a: `CommitFileAsAsync(path, content, message, authorName, authorEmail)` commits as another author, the clock advancing as for `CommitFileAsync`; the isolation (`GitIsolation.MachineIndependence`) also removes `NETRC`, and the calls' `HOME` was always an empty folder of the class's (D340) |
-| `Scenarios` | same | The scenario repos: `LinearAsync` (phase 0), `GraphAsync` (phase 1: branches in folders, a merge, tags, a remote with ahead and behind, a stash), `ChangesAsync` (phase 2: staged, unstaged and untracked changes of every kind the diff view shows; its contents in `Scenarios.ChangesFiles`) `CrlfAsync` (phase 2: `core.autocrlf` in the repo's own configuration) and `ConflictAsync` (phase 2: a merge stopped with a conflict). Phase 3's, in `Scenarios.Phase3.cs`: `OperationsAsync` ("ops": branches, tags, a stash, a bare `origin`), `StoppedAsync(kind)` (an ops copy stopped in a merge, cherry-pick sequence, revert, rebase, or with stash conflicts, as a terminal would leave it; built each time), `RemoteSyncAsync` ("sync": published, unpushed and local branches) with `PushFromElsewhereAsync`, `CheckoutBlockedAsync` ("blocked"), `EdgeCasesAsync` ("edges": a detached HEAD, a linked worktree, a local upstream, a branch named like a remote branch, a tag named like a branch), `AuthRemoteAsync(server)` ("auth": a clone of what `AuthRemoteServer` serves). Phase 4's, in `Scenarios.Phase4.cs`: `RebaseAsync` ("rebase": `feature/topic` and `feature/other` to rebase onto `main` without a conflict, a bare `origin`), `InteractiveAsync` ("interactive": one line of eight commits on `main`, one a fixup candidate, one with a `#42 is the issue` body line), `ConflictsAsync` ("conflicts": `main` and `feature/theirs`, `feature/rebase`, `feature/picks`, `feature/kinds`, with notes.txt, other.txt, image.png and new.txt) and `ConflictsStoppedAsync(ConflictsStop.Merge | Rebase | CherryPicks | MergeKinds, mergeTool)` (stopped as a terminal would leave it, built each time, optionally with the fake merge tool of `ConfigureFakeMergeToolAsync`); their files in `RebaseFiles`, `InteractiveFiles` and `ConflictsFiles`, whose lines are short enough for a resolver pane at 1100×700. `GraphAsync`, `ChangesAsync`, phase 3's and phase 4's (except the stopped ones) are built once per test process as templates and copied for each test; `Phase3ScenarioTests` and `Phase4ScenarioTests` pin their refs, SHAs, graphs and stopped states. Phase 5's, in `Scenarios.Phase5.cs`, built once per process as templates and pinned by `Phase5ScenarioTests`: `HistoryAsync` ("history": three authors, `src/Parser.cs` renamed to `src/Reader.cs` with an edit, blame lines from four commits, a file deleted and added again, a merge, words only in commit bodies, a pickaxe string added and removed, `main` and `feature/compare` diverged), `FiltersAsync` ("filters": branches to hide and solo, their upstreams, `origin/HEAD`, two stashes), `ReflogAsync` ("reflog": lost commits, a gap in HEAD's reflog, a deleted branch, backups of every kind the list shows, dated against the fixed backup clock; built with 88 git calls), `ReflogManyBackupsAsync` (built each time) and `AddOldAndManyBackupsAsync` (old and more than 50 backups, for the clean-up's notes), `ProtectAsync` ("protect": a branch whose checkout the checks' own changes block, a file `main` ignores that the two oldest commits track); their files in `HistoryFiles`, `ReflogFiles`, `ProtectFiles`. `Scenarios.Phase5.Shell.cs`: a merge tool that waits until released (`ConfigureWaitingMergeToolAsync`). `Scenarios.MergeToolTimeout` (120 s, D185) bounds every wait for `git mergetool` to start. Phase 6's, in `Scenarios.Phase6.cs` (D229), built once per process and pinned by `Phase6ScenarioTests`: `WorkspaceAsync` (the workspace "Web" of ten repositories in mixed states, a `TempWorkspace`), `ServeWorkspaceAsync(copy, requireAuth, names)` (its remotes over `AuthRemoteServer`'s folder mode), `RenamingRefspecAsync` ("refspecs"), `IgnoredAsync` ("ignored") and `GitSettingsAsync` ("settings"). Phase 7a's, in `Scenarios.Phase7a.cs`, built once per process and pinned by `Phase7aScenarioTests`: `HostingAsync` ("hosting": `hello/`, `tool/` and the fake's six bare repositories in `github/`) and `ServeHostingAsync(hello, port, inProcess, ct, ownsCopy)` (the fake of GitHub on them, a `ServedHosting`); see "The fake of GitHub" |
+| `Scenarios` | same | The scenario repos: `LinearAsync` (phase 0), `GraphAsync` (phase 1: branches in folders, a merge, tags, a remote with ahead and behind, a stash), `ChangesAsync` (phase 2: staged, unstaged and untracked changes of every kind the diff view shows; its contents in `Scenarios.ChangesFiles`) `CrlfAsync` (phase 2: `core.autocrlf` in the repo's own configuration) and `ConflictAsync` (phase 2: a merge stopped with a conflict). Phase 3's, in `Scenarios.Phase3.cs`: `OperationsAsync` ("ops": branches, tags, a stash, a bare `origin`), `StoppedAsync(kind)` (an ops copy stopped in a merge, cherry-pick sequence, revert, rebase, or with stash conflicts, as a terminal would leave it; built each time), `RemoteSyncAsync` ("sync": published, unpushed and local branches) with `PushFromElsewhereAsync`, `CheckoutBlockedAsync` ("blocked"), `EdgeCasesAsync` ("edges": a detached HEAD, a linked worktree, a local upstream, a branch named like a remote branch, a tag named like a branch), `AuthRemoteAsync(server)` ("auth": a clone of what `AuthRemoteServer` serves). Phase 4's, in `Scenarios.Phase4.cs`: `RebaseAsync` ("rebase": `feature/topic` and `feature/other` to rebase onto `main` without a conflict, a bare `origin`), `InteractiveAsync` ("interactive": one line of eight commits on `main`, one a fixup candidate, one with a `#42 is the issue` body line), `ConflictsAsync` ("conflicts": `main` and `feature/theirs`, `feature/rebase`, `feature/picks`, `feature/kinds`, with notes.txt, other.txt, image.png and new.txt) and `ConflictsStoppedAsync(ConflictsStop.Merge | Rebase | CherryPicks | MergeKinds, mergeTool)` (stopped as a terminal would leave it, built each time, optionally with the fake merge tool of `ConfigureFakeMergeToolAsync`); their files in `RebaseFiles`, `InteractiveFiles` and `ConflictsFiles`, whose lines are short enough for a resolver pane at 1100×700. `GraphAsync`, `ChangesAsync`, phase 3's and phase 4's (except the stopped ones) are built once per test process as templates and copied for each test; `Phase3ScenarioTests` and `Phase4ScenarioTests` pin their refs, SHAs, graphs and stopped states. Phase 5's, in `Scenarios.Phase5.cs`, built once per process as templates and pinned by `Phase5ScenarioTests`: `HistoryAsync` ("history": three authors, `src/Parser.cs` renamed to `src/Reader.cs` with an edit, blame lines from four commits, a file deleted and added again, a merge, words only in commit bodies, a pickaxe string added and removed, `main` and `feature/compare` diverged), `FiltersAsync` ("filters": branches to hide and solo, their upstreams, `origin/HEAD`, two stashes), `ReflogAsync` ("reflog": lost commits, a gap in HEAD's reflog, a deleted branch, backups of every kind the list shows, dated against the fixed backup clock; built with 88 git calls), `ReflogManyBackupsAsync` (built each time) and `AddOldAndManyBackupsAsync` (old and more than 50 backups, for the clean-up's notes), `ProtectAsync` ("protect": a branch whose checkout the checks' own changes block, a file `main` ignores that the two oldest commits track); their files in `HistoryFiles`, `ReflogFiles`, `ProtectFiles`. `Scenarios.Phase5.Shell.cs`: a merge tool that waits until released (`ConfigureWaitingMergeToolAsync`). `Scenarios.MergeToolTimeout` (120 s, D185) bounds every wait for `git mergetool` to start. Phase 6's, in `Scenarios.Phase6.cs` (D229), built once per process and pinned by `Phase6ScenarioTests`: `WorkspaceAsync` (the workspace "Web" of ten repositories in mixed states, a `TempWorkspace`), `ServeWorkspaceAsync(copy, requireAuth, names)` (its remotes over `AuthRemoteServer`'s folder mode), `RenamingRefspecAsync` ("refspecs"), `IgnoredAsync` ("ignored") and `GitSettingsAsync` ("settings"). Phase 7a's, in `Scenarios.Phase7a.cs`, built once per process and pinned by `Phase7aScenarioTests`: `HostingAsync` ("hosting": `hello/`, `tool/` and the fake's six bare repositories in `github/`) and `ServeHostingAsync(hello, port, inProcess, ct, ownsCopy)` (the fake of GitHub on them, a `ServedHosting`); see "The fake of GitHub". Phase 7b's, in `Scenarios.Phase7b.cs` and its two halves `Scenarios.Phase7b.AzureDevOps.cs` and `.GitLab.cs`, built once per process and pinned by `Phase7bSupportTests` and, for the halves, `FakeAzureDevOpsGitTests` and `FakeGitLabGitTests`: `Hosting7bAsync` ("hosting7b": `mobile-app/`, `manifest/` and `web-app/` beside the three fakes' bare repositories in `azure-devops/`, `gitlab/` and `github/`) and `ServeHosting7bAsync(copy, azureDevOpsPort, gitLabPort, gitHubPort, ownsCopy, ct)` (the three fakes on them, a `ServedHosting7b`); see "The fakes of Azure DevOps and GitLab" |
 | `TestImages` | same | Small PNGs whose bytes depend only on their pixels (stored deflate blocks), for scenario repos |
 | `FakeRepositoryBase` | same | The start of a fake `IGitRepository` for view-model tests: a clean working tree, every write refused; phase 3's and phase 4's reads give empty results (no remotes, no worktrees, nothing detached, no merge tool, no operation message, a clean-up that removes nothing) and their writes throw `NotSupportedException`; phase 5's reads find nothing (no history, blame, reflog, backups, differences, matches, ignored files or stash paths), the undo history's read sees HEAD alone, so that no action leaves an entry, and an undo step and C12's writes throw; phase 6's reads find no ignored file in the way and no pull setting, `OpenedAtTopAsync` answers true, and the configuration write throws; phase 7a's read finds no URL rewrite and its fetch of a pull request's head into `FETCH_HEAD` throws |
 | `LargeHistory` | same | The 100k-commit repo (D51), built once per machine with `git fast-import` under `%TEMP%/VisualCommit.Tests/shared/` and shared read-only; what each row shows follows from its number. Since phase 4 `GetBareAsync()` gives a bare copy made once beside it (`large-history-v1.git`), which `AuthRemoteServer` serves in place for phase 1's clone checks (D150) |
-| `GitIsolation` | same | Cuts the test process off from the machine: no system or user git configuration, no search for a repository above the tests' own temp folder (`GIT_CEILING_DIRECTORIES`), none of the variables a surrounding process can hand git, and dates in UTC; since phase 3 also no askpass program or ssh command of the machine (`GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE`, `GCM_INTERACTIVE`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`), no proxy (`no_proxy` set to `127.0.0.1,localhost`) and auto-fetch off (`VISUALCOMMIT_AUTO_FETCH_MINUTES=0`) (D112, D116); since phase 4 no editor of the machine (`EDITOR`, `VISUAL`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, D151). `ApplyMachineIndependence` does the same for a process about to start (the real-window pass's app). The UI test assemblies call it through `HeadlessTestApp.IsolateFromTheMachine` in a module initializer, `VisualCommit.Git.Tests` directly. Phase 6 (D220, design 17.2): the test process's `GIT_CONFIG_GLOBAL` names a file in a folder nobody makes (`NoGlobalConfigFile`), so reads see no global configuration and a global write outside an app session fails with exit 255 in the test that made it, and its `XDG_CONFIG_HOME` is an empty folder of the tests' (`ProcessXdgConfigHome`, `%TEMP%/VisualCommit.Tests/isolation/xdg`), so the user's `~/.config/git/ignore` and `attributes` reach no call; `GIT_AUTHOR_*`, `GIT_COMMITTER_*`, `EMAIL` and `MSYSTEM` are removed and `PATHEXT` is Windows' default; `SessionGitEnvironment(data)` gives an app session its own `GIT_CONFIG_GLOBAL` (`<data>/harness/global.gitconfig`) and `XDG_CONFIG_HOME`, which both harnesses pass; the tripwire `GlobalConfigurationWrittenOutsideASession` lists the traces a global write outside a session leaves in the isolation folder, which every test process shares (`%TEMP%/VisualCommit.Tests/isolation`: its `no-global` folder made, a `git` folder in its `xdg`, the old shared `gitconfig` not empty); `GitIsolationTripwireTests` (in `GitIsolationTests.cs`) and `Phase6TripwireTests` (in `Phase6SupportTests.cs`) assert that it lists nothing, each in a collection with parallelization off, which xunit runs after the parallel tests, so that every git call of their process has ended and what the projects beside them wrote until then is seen too; `ShellTests` and `Phase6SupportTests` also assert it at the end of a test of a session's git environment. Phase 7a (design 1.8, 19 item 4; ruling 24, D340): `MachineIndependence` also sets `VISUALCOMMIT_GITHUB_URL=none` and `VISUALCOMMIT_KEYCHAIN=memory` and removes `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GH_HOST` and the live command's two variables (`HostingTokenVariables`), so every test process and the app the real-window pass starts begin with GitHub off and tokens in memory, a check's own variables overriding; it removes `NETRC` (`NetrcVariables`) and leaves `VISUALCOMMIT_WATCHER_LAG_MS` alone; `SessionGitEnvironment(data)` also gives `HOME = <data>/harness/home` (`SessionHomeFolder`), empty, so that the curl of a session's git calls never reads the machine's `.netrc` or `_netrc`, which answers a server's 401 before any credential helper. Runners that use neither `TempRepo`'s environment nor a session's (App.Tests' `OperationsHarness`, static runners, `LargeHistory`, `AuthRemoteServer`'s own) still see the machine's `HOME` (plan.md's risk 37) |
-| `AuthRemoteServer` | same | The credential test server (D97): a `TcpListener` on 127.0.0.1 serving `git http-backend` through `GitRunner` as CGI for one bare repository (its own `remote.git`, or an existing one in place), asking for HTTP Basic auth (alice/s3cret) unless `RequireAuth` is false. Port 0 (the system picks) by default; `StartForVisualChecksAsync` uses 47391 (`VisualChecksPort`) so the pictures do not change, or since phase 4 47392 (`Phase1VisualChecksPort`) for phase 1's clone checks, which run in another process at the same time as phase 3's (D150), falling back to a free port (`PortWasTaken`). `Requests`, `Errors`; `HoldNextFetchPack(atPercent)` holds the next fetch's pack until `Release()`, so a check can show and cancel a running fetch: with 0 after its first progress line with a percentage, with a percentage right after the first whole progress line at or above it, the packet re-framed so that git's last line shows exactly that percentage (phase 1's clone is held at 45 %, so it cannot race). Since phase 6 (D229) `StartForFolderAsync(folder, port)` serves a folder of bare repositories, each at its own URL with its own hold at a chosen percentage (`UrlOf`), on `Phase6VisualChecksPort` 47393 for phase 6's walk-through and the real window, and on `Phase6LookVisualChecksPort` 47394 for `VisualCommit.VisualTests.Phase6Look`, which runs beside it; its own tests take a system port. Since phase 7a (D266) `StartForHostAsync(folder, options, port)` stands in for a git host, `Serve("owner/name")` registering each repository, with Basic auth by token (`LoginOfToken`), anonymous reads of public repositories, pushes by pushers only, a hook for the routes it claims and `GivenUserName` in `AuthRemoteRequest`; `Phase7aVisualChecksPort` is 47395 (D265). See "The fake of GitHub" |
+| `GitIsolation` | same | Cuts the test process off from the machine: no system or user git configuration, no search for a repository above the tests' own temp folder (`GIT_CEILING_DIRECTORIES`), none of the variables a surrounding process can hand git, and dates in UTC; since phase 3 also no askpass program or ssh command of the machine (`GIT_ASKPASS`, `SSH_ASKPASS`, `SSH_ASKPASS_REQUIRE`, `GCM_INTERACTIVE`, `GIT_SSH`, `GIT_SSH_COMMAND`, `GIT_SSH_VARIANT`), no proxy (`no_proxy` set to `127.0.0.1,localhost`) and auto-fetch off (`VISUALCOMMIT_AUTO_FETCH_MINUTES=0`) (D112, D116); since phase 4 no editor of the machine (`EDITOR`, `VISUAL`, `GIT_EDITOR`, `GIT_SEQUENCE_EDITOR`, D151). `ApplyMachineIndependence` does the same for a process about to start (the real-window pass's app). The UI test assemblies call it through `HeadlessTestApp.IsolateFromTheMachine` in a module initializer, `VisualCommit.Git.Tests` directly. Phase 6 (D220, design 17.2): the test process's `GIT_CONFIG_GLOBAL` names a file in a folder nobody makes (`NoGlobalConfigFile`), so reads see no global configuration and a global write outside an app session fails with exit 255 in the test that made it, and its `XDG_CONFIG_HOME` is an empty folder of the tests' (`ProcessXdgConfigHome`, `%TEMP%/VisualCommit.Tests/isolation/xdg`), so the user's `~/.config/git/ignore` and `attributes` reach no call; `GIT_AUTHOR_*`, `GIT_COMMITTER_*`, `EMAIL` and `MSYSTEM` are removed and `PATHEXT` is Windows' default; `SessionGitEnvironment(data)` gives an app session its own `GIT_CONFIG_GLOBAL` (`<data>/harness/global.gitconfig`) and `XDG_CONFIG_HOME`, which both harnesses pass; the tripwire `GlobalConfigurationWrittenOutsideASession` lists the traces a global write outside a session leaves in the isolation folder, which every test process shares (`%TEMP%/VisualCommit.Tests/isolation`: its `no-global` folder made, a `git` folder in its `xdg`, the old shared `gitconfig` not empty); `GitIsolationTripwireTests` (in `GitIsolationTests.cs`) and `Phase6TripwireTests` (in `Phase6SupportTests.cs`) assert that it lists nothing, each in a collection with parallelization off, which xunit runs after the parallel tests, so that every git call of their process has ended and what the projects beside them wrote until then is seen too; `ShellTests` and `Phase6SupportTests` also assert it at the end of a test of a session's git environment. Phase 7a (design 1.8, 19 item 4; ruling 24, D340): `MachineIndependence` also sets `VISUALCOMMIT_GITHUB_URL=none` and `VISUALCOMMIT_KEYCHAIN=memory` and removes `GH_TOKEN`, `GITHUB_TOKEN`, `GH_ENTERPRISE_TOKEN`, `GITHUB_ENTERPRISE_TOKEN`, `GH_HOST` and the live command's two variables (`HostingTokenVariables`), so every test process and the app the real-window pass starts begin with GitHub off and tokens in memory, a check's own variables overriding; it removes `NETRC` (`NetrcVariables`) and leaves `VISUALCOMMIT_WATCHER_LAG_MS` alone; `SessionGitEnvironment(data)` also gives `HOME = <data>/harness/home` (`SessionHomeFolder`), empty, so that the curl of a session's git calls never reads the machine's `.netrc` or `_netrc`, which answers a server's 401 before any credential helper. Phase 7b (design 1.8, ruling 27): `MachineIndependence` also sets `VISUALCOMMIT_AZURE_DEVOPS_URL=none` and `VISUALCOMMIT_GITLAB_URL=none`, and `HostingTokenVariables` also holds GitLab's tools' variables (`GITLAB_TOKEN`, `GITLAB_ACCESS_TOKEN`, `OAUTH_TOKEN`, `GITLAB_HOST`, `GITLAB_URI`, `GL_HOST`, `GITLAB_API_HOST`, `GL_TOKEN`, `CI_JOB_TOKEN`), Azure DevOps' and Git Credential Manager's for Azure Repos (`AZURE_DEVOPS_EXT_PAT`, `SYSTEM_ACCESSTOKEN`, `GCM_AZREPOS_SP_SECRET`, `GCM_AZREPOS_WIF_ASSERTION`) and the live command's four new variables, so every test process and the app the real-window pass starts begin with the three providers off and no tool's token; `GitIsolationTests` and `Phase7bSupportTests` pin the names, written out. Runners that use neither `TempRepo`'s environment nor a session's (App.Tests' `OperationsHarness`, static runners, `LargeHistory`, `AuthRemoteServer`'s own) still see the machine's `HOME` (plan.md's risk 37) |
+| `AuthRemoteServer` | same | The credential test server (D97): a `TcpListener` on 127.0.0.1 serving `git http-backend` through `GitRunner` as CGI for one bare repository (its own `remote.git`, or an existing one in place), asking for HTTP Basic auth (alice/s3cret) unless `RequireAuth` is false. Port 0 (the system picks) by default; `StartForVisualChecksAsync` uses 47391 (`VisualChecksPort`) so the pictures do not change, or since phase 4 47392 (`Phase1VisualChecksPort`) for phase 1's clone checks, which run in another process at the same time as phase 3's (D150), falling back to a free port (`PortWasTaken`). `Requests`, `Errors`; `HoldNextFetchPack(atPercent)` holds the next fetch's pack until `Release()`, so a check can show and cancel a running fetch: with 0 after its first progress line with a percentage, with a percentage right after the first whole progress line at or above it, the packet re-framed so that git's last line shows exactly that percentage (phase 1's clone is held at 45 %, so it cannot race). Since phase 6 (D229) `StartForFolderAsync(folder, port)` serves a folder of bare repositories, each at its own URL with its own hold at a chosen percentage (`UrlOf`), on `Phase6VisualChecksPort` 47393 for phase 6's walk-through and the real window, and on `Phase6LookVisualChecksPort` 47394 for `VisualCommit.VisualTests.Phase6Look`, which runs beside it; its own tests take a system port. Since phase 7a (D266) `StartForHostAsync(folder, options, port)` stands in for a git host, `Serve("owner/name")` registering each repository, with Basic auth by token (`LoginOfToken`), anonymous reads of public repositories, pushes by pushers only, a hook for the routes it claims and `GivenUserName` in `AuthRemoteRequest`; `Phase7aVisualChecksPort` is 47395 (D265). Since phase 7b (D363, design 2.2) a host also serves a repository at a path of any depth (`ServeAt(urlPath, folder, gitSuffix)`, looked up only when 7a's two levels find nothing, so their answers stay), `AuthRemoteHostOptions` takes `PushRefusal`, `LoginOfTokenIn` and `FetchRefusal`, and `Phase7bAzureDevOpsPort`, `Phase7bGitLabPort` and `Phase7bGitHubPort` are 47397, 47398 and 47399. See "The fake of GitHub" and "The fakes of Azure DevOps and GitLab" |
 | `FakeFileLauncher`, `FakeClipboard` | `tests/VisualCommit.Testing/Headless` | Record what the app asked to open, show or copy, and touch nothing on the machine; `ShellDriver.Start` injects them (`Launcher`, `Clipboard`). Since phase 7a the launcher records "Open in browser" as `FileLaunchKind.OpenUrl` with the address, and fails an address that is not `http` or `https` with the real launcher's `ArgumentException`, recording nothing |
 | `ScriptedPromptHandler` | `tests/VisualCommit.Testing` | Answers prompts from a queue of answers and records every prompt; a prompt without an answer is refused. Injected through `AppSession.Start` or `ShellDriver.Start` (`promptHandler`), or given to a broker |
 | `AskPassRunner` | same | Runs the real helper as OpenSSH runs `SSH_ASKPASS` (the prompt as its argument, `SSH_ASKPASS_PROMPT` when ssh sets it, an open scope's environment) for the prompt dialogs no ssh server can reach; since phase 7a `RunCredentialAsync` runs it as git runs a credential helper (`--vc-credential` and the action, the input written and closed), for the credential tests (see "Prompts and credentials") |
 | `FakeSsh` | same | A shell script set as a remote's `core.sshCommand` that runs `$SSH_ASKPASS` with recorded OpenSSH texts (passphrase, unknown host, PIN), writes the answers to a file and exits 1 (D115) |
-| `AppLogFile` | same | The app's log as checks read it, and the patterns of the lines they wait for or count, in both harnesses. Since phase 5 every test reads the log only through it (`ReadText` opens the file sharing it for writing): a plain `File.ReadAllText` is refused on Windows while the app writes an entry. Since phase 7a `PullRequestsListed(repo)` and `AvatarsShown(repo)` match the Debug lines `{repo}: listed {n} open pull requests of {owner/name}` and `{repo}: showing GitHub avatars for {n} authors` (groups `count` and `repository`), each written on the UI thread once the list or the avatars are applied (the second by the active tab's graph only); both harnesses take a picture of an opened GitHub repository while signed in only after both (D322) |
+| `AppLogFile` | same | The app's log as checks read it, and the patterns of the lines they wait for or count, in both harnesses. Since phase 5 every test reads the log only through it (`ReadText` opens the file sharing it for writing): a plain `File.ReadAllText` is refused on Windows while the app writes an entry. Since phase 7a `PullRequestsListed(repo)` and `AvatarsShown(repo)` match the Debug lines `{repo}: listed {n} open pull requests of {owner/name}` and `{repo}: showing GitHub avatars for {n} authors` (groups `count` and `repository`), each written on the UI thread once the list or the avatars are applied (the second by the active tab's graph only); both harnesses take a picture of an opened GitHub repository while signed in only after both (D322). Since phase 7b (design 2.4) `PullRequestsListed`'s listed repository has any depth and may hold spaces (`northfield/platform/web-app`, `Fernhill-Labs/Mobile App/mobile-app`), 7a's lines matching as before; Azure DevOps and GitLab write no avatars line (D349), so a picture of such a repository while signed in waits for that line alone |
 | `WindowLayout` | same | The window's fixed layout in logical pixels, copied from the reports (tab strip, toolbar, panels, column headers, rows 26 high, the banner's minimum, the menu's heights and gaps) and the neutral point (760, 687) where both harnesses rest the pointer before a capture that is not about a hover. Both harnesses compute positions from it |
 | `HeadlessTestApp` | `tests/VisualCommit.Testing/Headless` | Builds the real `App` for headless mode with Skia rendering. Each UI test assembly names it in `AssemblyInfo.cs` |
-| `ShellDriver` | same | Starts an `AppSession` on a data folder (`Start`, or `StartWithTabs` with repositories open through the session file), shows its window at a size, and drives it with simulated input: click, right-click, double-click, drag, wheel, hover, typing and keys. `Folders` is the fake folder dialog; `WaitForAsync` waits for a condition while the UI thread keeps running; `Capture()` returns a `Screenshot`. Partial since phase 3: `ShellDriver.Phase3.cs` (clicks with modifiers, a drag in steps, `Menu()` as a `MenuSnapshot`, `ClickMenuItem`, `MenuItemBounds`, the open dialog, `TypeInto`, `WaitForIdleAsync` for the queue and its refresh), `.Pointer.cs` (the neutral point, resting the pointer until a tooltip opens), `.Log.cs` (the app's log lines, git's call records, step times), `.Checks.cs` (opening a repository, rows below the banner, left-panel and file rows, the error dialog as an `ErrorDialogSnapshot`, progress, closing the window); phase 4's `.Phase4.cs` (`Undo()` and `Redo()` by the first gesture of `HotkeyConfiguration.Undo` and `.Redo`, the banner's Continue and Skip, the result's caret held still: `ConflictResultEditor.CaretBlinks = false` in `Start`), `.Phase4.Rebase.cs` (the list as a snapshot, a row's point, a drag of a row in steps, a row's action through its menu) and `.Phase4.Conflicts.cs` (the resolver as a snapshot, a bar's button, the result's text, caret and modified state, typing into it, a click at a line and column). `WaitForIdleAsync` also waits for the stage panel's read of the stopped commit's message (`StagePanelSettled`: `IsFillingMessage` false), which fills its boxes after the status is shown. `FindByAutomationId` looks in the open menu first, then in the top dialog, then in the whole window. Phase 5: `Start` gives the session a frozen record clock and a fixed backup clock at 2026-01-02 09:00:00 UTC (`AppClocks.HarnessTime`); `DefaultWaitTimeout` is 60 s since phase 6's gate (D237: with nine test projects side by side a git call took 10 to 15 times as long as alone, and a pop of 24 calls ran past 30 s; it was 10 s before phase 5, 30 s from it); `DoubleClick` stops the window's input clock for its two presses (`HeadlessInputClock`), so that a busy first click cannot split a double-click into two clicks, and since phase 7a (CI's run on WP-P's merge) it first waits, running the dispatcher's jobs, until that clock (`HeadlessInputClock.Read`) stands more than the double-tap time of 500 ms past the last press in the window, by anyone, when that press lay within the double-tap size of 4 by 4 pixels around its spot: Avalonia's `MouseDevice` counts a press on from the last one there whatever control either went to, so a double-click right after a click at its spot came as that click's second and third press (`LeftPanelPullRequestsViewTests`' double-click on pull request #5, which had taken the clicked sign-in row's place); `DoubleClick(Visual)` reads the control's centre again after that wait, and `DoubleClick` throws an `InvalidOperationException` naming the counts and the press before when its presses are not counted 1 and 2; `Click` and `RightClick` do not wait, so two presses at one spot within 500 ms are a double-click there as for a user (phase 7a's design 17 item 9); `.Phase5.Shell.cs` (`PressSearch`, `PressGitUndo`, `PressGitRedo`, the activity log as a snapshot, `WaitForOperationRecordAsync`), `.Phase5.Find.cs` (the search bar and its marks read from the graph control's state, never from pixels, the comparison and `WaitForComparisonShownAsync`, the left panel's marks, the waits for a search and a filter's reload), `.Phase5.Graph.cs` (a lane's centre read as dashed or solid), `.Phase5.Pages.cs` (the pages as snapshots and their waits), `.Phase5.Protect.cs` (the status bar's text as laid out, the stash calls since a mark, the wait for a status read) and `.Phase5.Undo.cs` (the toolbar's Undo and Redo as both harnesses read them). Phase 4's `Undo()` and `Redo()` stay the text undo of a text box and the resolver. Phase 6 (design 17.2): `Start` gives the session `GitIsolation.SessionGitEnvironment` on its data folder (`GlobalGitConfigPath`, `SeedGlobalGitConfig` writes it before a start; a restart on the folder keeps it), `ToolCatalogues.Fixed` (or `tools`, such as `HeldMergeTools`), a `FakeSystemTheme` dark unless `systemDark` is false (`SystemTheme`), and an optional `readClock` (`ReadClock`); its parts `.Phase6.Workspaces.cs` (`WriteWorkspaces`, `StartWithTabs` with `TabState`s, `StartWithWorkspace`, the welcome page's section, the Add repositories dialog), `.Phase6.Dashboard.cs` (the dashboard as a `DashboardSnapshot`, `WaitForDashboardReadAsync` on the pass's line, `ActivateWindow`, a row's point, menu and open, `CallMark` and `CallsSince`), `.Phase6.Bulk.cs` (Fetch all, Pull all, Cancel all, a row's percentage, Details… and Cancel), `.Phase6.Palette.cs` (`PressPalette`, `TypeInPalette`, `PaletteSnapshot`, `RunPaletteEntryAsync`), `.Phase6.Keys.cs` (`PressShortcut` from the app's own `Shortcut`, the focused region, `AcceleratorKey` and help texts, a menu item's key), `.Phase6.Settings.cs` (the screen as a `SettingsSnapshot`, its sections, scopes, fields and Save), `.Phase6.Theme.cs` (`SetSystemThemeAsync`, a token's colour) and `.Phase6.TabStrip.cs` (`TabStrip()`); and in `.Phase3.cs` `WatchersQuiet` and `WaitForWatchersQuietAsync()`, every open tab's `RepositoryViewModel.IsWatcherQuiet`, which part S waits for before it marks and reads a step's git calls. Phase 7a (design 2.5, 1.9): `Start` and `StartWithTabs` take, last, `gitHub:` (a `FakeGitHub` on a port), `tokens:` (a `FakeTokenStore`, new per start unless given) and `hosting:` (options as given), refuse both together and an in-process fake as `gitHub:`, put every HTTP client but `hosting:`'s behind a `LoopbackOnlyHandler`, and pump the UI thread until `Session.HostingStarted` has completed (see "The fake of GitHub"); the session's git environment has its own empty `HOME`. `.Phase7a.cs`: `Tokens`, `GitHub`, `Hosting`, `RefusedRequests`, `SignInAsync(token)` (through the session, no dialog; anything but signed in throws with the failure's kind and message, never the token); `.Phase7a.Accounts.cs`: the Accounts section and the "Add GitHub account" dialog (`OpenAccountsAsync`, `OpenSignInDialogAsync`, `TypeToken`, `ConfirmSignInAsync`, `WaitForSignInCheckAsync`, `SignOutAsync`, `WaitForAccountAsync`); `.Budget.cs`: `QuietCallMarkAsync()` and `QuietCallsSinceAsync(mark, inFolder)` (S8, `GitCallBudget`); `.Pointer.cs`: `WaitForControlAtAsync(Point)`, a hit test polled until the window has drawn a control there, since `WaitUntilReadyAsync` renders no frame (the wheel test failed without it in a bare Ubuntu container) |
+| `ShellDriver` | same | Starts an `AppSession` on a data folder (`Start`, or `StartWithTabs` with repositories open through the session file), shows its window at a size, and drives it with simulated input: click, right-click, double-click, drag, wheel, hover, typing and keys. `Folders` is the fake folder dialog; `WaitForAsync` waits for a condition while the UI thread keeps running; `Capture()` returns a `Screenshot`. Partial since phase 3: `ShellDriver.Phase3.cs` (clicks with modifiers, a drag in steps, `Menu()` as a `MenuSnapshot`, `ClickMenuItem`, `MenuItemBounds`, the open dialog, `TypeInto`, `WaitForIdleAsync` for the queue and its refresh), `.Pointer.cs` (the neutral point, resting the pointer until a tooltip opens), `.Log.cs` (the app's log lines, git's call records, step times), `.Checks.cs` (opening a repository, rows below the banner, left-panel and file rows, the error dialog as an `ErrorDialogSnapshot`, progress, closing the window); phase 4's `.Phase4.cs` (`Undo()` and `Redo()` by the first gesture of `HotkeyConfiguration.Undo` and `.Redo`, the banner's Continue and Skip, the result's caret held still: `ConflictResultEditor.CaretBlinks = false` in `Start`), `.Phase4.Rebase.cs` (the list as a snapshot, a row's point, a drag of a row in steps, a row's action through its menu) and `.Phase4.Conflicts.cs` (the resolver as a snapshot, a bar's button, the result's text, caret and modified state, typing into it, a click at a line and column). `WaitForIdleAsync` also waits for the stage panel's read of the stopped commit's message (`StagePanelSettled`: `IsFillingMessage` false), which fills its boxes after the status is shown. `FindByAutomationId` looks in the open menu first, then in the top dialog, then in the whole window. Phase 5: `Start` gives the session a frozen record clock and a fixed backup clock at 2026-01-02 09:00:00 UTC (`AppClocks.HarnessTime`); `DefaultWaitTimeout` is 60 s since phase 6's gate (D237: with nine test projects side by side a git call took 10 to 15 times as long as alone, and a pop of 24 calls ran past 30 s; it was 10 s before phase 5, 30 s from it); `DoubleClick` stops the window's input clock for its two presses (`HeadlessInputClock`), so that a busy first click cannot split a double-click into two clicks, and since phase 7a (CI's run on WP-P's merge) it first waits, running the dispatcher's jobs, until that clock (`HeadlessInputClock.Read`) stands more than the double-tap time of 500 ms past the last press in the window, by anyone, when that press lay within the double-tap size of 4 by 4 pixels around its spot: Avalonia's `MouseDevice` counts a press on from the last one there whatever control either went to, so a double-click right after a click at its spot came as that click's second and third press (`LeftPanelPullRequestsViewTests`' double-click on pull request #5, which had taken the clicked sign-in row's place); `DoubleClick(Visual)` reads the control's centre again after that wait, and `DoubleClick` throws an `InvalidOperationException` naming the counts and the press before when its presses are not counted 1 and 2; `Click` and `RightClick` do not wait, so two presses at one spot within 500 ms are a double-click there as for a user (phase 7a's design 17 item 9); `.Phase5.Shell.cs` (`PressSearch`, `PressGitUndo`, `PressGitRedo`, the activity log as a snapshot, `WaitForOperationRecordAsync`), `.Phase5.Find.cs` (the search bar and its marks read from the graph control's state, never from pixels, the comparison and `WaitForComparisonShownAsync`, the left panel's marks, the waits for a search and a filter's reload), `.Phase5.Graph.cs` (a lane's centre read as dashed or solid), `.Phase5.Pages.cs` (the pages as snapshots and their waits), `.Phase5.Protect.cs` (the status bar's text as laid out, the stash calls since a mark, the wait for a status read) and `.Phase5.Undo.cs` (the toolbar's Undo and Redo as both harnesses read them). Phase 4's `Undo()` and `Redo()` stay the text undo of a text box and the resolver. Phase 6 (design 17.2): `Start` gives the session `GitIsolation.SessionGitEnvironment` on its data folder (`GlobalGitConfigPath`, `SeedGlobalGitConfig` writes it before a start; a restart on the folder keeps it), `ToolCatalogues.Fixed` (or `tools`, such as `HeldMergeTools`), a `FakeSystemTheme` dark unless `systemDark` is false (`SystemTheme`), and an optional `readClock` (`ReadClock`); its parts `.Phase6.Workspaces.cs` (`WriteWorkspaces`, `StartWithTabs` with `TabState`s, `StartWithWorkspace`, the welcome page's section, the Add repositories dialog), `.Phase6.Dashboard.cs` (the dashboard as a `DashboardSnapshot`, `WaitForDashboardReadAsync` on the pass's line, `ActivateWindow`, a row's point, menu and open, `CallMark` and `CallsSince`), `.Phase6.Bulk.cs` (Fetch all, Pull all, Cancel all, a row's percentage, Details… and Cancel), `.Phase6.Palette.cs` (`PressPalette`, `TypeInPalette`, `PaletteSnapshot`, `RunPaletteEntryAsync`), `.Phase6.Keys.cs` (`PressShortcut` from the app's own `Shortcut`, the focused region, `AcceleratorKey` and help texts, a menu item's key), `.Phase6.Settings.cs` (the screen as a `SettingsSnapshot`, its sections, scopes, fields and Save), `.Phase6.Theme.cs` (`SetSystemThemeAsync`, a token's colour) and `.Phase6.TabStrip.cs` (`TabStrip()`); and in `.Phase3.cs` `WatchersQuiet` and `WaitForWatchersQuietAsync()`, every open tab's `RepositoryViewModel.IsWatcherQuiet`, which part S waits for before it marks and reads a step's git calls. Phase 7a (design 2.5, 1.9): `Start` and `StartWithTabs` take, last, `gitHub:` (a `FakeGitHub` on a port), `tokens:` (a `FakeTokenStore`, new per start unless given) and `hosting:` (options as given), refuse both together and an in-process fake as `gitHub:`, put every HTTP client but `hosting:`'s behind a `LoopbackOnlyHandler`, and pump the UI thread until `Session.HostingStarted` has completed (see "The fake of GitHub"); the session's git environment has its own empty `HOME`. `.Phase7a.cs`: `Tokens`, `GitHub`, `Hosting`, `RefusedRequests`, `SignInAsync(token)` (through the session, no dialog; anything but signed in throws with the failure's kind and message, never the token); `.Phase7a.Accounts.cs`: the Accounts section and the "Add GitHub account" dialog (`OpenAccountsAsync`, `OpenSignInDialogAsync`, `TypeToken`, `ConfirmSignInAsync`, `WaitForSignInCheckAsync`, `SignOutAsync`, `WaitForAccountAsync`); `.Budget.cs`: `QuietCallMarkAsync()` and `QuietCallsSinceAsync(mark, inFolder)` (S8, `GitCallBudget`); `.Pointer.cs`: `WaitForControlAtAsync(Point)`, a hit test polled until the window has drawn a control there, since `WaitUntilReadyAsync` renders no frame (the wheel test failed without it in a bare Ubuntu container). Phase 7b (design 1.9, 2.4): `Start` and `StartWithTabs` take, after `hosting:`, `azureDevOps:` and `gitLab:` (fakes on a port), refuse either beside `hosting:` and an in-process one, and put all three providers' handlers behind a `LoopbackOnlyHandler` (see "The fake of GitHub"); `.Phase7b.cs`: `AzureDevOps`, `GitLab` and `SignInAsync(provider, token, organization)` (through the session, no dialog; a failure's text names the provider and holds neither the token nor the organization); `.Phase7a.Accounts.cs` keeps 7a's GitHub forms and gains the provider forms `OpenSignInDialogAsync(provider)` (it waits for the keychain's answer and the focus in `SignInOrganization` while that box shows empty, else in `SignInToken`), `TypeOrganization`, `SignOutAsync(provider, confirm)`, `WaitForAccountAsync(provider, condition)`, `AccountsBlock(provider)` and `AccountIdOf(provider, id)` (7a's ids, followed by `GitLab` or `AzureDevOps`); `.Budget.cs` gains `WatcherRefreshes`, `QuietStepMarkAsync()` and `AssertNoStepCallsAsync(mark, what)` (D390, see `GitCallBudget`) |
 | `FakeFolderPicker` | same | Answers the app's folder dialogs with folders the test queued (D42) |
 | `Screenshot` | same | A captured frame: save as PNG, read pixel colours |
 | `LayoutAudit` | same | `FindClippedText` lists every visible text that is not shown in full; with `allowShortenedWithToolTip` it lets through text cut with "…" on purpose whose whole text is in a tooltip, and with `allowScrolledOutOfView` text cut only by a scrolling list's edge (since phase 5 also a list's partly shown row where a page around the list ends too). A wrapped line's trailing space is not counted |
 | `FreshApplication` | same | Runs part of a test with a new Avalonia application object: how a scripted check crosses a restart (D32). Its wait for its turn on the headless UI thread does not count against the test (D132) |
-| `VisualRun`, `VisibleTexts` | same | Where the walk-throughs save their pictures (`artifacts/visual/phase-N/scripted/`); the texts a region shows, as a person reads them. Shared by the walk-through projects. Since phase 5 a phase's folder is emptied once per run, not once per process (`RunKey`: the `dotnet` process that started the test process, named by its id and start; a `.run` file in the folder names the run whose pictures it holds, and the processes take turns at it), so phase 5's two projects fill one folder, and phase 6's two (`Phase6`, `Phase6Look`) theirs, emptied once by one `dotnet test`. Since phase 7a a phase is a string (`FolderFor(string)`, `Save(Screenshot, string, string)`; the `int` forms delegate, as `Screens` and `RealWindowRun` do in the real-window project), so 7a's pictures go to `artifacts/visual/phase-7a/` (design 2.7) |
+| `VisualRun`, `VisibleTexts` | same | Where the walk-throughs save their pictures (`artifacts/visual/phase-N/scripted/`); the texts a region shows, as a person reads them. Shared by the walk-through projects. Since phase 5 a phase's folder is emptied once per run, not once per process (`RunKey`: the `dotnet` process that started the test process, named by its id and start; a `.run` file in the folder names the run whose pictures it holds, and the processes take turns at it), so phase 5's two projects fill one folder, and phase 6's two (`Phase6`, `Phase6Look`) theirs, emptied once by one `dotnet test`. Since phase 7a a phase is a string (`FolderFor(string)`, `Save(Screenshot, string, string)`; the `int` forms delegate, as `Screens` and `RealWindowRun` do in the real-window project), so 7a's pictures go to `artifacts/visual/phase-7a/` (design 2.7) and 7b's to `artifacts/visual/phase-7b/` |
 | `TempWorkspace`, `LeanRepositories` | `tests/VisualCommit.Testing` | Phase 6 (D229, design 17.1): the workspace "Web", ten repositories in the dashboard's order (`api` … `notes`, and `old-site`, listed and never made), eight with a bare remote under `remotes/<name>.git` reached by the relative URL `../remotes/<name>.git`, so a copy is files only and fetches from its own remotes. Built once per test process the lean way (`LeanRepositories`: `git fast-import` and configuration written as text in a copy of the blank git folder, 28 git processes for the ten instead of about 80), then copied for each test |
 | `FetchHold` | same | Phase 6: holds the fetches of chosen repositories from their file remotes until a test lets them go: a shell script set as the remote's `remote.origin.uploadpack` in each held repository's own configuration (never the session's global one), which waits for a file `release` before it hands over to `git upload-pack` |
 | `FakeSystemTheme`, `HeldMergeTools`, `DrawnLines` | `tests/VisualCommit.Testing/Headless` | Phase 6: the operating system's mode for a headless session (`Set` flips it); merge-tool catalogues that hold their list back until released, for the settings screen's loading state; the lines a text block draws, read from its layout, where it wrapped and where it cut (the long folder's checks), without `UrlTextBlock`'s and `PathTextBlock`'s marks |
@@ -4989,10 +6315,12 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
 | `HangWatchdogAttribute`, `HangClock` | `tests/VisualCommit.Testing` | `[assembly: HangWatchdog]` in each default test assembly. If a test runs for more than 3 minutes, or nothing starts or finishes for that long, it prints which tests were running and stops the test process. `VISUALCOMMIT_TEST_HANG_SECONDS` changes the limit. A test's wait for a shared preparation (`SharedPreparationAsync`: a scenario template, the 100k-commit repo, the pull-parity templates) and for its turn on the headless UI thread (`WaitingForTurn`) is left out of its time; a preparation is held to a limit of its own, since phase 6's gate 10 minutes (`SharedPreparationLimit`, D237: the reflog scenario's template, 18 s alone, ran past 180 s with nine projects side by side; D132). Since phase 5 so is a test's wait for git's merge tool to start (`WaitingForSlowProgram`, D185): `git mergetool` is a shell script of over a hundred process starts, about 3 s alone and 32 to 64 s with the default run's projects side by side; the wait has its own limit of 120 s (`Scenarios.MergeToolTimeout`). Since phase 6 such a wait may name a limit of its own in place of the run's (`WaitingForSlowProgram(what, limit)`, for `git mergetool --tool-help`, over 180 s under the default run's load), and while it is within it the "nothing starts or finishes" rule waits for it. `HangClock` holds these rules apart from the watchdog, so they are tested with a clock moved by hand |
 | `GitIsoDates` | same | Reads git's strict ISO dates as instants: Git 2.36 writes `+00:00` for UTC, Git 2.55 (CI's `ubuntu-latest` until 2026-10-28) `Z` |
 | `FakeGitHub`, `FakeGitHubHandler`, `LoopbackOnlyHandler`, `TokenTripwire`; `FakeTokenStore` | `tests/VisualCommit.Testing/Hosting`; `FakeTokenStore` in `Headless` | Phase 7a: the fake of GitHub (on a port or in process), the harness's network tripwire, the token's tripwire over files and git calls, and the harness's keychain; see "The fake of GitHub" |
+| `FakeHostingService`, `FakeAzureDevOps`, `FakeGitLab`; `HostingSessionGitHubForms` | `tests/VisualCommit.Testing/Hosting` | Phase 7b (D363): the fakes' surface over their shared core (`FakeServiceCore`, `FakeGitHub`'s too), the fakes of Azure DevOps and GitLab (on a port or in process), and 7a's GitHub-named forms of the session and of `accounts.json` as C# 14 extension members for tests alone (`GitHub`, `Account`, `SignInAsync(token)`, `SignOutAsync`, `SetUseForGit`, `ListRepositoriesAsync`; `GitHubOn`, `WithGitHub`, `WithoutGitHub`), each delegating with `HostingProvider.GitHub`, declared in the namespace `VisualCommit.Hosting` so that no caller needs a `using`; see "The fakes of Azure DevOps and GitLab" |
 | `GitUrlUser` | `tests/VisualCommit.Testing` | D389: measures once per test process, against a loopback listener that answers 401, whether the git on `PATH` keeps a URL's user after the first 401 (`Kept`) or loses it (`Lost`: git up to 2.56.0 over a libcurl that strips it, plan risk 43); any other answer fails. `MeasuredAsync()` gives the kind, git's path, version and stderr line and the requests the listener saw, and writes them to `artifacts/visual/git-url-user.txt`. D278's test asserts the prompt it predicts |
 | `GitCallBudget`, `RefreshForm` | `tests/VisualCommit.Testing/Headless` | Phase 7a's S8 (D280, D281, design 5.3): with a live watcher a count of git calls is marked and read with the watchers quiet (`ShellDriver.QuietCallMarkAsync()`, `QuietCallsSinceAsync`; App.Tests' `OperationsHarness` has the same pair over `WaitForWatcherQuietAsync`, and `WaitForOpeningCleanUpReadAsync` for a mark right after opening), and a refresh the watcher started for a change reported late is set aside only whole. `RefreshForms`: the refs read's five forms and the status read, moved from phase 6's part S helpers, and, optional (counted 0 times or as often as the others), the URL-rewrites read a signed-in tab makes after each refs read (`git config --null --get-regexp ^url\.`). `NotWholeRefreshes` says what keeps calls from being whole refreshes (a call of a form inside an operation, a required form less often than another); `AssertOnlyWholeRefreshes` fails printing the calls; `AssertAtMost(calls, budget, what, setAsideWholeRefreshes)` holds a count that is a cost to a budget. Three counts that are a cost became budgets (`IgnoredInTheWayTests`, `RefReadingTests`, `Phase6ScenarioTests`); seven with a live watcher are marked and read quiet with whole refreshes set aside; counts that are a test's meaning stay exact (D280). 7a's checks count git calls only through it. Since phase 7b a step whose meaning is that it starts no git call is marked with `ShellDriver.QuietStepMarkAsync()` and checked with `AssertNoStepCallsAsync(mark, what)`: no operation may end, and only whole refreshes are set aside, no more than the watchers asked for (`AssertOnlyWatcherRefreshes`, `RepositoryViewModel.WatcherRefreshes`; D390) |
 | `RecordingCredentialSource` | `tests/VisualCommit.Testing` | Phase 7a: a credential source for the app's helper that answers every `get` with `Token` (null: none) and records each `get` and refusal by account, never showing the token (see "Prompts and credentials") |
-| `HostingSessionSetup`, `HostingTestThread`, `RecordingHttpHandler` | `tests/VisualCommit.Hosting.Tests` | Phase 7a (design 7.13): a hosting session over a copy of "hosting" served in process, made and not started: the fake's handler behind a recorder, a `FakeTokenStore` unless given, a data folder of its own, a `ManualTimeProvider` at the harness's time and a `HostingTestThread` (one thread with a `SynchronizationContext` of its own, where tests call what the app calls on its UI thread) as the post delegate; `NetworkDown` fails requests before the fake. Its disposal runs `TokenTripwire` for the scenario's three tokens over the data folder and asserts no log line holds `_FAKE-`, no error on the thread and none in the fake |
+| `HostingSessionSetup`, `HostingTestThread`, `RecordingHttpHandler` | `tests/VisualCommit.Hosting.Tests` | Phase 7a (design 7.13): a hosting session over a copy of "hosting" served in process, made and not started: the fake's handler behind a recorder, a `FakeTokenStore` unless given, a data folder of its own, a `ManualTimeProvider` at the harness's time and a `HostingTestThread` (one thread with a `SynchronizationContext` of its own, where tests call what the app calls on its UI thread) as the post delegate; `NetworkDown` fails requests before the fake. Its disposal runs `TokenTripwire` for the scenario's three tokens over the data folder and asserts no log line holds `_FAKE-`, no error on the thread and none in the fake. Since phase 7b `Fault` makes a request throw a test's exception before the fake, and `ThrownText`, `ThrownSecrets` and `AssertNothingThrownLogged` give a made-up exception text that echoes a token, a proxy's user and password and an address, none of which may reach the log (D380, D382) |
+| `ProvidersSessionSetup`, `HeldRulesTab`, `RawHttpServer`, `JsonAccountStore7a` | `tests/VisualCommit.Hosting.Tests` | Phase 7b: `HostingSessionSetup` over the three fakes in process, each optional (octo 1001 on GitHub; the organizations `fake-org` and `other-org`, each with a project `P` and a user Ada, on Azure DevOps; ada 2001 granted Maintainer (40) on the group `fake-group`, above `fake-group/sub`, on GitLab; with `repositories`, one repository each with an open request), each fake's handler behind a recorder, made and not started; its disposal searches the data folder and the log for every token it minted or a test gave `Track`, the log for any fake token's form (`FAKE-`, but the fakes' request ids), and asserts no fake saw an error. `HeldRulesTab`: one repository tab built by hand over a clone of "hosting" (`hello`) or "hosting7b" (`web-app`, `mobile-app`), signed out, the fakes on port 0, a `HostingSession` as the askpass broker's credential source and a `ScriptedPromptHandler` that refuses and records, whose URL-rules reads a test holds or fails through `RulesReads`, a `DispatchProxy` of the repository (D290's window, D388). `RawHttpServer`: a loopback server on a system port that answers each request with the bytes a test gives, for answers no HTTP library writes (an invalid header line, a bad chunk line, a body its `Content-Encoding` does not decode, a proxy's 407; D380). `JsonAccountStore7a`: 7a's `AccountsFile` and records word for word, with which `JsonAccountStoreTests` reads a file 7b wrote |
 
 - `VisualCommit.VisualTests` has a folder per phase for phases 0 to 2. `PhaseNChecks` holds a test for every
   numbered check of the phase's test report (phase 1's are split over `Phase1Checks.Shell.cs` and
@@ -5020,10 +6348,11 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `Phase3Expectations.Common.cs` and `Phase3Expectations.A.cs` to `.D.cs` (nested `PartA` to
   `PartD`). A test is named `Check_<NN>[<suffix>]_<what>`, one per app start; every wait is on a
   condition, never a fixed time. `scripts/time-scripted-check.sh` times chosen checks alone and
-  prints each step's time (its second argument picks the phase and the project: 7a when left out,
-  since phase 7a, which runs `VisualCommit.VisualTests.Phase7a`, and a phase it does not know exits
-  2 before anything is built; for phase 5 the filter picks the project, `Phase5Undo` for part U and
-  `Phase5` otherwise, and for phase 6 `Phase6Look` for part L and `Phase6` otherwise).
+  prints each step's time (its second argument picks the phase and the project: 7b when left out,
+  since phase 7b, which runs `VisualCommit.VisualTests.Phase7b`, `7a` runs
+  `VisualCommit.VisualTests.Phase7a`, and a phase it does not know, `7` among them, exits 2 before
+  anything is built; for phase 5 the filter picks the project, `Phase5Undo` for part U and `Phase5`
+  otherwise, and for phase 6 `Phase6Look` for part L and `Phase6` otherwise).
 - Phase 4's walk-through is the project `VisualCommit.VisualTests.Phase4` (D151), built the same
   way: the abstract base `Phase4Checks` (`Phase4Checks.Support.cs`, a copy of what phase 3's
   support offers, plus what phase 3 repeated in each part: a graph assertion, the backups,
@@ -5108,22 +6437,80 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   checkout plan; the menus; the graph's badge and avatars; the details panel's avatar; the status
   bar's offer; `HostingTexts.Describe`), linking App.Tests' `RecordingActions.cs` and
   `RecordingLog.cs`, so that 7a's menu tests live outside App.Tests (design 0.6). Its checks are in
-  phase 7a's report.
+  phase 7a's report. Since phase 7b part A's expected intro is D353's one sentence for the three
+  providers (`PartA.Intro`), which changed 23 of part A's pictures and the real window's `a01a`,
+  `a02b` and `a05a` in the intro's two lines alone, and `Check_A9` waits for hello's hosting to show
+  signed out before it asserts that state; Azure DevOps and GitLab are off in 7a's checks and its
+  real-window launches (D362; phase 7b's report, "Changes to expected results").
+- Phase 7b's walk-through is one project, `VisualCommit.VisualTests.Phase7b` (design 0.3, 0.5, 2.7):
+  29 test methods for the report's 45 checks, in one class per part, `Phase7bChecksA` (accounts and
+  sign-in, A1 to A14, 9), `Phase7bChecksB` (browse and clone, B1 to B8, 6), `Phase7bChecksP`
+  (requests in the left panel and the graph, P1 to P14, 7, the checkouts in
+  `Phase7bChecks.P.Checkout.cs`) and `Phase7bChecksN` (a new pull or merge request, N1 to N9, 7);
+  many methods have a GitLab and an Azure DevOps form (`Check_P11_gitlab_…`, `Check_P11_azure_…`),
+  and the part letters avoid C, O, Q, R and T. It is built as 7a's: the base `Phase7bChecks`, its
+  support `Phase7bChecks.Support.cs` (7a's with 7b's names), each part's own helpers in
+  `Phase7bChecks.<part>.Helpers.cs`, the expectations in `Phase7bExpectations.Common.cs` (`Phase =
+  "7b"`, the sizes, the three ports, `WithPorts`, `WebBase`, the scenario's names, tokens and URLs,
+  the palette, and `PrepareRequestsAsync(copy, provider)`: `git branch --track topic/no-request
+  origin/topic/no-request` in GitLab's `web-app/` or Azure DevOps' `mobile-app/`, the one prepared
+  state that part P's real-window methods, part N's checks and the pass's "Requests and create"
+  launches share) and one file per part with its nested `PartA`, `PartB`, `PartP` and `PartN`;
+  `Phase7bExpectationTests.<part>.cs` and `Phase7bSupportTests.cs` are named so that the real-window
+  project's link pattern does not take them. Every check starts on a fresh copy of "hosting7b" served
+  by the three fakes (`ServeAsync`) and opens it with `OpenAsync` (one tab on `mobile-app`,
+  `manifest` or `web-app`, the three fakes, a sign-in through the session to each provider it names,
+  by default the repository's, Azure DevOps with `Fernhill-Labs`, `[]` for none, then a wait until
+  the watchers are quiet) or `StartEmptyAsync` (one empty tab with the three fakes). xunit runs the
+  part classes side by side, and a fake that finds its port taken falls back to a free one, so every
+  expected text that holds a port goes through `WithPorts`. `Shot` saves under
+  `artifacts/visual/phase-7b/scripted/` (93 pictures) and the step times under `phase-7b/timings/`,
+  waiting and refusing as 7a's does; a picture of a signed-in Azure DevOps or GitLab repository waits
+  for D322's `PullRequestsListed` line alone (D349). Call assertions are 7a's; a step whose meaning
+  is that it starts no git call goes through `QuietStepMarkAsync` and `AssertNoStepCallsAsync`
+  (P11's double-click on !13, D390). Every method ends, through its part's `AssertCleanEnd` or `End`,
+  with the tripwire for the tokens it used over the data folder and the copy's three clones with the
+  session's call log, each fake's `Errors` and the harness's `RefusedRequests` empty, no request
+  answered 400 or 415 (part N lets through its refused create's own), and the launcher's records (in
+  parts P and N the clipboard's too) only those its steps name; part N's also finds no typed title or
+  description and no "showing GitHub avatars" in the log (D367). The project also holds 7b's tests
+  of the view models and controls beside the checks (`SignInDialogProvidersTests`, which signs in
+  through a `HostingSession` over the scenario's fakes on port 0, `AccountsProvidersViewModelTests`,
+  `CloneFromAccountDialogViewModelTests`, `RequestSectionProvidersTests`,
+  `RequestCheckoutProvidersTests`, `RepositoryMenusProvidersTests`, `GraphRequestBadgeTests`,
+  `CreateRequestDialogProvidersTests`, `HostingTextsDescribeProvidersTests`, with `RequestTestData`'s
+  made-up requests), linking App.Tests' `RecordingActions.cs` and `RecordingLog.cs` and 7a's
+  `GraphTestHost.cs`. It runs 179 tests (15 min 33 s of its own in the gate's counted default run).
+  Its checks are in phase 7b's report.
 - `VisualCommit.Hosting.Tests` (phase 7a; design 1.1, D334) holds the hosting's unit tests by
-  subject: the fake's own (`FakeGitHubTests`, `FakeGitHubGitTests`, `FakeTokenStoreTests`), the
-  options (`HostingOptionsTests`, `HostingSmokeTests`), the client and provider
-  (`GitHubClientTests`, `GitHubProviderTests`, `GitHubRecognitionTests`, `AvatarCacheTests`), the
-  rules (`HostingRulesTests`), the session (`HostingSession*Tests`, `JsonAccountStoreTests`,
-  `RepositoryHosting*Tests`) and the token stores (`Tokens/`). Its three real-store classes skip
-  unless `VISUALCOMMIT_KEYCHAIN_TESTS` names them (CI's keychain steps, see "CI"), and
-  `WindowsCredentialStoreTests`' off-Windows test skips on Windows, so a default run skips four
-  tests on Windows and three on macOS and Linux (D270). By D334 it also holds six classes with real
-  git (five start the app through `ShellDriver`; `RepositoryHostingWiringTests` builds a tab's
-  `TabServices` by hand with a `HostingSession`), 44 test methods with clones, checkouts and pushes
-  (`RepositoryHostingWiringTests`, `SignInEntryTests`, `WelcomeCloneFromGitHubTests`,
-  `PaletteCloneFromGitHubTests`, `PullRequestOperationsTests`, `CreatePullRequestOperationTests`):
-  in this assembly their `[AvaloniaFact]`s run on a headless UI thread of their own beside the
-  walk-through's rather than on its thread. Every fake there is on port 0 or in process (D265).
+  subject: the fakes' own (`FakeGitHubTests`, `FakeGitHubGitTests`, `FakeTokenStoreTests`; since
+  phase 7b `FakeHostingServiceTests`, the shared core through a fake of its own, `FakeAzureDevOpsTests`
+  and `FakeGitLabTests` in process, `FakeAzureDevOpsGitTests` and `FakeGitLabGitTests` with real git
+  on port 0, and `TokenTripwireFormsTests`), the options (`HostingOptionsTests`,
+  `HostingSmokeTests`), the providers' contracts and texts (`HostingContractsTests`,
+  `HostingProvidersTests`, `HostingTextsProviderTests`), the shared HTTP core
+  (`HostingHttpClientTests`, with `RawHttpServer`), the clients and providers (`GitHubClientTests`,
+  `GitHubProviderTests`, `GitHubRecognitionTests`, `AvatarCacheTests`; `AzureDevOpsClientTests`,
+  `AzureDevOpsJsonTests`, `AzureDevOpsProviderTests`, `AzureDevOpsRecognitionTests`;
+  `GitLabClientTests`, `GitLabProviderTests`, `GitLabRecognitionTests`), the rules
+  (`HostingRulesTests`), the session (`HostingSession*Tests`, `JsonAccountStoreTests`,
+  `RepositoryHosting*Tests`; over `HostingSessionSetup` or, since phase 7b, `ProvidersSessionSetup`)
+  and the token stores (`Tokens/`). Its three real-store classes skip unless
+  `VISUALCOMMIT_KEYCHAIN_TESTS` names them (CI's keychain steps, see "CI"), and
+  `WindowsCredentialStoreTests`' off-Windows test skips on Windows, so a default run skips four tests
+  on Windows and three on macOS and Linux (D270). By D334
+  it also holds six classes with real git (five start the app through `ShellDriver`;
+  `RepositoryHostingWiringTests` builds a tab's `TabServices` by hand with a `HostingSession`), 44
+  test methods at phase 7a's gate with clones, checkouts and pushes (`RepositoryHostingWiringTests`,
+  `SignInEntryTests`, `WelcomeCloneFromGitHubTests`, `PaletteCloneFromGitHubTests`,
+  `PullRequestOperationsTests`, `CreatePullRequestOperationTests`), 51 since D391 added seven to
+  `WelcomeCloneFromGitHubTests`. Phase 7b adds six more that start the app through `ShellDriver` with
+  real git, 62 test methods (`RepositoryHostingProvidersWiringTests`, `SignInEntryProvidersTests`,
+  `CloneFromAccountTests`, `RequestOperationsProvidersTests`, `CreateRequestOperationProvidersTests`
+  and `SignInBindingsWindowTests`, the last two also on a tab built by hand, `HeldRulesTab`), all on
+  7b's lagged list. In this assembly their `[AvaloniaFact]`s run on a headless UI thread of their own
+  beside the walk-throughs' rather than on theirs. Every fake there is on port 0 or in process (D265,
+  D363).
 - **The gits** (phase 3's rule, carried into phases 4 and 5): the reports quote git's own texts and
   files as Git 2.36 writes them, and the checks assert them word for word only on that git
   (`Phase4Expectations.IsReportGitAsync()`); on any other git (CI's 2.43 to 2.56) they assert the
@@ -5177,7 +6564,11 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   4 skipped (the keychains' real stores, D270), in 1 h 12 min 6 s. Since D343, at phase 7a's gate,
   the laptop's whole run through `scripts/heavy-run.sh` runs at most four projects at once: the
   gate's counted run (`a9d02c1`'s code) passed 5,948 of 5,952 in 1 h 12 min 18 s, and the
-  real-window pass of phases 0 to 7a 72 tests in 31 min 6 s (`a2c312a`).
+  real-window pass of phases 0 to 7a 72 tests in 31 min 6 s (`a2c312a`). Phase 7b adds one project,
+  `VisualCommit.VisualTests.Phase7b`, so twelve; at its gate's counted round (`cb9af6d`'s code,
+  2026-11-08, at most four projects at once through the script) the whole run passed 7,888 of 7,892
+  tests, 4 skipped, in 1 h 31 min 48 s, and the real-window pass of phases 0 to 7b 77 tests in
+  33 min 35 s.
 - **Wait limits** (D341, phase 7a). D237's 60 s applies to every wait of the default run whose
   condition holds only once git, a refresh the watcher starts, a scenario's git or work that slows
   with the machine's load has finished, also where a call site, a helper's default, a field or a
@@ -5210,7 +6601,14 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   different kinds. A failure under the lag is the fault class it imitates, macOS's late events, and
   gets a fix, never a looser test. `RepositoryWatcherTests` is not on it: its "nothing within the
   settle time" checks prove less under a lag (D282). It first ran at WP1's merge (`a4a388e`) and
-  passed in all five commands on `7015753`.
+  passed in all five commands on `7015753`. Phase 7b's list (its design 0.4), run at WP-F's merge
+  and at each later merge whose section names it, is 7a's list, then the whole 7b walk-through and
+  the six Hosting.Tests classes that start the app through `ShellDriver` with real git on 7b's fakes
+  (`RepositoryHostingProvidersWiringTests`, `SignInEntryProvidersTests`, `CloneFromAccountTests`,
+  `RequestOperationsProvidersTests`, `CreateRequestOperationProvidersTests`,
+  `SignInBindingsWindowTests`), one command for the walk-through and one for the six; the lead's
+  lagged runs on `6333de6` (2026-11-08) passed 179 tests of the walk-through, 75 of those six classes
+  and 51 of D334's six.
 - **Timing tests under load** (phase 6): a test that compares how the work grows measures the
   thread's own work (`ThreadWork`), not a stopwatch, which the other projects' load stretches, and
   compares ratios of two runs on one thread, each the best of three, interleaved.
@@ -5221,13 +6619,22 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   parallelization off, which xunit runs after the parallel tests, so no other test of the process
   runs beside them. Each measure runs inside a region without garbage collection
   (`GrowthMeasures.WithoutCollection(budget, work)`: a full collection, then
-  `GC.TryStartNoGCRegion(budget)`; the test fails when a collection ran during the measure), since
+  `GC.TryStartNoGCRegion(budget)`; the test fails when a collection ran during the measure, and
+  since phase 7b its failure blames the budget only when the process allocated at least the budget
+  during the measure, and otherwise names what it allocated and the machine's memory load, because
+  another thread's collection or memory pressure also ends the region), since
   the collector's work grows faster than the items and follows the processor's caches (with
   collections in the measure, 1,000 against 10,000 tags grew 29 times on CI's Windows runner in run
   39936260636, 7 to 9 times on the development laptop). The budgets are 64 MB for the matcher,
   200 MB for the build, and for the diff view twice what a warm-up measure allocated, at least
   64 MB. The stopwatch's times are reported and held only to a gross ceiling: 1 s for the matcher,
-  20 s for the build and for the diff view.
+  20 s for the build and for the diff view. Since phase 7b (design 16.3) the palette's build test
+  keeps each measure's work as the measure returns (`PaletteGrowthWorks`) and appends a line for
+  every run, passed or failed, to `artifacts/visual/palette-growth.txt` under the repository's root
+  (`GrowthMeasures.AppendRecord`; a write that fails never fails the test, which names it only when
+  it fails anyway), which CI uploads with each job's pictures, so that a rare failure on CI can be
+  set beside the runs that passed. `GrowthMeasuresTests` (in `GrowthCollection`) and
+  `PaletteGrowthWorksTests` test that harness.
 - `GitIsolation` also sets `GIT_AUTHOR_DATE` and `GIT_COMMITTER_DATE` to 2026-01-02 09:00 UTC for
   the app under test, and `RealApp.Launch` hands it the same (D72): a commit the app makes gets
   the same id in both passes and on every machine. Since phase 5 (D173) both harnesses also fix
@@ -5252,8 +6659,9 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `VisualCommit.Testing`, so it uses the same scenario repos, and compiles the scripted run's
   `Phase3Expectations*.cs`, `Phase4Expectations*.cs`, `Phase5Expectations*.cs`, since phase 6
   `..\VisualCommit.VisualTests.Phase6*\Phase6Expectations*.cs` (both phase 6 projects) and, since
-  phase 7a, `..\VisualCommit.VisualTests.Phase7a*\Phase7aExpectations*.cs`, so both harnesses use
-  the same constants, texts and `PrepareAsync` calls. Its tests never
+  phase 7a, `..\VisualCommit.VisualTests.Phase7a*\Phase7aExpectations*.cs` and, since phase 7b,
+  `..\VisualCommit.VisualTests.Phase7b*\Phase7bExpectations*.cs`, so both harnesses use the same
+  constants, texts and `PrepareAsync` and `PrepareRequestsAsync` calls. Its tests never
   run in parallel (they share the desktop and the mouse).
 - Phase 3's pass: `Phase3RealWindowPass.cs` (the run, `Phase3Run`, one folder and one `run.txt`
   for the whole pass; launching the app on a scenario and at a server; waiting for an operation's
@@ -5347,11 +6755,63 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   `Check_N`'s lookup of the title box, which now looks inside the form, and the second passed 5 of 5
   in 2 min 55 s; the whole pass of phases 0 to 7a passed 72 of 72 in 31 min 6 s on `a2c312a`, whose
   `RealApp.TitleOf` reads a closing dialog's title without throwing (ruling 30, CLAUDE.md).
-- The whole pass, phases 0 to 7a, runs 72 tests: 68 test methods of the pass (phase 0 1, phase 1 5,
-  phase 2 8, phase 3 15, phase 4 10, phase 5 16, phase 6 8, phase 7a 5) and the 4 of
+- Phase 7b's pass (phase 7b's design 14; ruling 29, D363): `Phase7bRealWindowPass.cs` (the run
+  `Phase7bRun`, one folder and one `run.txt`; the order `Phase7bOrder`; `Launch`; the waits on the
+  three fakes' records, `WaitForFake` and `WaitForGitHub`, which check the records for tokens before
+  a message may print them, and on D322's line, `WaitForListed`; `Compare`; the menus;
+  `accounts.json`; `AssertCleanEnd`; and the two launches each provider makes,
+  `SignInBrowseAndCloneAsync` and `RequestsAndCreateAsync`), `.Accounts.cs`, `.GitLab.cs` and
+  `.AzureDevOps.cs`: five test methods of one launch each, in `Phase7bOrder`
+  (`Check_A_three_accounts`, `Check_GitLab_sign_in_browse_and_clone`,
+  `Check_GitLab_requests_and_create`, `Check_AzureDevOps_sign_in_browse_and_clone`,
+  `Check_AzureDevOps_requests_and_create`: two per provider and one for the three accounts, in
+  place of D319's one per part), 13 captures (A 1, each "sign-in, browse, clone" 2, each "requests
+  and create" 4), all at 1100×700 in the dark theme. Each launch serves a fresh "hosting7b" with the
+  three fakes on 47397 to 47399 in the test process (run.txt notes a fake that fell back), so phase
+  7b's walk-through never runs beside it; "Requests and create" calls `PrepareRequestsAsync` first,
+  as its twins do; the app starts with `RealApp.Hosting7bEnvironment(served)` (the three URL
+  variables at the fakes' web bases, `VISUALCOMMIT_KEYCHAIN=memory`) and the launch waits for each
+  provider's start line (`{DisplayName}: 127.0.0.1:<port>.`). Every sign-in types the scenario's
+  made-up token into the real dialog from Settings, Accounts (`RealApp.SignInThroughSettings`, or
+  `OpenSignInDialog` and a real click on `SignInToken`), with Azure DevOps' organization typed (in
+  lower case in A, whose block shows the server's spelling) or, on `mobile-app`'s tab, prefilled
+  from its remote (ruling 16); its requests are part A's check requests alone, GitLab's `Bearer`
+  and Azure DevOps' Basic with an empty user, each 200. A turns the Accounts section to its end
+  with the real wheel (`ScrollAccountsToEnd`, until UI Automation's `VerticalScrollPercent` on
+  `SettingsSection` is at least 99.95, asserted before the capture) and reads `accounts.json`'s
+  three records, `userId` on Azure DevOps' alone and no token. "Sign-in, browse, clone" opens the
+  browser through the clone form's "From GitLab…" or "From Azure DevOps…" (D354) and clones
+  `northfield/platform/web-app` or `mobile-app` (its `Fernhill-Labs@` URL with `%20`) in the real
+  process through `visualcommit-askpass.exe`: no credentials dialog, a 200 git request given
+  `x-access-token` and none answered 200 as another user, nothing asked of the other fakes, the
+  clone's D322 line before the close; afterwards `remote.origin.url` is the chosen URL and the clone
+  has no `credential` key, and run.txt names the helper's path. "Requests and create" signs in on
+  `web-app` or `mobile-app` (GitHub's fake, web-app's upstream, asked nothing, D257), compares the
+  section's rows with the badge and its menu, opens the create form from `topic/no-request`'s menu
+  and creates: one create request, 201, its body exactly part N's, no git request at all (the branch
+  is on the remote already), the status bar's "Open in browser" never clicked, the new row first.
+  The pass opens no browser and clicks no "Copy …" (ruling 29). Before each capture the window's
+  element names are checked for a token, and a fake's record or a text from the app reaches a
+  failure's message only through a token check (`Recorded`, `RecordedGitHub`, `Checked`), the log's
+  lines only as counts. `AssertCleanEnd`: the app exits 0, `TokenTripwire` finds none of the
+  scenario's four tokens in the data folder, the copy's `mobile-app/`, `manifest/` and `web-app/`
+  and the given folders (with no call log: the real process's git calls are not recorded), each
+  fake's `Errors` is empty, no request was answered 400 or 415, and with GitHub never signed in there
+  is no `avatars/` and no "showing GitHub avatars" line (D349, D367). `RealApp.Phase7b.cs` (the
+  environment, `AccountsSuffix` and `AccountsBlockId`, the wheel over the section, the dialog per
+  provider, `TypeOrganization`, `WaitForAccountLogin`, `SignInThroughSettings`) and 7a's
+  `RealApp.Phase7a.cs` drive it. Its first runs were D246's two of the 7b class alone
+  (`--filter-class "*Phase7bRealWindowPass"`) at phase 7b's gate on 2026-11-08, the owner present:
+  5 of 5 in 3 min 50 s and in 3 min 26 s, each of the 13 captures within 0.32 % to 0.86 % of its
+  scripted twin; the whole pass of phases 0 to 7b then passed 77 of 77 in 33 min 35 s on `cb9af6d`'s
+  code.
+- The whole pass, phases 0 to 7b, runs 77 tests: 73 test methods of the pass (phase 0 1, phase 1 5,
+  phase 2 8, phase 3 15, phase 4 10, phase 5 16, phase 6 8, phase 7a 5, phase 7b 5) and the 4 of
   `Phase3ExpectationsTests`,
   which the link pattern `Phase3Expectations*.cs` compiles in with phase 3's expectations. Phases 0
-  to 5 took about 25 minutes at phase 5's gate, phases 0 to 6 27 min 39 s at phase 6's. Phase 5 changed two earlier passes: phase 2's rests the pointer at the
+  to 5 took about 25 minutes at phase 5's gate, phases 0 to 6 27 min 39 s at phase 6's, phases 0 to
+  7a 31 min 6 s at phase 7a's and phases 0 to 7b 33 min 35 s at phase 7b's. Phase 5 changed two
+  earlier passes: phase 2's rests the pointer at the
   neutral point at 1100×700 (it rested at (130, 687), on the status bar's operation text, which
   since phase 5 can carry a tooltip: the restore bar's Restore is the discard's Undo, and 17c
   showed "Undid discard of Calculator.cs"; its rests at 1400×900 stay), and phase 3's check 11
@@ -5370,27 +6830,38 @@ Tests run on xunit.v3 with Microsoft Testing Platform (D24). The commands are in
   part of the build or the tests. Phase 5's gate compared phases 0 to 4's pictures with references
   made on `master` and kept outside the repository, so that the inspectors judged differences
   rather than re-reading every picture; the pictures it inspected are listed in
-  `docs/test-reports/phase-5-pictures.sha256` (1,080).
+  `docs/test-reports/phase-5-pictures.sha256` (1,080). Phase 7b's gate compared its counted round's
+  pictures with references made on `master` (its design 0.7): 1,112 the same file, 320 changed and
+  119 new, none in the references alone; its list, `docs/test-reports/phase-7b-pictures.sha256`,
+  holds 1,551 pictures, 1,150 scripted and 401 real-window files, which the gate's inspection
+  passed with 45 of CI's (D247; the two it held in doubt were judged no defect).
 
 ### The fake of GitHub (D250, D265 to D267)
 
 No test of the default run or of CI reaches GitHub (D250). Every one of them that talks to GitHub
 talks to `FakeGitHub` (`tests/VisualCommit.Testing/Hosting/`, partial over `FakeGitHub.cs`,
 `.Router.cs`, `.Json.cs`, `.Git.cs` and `.Model.cs`): git, the REST API under `api/v3/`, avatars and
-web pages on one host. It runs in one of two ways:
+web pages on one host. Since phase 7b what no provider owns is the fakes' shared core
+(`FakeServiceCore`, see "The fakes of Azure DevOps and GitLab"), and `FakeGitHub` keeps its public
+API, tables, types and answers over it (phase 7b's design 2.3); later in the phase D394 changed one
+answer, the `commits:` route's to a revision git cannot resolve beside `author` (404 in place of
+500), and added `UnknownRevisionBesideAuthorAnswers500`, which brings the 500 back for a test (the
+routes' table). It runs in one of two ways:
 
 | Start | What answers | Endpoints | Used by |
 |---|---|---|---|
-| `FakeGitHub.StartAsync(root, port, fallBackToFreePort)` | `AuthRemoteServer` in host mode on 127.0.0.1: git through `git http-backend`, the API, avatars and pages through its route hook | `GitHubEndpoints.Local(port)`: `http://127.0.0.1:<port>/` and its `api/v3/` | the 7a walk-through and its real-window twin on 47395 (D265, below), every other test on port 0 |
-| `FakeGitHub.InProcess(root)` | `CreateHandler()`, a `FakeGitHubHandler` that serves a request by its path whatever its host and records it as over TCP; git's paths get 404; a dropped answer is an `HttpRequestException` | `Local(1)` (`InProcessPort`), never listened on | the client's and provider's tests, `HostingSessionSetup` |
+| `FakeGitHub.StartAsync(root, port, fallBackToFreePort)` | `AuthRemoteServer` in host mode on 127.0.0.1: git through `git http-backend`, the API, avatars and pages through its route hook | `GitHubEndpoints.Local(port)`: `http://127.0.0.1:<port>/` and its `api/v3/` | the 7a walk-through and its real-window twin on 47395 (D265, below), 7b's walk-through and its twin on 47399 (`Phase7bGitHubPort`, D363), every other test on port 0 |
+| `FakeGitHub.InProcess(root)` | `CreateHandler()`, a `FakeGitHubHandler` that serves a request by its path whatever its host and records it as over TCP; git's paths get 404; a dropped answer is an `HttpRequestException` ("The fake of GitHub closed the connection without an answer."; since phase 7b the fakes' shared conversion, `FakeServiceConversion`) | `Local(1)` (`InProcessPort`), never listened on | the client's and provider's tests, `HostingSessionSetup`, `ProvidersSessionSetup` |
 
 It is stricter than GitHub (D266): every API request needs a token and the pinned API version, so a
 forgotten header or a request before the sign-in (D257) fails in the default run. Its state (users,
 tokens, repositories, pull requests, linked e-mails, holds, faults, each login's request count) is
 kept under one lock; git runs outside it through `GitRunner` with `TempRepo.IsolatedEnvironment` on
 a home folder of its own, a repository's ref sync and create one at a time (a semaphore per
-repository). Disposing it releases every hold, then stops the server; nothing under `root` is
-deleted.
+repository). Since phase 7b the lock, the home folder, the runner, the holds, the faults, the records
+and the semaphores are the shared core's. Disposing it releases every hold, since phase 7b a request
+already waiting at one included (over TCP the server's stop may still cut that request off), then
+stops the server; nothing under `root` is deleted.
 
 **What a test adds** (`FakeGitHub.Model.cs`). `AddUser(login, id, name)` gives a `FakeUser`
 (settable `IsOrganization`; `AvatarBytes`, by default a 64×64 PNG of the user's colour, 1001
@@ -5468,7 +6939,9 @@ that route waits before anything is decided about it until the hold is disposed,
 (then it goes on with an `Errors` line). `Arrived` completes when a request waits there; `Abandoned`
 (design 19 item 5) when a request held in process is given up by its sender, so a test proves a
 cancelled download or a sign-out's dropped request without a fixed sleep; over a served fake it sees
-only the server's stop. `git:o/r` delegates to `AuthRemoteServer.HoldNextRequest`, on a server only.
+only the server's stop. `git:o/r` delegates to `AuthRemoteServer.HoldNextRequest`, on a server only;
+a second hold of a git route before the first is disposed shares its gate, and either's dispose
+opens it (7a's, kept in phase 7b; the fakes of Azure DevOps and GitLab refuse a second one).
 `FailNext(route, fault)` answers that route's next request once with a `FakeGitHubFault`, after the
 header checks and before auth: `BadCredentials`, `PrimaryRateLimit`, `SecondaryRateLimit`
 (`Retry-After: 60`), `SsoRequired`, `SsoPartialResults` (the list as normal with `X-GitHub-SSO:
@@ -5502,27 +6975,36 @@ password; a header it cannot read and an unknown or revoked token get 401 with `
 realm="GitHub"` on every path it does not claim; with no header, an upload-pack of a repository that
 `IsPublic` allows is served as `anonymous`, as GitHub does; a receive-pack needs `MayPush`, else 403
 "Permission to octo/hello.git denied to ada.". `BeforeRefsAsync` runs before git lists a
-repository's refs. The other starts behave as before.
+repository's refs. The other starts behave as before. Since phase 7b a host also serves repositories
+at paths of any depth (`ServeAt`), looked up only when the two levels find nothing, and takes three
+more callbacks (`PushRefusal`, `LoginOfTokenIn`, `FetchRefusal`), which the fake of GitHub does not
+set, so its answers stay; see "The fakes of Azure DevOps and GitLab".
 
 **Ports** (D265, amending D97 as D150, D229 and D238 did). `AuthRemoteServer.Phase7aVisualChecksPort`
 is 47395, whose URLs the 7a pictures show; only the 7a walk-through and its real-window twin bind it,
 falling back to a free port when it is taken (`PortWasTaken`), and 47396 is reserved for a second
-7a walk-through project. Every other test, `VisualCommit.Hosting.Tests` included, uses port 0 or the
-in-process handler. `AuthRemoteServerTests` pins 47391 to 47395.
+7a walk-through project. Since phase 7b (D363) phase 7b's walk-through and its twin serve a fake of
+GitHub of their own on 47399 (`Phase7bGitHubPort`), with the same fallback, so that no 7b picture
+depends on 47395 in the process beside it; its fakes of Azure DevOps and GitLab are on 47397 and
+47398 ("The fakes of Azure DevOps and GitLab"). Every other test, `VisualCommit.Hosting.Tests`
+included, uses port 0 or the in-process handler. `AuthRemoteServerTests` pins 47391 to 47395 and
+47397 to 47399.
 
-**The harness's seams** (design 1.9, 2.5). Every test process and the app the real-window pass
-starts begin with GitHub off and tokens in memory (`GitIsolation.MachineIndependence`:
-`VISUALCOMMIT_GITHUB_URL=none`, `VISUALCOMMIT_KEYCHAIN=memory`, no token variable).
-`ShellDriver.Start` and `StartWithTabs` take, last, `gitHub:` (a fake on a port), `tokens:` (a
-`FakeTokenStore`) and `hosting:` (options as given) and pass the options and the store to
-`AppSession.Start`:
+**The harness's seams** (design 1.9, 2.5; phase 7b's design 1.8, 1.9, 2.4). Every test process and
+the app the real-window pass starts begin with the providers off and tokens in memory
+(`GitIsolation.MachineIndependence`: `VISUALCOMMIT_GITHUB_URL=none`, since phase 7b also
+`VISUALCOMMIT_AZURE_DEVOPS_URL=none` and `VISUALCOMMIT_GITLAB_URL=none`, `VISUALCOMMIT_KEYCHAIN=memory`,
+no token variable). `ShellDriver.Start` and `StartWithTabs` take, last, `gitHub:` (a fake on a port),
+`tokens:` (a `FakeTokenStore`), `hosting:` (options as given) and, since phase 7b, `azureDevOps:` and
+`gitLab:` (fakes on a port), and pass the options and the store to `AppSession.Start`:
 
 | Given | The session's hosting options |
 |---|---|
-| neither | `HostingOptions.Off`, its handler a `LoopbackOnlyHandler` over a `SocketsHttpHandler` without proxy or redirects |
-| `gitHub:` | the fake's `Endpoints`, each handler a `LoopbackOnlyHandler` over `HostingOptions.DefaultHandler(endpoints)` |
-| `hosting:` | as given, with no loopback filter: an in-process fake's `new HostingOptions(fake.Endpoints, fake.CreateHandler)`, or the live command's github.com |
-| both, or an in-process fake as `gitHub:` | `ArgumentException` (design 16 item 3) |
+| no fake and no `hosting:` | `HostingOptions.Off`, each of the three providers' handlers a `LoopbackOnlyHandler` over a `SocketsHttpHandler` without proxy or redirects |
+| `gitHub:` | the fake's `Endpoints` in GitHub's slot, each of its handlers a `LoopbackOnlyHandler` over `HostingOptions.DefaultHandler(endpoints)` |
+| `azureDevOps:`, `gitLab:` (phase 7b) | the fake's endpoints in its provider's slot (`AzureDevOps`, `GitLab`), its handler a `LoopbackOnlyHandler` over `HostingOptions.DefaultHandler` of the fake's web base (Azure DevOps) or API base (GitLab); a provider given no fake stays off with the handler of the first row |
+| `hosting:` | as given, with no loopback filter: an in-process fake's `new HostingOptions(fake.Endpoints, fake.CreateHandler)`, or the live command's options for the real services |
+| a fake beside `hosting:`, or an in-process fake as `gitHub:`, `azureDevOps:` or `gitLab:` | `ArgumentException` (design 16 item 3; phase 7b's design 1.9) |
 
 `LoopbackOnlyHandler` lets through only a request whose host parses as a loopback IP address
 (`localhost` does not) and records any other in the session's `RefusedRequests`, failing it with
@@ -5532,7 +7014,10 @@ to two starts is the scripted restart. Before `Start` returns it runs the UI thr
 15 ms until `AppSession.HostingStarted` has completed (the hosting session's read of its account and
 token, whose posts need the UI thread), at most `ShellDriver.DefaultWaitTimeout`, rethrowing what the
 start threw. `ShellDriver.SignInAsync(token)` signs in through the session with no dialog and
-throws, with the failure's kind and message and never the token, unless the account is signed in.
+throws, with the failure's kind and message and never the token, unless the account is signed in;
+since phase 7b `SignInAsync(provider, token, organization)` does the same for any provider, its
+failure naming the provider (`HostingProviders.DisplayName`) with the token and the organization
+screened out.
 
 `FakeTokenStore` (`tests/VisualCommit.Testing/Headless/`) is the harness's keychain: tokens in
 memory that, unlike the app's memory store, count as kept across restarts (`Name` "fake",
@@ -5547,13 +7032,18 @@ the platform stores (see "CI" and "Tokens and the keychains").
 `TokenTripwire.AssertAbsent(token, folders, calls)` searches every file under the folders, `.git`
 included, for the token as UTF-8, UTF-16LE, URL-escaped, base64 of `x-access-token:<token>` (git's
 Basic header) and base64 of the token (the macOS store's form), and each git call's command,
-recorded standard input, output and error for the text forms. A find names the file or the call and
-the form, never the token: a call whose command holds it is named by its words before the first
-that does, then "…" and its sequence number (design 18 item 2). A file is read sharing read, write
-and delete; one still unreadable after five tries 100 ms apart fails as unreadable, since it may hold
-the token, and one deleted first passes. The checks run it over the data folder and the clones at
-their end, `HostingSessionSetup`'s disposal over its data folder, the real-window pass and the live
-command over theirs.
+recorded standard input, output and error for the text forms. Since phase 7b (its design 2.5) the text
+forms also hold the token in base64 at each of the three alignments a prefix can leave it at (`base64
+at offset k`, k = 0, 1, 2: the base64 of k zero bytes and the token, less its first quantum when k
+is 1 or 2 and less a last partial one), so the token is found after any prefix (`x-access-token:`,
+Azure DevOps' `:`, `oauth2:`, `<organization>:`); a form under 8 characters is left out, and
+`TokenTripwireFormsTests` tries them. A find names the file or the call and the form, never the
+token: a call whose command holds it is named by its words before the first that does, then "…" and
+its sequence number (design 18 item 2). A file is read sharing read, write and delete; one still
+unreadable after five tries 100 ms apart fails as unreadable, since it may hold the token, and one
+deleted first passes. The checks run it over the data folder and the clones at their end,
+`HostingSessionSetup`'s and `ProvidersSessionSetup`'s disposals over their data folders, the
+real-window pass and the live command over theirs.
 
 **The scenario "hosting"** (`Scenarios.Phase7a.cs`, design 2.6). `Scenarios.HostingAsync()` copies,
 with one git process, a template built once per test process: `hello/` (the returned repository),
@@ -5591,39 +7081,367 @@ pushed head's `refs/pull` moved at the next listing) and `FakeTokenStoreTests`, 
 `VisualCommit.Hosting.Tests`; `Phase7aSupportTests` (the 7a project) tries the safety nets, the
 tripwires and the seams once.
 
-### The live command (D250, D260, D323 to D328, D335, D337)
+### The fakes of Azure DevOps and GitLab (D346, D363, D370)
 
-Real GitHub is tried by an opt-in command of its own (D250): `tests/VisualCommit.LiveHostingTests`
-(`net10.0-windows`, `Exe`; App, Core, Git, Hosting, Testing; `xunit.v3`, `Avalonia.Headless.XUnit`)
-runs the whole app in Avalonia's headless mode against github.com with the owner's fine-grained token
-for one private sandbox repository on the owner's account (D326: then the clone too proves that the
-token reached git). It is in no solution (`VisualCommit.slnx`'s comment says why), so `dotnet build`,
-`dotnet test` and CI's test steps never touch it; CI's Windows job builds it and never runs it (D337,
-"CI"). It runs only by its own command, `bash scripts/heavy-run.sh --project
-tests/VisualCommit.LiveHostingTests -c Release` (CLAUDE.md), under the heavy-run lock, which the
-owner is told of because it acts on their account: at a gate once before its pictures, its
-corrections to the fake committed before the passes, once on the counted round after the real-window
-pass and the pictures' list, and alone on a later commit that changes only this project, which then
-keeps the Gate commit where it was (D328, D335). It takes no screenshot and writes nothing under
-`artifacts/visual`.
+No test of the default run or of CI reaches Azure DevOps or GitLab (D346). Every one of them that
+talks to either talks to `FakeAzureDevOps` or `FakeGitLab` (`tests/VisualCommit.Testing/Hosting/`,
+each partial over its `.cs`, `.Router.cs`, `.Json.cs`, `.Git.cs` and `.Model.cs`): the API, web pages
+and git on one host, `http://127.0.0.1:<port>/`, through `AuthRemoteServer`'s host mode, or the same
+routes in process. In this section "design" is phase 7b's (sections 2 to 4, with their As built
+notes). The fakes were written from phase 7b's research, not from the clients: each answer's mark,
+MEASURED, READ or ASSUMED, is in its doc comment, and the head of each `.Router.cs` lists what the
+live command settled and what stays READ or ASSUMED, with the reason (D342, D370, D375); stage 1's
+run and the fix package after it (WP-LF, design 16.1) copied what it probed, and the gate's live runs
+changed neither fake (D394 changed GitHub's). They are stricter than the services only where
+D370 says: the fake of Azure DevOps answers a request without `api-version` 400
+`VssInvalidApiResourceVersionException` in its own words, and the fake of GitLab takes a token from
+`Authorization: Bearer` alone, answering `PRIVATE-TOKEN` and `private_token` as no token; it runs no
+quick actions and does not model a fine-grained token limited to selected projects. No
+`<organization>.visualstudio.com` is served: that host's recognition and bindings are tested on
+strings and with real git's offline credential matching (D363).
 
-**The variables** (D260). `VISUALCOMMIT_LIVE_GITHUB_TOKEN` (the token) and
-`VISUALCOMMIT_LIVE_GITHUB_REPO` (`owner/name`) are Windows user variables that the owner sets once.
-The assembly's module initializer runs before `Main`, any test and Avalonia's set-up:
-`LiveSettings.CaptureAndRemove()` reads both, trimmed, once and removes them from the process, so
-that no git or app process inherits them; then `HeadlessTestApp.IsolateFromTheMachine()` (whose
-`MachineIndependence` removes both from every other test process too); and the hang watchdog's
-limit becomes 600 s unless the owner set one (`Check_2`'s step limits add up to about 510 s).
-`LiveSettings.Require()` gives a `LiveSandbox(Owner, Name, Token)`, whose `ToString()` leaves the
-token out, or throws one message naming the variable that is missing or not `owner/name`; every test
-calls it first and none is skipped, so without the variables all three fail at once (a skip could pass
-for green at a gate). Tests run one at a time (`DisableTestParallelization`), in `GitHubLiveOrder`'s
-order.
+**The shared core** (D363, design 2.3). `FakeServiceCore<TFault, TRequest>` (internal,
+`FakeHostingService.Core.cs`) holds what no provider owns, taken out of 7a's `FakeGitHub`: the lock
+the tables are kept under, git's isolated home and `GitRunner` (`TempRepo.IsolatedEnvironment`, git
+never inside the lock), holds of at most 120 s, faults taken once per route, the request log,
+`Errors` with the server's, a semaphore per repository, the server's start in host mode, and a
+dispose that releases every hold, a request already waiting at one included, before it stops the
+server. `FakeGitHub` keeps its own tables, types and records over one; `FakeHostingService`
+(abstract, `FakeHostingService.cs`, its types in `.Model.cs`) is the two new fakes' surface over
+another; `FakeServiceConversion` (`.Handler.cs`) turns `HttpClient`'s messages into a route's request
+and an answer back for every in-process handler, GitHub's included, a dropped answer being an
+`HttpRequestException` "The fake of {DisplayName} closed the connection without an answer.".
+
+**A request.** `FakeHostingService` gives `Port`, `PortWasTaken`, `Root`, `DisplayName` ("Azure
+DevOps", "GitLab"), `MaxPerPage` (100), `CreateHandler()`, `Requests`, `GitRequests` and `Errors`
+(snapshots, safe from any thread), `HoldNext(route)`, `FailNext(route, fault)`, `Revoke(token)`
+(the next request with it refused, git's included) and `DisposeAsync()`; a fake gives its realm,
+`Claims` (decided from the request line's raw path), `RouteOf` (a lower-case key, the key of holds,
+faults and records), `AnswerAsync`, `IsPublic` and `MayPush`, and may override `PushRefusal`,
+`FetchRefusal`, `LoginOfToken(repository, token)` and `BeforeGitAsync` (the ref sync), which
+`FakeHostingService.StartServerAsync` wires to `AuthRemoteHostOptions` before the core starts the
+server: `LoginOfToken(repository, token)` as `LoginOfTokenIn`, asked only for a path in a served
+repository, beside an options' `LoginOfToken` that takes any known token not revoked, so that a known
+token on a path in no repository gets 404, not 401. A request goes through, in order: its route, the
+hold on that route, the fault waiting for it (`FakeServiceFault.Dropped` answers nothing and is
+recorded with status 0; `ServedThenDropped` serves the request in full and then drops the answer;
+any other fault goes to the fake's answer, which answers it where its checks put it), the record
+last; a path the fake does not claim (in process, git's) gets 404 "Not found.". The credential is
+read after the fault is taken and before the fake's answer (`FakeAuthorizationForm`): `Bearer`,
+`Basic`, `BasicEmptyUser` (`:` and the token), `PrivateToken` (the header), `Query` (a `private_token` parameter), `None`, and `Other` for another
+scheme, a Basic header that cannot be read, an empty token or two credentials at once.
+`FakeServiceRequest(Method, Host, Path, Query, Route, Authorization, Login, Status, Body)` keeps the
+raw path, a `private_token` value as `***`, the body of a POST, PUT or PATCH, and never a token;
+`FakeServiceCall.ToString()` hides the token. A repository is named by its folder under `Root`
+without a final `.git` (`Fernhill-Labs/Mobile App/_git/mobile-app`, `northfield/platform/web-app`)
+in every callback, hold and gate, whichever registered path reached it. `HoldNext("git:<folder>")`,
+matched without case, holds that repository's next git request through the server, on a server
+only, and refuses a second hold of it until the first is disposed, since the server's release opens
+every gate of a repository; `FailNext("git:…")` throws `NotSupportedException`. A bare repository
+(`BareRepositoryAsync`) is `<Root>/<urlPath>`, `.git` added for GitLab: used in place when it holds
+`HEAD`, else one `git clone --bare --no-hardlinks` of a source, else `git init --bare
+--initial-branch main`, then served at its path.
+
+**Host mode by path** (D363, design 2.2). `AuthRemoteServer.ServeAt(urlPath, folder, gitSuffix)`
+registers a host's bare repository (a folder relative to the host's, holding `HEAD` and `objects`)
+at a decoded path of any depth, also while the server runs, without running git; with `gitSuffix`
+(GitLab's) the last segment followed by `.git` names it too, never for Azure DevOps, which keeps
+`.git` in a repository's name. A path registered again with its folder and suffix changes nothing,
+with another folder or the other suffix throws; two paths may share a folder (Azure DevOps'
+`{o}/_git/{r}` beside `{o}/{p}/_git/{r}`). After the routes' `Claims`, which keep the raw path
+(GitLab's `%2F`), a request's path is decoded segment by segment as strict UTF-8; a segment that is
+empty, holds a character beyond ASCII or a `%` without two hex digits, does not decode, or decodes to
+hold `/`, `\` or a control character or to `.` or `..`, puts the path in no repository (404, no
+`http-backend`, no `Errors` line), and so does a segment after the registration's that needs
+decoding at all, since the push guard and `http-backend` read the raw rest. The longest registration
+whose segments equal the path's first ones without case, with a segment after it, is the repository;
+`http-backend`'s `PATH_INFO` is `/`, the folder and the raw rest. 7a's two-level lookup comes first
+and keeps its answers. `UrlOf` names a registered path (`http://127.0.0.1:<port>/`, its segments
+`Uri.EscapeDataString`d, `.git` with the suffix) and `ServedRepositories` lists its folder's name
+without a final `.git`, as for 7a's repositories.
+`AuthRemoteHostOptions` gained, last and optional, `PushRefusal` (a refused push's 403 text; none:
+7a's), `LoginOfTokenIn` (a Basic password's login in a served repository, asked there in place of
+`LoginOfToken`) and `FetchRefusal` (a 403 `text/plain` to a signed-in request that is no push, after
+auth and before `http-backend`). A git 401 carries one `Basic realm`, the fake's.
+
+**The fake of Azure DevOps** (D346, design 3). `FakeAzureDevOps.StartAsync(root, port,
+fallBackToFreePort)` serves in host mode; `InProcess(root)` serves the routes alone, its endpoints
+`AzureDevOpsEndpoints.Local(2)` (`InProcessPort`), never listened on; `Endpoints` is
+`AzureDevOpsEndpoints.Local(Port)`, whose web base is `http://127.0.0.1:<port>/` with the
+organization as the path's first segment. A test adds organizations (`AddOrganization(name,
+publicProjects)`), projects (`AddProject(organization, name, isPublic, description)`, settable
+`Members`), users (`AddUser(organization, displayName)`: a made-up GUID fixed by the order things are
+added in and an address of the name's words joined by `.` at example.com; settable
+`CustomDisplayName` and `MetaTypeId`), tokens (`AddToken(organization, user, codeWrite)`:
+`azdo_FAKE-<organization>-<n>`, n counted per organization, valid in that organization alone;
+`Expire`, and the core's `Revoke`), repositories (`AddRepositoryAsync(organization, project, name,
+sourceRepository, forkOf)` at `<root>/{o}/{p}/_git/{r}`, served at that path and, when the
+repository is named as its project, at `{o}/_git/{r}`; settable `IsDisabled` and `Contributors`) and
+pull requests (`AddPullRequest(target, title, creator, sourceBranch, targetBranch, fork, draft,
+description, id)`, one sequence of ids per organization; settable `Status` and `Conflicts`). Names
+are looked up without case and answered in the spelling they were added with; `CreateStatus` (201
+unless set) is a create's status; `User`, `Repository`, `PullRequests` and `SyncRefsAsync` read and
+drive the state. Claimed are a path with an `_apis` segment and every GET but git's `…/info/refs`;
+route keys hold the decoded names, lower-case, a project or repository named by its GUID keyed by
+its name:
+
+| Key | Request | Answer |
+|---|---|---|
+| `connection:{o}` | `GET {o}/_apis/connectionData` | the caller's identity, or Anonymous's (check 4) |
+| `areas` | `GET {o}/_apis/resourceAreas/<core area>`, or `GET _apis/resourceAreas/<core area>?organizationName={o}` (or `accountName`) | the core area, its `locationUrl` the organization's web base in the stored spelling; in the root form an unknown organization 404 TF400677 and one without `organizationName` or `accountName` 404 "Page not found" (under `{o}/` an unknown organization gets check 1's 404); no credential is read |
+| `repos:{o}[/{p}]` | `GET {o}[/{p}]/_apis/git/repositories` | `{"value","count"}`: the readable projects' repositories in creation order, unpaged, `$top` ignored; a project unknown or hidden 404 TF200016 |
+| `repo:{o}/{p}/{r}` | `GET …/git/repositories/{name or id}` | the repository with `_links`, a fork's with `parentRepository`; 404 TF401019 |
+| `pulls:{o}/{p}/{r}` | `GET …/pullrequests` | after the ref sync: `searchCriteria.status` (`active` unless `abandoned`, `completed` or `all`), `$skip`, `$top` (101 rows when none is sent, whatever `MaxPerPage` is; one sent capped at `MaxPerPage`); id descending, `count` the page's |
+| `pull:{o}/{p}/{n}` | `GET …/repositories/{r}/pullrequests/{n}` or `GET {o}/{p}/_apis/git/pullrequests/{n}` | after the ref sync, the pull request whole, with `artifactId`; 404 TF401180 |
+| `create:{o}/{p}/{r}` | `POST …/pullrequests` | below |
+| `update:{o}/{p}/{n}` | `PATCH …/pullrequests/{n}` | `status`, `title` and `description`; anything else 400 `InvalidArgumentValueException` |
+| `refs:{o}/{p}/{r}` | `GET …/refs?filter=`, `POST …/refs` | after the ref sync, the refs under the filter; the POST deletes and creates branches and tags in one `update-ref --stdin`, each update's status at 200 (`succeeded`, `staleOldObjectId`, `unresolvableToCommit`, `refNameConflict`, names and folders compared without case, `invalidRefName`) |
+| `page` | any other GET | 200 `text/html`, whatever the path; no check but a fault |
+
+Its checks, in order: (1) the organization: an unknown one 404 `text/plain` "The resource cannot be
+found.", without a credential as with a token, and an `_apis` path no route serves 404 "Page not
+found"; (2) `api-version`, from the query or `Accept`: none 400 `VssInvalidApiResourceVersionException`
+in the fake's words (D370), a malformed one that type in the service's words, above 7.2
+`VssVersionOutOfRangeException`, no `-preview` on `connectionData` and the resource area or at 7.2
+elsewhere `VssInvalidPreviewVersionException`, a preview's resource version above 1 on a git route
+404 "Page not found"; (3) a pending fault; (4) the credential, `Authorization: Basic` alone with its
+user ignored: a password in one of the token forms (`azdo_FAKE-…`, 84 characters with `AZDO` at 76
+to 79, or the older 52 of `a` to `z` and `2` to `7`) that is unknown, revoked or another
+organization's gets 401 with an empty body and one `Basic realm` (`TokenRealm`), an expired one 401
+`AccessCheckException` led by a byte-order mark; no credential, another scheme (`Bearer` among them)
+or a value in none of the forms is no credential: `connectionData` answers the Anonymous identity in
+an organization with `publicProjects`, a public project's reads go on, and anything else gets the
+sign-in's 302 to the fake's made-up identity host, or with `X-TFS-FedAuthRedirect: Suppress` 401
+TF400813 with the three challenges; (5) the route: a project or repository the caller cannot see
+404 TF401019, a read-only token's write 401 TF400813, a write by a user the repository's
+`Contributors` leave out 403 TF401027. A create takes `sourceRefName`, `targetRefName`, `title`,
+`description`, `isDraft` and `forkSource.repository.id`: no title 400 `InvalidArgumentValueException`
+in the service's words, a ref outside `refs/heads/` or a missing branch 400 TF401398, an active
+pull request of that source and target 409 TF401179, else `CreateStatus` with `status: active`,
+`mergeStatus: queued` and the token's user as `createdBy`, also with nothing ahead. The answers are
+camelCase with dates of seven fractional digits and `Z`; a success's
+`Content-Type` names `api-version=<served>`; `ActivityId`, `X-TFS-Session` and `X-VSS-E2EID` carry
+one id from a counter; no `ETag`, `Link` or continuation. `FakeAzureDevOpsFault`, each once and then
+the normal answer: `InvalidToken`, `Unauthorized`, `Expired`, `SignInRedirect`, `NonAuthoritative`
+(203 `text/html`), `AnonymousIdentity`, `Throttled` (429 with `Retry-After` and `X-RateLimit-*`),
+`Delayed` (`X-RateLimit-Delay` on the normal answer), `VersionRefused`, `NotFound`, `RouteMissing`,
+`OrganizationMissing`, `ServerError` (500), `BadGateway` (503 HTML), `Malformed` and
+`CreatedThenDropped`, besides the core's two drops.
+
+Its git (design 3.5): host mode serves `{o}/{p}/_git/{r}` with no `.git` stripped. `LoginOfToken`
+gives `{o}/<user id>` (`#read` added for a read-only token) for a known, unexpired token of the
+repository's organization, its first segment, under any non-empty user, `{o}` and `x-access-token`
+included; another organization's token gets 401. `IsPublic` is the project's, for a repository that
+is not disabled; `MayPush` takes a write token's user whom `Contributors` names, or any when it names
+none; a refused push gets 403 TF401027 naming the user. Every git 401 names `TfsRealm`, the form
+measured for git's first request without a credential, where the service named `TokenRealm`'s form
+when it refused a credential: a difference kept, since `AuthRemoteServer` gives every git 401 one
+realm and the app's helper reads no `wwwauth[]` (the Router's header). The ref sync (D267's pattern,
+before `pulls`, `pull`, `create`, the `refs` GET and git's ref listing): an active pull request
+without `Conflicts` whose target's or source's tip moved gets a new `refs/pull/<n>/merge`, one `git
+commit-tree <source>^{tree} -p <target> -p <source>` with the message "Merge pull request <n> from
+<source> into <target>" and its creator at the harness's time as author and committer, a fork's
+source fetched first into `refs/fake/source/<n>`; one `update-ref --stdin` writes them and deletes
+`refs/fake/source/*` and the merge refs of abandoned, completed and conflicting ones; a pull request
+whose branch is gone keeps its ref; there is no `/head` and no `/source`. `mergeStatus` is `queued`
+until the first sync after the create, then `succeeded` (`conflicts` while `Conflicts`). Each merge
+commit is one git process, so design 3.5 keeps a test's repository at 20 active pull requests
+without `Conflicts` at most.
+
+**The fake of GitLab** (D346, design 4). `FakeGitLab.StartAsync` and `InProcess` as Azure DevOps',
+in process on `GitLabEndpoints.Local(3)`; `Endpoints` is `GitLabEndpoints.Local(Port)`, its API base
+`<web>api/v4/`. A test adds users (`AddUser(username, id, name)`, the address
+`<username>@example.com`), tokens (`AddToken(username, kind, permissions, expires)`:
+`glpat-FAKE-<username>-<n>`, n counted per user; a legacy token's scopes, `api` by default, or a
+fine-grained token's labels, by default `FakeGitLabPermissions.FineGrainedDefault`, D364's list as
+D385 amended it, without Personal Access Token: Read; an expiry on or before the harness's date
+expires it; `Expire`, and the core's `Revoke`), projects (`AddProjectAsync(path, sourceRepository,
+visibility, forkOf)`: a path of 2 to 22 segments, ids from 5001, served by git at `<path>.git` and
+`<path>` from `<root>/<path>.git`; settable `Visibility`, `IsArchived`, `MergeRequestsEnabled`,
+`Description`, `LastActivityAt`), access (`Grant(path, username, accessLevel)`, 10 to 50, on a group
+or project and all below it, the higher grant counting; a project under a username is that user's,
+Owner 50), API-only lists (`AddListedProjects(namespacePath, count)`, private and git-less,
+`listed-0001` on) and merge requests (`AddMergeRequest(target, title, author, sourceBranch,
+targetBranch, source, description, iid)`, ids from 7001, iids per target, a draft when the title
+starts `Draft:`, `[Draft]` or `(Draft)` without case; settable `State`). `Project`, `MergeRequests`,
+`Move(path, newPath)` and `SyncRefsAsync` read and drive the state. Claimed are `api/v4/…` and every
+GET but git's (a path with a segment ending in `.git` and more after it). A project's `:id` is its
+number or its path escaped (`%2F` or `%2f`), without case, a trailing `/` allowed; route keys name
+the project's path now:
+
+| Key | Request | Answer |
+|---|---|---|
+| `user`, `self` | `GET user`, `GET personal_access_tokens/self` | the token's user; the token |
+| `projects` | `GET projects` | with `membership=true` the user's projects, through groups too, else the public ones and the user's; `archived`, `simple`, `order_by`, `sort`; `per_page` 20 by default, clamped at `MaxPerPage` |
+| `project:<path>` | `GET projects/:id` | the project; an unknown or hidden one 404 "404 Project Not Found" |
+| `mrs:<path>` | `GET projects/:id/merge_requests` | after the ref sync; `state` (`all` by default), `source_branch`, `target_branch`; `created_at` descending |
+| `mr:<path>/<iid>` | `GET …/merge_requests/:iid` | after the ref sync; an unknown one 404 "404 Not found" |
+| `create:<path>` | `POST …/merge_requests` | below |
+| `update:<path>/<iid>`, `delete:<path>/<iid>` | `PUT`, `DELETE …/merge_requests/:iid` | `state_event` `close` or `reopen`; a DELETE 204 for an Owner alone, else 403 |
+| `branches:<path>` | `GET …/repository/branches?search=`, `DELETE …/repository/branches/:branch` | the branches; a delete 204, 404 "404 Branch Not Found", 403 without push |
+| `page` | any other GET | 200 `text/html`; a moved project's page 301 to its new path; a `GET <path>/info/refs` without `.git`, 301 to `<path>.git/info/refs` with its query, which git follows |
+
+A path below `api/v4/` that no route serves gets 404 `{"error":"404 Not Found"}` before any check.
+Its checks, in order: (1) a pending fault; (2) the token, from `Authorization: Bearer` alone; (3) no
+token: 401 "401 Unauthorized" without `WWW-Authenticate`, but the project list and a project's reads
+go on (a public project answers, an unknown or hidden one 404 "404 Project Not Found"); an unknown
+token the same 401; a revoked or expired one 401 `invalid_token` with its challenge; (4) a legacy
+token without the route's scope: 403 `insufficient_scope`, `scope` in body and header; (5) a
+fine-grained token without the route's permission: 403 `insufficient_granular_scope` naming `user`
+or `project` and the label, but a public project's reads pass; (6) the route: an old path's GET 301
+to `projects/<id>` and the rest with the query, any other method 405. A create, in order: a missing
+`title`, `source_branch` or `target_branch` 400 "<name> is missing", joined by ", "; below Developer
+on the source, or its merge requests off, 403; an unknown `target_project_id` 404 "404 Not found"; a
+target the user cannot read or with merge requests off 403; 422 for the same project and branch or
+a source that is not a fork of the target; 409 "Another open merge request already exists for this
+source branch: !<iid>"; 400 `{"source_branch":["does not exist"]}`, then `target_branch`; else 201,
+its iid the target's next, the description stored as sent, nothing ahead allowed and the head ref
+written. Answers are snake_case with `Content-Type: application/json` and dates with milliseconds
+and `Z`; every API answer has the `ratelimit-*` headers and `x-request-id` (`FAKE-GL-<6 digits>`); a
+200 GET has a weak `ETag`, and a matching `If-None-Match` gets 304, still counted; a list has `Link`
+and the `x-*` page headers, `x-next-page` empty on the last, and `[]` past the end.
+`FakeGitLabFault`, each once: `Unauthorized`, `Expired`, `Revoked`, `InsufficientScope`,
+`InsufficientGranular`, `Forbidden`, `NotFound`, `RateLimited` (429 "Retry later", `Retry-After:
+60`), `EndpointRateLimited` (429, `Retry-After: 600`), `Timeout` (408), `ServerError` (500),
+`BadGateway` (502 HTML), `Malformed`, `CreatedThenDropped` and `MovedTo(uri)`, besides the core's two.
+
+Its git (design 4.5): `LoginOfToken` gives the username of a live token under any non-empty user,
+else null, so 401 with realm `GitLab`; `IsPublic` is `public` alone; `MayPush` needs Developer (30)
+or above and `api`, `write_repository` or Code: Push; a refused push and a refused fetch get 403
+`text/plain` in `Gitlab::GitAccess#check`'s order (a legacy token's missing ability, then a hidden
+project's 404 text, then a fine-grained label). The token reaches `MayPush`, `PushRefusal` and
+`FetchRefusal` through a `[ThreadStatic]` that `LoginOfToken` sets, because
+`AuthRemoteServer.HostAccess` asks the four in one synchronous call per request, which a change there
+must keep. A moved project (`Move`) is served by git at its old path and its new, fetch and push, 200
+with no redirect; paths match without case. The ref sync (before `mrs`, `mr`, `create` and git's
+ref listing) brings each open merge request's `refs/merge-requests/<iid>/head` in the target to its
+source's tip, by one `update-ref --stdin` and one fetch per fork, removes a deleted one's, and keeps
+a closed or merged one's and an open one's whose source branch is gone; there is no `/merge`.
+
+**Ports** (D363). Phase 7b's walk-through and its real-window twin bind
+`AuthRemoteServer.Phase7bAzureDevOpsPort` 47397, `Phase7bGitLabPort` 47398 and `Phase7bGitHubPort`
+47399 (7b's own fake of GitHub), each falling back to a free port when it is taken (`PortWasTaken`);
+47396 stays reserved for a second 7a walk-through project. Every other test uses port 0 or a fake in
+process, whose endpoints are `Local(1)` (GitHub), `Local(2)` (Azure DevOps) and `Local(3)` (GitLab),
+never listened on. The harness's seams for the two fakes are in "The fake of GitHub".
+
+**The scenario "hosting7b"** (`Scenarios.Phase7b.cs`, design 2.6). `Scenarios.Hosting7bAsync()`
+copies, with one git process, a template built once per test process, and returns `mobile-app/`;
+beside it `manifest/`, `web-app/` and the fakes' folders `azure-devops/`, `gitlab/` and `github/`.
+Commits a minute apart by Octo Cat, Ada Lovelace and `TempRepo`'s Test Author; made-up names only:
+
+- `azure-devops/Fernhill-Labs/Mobile App/_git/mobile-app`: `main` from 12:00 with three commits and
+  one commit each on `feature/sign-in`, `docs/guide` and `topic/no-request`; beside it
+  `mobile-app-fork` (the same and `fix-typo`), and `sandbox` and
+  `customer-onboarding-and-identity-verification-service`, empty (no default branch).
+  `azure-devops/harbor-co/Docks/_git/manifest`: `main`.
+- `gitlab/northfield/platform/web-app.git`: `main` from 12:20 with three commits and one each on
+  `feature/search`, `docs/readme` and `topic/no-request`; `gitlab/ada/web-app.git`, the same and
+  `fix-typo`; `gitlab/northfield/platform/services/billing/invoice-generation-and-reconciliation.git`,
+  empty.
+- `github/octo/web-app.git`: web-app's `main`.
+- `mobile-app/`: `main` and `feature/sign-in` tracking origin, local-only `local-work`, on `main`;
+  origin `http://Fernhill-Labs@127.0.0.1:47397/Fernhill-Labs/Mobile%20App/_git/mobile-app`, the
+  service's `<organization>@` form. `manifest/`: origin
+  `http://harbor-co@127.0.0.1:47397/harbor-co/Docks/_git/manifest` (D356). `web-app/`:
+  `feature/search` tracking origin, local-only `local-work`, on `main`; origin
+  `http://127.0.0.1:47398/northfield/platform/web-app.git`, upstream
+  `http://127.0.0.1:47399/octo/web-app.git` (ruling 5). Each remote's `HEAD` is at its `main`, and
+  the URLs are written last.
+
+`Scenarios.ServeHosting7bAsync(copy, azureDevOpsPort = 47397, gitLabPort = 47398, gitHubPort =
+47399, ownsCopy, ct)` gives a `ServedHosting7b` (`AzureDevOps`, `GitLab`, `GitHub`, `MobileApp`,
+`Manifest`, `WebApp`, `AzureDevOpsToken`, `GitLabToken`, `GitLabLegacyToken`, `GitHubToken`,
+`Tokens`, `Organization`, `OtherOrganization`; its `ToString` shows no token): the three fakes on
+the copy's folders, each on a port with the fallback, none in process; on GitHub octo 1001 "Octo
+Cat", `github_pat_FAKE-octo-1` and the public `octo/web-app`; then its two halves. Azure DevOps'
+(`SeedHosting7bAzureDevOpsAsync`): the organization `Fernhill-Labs` with the private project "Mobile
+App", the users Ada Lovelace and Octo Cat and Ada's token `azdo_FAKE-Fernhill-Labs-1`; the
+repositories `mobile-app`, `mobile-app-fork` as its fork, `sandbox` and the long one; pull requests
+!11 "Add the sign-in page" (Ada, `feature/sign-in`), !12 "Write the guide" (Octo, `docs/guide`, a
+draft) and !13 "Fix a typo in the greeting" (Ada, from the fork's `fix-typo`); `harbor-co` with the
+project "Docks", a user Test Author without a token, `manifest` and its !5 from a branch the bare
+repository lacks, which never gets a merge ref. GitLab's (`SeedHosting7bGitLabAsync`): ada 2001 and
+octo 2002, both Developers of the group `northfield`, ada's fine-grained `glpat-FAKE-ada-1` and
+legacy `glpat-FAKE-ada-2`; the private projects web-app, `ada/web-app` as its fork and the long one;
+!21 "Add the search box" (ada, `feature/search`), !22 "Draft: Update the readme" (octo,
+`docs/readme`) and !23 "Fix a typo in the footer" (ada, from the fork's `fix-typo`). The bare folders
+are served in place, and the merge and head refs are written at each fake's first ref sync. Only a
+fake on a port other than its fixed one has its clones' remotes rewritten (`git remote set-url`,
+keeping `<organization>@` and `%20`; D265's rule), as in `VisualCommit.Hosting.Tests`, which serves
+all three on port 0. With `ownsCopy` its disposal deletes the copy after it stops the three fakes.
+
+**Their own tests.** `FakeHostingServiceTests` (the core through a fake of its own: holds, a fault
+once, both drops, `Revoke` on the API and on git, each credential form, git holds, `GitAsync`'s
+environment, the bare repositories' rule, the dispose), `FakeAzureDevOpsTests` and `FakeGitLabTests`
+(in process: every route, check, shape and fault, a fault then the normal answer, no record holding
+a token), `FakeAzureDevOpsGitTests` and `FakeGitLabGitTests` (port 0, real git without a helper:
+clones with `x-access-token` and with the organization or the username as the user, at both of
+Azure DevOps' paths and through GitLab's 301, the request refs as `ls-remote` shows them,
+refusals, anonymous clones of public repositories, a moved GitLab project at its old path, and each
+scenario half) and `TokenTripwireFormsTests`, in `VisualCommit.Hosting.Tests`;
+`AuthRemoteServerTests` (its paths in `AuthRemoteServerTests.Paths.cs`) and `GitIsolationTests` in
+Git.Tests; `Phase7bSupportTests` (the 7b project) pins ruling 27's names, a start without fakes off,
+the three fakes' endpoints on port 0 and the tripwire's refusal of other hosts, the refusals of a
+fake beside `hosting:` and in process, the scenario's layout, URLs and authors, the rewrite on port
+0, the log pattern, `WithPorts` and the picture names.
+
+### The live command (D250, D260, D323 to D328, D335, D337, D346, D352, D364, D371 to D375, D384, D393)
+
+The real services are tried by an opt-in command of its own (D250):
+`tests/VisualCommit.LiveHostingTests` (`net10.0-windows`, `Exe`; App, Core, Git, Hosting, Testing;
+`xunit.v3`, `Avalonia.Headless.XUnit`) runs the whole app in Avalonia's headless mode against
+github.com and, since phase 7b, against Azure DevOps Services (`dev.azure.com`) and gitlab.com
+(D346), each with the owner's token for one private sandbox: on GitHub a fine-grained token for one
+repository on the owner's account (D326: then the clone too proves that the token reached git); on
+Azure DevOps a token for one organization, whose sandbox, the project and repository
+`visualcommit-sandbox`, lies in an organization that holds other work, so that a guard in the command
+keeps every request to the sandbox (D352, D364, D371); on GitLab a fine-grained token of an account
+that lists other projects beside its sandbox project `visualcommit-sandbox`, behind a guard that
+admits that project alone (D364, D393). It is in no solution (`VisualCommit.slnx`'s comment says
+why), so `dotnet build`, `dotnet test` and CI's test steps never touch it; CI's Windows job builds it
+and never runs it (D337, "CI"). It runs only by its own command, `bash scripts/heavy-run.sh --project
+tests/VisualCommit.LiveHostingTests -c Release` (CLAUDE.md; one provider's class alone with
+`--filter-class "*GitHubLiveTests"`, `"*AzureDevOpsLiveTests"` or `"*GitLabLiveTests"`), under the
+heavy-run lock, which the owner is told of because it acts on their accounts: at a gate once before
+its pictures, its corrections to the fakes committed before the passes, once on the counted round
+after the real-window pass and the pictures' list, and alone on a later commit that changes only this
+project, which then keeps the Gate commit where it was (D328, D335). Since phase 7b its offline
+classes run alone first, on the same commit (`--filter-class "*LiveSafetyTests" --filter-class
+"*LiveScreenTests"`, CLAUDE.md), and the run with the tokens goes on only when they pass: in one
+process a failed class stops nothing, so the live run cannot gate on them (design 15.9). It takes no
+screenshot and writes nothing under `artifacts/visual`. In this section "design" is phase 7b's and
+"7a design" phase 7a's.
+
+**The variables** (D260, D364). Six Windows user variables that the owner sets once: GitHub's
+`VISUALCOMMIT_LIVE_GITHUB_TOKEN` (the token) and `VISUALCOMMIT_LIVE_GITHUB_REPO` (`owner/name`), and
+since phase 7b `VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN` with `VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO`
+(`<organization>/<project>/<repository>`) and `VISUALCOMMIT_LIVE_GITLAB_TOKEN` with
+`VISUALCOMMIT_LIVE_GITLAB_REPO` (`<namespace path>/<project>`). The assembly's module initializer
+runs before `Main`, any test and Avalonia's set-up: `LiveSettings.CaptureAndRemove()` reads all six,
+trimmed, once and removes them from the process, so that no git or app process inherits them; then
+`HeadlessTestApp.IsolateFromTheMachine()` (whose `MachineIndependence` removes all six from every
+other test process too, among `GitIsolation.HostingTokenVariables`); and the hang watchdog's limit
+becomes 600 s unless the owner set one (GitHub's `Check_2`'s step limits add up to about 510 s, and
+each new method's to at most 595 s, `LiveSteps.Sums`, which `LiveSafetyTests` holds under 600 s).
+`LiveSettings.Require()` gives GitHub's `LiveSandbox(Owner, Name, Token)`, and
+`Require(provider)` Azure DevOps' `LiveAzureSandbox(Organization, Project, Repository, Token)` (the
+organization `[A-Za-z0-9-]+`) or GitLab's `LiveGitLabSandbox(Namespace, Project, Token)` (2 to 21
+segments). No `ToString()` shows the token; Azure DevOps' hides the organization and GitLab's the
+namespace's first segment, the account's login (D384). Each throws one message naming the variables
+that are missing or not in their form; a new provider's never names a value, and says so when the
+repository variable holds what looks like a token. Every test calls it first and none is skipped, so
+without the variables every live test fails at once (a skip could pass for green at a gate). Tests
+run one at a time (`DisableTestParallelization`), each class in its own order (`GitHubLiveOrder`,
+`AzureDevOpsLiveOrder`, `GitLabLiveOrder`).
+
+**GitHub's class**, `GitHubLiveTests` with the fixture `LiveRun`, is phase 7a's; phase 7b changed none
+of its three methods, which follow.
 
 **`Check_1_the_sandbox_and_its_leftovers`** (`[Fact]`) reads the sandbox through the test's own
 client, `GitHubLiveApi` (an `HttpClient` without redirects, 30 s a call, GitHub's headers and the
 pinned version): it must answer 200 with `permissions.push`, and a public sandbox, a fork or a token
-that may not push fails, naming D326 or design 14.6. It then removes what a stopped run left (D324):
+that may not push fails, naming D326 or 7a design 14.6. It then removes what a stopped run left (D324):
 open pull requests whose head is a `visualcommit-live/` branch of the sandbox itself are closed and
 the branches under `refs/heads/visualcommit-live/` (compared ordinally, `LiveLeftovers`) deleted;
 anything else GitHub's `matching-refs` returns is noted as not touched, and a refused clean-up fails
@@ -5638,7 +7456,8 @@ address is named. Each probe is also answered by an in-process `FakeGitHub` (wit
 so a change of GitHub's or of the fake shows at the next run. The answers the app relies on are
 premises that fail the run once noted: the version's 400 names the header in `message` or `errors`;
 the lookups answer an array of 1 and of 0; an unknown SHA beside `author` answers 422, a 5xx or 404
-(D342).
+(D342; github.com answered 404 in phase 7b's gate's first run, 2026-11-08, which the fake of GitHub
+now gives too, D394).
 
 **`Check_2_sign_in_clone_list_push_and_create`** (`[AvaloniaFact]`) starts the app with
 `ShellDriver.StartWithTabs(data, [null], hosting: new HostingOptions(GitHubEndpoints.GitHubCom, …))`
@@ -5657,7 +7476,7 @@ D340), the plain URL and no `credential` key in the clone's configuration, and n
 ends; the test commits a file on a new branch `visualcommit-live/<UTC time>` as "VisualCommit live
 test" `<live-test@visualcommit.invalid>` (D325), and "Create pull request…" on its row pushes it and
 creates a draft through the form (when GitHub refuses the draft with a text that names drafts, the
-text is recorded and the same form creates a ready pull request, design 18 item 2); the test reads
+text is recorded and the same form creates a ready pull request, 7a design 18 item 2); the test reads
 it back, tries the same create again and records GitHub's answer (422 expected, whose first error
 must start "A pull request already exists", D316's premise; a 201 closed in the
 clean-up), then in `finally` closes it and deletes the branch, each call on its own, a failure
@@ -5675,32 +7494,203 @@ cannot answer the second address first), an unknown SHA beside a made-up address
 commit beside its author's, must map the second to the sandbox's owner and leave the first out; each
 step needs its requests in the log, and the tripwires are `Check_2`'s.
 
-**What keeps the token in** (D323, design 14.5, 18 item 2). `LiveRequestLog`, a `DelegatingHandler`,
-records per request the time, method, scheme, host, path without the query, status, whether
-`Authorization` was sent, and of the answer only `X-GitHub-Request-Id`,
+**Azure DevOps' and GitLab's classes** (since phase 7b; design 15.5 to 15.7): `AzureDevOpsLiveTests`
+and `GitLabLiveTests`, with the fixtures `AzureDevOpsLiveRun` and `GitLabLiveRun`, run
+`Check_1_the_sandbox_and_its_leftovers`, `Check_1b_probes`, `Check_2_the_providers_and_the_session`,
+`Check_2b_probes`, `Check_3_the_app_signs_in_clones_lists_pushes_and_creates` and, on Azure DevOps
+alone, `Check_4_a_clone_through_the_organization_host`, in that order (`AzureDevOpsLiveOrder`,
+`GitLabLiveOrder`). The probes have methods of their own so that each method's call limits stay under
+the watchdog's 600 s. Each method's first call is the identity read (Azure DevOps' connectionData with
+the token, GitLab's `GET user`), made once per run, so that the screen has learned the user's ids and
+addresses before any note.
+- `Check_1` (`[Fact]`) checks that the variables are gone, reads the sandbox (200, private, D326, and
+  its default branch) and removes what a stopped run left (D324, D371), each call on its own: on Azure
+  DevOps the active pull requests from the sandbox's own `visualcommit-live/` branches are abandoned,
+  since they cannot be deleted, and one refs POST deletes those branches; on GitLab each opened merge
+  request from such a branch is closed, then deleted (a 403 is noted "closed, kept"), and each such
+  branch is deleted (a 404 counts as gone). A request counts as the sandbox's own only when it comes
+  from no fork (Azure DevOps' `forkSource` absent; GitLab's `source_project_id` and
+  `target_project_id` both numbers and equal), and nothing else is touched.
+- `Check_1b_probes` (`[Fact]`) records the service's answers to what the fake imitates, each beside
+  the fake's (below): on Azure DevOps 17 reads (connectionData with the token, with and without
+  `X-TFS-FedAuthRedirect: Suppress` and at `7.1`, and without a credential, with Suppress; the core
+  resource area without a credential and with the token; D373's two made-up values on connectionData
+  and on the sandbox's `info/refs`, sent as git sends it, each with and without Suppress; D374's
+  made-up organization, without a credential and then with the token; the sandbox project's
+  repository list); on GitLab
+  `GET user`, `personal_access_tokens/self` (whose 403 `insufficient_granular_scope` is expected), a
+  made-up `glpat-` value on `GET user`, the projects, the sandbox's merge requests and `GET user`
+  again with its ETag, for the rate-limit headers across a 304.
+- `Check_2_the_providers_and_the_session` (`[AvaloniaFact]`) starts the app with that provider alone
+  on (`HostingOptions.Off with { AzureDevOps = AzureDevOpsEndpoints.Service with { ListProject = <the
+  sandbox's project> }, CreateAzureDevOpsHandler = … }`, GitLab's with `GitLabEndpoints.GitLabCom`),
+  each handler a `LiveRequestLog` over `HostingOptions.DefaultHandler` behind the provider's guard,
+  and the default `FakeTokenStore`; the log names the provider's host and no request has left. It
+  signs in through the session (`ShellDriver.SignInAsync`): only the sign-in's reads leave, each 200
+  and each in the log's store, and the login must be the organization or the namespace's first
+  segment, without case. It lists the sandbox (on Azure DevOps the row's `CloneUrl` keeps
+  `<organization>@`, ruling 15), clones it through the clone form's URL box with GitHub's `Check_2`'s
+  checks (no credentials dialog, the broker's "answered from the account." line since the clone's
+  mark, the URL as typed, no `credential` key and no `credential.helper`), waits for the requests to
+  load, pushes D325's commit on `visualcommit-live/<UTC time>` with the branch menu's "Push {branch}…"
+  (on GitLab also a branch with nothing ahead, for `Check_2b_probes`) and creates a draft through the
+  repository's hosting, whose POST must answer 200 or 201. It hands what it made to the run and cleans
+  up nothing itself.
+- `Check_2b_probes` (`[Fact]`) probes the create beside the fake's own draft (on Azure DevOps its
+  status, `mergeStatus`, whether it is a draft, its creator and its head, when its merge ref appears
+  and that the abandon removes it; on GitLab whether it is a draft, its `Draft:` title, its
+  `references` and its head; then a duplicate, a missing branch, on Azure DevOps an empty title, and a
+  create with nothing ahead), then in `finally` cleans up what `Check_2` made, whether `Check_2` passed
+  or not.
+- `Check_3_the_app_signs_in_clones_lists_pushes_and_creates` (`[AvaloniaFact]`, stage 2) is GitHub's
+  `Check_2` on phase 7b's screens, the app started as `Check_2` starts it: the sign-in through
+  Settings, Accounts and the provider's own dialog ("Add Azure DevOps account" with the organization
+  typed into its Organization box, "Add GitLab account"), the token typed into its masked box; the
+  clone form's "From Azure DevOps…" or "From GitLab…", the browser's row by its full name, without
+  case, and Choose filling the URL box with that row's clone URL (on Azure DevOps with the
+  organization as its user); the clone; the left panel's section titled "Pull requests" or "Merge
+  requests", with a row per open request or its "No open …" line; the push; "Create pull request…"
+  or "Create merge request…" from the branch's menu with Draft ticked (GitLab's form then shows the
+  title GitLab gets, `Draft: …`), ending in the status "Created draft pull request !n" or "Created
+  draft merge request !n"; the request read back from the service (a draft, open, its title, both
+  refs or branches, on Azure DevOps created by the account); then the clean-up in `finally`.
+- `Check_4_a_clone_through_the_organization_host` (Azure DevOps alone, `[AvaloniaFact]`) signs in as
+  `Check_2` does, clones `https://<organization>.visualstudio.com/<project>/_git/<repository>` with no
+  credentials dialog, then lists and loads from `dev.azure.com`: the only test of that host against
+  the service (D363).
+
+Each of these methods ends in `LiveSteps.Finish`: no request, of the app's or of the test's own API,
+refused by the guard, in another scheme than `https` or sent with a credential to another host than
+the guard's (`ReachProblems`). The three that start the app (`Check_2`, `Check_3` and Azure DevOps'
+`Check_4`) end before that as GitHub's `Check_2` does (`LiveApp.Tripwires`):
+`TokenTripwire.AssertAbsent` over the data folder, the clone, the test identity's home and the app's
+git calls (their standard input too), and the data folder's `accounts.json` and log searched for the
+learned addresses; and their `Finish` also finds no request before the sign-in.
+
+**What keeps the token in** (D323, 7a design 14.5, 18 item 2). For GitHub, `LiveRequestLog`, a
+`DelegatingHandler`, records per request the time, method, scheme, host, path without the query,
+status, whether `Authorization` was sent, and of the answer only `X-GitHub-Request-Id`,
 `X-GitHub-Api-Version-Selected`, whether `X-OAuth-Scopes` came and the token's expiry date; it refuses
 before it leaves, as an `HttpRequestException`, a request that is not HTTPS or that carries
-`Authorization` to any host but `api.github.com:443`. `LiveRun`, the class fixture, keeps the notes
-in order and writes them at its end to `artifacts/live/github/run.txt`, outside `artifacts/visual`
-(always, `No note was taken: …` when the tests failed before their first step). Each note, run.txt's
-text and a failing step's exception are searched for the token as written, URL-escaped, as base64 of
-`x-access-token:<token>` and of the token, and as any 16 of its characters in a row: a note that holds
-it is kept as "A note was withheld: it held the token.", a file that holds it is not written, and an
-exception that holds it is replaced by one naming the step and the exception's type
-(`LiveRun.FailureOf`); each find fails the run. The token is sent only by the dialog's typing, the
-test's own API calls and `Check_3`'s provider, all to `https://api.github.com/` alone (`GitHubLiveApi`
-refuses the owner's token with any other API base), compared only with `string.Equals` or
-`string.Contains`, and never passed to an assertion, a message, a git argument or environment, a
-file or the in-process fake. `LiveSafetyTests` (109) prove the search, the request log, the
-clean-up's selection, the probes' notes beside the fake, the premises and the version rewriter
-offline, with made-up tokens and an in-process handler, by their own command (CLAUDE.md), with no
-variable and no network.
+`Authorization` to any host but `api.github.com:443`. `LiveRun`, the class fixture (since phase 7b
+also the base of the new providers' fixtures), keeps the notes in order and writes them at its end to
+`artifacts/live/github/run.txt` (the new providers' to `artifacts/live/azure-devops/run.txt` and
+`artifacts/live/gitlab/run.txt`), outside `artifacts/visual` (always, `No note was taken: …` when the
+tests failed before their first step). Each note, run.txt's text and a failing step's exception are
+searched for the token as written, URL-escaped, as base64 of `x-access-token:<token>` and of the
+token, since phase 7b also as the base64 of any text that holds it after a prefix, at each of the
+three alignments (Azure DevOps' Basic `:<token>` among them, D364), and as any 16 of its characters in
+a row (`LiveTokenForms`): a note that holds it is kept as "A note was withheld: it held the token.", a
+file that holds it is not written, and an exception that holds it is replaced by one naming the step
+and the exception's type (`LiveRun.FailureOf`); each find fails the run. GitHub's token is sent only
+by the dialog's typing, the test's own API calls and `Check_3`'s provider, all to
+`https://api.github.com/` alone (`GitHubLiveApi` refuses the owner's token with any other API base);
+a new provider's only by the session's or the dialog's sign-in and the test's own API, all through its
+guard. A token is compared only with `string.Equals` or `string.Contains`, and never passed to an
+assertion, a message, a git argument or environment, a file or the in-process fake. The offline
+classes, `LiveSafetyTests` and, since phase 7b, `LiveScreenTests` (582 tests together at phase 7b's
+gate), prove the search, the request log and its guards, the screen, the clean-up's selection, the
+probes' notes beside the fakes, the premises, D373's made-up values and the version rewriter offline,
+with made-up tokens and in-process handlers or fakes on port 0, by their own command (CLAUDE.md), with
+no variable and no network. `LiveSafetyTests` also holds each method's call limits under 600 s and
+rehearses each new provider's `Check_3` over its fake behind a rehearsal's guard
+(`LiveReach.AzureDevOpsRehearsal`, `GitLabRehearsal`, which admit a fake's
+`http://127.0.0.1:<port>/` alone and judge paths, methods, queries and credentials there as on the
+service).
 
-Its runs with the token are in the 7a report's "Live command" and design 20: the first (status step
-16, 2026-10-30) found GitHub's version refusal and its answer to an unknown SHA beside `author`
-unlike the fake's, each hiding a defect of the app's (D342); the second, on the merged corrections,
-passed with every probe "the fake: same" (63 s with its build) and stands as the gate's run before
-its pictures.
+**The guard on Azure DevOps and GitLab** (D352, D371, D374, D393; design 15.4). Every request of the
+app's and of the test's own API to a new provider passes `LiveRequestLog(inner, store, reach)`, whose
+`LiveReach` judges it before it leaves: any `Host` header or method-override header refuses it, then
+the origin, the credential's form (`LiveCredentialForm`: none, Basic, Bearer, another scheme,
+`PRIVATE-TOKEN`, `JOB-TOKEN`, a query token), the path, the method and the query. A refusal is
+recorded, fails the request as an `HttpRequestException` and names the origin and the method, never
+the path; `ReachProblems` puts each refused request among the run's problems. The record keeps the
+credential's form, the request id (`ActivityId` or `x-request-id`) and the answer's rate-limit, expiry
+and `api-version` headers (`KeptHeaders`). The test's own API (`AzureDevOpsLiveApi`, `GitLabLiveApi`,
+on `LiveServiceApi`, 30 s a call) sends through a handler that follows no redirect, so a redirect is
+recorded as the answer. `AzureDevOpsReach` admits only `https://dev.azure.com:443`, with Basic or no
+credential, no path segment that is empty, a dot segment, or holds `/`, `\` or `%` once decoded, and,
+compared without case with the sandbox's names `{o}`, `{p}` and `{r}`, only these paths:
+`{o}/_apis/connectionData`; the core resource area (`_apis/resourceAreas/79134c72-…` with
+`organizationName={o}`, or under `{o}/`); `{o}/{p}/_apis/git/repositories`; the repository
+`{o}/{p}/_apis/git/repositories/{r}` and below it `pullrequests` (GET, POST), `pullrequests/{n}` (GET,
+PATCH) and `refs` (GET, POST); and GET below `{o}/{p}/_git/{r}`. The query may hold only
+`api-version`, `$top`, `$skip`, `searchCriteria.status`, `filter` and `service`, none twice, and no
+project or repository is named by id. D374's read outside the sandbox, `{x}/_apis/connectionData` for
+the run's made-up organization (`vc-none-` and 12 random hex digits), is admitted without a
+credential, and with Basic once, only after that read answered 404 without one; any other answer, a
+refusal or no answer bars it for the run. `GitLabReach` admits only `https://gitlab.com:443/api/v4/`,
+with Bearer or no credential: `user`, `personal_access_tokens/self` and `projects` (GET), and below
+`projects/` the sandbox alone (D393), named by its path as `VISUALCOMMIT_LIVE_GITLAB_REPO` gives it
+(escaped as the app sends it, decoded once, ASCII alone, compared without case) or by its numeric id
+once the guard has learned it from a 200 to the sandbox's own read: the project itself (GET),
+`merge_requests` (GET, POST), `merge_requests/{iid}` (GET, PUT, DELETE), `repository/branches` (GET)
+and a branch (DELETE). There a write carries no query, a query parameter that may name a project
+(`id`, `…_id`, `…_ids`) must name the sandbox, by its path or its learned id, and a top-level JSON
+member that may name one must be null or the learned id; only POST and PUT carry content, one JSON
+object sent as `application/json`; the log buffers that content, and the body of the sandbox read
+the id is learned from, for the guard (10 MiB at most) and passes both on whole.
+
+**The screen** (D372, D384; design 15.3). Azure DevOps' and GitLab's fixtures add a `LiveScreen`
+that runs after the token's search on every note, every assertion message that shows values
+(`LiveRun.Check`), every failure (`FailureOf`) and run.txt. It hides the Azure DevOps organization's
+name and GitLab's sandbox namespace, the account's login (D384), both taken from the variables before
+the first request, and what it learns from every answer the test's own API reads, headers and body,
+before that answer can be noted, and from the clone's authors (`git log --all --format=%ae%n%ce`):
+the organization's host ids (connectionData's `instanceId`, a sign-in URL's `hid` and `context`), the
+tenant, the user's id and every e-mail address. Each becomes a placeholder (`<the organization>`,
+`<the namespace>`, `<the organization's id>`, `<the tenant>`, `<the user's id>`, `<the sign-in
+query>`, `<the user's address>`, `<an address>`), in any case and in the forms the services write it
+(URL-escaped; an id with and without hyphens), and so does any other address-shaped string but
+D325's and `example.com` ones. A text that holds a learned value in a form the screen does not
+replace, or that still holds one once screened (`SurvivorIn`, which reads it raw and in every reading
+that decoding percent escapes, HTML's character references and JSON's string escapes reaches), is
+withheld as one holding the token is, naming only the kind of value, and fails the run. The data
+folder's `accounts.json` and log, which name the organization by design (the login, the clone's
+command line) and stay in the run's temporary folder, are searched for the learned addresses alone.
+The services' published constants (the Anonymous identity's id, the core and Git areas' ids, the zero
+GUID) are never learned, and D374's made-up organization is no secret: run.txt names it.
+
+**The fake beside, the premises and the made-up values** (D342, D373, D375; design 15.7). Each new
+provider's probe is also sent to an in-process fake, with a token of its own and 5 s a call:
+`LiveAzureFake` (`FakeAzureDevOps` with the organization `fake-org` and the sandbox's project and
+repository names) or `LiveGitLabFake` (`FakeGitLab` with `ada/<project>`), each with a README on
+`main` and, for `Check_2b_probes`, the run's branch one commit ahead and a branch with nothing ahead.
+`LiveServiceAnswer.Beside` replaces each side's names, ids, dates and origin, then compares the
+status, the media type, Azure DevOps' `api-version`, the BOM, `typeKey`, the TF code, `message`,
+GitLab's `error` and `scope`, `WWW-Authenticate` and a 2xx's top-level names; each note says "the
+fake: same" or what differs, a non-2xx's body shown screened, a 2xx's by its shape. The answers the
+app relies on are premises that fail the run once noted (`LiveProviderPremises`): on Azure DevOps a
+member's id that is a GUID other than the Anonymous identity's, no made-up value earning a 2xx that
+the sign-in would take, a duplicate's 409 `GitPullRequestExistsException` and a missing branch's 400
+`GitPullRequestCannotBeActivated`; on GitLab a made-up value's 401, a duplicate's 409 and a missing
+branch's 400 naming `source_branch`; on both a create's 200 or 201. D373's made-up values are a fixed
+plain string, an 84-character string of Azure DevOps' token form (`AZDO` at characters 76 to 79) and
+GitLab's `glpat-` with 20 letters and digits; the last two are drawn at run time (`LiveMadeUp`), so
+that no token-shaped literal is committed, again while one shares 16 characters in a row with the
+token, and each is named in the notes by its kind and length alone. What the fakes keep READ or
+ASSUMED stays so, the fork shapes and a legacy GitLab token's sign-in among them: the sandboxes have
+no fork, and the command proves GitLab's fine-grained token alone (D375).
+
+Its runs with the tokens are in the 7a report's "Live command" and 7a design 20 for GitHub, and in
+the 7b report's "Live command" for all three; what stage 1 and the probe of 2026-11-07 found, and what
+WP-LF put into the fakes, is also in design 16.1's As built. Phase 7a's first (status step 16,
+2026-10-30) found GitHub's version refusal and its answer to an unknown SHA beside `author` unlike the
+fake's, each hiding a defect of the app's (D342); its second, on the merged corrections, passed with
+every probe "the fake: same" (63 s with its build) and stood as 7a's gate's run before its pictures.
+Phase 7b's stage 1 (Azure DevOps on 2026-11-05; GitLab again on 2026-11-06, with a token made again
+for D385) found that a GitLab fine-grained token needs Project: Read among its user permissions to
+list projects (D385) and eleven Azure DevOps answers unlike its fake's, which WP-LF put into the fakes
+before part A's checks were written, keeping git's `info/refs` refusals of made-up values as
+differences; Azure DevOps' `Check_1b_probes` alone again (2026-11-07, the report's open point 8) found
+that the sandbox's organization answers connectionData without a credential with the Anonymous
+identity's 200, as an organization that allows public projects does, which the fake now gives only in
+such an organization (`LiveAzureFake`'s allows them); stage 2 (`Check_3`, 2026-11-08) passed 11 of
+11 in 1 min 26 s. At phase 7b's gate the run before the pictures (on `ee0aeeb`) passed 595 of 596:
+GitLab's `Check_2` stopped on stalls of the network to gitlab.com and passed on the second of two runs of its class alone, and the probes found
+that github.com now answers a commit it lacks beside `author` with 404, which the fake of GitHub
+copied before any picture (D394, with D395's change to the avatars). The counted round's run (on
+`3dc0887`, `cb9af6d`'s code) passed 596 of 596 in 2 min 20 s, with nothing new for the fakes.
 
 ### CI
 
@@ -5708,27 +7698,35 @@ its pictures.
 `windows-latest`, `macos-latest` and `ubuntu-latest` for every push and pull request that changes
 more than docs. On Windows it also builds in Release, but does not run, the two projects the
 solution leaves out, in the step "Build the opt-in projects": the real-window pass and, since phase
-7a, the live command (D337), so that neither goes stale unnoticed. The step runs in bash, so a
-failure of the first build fails it, and whenever the build passed and the run was not cancelled,
-also after a failed test or keychain step (design 19 item 4), so a failing test does not hide a
-compile break. Each job uploads `artifacts/visual/` as `visual-<os>`, so the scripted screenshots of
-all three platforms can be downloaded and looked at. A newer push to the same branch cancels the run
-before it (`concurrency`). Time limits: 65 minutes for each of these jobs with 55 for its test step,
-and 25 minutes for each container job with 14 for its test step, so that a hang cannot use up the
-job's time. D232 raised the first two from D184's 50 and 40 in phase 6 (macOS's test step had passed
-32 minutes, D186's threshold, with phase 6's last walk-through parts still to come); the lead raises
-them again when the Windows or macOS test step passes 44 minutes, four fifths of 55. D184 had raised
-them from D152's 32 and 24: phase 5's two walk-through projects and the undo history's reads took
-Windows' test step to the 24-minute limit. On phase 5's gate commit the test step took 25 min 15 s
-on Windows, 16 min 13 s on macOS, 3 min 26 s on `ubuntu-latest` and about 4 minutes in each
-container. On phase 6's gate commit (run 40059391404) it took 24 min 37 s on Windows, 23 min 33 s on
-macOS, 4 min 21 s on `ubuntu-latest`, and 5 min 50 s and 4 min 56 s in the containers; macOS's had
-reached 43 min 12 s in run 40019921605 (on `a937ca6`, before the gate's first round), near the 44 at
-which the limit is raised. A test project added to the solution is picked up with no change to the
-workflow. The build trim (`Directory.Build.targets`, D239, "Solution layout") applies in full on the
-Windows job, whose Release build and real-window build copy only win-x64's, `win`'s and `any`'s
-native libraries; the macOS, Linux and container jobs lose only the packages' native `.pdb` files
-and keep every platform's libraries.
+7a, the live command (D337), since phase 7b with its Azure DevOps and GitLab classes, so that neither
+goes stale unnoticed. The step runs in bash, so a failure of the first build fails it, and whenever
+the build passed and the run was not cancelled, also after a failed test or keychain step (7a design
+19 item 4), so a failing test does not hide a compile break. Each job uploads `artifacts/visual/` as
+`visual-<os>`, so the scripted screenshots of all three platforms can be downloaded and looked at;
+since phase 7b the folder also holds `git-url-user.txt`, what the job's git does with a URL's user
+after a 401 (`GitUrlUser`, D389), and `palette-growth.txt`, a line per run of phase 6's palette
+growth test (7b design 16.3). A newer push to the same branch cancels the run before it
+(`concurrency`). Time limits: 80 minutes for each of these jobs with 70 for its test step, and 25
+minutes for each container job with 14 for its test step, so that a hang cannot use up the job's
+time. Phase 7b's first code commit (`a88b84d`) raised the first two from D232's 65 and 55 (D377):
+the growth its two providers' tests were projected to bring would have taken macOS's test step past
+D232's 44 minutes. Since D377 the lead raises a limit when a test step passes four fifths of it (56
+of 70 minutes, 11 min 12 s of a container's 14), on every job, and records it, but only at a merge
+before the counted round: no CI limit changes after the counted round's commit, and a run past four
+fifths there is recorded in the handoff and left to the next phase's first code commit. D232 had
+raised them from D184's 50 and 40 in phase 6 (macOS's test step had passed 32 minutes, D186's
+threshold, with phase 6's last walk-through parts still to come), and D184 from D152's 32 and 24:
+phase 5's two walk-through projects and the undo history's reads took Windows' test step to the
+24-minute limit. On phase 5's gate commit the test step took 25 min 15 s on Windows, 16 min 13 s on
+macOS, 3 min 26 s on `ubuntu-latest` and about 4 minutes in each container. On phase 6's gate commit
+(run 40059391404) it took 24 min 37 s on Windows, 23 min 33 s on macOS, 4 min 21 s on
+`ubuntu-latest`, and 5 min 50 s and 4 min 56 s in the containers; macOS's had reached 43 min 12 s in
+run 40019921605 (on `a937ca6`, before the gate's first round), near the 44 at which the limit was
+then raised. A test project added to the solution is picked up with no change to the workflow, as
+phase 7b's walk-through project was. The build trim (`Directory.Build.targets`, D239, "Solution
+layout") applies in full on the Windows job, whose Release build and real-window build copy only
+win-x64's, `win`'s and `any`'s native libraries; the macOS, Linux and container jobs lose only the
+packages' native `.pdb` files and keep every platform's libraries.
 
 Since phase 7a every job but `ubuntu-latest` also runs the real keychain store's own tests (D259,
 D270; see "Tokens and the keychains") in a step of its own after the Test step, with a limit of 5
@@ -5743,16 +7741,26 @@ container "Keychain (Secret Service)" (`secret-service`, `*SecretServiceTokenSto
 password and `XDG_DATA_HOME` a temporary folder. The classes use entries named
 `VisualCommit-test:<guid>` with dummy secrets, deleted in `finally`. The containers run with
 `--cap-add=IPC_LOCK`: Ubuntu's gnome-keyring gives its daemon that file capability when `setcap` is
-installed, and a container without it in its bounding set cannot start the daemon (design 16 item
-6). Each keychain step passed on its first run, on `8b02805`.
+installed, and a container without it in its bounding set cannot start the daemon (7a design 16
+item 6). Each keychain step passed on its first run, on `8b02805`.
 
 Phase 7a's two projects and its walk-through lengthened the Test steps: the longest in its runs were
 35 min 21 s on Windows (run 40993671970) and 37 min 57 s on macOS (run 41038505814), under the 44 at
-which the limit is raised. On the review's last code commit before the gate (`7015753`, run
+which the limit was then raised. On the review's last code commit before the gate (`7015753`, run
 41111820880) the Test step took 29 min 9 s on Windows, 30 min 58 s on macOS and 6 min 1 s on
 `ubuntu-latest`, the containers' jobs 7 min 25 s and 7 min 19 s in all, and "Build the opt-in
 projects" 22 s. On the gate's commit (`a2c312a`, run 41190572421) it took 21 min 48 s on Windows,
 32 min 16 s on macOS and 4 min 54 s on `ubuntu-latest`.
+
+Phase 7b's walk-through project and its two providers' tests lengthened them again: the longest Test
+steps in its runs were 41 min 6 s on Windows (run 42480966359, on WP-R's merge) and 46 min 21 s on
+macOS (run 42487421403, on D393's guard merged), under D377's 56 minutes; `ubuntu-latest`'s longest
+was 6 min 47 s (run 42477551563) and the containers' 7 min 7 s (run 42472105974), under 11 min 12 s,
+so no limit changed after D377's. On the code of the gate's counted round (`cb9af6d`'s; run
+42522049151 on `9b044af`, the commits after it changing only docs) all five jobs passed, Windows with
+7,892 tests and 4 skipped and the others with 7,889 and 3: the Test step took 23 min 41 s on Windows,
+33 min 9 s on macOS and 6 min 23 s on `ubuntu-latest`, 5 min 51 s and 5 min 28 s in the containers,
+and "Build the opt-in projects" 19 s.
 
 Two more jobs, both named "bare ubuntu container", start from an empty `ubuntu:24.04`
 container, run `scripts/setup-linux.sh` in it twice (the second run has to find everything in
@@ -5768,20 +7776,25 @@ allowlist: a CI runner's network is open. The first way exists for that reason, 
 default allowlist names Ubuntu's package servers but not the server Microsoft's installer
 downloads from.
 
-CI's gits: since 2026-10-15 Windows runs 2.56.0.windows.2 and macOS 2.56.0, and the two containers
-2.43.0 (Ubuntu 24.04's); `ubuntu-latest` ran 2.55.0 until 2026-10-28 (run 40679200453) and runs
-2.56.0 on its `ubuntu-24.04` image from 2026-10-29 (run 40848974456 on, the gate's 41190572421
-among them). So no CI run of phase 7a ran 2.55, and only the containers' 2.43 differs from 2.56
-(plan risk 26). The development machine runs
-2.56.0.windows.4 since 2026-10-28 (D248; 2.36 before). Tests must work on all of them; CI is the
-only check on 2.43.
+CI's gits: Windows ran 2.56.0.windows.2 from 2026-10-15 and runs 2.56.0.windows.4, the development
+machine's, from 2026-11-02 (run 41484799303 on; run 41414339419, that morning, still ran windows.2);
+macOS runs 2.56.0 (Homebrew's) and the two containers 2.43.0 (Ubuntu 24.04's); `ubuntu-latest` ran
+2.55.0 until 2026-10-28 (run 40679200453) and runs 2.56.0 on its `ubuntu-24.04` image from 2026-10-29
+(run 40848974456 on, phase 7a's gate's 41190572421 and every run of phase 7b among them). So no CI run
+of phase 7a or 7b ran 2.55, and only the containers' 2.43 differs from 2.56 in its version (plan risk
+26). macOS's git differs in what it does with a URL's user: it loses the user after the first 401,
+where the others keep it (D389, plan risk 43), as each job's `git-url-user.txt` records (`Lost` on
+macOS and `Kept` on the four others in run 42454621322, the first that wrote it). The development
+machine runs 2.56.0.windows.4 since 2026-10-28 (D248; 2.36 before). Tests must work on all of them;
+CI is the only check on 2.43 and on a git that loses a URL's user.
 
 ### Package versions
 
 .NET SDK 10.0. `global.json` accepts any 10.0 feature band, and its `version` has to stay in
 the first band (10.0.1xx): Ubuntu's packages, which a cloud session and one of the two
 container jobs build with, never leave that band (10.0.112 in October 2026), while the Windows
-machine and the other CI jobs use newer ones (10.0.303 and 10.0.401 then). Avalonia 12.1.3 (with
+machine and the other CI jobs use newer ones (10.0.303 and 10.0.401 then; in November 2026 Ubuntu's
+10.0.114, the laptop's 10.0.303 and the other CI jobs' 10.0.403). Avalonia 12.1.3 (with
 Avalonia.Desktop, Themes.Fluent, Fonts.Inter, Skia, Headless, Headless.XUnit),
 CommunityToolkit.Mvvm 8.4.2, xunit.v3 3.2.2, FlaUI.UIA3 5.0.0. Phase 1 added no packages.
 Phase 2 added Avalonia.AvaloniaEdit 12.0.0 (built against Avalonia 12.0.0, used with 12.1.3),
@@ -5799,5 +7812,8 @@ Avalonia 12.1.3 resolves, so it moves with `AvaloniaVersion`, as xunit does (D24
 the avatars, the fake of GitHub and the live command use .NET's own `HttpClient` and
 `System.Text.Json`, and the new test projects use the test packages already there (`xunit.v3`,
 `Avalonia.Headless.XUnit`).
+Phase 7b added none: Azure DevOps' and GitLab's clients, their fakes and the live command's new
+classes use `HttpClient` and `System.Text.Json` too, and its walk-through project the test packages
+already there.
 `scripts/compare-pictures.py`, the gate's comparison of pictures, needs Python with Pillow and
 NumPy on the machine that runs it; nothing in the build or the tests does.
