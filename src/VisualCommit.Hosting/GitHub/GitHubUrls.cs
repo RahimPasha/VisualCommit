@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using VisualCommit.Core.Hosting;
+using VisualCommit.Hosting.Http;
 
 namespace VisualCommit.Hosting.GitHub;
 
@@ -10,8 +11,6 @@ namespace VisualCommit.Hosting.GitHub;
 /// </summary>
 internal static partial class GitHubUrls
 {
-    private const string PullPrefix = "refs/pull/";
-
     /// <summary>
     /// The repository <paramref name="url"/> names on <paramref name="endpoints"/>, or null. On
     /// github.com (<see cref="GitHubEndpoints.GitHubCom"/>), the host <c>github.com</c> or
@@ -41,38 +40,25 @@ internal static partial class GitHubUrls
     /// <summary>
     /// The push guard's rule (ruling 8): false only for <c>refs/pull/&lt;x&gt;/head</c> or
     /// <c>refs/pull/&lt;x&gt;/merge</c> whose <c>&lt;x&gt;</c> is not one or more ASCII digits
-    /// (<c>refs/pull/fix/typo/head</c> included), which GitHub never has; true otherwise.
+    /// (<c>refs/pull/fix/typo/head</c> included), which GitHub never has; true otherwise. The rule
+    /// is <see cref="PullRequestRefs.SourceCanExist"/>'s for GitHub (docs/phase-7b-design.md 1.2).
     /// </summary>
-    public static bool SourceCanExist(string remoteRef)
-    {
-        ArgumentNullException.ThrowIfNull(remoteRef);
-        if (!remoteRef.StartsWith(PullPrefix, StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        var rest = remoteRef[PullPrefix.Length..];
-        var slash = rest.LastIndexOf('/');
-        if (slash < 0 || rest[(slash + 1)..] is not ("head" or "merge"))
-        {
-            return true;
-        }
-
-        var number = rest[..slash];
-        return number.Length > 0 && number.All(char.IsAsciiDigit);
-    }
+    public static bool SourceCanExist(string remoteRef) => PullRequestRefs.SourceCanExist(HostingProvider.GitHub, remoteRef);
 
     /// <summary>Whether <paramref name="endpoints"/> are github.com's own.</summary>
     public static bool IsGitHubCom(GitHubEndpoints endpoints) => endpoints == GitHubEndpoints.GitHubCom;
 
-    /// <summary>Whether two addresses have the same scheme, host and port (ruling 23's match, D285's).</summary>
-    public static bool SameOrigin(Uri a, Uri b) =>
-        string.Equals(a.Scheme, b.Scheme, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(a.IdnHost, b.IdnHost, StringComparison.OrdinalIgnoreCase)
-        && a.Port == b.Port;
+    /// <summary>
+    /// Whether two addresses have the same scheme, host and port (ruling 23's match, D285's): the
+    /// core's <see cref="HostingHttpClient.SameOrigin"/>, so a host without an IDN form is on no origin (D380).
+    /// </summary>
+    public static bool SameOrigin(Uri a, Uri b) => HostingHttpClient.SameOrigin(a, b);
 
-    /// <summary><c>&lt;scheme&gt;://&lt;host&gt;:&lt;port&gt;</c> of <paramref name="uri"/>, for a log line: never its path or query.</summary>
-    public static string OriginOf(Uri uri) => FormattableString.Invariant($"{uri.Scheme}://{uri.IdnHost}:{uri.Port}");
+    /// <summary>
+    /// <c>&lt;scheme&gt;://&lt;host&gt;:&lt;port&gt;</c> of <paramref name="uri"/>, for a log line: never its path or query;
+    /// the core's <see cref="HostingHttpClient.OriginOf"/>.
+    /// </summary>
+    public static string OriginOf(Uri uri) => HostingHttpClient.OriginOf(uri);
 
     /// <summary>The path of a github.com URL in one of its forms, or null.</summary>
     private static string? GitHubComPath(string url)

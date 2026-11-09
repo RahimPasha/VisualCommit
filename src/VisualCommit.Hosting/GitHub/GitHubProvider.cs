@@ -1,5 +1,6 @@
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
+using VisualCommit.Core.Operations;
 
 namespace VisualCommit.Hosting.GitHub;
 
@@ -8,12 +9,17 @@ namespace VisualCommit.Hosting.GitHub;
 /// the push guard without the network, and A1 to A6 through <see cref="GitHubClient"/>, each with
 /// the account's token, which the provider never keeps. Paths are relative to the API's address,
 /// each segment escaped. An avatar is kept only on GitHub's own avatar host (github.com) or on the
-/// fake's web address; any other counts as none, with one warning per provider.
+/// fake's web address; any other counts as none, with one warning per provider. A token of another
+/// provider's form is refused without a request (D378), and A5's refusal carries the
+/// <see cref="PullRequestRefusal"/> its detail stands for (docs/phase-7b-design.md 5.4).
 /// </summary>
 public sealed class GitHubProvider : IHostingProvider, IDisposable
 {
     /// <summary>A1's text for a token that is empty or blank: no request is made.</summary>
     public const string EmptyTokenText = "The token is empty.";
+
+    /// <summary>The <see cref="HostingFailure.Detail"/> prefix of a token of another provider's form, before that provider's id (D378).</summary>
+    public const string OtherProviderDetail = "other-provider:";
 
     /// <summary>A2's cap: 10 pages of 100 repositories (ruling 14).</summary>
     public const int RepositoryPages = 10;
@@ -39,13 +45,63 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         _client = new GitHubClient(endpoints, createHandler, log, clock);
     }
 
+    /// <summary>GitHub's page for a new fine-grained token, relative to the web base (D295): the App's <c>TokenPage</c> text.</summary>
+    public const string TokenPagePath = "settings/personal-access-tokens/new?name=VisualCommit&contents=write&pull_requests=write";
+
     public HostingProvider Kind => HostingProvider.GitHub;
 
     public GitHubEndpoints Endpoints { get; }
 
+    /// <summary><see cref="GitHubEndpoints.Host"/>.</summary>
+    public string Host => Endpoints.Host;
+
+    /// <summary><see cref="GitHubEndpoints.WebBase"/>.</summary>
+    public Uri WebBase => Endpoints.WebBase;
+
     public HostedRepository? Recognise(string url) => GitHubUrls.Recognise(Endpoints, url);
 
     public bool SourceCanExist(string remoteRef) => GitHubUrls.SourceCanExist(remoteRef);
+
+    /// <summary>7a's rule (D278): the web base's scheme, host and port, any path.</summary>
+    public GitCoverage CoverageOf(AccountKey account)
+    {
+        ArgumentNullException.ThrowIfNull(account);
+        return new GitCoverage(account, Endpoints.WebBase);
+    }
+
+    /// <summary>By host: a GitHub repository on the account's host, which is this provider's.</summary>
+    public bool Covers(HostedRepository repository, AccountKey account)
+    {
+        ArgumentNullException.ThrowIfNull(repository);
+        ArgumentNullException.ThrowIfNull(account);
+        return repository.Provider == HostingProvider.GitHub
+            && account.Provider == HostingProvider.GitHub
+            && string.Equals(repository.Host, Host, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(account.Host, Host, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>D295's page for a new fine-grained token (<see cref="TokenPagePath"/>); <paramref name="organization"/> is ignored.</summary>
+    public Uri TokenPage(string? organization) => new(Endpoints.WebBase, TokenPagePath);
+
+    /// <summary><c>{web base}{owner}/{name}/pulls</c>.</summary>
+    public Uri PullRequestsPage(HostedRepository repository)
+    {
+        ArgumentNullException.ThrowIfNull(repository);
+        return new Uri(Endpoints.WebBase, $"{repository.Owner}/{repository.Name}/pulls");
+    }
+
+    /// <summary><c>refs/pull/&lt;n&gt;/head</c>.</summary>
+    public string? PullRequestHeadRef(PullRequest pull)
+    {
+        ArgumentNullException.ThrowIfNull(pull);
+        return PullRequestRefs.HeadOf(Kind, pull.Number);
+    }
+
+    /// <summary>A1 through the interface: 7a's <see cref="CheckTokenAsync(string, CancellationToken)"/>; <paramref name="organization"/> is ignored.</summary>
+    public Task<HostingResult<HostingAccount>> CheckTokenAsync(string token, string? organization, CancellationToken ct) => CheckTokenAsync(token, ct);
+
+    /// <summary>A2 through the interface: 7a's <see cref="ListRepositoriesAsync(string, CancellationToken)"/>; <paramref name="account"/> is ignored.</summary>
+    public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(string token, HostingAccount account, CancellationToken ct) => ListRepositoriesAsync(token, ct);
 
     /// <summary>A1: <c>GET user</c>. An empty token is refused without a request.</summary>
     public async Task<HostingResult<HostingAccount>> CheckTokenAsync(string token, CancellationToken ct)
@@ -64,7 +120,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (reply.Value is not { Login: { Length: > 0 } login } user)
         {
-            return HostingResult<HostingAccount>.Fail(Malformed("GET", url, reply.RequestId));
+            return HostingResult<HostingAccount>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
         }
 
         var key = new AccountKey(HostingProvider.GitHub, Endpoints.Host, login);
@@ -88,7 +144,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (reply.Value is null)
         {
-            return HostingResult<RepositoryList>.Fail(Malformed("GET", url, reply.RequestId));
+            return HostingResult<RepositoryList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
         }
 
         var repositories = new List<RepositoryInfo>();
@@ -96,7 +152,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         {
             if (Info(json, withParent: false) is not { } info)
             {
-                return HostingResult<RepositoryList>.Fail(Malformed("GET", url, reply.RequestId));
+                return HostingResult<RepositoryList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
             }
 
             repositories.Add(info);
@@ -124,7 +180,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         return reply.Value is not null && Info(reply.Value, withParent: true) is { } info
             ? HostingResult<RepositoryInfo>.Ok(info)
-            : HostingResult<RepositoryInfo>.Fail(Malformed("GET", url, reply.RequestId));
+            : HostingResult<RepositoryInfo>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
     }
 
     /// <summary>A4: <c>GET repos/{o}/{r}/pulls?state=open&amp;per_page=100</c>, up to 3 pages.</summary>
@@ -145,7 +201,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (reply.Value is null)
         {
-            return HostingResult<PullRequestList>.Fail(Malformed("GET", url, reply.RequestId));
+            return HostingResult<PullRequestList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
         }
 
         var pulls = new List<PullRequest>();
@@ -153,7 +209,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         {
             if (Pull(json, repository) is not { } pull)
             {
-                return HostingResult<PullRequestList>.Fail(Malformed("GET", url, reply.RequestId));
+                return HostingResult<PullRequestList>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
             }
 
             pulls.Add(pull);
@@ -165,7 +221,8 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// <summary>
     /// A5: <c>POST repos/{o}/{r}/pulls</c> on the base repository, once (never retried): <c>head</c>
     /// the branch, or <c>owner:branch</c> across forks with <c>maintainer_can_modify: true</c>.
-    /// A 422's detail is the client's (6.3's forms).
+    /// A 422's detail is the client's (6.3's forms), and its <see cref="HostingFailure.Refusal"/>
+    /// the reason that detail stands for (<see cref="RefusalOf"/>); its message and detail stay GitHub's.
     /// </summary>
     public async Task<HostingResult<PullRequest>> CreatePullRequestAsync(string token, HostedRepository baseRepository, NewPullRequest request, CancellationToken ct)
     {
@@ -190,13 +247,17 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         var reply = await _client.SendAsync(HttpMethod.Post, token, url, body, GitHubJsonContext.Default.GitHubPullRequestJson, ct).ConfigureAwait(false);
         if (reply.Failure is { } failure)
         {
-            return HostingResult<PullRequest>.Fail(failure);
+            return HostingResult<PullRequest>.Fail(failure.Kind == HostingFailureKind.Validation ? failure with { Refusal = RefusalOf(failure.Detail) } : failure);
         }
 
         return reply.Value is not null && Pull(reply.Value, baseRepository) is { } pull
             ? HostingResult<PullRequest>.Ok(pull)
-            : HostingResult<PullRequest>.Fail(Malformed("POST", url, reply.RequestId));
+            : HostingResult<PullRequest>.Fail(Malformed(HttpMethod.Post, url, reply.RequestId));
     }
+
+    /// <summary>A6 with no repository known readable but <paramref name="repository"/> (the overload below).</summary>
+    public Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, CancellationToken ct) =>
+        ReadAuthorsAsync(token, repository, branch, lookups, [], ct);
 
     /// <summary>
     /// A6 (D252): with <paramref name="branch"/>, the first page of its commits in
@@ -205,19 +266,30 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// empty map. Then at most 20 lookups for <paramref name="lookups"/> whose e-mail is not yet in
     /// the map, in order, each in its own repository's history from its own commit (D339):
     /// <c>repos/{owner}/{name}/commits?sha=&lt;SHA&gt;&amp;author=&lt;e-mail&gt;&amp;per_page=1</c>.
-    /// A lookup answered 409, or 404 in a repository other than <paramref name="repository"/>
-    /// (empty, or one GitHub does not let the token read), is left out with the rest of that
-    /// repository's, asked no more in this call, and the others go on. One answered 422, 404 in
-    /// <paramref name="repository"/> or a server error (GitHub lacks its commit: 500 without a body
-    /// beside <c>author</c>, the live run of 2026-10-30) is left out alone and the others go on
-    /// (D342, amending D339). Any other failure (the token refused or limited, the API version,
-    /// no answer, an answer not read) stops them and is left out. A lookup left out is not in the
-    /// map, so it is asked again at a later run.
+    /// A lookup answered 409 (an empty repository) is left out with the rest of that repository's,
+    /// asked no more in this call, and the others go on. One answered 404 in a repository not known
+    /// to be readable (not <paramref name="repository"/>, not in <paramref name="readable"/>, and
+    /// not one that answered a lookup of this call) is followed by one
+    /// <see cref="ReadRepositoryAsync"/> of that repository (D395): when it succeeds, the repository
+    /// is readable and the 404 is taken as below; when it answers 404, 403 (single sign-on's
+    /// included) or a server error (a repository GitHub does not give or does not let the token
+    /// read, or cannot answer for), the same as a 409; any other failure of the read stops the
+    /// lookups, as the same failure of a lookup does. One answered 422, 404 in a readable
+    /// repository or a server error (GitHub lacks its commit: 500 without a body beside
+    /// <c>author</c> in the live runs of 2026-10-30 and 31, 404 "Not Found" in that of 2026-11-08,
+    /// D394) is left out alone and the others go on (D342, amending D339). Any other failure (the
+    /// token refused or limited, the API version, no answer, an answer not read) stops them and is
+    /// left out. A lookup left out is not in the map, so it is asked again at a later run.
     /// </summary>
-    public async Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, CancellationToken ct)
+    /// <param name="readable">
+    /// Repositories the caller knows the token reads, for which a lookup's 404 is the commit's and
+    /// asks no read: a tab's own, which A3 has read (D395).
+    /// </param>
+    public async Task<HostingResult<AuthorMap>> ReadAuthorsAsync(string token, HostedRepository repository, string? branch, IReadOnlyCollection<AuthorCommit> lookups, IReadOnlyCollection<HostedRepository> readable, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(repository);
         ArgumentNullException.ThrowIfNull(lookups);
+        ArgumentNullException.ThrowIfNull(readable);
         if (Refusal(token) is { } refused)
         {
             return HostingResult<AuthorMap>.Fail(refused);
@@ -241,7 +313,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
             if (reply.Value is null)
             {
-                return HostingResult<AuthorMap>.Fail(Malformed("GET", url, reply.RequestId));
+                return HostingResult<AuthorMap>.Fail(Malformed(HttpMethod.Get, url, reply.RequestId));
             }
 
             foreach (var item in reply.Value)
@@ -261,6 +333,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             .Take(MaxAuthorLookups)
             .ToList();
         var unreadable = new HashSet<HostedRepository>();
+        var known = new HashSet<HostedRepository>(readable) { repository };
         foreach (var lookup in asked)
         {
             if (unreadable.Contains(lookup.Repository))
@@ -271,11 +344,37 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             var url = Api($"{RepositoryPath(lookup.Repository)}/commits?sha={Uri.EscapeDataString(lookup.Sha)}&author={Uri.EscapeDataString(lookup.Email)}&per_page=1");
             var reply = await _client.SendAsync(HttpMethod.Get, token, url, null, GitHubJsonContext.Default.ListGitHubCommitItemJson, ct).ConfigureAwait(false);
             var kind = reply.Failure?.Kind;
-            if (reply.Status == 409 || (kind is HostingFailureKind.NotFound && !repository.Equals(lookup.Repository)))
+            if (kind is HostingFailureKind.NotFound && !known.Contains(lookup.Repository))
             {
-                // An empty repository, or another remote's that is gone or private to others: none of
-                // its addresses is found there, so its other lookups are not asked in this call; the
-                // rest go on.
+                // Another remote's repository, not known to be readable: its 404 is the repository's
+                // (gone, or private to others) or, since the live run of 2026-11-08 (D394), a commit
+                // GitHub lacks, and GitHub answers both alike. The repository's own read, A3's
+                // request, tells them apart, once a call (D395).
+                var read = await ReadRepositoryAsync(token, lookup.Repository, ct).ConfigureAwait(false);
+                if (read.Succeeded)
+                {
+                    known.Add(lookup.Repository);
+                }
+                else if (read.Failure!.Kind is HostingFailureKind.NotFound or HostingFailureKind.Forbidden or HostingFailureKind.SsoRequired or HostingFailureKind.ServerError)
+                {
+                    // The repository's own answer (gone, private to others, closed to this token by
+                    // its owner), or GitHub failing on it: left out with the rest of its lookups in
+                    // this call, as its 404 alone left it out before D395; the others go on.
+                    unreadable.Add(lookup.Repository);
+                    continue;
+                }
+                else
+                {
+                    // The token refused or limited, the API version, no answer or an answer not
+                    // read: the lookups stop, as for a lookup's own such failure.
+                    break;
+                }
+            }
+
+            if (reply.Status == 409)
+            {
+                // An empty repository: none of its addresses is found there, so its other lookups are
+                // not asked in this call; the rest go on.
                 unreadable.Add(lookup.Repository);
                 continue;
             }
@@ -283,11 +382,14 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             if (kind is HostingFailureKind.Validation or HostingFailureKind.ServerError or HostingFailureKind.NotFound)
             {
                 // A commit GitHub does not have (a remote-tracking branch GitHub has since lost or
-                // rewritten, a remote pointed elsewhere): github.com answers such a lookup 500 without
-                // a body (the live run of 2026-10-30), and a 422 is taken the same, in any repository.
-                // A 404 in the listed repository (the tab's own: A3's, or for a fork the parent A3
-                // names) is taken as this commit's, not the repository's (not measured). Only this
-                // address is not found, and it is asked again at a later run (D342).
+                // rewritten, a remote pointed elsewhere): github.com answered such a lookup 500
+                // without a body in the live runs of 2026-10-30 and 31, and 404 "Not Found" in that
+                // of 2026-11-08 (D394); a 422 is taken as the 500, in any repository. A 404 in a
+                // readable repository (the listed one: the tab's own, or for a fork the parent A3
+                // names; one the caller knows readable, a fork tab's own fork, which A3 read; one
+                // that answered a lookup of this call; one whose read above succeeded) is taken as
+                // this commit's, not the repository's. Only this address is not found, and it is
+                // asked again at a later run (D342, D395).
                 continue;
             }
 
@@ -296,6 +398,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
                 break;
             }
 
+            known.Add(lookup.Repository);
             map[lookup.Email] = reply.Value is [var first, ..] ? Author(first.Author) : null;
         }
 
@@ -310,14 +413,20 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// </summary>
     internal void ForgetKept() => _client.ForgetKept();
 
+    /// <summary>What a request with <paramref name="token"/> is screened as: WP-S's D382 check reads A1's answer for each.</summary>
+    internal string[] SecretsOf(string token) => _client.SecretsOf(token);
+
     /// <summary><c>repos/{owner}/{name}</c>, each segment escaped.</summary>
     private static string RepositoryPath(HostedRepository repository) =>
         $"repos/{Uri.EscapeDataString(repository.Owner)}/{Uri.EscapeDataString(repository.Name)}";
 
     /// <summary>
-    /// Why a token is refused without a request: empty or blank (<see cref="EmptyTokenText"/>), or
+    /// Why a token is refused without a request: empty or blank (<see cref="EmptyTokenText"/>);
     /// holding anything but visible ASCII, which no GitHub token does and no header may carry
-    /// (GitHub's own "Bad credentials"); null when it may be sent.
+    /// (GitHub's own "Bad credentials"); or of GitLab's or Azure DevOps' form
+    /// (<see cref="HostingProviders.TokenFormOf"/>; D378, amending D298), "Bad credentials" with the
+    /// detail <c>other-provider:&lt;id&gt;</c>, so that it is disclosed to no other service. A token
+    /// of GitHub's form, or of none, may be sent: null.
     /// </summary>
     private static HostingFailure? Refusal(string? token)
     {
@@ -326,17 +435,46 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             return new HostingFailure(HostingFailureKind.BadCredentials, EmptyTokenText);
         }
 
-        return token.All(c => c is > ' ' and < '\u007F') ? null : new HostingFailure(HostingFailureKind.BadCredentials, "Bad credentials");
+        if (!token.All(c => c is > ' ' and < '\u007F'))
+        {
+            return new HostingFailure(HostingFailureKind.BadCredentials, "Bad credentials");
+        }
+
+        return HostingProviders.TokenFormOf(token) is { } form && form != HostingProvider.GitHub
+            ? new HostingFailure(HostingFailureKind.BadCredentials, "Bad credentials", OtherProviderDetail + HostingProviders.Id(form))
+            : null;
     }
+
+    /// <summary>
+    /// The reason a 422's detail (<see cref="GitHubClient"/>'s forms) stands for, as the create
+    /// form matched it in 7a: starting "A pull request already exists"
+    /// <see cref="PullRequestRefusal.AlreadyExists"/>, starting "No commits between"
+    /// <see cref="PullRequestRefusal.NoCommits"/>, "head is invalid"
+    /// <see cref="PullRequestRefusal.HeadMissing"/>, "base is invalid"
+    /// <see cref="PullRequestRefusal.BaseMissing"/>; else <see cref="PullRequestRefusal.None"/>.
+    /// GitHub never gives <see cref="PullRequestRefusal.BranchesMissing"/>.
+    /// </summary>
+    internal static PullRequestRefusal RefusalOf(string? detail) => detail switch
+    {
+        null => PullRequestRefusal.None,
+        _ when detail.StartsWith("A pull request already exists", StringComparison.Ordinal) => PullRequestRefusal.AlreadyExists,
+        _ when detail.StartsWith("No commits between", StringComparison.Ordinal) => PullRequestRefusal.NoCommits,
+        "head is invalid" => PullRequestRefusal.HeadMissing,
+        "base is invalid" => PullRequestRefusal.BaseMissing,
+        _ => PullRequestRefusal.None,
+    };
 
     private Uri Api(string relative) => new(Endpoints.ApiBase, relative);
 
-    /// <summary>A repository as A2 and A3 describe it; null when a field the app needs is missing or unreadable.</summary>
+    /// <summary>
+    /// A repository as A2 and A3 describe it; null when a field the app needs is missing or
+    /// unreadable, <c>clone_url</c> and <c>html_url</c> among them unless <see cref="WebAddress"/> reads them.
+    /// </summary>
     private RepositoryInfo? Info(GitHubRepositoryJson json, bool withParent)
     {
         if (json.DefaultBranch is not { Length: > 0 } defaultBranch
-            || !Uri.TryCreate(json.CloneUrl, UriKind.Absolute, out var cloneUrl)
-            || !Uri.TryCreate(json.HtmlUrl, UriKind.Absolute, out var htmlUrl)
+            || WebAddress(json.CloneUrl) is not { } cloneUrl
+            || WebAddress(json.HtmlUrl) is not { } htmlUrl
             || json.UpdatedAt is not { } updatedAt)
         {
             return null;
@@ -358,10 +496,13 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             parent is null ? null : json.Parent!.DefaultBranch);
     }
 
-    /// <summary>A pull request of A4 or A5 on <paramref name="baseRepository"/> (its <c>base.repo</c> when given); null when it cannot be read.</summary>
+    /// <summary>
+    /// A pull request of A4 or A5 on <paramref name="baseRepository"/> (its <c>base.repo</c> when
+    /// given); null when it cannot be read, its <c>html_url</c> among them unless <see cref="WebAddress"/> reads it.
+    /// </summary>
     private PullRequest? Pull(GitHubPullRequestJson json, HostedRepository baseRepository)
     {
-        if (!Uri.TryCreate(json.HtmlUrl, UriKind.Absolute, out var htmlUrl))
+        if (WebAddress(json.HtmlUrl) is not { } htmlUrl)
         {
             return null;
         }
@@ -380,6 +521,19 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
             json.CreatedAt);
     }
 
+    /// <summary>
+    /// An address an answer gives, used only once its scheme is <c>http</c> or <c>https</c>, as wave
+    /// 2's clients read theirs (docs/phase-7b-design.md 5.6): on Windows .NET reads <c>//host/share</c>
+    /// as <c>file://host/share</c>, which a clone would reach over SMB; else null.
+    /// </summary>
+    private static Uri? WebAddress(string? text) =>
+        text is not null
+        && (text.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || text.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        && Uri.TryCreate(text, UriKind.Absolute, out var url)
+        && (url.Scheme == Uri.UriSchemeHttp || url.Scheme == Uri.UriSchemeHttps)
+            ? url
+            : null;
+
     private HostedRepository Hosted(GitHubRepositoryJson json) => new(HostingProvider.GitHub, Endpoints.Host, json.Owner.Login, json.Name);
 
     /// <summary>A6's user of a commit: null when GitHub links none (null or <c>{}</c>), or when its avatar is not on GitHub's own host.</summary>
@@ -391,7 +545,8 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
     /// <summary>
     /// The avatar's address when it is <c>https</c> on <c>avatars.githubusercontent.com</c>
     /// (github.com) or on the web address's scheme, host and port (the fake, D252, D286); else null,
-    /// with one warning per provider that names the host only.
+    /// with one warning per provider that names the host only (a host without an IDN form is on
+    /// neither and named <see cref="Http.HostingHttpClient.UnreadableHost"/>, D380).
     /// </summary>
     private Uri? AvatarOf(string? avatarUrl)
     {
@@ -402,7 +557,7 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
 
         if (Uri.TryCreate(avatarUrl, UriKind.Absolute, out var url)
             && (GitHubUrls.IsGitHubCom(Endpoints)
-                ? url.Scheme == Uri.UriSchemeHttps && string.Equals(url.IdnHost, AvatarHost, StringComparison.OrdinalIgnoreCase) && url.Port == 443
+                ? url.Scheme == Uri.UriSchemeHttps && string.Equals(Http.HostingHttpClient.IdnHostOf(url), AvatarHost, StringComparison.OrdinalIgnoreCase) && url.Port == 443
                 : GitHubUrls.SameOrigin(url, Endpoints.WebBase)))
         {
             return url;
@@ -417,11 +572,6 @@ public sealed class GitHubProvider : IHostingProvider, IDisposable
         return null;
     }
 
-    /// <summary>An answer that succeeded but lacks what the app needs: the client's text, and the warning the client would write.</summary>
-    private HostingFailure Malformed(string method, Uri url, string? requestId)
-    {
-        var request = requestId is { Length: > 0 } ? $" (request {requestId})" : string.Empty;
-        _log.Warning($"GitHub: {method} {url.AbsolutePath} failed: Malformed{request}.");
-        return new HostingFailure(HostingFailureKind.Malformed, GitHubClient.MalformedText, Url: new Uri(url.GetLeftPart(UriPartial.Path)), RequestId: requestId);
-    }
+    /// <summary>An answer that succeeded but lacks what the app needs: the core's <see cref="Http.HostingHttpClient.MalformedAnswer"/>, its text and its warning.</summary>
+    private HostingFailure Malformed(HttpMethod method, Uri url, string? requestId) => _client.MalformedAnswer(method, url, requestId);
 }

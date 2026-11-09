@@ -81,6 +81,9 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
     /// <summary>The watcher's Changed events posted to the UI thread whose refresh has not been asked for yet.</summary>
     private int _changesPosted;
+
+    /// <summary>The refreshes of the refs the watcher has asked for (<see cref="WatcherRefreshes"/>).</summary>
+    private int _watcherRefreshes;
     private DiscardSnapshot? _lastSnapshot;
     private Dictionary<string, string?>? _afterDiscard;
 
@@ -345,6 +348,16 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         && Volatile.Read(ref _refreshing) is not { IsCompleted: false }
         && Volatile.Read(ref _statusRefreshing) is not { IsCompleted: false }
         && IsHostingQuiet;
+
+    /// <summary>
+    /// How many refreshes of the refs (<see cref="RefreshAsync"/>) the watcher has asked for since
+    /// the view model was made: one for each change it raised in the git folder once the first load
+    /// had ended. A change in the working tree alone asks for a status read and is not counted, nor
+    /// is a refresh anything else asks for (an operation's end, the Refresh command, a filter, a
+    /// page). The harnesses read it with <see cref="IsWatcherQuiet"/> to tell a refresh that a write
+    /// reported late started (macOS) from one a check's step started itself (docs/phase-7a-design.md 5.3).
+    /// </summary>
+    public int WatcherRefreshes => Volatile.Read(ref _watcherRefreshes);
 
     /// <summary>What the status bar shows of the operations (4e).</summary>
     public OperationStatusViewModel OperationStatus { get; }
@@ -1667,7 +1680,15 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
             return;
         }
 
-        _ = change.GitFolder ? RefreshAsync() : RefreshStatusAsync();
+        if (change.GitFolder)
+        {
+            Interlocked.Increment(ref _watcherRefreshes);
+            _ = RefreshAsync();
+        }
+        else
+        {
+            _ = RefreshStatusAsync();
+        }
     }
 
     /// <summary>

@@ -175,6 +175,54 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
     }
 
     /// <summary>
+    /// The file a conditional include of the outside read names, read for a clone's binding (D331,
+    /// fixed at phase 7b's review before the gate): its path as git works it out
+    /// (<see cref="GitConfigIncludes.Resolve"/>, <c>~</c> under the home folder of the environment git
+    /// gets), then <c>git config --file &lt;path&gt; --includes --show-scope --show-origin -z
+    /// --get-regexp ^(url|includeif)\.</c> in the data folder under its ceiling, as the outside read
+    /// runs: the <c>url.</c> rules and the conditional directives of the file and of the files it
+    /// includes without condition, each with the directive's scope and its own file. Exit 1 with
+    /// nothing on standard error is a file without such keys or no file at all, which git ignores:
+    /// empty. Any other failure (a broken file, a file git may not open, which it reports on standard
+    /// error with exit 1) throws <see cref="GitException"/>, as does a path git would work out by
+    /// means this app does not follow.
+    /// </summary>
+    public async Task<IReadOnlyList<GitConfigValue>> ReadIncludedAsync(GitConfigValue directive, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(directive);
+        var runner = await _runner(cancellationToken).ConfigureAwait(false);
+
+        // The home folder may be a share that takes its time to answer: never on the caller's thread.
+        var home = directive.Value is ['~', ..]
+            ? await Task.Run(() => GitConfigLocations.Home(Variable, Directory.Exists, OperatingSystem.IsWindows()), cancellationToken).ConfigureAwait(false)
+            : null;
+        var folder = PrepareDataDirectory();
+        var path = GitConfigIncludes.Resolve(directive.Value, directive.Origin, home)
+            ?? throw new GitException("git config --file", null, "The include's path cannot be worked out as git would.");
+        var command = new GitCommand("config", "--file", path, "--includes", "--show-scope", "--show-origin", "-z", "--get-regexp", @"^(url|includeif)\.")
+        {
+            WorkingDirectory = folder,
+            Environment = _outsideReadEnvironment,
+        };
+
+        var result = await runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.ExitCode == 1 && result.StandardError.Trim().Length == 0)
+        {
+            return [];
+        }
+
+        result.EnsureSuccess(command);
+        try
+        {
+            return [.. ParseList(result.StandardOutput, folder).Select(value => value with { Scope = directive.Scope })];
+        }
+        catch (FormatException ex)
+        {
+            throw new GitException(command.DisplayText, result.ExitCode, $"Unexpected output: {ex.Message}");
+        }
+    }
+
+    /// <summary>
     /// <c>git var GIT_AUTHOR_IDENT</c> and <c>git var GIT_COMMITTER_IDENT</c> in
     /// <paramref name="workingTree"/>, side by side (8.6): each <c>Name &lt;email&gt;</c> without
     /// git's time and zone, or null when git refused, with git's last <c>fatal:</c> line (the

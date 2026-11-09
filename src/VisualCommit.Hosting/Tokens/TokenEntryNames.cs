@@ -1,6 +1,7 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
+using VisualCommit.Core.Hosting;
 
 namespace VisualCommit.Hosting.Tokens;
 
@@ -19,11 +20,10 @@ public sealed class TokenEntryNames
     /// <summary>The Secret Service's <c>xdg:schema</c> attribute of the app's items.</summary>
     public const string SecretServiceSchema = "io.github.rahimpasha.VisualCommit.Token";
 
-    // How a provider's id is shown in a label or a comment; 7b adds its own.
-    private static readonly Dictionary<string, string> ProviderNames = new(StringComparer.Ordinal)
-    {
-        ["github"] = "GitHub",
-    };
+    // How a provider's id is shown in a label or a comment: HostingProviders' display name
+    // (docs/phase-7b-design.md 1.6): "GitHub", "Azure DevOps", "GitLab".
+    private static readonly Dictionary<string, string> ProviderNames = HostingProviders.InAccountsOrder
+        .ToDictionary(HostingProviders.Id, HostingProviders.DisplayName, StringComparer.Ordinal);
 
     private TokenEntryNames(TokenKey key, string application)
     {

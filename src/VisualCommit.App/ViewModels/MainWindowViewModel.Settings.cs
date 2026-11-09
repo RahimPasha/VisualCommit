@@ -3,6 +3,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using Texts = VisualCommit.App.ViewModels.Operations.OperationTexts.SettingsTexts;
 
@@ -71,7 +72,7 @@ public partial class MainWindowViewModel
                     _log)
                 {
                     Hosting = _tabServices.Hosting,
-                    SignIn = SignInToGitHubAsync,
+                    SignIn = SignInAsync,
                     GitVersion = Git?.Version,
                 },
                 section);

@@ -6,7 +6,9 @@ namespace VisualCommit.Hosting.GitHub;
 // GitHub's REST shapes, as far as the provider reads them (docs/phase-7a-design.md 6.2, 6.3). Field
 // names are GitHub's snake_case through GitHubJsonContext; fields not listed are ignored. A field
 // the provider needs is `required`, and a null where none is allowed fails the parse, so an answer
-// without them is Malformed rather than a half-filled record.
+// without them is Malformed rather than a half-filled record. The shared HTTP core parses the bodies
+// with these shapes after removing a leading byte order mark, and refuses a request body of a type
+// GitHubJsonContext lacks, through GitHubClient's profile (docs/phase-7b-design.md 5.2, 5.3).
 
 /// <summary>A user (<c>GET user</c>, a pull request's <c>user</c>, a commit's <c>author</c>); <c>{}</c> leaves every field unset.</summary>
 internal sealed class GitHubUserJson
@@ -110,7 +112,11 @@ internal sealed class GitHubCommitAuthorJson
     public string? Email { get; set; }
 }
 
-/// <summary>GitHub's error body: <c>message</c> and <c>errors</c> (a 422's array, a 400's one string; <see cref="GitHubErrorsConverter"/>).</summary>
+/// <summary>
+/// GitHub's error body: <c>message</c> and <c>errors</c> (a 422's array, a 400's one string;
+/// <see cref="GitHubErrorsConverter"/>). A 422's first error gives the failure's detail, from
+/// which <c>GitHubProvider</c> reads A5's <see cref="PullRequestRefusal"/> (docs/phase-7b-design.md 5.4).
+/// </summary>
 internal sealed class GitHubErrorJson
 {
     public string? Message { get; set; }

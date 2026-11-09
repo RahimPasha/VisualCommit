@@ -52,7 +52,12 @@ public sealed class RepositoryHostingWiringTests
         var url = Scenarios.HostingUrl("octo/hello", wiring.Fake.Port);
         Assert.Equal([new CredentialBinding(url, HostingKey(wiring))], viewModel.Hosting.Bindings);
         Assert.Equal(4, viewModel.HostingState.List!.PullRequests.Count);
-        Assert.Single(wiring.Log.Lines, line => line.Message == "hello: listed 4 open pull requests of octo/hello");
+
+        // The line is posted after the state is applied (D322), so the state can be seen while it
+        // still waits in the dispatcher's queue (CI's run 41321215497 on ubuntu-latest).
+        const string listed = "hello: listed 4 open pull requests of octo/hello";
+        await WaitForAsync(() => wiring.Log.Lines.Any(line => line.Message == listed), "the list's line");
+        Assert.Single(wiring.Log.Lines, line => line.Message == listed);
 
         // A rule and a remote that needs it: the refresh reads the rules once more and binds through them.
         var (marked, refsMarked) = (wiring.RulesReads(), wiring.RefsReads());
@@ -85,7 +90,7 @@ public sealed class RepositoryHostingWiringTests
         await wiring.Served.Hello.GitAsync("config", $"url.{wiring.Fake.Endpoints.WebBase}.insteadOf", "gh:");
         await wiring.Served.Hello.GitAsync("remote", "set-url", "origin", "gh:octo/hello.git");
         using var viewModel = await wiring.OpenAsync();
-        Assert.Same(RepositoryHostingState.NotGitHub, viewModel.HostingState);
+        Assert.Same(RepositoryHostingState.NoHostedRemote, viewModel.HostingState);
         Assert.Equal(0, wiring.RulesReads());
 
         // Nothing but the wish for the rules changes at the sign-in; that alone starts their read.

@@ -7,12 +7,15 @@ using VisualCommit.Testing;
 namespace VisualCommit.App.Tests;
 
 /// <summary>
-/// A hosting session for WP-C's App tests (docs/phase-7a-design.md 4.1, 4.8): one account on
-/// <see cref="WebBase"/>, git's credentials from a <see cref="RecordingCredentialSource"/>, every
-/// repository's hosting a <see cref="StubRepositoryHosting"/> whose <see cref="RepositoryBindings"/>
-/// the test sets, <see cref="BindsGit"/> settable with <see cref="BindingsFor"/> binding the given
-/// URLs to the account through <see cref="CredentialBinding.Select"/>, and the push guard's ruling 8
-/// for the URLs in <see cref="GitHubUrls"/>. It makes no request.
+/// A hosting session for WP-C's App tests (docs/phase-7a-design.md 4.1, 4.8; docs/phase-7b-design.md
+/// 8.7): one account of one provider under <see cref="Coverage"/>, git's credentials from a
+/// <see cref="RecordingCredentialSource"/>, every repository's hosting a
+/// <see cref="StubRepositoryHosting"/> whose <see cref="RepositoryBindings"/> the test sets,
+/// <see cref="BindsGit"/> settable with <see cref="BindingsFor"/> binding the given URLs to the
+/// account through <see cref="CredentialBinding.Select(IReadOnlyList{RemoteEffectiveUrls}, GitCoverage)"/>,
+/// and the push guard's rule (<see cref="PullRequestRefs.SourceCanExist"/>) for the URLs in
+/// <see cref="GitHubUrls"/> (GitHub's) and <see cref="RecognisedUrls"/> (any provider's). It makes
+/// no request.
 /// </summary>
 internal sealed class HostingSessionStub : IHostingSession
 {
@@ -20,15 +23,31 @@ internal sealed class HostingSessionStub : IHostingSession
     private IReadOnlyList<CredentialBinding> _repositoryBindings = [];
     private int _bindingsForCalls;
 
+    /// <summary>7a's stub: a GitHub account <paramref name="login"/> on <paramref name="webBase"/>'s host, GitHub's coverage; the status keeps the login's case.</summary>
     public HostingSessionStub(Uri webBase, string login, string? token)
+        : this(new GitCoverage(new AccountKey(HostingProvider.GitHub, webBase.Authority, login), webBase), token, login)
     {
-        WebBase = webBase;
-        Key = new AccountKey(HostingProvider.GitHub, webBase.Authority, login);
+    }
+
+    /// <summary>The coverage's account signed in, answering git with <paramref name="token"/>; a test sets <see cref="Account"/> for a login in another case.</summary>
+    public HostingSessionStub(GitCoverage coverage, string? token)
+        : this(coverage, token, coverage?.Account.Login!)
+    {
+    }
+
+    private HostingSessionStub(GitCoverage coverage, string? token, string login)
+    {
+        ArgumentNullException.ThrowIfNull(coverage);
+        Coverage = coverage;
+        Key = coverage.Account;
         Credentials = new RecordingCredentialSource(token);
         Account = new AccountStatus(new HostingAccount(Key, login, 1, null, null, UseForGit: true), AccountState.SignedIn, TokenPlace.Session, AccountNoteKind.None, null);
     }
 
-    public Uri WebBase { get; }
+    /// <summary>What the account covers for git: <see cref="BindingsFor"/> applies it.</summary>
+    public GitCoverage Coverage { get; }
+
+    public Uri WebBase => Coverage.Origin;
 
     public AccountKey Key { get; }
 
@@ -37,6 +56,9 @@ internal sealed class HostingSessionStub : IHostingSession
 
     /// <summary>URLs, as configured, of remotes recognised as GitHub by <see cref="SourceCanExist"/>.</summary>
     public HashSet<string> GitHubUrls { get; } = new(StringComparer.Ordinal);
+
+    /// <summary>URLs, as configured, of remotes <see cref="SourceCanExist"/> takes as the given provider's, an account's or not (D279).</summary>
+    public Dictionary<string, HostingProvider> RecognisedUrls { get; } = new(StringComparer.Ordinal);
 
     /// <summary>The bindings of every repository's hosting, those made already and those to come.</summary>
     public IReadOnlyList<CredentialBinding> RepositoryBindings
@@ -69,17 +91,39 @@ internal sealed class HostingSessionStub : IHostingSession
 
     public bool IsOff => false;
 
+    public IReadOnlyList<HostingProvider> Providers => [Key.Provider];
+
     public IHostingProvider? GitHub => null;
 
     public AccountStatus? Account { get; set; }
 
     public bool BindsGit { get; set; }
 
-    public event EventHandler? AccountChanged
+    public event EventHandler<HostingAccountChangedEventArgs>? AccountChanged
     {
         add { }
         remove { }
     }
+
+    public bool IsOn(HostingProvider provider) => provider == Key.Provider;
+
+    public IHostingProvider? ProviderOf(HostingProvider provider) => null;
+
+    public AccountStatus? AccountOf(HostingProvider provider) => provider == Key.Provider ? Account : null;
+
+    public Task<SignInResult> SignInAsync(SignInRequest request, CancellationToken ct) => throw new NotSupportedException("The stub signs nobody in.");
+
+    public Task<string?> SignOutAsync(HostingProvider provider, CancellationToken ct) => throw new NotSupportedException("The stub signs nobody out.");
+
+    public void SetUseForGit(HostingProvider provider, bool useForGit)
+    {
+        if (provider == Key.Provider)
+        {
+            SetUseForGit(useForGit);
+        }
+    }
+
+    public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(HostingProvider provider, CancellationToken ct) => throw new NotSupportedException("The stub lists nothing.");
 
     public Task StartAsync(CancellationToken ct) => Task.CompletedTask;
 
@@ -93,30 +137,18 @@ internal sealed class HostingSessionStub : IHostingSession
 
     public HostedRepository? Recognise(string url) => null;
 
-    /// <summary>Ruling 8 on a recognised URL: false only for <c>refs/pull/&lt;x&gt;/head</c> or <c>/merge</c> whose <c>&lt;x&gt;</c> is not all digits.</summary>
-    public bool SourceCanExist(string remoteUrl, string remoteRef)
-    {
-        if (!GitHubUrls.Contains(remoteUrl) || !remoteRef.StartsWith("refs/pull/", StringComparison.Ordinal))
-        {
-            return true;
-        }
-
-        var rest = remoteRef["refs/pull/".Length..];
-        var slash = rest.IndexOf('/', StringComparison.Ordinal);
-        if (slash < 0 || rest[(slash + 1)..] is not ("head" or "merge"))
-        {
-            return true;
-        }
-
-        return slash > 0 && rest[..slash].All(char.IsAsciiDigit);
-    }
+    /// <summary>Rulings 8 and 14 on a recognised URL: <see cref="PullRequestRefs.SourceCanExist"/> of its provider; true for a URL not recognised.</summary>
+    public bool SourceCanExist(string remoteUrl, string remoteRef) =>
+        GitHubUrls.Contains(remoteUrl) ? PullRequestRefs.SourceCanExist(HostingProvider.GitHub, remoteRef)
+        : RecognisedUrls.TryGetValue(remoteUrl, out var provider) ? PullRequestRefs.SourceCanExist(provider, remoteRef)
+        : true;
 
     public IReadOnlyList<CredentialBinding> BindingsForClone(string url) => [];
 
     public IReadOnlyList<CredentialBinding> BindingsFor(IReadOnlyList<RemoteUrl> remoteUrls, UrlRewrites rewrites)
     {
         Interlocked.Increment(ref _bindingsForCalls);
-        return BindsGit ? CredentialBinding.Select(rewrites.Apply(remoteUrls), WebBase, Key) : [];
+        return BindsGit ? CredentialBinding.Select(rewrites.Apply(remoteUrls), Coverage) : [];
     }
 
     public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(CancellationToken ct) => throw new NotSupportedException("The stub lists nothing.");
@@ -147,7 +179,7 @@ internal sealed class HostingSessionStub : IHostingSession
     /// </summary>
     internal sealed class StubRepositoryHosting : IRepositoryHosting
     {
-        private RepositoryHostingState _state = RepositoryHostingState.NotGitHub;
+        private RepositoryHostingState _state = RepositoryHostingState.NoHostedRemote;
         private EventHandler? _changed;
 
         public RepositoryHostingState State

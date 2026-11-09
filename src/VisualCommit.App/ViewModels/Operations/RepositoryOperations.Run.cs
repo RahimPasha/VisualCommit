@@ -342,29 +342,15 @@ public sealed partial class RepositoryOperations
         // The URLs whose credentials come from the account (D255), for a network operation only
         // (docs/phase-7a-design.md 0.2, 4.7): the tab's hosting's, or for a dashboard row without a
         // tab, whose hosting is the null object, its remotes' URLs after the rules read now (D332).
+        // A tab inside D290's window, whose bindings are empty until its rules read answers, binds
+        // once the rules are known, never from unrewritten URLs (D388, BindingsOnceRulesReadAsync).
         // Signed out nothing is read. A local operation's git calls get no credential pair and keep
         // an inherited command-line configuration (D329), as in a tab that is not bound.
         var bindings = kind == OperationKind.Network ? Repository.Hosting.Bindings : [];
-        if (kind == OperationKind.Network && Repository.IsSummary && Services?.Hosting is { BindsGit: true } hosting && Repository.Refs is { } refs)
+        if (kind == OperationKind.Network && Services?.Hosting is { BindsGit: true } hosting
+            && (Repository.IsSummary ? Repository.Refs is not null : Repository.AwaitsUrlRules))
         {
-            try
-            {
-                // The view model's lifetime is its own; a tab closed meanwhile is caught below.
-                var rules = await Repository.Repository.ReadUrlRewritesAsync(options.Cancellation).ConfigureAwait(true);
-                bindings = hosting.BindingsFor(refs.RemoteUrls, rules);
-            }
-            catch (Exception ex) when (ex is GitException or OperationCanceledException)
-            {
-                if (ex is GitException)
-                {
-                    Log.Warning($"{Repository.Name}: {text.Title}: the URL rules could not be read, so the account is not used for git: {GitCommand.HideCredentials(ex.Message)}");
-                }
-
-                bindings = [];
-            }
-
-            // Not "after": the tests count "<title>: ... after" lines as the queue's ends of operations.
-            Log.Debug($"{Repository.Name}: {text.Title}: {bindings.Count} URLs bound to the account once the URL rules were read.");
+            bindings = await BindingsOnceRulesReadAsync(text, hosting, options.Cancellation).ConfigureAwait(true);
             if (IsClosed)
             {
                 Log.Info($"{Repository.Name}: {text.Title}: not started, the tab is closed.");
@@ -463,6 +449,67 @@ public sealed partial class RepositoryOperations
 
     /// <summary>What the first caller of a queue's task (<see cref="_resultsShown"/>) knows: the operation's id once it runs, and a rebase's stop notice.</summary>
     private sealed record FirstCaller(StrongBox<string?> OperationId, StopNotice? Notice);
+
+    /// <summary>
+    /// The bindings of a network operation whose repository's URL rules are not known at its start,
+    /// on the UI thread, before it is queued. A tab inside D290's window (D388) waits first for its
+    /// own read in flight, which adds no git call, and then takes its hosting's bindings. With none in
+    /// flight (not started yet, or failed), and for a dashboard row (D332), it reads the rules once
+    /// (one <c>git config --null --get-regexp ^url\.</c>) and binds the remotes' URLs through them:
+    /// <paramref name="hosting"/>'s <c>BindingsFor</c>, the rules the tab's hosting applies, so a URL
+    /// the rules give another user or host is not bound (D278). A failed read binds nothing. A cancel
+    /// or the tab's closing meanwhile binds nothing; the caller then starts nothing. The account
+    /// signed out meanwhile binds nothing too, and the caller starts the operation unbound, as in a
+    /// signed-out tab. One Debug line gives the count whenever it took the tab's bindings or began its
+    /// own read (0 when that read failed or was cancelled); none when the wait ended by a cancel, the
+    /// tab's closing or a sign-out, nor for a tab whose refs are not read yet, which binds nothing
+    /// (its toolbar and the bulk runs start no network operation then).
+    /// </summary>
+    private async Task<IReadOnlyList<CredentialBinding>> BindingsOnceRulesReadAsync(OperationText text, VisualCommit.Hosting.IHostingSession hosting, CancellationToken cancellation)
+    {
+        if (!Repository.IsSummary)
+        {
+            if (await Repository.UrlRulesReadAsync(cancellation).ConfigureAwait(true))
+            {
+                var bound = Repository.Hosting.Bindings;
+                Log.Debug($"{Repository.Name}: {text.Title}: {bound.Count} URLs bound to the account once the tab's URL rules were read.");
+                return bound;
+            }
+
+            // Signed out or closed meanwhile, or cancelled: nothing to read the rules for.
+            if (IsClosed || cancellation.IsCancellationRequested || !hosting.BindsGit)
+            {
+                return [];
+            }
+        }
+
+        // The refs as the read starts: a dashboard row's are those its start found (D332).
+        if (Repository.Refs is not { } refs)
+        {
+            return [];
+        }
+
+        IReadOnlyList<CredentialBinding> bindings;
+        try
+        {
+            // The view model's lifetime is its own; a tab closed meanwhile is caught by the caller.
+            var rules = await Repository.Repository.ReadUrlRewritesAsync(cancellation).ConfigureAwait(true);
+            bindings = hosting.BindingsFor(refs.RemoteUrls, rules);
+        }
+        catch (Exception ex) when (ex is GitException or OperationCanceledException)
+        {
+            if (ex is GitException)
+            {
+                Log.Warning($"{Repository.Name}: {text.Title}: the URL rules could not be read, so the account is not used for git: {GitCommand.HideCredentials(ex.Message)}");
+            }
+
+            bindings = [];
+        }
+
+        // Not "after": the tests count "<title>: ... after" lines as the queue's ends of operations.
+        Log.Debug($"{Repository.Name}: {text.Title}: {bindings.Count} URLs bound to the account once the URL rules were read.");
+        return bindings;
+    }
 
     /// <summary>
     /// Asks <paramref name="confirmation"/>, then runs the operation (<see cref="RunAsync"/>), which
@@ -729,9 +776,10 @@ public sealed partial class RepositoryOperations
     }
 
     /// <summary>
-    /// The dialog of a failure whose credentials GitHub refused through the app's helper (ruling 4,
-    /// D276, D330, docs/phase-7a-design.md 4.7), before any other description: the operation's
-    /// error title, <see cref="OperationTexts.GitCredentialsRefused"/> with the signed-in login in
+    /// The dialog of a failure whose credentials a provider refused through the app's helper (ruling 4,
+    /// D276, D330, docs/phase-7a-design.md 4.7, docs/phase-7b-design.md 8.5), before any other
+    /// description: the operation's error title, <see cref="OperationTexts.GitCredentialsRefused(Core.Hosting.HostingProvider, string)"/>
+    /// naming the refused account's provider, with that provider's signed-in login in
     /// its own case (or the refused key's), and "Open settings…" on Accounts when the window can
     /// open the settings screen. Null for any other result.
     /// </summary>
@@ -742,11 +790,11 @@ public sealed partial class RepositoryOperations
             return null;
         }
 
-        var login = Services?.Hosting.Account is { } status && status.Account.Key == refused ? status.Account.Login : refused.Login;
+        var login = Services?.Hosting.AccountOf(refused.Provider) is { } status && status.Account.Key == refused ? status.Account.Login : refused.Login;
         var extra = Services?.OpenSettings is { } openSettings
             ? new ErrorAction(OperationTexts.OpenSettingsButton, () => openSettings(SettingsSection.Accounts))
             : null;
-        return new FailureDisplay(text.ErrorTitle, OperationTexts.GitCredentialsRefused(login), extra);
+        return new FailureDisplay(text.ErrorTitle, OperationTexts.GitCredentialsRefused(refused.Provider, login), extra);
     }
 
     /// <summary>

@@ -141,7 +141,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         {
             // git fails every call with such a count; the pairs would not help it.
             _inheritedCount = null;
-            _log.Warning("GIT_CONFIG_COUNT is not a number git accepts; GitHub's token is not given to git.");
+            _log.Warning("GIT_CONFIG_COUNT is not a number git accepts; no account's token is given to git.");
         }
 
         _inheritsParameters = !string.IsNullOrEmpty(Inherited(ConfigParametersVariable));
@@ -827,7 +827,13 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
             return IsDisposed ? null : answer.Text;
         }
 
-        /// <summary>The account of the binding a user name or password prompt names, or null.</summary>
+        /// <summary>
+        /// The account of the binding a user name or password prompt names, or null: the first
+        /// binding on the prompt's origin (one account per origin, docs/phase-7b-design.md 9.2).
+        /// On an origin that serves other accounts (<see cref="CredentialBinding.SharedOriginOwner"/>,
+        /// dev.azure.com) the prompt must also name the binding's organization (8.3,
+        /// <see cref="NamesOwner"/>). Then the user must be the account's (<see cref="IsAccountUser"/>).
+        /// </summary>
         private AccountKey? AccountOf(GitPromptClassification classification)
         {
             if (Bindings.Count == 0 || classification.Kind is not (GitPromptKind.Username or GitPromptKind.Password) || classification.Url is not { } url)
@@ -837,7 +843,34 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
 
             var origin = OriginOf(url);
             var binding = origin is null ? null : Bindings.FirstOrDefault(binding => OriginOf(binding.Url) == origin);
-            return binding is not null && IsAccountUser(classification.User, binding.Account) ? binding.Account : null;
+            return binding is not null
+                && (binding.SharedOriginOwner is not { } owner || NamesOwner(url, classification.User, owner))
+                && IsAccountUser(classification.User, binding.Account)
+                    ? binding.Account
+                    : null;
+        }
+
+        /// <summary>
+        /// Whether a prompt's URL names <paramref name="owner"/> (docs/phase-7b-design.md 8.3): its
+        /// raw path as the prompt writes it (never .NET's <c>AbsolutePath</c>, which resolves
+        /// <c>..</c>; g3 G0.4), split at <c>/</c> after its leading one, has no segment that is empty,
+        /// <c>.</c> or <c>..</c> or holds <c>%</c> or <c>\</c>, and its first segment is the owner
+        /// without case; or the path is empty and the user is the owner without case or
+        /// <c>x-access-token</c>. Git writes a path only with <c>useHttpPath</c> on.
+        /// </summary>
+        private static bool NamesOwner(string url, string? user, string owner)
+        {
+            var schemeEnd = url.IndexOf("://", StringComparison.Ordinal);
+            var pathStart = schemeEnd < 0 ? -1 : url.IndexOf('/', schemeEnd + 3);
+            if (pathStart < 0)
+            {
+                return string.Equals(user, owner, StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(user, AskPassProtocol.CredentialUserName, StringComparison.Ordinal);
+            }
+
+            var segments = url[(pathStart + 1)..].Split('/');
+            return segments.All(segment => segment.Length > 0 && segment is not ("." or "..") && segment.AsSpan().IndexOfAny('%', '\\') < 0)
+                && string.Equals(segments[0], owner, StringComparison.OrdinalIgnoreCase);
         }
 
         protected override void OnDisposed()

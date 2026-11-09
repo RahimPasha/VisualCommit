@@ -29,7 +29,7 @@ public sealed class PullRequestSectionTests
         Assert.DoesNotContain(panel.Rows, row => row is PullRequestRow or PullRequestMessageRow);
         Assert.All(panel.Rows.OfType<RefItemRow>(), row => Assert.False(row.ShowsPullRequest));
 
-        panel.UpdatePullRequests(RepositoryHostingState.NotGitHub);
+        panel.UpdatePullRequests(RepositoryHostingState.NoHostedRemote);
         Assert.Contains("> Pull requests 0", Describe(panel));
     }
 
@@ -295,7 +295,7 @@ public sealed class PullRequestSectionTests
 
         // Without a GitHub remote they go too.
         var other = Panel(Loaded());
-        other.UpdatePullRequests(RepositoryHostingState.NotGitHub);
+        other.UpdatePullRequests(RepositoryHostingState.NoHostedRemote);
         other.UpdatePullRequests(Failed(Forbidden));
         Assert.Empty(PullRequests(other));
     }

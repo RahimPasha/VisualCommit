@@ -15,7 +15,10 @@ public static class TokenTripwire
     /// Searches every file under <paramref name="folders"/> (<c>.git</c> included) for
     /// <paramref name="token"/> as UTF-8, UTF-16LE, <see cref="Uri.EscapeDataString"/>, base64 of
     /// <c>x-access-token:&lt;token&gt;</c> (git's Basic header) and base64 of the token's UTF-8
-    /// (the macOS store's form, 3.5), and each record of <paramref name="calls"/> (its command,
+    /// (the macOS store's form, 3.5), base64 at each of the three alignments a prefix can leave it
+    /// at (<c>base64 at offset k</c>, k = 0, 1, 2: <c>x-access-token:</c>, Azure DevOps' <c>:</c>,
+    /// <c>oauth2:</c>, <c>&lt;organization&gt;:</c> or any user, docs/phase-7b-design.md 2.5, g4 D1.6),
+    /// and each record of <paramref name="calls"/> (its command,
     /// recorded standard input, output and error) for the text forms. A find fails naming the file
     /// or the git call (<see cref="NameOf"/>) and the form, never the token. A file is read sharing
     /// read, write and delete, so one another process
@@ -156,7 +159,39 @@ public static class TokenTripwire
             forms.Add(("URL-escaped", escaped));
         }
 
+        for (var offset = 0; offset < 3; offset++)
+        {
+            if (Base64AtOffset(token, offset) is { } aligned)
+            {
+                forms.Add((string.Create(CultureInfo.InvariantCulture, $"base64 at offset {offset}"), aligned));
+            }
+        }
+
         return forms;
+    }
+
+    /// <summary>
+    /// The part of the base64 of any text that holds <paramref name="token"/> after a prefix whose
+    /// length leaves <paramref name="offset"/> over a multiple of 3 that depends on the token alone
+    /// (docs/phase-7b-design.md 2.5): <c>base64(offset zero bytes + token)</c> less its first quantum
+    /// when <paramref name="offset"/> is 1 or 2 (it mixes the prefix's bytes in) and less a last
+    /// partial quantum (it mixes in what follows, or the padding). Null when nothing is left, or too
+    /// little to name the token alone (under 8 characters).
+    /// </summary>
+    private static string? Base64AtOffset(string token, int offset)
+    {
+        var bytes = Encoding.UTF8.GetBytes(token);
+        var aligned = new byte[offset + bytes.Length];
+        bytes.CopyTo(aligned, offset);
+        var full = aligned.Length / 3 * 3;
+        var start = offset > 0 ? 3 : 0;
+        if (full - start <= 0)
+        {
+            return null;
+        }
+
+        var text = Convert.ToBase64String(aligned, start, full - start);
+        return text.Length >= 8 ? text : null;
     }
 }
 

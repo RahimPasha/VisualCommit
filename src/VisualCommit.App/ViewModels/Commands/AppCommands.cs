@@ -2,6 +2,7 @@ using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.ViewModels.Workspaces;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Settings;
 using static VisualCommit.App.ViewModels.Operations.OperationTexts.MenuTexts;
@@ -166,9 +167,14 @@ public sealed partial class AppCommands
 
             case AppCommand.CloneFromGitHub:
                 // Listed while GitHub is not off (D299); signed out it signs in first (9.5, D300).
-                return new(
-                    new(!shell.Services.Hosting.IsOff, true, OperationTexts.CloneTexts.PaletteCommand, null, null),
-                    () => Start(shell.CloneFromGitHubAsync(), OperationTexts.CloneTexts.PaletteCommand));
+                return CloneFromAccount(shell, HostingProvider.GitHub);
+
+            case AppCommand.CloneFromGitLab:
+                // As GitHub's, for each provider (docs/phase-7b-design.md 11.5, D354).
+                return CloneFromAccount(shell, HostingProvider.GitLab);
+
+            case AppCommand.CloneFromAzureDevOps:
+                return CloneFromAccount(shell, HostingProvider.AzureDevOps);
 
             case AppCommand.InitRepository:
                 return Always("Init repository…", () => Start(shell.InitRepositoryAsync(), "Init repository…"));
@@ -357,6 +363,16 @@ public sealed partial class AppCommands
     }
 
     private static Resolved Always(string label, Action run) => new(new(true, true, label, null, null), run);
+
+    /// <summary>
+    /// <c>Clone from {name}…</c> of <paramref name="provider"/> (D299, D354; docs/phase-7b-design.md
+    /// 11.5): listed while that provider is on, without a key; signed out it signs in first (D300).
+    /// </summary>
+    private Resolved CloneFromAccount(MainWindowViewModel shell, HostingProvider provider)
+    {
+        var label = OperationTexts.CloneTexts.PaletteCommandOf(provider);
+        return new(new(shell.Services.Hosting.IsOn(provider), true, label, null, null), () => Start(shell.CloneFromAccountAsync(provider), label));
+    }
 
     /// <summary>
     /// Lets a command's task go on without waiting for it (the key or the palette has done its part:

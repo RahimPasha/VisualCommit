@@ -31,5 +31,6 @@
     <Project Path="tests/VisualCommit.VisualTests.Phase6/VisualCommit.VisualTests.Phase6.csproj" />
     <Project Path="tests/VisualCommit.VisualTests.Phase6Look/VisualCommit.VisualTests.Phase6Look.csproj" />
     <Project Path="tests/VisualCommit.VisualTests.Phase7a/VisualCommit.VisualTests.Phase7a.csproj" />
+    <Project Path="tests/VisualCommit.VisualTests.Phase7b/VisualCommit.VisualTests.Phase7b.csproj" />
   </Folder>
 </Solution>

@@ -13,7 +13,10 @@ namespace VisualCommit.Git.Tests;
 /// <summary>
 /// The variables of a scope with <see cref="CredentialBinding"/>s (docs/phase-7a-design.md 4.6,
 /// D274, D277, D329): the <c>GIT_CONFIG_COUNT</c> pairs and when they are given, the deny scope's
-/// registration, and that every scope that uses no binding is today's, byte for byte.
+/// registration, and that every scope that uses no binding is today's, byte for byte. Since 7b
+/// (docs/phase-7b-design.md 8.3, 8.7): three providers' bindings in one scope, git's <c>get</c>
+/// per origin, and a prompt on a shared origin (dev.azure.com) carrying the account only where it
+/// names the organization.
 /// </summary>
 /// <remarks>
 /// The process's own <c>GIT_CONFIG_COUNT</c> is not set here: the test process runs git beside
@@ -94,7 +97,7 @@ public class AskPassBrokerBindingTests
         using var broker = Broker(process: name => name == "GIT_CONFIG_COUNT" ? "abc" : null, log: log);
 
         AssertToday(broker, PromptMode.Ask);
-        Assert.Single(log.Entries, entry => entry == (LogLevel.Warning, "GIT_CONFIG_COUNT is not a number git accepts; GitHub's token is not given to git."));
+        Assert.Single(log.Entries, entry => entry == (LogLevel.Warning, "GIT_CONFIG_COUNT is not a number git accepts; no account's token is given to git."));
     }
 
     [Fact]
@@ -120,7 +123,7 @@ public class AskPassBrokerBindingTests
 
         AssertToday(broker, PromptMode.Ask);
         AssertToday(broker, PromptMode.Deny);
-        Assert.Single(log.Entries, entry => entry == (LogLevel.Warning, "GIT_CONFIG_COUNT is not a number git accepts; GitHub's token is not given to git."));
+        Assert.Single(log.Entries, entry => entry == (LogLevel.Warning, "GIT_CONFIG_COUNT is not a number git accepts; no account's token is given to git."));
     }
 
     [Fact]
@@ -277,6 +280,159 @@ public class AskPassBrokerBindingTests
         Assert.Equal(
             lines,
             log.Entries.Count(entry => entry == (LogLevel.Debug, "repo: Fetch from origin: the inherited command-line git configuration is left out of calls bound to the account.")));
+    }
+
+    private static readonly AccountKey MyOrg = new(HostingProvider.AzureDevOps, "dev.azure.com", "myorg");
+    private static readonly AccountKey Ada = new(HostingProvider.GitLab, "gitlab.com", "Ada");
+    private static readonly CredentialBinding Azure = new("https://dev.azure.com/myorg/p/_git/r", MyOrg) { SharedOriginOwner = "myorg" };
+    private static readonly CredentialBinding AzureTwin = new("https://dev.azure.com/myorg/p/_git/r(x)", MyOrg) { SharedOriginOwner = "myorg" };
+    private static readonly CredentialBinding AzureTwinEscaped = new("https://dev.azure.com/myorg/p/_git/r%28x%29", MyOrg) { SharedOriginOwner = "myorg" };
+    private static readonly CredentialBinding VisualStudio = new("https://myorg.visualstudio.com/p/_git/r", MyOrg);
+    private static readonly CredentialBinding GitLabProject = new("https://gitlab.com/g/p", Ada);
+    private static readonly CredentialBinding GitLabTwin = new("https://gitlab.com/g/p.git", Ada);
+
+    [Fact]
+    public void Three_providers_bindings_in_one_scope_give_three_pairs_per_url_and_no_use_http_path_key()
+    {
+        // 8.6: 3 pairs per bound URL, twins of either kind counted: 6 for a .git-less GitLab URL or
+        // a URL with a credential twin, 12 for both.
+        var gitLabBoth = CredentialBinding.Select(
+            [new RemoteEffectiveUrls("origin", ["https://gitlab.com/g/my(p)"], ["https://gitlab.com/g/my(p)"])],
+            new GitCoverage(Ada, new Uri("https://gitlab.com/")) { GitTwin = true, HelperUserIsAccounts = true });
+        Assert.Equal(4, gitLabBoth.Count);
+        using var broker = Broker();
+        foreach (var (bindings, pairs) in new (CredentialBinding[], int)[]
+        {
+            ([GitLabProject, GitLabTwin], 6),
+            ([AzureTwin, AzureTwinEscaped], 6),
+            ([.. gitLabBoth], 12),
+        })
+        {
+            using var alone = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-" + Guid.NewGuid().ToString("N"), bindings: bindings);
+            Assert.Equal(pairs.ToString(System.Globalization.CultureInfo.InvariantCulture), alone.Environment["GIT_CONFIG_COUNT"]);
+        }
+
+        using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo, Azure, AzureTwin, AzureTwinEscaped, VisualStudio, GitLabProject, GitLabTwin]);
+
+        var environment = scope.Environment;
+        var helper = $"!'{broker.HelperPath.Replace('\\', '/')}' --vc-credential";
+        Assert.Equal("21", environment["GIT_CONFIG_COUNT"]);
+        Assert.Equal(
+            new[] { Repo, Azure, AzureTwin, AzureTwinEscaped, VisualStudio, GitLabProject, GitLabTwin }.SelectMany(binding => new[]
+            {
+                ($"credential.{binding.Url}.helper", string.Empty),
+                ($"credential.{binding.Url}.helper", helper),
+                ($"http.{binding.Url}.proactiveAuth", "basic"),
+            }),
+            Pairs(environment, 0, 21));
+        Assert.DoesNotContain(Pairs(environment, 0, 21), pair => pair.Key.Contains("usehttppath", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("1", environment["GIT_TRACE_REDACT"]);
+    }
+
+    [Fact]
+    public void At_git_2_30_three_providers_bindings_leave_todays_environment()
+    {
+        using var broker = Broker(version: () => new GitVersion(2, 30, 0));
+        var id = Guid.NewGuid().ToString("N");
+        using var offered = broker.Begin("Fetch", "repo", PromptMode.Ask, id + "-a", bindings: [Azure, VisualStudio, GitLabProject, GitLabTwin]);
+        using var none = broker.Begin("Fetch", "repo", PromptMode.Ask, id + "-b");
+
+        var expected = new Dictionary<string, string?>(none.Environment) { [AskPassProtocol.OperationVariable] = offered.Id };
+        Assert.Equal(expected, offered.Environment);
+    }
+
+    [Theory]
+    [InlineData("dev.azure.com", "MyOrg", true)]
+    [InlineData("dev.azure.com", "myorg", true)]
+    [InlineData("dev.azure.com", "x-access-token", true)]
+    [InlineData("dev.azure.com", null, true)]
+    [InlineData("dev.azure.com", "otherorg", false)]
+    [InlineData("dev.azure.com", "oauth2", false)]
+    [InlineData("myorg.visualstudio.com", "MYORG", true)]
+    [InlineData("myorg.visualstudio.com", null, true)]
+    [InlineData("myorg.visualstudio.com", "otherorg", false)]
+    [InlineData("gitlab.com", "ada", true)]
+    [InlineData("gitlab.com", "x-access-token", true)]
+    [InlineData("gitlab.com", null, true)]
+    [InlineData("gitlab.com", "oauth2", false)]
+    [InlineData("github.com", "OctoCat", true)]
+    [InlineData("github.com", "myorg", false)]
+    public async Task Gits_get_is_answered_for_the_accounts_users_by_its_origins_account(string host, string? user, bool answered)
+    {
+        var source = new RecordingCredentialSource("FAKE-token-1");
+        using var broker = Broker(source);
+        using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo, Azure, VisualStudio, GitLabProject]);
+
+        var request = $"protocol=https\nhost={host}\n" + (user is null ? string.Empty : $"username={user}\n") + "\n";
+        var result = await AskPassRunner.RunCredentialAsync("get", request, scope.Environment, cancellationToken: TestContext.Current.CancellationToken);
+
+        var account = host switch
+        {
+            "github.com" => Octocat,
+            "gitlab.com" => Ada,
+            _ => MyOrg,
+        };
+        Assert.Equal(answered ? "username=x-access-token\npassword=FAKE-token-1\n" : string.Empty, result.StandardOutput);
+        Assert.Equal(answered ? [account] : [], source.Gets);
+    }
+
+    [Theory]
+    [InlineData("Username for 'https://dev.azure.com': ", false)]
+    [InlineData("Password for 'https://myorg@dev.azure.com': ", true)]
+    [InlineData("Password for 'https://MyOrg@dev.azure.com': ", true)]
+    [InlineData("Password for 'https://x-access-token@dev.azure.com': ", true)]
+    [InlineData("Password for 'https://otherorg@dev.azure.com': ", false)]
+    [InlineData("Password for 'https://oauth2@dev.azure.com': ", false)]
+    [InlineData("Username for 'https://dev.azure.com/myorg/p/_git/r': ", true)]
+    [InlineData("Username for 'https://dev.azure.com/MYORG/p/_git/r': ", true)]
+    [InlineData("Password for 'https://x-access-token@dev.azure.com/myorg/p/_git/r': ", true)]
+    [InlineData("Password for 'https://otherorg@dev.azure.com/myorg/p/_git/r': ", false)]
+    [InlineData("Username for 'https://dev.azure.com/otherorg/p/_git/r': ", false)]
+    [InlineData("Password for 'https://myorg@dev.azure.com/otherorg/p/_git/r': ", false)]
+    [InlineData("Username for 'https://dev.azure.com/myorg/../otherorg/p/_git/r': ", false)]
+    [InlineData("Username for 'https://dev.azure.com/myorg/./p/_git/r': ", false)]
+    [InlineData("Username for 'https://dev.azure.com//myorg/p/_git/r': ", false)]
+    [InlineData("Username for 'https://dev.azure.com/%6Dyorg/p/_git/r': ", false)]
+    [InlineData("Username for 'https://dev.azure.com/myorg/My%20P/_git/r': ", false)]
+    [InlineData("Username for 'https://dev.azure.com/myorg\\..\\otherorg/p/_git/r': ", false)]
+    [InlineData("Username for 'https://dev.azure.com/myorg/p/_git/r/': ", false)]
+    [InlineData("Username for 'https://myorg.visualstudio.com': ", true)]
+    [InlineData("Password for 'https://otherorg@myorg.visualstudio.com': ", false)]
+    [InlineData("Username for 'https://gitlab.com': ", true)]
+    [InlineData("Password for 'https://Ada@gitlab.com': ", true)]
+    [InlineData("Password for 'https://bob@gitlab.com': ", false)]
+    public async Task A_prompt_on_a_shared_origin_carries_the_account_only_where_it_names_the_organization(string prompt, bool carries)
+    {
+        var handler = new RecordingPromptHandler(PromptAnswer.Refused);
+        using var broker = new AskPassBroker(handler, credentials: new RecordingCredentialSource("t"));
+        using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Azure, VisualStudio, GitLabProject]);
+
+        await AskPassRunner.RunAsync(scope, prompt, cancellationToken: TestContext.Current.CancellationToken);
+
+        var asked = Assert.Single(handler.Prompts);
+        var expected = !carries ? null : prompt.Contains("gitlab", StringComparison.Ordinal) ? Ada : MyOrg;
+        Assert.Equal(expected, asked.Account);
+    }
+
+    [Fact]
+    public async Task After_a_refusal_the_organizations_password_prompt_never_reaches_the_handler_and_the_path_less_username_prompt_does()
+    {
+        var handler = new RecordingPromptHandler(PromptAnswer.Refused, PromptAnswer.Refused);
+        using var broker = new AskPassBroker(handler, credentials: new RecordingCredentialSource("FAKE-token-1"));
+        using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Azure]);
+        var cancellationToken = TestContext.Current.CancellationToken;
+        await AskPassRunner.RunCredentialAsync("get", "protocol=https\nhost=dev.azure.com\n\n", scope.Environment, cancellationToken: cancellationToken);
+        await AskPassRunner.RunCredentialAsync("erase", "protocol=https\nhost=dev.azure.com\nusername=x-access-token\npassword=FAKE-token-1\n\n", scope.Environment, cancellationToken: cancellationToken);
+        Assert.Equal(MyOrg, scope.RefusedAccount);
+
+        var password = await AskPassRunner.RunAsync(scope, "Password for 'https://myorg@dev.azure.com': ", cancellationToken: cancellationToken);
+        var token = await AskPassRunner.RunAsync(scope, "Password for 'https://x-access-token@dev.azure.com': ", cancellationToken: cancellationToken);
+        Assert.Equal((1, 1), (password.ExitCode, token.ExitCode));
+        Assert.Empty(handler.Prompts);
+
+        await AskPassRunner.RunAsync(scope, "Username for 'https://dev.azure.com': ", cancellationToken: cancellationToken);
+        var username = Assert.Single(handler.Prompts);
+        Assert.Null(username.Account);
     }
 
     /// <summary>A broker whose process environment is <paramref name="process"/>, none by default.</summary>

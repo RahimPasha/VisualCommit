@@ -23,17 +23,21 @@ session replaces them with its own. It does not count as the gate's scripted pas
 
 ## Live command
 
-Since phase 7a (`docs/plan.md`'s Visual test gate, step 4; D250, D335): the opt-in command
-against real GitHub (`tests/VisualCommit.LiveHostingTests`), with the owner's fine-grained token
-for their private sandbox repository, the owner told before each run. Filled in from its
-`artifacts/live/github/run.txt` for each run: the date and time, the commit (and the code it
-built, when they differ), the outcome (tests passed of those run, and the time), what it made in
-the sandbox and removed again, its findings about GitHub's answers with what each changed in the
-fake of GitHub, and the search of run.txt and the console output for the token. Its runs: any
-made during the phase; at the gate, one before the gate's pictures, whose corrections to the fake
-are committed before the passes, and one on the counted round, after the real-window pass and
-the list of pictures. The next run overwrites run.txt, so each run's copy is kept outside the
-repository and named here. The token is written here in no form.
+Since phase 7a (`docs/plan.md`'s Visual test gate, step 4; D250, D335), and for Azure DevOps
+Services and gitlab.com too since phase 7b (D364): the opt-in command against the real services
+(`tests/VisualCommit.LiveHostingTests`), with the owner's tokens for their sandbox repositories,
+the owner told before each run. Filled in per provider from its `run.txt`
+(`artifacts/live/github/`, `artifacts/live/azure-devops/`, `artifacts/live/gitlab/`) for each run:
+the date and time, the commit (and the code it built, when they differ), the outcome (tests
+passed of those run, and the time), what it made in the sandbox and removed again, its findings
+about the service's answers with what each changed in that provider's fake, and the search of
+run.txt and the console output for the token. Since phase 7b each run with the tokens follows a
+run of the offline classes alone on the same commit, which is named too. Its runs: any made
+during the phase; at the gate, one before the gate's pictures, whose corrections to the fakes are
+committed before the passes, and one on the counted round, after the real-window pass and the
+list of pictures. The next run overwrites run.txt, so each run's copy is kept outside the
+repository and named here. The tokens, the owner's addresses, the Azure DevOps organization's
+name and GitLab's namespace are written here in no form (D346, D352, D384).
 
 ## Checks
 

@@ -206,8 +206,11 @@ public sealed partial class RepositoryOperations
             return null;
         }
 
-        // On a remote recognised as GitHub by its first configured url (ruling 8, D279, no request):
-        // refs/pull/<x>/head and /merge count as sources only when <x> is all digits.
+        // On a remote a provider recognises by its first configured url, another organization's
+        // included (rulings 8 and 14, D279, no request): a request ref that cannot exist on that
+        // provider counts as no source (PullRequestRefs.SourceCanExist: on GitHub refs/pull/<x>/head
+        // and /merge with <x> not all digits, on GitLab refs/merge-requests/<x>/..., on Azure DevOps
+        // refs/pull/<x>/... and every refs/pull/<n>/head).
         var url = Repository.Refs?.RemoteUrls.FirstOrDefault(candidate => !candidate.IsPushUrl && string.Equals(candidate.Remote, remote, StringComparison.Ordinal))?.Url;
         RemoteSource SourceOf(string destination) => url is null
             ? refspecs.SourceOf(destination, remote)

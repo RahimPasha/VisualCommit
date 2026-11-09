@@ -22,7 +22,9 @@ public partial class SignInDialogView : DialogView
         DataContextChanged += (_, _) => Follow(DataContext as SignInDialogViewModel);
     }
 
-    protected override TextBox? InitialTextBox => SignInToken;
+    /// <summary>Azure DevOps' organization box while it is empty (docs/phase-7b-design.md 10.4), else the token box.</summary>
+    protected override TextBox? InitialTextBox =>
+        _model is { ShowsOrganization: true } model && string.IsNullOrEmpty(model.Organization) ? SignInOrganization : SignInToken;
 
     private void Follow(SignInDialogViewModel? model)
     {

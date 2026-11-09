@@ -180,11 +180,51 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_set_leaves_out_a_gitlab_remotes_branches()
+    {
+        // docs/phase-7b-design.md 9.9: only GitHub's remotes reach authors. Bob's commit is only on
+        // "other"'s topic: as a GitLab remote it reaches nothing, as a GitHub remote it reaches Bob.
+        using var viewModel = await OpenAsync(_repo!.Path);
+        var gitLab = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "fake-group/sub", "other");
+        var asGitHub = new HostedRepository(HostingProvider.GitHub, "github.com", "octo", "other");
+
+        var onGitLab = RepositoryViewModel.AuthorsOnGitHub(viewModel.Graph, new Dictionary<string, HostedRepository>(StringComparer.Ordinal) { ["origin"] = OctoHello, ["other"] = gitLab });
+        var onGitHub = RepositoryViewModel.AuthorsOnGitHub(viewModel.Graph, new Dictionary<string, HostedRepository>(StringComparer.Ordinal) { ["origin"] = OctoHello, ["other"] = asGitHub });
+
+        Assert.Equal([new AuthorCommit("ada@example.com", _adaOnOrigin, OctoHello), new AuthorCommit("octo@example.com", _octoOnOrigin, OctoHello)], onGitLab);
+        Assert.Contains(onGitHub, author => author.Email == "bob@example.com" && author.Repository == asGitHub);
+        Assert.Empty(RepositoryViewModel.AuthorsOnGitHub(viewModel.Graph, new Dictionary<string, HostedRepository>(StringComparer.Ordinal) { ["origin"] = gitLab with { Name = "hello" } }));
+    }
+
+    [Fact]
+    public async Task Nothing_is_sent_while_gitlabs_repository_is_listed_beside_a_github_remote()
+    {
+        // D367, docs/phase-7b-design.md 9.9: a GitLab origin is listed though upstream is GitHub's;
+        // no set is sent in any state, and a GitHub listing afterwards sends it.
+        using var viewModel = await OpenAsync(_repo!.Path);
+        var hosting = _session.Hostings.Single();
+        var gitLab = new HostedRepository(HostingProvider.GitLab, "gitlab.com", "fake-group/sub", "hello");
+        var remotes = new Dictionary<string, HostedRepository>(StringComparer.Ordinal) { ["origin"] = gitLab, ["upstream"] = OctoHello };
+        var noPulls = new Dictionary<string, PullRequest>(StringComparer.Ordinal);
+
+        foreach (var state in new[] { PullRequestsState.Loading, PullRequestsState.Loaded, PullRequestsState.Failed })
+        {
+            hosting.Raise(new RepositoryHostingState(state, remotes, gitLab, null, null, noPulls));
+        }
+
+        hosting.Raise(new RepositoryHostingState(PullRequestsState.OtherOrganization, remotes, gitLab, null, null, noPulls));
+        Assert.Empty(hosting.Sent);
+
+        hosting.Raise(State(PullRequestsState.Loaded));
+        Assert.Equal([["ada@example.com", "octo@example.com"]], Emails(hosting));
+    }
+
+    [Fact]
     public async Task Nothing_is_sent_without_an_account_s_listing_or_in_summary_mode()
     {
         using var viewModel = await OpenAsync(_repo!.Path);
         var hosting = _session.Hostings.Single();
-        hosting.Raise(RepositoryHostingState.NotGitHub);
+        hosting.Raise(RepositoryHostingState.NoHostedRemote);
         hosting.Raise(State(PullRequestsState.SignedOut));
         Assert.Empty(hosting.Sent);
 
@@ -205,7 +245,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
         Assert.Equal(hosting.Sent[0], hosting.Sent[1]);
 
         // A repository whose remote is no longer GitHub's forgets it too.
-        hosting.Raise(RepositoryHostingState.NotGitHub);
+        hosting.Raise(RepositoryHostingState.NoHostedRemote);
         hosting.Raise(State(PullRequestsState.Loaded));
         Assert.Equal(3, hosting.Sent.Count);
     }
@@ -332,17 +372,35 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
 
         public bool IsOff => false;
 
+        public IReadOnlyList<HostingProvider> Providers => [HostingProvider.GitHub];
+
         public IHostingProvider? GitHub => null;
 
         public AccountStatus? Account => null;
 
         public bool BindsGit => false;
 
-        public event EventHandler? AccountChanged
+        public event EventHandler<HostingAccountChangedEventArgs>? AccountChanged
         {
             add { }
             remove { }
         }
+
+        public bool IsOn(HostingProvider provider) => provider == HostingProvider.GitHub;
+
+        public IHostingProvider? ProviderOf(HostingProvider provider) => null;
+
+        public AccountStatus? AccountOf(HostingProvider provider) => null;
+
+        public Task<SignInResult> SignInAsync(SignInRequest request, CancellationToken ct) => throw new NotSupportedException();
+
+        public Task<string?> SignOutAsync(HostingProvider provider, CancellationToken ct) => throw new NotSupportedException();
+
+        public void SetUseForGit(HostingProvider provider, bool useForGit)
+        {
+        }
+
+        public Task<HostingResult<RepositoryList>> ListRepositoriesAsync(HostingProvider provider, CancellationToken ct) => throw new NotSupportedException();
 
         public IRepositoryHosting ForRepository(string workingDirectory)
         {
@@ -391,7 +449,7 @@ public sealed class RepositoryAvatarsTests : IAsyncLifetime
     /// <summary>A repository's fake hosting: its state and avatars set by the test and announced through <see cref="Changed"/>; the sets it is told, recorded.</summary>
     private sealed class FakeHosting(RepositoryHostingState? stateOnUpdate) : IRepositoryHosting
     {
-        public RepositoryHostingState State { get; private set; } = RepositoryHostingState.NotGitHub;
+        public RepositoryHostingState State { get; private set; } = RepositoryHostingState.NoHostedRemote;
 
         public IReadOnlyList<CredentialBinding> Bindings => [];
 

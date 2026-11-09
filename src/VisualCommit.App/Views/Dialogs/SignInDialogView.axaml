@@ -10,9 +10,15 @@
                   AutomationProperties.Name="{Binding Title}">
 
   <!-- "Add GitHub account" (docs/phase-7a-design.md 8.4): the help, the link to GitHub's page for a
-       new token, the masked token box, one line of state and the buttons. No "In {repo}" line. -->
+       new token, the masked token box, one line of state and the buttons. No "In {repo}" line.
+       Since phase 7b one per provider (docs/phase-7b-design.md 10.4): GitLab's second link 4 below
+       the first; Azure DevOps' organization label and box above the token's. -->
   <local:DialogView.Resources>
-    <!-- The link: ParentLinkButton's look (RightPanelView.axaml), reached by Tab. -->
+    <!-- The link: ParentLinkButton's look (RightPanelView.axaml), reached by Tab. Disabled (Azure
+         DevOps' while its box gives no organization, 10.4; the lead's ruling of 2026-11-06): the
+         theme's disabled look of its buttons (Theme/Controls.axaml, VcTextDisabledBrush), the arrow
+         cursor and no underline (below), so that it invites no click that does nothing. GitHub's and
+         GitLab's links are never disabled. -->
     <ControlTheme x:Key="SignInLinkButton" TargetType="Button">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
@@ -27,6 +33,10 @@
                             ContentTemplate="{TemplateBinding ContentTemplate}" />
         </ControlTemplate>
       </Setter>
+      <Style Selector="^:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+        <Setter Property="Cursor" Value="Arrow" />
+      </Style>
     </ControlTheme>
   </local:DialogView.Resources>
 
@@ -36,8 +46,8 @@
       <Setter Property="FontSize" Value="12" />
       <Setter Property="Margin" Value="0,12,0,4" />
     </Style>
-    <!-- Underlined on pointer-over and while focused. -->
-    <Style Selector="Button.tokenLink:pointerover TextBlock, Button.tokenLink:focus TextBlock">
+    <!-- Underlined on pointer-over and while focused; never while disabled. -->
+    <Style Selector="Button.tokenLink:not(:disabled):pointerover TextBlock, Button.tokenLink:not(:disabled):focus TextBlock">
       <Setter Property="TextDecorations" Value="Underline" />
     </Style>
   </local:DialogView.Styles>
@@ -51,7 +61,7 @@
                    AutomationProperties.AutomationId="DialogTitle" />
         <TextBlock Name="SignInHelp"
                    Classes="dialogText"
-                   Text="{x:Static ops:OperationTexts+AccountTexts.SignInHelp}"
+                   Text="{Binding HelpText}"
                    AutomationProperties.AutomationId="SignInHelp" />
         <Button Name="SignInTokenLink"
                 Theme="{StaticResource SignInLinkButton}"
@@ -59,11 +69,34 @@
                 HorizontalAlignment="Left"
                 Margin="0,6,0,0"
                 Command="{Binding OpenTokenPageCommand}"
-                ToolTip.Tip="{x:Static ops:OperationTexts+AccountTexts.SignInTokenLinkTip}"
+                ToolTip.Tip="{Binding TokenLinkTip}"
                 AutomationProperties.AutomationId="SignInTokenLink"
-                AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.SignInTokenLink}">
-          <TextBlock Text="{x:Static ops:OperationTexts+AccountTexts.SignInTokenLink}" />
+                AutomationProperties.Name="{Binding TokenLinkText}">
+          <TextBlock Text="{Binding TokenLinkText}" />
         </Button>
+        <Button Name="SignInLegacyTokenLink"
+                Theme="{StaticResource SignInLinkButton}"
+                Classes="tokenLink"
+                HorizontalAlignment="Left"
+                Margin="0,4,0,0"
+                Command="{Binding OpenLegacyTokenPageCommand}"
+                IsVisible="{Binding ShowsLegacyLink}"
+                ToolTip.Tip="{x:Static ops:OperationTexts+AccountTexts.LegacyTokenLinkTip}"
+                AutomationProperties.AutomationId="SignInLegacyTokenLink"
+                AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.LegacyTokenLink}">
+          <TextBlock Text="{x:Static ops:OperationTexts+AccountTexts.LegacyTokenLink}" />
+        </Button>
+
+        <TextBlock Classes="promptLabel" Text="{x:Static ops:OperationTexts+AccountTexts.OrganizationLabel}" IsVisible="{Binding ShowsOrganization}" />
+        <!-- Under its label as the token box is under its own: dialogBox's 12 above would double the label's gap. -->
+        <TextBox Name="SignInOrganization"
+                 Classes="dialogBox"
+                 Margin="0"
+                 Text="{Binding Organization}"
+                 IsVisible="{Binding ShowsOrganization}"
+                 IsEnabled="{Binding IsBoxEnabled}"
+                 AutomationProperties.AutomationId="SignInOrganization"
+                 AutomationProperties.Name="{x:Static ops:OperationTexts+AccountTexts.OrganizationLabel}" />
 
         <TextBlock Classes="promptLabel" Text="{x:Static ops:OperationTexts+AccountTexts.TokenLabel}" />
         <c:SecretTextBox Name="SignInToken"

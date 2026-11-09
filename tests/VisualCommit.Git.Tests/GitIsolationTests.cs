@@ -155,6 +155,40 @@ public class GitIsolationTests
     }
 
     [Fact]
+    public void A_started_process_keeps_no_hosting_tools_token_and_gets_every_provider_off()
+    {
+        // Ruling 27's names (docs/phase-7b-design.md 1.8; g4 D2.3), written out rather than read
+        // from the list under test, on a ProcessStartInfo as RealApp.Launch does it.
+        string[] names =
+        [
+            "GITLAB_TOKEN", "GITLAB_ACCESS_TOKEN", "OAUTH_TOKEN", "GITLAB_HOST", "GITLAB_URI", "GL_HOST", "GITLAB_API_HOST", "GL_TOKEN",
+            "CI_JOB_TOKEN", "AZURE_DEVOPS_EXT_PAT", "SYSTEM_ACCESSTOKEN", "GCM_AZREPOS_SP_SECRET", "GCM_AZREPOS_WIF_ASSERTION",
+            "VISUALCOMMIT_LIVE_AZURE_DEVOPS_TOKEN", "VISUALCOMMIT_LIVE_AZURE_DEVOPS_REPO", "VISUALCOMMIT_LIVE_GITLAB_TOKEN", "VISUALCOMMIT_LIVE_GITLAB_REPO",
+        ];
+        var startInfo = new ProcessStartInfo("unused");
+        foreach (var name in names)
+        {
+            startInfo.Environment[name] = "glpat-FAKE-machine-1";
+        }
+
+        startInfo.Environment["VISUALCOMMIT_GITHUB_URL"] = "http://127.0.0.1:1/";
+        startInfo.Environment["VISUALCOMMIT_AZURE_DEVOPS_URL"] = "https://dev.azure.com/";
+        startInfo.Environment["VISUALCOMMIT_GITLAB_URL"] = "https://gitlab.com/";
+
+        GitIsolation.ApplyMachineIndependence(startInfo.Environment);
+
+        var kept = startInfo.Environment.Keys.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        Assert.All(names, name => Assert.DoesNotContain(name, kept));
+        Assert.All(names, name => Assert.Contains(name, GitIsolation.HostingTokenVariables));
+        Assert.All(names, name => Assert.Null(Environment.GetEnvironmentVariable(name)));
+        foreach (var variable in new[] { "VISUALCOMMIT_GITHUB_URL", "VISUALCOMMIT_AZURE_DEVOPS_URL", "VISUALCOMMIT_GITLAB_URL" })
+        {
+            Assert.Equal("none", startInfo.Environment[variable]);
+            Assert.Equal("none", Environment.GetEnvironmentVariable(variable));
+        }
+    }
+
+    [Fact]
     public async Task A_proxy_of_the_machine_no_longer_carries_a_request_for_the_test_server()
     {
         await using var server = await AuthRemoteServer.StartAsync();

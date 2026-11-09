@@ -269,7 +269,8 @@ public sealed class AvatarCacheTests
 
         Assert.Null(await cache.FileOfAsync(new AuthorAvatar(1001, "octo", new Uri("http://127.0.0.1:1/avatars/u/1001?v=4")), Cancelled));
 
-        Assert.Equal("The avatar of user 1001 could not be fetched.", Assert.Single(log.Lines).Message);
+        Assert.Equal("The avatar of user 1001 could not be fetched (TaskCanceledException).", Assert.Single(log.Lines).Message);
+        Assert.Null(Assert.Single(log.Entries).Exception);
     }
 
     [Theory]

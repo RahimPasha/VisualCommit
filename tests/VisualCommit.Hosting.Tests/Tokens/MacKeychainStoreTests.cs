@@ -1,4 +1,5 @@
 using System.Text;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Hosting.Tokens;
 using Xunit;
 
@@ -295,6 +296,26 @@ public sealed class MacKeychainStoreTests
         Assert.Equal("macOS keychain", store.Name);
         Assert.True(store.KeepsTokensAcrossRestarts);
         Assert.Empty(_log.Lines);
+    }
+
+    [Fact]
+    public async Task An_Azure_DevOps_keys_label_keeps_its_space_within_its_quotes()
+    {
+        // docs/phase-7b-design.md 1.6: the label "VisualCommit: Azure DevOps (<organization>)" holds
+        // spaces, which security -i reads as one argument inside the single quotes (r8 S11, READ).
+        var key = TokenKey.Of(new AccountKey(HostingProvider.AzureDevOps, "dev.azure.com", "Fernhill-Labs"));
+        _runner.Answer(0, "security> ").Answer(0, Base64 + "\n");
+        var store = Store();
+
+        var result = await store.SaveAsync(key, Token, _ct);
+
+        Assert.Equal(new TokenStoreResult(TokenStoreOutcome.Done), result);
+        Assert.Equal(
+            $"add-generic-password -U -s 'VisualCommit:azure-devops:dev.azure.com' -a 'fernhill-labs' -l 'VisualCommit: Azure DevOps (fernhill-labs)' -w '{Base64}'\n",
+            _runner.Calls[0].StandardInput);
+        Assert.Matches("^[^']*'[^']*'[^']*'[^']*'[^']*'[^']*' -w '[A-Za-z0-9+/=]+'\n$", _runner.Calls[0].StandardInput!);
+        Assert.Equal(["find-generic-password", "-s", "VisualCommit:azure-devops:dev.azure.com", "-a", "fernhill-labs", "-w"], _runner.Calls[1].Arguments);
+        AssertNoTokenInTheArgumentsOrTheLog();
     }
 
     private MacKeychainStore Store(string? keychainFile = null) =>

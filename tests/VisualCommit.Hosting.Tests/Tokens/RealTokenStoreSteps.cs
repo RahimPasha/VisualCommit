@@ -6,7 +6,9 @@ namespace VisualCommit.Hosting.Tests.Tokens;
 /// <summary>
 /// The steps every real store's class takes against its throw-away entry (docs/phase-7a-design.md
 /// 3.9, D270): probe, read nothing, save, read, save another, read, delete, read nothing, delete
-/// nothing; and a delete in <c>finally</c> whatever failed. A failed step's message quotes the log,
+/// nothing; then once for an <c>azure-devops</c> key on <c>dev.azure.com</c>, whose macOS label
+/// holds a space (docs/phase-7b-design.md 1.6, 1.10): read nothing, save, read, delete, read
+/// nothing; and a delete of each in <c>finally</c> whatever failed. A failed step's message quotes the log,
 /// where the store wrote the platform's detail (the Win32 error, <c>security</c>'s error line, the
 /// D-Bus error's name).
 /// </summary>
@@ -25,9 +27,11 @@ internal static class RealTokenStoreSteps
     public static async Task RunAsync(ITokenStore store, ListLog log, CancellationToken ct, params string[] moreTokens)
     {
         var key = new TokenKey("github", "github.com", "vc-test-" + Guid.NewGuid().ToString("N")[..12]);
+        var azureKey = new TokenKey("azure-devops", "dev.azure.com", "vc-test-" + Guid.NewGuid().ToString("N")[..12]);
+        var azureToken = DummySecret();
         var first = DummySecret();
         var second = DummySecret();
-        string[] tokens = [first, second, .. moreTokens];
+        string[] tokens = [first, second, .. moreTokens, azureToken];
         try
         {
             var probe = await store.ProbeAsync(ct);
@@ -48,10 +52,22 @@ internal static class RealTokenStoreSteps
             await ExpectNotFoundAsync(store, log, key, "after the delete", ct);
             var again = await store.DeleteAsync(key, ct);
             Check(log, again.Outcome == TokenStoreOutcome.NotFound, $"the second delete ended {again.Outcome} ({again.Reason})");
+
+            // An Azure DevOps key once: macOS' label "…: Azure DevOps (…)" goes through security -i.
+            await ExpectNotFoundAsync(store, log, azureKey, "before the Azure DevOps key's save", ct);
+            var azureSaved = await store.SaveAsync(azureKey, azureToken, ct);
+            Check(log, azureSaved.Outcome == TokenStoreOutcome.Done, $"the Azure DevOps key's save ended {azureSaved.Outcome} ({azureSaved.Reason})");
+            var azureRead = await store.ReadAsync(azureKey, ct);
+            Check(log, azureRead.Outcome == TokenStoreOutcome.Done, $"the read after the Azure DevOps key's save ended {azureRead.Outcome} ({azureRead.Reason})");
+            Check(log, string.Equals(azureRead.Token, azureToken, StringComparison.Ordinal), "the read did not give the Azure DevOps key's token");
+            var azureDeleted = await store.DeleteAsync(azureKey, ct);
+            Check(log, azureDeleted.Outcome == TokenStoreOutcome.Done, $"the Azure DevOps key's delete ended {azureDeleted.Outcome} ({azureDeleted.Reason})");
+            await ExpectNotFoundAsync(store, log, azureKey, "after the Azure DevOps key's delete", ct);
         }
         finally
         {
             await store.DeleteAsync(key, CancellationToken.None);
+            await store.DeleteAsync(azureKey, CancellationToken.None);
         }
 
         Assert.All(log.Lines, line => Assert.All(tokens, token => Assert.DoesNotContain(token, line.Message, StringComparison.Ordinal)));

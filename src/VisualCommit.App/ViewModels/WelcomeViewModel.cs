@@ -4,8 +4,10 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Hosting;
@@ -16,7 +18,9 @@ namespace VisualCommit.App.ViewModels;
 /// The welcome page of a tab without a repository (D42): Open, Clone and Init, the clone form
 /// with its progress, the workspaces (docs/phase-6-design.md 13.1, D188) and the recent
 /// repositories. Since phase 7a the form's "From GitHub…" opens the repository browser while an
-/// account is signed in (docs/phase-7a-design.md 9.3, D261, D302).
+/// account is signed in (docs/phase-7a-design.md 9.3, D261, D302); since phase 7b the button names
+/// the one signed-in provider, or "From an account…" with two or three (docs/phase-7b-design.md 11.3,
+/// D354).
 /// </summary>
 public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
 {
@@ -94,16 +98,29 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     /// <summary>A clone is running: the fields are disabled and the progress shows.</summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(CanEditClone))]
-    [NotifyCanExecuteChangedFor(nameof(StartCloneCommand), nameof(CloseCloneFormCommand), nameof(BrowseGitHubCommand))]
+    [NotifyCanExecuteChangedFor(nameof(StartCloneCommand), nameof(CloseCloneFormCommand), nameof(BrowseCommand))]
     public partial bool IsCloning { get; private set; }
 
     public bool CanEditClone => !IsCloning;
 
     /// <summary>
-    /// "From GitHub…" shows at the URL row's end only while an account is signed in (D261); "needs
-    /// sign-in" hides it too (D302). Collapsed, it takes no room, so the form is laid out as before.
+    /// The browse button shows at the URL row's end only while an account of any provider is signed
+    /// in (D261, D354); "needs sign-in" counts as none (D302). Collapsed, it takes no room, so the form
+    /// is laid out as before.
     /// </summary>
-    public bool ShowsGitHubButton => _services.Hosting.Account is { State: AccountState.SignedIn };
+    public bool ShowsBrowseButton => SignedInProviders().Count > 0;
+
+    /// <summary>
+    /// The button's text and automation name (11.3, D354): <see cref="OperationTexts.CloneTexts.FromButtonOf"/>
+    /// of the one signed-in provider (7a's <c>From GitHub…</c> for GitHub), <c>From an account…</c> with
+    /// two or three; 7a's text while none is (the button is collapsed then).
+    /// </summary>
+    public string BrowseButtonText => SignedInProviders() switch
+    {
+        [var one] => OperationTexts.CloneTexts.FromButtonOf(one),
+        { Count: > 1 } => OperationTexts.CloneTexts.FromAnAccount,
+        _ => OperationTexts.CloneTexts.FromGitHubButton,
+    };
 
     /// <summary>The current stage's percentage, 0 to 100.</summary>
     [ObservableProperty]
@@ -234,16 +251,32 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
-    /// "From GitHub…" (9.3): the repository browser over the form, its load started before it shows
-    /// (as <c>WorkspaceCommands</c>' search is); a chosen repository's plain clone URL fills the URL
-    /// box (and so the folder name, unless the user typed one), unless a clone started meanwhile.
-    /// The user then presses Clone as for a typed URL.
+    /// The browse button and the palette's <c>Clone from …</c> (7a design 9.3; docs/phase-7b-design.md
+    /// 11.3, 11.5, D354): the repository browser over the form on <paramref name="provider"/>, or the
+    /// first signed-in provider in D353's order for null (the button), with a switch between the
+    /// signed-in providers; nothing when none is signed in or <paramref name="provider"/> is not. Its
+    /// first load starts before it shows (as <c>WorkspaceCommands</c>' search does); a chosen
+    /// repository's clone URL fills the URL box (and so the folder name, unless the user typed one),
+    /// unless a clone started meanwhile. The user then presses Clone as for a typed URL. The palette
+    /// runs it through <see cref="BrowseCommand"/> with its provider, as 7a's ran the button's command,
+    /// so the button is drawn disabled under every browser over the form (open point 21's ruling).
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanEditClone))]
-    private async Task BrowseGitHubAsync()
+    public async Task BrowseAsync(HostingProvider? provider)
     {
         var hosting = _services.Hosting;
-        var dialog = new CloneFromGitHubDialogViewModel(hosting.ListRepositoriesAsync, _services.Log, () => hosting.Account?.Account.Login);
+        var providers = SignedInProviders();
+        if (providers.Count == 0 || (provider is { } asked && !providers.Contains(asked)))
+        {
+            return;
+        }
+
+        var dialog = new CloneFromGitHubDialogViewModel(
+            providers,
+            provider ?? providers[0],
+            hosting.ListRepositoriesAsync,
+            _services.Log,
+            each => hosting.AccountOf(each)?.Account.Login);
         _ = dialog.Start();
         var url = await _services.DialogHost.ShowAsync(dialog);
         if (url is not null && !IsCloning)
@@ -251,6 +284,13 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
             ErrorText = null;
             CloneUrl = url;
         }
+    }
+
+    /// <summary>The providers whose accounts are signed in, in D353's order; one needing sign-in is none (D302).</summary>
+    private List<HostingProvider> SignedInProviders()
+    {
+        var hosting = _services.Hosting;
+        return [.. HostingProviders.InAccountsOrder.Where(provider => hosting.AccountOf(provider) is { State: AccountState.SignedIn })];
     }
 
     [RelayCommand(CanExecute = nameof(CanEditClone))]
@@ -335,6 +375,12 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     /// repository around its folder) and the URL git will use is bound. A rule that rewrites it to
     /// another user leaves it unbound (D82's order). No configuration service, or a failed read, binds
     /// nothing and is logged once. Signed out nothing is read, so no earlier count of git calls moves.
+    /// <para>
+    /// The outside read sees no file of a conditional include, while <c>git clone</c> applies those of
+    /// the new folder and of its URL (fixed at phase 7b's review before the gate): when the read lists
+    /// any, <see cref="WhyIncludesUnbindAsync"/> reads their files, and a reason it gives binds nothing
+    /// (D82's order) with one Debug line. Without such a directive no further git call is made.
+    /// </para>
     /// </summary>
     private async Task<IReadOnlyList<CredentialBinding>> BindingsForCloneAsync(string url, CancellationToken cancellationToken)
     {
@@ -344,23 +390,99 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
             return [];
         }
 
+        IGitConfiguration settings;
+        List<GitConfigValue> outside;
+        string? effective;
         try
         {
-            var settings = _services.GitSettings ?? throw new InvalidOperationException("No git configuration service.");
+            settings = _services.GitSettings ?? throw new InvalidOperationException("No git configuration service.");
             var read = await settings.ReadAsync(null, cancellationToken);
-            var rules = UrlRewrites.Parse(read.Values
-                .Where(value => value.Scope is not (GitConfigScope.Local or GitConfigScope.Worktree) && value.Value is not null)
-                .Select(value => (value.Key, value.Value!)));
-            return rules.Apply([new RemoteUrl("origin", url, false)]) is [{ Fetch: [var effective, ..] }]
-                ? hosting.BindingsForClone(effective)
-                : [];
+            outside = [.. read.Values.Where(value => value.Scope is not (GitConfigScope.Local or GitConfigScope.Worktree))];
+            effective = CloneUrlAfterRules(outside, url);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _services.Log.Warning($"Cloning {GitCommand.HideCredentials(url)}: git's configuration could not be read; the clone goes without the account's token.", ex);
             return [];
         }
+
+        if (effective is null)
+        {
+            return [];
+        }
+
+        if (await WhyIncludesUnbindAsync(settings, outside, url, effective, cancellationToken) is { } why)
+        {
+            _services.Log.Debug($"Cloning: {why}; the clone goes without the account's token (D82's order).");
+            return [];
+        }
+
+        return hosting.BindingsForClone(effective);
     }
+
+    /// <summary>
+    /// Why a conditional include of <paramref name="outside"/> (<see cref="GitConfigIncludes.IsConditional"/>,
+    /// whatever its condition) keeps the clone of <paramref name="url"/> unbound; null when none does, or
+    /// there is none (then no git call is made). Each directive's file is read
+    /// (<see cref="IGitConfiguration.ReadIncludedAsync"/>): one git cannot read, one that holds a
+    /// conditional directive of its own (its condition is the new repository's to judge), or one whose
+    /// <c>url.</c> rules give the URL another result is a reason. Only the new repository knows which
+    /// conditions hold, so each include is judged twice. First with the outside rules alone, its rules
+    /// read where git reads them, right after the directive: this catches one include that reorders the
+    /// outside bases, the order git breaks a tie of equal prefixes by. Then, whatever the order: any of
+    /// its <c>insteadOf</c> rules that matches the URL with a prefix at least as long as the longest
+    /// outside match (any match when none matches outside) and rewrites it to another URL than
+    /// <paramref name="effective"/> is a reason, since another include may put its base first and win
+    /// the tie (two prefixes of one URL of equal length are one string). Together the two cover every
+    /// set of includes whose conditions hold. A missing file counts as empty, as git ignores it. The
+    /// reason names no path or URL.
+    /// </summary>
+    private static async Task<string?> WhyIncludesUnbindAsync(IGitConfiguration settings, List<GitConfigValue> outside, string url, string effective, CancellationToken cancellationToken)
+    {
+        var longestOutside = FetchRulesMatching(outside, url).Select(rule => rule.Prefix.Length).DefaultIfEmpty(-1).Max();
+        for (var i = 0; i < outside.Count; i++)
+        {
+            if (!GitConfigIncludes.IsConditional(outside[i]))
+            {
+                continue;
+            }
+
+            IReadOnlyList<GitConfigValue> included;
+            try
+            {
+                included = await settings.ReadIncludedAsync(outside[i], cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                return "a conditional include of git's configuration could not be read";
+            }
+
+            if (included.Any(GitConfigIncludes.IsConditional))
+            {
+                return "a conditional include of git's configuration holds a conditional include of its own";
+            }
+
+            if (CloneUrlAfterRules([.. outside[..(i + 1)], .. included, .. outside[(i + 1)..]], url) != effective
+                || FetchRulesMatching(included, url).Any(rule => rule.Prefix.Length >= longestOutside && rule.Base + url[rule.Prefix.Length..] != effective))
+            {
+                return "a conditional include of git's configuration rewrites the clone's URL";
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The <c>insteadOf</c> rules of <paramref name="values"/> (<see cref="UrlRewrites.Parse"/>) whose prefix starts <paramref name="url"/>, as git matches them: plainly, with case.</summary>
+    private static IEnumerable<UrlRewrite> FetchRulesMatching(IEnumerable<GitConfigValue> values, string url) =>
+        UrlRewrites.Parse(values.Where(value => value.Value is not null).Select(value => (value.Key, value.Value!)))
+            .Rules.Where(rule => !rule.ForPush && url.StartsWith(rule.Prefix, StringComparison.Ordinal));
+
+    /// <summary>The URL git clones <paramref name="url"/> from after the <c>insteadOf</c> rules of <paramref name="values"/>, in their order (<see cref="UrlRewrites"/>).</summary>
+    private static string? CloneUrlAfterRules(IEnumerable<GitConfigValue> values, string url) =>
+        UrlRewrites.Parse(values.Where(value => value.Value is not null).Select(value => (value.Key, value.Value!)))
+            .Apply([new RemoteUrl("origin", url, false)]) is [{ Fetch: [var effective, ..] }]
+            ? effective
+            : null;
 
     public void Dispose()
     {
@@ -403,8 +525,12 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
 
     private void OnWorkspacesChanged(object? sender, NotifyCollectionChangedEventArgs e) => OnPropertyChanged(nameof(HasWorkspaces));
 
-    /// <summary>A sign-in, a sign-out or a refusal shows or hides "From GitHub…" (D261, D302); raised on the UI thread.</summary>
-    private void OnAccountChanged(object? sender, EventArgs e) => OnPropertyChanged(nameof(ShowsGitHubButton));
+    /// <summary>A sign-in, a sign-out or a refusal of any provider shows, hides or renames the browse button (D261, D302, D354); raised on the UI thread.</summary>
+    private void OnAccountChanged(object? sender, EventArgs e)
+    {
+        OnPropertyChanged(nameof(ShowsBrowseButton));
+        OnPropertyChanged(nameof(BrowseButtonText));
+    }
 
     /// <summary>A change of the store can set or clear its notice (a failed save, then one that succeeded, 1.3).</summary>
     private void OnWorkspaceStoreChanged(object? sender, EventArgs e)

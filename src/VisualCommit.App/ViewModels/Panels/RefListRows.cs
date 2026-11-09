@@ -1,7 +1,9 @@
 using System.Globalization;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.App.ViewModels.Hosting;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.Hosting;
 
 namespace VisualCommit.App.ViewModels.Panels;
 
@@ -148,7 +150,7 @@ public sealed partial class RefItemRow : RefListRow
         RefRowMarks? marks = null,
         Action<RefItemRow>? showHidden = null,
         Action<RefItemRow>? stopSoloing = null,
-        (int Number, string Title)? pullRequest = null)
+        PullRequest? pullRequest = null)
         : base(key, text, depth, isOpen, activate)
     {
         Kind = kind;
@@ -162,8 +164,10 @@ public sealed partial class RefItemRow : RefListRow
         StopSoloingCommand = new RelayCommand(() => stopSoloing?.Invoke(this), () => stopSoloing is not null);
         if (pullRequest is { } open)
         {
-            PullRequestText = "#" + open.Number.ToString(CultureInfo.InvariantCulture);
-            PullRequestToolTip = OperationTexts.PullRequestOfBranch(open.Number, open.Title);
+            // In the request's provider's number and words (docs/phase-7b-design.md 12.3; D355).
+            var provider = open.BaseRepository.Provider;
+            PullRequestText = HostingTexts.Number(provider, open.Number);
+            PullRequestToolTip = OperationTexts.RequestOfBranch(provider, open.Number, open.Title);
         }
     }
 
@@ -233,13 +237,13 @@ public sealed partial class RefItemRow : RefListRow
     public IRelayCommand StopSoloingCommand { get; }
 
     /// <summary>
-    /// The branch's open pull request (docs/phase-7a-design.md 10.3, D308): <c>#1</c> at the row's
-    /// right before its counts and toggles; empty without one, and for every row of a repository
-    /// without a GitHub remote.
+    /// The branch's open pull request (docs/phase-7a-design.md 10.3, D308): <c>#1</c> (GitLab's and
+    /// Azure DevOps' <c>!21</c>, D355) at the row's right before its counts and toggles; empty without
+    /// one, and for every row of a repository without a hosted remote.
     /// </summary>
     public string PullRequestText { get; } = string.Empty;
 
-    /// <summary>The <c>#1</c>'s tooltip: <c>Pull request #1: Add the login form</c>; null without one.</summary>
+    /// <summary>The <c>#1</c>'s tooltip: <c>Pull request #1: Add the login form</c> (<c>Merge request !21: …</c>); null without one.</summary>
     public string? PullRequestToolTip { get; }
 
     /// <summary>The <c>#1</c> shows (<c>RefPullRequest</c>); collapsed, it takes no room.</summary>

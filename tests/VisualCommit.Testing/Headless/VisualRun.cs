@@ -26,7 +26,8 @@ public static class VisualRun
     /// <summary>How long a process waits for another to finish starting the same folder's run.</summary>
     private static readonly TimeSpan RunFileWait = TimeSpan.FromSeconds(30);
 
-    private static readonly string RepoRoot =
+    /// <summary>The repository's root, as the build gave it (<c>artifacts/</c> is under it).</summary>
+    internal static readonly string RepoRoot =
         typeof(VisualRun).Assembly.GetCustomAttributes<AssemblyMetadataAttribute>()
             .First(attribute => attribute.Key == "RepoRoot").Value!;
 

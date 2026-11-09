@@ -103,6 +103,14 @@ public sealed class GitRunner : IGitRunner
     internal Action? StopObserver { get; init; }
 
     /// <summary>
+    /// A seam for the tests: called on the call's thread with git's process just after git has started,
+    /// before the runner puts it in a job and, for a below-normal call, lowers it (docs/phase-6-design.md
+    /// 8.10). It must not throw: git would be left running, and the call neither recorded nor
+    /// registered for cancellation, which both come after it.
+    /// </summary>
+    internal Action<Process>? StartObserver { get; init; }
+
+    /// <summary>
     /// The session's git environment given to the constructor (empty for none), a copy, which the
     /// runner applies to every call (docs/phase-6-design.md 8.12). Nothing in the app reads it back:
     /// the session gives the same variables to the settings' <c>GitConfiguration</c> itself; the tests
@@ -138,12 +146,15 @@ public sealed class GitRunner : IGitRunner
             throw new GitException(command.DisplayText, null, ex.Message, ex);
         }
 
+        StartObserver?.Invoke(process);
+
+        // A call at below-normal priority gets a job that holds every process in it there (8.10); the
+        // lowering then catches what git started before it joined the job.
+        using var job = OperatingSystem.IsWindows() ? WindowsJob.TryAttach(process, belowNormal: command.BelowNormalPriority) : null;
         if (command.BelowNormalPriority && OperatingSystem.IsWindows())
         {
-            LowerPriority(process, command);
+            LowerPriority(process, job, command);
         }
-
-        using var job = OperatingSystem.IsWindows() ? WindowsJob.TryAttach(process) : null;
         void Stop()
         {
             StopObserver?.Invoke();
@@ -279,11 +290,11 @@ public sealed class GitRunner : IGitRunner
     /// cannot be set, runs on as it is: the call does not fail for it.
     /// </summary>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    private void LowerPriority(Process process, GitCommand command)
+    private void LowerPriority(Process process, WindowsJob? job, GitCommand command)
     {
         try
         {
-            LowerTreeBelowNormal(process);
+            LowerTreeBelowNormal(process, job);
         }
         catch (Exception ex) when (ex is Win32Exception or InvalidOperationException or NotSupportedException)
         {
@@ -296,29 +307,50 @@ public sealed class GitRunner : IGitRunner
 
     /// <summary>
     /// Puts <paramref name="root"/> at below-normal priority, and every process it has started by
-    /// then, directly or not (Windows). Windows gives a new process its parent's class as it is
-    /// when the process is created, and Git for Windows' <c>cmd\git.exe</c>, the git most machines
-    /// find, is a launcher that starts the real git at once: under load that can come before the
-    /// launcher's class is set, and the real git and every shell it starts would then run at
-    /// normal priority. So the descendants are lowered too, from a snapshot of the machine's
-    /// processes (Toolhelp's, which names each one's parent), until a snapshot finds none left to
-    /// lower: a process that one of them started before it was lowered shows up in the next one.
-    /// At most <see cref="LoweringRounds"/> snapshots; what starts later gets the class from its
-    /// parent. A child that started before its parent is no descendant (the parent's id was
-    /// reused) and is left alone; one that ends meanwhile is skipped.
+    /// then, directly or not (Windows), adding each to <paramref name="job"/> when there is one.
+    /// What the root starts can come before its class is set: Git for Windows' <c>cmd\git.exe</c>,
+    /// the git most machines find, is a launcher that starts the real git at once, and a console
+    /// program started without a console, as git is here, starts its console host
+    /// (<c>conhost.exe</c>) as it begins. So the descendants are lowered too, from a snapshot of the
+    /// machine's processes (Toolhelp's, which names each one's parent), until a snapshot finds none
+    /// left to change: a process that one of them started before it was changed shows up in the next
+    /// one. At most <see cref="LoweringRounds"/> snapshots. A child that started before its parent is
+    /// no descendant (the parent's id was reused) and is left alone; one that ends meanwhile is skipped.
+    /// <para>
+    /// The class alone does not hold what starts later. CI run 42216604663 found git's console host
+    /// at normal priority. Measured on the laptop (Windows 11, git 2.56): Windows takes a new
+    /// process's class from its creator partway through the creation and lists the process in a
+    /// snapshot only at its end, so any process of the tree whose class was taken before its creator
+    /// was lowered and that shows only after the last snapshot runs at normal priority to its end.
+    /// The launcher creates its console host as it begins, when the runner lowers the launcher: with
+    /// the lowering held about 2 ms after the start beside below-normal load, the console host showed
+    /// as late as 250 ms after the launcher was lowered, at normal priority, in 7 calls of 210. A job
+    /// whose <see cref="WindowsJob.HoldsBelowNormal"/> closes that gap (none of 360 such calls):
+    /// Windows adds a new process to its creator's job and applies the job's limit as the process
+    /// joins, so whatever starts in the tree once its creator, the root or a descendant added here, is
+    /// in the job runs below normal, however its class was chosen. One case is left: a process whose
+    /// creation read its creator's job before the creator joined it, and that shows only after the
+    /// last snapshot, stays out of the job and keeps the class it was given.
+    /// </para>
     /// </summary>
     /// <exception cref="InvalidOperationException"><paramref name="root"/> has exited.</exception>
     /// <exception cref="Win32Exception">Windows refused to change <paramref name="root"/>'s class, or gave no snapshot.</exception>
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    internal static void LowerTreeBelowNormal(Process root)
+    internal static void LowerTreeBelowNormal(Process root, WindowsJob? job = null)
     {
         ArgumentNullException.ThrowIfNull(root);
-        root.PriorityClass = ProcessPriorityClass.BelowNormal;
+
+        // In a job that holds it below normal, Windows has set the class already.
+        if (root.PriorityClass != ProcessPriorityClass.BelowNormal)
+        {
+            root.PriorityClass = ProcessPriorityClass.BelowNormal;
+        }
+
         var rootStart = root.StartTime;
         for (var round = 0; round < LoweringRounds; round++)
         {
             var children = ProcessSnapshot.ChildrenByParent();
-            var lowered = false;
+            var changed = false;
             var visited = new HashSet<int> { root.Id };
             var parents = new Queue<(int Id, DateTime Start)>();
             parents.Enqueue((root.Id, rootStart));
@@ -345,10 +377,16 @@ public sealed class GitRunner : IGitRunner
                             continue;
                         }
 
+                        // Added first: in a job that holds it below normal, that sets its class too.
+                        if (job is not null && job.TryAdd(child))
+                        {
+                            changed = true;
+                        }
+
                         if (child.PriorityClass != ProcessPriorityClass.BelowNormal)
                         {
                             child.PriorityClass = ProcessPriorityClass.BelowNormal;
-                            lowered = true;
+                            changed = true;
                         }
 
                         parents.Enqueue((id, start));
@@ -360,7 +398,7 @@ public sealed class GitRunner : IGitRunner
                 }
             }
 
-            if (!lowered)
+            if (!changed)
             {
                 return;
             }

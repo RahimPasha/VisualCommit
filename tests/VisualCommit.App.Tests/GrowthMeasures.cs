@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime;
 using Xunit;
 
@@ -15,7 +16,11 @@ internal static class GrowthMeasures
 {
     /// <summary>
     /// Runs <paramref name="work"/> after a full collection in a region of no garbage collection
-    /// that may allocate <paramref name="budget"/> bytes, and asserts that no collection ran.
+    /// that may allocate <paramref name="budget"/> bytes, and asserts that no collection ran. The
+    /// region also ends when any thread of the process asks for a collection, or under memory
+    /// pressure, with the budget far from used: the failure blames the budget only when the process
+    /// allocated at least the budget during the measure, and otherwise says what it allocated and
+    /// the machine's memory load (<see cref="CollectionRan"/>).
     /// </summary>
     public static T WithoutCollection<T>(long budget, Func<T> work)
     {
@@ -23,11 +28,14 @@ internal static class GrowthMeasures
         GC.Collect();
         GC.WaitForPendingFinalizers();
         GC.Collect();
+        var allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
         Assert.True(GC.TryStartNoGCRegion(budget), "The region without garbage collection did not start.");
         try
         {
             var result = work();
-            Assert.True(GCSettings.LatencyMode == GCLatencyMode.NoGCRegion, "A garbage collection ran during the measure: the budget is too small.");
+            var allocated = GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore;
+            var stillInRegion = GCSettings.LatencyMode == GCLatencyMode.NoGCRegion;
+            Assert.True(stillInRegion, stillInRegion ? null : CollectionRan(allocated, budget, GC.GetGCMemoryInfo()));
             return result;
         }
         finally
@@ -36,6 +44,39 @@ internal static class GrowthMeasures
             {
                 GC.EndNoGCRegion();
             }
+        }
+    }
+
+    /// <summary>
+    /// The failure of a measure whose region a collection ended: the budget is blamed only when the
+    /// process allocated at least <paramref name="budget"/> bytes during the measure (every thread's
+    /// allocations count against the region's budget); otherwise another thread's collection or
+    /// memory pressure ended it, and the message gives the memory load and the high-load threshold
+    /// of the last collection (<paramref name="memory"/>).
+    /// </summary>
+    internal static string CollectionRan(long allocated, long budget, GCMemoryInfo memory) =>
+        allocated >= budget
+            ? string.Create(CultureInfo.InvariantCulture, $"A garbage collection ran during the measure, which allocated {allocated:N0} bytes of the budget's {budget:N0}: the budget is too small.")
+            : string.Create(CultureInfo.InvariantCulture, $"A garbage collection ran during the measure with {allocated:N0} bytes of the budget's {budget:N0} allocated: another thread's collection or memory pressure ended the region (memory load {memory.MemoryLoadBytes:N0} bytes, the high-load threshold {memory.HighMemoryLoadThresholdBytes:N0} bytes).");
+
+    /// <summary>
+    /// Appends <paramref name="line"/> to <paramref name="file"/>, after <paramref name="heading"/>
+    /// when the file does not exist yet, and returns null. A write that fails returns what failed
+    /// instead of throwing: a measure's record never fails its test, which names the failed write
+    /// only when it fails anyway.
+    /// </summary>
+    internal static string? AppendRecord(string file, string heading, string line)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            var text = (File.Exists(file) ? string.Empty : heading + "\n") + line + "\n";
+            File.AppendAllText(file, text);
+            return null;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            return $"The record {file} was not written ({ex.GetType().Name}: {ex.Message}).";
         }
     }
 }

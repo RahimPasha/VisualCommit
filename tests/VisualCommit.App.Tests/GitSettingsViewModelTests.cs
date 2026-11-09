@@ -750,6 +750,9 @@ public class GitSettingsViewModelTests
             return ReadFailure is { } failure ? Task.FromException<GitConfigRead>(failure) : Task.FromResult(workingTree is null ? Outside : InRepository);
         }
 
+        /// <summary>The settings screen reads no included file: only a clone's binding does.</summary>
+        public Task<IReadOnlyList<GitConfigValue>> ReadIncludedAsync(GitConfigValue directive, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
         public Task<GitIdentityRead> ReadIdentityAsync(string workingTree, CancellationToken cancellationToken = default)
         {
             IdentityReads.Add(workingTree);

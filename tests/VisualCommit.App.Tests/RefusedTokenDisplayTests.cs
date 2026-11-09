@@ -17,7 +17,8 @@ namespace VisualCommit.App.Tests;
 /// (docs/phase-7a-design.md 4.7, ruling 4, D276, D330): <see cref="OperationTexts.GitCredentialsRefused"/>
 /// word for word with the login's own case, never <see cref="OperationTexts.TokenRefused"/>, and
 /// "Open settings…" on Accounts; no credentials dialog; a bulk row's kept dialog on a row without
-/// a tab the same.
+/// a tab the same. Since 7b (docs/phase-7b-design.md 8.5): each provider's texts, GitHub's 7a's,
+/// and a refused GitLab or Azure DevOps fetch naming its provider and its account's login.
 /// </summary>
 public class RefusedTokenDisplayTests
 {
@@ -30,6 +31,62 @@ public class RefusedTokenDisplayTests
         Assert.Equal("GitHub refused the token of octocat. Sign in to GitHub in Settings, Accounts.", OperationTexts.TokenRefused("octocat"));
     }
 
+
+    [Fact]
+    public void Each_provider_has_its_refusals_and_GitHubs_are_7as()
+    {
+        Assert.Equal(OperationTexts.GitCredentialsRefused("octocat"), OperationTexts.GitCredentialsRefused(HostingProvider.GitHub, "octocat"));
+        Assert.Equal(OperationTexts.TokenRefused("octocat"), OperationTexts.TokenRefused(HostingProvider.GitHub, "octocat"));
+        Assert.Equal(
+            "GitLab refused git's credentials for Ada. If the token has expired or was revoked, sign in to GitLab again in Settings, Accounts.",
+            OperationTexts.GitCredentialsRefused(HostingProvider.GitLab, "Ada"));
+        Assert.Equal("GitLab refused the token of Ada. Sign in to GitLab in Settings, Accounts.", OperationTexts.TokenRefused(HostingProvider.GitLab, "Ada"));
+        Assert.Equal(
+            "Azure DevOps refused git's credentials for Fernhill-Labs. If the token has expired or was revoked, sign in to Azure DevOps again in Settings, Accounts.",
+            OperationTexts.GitCredentialsRefused(HostingProvider.AzureDevOps, "Fernhill-Labs"));
+        Assert.Equal(
+            "Azure DevOps refused the token of Fernhill-Labs. Sign in to Azure DevOps in Settings, Accounts.",
+            OperationTexts.TokenRefused(HostingProvider.AzureDevOps, "Fernhill-Labs"));
+    }
+
+    [Theory]
+    [InlineData(HostingProvider.GitLab, "ada", "Ada", "GitLab refused git's credentials for Ada. If the token has expired or was revoked, sign in to GitLab again in Settings, Accounts.")]
+    [InlineData(HostingProvider.AzureDevOps, "fernhill-labs", "Fernhill-Labs", "Azure DevOps refused git's credentials for Fernhill-Labs. If the token has expired or was revoked, sign in to Azure DevOps again in Settings, Accounts.")]
+    public async Task A_refused_fetch_of_another_provider_names_that_provider_and_its_login(HostingProvider provider, string keyLogin, string login, string summary)
+    {
+        await using var server = await AuthRemoteServer.StartAsync();
+        server.Credentials = new NetworkCredential(AskPassProtocol.CredentialUserName, CredentialTestSupport.Token);
+        using var repo = await Scenarios.AuthRemoteAsync(server);
+        var origin = new Uri($"http://127.0.0.1:{server.Port}/");
+        var key = new AccountKey(provider, origin.Authority, keyLogin);
+        var coverage = provider == HostingProvider.GitLab
+            ? new GitCoverage(key, origin) { GitTwin = true, HelperUserIsAccounts = true }
+            : new GitCoverage(key, origin) { Organization = login, HelperUserIsAccounts = true };
+        var stub = new HostingSessionStub(coverage, "FAKE-refused-token-0")
+        {
+            Account = new AccountStatus(new HostingAccount(key, login, 0, null, null, UseForGit: true), AccountState.SignedIn, TokenPlace.Session, AccountNoteKind.None, null),
+        };
+        stub.RepositoryBindings = [new CredentialBinding(server.Url, stub.Key)];
+        var handler = new ScriptedPromptHandler();
+        using var app = await OperationsHarness.OpenAsync(repo, _ => handler, hosting: stub);
+        SettingsSection? opened = null;
+        app.Services.OpenSettings = section =>
+        {
+            opened = section;
+            return Task.CompletedTask;
+        };
+        app.Dialogs.CloseError(clickExtra: true);
+
+        await app.Operations.FetchAllAsync();
+        await app.WaitForIdleAsync();
+
+        var error = Assert.Single(app.Dialogs.Errors);
+        Assert.Equal(("Fetch failed", summary, true), (error.Title, error.Summary, error.HasExtraAction));
+        Assert.Equal(SettingsSection.Accounts, opened);
+        Assert.Empty(handler.Prompts);
+        Assert.Equal([key], stub.Credentials.Refusals);
+        app.AssertScriptFollowed();
+    }
     [Fact]
     public async Task A_refused_fetch_says_git_credentials_were_refused_with_the_logins_case_and_opens_accounts()
     {

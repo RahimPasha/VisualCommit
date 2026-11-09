@@ -13,6 +13,7 @@ using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting;
 
@@ -65,7 +66,7 @@ public sealed partial class RepositoryViewModel
         MergeTool = _mergeTool,
         Filters = Filters,
         HasEditor = IsEditorChosen(),
-        Hosting = HostingState.PullRequests == PullRequestsState.NotGitHub ? null : HostingState,
+        Hosting = HostingState.PullRequests == PullRequestsState.NoHostedRemote ? null : HostingState,
     };
 
     /// <summary>
@@ -431,7 +432,7 @@ public sealed partial class RepositoryViewModel
                 Start(MenuActions.ApplyStashAsync(stash), "applying the stash");
                 break;
             case RefRowTarget.PullRequest when row is PullRequestRow pullRequest
-                && HostingState.PullRequests != PullRequestsState.NotGitHub
+                && HostingState.PullRequests != PullRequestsState.NoHostedRemote
                 && PullRequestCheckout.Plan(HostingState, Refs, pullRequest.PullRequest).DisabledReason is null:
                 // Its checkout (D304, 10.5), as the menu's item, unless the item would be disabled.
                 Start(MenuActions.CheckOutPullRequestAsync(pullRequest.PullRequest), "checking out a pull request");
@@ -441,8 +442,9 @@ public sealed partial class RepositoryViewModel
 
     /// <summary>
     /// A click on a clickable message row of the "Pull requests" section (docs/phase-7a-design.md
-    /// 10.3, 10.4): the sign-in row signs in to GitHub (the window's entry, 8.5), the "more" row
-    /// opens the repository's pull requests in the browser.
+    /// 10.3, 10.4): the sign-in row signs in to the listed repository's provider (the window's entry,
+    /// 8.5; docs/phase-7b-design.md 12.5), the "more" row opens the repository's pull requests in the
+    /// browser. D356's row takes no click.
     /// </summary>
     public void ActivatePullRequestMessage(PullRequestMessageRow row)
     {
@@ -455,7 +457,7 @@ public sealed partial class RepositoryViewModel
         switch (row.Kind)
         {
             case PullRequestMessageKind.SignIn:
-                Start(MenuActions.SignInToGitHubAsync(), "signing in to GitHub");
+                Start(MenuActions.SignInToHostAsync(), $"signing in to {HostingTexts.Name(HostingState.Repository?.Provider ?? HostingProvider.GitHub)}");
                 break;
             case PullRequestMessageKind.More:
                 Start(MenuActions.OpenPullRequestsInBrowserAsync(), "opening the pull requests in the browser");

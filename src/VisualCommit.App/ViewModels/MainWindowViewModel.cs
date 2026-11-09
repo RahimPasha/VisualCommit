@@ -67,8 +67,9 @@ public partial class MainWindowViewModel : ObservableObject
         // The welcome page's Open takes Open repository…'s first step too (5.10, D215).
         _tabServices.ActivateTabShowing = ActivateTabShowing;
 
-        // "Sign in to GitHub…" opens the sign-in through the window (docs/phase-7a-design.md 1.7).
-        _tabServices.SignInToGitHub = SignInToGitHubAsync;
+        // "Sign in to GitHub…" opens the sign-in through the window (docs/phase-7a-design.md 1.7,
+        // docs/phase-7b-design.md 1.7).
+        _tabServices.SignIn = SignInAsync;
 
         // The theme shown follows the service: the user's choice, or the system's mode (11.6).
         FollowThemeService();
@@ -250,6 +251,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public void CloseAll()
     {
+        _closed = true;
         Dialogs.CancelAll();
         AutoFetch.Dispose();
         ActivityLog.Dispose();
@@ -357,8 +359,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// Shows "Finishing operations" and closes the window when the operations and the settings
-    /// screens' global writes have ended, or the user chooses "Quit now". <see cref="_finishing"/>
-    /// keeps the dialog afterwards, also after "Keep open": <see cref="TryClose"/> goes by its state.
+    /// screens' global writes have ended, or the user chooses "Quit now". An answer the dialog took
+    /// goes first: after "Keep open" the window stays, also when the operations ended before the
+    /// answer was acted on. <see cref="_finishing"/> keeps the dialog afterwards, also after "Keep
+    /// open": <see cref="TryClose"/> goes by its state.
     /// </summary>
     private async Task FinishThenCloseAsync(IReadOnlyList<RepositoryViewModel> repositories, IReadOnlyList<SettingsDialogViewModel> saves, Action closeWindow)
     {
@@ -380,8 +384,15 @@ public partial class MainWindowViewModel : ObservableObject
         {
             var idle = Task.WhenAll(repositories.Select(repository => repository.Queue.WhenIdleAsync()).Concat(writes.Select(save => save.Writes!)));
             var answer = Dialogs.ShowAsync(dialog);
-            var first = await Task.WhenAny(idle, answer);
-            if (first == idle)
+            await Task.WhenAny(idle, answer);
+
+            // The dialog's own state decides, as in TryClose, not which of the two tasks WhenAny saw
+            // complete first: both reach it through the thread pool (their sources run their
+            // continuations asynchronously), in an order that need not be the UI thread's, and this
+            // continuation runs later still. An answer the dialog took while it was open stands, also
+            // when the operations ended before it was acted on: "Keep open" keeps the window (CI run
+            // 42301846503 closed it after "Keep open"). Only a dialog nobody answered closes as finished.
+            if (!answer.IsCompleted)
             {
                 dialog.CloseAsFinished();
             }

@@ -10,7 +10,7 @@ namespace VisualCommit.Hosting.Tests;
 /// <summary>
 /// The palette's "Clone from GitHub…" (docs/phase-7a-design.md 9.5, 9.6; D299, D300, D334): not
 /// listed with GitHub off; right after "Clone repository…" with the fake, without a key; signed
-/// out it runs the window's sign-in entry first (a stub on <c>TabServices.SignInToGitHub</c>):
+/// out it runs the window's sign-in entry first (a stub on <c>TabServices.SignIn</c>):
 /// false leaves the tabs and the welcome page as they were, true opens the form on the empty active
 /// tab with the browser over it; signed in it does not ask. The fake of GitHub is in process.
 /// </summary>
@@ -69,7 +69,7 @@ public sealed class PaletteCloneFromGitHubTests
         try
         {
             var asked = 0;
-            app.Session.Services.SignInToGitHub = () =>
+            app.Session.Services.SignIn = _ =>
             {
                 asked++;
                 return Task.FromResult(false);
@@ -101,7 +101,7 @@ public sealed class PaletteCloneFromGitHubTests
         try
         {
             var asked = 0;
-            app.Session.Services.SignInToGitHub = async () =>
+            app.Session.Services.SignIn = async _ =>
             {
                 asked++;
                 await app.Session.Services.Hosting.SignInAsync(served.OctoToken, Cancelled);
@@ -145,7 +145,7 @@ public sealed class PaletteCloneFromGitHubTests
         {
             await app.SignInAsync(served.OctoToken, Cancelled);
             var asked = 0;
-            app.Session.Services.SignInToGitHub = () =>
+            app.Session.Services.SignIn = _ =>
             {
                 asked++;
                 return Task.FromResult(true);

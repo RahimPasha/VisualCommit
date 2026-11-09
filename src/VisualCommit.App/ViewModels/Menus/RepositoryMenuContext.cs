@@ -157,7 +157,7 @@ public sealed record RepositoryMenuContext(
     /// <summary>
     /// The repository's hosting (docs/phase-7a-design.md 1.7, 10): its pull requests and which
     /// branch has one, for the pull-request items of the menus; null for a repository without a
-    /// GitHub remote (<see cref="PullRequestsState.NotGitHub"/>).
+    /// GitHub remote (<see cref="PullRequestsState.NoHostedRemote"/>).
     /// </summary>
     public RepositoryHostingState? Hosting { get; init; }
 

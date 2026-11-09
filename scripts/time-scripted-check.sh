@@ -1,22 +1,24 @@
 #!/usr/bin/env bash
 # Times scripted visual checks, for the time budgets of docs/phase-3-design.md 7.7,
-# docs/phase-4-design.md 13.6, docs/phase-5-design.md 15.6, docs/phase-6-design.md 17.6 and
-# docs/phase-7a-design.md 0.6: runs
+# docs/phase-4-design.md 13.6, docs/phase-5-design.md 15.6, docs/phase-6-design.md 17.6,
+# docs/phase-7a-design.md 0.6 and docs/phase-7b-design.md 0.5: runs
 # the walk-through's tests whose method names match a filter, alone, and prints how long each test
 # took (as the test platform measured it) and the time of each step the checks noted (every
-# picture a phase 3, 4, 5, 6 or 7a check saves through Shot is a step:
+# picture a phase 3, 4, 5, 6, 7a or 7b check saves through Shot is a step:
 # artifacts/visual/phase-N/timings/). It never runs the real-window pass.
 #
 # Usage, from anywhere in the repository (Git Bash on Windows, bash elsewhere):
-#   bash scripts/time-scripted-check.sh "*Phase7aChecksA*"
+#   bash scripts/time-scripted-check.sh "*Phase7bChecksA*"
+#   bash scripts/time-scripted-check.sh "*Phase7aChecksA*" 7a
 #   bash scripts/time-scripted-check.sh "*Check_W4*" 6
 #   bash scripts/time-scripted-check.sh "*Check_L27*" 6
 #   bash scripts/time-scripted-check.sh "*Check_U16*" 5
 #   bash scripts/time-scripted-check.sh "*Check_C10*" 4
 #   bash scripts/time-scripted-check.sh "*Phase3ChecksD*" 3
-# The second argument is the phase whose step times to print, as the docs write it (7a when left
-# out; docs/phase-7a-design.md 0.3); a phase it does not know exits 2 before anything is built. It
-# also picks the walk-through project: for phase 7a tests/VisualCommit.VisualTests.Phase7a; for
+# The second argument is the phase whose step times to print, as the docs write it (7b when left
+# out; docs/phase-7b-design.md 0.3); a phase it does not know, such as 7, exits 2 before anything is
+# built. It also picks the walk-through project: for phase 7b tests/VisualCommit.VisualTests.Phase7b;
+# for phase 7a tests/VisualCommit.VisualTests.Phase7a; for
 # phase 6 (docs/phase-6-design.md 17.3):
 # tests/VisualCommit.VisualTests.Phase6Look when the filter names part L (its checks, Check_L<n>,
 # or their class, Phase6ChecksL), and tests/VisualCommit.VisualTests.Phase6 for parts W, K, S and
@@ -34,12 +36,13 @@
 # writing a budget.
 set -euo pipefail
 
-filter="${1:?usage: bash scripts/time-scripted-check.sh <method filter, such as \"*Check_W4*\"> [phase: 7a when left out, or 6, 5, 4, 3, 0, 1, 2]}"
-phase="${2:-7a}"
+filter="${1:?usage: bash scripts/time-scripted-check.sh <method filter, such as \"*Check_W4*\"> [phase: 7b when left out, or 7a, 6, 5, 4, 3, 0, 1, 2]}"
+phase="${2:-7b}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 case "$phase" in
+  7b) project="tests/VisualCommit.VisualTests.Phase7b" ;;
   7a) project="tests/VisualCommit.VisualTests.Phase7a" ;;
   6)
     case "$filter" in

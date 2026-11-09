@@ -48,7 +48,9 @@ What was done differently and why. Link each to its entry in `decisions.md`.
 
 ## Known issues
 
-Bugs, shortcuts and debt, each with how much it matters and where it is.
+Bugs, shortcuts and debt, each with how much it matters and where it is. Name every local
+`wip/...` or `backup/...` branch left unmerged, its tip and why, since CLAUDE.md's step 1 sends
+the reader here for them (D396).
 
 ## Things that cost time
 

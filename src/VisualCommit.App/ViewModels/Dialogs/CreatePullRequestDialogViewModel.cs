@@ -1,6 +1,9 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
+using VisualCommit.Hosting;
+using VisualCommit.Hosting.GitLab;
 using Texts = VisualCommit.App.ViewModels.Operations.OperationTexts.CreatePullRequestTexts;
 
 namespace VisualCommit.App.ViewModels.Dialogs;
@@ -16,6 +19,22 @@ public sealed record PullRequestEnd(string Text, string Repository)
 {
     /// <summary>The branch's name on GitHub (<c>main</c> for <c>origin/main</c>), for the same branch's text; null: <see cref="Text"/>.</summary>
     public string? Branch { get; init; }
+
+    /// <summary>
+    /// The repository as a record (docs/phase-7b-design.md 13.3; r1 P11): set wherever the
+    /// repository makes an end, and what the repository compares in place of <see cref="Repository"/>'s
+    /// text; null in a test's end. An end's equality leaves it out, so two ends are equal as 7a's
+    /// were: by text, repository and branch.
+    /// </summary>
+    public HostedRepository? Hosted { get; init; }
+
+    public bool Equals(PullRequestEnd? other) =>
+        other is not null
+        && string.Equals(Text, other.Text, StringComparison.Ordinal)
+        && string.Equals(Repository, other.Repository, StringComparison.Ordinal)
+        && string.Equals(Branch, other.Branch, StringComparison.Ordinal);
+
+    public override int GetHashCode() => HashCode.Combine(Text, Repository, Branch);
 }
 
 /// <summary>What <see cref="ICreatePullRequestActions.StartAsync"/> found: the default base (A3), or why there is none.</summary>
@@ -31,6 +50,9 @@ public sealed record CreatePullRequestOutcome(bool Created, string? Error, int? 
 /// </summary>
 public interface ICreatePullRequestActions
 {
+    /// <summary>The listed repository's provider, in whose words the form speaks (docs/phase-7b-design.md 13.4); GitHub by default, as 7a's.</summary>
+    HostingProvider Provider => HostingProvider.GitHub;
+
     /// <summary>The head: <c>topic/no-pr</c> · <c>octo/hello</c>.</summary>
     PullRequestEnd Head { get; }
 
@@ -83,6 +105,7 @@ public sealed partial class CreatePullRequestDialogViewModel : DialogViewModel<b
 {
     private readonly ICreatePullRequestActions _actions;
     private readonly IAppLog _log;
+    private readonly HostingProvider _provider;
     private readonly CancellationTokenSource _lifetime = new();
     private bool _baseChosen;
 
@@ -91,6 +114,7 @@ public sealed partial class CreatePullRequestDialogViewModel : DialogViewModel<b
         ArgumentNullException.ThrowIfNull(actions);
         _actions = actions;
         _log = log ?? NullAppLog.Instance;
+        _provider = actions.Provider;
         Head = actions.Head;
         PullRequestTitle = actions.DefaultTitle;
         HeadNote = actions.HeadNote();
@@ -109,7 +133,11 @@ public sealed partial class CreatePullRequestDialogViewModel : DialogViewModel<b
         ShowSameBranch();
     }
 
-    public override string Title => Texts.DialogTitle;
+    /// <summary><c>Create pull request</c>; GitLab's <c>Create merge request</c> (13.2).</summary>
+    public override string Title => Texts.DialogTitleOf(_provider);
+
+    /// <summary>The listed repository's provider (13.4).</summary>
+    public HostingProvider Provider => _provider;
 
     /// <summary>The default base's read: complete once it is shown (or failed, or the form closed).</summary>
     public Task Starting { get; }
@@ -129,8 +157,8 @@ public sealed partial class CreatePullRequestDialogViewModel : DialogViewModel<b
     [NotifyCanExecuteChangedFor(nameof(CreateCommand))]
     public partial PullRequestEnd? Base { get; private set; }
 
-    /// <summary>Into's text: the base's, <c>Reading GitHub…</c> while it is read, or empty.</summary>
-    public string BaseText => Base?.Text ?? (IsReadingBase ? Texts.ReadingGitHub : string.Empty);
+    /// <summary>Into's text: the base's, <c>Reading GitHub…</c> (the provider's name) while it is read, or empty.</summary>
+    public string BaseText => Base?.Text ?? (IsReadingBase ? Texts.ReadingOf(_provider) : string.Empty);
 
     public string BaseRepository => Base?.Repository ?? string.Empty;
 
@@ -142,13 +170,29 @@ public sealed partial class CreatePullRequestDialogViewModel : DialogViewModel<b
     /// <summary>The pull request's title (<c>PullRequestTitle</c>): the head's subject to begin with.</summary>
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(CreateCommand))]
+    [NotifyPropertyChangedFor(nameof(SentTitle))]
     public partial string PullRequestTitle { get; set; } = string.Empty;
 
     [ObservableProperty]
     public partial string Description { get; set; } = string.Empty;
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowsSentTitle))]
     public partial bool IsDraft { get; set; }
+
+    /// <summary>
+    /// GitLab's <c>PullRequestSentTitle</c> while Draft is ticked (13.4, ruling 20): the title GitLab's
+    /// provider sends, by the same <see cref="GitLabProvider.TitleFor"/>; never on GitHub or Azure DevOps.
+    /// </summary>
+    public bool ShowsSentTitle => _provider == HostingProvider.GitLab && IsDraft;
+
+    /// <summary><c>Title on GitLab: Draft: Add the search box</c>; a <c>[Draft] x</c> unchanged.</summary>
+    public string SentTitle => Texts.SentTitle(_provider, GitLabProvider.TitleFor(PullRequestTitle.TrimEnd(), true));
+
+    /// <summary>GitLab's <c>PullRequestQuickActionsNote</c> under the description (13.4): GitLab's alone.</summary>
+    public bool ShowsQuickActionsNote => _provider == HostingProvider.GitLab;
+
+    public string QuickActionsNote => Texts.QuickActionsNote;
 
     /// <summary>The error line, or null (<c>PullRequestError</c> hidden).</summary>
     [ObservableProperty]
@@ -164,7 +208,7 @@ public sealed partial class CreatePullRequestDialogViewModel : DialogViewModel<b
 
     public bool HasExisting => ExistingNumber is not null;
 
-    public string OpenExistingText => ExistingNumber is { } number ? Texts.OpenExisting(number) : string.Empty;
+    public string OpenExistingText => ExistingNumber is { } number ? Texts.OpenExisting(_provider, number) : string.Empty;
 
     /// <summary>Create runs: every control is disabled and Create reads <c>Creating…</c>.</summary>
     [ObservableProperty]
@@ -245,7 +289,7 @@ public sealed partial class CreatePullRequestDialogViewModel : DialogViewModel<b
         catch (Exception ex)
         {
             _log.Error("Creating a pull request failed unexpectedly.", ex);
-            outcome = new CreatePullRequestOutcome(false, Texts.Operation(Head.Text).FailureSummary, null);
+            outcome = new CreatePullRequestOutcome(false, Texts.Operation(_provider, Head.Text).FailureSummary, null);
         }
 
         if (outcome.Created)
@@ -314,7 +358,7 @@ public sealed partial class CreatePullRequestDialogViewModel : DialogViewModel<b
         catch (Exception ex)
         {
             _log.Error("Reading the default base of a pull request failed unexpectedly.", ex);
-            start = new CreatePullRequestStart(null, Texts.Operation(Head.Text).FailureSummary);
+            start = new CreatePullRequestStart(null, Texts.Operation(_provider, Head.Text).FailureSummary);
         }
 
         if (IsClosed || _baseChosen)

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Avalonia.Headless.XUnit;
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -8,8 +9,10 @@ namespace VisualCommit.App.Tests;
 
 /// <summary>
 /// S8's counts of git calls (docs/phase-7a-design.md 5.3, D280, D281): <see cref="GitCallBudget"/>'s
-/// whole refreshes, its optional form and its budgets, tried on calls made up here; and the
-/// operations harness's quiet mark and read around the watcher's refresh of a real repository.
+/// whole refreshes, its optional form and its budgets, tried on calls made up here; the
+/// operations harness's quiet mark and read around the watcher's refresh of a real repository; and
+/// the shell's mark of a step that starts no git call, which passes the watcher's refresh and fails
+/// a refresh or an operation of the step's own.
 /// </summary>
 public class GitCallBudgetTests
 {
@@ -114,6 +117,71 @@ public class GitCallBudgetTests
         var failure = Assert.Throws<GitCallBudgetException>(() => GitCallBudget.AssertOnlyWholeRefreshes([.. Refresh, Call("git worktree list --porcelain")], "the step"));
         Assert.StartsWith("the step made git calls that are no whole refresh (git worktree list --porcelain is no refresh's call):", failure.Message, StringComparison.Ordinal);
         Assert.All(Refresh, call => Assert.Contains(call.CommandText, failure.Message, StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// A step that starts no git call (<see cref="GitCallBudget.AssertOnlyWatcherRefreshes"/>): whole
+    /// refreshes pass up to the number the watchers asked for (fewer when the watcher's changes fold
+    /// into one refresh), one more fails and names both numbers and every call, and calls that are
+    /// no whole refresh fail whatever the watchers asked for.
+    /// </summary>
+    [Fact]
+    public void A_step_without_calls_passes_no_more_whole_refreshes_than_the_watchers_asked_for()
+    {
+        GitCallBudget.AssertOnlyWatcherRefreshes([], 0, "the step");
+        GitCallBudget.AssertOnlyWatcherRefreshes(Refresh, 1, "the step");
+        GitCallBudget.AssertOnlyWatcherRefreshes(Refresh, 2, "the step");
+        GitCallBudget.AssertOnlyWatcherRefreshes([.. Refresh, .. Refresh], 2, "the step");
+
+        var failure = Assert.Throws<GitCallBudgetException>(() => GitCallBudget.AssertOnlyWatcherRefreshes(Refresh, 0, "the step"));
+        Assert.StartsWith("the step made 1 whole refresh where the watchers asked for 0: a refresh nothing reported to the watchers started. The calls:", failure.Message, StringComparison.Ordinal);
+        Assert.All(Refresh, call => Assert.Contains(call.CommandText, failure.Message, StringComparison.Ordinal));
+        failure = Assert.Throws<GitCallBudgetException>(() => GitCallBudget.AssertOnlyWatcherRefreshes([.. Refresh, .. Refresh], 1, "the step"));
+        Assert.StartsWith("the step made 2 whole refreshes where the watchers asked for 1:", failure.Message, StringComparison.Ordinal);
+
+        failure = Assert.Throws<GitCallBudgetException>(() => GitCallBudget.AssertOnlyWatcherRefreshes([.. Refresh, Call("git worktree list --porcelain")], 5, "the step"));
+        Assert.StartsWith("the step made git calls that are no whole refresh (git worktree list --porcelain is no refresh's call):", failure.Message, StringComparison.Ordinal);
+        failure = Assert.Throws<GitCallBudgetException>(() => GitCallBudget.AssertOnlyWatcherRefreshes([Call(StatusRead)], 1, "the step"));
+        Assert.StartsWith("the step made git calls that are no whole refresh (the refresh calls are not whole refreshes:", failure.Message, StringComparison.Ordinal);
+        failure = Assert.Throws<GitCallBudgetException>(() => GitCallBudget.AssertOnlyWatcherRefreshes([.. Refresh[..5], Call(Refresh[5].CommandText, "op-3")], 1, "the step"));
+        Assert.Contains("(in op-3) is no refresh's call", failure.Message, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The shell's mark of a step that starts no git call (<see cref="ShellDriver.QuietStepMarkAsync"/>,
+    /// <see cref="ShellDriver.AssertNoStepCallsAsync"/>) on a real repository: the watcher's refresh
+    /// after a write of git config outside the app passes, counted by the tab's watcher; a refresh
+    /// the step asks for itself (<c>RefreshAsync</c>, as the Refresh command does) fails, though its
+    /// calls are a whole refresh outside every operation, as an operation's refresh is; and an
+    /// operation that ends fails, named.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_step_mark_passes_the_watchers_refresh_and_fails_a_refresh_or_an_operation_of_the_steps_own()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        var repository = await app.WaitForTabOpenedAsync(repo.Path);
+
+        var mark = await app.QuietStepMarkAsync();
+        await repo.ConfigAsync("pull.ff", "true");
+        await app.WaitForAsync(() => app.WatcherRefreshes > mark.WatcherRefreshes, "the watcher's refresh after the write to .git/config");
+        await app.AssertNoStepCallsAsync(mark, "the watcher's refresh");
+        var calls = app.CallsSince(mark.Calls);
+        Assert.True(calls.Count >= GitCallBudget.RefreshForms.Count(form => !form.Optional), "The watcher's refresh made fewer calls than a refresh's forms:\n  " + string.Join("\n  ", calls.Select(call => call.CommandText)));
+
+        mark = await app.QuietStepMarkAsync();
+        await repository.RefreshAsync();
+        var failure = await Assert.ThrowsAsync<GitCallBudgetException>(() => app.AssertNoStepCallsAsync(mark, "the step's refresh"));
+        Assert.StartsWith("the step's refresh made 1 whole refresh where the watchers asked for 0:", failure.Message, StringComparison.Ordinal);
+        Assert.Equal(mark.WatcherRefreshes, app.WatcherRefreshes);
+
+        mark = await app.QuietStepMarkAsync();
+        await repository.Operations.CheckoutAsync("refs/heads/feature/ff");
+        await app.WaitForIdleAsync();
+        failure = await Assert.ThrowsAsync<GitCallBudgetException>(() => app.AssertNoStepCallsAsync(mark, "the step's checkout"));
+        Assert.StartsWith("the step's checkout ran an operation: ", failure.Message, StringComparison.Ordinal);
+        Assert.Contains("git switch ", failure.Message, StringComparison.Ordinal);
     }
 
     /// <summary>

@@ -192,6 +192,50 @@ public sealed class HostingSessionStartTests
         Assert.Equal([new CredentialBinding(Hello, OctoKey(setup))], hosting.Bindings);
     }
 
+    // The review before the gate, life-1 (docs/phase-7b-design.md 9.4, 9.5): the start reads GitHub's
+    // account, then GitLab's. While GitLab's read is held, GitHub's account already binds git, so
+    // git's get for it answers at once; GitLab's waits for its own read, at most 10 s on the
+    // session's clock, as 7a's did for the start's. AccountChanged still comes after the whole start.
+    [Fact]
+    public async Task With_a_later_providers_read_held_an_earlier_providers_get_answers_at_once_and_the_held_ones_waits()
+    {
+        await using var setup = await ProvidersSessionSetup.StartAsync(azureDevOps: false);
+        var gitHub = (await setup.SignInAsync(HostingProvider.GitHub)).Account.Key;
+        var gitLab = (await setup.SignInAsync(HostingProvider.GitLab)).Account.Key;
+        using var held = new KeyHeldStore(setup.Tokens, TokenKey.Of(gitLab));
+        var session = setup.NewSession(tokens: held);
+        var raised = new List<HostingProvider>();
+        await setup.Thread.RunAsync(() => session.AccountChanged += (_, e) => raised.Add(e.Provider));
+
+        var start = Task.Run(() => session.StartAsync(Cancelled), Cancelled);
+        await held.Arrived.WaitAsync(Cancelled);
+
+        Assert.True(session.BindsGit);
+        var gitHubGet = session.GetAsync(gitHub, Cancelled);
+        Assert.True(gitHubGet.IsCompletedSuccessfully, "GitHub's get waited for GitLab's read.");
+        Assert.Equal(setup.GitHubToken, (await gitHubGet)!.Token);
+
+        var timers = setup.Clock.ArmedTimers;
+        var early = session.GetAsync(gitLab, Cancelled);
+        await WaitUntilAsync(() => setup.Clock.ArmedTimers >= timers + 1);
+        Assert.False(early.IsCompleted);
+        setup.Clock.Advance(HostingSession.CredentialWait);
+        Assert.Null(await early.WaitAsync(Cancelled));
+        Assert.Contains("GitLab: the keychain's read had not ended after 10 s; git's request for 127.0.0.1:3 went without the account's token.", setup.Warnings);
+
+        timers = setup.Clock.ArmedTimers;
+        var waiting = session.GetAsync(gitLab, Cancelled);
+        await WaitUntilAsync(() => setup.Clock.ArmedTimers >= timers + 1);
+        await setup.Thread.IdleAsync();
+        Assert.Empty(raised);
+        held.Release();
+        await start.WaitAsync(Cancelled);
+
+        Assert.Equal(setup.GitLabToken, (await waiting.WaitAsync(Cancelled))!.Token);
+        await setup.Thread.IdleAsync();
+        Assert.Equal([HostingProvider.GitHub, HostingProvider.GitLab], raised);
+    }
+
     internal static AccountKey OctoKey(HostingSessionSetup setup) => new(HostingProvider.GitHub, setup.Fake.Endpoints.Host, "octo");
 
     internal static void WriteRecord(HostingSessionSetup setup, string tokenState, string? host = null, bool useForGit = false) =>
@@ -227,5 +271,40 @@ public sealed class HostingSessionStartTests
             Assert.True(DateTime.UtcNow < limit, "The condition did not hold within 30 s.");
             await Task.Delay(10, Cancelled);
         }
+    }
+
+    /// <summary><paramref name="inner"/> with each read of <paramref name="held"/> held until <see cref="Release"/> (or disposal); every other call goes through.</summary>
+    private sealed class KeyHeldStore(ITokenStore inner, TokenKey held) : ITokenStore, IDisposable
+    {
+        private readonly TaskCompletionSource _arrived = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Completes when a read of the held key waits.</summary>
+        public Task Arrived => _arrived.Task;
+
+        public string Name => inner.Name;
+
+        public bool KeepsTokensAcrossRestarts => inner.KeepsTokensAcrossRestarts;
+
+        public Task<TokenStoreProbe> ProbeAsync(CancellationToken ct) => inner.ProbeAsync(ct);
+
+        public Task<TokenStoreResult> SaveAsync(TokenKey key, string token, CancellationToken ct) => inner.SaveAsync(key, token, ct);
+
+        public Task<TokenStoreResult> DeleteAsync(TokenKey key, CancellationToken ct) => inner.DeleteAsync(key, ct);
+
+        public async Task<TokenRead> ReadAsync(TokenKey key, CancellationToken ct)
+        {
+            if (key == held)
+            {
+                _arrived.TrySetResult();
+                await _released.Task.WaitAsync(ct);
+            }
+
+            return await inner.ReadAsync(key, ct);
+        }
+
+        public void Release() => _released.TrySetResult();
+
+        public void Dispose() => Release();
     }
 }

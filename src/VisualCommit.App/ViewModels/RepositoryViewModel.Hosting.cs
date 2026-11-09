@@ -1,9 +1,12 @@
-// The repository's hosting (docs/phase-7a-design.md 1.7, 7.10): its pull requests, the bindings of
-// git's credentials to the account and its authors' avatars, from the session's hosting. While the
-// account is signed in, the tab reads the user's URL rewrites after each refs read (one
+// The repository's hosting (docs/phase-7a-design.md 1.7, 7.10; docs/phase-7b-design.md 9.9): its pull
+// requests, the bindings of git's credentials to the accounts and its authors' avatars, from the
+// session's hosting. While any account is signed in, the tab reads the user's URL rewrites after each
+// refs read (one
 // `git config --null --get-regexp ^url\.`, D281, D290) and gives them to the hosting; a succeeded
 // network operation of its queue refreshes the pull requests (D289). A dashboard row's view model
-// in summary mode holds none (NullRepositoryHosting) until a tab adopts it.
+// in summary mode holds none (NullRepositoryHosting) until a tab adopts it. Until the first read
+// answers after a sign-in, a network operation awaits the read in flight, and the auto-fetch's
+// tick asks for one when none is (D388).
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.Core.Git;
@@ -33,7 +36,7 @@ public sealed partial class RepositoryViewModel
 
     /// <summary>The hosting's state as last applied: the "Pull requests" section and the branches' pull requests.</summary>
     [ObservableProperty]
-    public partial RepositoryHostingState HostingState { get; private set; } = RepositoryHostingState.NotGitHub;
+    public partial RepositoryHostingState HostingState { get; private set; } = RepositoryHostingState.NoHostedRemote;
 
     /// <summary>The authors' avatars as last applied (D252).</summary>
     [ObservableProperty]
@@ -45,6 +48,62 @@ public sealed partial class RepositoryViewModel
     /// splits a read from its count. No refresh awaits the read.
     /// </summary>
     private bool IsHostingQuiet => Volatile.Read(ref _rulesReading) is not { IsCompleted: false };
+
+    /// <summary>
+    /// The tab is inside D290's window while an account binds git (D388): an account wants the URL
+    /// rewrites and none of the tab's reads has answered since (a sign-in with none signed in, or the
+    /// tab's first load signed in), so its hosting's bindings are empty. A network operation started
+    /// now binds once the rules are known (<see cref="UrlRulesReadAsync"/>, or its own read), and the
+    /// auto-fetch's tick starts no fetch (<see cref="RequestUrlRules"/>). On the UI thread. False signed
+    /// out, in summary mode (a dashboard row reads the rules itself, D332), once read, closed, or with
+    /// no account binding git.
+    /// </summary>
+    internal bool AwaitsUrlRules => !IsSummary && !_disposed && Hosting.WantsUrlRewrites && !_rulesRead && _services?.Hosting.BindsGit == true;
+
+    /// <summary>
+    /// For the auto-fetch's tick inside D290's window (<see cref="AwaitsUrlRules"/>, D388), on the UI
+    /// thread: with no read in flight, which after a failed read stays so until the next refs read or
+    /// hosting change, starts the tab's read of the URL rules (one
+    /// <c>git config --null --get-regexp ^url\.</c>), whose answer ends the window, and returns true.
+    /// False, starting nothing, outside the window, while a read is in flight, or before the first
+    /// refs read.
+    /// </summary>
+    internal bool RequestUrlRules()
+    {
+        if (!AwaitsUrlRules || !IsHostingQuiet || Refs is not { } refs)
+        {
+            return false;
+        }
+
+        ReadRules(refs);
+        return true;
+    }
+
+    /// <summary>
+    /// Waits for the tab's URL-rewrites reads in flight (D388), on the UI thread, until one has given
+    /// the hosting the rules: true then, and its <see cref="IRepositoryHosting.Bindings"/> hold them.
+    /// False when the rules are still not known and no read is in flight (not started yet, or
+    /// failed), when the account no longer wants them, or when <paramref name="cancellationToken"/>
+    /// ends the wait. A read runs under the tab's lifetime, so the tab's closing ends it and the
+    /// wait. Adds no git call.
+    /// </summary>
+    internal async Task<bool> UrlRulesReadAsync(CancellationToken cancellationToken)
+    {
+        // A newer refs read's start drops an older read's answer and starts its own (ReadRulesAsync).
+        while (!_disposed && !_rulesRead && Hosting.WantsUrlRewrites && Volatile.Read(ref _rulesReading) is { IsCompleted: false } reading)
+        {
+            try
+            {
+                await reading.WaitAsync(cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return false;
+            }
+        }
+
+        return !_disposed && _rulesRead && Hosting.WantsUrlRewrites;
+    }
 
     /// <summary>The constructor's set-up, after <see cref="IsSummary"/> is set: no hosting for a dashboard row.</summary>
     private void SetUpHosting()
@@ -158,7 +217,10 @@ public sealed partial class RepositoryViewModel
         // Summary mode shows no left panel (3.1).
         if (!IsSummary)
         {
-            LeftPanel.UpdatePullRequests(HostingState, _services?.Hosting.Account?.Account.Key);
+            // The listed repository's provider's account (docs/phase-7b-design.md 9.9), and its
+            // login in the server's spelling and its state for D356's row (12.3, D366).
+            var held = HostingState.Repository is { } listed ? _services?.Hosting.AccountOf(listed.Provider) : null;
+            LeftPanel.UpdatePullRequests(HostingState, held?.Account.Key, held?.Account.Login, held?.State ?? AccountState.SignedIn);
         }
 
         // Signed out the rewrites are forgotten; a sign-in while the tab is open starts their read.

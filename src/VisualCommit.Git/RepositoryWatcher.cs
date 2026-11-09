@@ -47,7 +47,7 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     private readonly HashSet<string> _changedPaths = new(StringComparer.Ordinal);
     private readonly CancellationTokenSource _lifetime = new();
 
-    /// <summary><see cref="_lifetime"/>'s token, taken at construction: the held events' consumer still reads it once the source is disposed.</summary>
+    /// <summary><see cref="_lifetime"/>'s token, taken at construction: the held events' consumer and the ignore check still read it once the source is disposed.</summary>
     private readonly CancellationToken _lifetimeToken;
 
     /// <summary>How long each event is held before it is looked at; zero: none.</summary>
@@ -136,6 +136,15 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
     /// has arrived before it moves the clock.
     /// </summary>
     internal Action<string?>? EventCounted { get; set; }
+
+    /// <summary>
+    /// For tests: called once a burst's raise has passed its checks, the last of them Dispose's,
+    /// and before its ignore check (whether that runs or not), inside the raise's lock, on the
+    /// thread that raises it. Dispose does not take that lock and can run whole there, as on a busy
+    /// machine between those two steps; a test that disposes the watcher in this sees what the
+    /// raise does then.
+    /// </summary>
+    internal Action? RaisePassedChecks { get; set; }
 
     /// <summary>For tests of the lag (R8): how many events have been held so far; zero without a lag.</summary>
     internal int HeldEvents => Volatile.Read(ref _heldEvents);
@@ -551,6 +560,7 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
                 try
                 {
+                    RaisePassedChecks?.Invoke();
                     if (workingTree && !gitFolder && !tooMany && paths.Count > 0 && AllIgnored(paths))
                     {
                         return;
@@ -587,7 +597,10 @@ public sealed class RepositoryWatcher : IRepositoryWatcher
 
         try
         {
-            return _allIgnored(paths, _lifetime.Token).GetAwaiter().GetResult();
+            // The token taken at construction: Dispose can run between the raise's check of
+            // _disposed and this, and the disposed source's Token would throw, which would read as
+            // "git cannot say" and raise the burst after Dispose. Its cancelled token drops it.
+            return _allIgnored(paths, _lifetimeToken).GetAwaiter().GetResult();
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

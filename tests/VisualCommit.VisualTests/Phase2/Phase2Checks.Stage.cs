@@ -115,6 +115,7 @@ public partial class Phase2Checks
         app.Click(app.Find<Button>("CommitButton"));
         await WaitForHeadAsync(app, repo, Phase2Expectations.FirstCommit);
         await WaitForStagePanelAsync(app, unstaged: 7, staged: 0);
+        await WaitForCommitEndAsync(app, () => app.Find<Button>("CommitButton").Content as string == "Stage files to commit", "the disabled \"Stage files to commit\"");
         app.MoveMouse(new Point(130, 700 - 13));
         app.Capture().Save(Phase, "14b-committed");
 
@@ -170,6 +171,7 @@ public partial class Phase2Checks
         await WaitForHeadAsync(app, repo, Phase2Expectations.AmendedCommit);
         await WaitForStagePanelAsync(app, unstaged: 6, staged: 0);
         await app.WaitForAsync(() => Subjects(Graph(app))[0] == "Add usage, settings and a guide", "the amended commit in the graph");
+        await WaitForCommitEndAsync(app, () => app.Find<CheckBox>("AmendCheckBox").IsChecked == false, "\"Amend previous commit\" not ticked");
         app.MoveMouse(new Point(130, 700 - 13));
         app.Capture().Save(Phase, "15b-amended");
 
@@ -179,6 +181,7 @@ public partial class Phase2Checks
         Assert.Contains("docs/guide.md", (await repo.GitAsync("ls-tree", "-r", "--name-only", "HEAD")).StandardOutput.Split('\n'));
         Assert.DoesNotContain("A guide.md docs", FileRows(app, "UnstagedFileList"));
         Assert.Equal(string.Empty, app.Find<TextBox>("CommitSummary").Text ?? string.Empty);
+        Assert.Equal(string.Empty, app.Find<TextBox>("CommitDescription").Text ?? string.Empty);
         Assert.False(app.Find<CheckBox>("AmendCheckBox").IsChecked);
     }
 
@@ -293,6 +296,18 @@ public partial class Phase2Checks
         app.WaitForAsync(
             () => app.Session.Shell.ActiveTab.Repository is { Graph: { IsComplete: true } graph } && graph.Count > 0 && graph.Refs.Head.Sha == sha,
             $"HEAD at {sha[..7]} in the graph");
+
+    /// <summary>
+    /// Waits for <paramref name="shown"/>, a state the stage panel reaches only when the commit (or
+    /// amend) has ended. A commit ends after its refresh (docs/phase-3-design.md 1.3, steps 7 and 8),
+    /// and only then empties the boxes, unticks Amend and leaves "Committing…". The graph, HEAD and
+    /// the lists show the new commit during that refresh already, which runs once more when a
+    /// watcher event comes meanwhile (<see cref="VisualCommit.App.ViewModels.RepositoryViewModel.RefreshAsync"/>):
+    /// with the watcher's lag (D262) on a busy machine, that round outlasted check 15's next steps
+    /// (the lagged list at WP-P's merge, 2026-11-07).
+    /// </summary>
+    private static Task WaitForCommitEndAsync(ShellDriver app, Func<bool> shown, string what) =>
+        app.WaitForAsync(shown, $"the commit's end: {what}");
 
     private static async Task<List<string>> PorcelainAsync(TempRepo repo) =>
         [.. (await repo.GitAsync("status", "--porcelain", "--untracked-files=all")).StandardOutput.Split('\n', StringSplitOptions.RemoveEmptyEntries)];

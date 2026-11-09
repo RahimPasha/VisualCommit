@@ -218,11 +218,13 @@ public sealed partial class Phase6ChecksW
             // Whole where the folder fits, as on the development machine, whose temporary folder is
             // short enough, and cut with "…" where it does not (WD29): CI's Windows runner's longer
             // folder lies near the cell's width, and the scenario's random name tips it either way.
+            // Exactly where it is wider, as the cell cuts: half a pixel's grace let a folder 632.475 px
+            // wide in 632 be expected whole (CI's run 41328744135).
             var room = app.BoundsOf(block).Width;
             var full = new FormattedText(folder.Text, System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, new Typeface(block.FontFamily, block.FontStyle, block.FontWeight), block.FontSize, null).WidthIncludingTrailingWhitespace;
             Assert.True(
-                folder.IsTrimmed == (full > room + 0.5),
-                System.FormattableString.Invariant($"{name}'s folder is {full} px wide in a room of {room}: it should {(full > room + 0.5 ? "be cut with \"…\"" : "show whole")}, and it is {(folder.IsTrimmed ? "cut" : "whole")}: \"{folder.Text}\"."));
+                folder.IsTrimmed == (full > room),
+                System.FormattableString.Invariant($"{name}'s folder is {full} px wide in a room of {room}: it should {(full > room ? "be cut with \"…\"" : "show whole")}, and it is {(folder.IsTrimmed ? "cut" : "whole")}: \"{folder.Text}\"."));
         }
 
         AssertArrowsAndBackgrounds(app, shot, PartW.Names);

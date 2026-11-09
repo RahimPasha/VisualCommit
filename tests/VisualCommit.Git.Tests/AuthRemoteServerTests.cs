@@ -15,7 +15,7 @@ namespace VisualCommit.Git.Tests;
 /// held fetch, parallel connections and cancelling. Credentials go in the URL or in
 /// <c>http.extraHeader</c>; no credential helper or askpass program takes part.
 /// </summary>
-public class AuthRemoteServerTests
+public partial class AuthRemoteServerTests
 {
     /// <summary>How long any one step may take before the test fails instead of hanging.</summary>
     private static readonly TimeSpan StepTimeout = TimeSpan.FromSeconds(60);
@@ -417,6 +417,9 @@ public class AuthRemoteServerTests
         Assert.Equal(47393, AuthRemoteServer.Phase6VisualChecksPort);
         Assert.Equal(47394, AuthRemoteServer.Phase6LookVisualChecksPort);
         Assert.Equal(47395, AuthRemoteServer.Phase7aVisualChecksPort);
+        Assert.Equal(47397, AuthRemoteServer.Phase7bAzureDevOpsPort);
+        Assert.Equal(47398, AuthRemoteServer.Phase7bGitLabPort);
+        Assert.Equal(47399, AuthRemoteServer.Phase7bGitHubPort);
     }
 
     // ---- A host (docs/phase-7a-design.md 2.2, D266) --------------------------------------------------

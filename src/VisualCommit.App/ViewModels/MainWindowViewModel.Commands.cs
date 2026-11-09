@@ -1,6 +1,7 @@
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Hosting;
@@ -181,24 +182,38 @@ public partial class MainWindowViewModel
     /// <summary><c>Clone repository…</c> and its key (5.10): the active tab when it is empty, else a new tab at the end, shows the clone form with the focus in its URL box.</summary>
     public void CloneRepository() => TabForOpening().Welcome.OpenCloneFormCommand.Execute(null);
 
+    /// <summary>Set first in <see cref="CloseAll"/>: the session has ended (UI thread only).</summary>
+    private bool _closed;
+
     /// <summary>
-    /// The palette's <c>Clone from GitHub…</c> (docs/phase-7a-design.md 9.5; D299, D300): unless an
-    /// account is signed in, the window's sign-in entry first (8.5), and a cancelled or failed sign-in
-    /// stops there, with no tab and no form; then, as <see cref="CloneRepository"/>, the active tab
-    /// when it is empty, else a new tab at the end, shows the clone form with the repository browser
-    /// over it. Cancelling the browser leaves the form open.
+    /// The palette's <c>Clone from GitHub…</c>, <c>Clone from GitLab…</c> and <c>Clone from Azure
+    /// DevOps…</c> (docs/phase-7a-design.md 9.5, docs/phase-7b-design.md 11.5; D299, D300, D354):
+    /// unless <paramref name="provider"/>'s account is signed in, the window's sign-in entry for it
+    /// first (10.5), and a cancelled or failed sign-in stops there, with no tab and no form; then, as
+    /// <see cref="CloneRepository"/>, the active tab when it is empty, else a new tab at the end, shows
+    /// the clone form with the repository browser over it on that provider, through the form's own
+    /// browse command (open point 21's ruling). Cancelling the browser leaves the form open. A
+    /// session that ended while the sign-in waited (<see cref="_closed"/>) opens nothing.
     /// </summary>
-    public async Task CloneFromGitHubAsync()
+    public async Task CloneFromAccountAsync(HostingProvider provider)
     {
-        if (_tabServices.Hosting.Account is not { State: AccountState.SignedIn }
-            && (_tabServices.SignInToGitHub is not { } signIn || !await signIn()))
+        if (_tabServices.Hosting.AccountOf(provider) is not { State: AccountState.SignedIn }
+            && (_tabServices.SignIn is not { } signIn || !await signIn(provider)))
+        {
+            return;
+        }
+
+        // CloseAll cancels the sign-in's dialog, and the sign-in still answers true when the dialog
+        // had signed the account in for the session (its failed save): a form and a browser opened
+        // now would be on a closed window, the browser on the dialog layer with nothing to close it.
+        if (_closed)
         {
             return;
         }
 
         var welcome = TabForOpening().Welcome;
         welcome.OpenCloneFormCommand.Execute(null);
-        await welcome.BrowseGitHubCommand.ExecuteAsync(null);
+        await welcome.BrowseCommand.ExecuteAsync(provider);
     }
 
     /// <summary>

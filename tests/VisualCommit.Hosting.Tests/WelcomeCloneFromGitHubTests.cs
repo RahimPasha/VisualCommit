@@ -21,12 +21,23 @@ namespace VisualCommit.Hosting.Tests;
 /// and the folder name and keeps a typed name; a clone of the private octo/hello through the app's
 /// helper without a dialog and without a credential in the clone; another user's URL, and a global
 /// rule that rewrites to one, open git's credentials dialog as before; signed out, no configuration
-/// read; the tab not empty while that read is held. The fake of GitHub serves on a free port (design
-/// 16.3), so that git reaches it; the held read's test serves it in process and runs no git.
+/// read; the tab not empty while that read is held. A conditional include (fixed at phase 7b's review
+/// before the gate, docs/phase-7b-design.md 16.3) whose file rewrites the URL to another user, through
+/// <c>gitdir:</c>, <c>hasconfig:remote.*.url:</c> or a relative path, two that rewrite it only
+/// together, one that git cannot read, or one that holds a conditional include of its own, binds
+/// nothing and git asks the user's own helper first; one that holds only an email, or names no file,
+/// still binds. The fake of GitHub serves on a free port (design 16.3), so that git reaches it; the
+/// held read's test serves it in process and runs no git.
 /// </summary>
 public sealed class WelcomeCloneFromGitHubTests
 {
     private const string ConfigRead = "git config --show-scope --show-origin -z --list";
+
+    /// <summary>The start of a read of a conditional include's file (D331, fixed at phase 7b's review before the gate).</summary>
+    private const string IncludeRead = "git config --file ";
+
+    /// <summary>The first git whose <c>includeIf "hasconfig:remote.*.url:"</c> applies.</summary>
+    private static readonly GitVersion HasConfigVersion = new(2, 36, 0);
 
     private static CancellationToken Cancelled => TestContext.Current.CancellationToken;
 
@@ -47,7 +58,7 @@ public sealed class WelcomeCloneFromGitHubTests
         {
             await OpenFormAsync(app);
             AssertNoButton(app);
-            Assert.False(Welcome(app).ShowsGitHubButton);
+            Assert.False(Welcome(app).ShowsBrowseButton);
         }
         finally
         {
@@ -151,6 +162,7 @@ public sealed class WelcomeCloneFromGitHubTests
             var read = calls.IndexOf(ConfigRead);
             var clone = calls.IndexOf($"git clone --progress -- {Scenarios.HostingUrl("octo/hello", served.GitHub.Port)} hello");
             Assert.True(read >= 0 && clone > read, "The clone did not read git's configuration first:\n" + string.Join('\n', calls));
+            Assert.DoesNotContain(calls, call => call.StartsWith(IncludeRead, StringComparison.Ordinal));
             var lines = app.LogLinesSince(log);
             Assert.Contains(lines, line => line.Contains($"hello: Clone: git's credential get for 127.0.0.1:{served.GitHub.Port} answered from the account.", StringComparison.Ordinal));
             Assert.DoesNotContain(lines, line => line.Contains("hello: Clone: git asks (", StringComparison.Ordinal));
@@ -208,6 +220,240 @@ public sealed class WelcomeCloneFromGitHubTests
         {
             await OpenSignedInFormAsync(app, served);
             await AssertAsksAsync(app, Scenarios.HostingUrl("octo/hello", served.GitHub.Port), clones.Path, readsConfiguration: true);
+            Assert.DoesNotContain(app.GitCalls(), call => call.CommandText.StartsWith(IncludeRead, StringComparison.Ordinal));
+        }
+        finally
+        {
+            app.Dispose();
+        }
+
+        End(app, data, served, clones.Path);
+    }
+
+    /// <summary>
+    /// A global <c>includeIf "gitdir:"</c> over the clone's parent whose file rewrites the URL to another
+    /// user: the outside read sees no rule of it, <c>git clone</c> applies it (D331, fixed at phase 7b's
+    /// review before the gate). The clone binds nothing and git asks the user's own helper first, then
+    /// the app's dialog (D82's order); a git that keeps a URL's user after a refusal asks the helper for
+    /// that user, one that loses it (plan risk 43, D389) asks without it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_gitdir_include_whose_rule_rewrites_the_url_to_another_user_binds_nothing_and_asks_the_user_s_helper()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("welcome clone gitdir");
+        using var clones = new TempDirectory("clones");
+        using var files = new TempDirectory("includes");
+        var rules = Path.Combine(files.Path, "rules.gitconfig");
+        File.WriteAllText(rules, AnotherUserRule(served));
+        var helper = SeedWithUserHelper(data, files, $"[includeIf \"gitdir:{Path.GetFileName(clones.Path)}/\"]\n\tpath = {GitPath(rules)}\n");
+        var app = ShellDriver.Start(data.Path, gitHub: served.GitHub);
+        try
+        {
+            await OpenSignedInFormAsync(app, served);
+            await AssertIncludeUnbindsAsync(app, served, clones.Path, helper, "rewrites the clone's URL", includeReads: 1);
+            await AssertGitTookAliceAsync(served, helper);
+        }
+        finally
+        {
+            app.Dispose();
+        }
+
+        End(app, data, served, clones.Path);
+    }
+
+    /// <summary>
+    /// The same with <c>includeIf "hasconfig:remote.*.url:"</c> naming the clone's URL, which <c>git
+    /// clone</c> applies since Git 2.36: on such a git the server sees alice's request too.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_hasconfig_include_whose_rule_rewrites_the_url_to_another_user_binds_nothing_and_asks_the_user_s_helper()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("welcome clone hasconfig");
+        using var clones = new TempDirectory("clones");
+        using var files = new TempDirectory("includes");
+        var rules = Path.Combine(files.Path, "rules.gitconfig");
+        File.WriteAllText(rules, AnotherUserRule(served));
+        var helper = SeedWithUserHelper(data, files, $"[includeIf \"hasconfig:remote.*.url:http://127.0.0.1:{served.GitHub.Port}/**\"]\n\tpath = {GitPath(rules)}\n");
+        var app = ShellDriver.Start(data.Path, gitHub: served.GitHub);
+        try
+        {
+            await OpenSignedInFormAsync(app, served);
+            await AssertIncludeUnbindsAsync(app, served, clones.Path, helper, "rewrites the clone's URL", includeReads: 1);
+            var measure = await GitUrlUser.MeasuredAsync();
+            Assert.True(GitVersion.TryParse(measure.GitVersion, out var version), $"Git's version could not be read: {measure}.");
+            if (version >= HasConfigVersion)
+            {
+                await AssertGitTookAliceAsync(served, helper);
+            }
+        }
+        finally
+        {
+            app.Dispose();
+        }
+
+        End(app, data, served, clones.Path);
+    }
+
+    /// <summary>
+    /// A relative include path is read beside the file that holds the directive, as git reads it: the
+    /// rule in <c>rules.gitconfig</c> next to the global file binds nothing.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_relative_include_path_is_read_beside_the_global_file_and_its_rule_binds_nothing()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("welcome clone relative");
+        using var clones = new TempDirectory("clones");
+        using var files = new TempDirectory("includes");
+        var helper = SeedWithUserHelper(data, files, $"[includeIf \"gitdir:{Path.GetFileName(clones.Path)}/\"]\n\tpath = rules.gitconfig\n");
+        File.WriteAllText(Path.Combine(Path.GetDirectoryName(ShellDriver.GlobalGitConfigPath(data.Path))!, "rules.gitconfig"), AnotherUserRule(served));
+        var app = ShellDriver.Start(data.Path, gitHub: served.GitHub);
+        try
+        {
+            await OpenSignedInFormAsync(app, served);
+            await AssertIncludeUnbindsAsync(app, served, clones.Path, helper, "rewrites the clone's URL", includeReads: 1);
+            await AssertGitTookAliceAsync(served, helper);
+        }
+        finally
+        {
+            app.Dispose();
+        }
+
+        End(app, data, served, clones.Path);
+    }
+
+    /// <summary>An included file git cannot read (a broken line) binds nothing, whatever its condition: what it holds is not known.</summary>
+    [AvaloniaFact]
+    public async Task An_included_file_git_cannot_read_binds_nothing()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("welcome clone unreadable");
+        using var clones = new TempDirectory("clones");
+        using var files = new TempDirectory("includes");
+        var broken = Path.Combine(files.Path, "broken.gitconfig");
+        File.WriteAllText(broken, "[url \"http://alice@127.0.0.1/\"\n\tinsteadOf = x\n");
+        var helper = SeedWithUserHelper(data, files, $"[includeIf \"gitdir:{Path.GetFileName(files.Path)}-elsewhere/\"]\n\tpath = {GitPath(broken)}\n");
+        var app = ShellDriver.Start(data.Path, gitHub: served.GitHub);
+        try
+        {
+            await OpenSignedInFormAsync(app, served);
+            await AssertIncludeUnbindsAsync(app, served, clones.Path, helper, "could not be read", includeReads: 1);
+        }
+        finally
+        {
+            app.Dispose();
+        }
+
+        End(app, data, served, clones.Path);
+    }
+
+    /// <summary>An included file that holds a conditional include of its own binds nothing: only the new repository can judge its condition.</summary>
+    [AvaloniaFact]
+    public async Task An_included_file_with_a_conditional_include_of_its_own_binds_nothing()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("welcome clone nested");
+        using var clones = new TempDirectory("clones");
+        using var files = new TempDirectory("includes");
+        var outer = Path.Combine(files.Path, "outer.gitconfig");
+        File.WriteAllText(outer, $"[includeIf \"onbranch:main\"]\n\tpath = {GitPath(Path.Combine(files.Path, "inner.gitconfig"))}\n");
+        var helper = SeedWithUserHelper(data, files, $"[includeIf \"gitdir:{Path.GetFileName(clones.Path)}/\"]\n\tpath = {GitPath(outer)}\n");
+        var app = ShellDriver.Start(data.Path, gitHub: served.GitHub);
+        try
+        {
+            await OpenSignedInFormAsync(app, served);
+            await AssertIncludeUnbindsAsync(app, served, clones.Path, helper, "holds a conditional include of its own", includeReads: 1);
+        }
+        finally
+        {
+            app.Dispose();
+        }
+
+        End(app, data, served, clones.Path);
+    }
+
+    /// <summary>
+    /// Two conditional includes that rewrite the URL only together (the review before the gate's second
+    /// look at D331): the first, before the outside rule that leaves the URL as it is, names alice's base
+    /// with a prefix the URL does not start with; the second, after it, gives alice's base the outside
+    /// rule's prefix. Each beside the outside rules alone leaves the URL to the outside rule, which git
+    /// sees first; both together put alice's base first, and git breaks the tie of equal prefixes for
+    /// it. The clone binds nothing, after a read of each file, and git takes alice's URL.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Two_includes_that_rewrite_the_url_only_together_bind_nothing()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("welcome clone tie");
+        using var clones = new TempDirectory("clones");
+        using var files = new TempDirectory("includes");
+        var web = $"http://127.0.0.1:{served.GitHub.Port}/";
+        var first = Path.Combine(files.Path, "first.gitconfig");
+        File.WriteAllText(first, $"[url \"http://alice@127.0.0.1:{served.GitHub.Port}/\"]\n\tinsteadOf = http://elsewhere.invalid/\n");
+        var second = Path.Combine(files.Path, "second.gitconfig");
+        File.WriteAllText(second, AnotherUserRule(served));
+        var condition = $"[includeIf \"gitdir:{Path.GetFileName(clones.Path)}/\"]";
+        var helper = SeedWithUserHelper(
+            data,
+            files,
+            $"{condition}\n\tpath = {GitPath(first)}\n[url \"{web}\"]\n\tinsteadOf = {web}\n{condition}\n\tpath = {GitPath(second)}\n");
+        var app = ShellDriver.Start(data.Path, gitHub: served.GitHub);
+        try
+        {
+            await OpenSignedInFormAsync(app, served);
+            await AssertIncludeUnbindsAsync(app, served, clones.Path, helper, "rewrites the clone's URL", includeReads: 2);
+            await AssertGitTookAliceAsync(served, helper);
+        }
+        finally
+        {
+            app.Dispose();
+        }
+
+        End(app, data, served, clones.Path);
+    }
+
+    /// <summary>
+    /// A conditional include whose file holds only <c>user.email</c>, and one whose file is not there
+    /// (git ignores it), change no URL: the clone is bound and takes the account's token without a
+    /// dialog, after one read of each directive's file.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task An_include_of_only_an_email_and_a_missing_include_still_bind()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("welcome clone email");
+        using var clones = new TempDirectory("clones");
+        using var files = new TempDirectory("includes");
+        var email = Path.Combine(files.Path, "email.gitconfig");
+        File.WriteAllText(email, "[user]\n\temail = someone@example.invalid\n");
+        ShellDriver.SeedGlobalGitConfig(
+            data.Path,
+            $"[includeIf \"gitdir:{Path.GetFileName(clones.Path)}/\"]\n\tpath = {GitPath(email)}\n" +
+            $"[includeIf \"hasconfig:remote.*.url:http://127.0.0.1:{served.GitHub.Port}/**\"]\n\tpath = {GitPath(Path.Combine(files.Path, "missing.gitconfig"))}\n");
+        var app = ShellDriver.Start(data.Path, gitHub: served.GitHub);
+        try
+        {
+            await OpenSignedInFormAsync(app, served);
+            app.ReplaceText("CloneUrlBox", Scenarios.HostingUrl("octo/hello", served.GitHub.Port));
+            app.TypeInto("CloneParentBox", clones.Path);
+            var mark = await app.QuietCallMarkAsync();
+            var log = app.LogMark();
+
+            app.Click(app.FindByAutomationId("CloneStartButton"));
+            await app.WaitForRepositoryAsync();
+            await app.WaitForWatchersQuietAsync();
+
+            Assert.DoesNotContain(app.Session.Services.DialogHost.Open, dialog => dialog is PromptDialogViewModel);
+            var calls = app.GitCalls().Where(call => call.Sequence > mark).Select(call => call.CommandText).ToList();
+            var read = calls.IndexOf(ConfigRead);
+            var clone = calls.IndexOf($"git clone --progress -- {Scenarios.HostingUrl("octo/hello", served.GitHub.Port)} hello");
+            var includes = calls.Select((call, index) => (call, index)).Where(pair => pair.call.StartsWith(IncludeRead, StringComparison.Ordinal)).Select(pair => pair.index).ToList();
+            Assert.True(read >= 0 && clone > read && includes.Count == 2 && includes.All(index => index > read && index < clone), "The clone did not read the configuration and each include once, in that order:\n" + string.Join('\n', calls));
+            var lines = app.LogLinesSince(log);
+            Assert.Contains(lines, line => line.Contains($"hello: Clone: git's credential get for 127.0.0.1:{served.GitHub.Port} answered from the account.", StringComparison.Ordinal));
+            Assert.DoesNotContain(lines, line => line.Contains("Cloning: a conditional include", StringComparison.Ordinal));
         }
         finally
         {
@@ -300,7 +546,7 @@ public sealed class WelcomeCloneFromGitHubTests
         var dialog = await app.WaitForDialogAsync<CredentialsViewModel>();
         Assert.True(welcome.IsCloning);
         Assert.False(Button(app).IsEffectivelyEnabled);
-        Assert.False(welcome.BrowseGitHubCommand.CanExecute(null));
+        Assert.False(welcome.BrowseCommand.CanExecute(null));
         Assert.True(Button(app).IsEffectivelyVisible);
 
         dialog.CancelCommand.Execute(null);
@@ -314,6 +560,62 @@ public sealed class WelcomeCloneFromGitHubTests
         Assert.DoesNotContain(lines, line => line.Contains("answered from the account", StringComparison.Ordinal));
         Assert.Contains(lines, line => line.Contains("Clone: git asks (", StringComparison.Ordinal));
     }
+
+    /// <summary>
+    /// Starts a clone of octo/hello that a conditional include keeps unbound (<see cref="AssertAsksAsync"/>),
+    /// then checks that the scope bound nothing, that <paramref name="includeReads"/> include files were
+    /// read, that the Debug line gives <paramref name="reason"/> and that git asked the user's own helper
+    /// (<paramref name="helper"/>, its record) first, as D82's order has it.
+    /// </summary>
+    private static async Task AssertIncludeUnbindsAsync(ShellDriver app, ServedHosting served, string parent, string helper, string reason, int includeReads)
+    {
+        var mark = await app.QuietCallMarkAsync();
+        var log = app.LogMark();
+        await AssertAsksAsync(app, Scenarios.HostingUrl("octo/hello", served.GitHub.Port), parent, readsConfiguration: true);
+
+        var lines = app.LogLinesSince(log);
+        Assert.True(File.Exists(helper), "Git did not ask the user's own helper.");
+        Assert.Contains($"host=127.0.0.1:{served.GitHub.Port}", File.ReadAllText(helper), StringComparison.Ordinal);
+        Assert.DoesNotContain(lines, line => line.Contains("Clone: ", StringComparison.Ordinal) && line.Contains("URLs bound to the account", StringComparison.Ordinal));
+        Assert.Contains(lines, line => line.Contains($"Cloning: a conditional include of git's configuration {reason}; the clone goes without the account's token (D82's order).", StringComparison.Ordinal));
+        var calls = app.GitCalls().Where(call => call.Sequence > mark).Select(call => call.CommandText).ToList();
+        Assert.Equal(includeReads, calls.Count(call => call.StartsWith(IncludeRead, StringComparison.Ordinal)));
+    }
+
+    /// <summary>
+    /// Git applied the rule that rewrites the URL to alice: the server saw a request with alice's name,
+    /// libcurl's retry with the URL's user, on every git; and on a git that keeps a URL's user after a
+    /// refusal (<see cref="GitUrlUser"/>) the user's helper (<paramref name="helper"/>, its record) was
+    /// asked for alice. A git that loses it (plan risk 43, D389, CI's macOS) asks the helper without a
+    /// user, which <see cref="AssertIncludeUnbindsAsync"/> has checked.
+    /// </summary>
+    private static async Task AssertGitTookAliceAsync(ServedHosting served, string helper)
+    {
+        Assert.Contains(served.GitHub.GitRequests, request => request.GivenUserName == "alice");
+        if ((await GitUrlUser.MeasuredAsync()).Kind == UrlUserAfterRefusal.Kept)
+        {
+            Assert.Contains("username=alice", File.ReadAllText(helper), StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>A rule that rewrites the fake's URLs to the user alice, as a multi-account set-up keeps it in an included file.</summary>
+    private static string AnotherUserRule(ServedHosting served) =>
+        $"[url \"http://alice@127.0.0.1:{served.GitHub.Port}/\"]\n\tinsteadOf = http://127.0.0.1:{served.GitHub.Port}/\n";
+
+    /// <summary>
+    /// Seeds the global configuration of <paramref name="data"/> with the user's own credential helper,
+    /// which records what git asks it in <c>user-helper.txt</c> of <paramref name="files"/> and answers
+    /// nothing, then <paramref name="more"/>; returns the record's path.
+    /// </summary>
+    private static string SeedWithUserHelper(TempDirectory data, TempDirectory files, string more)
+    {
+        var record = Path.Combine(files.Path, "user-helper.txt");
+        ShellDriver.SeedGlobalGitConfig(data.Path, $"[credential]\n\thelper = \"!f() {{ cat >> '{GitPath(record)}'; }}; f\"\n{more}");
+        return record;
+    }
+
+    /// <summary>A path as a configuration file writes it: forward slashes.</summary>
+    private static string GitPath(string path) => path.Replace('\\', '/');
 
     private static async Task OpenSignedInFormAsync(ShellDriver app, ServedHosting served)
     {
@@ -415,6 +717,8 @@ public sealed class WelcomeCloneFromGitHubTests
             await Task.Delay(Timeout.Infinite, cancellationToken);
             throw new UnreachableException();
         }
+
+        public Task<IReadOnlyList<GitConfigValue>> ReadIncludedAsync(GitConfigValue directive, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<GitIdentityRead> ReadIdentityAsync(string workingTree, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
