@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-09
+Last updated: 2026-11-18
 
 Remote: `origin` is https://github.com/RahimPasha/VisualCommit.git, a public repository. The local
 folder on the development machine is still named "Visual Git"; that has no effect on the build.
@@ -237,9 +237,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 ### Next step
 
 The owner said "Start phase 8" on 2026-11-09 and gave the first answers before its design ("Waiting
-on the owner", "For phase 8, before its design"). No phase branch exists yet. Next: the owner's
-conversation with the lead on some legal and professional points, which the two signing answers
-wait for; then the questions not yet asked; then the split's decision (D397) and phase 8a's start.
+on the owner", "For phase 8, before its design"). On 2026-11-18 the owner paused to reconsider the
+licence ("Waiting on the owner", "The licence"). No phase branch exists yet. Next, in a session
+where the owner says "Start phase 8" again: the owner's choice of licence, recorded as a decision
+that keeps or replaces D6 and carried into `LICENSE`, `README.md`, R6 and the notices before
+anything is released; the rest of the owner's legal and professional points, which the two signing
+answers wait for; then the questions not yet asked; then the split's decision and phase 8a's start.
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -249,16 +252,23 @@ every commit.
 ### Notes for whoever resumes
 
 - Nothing is in flight. `master` holds everything; the working tree was clean when phase 7b was
-  merged (`3dc7f79`). Left on the machine, all local: seven worktrees under
-  `D:/Projects/Personal/vc-wt/`, 24 `wip/p7b-*` branches (all merged but `wip/p7b-palette-growth`) and
-  two `backup/*` branches, which must never be pushed (D396); the 7b handoff's Known issues and "Do
-  first", step 3, say what to do with them. Phase 7b's gate references and work lie outside the
-  repository: `D:/Projects/Personal/gate7b-reference/` (phases 0 to 7a's pictures as `master` drew
-  them before 7b, and 7a's gate's real-window files) and `D:/Projects/Personal/phase7b-work/` (the
-  research notes, the design's drafts, the review's findings, the lead's rulings, the live runs'
-  `run.txt` copies and, in `gate/`, the gate's logs, the counted round's copy `round-3dc0887/`, whose
-  `visual/` is phase 8's references, and the inspection's verdicts). Phase 7a's lie in
-  `D:/Projects/Personal/gate7a-reference/` and `D:/Projects/Personal/phase7a-work/`.
+  merged (`3dc7f79`). **Cleaned up on 2026-11-18, at the owner's word** (the 7b handoff's "Do
+  first", step 3): the seven worktrees under `D:/Projects/Personal/vc-wt/` (each clean, its branch
+  merged) with that folder, and the 23 merged `wip/p7b-*` branches. Left, all local:
+  `wip/p7b-palette-growth` (the refuted fix, plan risk 46) and the two `backup/*` branches, which
+  must never be pushed (D396); whether they go is the owner's. Removed outside the repository, as
+  D240 removed phase 5's: `gate6-reference`, `gate6-inspection`, `gate7a-reference` and
+  `gate7b-reference` under `D:/Projects/Personal/` (the gate folders of an accepted phase serve no
+  later gate; the docs that name them are history), and the 622 .NET build output folders (`bin`
+  and `obj`, 6.3 GB) inside the `verify/` and `review/` scratch of
+  `D:/Projects/Personal/phase7b-work/`. Still there: `D:/Projects/Personal/phase7b-work/` (about
+  6 GB: the research notes, the design's drafts, the review's findings, the lead's rulings, the
+  live runs' `run.txt` copies, the verifiers' source copies and pictures, the kept gits of the 7b
+  handoff's Environment in `research/scratch-g3-git/` and `verify/git243/git-2.43.0-hb/`, and, in
+  `gate/`, the gate's logs, the counted round's copy `round-3dc0887/`, whose `visual/` is phase
+  8's references, and the inspection's verdicts) and `D:/Projects/Personal/phase7a-work/` (1.2 GB:
+  phase 7a's notes, live run copies and pictures; history only). D: had 19.5 GB free afterwards
+  (12.7 GB before), C: 25.4 GB.
 - **The review before phase 7 was applied on 2026-10-28** (D239 to D248, on `master`): the build
   trim (`Directory.Build.targets`, D239), the owner's Claude Code settings and a one-time clean-up
   of disk (D240), the split of phase 7 and the weekly allowance (D241), the rules for agents, the
@@ -389,7 +399,7 @@ every commit.
   2:00), and the phase is to be split, 8a the in-app work (the first-run Git check, the
   accessibility and performance passes, the small fixes, icons, notices and the user guide) and 8b
   the packaging (installers, auto-update, signing, notarisation, the beta and the full regression
-  against the installed build). The split's decision (D397, amending D241) is still to be written,
+  against the installed build). The split's decision (the next free number, amending D241) is still to be written,
   with the phases' names and branches and CLAUDE.md's counting of phases in the same commit. **On
   hold at the owner's word**: the Windows code signing and the Apple Developer membership, until
   the owner has talked through some legal and professional points with the lead. The other
@@ -398,6 +408,30 @@ every commit.
   its price could not be read; a Microsoft Q&A answer of March 2026, marked AI-generated, limits
   new individual sign-ups to the US and Canada; SignPath Foundation signs open source for free
   after approval and is itself the publisher shown; the Apple Developer Program costs $99 a year.
+- **The licence (D6), reopened by the owner on 2026-11-18**; no choice made yet. The owner's aim:
+  no direct income from the product; wide free use; the owner's name kept visible, for reputation.
+  What the lead found and told the owner that day:
+  - The owner alone decides: all 1,809 commits carry the owner's identity, and GitHub showed no
+    fork, star, issue or outside pull request. A change binds new versions only; what has been
+    public under MIT since 2026-10-10 stays under MIT for whoever has a copy.
+  - The owner's name is nowhere in the product today: `LICENSE` reads "VisualCommit contributors"
+    (settled 2026-10-06) and the app has no About screen.
+  - The options laid out: MIT with the owner's name in the copyright line; Apache-2.0 with a
+    `NOTICE` file and its trademark clause; GPL-3.0 with an attribution term under its section
+    7(b), which keeps forks open and the credit in their legal notices. Every dependency (MIT,
+    ISC, OFL, Apache-2.0) fits all three. A non-commercial or source-available licence is not open
+    source and was advised against. The lead leans to GPL-3.0 if a closed, renamed copy would
+    bother the owner, and to MIT with the name otherwise.
+  - Two cautions: 1,804 commits carry an AI co-author trailer, and copyright in AI-written code is
+    unsettled (in the US only human authorship is protected), which weakens the enforcement of any
+    licence term, restrictive ones most; and the owner's employment terms on outside work are the
+    owner's to read.
+  - Beside the licence, for the name: an About screen, the README, the publisher name on signed
+    installers (which ties this to the signing answers above), and a short trademark note that a
+    fork takes another name.
+  The choice becomes a decision (D397 on) that keeps or replaces D6, with `LICENSE`, `README.md`,
+  `requirements.md`'s R6 and `THIRD-PARTY-NOTICES.md` changed in the same commit, before phase 8's
+  design, whose notices, About screen and installers depend on it.
 - **Phase 7a's acceptance**: given on 2026-10-31; merged into `master` (`019e68a`); its gate ran on
   `a2c312a`. The tab the real-window pass opened on the fake's page was closed by the owner the
   same day (D321). Still open from the phase, below: risk 39's sign-in dialog in a bound tab and
