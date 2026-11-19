@@ -131,7 +131,7 @@ commits) must still open and work normally.
 | R3 | Hosting tokens stored in the OS keychain, never in plain files; where no keychain can be reached, kept for the session only (D253) |
 | R4 | First-run check for Git, with guidance when it is missing or too old |
 | R5 | Original name, icons and visual design; no GitKraken branding or assets, and no "Git" in the product name (Git trademark policy) |
-| R6 | MIT licence file and third-party notices |
+| R6 | MIT licence file and third-party notices; an About screen in the app that names its creator (D398) |
 | R7 | Keyboard access to all main actions |
 
 ## Better than GitKraken
