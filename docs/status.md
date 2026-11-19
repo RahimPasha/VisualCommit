@@ -18,7 +18,7 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 6. Multi-repo and productivity | Done | `phase/6-multi-repo` | [phase-6](handoffs/phase-6.md) | [phase-6](test-reports/phase-6.md) |
 | 7a. Hosting foundation and GitHub | Done | `phase/7a-hosting-github` | [phase-7a](handoffs/phase-7a.md) | [phase-7a](test-reports/phase-7a.md) |
 | 7b. Azure DevOps and GitLab | Done | `phase/7b-hosting-azure-gitlab` | [phase-7b](handoffs/phase-7b.md) | [phase-7b](test-reports/phase-7b.md) |
-| 8a. Release readiness in the app | Not started | `phase/8a-release-readiness` | | |
+| 8a. Release readiness in the app | In progress | `phase/8a-release-readiness` | | |
 | 8b. Packaging and public beta | Not started | `phase/8b-packaging-beta` | | |
 
 States: Not started, In progress, Blocked (cannot continue or close without the owner, or without
@@ -27,13 +27,14 @@ acceptance (whole gate passed, not yet merged), Done (merged).
 
 ## Current phase
 
-None in progress. Phase 7b was accepted by the owner on 2026-11-08 and merged into `master` (merge
-commit `3dc7f79`); its gate ran on `cb9af6d`. Phase 7a was accepted on 2026-10-31 (merge commit
+Phase 8a, "Release readiness in the app" (plan.md's "Phase 8a"; D399), is in progress on
+`phase/8a-release-readiness`, started on 2026-11-19 from `master` at `66063f3`. It is the in-app
+half of the public release; 8b, the packaging, follows it. Phase 7b was accepted by the owner on
+2026-11-08 and merged into `master` (merge commit `3dc7f79`); its gate ran on `cb9af6d`. Phase 7a was accepted on 2026-10-31 (merge commit
 `019e68a`), phase 6 on 2026-10-24 (merge commit `3f34c87`), phase 5 on 2026-10-17 (merge commit
 `c299939`), phase 4 on 2026-10-12 (merge commit `ce5f337`), phase 3 on 2026-10-11 (merge commit
 `8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit
-`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). The next phase to start is phase 8a,
-the in-app half of the public release: phase 8 is split into 8a and 8b (D399).
+`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`).
 
 Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
 that both passes of the gate ran on (or, by D246, the real-window pass's commit when it changes
@@ -42,16 +43,105 @@ nothing but docs changed after it.
 
 ### Progress
 
-Empty until a phase starts. At the start of a phase this becomes a checklist: the phase's
-"Delivers" items from `plan.md` split into small steps, then its visual checks, then the closing
-steps from `CLAUDE.md` and a step for reading the CI run of the gate's commit. Each item is ticked
-in the commit that completes it, and each tick, like the start of each stage, records the share
-of the plan's weekly allowance used at that point, as `/usage` or the status line's seven-day
-percentage shows it (D241): a phase or a stage starts only when the share left covers it
-(`plan.md`, "Workflow"). The allowance resets on Thursdays at 2:00; a session cannot read `/usage`
-itself, so it asks the owner for the share. Number the steps plainly; do not label them C1, C2 and
-so on, which are requirement numbers. Phase 7b's checklist, with a note on each step, is in this
-file as of `3dc7f79`'s second parent (`git show 1c2eca3:docs/status.md`).
+Each item is ticked in the commit that completes it, and each tick, like the start of each stage,
+records the share of the plan's weekly allowance used at that point (D241). The start runs through
+the reset of Thursday 2026-11-19 at 2:00 without that check until the design is reviewed (D415);
+from step 4 on the session asks the owner for the share before each stage, and a checkpoint
+records the answer, or "share not read". The numbers are plain step numbers, not requirement
+numbers. The design (step 3) splits the steps below into work packages and says how they map onto
+them. Phase 7b's checklist, with a note on each step, is in this file as of `3dc7f79`'s second
+parent (`git show 1c2eca3:docs/status.md`).
+
+Start:
+
+- [x] 1. Phase branch created from `master` at `66063f3`, phase set to "In progress", this
+  checklist. The owner's answers before the design were given before the start (D399 to D415, in
+  five sittings on 2026-11-18 and 19, after the two workflows of the Notes' "Phase 8's start").
+  `dotnet build` passed on `master` (0 warnings, 2 min 38 s). The baseline that D245 asks for
+  after the Windows updates of 2026-11-11 was run and is no clean one (Notes). (2026-11-19. Week:
+  under 50 % used at 22:00 on 2026-11-18; the reset is at 2:00 on 2026-11-19, D415.)
+
+Design:
+
+- [ ] 2. Before the drafting: the search of the web for other uses of the name "VisualCommit"
+  (D412), reported to the owner; the lead's rulings on the questions the readers left to the
+  design ("Waiting on the owner", "Left to 8a's design"); and what the design needs measured and
+  no brief holds: what the tests do on git 2.34.1 (D406; nothing below 2.43 has run), a pixel scan
+  of phase 7b's pictures for each contrast fix's reach (D410), where Avalonia 12.1.3 sets the
+  placeholder's opacity, how the custom-drawn graph can expose a row to UI Automation (D411), the
+  macOS application menu (D409), and how the first-run states are scripted in both harnesses.
+- [ ] 3. Design in `docs/phase-8a-design.md` (D243: about 150 to 200 KB, its decisions only in
+  `decisions.md`; the 7b handoff's "Do first", step 4): the scope and what stays out, how the code
+  and the harness name 8a (the 7b handoff's "Naming", with `8a` for `8`), its lagged list (D262),
+  an estimate of what the phase adds to the default run (1 h 31 min 48 s at 7b's gate) and to the
+  real-window pass (33 min 35 s), the earlier pictures each change touches, the shared contracts,
+  and the work packages, each section a builder's brief of at most about 25 KB (D242). Its review:
+  3 or 4 lenses, git safety and tests/gate among them, a verifier only for each blocker and major;
+  its decisions recorded (D416 on).
+
+Build (the design may reorder and regroup these into waves; each part's visual checks are written
+into `docs/test-reports/phase-8a.md` and committed just before its package is built, D244):
+
+- [ ] 4. First package: `Directory.Build.props`' `Authors` and `Copyright` take the owner's name
+  (D397) and `VisualCommit.slnx`'s comment on the live project is corrected, in the phase's first
+  code commit; the contracts and stubs the packages build on; the walk-through project
+  `tests/VisualCommit.VisualTests.Phase8a` with `scripts/time-scripted-check.sh`'s `8a` case, and
+  CLAUDE.md's Commands rows for it.
+- [ ] 5. The git floor (D406): the CI job on stock Ubuntu 22.04 with git 2.34.1; what it finds
+  fixed; `GitVersion.Minimum` 2.34 with the "too old" texts, `requirements.md`, the README and
+  CLAUDE.md's prerequisites; D277's branch for a git below 2.31 removed.
+- [ ] 6. First-run experience (R4, D405): the detection's states (missing, too old, not working,
+  with git's own message for a broken `~/.gitconfig`, a missing askpass helper), "Check again"
+  without a restart, "Choose git.exe" with its setting, the winget install after a confirm, and the
+  macOS and Linux guidance; the OpenSSH note (risk 15) and the Accounts section's netrc note (risk
+  35) as the design rules.
+- [ ] 7. The contrast fixes in one round (D410): the placeholder, the dark danger colour with the
+  dark label, the dark accent on hovered and selected rows; `ThemeTokensTests`' known gaps removed;
+  reference pictures and the comparison by region.
+- [ ] 8. Keyboard-accessibility pass (R7, D411): the keyboard gaps the design confirms, an
+  accessible name on every control with a test that sweeps them, the graph's selected row exposed
+  to UI Automation, the focus after "Choose" in the repository browser and the loading diff's late
+  focus (phase 7a's design 17, items 5 and 11), and the commit boxes and Amend while "Committing…"
+  runs (D392).
+- [ ] 9. The About screen (R6, D398, D409) and the complete third-party notices, reachable from
+  the app.
+- [ ] 10. Icons and branding (R5, D407): the candidates, the owner's choice, the tool that makes
+  the icon's files, the window's and the executable's icon, and the README's "Name" note naming
+  the icon.
+- [ ] 11. Performance pass: the measures and the end the design sets; the "before" and "after"
+  numbers on the rested laptop.
+- [ ] 12. User guide (D408): the pages, the workflow that builds the site, the pictures in both
+  themes, the app's links to it, and GitHub Pages turned on (the owner).
+- [ ] 13. What the design adds from the readers' findings: two instances at once, the macOS data
+  folder checked by CI's macOS job, and any other item it rules into the phase.
+- [ ] 14. The real-window part for 8a's checks (`Phase8aRealWindowPass`), written with the
+  packages; the lagged runs at each wave's merge (D262).
+- [ ] 15. An independent review of the code before the gate, each finding verified, the confirmed
+  ones fixed with tests.
+
+Gate:
+
+- [ ] 16. The live command once before the gate's pictures, the owner told (D335). It needs the
+  three tokens made again first: GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on
+  2026-12-04 ("Waiting on the owner").
+- [ ] 17. The visual test gate: D246's two runs of 8a's real-window checks on their own, the
+  owner present; `dotnet test` and the real-window pass on one commit; the list of pictures; the
+  live command on the counted round; every picture of both passes inspected, the changed earlier
+  ones against phase 7b's references (`D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual/`);
+  the checks by hand (the Narrator walk-through, D411; phase 6's System step, D224);
+  `docs/test-reports/phase-8a.md` completed.
+
+Closing (CLAUDE.md's "Closing a phase"):
+
+- [ ] 18. `docs/architecture.md` describes what is built.
+- [ ] 19. `docs/plan.md`: what 8a did not deliver moved to the phase that owns it, the risks
+  updated.
+- [ ] 20. `docs/handoffs/phase-8a.md` written from the template.
+- [ ] 21. The cold-read check, and its gaps fixed.
+- [ ] 22. The CI run of the gate's commit read and recorded here, with each job's result.
+- [ ] 23. This file: links to the handoff and the report, the "Gate commit", what waits on the
+  owner, and the state "Awaiting acceptance" or "Blocked"; the owner told what passed, what did not
+  and what needs a decision.
 
 ### CI
 
@@ -247,18 +337,17 @@ professional point is left, so the hold on the two signing questions was lifted.
 Opus agents then read the repo for phase 8 and researched the release questions on the web (Notes,
 "Phase 8's start"), and the owner answered the questions in five sittings that night: D399 (the
 split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" sections,
-`requirements.md`, the README and CLAUDE.md's counting of phases. No phase branch exists yet.
+`requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
+night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next, in this order (the owner said to go on through the reset, D415):
-1. "Start a phase" for 8a (CLAUDE.md): `git switch -c phase/8a-release-readiness --no-track
-   origin/master`; in this file set 8a to "In progress" and build the Progress checklist from
-   plan.md's "Phase 8a"; commit and push the branch.
-2. The search of the web for other uses of the name "VisualCommit", which the owner allowed (D412),
-   before any icon work; report what it finds to the owner.
-3. 8a's design, `docs/phase-8a-design.md`, as D243 and the 7b handoff's "Do first", step 4,
-   describe it: the lead's rulings on the questions the readers left to the design (below, "Waiting
-   on the owner", "Left to 8a's design") before the drafting, then the draft, its review and the
-   work packages. The briefs in `D:/Projects/Personal/phase8-work/research/` are its material.
+Next: Progress step 2, the work before the design's drafting (the owner said to go on through the
+reset, D415). First the result of the App tests' run alone, which settles whether the baseline's
+watchdog stop was the load beside it (Notes, "Phase 8's start"); no agent that runs a process
+works before that run has ended. Then the search of the web for other uses of the name
+"VisualCommit" (D412), reported to the owner before any icon work; the lead's rulings on the
+questions left to the design ("Waiting on the owner", "Left to 8a's design"); and the
+measurements step 2 lists. Then step 3, the design, `docs/phase-8a-design.md`, with the briefs in
+`D:/Projects/Personal/phase8-work/research/` as its material.
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
