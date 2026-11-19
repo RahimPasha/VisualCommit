@@ -58,8 +58,10 @@ Start:
   checklist. The owner's answers before the design were given before the start (D399 to D415, in
   five sittings on 2026-11-18 and 19, after the two workflows of the Notes' "Phase 8's start").
   `dotnet build` passed on `master` (0 warnings, 2 min 38 s). The baseline that D245 asks for
-  after the Windows updates of 2026-11-11 was run and is no clean one (Notes). (2026-11-19. Week:
-  under 50 % used at 22:00 on 2026-11-18; the reset is at 2:00 on 2026-11-19, D415.)
+  after the Windows updates of 2026-11-11: the whole run lost the App tests to the hang watchdog
+  under the load of the agents beside it, and the App tests then passed alone, 2,233 of 2,233, so
+  every project has passed since the updates (Notes). (2026-11-19. Week: under 50 % used at 22:00
+  on 2026-11-18; the reset is at 2:00 on 2026-11-19, D415.)
 
 Design:
 
@@ -376,7 +378,11 @@ every commit.
   their file searches (one ran a single `echo` by mistake): the lead judged that light enough,
   against this section's rule on agents beside a heavy run, and it was not. The lead then ran
   `VisualCommit.App.Tests` again alone, with nothing beside it, from 00:07 on 2026-11-19
-  (`app-tests-alone-2026-11-19.log` in the same folder); its result is in the next note.
+  (`app-tests-alone-2026-11-19.log` in the same folder): 2,233 of 2,233 passed in 33 min 35 s, so
+  the stop was the load beside the run and no fault of the machine's updates. Taken together,
+  every project of the default run has passed on the machine since the updates: eleven in the
+  whole run (5,655 tests and the 4 always skipped) and the App tests alone. `dotnet build` on the
+  phase's first code commit, `e04762b`: 0 warnings, 0 errors, 2 min 35 s.
   The workflows, whose briefs are in `D:/Projects/Personal/phase8-work/research/`, outside the
   repo: `phase8-repo-map`, seven Opus readers and a critic, 2.27M tokens in 62 minutes
   (`repo-ship.md`, `repo-git.md`, `repo-a11y.md`, `repo-perf.md`, `repo-gate.md`, `repo-owed.md`,
@@ -402,6 +408,14 @@ every commit.
   owner's if wanted. One of the five queries also carried the owner's GitHub handle beside the
   name, which D412's leave did not cover; the handle is public on the repository's page, and the
   lead told the owner. D21's search of 2026-10-06 found the same: no existing product.
+- **The icon** (D407): five first candidates, drawn by the lead as SVG (Lens, Merge V, Check, Ring,
+  Viewfinder), are on a private page of the owner's,
+  https://claude.ai/artifact/BDztvt827qm6QeypyqZmxM, each from 16 to 128 pixels on a dark and a
+  light desk; the page's source, with the five drawings, is
+  `D:/Projects/Personal/phase8-work/icon/candidates-v1.html`, outside the repo until the owner has
+  chosen. The lead had no way to look at the rendered page before publishing it. Next: the owner's
+  letter and changes; then the look-alike check against Git's logo and the other clients' icons,
+  the small-size drawing, and the SVG into the repo with the tool that makes its files (step 10).
 - Nothing else is in flight. `master` holds everything; the working tree was clean when phase 7b was
   merged (`3dc7f79`). **Cleaned up on 2026-11-18, at the owner's word** (the 7b handoff's "Do
   first", step 3): the seven worktrees under `D:/Projects/Personal/vc-wt/` (each clean, its branch
