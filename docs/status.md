@@ -65,13 +65,36 @@ Start:
 
 Design:
 
-- [ ] 2. Before the drafting: the search of the web for other uses of the name "VisualCommit"
+- [x] 2. Before the drafting: the search of the web for other uses of the name "VisualCommit"
   (D412), reported to the owner; the lead's rulings on the questions the readers left to the
   design ("Waiting on the owner", "Left to 8a's design"); and what the design needs measured and
   no brief holds: what the tests do on git 2.34.1 (D406; nothing below 2.43 has run), a pixel scan
   of phase 7b's pictures for each contrast fix's reach (D410), where Avalonia 12.1.3 sets the
   placeholder's opacity, how the custom-drawn graph can expose a row to UI Automation (D411), the
   macOS application menu (D409), and how the first-run states are scripted in both harnesses.
+  Done 2026-11-19. The search found no product of the name (Notes, "The name's search"). The
+  workflow `phase8a-design-research` (run `wf_7a57f7e4-dcb`: eight Opus agents, 2.96M tokens, 50
+  minutes) wrote the eight inputs in `D:/Projects/Personal/phase8-work/research2/`, and the lead
+  ruled on their open points: 75 rulings in all, in
+  `D:/Projects/Personal/phase8-work/design/rulings.md`, which the design carries in short form.
+  What the inputs measured: **git 2.34.1** fails 20 of 7,889 tests (CI's new job, run
+  44479788558), in three groups: git's own words and exit codes that changed in 2.35 (7 tests),
+  stash names below 2.36, where git names a stash after the last part of the branch (10 tests),
+  and one fault of the app's (3 tests: a fast-forward of a branch that another worktree has
+  checked out is refused by git only from 2.35, so on 2.34 the app moves it); the app uses no git
+  command newer than 2.34, and the package is of middle size. **The contrast round** changes
+  1,333 of the 1,350 pictures of phase 7b's counted round (the placeholder alone 1,293, the dark
+  danger colour 360, the accent on rows 13); the plan's list of 35 danger-label pictures misses 6;
+  the dark danger text on a control's background is 4.15:1, a gap `ThemeTokensTests` does not
+  hold. The placeholder's opacity is one resource key of Avalonia's Fluent theme, which the app's
+  tokens can set. **Names**: the 18 icon buttons the plan lists as unnamed take their names from
+  their tooltips since 2026-10-10, so the names are weak and not missing; the true gaps are the
+  activity log's toggle and three splitters. **The graph** can expose its selected row with three
+  peers at most; which UI Automation event makes Narrator speak on a move is unproven until a
+  spike (ruling 32). **The macOS data folder** in the docs is right. **Keyboard**: six gaps are
+  real, and eight fixes change no earlier picture. **Notices**: the build output holds 53 files
+  from 24 packages on Windows, and the present notices cover two components in full. (Week:
+  share not read; the reset was at 2:00 on 2026-11-19, D415.)
 - [ ] 3. Design in `docs/phase-8a-design.md` (D243: about 150 to 200 KB, its decisions only in
   `decisions.md`; the 7b handoff's "Do first", step 4): the scope and what stays out, how the code
   and the harness name 8a (the 7b handoff's "Naming", with `8a` for `8`), its lagged list (D262),
@@ -149,6 +172,23 @@ Closing (CLAUDE.md's "Closing a phase"):
 
 Recorded here at the end of each phase, after each merge and after each change made on `master`
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
+
+Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jobs since
+`e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", does not fail the run until
+step 5 has fixed what it finds.
+
+- [44479788558](https://github.com/RahimPasha/VisualCommit/actions/runs/44479788558), for
+  `e04762b` (the floor's job, D397's two properties, the solution's comment). First attempt:
+  `ubuntu-latest` green (Test step 5 min 7 s) and `macos-latest` green (Test step 36 min 38 s, its
+  keychain step green); `windows-latest` failed one test of 7,892, phase 6's
+  `PaletteGrowthTests.The_build_and_a_one_letter_query_grow_in_step_with_the_refs` with a ratio of
+  8.1 against 6.3 (plan risk 46, the first time on Windows), 7,887 passed and 4 skipped, Test step
+  22 min 53 s; both "bare ubuntu container" jobs were cancelled at their 25-minute job limit,
+  because Ubuntu's package servers were slow that hour (the set-up step took 18 min 27 s in one
+  and never ended in the other, where it takes about a minute); the floor's job failed 20 of
+  7,889 tests on git 2.34.1 in a Test step of 7 min 15 s, after a set-up of 19 min 3 s (Progress,
+  step 2, says what the 20 are). The lead ran the failed and cancelled jobs again at 01:38 on
+  2026-11-19 (attempt 2); its result goes here.
 
 The run for phase 7b's merge on `master` is
 [42574680274](https://github.com/RahimPasha/VisualCommit/actions/runs/42574680274), for `1a4a555`
@@ -342,23 +382,20 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: Progress step 2, the work before the design's drafting (the owner said to go on through the
-reset, D415). Begun: the search for the name is made (Notes, "The name's search"), and the phase's
-first code commit added CI's job on git 2.34.1 ahead of step 5, as step 2's measurement of what the
-tests do on the floor (its failure does not fail the run yet), with step 4's two one-line changes
-(`Directory.Build.props`' `Authors` and `Copyright`, D397; `VisualCommit.slnx`'s comment). Read
-that run first: the job "ubuntu 22.04 container, git 2.34 (the floor)" of run 44479788558. The
-lead's rulings on the questions left to the design are written
-(`D:/Projects/Personal/phase8-work/design/rulings.md`, 23 rulings; the design lists them for the
-owner), and the workflow `phase8a-design-research` (run `wf_7a57f7e4-dcb`, eight Opus agents,
-started at about 00:45 on 2026-11-19) writes the design's inputs into
-`D:/Projects/Personal/phase8-work/research2/`: `colours.md` with the pixel scan, `uia.md`,
-`firstrun.md`, `keyboard.md`, `notices.md`, `guide.md`, `perfsingle.md` and `floor.md`, which reads
-the git 2.34 job. A session that finds that workflow ended or lost reads the notes that exist and
-runs again only the missing ones. Then step 3, the design, `docs/phase-8a-design.md`, drafted from
-the rulings, those inputs and the briefs in `D:/Projects/Personal/phase8-work/research/`, as phase
-7b's was: an architect for sections 0 and 1, a drafter per work package, an integrator, then the
-review. The icon's first candidates are with the owner (Notes, "The icon").
+Next: Progress step 3, the design (the owner said to go on through the reset, D415). Step 2 is
+done: the phase's first code commit (`e04762b`) added CI's job on git 2.34.1 ahead of step 5, with
+step 4's two one-line changes, and the inputs and the lead's 75 rulings are written. Under way
+since about 01:45 on 2026-11-19: the workflow `phase8a-design-draft` (run `wf_2e69aec7-03e`), an
+Opus architect for sections 0 and 1, a drafter per work package and an integrator. It writes into
+`D:/Projects/Personal/phase8-work/design/`: the sections under `sections/`, the assembled
+`phase-8a-design.md` and `decisions-draft.md` (the design's decisions, D416 on). When it has ended,
+the lead reads the result, copies the design to `docs/phase-8a-design.md`, adds its decisions to
+`docs/decisions.md` and a row to CLAUDE.md's Docs map, commits, and runs the design's review (3
+or 4 lenses, git safety and tests/gate among them, a verifier for each blocker and major; D243).
+A session that finds the workflow ended or lost reads what `sections/` holds and has only the
+missing sections drafted, by the same briefs (the workflow's script is kept with the session;
+its prompts are short and can be written again from this step and the rulings). The icon's first
+candidates are with the owner (Notes, "The icon").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
