@@ -3,16 +3,17 @@
 This is phase 8a's design: what the phase builds, how it is cut into work packages, the contracts the
 packages share, and one brief per package for its builder. Once the phase is built it is kept as
 history, as phases 3 to 7b's designs are. Its decisions are recorded only in `docs/decisions.md`
-(D243): the design names them by number (D416 to D446) and does not repeat them. The phase's report,
-handoff and status cite its sections as "design N.N". Binding inputs: the owner's decisions D399 to
-D415; `docs/plan.md`'s "Phase 8a", "Workflow" and "Visual test gate" sections and its risks; the 7b
-handoff's "Patterns to follow", "Known issues" and "For the next phase"; the lead's 75 rulings of
-2026-11-19 ("ruling n"), which section 13 carries in short form. The research is outside the
-repository: the eight inputs in `D:/Projects/Personal/phase8-work/research2/` ("colours.md 3.2"),
-with their measurements, and the digests and web briefs of 2026-11-18 in
-`D:/Projects/Personal/phase8-work/research/`, where a skeptic's file wins over its brief. What the
-research did not verify is marked unverified, with the step that verifies it. Line numbers are those
-of `27c5109`; an earlier phase's design is cited "phase 4 design 11.10".
+(D243): the design names them by number, D416 to D452 and the owner's answer on winget (13.3), and
+does not repeat them. The phase's report, handoff and status cite its sections as "design N.N".
+Binding inputs: the owner's decisions D399 to D415; `docs/plan.md`'s "Phase 8a", "Workflow" and
+"Visual test gate" sections and its risks; the 7b handoff's "Patterns to follow", "Known issues" and
+"For the next phase"; the lead's 75 rulings of 2026-11-19 ("ruling n"), which section 13 carries in
+short form. The research is outside the repository: the eight inputs in
+`D:/Projects/Personal/phase8-work/research2/` ("colours.md 3.2"), with their measurements, and the
+digests and web briefs of 2026-11-18 in `D:/Projects/Personal/phase8-work/research/`, where a
+skeptic's file wins over its brief. What the research did not verify is marked unverified, with the
+step that verifies it. Line numbers are those of `27c5109`; an earlier phase's design is cited
+"phase 4 design 11.10".
 
 A builder reads section 0, section 1 and its own section, and nothing else. Nothing a package writes
 holds a real person's data: examples use made-up authors at `example.com` and `/home/demo` (ruling
@@ -43,8 +44,8 @@ section 13); requirements.md; CLAUDE.md and plan.md's "Workflow" and "Visual tes
 D247). The research is outside the repository: `D:/Projects/Personal/phase8-work/research2/` (eight
 inputs, cited "colours.md 3.2") and `research/` (the digests and web briefs; a web brief's skeptic
 file wins where they differ). Line numbers are those of `27c5109`. "§n" is this design's section n,
-the brief of one package. The design's own decisions are D416 to D446; they stand in
-`docs/decisions.md` alone (D243), and the sections cite them by number.
+the brief of one package. The design's own decisions are D416 to D452 and the owner's answer on
+winget (13.3); they stand in `docs/decisions.md` alone (D243), and the sections cite them by number.
 
 ### 0.1 Scope against the Delivers list
 
@@ -61,7 +62,7 @@ the brief of one package. The design's own decisions are D416 to D446; they stan
 | Performance pass | §10 | `Phase8aPerformance`'s series in the report; Q1 in the pass |
 | Third-party notices (R6) | §8 | `ThirdPartyNoticesTests` |
 | About (R6, D398, D409) | §8 | Part A; real window A1 and A4 |
-| Icon and branding (R5, D407) | §7 | `IconFilesTests`; part B; real window B |
+| Icon and branding (R5, D407) | §7 | `IconFilesTests` (items 7 and 8 the `.icns`, D447; item 8 in CI's macOS job); part B; real window B |
 | User guide (D408) | §11 | The pages; the `guide-site` artifact; part G; checks by hand |
 | Two instances; the macOS data folder (plan 778) | §4 | `SingleInstanceGuardTests`; part I; real window I; `AppPathsTests` in CI's macOS job |
 | `Authors`, `Copyright` (D397); the `.slnx` comment | done in `e04762b` | The files |
@@ -123,6 +124,25 @@ The decisions are cited, not restated (D243); each line names the mechanism and 
   outside host. §11.
 - **D442** to **D446**: the real window's launches, the masked notice, nothing pressed that leaves
   the app, the graph's events, F4's git. §12.
+- **D447** (the design's review, 13.5; amends D429, keeps D407 as the owner wrote it): the tool
+  writes the `.icns`; the candidates' rounds kept in `docs/brand/icon/`. §7.
+- **D448** (the review; amends D443): the notice's data folder on a line of its own, trimmed at its
+  start; the masked comparison masks that line after asserting equal heights; the guard's server
+  admits the current user only. 1.11; §4, §12.
+- **D449** (the review; amends D423): winget started by the full path the screen found, through
+  `cmd.exe /S /K`, in winget's folder; a chosen git and the stand-in full paths (`.exe` on Windows); a
+  chosen `/usr/bin/git` keeps the macOS gate; no third-party package source named; the real-window
+  first-run checks need winget on the gate's machine. 1.3, 1.14; §5, §12.
+- **D450** (the review; amends D445): the graph row's proof a `LiveRegionChanged` event; a Name change
+  alone fails. §9, §12.
+- **D451** (the review): the guide's workflow runs the two App.Tests classes that read the pages; the
+  hand check takes the `guide-site` artifact of the gate commit or of a `workflow_dispatch` run on it;
+  D441's check also reads CSS and every loading link; the workflow's token read-only; the demo's
+  GitHub owner `demo--alex`. §11.
+- **D452** (the review; amends D417): "Cancel {title}" cancels only while the titled operation is
+  still the one running; K10 takes a fourth PageDown from §11's merge. 1.8; §6, §8, §11.
+- The owner's answer (13.3), on winget for a git that is too old or not working (ruling 44 and D423
+  narrow D405): a decision of its own once given; until then ruling 44 stands, and §5 starts after it.
 
 ### 0.3 How 8a is named
 
@@ -153,12 +173,12 @@ The decisions are cited, not restated (D243); each line names the mechanism and 
 | Package | § | Wave | Depends on | Owns |
 |---|---|---|---|---|
 | WP0, contracts and stubs (the lead) | 1 | 0 | none | 1.16's list |
-| colours: the contrast round | 2 | 1 | WP0 | `Tokens.axaml`; added styles in `LeftPanelView`, `RightPanelView`, `CompareView`, `WorkingChangesView`, `FileHistoryView` (`.axaml`); `ThemeTokensTests.cs`, `PanelViewTests.cs`; ruling 28's files (2.4: four App.Tests files, `Phase1Expectations.cs` and the `Phase3` to `Phase7b` `Expectations.Common.cs`, `Phase7bExpectations.A.cs`, `Phase6SupportTests.cs`, `Phase6ExpectationTests.L.cs`, `Phase6Checks.L.Overlays.cs`, the HEAD helpers of phases 3 to 5, `Phase5Checks.F.Filters.cs`); `scripts/scan-contrast.py`, `compare-pictures.py`; part L |
+| colours: the contrast round | 2 | 1 | WP0 | `Tokens.axaml`; added styles in `LeftPanelView`, `RightPanelView`, `CompareView`, `WorkingChangesView`, `FileHistoryView` (`.axaml`); `ThemeTokensTests.cs`, `PanelViewTests.cs`; ruling 28's files (2.4: four App.Tests files, `Phase1Expectations.cs` and the `Phase3` to `Phase7b` `Expectations.Common.cs`, `Phase7bExpectations.A.cs`, `Phase6SupportTests.cs`, `Phase6ExpectationTests.L.cs`, `Phase6Checks.L.Overlays.cs`, the HEAD helpers of phases 3 to 5, `Phase5Checks.F.Filters.cs`); `scripts/scan-contrast.py`, `compare-pictures.py`; `docs/test-reports/phase-8a-contrast/` (2.2); part L |
 | floor | 3 | 1 | WP0 | `GitVersion.cs`, `IGitRepository.cs`; `GitRepository.Branches.cs`, `.Search.cs`, `GitRepository.cs`; D277's code in `AskPassBroker.cs`, `AccountBlockViewModel.cs`, `AccountsSettingsViewModel.cs`, `OperationTexts.Hosting.Accounts.cs`; `OperationTexts.cs`; `RepositoryOperations.Branches.cs`; `TempRepo.cs`, `GitWords.cs`; 3.4's test files; `ci.yml` |
 | single: one instance per data folder | 4 | 1 | WP0 | `AppPaths.cs`, `SingleInstanceGuard.cs`, `AppLaunch.cs`, `Program.cs`, `App.axaml.cs`, `MainWindow.axaml.cs`, `InstanceNoticeWindow.axaml(.cs)`, `InstanceNoticeViewModel.cs`, `InstanceNoticeTexts.cs`; `GitIsolation.cs:74`'s comment; `AppPathsTests.cs` and 4.5's classes; part I with `InstanceNoticeHost` |
-| firstrun | 5 | 2 | §3 | `GitLocator.cs`, `GitSetupProbe.cs`, `OsRelease.cs`, `GitConfiguration.cs`, the helper in `AskPassBroker.cs`; `GitAccess.cs`, `FileLauncher.cs`; `MainWindowViewModel.cs`, `.Settings.cs`, `.Git.cs`, `RepoTabViewModel.cs`, `WelcomeViewModel.cs`, `ViewModels/GitSetup/`, `GitProgramViewModel.cs`, `AccountsSettingsViewModel.cs`; `GitSetupView`, `CommitGraphView.axaml(.cs)`, `StatusBarView.axaml`, `SettingsDialogView.axaml`, `SettingsDialogViewModel.cs`; `tests/VisualCommit.GitStandIn`, `FakeGitSetupProbe.cs`; 5.4's test files; part F |
+| firstrun | 5 | 2 | §3; the owner's answer (13.3) | `IGitRunner.cs`, `GitLocator.cs`, `GitSetupProbe.cs`, `OsRelease.cs`, `VisualCommit.Core/ProgramSearch.cs`, `GitConfiguration.cs`, the helper in `AskPassBroker.cs`; `GitAccess.cs`, `FileLauncher.cs`; `MainWindowViewModel.cs`, `.Settings.cs`, `.Git.cs`, `RepoTabViewModel.cs`, `WelcomeViewModel.cs`, `ViewModels/GitSetup/`, `GitProgramViewModel.cs`, `AccountsSettingsViewModel.cs`; `GitSetupView`, `CommitGraphView.axaml(.cs)`, `StatusBarView.axaml`, `SettingsDialogView.axaml`, `SettingsDialogViewModel.cs`; `tests/VisualCommit.GitStandIn`, `FakeGitSetupProbe.cs`, `MergeToolHelpTests.cs` (its `HeldToolHelpRunner` made `internal`, 5.2); 5.4's test files; part F |
 | keyboard | 6 | 2 | §2 | `DiffTextView.cs`, `DiffPane.cs`, `HunkHeaders.cs`, `DiffView.axaml.cs`, `BlameTextEditor.cs`, `BlameView.axaml.cs`, `AppCommands.Palette.cs`, `WorkingChangesView.axaml(.cs)`, `WorkingChangesViewModel.cs`, `WelcomeView.axaml.cs`, `CreatePullRequestDialogView.axaml.cs`, `FocusReturn.cs`; `MainWindow.axaml.cs` (D427); `ActivityLogView.axaml` only if 6.3.8's test fails; `HeldGitRunner.cs`; 6.4's test files, `Phase2Checks.Helpers.cs`; part K |
-| icon | 7 | 2 | §4 | `tools/VisualCommit.IconBuilder`, `assets/brand/`, `Assets/Icon/`, `AppIcon.cs`, `VisualCommit.App.csproj`, `MainWindow.axaml`, the notice window's `Icon`, `Directory.Packages.props`; `IconFile.cs`; part B |
+| icon | 7 | 2 | §4 | `tools/VisualCommit.IconBuilder`, `assets/brand/`, `Assets/Icon/`, `AppIcon.cs`, `VisualCommit.App.csproj`, `MainWindow.axaml`, the notice window's `Icon`, `Directory.Packages.props`, `.gitattributes` (`*.icns binary`, D447); `IconFile.cs`; part B |
 | about: About and notices | 8 | 3 | §5, §7 | `THIRD-PARTY-NOTICES.md`, `notices/`, `EmbeddedTexts.cs`, `OperationTexts.About.cs`, the About section, `SettingsDialogView.axaml(.cs)`, `SettingsDialogViewModel.cs`, `SettingsSection.About`, the text dialog, `VcLinkButton` (`Theme/Controls.axaml`, `SignInDialogView.axaml`), `Theme/Dialogs.axaml`, `App.axaml(.cs)`, `AppCommands.cs`, the csproj, `ci.yml`; 8.4's earlier files; part A |
 | uia: screen readers | 9 | 3 | §5, §6; merges after §8 | `CommitGraphControl.cs`, `CommitGraphControl.Automation.cs`, `GraphRowSpeech.cs`, `AutomationNames.cs`, the names in ten views (9.2), `AutomationSweep.cs`, `ShellDriver.Phase8a.Uia.cs`, `CommitGraphControlTests.cs`, `StatusBarTests.cs`; part U |
 | perf | 10 | 3 | WP0 | `StartupTimeline.cs`, `RepositoryViewModel.cs`'s lines, `RealApp.cs`'s helpers, `Phase8aPerformance.cs`, `PerformanceSeries*.cs`; 10.4's test files |
@@ -168,13 +188,14 @@ The decisions are cited, not restated (D243); each line names the mechanism and 
 **Waves and merges.** Wave 0: WP0 in the main checkout. Wave 1: §2, §3, §4, any order; §2 is the
 first package that changes an earlier picture (ruling 13). Wave 2: §5, §6, §7, any order. Wave 3: §8,
 §9 and §10, built together; §9 merges after §8 and sweeps About at its merge. Wave 4: §11; the
-review before the gate (status step 15) and its fixers; §12, built on the Windows machine at step
-14, reviewed at step 15, merges last, after the review's fixes. At most three packages are built at
+review before the gate (status step 19) and its fixers; §12, built on the Windows machine at step
+18, reviewed at step 19, merges last, after the review's fixes. At most three packages are built at
 once; one owner per file and test class, and a file passes only at a merge. No two packages of one
 wave own a file. The files that pass between packages, in this order: `AppCommands.Palette.cs` (WP0,
 §6); `AppCommands.cs` (§8, §11); `App.axaml.cs` (WP0, §4, §8); `Program.cs`, `AppLaunch.cs` (WP0,
 §4); `GitIsolation.cs` (WP0, §4); `AskPassBroker.cs`, `AccountsSettingsViewModel.cs`,
 `MainWindowViewModelTests.cs` (§3, §5); `MainWindowViewModel.cs` and `.Settings.cs` (WP0, §5);
+`IGitRunner.cs`, `GitLocator.cs`, `GitSetupProbe.cs`, `GitAccess.cs`, `FileLauncher.cs` (WP0, §5);
 `SettingsDialogViewModel.cs` (WP0, §5, §8); `SettingsDialogView.axaml` (§5, §8);
 `SettingsDialogViewTests.cs` (§5, §8, §11); `WorkingChangesView.axaml` (§2, §6, §9);
 `LeftPanelView.axaml`, `CompareView.axaml` (§2, §9); `StatusBarView.axaml`, `CommitGraphView.axaml`
@@ -182,12 +203,13 @@ wave own a file. The files that pass between packages, in this order: `AppComman
 `ActivityLogView.axaml` (§6 if needed, §9); the notice window (§4, §7); `App.csproj` (§7, §8);
 `RepositoryViewModel.cs` (WP0, §10); `RealApp.cs` (§10, §12); `ci.yml` (§3, §8, §11);
 `Phase7aExpectations.A.cs` (§3, §8); `Phase7bExpectations.A.cs` (§2, §8); `Phase6Expectations.K.cs`,
-`Phase6ExpectationTests.K.cs`, `PaletteEntriesTests.cs` (§8, §11); `AppShortcutsTests.cs` (WP0,
-§11). A package adds `ShellDriver` helpers only in a new partial `ShellDriver.Phase8a.<Key>.cs`. The
-lead's throughout: `AppSession.cs`, `TabServices.cs` (but §8's `SettingsSection.About`),
-`PromptDialogs.cs` after WP0, `VisualCommit.slnx` (each new project's line at its merge),
-`Directory.Build.props`, `CLAUDE.md`, `README.md`, `requirements.md`, `plan.md`, `status.md`,
-`architecture.md`. Every other doc a merge needs is the lead's, at that merge.
+`Phase6ExpectationTests.K.cs`, `PaletteEntriesTests.cs`, `CommandPaletteViewTests.cs` (§8, §11);
+`AppShortcutsTests.cs` (WP0, §11). A package adds `ShellDriver` helpers only in a new partial
+`ShellDriver.Phase8a.<Key>.cs`. The lead's throughout: `AppSession.cs`, `TabServices.cs` (but §8's
+`SettingsSection.About`), `PromptDialogs.cs` after WP0, `VisualCommit.slnx` (each new project's line
+at its merge), `Directory.Build.props`, `CLAUDE.md`, `README.md`, `requirements.md`, `plan.md`,
+`status.md`, `architecture.md`, the icon's rounds in `docs/brand/icon/` (D447). Every other doc a
+merge needs is the lead's, at that merge.
 
 At §3's merge the lead removes the broker's git version (D420): the `gitVersion` parameter of both
 `AskPassBroker` constructors and of `PromptDialogs.CreateBroker`, and the argument in
@@ -197,13 +219,18 @@ after wave 2's merges, with §6's test.
 
 No agent that runs a process works beside a heavy run (ruling 23): a wave's lagged list and whole
 default run (D245) run after its last merge, with no builder working; the next wave starts after
-them. §2's merge is read against phase 7b's references first (0.7). After wave 3, the lead runs
-§10's "before" series on the rested laptop; a change it calls for is a fix package after a ruling
+them. A mid-wave merge's lagged list runs only while no builder of the wave runs a process: the
+builders pause until it ends. A builder runs only the classes and methods its section names, never a
+whole project; whole projects are the lead's, through `scripts/heavy-run.sh` (D245). §2's merge is
+read against phase 7b's references first (0.7). After wave 3, the lead runs §10's "before" series on
+the rested laptop; a change it calls for is a fix package after a ruling
 (ruling 66), with no section. §3's fixes are read on CI's floor job after each push of the phase
 branch; the commit that makes the job green removes `continue-on-error` and moves `Minimum`
-(rulings 10, 71). After the gate commit, `docs/guide/**` is docs; `guide.yml`, the shots and the
-links are code, so they come before the counted round; from §8's merge the notices and `LICENSE`
-count as code (D433).
+(rulings 10, 71). After the gate commit, `docs/guide/**` stays docs: a change to it is checked by the
+guide workflow's run, whose step "App's links" runs `AppLinksTests` and `GuideShortcutsPageTests`, the
+two App.Tests classes that read the pages (D451, 11.3.4), and the lead reads that run and records it
+beside CI's in `status.md`. `guide.yml`, the shots and the links are code, so they come before the
+counted round; from §8's merge the notices and `LICENSE` count as code (D433).
 
 **The lagged list** (D262), at each wave's last merge and at the merge of §5, §6, §9 and §10, in Git
 Bash, one command at a time, before the wave's whole run: phase 7b's list (its design 0.4: 7a's list
@@ -213,7 +240,7 @@ classes 8a extends with real git, and 8a's project once it has checks:
 ```
 export VISUALCOMMIT_WATCHER_LAG_MS=1500
 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests --filter-class "*Phase2Checks"
-bash scripts/heavy-run.sh --project tests/VisualCommit.App.Tests --filter-class "*StageListRefreshTests" --filter-class "*RepositoryOperationsProtectTests" --filter-class "*CompareViewTests" --filter-class "*SearchBarTests" --filter-class "*UndoStepTests" --filter-class "*RepositoryOperationsFetchTests" --filter-class "*GitCallBudgetTests" --filter-class "*GitRepositoryProviderTests" --filter-class "*DiffTextViewTests" --filter-class "*WorkingChangesTests" --filter-class "*StatusBarTests"
+bash scripts/heavy-run.sh --project tests/VisualCommit.App.Tests --filter-class "*StageListRefreshTests" --filter-class "*RepositoryOperationsProtectTests" --filter-class "*CompareViewTests" --filter-class "*SearchBarTests" --filter-class "*UndoStepTests" --filter-class "*RepositoryOperationsFetchTests" --filter-class "*GitCallBudgetTests" --filter-class "*GitRepositoryProviderTests" --filter-class "*DiffTextViewTests" --filter-class "*WorkingChangesTests" --filter-class "*StatusBarTests" --filter-class "*RepositoryViewModelTests" --filter-class "*RepositoryViewModelFilterTests" --filter-class "*RepositoryOperationsPullTests" --filter-class "*RepositoryOperationsBranchesTests"
 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase6 --filter-method "*Phase6ChecksS.*" --filter-method "*Check_K10_*" --filter-method "*Check_K13_*" --filter-method "*Check_W1_*" --filter-method "*Check_W8_*"
 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7a
 bash scripts/heavy-run.sh --project tests/VisualCommit.VisualTests.Phase7b
@@ -224,9 +251,11 @@ unset VISUALCOMMIT_WATCHER_LAG_MS
 
 A failure under the lag is the fault R8 imitates: it gets a fix, never a looser test.
 
-**Progress steps** (status.md): 4 WP0; 5 §3; 6 §5; 7 §2; 8 §6 and §9; 9 §8; 10 §7 and the owner's
-choice; 11 §10 and the series; 12 §11 (Pages at the merge); 13 §4; 14 §12 and the lagged runs; 15
-the review; 16 and 17 the gate.
+**Progress steps** (status.md), in the waves' order: 4 WP0; 5 §2; 6 §3; 7 §4; 8 wave 1's close (the
+lagged list, the whole default run, §2's comparison and the new references); 9 §5; 10 §6; 11 §7 and
+the owner's choice; 12 wave 2's close; 13 §8; 14 §9; 15 §10; 16 wave 3's close and the "before"
+series; 17 §11; 18 §12, built; 19 the code review before the gate and its fixes, then §12's merge; 20
+the live command before the pictures; 21 the gate; 22 to 27 the closing steps.
 
 ### 0.5 The visual checks' parts
 
@@ -249,14 +278,17 @@ a project of its own, as D230 did for phase 6.
 
 Every new screen has a real-window picture: the first-run screen (F1, F4, F5, F6), its winget
 confirm (F2), the notice (I2), About (A1), the text dialog (A4), the icon in the title bar and the
-taskbar (B1, B2).
+taskbar (B1, B2). F1 and F2 need `winget.exe` on the gate's machine's `PATH`: without it they fail,
+never "Not run" (D449; the laptop has it, 13.4 item 7).
 
 Checks by hand, in the report: the Narrator walk-through (D411, the owner, about 20 minutes, §9's
-steps); phase 6's System step (D224); a second start from the taskbar while the app is behind
-another window (§4); the guide's pictures from the gate commit's `guide-site` artifact (ruling 61:
-both themes, search, no outside host); after the merge, the live site and the environment's branch
-rule (ruling 64). macOS's (About in the application menu, the Command Line Tools, a second start)
-go to 8b's Mac checklist.
+steps); phase 6's System step (D224); a second start while the app is behind another window (§4):
+the lead gives the owner a `.cmd` file outside the repository that sets CLAUDE.md's isolating
+variables and starts the Release build, and the owner starts it twice, the second time while another
+window is in front; the guide's pictures from the `guide-site` artifact of the gate commit, or of a
+`workflow_dispatch` run on it (ruling 61: both themes, search, no outside host); after the merge,
+the live site and the environment's branch rule (ruling 64). macOS's (About in the application menu,
+the Command Line Tools, a second start) go to 8b's Mac checklist.
 
 ### 0.6 Cost in time
 
@@ -280,8 +312,8 @@ go to 8b's Mac checklist.
   min 12 s; the floor's under 9, under 20. No limit is raised ahead of need (ruling 21); the lead
   reads every merge's run against four fifths of each limit. A slow day of Ubuntu's mirror can time
   out the three container jobs: they are run again (ruling 74). Windows' job builds `GuideShots` with
-  the opt-in projects (about a minute). The guide's workflow is separate: about 5 to 8 minutes per
-  push of code, unverified until its first run.
+  the opt-in projects (about a minute). The guide's workflow is separate: about 7 to 10 minutes per
+  push of code, about 2 of them its step "App's links" (D451), unverified until its first run.
 - **Live command** (D335, ruling 2): about 2 min 30 s per whole run, twice at the gate.
 - **Sum at the gate**: the default run about 1 h 50 min, the pass about 44 minutes, D246's two runs
   about 11 each, the live command twice; about 1,700 files inspected in about 12 batches (D247).
@@ -297,7 +329,7 @@ round (1,150 scripted, 200 real-window captures, 3 framed captures, 198 differen
 | The window's icon (§7) | 3 | the 3 framed captures (phase 0 `A`, `B`; phase 6 `s15`) | the title bar |
 | The Git program row (§5) | 40 | 9 scripted: `s14c`, `s14i`, `s18a`, `s18d`, `s19a`, `s19d`, `s20b`, `l31e-dark`, `l31e-light` | the global scope's bottom |
 | The About nav button (§8) | 3, 14, D409 | 83 scripted, 8 captures | x 141–317, y 255–285 at 1100×700 (x 551–727, y 415–445 at 1920×1080) |
-| Two palette commands (§8, §11) | 54 | 4 scripted (`k10a`, `k10f`, `l31c` dark, light), 2 captures; K10's constants | the scroll thumb, x 837–838 |
+| Two palette commands (§8, §11) | 54 | 4 scripted (`k10a`, `k10f`, `l31c` dark, light), 2 captures; K10's constants and `CommandPaletteViewTests`' count (and, from §11, a fourth PageDown in both, D452; 11.4) | the scroll thumb, x 837–838 |
 | The shortcuts list's "Help" group (§11) | 62 | `s14f-shortcuts-end`; `s14e-shortcuts-top` in the section's scroll bar only, if at all (§11's builder measures it) | the list's end; the scroll bar |
 
 Every one but the framed captures is in the 1,333, so about 1,336 of 1,353 earlier files change. Every
@@ -309,19 +341,25 @@ run, with the scan's boxes as the expected regions (ruling 30): a difference out
 finding. The run's scripted pictures, once that comparison passes, are the new references
 (`D:/Projects/Personal/phase8-work/references/wave1/`); every later merge and the gate compare
 against them with `scripts/compare-pictures.py --expected <file>`, whose file maps
-`phase-N/<folder>/<name>.png`, or an `fnmatch` pattern, to boxes `[left, top, right, bottom]` (2.6):
-the lead writes one for the regions above. The real-window captures are compared at the gate with
-phase 7b's, expecting the scan's lists and the rows above. The report replaces plan.md's 35 label
-pictures by the scan's lists (ruling 31) and states every changed expectation once under "Changes
+`phase-N/<folder>/<name>.png`, or an `fnmatch` pattern, to boxes `[left, top, right, bottom]` in the
+picture's own pixels (2.6): the lead writes one for the regions above. `--expected` may be given more
+than once; a picture's boxes are those of every key that matches it, exact or a pattern, from every
+file, united; a picture whose size changed goes under the fourth heading, "Changed size", and counts
+as unexpected. The real-window captures are compared at the gate with phase 7b's, the scan's
+`expected.json` and the lead's file for the rows above both given. The report replaces plan.md's 35
+label pictures by the scan's lists (ruling 31) and states every changed expectation once under "Changes
 to expected results" (ruling 28). Every picture is inspected (D247).
 
 ### 0.8 What the phase asks of the owner
 
-13.3 lists it by when: now, to look at the rulings and D416 to D446; beside the build, the icon;
-the spike's and the series' takeovers of the desktop, told first; before the counted round, the
-chosen mark or the placeholder; before the gate, the three live tokens and D246's two runs; at the
-gate, the Narrator walk-through, phase 6's System step and a second start from the taskbar; at
-"Phase 8a accepted", GitHub Pages' source (ruling 64, D408).
+13.3 lists it by when: now, to look at the rulings and D416 to D452, and to answer on winget for a
+git that is too old or not working (before wave 2); beside the build, the icon's rounds
+(`docs/brand/icon/`, D447); the takeovers of the desktop (the spike, §6's merge, §12's build, the
+series), told first; before the counted round, the chosen mark or the placeholder; before the gate,
+the three live tokens and D246's two runs; at the gate, the Narrator walk-through, phase 6's System
+step and a second start through the lead's isolating start file; at "Phase 8a accepted", before
+`master` is pushed, GitHub Pages' source (ruling 64, D408), and the environment's branch rule if it
+admits more than `master`.
 
 ## 1. Shared contracts (WP0's brief)
 
@@ -373,8 +411,8 @@ public sealed record GitDetection(GitAvailability Availability, string? Executab
     public string? ErrorText { get; init; }              // Broken: git's standard error, else its standard output, at most 4,000 characters; or why it could not start
     public int? ExitCode { get; init; }                  // Broken: git's exit code; null when it did not start
     public GitConfigFault? ConfigFault { get; init; }    // Broken with "fatal: bad config line <n> in file <f>" (plan 767)
-    public string? ChosenMissing { get; init; }          // NotFound: the setting names this path and no file is there (ruling 41)
-    public string? PathCandidate { get; init; }          // with ChosenMissing: the git the machine's search finds, which "Use the Git on the PATH" names; null for none
+    public string? ChosenMissing { get; init; }          // NotFound: the setting names this path and no file is there (ruling 41), or a setting that is not a full path (on Windows, not an `.exe`), 1.14
+    public string? PathCandidate { get; init; }          // with ChosenMissing: the git the machine's search finds (the PATH, then the install folders), which "Use the Git it found" names; null for none (the button hidden)
     public bool CommandLineToolsMissing { get; init; }   // macOS: /usr/bin/git left out because `xcode-select -p` failed
 }
 public sealed record GitConfigFault(string File, int Line);       // new
@@ -389,8 +427,10 @@ public sealed record LinuxDistribution(string Id, IReadOnlyList<string> IdLike, 
 public sealed record GitGuidance(GuidancePlatform Platform, string? WingetPath, LinuxDistribution? Distribution);
 public interface IGitSetupProbe
 {
-    // Ruling 4's order: the setting (used whatever it answers; no file: ChosenMissing, no fallback), else the
-    // stand-in when StandIn is set, else PATH and then the install folders.
+    // Ruling 4's order: the setting (used whatever it answers; no file, or a value that is not a full path (on
+    // Windows, not an .exe): ChosenMissing; on macOS a chosen /usr/bin/git while xcode-select -p fails: NotFound
+    // with CommandLineToolsMissing; no fallback), else the stand-in when StandIn is set, else PATH and then the
+    // install folders.
     Task<GitDetection> DetectAsync(GitLookup lookup, IGitCallLog? callLog, IAppLog log, TimeProvider? recordClock,
         IReadOnlyDictionary<string, string?>? environment, CancellationToken cancellationToken);
     GitGuidance ReadGuidance();   // read only while the first-run screen shows (ruling 48); nothing extra runs at a start with a working git
@@ -415,8 +455,13 @@ public static Task<GitDetection> DetectAsync(GitLookup lookup, IGitCallLog? call
 ```
 
 `src/VisualCommit.Git/GitSetupProbe.cs` (new; WP0 a stub over the overload above, its guidance the
-platform's with no winget and no distribution; §5 the real one with `OsRelease.Parse`):
+platform's with no winget and no distribution; §5 the real one with `OsRelease.Parse` and, on Windows,
+`WingetPath` = `ProgramSearch.FindOnPath("winget.exe", PATH, ';', File.Exists)`):
 `public sealed class MachineGitSetupProbe : IGitSetupProbe { public static MachineGitSetupProbe Instance { get; } }`.
+VisualCommit.Git cannot reach App's `FileLauncher`, so §5 moves `FileLauncher.FindOnPath`'s body and
+comment word for word to `src/VisualCommit.Core/ProgramSearch.cs` (new, §5's), and
+`FileLauncher.FindOnPath` stays as a one-line forward to it:
+`public static string? FindOnPath(string program, string? searchPath, char separator, Func<string, bool> fileExists)`.
 
 `src/VisualCommit.App/Services/GitAccess.cs` (WP0 the surface with today's behaviour; §5 the second
 and later searches):
@@ -425,7 +470,7 @@ and later searches):
 public sealed class GitAccess
 {
     public const string GitNotWorking = "Git is not working on this computer.";   // unchanged
-    public GitAccess(Task<GitDetection> detection);        // unchanged: one fixed search (GitRepositoryProviderTests); ProbeAsync answers NotFound, ReadGuidance the running platform's
+    public GitAccess(Task<GitDetection> detection);        // unchanged: one fixed search (GitRepositoryProviderTests); ProbeAsync answers NotFound, ReadGuidance new GitGuidance(<the running platform>, null, null), reading no file and no PATH
     public GitAccess(IGitSetupProbe probe, Func<GitLookup> lookup, IGitCallLog? callLog, IAppLog log,
         TimeProvider? recordClock, IReadOnlyDictionary<string, string?>? environment);   // new: the session's
     public Task<GitDetection> Detection { get; }           // the latest search, pending until it ends
@@ -481,30 +526,61 @@ void ForgetToolLookup() { }          // drops a finished merge-tool lookup, so t
 // src/VisualCommit.App/Services/PromptDialogs.cs: CreateBroker gains `string? helperPath = null`, passed to AskPassBroker
 ```
 
+`GitConfigurationForgetTests` (§5) use `MergeToolHelpTests`' fake runner, `HeldToolHelpRunner`
+(`MergeToolHelpTests.cs:389`, private today; §5 makes it `internal` where it is, 5.2), never the real
+`git mergetool --tool-help`.
+
 The broker's `gitVersion` (`AskPassBroker`'s two constructors, `CreateBroker`, `AppSession.cs:254`)
 goes at §3's merge, by the lead (D420).
 
 ### 1.3 The launcher's start call
 
 ```csharp
-// src/VisualCommit.App/Services/IFileLauncher.cs (WP0 the member; FileLauncher's body §5, WP0's throws NotSupportedException)
-// Starts command's program off the UI thread, not waited for; FileNotFoundException when the program is not
-// there, the start's own exception when it cannot start.
-Task StartAsync(LaunchCommand command, CancellationToken cancellationToken = default);
+// src/VisualCommit.App/Services/IFileLauncher.cs (WP0 the member with its default body; FileLauncher's body §5)
+// Starts command's program off the UI thread, not waited for; FileNotFoundException when a bare name is not
+// found, the start's own exception when it cannot start.
+Task StartAsync(LaunchCommand command, CancellationToken cancellationToken = default) => Task.FromException(new NotSupportedException());
 // src/VisualCommit.App/Services/FileLauncher.cs, LaunchCommand (WP0)
 public bool InNewTerminal { get; init; }   // Windows: in a console window of its own (UseShellExecute); ignored elsewhere
+// src/VisualCommit.App/Services/FileLauncher.cs, FileLauncher (§5); pure
+public static LaunchCommand ResolveStart(LaunchCommand command, Func<string, string?> findOnPath, string systemFolder);
 // tests/VisualCommit.Testing/Headless/FakeFileLauncher.cs (WP0 whole)
 // FileLaunchKind.Start; IReadOnlyList<LaunchCommand> Starts; Exception? StartFailure { get; set; }
 ```
 
-The two starts (§5): on Windows with git missing and winget found (ruling 44), `new LaunchCommand("cmd.exe", []) { CommandLine = "/K winget install --id Git.Git -e --source winget", InNewTerminal = true }`,
+`FileLauncher` and `FakeFileLauncher` implement `StartAsync`. WP0 adds the member with its default
+body and the fake's; `FileLauncher`'s is §5's, and until then the default answers for it.
+
+How §5 starts a program (D449). `LaunchCommand.ToStartInfo()` (existing, public and pure) sets
+`UseShellExecute = true` and redirects nothing when `InNewTerminal` is set on Windows; such a command
+removes no variables, since a start through the shell takes no environment. `ResolveStart` is pure:
+`cmd.exe` resolves to `systemFolder`'s, any other bare name through `findOnPath`, a full path stays as it
+is, and a bare name that is not found throws `FileNotFoundException`. `StartAsync` is
+`Process.Start(ResolveStart(command, …).ToStartInfo())` off the UI thread, not waited for, its
+`findOnPath` being `FindOnPath` over the `PATH` and its `systemFolder` `Environment.SystemDirectory`.
+The tests call `ResolveStart` and `ToStartInfo` and assert the result; the only call of the real
+`StartAsync` in a test names, without `InNewTerminal`, a full path to a program that does not exist in an
+empty `TempDirectory`: it reads no `PATH` (the rule above), `ResolveStart` keeps the path, and
+`Process.Start` throws the start's own exception before anything starts. No test starts `cmd.exe`,
+winget, `xcode-select`, a terminal or a browser.
+
+The two starts (§5): on Windows with git missing and winget found (ruling 44), with `wingetPath` the
+guidance's `WingetPath`,
+`new LaunchCommand("cmd.exe", []) { CommandLine = "/S /K \"\"" + wingetPath + "\" install --id Git.Git -e --source winget\"", WorkingDirectory = Path.GetDirectoryName(wingetPath), InNewTerminal = true }`,
 after a confirm that shows `winget install --id Git.Git -e --source winget`; on macOS with the tools
 missing (ruling 45), `new LaunchCommand("/usr/bin/xcode-select", ["--install"])`, without the app's
-confirm. No check runs either: both harnesses hand them to the fake, which asserts the command
-(ruling 6). Unverified: that `cmd.exe /K` started so shows a window that stays where Windows
-Terminal is the default console, and that `File.Exists` finds winget's app execution alias; the lead
-tries `/K echo` by hand once before §5's merge and notes whether the laptop has `winget.exe` on its
-`PATH` (F1's real-window picture shows the button only then, 13.4).
+confirm. Given a bare name, `cmd.exe` looks first in its current folder and then along the `PATH`, with
+every `PATHEXT` extension, so the app names the file it found and starts `cmd.exe` in that file's
+folder; with `/S`, `cmd.exe` strips only the outer pair of quotes, so the path stays one piece. The
+confirm and the guide show git-scm.com's line `winget install --id Git.Git -e --source winget`
+unchanged; the log line stays `Started in a terminal: {the command's DisplayText}`. No check runs
+either start: both harnesses hand them to the fake, which asserts the command (ruling 6), the winget
+start with the seam's `WingetPath`, quoted so, and that working folder. Settled (the lead,
+2026-11-19): the laptop has `winget.exe` on its `PATH`, an app execution alias for which `File.Exists`
+is true; the real-window checks F1 and F2 need winget on the gate's machine (D449, 12.3.4 launch 7).
+Still to try by hand once before §5's merge, with the owner told:
+`cmd.exe /S /K ""<the path found>" --version"`, whose window should stay open where Windows Terminal is
+the default console (13.4 item 7).
 
 ### 1.4 The settings key for the git program
 
@@ -515,7 +591,7 @@ public string? GitExecutable { get; init; }   // "gitExecutable": the git chosen
 ```
 
 Absent, phase 6's part S still finds its nine properties. Only a git that is found and new enough is
-saved; "Use the Git on the PATH" removes it.
+saved; `GitSetupUsePathButton` and the settings row's `GitProgramUsePathButton` remove it.
 
 ### 1.5 The theme tokens (§2, D418)
 
@@ -608,8 +684,10 @@ after `FollowSystemTheme` (ruling 54). Until §8 and §11 add their `case` to `A
 `OperationStatus` has `CanCancel` and a `RunningTitle`: `new PaletteEntry(DashboardTexts.CancelTitle(title),
 snapshot.RepositoryDetail, null, true, null, false, PaletteEntryKind.Command, 0, run)`, no key, not
 destructive, its detail the repository's name only while dialogs name it (`NamesRepositoryInDialogs`),
-`run` executing `OperationStatus.CancelCommand` only if `CanExecute` still holds. No `AppCommand`
-value; not on a dashboard (its rows' menus have it).
+`run` executing `OperationStatus.CancelCommand` only if `CanExecute` still holds and
+`OperationStatus.RunningTitle` still equals the title it was listed with; otherwise it does nothing and
+logs Info `Cancel {title}: that operation is no longer running.` (D452). No `AppCommand` value; not on a
+dashboard (its rows' menus have it).
 
 §11: `public const string OpenUserGuideText = "Open the user guide";` in `AppCommands`, shared by the
 palette and the shortcuts list; `new(AppCommand.OpenUserGuide, [new(F1)], KeyPass.Tunnel)`; a last group
@@ -709,7 +787,7 @@ public sealed class SingleInstanceGuard : IDisposable
     public bool WaitToTake();                         // after Closing: TryTakeNow every 250 ms until WaitWhileClosing
     public Func<ForwardAnswer>? ComeForward { get; set; }   // Taken: run on a pool thread, waited for at most Reply; null answers Starting
     public static string? LockingOffWarning(string dataDirectory, string? variableValue, bool switchOn, bool windows);   // pure: the Warning on macOS and Linux when .NET's file locking is off, else null
-    public void Dispose();                            // stops the server, then releases the lock
+    public void Dispose();                            // Taken: stops the server, deletes instance.json, then releases the lock; Held or Unavailable: touches no file
 }
 // src/VisualCommit.App/Views/MainWindow.axaml.cs
 public ForwardAnswer BringForward();                  // restores a minimised window to its last state and activates it; Closing after Closed
@@ -718,13 +796,15 @@ public ForwardAnswer BringForward();                  // restores a minimised wi
 App sets `ComeForward` on the main window's `Opened` to
 `() => Dispatcher.UIThread.InvokeAsync(window.BringForward).GetTask().GetAwaiter().GetResult()` and on
 its `Closed` to `() => ForwardAnswer.Closing`. The endpoint is random per run (a pipe name, or a
-socket path under `Path.GetTempPath()`) and holds nothing of the data folder's path. `Program.Main`
-returns `AppLaunch.Current.ExitCode`: 0 when the first instance answers `Activated` or `Starting`
-(before Avalonia starts), 2 when the notice closes unanswered (ruling 67).
+socket path under `Path.GetTempPath()`) and holds nothing of the data folder's path. The server is made
+with `PipeOptions.CurrentUserOnly | PipeOptions.Asynchronous`, so only the current user can connect
+(D448). `Program.Main` returns `AppLaunch.Current.ExitCode`: 0 when the first instance answers
+`Activated` or `Starting` (before Avalonia starts), 2 when the notice closes unanswered (ruling 67).
 
 The notice is `src/VisualCommit.App/Views/InstanceNoticeWindow.axaml(.cs)`, a `Window` with a
 parameterless constructor (§7 gives it the icon), over `ViewModels/InstanceNoticeViewModel.cs`. Its ids:
-`InstanceNotice`, `InstanceNoticeHeading`, `InstanceNoticeBody`, `InstanceNoticeIfNoWindow`,
+`InstanceNotice`, `InstanceNoticeHeading`, `InstanceNoticeFolder` (the data folder on a line of its own,
+trimmed at its start, D448), `InstanceNoticeBody`, `InstanceNoticeIfNoWindow`,
 `InstanceNoticeStatus`, `InstanceNoticeTryAgain`, `InstanceNoticeClose`. A headless test shows it
 through `InstanceNoticeHost.Show(GuidancePlatform platform, string folder, ThemeVariant theme)` (new,
 §4, in 8a's project), which part I and §9's sweep call. The guard never runs in a harness:
@@ -805,10 +885,15 @@ guide", its text "Open the user guide"). The text dialog's: `DialogTitle`, `Text
 
 | Variable | Read by | Values | In the harnesses |
 |---|---|---|---|
-| `VISUALCOMMIT_GIT_STAND_IN` | `AppSession.Start`, once; §5 logs `VISUALCOMMIT_GIT_STAND_IN is set: Git is looked for only at {value} (a test switch).` as a Warning | a full path: that program is the machine's only git (`GitSource.StandIn`); `none`, or a path without a file: the machine has none. The setting still comes first | removed (null) by `MachineIndependence`; a real-window launch sets it last |
+| `VISUALCOMMIT_GIT_STAND_IN` | `AppSession.Start`, once; §5 logs a Warning: for a full path `VISUALCOMMIT_GIT_STAND_IN is set (a test switch): unless Settings names a Git, Git is looked for only at {value}.`; for `none` and for a value that is not a full path (or, on Windows, does not end in `.exe`) `VISUALCOMMIT_GIT_STAND_IN is set (a test switch): unless Settings names a Git, this computer is treated as having no Git.` | a full path (on Windows ending in `.exe`): that program is the machine's only git (`GitSource.StandIn`); `none`, a path without a file, or any other value: the machine has none. The setting still comes first | removed (null) by `MachineIndependence`; a real-window launch sets it last |
 | `VISUALCOMMIT_GIT_STAND_IN_VERSION`, `VISUALCOMMIT_GIT_STAND_IN_FAILURE` | the stand-in program | its `--version` line (default `git version 2.29.0`); a text written to standard error with exit 128, whatever the arguments | removed |
 | `VISUALCOMMIT_PERF_RUNS` | `Phase8aPerformance` (§10) | runs per measure, 1 to 20; unset, each fact skips (`Assert.SkipUnless`, as D270's keychain tests) | unset; the lead's series sets 5 |
 | `VISUALCOMMIT_GUIDE_ROOT`, `VISUALCOMMIT_GUIDE_PICTURES` | `GuideShots` (§11) | the demo root (`/home/demo` in the workflow): absolute, outside `Path.GetTempPath()` and the repository, empty or holding the marker `.visualcommit-guide`; the pictures' folder | outside the default run |
+
+What the lookup runs (D449): a setting (1.4) or a stand-in that is not `Path.IsPathFullyQualified`, or
+on Windows does not end in `.exe`, is not run: the setting gives `ChosenMissing` with a Warning that says
+why, the stand-in counts as `none`. On macOS a chosen `/usr/bin/git` is not run while `xcode-select -p`
+fails (`CommandLineToolsMissing`). `GitLocatorTests` (§5) has one case per rule.
 
 `tests/VisualCommit.Testing/GitStandIn.cs` (new; WP0) holds the stand-in's names for every test:
 `FileName` (`visualcommit-git-stand-in`, with `.exe` on Windows), `VersionVariable` and
@@ -834,8 +919,8 @@ The data folder gains `settings.json`'s `gitExecutable` (only when set), `instan
 | `FakeFileLauncher`'s `Start`; `GitStandIn` (Testing) | WP0 | 1.3; 1.14 |
 | `FakeGitSetupProbe` (Testing) | §5 | a queue of answers, the last repeated: Missing, ChosenMissing, TooOld, NotWorking, ConfigFault, NotStarted, CommandLineToolsMissing, `RealAt(path, source, version?)` (the machine's runner reported at a fixed path and, if given, version); `AnswerFor(path, answer)` for `ProbeAsync`; a fixed `GitGuidance` for any platform; `Lookups` |
 | `GitWords` (Testing); `TempRepo.StashAsync` | §3 | git's version and words in one place; the scenarios' stashes rebuilt below 2.36 (ruling 72). Members: `Task<GitVersion> VersionAsync()`, `bool HasZdiff3(GitVersion)`, `bool FetchGuardsEveryWorktree(GitVersion)`, `bool StashNamesTheWholeBranch(GitVersion)`, `string StashBranch(string branch, GitVersion)`, `string StashText(string text, GitVersion)`, `string TrackingSetUp(string local, string remote, string remoteBranch, GitVersion)` |
-| `HeldGitRunner` (Testing, `Headless/`) | §6 | an `IGitRunner` over the found git that holds the next call whose arguments start with a given word until `Release()`, with `Started` to await; given through `ShellDriver.Start(gitProbe:)` by a probe that returns `MachineGitSetupProbe`'s detection `with { Runner = held }` |
-| `IconFile`, `PngHeader` (Testing, plain .NET) | §7 | `IconFile.Read(path)` gives `IReadOnlyList<IconFrame>`; `IconFrame(int Size, bool IsPng, byte[] Data)` with `Bgra()` (top-down, unpremultiplied) for a bitmap entry; `PngHeader.Read(path)` gives `(Width, Height, BitDepth, ColourType)`; the lists `IcoSizes`, `PngSizes`, `IconSetNames`, `AppImageSizes` |
+| `HeldGitRunner` (Testing, `Headless/`) | §6 | an `IGitRunner` over the found git that holds the next call whose first argument equals a given word (an unstaged file's diff is `diff-files`, `GitRepository.Changes.cs:201`; a commit is `commit`) until `Release()`, with `Started` to await; given through `ShellDriver.Start(gitProbe:)` by a probe that returns `MachineGitSetupProbe`'s detection `with { Runner = held }` |
+| `IconFile`, `PngHeader` (Testing, plain .NET) | §7 | `IconFile.Read(path)` gives `IReadOnlyList<IconFrame>`; `IconFrame(int Size, bool IsPng, byte[] Data)` with `Bgra()` (top-down, unpremultiplied) for a bitmap entry; `PngHeader.Read(path)` gives `(Width, Height, BitDepth, ColourType)`; the lists `IcoSizes`, `PngSizes`, `IconSetNames`, `AppImageSizes`; `IcnsTypes`, the `.icns`'s entries as `(Type, Size)` in the file's order (`icp4` 16, `icp5` 32, `ic11` 32, `ic12` 64, `ic07` 128, `ic13` 256, `ic08` 256, `ic14` 512, `ic09` 512, `ic10` 1024, D447; without `icp4` and `icp5` if 7.3 drops them), and `IconFile.ReadIcns(path)`, its entries in order as `(string Type, byte[] Data)`; `IconFile.RepositoryPath(string relative)`, public, the path under `VisualRun.RepoRoot`, through which 8a's project reads `assets/brand/generated/` |
 | `InstanceNoticeHost` (8a's project) | §4 | 1.11 |
 | `AutomationSweep` (Testing); `ShellDriver.Phase8a.Uia.cs` | §9 | 1.12; `GraphRowPeer()`, the window's peer made once, `RecordNameChanges(AutomationPeer)` |
 | `RealApp.Memory()`, `RealApp.LogTime(string dataDirectory, Regex line)`, `Phase8aPerformance`, `PerformanceSeries` | §10 | the measures' helpers (perfsingle.md a) |
@@ -878,7 +963,8 @@ either theme below 4.5:1 in `ThemeTokensTests`); rulings 3, 13, 22, 24 to 31. Re
   list of gaps; headless tests of the placeholder's template part and of the row states.
 - The earlier expectations the round changes (ruling 28), each reason drafted once for 8a's report.
 - `scripts/scan-contrast.py` (new) and `scripts/compare-pictures.py --expected`, so the gate can
-  repeat the scan and the masked comparison (ruling 30).
+  repeat the scan and the masked comparison (ruling 30); the scan's eight lists in
+  `docs/test-reports/phase-8a-contrast/`.
 - Part L's six checks, and what §12 needs to repeat five of them.
 
 Left to others: the real-window code (§12); the comparison run and the new references (the lead,
@@ -902,6 +988,7 @@ levels from `#7C8CFF` in red, beyond the picture helpers' tolerance of 8; D419 (
 | `tests/VisualCommit.App.Tests/ThemeTokensTests.cs`; `PanelViewTests.cs` | rewritten; three new tests (2.4) |
 | the 15 earlier test files and the HEAD helpers of 2.4 | ruling 28 |
 | `scripts/scan-contrast.py` (new); `scripts/compare-pictures.py` | 2.6; without `--expected` it is unchanged |
+| `docs/test-reports/phase-8a-contrast/` (new) | the eight lists the scan writes on phase 7b's references (2.6), `colours-any.txt`, `-none`, `-placeholder`, `-placeholder-double-backdrop`, `-danger`, `-danger-on-row`, `-danger-button` and `-accent-on-row`, one `phase-N/<folder>/<name>.png` per line, committed in §2's commits: they are the names ruling 3 asks for, and the research folder is outside the repository (13.4 item 1). The scan's other output (`scan.json`, `report.txt`, `expected.json`) stays outside it; the script makes it again |
 | `tests/VisualCommit.VisualTests.Phase8a/Phase8aChecks.L.cs` (and `.L.Helpers.cs`), `Phase8aExpectations.L.cs`, `Phase8aExpectationTests.L.cs` (new); `ShellDriver.Phase8a.Colours.cs` (new, only if needed) | part L (2.5) |
 
 Each style sets `Foreground` to `VcAccentOnRowBrush` and comes after the style it overrides (of two
@@ -1027,15 +1114,20 @@ pictures, each with a box measured once by hand; the lane-3 cuts and pills; the 
 round-shape rule). It writes `scan.json`, the eight `colours-<list>.txt`, `report.txt` and
 `expected.json`: per `phase-N/<folder>/<name>.png`, boxes `[left, top, right, bottom]`, each hit grown
 by 3 px (6 at 200 %) and joined with its text line's hits within 24 px (48), a danger button whole.
-`compare-pictures.py --expected <file>` lists per picture the changed pixels outside its boxes under
-"Changed outside the expected regions", then "Changed, not expected" and "Expected, not changed"; a
-key may be an `fnmatch` pattern, so the lead can write a file for 0.7's later regions.
+`compare-pictures.py --expected <file>` may be given more than once. A picture's boxes are those of
+every key that matches it, exact or an `fnmatch` pattern, from every file, united; a box is in the
+picture's own pixels, never scaled by the script. The summary then has four headings, always in this
+order: "Changed outside the expected regions" (per picture, the changed pixels outside its boxes),
+"Changed, not expected", "Expected, not changed" and "Changed size": a picture whose width or height
+differs from its reference's (for which `compare` today returns only the two sizes) goes there and
+counts as unexpected, whatever its boxes. So the lead can write a file for 0.7's later regions and
+give it beside the scan's `expected.json` at the gate.
 
 At wave 1, after its lagged list and whole default run (0.4), the lead:
 1. scans `D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual/` (ruling 22); `diff` with
    `research2/colours-*.txt` prints nothing;
 2. compares those references with `artifacts/visual`, `--expected` given: the scripted 1,137 of
-   `colours-any.txt` changed, the 13 of `colours-none.txt` the same file; each entry under the three
+   `colours-any.txt` changed, the 13 of `colours-none.txt` the same file; each entry under the four
    headings is explained (a placeholder in a disabled box, which the scan cannot see) or a finding;
 3. inspects every flagged picture and part L's, then copies the run's scripted pictures to
    `D:/Projects/Personal/phase8-work/references/wave1/`.
@@ -1056,6 +1148,8 @@ two launches, about 1.5 minutes (0.6).
 - Part L passes, each method under 40 s alone, its pictures inspected by the lead.
 - The scan's script reproduces the eight lists; `compare-pictures.py` without `--expected` writes the
   summary it wrote before for one earlier pair of folders.
+- The eight lists are committed in `docs/test-reports/phase-8a-contrast/`, each equal line for line
+  to the scan's and to `research2/colours-<list>.txt`, and nothing else of the scan's output is.
 - At wave 1: 2.6's steps pass, the lagged list and the whole default run are green, and CI is green in
   every job (the floor job as §3 leaves it).
 
@@ -1072,7 +1166,7 @@ two launches, about 1.5 minutes (0.6).
    "Expected, not changed" when nothing else in it changes.
 6. Unverified: a capture's ink at 200 % under ClearType; §12 settles it in D246's runs.
 
-Open points: 13.4, items 1 to 3.
+Open points: 13.4, items 1 to 3; item 1 is settled, and 2.2 and 2.8 carry it.
 
 ## 3. floor: the git floor (D406)
 
@@ -1249,7 +1343,10 @@ New:
 - `BranchOperationTests`: `A_fast_forward_is_refused_…` asserts the exception (`side`, the folder of
   `edges-wt` as git lists it), no `git fetch`, `side` unmoved, the worktree clean, on every git; its
   non-fast-forward half as today. New: a prunable worktree is refused the same way; a branch checked out
-  nowhere costs one `worktree list`, then the fetch.
+  nowhere costs one `worktree list`, then the fetch; `ParseWorktrees` of a block whose path holds a line
+  break (`worktree /srv/a`, then `b`, `HEAD …`, `branch refs/heads/side` and the empty line) gives
+  `Path.GetFullPath("/srv/a")` with `refs/heads/side`, so P1 still sees the branch and names the path up
+  to the break. A path that holds an empty line loses its branch: accepted (3.9, risk 7).
 - `RepositoryOperationsBranchesTests`: `:290` expects the summary with the path (as git lists it,
   compared as a folder), `:291` an empty output and no command; a new theory: `FastForwardFailureDisplay`
   gives `FastForwardInOtherWorktree(branch)` for 2.34's
@@ -1289,23 +1386,34 @@ The builder runs these classes alone with plain `dotnet test` (D245): in Git.Tes
 
 ### 3.5 Visual checks
 
-None. Nothing on screen changes on 2.35 or later; P1's dialog and the old-git note are in no check;
-the "too old" state's checks are §5's (part F).
+None. Nothing on screen changes on 2.35 or later but the second common-dir call's text where that call
+is made (3.6); P1's dialog and the old-git note are in no check; the "too old" state's checks are §5's
+(part F).
 
 ### 3.6 Earlier pictures
 
-None (ruling 3). The proof: the scripted pictures of the builder's runs of `Phase3ChecksA`,
-`Phase3ChecksC`, `Phase5ChecksF`, `Phase5ChecksU` and `Phase6ChecksW`, compared by
+None on the laptop (ruling 3). The proof: the scripted pictures of the builder's runs of
+`Phase3ChecksA`, `Phase3ChecksC`, `Phase5ChecksF`, `Phase5ChecksU` and `Phase6ChecksW`, compared by
 `scripts/compare-pictures.py` with the current references (0.7), show no difference, and a grep shows
 no check with the activity log open on a fast-forward of another branch or on a folder opened below its
-top. The floor job's pictures (`visual-ubuntu-22.04-git-floor`) show 2.34's words and are compared with
-nothing.
+top. The grep's premise holds on the laptop only: `TempDirectory` keeps `Path.GetTempPath()` as it is,
+while git prints the top level as its real path, so on macOS (`/var` is `/private/var`) and on a TEMP
+with a linked or short (8.3) name (CI's Windows job's, probably) the opened folder is never the top level
+as written, and every open whose first answer names the common folder relatively (a main worktree's
+`.git`) makes the second common-dir call (`ResolveCommonDirectoryAsync`, 3.3.4).
+There CI's pictures that show the reads, phase 5's A2 (`a2d-show-reads`), show
+`git rev-parse --path-format=absolute --git-common-dir` where they showed `git rev-parse --git-common-dir`.
+The lead reads the macOS job's after round 1 (3.8), and the report notes the change under "Other
+platforms". The floor job's pictures (`visual-ubuntu-22.04-git-floor`) show 2.34's words and are
+compared with nothing.
 
 ### 3.7 Lagged list, run time, real-window pass
 
-The lagged list gains nothing (P1's read touches no file the watcher sees; `SearchBarTests` already
-covers the search). The default run: about 12 tests more, 8 fewer, seconds. The floor job's Test step
-stays about 7 minutes. The real-window pass: nothing (2.56; its linked constants keep 2.36's words).
+The lagged list gains nothing of §3's own: 0.4's App.Tests command names
+`RepositoryOperationsBranchesTests`, which 3.4 changes (P1's read touches no file the watcher sees;
+`SearchBarTests` already covers the search). The default run: about 13 tests more, 8 fewer, seconds.
+The floor job's Test step stays about 7 minutes. The real-window pass: nothing (2.56; its linked
+constants keep 2.36's words).
 
 ### 3.8 Done when
 
@@ -1316,13 +1424,20 @@ stays about 7 minutes. The real-window pass: nothing (2.56; its linked constants
   "before Git 2.31".
 - The green commit's diff of `ci.yml` is its two removals; the limits read 35 and 25.
 - No 2.36-pinned gate (3.1) changes.
-- 3.6's comparison shows no difference.
+- 3.6's comparison on the laptop shows no difference.
+- After round 1 (3.3.5), the lead reads phase 5's `a2d-show-reads` in that run's macOS artifact
+  (`visual-macos-latest`): its "Show reads" shows the second call as
+  `git rev-parse --path-format=absolute --git-common-dir`, as 3.6 expects; the report notes it under
+  "Other platforms".
 - At the merge the lead removes the broker's `gitVersion` (0.4) and changes: D420 in decisions.md;
-  `requirements.md:21`, `README.md:40`, `CLAUDE.md:530-531` (Git 2.34.1 or newer, the app's minimum and
-  the tests'); architecture.md :614 (P1), :740 (the search), the opening's common folder, :2438-2440,
-  :2573-2576, :2618, :3941, :3986-3987 (D277); plan.md line 758 (2.34.1), risk 26 (2.34.1 and 3.3.3's
-  five differences), risk 31 (2.30 to 2.33 fall away), a new risk (the mirror refspec); the report's
-  "Changes to expected results" (3.4's checks that take 2.34's words, `PartW.ReadForms`).
+  `requirements.md:21`, `README.md:40` and `:55`, `CLAUDE.md:530-531` (Git 2.34.1 or newer, the app's
+  minimum and the tests'), and CLAUDE.md's sentence on the floor job in "What to know" (from this
+  commit its failure fails the run, as the other jobs' does); architecture.md :614 (P1), :740 (the search), the opening's common folder,
+  :2438-2440, :2573-2576, :2618, :3941, :3986-3987 (D277); plan.md line 758 (2.34.1), risk 26 (2.34.1
+  and 3.3.3's five differences), risk 31 (2.30 to 2.33 fall away), two new risks: the mirror refspec
+  (3.9, risk 4), and "on 2.34 P1 does not see a branch being rebased or bisected in another worktree,
+  nor a checkout between its read and the fetch; git 2.35 and later refuse both" (3.9, risk 3); the
+  report's "Changes to expected results" (3.4's checks that take 2.34's words, `PartW.ReadForms`).
 - Afterwards `AccountsSettingsViewModel.cs`, `AskPassBroker.cs` and `MainWindowViewModelTests.cs` pass
   to §5, `Phase7aExpectations.A.cs` to §8 (0.4).
 
@@ -1332,18 +1447,30 @@ Risks:
 1. Hidden assertions: each test stopped at its first failure; 3.4 fixes what a grep finds (check 23's
    undo labels, check 14's left panel and graph), and the next round may find more.
 2. The floor job used 28 min 35 s of its 35 on a slow mirror; such a day can time it out.
-3. P1 reads before git writes: on 2.34 a checkout between the two, or a rebase or bisect of the branch
-   in another worktree, is not caught; 2.35 and later catch both.
+3. P1 reads only the worktrees' branch lines, before git writes. On 2.34 it never sees a branch being
+   rebased or bisected in another worktree (that worktree's HEAD is detached, so no branch line is
+   listed), nor a checkout between its read and the fetch; 2.35 and later refuse both. Reading
+   `rebase-merge/head-name`, `rebase-apply/head-name` and `BISECT_START` in each such worktree, as
+   `worktree.c` v2.35.0:424-429 does, is not taken: git 2.35 and later refuse both cases themselves,
+   and on 2.34 the rebase's end cannot update the moved branch (`sequencer.c` v2.34.1 updates it only
+   from `orig-head`'s value, else `could not update refs/heads/<branch>`): that worktree is left on a
+   detached HEAD with the rebased commits, the branch at the fast-forwarded commit, and nothing is lost
+   (the fast-forwarded commits are still on the remote). plan.md records it as a risk (3.8).
 4. A mirror refspec (`+refs/*:refs/*`) can move a branch checked out in another worktree on 2.34, as
    in a terminal: a plan risk, not fixed (ruling 75).
 5. Ubuntu's 2.34.1 carries backports (`safe.directory`, `protocol.file.allow`): "tested on 2.34.1"
    means Ubuntu's; nothing in the app depends on them.
 6. Git's refusal of this worktree's own branch still reads `… in another worktree.` (today's text on
    2.35 and later); no menu offers that fast-forward.
+7. `ParseWorktrees` ends a block at every empty line, and without `-z` git prints a worktree's path as
+   it is, on 2.34 and 2.56 alike (release notes 2.36.0 lines 110-112): a path that holds an empty line
+   (never on Windows) loses its branch line, so P1 misses that branch on 2.34, where 2.35 and later
+   refuse it. Accepted; a path with a single line break keeps its branch (3.4).
 
 Unverified, with the step that verifies it: the rebuilt stashes' ids on 2.34 (`Phase5ScenarioTests`,
 the new pin; round 1 of the floor job); 2.34's zdiff3 refusal on standard error, and U18's `fsck`
-route (round 1); the second common-dir call in no picture (3.6).
+route (round 1); the second common-dir call in no laptop picture (3.6), and its new text in the macOS
+job's A2 picture (round 1, 3.8).
 
 Open point: 13.4, item 4.
 
@@ -1372,7 +1499,8 @@ folder a second start names (the protocol keeps an empty `args`); any switch.
 
 Decisions: D421 (rulings 16, 67), one instance per data folder, since `session.json` is rewritten
 whole (`JsonSessionStore.cs:31-45`); D422, "Try again" starts the app in the same process once the
-other has ended.
+other has ended; D448 (amends D443), the notice's folder on a line of its own, trimmed at its start,
+and a server that admits the current user only.
 
 ### 4.2 Files
 
@@ -1395,8 +1523,8 @@ in `tests/VisualCommit.App.Tests` (no session: D416) `SingleInstanceGuardTests.c
 `Phase8aExpectations.I.cs`, `Phase8aExpectationTests.I.cs`.
 
 Implements 1.11 whole and 1.10's `Guard`, `Mode` and `ExitCode`. Uses `AppLaunch.Current` and `Timeline` (1.10),
-`GuidancePlatform` (1.2), the 8a support (1.15), `DurableFile.Replace`, `PlatformSystemTheme.IsDarkIn`
-and `Theme/Dialogs.axaml`'s classes.
+`GuidancePlatform` (1.2), the 8a support (1.15), `DurableFile.Replace`, `PlatformSystemTheme.IsDarkIn`,
+`Theme/Dialogs.axaml`'s classes and `Controls/TrimmedTextBlock.cs`.
 
 ### 4.3 Behaviour
 
@@ -1409,8 +1537,8 @@ In order: a comment that an updater's start-up hook goes first (the code names n
 starts); `Closing` gives `Normal` if `WaitToTake()`, else `NotAnswered`; `NotAnswered` gives
 `NotAnswered`. Then WP0's line, extended: `AppLaunch.Current = new() { Timeline = …, Guard = guard,
 Mode = mode }`; the lifetime as today; return `AppLaunch.Current.ExitCode`. The `using` disposes the
-guard after the lifetime and on the rethrow. The waits (at most 8 s, or 30 s after `Closing`) come
-before any UI thread exists (Q2).
+guard after the lifetime and on the rethrow. The waits (at most about 8.5 s: the lock's 250 ms,
+`Connect` and `Reply`; or 30 s after `Closing`) come before any UI thread exists (Q2).
 
 #### 4.3.2 The guard
 
@@ -1420,15 +1548,19 @@ before any UI thread exists (Q2).
   with `Utf8JsonWriter`: `{"v":1,"pid":…,"endpoint":"…","started":"<ISO 8601 with offset>"}`. If the
   old file named a socket path `<Path.GetTempPath()>VisualCommit-<16 hex>` or `/tmp/VisualCommit-<16 hex>`
   exactly and a file is there, it deletes it first (the lock was free, so its owner is gone).
-- `IOException` while `instance.lock` exists: `Held`, without reading an HResult (Unix's for a held
-  `flock` is unchecked).
+- `IOException` while `instance.lock` exists: the open is tried again every 50 ms for 250 ms (a virus
+  scanner or the indexer may hold the file for a moment), then `Held`, without reading an HResult
+  (Unix's for a held `flock` is unchecked). `TryTakeNow` makes no such retries.
 - Anything else (`UnauthorizedAccessException`, no file, a path under a file): `Unavailable`; the start
   goes on as today.
 
-`AskToComeForward` (on `Held` only, else `InvalidOperationException`): every 100 ms until `Connect`
-has passed it reads `instance.json` (missing or half written: again), on Windows calls
-`AllowSetForegroundWindow(pid)` (user32 by `[DllImport]`, as `WindowsJob.cs`; failure ignored),
-connects with `PipeOptions.CurrentUserOnly`, sends one line and waits at most `Reply` for one:
+`AskToComeForward` (on `Held` only, else `InvalidOperationException`): until `Connect` has passed it
+makes an attempt every 100 ms, and re-reads `instance.json` before each; a missing or half-written
+file and an endpoint that refuses the connection are alike: again after 100 ms (so a start that read
+a crashed run's endpoint reaches the new holder once that one has rewritten the file). Each attempt
+connects with `PipeOptions.CurrentUserOnly`; on Windows it first calls `AllowSetForegroundWindow(pid)`
+(user32 by `[DllImport]`, as `WindowsJob.cs`; failure ignored) and connects with a 100 ms timeout.
+Connected, it sends one line and waits at most `Reply` for one:
 client `{"v":1,"request":"come-forward","pid":<its pid>,"args":[]}`; server `{"v":1,"answer":"activated"}`,
 `"starting"` or `"closing"`. Anything else is `NotAnswered`.
 
@@ -1440,8 +1572,11 @@ lowercase: true)`); on macOS and Linux the socket path `<Path.GetTempPath()>Visu
 `/tmp/VisualCommit-<16 hex>` when that is over 100 UTF-8 bytes (macOS allows 104). Nothing of the data
 folder's path. `Endpoint`: the guard's own while `Taken`, else null.
 
-`Dispose` (twice is harmless): stops the server, deletes `instance.json` (best effort), closes the
-lock's stream. The lock file stays (deleted, two processes could lock two files of one name).
+`Dispose` (twice is harmless): on a guard that holds the lock (`Taken`, also after a successful
+`TryTakeNow` or `WaitToTake`), it stops the server, deletes `instance.json` (best effort), then closes
+the lock's stream. The deletion comes before the release, so the file it deletes is its own. A `Held`
+or `Unavailable` guard's `Dispose` touches no file: `instance.json` belongs to the instance that holds
+the lock. The lock file stays (deleted, two processes could lock two files of one name).
 
 On macOS and Linux, `TryTake` logs `LockingOffWarning` when
 `DOTNET_SYSTEM_IO_DISABLEFILELOCKING` is `1` or `true` in any case, or `System.IO.DisableFileLocking`
@@ -1449,11 +1584,15 @@ is on: .NET then takes no lock (perfsingle.md b fact 4). On Windows it does noth
 
 #### 4.3.3 The server and `ComeForward`
 
-A background task, one client at a time; each connection is read for at most `Reply` and 4 KB. A
-malformed line, another `v` or another `request` gets no answer. `ComeForward` null answers
-`starting`; otherwise the guard runs it on a pool thread and waits at most `Reply`, sending its
-answer, or nothing after a throw or a timeout. A server that cannot open its endpoint leaves the
-guard `Taken`, with a Warning; a second start then gets the notice.
+A background task, one client at a time; each connection is read for at most `Reply` and 4 KB. The
+server is a `NamedPipeServerStream` on the endpoint, made with `SingleInstanceGuard.ServerPipeOptions`,
+a public constant (the app has no `InternalsVisibleTo`; test 6 reads it):
+`PipeOptions.CurrentUserOnly | PipeOptions.Asynchronous` (D448; Windows: the pipe admits the current
+user alone; macOS and Linux: the peer's uid is checked). A connection it refuses is dropped
+unanswered, and the next is awaited. A malformed line, another `v` or another `request` gets no
+answer. `ComeForward` null answers `starting`; otherwise the guard runs it on a pool thread and waits
+at most `Reply`, sending its answer, or nothing after a throw or a timeout. A server that cannot open
+its endpoint leaves the guard `Taken`, with a Warning; a second start then gets the notice.
 
 `StartSession` sets `ComeForward` on the main window's `Opened` and `Closed` as 1.11 says (no
 dispatch while the dispatcher stops).
@@ -1477,17 +1616,23 @@ set on the window's own `RequestedThemeVariant`, never the application's.
 
 The window: `Title` "VisualCommit", width 480, `SizeToContent="Height"`, not resizable, centred on
 the screen, `VcPanelBackgroundBrush`, `VcTextPrimaryBrush`, font size 12.5, padding 20, id
-`InstanceNotice`. Top to bottom: the heading (`dialogTitle`, id `InstanceNoticeHeading`), the body
+`InstanceNotice`. Top to bottom: the heading (`dialogTitle`, id `InstanceNoticeHeading`), the folder
+(`TrimmedTextBlock`, class `dialogRepository`, `TextTrimming="LeadingCharacterEllipsis"`, id
+`InstanceNoticeFolder`: one line, never wrapped; its text, `ToolTip.Tip` and automation name are the
+data folder's full path, so the notice's height never depends on the path's length, D448), the body
 (`dialogText`, `InstanceNoticeBody`), the platform's sentence (`dialogText`, `InstanceNoticeIfNoWindow`),
 the status (`dialogWarning`, `InstanceNoticeStatus`, only after an unanswered try), and
 (`dialogButtons`) "Close" (`VcActionButton`, `InstanceNoticeClose`), then "Try again"
 (`VcPrimaryButton`, `IsDefault`, `InstanceNoticeTryAgain`), which takes the focus at open as a
 dialog's button does. Tab goes round the two; Enter is "Try again"; Esc, the title bar's close and
-Alt+F4 are "Close". Each button's automation name is its text.
+Alt+F4 are "Close". Each button's automation name is its text. The window's
+`AutomationProperties.Name` is the heading and its `AutomationProperties.HelpText` the body followed
+by the platform's sentence (one space between), so that a screen reader speaks them when the notice
+opens with the focus on a button; no picture changes.
 
 Texts (`InstanceNoticeTexts`, ruling 58):
 - Title `VisualCommit`; heading `VisualCommit is already running`
-- Body: `Another VisualCommit uses the same data folder, {folder}, but did not answer. Switch to its window, or close it and start VisualCommit again.`
+- Body: `Another VisualCommit uses the same data folder but did not answer. Switch to its window, or close it and start VisualCommit again.`
 - Windows: `If no VisualCommit window is open, end VisualCommit in Task Manager, then choose Try again.`
 - macOS: `If no VisualCommit window is open, quit VisualCommit in Activity Monitor, then choose Try again.`
 - Linux: `If no VisualCommit window is open, end VisualCommit in your system monitor, then choose Try again.`
@@ -1531,34 +1676,48 @@ On .NET 10, `SpecialFolder.ApplicationData` on macOS is `~/Library/Application S
 
 ### 4.5 Tests (the builder runs these classes only, D245)
 
-`SingleInstanceGuardTests` (App.Tests, every platform, CI's six jobs; options 300 ms, 300 ms, 2 s;
-each data folder in a `TempDirectory`, named `data folder`, with a space):
+`SingleInstanceGuardTests` (App.Tests, every platform, CI's six jobs; each data folder in a
+`TempDirectory`, named `data folder`, with a space). Each guard's options are the test's own (they
+belong to each guard, 1.11): a guard expected to answer, serve, take or wait gets `Connect` 5 s,
+`Reply` 5 s and `WaitWhileClosing` 30 s, and every wait ends as soon as its condition holds; 300 ms
+only on the side whose expected result is that no answer comes, where a stall under load can only
+make that result surer. No test asserts an elapsed time under 1 s: the default run's load stretches
+every step (D237), and a 250 ms window on the real clock failed in CI before
+(Git.Tests' `RepositoryWatcherTests.cs:206-210`).
 1. A second guard on a taken folder is `Held`; one on another folder `Taken`.
 2. `AskToComeForward` reaches a fake `ComeForward` once: `Activated`; with it null, `Starting`; the
    holder's log has the server's line with the asker's pid.
-3. The test holds `instance.lock` itself, no `instance.json`: `NotAnswered` within `Connect` plus
-   100 ms, with `no instance.json` in the Warning.
+3. The test holds `instance.lock` itself, no `instance.json`: `NotAnswered`, with at least `Connect`
+   (300 ms) elapsed and at most `Connect` plus 5 s, with `no instance.json` in the Warning.
 4. `ComeForward` answers `Closing`, the holder disposes 300 ms later: `WaitToTake` true, `Outcome`
    `Taken`, and a third guard's ask reaches it.
 5. A lock file left unheld and an `instance.json` naming a stale endpoint (on macOS and Linux a file at
    that path): the next guard is `Taken` and serves; on Unix the stale file is gone.
+5a. A guard is `Taken`; the test replaces its `instance.json` with one naming a stale endpoint (as 5),
+   starts a second guard's ask and writes the holder's file back 300 ms later: the ask gets
+   `Activated`.
 6. `Endpoint` holds no segment of the data folder below the temp folder; Windows
    `^VisualCommit-[0-9a-f]{16}$`, elsewhere the temp folder or `/tmp/` plus that, at most 100 bytes; two
-   guards' differ.
+   guards' differ. `SingleInstanceGuard.ServerPipeOptions` includes `PipeOptions.CurrentUserOnly`.
 7. A data folder under a file (`<temp>/a-file/data`): `Unavailable`, no throw, a Warning naming it (a
    path under a file fails as root too, which a read-only folder would not in CI's containers).
 8. `LockingOffWarning`: `1`, `TRUE` and the switch give the text on macOS and Linux; unset, `0`, and
    anything on Windows give null.
 9. A malformed line, `"v":2` and a silent client get no answer and the next client is served; a
-   `ComeForward` that throws or outlasts `Reply` gives `NotAnswered` and a Warning, and the next is served.
+   `ComeForward` that throws, or one that blocks on a gate the test opens only after the holder's
+   Warning, gives the asker (`Reply` 300 ms) `NotAnswered`; the holder (`Reply` 5 s) logs the Warning,
+   and the next client is served.
 10. `Dispose` twice is harmless; afterwards `instance.json` is gone, `instance.lock` stays, a new guard
     is `Taken`.
+11. A `Held` guard asks (`Activated`) and is disposed: the holder's `instance.json` is unchanged byte
+    for byte, and a third guard's `AskToComeForward` gets `Activated`. The same holds for a `Held`
+    guard disposed after `NotAnswered`.
 
-`InstanceNoticeViewModelTests` (App.Tests): the texts per platform, word for word; `Trying…` and
-disabled while a held try runs; `NoAnswer` shows the status and enables the button; `HandedOver`,
-`Free` and "Close" give `HandedOver`, `StartHere` and `Closed`, "Close" also during a try, whose later
-result changes nothing; the theme read: `"theme": "Light"` light, missing and unreadable Dark, the
-unreadable file still there.
+`InstanceNoticeViewModelTests` (App.Tests): the texts per platform, word for word; the folder line's
+text is the folder given; `Trying…` and disabled while a held try runs; `NoAnswer` shows the status
+and enables the button; `HandedOver`, `Free` and "Close" give `HandedOver`, `StartHere` and `Closed`,
+"Close" also during a try, whose later result changes nothing; the theme read: `"theme": "Light"`
+light, missing and unreadable Dark, the unreadable file still there.
 
 `MainWindowBringForwardTests` (App.Tests, `[AvaloniaFact]`, `new MainWindow()` as
 `PanelViewTests.cs:325`): Maximized, then Minimized, comes back Maximized; Normal comes back Normal;
@@ -1584,13 +1743,18 @@ paths are made up (ruling 63). §9's sweep shows it the same way.
 
 | Id | Steps | Expected | Theme, size | Real window |
 |---|---|---|---|---|
-| I1 | Not scripted (no harness runs `Program.Main`). Launch A on folder D; minimise it; start B on D, same exe and environment | B exits 0 within 10 s with no window; A is not iconic and visible within 2 s; the foreground noted, not asserted; D's log has B's "asked to come to the front" and A's "answered activated"; `session.json`'s bytes unchanged by B | dark, 1100×700 | yes, its own (12.3.4 launch 4) |
-| I2 | Windows text, `C:\Users\demo\AppData\Roaming\VisualCommit`; open: `i2a-notice-dark`; Enter, try held: `i2b-notice-trying`; no answer: `i2c-notice-no-answer`; Esc | i2a: heading, body with the path, the Windows sentence, no status, Close then Try again, Try again focused; i2b: `Trying…`, disabled; i2c: `It still did not answer.` in the warning colour, Try again enabled and focused; Esc: `Closed`, window gone | dark, 480 wide | yes: exit 2, then Try again starting the app after the lock is freed (12.3.4 launches 5 and 6; D443 masks the body) |
+| I1 | Not scripted (no harness runs `Program.Main`). Launch A on folder D; minimise it; start B on D, same exe and environment | B exits 0 within 10 s with no window; A is not iconic and visible within 2 s; the foreground noted, not asserted; D's log has B's "asked to come to the front" and A's "answered activated"; `session.json`'s and `instance.json`'s bytes unchanged by B | dark, 1100×700 | yes, its own (12.3.4 launch 4) |
+| I2 | Windows text, `C:\Users\demo\AppData\Roaming\VisualCommit`; open: `i2a-notice-dark`; Enter, try held: `i2b-notice-trying`; no answer: `i2c-notice-no-answer`; Esc | i2a: heading, the folder line with the path, the body, the Windows sentence, no status, Close then Try again, Try again focused; i2b: `Trying…`, disabled; i2c: `It still did not answer.` in the warning colour, Try again enabled and focused; Esc: `Closed`, window gone | dark, 480 wide | yes: exit 2, then Try again starting the app after the lock is freed (12.3.4 launches 5 and 6; D443, as D448 amends it, asserts equal heights and masks the folder line) |
 | I3 | Linux text, `/home/demo/.config/VisualCommit`; open: `i3a-notice-light`; Tab, Tab, Shift+Tab, Space | as i2a in light with the Linux sentence; the focus goes Close, Try again, Close; Space: `Closed` | light, 480 wide | no |
 
-`Phase8aExpectations.I` holds the names, the texts and the log lines' fragments that §12 reads. By
-hand at the gate (0.5): a second start from the taskbar while the app is behind another window; macOS
-(`open -n`, Terminal) goes to 8b's Mac checklist.
+`Phase8aExpectations.I` holds the names (among them `InstanceNoticeFolder`, the element D448 masks),
+the texts and the log lines' fragments that §12 reads. By hand at the gate (0.5), isolated: the lead
+gives the owner a `.cmd` file outside the repository that sets CLAUDE.md's isolating variables
+(`VISUALCOMMIT_DATA_DIR` to a folder of its own, `GIT_CONFIG_NOSYSTEM=1`, `GIT_CONFIG_GLOBAL` to an
+empty file of its own, `XDG_CONFIG_HOME` to an empty folder, `VISUALCOMMIT_KEYCHAIN=memory`, and
+`VISUALCOMMIT_GITHUB_URL`, `VISUALCOMMIT_AZURE_DEVOPS_URL` and `VISUALCOMMIT_GITLAB_URL` set to `none`)
+and starts the Release build; the owner starts it twice, the second time while another window is in
+front of the first. macOS (`open -n`, Terminal) goes to 8b's Mac checklist.
 
 ### 4.7 Earlier pictures
 
@@ -1604,7 +1768,8 @@ folder's files (Grep), and each relaunch waits for the exit.
 
 ### 4.8 Lagged list, time, the pass
 
-Lagged list: nothing new (8a's project is listed; part I has no watcher). Default run: about 30 s.
+Lagged list: nothing new (8a's project is listed; part I has no watcher). Default run: about 35 s
+(test 9 waits out the holder's 5 s `Reply`).
 Real-window pass: I1 about 50 s, I2's launches about 15 and 45 s: about 2 minutes (0.6).
 
 ### 4.9 Done when; risks; open points
@@ -1634,7 +1799,11 @@ wrote "settings folder". I2's second launch (about 45 s) stays: without it D422 
 Key `firstrun`, wave 2, after §3 (the texts read `GitVersion.Minimum`, 2.34.1). Carries R4, D405, plan
 757, 766, 767, 773, 781, 786, rulings 4 to 9 and 40 to 48. Its decisions: D423 (rulings 4 to 6, 9,
 40 to 46, 48; D405), the setting, the lookup, the screen, winget and the helper; D424 (rulings 7, 8),
-no `ssh -V` probe and the netrc note.
+no `ssh -V` probe and the netrc note; D449 (amends D423), winget started by its path and the full paths
+a git must have.
+
+§5's builder starts only after the owner's answer on winget for a git that is too old or not working
+(13.3); until then the section stands as ruling 44 has it.
 
 ### 5.1 Delivers and leaves
 
@@ -1647,7 +1816,12 @@ hand (8b).
 ### 5.2 Files and contracts
 
 New: `src/VisualCommit.Git/OsRelease.cs` (`Parse(string) → LinuxDistribution?`; `/etc/os-release`,
-else `/usr/lib/os-release`);
+else `/usr/lib/os-release`); `src/VisualCommit.Core/ProgramSearch.cs` (a static class in
+`VisualCommit.Core`: `public static string? FindOnPath(string program, string? searchPath, char separator, Func<string, bool> fileExists)`,
+`FileLauncher.FindOnPath`'s body and comment moved word for word, D130's rule of fully qualified
+folders with them; `FileLauncher.FindOnPath` stays as a one-line forward, so its callers, its tests and
+the comment at `KnownEditors.cs:295` are unchanged; VisualCommit.Git, which cannot reach App's
+`FileLauncher`, calls it);
 `src/VisualCommit.App/ViewModels/GitSetup/GitSetupViewModel.cs`, `GitSetupTexts.cs` (every text below);
 `Views/Shell/GitSetupView.axaml(.cs)`; `ViewModels/MainWindowViewModel.Git.cs`;
 `ViewModels/Settings/GitProgramViewModel.cs`; `tests/VisualCommit.GitStandIn/` (as
@@ -1658,18 +1832,21 @@ else `/usr/lib/os-release`);
 Changed: `src/VisualCommit.Git/GitLocator.cs` (`GitSearchContext` gains init `IsMacOS`,
 `Func<bool>? CommandLineToolsInstalled`), WP0's `GitSetupProbe.cs`, `GitConfiguration.cs`,
 `Prompts/AskPassBroker.cs`; under `src/VisualCommit.App/`: `Services/GitAccess.cs`,
-`Services/FileLauncher.cs` (`StartAsync`, `InNewTerminal`), `ViewModels/MainWindowViewModel.cs`,
+`Services/FileLauncher.cs` (`StartAsync`'s body, `ResolveStart`, `ToStartInfo`'s case for
+`InNewTerminal`, `FindOnPath` a forward to `ProgramSearch`), `ViewModels/MainWindowViewModel.cs`,
 `.Settings.cs`, `RepoTabViewModel.cs`, `WelcomeViewModel.cs`, `Views/Shell/CommitGraphView.axaml(.cs)`,
 `StatusBarView.axaml`, `Views/Dialogs/SettingsDialogView.axaml`,
 `ViewModels/Dialogs/SettingsDialogViewModel.cs` (and the D277 comment at `:62`, which now names the
 netrc note), `ViewModels/Settings/AccountsSettingsViewModel.cs` (it keeps `gitVersion` and gains
 optional `Func<bool>? homeHasNetrc`, `Action? dismissNetrcNote`), the D277 comment at
 `SettingsDialogView.axaml:560`; `tests/VisualCommit.Git.Tests/VisualCommit.Git.Tests.csproj` (the
-stand-in's reference).
+stand-in's reference); `tests/VisualCommit.Git.Tests/MergeToolHelpTests.cs` (its fake runner
+`HeldToolHelpRunner`, a private nested class at `:389`, made `internal` for `GitConfigurationForgetTests`).
 
 Made real: 1.2 (with `GitAccess.ProbeAsync`, `ReadGuidance` and `RepoTabViewModel.GitSetup`), 1.3's
-`StartAsync`, 1.4, 1.10's `ProbeGit`, `HomeHasNetrc` and `DismissNetrcNote`, 1.14, 1.15's fake. Used:
-`GitSetupStates.Of`, `AppLinks.Guide`, `FakeFileLauncher`, `ShellDriver.Start`, `GitStandIn`.
+`StartAsync`, `ResolveStart` and `ToStartInfo`'s case for `InNewTerminal`, 1.4, 1.10's `ProbeGit`,
+`HomeHasNetrc` and `DismissNetrcNote`, 1.14, 1.15's fake. Used: `GitSetupStates.Of`, `AppLinks.Guide`,
+`FakeFileLauncher`, `ShellDriver.Start`, `GitStandIn`.
 `GitSearchContext` (`GitLocator.cs`) gains init members `bool IsMacOS` and `Func<bool>?
 CommandLineToolsInstalled`, its positional constructor unchanged.
 
@@ -1678,9 +1855,16 @@ CommandLineToolsInstalled`, its positional constructor unchanged.
 **Lookup**, off the caller's thread (it may start `xcode-select`): the setting: a file there is run
 whatever it answers (`Setting`); no file: `NotFound` with `ChosenMissing`, and `PathCandidate` = what
 the next steps find, not run; no fallback (ruling 41). Else `StandIn`: a path to a file is the only git;
-`none` or no file: none. Else the PATH, then the usual folders, as today. On macOS `/usr/bin/git`, from
-either, only when `/usr/bin/xcode-select -p` exits 0 within 5 s (asked once per search); otherwise
-skipped with `CommandLineToolsMissing`.
+`none` or no file: none. Else the PATH, its fully qualified folders only (as `ProgramSearch.FindOnPath`, D130; today's
+search also takes a relative entry, which would run a git from the app's current folder, D449), then
+the usual folders. A setting or a stand-in that
+is not `Path.IsPathFullyQualified`, or on Windows does not end in `.exe`, is never run (D449): the
+setting gives `ChosenMissing` as a gone file does, with a Warning `The Git chosen in Settings is not
+used: {path} is not a full path.` or, on Windows, `The Git chosen in Settings is not used: {path} is
+not an .exe file.`; the stand-in counts as `none`. On macOS `/usr/bin/git`, from the setting, the PATH
+or the usual folders, is run only when `/usr/bin/xcode-select -p` exits 0 within 5 s (asked once per
+search); otherwise it is skipped with `CommandLineToolsMissing`, and a chosen one gives `NotFound` with
+no fallback (the screen's Missing M with the tools missing).
 
 **Version.** Not started: `Broken`, `ErrorText` the exception's message. Exit ≠ 0 or no version:
 `Broken`, `ErrorText` standard error, else output (≤ 4,000), `ExitCode`; `^fatal: bad config line (\d+)
@@ -1688,11 +1872,21 @@ in file (.+)$` gives `ConfigFault`; the Warning names that first line. `Using Gi
 stays; a Debug line adds the source. Windows, no `.windows.` in the output: used, with Warning `Git
 {version} at {path} is not Git for Windows; VisualCommit is tested with Git for Windows.`
 
-**GitAccess** as 1.2; 1.14's Warning once, at the first search with a stand-in; ChosenMissing's text
-`The Git chosen in Settings was not found at {path}.` `ProbeAsync` and `ReadGuidance` as 1.2.
+**GitAccess** as 1.2; 1.14's Warning once, at the first search with a stand-in: `VISUALCOMMIT_GIT_STAND_IN
+is set (a test switch): unless Settings names a Git, Git is looked for only at {value}.`, or, for `none`
+and for a value that is not a full path (or, on Windows, does not end in `.exe`), as 1.14 has it (a full
+path with no file gets the first), `VISUALCOMMIT_GIT_STAND_IN is set (a test switch): unless Settings
+names a Git, this computer is treated as having no Git.`; ChosenMissing's text
+`The Git chosen in Settings was not found at {path}.`, or, for a setting the lookup does not run, the
+Lookup's Warning text: `The Git chosen in Settings is not used: {path} is not a full path.` or, on
+Windows, `The Git chosen in Settings is not used: {path} is not an .exe file.` `ProbeAsync` and
+`ReadGuidance` as 1.2; the fixed-detection constructor's `ReadGuidance` is
+`new GitGuidance(<the running platform>, null, null)` and reads no file and no `PATH`.
 **Guidance**, off the UI thread and only while the screen shows: on Windows
-`WingetPath` = `FileLauncher.FindOnPath("winget.exe", PATH)`, the search `cmd.exe` makes; on Linux
-`OsRelease`.
+`MachineGitSetupProbe.ReadGuidance` sets `WingetPath` = `ProgramSearch.FindOnPath("winget.exe", PATH,
+';', File.Exists)`: fully qualified `PATH` folders only, and the path 1.3's start runs. `cmd.exe`'s own
+search of a bare name, which starts in its current folder and tries each `PATHEXT` extension, is never
+relied on. On Linux `OsRelease`.
 
 **States** (`GitSetupStates.Of(Git, Prompts.MissingHelperPath)`): the screen shows for Missing,
 ChosenMissing, TooOld, NotWorking, and HelperMissing until "Continue without it" (this session). A
@@ -1706,21 +1900,24 @@ it gives it to the graph area's target. Layout as the welcome page, `MaxWidth` 5
 SemiBold), body (`secondary`), the path (`PathTextBlock`), "Git said:" over a `SelectableTextBlock`
 (`VcCodeFontFamily`, `VcBorderBrush`, six lines, then a scroll bar), guidance, the command with Copy,
 buttons (`VcActionButton`), `GitSetupError`, links (`VcFlatButton`, `VcAccentBrush`). Tokens only.
+`GitSetupView`'s `AutomationProperties.Name` is the state's title and its `AutomationProperties.HelpText`
+the state's body, so that a screen reader speaks them when the screen shows with the focus on its first
+button (§9's sweep and Narrator steps 20 and 21 read them); no picture changes.
 
 **Buttons** (W, M, L the guidance's platform; "chosen": the git came from the setting):
 
 | Id | Text | Shown | Does |
 |---|---|---|---|
-| `GitSetupWingetButton` | `Install with winget…` | W Missing, `WingetPath` set | confirm, then 1.3's start |
-| `GitSetupDownloadButton` | `Download Git for Windows` | W Missing, TooOld, NotWorking without a fault | `https://git-scm.com/install/windows` |
+| `GitSetupWingetButton` | `Install with winget…` | W Missing, `WingetPath` set (and ChosenMissing without a candidate where the owner's answer, 13.3, allows it) | confirm, then 1.3's start |
+| `GitSetupDownloadButton` | `Download Git for Windows` | W Missing, TooOld, NotWorking without a fault, ChosenMissing without a candidate | `https://git-scm.com/install/windows` |
 | `GitSetupCltButton` | `Install the Command Line Tools` | M Missing with the tools missing; M NotWorking with `xcrun: error` or `requesting installation of command line developer tools` | 1.3's start, no confirm |
 | `GitSetupShowFileButton` | `Show the file` | a config fault | `RevealAsync(file)` |
 | `GitSetupChooseButton` | W `Choose git.exe…`, M L `Choose the git program…` | all but HelperMissing | Choose |
-| `GitSetupUsePathButton` | `Use the Git on the PATH` | ChosenMissing; TooOld, NotWorking when chosen | removes the setting, Check again |
+| `GitSetupUsePathButton` | ChosenMissing: `Use the Git it found`; TooOld, NotWorking: `Use the Git on the PATH` | ChosenMissing with a candidate; TooOld, NotWorking when chosen | removes the setting, Check again |
 | `GitSetupCheckAgainButton` | `Check again`; `Checking…` disabled while searching | all | Check again |
 | `GitSetupContinueButton` | `Continue without it` | HelperMissing | hides the screen |
 | `GitSetupCopyButton` | `Copy` | a command shows | the command to the clipboard |
-| `GitSetupMoreLink` | `Other ways to install Git` | M, L Missing, TooOld | `https://git-scm.com/install/mac`, `/linux` |
+| `GitSetupMoreLink` | `Other ways to install Git` | M, L Missing, TooOld, ChosenMissing without a candidate | `https://git-scm.com/install/mac`, `/linux` |
 | `GitSetupGuideLink` | `How VisualCommit finds Git`; helper: `What the helper does` | all | `AppLinks.Guide` of the state's page |
 
 **Texts** (`{v}` found, `{min}` `GitVersion.Minimum`; the path in `GitSetupPath`):
@@ -1730,8 +1927,8 @@ buttons (`VcActionButton`), `GitSetupError`, links (`VcFlatButton`, `VcAccentBru
 | Missing W | `VisualCommit needs Git` | `VisualCommit works through the Git installed on this computer, and it found none: not on the PATH, nor in Git for Windows' usual install folders.` | `Install Git for Windows, then press Check again. VisualCommit does not need to restart.` |
 | Missing M | same | `VisualCommit works through the Git installed on this Mac, and it found none.` + tools missing: ` Apple's Command Line Tools, which include Git, are not installed.` | tools missing: `Install the Command Line Tools, which macOS asks you to confirm, or install Git with Homebrew, then press Check again. With Homebrew, in Terminal:`; else `Install Git with Homebrew, then press Check again. In Terminal:`; command `brew install git` |
 | Missing L | same | `VisualCommit works through the Git installed on this computer, and it found none on the PATH or in the usual folders.` | known: `Install it with your distribution's package manager, in a terminal, then press Check again. On {PRETTY_NAME, else ID}:` + command; unknown: `Install the package named git with your distribution's package manager, then press Check again.` |
-| ChosenMissing | `The chosen Git is gone` | `VisualCommit was set to use the Git at this path, and there is no file there now:` | `The Git on the PATH is at {candidate}. Use it, choose another, or press Check again once the chosen one is back.`; none: `No other Git was found on the PATH or in the usual install folders. Choose another, or press Check again once the chosen one is back.` |
-| TooOld | `Git {v} is too old` | `VisualCommit needs Git {min} or newer. It found Git {v} at:` | W `Update Git for Windows, then press Check again. Its installer updates it in place.`; M `Update the Command Line Tools in System Settings, General, Software Update, or install Git with Homebrew, then press Check again. With Homebrew, in Terminal:` + `brew install git`; L Ubuntu in `ID` or `ID_LIKE`: `The Git team's PPA for Ubuntu has the newest Git. Add it in a terminal, then press Check again:` + `sudo add-apt-repository ppa:git-core/ppa && sudo apt update && sudo apt install git`; L other: `Install a newer Git from your distribution, or choose another Git, then press Check again.` |
+| ChosenMissing | `The chosen Git is gone` | `VisualCommit was set to use the Git at this path, and there is no file there now:`; a setting the lookup does not run (not a full path, or not `.exe` on Windows; `GitSetupTexts` applies the lookup's rule to the path): `VisualCommit was set to use the Git at this path, but it runs Git only from a full path to the program itself:` | `VisualCommit found another Git at {candidate}.`; none: `No other Git was found on the PATH or in the usual install folders. Choose another, or press Check again once the chosen one is back.` |
+| TooOld | `Git {v} is too old` | `VisualCommit needs Git {min} or newer. It found Git {v} at:` | W `Update Git for Windows, then press Check again. Its installer updates it in place.`; M `Update the Command Line Tools in System Settings, General, Software Update, or install Git with Homebrew, then press Check again. With Homebrew, in Terminal:` + `brew install git`; L, every distribution, no command: `Install a newer Git from your distribution, or choose another Git, then press Check again.` (`GitSetupMoreLink` is the way to other sources; the app names no third-party package source, D449) |
 | NotWorking | `Git is not working` | `VisualCommit found Git at the path below, but it did not report its version.`; empty output: `…but it said nothing and exited with code {n}.`; not started: `…but it could not be started: {message}` | fault: `Git cannot read line {n} of {file}. Correct that line, or rename the file, then press Check again.`; W `Repair or reinstall Git for Windows, then press Check again.`; M tools broken: `Apple's Command Line Tools look damaged. Install them again, or select them in Terminal, then press Check again:` + `sudo xcode-select --switch /Library/Developer/CommandLineTools`; M `Reinstall Git, then press Check again.`; L `Reinstall git with your distribution's package manager, then press Check again.` |
 | HelperMissing | `Part of VisualCommit is missing` | `Git works, but VisualCommit's helper for git's questions is missing. It was looked for at:` | `Without it, git and ssh cannot ask for a password, a passphrase or a host key here, and a signed-in account cannot be used for git. Install VisualCommit again to restore it.` |
 
@@ -1743,12 +1940,25 @@ Linux commands by `ID`, then each `ID_LIKE` token: `debian`, `ubuntu`: `sudo apt
 opens a terminal window that runs winget install --id Git.Git -e --source winget", "winget downloads Git
 for Windows from its community repository, which the Git for Windows project does not maintain, and runs
 the installer; Windows may ask for permission. When it has finished, close the window and press Check
-again.", "Install", IsDestructive: false)`; Install starts 1.3's `cmd.exe /K` command, not waited for,
-logged Info `Started in a terminal: cmd.exe /K winget install --id Git.Git -e --source winget`.
-`StartAsync`: `cmd.exe` from the System folder, other bare names by `FindOnPath`; no file:
-`FileNotFoundException`; `InNewTerminal` on Windows sets `UseShellExecute`. The tools' start logs
-`Started: /usr/bin/xcode-select --install`. A failed start: `{winget|xcode-select} could not be
-started: {message}` in `GitSetupError`.
+again.", "Install", IsDestructive: false)`; Install starts 1.3's command (D449),
+`new LaunchCommand("cmd.exe", []) { CommandLine = "/S /K \"\"" + wingetPath + "\" install --id Git.Git -e --source winget\"", WorkingDirectory = Path.GetDirectoryName(wingetPath), InNewTerminal = true }`
+with `wingetPath` the guidance's `WingetPath`, not waited for, logged Info `Started in a terminal: {the
+command's DisplayText}`. winget runs from the path the guidance found, never from its bare name: given
+a bare name, `cmd.exe` would look first in its current folder (a cloned repository when the app was
+started there) and then in every `PATH` folder under each `PATHEXT` extension. Started in winget's
+folder with that file's full path, it runs the file the screen checked; `/S` and the outer pair of
+quotes keep the path one piece whatever characters it holds. The confirm and the guide show
+git-scm.com's line `winget install --id Git.Git -e --source winget` unchanged.
+`StartAsync` is `Process.Start(ResolveStart(command, findOnPath, Environment.SystemDirectory).ToStartInfo())`
+off the UI thread, not waited for, with `findOnPath` the forward `FileLauncher.FindOnPath` over the
+`PATH`, `Path.PathSeparator` and `File.Exists`.
+`public static LaunchCommand FileLauncher.ResolveStart(LaunchCommand command, Func<string, string?> findOnPath, string systemFolder)`
+is pure: `cmd.exe` resolves to `systemFolder`'s, any other bare name through `findOnPath`, a full path
+stays as it is (the tools' `/usr/bin/xcode-select`); a bare name that is not found throws
+`FileNotFoundException`, before any start. `LaunchCommand.ToStartInfo()` sets `UseShellExecute = true`
+and redirects nothing when `InNewTerminal` is set on Windows; elsewhere `InNewTerminal` changes nothing.
+The tools' start logs `Started: /usr/bin/xcode-select --install`. A failed start: `{winget|xcode-select}
+could not be started: {message}` in `GitSetupError`.
 
 **Choose**: the picker (`Choose git.exe`; `Choose the git program`); on Windows a name without `.exe`
 gets `SettingsTexts.ProgramNotExe` unrun; `GitSetupError` reads `Checking…`; `ProbeAsync`. Found:
@@ -1779,13 +1989,16 @@ screen, else a new tab.
 in "This repository"; `Grid 132,12,*`, top margin 18. Label `Git program`; `GitProgramPath`
 (`TrimmedTextBlock`, leading ellipsis): the pending choice, else the git in use, else `None found`;
 `GitProgramNote`: `Found on the PATH.`, `Found in Git for Windows' install folder.` (else `Found in a
-usual install folder.`), `Chosen here.`, `Chosen here. There is no file at this path.`, `From
-VISUALCOMMIT_GIT_STAND_IN, a test switch.`, `No Git was found on the PATH or in the usual install
-folders.`; then, while the choice differs from the git in use, ` VisualCommit uses it from its next
-start.` (git works) or ` VisualCommit looks for Git again when you save.`; `GitProgramBrowseButton`
-`Browse…` (Choose's checks; `GitProgramStatus`); `GitProgramUsePathButton` `Use the Git on the PATH`
-while a path is chosen. Save's step 2 writes `GitExecutable`. After the screen closes, a changed setting
-while git does not work runs Check again.
+usual install folder.`), `Chosen here.`, `Chosen here. There is no file at this path.` (for a setting
+the lookup does not run, `Chosen here. VisualCommit runs Git only from a full path to the program
+itself.`), `From VISUALCOMMIT_GIT_STAND_IN, a test switch.`, `No Git was found on the PATH or in the
+usual install folders.`; then, while the choice differs from the git in use, ` VisualCommit uses it
+from its next start.` (git works) or ` VisualCommit looks for Git again when you save.`;
+`GitProgramBrowseButton` `Browse…` (Choose's checks; `GitProgramStatus`); `GitProgramUsePathButton`
+`Use the Git on the PATH` while a path is chosen; `Use the Git it found` instead in ChosenMissing with a
+candidate, as on the screen, and while a pending choice would give way to a git in use that the install
+folders gave (`GitSource.InstallFolder`). Save's step 2 writes `GitExecutable`. After the screen
+closes, a changed setting while git does not work runs Check again.
 
 **Netrc note** (ruling 8): `AccountsNetrcNote` (`settingsNote notice`, `VcWarningBrush`) and
 `AccountsNetrcDismiss` `Dismiss`, under the blocks, while an account is signed in with "Use for git
@@ -1804,24 +2017,40 @@ ignores it and asks in the terminal VisualCommit was started from, if there is o
 ({path}).`
 
 **FakeGitSetupProbe** (1.15) shows made-up values: `C:\Program Files\Git\cmd\git.exe`,
-`C:/Users/demo/.gitconfig`; Ubuntu 22.04 (`ubuntu`, [`debian`], `Ubuntu 22.04.5 LTS`), Alpine.
+`C:/Users/demo/.gitconfig`; Ubuntu 22.04 (`ubuntu`, [`debian`], `Ubuntu 22.04.5 LTS`), Alpine. Its
+ChosenMissing answer takes a candidate or none.
 
 ### 5.4 Tests
 
-Fail first: the lookup, the stand-in, the macOS rule, `ConfigFault`, the reopening, `StartAsync`,
-`CheckHelper`, Choose's write, the row, the note.
-- Git.Tests: `GitLocatorTests` (added: the order; a gone setting; the stand-in, `none`; the macOS rule
+Fail first: the lookup, the stand-in, the macOS rule, `ConfigFault`, the reopening, `ResolveStart` and
+`ToStartInfo`'s case for `InNewTerminal`, `CheckHelper`, Choose's write, the row, the note.
+- Git.Tests: `GitLocatorTests` (added: the order; a gone setting; the stand-in, `none`; one case per
+  rule of D449: a setting that is not a full path, a stand-in that is not, a setting and a stand-in
+  without `.exe` on Windows, a chosen `/usr/bin/git` while `xcode-select -p` fails, a relative `PATH` entry that holds git
+  skipped; the macOS rule
   through the context; TooOld, Broken 128 and the "answers only" case through the stand-in; the Windows
   Warning; real git with `[user` in `GIT_CONFIG_GLOBAL` gives `ConfigFault(file, 1)`, on every CI job);
   `OsReleaseTests` (quotes, escapes, `#`, a later key wins, the `/usr/lib` file), `GitStandInTests`,
-  `AskPassBrokerHelperTests` (the ssh line once), `GitConfigurationForgetTests`.
-- App.Tests, no session: `GitAccessTests` (waiters, swap, joining, `Changed`, `ProbeAsync`),
+  `AskPassBrokerHelperTests` (the ssh line once), `GitConfigurationForgetTests` (over `MergeToolHelpTests`'
+  fake runner, `HeldToolHelpRunner`; never the real `git mergetool --tool-help`).
+- App.Tests, no session: `GitAccessTests` (waiters, swap, joining, `Changed`, `ProbeAsync`; the
+  fixed-detection constructor's `ReadGuidance` has no winget and no distribution),
   `CheckGitAgainTests` (the order, reopening, errors cleared, tools asked again, HelperMissing keeps
-  git), `GitSetupTextsTests` (state × platform, `{min}`, the commands), `GitSetupViewModelTests`,
-  `GitProgramViewModelTests`, `AccountsNetrcNoteTests`; added to `FileLauncherTests`,
-  `JsonSettingsStoreTests` (`gitExecutable` absent, written, read back), `MainWindowViewModelTests`,
-  `SettingsDialogViewTests`.
-- 8a's project: `GitSetupShellTests` (each state: no clipped text at 1100×700 and 1000×560).
+  git), `GitSetupTextsTests` (state × platform, `{min}`, the commands; L TooOld shows no command,
+  whatever `ID` or `ID_LIKE`), `GitSetupViewModelTests` (Install hands the launcher one `Start` whose
+  command line holds the seam's `WingetPath`, quoted as 5.3 has it, and whose `WorkingDirectory` is that
+  path's folder; ChosenMissing with a candidate and without one), `GitProgramViewModelTests`,
+  `AccountsNetrcNoteTests`; added to `FileLauncherTests`: `ResolveStart` (`cmd.exe` to the given System
+  folder's, a bare name through the given search, a full path kept, a bare name not found throws
+  `FileNotFoundException`), `ToStartInfo` of the winget command (on Windows `UseShellExecute` true and
+  nothing redirected, elsewhere false; `Arguments` equal to its `CommandLine` exactly; its
+  `WorkingDirectory`), and the only call of the real `StartAsync`, which names, without `InNewTerminal`,
+  a full path to a program that does not exist in an empty `TempDirectory`, reads no `PATH` and throws
+  the start's own exception before anything starts; `JsonSettingsStoreTests` (`gitExecutable` absent,
+  written, read back), `MainWindowViewModelTests`, `SettingsDialogViewTests`. No test starts `cmd.exe`, winget,
+  `xcode-select`, a terminal or a browser.
+- 8a's project: `GitSetupShellTests` (each state: no clipped text at 1100×700 and 1000×560; the view's
+  automation name and help text are the state's title and body).
 - Earlier: `ShellTests`' NotFound window now shows the screen and stays green unchanged.
 
 ### 5.5 Part F
@@ -1831,15 +2060,15 @@ Dark, 1100×700, the fake probe and launcher unless named. 14 checks; RW the rea
 | Check | Steps | Expected |
 |---|---|---|
 | F1 Missing (RW) | W with winget, one restored tab | the texts and buttons; `Git not found`, `Set up Git…`; a New tab; no git call; `f1a-missing-windows`, `f1b-missing-windows-light` |
-| F2 Offers (RW: confirm, Cancel) | Install…, Cancel; Install; Download | `f2a-winget-confirm`; no start after Cancel; one `Start`, 1.3's, `InNewTerminal`; one `OpenUrl` |
-| F3 Chosen gone | ChosenMissing; Use the Git on the PATH | `f3a-chosen-gone`; then the key gone, screen gone |
+| F2 Offers (RW: confirm, Cancel) | Install…, Cancel; Install; Download | `f2a-winget-confirm`; no start after Cancel; one `Start`, 1.3's, with the seam's `WingetPath` and its folder, `InNewTerminal`; one `OpenUrl` |
+| F3 Chosen gone | ChosenMissing with a candidate; Use the Git it found | `f3a-chosen-gone`; then the key gone, screen gone |
 | F4 Found again (RW: native dialog) | Missing, then Real; Check again | `Checking…`; the tab's graph; status, tooltip; tools asked; `f4a-found-again` |
 | F5 Too old (RW: stand-in) | 2.29.0 | `{v}`, `{min}`, path, Download, no winget; `f5a-too-old` |
 | F6 Config fault (RW: stand-in) | Show the file | git's line, `line 1 of C:/Users/demo/.gitconfig`; `Reveal`; `f6a-config-fault`. F6b (RW): real git, `[user` in the session's global file: `fatal: bad config line 1 in file`, no picture |
 | F7 Not started | | `could not be started: {message}`; `f7a-not-started` |
 | F8 Choose | too old; then `RealAt(D:\Tools\PortableGit\cmd\git.exe)` | refusal, settings.json untouched, `f8a-choose-too-old`; key written, screen gone |
 | F9 macOS | tools missing; Install; Copy; `xcrun: error` | `f9a-macos-missing`; `Start` of `xcode-select --install`, no confirm; `brew install git` copied; `f9b-macos-broken` |
-| F10 Linux | Ubuntu, Alpine Missing; Ubuntu TooOld | `f10a-ubuntu-missing`, `f10b-alpine-missing`, `f10c-ubuntu-too-old` |
+| F10 Linux | Ubuntu, Alpine Missing; Ubuntu TooOld | `f10a-ubuntu-missing`, `f10b-alpine-missing`, `f10c-ubuntu-too-old` (the generic Linux text, no command or Copy, `Other ways to install Git`) |
 | F11 Helper (scripted only) | no helper file; Continue; `Details…` | `f11a-helper-missing`; `Git {v} (helper missing)`; welcome page; screen back |
 | F12 Settings row | Browse, Save; reopen; Use the Git on the PATH; Browse too old | `f12a-row-next-start`; the key written, then removed; `f12b-row-too-old` |
 | F13 Keys (RW) | F6, Tab, Enter on Check again | the first button; all in order; Enter acts; after the search Check again has the focus again |
@@ -1852,9 +2081,13 @@ line `git version 2.29.0`, F6's failure text, the confirm's title and the pictur
 ### 5.6 Earlier pictures
 
 Ruling 40's nine: `s14c`, `s14i`, `s18a`, `s18d`, `s19a`, `s19d`, `s20b`, `l31e-dark`, `l31e-light`, at
-the global scope's bottom; none else. Proof:
-phase 6's parts S and L and phases 0 to 2's walk-through through `scripts/compare-pictures.py` against
-`references/wave1/`: only the nine differ, there. Any other difference stops the package (ruling 3).
+the global scope's bottom; none else. Proof: the builder runs only the classes and methods named here,
+never a whole project: `--filter-class "*Phase6ChecksS"` in `VisualCommit.VisualTests.Phase6`,
+`--filter-method "*Check_L31*"` in `VisualCommit.VisualTests.Phase6Look`, and `--filter-class
+"*Phase0Checks" --filter-class "*Phase2Checks"` in `VisualCommit.VisualTests`, and compares their
+pictures through `scripts/compare-pictures.py` against `references/wave1/`: only the nine differ, there.
+Whole projects are the lead's, through `scripts/heavy-run.sh`; wave 2's whole run at its close (status
+step 12) covers the rest. Any other difference stops the package (ruling 3).
 
 ### 5.7 Lagged list, time, real window
 
@@ -1866,14 +2099,19 @@ output, its variable set last; no press of Install, Download, Copy or a link (ru
 ### 5.8 Done when
 
 5.4 passes (fail-first tests failed first); part F on the laptop and in CI's six jobs (F6b on 2.34.1);
-5.6 holds; no warning; no test reads the machine's PATH, home or settings; the lead's `cmd.exe /K echo`
-(1.3) stayed open; part S's settings.json has no `gitExecutable`.
+5.6 holds; no warning; no test reads the machine's PATH, home or settings, and none starts `cmd.exe`,
+winget, `xcode-select`, a terminal or a browser; the lead's by-hand `cmd.exe /S /K ""<the path found>"
+--version"` (1.3) showed winget's version in a window that stayed open; part S's settings.json has no
+`gitExecutable`.
 
 ### 5.9 Risks, unverified, open
 
-- Unverified: the `cmd.exe` window where Windows Terminal is the default console, and `File.Exists`
-  on winget's alias: the lead by hand before the merge; without winget F1's real picture lacks the
-  button. A Mac (`xcode-select -p`, the shim, `--install`): 8b's checklist. git-scm.com's pages and
+- Unverified: whether `cmd.exe /S /K` started with `UseShellExecute` shows a window that stays open
+  where Windows Terminal is the default console: the lead's by-hand `cmd.exe /S /K ""<the path
+  found>" --version"` before the merge, the owner told. Settled (the lead, 2026-11-19): the laptop's
+  winget is `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`, an app execution alias that `File.Exists`
+  finds on the `PATH`; the real-window F1 and F2 need winget on the gate's machine and fail without it
+  (D449). A Mac (`xcode-select -p`, the shim, `--install`): 8b's checklist. git-scm.com's pages and
   commands: read by the input only.
 - The note reads git's home only: curl's `NETRC`, or Windows without `HOME`, can escape it; the
   guide says so.
@@ -1910,7 +2148,8 @@ every row would put every row's buttons into UI Automation, where `Phase2RealWin
 a focused hunk bar leaves (otherwise Avalonia picks the next focus, `MainWindow.axaml.cs:302-304`);
 D427, a keyboard move of `LeftSplitter` or `RightSplitter` fitted and remembered as a drag's end is
 (`PanelDragged`, `MainWindow.axaml.cs:37`), built only where G8's test shows `GridSplitter`'s arrows
-do not already do it; the activity log's splitter goes to a fixer (0.4).
+do not already do it; the activity log's splitter goes to a fixer (0.4); D452 (amends D417), "Cancel
+{title}" cancels only while the titled operation is still the one running (6.3.3).
 
 ### 6.2 Files and contracts
 
@@ -1961,7 +2200,12 @@ commit. No other key picks. `OnContextRequested`'s keyboard branch takes `Select
 run`, so Shift+F10 right after opening shows run 0's menu. Opening picks nothing (b6a to b6h come from
 clicks). Enter does nothing new; "Show in graph" is in the run's menu. Tab leaves the text.
 
-**6.3.3 F3, Cancel.** The entry of 1.8. On screen: "Cancel Fetch origin", no key, the repository's
+**6.3.3 F3, Cancel.** The entry of 1.8. Its `run` keeps the title it was listed with and runs
+`OperationStatus.CancelCommand` only if `CanExecute` still holds and `OperationStatus.RunningTitle`
+still equals that title; otherwise it does nothing and logs Info
+`Cancel {title}: that operation is no longer running.` (D452). `CancelCommand` cancels whatever runs
+now (`OperationStatusViewModel.cs:201-202`): the titled fetch may have ended and an operation queued
+behind it, or the merge tool, started. On screen: "Cancel Fetch origin", no key, the repository's
 name as detail while dialogs name it (KD2). Afterwards the status bar reads "Fetch origin cancelled"
 (`OperationTexts.Cancelled`). `AppShortcutsTests`' lists stay unchanged.
 
@@ -1975,8 +2219,10 @@ last `Panel.stageRow StackPanel.rowActions Button:focus-visible` opacity 1.
   the next row. Shift+Tab reaches a row's own button, not its buttons. The panel is an overlay.
 - After a row action started by keyboard (the button had `:focus-visible`), once the lists show its
   result, the focus is on the row now at its place in that list, else that list's last row, else the
-  other list's first row, else the summary (`Tab`, 6.3.5). A Discard cancelled in its question gives
-  the focus back to its row.
+  other list's first row, else the summary (`Tab`, 6.3.5). When the action leaves the tree clean (a
+  Discard of the only change), the panel goes with the focused button
+  (`RepositoryViewModel.cs:1418-1422`): the focus then goes to the graph (`GraphRows`, the main
+  region's target), `Tab`. A Discard cancelled in its question gives the focus back to its row.
 
 **6.3.5 F5, the focus after "Choose"** (F5-A: D104's rule where the opener was disabled). New
 `FocusReturn.AfterRun(IAsyncRelayCommand command, Control scope, Func<InputElement?> target,
@@ -2044,9 +2290,11 @@ Ctrl-click (Cmd on macOS).
 Each class runs alone with plain `dotnet test` (D245). "Fails first": run on the branch's base before
 the fix, the failure named in the commit message.
 
-`HeldGitRunner` (1.15) holds `diff` and `commit` calls. A tab's git calls take the detection's
-runner (1.2); if the session's calls bypass it anyway, K6 and K7 keep their tests and drop their
-pictures.
+`HeldGitRunner` (1.15) holds the next call whose first argument equals its word: `diff-files`, an
+unstaged file's diff (`GitRepository.Changes.cs:201`; a staged file's is `diff --cached`, an untracked
+one's `diff --no-index`, a commit's `diff-tree` or `diff`), and `commit`
+(`GitRepository.Writes.cs:219`). A tab's git calls take the detection's runner (1.2); if the
+session's calls bypass it anyway, K6 and K7 keep their tests and drop their pictures.
 
 - `DiffTextViewTests` (DiffHost): Tab from the text focuses the first `StageHunkButton`, then
   `DiscardHunkButton`, then the next hunk's (fails first); side by side Tab reaches `DiffTextRight`,
@@ -2060,12 +2308,23 @@ pictures.
   and the commit carries the first message (fails first); nothing typed: both boxes emptied, Amend
   unticked, as today; `CanToggleAmend` false while committing. ShellDriver: F6, Tab focuses
   `RowStageButton` at opacity 1, Tab `RowDiscardButton` (fails first); the row alone focused: both at
-  opacity 0; Enter on "Stage" stages the file (git's index) and the focus is on the row now first
-  (fails first).
+  opacity 0. Four focus tests, one per case of 6.3.4's rule (each fails first): Enter on "Stage" of
+  the first of three unstaged rows stages the file (git's index) and the focus is on the row now
+  first; on the last of three, on the unstaged list's last row; on the only unstaged row, on the
+  staged list's first row; the summary last. The app never shows the panel with both lists empty:
+  they empty only with a clean tree, and then `ApplyStatus` deselects the working row and the panel
+  goes (`RepositoryViewModel.cs:1418-1422`). So the fourth test hosts `WorkingChangesView` alone over
+  `FakeHost`, whose `StageAsync` applies `WorkingTreeStatus.Clean` before it returns: the only row's
+  own button focused with `NavigationMethod.Tab`, Tab, Enter on "Stage", and `CommitSummary` has the
+  focus. A fifth, in the app (ShellDriver): Enter on "Discard" of the only change, confirmed, and
+  `GraphRows` has the focus (6.3.4's clean tree; fails first).
 - `StatusBarTests` (the held fetch, `:64-71`): the palette's first entry "Cancel Fetch origin", Enter
   gives `OperationOutcome.Cancelled` (fails first); none with nothing running, with a held local
-  "Create branch hotfix", or once `CanCancel` is false; from F6 on the right panel at most 200 Tabs
-  reach `OperationCancelButton` (G7, passes today).
+  "Create branch hotfix", or once `CanCancel` is false; the entry taken during the held fetch, a held
+  "Push main" queued behind it, the fetch released: Enter on "Cancel Fetch origin" cancels nothing,
+  the push ends `OperationOutcome.Succeeded` once released, and `LogLines()` holds
+  `Cancel Fetch origin: that operation is no longer running.` (D452; fails first); from F6 on the
+  right panel at most 200 Tabs reach `OperationCancelButton` (G7, passes today).
 - `KeyboardPassTests` (8a project, D416): Shift+Tab from the diff's text focuses
   `DiscardFileButton` (fails first); Tab, Enter on "Stage hunk" stages that hunk alone and leaves the
   focus on `DiffText` (fails first); F6, Down, Shift+Down twice, Shift+F10, Enter on "Stage selected
@@ -2073,7 +2332,8 @@ pictures.
   (fails first); after Choose and after Esc in the repository browser (fake GitHub, as
   `WelcomeCloneFromGitHubTests`) `CloneFromGitHubButton` has the focus (fails first); after the create
   form's Pick `PullRequestBaseChooseButton` has it (ruling 51; passing today, nothing changes); a held
-  `diff` read with Mod+Shift+M before its release leaves the focus in `CommitSummary`, and so does an
+  `diff-files` read (an unstaged file, `GitRepository.Changes.cs:201`) with Mod+Shift+M before its
+  release leaves the focus in `CommitSummary`, and so does an
   `Empty` body turning to `Text` (fails first); a diff opened by Enter on a row or from its menu still
   takes the focus (passes today); with a held `commit` Amend is disabled and, focused by Tab before,
   gets the focus back (fails first); the providers' switch keeps the focus and Tab goes to
@@ -2103,8 +2363,9 @@ dark 1100×700 unless named; git states read with git.
 - **K5 the focus after Choose**. Fake GitHub signed in, the clone form, "From GitHub…" by Tab and
   Enter, a row, Enter: URL and name filled, the button focused, no frame (`k5a-chosen`; `b06a`'s form
   outside the URL's text).
-- **K6 the loading diff**. A held `diff`: Enter on a row, Mod+Shift+M, release: the diff shows, the
-  summary keeps the focus and its accent border (`k6a-summary-kept`).
+- **K6 the loading diff**. A held `diff-files` read (an unstaged file, `GitRepository.Changes.cs:201`):
+  Enter on its row, Mod+Shift+M, release: the diff shows, the summary keeps the focus and its accent
+  border (`k6a-summary-kept`).
 - **K7 committing**. "First", Mod+Enter, the `commit` held: "Committing…", Amend disabled
   (`k7a-committing`); type "Next"; release: HEAD's subject "First", the summary "Next" (`k7b-committed`).
 - **K8 the walks**. With K3's held fetch: F6 to the right panel, Tab until Cancel (the count in the
@@ -2126,9 +2387,10 @@ and compares them with `scripts/compare-pictures.py` against
 ### 6.7 Lagged list, time, the pass
 
 Lagged list: nothing new; 0.4's holds `*Phase2Checks`, `DiffTextViewTests`, `WorkingChangesTests`,
-`StatusBarTests` and 8a's project. Default run: about 25 tests in App.Tests (most on a host, about a
-minute), 8 checks and about 14 tests in 8a's project (3 to 4 minutes alone). Real-window pass: one
-launch for K1 and K2, about 45 s (§12).
+`StatusBarTests` and 8a's project. Default run: about 30 tests in App.Tests (most on a host, about a
+minute), 8 checks and about 14 tests in 8a's project (3 to 4 minutes alone). Real-window pass: two
+launches, K1 on the changes scenario and K2 on the history scenario in light (D442; 12.3.4 launches
+11 and 12), about 45 s each.
 
 ### 6.8 Done when
 
@@ -2154,51 +2416,56 @@ launch for K1 and K2, about 45 s (§12).
 6. F6's rule must allow the window's own moves (D104, the menu's return); a guard test covers them.
 7. F2 picks on every caret move, as the graph's arrows select on each.
 
-K5 answers 7a's report on where the focus returns; 7a's B6 and 7b's B7 stay as they are. Open point:
-13.4, item 8.
+K5 answers 7a's report on where the focus returns; 7a's B6 and 7b's B7 stay as they are. 13.4 item 8
+is settled: 6.3.4's rule, with a test per case (6.4).
 
 ## 7. icon: the icon's pipeline and a placeholder mark (R5)
 
 ### 7.1 What the package delivers
 
-Status step 10; wave 2, `wip/p8a-icon`, after §4's merge (the notice window). R5, D407, D412;
+Status step 11; wave 2, `wip/p8a-icon`, after §4's merge (the notice window). R5, D407, D412;
 rulings 3, 17; plan.md lines 764 ("Icons and branding") and 782 ("the icon in the window and the
 taskbar"). Its decisions: D428 (ruling 17, D407), the masters, the tool on Svg.Skia 4.9.1 (5.x needs
 SkiaSharp 4.x, which Avalonia 12.1.3 does not take), the committed files and the placeholder; D429,
 the three masters and the sizes; D430, the files checked by format, size and the masters' hashes,
-never by pixels.
+never by pixels; D447 (amends D429, keeps D407 as the owner wrote it), the `.icns` written by the
+tool and the candidates' rounds kept in `docs/brand/icon/`.
 
 - Three SVG masters in `assets/brand/` (new), holding a placeholder mark until the owner chooses, so
   that no package waits on the choice (ruling 17).
 - `tools/VisualCommit.IconBuilder` (new), a C# console tool on Svg.Skia 4.9.1 that renders from the
-  masters the `.ico`, the `.iconset` that 8b turns into the `.icns`, the PNG sizes for Linux, the two
-  PNGs the app shows and a manifest. The generated files are committed. The tool is never shipped
-  and never run by a test or by CI, which builds it with the solution.
+  masters the `.ico`, the `.icns` (`assets/brand/generated/VisualCommit.icns`, D407, D447) and the
+  `.iconset` it is made from, the PNG sizes for Linux, the two PNGs the app shows and a manifest. The
+  generated files are committed. The tool is never shipped and never run by a test or by CI, which
+  builds it with the solution.
 - The executable's icon (`ApplicationIcon`) and the window icon of the main window and of §4's
   notice window, from one embedded `.ico`; `AppIcon`, the resource paths §8's About uses.
-- `IconFilesTests`, `WindowIconTests`, the reader `IconFile`; part B's two checks and the outline of
-  their real-window repeats.
+- `IconFilesTests` (its item 8, `iconutil` on the `.iconset` and the `.icns`, in CI's macOS job),
+  `WindowIconTests`, the reader `IconFile`; part B's two checks and the outline of their real-window
+  repeats.
 
-Left to others: the owner's choice and the regeneration (the lead, 7.8); the README's "Name" note
-(7.3), CLAUDE.md's row, the slnx line, `architecture.md` (the lead); About's image (§8); the
-real-window code (§12). Out of 8a (ruling 17, D399): the `.icns` itself (`iconutil` on 8b's macOS
-runner), macOS 26's layered `.icon`, `Info.plist`, `.desktop` and hicolor tree, installers' images.
+Left to others: the owner's choice, its rounds in `docs/brand/icon/` and the regeneration (the lead,
+7.8, D447); the README's "Name" note (7.3), CLAUDE.md's row, the slnx line, `architecture.md` (the
+lead); About's image (§8); the real-window code (§12). Out of 8a (ruling 17, D399): macOS 26's
+layered `.icon`, `Info.plist`, `.desktop` and hicolor tree, installers' images; 8b's bundle takes the
+committed `.icns`.
 
 ### 7.2 Files
 
 New:
 - `assets/brand/icon.svg`, `icon-small.svg`, `icon-macos.svg` (7.3).
-- `assets/brand/generated/VisualCommit.iconset/` (ten PNGs), `assets/brand/generated/png/icon-<N>.png`
-  (eight), `assets/brand/generated/manifest.json`. `bin/` and `obj/` are git-ignored, so no output
-  folder takes those names; `.gitattributes` already marks `*.png` and `*.ico` binary.
+- `assets/brand/generated/VisualCommit.iconset/` (ten PNGs), `assets/brand/generated/VisualCommit.icns`
+  (D447), `assets/brand/generated/png/icon-<N>.png` (eight), `assets/brand/generated/manifest.json`.
+  `bin/` and `obj/` are git-ignored, so no output folder takes those names; `.gitattributes` already
+  marks `*.png` and `*.ico` binary, and gains `*.icns` (below).
 - `src/VisualCommit.App/Assets/Icon/VisualCommit.ico`, `VisualCommit-48.png`, `VisualCommit-96.png`.
 - `src/VisualCommit.App/Services/AppIcon.cs` (1.6).
 - `tools/VisualCommit.IconBuilder/VisualCommit.IconBuilder.csproj` (`Exe`, `IsPackable` false, no project
   reference; package references `Svg.Skia`, `SkiaSharp`, `SkiaSharp.NativeAssets.Linux`,
-  `HarfBuzzSharp.NativeAssets.Linux`), `Program.cs`, `IconRenderer.cs`, `IcoWriter.cs`, `IconOutputs.cs`
-  (7.3's lists, in one place).
+  `HarfBuzzSharp.NativeAssets.Linux`), `Program.cs`, `IconRenderer.cs`, `IcoWriter.cs`, `IcnsWriter.cs`
+  (D447), `IconOutputs.cs` (7.3's lists, in one place).
 - `tests/VisualCommit.Testing/IconFile.cs` (1.15), plain .NET, no Avalonia (the real-window project
-  uses it); its lists are the tests' copy of 7.3's.
+  uses it); its lists, `IcnsTypes` among them, are the tests' copy of 7.3's.
 - `tests/VisualCommit.App.Tests/IconFilesTests.cs`, `WindowIconTests.cs`.
 - `tests/VisualCommit.VisualTests.Phase8a/`: `Phase8aChecks.B.cs` (`Phase8aChecksB : Phase8aChecks`),
   `IconSheet.cs` (a harness control), `Phase8aExpectations.B.cs`, `Phase8aExpectationTests.B.cs`.
@@ -2214,9 +2481,11 @@ Changed:
   comment naming D407 and the tool.
 - `src/VisualCommit.App/Views/MainWindow.axaml`: `Icon="/Assets/Icon/VisualCommit.ico"` after `Title`.
 - §4's notice window: the same attribute in its `.axaml` (its name is §4's).
+- `.gitattributes`: `*.icns binary` after `*.ico binary` (D447).
 
 Section 1 used: 1.1 (the tool's row), 1.11 (the notice window), 1.15 (`Phase8aChecks.Support.cs`,
-`Phase8aExpectations.Common.cs`, the pattern of 0.3).
+`Phase8aExpectations.Common.cs`, the pattern of 0.3; `IconFile`'s row, with `IcnsTypes`, `ReadIcns`
+and `RepositoryPath`).
 
 ### 7.3 Behaviour: the masters, the tool, the outputs
 
@@ -2249,7 +2518,7 @@ arithmetic `#6170F0` is about 3.9:1 against a dark desk `#202020` and 3.7:1 agai
 `#F3F3F3` (roughly Windows 11's taskbars, not measured), and the disc 4.1:1 on the tile, so most of
 the mark holds 3:1 on both (Microsoft's rule, web-brand 1.4).
 
-**The outputs** (`IconOutputs`; D429):
+**The outputs** (`IconOutputs`; D429, D447):
 
 | File | Sizes | From | Format |
 |---|---|---|---|
@@ -2257,10 +2526,15 @@ the mark holds 3:1 on both (Microsoft's rule, web-brand 1.4).
 | `…/Assets/Icon/VisualCommit-48.png`, `-96.png` | 48, 96 | `icon.svg` | PNG, RGBA, 8 bits |
 | `assets/brand/generated/png/icon-<N>.png` | 16, 24, 32, 48, 64, 128, 256, 512 | as the `.ico` | PNG |
 | `assets/brand/generated/VisualCommit.iconset/<name>.png` | `icon_16x16` 16, `icon_16x16@2x` 32, `icon_32x32` 32, `icon_32x32@2x` 64, `icon_128x128` 128, `icon_128x128@2x` 256, `icon_256x256` 256, `icon_256x256@2x` 512, `icon_512x512` 512, `icon_512x512@2x` 1024 | `icon-macos.svg` | PNG |
+| `assets/brand/generated/VisualCommit.icns` | the `.iconset`'s ten, as ten entries in this order: `icp4` 16 (`icon_16x16`), `icp5` 32 (`icon_32x32`), `ic11` 32 (`icon_16x16@2x`), `ic12` 64 (`icon_32x32@2x`), `ic07` 128 (`icon_128x128`), `ic13` 256 (`icon_128x128@2x`), `ic08` 256 (`icon_256x256`), `ic14` 512 (`icon_256x256@2x`), `ic09` 512 (`icon_512x512`), `ic10` 1024 (`icon_512x512@2x`) | the `.iconset`'s PNGs (`icon-macos.svg`), no second render | big-endian: the magic `icns`, the file's length in 4 bytes; per entry its type (4 ASCII bytes), its length with the 8-byte header in 4 bytes, and the very bytes of the `.iconset` file named beside it (D447) |
 | `assets/brand/generated/manifest.json` | | | below |
 
-Linux's scalable icon is `icon.svg` itself (8b copies it). The manifest has no time stamp, so a run
-with nothing changed writes the same bytes:
+Linux's scalable icon is `icon.svg` itself (8b copies it); 8b's bundle takes the committed `.icns`.
+If `iconutil` refuses the PNG data in `icp4` and `icp5` (7.4 item 8), a fixer drops those two
+entries after §7's merge, when CI's macOS job shows the refusal (the builder's own run skips item 8,
+and a `wip` branch is not pushed), so that macOS scales the 1x 16 and 32 from `ic11` and `ic12`, and says so here, in
+`IconOutputs` and in `IconFile.IcnsTypes` (1.15). The manifest lists the `.icns` with its entries'
+sizes in order. The manifest has no time stamp, so a run with nothing changed writes the same bytes:
 
 ```json
 { "v": 1, "renderer": "Svg.Skia 4.9.1, SkiaSharp 3.119.4",
@@ -2275,7 +2549,8 @@ Windows checkout's line ends do not count (`*.svg` is text by `.gitattributes`).
 1. The root: the nearest folder upward that holds `VisualCommit.slnx`, or `--root`.
 2. Every master is checked by the rules above before anything is drawn.
 3. Each size: an `SKSurface` of N×N, transparent, the master's `SKPicture` scaled by N over the
-   viewBox, antialiased; PNG by SkiaSharp's encoder.
+   viewBox, antialiased; PNG by SkiaSharp's encoder. `IcnsWriter` then puts the `.icns` together from
+   the `.iconset`'s PNG bytes, as the table above says.
 4. All is written to a temporary folder, then moved into place, the manifest last; a file in the
    generated folders that is not in the list is deleted. A failure leaves the committed files as they
    were.
@@ -2320,6 +2595,17 @@ The builder runs these classes and part B's only (D245).
 4. The `.iconset` holds exactly the ten names, each an 8-bit RGBA PNG of its size.
 5. `generated/png` holds exactly the eight files, at their sizes.
 6. `Assets/Icon` holds exactly the three files; the PNGs are 48×48 and 96×96.
+7. The `.icns` (D447), read by `IconFile.ReadIcns`: it starts with `icns`; its length field equals the
+   file's length; its entries are exactly `IconFile.IcnsTypes`, in order; each entry's data equals,
+   byte for byte, the `.iconset` file 7.3's table names beside its type.
+8. On macOS only (`Assert.SkipUnless(OperatingSystem.IsMacOS(), "iconutil exists only on macOS; CI's
+   macOS job runs this (D447).")`, so the builder's run skips it and CI's macOS job runs it; 13.4
+   item 9): `/usr/bin/iconutil -c icns` on the `.iconset` and `/usr/bin/iconutil -c iconset` on the
+   committed `.icns`, each into a `TempDirectory` of its own. Each exits with 0, iconutil's standard
+   error in the message otherwise; the first gives a file that starts with `icns`, the second exactly
+   the ten `.iconset` names (eight if 7.3 drops `icp4` and `icp5`). Nothing is written into the
+   repository. If iconutil refuses the PNG data in `icp4` and `icp5`, a fixer drops those two
+   entries after the merge (7.3).
 
 `WindowIconTests` (App.Tests, `[AvaloniaFact]`, no session):
 1. `new MainWindow().Icon` is not null.
@@ -2330,11 +2616,11 @@ The builder runs these classes and part B's only (D245).
 `Phase8aExpectationTests.B`: `Phase8aExpectations.B`'s lists equal `IconFile`'s; the picture names
 match 0.3's pattern; the sheet's rows fit 1100×700.
 
-Red before the change: all of `IconFilesTests` and `WindowIconTests` (no files, no `Icon`); the
-builder writes `AppIcon` and the tests first, then the masters and the tool's run. Earlier tests that
-change: none. No test reads a window's `Icon` or the app's resources (the `.Icon` hits in `tests/` are
-the glyph control's); `ShellTests`, `PanelViewTests` and `MainWindowCloseTests` make a `MainWindow`
-and pass unchanged.
+Red before the change: all of `IconFilesTests` (item 8 on macOS alone; elsewhere it skips) and
+`WindowIconTests` (no files, no `Icon`); the builder writes `AppIcon` and the tests first, then the
+masters and the tool's run. Earlier tests that change: none. No test reads a window's `Icon` or the
+app's resources (the `.Icon` hits in `tests/` are the glyph control's); `ShellTests`,
+`PanelViewTests` and `MainWindowCloseTests` make a `MainWindow` and pass unchanged.
 
 ### 7.5 Visual checks, part B (outline)
 
@@ -2343,7 +2629,10 @@ headless `Window` of 1100×700 with the app's resources, `RequestedThemeVariant`
 `VcWindowBackgroundBrush` behind. Row 1, headed `VisualCommit.ico`: its 14 frames, left 24, gap 12,
 bottoms aligned, each an `Image` at its own pixel size (`Stretch="None"`, whole-pixel positions), the
 size below in `VcTextSecondaryBrush` at 11. Row 2: `png/icon-16` to `icon-128`, then `VisualCommit.iconset`'s
-`icon_16x16`, `icon_32x32` and `icon_128x128`. No repository, no git.
+`icon_16x16`, `icon_32x32` and `icon_128x128`. The sheet reads its files through
+`IconFile.RepositoryPath` (1.15): the `.ico` at `src/VisualCommit.App/Assets/Icon/VisualCommit.ico`,
+its frames by `IconFile.Read`, and row 2's PNGs under `assets/brand/generated/`, which are no Avalonia
+resources. No scenario repository, no git.
 
 | Id | Steps | Expected | Theme, size | Real window |
 |---|---|---|---|---|
@@ -2389,7 +2678,8 @@ their expectations name no shape.
 
 - Lagged list: nothing (no git, no watcher).
 - Default run: two App.Tests classes, about a second; part B's two checks, about 5 to 10 s each alone.
-- CI: the tool's restore and build in each of the six jobs, about 10 to 30 s (not measured).
+- CI: the tool's restore and build in each of the six jobs, about 10 to 30 s (not measured); in the
+  macOS job `IconFilesTests` item 8's two `iconutil` calls, about a second (not measured).
 - Real-window pass: B's steps in A's launch, about 30 to 45 s.
 
 ### 7.8 Done when, and the owner's choice
@@ -2399,7 +2689,8 @@ The lead checks at the merge:
    `ShellTests`, `PanelViewTests` and `MainWindowCloseTests` pass unchanged.
 2. A second run of the tool with nothing changed leaves `git status` clean.
 3. `dotnet build` at the root has no warning; the merge's CI run is green in every job, the floor's
-   included (the tool built everywhere, `ApplicationIcon` warning nowhere).
+   included (the tool built everywhere, `ApplicationIcon` warning nowhere), and the macOS job's log
+   shows `IconFilesTests` item 8 passed, not skipped.
 4. `dotnet list tools/VisualCommit.IconBuilder package --include-transitive` shows Svg.Skia 4.9.1 and
    SkiaSharp 3.119.4; no `.deps.json` under `src/` names `Svg.Skia` or `ShimSkiaSharp`.
 5. 7.6's proof holds.
@@ -2407,13 +2698,19 @@ The lead checks at the merge:
    (`dotnet run --project tools/VisualCommit.IconBuilder`, first run date); the "Name" note (7.3) and
    rows `assets/brand` and `tools/` in the README's layout table.
 
-**The owner's choice** (status step 10): up to three rounds (D407; five candidates in
-`D:/Projects/Personal/phase8-work/icon/candidates-v1.html`; B, D and E have a dark tile that leans on
-a thin edge on a dark desk, as B's note says, which the tool's printout and B1 show). The lead writes
-the three masters by 7.3's rules with the new first comment, runs the tool, `IconFilesTests`,
-`WindowIconTests`, parts B and A, inspects, and commits "Icon: the owner's choice": code by the gate's
-rule, so before the review before the gate (status step 15) where it can, before the counted round at
-the latest. The look-alike board (web-brand 1.5) is the lead's, in the report's checks by hand.
+**The owner's choice** (status step 11): up to three rounds (D407, D447). Each round is committed in
+`docs/brand/icon/round-<n>/`, docs only, so it starts no CI run and is no package's file
+(`assets/brand/` is §7's, 0.4): each candidate an SVG of its own, the contact sheet `candidates.html`
+with a ladder from 16 to 256 pixels on a dark and a light desk, and a `README.md` with the date, what
+the owner chose and what the owner asked to change, the record of the human part that D407 names.
+The lead committed round 1 on 2026-11-19 (`306f61f`), before the owner's first letter: `a-lens.svg`,
+`b-merge-v.svg`, `c-check.svg`, `d-ring.svg`, `e-viewfinder.svg`; each later round adds
+`round-<n>/`. B, D and E have a dark tile that leans on a thin edge on a dark desk, as B's note says,
+which the tool's printout and B1 show. The chosen one becomes the three masters: the lead writes
+them by 7.3's rules with the new first comment, runs the tool, `IconFilesTests`, `WindowIconTests`,
+parts B and A, inspects, and commits "Icon: the owner's choice": code by the gate's rule, so before
+the review before the gate (status step 19) where it can, before the counted round at the latest.
+The look-alike board (web-brand 1.5) is the lead's, in the report's checks by hand.
 
 ### 7.9 Risks, unverified points, open points
 
@@ -2425,13 +2722,16 @@ Unverified, and the step that verifies each:
    `WindowIconTests`, `ShellTests`.
 4. That `ApplicationIcon` warns nowhere on macOS and Linux (warnings are errors): the merge's CI run.
 5. That Windows 11's taskbar button is reachable through UI Automation: B2's repeat, else by hand.
-6. X11's window icon, an unbundled app's Dock icon, `icon-macos.svg` against macOS 26's plate and
-   `iconutil` on the runner (web-verify B5, B20): 8b's checklists.
+6. X11's window icon, an unbundled app's Dock icon and `icon-macos.svg` against macOS 26's plate
+   (web-verify B5): 8b's checklists.
+7. That `iconutil` is on CI's macOS runner, converts the `.iconset` and reads back the tool's `.icns`,
+   the PNG data in `icp4` and `icp5` included (web-verify B20): `IconFilesTests` item 8 in the merge's
+   CI run (7.8 item 3).
 
 Risks: the choice comes after the counted round; Skia's pixels differ between machines, so the files
 are made on one machine and never compared by pixel (D430).
 
-Open points: 13.4, items 9 to 11.
+Open points: 13.4, items 10 and 11 (item 9, settled, is 7.4's item 8).
 
 ## 8. about: the About section and the third-party notices (R6)
 
@@ -2604,7 +2904,8 @@ VisualCommit". No text holds an e-mail address.
 **8a's project** (new, D416): `AboutSectionTests`: the section's texts are the pin's; Show
 license… by Enter, the focus in the text, Esc gives it back; the notices switch shows Avalonia's file;
 the links reach the fake launcher, nothing else launched. `AboutEntryTests`: on a welcome, a repository
-and a dashboard tab the palette's last command is "About VisualCommit…", enabled, keyless, and opens
+and a dashboard tab the palette lists "About VisualCommit…" once, right after "Follow the system's
+theme" (from §11's merge "Open the user guide" follows it, D417), enabled, keyless, and opens
 About with the focus on `SettingsNavAbout`; `NativeMenu.GetMenu(Application.Current)` holds one item,
 "About VisualCommit", no header holds "Avalonia"; its `Command` with `App.Shell` set opens About, and
 does nothing while a dialog is open.
@@ -2612,18 +2913,24 @@ does nothing while a dialog is open.
 **Red before the change** (merge note): `ThirdPartyNoticesTests` on today's file; the lines below.
 
 **Earlier tests that change** (each reason once in 8a's report, "Changes to expected results"); the
-builder Greps for others (`SettingsNavAccounts`, `Follow the system's theme`):
+builder Greps for others (`SettingsNavAccounts`, `Follow the system's theme`, `Shown.Count`):
 1. `SettingsDialogViewTests.cs:176-187`: Down from Accounts reaches `SettingsNavAbout`, Down stays,
    three Ups reach Tools; the comment names About last (D409).
 2. `PaletteEntriesTests.cs:159`, `:340`: "About VisualCommit…" after "Follow the system's theme" (ruling 54).
 3. K10 (ruling 54): `Phase6Expectations.K.cs`' `OpsCommands` and `DashboardCommands` end with
    `E("About VisualCommit…")`; `OpsCommandCount` 34, `DashboardCommandCount` 23, `WebAppCommandCount`
-   35, `PageDownRows` [11, 22, 33], `FirstRowInViewAtEnd` 22, `WheelRow` 27; `Phase6ExpectationTests.K.cs:318`.
-   They follow from `:317-319`'s identities; K10's run confirms them. §11 moves them again.
+   35, `PageDownRows` [11, 22, 33], `FirstRowInViewAtEnd` 22, `WheelRow` 27; `Phase6ExpectationTests.K.cs:318`
+   and the identity `PageDownRows[^1] == OpsCommandCount - 1`, added there as
+   `Assert.Equal(PartK.OpsCommandCount - 1, PartK.PageDownRows[^1])` (33, the last of 34 rows).
+   They follow from `:317-319`'s identities; K10's run confirms them. §11 moves them again, with a
+   fourth PageDown (D452).
 4. `Phase7aExpectations.A.cs:55, 58`, `Phase7bExpectations.A.cs:97, 99`: `NavButtons` and `NavIds`
    end with "About", `SettingsNavAbout` (D409); 7a's real-window A1 reads the linked file.
 5. `ShellDriver.Phase6.Settings.cs:124-131`: `ChooseSection` gains About, never General's default.
 6. The phase 6 report's "`Shown` 33 commands": the lead's, in 8a's report.
+7. `CommandPaletteViewTests.cs:99-116` (`The_keys_move_the_highlight_into_view_and_typing_filters`, ops
+   scenario): 34 commands; PageDown rows 11, 22, 33 (the comment drops "clamped": 33 is reached
+   exactly); Up from row 0 wraps to 33, then 32 (ruling 54).
 
 ### 8.5 Part A's checks (outline, D244)
 
@@ -2631,7 +2938,7 @@ Dark, 1100×700, an empty tab, `settings.json` unwritten and nothing launched un
 
 | Id | Steps | Expected |
 |---|---|---|
-| A1 (R) | Ctrl+Shift+P, `about`, Enter; Tab ×4; Enter on the repository link; Esc | One command row, no key. Six nav buttons 176 × 30, 2 apart, About at (141, 255), selected, focused; 8.3.1's rows with the pin; nothing clipped (`LayoutAudit`), no "@". `a1a-about-dark`. Tab: the two buttons, the repository link underlined, the guide link: `a1b-about-link-focus`. Enter records exactly the repository's address; Esc closes |
+| A1 (R) | Ctrl+Shift+P, `about`, Enter; Tab ×3; Enter; Tab; Esc | One command row, no key. Six nav buttons 176 × 30, 2 apart, About at (141, 255), selected, focused; 8.3.1's rows with the pin; nothing clipped (`LayoutAudit`), no "@". `a1a-about-dark`. Tab ×3: Show license…, Show third-party notices…, then the repository link, underlined: `a1b-about-link-focus`. Enter records exactly the repository's address; Tab: the guide link; Esc closes |
 | A2 | Light in the data folder; Settings, a click on About | A1's texts; the link `#4353D8`. `a2a-about-light` |
 | A3 | 1920×1080; Ctrl+,, Down ×5, Enter | About at (551, 415). `a3a-about-1920` |
 | A4 (R) | Show license…; Copy all; Esc | Over the dimmed screen: "MIT License", no switch, `LICENSE`'s 21 lines in view, Copy all left, Close right, the focus in the text. `a4a-license`. The clipboard holds `LICENSE` (`\n`); Esc: the focus on Show license… |
@@ -2695,7 +3002,7 @@ point: 13.4, item 12.
 ## 9. uia: screen readers, names and the graph's row (D411)
 
 Wave 3, after §5's and §6's merges; merges after §8; branch `wip/p8a-uia`, part U. Carries D411, D49,
-rulings 3, 12, 32 to 39, plan.md's lines 759, 770, 784 and 786, and D435. Facts are
+rulings 3, 12, 32 to 39, plan.md's lines 759, 770, 784 and 786, D435 and D450. Facts are
 uia.md's (Avalonia 12.1.3, FlaUI 5.0.0, the code at `e04762b`), checked again on `27c5109`.
 
 ### 9.1 What the package delivers, and what it leaves
@@ -2754,16 +3061,18 @@ clicks), no heavy run beside (ruling 23):
 
 | Step | Does | Asks |
 |---|---|---|
-| S1 cold | Click "Main work", Down three times, nothing below the graph read | A LiveRegionChanged or Name event from `GraphSelectedRow` per move? |
+| S1 cold | Click "Main work", Down three times, nothing below the graph read | A LiveRegionChanged from `GraphSelectedRow` per move? |
 | S2 warm | Read the graph's first child, Down three times | The same |
 | S3 | F6 away and back | Focus on `GraphRows`; the row's event once |
 | S4 | Click `feature/alpha` in the left panel | The row's event, the focus kept on `RefItem` |
 | S5 | Ctrl+Shift+F (the local origin) | How many LiveRegionChanged from `OperationStatus` |
 | S6 | Throughout | `FocusedAutomationId()` never `GraphSelectedRow` (ruling 35) |
 
-S1 yes: the route stands. S1 no, S2 yes: the lead decides (13.4 item 14). Both no:
-the build stops until a decision names `IEmbeddedRootProvider` (`[PrivateApi]`, 12.1.3) and its
-guarding test (ruling 32). The events go into the merge notes.
+The row's event, in S1 to S4, is a LiveRegionChanged from `GraphSelectedRow`: the focus is never on
+the row, so Narrator speaks it only through that event, and a Name change alone counts as none, though
+`events.txt` records it (D450). S1 yes: the route stands. S1 no, S2 yes: the lead decides (13.4 item
+14). Both no: the build stops until a decision names `IEmbeddedRootProvider` (`[PrivateApi]`, 12.1.3)
+and its guarding test (ruling 32). The events go into the merge notes.
 
 #### 9.3.2 The graph's peer
 
@@ -2870,23 +3179,31 @@ graph's row, a context menu on the graph and on a file; (6) search, compare, fil
 reflog; (7) the rebase list; (8) the resolver, its card, the banner; (9) the dashboard; first run
 through `FakeGitSetupProbe`: (10) Windows' Missing, then by "Check again" ChosenMissing, TooOld and
 NotWorking with git's words, (11) macOS's Missing, (12) Linux's Missing, (13) HelperMissing
-(`askPassHelper` a path without a file); (14) §4's notice through `InstanceNoticeHost` (1.11).
+(`askPassHelper` a path without a file), in each state of (10) to (13) also `GitSetup`'s name the
+state's title (`GitSetupTitle`'s text) and its help text the state's body (`GitSetupBody`'s text), which
+§5 sets so that Narrator speaks them (9.3.9, steps 20 and 21); (14) §4's notice through
+`InstanceNoticeHost` (1.11).
 
 #### 9.3.9 Narrator by hand, and the guide
 
 The walk-through (D411, the owner, about 20 minutes, at the gate) on copies of the ops scenario with
 README.md changed and of a stopped merge, started by the lead's PowerShell line with CLAUDE.md's
-isolating variables. Narrator: Ctrl+Win+Enter. Each step: "as expected", or the words heard.
+isolating variables; for steps 20 and 21, last, the lead's start line with
+`VISUALCOMMIT_GIT_STAND_IN=none` beside the isolating variables, so that the app finds no Git and shows
+the first-run screen (1.14). Narrator: Ctrl+Win+Enter. Each step: "as expected", or the words heard.
 1. The app in front: its title. 2. F6 to the graph: "Commit graph, list", then the selected row.
 3. Down: the next row's subject, author, date, refs. 4. HEAD's row: "…, current branch main…".
 5. Home, End, PageDown: each landing row, once. 6. Shift+Down twice: each focus row; is "3 commits
 selected" heard? 7. Down: one row, no count. 8. Up to "Working changes". 9. Shift+F10: the menu's
 first item; Esc: back. 10. A branch clicked in the left panel: its commit's row. 11. F6, Tab to a
-file: its path, "button". 12. Mod+Shift+M, then Tab to a row's button: "Stage README.md, button".
-13. The status bar's toggle: "Activity log, button, Ctrl+J". 14. Ctrl+Shift+F: the result; are the
-progress steps read? 15. Ctrl+F, a word, Enter: the match's row, the focus in the box. 16. Ctrl+Shift+P,
-"fet": entries with keys. 17. Ctrl+,, About: the owner's name and the version. 18. The resolver:
-"Next conflict, button, Alt+Down". 19. Narrator+Tab on the graph: "Commit graph, list" (ruling 35).
+file: its path, "button". 12. Ctrl+Shift+M (the commit message), Shift+Tab to README.md's row, then
+Tab: "Stage README.md, button". 13. The status bar's toggle: "Activity log, button, Ctrl+J".
+14. Ctrl+Shift+F: the result; are the progress steps read? 15. Ctrl+F, a word, Enter: the match's row,
+the focus in the box. 16. Ctrl+Shift+P, "fet": entries with keys. 17. Ctrl+,, Down to About, Enter,
+then Narrator+W: the owner's name and the version. 18. The resolver: "Next conflict, button,
+Alt+Down". 19. Narrator+Tab on the graph: "Commit graph, list" (ruling 35). 20. The first-run screen
+shows: the state's title, "VisualCommit needs Git", and its body. 21. Tab to "Check again", Enter: its
+result is spoken (no Git found again, the focus back on "Check again").
 Silence at steps 2, 3 or 5: the live region does not reach Narrator (9.9, risk 1).
 
 For §11 (ruling 39): "VisualCommit is tested with Narrator on Windows. Other screen readers, NVDA,
@@ -2942,7 +3259,8 @@ of `Scenarios.ConflictsStoppedAsync(ConflictsStop.Merge)`'s working row and its 
 three names of an untracked `u-untracked.txt`, which §12 writes into that scenario (it takes no
 picture, so no twin differs).
 §12 repeats U1 and U3 in one launch (12.3.4 launch 13); its `run.txt` lists the names and every event
-kind (D445).
+kind (D445), and each move must raise a LiveRegionChanged from `GraphSelectedRow`: a Name change alone
+fails and is written to `run.txt` (D450).
 
 ### 9.6 Earlier pictures
 
@@ -2980,7 +3298,8 @@ once, outside the pass.
 6. VoiceOver may announce a live Name change (uia.md 2), untried; Linux announces nothing (D411).
 
 The spike's branch `wip/p8a-uia-spike` is never pushed and is deleted after §9's merge, its events
-in the merge notes. Open points: 13.4, items 13 to 16.
+in the merge notes. Open points: 13.4, items 13 to 16; item 16's two first-run steps are 9.3.9's
+steps 20 and 21.
 
 ## 10. perf: the performance pass, measures first
 
@@ -3116,13 +3435,22 @@ One `[Fact]` per measure: `M2_start_up_with_one_tab`, `M3_start_up_with_ten_tabs
 `M4_M5_memory_and_the_reload_after_an_outside_commit`, `M6_the_reload_after_a_fetch`,
 `M7_pulls_settings_reads`. Each starts with
 `Assert.SkipUnless(PerformanceSeries.Runs is not null, "VISUALCOMMIT_PERF_RUNS turns on the performance series; only the lead sets it, on the rested laptop.")`;
-`Runs` is the variable's value read as an integer from 1 to 20, null when unset; any other value
-fails the fact. The class has no fixture that does work before the skip: the gate's pass shows five
-skipped tests and writes nothing for them.
+`Runs` is `PerformanceSeries.ParseRuns(Environment.GetEnvironmentVariable("VISUALCOMMIT_PERF_RUNS"))`:
+the value read as an integer from 1 to 20, null when unset; any other value fails the fact.
+`PerformanceSeriesTests` tests `ParseRuns` and never sets the variable: the real-window project runs
+every class in one process (its `AssemblyInfo.cs` turns parallel runs off), so a variable set there
+would make the gate's pass run the series. The class has no fixture that does work before the skip:
+the gate's pass shows five skipped tests and writes nothing for them.
 
 `PerformanceSeries` writes `artifacts/perf/phase-8a/series-<yyyyMMdd-HHmmss>-<commit>.txt` under the
 `RepoRoot` metadata, `<commit>` from `git rev-parse --short=7 HEAD` there, with `-changes` when
-`git status --porcelain` is not empty. Its lines: a head line with the date, the commit, git's
+`git status --porcelain` is not empty. Both reads run through a `GitRunner` whose environment is
+`TempRepo.IsolatedEnvironment(home.Path)` (`home` a `TempDirectory` of its own, as in
+`Phase7bRealWindowPass`'s plain git) plus `GIT_OPTIONAL_LOCKS=0`, as the app's reads have (D47):
+the real-window project's process is not isolated (it calls no `GitIsolation.IsolateThisProcess`),
+and a plain `git status` would read the machine's and the lead's global configuration and refresh
+the index under `index.lock` in the lead's checkout.
+The file's lines: a head line with the date, the commit, git's
 version and the runs; `M2 warm-up: {N} ms`; `M2 run {i}: {N} ms` (with the noted values in
 brackets); per measure `M2: median {m} ms, range {a} to {b} ms, {n} runs; bound {B} ms, held` (or
 `bound not set`); memory in MB of 1,048,576 bytes. Each wait has its own timeout through
@@ -3191,8 +3519,8 @@ passes on today's code by design and fails when a read is added. The watcher's r
 operation id, so the lag of 0.4 cannot change the count.
 
 `PerformanceSeriesTests` (RealWindowTests, new, no window): the median of odd and even counts, the
-range, the rounding (1,513 ms × 1.25 gives 1,900; 412 MB gives 520; M7's 37 ms gives 50), the
-variable's parsing (unset, `5`, `0`, `x`).
+range, the rounding (1,513 ms × 1.25 gives 1,900; 412 MB gives 520; M7's 37 ms gives 50),
+`ParseRuns` (null, `5`, `0`, `x`), called with the value and never through the variable (10.3.5).
 
 `Phase8aPerformance` is written and built here (CI's Windows job builds the project) and first runs
 at the merge (10.8). No earlier test changes: none counts a log's Info lines, and the patterns that
@@ -3223,9 +3551,12 @@ minutes), plus the rest; alternation after a change, ten runs at one run each, 4
 
 ### 10.8 Done when
 
-- The classes of 10.4 pass on the branch and on the merge's CI run, the floor job's included
-  (a Pull budget is the highest count among the six jobs; the lead raises it at the merge, with the
-  reason, if the floor job counts more).
+- The App.Tests classes of 10.4 pass on the branch and on the merge's CI run, the floor job's
+  included (a Pull budget is the highest count among the six jobs; the lead raises it at the merge,
+  with the reason, if the floor job counts more). `PerformanceSeriesTests`, in a project CI only
+  builds, passes in the builder's run of its class alone (`dotnet test --project
+  tests/VisualCommit.RealWindowTests -c Release --filter-class "*PerformanceSeriesTests"`, no window)
+  and in the gate's pass.
 - Phase 1's pictures unchanged (10.6); Phase1RealWindowPass's Q1 code untouched.
 - At the merge, the owner told, `VISUALCOMMIT_PERF_RUNS=1` with 10.3.6's command once: every fact
   passes its guards, the file holds each line of 10.3.5, and M6's reload line follows the fetch.
@@ -3253,7 +3584,9 @@ Key `guide`, wave 4, after §5, §6, §8 and §9. Binding: D408, D411; rulings 7
 60 to 64), mdBook 0.5.4 pinned, the pictures made in the workflow at scale 2 and not committed,
 `GuideShots` outside the solution, deploys from `master` only (Zensical is in beta, and history does
 not grow per regeneration); D440, two images per picture; D441, the links' check fails a page that
-loads anything from another host; and D417 (F1) and D434 (the guide's spelling).
+loads anything from another host; D451 (the design's review): the workflow's step "App's links", the
+hand check's artifact, CSS and every loading link in the links' check, a read-only token, the demo's
+owner `demo--alex`; D452, K10's fourth PageDown; and D417 (F1) and D434 (the guide's spelling).
 
 ### 11.1 What it delivers, and what it leaves
 
@@ -3276,16 +3609,19 @@ New: `docs/guide/book.toml`, `docs/guide/guide.css`, `docs/guide/src/SUMMARY.md`
 
 Changed (paths checked): `src/VisualCommit.App/ViewModels/Commands/AppShortcuts.cs` and
 `AppCommands.cs` (11.3.1); in `tests/VisualCommit.App.Tests/` `AppShortcutsTests.cs`,
-`SettingsDialogViewTests.cs`, `PaletteEntriesTests.cs` and WP0's `AppLinksTests.cs`; in
-`tests/VisualCommit.VisualTests.Phase6/` `Phase6Expectations.S.cs`, `Phase6ExpectationTests.S.cs`,
-`Phase6Checks.S.cs`, `Phase6Expectations.K.cs`, `Phase6ExpectationTests.K.cs` (11.4); `.gitignore`
+`SettingsDialogViewTests.cs`, `PaletteEntriesTests.cs`, `CommandPaletteViewTests.cs` and WP0's
+`AppLinksTests.cs`; in `tests/VisualCommit.VisualTests.Phase6/` `Phase6Expectations.S.cs`,
+`Phase6ExpectationTests.S.cs`, `Phase6Checks.S.cs`, `Phase6Expectations.K.cs`,
+`Phase6ExpectationTests.K.cs` and a comment in `Phase6Checks.K.cs`; a comment in
+`tests/VisualCommit.RealWindowTests/Phase6RealWindowPass.K.cs` (11.4); `.gitignore`
 (`docs/guide/book/`, `docs/guide/src/pictures/`); `.github/workflows/ci.yml`, whose step "Build the
 opt-in projects" gains `dotnet build tests/VisualCommit.GuideShots --configuration Release`.
 
 The lead's, at the merge: CLAUDE.md's Commands rows (the shots, the book, the links' check, the
 guide workflow's runs), its docs map, and "What to know": "A push that changes only docs starts no
-CI run; one that touches `docs/guide/**` starts the guide's workflow."; `VisualCommit.slnx`'s
-comment names GuideShots as left out.
+CI run; one that touches `docs/guide/**` starts the guide's workflow, which also runs `AppLinksTests`
+and `GuideShortcutsPageTests`; read its run as CI's."; `VisualCommit.slnx`'s comment names GuideShots
+as left out.
 
 Contracts: 1.7, 1.8, 1.14's guide variables, 1.15's GuideShots classes, 1.2's first-run ids, 1.3's
 `FakeFileLauncher`; `ShellDriver.Start`'s `gitProbe` and §5's `FakeGitSetupProbe`.
@@ -3317,7 +3653,7 @@ American spelling (D434). A slug never changes once the app links to it. `SUMMAR
 | Introduction: `index.md` | What the app does, the systems, free and MIT; links the README, where D404's note stays alone | `main-window` |
 | `what-it-does-not-do.md` | O10 to O18, O20 to O22; no high-contrast palette (D411); commits apart only by the mouse (ruling 50) | none |
 | Getting started: `install.md` | Per system: "The installers come with the public beta", build from source; "What an uninstall leaves" (data folder, keychain entries, the global git configuration, D190) | none |
-| `first-run.md` | Git 2.34.1 or newer (ruling 69); the five states and buttons in §5's words; `winget install --id Git.Git -e --source winget`; the Command Line Tools or `brew install git`; Linux as §5's table; the status bar's Git box; tested with Git for Windows (ruling 46) | `first-run-` + `missing`, `missing-macos`, `missing-linux`, `too-old`, `not-working`, `winget-confirm`; `status-bar-git` |
+| `first-run.md` | Git 2.34.1 or newer (ruling 69); the five states and buttons in §5's words; `winget install --id Git.Git -e --source winget`; the Command Line Tools or `brew install git`; Linux as §5's table (a too-old Git: the distribution's newer Git, or git-scm.com's Linux page for other sources; the guide names no PPA); the status bar's Git box; tested with Git for Windows (ruling 46) | `first-run-` + `missing`, `missing-macos`, `missing-linux`, `too-old`, `not-working`, `winget-confirm`; `status-bar-git` |
 | `open-clone-create.md` | Ctrl+O, Ctrl+Shift+C, Ctrl+Shift+I, the recent list | `welcome-page`, `clone-form` |
 | `tour.md` | The window's regions | `main-window` |
 | Everyday work: `see-changes.md` | Side by side, inline, images | `diff-side-by-side`, `diff-inline` |
@@ -3357,21 +3693,31 @@ reads `theme/` as its theme folder); `[output.html.playground] runnable = false`
 analytics, no font from another host (ruling 18). `guide.css`: `--content-max-width: 1000px`;
 `html.light` and `html.rust` hide `img[src$="-dark.png"]`, `html.coal`, `html.navy` and `html.ayu`
 hide `img[src$="-light.png"]`. A picture is two images, light first (D440):
-`<img src="../pictures/stage-hunk-light.png" srcset="../pictures/stage-hunk-light.png 2x" alt="…">`.
+`<img src="pictures/stage-hunk-light.png" srcset="pictures/stage-hunk-light.png 2x" alt="…">`, the
+path relative to the page: `pictures/` from a page at the root of `src`, `../pictures/` from
+`troubleshooting/` and `reference/`.
 
 **11.3.4 `guide.yml`** (guide.md 2's outline). Triggers: `push` on `docs/guide/**`, the workflow,
 `scripts/check-guide-links.py`, `src/**`, `tests/VisualCommit.Testing/**`,
 `tests/VisualCommit.GuideShots/**`, `Directory.*.props`, `Directory.Build.targets`, `global.json`;
-`workflow_dispatch`; no `pull_request`. Concurrency per ref, `master` never cancelled. Job `build`
-(ubuntu-latest, 30 min): checkout@v7, setup-dotnet@v6; "Pictures" (15 min) makes `/home/demo`, owned by
-the runner, and runs `dotnet test --project tests/VisualCommit.GuideShots -c Release` with
+`workflow_dispatch`; no `pull_request`. `permissions: contents: read` at the workflow's top, and
+checkout with `persist-credentials: false` (D451). Concurrency per ref, `master` never cancelled.
+Job `build` (ubuntu-latest, 30 min): checkout@v7, setup-dotnet@v6; "App's links" (5 min) runs
+`dotnet test --project tests/VisualCommit.App.Tests -c Release --filter-class "*AppLinksTests" --filter-class "*GuideShortcutsPageTests"`,
+the two classes that read `docs/guide/src` (11.4), which ci.yml leaves out (D451); "Pictures" (15
+min) makes `/home/demo`, owned by the runner, and runs
+`dotnet test --project tests/VisualCommit.GuideShots -c Release` with
 `VISUALCOMMIT_GUIDE_ROOT=/home/demo`, `VISUALCOMMIT_GUIDE_PICTURES=$GITHUB_WORKSPACE/docs/guide/src/pictures`;
 "Book" downloads `mdbook-v0.5.4-x86_64-unknown-linux-gnu.tar.gz`, checks it with `sha256sum -c`, runs
 `mdbook build docs/guide`, `python3 -I scripts/check-guide-links.py --self-test`, then the check on
 `docs/guide/book`; on `master` `upload-pages-artifact@v5`, elsewhere `upload-artifact@v7` as
-`guide-site`, 14 days. Job `deploy`: only on `master`, `pages: write`, `id-token: write`, environment
-`github-pages`, `configure-pages@v6`, `deploy-pages@v5`. mdBook publishes no hash: the lead takes the
-archive's `sha256sum` once, for the package's first commit, and dates it in the report.
+`guide-site`, 14 days. Job `deploy`: only on `master`, `pages: write` and `id-token: write` (the only
+job that has them), environment `github-pages`, `configure-pages@v6`, `deploy-pages@v5`. mdBook
+publishes no hash: the lead takes the archive's `sha256sum` once, for the package's first commit, and
+dates it in the report. Pages' source is set to GitHub Actions at "Phase 8a accepted", before `master`
+is pushed, so that the merge's run on `master` can deploy (11.5). After the gate commit,
+`docs/guide/**` stays docs (0.4): a change to it is checked by this workflow's run, "App's links"
+included, which the lead reads and records beside CI's in `status.md` (D451).
 
 **11.3.5 GuideShots.** `net10.0` (the workflow runs it on Linux), Exe, xunit.v3 and
 Avalonia.Headless.XUnit; references App, Core, Git, Hosting, Testing; `AssemblyMetadata` RepoRoot;
@@ -3387,12 +3733,14 @@ outside the solution. `AssemblyInfo.cs`: `AvaloniaTestApplication(typeof(Headles
   `<root>/Projects/weather-station`, about 30 commits by "Alex Demo", "Sam Example" and "Kim Sample"
   at `example.com`, dated 2025-11-03 to 2025-12-19 UTC (before the app's own commits at 2026-01-02,
   `GitIsolation.AppCommitDates`); branches `main`, `feature/forecast`, `feature/units`, `fix/rounding`;
-  tags `v1.0`, `v1.1`; one stash; `origin` `https://github.com/alex-demo/weather-station.git`, its refs
+  tags `v1.0`, `v1.1`; one stash; `origin` `https://github.com/demo--alex/weather-station.git`, its refs
   written from a bare repository under `<root>/remotes`, one ahead and one behind, never fetched; two
   changed files and an image; its own `user.name` and `user.email`. `recipe-box` for the dashboard;
   conflict and rebase states on demand. Data folder `<root>/.config/VisualCommit`, fresh per start.
   Hosting shots: `FakeGitHub.InProcess`, `new HostingOptions(GitHubEndpoints.GitHubCom, () => fake.CreateHandler())`,
-  login `alex-demo`. No shot fetches, pulls, pushes or clones.
+  login `demo--alex`, a name GitHub cannot assign (no two hyphens in a row) and `GitHubUrls`' owner
+  pattern accepts (D451); any other login the fake serves, such as a request's author, takes the same
+  form (`demo--sam`). No shot fetches, pulls, pushes or clones.
 - `GuideCamera`: `public const double Scale = 2;` (1 is ruling 61's fallback). Each shot is an
   `[AvaloniaTheory]` over dark and light: a fresh `ShellDriver.Start`, then
   `Session.Shell.UseTheme(Dark or Light)` and its wait before the state is set up, so no switch closes
@@ -3402,16 +3750,22 @@ outside the solution. `AssemblyInfo.cs`: `AvaloniaTestApplication(typeof(Headles
   `C:\Program Files\Git\cmd\git.exe` or `/usr/bin/git`.
 - `LeakGuard`: fails the shot, saving nothing, when `VisibleTexts.In(window)` or a visible `TextBox`
   holds the user name (3 or more characters), the machine name, the temp path, the real home folder,
-  the repository's path, `VisualCommit.Tests`, `Test Author`, or an e-mail address not at
-  `example.com` (ruling 63); it names the shot and the text.
+  the repository's path, `VisualCommit.Tests`, `Test Author`, an e-mail address not at
+  `example.com`, or a `github.com/` address whose owner is not `demo--alex`, other than
+  `github.com/RahimPasha/VisualCommit`, `AppLinks.Repository`'s host and path, which About shows
+  (8.3.1; ruling 63, D451); it names the shot and the text.
 - `GuideShotCatalogue.Names`: the 42 names of 11.3.2.
 
 **11.3.6 `check-guide-links.py`.** Standard library, `python3 -I`. Over each `.html` under the folder
-given: every relative `href` and `src` resolves to a file and every `#fragment` to an `id` in its
-target; no `script`, `img`, `iframe`, `source` or stylesheet `link` names another host or a
-protocol-relative URL (D441); links to outside pages pass. Findings as
-`<file>: <url>: <reason>`; exit 0 clean, 1 findings, 2 usage. `--self-test` checks one good and one
-bad case per rule in a temporary folder.
+given: every relative `href`, `src` and `srcset` entry resolves to a file and every `#fragment` to an
+`id` in its target; nothing that loads names another host or a protocol-relative URL (D441, D451):
+`script`, `img` (its `src` and each `srcset` entry), `iframe`, `source`, `video` (with its `poster`),
+`audio`, `track`, `object`, `embed`, a `link` whose `rel` is `stylesheet`, `icon`, `preload`,
+`modulepreload` or `manifest`, and every `url(...)` in an inline `style`. Over each `.css` file under
+the folder: every `url(...)` and `@import` resolves to a file of the site (a `data:` URL passes).
+Links to outside pages pass. Findings as `<file>: <url>: <reason>`; exit 0 clean, 1 findings, 2
+usage. `--self-test` checks one good and one bad case per rule, and one bad case per element, `rel`
+and CSS form, in a temporary folder.
 
 ### 11.4 Tests
 
@@ -3428,12 +3782,22 @@ Fail first: `AppShortcutsTests`' F1 and Help, `GuideShortcutsPageTests`, AppLink
   Ctrl and Cmd); `SettingsDialogViewTests.ShortcutTable` gains `new("Help", [new("Open the user guide", "F1")], null)`;
   `PaletteEntriesTests`' two lists end `"About VisualCommit…", "Open the user guide · F1"`; part S
   (ruling 62): `PartS.ShortcutGroups` gains Help, `LastGroup = "Help"`, 11 and 50 become 12 and 51,
-  `AssertLastGroupInView` takes the last group's row count, not 3; K10 (ruling 54): from §8's 34, 23
-  and 35 to 35, 24 and 36, `PageDownRows` [11, 22, 33], `FirstRowInViewAtEnd` 23, `WheelRow` 28 (the
-  identities `Phase6ExpectationTests.K` asserts), `OpsCommands` and `DashboardCommands` gain the row.
+  `AssertLastGroupInView` takes the last group's row count, not 3; K10 (ruling 54, D452): from §8's
+  34, 23 and 35 to 35, 24 and 36, `PageDownRows` [11, 22, 33, 34] (a fourth PageDown: with rows 0 to
+  34 the third lands on 33, and Down must wrap from the last row), `FirstRowInViewAtEnd` 23, `WheelRow`
+  28 (the identities `Phase6ExpectationTests.K` asserts, with §8's
+  `Assert.Equal(PartK.OpsCommandCount - 1, PartK.PageDownRows[^1])`), the new literal at
+  `Phase6ExpectationTests.K.cs:318`, four PageDowns and their rows in the comments at
+  `Phase6Checks.K.cs:97`, `Phase6RealWindowPass.K.cs:73` and `Phase6Expectations.K.cs:277` (both
+  loops read the constant and change no more), `OpsCommands` and `DashboardCommands` gain the row,
+  and the report's K10 "PageDown three times" becomes four; `CommandPaletteViewTests.cs:99-116`
+  (`The_keys_move_the_highlight_into_view_and_typing_filters`, ops scenario): 35 commands, PageDown
+  rows 11, 22, 33 and 34 (a fourth PageDown for the same reason: `:111-112` presses Down and expects
+  row 0), Up from row 0 wraps to 34, then 33 (ruling 54).
 - GuideShots: `GuideCatalogueTests` (every picture a page names is in the catalogue and every name is
   used; each `<img>` has `alt`, light before dark, `srcset` "`<src>` 2x" exactly when `Scale` is 2);
-  `LeakGuardTests` (one made-up text per rule caught; the demo's texts clean).
+  `LeakGuardTests` (one made-up text per rule caught; the demo's texts and About's
+  `github.com/RahimPasha/VisualCommit` clean).
 
 ### 11.5 Part G's checks (outline)
 
@@ -3442,28 +3806,36 @@ Dark, 1100×700, the ops scenario; none in the real window, which opens no brows
 | Id | Steps | Expected |
 |---|---|---|
 | G1 | Ctrl+Shift+P, `guide` (`g1a-palette-guide`); Enter; F1 on the graph; the settings screen open, F1; Keyboard shortcuts scrolled to the end (`g1b-shortcuts-help`) | One row `Open the user guide`, `F1`; Enter closes the palette; the launcher holds `https://rahimpasha.github.io/VisualCommit/` once, twice after F1; F1 over the settings screen adds nothing; the list ends with `Help`, its row whole in view; no git call, no write |
-| G2 | `FakeGitSetupProbe` in turn Missing, ChosenMissing, TooOld, NotWorking, HelperMissing: Tab to `GitSetupGuideLink` (`g2a-first-run-guide-link` on Missing), Enter; F1 | Each Enter adds only its state's URL (`troubleshooting/git.html#git-missing`, `#git-chosen-missing`, `#git-too-old`, `#git-not-working`, `#helper-missing`); F1 the start page |
+| G2 | Missing, ChosenMissing, TooOld and NotWorking from `FakeGitSetupProbe` in one start, the next by Check again; HelperMissing in a second start, `RealAt(…)` with `askPassHelper` a path without a file (1.10). In each state: Tab to `GitSetupGuideLink` (`g2a-first-run-guide-link` on Missing), Enter; F1 | Each Enter adds only its state's URL (`troubleshooting/git.html#git-missing`, `#git-chosen-missing`, `#git-too-old`, `#git-not-working`, `#helper-missing`); F1 the start page |
 | G3 | The settings screen on About; Tab to the guide link (`g3a-about-guide-link`), Enter | The row's label reads `User guide`, the link `Open the user guide` (1.13); the launcher holds the start page once |
 
-By hand (0.5), from the gate commit's `guide-site` artifact (`gh run download <id> -n guide-site`,
-served by `python -m http.server`): every picture, Light and Navy each showing their own; search
-finds "rebase"; no other host in the network panel; every `SUMMARY.md` link opens. After the 8a
-merge: the live address answers; the environment admits only `master` (ruling 64).
+By hand (0.5), from the `guide-site` artifact of the gate commit, or of a `workflow_dispatch` run on
+it (`gh run download <id> -n guide-site`, served by `python -m http.server`): every picture, Light
+and Navy each showing their own; search finds "rebase"; no other host in the network panel; every
+`SUMMARY.md` link opens. At "Phase 8a accepted" (ruling 64): before `master` is pushed, Pages' source
+is set to GitHub Actions (the owner, or the lead through `gh api` at the owner's word); after the
+push, the guide's run on `master` is read, and run again by `workflow_dispatch` if it ran before the
+setting; the live address answers; the `github-pages` environment's branch rule is read, and if it
+admits more than `master`, the owner's leave is asked to set it.
 
 ### 11.6 Earlier pictures
 
 As rulings 54 and 62 name: `k10a`, `k10f`, `l31c-palette` dark and light (the scroll thumb,
 x 837–838) and their 2 real-window twins at the gate; `s14f-shortcuts-end`, confirmed: the list's
 end shows Help, so the section's column changes; `s14e-shortcuts-top` at most in the section's scroll
-bar, which the builder measures. Proof: Phase6 and Phase6Look run alone, then
+bar, which the builder measures. Proof: the builder runs, besides 11.4's classes, only
+`--filter-method "*Phase6ChecksS.*" --filter-method "*Check_K10_*"` in Phase6 (one command, as 0.4
+writes them) and `--filter-method "*Check_L31_overlays*"` in Phase6Look, never a whole project; at the merge the lead
+runs Phase6 and Phase6Look whole, one after the other, through `scripts/heavy-run.sh` (D245), then
 `scripts/compare-pictures.py` against the references current at the merge; any other difference
 stops the merge. The guide's pictures are outside `artifacts/visual` and in no list.
 
 ### 11.7 Lagged list, time, real window
 
 Nothing new for the lagged list (8a's project is in it). Default run: part G, under a minute;
-App.Tests, seconds. CI's Windows job: about a minute to build GuideShots. The guide workflow: 5 to 8
-minutes per push of code, an estimate until its first run. Real-window pass: nothing.
+App.Tests, seconds. CI's Windows job: about a minute to build GuideShots. The guide workflow: 7 to 10
+minutes per push of code (about 2 for App.Tests' build and its two classes), an estimate until its
+first run. Real-window pass: nothing.
 
 ### 11.8 Done when
 
@@ -3472,29 +3844,31 @@ minutes per push of code, an estimate until its first run. Real-window pass: not
 2. 11.4's classes pass; part G passes, its four pictures inspected.
 3. The lead's run of GuideShots on the laptop through `heavy-run.sh` passes, `LeakGuard` silent and
    every picture looked at; `compare-pictures.py` shows only 11.6's changes.
-4. After the merge's push: the guide workflow green, no deploy job run, `guide-site` looked at; CI's
-   Windows job builds GuideShots.
+4. After the merge's push: the guide workflow green, its step "App's links" included, no deploy job
+   run, `guide-site` looked at; CI's Windows job builds GuideShots.
 5. The lead's lines of 11.2 are in.
 
 ### 11.9 Risks, unverified, open points
 
 - Unverified, read from mdBook's sources: `{ #id }`, raw `<img>` with `srcset`, the copy of
-  `pictures/`, the theme classes, a CSS file at the root. The builder's first local build verifies
-  them, with the links' check (the lead first puts mdBook 0.5.4 for Windows, hashed, in
-  `D:/Projects/Personal/phase8-work/tools/`).
+  `pictures/`, the theme classes, a CSS file at the root, and that mdBook's own CSS names only files
+  of the site (11.3.6). The builder's first local build verifies them, with the links' check (the
+  lead first puts mdBook 0.5.4 for Windows, hashed, in `D:/Projects/Personal/phase8-work/tools/`).
 - Scale 2 never ran here; the graph's half-pixel insets or the diff may look wrong. The builder looks
   at every picture of the first run; if wrong, `Scale = 1` and no `srcset`, before the counted round.
 - `LeakGuard` sees no drawn text (graph, diff); that text is the demo's, and the gate looks by hand.
 - The actions' majors and the environment's default protection are the research's reading; the first
-  deploy, at the 8a merge, verifies them. Until then the app's links answer "not found".
+  deploy, on `master`'s push at "Phase 8a accepted" with Pages' source set before it (11.5), verifies
+  them, and a branch rule that admits more than `master` waits on the owner's leave. Until then the
+  app's links answer "not found".
 - Ruling 44: Git for Windows' own updater stays out of the guide; nobody confirmed it at its source.
 - Open points: 13.4, items 19 to 21.
 
 ## 12. realwindow: the real-window part for 8a's checks
 
-Status step 14; wave 4, branch `wip/p8a-realwindow`, worktree `D:/Projects/Personal/vc-wt/p8a-realwindow`,
-built on the Windows machine after §11's merge, reviewed in step 15 with the rest, merged last, after
-the review's fixes. Carries plan.md's Visual test gate step 4, D33, D58, D224, D246, rulings 6, 23, 47,
+Status step 18; wave 4, branch `wip/p8a-realwindow`, worktree `D:/Projects/Personal/vc-wt/p8a-realwindow`,
+built on the Windows machine after §11's merge, reviewed in step 19 with the rest, merged last, in that
+step, after the review's fixes. Carries plan.md's Visual test gate step 4, D33, D58, D224, D246, rulings 6, 23, 47,
 59, 65, phase 7b's ruling 29 and the 7b handoff's "A real-window launch" pattern.
 
 ### 12.1 What the package delivers, and what it leaves
@@ -3505,8 +3879,10 @@ most 3 % different (D33, D58); B's captures have no twin and are inspected. `Rea
 `Phase8aOrderTests` and the csproj's 8a link and stand-in reference. At least one capture of every new
 screen: the first-run screen and its confirm, the notice, About and its text dialog, the window's and
 the taskbar's icon. Its decisions: D442, one launch per session, each holding exactly its twins' tabs
-and starting theme, so that the 3 % (D33) measures rendering and not a tab strip; D443, the masked
-notice; D444, nothing pressed that leaves the app; D445, the graph's public events; D446, F4's git.
+and starting theme, so that the 3 % (D33) measures rendering and not a tab strip; D443 as D448 amends
+it, the notice compared with its folder line masked, once its height equals its twin's; D444, nothing
+pressed that leaves the app; D445 as D450 amends it, the graph row's LiveRegionChanged; D446, F4's git;
+D449, F1 and F2 need winget on the gate's machine.
 
 Leaves: the scripted checks and their expectations (§2, §4 to §9); `Phase8aPerformance` (§10), which
 skips in the gate's pass (ruling 65); part G (no real window opens a browser); the checks by hand (0.5);
@@ -3517,8 +3893,14 @@ D246's two runs and the gate's pass (the lead, the owner told); CLAUDE.md's rows
 New, all under `tests/VisualCommit.RealWindowTests/`:
 - `Phase8aRealWindowPass.cs`: `Phase8aRun` (the fixture: `new RealWindowRun(Phase8aExpectations.Phase)`,
   `DisplayNoted`), `Phase8aOrder` (12.3.4's list), the class's limits (`LoadTimeout` 60 s, `StepTimeout`
-  30 s), `Launch`, `Sized`, `Compare`, `CompareMasked` (D443), `InkOf` (12.3.3),
+  30 s), `Launch`, `Sized`, `Compare`, `CompareMasked`, `InkOf` (12.3.3),
   `AssertDesktopReady` (D224), `AssertNeverPressed` (12.3.2), `NoteLaunch`; and `Phase8aOrderTests`.
+  `CompareMasked` (D443 as D448 amends it) first asserts that the capture's height divided by
+  `Scaling` equals the twin's height within 1 px, else fails with `The notice is {h} high and its
+  scripted twin {t}: their layouts differ, so the masked comparison cannot hold.`; then paints
+  `InstanceNoticeFolder`'s UI Automation bounds, relative to the client area, one flat colour in the
+  capture and, divided by `Scaling`, in the twin (a copy in the test's temporary folder; the scripted
+  file is never changed); then compares at 3 %. `Phase8aExpectations.I` names `InstanceNoticeFolder`.
 - `Phase8aRealWindowPass.L.cs`, `.I.cs`, `.F.cs`, `.K.cs`, `.AB.cs`, `.U.cs`: one file per part, A and
   B together, as they share one launch (§7.5).
 - `RealApp.Phase8a.cs`: `ExecutablePath` (§7.5's accessor); `StandInPath`, the stand-in in
@@ -3544,10 +3926,11 @@ Changed:
   dataDirectory, IReadOnlyDictionary<string, string?>? environment)`, which `Launch` and `StartBeside`
   call. No earlier launch's environment changes.
 
-Uses 1.2's first-run ids and `GitLocator.StandInVariable`, 1.6's `AppVersionInfo`, 1.11's paths and
-ids, 1.12's names and `GraphSelectedRow`, 1.14's variables, 1.13's About ids, 1.15's `Phase8aExpectations.Common`,
-`IconFile`, `GitStandIn` and each part's `Phase8aExpectations.<Part>` (1.15's last paragraph). `RealApp.Executable`
-is private, hence `ExecutablePath`.
+Uses 1.2's first-run ids, `ProgramSearch.FindOnPath` and `GitLocator.StandInVariable`, 1.6's
+`AppVersionInfo`, 1.11's paths and ids, 1.12's names and `GraphSelectedRow`, 1.14's variables, 1.13's
+About ids, 1.15's `Phase8aExpectations.Common`, `IconFile`, `GitStandIn` and each part's
+`Phase8aExpectations.<Part>` (1.15's last paragraph). `RealApp.Executable` is private, hence
+`ExecutablePath`.
 
 ### 12.3 Behaviour
 
@@ -3570,10 +3953,12 @@ No step presses, clicks or sends Enter to: the winget confirm's `Install`; `GitS
 `GitSetupMoreLink`, `GitSetupGuideLink`, `GitSetupCopyButton`, `GitSetupShowFileButton`,
 `GitSetupCltButton`; About's repository and guide links and the text dialog's "Copy all"; the palette's
 "Open the user guide"; the F1 key (it opens the guide, §11); any "Copy …", "Open in browser", "Show in
-folder" or "Open in editor". F2's step checks after its Cancel that the log has no `Started in a
-terminal:` line and that `NativeMethods.Processes()` lists no `cmd.exe` or `winget.exe` whose parent is
-the app (ruling 6). Where the twin opens About from the palette, the pass asserts that the highlighted
-row reads `About VisualCommit…` before it presses Enter.
+folder" or "Open in editor". F2's step, after its Cancel, waits at most 5 s for no `ConfirmationDialog`
+and fails before it sends any further key if one is still there; then it checks that the log has no
+`Started in a terminal:` line and that `NativeMethods.Processes()` lists no `cmd.exe` or `winget.exe`
+whose parent is the app (ruling 6). F13 asserts the focused element's id after each Tab and sends
+Enter only while the focus is on `GitSetupCheckAgainButton`. Where the twin opens About from the
+palette, the pass asserts that the highlighted row reads `About VisualCommit…` before it presses Enter.
 
 #### 12.3.3 Ink in a capture
 
@@ -3611,33 +3996,42 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
    None found: run.txt says `B2's taskbar button: Not run (no taskbar button named VisualCommit was
    found within 10 s).` and the gate checks it by hand.
 4. **`Check_I1_second_start_hands_over`** (one empty tab, data folder D). The app `Minimise()`d;
-   `session.json`'s bytes read; `StartBeside(D, the same environment)`: the second start exits 0 within
-   10 s; the app is not iconic and is visible within 2 s; `ForegroundIsThis` noted, not asserted (the
-   test host is not the foreground process); D's log holds the second's `it was asked to come to the
-   front, and this start ends.` and the app's `answered activated.` (4.3.5); `session.json`'s bytes
-   unchanged; the app closes with 0.
+   `session.json`'s and `instance.json`'s bytes read; `StartBeside(D, the same environment)`: the second
+   start exits 0 within 10 s; the app is not iconic and is visible within 2 s; `ForegroundIsThis` noted,
+   not asserted (the test host is not the foreground process); D's log holds the second's `it was asked
+   to come to the front, and this start ends.` and the app's `answered activated.` (4.3.5);
+   `session.json`'s bytes unchanged; `instance.json`'s bytes unchanged (a `Held` guard's `Dispose`
+   touches no file, 1.11); the app closes with 0.
 5. **`Check_I2_notice_and_exit_code_2`**. The test opens D's `InstanceLockFile` with `FileShare.None`
    and holds it; `RealApp.Launch(D)` finds the notice as the process's main window, within 15 s; not
-   sized. `InstanceNoticeBody`'s name holds D's path; `CompareMasked` with `i2a-notice-dark`. A real
-   click on `InstanceNoticeTryAgain`: while it reads `Trying…`, disabled, `CompareMasked` with
-   `i2b-notice-trying`; within 10 s `InstanceNoticeStatus` reads `It still did not answer.`;
-   `CompareMasked` with `i2c-notice-no-answer`. A real click on `InstanceNoticeClose`: exit 2 within
-   5 s; D holds `instance.lock`, `logs/` and the launch's own `harness/`, nothing else.
+   sized. `InstanceNoticeFolder`'s automation name is D's path; `CompareMasked` with
+   `i2a-notice-dark`. A real click on `InstanceNoticeTryAgain`: while it reads `Trying…`, disabled,
+   `CompareMasked` with `i2b-notice-trying`; within 10 s `InstanceNoticeStatus` reads
+   `It still did not answer.`; `CompareMasked` with `i2c-notice-no-answer`. A real click on
+   `InstanceNoticeClose`: exit 2 within 5 s; D holds `instance.lock`, `logs/` and the launch's own
+   `harness/`, nothing else.
 6. **`Check_I2_notice_try_again_starts_here`**. As 5 to the notice; the test releases the lock; a real
    click on Try again: within 15 s `OtherWindowOfProcess` finds the main window (`GitStatus` in it);
    `instance.json`'s `pid` is the app's; that window closed, exit 0 within 15 s (D422).
-7. **`Check_F_missing_offers_keys_and_choose`** (F1's session; `StandInEnvironment("none")`). F1: the
-   screen's title, body and buttons as `Phase8aExpectations.F`; `GitStatus` `Git not found`;
-   `GitSetupButton` `Set up Git…`; `f1a-missing-windows`. No `GitSetupWingetButton`: F2 is noted `Not run: the app
-   found no winget.exe on this machine.` F2: a real click on it; the confirm `Install Git with winget?`;
-   `f2a-winget-confirm`; a real click on Cancel; 12.3.2's two checks; the screen unchanged. F13: real F6 until the
-   screen's first button has the focus; real Tab through F13's order; Enter on
-   `GitSetupCheckAgainButton`: one more search logged, still Missing; once the search ends
-   `GitSetupCheckAgainButton` has the focus again (5.3). F4: a real click on `GitSetupChooseButton`; `ChooseFileInDialog("Choose git.exe", git,
-   30 s)`, `git` by D446, `GitLocator.FindExecutable(GitSearchContext.FromSystem())` in the
-   test process; within 60 s the screen is gone and the restored repository's
-   `loaded` and working-tree lines are logged; `GitStatus` `Git {v}`, its help text `{git}, chosen in
-   Settings`; `settings.json`'s `gitExecutable` is `git`; `f4a-found-again`.
+7. **`Check_F_missing_offers_keys_and_choose`** (F1's session; `StandInEnvironment("none")`). Before the
+   app starts, the test looks for winget as the app does, `ProgramSearch.FindOnPath("winget.exe", PATH,
+   ';', File.Exists)` over its own `PATH`, which `RealApp.Launch` passes on unchanged (as D446 finds
+   git in the test process); none: the method fails with `winget.exe is not on this machine's PATH: F1
+   and F2 need it (install App Installer from the Microsoft Store).` (D449; never "Not run"); found:
+   run.txt names the path. F1: the screen's title, body and buttons as `Phase8aExpectations.F`,
+   `GitSetupWingetButton` among them; `GitStatus` `Git not found`; `GitSetupButton` `Set up Git…`;
+   `f1a-missing-windows`. F2: a real click on `GitSetupWingetButton`; the confirm `Install Git with
+   winget?`; `f2a-winget-confirm`; a real click on the confirm's `CancelButton`; no `ConfirmationDialog`
+   within 5 s, else the method fails before any further key; 12.3.2's two checks; the screen unchanged.
+   F13: real F6 until the screen's first button has the focus; real Tab through F13's order, each Tab
+   followed by `WaitForFocusedElement` of the order's next id, whose failure ends the method before any
+   further key; Enter only once the focus is on `GitSetupCheckAgainButton`: one more search logged,
+   still Missing; once the search ends `GitSetupCheckAgainButton` has the focus again (5.3). F4: a
+   real click on `GitSetupChooseButton`; `ChooseFileInDialog("Choose git.exe", git, 30 s)`, `git` by
+   D446, `GitLocator.FindExecutable(GitSearchContext.FromSystem())` in the test process; within 60 s
+   the screen is gone and the restored repository's `loaded` and working-tree lines are logged;
+   `GitStatus` `Git {v}`, its help text `{git}, chosen in Settings`; `settings.json`'s `gitExecutable`
+   is `git`; `f4a-found-again`.
 8. **`Check_F5_too_old_stand_in`** (F5's session; `StandInEnvironment(StandInPath, version: "git
    version 2.29.0")`). The title `Git 2.29.0 is too old`, `{min}` from `GitVersion.Minimum`,
    `GitSetupPath` the stand-in's path, Download shown, no winget button; `GitStatus`'s help text
@@ -3663,14 +4057,15 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
 13. **`Check_U_graph_row_and_names`** (`Scenarios.ConflictsStoppedAsync(ConflictsStop.Merge)`, with
     `u-untracked.txt` written into its work tree first). A real click on display row 1;
     `GraphSelectedRow` read once (its node made); `RecordSelectedRowEvents()`. Real Up, then Down twice;
-    after each, within 5 s, a `Name` change or LiveRegionChanged on `GraphSelectedRow`
-    (D445); its name and help text as `Phase8aExpectations.U`; `ListItem`; one element in
-    the graph's Selection pattern; `WindowLayout.RowHeight` ±1 high inside `GraphRowsBounds()`; the focus
-    still `GraphRows`. Names (1.12), each noted with its `AcceleratorKey`: the resolver's five (a real
-    double-click on `notes.txt`, phase 4's way; Esc); Ctrl+J: `ActivityLogToggle`, `ActivityLogClose`,
-    the three splitters; Ctrl+F: the search bar's three, Esc; the untracked row hovered: `Stage
-    u-untracked.txt`, `Discard u-untracked.txt`; Stage clicked, the staged row hovered: `Unstage
-    u-untracked.txt`. No picture.
+    after each, within 5 s, a LiveRegionChanged from `GraphSelectedRow` (D445 as D450 amends it; a
+    `Name` change alone fails and is written to run.txt); its name and help text as
+    `Phase8aExpectations.U`; `ListItem`; one element in the graph's Selection pattern;
+    `WindowLayout.RowHeight` ±1 high inside `GraphRowsBounds()`; the focus still `GraphRows`. Names
+    (1.12), each noted with its `AcceleratorKey`: the resolver's five (a real double-click on
+    `notes.txt`, phase 4's way; Esc); Ctrl+J: `ActivityLogToggle`, `ActivityLogClose`, the three
+    splitters; Ctrl+F: the search bar's three, Esc; the untracked row hovered: `Stage u-untracked.txt`,
+    `Discard u-untracked.txt`; Stage clicked, the staged row hovered: `Unstage u-untracked.txt`. No
+    picture.
 
 The app shows no text of this package's; the pass's own messages are the lines quoted here.
 
@@ -3691,8 +4086,8 @@ No part of its own. The R steps it repeats, by the parts' sections:
 |---|---|---|---|---|
 | L | L1, L2, L4 a, L5 dark, L6 a to c (5 of 6) | 2 | 9 | 0 |
 | A, B | A1, A4; B1, B2 (4 of 8) | 1 | 2 (3 where 1920×1080 fits) | 6 |
-| I | I1, I2 (2 of 3; I1 has no scripted step) | 3, and I1's second process | 3, masked | 0 |
-| F | F1, F2, F4, F5, F6, F6b, F13 (7 of 14) | 4 | 5 | 0 |
+| I | I1, I2 (2 of 3; I1 has no scripted step) | 3, and I1's second process | 3, the folder line masked (D448) | 0 |
+| F | F1, F2, F4, F5, F6 with F6b, F13 (6 of 14) | 4 | 5 | 0 |
 | K | K1, K2 (2 of 8) | 2 | 6 | 0 |
 | U | the row, the names (2 of 3) | 1 | 0 | 0 |
 | G | none (no real window opens a browser) | 0 | 0 | 0 |
@@ -3717,13 +4112,14 @@ palette captures). New files: the 31 captures above (32 where 1920×1080 fits) a
 
 ### 12.8 Done when
 
-The lead checks at the merge:
+The lead checks at the merge (status step 19):
 1. `dotnet build tests/VisualCommit.RealWindowTests -c Release` has no warning; the merge's CI run is
    green in every job, its Windows job compiling the project.
 2. 12.6's `git diff --stat` prints nothing.
-3. The builder made the twins in one command, since each run empties the scripted folder (`dotnet test
-   --project tests/VisualCommit.VisualTests.Phase8a` with `--filter-class` `"*Phase8aChecksL"`,
-   `"*Phase8aChecksA"`, `"*Phase8aChecksI"`, `"*Phase8aChecksF"`, `"*Phase8aChecksK"`), then ran each
+3. During the build (status step 18), the builder made the twins in one command, since each run
+   empties the scripted folder (`dotnet test --project tests/VisualCommit.VisualTests.Phase8a` with
+   `--filter-class` `"*Phase8aChecksL"`, `"*Phase8aChecksA"`, `"*Phase8aChecksI"`, `"*Phase8aChecksF"`,
+   `"*Phase8aChecksK"`), then ran each
    method alone (`--filter-method`), the owner told before each, never beside a heavy run (ruling 23):
    all green, captures inspected; phase 0's method alone green.
 4. `Phase8aOrderTests` pass; a Grep of the part files finds no press of 12.3.2's list.
@@ -3736,17 +4132,18 @@ The lead checks at the merge:
 Unverified, settled in the builder's first runs and D246's: the taskbar button's name and reach from
 the desktop root, a capture outside the window; `WM_GETICON` and `ExtractAssociatedIcon`'s size under
 per-monitor DPI; `ProductVersion` holding `+<commit>` (else `BuiltVersionDisplay` reads the attribute
-with `System.Reflection.Metadata`); a Name change or LiveRegionChanged reaching FlaUI (first §9's spike,
-ruling 32); full-coverage ink at 200 % under ClearType (§2.9 item 6); a tooltip over `main` in `l6b`;
-the notice found by `GetMainWindow`; the stand-in's runtime files in this output (the first build);
-F4's dialog title and box 1148 (S14's pattern).
+with `System.Reflection.Metadata`); a LiveRegionChanged from `GraphSelectedRow` reaching FlaUI (first
+§9's spike, ruling 32; D450); full-coverage ink at 200 % under ClearType (§2.9 item 6); a tooltip over
+`main` in `l6b`; the notice found by `GetMainWindow`; the stand-in's runtime files in this output (the
+first build); F4's dialog title and box 1148 (S14's pattern).
 
-Risks: winget's presence on the laptop decides F1's button and F2's step; a run in the worktree proves
-no path with a space (the main checkout's does); the owner's icon, chosen after D246's runs, changes
-B's captures, which the counted pass shows.
+Risks: a gate's machine without `winget.exe` on its `PATH` fails launch 7 (D449); a run in the
+worktree proves no path with a space (the main checkout's does); the owner's icon, chosen after D246's
+runs, changes B's captures, which the counted pass shows.
 
 Settled: §5 gives the focus back after Check again (5.3), and F13 asserts it; U's untracked file
-takes no picture (9.5). Open point: 13.4, item 7 (winget on the laptop).
+takes no picture (9.5); winget is on the laptop's `PATH` (the lead, 2026-11-19; 13.4 item 7). No open
+point is §12's: 13.4 item 7's by-hand try of the terminal window is §5's, before its merge.
 
 ## 13. The lead's rulings, what waits on the owner, and the open points
 
@@ -3768,7 +4165,8 @@ the guidance. 5. One screen in the welcome page's place, no wizard, shown only w
 "Check again" replaces the detection without a restart and reopens failed tabs; both harnesses reach
 the states through a seam. 6. winget on Windows only, where found, after a confirm that shows the
 command, in a visible terminal; no check runs the real winget. 7. No `ssh -V` probe: the guide says
-what an OpenSSH older than 8.4 does, and the log gets one Info line. 8. The Accounts section's netrc
+what an OpenSSH older than 8.4 does, and the log gets one Info line per session, at the first Ask or
+Deny scope (amended by D424; the ruling said per ssh operation). 8. The Accounts section's netrc
 note: an account signed in for git, git below 2.46, a `.netrc` or `_netrc` in the home folder; the
 file's content is never read. 9. A missing askpass helper is a first-run state below git's, with the
 path looked at. 10. The floor's work follows CI's job on git 2.34.1; a test takes both wordings where
@@ -3825,8 +4223,9 @@ reader tested.
 nine phase 6 pictures named; written to `settings.json` only when set. 41. A chosen git that is gone
 is a state of its own, with no silent fallback. 42. A change while git works applies at the next
 start; "Check again" at once. 43. The helper-missing state is proven by scripted checks only.
-44. git-scm.com's winget line, in a terminal that stays open, only when git is missing; too old: the
-download and "Check again". 45. On macOS `xcode-select --install` without the app's confirm.
+44. git-scm.com's winget line, in a terminal that stays open, only when git is missing (narrows D405;
+the owner's answer, 13.3); too old: the download and "Check again". 45. On macOS
+`xcode-select --install` without the app's confirm.
 46. A Windows git that is not Git for Windows is used, with a Warning. 47. A real-window picture may
 show the stand-in's path; the difference stays under 3 %. 48. The screen's platform and winget come
 from a seam.
@@ -3880,20 +4279,23 @@ activity log's splitter goes to a fixer (D427).
 
 | When | What |
 |---|---|
-| Now, before wave 1 | Look at the 75 rulings (13.1) and D416 to D446, above all those that amend a ruling: D420 (ruling 73's common-dir item), D425 (ruling 49's F4), D434 (ruling 58). The share of the week before each stage after the design's review (D241, D415). |
-| Beside the build | The icon (D407): the lead's candidates (`D:/Projects/Personal/phase8-work/icon/candidates-v1.html`), one to three rounds. Leave for a reverse image search for the look-alike board (D412 covers the name's search only). |
-| §9's spike and merge | Told before the spike (a minute of keys and clicks); if the lead asks, a short Narrator listen at the merge (steps 2 to 6 and 14, about 5 minutes). |
+| Now, before wave 1 | Look at the 75 rulings (13.1) and D416 to D452: above all those that amend a ruling, D420 (ruling 73's common-dir item), D424 (ruling 7's log line), D425 (ruling 49's F4) and D434 (ruling 58), and D447 to D452, what the design's review changed (13.5). Answer, before wave 2, on winget for a git that is too old or not working (13.4 item 22): the owner's D405 offers the winget install when git is missing, too old or not working, and ruling 44 and D423 narrowed it to a missing git. Offer it (a) for a missing and a too-old git, the lead's recommendation, since winget's install upgrades an installed package and cannot repair one that does not work; (b) for a missing git only, as ruling 44; (c) in all three states, as D405 reads. §5's builder starts only after the answer, which becomes a decision of its own. The share of the week before each stage after the design's review (D241, D415). |
+| Beside the build | The icon (D407, D447): the lead's candidates, one to three rounds, each committed in `docs/brand/icon/round-<n>/`: each candidate an SVG of its own, the contact sheet `candidates.html` with a ladder from 16 to 256 pixels on a dark and a light desk, and a `README.md` with the date, what the owner chose and what the owner asked to change (7.8). Round 1 is committed (2026-11-19, `306f61f`), before the owner's first letter. Leave for a reverse image search for the look-alike board (D412 covers the name's search only). |
+| §6's merge | Told before two earlier real-window checks run alone on the laptop, phase 2's `Check_17` and phase 5's `Check_A4_real_keys` (6.8 item 5; about 2 minutes of the desktop). |
+| §9's spike and merge | Told before the spike (a minute of keys and clicks); at §9's merge, a short Narrator listen (9.3.9's steps 2 to 6 and 14, about 5 minutes; 13.4 item 13). |
 | §10's merge and the series | Told before the first run (about 5 minutes of the desktop) and the series (rested, the desktop for 12 to 18 minutes per run, M6 clicks Fetch). |
+| §12's build (status step 18) | Told before each of its 13 methods runs alone and before phase 0's `Check_8` runs alone (12.4, 12.8 item 3): about 15 minutes of the desktop in all, never beside a heavy run (ruling 23). |
 | Before the counted round | The chosen mark regenerated, or the decision that 8a closes with the placeholder (the handoff says so, the choice moves to 8b) or that the gate waits. |
 | Before the gate | The three live tokens made again (GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04), through the masked script; told before each live run (D335). Present for D246's two runs of 8a's real-window checks; told before the pass. |
-| At the gate, by hand | The Narrator walk-through (about 20 minutes), phase 6's System step (D224), a second start from the taskbar. |
-| At "Phase 8a accepted" | GitHub Pages' source set to "GitHub Actions", by the owner or by the lead through `gh api` at the owner's word (ruling 64, D408); then the live address checked. |
+| At the gate, by hand | The Narrator walk-through (9.3.9's 21 steps, about 20 minutes; steps 20 and 21 on the first-run screen, through the lead's start line with `VISUALCOMMIT_GIT_STAND_IN=none`), phase 6's System step (D224), and a second start through the lead's isolating start file (4.6): a `.cmd` file outside the repository that sets CLAUDE.md's isolating variables and starts the Release build, which the owner starts twice, the second time while another window is in front. |
+| At "Phase 8a accepted" | Before `master` is pushed, GitHub Pages' source set to "GitHub Actions", by the owner or by the lead through `gh api` at the owner's word (ruling 64, D408). After the push, the guide's run on `master` read, and run again by `workflow_dispatch` if it ran before the setting; then the live address checked. The `github-pages` environment's branch rule read: if it admits more than `master`, the owner's leave asked to set it. |
 
 ### 13.4 Open points
 
 Each with who settles it and before what. "Settled" marks what the lead ruled on 2026-11-19, after
 the integration and before the design's review; a section that a ruling changes says so in its own
-text.
+text. Items 7 and 9 also say what the lead settled on the review, and item 22 is the review's
+question for the owner (13.5).
 1. Whether the scan's eight lists enter the repository (`docs/test-reports/phase-8a-contrast/`) or
    only the report's counts and the 41 danger-button names (ruling 31). The lead, before §2's merge.
    **Settled:** the eight lists enter the repository, in `docs/test-reports/phase-8a-contrast/`, in
@@ -3911,7 +4313,7 @@ text.
    opening call word for word (phase 5's A2 picture) and gives the second call
    `--path-format=absolute`. The other ways: the call kept with its comment corrected, or the option
    on the opening call with the picture named under ruling 3. The lead, before §3. **Settled:**
-   D420's form, unless the design's review finds a fault in it.
+   D420's form, which the design's review kept (T8 adds to 3.6 where the second call runs).
 5. Accepted risks of §4: a first instance hung before its window keeps answering "starting"; a second
    start waits up to 30 s unseen while the first closes; a data folder on a network share depends on
    the mount's locks. The lead, at §4's merge; plan.md's risks at the close.
@@ -3919,19 +4321,30 @@ text.
    without the remote's URL, so the line comes once per session, at the first Ask or Deny scope
    (D424). A line per operation would need `RepositoryOperations.Run.cs`, the clone and a URL parser.
    The lead, before §5. **Settled:** once per session, as D424 says.
-7. `cmd.exe /K` under Windows Terminal, winget's app execution alias, and whether the laptop has
-   `winget.exe` on its `PATH` (1.3): the lead by hand before §5's merge. Without winget, F1's real
-   picture lacks the button and F2's real step is "Not run", a part the machine decides, as the
-   1920×1080 window. The lead, before the gate.
+7. `cmd.exe /S /K` under Windows Terminal, winget's app execution alias, and whether the laptop has
+   `winget.exe` on its `PATH` (1.3). The lead, before §5's merge. **Settled** in part (the lead,
+   2026-11-19, on the review): the laptop has it, `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`,
+   an app execution alias (a reparse point) for which `File.Exists` is true, version v1.29.380, found
+   on the `PATH`. The real-window checks F1 and F2 need winget on the gate's machine and fail without
+   it, with `winget.exe is not on this machine's PATH: F1 and F2 need it (install App Installer from the Microsoft Store).`;
+   there is no "Not run" (D449, 12.3.4 launch 7). Still open: whether
+   `cmd.exe /S /K ""<the path found>" --version"`, started with `UseShellExecute`, shows a window that
+   stays open where Windows Terminal is the default console, which also shows `cmd.exe` starting the
+   alias by its path. The lead tries it by hand, the owner told, before §5's merge.
 8. The focus after a row action started by keys (6.3.4): the row now in its place, else the list's
    last row, else the other list's first, else the summary; keyboard.md left it to Avalonia. The lead,
-   before §6. **Settled:** this rule, with a test for each of its four cases.
+   before §6. **Settled:** this rule, with a test for each of its four cases; when the action leaves
+   the tree clean, the panel goes and the graph takes the focus (6.3.4).
 9. A test in CI's macOS job running `iconutil -c icns` on the `.iconset` would settle web-verify B20
-   in 8a; ruling 17 leaves the `.icns` to 8b, so §7 has none unless the lead adds it. Before §7.
-   **Settled:** §7 adds it. One test, run only on macOS (CI's macOS job; skipped elsewhere), runs
-   `iconutil -c icns` on the committed `.iconset` into a temporary folder and asserts exit code 0 and
-   a file that starts with `icns`. No Mac has run the app, so CI's job is the only proof before 8b
-   that the set is well formed; the `.icns` itself stays 8b's.
+   in 8a; the draft left the `.icns` to 8b (ruling 17 names the `.iconset` for it), so §7 had none
+   unless the lead added it. Before §7. **Settled:** §7 adds it, and on the review the tool writes
+   the `.icns` itself (D447): `assets/brand/generated/VisualCommit.icns`, from the `.iconset`'s ten
+   PNGs, which 8b's bundle takes. `IconFilesTests` item 8, run only on macOS (CI's macOS job; skipped
+   elsewhere), runs `iconutil -c icns` on the committed `.iconset` and `iconutil -c iconset` on the
+   committed `.icns`, each into a temporary folder: each exits 0, the first gives a file that starts
+   with `icns`, the second the ten names. If `iconutil` refuses the PNG data in `icp4` and `icp5`, a
+   fixer drops those two entries after §7's merge, when CI's macOS job shows it, and 7.3 says so. No Mac has run the app, so CI's job is the only
+   proof before 8b that the set and the `.icns` are well formed (7.4).
 10. The owner's icon by the counted round, or 8a closes with the placeholder (13.3). The owner.
 11. The look-alike board's reverse image search (13.3). The owner, before the gate.
 12. A5's bound of 1 s and End reaching the true last line with word wrap are unverified until part A
@@ -3961,3 +4374,62 @@ text.
     `D:/Projects/Personal/phase8-work/tools/`. Before §11.
 21. The 42 shots may cost more than planned; the lead may drop a shot whose state is too costly and
     keep its page's text. During §11.
+22. Whether winget is offered for a git that is too old or not working: the owner's D405 offers the
+    winget install when git is missing, too old or not working, and ruling 44 and D423 narrowed it to
+    a missing git. (a) For a missing and a too-old git, the lead's recommendation, since winget's
+    install upgrades an installed package and cannot repair one that does not work. (b) For a missing
+    git only, as ruling 44. (c) In all three states, as D405 reads. §5's builder starts only after the
+    answer, which becomes a decision of its own; until then §5 stands as ruling 44 has it (13.3). The
+    owner, before wave 2.
+
+### 13.5 What the design's review changed
+
+The review of 2026-11-19 read the draft at `85169db` through four lenses (git's safety, the tests and
+the gate, the contracts, the owner's scope) with five readers, and a verifier checked each blocker and
+major. It made 58 findings: 17 blockers and majors, all confirmed (two blockers, O1 and O3, and 13
+majors after verification; A1 and B5 judged minor), and 41 minors. Four pairs say the same thing: S1
+and O5, S2 and A2, T2 and B4, B1 within O1. The lead accepted every finding as ruled; O3 alone waits
+on the owner. The findings' full text, the verifiers' reasoning and the lead's rulings stay outside
+the repository, in `D:/Projects/Personal/phase8-work/design/review/`.
+
+The new decisions, with the findings behind them:
+- **D447** (amends D429, keeps D407 as the owner wrote it): O1 and B1, the tool writes the `.icns`
+  (0.1, 0.4, 1.15, 7.1 to 7.4, 7.8, 7.9, 13.4 item 9), with T6's item 9 (7.4); O2, each round of candidates
+  committed in `docs/brand/icon/round-<n>/` (7.8, 13.3).
+- **D448** (amends D443): T2 and B4, the notice's data folder on a line of its own, trimmed at its
+  start, and the masked comparison's check of equal heights (1.11, 4.3.4, 4.5, 4.6, 12.2, 12.3.4
+  launches 5 and 6, 12.5); O6, the guard's server for the current user only (1.11, 4.3.3, 4.5).
+- **D449** (amends D423): S1 and O5, winget started by the full path the screen found, through
+  `cmd.exe /S /K`, in winget's folder (1.3, 5.3, 5.4, 5.5, 12.3.4, 13.4 item 7); S5, a chosen git and
+  the stand-in full paths (`.exe` on Windows), and a chosen `/usr/bin/git` behind macOS's gate (1.14,
+  5.3, 5.4); O4, no third-party package source named (5.3, 5.4, 5.5, 11.3.2); T7, F1 and F2 need
+  winget on the gate's machine (0.5, 12.3.4 launch 7, 13.4 item 7).
+- **D450** (amends D445): O12, the graph row's proof a `LiveRegionChanged` event, a Name change alone
+  failing (9.3.1, 12.3.4 launch 13).
+- **D451**: B5, T4 and O17, the guide workflow's step "App's links" and the hand check's
+  `guide-site` artifact of the gate commit or of a `workflow_dispatch` run on it (0.4, 0.5, 11.2,
+  11.3.4, 11.5, 11.7, 11.8); O7, the workflow's token read-only (11.3.4); O8, D441's check reading CSS
+  and every loading link (11.3.6); O9, the demo's GitHub owner `demo--alex` (11.3.5).
+- **D452** (amends D417): S3, "Cancel {title}" cancelling only while the titled operation still runs
+  (1.8, 6.3.3, 6.4); T1, K10's fourth PageDown from §11's merge (0.7, 8.4, 11.4).
+
+Corrections of text alone, by finding and section: S2 and A2 (1.11, 4.3.2, 4.5, 4.6, 12.3.4 launch
+4); S4 (4.3.2, 4.5); S6 (3.4, 3.8, 3.9); S7 (12.3.2, 12.3.4 launch 7); S8 (10.3.5); T3 (4.5); T5
+(0.4, 5.6, 11.6); T6, items 1 (0.4, 2.2, 2.8), 8 (6.4) and 16 (9.3.9); T8 (3.6, 3.8); T9 (0.7, 2.6); T10
+and A4 (1.2, 1.3, 5.3, 5.4); T11 (0.4); T12, A6 and B11 (6.7, 12.5); A1 (0.4, 1.2, 5.2, 5.3); A3
+(1.15, 6.4, 6.5); A5 (1.3); A7 (0.4); B2 (0.4, 0.7, 8.4, 11.4); B3 (8.4); B6 (11.3.3); B7 (11.5); B8
+(10.3.5, 10.8); B9 and O13 (13.3; B9's Narrator items in 9.3.9); B10 (13.1, 13.3); B12 and O10
+(11.3.4, 11.5, 11.9, 13.3); B13 (1.15, 7.5); B14 (8.5); O11 (4.3.4, 5.3, 9.3.9); O14 (1.14, 5.3);
+O15 (3.8); O16 (0.5, 4.6, 13.3).
+
+After the fixers' and the checkers' passes the lead ruled on what they left open: git's own search of
+the `PATH` takes fully qualified folders only, as every other search of the app's does (5.3, D449);
+a keyboard Discard that leaves the tree clean gives the focus to the graph (6.3.4); a fixer, not
+§7's builder, drops the `.icns`'s two smallest entries if CI's macOS job shows `iconutil` refusing
+them (7.3); 0.4's list of files that pass between packages names the files WP0 writes and §5
+finishes; no Windows state shows a command to copy, so the winget line shows in the confirm and the
+guide alone (1.3).
+
+Waiting on the owner: O3, winget for a git that is too old or not working (§5's opening sentence,
+13.1's ruling 44, 13.3, 13.4 item 22). §5's builder starts after the answer, and until then the
+section stands as ruling 44 has it; the answer becomes a decision of its own.

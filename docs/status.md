@@ -48,8 +48,9 @@ records the share of the plan's weekly allowance used at that point (D241). The 
 the reset of Thursday 2026-11-19 at 2:00 without that check until the design is reviewed (D415);
 from step 4 on the session asks the owner for the share before each stage, and a checkpoint
 records the answer, or "share not read". The numbers are plain step numbers, not requirement
-numbers. The design (step 3) splits the steps below into work packages and says how they map onto
-them. Phase 7b's checklist, with a note on each step, is in this file as of `3dc7f79`'s second
+numbers. The Build steps follow the design's work packages in the order of its waves (design 0.4);
+they were renumbered when the design was reviewed, so an earlier commit's "step 5" (the floor) is
+step 6 here. Phase 7b's checklist, with a note on each step, is in this file as of `3dc7f79`'s second
 parent (`git show 1c2eca3:docs/status.md`).
 
 Start:
@@ -95,7 +96,7 @@ Design:
   real, and eight fixes change no earlier picture. **Notices**: the build output holds 53 files
   from 24 packages on Windows, and the present notices cover two components in full. (Week:
   share not read; the reset was at 2:00 on 2026-11-19, D415.)
-- [ ] 3. Design in `docs/phase-8a-design.md` (D243: about 150 to 200 KB, its decisions only in
+- [x] 3. Design in `docs/phase-8a-design.md` (D243: about 150 to 200 KB, its decisions only in
   `decisions.md`; the 7b handoff's "Do first", step 4): the scope and what stays out, how the code
   and the harness name 8a (the 7b handoff's "Naming", with `8a` for `8`), its lagged list (D262),
   an estimate of what the phase adds to the default run (1 h 31 min 48 s at 7b's gate) and to the
@@ -114,70 +115,120 @@ Design:
   (ruling 73's common-dir call is no dead code: it serves a folder opened below its top), D425
   (ruling 49's hidden buttons on every row would put them all into UI Automation and stop two
   earlier real-window helpers) and D434 (the notices file and the guide spell as the app's labels
-  do). The lead settled nine of the design's 21 open points (design 13.4, "Settled"). The review is
-  still to run.
+  do). The lead settled nine of the design's 21 open points (design 13.4, "Settled").
+  Reviewed on 2026-11-19 by the workflow `phase8a-design-review` (run `wf_e96519ef-ed4`: five Opus
+  readers through four lenses, git safety, the tests and the gate, the contracts against the code
+  in two halves, and the owner's decisions with the texts, security and privacy; a verifier for each
+  blocker and major, 17 of them; 22 agents, 4.32M tokens, 38 minutes). It made 58 findings: 17
+  blockers and majors, every one confirmed by its verifier (two blockers and 13 majors after
+  verification, two judged minor), and 41 minors. The lead accepted all of them. What mattered
+  most: the winget install was started through `cmd.exe` with a bare `winget`, which `cmd.exe`
+  looks for in the current folder first, so the app could have run a cloned repository's
+  `winget.cmd` (now the full path it found); a second start that handed over deleted the running
+  instance's `instance.json`, so every later start would have shown the "did not answer" notice;
+  the icon's tool made no `.icns` and the candidates were outside the repository, both against
+  D407; an Ubuntu text named a third-party package archive as "the Git team's"; and three test
+  plans that would have failed at the gate (the notice's comparison, K10's walk once the palette
+  has 35 commands, timing assertions in the most loaded test project). Corrected by the workflow
+  `phase8a-design-fixes` (run `wf_77d18914-cbf`: a fixer per section on its own part of the design,
+  three checkers, which found 33 misses, and a repair pass; 18 agents, 4.27M tokens, 39 minutes),
+  then by the lead's rulings on what the passes left open (design 13.5). The review's decisions are
+  D447 to D452. One finding waits on the owner: D405 offers the winget install for a git that is
+  missing, too old or not working, and ruling 44 with D423 had narrowed it to a missing git
+  ("Waiting on the owner"). The design is now 355 KB: sections 0 and 1, which every builder reads,
+  31 and 44 KB, and the briefs 18 to 29 KB, §5's alone over D242's 25. The stage's agents used
+  13.8M tokens in three workflows (5.20M, 4.32M, 4.27M), after step 2's 2.96M. (Week: share not
+  read since the reset of 2026-11-19, D415, which ends here; the owner is asked before step 4.)
 
-Build (the design may reorder and regroup these into waves; each part's visual checks are written
-into `docs/test-reports/phase-8a.md` and committed just before its package is built, D244):
+Build, in the order of the design's waves (design 0.4). Each part's visual checks are written into
+`docs/test-reports/phase-8a.md` and committed just before its package is built (D244). A builder
+works in a worktree on `wip/p8a-<key>` and runs only the classes its section names; the lead merges,
+and runs whole projects one at a time through `scripts/heavy-run.sh` (D245), never with an agent
+that runs a process beside them (ruling 23).
 
-- [ ] 4. First package: `Directory.Build.props`' `Authors` and `Copyright` take the owner's name
-  (D397) and `VisualCommit.slnx`'s comment on the live project is corrected, in the phase's first
-  code commit; the contracts and stubs the packages build on; the walk-through project
-  `tests/VisualCommit.VisualTests.Phase8a` with `scripts/time-scripted-check.sh`'s `8a` case, and
-  CLAUDE.md's Commands rows for it.
-- [ ] 5. The git floor (D406): the CI job on stock Ubuntu 22.04 with git 2.34.1; what it finds
-  fixed; `GitVersion.Minimum` 2.34 with the "too old" texts, `requirements.md`, the README and
-  CLAUDE.md's prerequisites; D277's branch for a git below 2.31 removed.
-- [ ] 6. First-run experience (R4, D405): the detection's states (missing, too old, not working,
-  with git's own message for a broken `~/.gitconfig`, a missing askpass helper), "Check again"
-  without a restart, "Choose git.exe" with its setting, the winget install after a confirm, and the
-  macOS and Linux guidance; the OpenSSH note (risk 15) and the Accounts section's netrc note (risk
-  35) as the design rules.
-- [ ] 7. The contrast fixes in one round (D410): the placeholder, the dark danger colour with the
-  dark label, the dark accent on hovered and selected rows; `ThemeTokensTests`' known gaps removed;
-  reference pictures and the comparison by region.
-- [ ] 8. Keyboard-accessibility pass (R7, D411): the keyboard gaps the design confirms, an
-  accessible name on every control with a test that sweeps them, the graph's selected row exposed
-  to UI Automation, the focus after "Choose" in the repository browser and the loading diff's late
-  focus (phase 7a's design 17, items 5 and 11), and the commit boxes and Amend while "Committing…"
-  runs (D392).
-- [ ] 9. The About screen (R6, D398, D409) and the complete third-party notices, reachable from
-  the app.
-- [ ] 10. Icons and branding (R5, D407): the candidates, the owner's choice, the tool that makes
-  the icon's files, the window's and the executable's icon, and the README's "Name" note naming
-  the icon.
-- [ ] 11. Performance pass: the measures and the end the design sets; the "before" and "after"
-  numbers on the rested laptop.
-- [ ] 12. User guide (D408): the pages, the workflow that builds the site, the pictures in both
-  themes, the app's links to it, and GitHub Pages turned on (the owner).
-- [ ] 13. What the design adds from the readers' findings: two instances at once, the macOS data
-  folder checked by CI's macOS job, and any other item it rules into the phase.
-- [ ] 14. The real-window part for 8a's checks (`Phase8aRealWindowPass`), written with the
-  packages; the lagged runs at each wave's merge (D262).
-- [ ] 15. An independent review of the code before the gate, each finding verified, the confirmed
-  ones fixed with tests.
+- [ ] 4. The lead's first package, WP0 (design section 1, its list in 1.16), in the main checkout:
+  the contracts and stubs the packages build on, with no behaviour and no picture changed; the
+  walk-through project `tests/VisualCommit.VisualTests.Phase8a` with
+  `scripts/time-scripted-check.sh`'s `8a` case, and CLAUDE.md's Commands rows for it. (D397's
+  `Authors` and `Copyright` and the `.slnx` comment were done in `e04762b`.)
+
+Wave 1:
+
+- [ ] 5. §2, the contrast round (D410, D418, D419), part L: the placeholder, the dark danger colour
+  with the dark label, the dark accent on hovered and selected rows; `ThemeTokensTests` as one
+  table with no list of gaps; the scan's script and lists, `compare-pictures.py --expected`.
+- [ ] 6. §3, the git floor (D406, D420): the worktree check before a fast-forward on every git,
+  the stash names below 2.36, the branches the floor makes dead removed; CI's floor job green, and
+  in that commit `GitVersion.Minimum` 2.34.1 with the "too old" texts, `continue-on-error`
+  removed, `requirements.md`, the README and CLAUDE.md's prerequisites.
+- [ ] 7. §4, one instance per data folder (D421, D422, D448), part I, and the macOS data folder's
+  test in CI's macOS job.
+- [ ] 8. Wave 1's close: the lagged list (D262) and the whole default run; §2's comparison against
+  phase 7b's references (`D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual/`) with the
+  scan's boxes, every difference outside them explained; the run's scripted pictures then become
+  the references of every later merge (`D:/Projects/Personal/phase8-work/references/wave1/`).
+
+Wave 2:
+
+- [ ] 9. §5, the first-run experience (R4, D405, D423, D424, D449), part F: the detection's states
+  with git's own message for a broken `~/.gitconfig` and the missing askpass helper, "Check again"
+  without a restart, the "Git program" setting, the winget install after a confirm, the macOS and
+  Linux guidance, the OpenSSH line and the netrc note. Starts only after the owner's answer on
+  winget for a git that is too old or not working ("Waiting on the owner").
+- [ ] 10. §6, the keyboard pass (R7, D425 to D427, D452), part K: the gaps each shown by a failing
+  test first, the focus after "Choose" and after a row's action, the loading diff's late focus,
+  the commit boxes while "Committing…" runs (D392), "Cancel {title}" in the palette.
+- [ ] 11. §7, the icon's pipeline with a placeholder mark (R5, D407, D428 to D430, D447), part B:
+  the masters, the tool, the `.ico`, the `.icns` and the PNG files, the window's and the
+  executable's icon; then the owner's choice (rounds in `docs/brand/icon/`), the chosen mark's
+  files, and the README's "Name" note naming the icon.
+- [ ] 12. Wave 2's close: the lagged list and the whole default run; the pictures against wave 1's
+  references, with only the changes design 0.7 names; D427's fixer if §6's test asks for it.
+
+Wave 3:
+
+- [ ] 13. §8, the About section and the complete third-party notices (R6, D398, D409, D431 to
+  D434), part A.
+- [ ] 14. §9, screen readers (D411, D435, D450), part U: the spike first (the owner told), the
+  graph's selected row, a name on every control with the sweep; merged after §8; a short listen
+  with Narrator by the owner at its merge.
+- [ ] 15. §10, the performance pass (D436 to D438): the log lines and the opt-in class.
+- [ ] 16. Wave 3's close: the lagged list, the whole default run and the pictures; then the
+  "before" series on the rested laptop, the owner told, and a change only where a trigger fires,
+  after a ruling.
+
+Wave 4 and the review:
+
+- [ ] 17. §11, the user guide (D408, D439 to D441, D451), part G: the pages, the workflow that
+  builds the site and runs the links' tests, the pictures in both themes, the app's links and F1.
+  (GitHub Pages is turned on at "Phase 8a accepted", before `master` is pushed.)
+- [ ] 18. §12, the real-window part for 8a's checks (`Phase8aRealWindowPass`, D442 to D446): built
+  on the Windows machine, each of its 13 methods run alone, the owner told before each.
+- [ ] 19. An independent review of the code before the gate, each finding verified, the confirmed
+  ones fixed with tests; then §12's merge, the lagged list and the whole default run.
 
 Gate:
 
-- [ ] 16. The live command once before the gate's pictures, the owner told (D335). It needs the
+- [ ] 20. The live command once before the gate's pictures, the owner told (D335). It needs the
   three tokens made again first: GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on
   2026-12-04 ("Waiting on the owner").
-- [ ] 17. The visual test gate: D246's two runs of 8a's real-window checks on their own, the
+- [ ] 21. The visual test gate: D246's two runs of 8a's real-window checks on their own, the
   owner present; `dotnet test` and the real-window pass on one commit; the list of pictures; the
   live command on the counted round; every picture of both passes inspected, the changed earlier
-  ones against phase 7b's references (`D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual/`);
-  the checks by hand (the Narrator walk-through, D411; phase 6's System step, D224);
-  `docs/test-reports/phase-8a.md` completed.
+  ones against the references; the guide's site from the gate commit's `guide-site` artifact; the
+  checks by hand (the Narrator walk-through of 21 steps, D411 and D450; phase 6's System step,
+  D224; a second start from the lead's isolating start file); `docs/test-reports/phase-8a.md`
+  completed.
 
 Closing (CLAUDE.md's "Closing a phase"):
 
-- [ ] 18. `docs/architecture.md` describes what is built.
-- [ ] 19. `docs/plan.md`: what 8a did not deliver moved to the phase that owns it, the risks
+- [ ] 22. `docs/architecture.md` describes what is built.
+- [ ] 23. `docs/plan.md`: what 8a did not deliver moved to the phase that owns it, the risks
   updated.
-- [ ] 20. `docs/handoffs/phase-8a.md` written from the template.
-- [ ] 21. The cold-read check, and its gaps fixed.
-- [ ] 22. The CI run of the gate's commit read and recorded here, with each job's result.
-- [ ] 23. This file: links to the handoff and the report, the "Gate commit", what waits on the
+- [ ] 24. `docs/handoffs/phase-8a.md` written from the template.
+- [ ] 25. The cold-read check, and its gaps fixed.
+- [ ] 26. The CI run of the gate's commit read and recorded here, with each job's result.
+- [ ] 27. This file: links to the handoff and the report, the "Gate commit", what waits on the
   owner, and the state "Awaiting acceptance" or "Blocked"; the owner told what passed, what did not
   and what needs a decision.
 
@@ -188,7 +239,7 @@ outside a phase that starts a run: the last CI run, its commit and its result in
 
 Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jobs since
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", does not fail the run until
-step 5 has fixed what it finds.
+step 6 has fixed what it finds.
 
 - [44479788558](https://github.com/RahimPasha/VisualCommit/actions/runs/44479788558), for
   `e04762b` (the floor's job, D397's two properties, the solution's comment). First attempt:
@@ -207,7 +258,7 @@ step 5 has fixed what it finds.
   two "bare ubuntu container" jobs green, 7,889 tests with 3 skipped each: Microsoft's installer
   with a set-up of 1 min 51 s and a Test step of 5 min 19 s, Ubuntu's packages 41 s and 6 min 54
   s, their Secret Service steps green; the floor's job failed the same 20 of 7,889 on git 2.34.1
-  (Test step 6 min 59 s, set-up 3 min 6 s), which does not fail the run until step 5.
+  (Test step 6 min 59 s, set-up 3 min 6 s), which does not fail the run until step 6.
 
 The run for phase 7b's merge on `master` is
 [42574680274](https://github.com/RahimPasha/VisualCommit/actions/runs/42574680274), for `1a4a555`
@@ -401,24 +452,24 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: Progress step 3's second half, the design's review (the owner said to go on through the
-reset, D415, which ends when the design is reviewed). The design is drafted and in the repository:
-`docs/phase-8a-design.md` (305 KB, sections 0 to 13), with its decisions D416 to D446 in
-`docs/decisions.md`. Its sources stay outside the repository, in
-`D:/Projects/Personal/phase8-work/design/` (`sections/`, the lead's `rulings.md`). The review: four
-lenses of Opus readers (git safety; tests and the gate; the contracts against the code, in two
-halves; the owner's decisions, scope, texts, security and privacy), each finding written to
-`D:/Projects/Personal/phase8-work/design/review/`, and a verifier for each blocker and major
-(D243). Under way since about 04:15 on 2026-11-19: the workflow `phase8a-design-review` (run
-`wf_e96519ef-ed4`), on the design as committed in `85169db`. The lead then rules on the confirmed findings, has the design corrected, records what
-changes a decision as a new decision (D447 on), ticks step 3 with the review's counts, and stops:
-before step 4 the owner is asked for the week's share (D241) and has the rulings and D416 to D446
-to look over (design 13.3). After the review the lead also rewrites the Build steps of this
-checklist in the design's order of waves (design 0.4: the lead's first package; then the contrast
-round, the floor and single instance; then first run, keyboard and the icon; then About, screen
-readers and performance; then the guide and the real-window part). A session that finds the
-review's workflow ended or lost reads what `review/` holds and runs only the lenses that wrote no
-file. The icon's first candidates are with the owner (Notes, "The icon").
+Next: the owner's answers, then Progress step 4. The design is drafted, reviewed and corrected
+(step 3), which ends D415. Before step 4 the session asks the owner for the share of the week's
+allowance used (D241) and puts the one question the review left to the owner: whether the
+first-run screen offers the winget install also for a git that is too old or not working, as D405
+reads ("Waiting on the owner"). The answer becomes a decision of its own (D453 on), and the lead
+brings design 1.3, 5.3, 5.5, 13.1, 13.3 and 13.4 item 22 into line with it; §5's builder (step 9)
+starts only after it, and steps 4 to 8 do not wait for it. Step 4 is the lead's own package, WP0
+(design section 1 and its list in 1.16), in the main checkout: the contracts and stubs with no
+behaviour or picture changed and the walk-through project; then the classes 1.16 names, a push,
+and CI's run read. Wave 1 follows (steps 5 to 8): part L's and part I's checks are written and
+committed before their packages (D244; the floor has none), then three Opus builders work in
+worktrees `D:/Projects/Personal/vc-wt/p8a-<key>` on `wip/p8a-<key>` (design 0.3), each reading
+sections 0 and 1 and its own. By hand before §5's merge, the owner told: `cmd.exe` started as the
+app will start it, with `/S /K` and winget's quoted path and `--version`, to see that its window
+stays open (design 13.4 item 7). The review's files (the findings in full, the lead's rulings on
+them, the design's parts with their texts from before the corrections) are outside the repository,
+in `D:/Projects/Personal/phase8-work/design/review/`. The icon's first round is with the owner
+(Notes, "The icon").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -473,14 +524,16 @@ every commit.
   owner's if wanted. One of the five queries also carried the owner's GitHub handle beside the
   name, which D412's leave did not cover; the handle is public on the repository's page, and the
   lead told the owner. D21's search of 2026-10-06 found the same: no existing product.
-- **The icon** (D407): five first candidates, drawn by the lead as SVG (Lens, Merge V, Check, Ring,
-  Viewfinder), are on a private page of the owner's,
-  https://claude.ai/artifact/BDztvt827qm6QeypyqZmxM, each from 16 to 128 pixels on a dark and a
-  light desk; the page's source, with the five drawings, is
-  `D:/Projects/Personal/phase8-work/icon/candidates-v1.html`, outside the repo until the owner has
-  chosen. The lead had no way to look at the rendered page before publishing it. Next: the owner's
-  letter and changes; then the look-alike check against Git's logo and the other clients' icons,
-  the small-size drawing, and the SVG into the repo with the tool that makes its files (step 10).
+- **The icon** (D407, D447): round 1, five candidates drawn by the lead as SVG (Lens, Merge V,
+  Check, Ring, Viewfinder), is in the repository since `306f61f`: `docs/brand/icon/round-1/` holds
+  each candidate as a file of its own, the contact sheet `candidates.html` (each from 16 to 256
+  pixels on a dark and a light desk; it loads nothing from the web) and a README that records the
+  round and will record the owner's choice. The same sheet is on a private page of the owner's,
+  https://claude.ai/artifact/BDztvt827qm6QeypyqZmxM. The design's review found that the round had
+  been kept outside the repository and shown only up to 128 pixels, against D407. The lead had no
+  way to look at the rendered page before publishing it. Next: the owner's letter and changes, each
+  later round in `round-<n>/`; then the look-alike check against Git's logo and the other clients'
+  icons, the small-size drawing, and the chosen mark as the masters in `assets/brand/` (step 11).
 - Nothing else is in flight. `master` holds everything; the working tree was clean when phase 7b was
   merged (`3dc7f79`). **Cleaned up on 2026-11-18, at the owner's word** (the 7b handoff's "Do
   first", step 3): the seven worktrees under `D:/Projects/Personal/vc-wt/` (each clean, its branch
@@ -613,24 +666,48 @@ every commit.
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
+  - **Before step 4: the share of the week's allowance used** (D241). D415's leave to go on without
+    the check ended with the design's review.
+  - **Before wave 2: winget for a git that is too old or not working.** D405, the owner's, offers
+    the winget install "when git is missing, too old or not working". The lead's ruling 44 and D423
+    narrowed it to a missing git without saying that this changes D405, which the design's review
+    found (finding O3). The choices: (a) a missing and a too-old git, the lead's recommendation:
+    winget's install upgrades a Git for Windows that is installed, and it cannot repair one that
+    does not work, where the screen shows git's own message, the download, "Choose git.exe" and
+    "Check again"; (b) a missing git only, as ruling 44; (c) all three states, as D405 reads. That
+    winget upgrades a Git for Windows which its own installer put there is not tried: the laptop
+    has the newest git.
+  - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
+    above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
+    D452; design 13.5). None of them is the owner's own, so the owner can overturn any.
   - **The three live tokens expire before 8a's gate can run**: GitHub's on 2026-11-29, Azure
     DevOps' and GitLab's on 2026-12-04, and a gate runs the live command twice (D335). Before 8a's
     gate the owner makes each again, with an expiry that also covers 8b's gate, as phase 7a's
     design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token.
-  - **The icon** (D407): the owner picks among the lead's candidates and directs the changes,
-    after the lead's report on the search for the name (D412).
-  - **By hand, with 8a's checks**: one walk-through with Windows Narrator, with the lead's steps
-    (D411), and phase 6's System step (switch Windows' app mode while the app runs with System
-    chosen, D224).
-  - **GitHub Pages** (D408): the owner allowed it; when the guide's workflow exists, the owner turns
-    it on for the repository, or tells the lead to do it with `gh`.
-  - **Left to 8a's design**, on which the lead rules before the drafting and which the design lists
-    for the owner to look at: whether two instances of the app may run at once (the readers
-    recommend a single-instance guard); a setting for git's executable, which D405's "Choose
-    git.exe" needs; the Accounts section's note on a netrc file below git 2.46 (risk 35); what the
-    release says about OpenSSH older than 8.4 (risk 15); which repository sizes the guide names as
-    tested; whether the performance pass takes risk 44; that the app never writes to a user's
-    repository for speed; that the keys stay a fixed set (D192); and the guide's generator (D408).
+  - **The icon** (D407, D447): the owner picks among the lead's candidates and directs the changes
+    (Notes, "The icon"); by the counted round the chosen mark, or the owner's word that 8a closes
+    with the placeholder.
+  - **The desktop, told first each time** (design 13.3): the lead's try of the winget terminal
+    window before §5's merge; two earlier real-window checks alone at §6's merge (about 2
+    minutes); §9's spike (a minute of keys and clicks) and a short listen with Narrator at §9's
+    merge (about 5 minutes); the performance series after wave 3 (12 to 18 minutes a run, rested);
+    §12's build (each of its 13 methods alone, about 15 minutes in all); D246's two runs and the
+    pass at the gate.
+  - **By hand, at the gate**: one walk-through with Windows Narrator, with the lead's 21 steps, the
+    first-run screen among them (D411, D450); phase 6's System step (switch Windows' app mode
+    while the app runs with System chosen, D224); a second start of the app from the lead's
+    isolating start file while another window is in front (design 4.6).
+  - **GitHub Pages** (D408, D451): the owner allowed it. Its source is set to "GitHub Actions" at
+    "Phase 8a accepted", before `master` is pushed, by the owner or by the lead with `gh` at the
+    owner's word; if the `github-pages` environment then admits more than `master`, the owner's
+    leave is asked to set its branch rule.
+  - **Leave for a reverse image search** for the icon's look-alike check (D412 covers only the
+    search for the name): asked when the owner has chosen a mark.
+  - **Left to 8a's design, now ruled**: the points the readers left to the design (one instance
+    per data folder, the git program setting, the netrc note, the OpenSSH line, the guide's tested
+    sizes and its generator, risk 44 left alone, no writes to a user's repository for speed, the
+    fixed set of keys) are the lead's rulings 1 to 23 and the decisions D416 to D446, which the
+    owner has above to look over.
 - **Phase 8b, to ask before its design**: plan.md's "Phase 8b" lists the questions, each with the
   research's recommendation: the installers per platform, the macOS token store (risk 34), the
   platforms and oldest systems, the version scheme, what proves "receive an update" and when the
