@@ -103,6 +103,19 @@ Design:
   and the work packages, each section a builder's brief of at most about 25 KB (D242). Its review:
   3 or 4 lenses, git safety and tests/gate among them, a verifier only for each blocker and major;
   its decisions recorded (D416 on).
+  Drafted on 2026-11-19 by the workflow `phase8a-design-draft` (run `wf_2e69aec7-03e`: an Opus
+  architect, eleven drafters and an integrator, 13 agents, 5.20M tokens, 1 h 43 min): sections 0
+  to 13, eleven work packages in four waves after the lead's first package (design 0.4), eight
+  parts of visual checks (0.5), and decisions D416 to D446, now in `decisions.md`. Its size is
+  305 KB, over D243's 150 to 200, as 7a's and 7b's were (7b's 274.6 KB): eleven briefs of 17 to 22
+  KB each, within D242's 25, and 39 KB of shared contracts; the integrator cut the repetitions
+  (from about 320 KB), and a further cut would take content out of the briefs. Three of the
+  decisions amend a ruling of the lead's, each for a fact its drafter found in the code: D420
+  (ruling 73's common-dir call is no dead code: it serves a folder opened below its top), D425
+  (ruling 49's hidden buttons on every row would put them all into UI Automation and stop two
+  earlier real-window helpers) and D434 (the notices file and the guide spell as the app's labels
+  do). The lead settled nine of the design's 21 open points (design 13.4, "Settled"). The review is
+  still to run.
 
 Build (the design may reorder and regroup these into waves; each part's visual checks are written
 into `docs/test-reports/phase-8a.md` and committed just before its package is built, D244):
@@ -188,7 +201,13 @@ step 5 has fixed what it finds.
   and never ended in the other, where it takes about a minute); the floor's job failed 20 of
   7,889 tests on git 2.34.1 in a Test step of 7 min 15 s, after a set-up of 19 min 3 s (Progress,
   step 2, says what the 20 are). The lead ran the failed and cancelled jobs again at 01:38 on
-  2026-11-19 (attempt 2); its result goes here.
+  2026-11-19. Attempt 2: the run succeeded. `windows-latest` green, 7,892 tests with 4 skipped,
+  Test step 40 min 30 s of 70 (under the 56 minutes at which D377 raises the limit, but close to
+  phase 7b's worst, 41 min 6 s), its keychain step green, "Build the opt-in projects" 33 s; the
+  two "bare ubuntu container" jobs green, 7,889 tests with 3 skipped each: Microsoft's installer
+  with a set-up of 1 min 51 s and a Test step of 5 min 19 s, Ubuntu's packages 41 s and 6 min 54
+  s, their Secret Service steps green; the floor's job failed the same 20 of 7,889 on git 2.34.1
+  (Test step 6 min 59 s, set-up 3 min 6 s), which does not fail the run until step 5.
 
 The run for phase 7b's merge on `master` is
 [42574680274](https://github.com/RahimPasha/VisualCommit/actions/runs/42574680274), for `1a4a555`
@@ -382,20 +401,23 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: Progress step 3, the design (the owner said to go on through the reset, D415). Step 2 is
-done: the phase's first code commit (`e04762b`) added CI's job on git 2.34.1 ahead of step 5, with
-step 4's two one-line changes, and the inputs and the lead's 75 rulings are written. Under way
-since about 01:45 on 2026-11-19: the workflow `phase8a-design-draft` (run `wf_2e69aec7-03e`), an
-Opus architect for sections 0 and 1, a drafter per work package and an integrator. It writes into
-`D:/Projects/Personal/phase8-work/design/`: the sections under `sections/`, the assembled
-`phase-8a-design.md` and `decisions-draft.md` (the design's decisions, D416 on). When it has ended,
-the lead reads the result, copies the design to `docs/phase-8a-design.md`, adds its decisions to
-`docs/decisions.md` and a row to CLAUDE.md's Docs map, commits, and runs the design's review (3
-or 4 lenses, git safety and tests/gate among them, a verifier for each blocker and major; D243).
-A session that finds the workflow ended or lost reads what `sections/` holds and has only the
-missing sections drafted, by the same briefs (the workflow's script is kept with the session;
-its prompts are short and can be written again from this step and the rulings). The icon's first
-candidates are with the owner (Notes, "The icon").
+Next: Progress step 3's second half, the design's review (the owner said to go on through the
+reset, D415, which ends when the design is reviewed). The design is drafted and in the repository:
+`docs/phase-8a-design.md` (305 KB, sections 0 to 13), with its decisions D416 to D446 in
+`docs/decisions.md`. Its sources stay outside the repository, in
+`D:/Projects/Personal/phase8-work/design/` (`sections/`, the lead's `rulings.md`). The review: four
+lenses of Opus readers (git safety; tests and the gate; the contracts against the code, in two
+halves; the owner's decisions, scope, texts, security and privacy), each finding written to
+`D:/Projects/Personal/phase8-work/design/review/`, and a verifier for each blocker and major
+(D243). The lead then rules on the confirmed findings, has the design corrected, records what
+changes a decision as a new decision (D447 on), ticks step 3 with the review's counts, and stops:
+before step 4 the owner is asked for the week's share (D241) and has the rulings and D416 to D446
+to look over (design 13.3). After the review the lead also rewrites the Build steps of this
+checklist in the design's order of waves (design 0.4: the lead's first package; then the contrast
+round, the floor and single instance; then first run, keyboard and the icon; then About, screen
+readers and performance; then the guide and the real-window part). A session that finds the
+review's workflow ended or lost reads what `review/` holds and runs only the lenses that wrote no
+file. The icon's first candidates are with the owner (Notes, "The icon").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
