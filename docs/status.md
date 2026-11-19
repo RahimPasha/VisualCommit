@@ -18,7 +18,8 @@ folder on the development machine is still named "Visual Git"; that has no effec
 | 6. Multi-repo and productivity | Done | `phase/6-multi-repo` | [phase-6](handoffs/phase-6.md) | [phase-6](test-reports/phase-6.md) |
 | 7a. Hosting foundation and GitHub | Done | `phase/7a-hosting-github` | [phase-7a](handoffs/phase-7a.md) | [phase-7a](test-reports/phase-7a.md) |
 | 7b. Azure DevOps and GitLab | Done | `phase/7b-hosting-azure-gitlab` | [phase-7b](handoffs/phase-7b.md) | [phase-7b](test-reports/phase-7b.md) |
-| 8. Public release | Not started | `phase/8-release` | | |
+| 8a. Release readiness in the app | Not started | `phase/8a-release-readiness` | | |
+| 8b. Packaging and public beta | Not started | `phase/8b-packaging-beta` | | |
 
 States: Not started, In progress, Blocked (cannot continue or close without the owner, or without
 a session on the Windows machine; the reason is under "Waiting on the owner"), Awaiting
@@ -31,8 +32,8 @@ commit `3dc7f79`); its gate ran on `cb9af6d`. Phase 7a was accepted on 2026-10-3
 `019e68a`), phase 6 on 2026-10-24 (merge commit `3f34c87`), phase 5 on 2026-10-17 (merge commit
 `c299939`), phase 4 on 2026-10-12 (merge commit `ce5f337`), phase 3 on 2026-10-11 (merge commit
 `8b33745`), phase 2 on 2026-10-10 (merge commit `e039070`), phase 1 on 2026-10-10 (merge commit
-`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). The next phase to start is phase 8,
-the public release.
+`b5eb1ed`) and phase 0 on 2026-10-06 (merge commit `b5f4723`). The next phase to start is phase 8a,
+the in-app half of the public release: phase 8 is split into 8a and 8b (D399).
 
 Gate commit: none yet. When a phase is set to "Awaiting acceptance", this line names the commit
 that both passes of the gate ran on (or, by D246, the real-window pass's commit when it changes
@@ -242,14 +243,22 @@ and kept MIT with the owner's name in the copyright line (D397), and asked for a
 that names the owner (D398). Later that day the owner said "Start phase 8" again and answered at
 once: Fable 5.2 leads phase 8 (CLAUDE.md's Models rule), under 50 % of the week's allowance was
 used at 22:00, four hours before the reset of Thursday 2026-11-19 at 2:00, and no legal or
-professional point is left, so the hold on the two signing questions is lifted. No phase branch
-exists yet. Under way in that session (Notes, "Phase 8's start"): the baseline default run that
-D245 asks for after the Windows updates of 2026-11-11, and two workflows of Opus agents that read
-the repo for phase 8 and research the release questions on the web. Next: read their briefs; ask
-the owner the questions not yet asked, each with the research's recommendation, the two signing
-questions among them; record each answer as a decision (D399 on) and carry it into plan.md; then
-the split's decision (it amends D241, with the phases' names and branches and CLAUDE.md's counting
-of phases in the same commit) and phase 8a's start.
+professional point is left, so the hold on the two signing questions was lifted. Two workflows of
+Opus agents then read the repo for phase 8 and researched the release questions on the web (Notes,
+"Phase 8's start"), and the owner answered the questions in five sittings that night: D399 (the
+split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" sections,
+`requirements.md`, the README and CLAUDE.md's counting of phases. No phase branch exists yet.
+
+Next, in this order (the owner said to go on through the reset, D415):
+1. "Start a phase" for 8a (CLAUDE.md): `git switch -c phase/8a-release-readiness --no-track
+   origin/master`; in this file set 8a to "In progress" and build the Progress checklist from
+   plan.md's "Phase 8a"; commit and push the branch.
+2. The search of the web for other uses of the name "VisualCommit", which the owner allowed (D412),
+   before any icon work; report what it finds to the owner.
+3. 8a's design, `docs/phase-8a-design.md`, as D243 and the 7b handoff's "Do first", step 4,
+   describe it: the lead's rulings on the questions the readers left to the design (below, "Waiting
+   on the owner", "Left to 8a's design") before the drafting, then the draft, its review and the
+   work packages. The briefs in `D:/Projects/Personal/phase8-work/research/` are its material.
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -261,19 +270,33 @@ every commit.
 - **Phase 8's start, 2026-11-18** (no branch yet: everything so far is on `master` or outside the
   repo). The machine changed since phase 7b's gate (Windows updates KB5132061 and KB5132688 on
   2026-11-11, and a boot that day; git 2.56.0.windows.4 and SDK 10.0.303 as before), so step 6's
-  whole default run was started at about 22:05 through `scripts/heavy-run.sh`. Its output is
-  `D:/Projects/Personal/phase8-work/baseline/default-run-2026-11-18.log`, whose last line is the
-  exit code; its result goes here. `dotnet build` at the root before it: 0 warnings, 0 errors,
-  2 min 38 s. D: had 19.5 GB free and C: 29.1 GB. Four `git fsmonitor--daemon` processes were
-  running (the owner's global `core.fsmonitor=true`); none was stopped. Beside the run, with no
-  process of their own (they read files and the web): the workflow `phase8-repo-map`, seven Opus
-  readers and a critic (`repo-ship.md`, `repo-git.md`, `repo-a11y.md`, `repo-perf.md`,
-  `repo-gate.md`, `repo-owed.md`, `repo-about.md`, `repo-critic.md`), and the workflow
-  `phase8-release-research`, six Opus researchers and three skeptics (`web-installers.md`,
-  `web-winsign.md`, `web-macos.md`, `web-git.md`, `web-channels.md`, `web-brand.md` and three
-  `web-verify-*.md`), all in `D:/Projects/Personal/phase8-work/research/`, outside the repo. The
-  researchers put neither the owner's name nor the product's into any web request, so nobody has
-  searched the web for other uses of the name "VisualCommit": that search needs the owner's leave.
+  whole default run was started at about 22:05 through `scripts/heavy-run.sh`
+  (`D:/Projects/Personal/phase8-work/baseline/default-run-2026-11-18.log`, whose last line is the
+  exit code). `dotnet build` at the root before it: 0 warnings, 0 errors, 2 min 38 s. D: had
+  19.5 GB free and C: 29.1 GB. Four `git fsmonitor--daemon` processes were running (the owner's
+  global `core.fsmonitor=true`); none was stopped. **The run is no clean baseline**: in 1 h 30 min
+  48 s eleven of the twelve projects passed (6,706 tests, 4 skipped as always, none failed), and
+  `VisualCommit.App.Tests` was stopped by the hang watchdog 2,478 s into its run, when
+  `RepositoryOperationsSequenceTests.Continue_and_Skip_of_a_list_that_stops_again_say_how_far_it_came_and_a_refused_commit_opens_the_dialog`
+  had run for 180 s (exit code 127, `dotnet test`'s for a stopped process). Two workflows worked
+  beside it, up to 13 Opus agents at once that read files and the web and ran no process but
+  their file searches (one ran a single `echo` by mistake): the lead judged that light enough,
+  against this section's rule on agents beside a heavy run, and it was not. The lead then ran
+  `VisualCommit.App.Tests` again alone, with nothing beside it, from 00:07 on 2026-11-19
+  (`app-tests-alone-2026-11-19.log` in the same folder); its result is in the next note.
+  The workflows, whose briefs are in `D:/Projects/Personal/phase8-work/research/`, outside the
+  repo: `phase8-repo-map`, seven Opus readers and a critic, 2.27M tokens in 62 minutes
+  (`repo-ship.md`, `repo-git.md`, `repo-a11y.md`, `repo-perf.md`, `repo-gate.md`, `repo-owed.md`,
+  `repo-about.md`, `repo-critic.md`), and `phase8-release-research`, six Opus researchers and three
+  skeptics, 2.09M tokens in 48 minutes (`web-installers.md`, `web-winsign.md`, `web-macos.md`,
+  `web-git.md`, `web-channels.md`, `web-brand.md` and three `web-verify-*.md`; the skeptics
+  confirmed 106 of 128 claims and corrected the rest, and where a brief and its skeptic differ the
+  skeptic's file is the one to go by). The researchers put neither the owner's name nor the
+  product's into any web request; the search for other uses of the name "VisualCommit" is allowed
+  since D412 and not yet made. Things the readers found that the docs had wrong or did not say:
+  no code sets `DOTNET_ROOT` for the askpass helper (plan.md's 8b item says so now); the macOS
+  data folder in the docs is unproven and probably wrong (plan.md's 8a items); the app shows its
+  own version nowhere and has no icon of any kind; nothing stops two instances.
 - Nothing else is in flight. `master` holds everything; the working tree was clean when phase 7b was
   merged (`3dc7f79`). **Cleaned up on 2026-11-18, at the owner's word** (the 7b handoff's "Do
   first", step 3): the seven worktrees under `D:/Projects/Personal/vc-wt/` (each clean, its branch
@@ -404,6 +427,34 @@ every commit.
 
 ## Waiting on the owner
 
+- **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
+  phase 8, before its design"):
+  - **The three live tokens expire before 8a's gate can run**: GitHub's on 2026-11-29, Azure
+    DevOps' and GitLab's on 2026-12-04, and a gate runs the live command twice (D335). Before 8a's
+    gate the owner makes each again, with an expiry that also covers 8b's gate, as phase 7a's
+    design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token.
+  - **The icon** (D407): the owner picks among the lead's candidates and directs the changes,
+    after the lead's report on the search for the name (D412).
+  - **By hand, with 8a's checks**: one walk-through with Windows Narrator, with the lead's steps
+    (D411), and phase 6's System step (switch Windows' app mode while the app runs with System
+    chosen, D224).
+  - **GitHub Pages** (D408): the owner allowed it; when the guide's workflow exists, the owner turns
+    it on for the repository, or tells the lead to do it with `gh`.
+  - **Left to 8a's design**, on which the lead rules before the drafting and which the design lists
+    for the owner to look at: whether two instances of the app may run at once (the readers
+    recommend a single-instance guard); a setting for git's executable, which D405's "Choose
+    git.exe" needs; the Accounts section's note on a netrc file below git 2.46 (risk 35); what the
+    release says about OpenSSH older than 8.4 (risk 15); which repository sizes the guide names as
+    tested; whether the performance pass takes risk 44; that the app never writes to a user's
+    repository for speed; that the keys stay a fixed set (D192); and the guide's generator (D408).
+- **Phase 8b, to ask before its design**: plan.md's "Phase 8b" lists the questions, each with the
+  research's recommendation: the installers per platform, the macOS token store (risk 34), the
+  platforms and oldest systems, the version scheme, what proves "receive an update" and when the
+  beta becomes 1.0, from which commit a public beta is built, the shape of the regression against
+  the installed build, test packages in the owner's own Windows profile, what an uninstall removes,
+  the report channels, and when a Mac is at hand for the 78 steps of the macOS checklists. With
+  them the Windows route (D402), a month before the first stable release if it is to be Azure
+  Artifact Signing, and the publisher name it shows.
 - **Phase 7b's acceptance**: given on 2026-11-08; merged into `master` (`3dc7f79`); its gate ran on
   `cb9af6d`. Still open from the phase, below: risk 39's sign-in dialog in a bound tab, risk 40's torn
   banner and risk 43's git that loses a URL's user. The real-window pass opened the default browser once, on the fake of GitHub's page
@@ -435,13 +486,30 @@ every commit.
   its price could not be read; a Microsoft Q&A answer of March 2026, marked AI-generated, limits
   new individual sign-ups to the US and Canada; SignPath Foundation signs open source for free
   after approval and is itself the publisher shown; the Apple Developer Program costs $99 a year.
+  **Answered on 2026-11-18 and 19, in five sittings, after the research (Notes, "Phase 8's
+  start"); each answer is a decision**: the split into 8a, "Release readiness in the app", and 8b,
+  "Packaging and public beta" (D399); the installers, the updates and the beta on GitHub Releases,
+  each release approved by the owner (D400); the update check asked at the first start (D401);
+  Windows ships its beta unsigned and the route is chosen before the first stable release, after
+  the owner first chose the Microsoft Store alone and reconsidered (D402); the owner already holds
+  a paid individual Apple Developer Program membership, so macOS is signed and notarised (D403); a
+  plain-language note in the README beside the unchanged licence, in the owner's words "I developed
+  this to help the community and use it on your own responsibility" (D404); no git bundled, and a
+  first-run screen that offers to install it (D405); the git floor 2.34, tested by a new CI job
+  (D406); the icon drafted by the lead and chosen by the owner (D407); the guide as a site on GitHub
+  Pages (D408); the About screen as a settings section, a palette command and the macOS menu's item
+  (D409); the three contrast fixes in one round, the placeholder's among them (D410); accessible
+  names, the graph's row and one Narrator walk-through, no high-contrast palette (D411); the search
+  for the name allowed, and a "Name" note in the README (D412); and 8a's start through the reset
+  (D415). Not asked yet: 8b's own questions (above).
 - **The licence (D6), reopened by the owner on 2026-11-18. Answered the same day (D397): MIT
   stays, with the owner's name.** `LICENSE` reads "Copyright (c) 2026 Rahim Khajei" and
   `README.md`'s Licence section names the owner as the app's creator; `Directory.Build.props`'
   `Authors` and `Copyright` follow in phase 8's first code commit (plan.md's phase 8). Answered the
   same day too (D398): the app gains an About screen that names the owner as its creator, built
-  in phase 8 (plan.md's phase 8, R6). Still to ask: the publisher name on signed installers, with
-  the signing answers, and whether the README says that a fork takes another name. The owner's aim:
+  in phase 8a (plan.md's "Phase 8a", R6, D409). Asked since: the README says that a fork takes
+  another name (D412, 2026-11-19), and the publisher name on signed installers waits for the
+  Windows route (D402), while macOS shows the owner's legal name (D403). The owner's aim:
   no direct income from the product; wide free use; the owner's name kept visible, for reputation.
   What the lead found and told the owner that day:
   - The owner alone decides: all 1,809 commits carry the owner's identity, and GitHub showed no
@@ -462,8 +530,9 @@ every commit.
   - Beside the licence, for the name: an About screen, the README, the publisher name on signed
     installers (which ties this to the signing answers above), and a short trademark note that a
     fork takes another name.
-  `requirements.md`'s R6 ("MIT licence file and third-party notices") and
-  `THIRD-PARTY-NOTICES.md` stand as they are.
+  `requirements.md`'s R6 ("MIT licence file and third-party notices", and since D398 an About
+  screen that names the app's creator) and `THIRD-PARTY-NOTICES.md` stand as they are; 8a
+  completes the notices.
 - **Phase 7a's acceptance**: given on 2026-10-31; merged into `master` (`019e68a`); its gate ran on
   `a2c312a`. The tab the real-window pass opened on the fake's page was closed by the owner the
   same day (D321). Still open from the phase, below: risk 39's sign-in dialog in a bound tab and
@@ -589,14 +658,15 @@ every commit.
   readable is checked against its read; the owner's approval), and D396 the cold read's at the close
   (CLAUDE.md's step 1 never checks out or pushes a local `wip/...` or `backup/...` branch). D397 is
   the owner's choice of 2026-11-18 (MIT stays, the copyright line names the owner) and D398 the
-  owner's answer of the same day (an About screen that names the owner). The next decision number
-  is D399.
-- **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
+  owner's answer of the same day (an About screen that names the owner). D399 to D415 are the
+  owner's answers of 2026-11-18 and 19 at phase 8's start; in D399 the two phases' names and
+  branches are the lead's. The next decision number is D416.
+- **Answered 2026-11-19: left as a recorded risk (D413).** **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
   refusal without a dialog, as D340 records for a sign-out. Should the broker also refuse such a
   prompt without a dialog, from what the session knows (amending D273 and D340)?
-- **The banner's brief torn state** (plan.md's risk 40, design 21 item 4): during a merge started
+- **Answered 2026-11-19: left as a recorded risk (D413).** **The banner's brief torn state** (plan.md's risk 40, design 21 item 4): during a merge started
   in a terminal the banner can read "Conflicts resolved" for about 0.3 s and one refresh. Removing
   it takes a status read that checks the in-progress files before and after `git status`; no
   requirement asks for it. Whether to build it is the owner's.
@@ -617,7 +687,7 @@ every commit.
   which the lead recommends: the token then reaches the sandbox alone and the guard refuses the rest
   even if the account gains a project. No answer is needed before the review before the gate; one is
   before the gate's live runs.
-- **A git that loses the URL's user** (the Notes of phase 7b's `status.md`, "D388's test on macOS"; D389, plan risk 43, design
+- **Answered 2026-11-19: left as a recorded risk (D413).** **A git that loses the URL's user** (the Notes of phase 7b's `status.md`, "D388's test on macOS"; D389, plan risk 43, design
   16.3's bullet on D275; no answer needed for the gate): git 2.56.0 without git's own fix `76524c2604bc`, over a
   curl that strips the user from its effective URL (curl 8.23.0, CI's macOS Homebrew git today),
   asks for credentials without the URL's user, so the broker's refusal of another user (D275) does
@@ -642,7 +712,9 @@ every commit.
   2026-10-31) and let the phase use the rest of that week (D344), then gave it about all of the week
   from 2026-11-05 (the owner's answer of 2026-11-05). From phase 8, D241's rule applies unless the
   owner says otherwise: the session asks for the share at the phase's start and before each stage,
-  and records it (plan.md's "Workflow").
+  and records it (plan.md's "Workflow"). At phase 8's start the owner gave it: under 50 % used at
+  22:00 on 2026-11-18, four hours before the reset; and 8a's start runs through that reset without
+  the check until its design is reviewed (D415).
 - **The live command's sandbox for GitHub (D250)**: the private `RahimPasha/visualcommit-sandbox`
   and a fine-grained token for it alone, expiring 2026-11-29, in the two Windows user variables
   `VISUALCOMMIT_LIVE_GITHUB_TOKEN` and `VISUALCOMMIT_LIVE_GITHUB_REPO` (set on 2026-10-30; the
@@ -663,7 +735,11 @@ every commit.
   row); the report's by-hand System step (switch Windows' app mode while the app runs with System
   chosen, D224); and the move of the text boxes' placeholder contrast (Fluent's watermark opacity,
   about 2.5:1 dark and 2.1:1 light) to phase 8's accessibility pass, which the lead made at the
-  gate's inspection rather than change nearly every picture.
+  gate's inspection rather than change nearly every picture. **Closed on 2026-11-18 and 19**: the
+  owner meant by the sentence that several repositories can be open at once, which the tabs give,
+  so design 17.5's reading goes beyond it and stands (D414); the placeholder's move is confirmed
+  and 8a fixes it with the other contrast gaps (D410); the System step is done by hand with 8a's
+  checks (above, "Phase 8a, from the owner").
 - **Decisions made during phase 6 without the owner**, which the owner may want to look at: the
   design's D203 to D230 (after its reviews); D231 (the rebase chosen for one pull reads `pull.ff`
   alone); D232 (CI's limits, 55 and 65 minutes); D233 (git calls leave out the repository-selecting

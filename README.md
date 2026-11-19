@@ -73,7 +73,25 @@ that changes more than documentation.
 
 [docs/architecture.md](docs/architecture.md) describes how the app is built.
 
+## A personal project, shared freely
+
+I build VisualCommit in my own time and share it freely, in the hope that it is useful to other
+developers. It is not a commercial product: it comes with no warranty and no promise of support,
+and you use it at your own risk. VisualCommit runs real git commands on your repositories, so keep
+a backup or a remote copy of work that matters to you. The full terms are in the
+[MIT licence](LICENSE).
+
+VisualCommit is an independent project. It is not affiliated with, sponsored or endorsed by the
+Git project, GitHub, GitLab or Microsoft; those names belong to their owners.
+
+Rahim Khajei
+
 ## Licence
 
 VisualCommit was created by Rahim Khajei and is released under the [MIT licence](LICENSE).
 Third-party work it includes is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+## Name
+
+The MIT licence covers the code, not the name. If you redistribute a changed version of
+VisualCommit, please give it another name, so that users can tell your version from this one.

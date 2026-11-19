@@ -18,7 +18,7 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 | Audience | Public release in the future |
 | UI | Avalonia (all C#), MVVM |
 | Runtime | .NET 10 (LTS) |
-| Git engine | The real `git` executable, driven by the app (minimum Git 2.30) |
+| Git engine | The real `git` executable, driven by the app and never bundled with it (D405). Minimum Git 2.34 from phase 8a (D406); 2.30 in the code until then |
 | Hosting providers | GitHub (github.com; Enterprise Server in the backlog, D258), Azure DevOps (Azure DevOps Services: dev.azure.com and `<organization>.visualstudio.com`; Azure DevOps Server in the backlog, D347), GitLab (gitlab.com; self-managed GitLab in the backlog, D347) |
 | Accounts / telemetry | None. Everything stays on the user's machine |
 
@@ -126,13 +126,13 @@ commits) must still open and work normally.
 
 | # | Requirement |
 |---|---|
-| R1 | Installers and auto-update on all three platforms |
-| R2 | Code signing (Windows) and notarisation (macOS) |
+| R1 | Installers and auto-update on all three platforms, published on GitHub Releases, each release approved by the owner (D400); the app asks before its first update check (D401) |
+| R2 | Code signing (Windows) and notarisation (macOS). macOS is signed with the owner's Developer ID and notarised (D403); Windows ships its beta unsigned, and its route is chosen before the first stable release (D402) |
 | R3 | Hosting tokens stored in the OS keychain, never in plain files; where no keychain can be reached, kept for the session only (D253) |
 | R4 | First-run check for Git, with guidance when it is missing or too old |
 | R5 | Original name, icons and visual design; no GitKraken branding or assets, and no "Git" in the product name (Git trademark policy) |
-| R6 | MIT licence file and third-party notices; an About screen in the app that names its creator (D398) |
-| R7 | Keyboard access to all main actions |
+| R6 | MIT licence file and third-party notices; an About screen in the app that names its creator (D398, D409) |
+| R7 | Keyboard access to all main actions. Beyond the keyboard, 1.0 gives every control an accessible name and exposes the graph's selected row to screen readers; no palette made for high contrast (D411) |
 
 ## Better than GitKraken
 

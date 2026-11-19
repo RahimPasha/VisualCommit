@@ -55,12 +55,15 @@ machine".
 3. Read `docs/plan.md`: the Workflow, Visual test gate and "Risks and open decisions" sections, and the section for the current phase.
 4. Read `docs/architecture.md`, `docs/decisions.md`, and the parts of `docs/requirements.md` the phase covers.
 5. Read the previous phase's handoff, `docs/handoffs/phase-<N-1>.md`. None exists until Phase 0 is closed.
-   Phase 7 is split in two (D241): the phases run 6, 7a, 7b, 8. Wherever this file counts phases
-   (the previous phase, N-1, N+1), the phase before 7a is 6, the one before 7b is 7a and the one
-   before 8 is 7b, and the docs write `7a` and `7b` for N (`docs/handoffs/phase-7a.md`,
-   `docs/test-reports/phase-7a.md`, "Start phase 7a", "Phase 7a accepted"); how the code and the
-   test harness name them was settled for 7a by its design's 0.3 (`docs/phase-7a-design.md`), and
-   the 7a handoff's "For the next phase", "Naming", gives 7b's names.
+   Phases 7 and 8 are each split in two (D241, D399): the phases run 6, 7a, 7b, 8a, 8b. Wherever
+   this file counts phases (the previous phase, N-1, N+1), the phase before 7a is 6, the one
+   before 7b is 7a, the one before 8a is 7b and the one before 8b is 8a, and the docs write `7a`,
+   `7b`, `8a` and `8b` for N (`docs/handoffs/phase-8a.md`, `docs/test-reports/phase-8a.md`, "Start
+   phase 8a", "Phase 8a accepted"); "Start phase 8" means "Start phase 8a" while 8a is not
+   started. How the code and the test harness name them was settled for 7a by its design's 0.3
+   (`docs/phase-7a-design.md`), the 7a handoff's "For the next phase", "Naming", gives 7b's
+   names, the 7b handoff's gives phase 8's, to be read with `8a` for `8`, and 8a's design's 0.3
+   (`docs/phase-8a-design.md`) settles them.
 6. If code exists, see the state you inherited before changing anything: build it, run the test
    classes of the areas the latest commits changed, and read the result of CI's last run on the
    branch (a push that changes only docs starts none, so it is the run of the last commit that
@@ -402,7 +405,7 @@ What to know about them:
   and not built again). `-p:VisualCommitNativeSymbols=true`
   copies the `.pdb` files again and `-p:VisualCommitAllRuntimes=true` every platform's libraries
   (either also as an environment variable); a portable `dotnet publish` needs the second (phase
-  8). Builds on macOS and Linux keep every platform's libraries.
+  8b). Builds on macOS and Linux keep every platform's libraries.
 - The scripted walk-through saves its screenshots under `artifacts/visual/phase-N/scripted/`.
   Every run that takes screenshots, `dotnet test` at the root included, empties that folder
   first and writes it again. `docs/test-reports/phase-N-pictures.sha256` lists the pictures that
