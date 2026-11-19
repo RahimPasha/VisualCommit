@@ -409,7 +409,8 @@ reset, D415, which ends when the design is reviewed). The design is drafted and 
 lenses of Opus readers (git safety; tests and the gate; the contracts against the code, in two
 halves; the owner's decisions, scope, texts, security and privacy), each finding written to
 `D:/Projects/Personal/phase8-work/design/review/`, and a verifier for each blocker and major
-(D243). The lead then rules on the confirmed findings, has the design corrected, records what
+(D243). Under way since about 04:15 on 2026-11-19: the workflow `phase8a-design-review` (run
+`wf_e96519ef-ed4`), on the design as committed in `85169db`. The lead then rules on the confirmed findings, has the design corrected, records what
 changes a decision as a new decision (D447 on), ticks step 3 with the review's counts, and stops:
 before step 4 the owner is asked for the week's share (D241) and has the rulings and D416 to D446
 to look over (design 13.3). After the review the lead also rewrites the Build steps of this
