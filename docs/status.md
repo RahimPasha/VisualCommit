@@ -237,12 +237,12 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 ### Next step
 
 The owner said "Start phase 8" on 2026-11-09 and gave the first answers before its design ("Waiting
-on the owner", "For phase 8, before its design"). On 2026-11-18 the owner paused to reconsider the
-licence ("Waiting on the owner", "The licence"). No phase branch exists yet. Next, in a session
-where the owner says "Start phase 8" again: the owner's choice of licence, recorded as a decision
-that keeps or replaces D6 and carried into `LICENSE`, `README.md`, R6 and the notices before
-anything is released; the rest of the owner's legal and professional points, which the two signing
-answers wait for; then the questions not yet asked; then the split's decision and phase 8a's start.
+on the owner", "For phase 8, before its design"). On 2026-11-18 the owner reconsidered the licence
+and kept MIT with the owner's name in the copyright line (D397). No phase branch exists yet. Next,
+in a session where the owner says "Start phase 8" again: the rest of the owner's legal and
+professional points, if any are left, which the two signing answers wait for; then the questions
+not yet asked, the owner's name in the app among them; then the split's decision and phase 8a's
+start.
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -388,7 +388,7 @@ every commit.
   it. The live command closed and deleted what it made in the three sandboxes. Before a later live run: GitHub's token expires on 2026-11-29, Azure
   DevOps' and GitLab's on 2026-12-04 (below, "The Azure DevOps sandbox's organization").
 - **For phase 8, before its design** (the 7b handoff's "For the next phase", "Do first", step 2;
-  each answer becomes a decision, D397 on, carried into plan.md): the code-signing certificate and
+  each answer becomes a decision, D398 on, carried into plan.md): the code-signing certificate and
   the Apple Developer membership (risk 6); the installers per platform and where the installers,
   the updates and the beta are published (a release on GitHub is the owner's to allow); whether to
   bundle git on Windows and the git versions the release supports (risks 15, 31, 35); the macOS
@@ -408,14 +408,19 @@ every commit.
   its price could not be read; a Microsoft Q&A answer of March 2026, marked AI-generated, limits
   new individual sign-ups to the US and Canada; SignPath Foundation signs open source for free
   after approval and is itself the publisher shown; the Apple Developer Program costs $99 a year.
-- **The licence (D6), reopened by the owner on 2026-11-18**; no choice made yet. The owner's aim:
+- **The licence (D6), reopened by the owner on 2026-11-18. Answered the same day (D397): MIT
+  stays, with the owner's name.** `LICENSE` reads "Copyright (c) 2026 Rahim Khajei" and
+  `README.md`'s Licence section names the owner as the app's creator; `Directory.Build.props`'
+  `Authors` and `Copyright` follow in phase 8's first code commit (plan.md's phase 8). Still to ask,
+  with the branding: whether the app shows the name too (an About screen, the publisher name on
+  signed installers, a note that a fork takes another name). The owner's aim:
   no direct income from the product; wide free use; the owner's name kept visible, for reputation.
   What the lead found and told the owner that day:
   - The owner alone decides: all 1,809 commits carry the owner's identity, and GitHub showed no
     fork, star, issue or outside pull request. A change binds new versions only; what has been
     public under MIT since 2026-10-10 stays under MIT for whoever has a copy.
-  - The owner's name is nowhere in the product today: `LICENSE` reads "VisualCommit contributors"
-    (settled 2026-10-06) and the app has no About screen.
+  - Before the answer the owner's name was nowhere in the product: `LICENSE` read "VisualCommit
+    contributors" (settled 2026-10-06), and the app has no About screen.
   - The options laid out: MIT with the owner's name in the copyright line; Apache-2.0 with a
     `NOTICE` file and its trademark clause; GPL-3.0 with an attribution term under its section
     7(b), which keeps forks open and the credit in their legal notices. Every dependency (MIT,
@@ -429,9 +434,8 @@ every commit.
   - Beside the licence, for the name: an About screen, the README, the publisher name on signed
     installers (which ties this to the signing answers above), and a short trademark note that a
     fork takes another name.
-  The choice becomes a decision (D397 on) that keeps or replaces D6, with `LICENSE`, `README.md`,
-  `requirements.md`'s R6 and `THIRD-PARTY-NOTICES.md` changed in the same commit, before phase 8's
-  design, whose notices, About screen and installers depend on it.
+  `requirements.md`'s R6 ("MIT licence file and third-party notices") and
+  `THIRD-PARTY-NOTICES.md` stand as they are.
 - **Phase 7a's acceptance**: given on 2026-10-31; merged into `master` (`019e68a`); its gate ran on
   `a2c312a`. The tab the real-window pass opened on the fake's page was closed by the owner the
   same day (D321). Still open from the phase, below: risk 39's sign-in dialog in a bound tab and
@@ -555,8 +559,9 @@ every commit.
   the owner's choice), D394 (the fake of GitHub answers a commit it lacks beside `author` 404, as
   github.com did at the gate's first live run) and D395 (a lookup's 404 in a repository not known to be
   readable is checked against its read; the owner's approval), and D396 the cold read's at the close
-  (CLAUDE.md's step 1 never checks out or pushes a local `wip/...` or `backup/...` branch). The next
-  decision number is D397.
+  (CLAUDE.md's step 1 never checks out or pushes a local `wip/...` or `backup/...` branch). D397 is
+  the owner's choice of 2026-11-18 (MIT stays, the copyright line names the owner). The next
+  decision number is D398.
 - **A sign-in dialog in a bound tab** (plan.md's risk 39, design 19 item 8; no answer needed
   for the gate): when the session refuses a bound account through the API, or it signs out,
   just after an operation started, git's "Sign in to github.com" dialog opens instead of D273's
@@ -621,10 +626,10 @@ every commit.
   the connectors switched off on claude.ai) is the owner's.
 - **Phase 6's acceptance**: given on 2026-10-24; merged into `master` (`3f34c87`); its gate ran on
   `b561b7c`. Still open, asked at acceptance and not yet answered (the handoff's "Waiting on the
-  owner"; each answer becomes a decision, D397 on, since D239 to D248 went to the review before
+  owner"; each answer becomes a decision, D398 on, since D239 to D248 went to the review before
   phase 7, D249 to D264 to phase 7a's start, D265 to D338 to its design, D339 to D343 to its build
   and gate, D344 to D356 to 7b's start and its research, D357 to D378 to its design, D379 to D395 to
-  its build, review and gate, and D396 to its close): design 17.5's reading of "ten repos can be checked and
+  its build, review and gate, D396 to its close and D397 to the licence's copyright line): design 17.5's reading of "ten repos can be checked and
   updated from one screen" (one dashboard of the ten, one Fetch all and one Pull all deciding every
   row); the report's by-hand System step (switch Windows' app mode while the app runs with System
   chosen, D224); and the move of the text boxes' placeholder contrast (Fluent's watermark opacity,
@@ -655,7 +660,7 @@ every commit.
   a commit after the counted round that changes only the live project re-runs only the live command
   (extends D246), and the live command also runs once before the counted round.
 - **Still open from the review before phase 7** ([review-before-phase-7.md](review-before-phase-7.md);
-  each answer becomes a decision, D397 on): its questions 1 (how the plan's limits count tokens),
+  each answer becomes a decision, D398 on): its questions 1 (how the plan's limits count tokens),
   10 (CI split into shards, S5, which reopens D134 and D232) and 12 (the machine: the page file,
   the space on C:, and how long to keep transcripts, D8; the reboot was made on 2026-10-28); and
   the proposals that no decision names: D5, T10/P7, R4, R9, R1/R6, R10, S6, S7, S10, R7, D3, D4,
@@ -714,8 +719,9 @@ every commit.
 - When the project is over: whether a CI run of 30 minutes or more is reasonable or needs another
   solution (D134).
 
-Settled on 2026-10-06: the copyright line in `LICENSE` stays "VisualCommit contributors", and
-the repository was made public, which lifts the limit on CI minutes.
+Settled on 2026-10-06: the copyright line in `LICENSE` stays "VisualCommit contributors" (until
+2026-11-18, when D397 put the owner's name in it), and the repository was made public, which lifts
+the limit on CI minutes.
 
 Settled on 2026-10-09 (D41): the owner deleted the GitHub repository and a session created it
 again, empty and public, and pushed `master` and `phase/0-foundation` unchanged. The commits from

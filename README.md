@@ -75,5 +75,5 @@ that changes more than documentation.
 
 ## Licence
 
-VisualCommit is released under the [MIT licence](LICENSE). Third-party work it includes is listed
-in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+VisualCommit was created by Rahim Khajei and is released under the [MIT licence](LICENSE).
+Third-party work it includes is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
