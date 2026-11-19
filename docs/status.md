@@ -239,10 +239,17 @@ Test step for minutes again, read "Known issues" in the phase 0 handoff first.
 The owner said "Start phase 8" on 2026-11-09 and gave the first answers before its design ("Waiting
 on the owner", "For phase 8, before its design"). On 2026-11-18 the owner reconsidered the licence
 and kept MIT with the owner's name in the copyright line (D397), and asked for an About screen
-that names the owner (D398). No phase branch exists yet. Next, in a session where the owner says
-"Start phase 8" again: the rest of the owner's legal and professional points, if any are left,
-which the two signing answers wait for; then the questions not yet asked; then the split's
-decision and phase 8a's start.
+that names the owner (D398). Later that day the owner said "Start phase 8" again and answered at
+once: Fable 5.2 leads phase 8 (CLAUDE.md's Models rule), under 50 % of the week's allowance was
+used at 22:00, four hours before the reset of Thursday 2026-11-19 at 2:00, and no legal or
+professional point is left, so the hold on the two signing questions is lifted. No phase branch
+exists yet. Under way in that session (Notes, "Phase 8's start"): the baseline default run that
+D245 asks for after the Windows updates of 2026-11-11, and two workflows of Opus agents that read
+the repo for phase 8 and research the release questions on the web. Next: read their briefs; ask
+the owner the questions not yet asked, each with the research's recommendation, the two signing
+questions among them; record each answer as a decision (D399 on) and carry it into plan.md; then
+the split's decision (it amends D241, with the phases' names and branches and CLAUDE.md's counting
+of phases in the same commit) and phase 8a's start.
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -251,7 +258,23 @@ every commit.
 
 ### Notes for whoever resumes
 
-- Nothing is in flight. `master` holds everything; the working tree was clean when phase 7b was
+- **Phase 8's start, 2026-11-18** (no branch yet: everything so far is on `master` or outside the
+  repo). The machine changed since phase 7b's gate (Windows updates KB5132061 and KB5132688 on
+  2026-11-11, and a boot that day; git 2.56.0.windows.4 and SDK 10.0.303 as before), so step 6's
+  whole default run was started at about 22:05 through `scripts/heavy-run.sh`. Its output is
+  `D:/Projects/Personal/phase8-work/baseline/default-run-2026-11-18.log`, whose last line is the
+  exit code; its result goes here. `dotnet build` at the root before it: 0 warnings, 0 errors,
+  2 min 38 s. D: had 19.5 GB free and C: 29.1 GB. Four `git fsmonitor--daemon` processes were
+  running (the owner's global `core.fsmonitor=true`); none was stopped. Beside the run, with no
+  process of their own (they read files and the web): the workflow `phase8-repo-map`, seven Opus
+  readers and a critic (`repo-ship.md`, `repo-git.md`, `repo-a11y.md`, `repo-perf.md`,
+  `repo-gate.md`, `repo-owed.md`, `repo-about.md`, `repo-critic.md`), and the workflow
+  `phase8-release-research`, six Opus researchers and three skeptics (`web-installers.md`,
+  `web-winsign.md`, `web-macos.md`, `web-git.md`, `web-channels.md`, `web-brand.md` and three
+  `web-verify-*.md`), all in `D:/Projects/Personal/phase8-work/research/`, outside the repo. The
+  researchers put neither the owner's name nor the product's into any web request, so nobody has
+  searched the web for other uses of the name "VisualCommit": that search needs the owner's leave.
+- Nothing else is in flight. `master` holds everything; the working tree was clean when phase 7b was
   merged (`3dc7f79`). **Cleaned up on 2026-11-18, at the owner's word** (the 7b handoff's "Do
   first", step 3): the seven worktrees under `D:/Projects/Personal/vc-wt/` (each clean, its branch
   merged) with that folder, and the 23 merged `wip/p7b-*` branches. Left, all local:
@@ -402,7 +425,11 @@ every commit.
   against the installed build). The split's decision (the next free number, amending D241) is still to be written,
   with the phases' names and branches and CLAUDE.md's counting of phases in the same commit. **On
   hold at the owner's word**: the Windows code signing and the Apple Developer membership, until
-  the owner has talked through some legal and professional points with the lead. The other
+  the owner has talked through some legal and professional points with the lead. **Lifted on
+  2026-11-18**: the owner has no such point left (the licence, D397, and the About screen, D398,
+  came of them), so the two signing questions are asked with the others. Answered the same day:
+  under 50 % of the week's allowance used at 22:00 (it resets on Thursday 2026-11-19 at 2:00), and
+  the session's model (Fable 5.2 leads phase 8; CLAUDE.md's Models rule). The other
   questions above have not been asked yet. Found for the two signing questions on 2026-11-09, to
   be checked again before any choice: Azure Artifact Signing bills from the account's creation and
   its price could not be read; a Microsoft Q&A answer of March 2026, marked AI-generated, limits

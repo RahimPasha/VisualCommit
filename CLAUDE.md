@@ -167,7 +167,10 @@ To **resume a phase**: continue from "Next step" in `docs/status.md`.
   change its own model; the owner does that with `/model`. If your session runs on a model that
   does not fit the work ahead (Sonnet 5.5 for building a phase, say), say so in your first reply
   and ask the owner once whether to switch or carry on; when a long stretch of work that Sonnet
-  5.5 does as well lies ahead, you may suggest switching. Fable 5.1 is no longer used.
+  5.5 does as well lies ahead, you may suggest switching. Fable 5.1 is no longer used. For phase 8
+  (8a and 8b) the owner let the main session, the lead, run on Fable 5.2 (2026-11-18, asked once
+  as this rule says): such a session does not ask again, and it still names `opus` or `sonnet` on
+  every sub-agent.
 
 ## Closing a phase
 
