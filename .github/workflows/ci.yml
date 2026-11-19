@@ -1,7 +1,8 @@
 name: CI
 
-# Builds and runs the default tests on Windows, macOS and Linux, and twice more in a bare Ubuntu
-# container that the repo's own set-up script prepares. The default tests include the scripted
+# Builds and runs the default tests on Windows, macOS and Linux, twice more in a bare Ubuntu
+# container that the repo's own set-up script prepares, and once in an Ubuntu 22.04 container on
+# git 2.34, the oldest git the release supports (D406). The default tests include the scripted
 # visual walk-through; its screenshots are uploaded so each platform's rendering can be looked
 # at. The real-window pass is Windows-only, takes over the mouse and never runs here; nor does the
 # live command against real GitHub (D250, D337), which needs the owner's token.
@@ -189,6 +190,57 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: visual-bare-ubuntu-container-${{ matrix.sdk.id }}
+          path: artifacts/visual/
+          if-no-files-found: warn
+          retention-days: 14
+
+  # The oldest git the release supports (D406). Stock Ubuntu 22.04 carries git 2.34.1, which no
+  # other job and no development machine runs: until this job, nothing below 2.43 had run the
+  # tests. It is the bare container's job on that image, with the SDK from Microsoft's installer
+  # (22.04's package servers have no .NET 10). Until phase 8a's step 5 has fixed what it finds,
+  # a failure here does not fail the run (continue-on-error); the job's own result still shows it.
+  git-floor-container:
+    name: ubuntu 22.04 container, git 2.34 (the floor)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    container:
+      image: ubuntu:22.04
+      options: --cap-add=IPC_LOCK
+    timeout-minutes: 35
+
+    env:
+      DOTNET_NOLOGO: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
+      AVALONIA_TELEMETRY_OPTOUT: 1
+      SETUP_LINUX_SDK_SOURCE: installer
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up the container with the repo's script
+        run: bash scripts/setup-linux.sh
+
+      # The job is worth its time only on the floor's git: if the image ever carries another one,
+      # it must say so instead of passing on a newer git.
+      - name: Show tool versions, and stop unless git is 2.34
+        run: |
+          dotnet --version
+          git --version
+          git --version | grep -q '^git version 2\.34\.' || { echo "This job tests git 2.34 (D406), and the image carries another git."; exit 1; }
+
+      - name: Build
+        id: build
+        run: dotnet build --configuration Release
+
+      - name: Test
+        timeout-minutes: 25
+        run: dotnet test --configuration Release --no-build
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: visual-ubuntu-22.04-git-floor
           path: artifacts/visual/
           if-no-files-found: warn
           retention-days: 14

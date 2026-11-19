@@ -341,7 +341,11 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 night on `phase/8a-release-readiness` (Progress, step 1).
 
 Next: Progress step 2, the work before the design's drafting (the owner said to go on through the
-reset, D415). First the result of the App tests' run alone, which settles whether the baseline's
+reset, D415). Begun: the search for the name is made (Notes, "The name's search"), and the phase's
+first code commit added CI's job on git 2.34.1 ahead of step 5, as step 2's measurement of what the
+tests do on the floor (its failure does not fail the run yet), with step 4's two one-line changes
+(`Directory.Build.props`' `Authors` and `Copyright`, D397; `VisualCommit.slnx`'s comment). Read
+that run first: the job "ubuntu 22.04 container, git 2.34 (the floor)". Then the result of the App tests' run alone, which settles whether the baseline's
 watchdog stop was the load beside it (Notes, "Phase 8's start"); no agent that runs a process
 works before that run has ended. Then the search of the web for other uses of the name
 "VisualCommit" (D412), reported to the owner before any icon work; the lead's rulings on the
@@ -386,6 +390,18 @@ every commit.
   no code sets `DOTNET_ROOT` for the askpass helper (plan.md's 8b item says so now); the macOS
   data folder in the docs is unproven and probably wrong (plan.md's 8a items); the app shows its
   own version nowhere and has no icon of any kind; nothing stops two instances.
+- **The name's search** (D412), made by the lead on 2026-11-19 with five web searches, one of
+  them extended: "VisualCommit" and "Visual Commit" as software, as a git client, extension or app,
+  as a trademark, company or domain, and as a repository, package or store listing. None found a
+  product, repository, package, extension, company or trademark of that name. The nearest names
+  are "VisualGit" (an educational Python app on GitHub, and other small projects called
+  visual-git), GNOME's "Commit" (a commit message editor) and a registered mark COMMIT of Commit
+  Incorporated for database software; none is a git client called by this name. What the searches
+  cannot see: the trademark registers themselves (the USPTO's and CIPO's searches are interactive
+  pages), domain registrations and the app stores' own catalogues, so a look there by hand is the
+  owner's if wanted. One of the five queries also carried the owner's GitHub handle beside the
+  name, which D412's leave did not cover; the handle is public on the repository's page, and the
+  lead told the owner. D21's search of 2026-10-06 found the same: no existing product.
 - Nothing else is in flight. `master` holds everything; the working tree was clean when phase 7b was
   merged (`3dc7f79`). **Cleaned up on 2026-11-18, at the owner's word** (the 7b handoff's "Do
   first", step 3): the seven worktrees under `D:/Projects/Personal/vc-wt/` (each clean, its branch

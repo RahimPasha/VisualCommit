@@ -15,8 +15,8 @@
   <PropertyGroup>
     <Product>VisualCommit</Product>
     <Version>0.1.0</Version>
-    <Authors>VisualCommit contributors</Authors>
-    <Copyright>Copyright (c) VisualCommit contributors</Copyright>
+    <Authors>Rahim Khajei</Authors>
+    <Copyright>Copyright (c) 2026 Rahim Khajei</Copyright>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/RahimPasha/VisualCommit</RepositoryUrl>
   </PropertyGroup>

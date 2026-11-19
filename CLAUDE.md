@@ -515,9 +515,12 @@ What to know about them:
   test project's own program with `-diagnostics -longRunning 10`:
   `tests\<project>\bin\Debug\net10.0\<project>.exe` on Windows,
   `tests/<project>/bin/Debug/net10.0/<project>` elsewhere.
-- CI has five jobs: one each for Windows, macOS and Linux, and two named "bare ubuntu
-  container", one for each way the set-up script has of getting the .NET SDK. A push that
-  changes only docs does not start a run.
+- CI has six jobs: one each for Windows, macOS and Linux, two named "bare ubuntu
+  container", one for each way the set-up script has of getting the .NET SDK, and, since phase
+  8a, one named "ubuntu 22.04 container, git 2.34 (the floor)", which runs the default tests on
+  the oldest git the release supports (D406). Until phase 8a's step 5 has fixed what that job
+  finds, its failure does not fail the run (`continue-on-error`), so read its own result. A push
+  that changes only docs does not start a run.
 - `gh run list` shows the duration of a run's latest attempt only. Each job's time comes from
   `gh run view <run id>`, or from the jobs API (`curl` above), whose `steps` also give each step's
   start and end, such as the Test step's.
