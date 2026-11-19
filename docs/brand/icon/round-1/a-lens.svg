@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>VisualCommit icon, round 1, candidate A: Lens</title>
+  <rect x="16" y="16" width="224" height="224" rx="52" fill="#4C5BE0"/>
+  <path d="M16 128H46M210 128H240" stroke="#FFFFFF" stroke-width="16" stroke-linecap="butt" fill="none"/>
+  <path d="M46 128Q128 46 210 128Q128 210 46 128Z" stroke="#FFFFFF" stroke-width="16" stroke-linejoin="round" fill="#4C5BE0"/>
+  <circle cx="128" cy="128" r="25" fill="#FFFFFF"/>
+</svg>

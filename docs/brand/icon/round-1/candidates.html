@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VisualCommit Icon Candidates</title>
+<style>
+  body { margin: 0; }
+  svg { max-width: none; }
+  /* Layout: a contact sheet. One row per candidate: a large proof, then the same mark at every
+     size the platforms ask for, on a dark desk and on a light desk, then what to watch. */
+  :root {
+    --bg: #14161B;
+    --panel: #1A1D24;
+    --chrome: #20242C;
+    --line: #323845;
+    --fg: #E4E7EC;
+    --muted: #9BA3B0;
+    --accent: #7C8CFF;
+    --desk-dark: #0E1014;
+    --desk-dark-ink: #8E96A3;
+    --desk-light: #ECEEF2;
+    --desk-light-ink: #5C6572;
+    --text: "Inter", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #FFFFFF; --panel: #F5F6F8; --chrome: #EBEDF1; --line: #D2D6DE;
+      --fg: #1B1F27; --muted: #5C6572; --accent: #4353D8;
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #FFFFFF; --panel: #F5F6F8; --chrome: #EBEDF1; --line: #D2D6DE;
+    --fg: #1B1F27; --muted: #5C6572; --accent: #4353D8;
+    color-scheme: light;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--text);
+    font-size: 15px;
+    line-height: 1.55;
+    padding-block: 40px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .sheet { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+
+  header { display: flex; flex-direction: column; gap: 10px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: 30px; line-height: 1.15; font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  .lede { max-width: 68ch; color: var(--muted); margin: 0; }
+  .lede strong { color: var(--fg); font-weight: 600; }
+
+  .candidates { display: flex; flex-direction: column; gap: 16px; }
+  .candidate {
+    display: grid;
+    grid-template-columns: 176px minmax(0, 1fr);
+    gap: 24px;
+    padding: 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    align-items: start;
+  }
+  .proof { display: flex; flex-direction: column; gap: 12px; }
+  .proof svg { width: 176px; height: 176px; display: block; max-width: 100%; }
+  .name { display: flex; align-items: baseline; gap: 10px; }
+  .letter { font-family: var(--mono); font-size: 13px; color: var(--accent); border: 1px solid var(--line); border-radius: 4px; padding: 0 7px; }
+  h2 { font-size: 18px; font-weight: 600; margin: 0; }
+
+  .desks { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .desk { border-radius: 8px; padding: 14px 16px 10px; overflow-x: auto; }
+  .desk.dark { background: var(--desk-dark); color: var(--desk-dark-ink); }
+  .desk.light { background: var(--desk-light); color: var(--desk-light-ink); }
+  .ladder { display: flex; align-items: flex-end; gap: 18px; }
+  .rung { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .rung svg { display: block; }
+  .rung span { font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+  .notes { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 10px 24px; min-width: 0; }
+  .notes p { margin: 0; }
+  .notes .idea { color: var(--fg); }
+  .notes .watch { color: var(--muted); font-size: 14px; }
+  .notes .watch b { font-weight: 600; color: var(--fg); }
+
+  .after { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px; border-top: 1px solid var(--line); padding-top: 24px; }
+  .after h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+  .after p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  @media (max-width: 860px) {
+    .candidate { grid-template-columns: 1fr; }
+    .proof { flex-direction: row; align-items: center; gap: 16px; }
+    .proof svg { width: 96px; height: 96px; }
+    h1 { font-size: 25px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- The five marks, each drawn once on a 256 grid and reused at every size below. -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- A. Lens: the commit on its line, drawn as an eye. -->
+    <symbol id="ic-a" viewBox="0 0 256 256">
+      <rect x="16" y="16" width="224" height="224" rx="52" fill="#4C5BE0"/>
+      <path d="M16 128H46M210 128H240" stroke="#FFFFFF" stroke-width="16" stroke-linecap="butt" fill="none"/>
+      <path d="M46 128Q128 46 210 128Q128 210 46 128Z" stroke="#FFFFFF" stroke-width="16" stroke-linejoin="round" fill="#4C5BE0"/>
+      <circle cx="128" cy="128" r="25" fill="#FFFFFF"/>
+    </symbol>
+
+    <!-- B. Merge V: two branches meet in one commit and spell a V. -->
+    <symbol id="ic-b" viewBox="0 0 256 256">
+      <rect x="18" y="18" width="220" height="220" rx="50" fill="#171A21" stroke="#3A4252" stroke-width="4"/>
+      <path d="M72 78L128 180" stroke="#7C8CFF" stroke-width="22" stroke-linecap="round" fill="none"/>
+      <path d="M184 78L128 180" stroke="#3FB97F" stroke-width="22" stroke-linecap="round" fill="none"/>
+      <circle cx="72" cy="78" r="24" fill="#7C8CFF" stroke="#171A21" stroke-width="8"/>
+      <circle cx="184" cy="78" r="24" fill="#3FB97F" stroke="#171A21" stroke-width="8"/>
+      <circle cx="128" cy="180" r="32" fill="#E4E7EC" stroke="#171A21" stroke-width="8"/>
+    </symbol>
+
+    <!-- C. Check: a commit is work marked done; the tick's corner is the commit. -->
+    <symbol id="ic-c" viewBox="0 0 256 256">
+      <rect x="16" y="16" width="224" height="224" rx="52" fill="#1C8655"/>
+      <path d="M62 130L110 178L198 82" stroke="#FFFFFF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="110" cy="178" r="31" fill="#FFFFFF"/>
+      <circle cx="110" cy="178" r="13" fill="#1C8655"/>
+    </symbol>
+
+    <!-- D. Ring: the letter C around one commit. -->
+    <symbol id="ic-d" viewBox="0 0 256 256">
+      <rect x="18" y="18" width="220" height="220" rx="50" fill="#171A21" stroke="#3A4252" stroke-width="4"/>
+      <path d="M177.5 78.5A70 70 0 1 0 177.5 177.5" stroke="#7C8CFF" stroke-width="28" stroke-linecap="round" fill="none"/>
+      <circle cx="128" cy="128" r="27" fill="#E4E7EC"/>
+    </symbol>
+
+    <!-- E. Viewfinder: one commit on its line, held in focus. -->
+    <symbol id="ic-e" viewBox="0 0 256 256">
+      <rect x="18" y="18" width="220" height="220" rx="50" fill="#171A21" stroke="#3A4252" stroke-width="4"/>
+      <path d="M128 44V212" stroke="#3FB97F" stroke-width="14" stroke-linecap="round" fill="none"/>
+      <path d="M62 102V62H102M154 62H194V102M194 154V194H154M102 194H62V154" stroke="#7C8CFF" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+      <circle cx="128" cy="128" r="28" fill="#E4E7EC" stroke="#171A21" stroke-width="8"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="sheet">
+  <header>
+    <div class="eyebrow">Phase 8a &middot; round 1 &middot; 2026-11-19 &middot; D407</div>
+    <h1>Five candidates for the app's icon</h1>
+    <p class="lede">Each mark is drawn once and shown at the sizes Windows, macOS and Linux ask for, on a dark desk and on a light one. Look first at the <strong>16 and 24 pixel</strong> columns: that is the taskbar, the title bar and the file list, where an icon is seen most. The 256 pixel column is the largest size Windows keeps, for the big views of a folder. Tell me a letter and what to change, or that none of them is it.</p>
+  </header>
+
+  <div class="candidates">
+
+    <section class="candidate">
+      <div class="proof">
+        <svg viewBox="0 0 256 256" role="img" aria-label="Candidate A, Lens"><use href="#ic-a"/></svg>
+        <div class="name"><span class="letter">A</span><h2>Lens</h2></div>
+      </div>
+      <div class="desks">
+        <div class="desk dark"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-a"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-a"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-a"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-a"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-a"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-a"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-a"/></svg><span>256</span></div>
+        </div></div>
+        <div class="desk light"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-a"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-a"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-a"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-a"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-a"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-a"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-a"/></svg><span>256</span></div>
+        </div></div>
+      </div>
+      <div class="notes">
+        <p class="idea">The usual drawing of a commit is a dot on a line. Here the dot is an eye: the commit, seen. It says both halves of the name.</p>
+        <p class="watch"><b>Watch:</b> an eye alone means "preview" or "show password" in many apps; the line through the tile is what makes it this one. One flat colour, so it prints and embosses well.</p>
+      </div>
+    </section>
+
+    <section class="candidate">
+      <div class="proof">
+        <svg viewBox="0 0 256 256" role="img" aria-label="Candidate B, Merge V"><use href="#ic-b"/></svg>
+        <div class="name"><span class="letter">B</span><h2>Merge V</h2></div>
+      </div>
+      <div class="desks">
+        <div class="desk dark"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-b"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-b"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-b"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-b"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-b"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-b"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-b"/></svg><span>256</span></div>
+        </div></div>
+        <div class="desk light"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-b"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-b"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-b"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-b"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-b"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-b"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-b"/></svg><span>256</span></div>
+        </div></div>
+      </div>
+      <div class="notes">
+        <p class="idea">Two branches in the graph's own first two lane colours meet in one commit, and the shape is the V of the name. It looks like a piece of the app's graph.</p>
+        <p class="watch"><b>Watch:</b> branch-and-dots marks are the common language of Git tools, so this one needs the closest look-alike check, against Git's own logo above all. The dark tile needs its thin edge to hold on a dark taskbar.</p>
+      </div>
+    </section>
+
+    <section class="candidate">
+      <div class="proof">
+        <svg viewBox="0 0 256 256" role="img" aria-label="Candidate C, Check"><use href="#ic-c"/></svg>
+        <div class="name"><span class="letter">C</span><h2>Check</h2></div>
+      </div>
+      <div class="desks">
+        <div class="desk dark"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-c"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-c"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-c"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-c"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-c"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-c"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-c"/></svg><span>256</span></div>
+        </div></div>
+        <div class="desk light"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-c"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-c"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-c"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-c"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-c"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-c"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-c"/></svg><span>256</span></div>
+        </div></div>
+      </div>
+      <div class="notes">
+        <p class="idea">A commit is work marked done. The tick is also a V, and its corner is a commit's ring. The green is the app's own "succeeded" colour.</p>
+        <p class="watch"><b>Watch:</b> a white tick on a colour is how to-do and task apps look. The ring at the corner sets it apart at 48 pixels and up, less so at 16.</p>
+      </div>
+    </section>
+
+    <section class="candidate">
+      <div class="proof">
+        <svg viewBox="0 0 256 256" role="img" aria-label="Candidate D, Ring"><use href="#ic-d"/></svg>
+        <div class="name"><span class="letter">D</span><h2>Ring</h2></div>
+      </div>
+      <div class="desks">
+        <div class="desk dark"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-d"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-d"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-d"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-d"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-d"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-d"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-d"/></svg><span>256</span></div>
+        </div></div>
+        <div class="desk light"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-d"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-d"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-d"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-d"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-d"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-d"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-d"/></svg><span>256</span></div>
+        </div></div>
+      </div>
+      <div class="notes">
+        <p class="idea">The letter C, for commit, drawn as a ring around one commit. The simplest of the five, and the strongest at 16 pixels.</p>
+        <p class="watch"><b>Watch:</b> a ring with a dot is also how a lens, a target or a record button is drawn, so it says the least about what the app does. It leans on the accent colour to be recognised.</p>
+      </div>
+    </section>
+
+    <section class="candidate">
+      <div class="proof">
+        <svg viewBox="0 0 256 256" role="img" aria-label="Candidate E, Viewfinder"><use href="#ic-e"/></svg>
+        <div class="name"><span class="letter">E</span><h2>Viewfinder</h2></div>
+      </div>
+      <div class="desks">
+        <div class="desk dark"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-e"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-e"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-e"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-e"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-e"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-e"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-e"/></svg><span>256</span></div>
+        </div></div>
+        <div class="desk light"><div class="ladder">
+          <div class="rung"><svg width="16" height="16"><use href="#ic-e"/></svg><span>16</span></div>
+          <div class="rung"><svg width="24" height="24"><use href="#ic-e"/></svg><span>24</span></div>
+          <div class="rung"><svg width="32" height="32"><use href="#ic-e"/></svg><span>32</span></div>
+          <div class="rung"><svg width="48" height="48"><use href="#ic-e"/></svg><span>48</span></div>
+          <div class="rung"><svg width="64" height="64"><use href="#ic-e"/></svg><span>64</span></div>
+          <div class="rung"><svg width="128" height="128"><use href="#ic-e"/></svg><span>128</span></div>
+          <div class="rung"><svg width="256" height="256"><use href="#ic-e"/></svg><span>256</span></div>
+        </div></div>
+      </div>
+      <div class="notes">
+        <p class="idea">One commit on its history line, held in a viewfinder's corners: looking closely at a commit, which is what the app is for.</p>
+        <p class="watch"><b>Watch:</b> the most parts of the five. Below 24 pixels the corners and the line crowd each other, so its small sizes would be redrawn without the line. Corner brackets also mean "scan" or "screenshot" elsewhere.</p>
+      </div>
+    </section>
+
+  </div>
+
+  <div class="after">
+    <div>
+      <h3>What these are</h3>
+      <p>First drafts, drawn by hand as vector shapes, in the app's own colours. The one you choose gets a second, simpler drawing for 16 to 32 pixels, and its edges set to whole pixels at each size.</p>
+    </div>
+    <div>
+      <h3>What comes before it ships</h3>
+      <p>A side-by-side check against Git's logo and the well-known Git clients' icons, so that it resembles none of them. Then the tool that makes the Windows, macOS and Linux files from the drawing.</p>
+    </div>
+    <div>
+      <h3>What was left out on purpose</h3>
+      <p>Git's diamond and its red, any letter G, and a full picture of a commit graph, which turns to noise at small sizes and is what several other tools already use.</p>
+    </div>
+  </div>
+</div>
+</body>
+</html>

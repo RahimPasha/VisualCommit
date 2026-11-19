@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>VisualCommit icon, round 1, candidate B: Merge V</title>
+  <rect x="18" y="18" width="220" height="220" rx="50" fill="#171A21" stroke="#3A4252" stroke-width="4"/>
+  <path d="M72 78L128 180" stroke="#7C8CFF" stroke-width="22" stroke-linecap="round" fill="none"/>
+  <path d="M184 78L128 180" stroke="#3FB97F" stroke-width="22" stroke-linecap="round" fill="none"/>
+  <circle cx="72" cy="78" r="24" fill="#7C8CFF" stroke="#171A21" stroke-width="8"/>
+  <circle cx="184" cy="78" r="24" fill="#3FB97F" stroke="#171A21" stroke-width="8"/>
+  <circle cx="128" cy="180" r="32" fill="#E4E7EC" stroke="#171A21" stroke-width="8"/>
+</svg>

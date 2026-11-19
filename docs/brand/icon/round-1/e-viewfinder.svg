@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>VisualCommit icon, round 1, candidate E: Viewfinder</title>
+  <rect x="18" y="18" width="220" height="220" rx="50" fill="#171A21" stroke="#3A4252" stroke-width="4"/>
+  <path d="M128 44V212" stroke="#3FB97F" stroke-width="14" stroke-linecap="round" fill="none"/>
+  <path d="M62 102V62H102M154 62H194V102M194 154V194H154M102 194H62V154" stroke="#7C8CFF" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  <circle cx="128" cy="128" r="28" fill="#E4E7EC" stroke="#171A21" stroke-width="8"/>
+</svg>
