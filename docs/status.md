@@ -347,13 +347,18 @@ reset, D415). Begun: the search for the name is made (Notes, "The name's search"
 first code commit added CI's job on git 2.34.1 ahead of step 5, as step 2's measurement of what the
 tests do on the floor (its failure does not fail the run yet), with step 4's two one-line changes
 (`Directory.Build.props`' `Authors` and `Copyright`, D397; `VisualCommit.slnx`'s comment). Read
-that run first: the job "ubuntu 22.04 container, git 2.34 (the floor)". Then the result of the App tests' run alone, which settles whether the baseline's
-watchdog stop was the load beside it (Notes, "Phase 8's start"); no agent that runs a process
-works before that run has ended. Then the search of the web for other uses of the name
-"VisualCommit" (D412), reported to the owner before any icon work; the lead's rulings on the
-questions left to the design ("Waiting on the owner", "Left to 8a's design"); and the
-measurements step 2 lists. Then step 3, the design, `docs/phase-8a-design.md`, with the briefs in
-`D:/Projects/Personal/phase8-work/research/` as its material.
+that run first: the job "ubuntu 22.04 container, git 2.34 (the floor)" of run 44479788558. The
+lead's rulings on the questions left to the design are written
+(`D:/Projects/Personal/phase8-work/design/rulings.md`, 23 rulings; the design lists them for the
+owner), and the workflow `phase8a-design-research` (run `wf_7a57f7e4-dcb`, eight Opus agents,
+started at about 00:45 on 2026-11-19) writes the design's inputs into
+`D:/Projects/Personal/phase8-work/research2/`: `colours.md` with the pixel scan, `uia.md`,
+`firstrun.md`, `keyboard.md`, `notices.md`, `guide.md`, `perfsingle.md` and `floor.md`, which reads
+the git 2.34 job. A session that finds that workflow ended or lost reads the notes that exist and
+runs again only the missing ones. Then step 3, the design, `docs/phase-8a-design.md`, drafted from
+the rulings, those inputs and the briefs in `D:/Projects/Personal/phase8-work/research/`, as phase
+7b's was: an architect for sections 0 and 1, a drafter per work package, an integrator, then the
+review. The icon's first candidates are with the owner (Notes, "The icon").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
