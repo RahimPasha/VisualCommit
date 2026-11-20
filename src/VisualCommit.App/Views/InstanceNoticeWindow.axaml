@@ -58,8 +58,12 @@
                 IsCancel="True"
                 AutomationProperties.AutomationId="InstanceNoticeClose"
                 AutomationProperties.Name="{Binding CloseText}" />
+        <!-- Try again never gets narrower than it has been drawn, so that it keeps its width through
+             a try and Close beside it stays where it is: it opens with the longer of its two texts,
+             and "Trying…", with the border of the disabled look, fits in that width. -->
         <Button Name="InstanceNoticeTryAgain"
                 Theme="{StaticResource VcPrimaryButton}"
+                MinWidth="{Binding $self.Bounds.Width}"
                 Content="{Binding TryAgainText}"
                 Command="{Binding TryAgainCommand}"
                 IsDefault="True"

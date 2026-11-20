@@ -45,6 +45,7 @@ public sealed partial class Phase8aChecksI : Phase8aChecks
         var opened = ShotNotice(host, I.I2aNoticeDark);
         AssertNoticeAsOpened(host, opened, GuidancePlatform.Windows, I.WindowsFolder, dark: true);
         AssertNoticeInTheTree(host);
+        var buttonsAtRest = (Close: host.BoundsOf(close), TryAgain: host.BoundsOf(tryAgain));
 
         // Step 2: Enter; the try is held.
         host.PressKey(Key.Enter);
@@ -58,6 +59,9 @@ public sealed partial class Phase8aChecksI : Phase8aChecks
         Assert.False(status.IsEffectivelyVisible, "The status shows before the try ended.");
         Assert.Equal(opened.Height, trying.Height);
         Assert.Equal(I.Width, trying.Width);
+
+        // The buttons stay where they were: "Try again" keeps its width while it reads "Trying…".
+        Assert.Equal(buttonsAtRest, (Close: host.BoundsOf(close), TryAgain: host.BoundsOf(tryAgain)));
         AssertNoClippedNoticeText(host);
 
         // Step 3: the held try gets no answer.
