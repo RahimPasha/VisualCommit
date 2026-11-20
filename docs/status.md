@@ -592,14 +592,19 @@ every commit.
   before the wave's closing runs and wave 3; yes to the icon's round 2 with the outlined eye; the
   look-alike check by eye, with no image search; wave 1's worktrees removed (done: `git worktree
   remove` on the three clean folders; the branches `wip/p8a-colours`, `wip/p8a-floor` and
-  `wip/p8a-single` stay, merged). Wave 2's first step is under way: the workflow
-  `phase8a-wave2-checks` (run `wf_4044f49a-3bc`) writes parts F, K and B's checks, each into a
-  file of its own under `D:/Projects/Personal/phase8-work/wave2/checks/`, has each reviewed by two
-  readers with a verifier for each major and corrected, and its last agent puts the three parts
-  into `docs/test-reports/phase-8a.md`, uncommitted: the lead reads its result, rules on what it
-  leaves for the design, commits the report before any builder starts (D244) and then starts the
-  wave's build. A session that finds the workflow gone and the report uncommitted reads the part
-  files and the report's diff, and finishes the same way.
+  `wip/p8a-single` stay, merged). Wave 2's checks are written, reviewed and committed before
+  any of their UI (D244): parts F (14 checks), K (8) and B (2) are in
+  `docs/test-reports/phase-8a.md`, which now holds 33 checks and 76 picture names. The workflow
+  `phase8a-wave2-checks` (run `wf_4044f49a-3bc`: a writer per part, two reviewers each, a verifier
+  for each of 19 majors, a fixer per part, an assembler; 32 agents, 6.44M tokens, 68 minutes)
+  wrote them; every major was confirmed and corrected (among them: a step that expected a git call
+  no harness makes, buttons described as disabled that the code hides, a real-window wait on what
+  UI Automation cannot read). The lead ruled on what the review left for the design and on nine
+  open points (`D:/Projects/Personal/phase8-work/wave2/checks/lead-rulings.md`), and
+  `phase8a-wave2-checks-settle` (run `wf_eceed900-6c6`, three agents, 0.76M tokens) carried the
+  rulings into the design (0.5, 0.7, 1.2, 1.3, 1.15, 5.3, 5.6, 6.3.1, 6.3.9, 6.4, 6.5, section 7's
+  opening, 7.5, 7.6, 12.3.4, 12.6, 13.4) and the report. The wave's build follows: three worktrees
+  and one workflow, as wave 1's.
   Nothing is uncommitted, and the phase branch is pushed. The run's pictures, the comparison and
   the inspectors' crops are outside the repository: `D:/Projects/Personal/phase8-work/references/`
   (`wave1/`, the references of every later merge, with `wave1-pictures.sha256`),
