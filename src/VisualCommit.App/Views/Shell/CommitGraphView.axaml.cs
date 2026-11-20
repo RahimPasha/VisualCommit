@@ -2,6 +2,7 @@ using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
@@ -25,6 +26,20 @@ public partial class CommitGraphView : UserControl
         // follows the panel's state, the graph area's height and the splitter.
         ActivityLog.DataContextChanged += (_, _) => FollowActivityLog(ActivityLog.DataContext as ActivityLogViewModel);
         ActivityLogSplitter.DragCompleted += (_, _) => ActivityLogDragged();
+
+        // A focused splitter moved by the arrows raises no drag's end: the move is fitted and
+        // kept as one is (D427), once the layout has drawn the new height.
+        ActivityLogSplitter.AddHandler(
+            KeyDownEvent,
+            (_, e) =>
+            {
+                if (e.Handled && e.Key is Key.Up or Key.Down)
+                {
+                    Dispatcher.UIThread.Post(ActivityLogDragged, DispatcherPriority.Loaded);
+                }
+            },
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
         SizeChanged += (_, _) => FitActivityLog();
     }
 

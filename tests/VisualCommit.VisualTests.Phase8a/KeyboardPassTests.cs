@@ -606,12 +606,11 @@ public sealed class KeyboardPassTests
 
     /// <summary>
     /// G8, D427: the activity log's splitter by Tab and Up: the log 10 taller, and the height kept
-    /// as a drag's end keeps it. It fails on the code as it is (the height stays 200): the splitter's
-    /// keyboard move raises no drag's end, and the line that keeps it is in
-    /// <c>CommitGraphView.axaml.cs</c>, which another package owns; a fixer after wave 2's merges adds
-    /// it with this test (docs/phase-8a-design.md 0.4) and removes the skip.
+    /// as a drag's end keeps it. The splitter's keyboard move raises no drag's end:
+    /// <c>CommitGraphView</c> keeps it after a handled Up or Down, as <c>MainWindow</c> does for the
+    /// side panels' splitters.
     /// </summary>
-    [AvaloniaFact(Skip = "D427: the activity log's keyboard move is not kept yet; its line in CommitGraphView.axaml.cs goes to a fixer after wave 2's merges (docs/phase-8a-design.md 0.4).")]
+    [AvaloniaFact]
     public async Task Up_on_the_activity_logs_splitter_reached_by_Tab_heightens_the_log_by_10_and_keeps_it()
     {
         using var repo = await Scenarios.GraphAsync();
