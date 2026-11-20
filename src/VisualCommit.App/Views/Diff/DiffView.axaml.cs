@@ -6,6 +6,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using VisualCommit.App.Controls.Diff;
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Menus;
@@ -25,6 +26,14 @@ public partial class DiffView : UserControl
         AvaloniaProperty.Register<DiffView, bool>(nameof(TakesFocusOnOpen), defaultValue: true);
 
     private DiffViewModel? _viewModel;
+
+    /// <summary>
+    /// The element that had the focus when the open diff's text was first asked to take it (outside
+    /// a menu, as the window keeps it for a dialog, D104): while the focus is still there, or in this
+    /// view, or nowhere, the text may take it; once the user has moved it, a read that ends later
+    /// does not take it back.
+    /// </summary>
+    private IInputElement? _focusAtOpen;
 
     public DiffView()
     {
@@ -128,10 +137,21 @@ public partial class DiffView : UserControl
             _viewModel.PropertyChanged += OnViewModelPropertyChanged;
             _viewModel.SelectionResetRequested += OnSelectionResetRequested;
 
-            // A diff that opens takes the keyboard focus, so that Ctrl+End and the like work at once.
+            // A diff that opens takes the keyboard focus, so that Ctrl+End and the like work at once,
+            // unless the user has moved the focus elsewhere before its text arrives.
             if (TakesFocusOnOpen)
             {
-                Dispatcher.UIThread.Post(() => DiffText.FocusBody(), DispatcherPriority.Loaded);
+                var opened = _viewModel;
+                Dispatcher.UIThread.Post(
+                    () =>
+                    {
+                        if (ReferenceEquals(_viewModel, opened))
+                        {
+                            _focusAtOpen = FocusOutsideMenus();
+                            DiffText.FocusBody(StillWanted);
+                        }
+                    },
+                    DispatcherPriority.Loaded);
             }
         }
 
@@ -145,13 +165,33 @@ public partial class DiffView : UserControl
     {
         if (e.PropertyName == nameof(DiffViewModel.Body) && _viewModel?.ShowsText == true && TakesFocusOnOpen)
         {
-            Dispatcher.UIThread.Post(() => DiffText.FocusBody(), DispatcherPriority.Loaded);
+            Dispatcher.UIThread.Post(() => DiffText.FocusBody(StillWanted), DispatcherPriority.Loaded);
         }
 
         if (e.PropertyName is nameof(DiffViewModel.BeforeImage) or nameof(DiffViewModel.AfterImage) or nameof(DiffViewModel.Body))
         {
             ShowImages();
         }
+    }
+
+    /// <summary>
+    /// Whether the text may still take the focus it was asked to: nothing has the focus, or the
+    /// window has it, or the element that had it when the diff opened, or something in this view.
+    /// </summary>
+    private bool StillWanted()
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        var focused = FocusOutsideMenus();
+        return focused is null || ReferenceEquals(focused, topLevel) || ReferenceEquals(focused, _focusAtOpen)
+            || (focused is Visual visual && this.IsVisualAncestorOf(visual));
+    }
+
+    /// <summary>The focused element of this view's window, or, while a context menu has the focus, the element that had it before the menu opened.</summary>
+    private IInputElement? FocusOutsideMenus()
+    {
+        var topLevel = TopLevel.GetTopLevel(this);
+        var focused = topLevel?.FocusManager?.GetFocusedElement();
+        return topLevel is MainWindow { MenuLayer: { } menus } ? menus.FocusOutsideMenus(focused) : focused;
     }
 
     /// <summary>The two images and their captions: "<width> × <height> pixels, <N> bytes", or "No image".</summary>

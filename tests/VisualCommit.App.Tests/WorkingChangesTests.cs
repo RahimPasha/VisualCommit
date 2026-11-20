@@ -1,12 +1,20 @@
+using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.Headless.XUnit;
+using Avalonia.Input;
+using Avalonia.Styling;
+using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.App.Views.Shell;
 using VisualCommit.Core;
 using VisualCommit.Core.Diff;
 using VisualCommit.Core.Git;
 using VisualCommit.Git;
 using VisualCommit.Testing;
+using VisualCommit.Testing.Headless;
 using Xunit;
 
 namespace VisualCommit.App.Tests;
@@ -475,6 +483,298 @@ public class WorkingChangesTests
         Assert.All(viewModel.Changes.Unstaged.Rows, row => Assert.False(row.IsSelected));
     }
 
+    /// <summary>
+    /// The commit boxes (docs/phase-8a-design.md 6.3.7, D392): the commit carries the message the
+    /// boxes held when it started; a summary typed while it runs stays afterwards, with the
+    /// description, since the boxes no longer hold what was committed.
+    /// </summary>
+    [Fact]
+    public async Task A_summary_typed_while_the_commit_runs_stays_and_the_commit_carries_the_message_it_started_with()
+    {
+        var host = new FakeHost { HoldsCommit = true };
+        var panel = new WorkingChangesViewModel(host, new MainWindowViewModelTests.FakeSettings());
+        panel.Update(ThreeStaged, hasHead: true);
+        panel.Summary = "First";
+        panel.Description = "Body";
+
+        var committing = panel.CommitCommand.ExecuteAsync(null);
+        await host.CommitStarted.Task;
+        Assert.True(panel.IsCommitting);
+        panel.Summary = "next";
+        host.ReleaseCommit();
+        await committing;
+
+        Assert.Equal(("First\n\nBody", false), host.Committed.Single());
+        Assert.Equal("next", panel.Summary);
+        Assert.Equal("Body", panel.Description);
+        Assert.Null(panel.ErrorText);
+    }
+
+    /// <summary>Amend can be ticked or unticked except while a commit runs (6.3.7, D392).</summary>
+    [Fact]
+    public async Task Amend_cannot_be_changed_while_the_commit_runs()
+    {
+        var host = new FakeHost { HoldsCommit = true };
+        var panel = new WorkingChangesViewModel(host, new MainWindowViewModelTests.FakeSettings());
+        panel.Update(ThreeStaged, hasHead: true);
+        panel.Summary = "First";
+        var changes = new List<string?>();
+        panel.PropertyChanged += (_, e) => changes.Add(e.PropertyName);
+        Assert.True(panel.CanToggleAmend);
+
+        var committing = panel.CommitCommand.ExecuteAsync(null);
+        await host.CommitStarted.Task;
+        Assert.False(panel.CanToggleAmend);
+        Assert.Contains(nameof(WorkingChangesViewModel.CanToggleAmend), changes);
+
+        changes.Clear();
+        host.ReleaseCommit();
+        await committing;
+        Assert.True(panel.CanToggleAmend);
+        Assert.Contains(nameof(WorkingChangesViewModel.CanToggleAmend), changes);
+
+        // Without a commit to amend, never.
+        panel.Update(ThreeStaged, hasHead: false);
+        Assert.False(panel.CanToggleAmend);
+    }
+
+    /// <summary>With nothing typed meanwhile, a commit empties both boxes and unticks Amend, as before (6.3.7).</summary>
+    [Fact]
+    public async Task With_nothing_typed_meanwhile_the_commit_empties_both_boxes_and_unticks_amend()
+    {
+        var host = new FakeHost { HoldsCommit = true };
+        var panel = new WorkingChangesViewModel(host, new MainWindowViewModelTests.FakeSettings());
+        panel.Update(ThreeStaged, hasHead: true);
+        panel.IsAmend = true;
+        await host.HeadMessageRead.Task;
+        panel.Summary = "Amended";
+        panel.Description = "Body";
+
+        var committing = panel.CommitCommand.ExecuteAsync(null);
+        await host.CommitStarted.Task;
+        host.ReleaseCommit();
+        await committing;
+
+        Assert.Equal(("Amended\n\nBody", true), host.Committed.Single());
+        Assert.Equal(string.Empty, panel.Summary);
+        Assert.Equal(string.Empty, panel.Description);
+        Assert.False(panel.IsAmend);
+    }
+
+    /// <summary>
+    /// A stage row's buttons (D425, docs/phase-8a-design.md 6.3.4): F6 focuses the first unstaged
+    /// row's own button, and its buttons are then in the tree but undrawn; Tab reaches "Stage", then
+    /// "Discard", each drawn while it has the keyboard's frame. No other row shows its buttons.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Tab_from_a_focused_rows_own_button_reaches_its_Stage_and_Discard_each_drawn_only_while_framed()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        using var app = await StageRowsAsync(data, repo);
+        var exact = await repo.ExactStateAsync();
+
+        app.PressF6();
+        await app.WaitForAsync(() => app.FocusedRowPath() == "README.md", "the focus on README.md's row");
+        Assert.True(app.FocusVisible, "README.md's row shows no keyboard frame.");
+        var row = app.StageRow("UnstagedFileList", "README.md")!;
+        var stage = ShellDriver.RowButton(row, "RowStageButton");
+        var discard = ShellDriver.RowButton(row, "RowDiscardButton");
+        Assert.True(stage.IsEffectivelyVisible && discard.IsEffectivelyVisible, "The focused row's buttons are not in the tree's shown part.");
+        Assert.Equal((0.0, 0.0), (stage.Opacity, discard.Opacity));
+
+        app.PressKey(Key.Tab);
+        Assert.True(stage.IsFocused, $"Tab did not reach README.md's Stage: the focus is on {app.DescribeFocus()}.");
+        Assert.True(app.FocusVisible, "Stage shows no keyboard frame.");
+        Assert.Equal((1.0, 0.0), (stage.Opacity, discard.Opacity));
+
+        app.PressKey(Key.Tab);
+        Assert.True(discard.IsFocused, $"Tab did not reach README.md's Discard: the focus is on {app.DescribeFocus()}.");
+        Assert.True(app.FocusVisible, "Discard shows no keyboard frame.");
+        Assert.Equal((0.0, 1.0), (stage.Opacity, discard.Opacity));
+
+        foreach (var other in app.StageRows("UnstagedFileList").Concat(app.StageRows("StagedFileList")).Where(other => !ReferenceEquals(other, row)))
+        {
+            Assert.DoesNotContain(
+                other.GetVisualDescendants().OfType<Button>(),
+                button => button.IsEffectivelyVisible && AutomationProperties.GetAutomationId(button) is "RowStageButton" or "RowDiscardButton" or "RowUnstageButton");
+        }
+
+        Assert.Equal(exact, await repo.ExactStateAsync());
+    }
+
+    /// <summary>After a keyboard "Stage" of the first of three unstaged rows, the focus is on the row now first (6.3.4's first case).</summary>
+    [AvaloniaFact]
+    public async Task After_Stage_by_the_keys_on_the_first_of_three_rows_the_focus_is_on_the_row_now_first()
+    {
+        using var repo = await ThreeChangedAsync(3);
+        using var data = new TempDirectory("data");
+        using var app = await StageRowsAsync(data, repo);
+
+        await PressRowButtonAsync(app, "a.txt", "RowStageButton");
+
+        await app.WaitForAsync(() => app.StageRows("UnstagedFileList").Count == 2, "two unstaged rows");
+        Assert.Equal("a.txt", (await repo.GitAsync("diff", "--cached", "--name-only")).StandardOutput.Trim());
+        await app.WaitForAsync(() => app.FocusedRowPath() == "b.txt", $"the focus on b.txt's row (it is on {app.DescribeFocus()})");
+        Assert.True(app.FocusVisible, "b.txt's row shows no keyboard frame.");
+    }
+
+    /// <summary>After a keyboard "Stage" of the last of three unstaged rows, the focus is on the list's last row (6.3.4's second case).</summary>
+    [AvaloniaFact]
+    public async Task After_Stage_by_the_keys_on_the_last_of_three_rows_the_focus_is_on_the_lists_last_row()
+    {
+        using var repo = await ThreeChangedAsync(3);
+        using var data = new TempDirectory("data");
+        using var app = await StageRowsAsync(data, repo);
+
+        await PressRowButtonAsync(app, "c.txt", "RowStageButton");
+
+        await app.WaitForAsync(() => app.StageRows("UnstagedFileList").Count == 2, "two unstaged rows");
+        Assert.Equal("c.txt", (await repo.GitAsync("diff", "--cached", "--name-only")).StandardOutput.Trim());
+        await app.WaitForAsync(() => app.FocusedRowPath() == "b.txt", $"the focus on b.txt's row (it is on {app.DescribeFocus()})");
+        Assert.True(app.FocusVisible, "b.txt's row shows no keyboard frame.");
+    }
+
+    /// <summary>After a keyboard "Stage" of the only unstaged row, the focus is on the staged list's first row (6.3.4's third case).</summary>
+    [AvaloniaFact]
+    public async Task After_Stage_by_the_keys_on_the_only_unstaged_row_the_focus_is_on_the_staged_lists_first_row()
+    {
+        using var repo = await ThreeChangedAsync(1);
+        using var data = new TempDirectory("data");
+        using var app = await StageRowsAsync(data, repo);
+
+        await PressRowButtonAsync(app, "a.txt", "RowStageButton");
+
+        await app.WaitForAsync(() => app.StageRows("StagedFileList").Count == 1, "one staged row");
+        Assert.Equal("a.txt", (await repo.GitAsync("diff", "--cached", "--name-only")).StandardOutput.Trim());
+        await app.WaitForAsync(
+            () => app.FocusedRowPath() == "a.txt" && app.FocusIsWithin(app.FindByAutomationId("StagedFileList")),
+            $"the focus on the staged list's a.txt (it is on {app.DescribeFocus()})");
+        Assert.True(app.FocusVisible, "The staged row shows no keyboard frame.");
+    }
+
+    /// <summary>
+    /// After a keyboard "Stage" that leaves both lists empty, the summary has the focus (6.3.4's
+    /// last case). The app never shows the panel so, so the panel is hosted alone, over a host whose
+    /// stage leaves nothing changed.
+    /// </summary>
+    [AvaloniaFact]
+    public void After_Stage_by_the_keys_leaves_both_lists_empty_the_summary_has_the_focus()
+    {
+        var host = new FakeHost();
+        var panel = new WorkingChangesViewModel(host, new MainWindowViewModelTests.FakeSettings());
+        host.OnStage = () => panel.Update(WorkingTreeStatus.Clean, hasHead: true);
+        panel.Update(new WorkingTreeStatus([], [new ChangedFile("a.txt", FileChangeKind.Modified)], new HashSet<string>(StringComparer.Ordinal)), hasHead: true);
+        var view = new WorkingChangesView { DataContext = panel };
+        using var window = DiffHost.Show(view, 400, 640, ThemeVariant.Dark);
+        var own = view.GetVisualDescendants().OfType<Button>().Single(button => button.IsEffectivelyVisible && AutomationProperties.GetAutomationId(button) == "StageFileRow");
+        Assert.True(own.Focus(NavigationMethod.Tab));
+        DiffHost.Settle();
+
+        window.PressKey(Key.Tab);
+        var stage = view.GetVisualDescendants().OfType<Button>().Single(button => AutomationProperties.GetAutomationId(button) == "RowStageButton");
+        Assert.True(stage.IsFocused, "Tab did not reach a.txt's Stage.");
+        window.PressKey(Key.Enter);
+        DiffHost.Settle();
+
+        Assert.Equal("a.txt", Assert.Single(host.Staged).Path);
+        var summary = view.GetVisualDescendants().OfType<TextBox>().Single(box => box.Name == "CommitSummary");
+        Assert.True(summary.IsFocused, $"The summary does not have the focus: {window.Window.FocusManager?.GetFocusedElement()?.GetType().Name ?? "nothing"}.");
+    }
+
+    /// <summary>
+    /// A keyboard "Discard" of the only change, confirmed, leaves the tree clean and the panel goes
+    /// with the focused button: the graph has the focus then (6.3.4).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task After_Discard_by_the_keys_of_the_only_change_the_graph_has_the_focus()
+    {
+        using var repo = await ThreeChangedAsync(1);
+        using var data = new TempDirectory("data");
+        using var app = await StageRowsAsync(data, repo);
+
+        await PressRowButtonAsync(app, "a.txt", "RowDiscardButton");
+        await app.WaitForDialogAsync<ConfirmationViewModel>();
+        app.Click(app.Find<Avalonia.Controls.Button>("ConfirmButton"));
+
+        await app.WaitForAsync(() => !app.Session.Shell.ActiveTab.Repository!.HasWorkingChanges, "the working tree to be clean");
+        Assert.Equal("a\n", File.ReadAllText(Path.Combine(repo.Path, "a.txt")));
+        await app.WaitForAsync(() => app.FocusedAutomationId() == "GraphRows", $"the focus on the graph (it is on {app.DescribeFocus()})");
+        Assert.True(app.FocusVisible, "The graph shows no keyboard frame.");
+    }
+
+    /// <summary>A repository with a.txt, b.txt and c.txt committed and the first <paramref name="changed"/> of them changed in the working tree.</summary>
+    private static async Task<TempRepo> ThreeChangedAsync(int changed)
+    {
+        var repo = await TempRepo.CreateAsync();
+        try
+        {
+            string[] names = ["a.txt", "b.txt", "c.txt"];
+            foreach (var name in names)
+            {
+                repo.WriteFile(name, name[..1] + "\n");
+            }
+
+            await repo.CommitAsync("Add three files");
+            foreach (var name in names.Take(changed))
+            {
+                repo.WriteFile(name, name[..1] + " changed\n");
+            }
+
+            return repo;
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>The app on <paramref name="repo"/>, its working-changes row clicked and the stage panel's lists shown, the pointer at rest.</summary>
+    private static async Task<ShellDriver> StageRowsAsync(TempDirectory data, TempRepo repo)
+    {
+        var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        try
+        {
+            await app.WaitForRepositoryAsync();
+            await app.WaitForWatchersQuietAsync();
+            app.Click(app.WorkingRowPoint());
+            await app.WaitForAsync(() => app.StageRows("UnstagedFileList").Count > 0, "the stage panel's unstaged rows");
+            await app.WaitForIdleAsync();
+            app.MoveToNeutral();
+            return app;
+        }
+        catch
+        {
+            app.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// F6 to the unstaged list's first row, then Tab, one at a time, until <paramref name="button"/>
+    /// of <paramref name="path"/>'s row has the focus (at most 30), then Enter.
+    /// </summary>
+    private static async Task PressRowButtonAsync(ShellDriver app, string path, string button)
+    {
+        app.PressF6();
+        await app.WaitForAsync(() => app.FocusedRowPath() is not null, "the focus on an unstaged row");
+        for (var tab = 0; !IsOn(app, path, button); tab++)
+        {
+            Assert.True(tab < 30, $"30 Tabs did not reach {path}'s {button}: the focus is on {app.DescribeFocus()}.");
+            app.PressKey(Key.Tab);
+        }
+
+        Assert.True(app.FocusVisible, $"{path}'s {button} shows no keyboard frame.");
+        app.PressKey(Key.Enter);
+
+        static bool IsOn(ShellDriver app, string path, string button) =>
+            app.FocusedElement is Control focused
+            && AutomationProperties.GetAutomationId(focused) == button
+            && ShellDriver.StageRowOf(focused)?.DataContext is ChangedFileRow { Key: var key }
+            && key == path;
+    }
+
     /// <summary>Waits until <paramref name="condition"/> holds, looking every few milliseconds, for at most 60 seconds.</summary>
     private static async Task WaitUntilAsync(Func<bool> condition, string what)
     {
@@ -512,9 +812,29 @@ public class WorkingChangesTests
 
         public TaskCompletionSource HeadMessageRead { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+        /// <summary>A commit waits until <see cref="ReleaseCommit"/>, <see cref="CommitStarted"/> completing when it begins.</summary>
+        public bool HoldsCommit { get; init; }
+
+        public TaskCompletionSource CommitStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        /// <summary>Runs while a stage goes on, before it returns: the test's new status.</summary>
+        public Action? OnStage { get; set; }
+
+        /// <summary>Every file staged, in order.</summary>
+        public List<ChangedFile> Staged { get; } = [];
+
         public bool HasHead => true;
 
-        public Task<string?> StageAsync(IReadOnlyList<ChangedFile> files) => Task.FromResult<string?>(null);
+        private TaskCompletionSource CommitRelease { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void ReleaseCommit() => CommitRelease.TrySetResult();
+
+        public Task<string?> StageAsync(IReadOnlyList<ChangedFile> files)
+        {
+            Staged.AddRange(files);
+            OnStage?.Invoke();
+            return Task.FromResult<string?>(null);
+        }
 
         public Task<string?> UnstageAsync(IReadOnlyList<ChangedFile> files) => Task.FromResult<string?>(null);
 
@@ -522,10 +842,16 @@ public class WorkingChangesTests
 
         public Task<string?> RestoreAsync() => Task.FromResult<string?>(null);
 
-        public Task<string?> CommitAsync(string message, bool amend)
+        public async Task<string?> CommitAsync(string message, bool amend)
         {
             Committed.Add((message, amend));
-            return Task.FromResult(CommitError);
+            if (HoldsCommit)
+            {
+                CommitStarted.TrySetResult();
+                await CommitRelease.Task;
+            }
+
+            return CommitError;
         }
 
         public Task<string?> CommitAsync(string message, bool amend, HeadState? amended)

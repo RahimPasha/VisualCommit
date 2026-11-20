@@ -176,6 +176,119 @@ public class BlameViewTests
         }
     }
 
+    /// <summary>
+    /// The keyboard pass (docs/phase-8a-design.md 6.3.2): after an arrow the caret's run is picked,
+    /// as a click picks it: its lines on the selection background, its commit in the right panel.
+    /// Three Downs from line 1 pick run 0, run 1 and run 2 in turn.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Down_picks_the_run_the_caret_comes_to_and_shows_its_commit()
+    {
+        using var page = ThreeRuns(out var pageHost);
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        Assert.True(text.TextArea.Focus());
+        Assert.Null(page.SelectedRun);
+
+        host.PressKey(Avalonia.Input.Key.Down);
+        Assert.Equal(0, page.SelectedRun?.Index);
+        host.PressKey(Avalonia.Input.Key.Down);
+        Assert.Equal(1, page.SelectedRun?.Index);
+        host.PressKey(Avalonia.Input.Key.Down);
+
+        Assert.Equal(4, text.TextArea.Caret.Line);
+        Assert.Equal(2, page.SelectedRun?.Index);
+        Assert.Equal(2, Gutter(view).SelectedRun);
+        Assert.Equal([AddParserSha, RenameSha, AddTracingSha], pageHost.Shown);
+    }
+
+    /// <summary>Ctrl+End takes the caret to the last line and picks the last run; Ctrl+Home the first (6.3.2).</summary>
+    [AvaloniaFact]
+    public async Task Ctrl_End_picks_the_last_run_and_Ctrl_Home_the_first()
+    {
+        using var page = ThreeRuns(out var pageHost);
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        Assert.True(Text(view).TextArea.Focus());
+
+        host.PressKey(Avalonia.Input.Key.End, Avalonia.Input.RawInputModifiers.Control);
+        Assert.Equal(2, page.SelectedRun?.Index);
+        host.PressKey(Avalonia.Input.Key.Home, Avalonia.Input.RawInputModifiers.Control);
+        Assert.Equal(0, page.SelectedRun?.Index);
+        Assert.Equal([AddTracingSha, AddParserSha], pageHost.Shown);
+    }
+
+    /// <summary>Tab leaves the blame's read-only text (ruling 52, D426): AvaloniaEdit no longer keeps it.</summary>
+    [AvaloniaFact]
+    public async Task Tab_leaves_the_text()
+    {
+        using var page = ThreeRuns(out _);
+        var view = new BlameView { DataContext = page };
+        var after = new Avalonia.Controls.Button { Content = "After" };
+        var root = new Avalonia.Controls.StackPanel { Children = { view, after } };
+        view.Height = 300;
+        using var host = DiffHost.Show(root, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        Assert.True(text.TextArea.Focus());
+
+        host.PressKey(Avalonia.Input.Key.Tab);
+
+        Assert.True(after.IsFocused, $"Tab did not leave the text: the focus is on {host.Window.FocusManager?.GetFocusedElement()?.GetType().Name ?? "nothing"}.");
+        Assert.Equal("namespace History;\n\npublic sealed class Reader\n{\n}", text.Document.Text);
+    }
+
+    /// <summary>A click on a line of the text still picks its run (phase 5's 4.2).</summary>
+    [AvaloniaFact]
+    public async Task A_click_on_the_text_still_picks_its_run()
+    {
+        using var page = ThreeRuns(out var pageHost);
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        host.Capture();
+
+        var textView = text.TextView;
+        var top = textView.GetVisualTopByDocumentLine(3) - textView.VerticalOffset;
+        host.Click(textView, new Point(40, top + 4));
+
+        Assert.Equal(1, page.SelectedRun?.Index);
+        Assert.Equal([RenameSha], pageHost.Shown);
+    }
+
+    /// <summary>The page of a blame of five lines in three runs: lines 1 and 2 "Add the parser", line 3 the rename, lines 4 and 5 "Add tracing"; <paramref name="pageHost"/> records what it shows.</summary>
+    private static BlameViewModel ThreeRuns(out RecordingPageHost pageHost)
+    {
+        var tracing = BlameCommitOf(AddTracingSha, "Jonas Berg", 4, "src/Parser.cs");
+        var repository = new PageFakeRepository
+        {
+            Blame = (_, _) => new BlameResult(
+            [
+                new("namespace History;", Parser),
+                new(string.Empty, Parser),
+                new("public sealed class Reader", Renamed),
+                new("{", tracing),
+                new("}", tracing),
+            ]),
+        };
+        pageHost = new RecordingPageHost(repository);
+        return new BlameViewModel(pageHost, new BlameRequest("src/Reader.cs", null));
+    }
+
+    private static BlameTextEditor Text(BlameView view) =>
+        view.GetVisualDescendants().OfType<BlameTextEditor>().Single(control => control.Name == "BlameText");
+
+    private static BlameGutter Gutter(BlameView view) =>
+        view.GetVisualDescendants().OfType<BlameGutter>().Single(control => control.Name == "BlameGutter");
+
     /// <summary><paramref name="count"/> lines of C#.</summary>
     private static string Lines(int count) =>
         string.Join('\n', Enumerable.Range(1, count).Select(line => $"var value{line} = \"line {line}\"; // {line}"));

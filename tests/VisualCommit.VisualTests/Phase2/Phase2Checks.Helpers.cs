@@ -169,9 +169,15 @@ public partial class Phase2Checks
     /// <summary>The panel of a file row: what draws its hover and selection backgrounds and holds its buttons.</summary>
     private static Panel RowPanel(Button rowButton) => (Panel)rowButton.GetVisualParent()!;
 
+    /// <summary>
+    /// A row's buttons that are drawn: shown and not see-through. Since phase 8a a row that holds
+    /// the keyboard focus shows its buttons' panel with the buttons undrawn, at opacity 0, until one
+    /// of them shows the keyboard's frame (D425), so being shown alone no longer means drawn.
+    /// </summary>
     private static List<string> VisibleRowButtons(Panel row) =>
         [.. row.GetVisualDescendants().OfType<Button>()
-            .Where(button => button.IsEffectivelyVisible && Avalonia.Automation.AutomationProperties.GetAutomationId(button) is "RowStageButton" or "RowDiscardButton" or "RowUnstageButton")
+            .Where(button => button.IsEffectivelyVisible && button.Opacity > 0.5
+                && Avalonia.Automation.AutomationProperties.GetAutomationId(button) is "RowStageButton" or "RowDiscardButton" or "RowUnstageButton")
             .Select(button => Avalonia.Automation.AutomationProperties.GetAutomationId(button)!)];
 
     private static async Task WaitForDetailsAsync(ShellDriver app, string subject)

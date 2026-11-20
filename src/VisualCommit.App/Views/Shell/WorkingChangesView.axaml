@@ -69,7 +69,8 @@
     </Style>
 
     <!-- A file row: the hover background while the mouse is over it, the selection background
-         while its diff is open; its buttons show in both cases (D70). -->
+         while its diff is open; its buttons show in both cases (D70), and on a row that holds the
+         keyboard focus, so that Tab reaches them (D425). -->
     <Style Selector="Panel.stageRow">
       <Setter Property="Background" Value="Transparent" />
     </Style>
@@ -88,8 +89,19 @@
     <Style Selector="Panel.stageRow.selected StackPanel.rowActions">
       <Setter Property="IsVisible" Value="True" />
     </Style>
+    <Style Selector="Panel.stageRow:focus-within StackPanel.rowActions">
+      <Setter Property="IsVisible" Value="True" />
+    </Style>
     <Style Selector="Panel.stageRow.folder StackPanel.rowActions">
       <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <!-- On a row that only holds the keyboard focus, neither hovered nor selected, the buttons
+         are there for Tab but drawn only while one of them shows the keyboard's frame (D425). -->
+    <Style Selector="Panel.stageRow:focus-within:not(:pointerover):not(.selected) StackPanel.rowActions Button">
+      <Setter Property="Opacity" Value="0" />
+    </Style>
+    <Style Selector="Panel.stageRow StackPanel.rowActions Button:focus-visible">
+      <Setter Property="Opacity" Value="1" />
     </Style>
 
     <Style Selector="TextBlock#SummaryCounter.over">
@@ -421,7 +433,7 @@
                     Theme="{StaticResource VcCheckBox}"
                     Content="Amend previous commit"
                     IsChecked="{Binding IsAmend}"
-                    IsEnabled="{Binding CanAmend}"
+                    IsEnabled="{Binding CanToggleAmend}"
                     ToolTip.Tip="{Binding AmendToolTip}"
                     ToolTip.ShowOnDisabled="True"
                     AutomationProperties.AutomationId="AmendCheckBox" />
