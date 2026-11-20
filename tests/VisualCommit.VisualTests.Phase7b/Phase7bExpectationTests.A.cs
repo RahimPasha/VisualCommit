@@ -56,9 +56,9 @@ public sealed partial class Phase7bExpectationTests
         Assert.Equal(Texts.SignOutTitle, Texts.SignOutTitleOf(HostingProvider.GitHub));
         Assert.Equal(PartA.GitLabSignOutTitle, Texts.SignOutTitleOf(HostingProvider.GitLab));
         Assert.Equal(PartA.AzureDevOpsSignOutTitle, Texts.SignOutTitleOf(HostingProvider.AzureDevOps));
-        Assert.Equal(PartA.GitLabSignOutQuestionAda, Texts.SignOutQuestionOf(HostingProvider.GitLab, AdaLogin, true));
-        Assert.Equal(PartA.AzureDevOpsSignOutQuestion, Texts.SignOutQuestionOf(HostingProvider.AzureDevOps, PartA.Organization, true));
-        Assert.Equal(Texts.SignOutQuestion(OctoLogin, true), Texts.SignOutQuestionOf(HostingProvider.GitHub, OctoLogin, true));
+        Assert.Equal(PartA.GitLabSignOutQuestionAda, Texts.SignOutQuestionOf(HostingProvider.GitLab, AdaLogin));
+        Assert.Equal(PartA.AzureDevOpsSignOutQuestion, Texts.SignOutQuestionOf(HostingProvider.AzureDevOps, PartA.Organization));
+        Assert.Equal(Texts.SignOutQuestion(OctoLogin), Texts.SignOutQuestionOf(HostingProvider.GitHub, OctoLogin));
         Assert.Equal(PartA.SignOutConfirm, Texts.SignOutConfirm);
 
         Assert.Equal(PartA.GitHubDialogTitle, HostingTexts.AddAccountTitleOf(HostingProvider.GitHub));

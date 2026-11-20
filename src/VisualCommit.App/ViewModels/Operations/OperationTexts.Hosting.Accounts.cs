@@ -47,7 +47,7 @@ public static partial class OperationTexts
 
         public const string AccountUseForGit = "Use for git over HTTPS";
 
-        /// <summary>The switch's note with git 2.31 or newer, or the version unknown.</summary>
+        /// <summary>The switch's note for GitHub, on every git the app supports.</summary>
         public const string AccountUseForGitNote =
             "Clone, fetch, pull and push to GitHub over HTTPS use this account's token in place of your git credential helpers. Git in a terminal still uses your helpers.";
 
@@ -95,17 +95,10 @@ public static partial class OperationTexts
         public static string AccountsSignOutNote(string reason) =>
             $"Signed out, but the token could not be removed from {HostingTexts.Keychain}: {WithoutFullStop(reason)}.";
 
-        /// <summary>The switch's note with a detected git older than 2.31 (D277), in place of <see cref="AccountUseForGitNote"/>.</summary>
-        public static string AccountUseForGitOldGit(string version) =>
-            $"This needs Git 2.31 or newer. With Git {version}, clone, fetch, pull and push still use your git credential helpers.";
-
-        /// <summary>
-        /// The confirmation's question (D291); the last sentence left out when git is older than
-        /// 2.31, which asked the user's helpers all along (D277).
-        /// </summary>
-        public static string SignOutQuestion(string login, bool gitUsesTheAccount) =>
+        /// <summary>The confirmation's question (D291), on every git the app supports, all of which take the account's credentials (D420).</summary>
+        public static string SignOutQuestion(string login) =>
             $"Sign out of GitHub as {login}? VisualCommit removes its token and the authors' pictures it saved from this computer, and no longer lists pull requests." +
-            (gitUsesTheAccount ? GitAsksTheHelpersAgain : string.Empty);
+            GitAsksTheHelpersAgain;
 
         /// <summary>The dialog's message after the token checked out but its save failed (ruling 19).</summary>
         public static string SignInSaveFailed(string login, string reason) =>
@@ -141,7 +134,7 @@ public static partial class OperationTexts
         public const string SignInNotAnOrganization =
             "Type the organization's name, of letters, digits and hyphens, or its address on dev.azure.com or visualstudio.com.";
 
-        /// <summary>The sign-out question's last sentence with git 2.31 or newer (D277).</summary>
+        /// <summary>The sign-out question's last sentence: git goes back to the user's own helpers.</summary>
         private const string GitAsksTheHelpersAgain = " Git over HTTPS asks your own credential helpers again.";
 
         /// <summary>The block's "refused" note: GitHub's 7a's, the others' with their name.</summary>
@@ -149,8 +142,8 @@ public static partial class OperationTexts
             p == HostingProvider.GitHub ? NeedsSignInRefused : $"{HostingTexts.Name(p)} refused the token. Sign in again with a new token.";
 
         /// <summary>
-        /// The switch's note with git 2.31 or newer: GitHub's 7a's; GitLab's with its name; Azure
-        /// DevOps' names the organization's repositories (D350), <paramref name="login"/> being the organization.
+        /// The switch's note: GitHub's 7a's; GitLab's with its name; Azure DevOps' names the
+        /// organization's repositories (D350), <paramref name="login"/> being the organization.
         /// </summary>
         public static string AccountUseForGitNoteOf(HostingProvider p, string login) => p switch
         {
@@ -165,19 +158,19 @@ public static partial class OperationTexts
 
         /// <summary>
         /// The sign-out's question: GitHub's 7a's (<see cref="SignOutQuestion"/>); GitLab's names the
-        /// login and merge requests, Azure DevOps' the organization; the last sentence left out when
-        /// git is older than 2.31 (D277).
+        /// login and merge requests, Azure DevOps' the organization; each ends with
+        /// <see cref="GitAsksTheHelpersAgain"/>.
         /// </summary>
-        public static string SignOutQuestionOf(HostingProvider p, string login, bool gitUsesTheAccount)
+        public static string SignOutQuestionOf(HostingProvider p, string login)
         {
             if (p == HostingProvider.GitHub)
             {
-                return SignOutQuestion(login, gitUsesTheAccount);
+                return SignOutQuestion(login);
             }
 
             var whom = p == HostingProvider.AzureDevOps ? $"for {login}" : $"as {login}";
             return $"Sign out of {HostingTexts.Name(p)} {whom}? VisualCommit removes its token from this computer and no longer lists {HostingTexts.Requests(p)}."
-                + (gitUsesTheAccount ? GitAsksTheHelpersAgain : string.Empty);
+                + GitAsksTheHelpersAgain;
         }
 
         /// <summary>The dialog's help (D345, D360, D385).</summary>

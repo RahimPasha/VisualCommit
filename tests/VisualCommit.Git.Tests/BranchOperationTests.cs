@@ -105,6 +105,21 @@ public class BranchOperationTests
         Assert.Equal(Path.GetFullPath("/srv/one"), worktrees[1].Path);
     }
 
+    /// <summary>
+    /// Without <c>-z</c>, git prints a worktree's path as it is, a line break too, on every git: the
+    /// part after the break is a line the parser does not know, so the block keeps its branch and
+    /// the path up to the break, which is all the fast-forward's check needs to refuse and name it.
+    /// </summary>
+    [Fact]
+    public void A_worktree_path_with_a_line_break_keeps_its_branch_and_the_path_up_to_the_break()
+    {
+        var worktrees = GitRepository.ParseWorktrees(
+            "worktree /srv/a\nb\nHEAD 1111111111111111111111111111111111111111\nbranch refs/heads/side\n\n");
+
+        var worktree = Assert.Single(worktrees);
+        Assert.Equal((Path.GetFullPath("/srv/a"), "refs/heads/side"), (worktree.Path, worktree.Branch));
+    }
+
     // ---- Checkouts --------------------------------------------------------------------------------
 
     [Fact]
@@ -396,15 +411,21 @@ public class BranchOperationTests
     public async Task A_fast_forward_is_refused_for_a_branch_checked_out_in_a_linked_worktree_and_for_a_non_fast_forward()
     {
         using var repo = await Scenarios.EdgeCasesAsync();
-        var repository = await OpenAsync(repo);
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
         var initial = await RevAsync(repo, "refs/heads/side");
         var mainWork = await RevAsync(repo, "refs/heads/main");
         var worktree = repo.SiblingPath(Scenarios.EdgeCasesWorktree);
+        var listed = (await repository.ReadWorktreesAsync(TestCancelled))[1].Path;
 
-        // side is behind main, but checked out in edges-wt: git fetch . refuses it (update-ref would
-        // move it, and that worktree would then show the commits as staged reverse changes).
-        var linked = await Assert.ThrowsAsync<GitException>(() => repository.FastForwardBranchAsync("side", "refs/heads/main", TestCancelled));
-        Assert.Contains("refusing to fetch into branch", linked.StandardError, StringComparison.Ordinal);
+        // side is behind main, but checked out in edges-wt: the app reads the worktrees and refuses
+        // it before git's fetch runs, which git 2.34 would let move it (that worktree would then
+        // show the commits as staged reverse changes). On every git, so that every job tests it.
+        var before = calls.Snapshot().Count;
+        var linked = await Assert.ThrowsAsync<BranchCheckedOutElsewhereException>(() => repository.FastForwardBranchAsync("side", "refs/heads/main", TestCancelled));
+        Assert.Equal(("side", listed), (linked.Branch, linked.WorktreePath));
+        AssertSameFolder(worktree, linked.WorktreePath);
+        Assert.DoesNotContain(calls.Snapshot().Skip(before), call => call.CommandText.StartsWith("git fetch", StringComparison.Ordinal));
         Assert.Equal(initial, await repo.RefTargetAsync("refs/heads/side"));
         Assert.Equal(string.Empty, await GitInAsync(repo, worktree, "status", "--porcelain"));
 
@@ -412,6 +433,42 @@ public class BranchOperationTests
         var behind = await Assert.ThrowsAsync<GitException>(() => repository.FastForwardBranchAsync("main", "refs/heads/side", TestCancelled));
         Assert.Contains("non-fast-forward", behind.StandardError, StringComparison.Ordinal);
         Assert.Equal(mainWork, await repo.RefTargetAsync("refs/heads/main"));
+    }
+
+    [Fact]
+    public async Task A_branch_checked_out_in_a_worktree_whose_folder_is_gone_is_refused_the_same_way()
+    {
+        using var repo = await Scenarios.EdgeCasesAsync();
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+        var initial = await RevAsync(repo, "refs/heads/side");
+        var listed = (await repository.ReadWorktreesAsync(TestCancelled))[1].Path;
+
+        // edges-wt's folder deleted without git: git still lists it, as prunable, with its branch.
+        Directory.Delete(repo.SiblingPath(Scenarios.EdgeCasesWorktree), recursive: true);
+        Assert.Contains("\nprunable ", await GitTextAsync(repo, "worktree", "list", "--porcelain"), StringComparison.Ordinal);
+
+        var before = calls.Snapshot().Count;
+        var gone = await Assert.ThrowsAsync<BranchCheckedOutElsewhereException>(() => repository.FastForwardBranchAsync("side", "refs/heads/main", TestCancelled));
+        Assert.Equal(("side", listed), (gone.Branch, gone.WorktreePath));
+        Assert.DoesNotContain(calls.Snapshot().Skip(before), call => call.CommandText.StartsWith("git fetch", StringComparison.Ordinal));
+        Assert.Equal(initial, await repo.RefTargetAsync("refs/heads/side"));
+    }
+
+    [Fact]
+    public async Task A_branch_checked_out_nowhere_costs_one_worktree_list_before_the_fetch()
+    {
+        using var repo = await Scenarios.EdgeCasesAsync();
+        var calls = new GitCallLog();
+        var repository = await GitRepository.OpenAsync(NewRunner(calls), repo.Path, TestCancelled);
+        var before = calls.Snapshot().Count;
+
+        await repository.FastForwardBranchAsync("loc", "refs/heads/main", TestCancelled);
+
+        Assert.Equal(
+            ["git worktree list --porcelain", "git fetch --no-auto-maintenance --no-write-fetch-head . refs/heads/main:refs/heads/loc"],
+            calls.Snapshot().Skip(before).Select(call => call.CommandText));
+        Assert.Equal(await RevAsync(repo, "refs/heads/main"), await repo.RefTargetAsync("refs/heads/loc"));
     }
 
     [Fact]

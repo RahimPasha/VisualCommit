@@ -282,13 +282,23 @@ public class RepositoryOperationsBranchesTests
         using var app = await OperationsHarness.OpenAsync(repo);
         var side = await app.ShaAsync("refs/heads/side");
         var alpha = await app.ShaAsync("refs/heads/feature/alpha");
+        var listed = ListedWorktree((await repo.GitAsync("worktree", "list", "--porcelain")).StandardOutput, Scenarios.EdgeCasesWorktree);
         app.Dialogs.CloseError().CloseError();
 
+        // side is checked out in edges-wt: the app refuses it before git runs, on every git, and
+        // names the worktree's folder as git lists it; the dialog has no git output and no command.
         await app.Operations.FastForwardBranchAsync("refs/heads/side", "refs/heads/main");
+        var refusal = OperationTexts.FastForwardInOtherWorktree("side", listed);
+        Assert.Equal(("Fast-forward failed", refusal), (app.Dialogs.Errors[0].Title, app.Dialogs.Errors[0].Summary));
+        Assert.Equal("side is checked out in another worktree (" + listed + ").", refusal);
+        Assert.True(SameFolder(repo.SiblingPath(Scenarios.EdgeCasesWorktree), listed), $"{listed} is not edges-wt's folder.");
+        Assert.Equal((null, null), (app.Dialogs.Errors[0].Output, app.Dialogs.Errors[0].Command));
+        Assert.Equal(("Fast-forward side failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
+        Assert.Contains(app.Log.Messages, message => message.EndsWith(": Fast-forward side: refused, " + refusal, StringComparison.Ordinal));
+        Assert.DoesNotContain(app.Calls.Snapshot(), call => call.CommandText.StartsWith("git fetch", StringComparison.Ordinal));
+
         await app.Operations.FastForwardBranchAsync("refs/heads/feature/alpha", "refs/heads/loc");
 
-        Assert.Equal(("Fast-forward failed", "side is checked out in another worktree."), (app.Dialogs.Errors[0].Title, app.Dialogs.Errors[0].Summary));
-        Assert.Contains("refusing to fetch into", app.Dialogs.Errors[0].Output, StringComparison.Ordinal);
         Assert.Equal(("Fast-forward failed", "feature/alpha is not behind loc any more."), (app.Dialogs.Errors[1].Title, app.Dialogs.Errors[1].Summary));
         Assert.Contains("non-fast-forward", app.Dialogs.Errors[1].Output, StringComparison.Ordinal);
         Assert.Equal(("Fast-forward feature/alpha failed", OperationStatusTone.Danger), (app.StatusText, app.StatusTone));
@@ -300,6 +310,61 @@ public class RepositoryOperationsBranchesTests
         Assert.Equal("Fast-forwarded loc to main", app.StatusText);
         Assert.Equal(await app.ShaAsync("refs/heads/main"), await repo.RefTargetAsync("refs/heads/loc"));
         app.AssertScriptFollowed();
+    }
+
+    /// <summary>
+    /// The dialog's reading of git's refusal: "refusing to fetch into" in either case, as git 2.34
+    /// capitalises it for the current branch ("Refusing to fetch into current branch") and 2.35 and
+    /// later write it for a branch checked out in any worktree; "non-fast-forward" for a branch that
+    /// moved meanwhile; nothing for any other failure, which takes the default dialog.
+    /// </summary>
+    [Theory]
+    [InlineData("fatal: Refusing to fetch into current branch refs/heads/main of non-bare repository", "worktree")]
+    [InlineData("fatal: refusing to fetch into branch 'refs/heads/side' checked out at '/home/demo/edges-wt'", "worktree")]
+    [InlineData("To .\n ! [rejected]        main       -> side  (non-fast-forward)", "behind")]
+    [InlineData("fatal: invalid refspec 'refs/heads/main:refs/heads/side side'", null)]
+    public void A_fast_forwards_failure_reads_gits_refusal_in_either_case(string gitOutput, string? reads)
+    {
+        var failure = new GitFailure(GitFailureKind.Other, "Fast-forward side failed.", gitOutput, "git fetch --no-auto-maintenance --no-write-fetch-head . refs/heads/main:refs/heads/side", 128);
+
+        var display = RepositoryOperations.FastForwardFailureDisplay(failure, "side", "main");
+
+        Assert.Equal(
+            reads switch
+            {
+                "worktree" => new FailureDisplay("Fast-forward failed", OperationTexts.FastForwardInOtherWorktree("side")),
+                "behind" => new FailureDisplay("Fast-forward failed", OperationTexts.FastForwardNotBehind("side", "main")),
+                _ => null,
+            },
+            display);
+    }
+
+    /// <summary>The folder of the worktree <paramref name="name"/> in <c>git worktree list --porcelain</c>, as the app reads it: a full path with the platform's separators.</summary>
+    private static string ListedWorktree(string porcelain, string name)
+    {
+        var line = porcelain.Split('\n')
+            .Select(text => text.TrimEnd('\r'))
+            .Single(text => text.StartsWith("worktree ", StringComparison.Ordinal) && text.EndsWith("/" + name, StringComparison.Ordinal));
+        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(line["worktree ".Length..]));
+    }
+
+    /// <summary>
+    /// Whether two paths name the same folder, however each is spelled: git lists a worktree by its
+    /// physical path, which can differ from the temporary folder's as written (a symbolic link such
+    /// as macOS's /var, a short name on Windows).
+    /// </summary>
+    private static bool SameFolder(string expected, string actual)
+    {
+        var marker = "same-folder-" + Guid.NewGuid().ToString("N");
+        File.WriteAllText(Path.Combine(expected, marker), string.Empty);
+        try
+        {
+            return File.Exists(Path.Combine(actual, marker));
+        }
+        finally
+        {
+            File.Delete(Path.Combine(expected, marker));
+        }
     }
 
     // ---- A closed tab --------------------------------------------------------------------------

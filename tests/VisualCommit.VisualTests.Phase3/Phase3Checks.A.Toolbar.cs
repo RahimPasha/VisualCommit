@@ -90,12 +90,16 @@ public sealed partial class Phase3ChecksA
         await app.WaitForAsync(() => !Graph(app).ShowsWorkingRow && repository.Graph.Count == 9, "the stash in the graph and no working-changes row");
         Shot(app, "23f-stashed");
         Assert.Contains(app.GitCalls(), call => call.CommandText.StartsWith("git stash push --include-untracked --message ", StringComparison.Ordinal) && call.CommandText.Contains("Toolbar stash", StringComparison.Ordinal));
-        Assert.Equal(["stash@{0}: On topic/new: Toolbar stash", "stash@{1}: On main: Experiment"], await GitLinesAsync(repo, "stash", "list"));
+
+        // The app's own stash, in git's words (the graph, the list and the undo labels show what git
+        // wrote): below 2.36 git names the last part of the branch, "On new: Toolbar stash".
+        var git = await GitWords.VersionAsync();
+        Assert.Equal(["stash@{0}: " + GitWords.StashText("On topic/new: Toolbar stash", git), "stash@{1}: On main: Experiment"], await GitLinesAsync(repo, "stash", "list"));
         Assert.Empty(await GitTextAsync(repo, "status", "--porcelain", "--untracked-files=all"));
         Assert.False(File.Exists(Path.Combine(repo.Path, "scratch.txt")));
         AssertStatus(app, "Stashed the changes");
         Assert.Contains("▾ Stashes 2", LeftPanelLines(app));
-        AssertGraph(app, PartA.StashedGraph);
+        AssertGraph(app, [GitWords.StashText(PartA.StashedGraph[0], git), .. PartA.StashedGraph.Skip(1)]);
         AssertGitDate(AppCommitTime, await GitTextAsync(repo, "log", "-1", "--format=%aI", "stash@{0}"));
         Assert.Equal(WindowLayout.GraphColumnWidth(4), Graph(app).Columns.Graph.Width);
         Assert.False(Graph(app).Columns.Date.IsVisible);
@@ -109,7 +113,7 @@ public sealed partial class Phase3ChecksA
                 ["PullButton"] = PartA.TopicNoUpstream,
                 ["StashButton"] = PartA.NoChangesToStash,
             },
-            "Undo stash \"On topic/new: Toolbar stash\"",
+            GitWords.StashText("Undo stash \"On topic/new: Toolbar stash\"", git),
             NothingToRedo,
             TopicNewWithoutUpstream);
 
@@ -132,7 +136,7 @@ public sealed partial class Phase3ChecksA
         AssertWorkingRingOnly(app, shot, 0, PaletteOf(app).Lane(0));
 
         // After the pop: `Undo pop of stash "{message}"` (7.6).
-        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream }, "Undo pop of stash \"On topic/new: Toolbar stash\"", NothingToRedo, TopicNewWithoutUpstream);
+        AssertToolbar(app, new Dictionary<string, string> { ["PullButton"] = PartA.TopicNoUpstream }, GitWords.StashText("Undo pop of stash \"On topic/new: Toolbar stash\"", git), NothingToRedo, TopicNewWithoutUpstream);
     }
 
     /// <summary>Pull's and Push's enabled tooltips on main tracking origin/main (docs/phase-6-design.md 6.8, 16.1).</summary>

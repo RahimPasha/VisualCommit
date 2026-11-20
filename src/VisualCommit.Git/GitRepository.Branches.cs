@@ -379,17 +379,32 @@ public sealed partial class GitRepository
 
     // ---- Fast-forward a branch that is not checked out (2.7) -------------------------------------
 
-    public Task FastForwardBranchAsync(string branch, string target, CancellationToken cancellationToken = default)
+    public async Task FastForwardBranchAsync(string branch, string target, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(branch);
         ArgumentException.ThrowIfNullOrWhiteSpace(target);
 
-        // "." is this repository: no network and no prompt. Git refuses a non-fast-forward and a
-        // branch checked out in any worktree, so a branch that moved meanwhile is never damaged.
-        return RunWriteAsync(
+        // Git guards a branch checked out in another worktree only from 2.35 (before, the fetch
+        // checks the current branch alone and moves the other worktree's branch under its files),
+        // so the worktrees are read first, on every git: one path, which every git tests. This
+        // worktree's own branch is left to git, which refuses it on every version. Git 2.35 and
+        // later stay the second guard: a checkout after this read, a rebase or bisect elsewhere.
+        var checkedOut = HeadsPrefix + branch;
+        foreach (var worktree in await ReadWorktreesAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (string.Equals(worktree.Branch, checkedOut, StringComparison.Ordinal)
+                && !WorktreeKey.Comparer.Equals(worktree.Path, WorkingDirectory))
+            {
+                throw new BranchCheckedOutElsewhereException(branch, worktree.Path);
+            }
+        }
+
+        // "." is this repository: no network and no prompt. Git refuses a non-fast-forward, so a
+        // branch that moved meanwhile is never damaged.
+        await RunWriteAsync(
             null,
             cancellationToken,
-            ["fetch", "--no-auto-maintenance", "--no-write-fetch-head", .. Positional(".", $"{target}:{HeadsPrefix}{branch}")]);
+            ["fetch", "--no-auto-maintenance", "--no-write-fetch-head", .. Positional(".", $"{target}:{checkedOut}")]).ConfigureAwait(false);
     }
 
     // ---- Merge (2.8 to 2.10, D94) ----------------------------------------------------------------

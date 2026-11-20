@@ -584,7 +584,17 @@ public sealed partial class RepositoryOperations : IInProgressActions
             RefreshScope.Refs,
             async _ =>
             {
-                await Git.FastForwardBranchAsync(branch, targetRef);
+                try
+                {
+                    await Git.FastForwardBranchAsync(branch, targetRef);
+                }
+                catch (BranchCheckedOutElsewhereException ex)
+                {
+                    // The worktrees read before git ran show the branch checked out in another one:
+                    // nothing moved, and the summary names that worktree's folder.
+                    return Refused(text, OperationTexts.FastForwardInOtherWorktree(ex.Branch, ex.WorktreePath));
+                }
+
                 return OperationReport.Done(OperationTexts.FastForwarded(branch, target));
             },
             new RunOptions
@@ -1304,11 +1314,16 @@ public sealed partial class RepositoryOperations : IInProgressActions
     private async Task<OperationReport?> RefuseIfCommitGoneAsync(OperationText text, string sha) =>
         await Git.CommitExistsAsync(sha) ? null : Refused(text, OperationTexts.CommitGone(sha));
 
-    /// <summary>2.7's dialog: its two sentences when git's line says why, otherwise 2.33's default.</summary>
-    private static FailureDisplay? FastForwardFailureDisplay(GitFailure failure, string branch, string target)
+    /// <summary>
+    /// 2.7's dialog: its two sentences when git's line says why, otherwise null, which gives 2.33's
+    /// default. Git's refusal is read in either case: 2.34 writes "Refusing to fetch into current
+    /// branch …", 2.35 and later "refusing to fetch into branch '…' checked out at '…'".
+    /// </summary>
+    public static FailureDisplay? FastForwardFailureDisplay(GitFailure failure, string branch, string target)
     {
+        ArgumentNullException.ThrowIfNull(failure);
         const string Title = "Fast-forward failed";
-        if (failure.GitOutput.Contains("refusing to fetch into", StringComparison.Ordinal))
+        if (failure.GitOutput.Contains("refusing to fetch into", StringComparison.OrdinalIgnoreCase))
         {
             return new FailureDisplay(Title, OperationTexts.FastForwardInOtherWorktree(branch));
         }

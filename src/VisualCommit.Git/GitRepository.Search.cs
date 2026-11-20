@@ -23,13 +23,6 @@ public sealed partial class GitRepository
     /// <summary>The rows each later call is given.</summary>
     internal int SearchChunk { get; set; } = 20_000;
 
-    /// <summary>
-    /// Set when git refused <c>--diff-merges</c>, which Git 2.31 brought: from then on the Changes
-    /// mode leaves it out, and <c>--first-parent</c> alone gives merges their first-parent change
-    /// (Git 2.29 and later).
-    /// </summary>
-    private volatile bool _noDiffMergesOption;
-
     public async Task SearchAsync(SearchMode mode, string text, IReadOnlyList<string> shas, Action<string> onMatch, IProgress<int>? progress, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(text);
@@ -78,31 +71,16 @@ public sealed partial class GitRepository
     /// </summary>
     private async Task<bool> SearchChunkAsync(SearchMode mode, string text, string input, Action<string> onMatch, CancellationToken cancellationToken)
     {
-        while (true)
+        var command = SearchCommand(mode, text, input, onMatch, cancellationToken);
+        var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
+        if (result.ExitCode == 128 && result.StandardError.Contains("bad object", StringComparison.Ordinal))
         {
-            var command = SearchCommand(mode, text, input, onMatch, cancellationToken);
-            var result = await _runner.RunAsync(command, cancellationToken).ConfigureAwait(false);
-            if (result.Succeeded)
-            {
-                return true;
-            }
-
-            if (mode == SearchMode.Changes && !_noDiffMergesOption && result.StandardError.Contains("--diff-merges", StringComparison.Ordinal))
-            {
-                // Git before 2.31: the same search without the option.
-                _log.Info($"{Name}: git does not know --diff-merges; searching changes with --first-parent alone.");
-                _noDiffMergesOption = true;
-                continue;
-            }
-
-            if (result.ExitCode == 128 && result.StandardError.Contains("bad object", StringComparison.Ordinal))
-            {
-                _log.Debug($"{Name}: The search stopped: a commit of the graph no longer exists ({result.StandardError.Trim()}).");
-                return false;
-            }
-
-            result.EnsureSuccess(command);
+            _log.Debug($"{Name}: The search stopped: a commit of the graph no longer exists ({result.StandardError.Trim()}).");
+            return false;
         }
+
+        result.EnsureSuccess(command);
+        return true;
     }
 
     /// <summary>
@@ -167,13 +145,9 @@ public sealed partial class GitRepository
                 // folded for A to Z. The commit's change against its first parent, a merge's too;
                 // the root's whatever log.showRoot says, renames whatever diff.renames says, and the
                 // bytes the diff shows, without textconv. -s prints no diff.
-                arguments.AddRange(["--format=%H", "--first-parent"]);
-                if (!_noDiffMergesOption)
-                {
-                    arguments.Add("--diff-merges=first-parent");
-                }
-
-                arguments.AddRange(["--root", "--find-renames", "--no-textconv", "-s", "--regexp-ignore-case", "-S" + text, "--"]);
+                arguments.AddRange([
+                    "--format=%H", "--first-parent", "--diff-merges=first-parent",
+                    "--root", "--find-renames", "--no-textconv", "-s", "--regexp-ignore-case", "-S" + text, "--"]);
                 break;
 
             default:

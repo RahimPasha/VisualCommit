@@ -8,6 +8,7 @@ using Avalonia.Media;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
+using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using Xunit;
@@ -186,7 +187,10 @@ public sealed partial class Phase3ChecksC
         AssertErrorDialogParts(app, extra: null, copy: false);
         AssertBranch(app, "feature/clash");
         AssertStatus(app, PartC.Check14ConflictsStatus, OperationStatusTone.Warning);
-        Assert.Equal(["stash@{0}: " + PartC.Check14StashMessage], await StashListAsync(repo));
+
+        // The app's own stash, in git's words: below 2.36 git names the last part of the branch.
+        var git = await GitWords.VersionAsync();
+        Assert.Equal(["stash@{0}: " + GitWords.StashText(PartC.Check14StashMessage, git)], await StashListAsync(repo));
         Assert.Equal(["UU notes.txt", "?? newfile.txt"], await StatusAsync(repo));
         Assert.Equal(
             ["<<<<<<< Updated upstream", "one (clash)", "=======", "one (local)", ">>>>>>> Stashed changes", "two", "three", "four", "five", "six", "seven"],
@@ -201,11 +205,11 @@ public sealed partial class Phase3ChecksC
         shot = Shot(app, "14h-stash-conflict-banner");
         AssertConflictsBanner(app, shot, PartC.ConflictsBanner, PartC.ConflictsBannerTip);
         AssertToolbar(app, "StashButton", enabled: false, PartC.ResolveFirst);
-        AssertGraph(app, shot, PartC.Check14Conflicts, lanes: 3, PartC.Check14ConflictsWorking);
+        AssertGraph(app, shot, InGitsWords(PartC.Check14Conflicts, git), lanes: 3, PartC.Check14ConflictsWorking);
         AssertSelection(app, shot, null, workingRow: true);
         AssertWorkingRowCutWithToolTip(app);
         Assert.Equal(1, SectionRow(app, "Stashes").Count);
-        Assert.Equal([PartC.Check14StashMessage], SectionLines(app, "Stashes"));
+        Assert.Equal([GitWords.StashText(PartC.Check14StashMessage, git)], SectionLines(app, "Stashes"));
         await AssertBranchRowAsync(app, ["Local branches", "feature", "clash"], head: true);
         Assert.Equal(["A newfile.txt", "U notes.txt"], FileRows(app, "UnstagedFileList"));
         await AssertConflictRowAsync(app, "notes.txt");
@@ -277,9 +281,16 @@ public sealed partial class Phase3ChecksC
         await AssertNoDialogAsync(app);
         Assert.Equal("feature/clash", await repo.CurrentBranchAsync());
         Assert.Equal(["UU notes.txt", "?? newfile.txt"], await StatusAsync(repo));
-        Assert.Equal(["stash@{0}: " + PartC.Check14StashMessage], await StashListAsync(repo));
+        Assert.Equal(["stash@{0}: " + GitWords.StashText(PartC.Check14StashMessage, await GitWords.VersionAsync())], await StashListAsync(repo));
         AssertBanner(app, PartC.ConflictsBanner, null);
     }
+
+    /// <summary>
+    /// <paramref name="rows"/>, which hold 2.36's words, with each stash row's message as
+    /// <paramref name="git"/> writes it (<see cref="GitWords.StashText"/>): the app shows what git wrote.
+    /// </summary>
+    private static IReadOnlyList<PartC.Row> InGitsWords(IReadOnlyList<PartC.Row> rows, GitVersion git) =>
+        [.. rows.Select(row => row.Stash ? row with { Message = GitWords.StashText(row.Message, git) } : row)];
 
     /// <summary>Clicks the folder Local branches › feature open, as check 14's step 2 starts.</summary>
     private static async Task OpenLocalFeatureFolderAsync(ShellDriver app)

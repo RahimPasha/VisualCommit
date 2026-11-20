@@ -385,9 +385,14 @@ public interface IGitRepository
     /// <summary>
     /// Fast-forwards the local branch <paramref name="branch"/>, which is not checked out, to
     /// <paramref name="target"/> (a full ref): <c>git fetch --no-auto-maintenance
-    /// --no-write-fetch-head . &lt;target&gt;:refs/heads/&lt;branch&gt;</c>. Git refuses a
-    /// non-fast-forward and a branch checked out in any worktree (2.7). No prompts.
+    /// --no-write-fetch-head . &lt;target&gt;:refs/heads/&lt;branch&gt;</c>, after one
+    /// <c>git worktree list --porcelain</c>. Git refuses a non-fast-forward on every version, but a
+    /// branch checked out in another worktree only from 2.35 (2.34 checks the current branch
+    /// alone), so the worktrees are read first, on every git, and such a branch is refused before
+    /// the fetch runs (D420). No prompts.
     /// </summary>
+    /// <exception cref="BranchCheckedOutElsewhereException">Another worktree has <paramref name="branch"/> checked out; nothing ran but the read.</exception>
+    /// <exception cref="GitException">Git refused or failed; the message is git's own.</exception>
     Task FastForwardBranchAsync(string branch, string target, CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -1066,6 +1071,21 @@ public sealed class NotARepositoryException(string path)
     : Exception($"{path} is not a git repository.")
 {
     public string Path { get; } = path;
+}
+
+/// <summary>
+/// A branch to be moved without a checkout is checked out in another worktree, which would then
+/// show the moved commits as staged changes in reverse: <see cref="IGitRepository.FastForwardBranchAsync"/>
+/// refuses it before git runs.
+/// </summary>
+public sealed class BranchCheckedOutElsewhereException(string branch, string worktreePath)
+    : Exception($"{branch} is checked out in another worktree ({worktreePath}).")
+{
+    /// <summary>The branch's short name, as it was given.</summary>
+    public string Branch { get; } = branch;
+
+    /// <summary>The worktree's folder as git lists it: a full path with the platform's separators.</summary>
+    public string WorktreePath { get; } = worktreePath;
 }
 
 /// <summary>An operation needs git, and no usable git was found.</summary>

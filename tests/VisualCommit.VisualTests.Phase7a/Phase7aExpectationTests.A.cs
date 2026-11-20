@@ -40,9 +40,8 @@ public sealed partial class Phase7aExpectationTests
         Assert.Equal(PartA.SignOutNoteLocked, Texts.AccountsSignOutNote(TokenStoreReasons.Locked));
         Assert.Equal(PartA.UseForGit, Texts.AccountUseForGit);
         Assert.Equal(PartA.UseForGitNote, Texts.AccountUseForGitNote);
-        Assert.Equal(PartA.UseForGitOldGit230, Texts.AccountUseForGitOldGit("2.30.0"));
         Assert.Equal(PartA.SignOutTitle, Texts.SignOutTitle);
-        Assert.Equal(PartA.SignOutQuestionOcto, Texts.SignOutQuestion(OctoLogin, gitUsesTheAccount: true));
+        Assert.Equal(PartA.SignOutQuestionOcto, Texts.SignOutQuestion(OctoLogin));
         Assert.Equal(PartA.SignOutConfirm, Texts.SignOutConfirm);
         Assert.Equal(PartA.Locked, TokenStoreReasons.Locked);
         Assert.Equal(PartA.OpenSettingsButton, OperationTexts.OpenSettingsButton);

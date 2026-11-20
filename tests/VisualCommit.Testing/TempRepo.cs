@@ -75,7 +75,9 @@ public sealed class TempRepo : IDisposable
         var environment = new Dictionary<string, string?>
         {
             // No system or user configuration: no aliases, hooks, signing or line-ending
-            // settings from the machine. GIT_CONFIG_GLOBAL needs Git 2.32; HOME covers 2.30 and 2.31.
+            // settings from the machine. GIT_CONFIG_GLOBAL (Git 2.32 and later, so every git the
+            // app supports) names the empty file; HOME points there too, for what reads the home
+            // folder itself.
             ["GIT_CONFIG_NOSYSTEM"] = "1",
             ["GIT_CONFIG_GLOBAL"] = globalConfig,
             ["HOME"] = home,
@@ -530,15 +532,128 @@ public sealed class TempRepo : IDisposable
         GitAsync("tag", "--annotate", "--message", message, name, target);
 
     /// <summary>
-    /// Stashes the changes in the working tree with <paramref name="message"/> (git records it as
-    /// "On &lt;branch&gt;: &lt;message&gt;"). Returns the stash commit's SHA.
+    /// Stashes the changes in the working tree with <paramref name="message"/>, recorded as git
+    /// 2.36 and later record it, on every git: "On &lt;branch&gt;: &lt;message&gt;", with the
+    /// branch's whole name. Returns the stash commit's SHA.
     /// </summary>
+    /// <remarks>
+    /// Below 2.36 git names a stash after the part of its branch's name after the last <c>/</c>
+    /// (<see cref="GitWords.StashNamesTheWholeBranch"/>), in the messages of all of its commits, so
+    /// the scenarios' stash ids, which the reports pin, would differ (D420). There, on a branch
+    /// whose name holds a <c>/</c>, the stash is written again with the whole name
+    /// (<see cref="RenameStashBranchAsync"/>) before the clock moves, and its ids are those git 2.36
+    /// gives. On 2.36 and later, on a branch without <c>/</c> and on a detached HEAD, no call is
+    /// added. The app's own stashes are never rewritten: the tests take git's words for them.
+    /// </remarks>
     public async Task<string> StashAsync(string message)
     {
+        ArgumentNullException.ThrowIfNull(message);
         await GitAsync("stash", "push", "--quiet", "--message", message);
+        string? stash = null;
+        var git = await GitWords.VersionAsync();
+        if (!GitWords.StashNamesTheWholeBranch(git) && await HeadBranchAsync() is { } branch && branch.Contains('/', StringComparison.Ordinal))
+        {
+            stash = await RenameStashBranchAsync(GitWords.StashBranch(branch, git), branch, message);
+        }
+
         _clock.Advance();
-        return (await GitAsync("rev-parse", "refs/stash")).StandardOutput.Trim();
+        return stash ?? (await GitAsync("rev-parse", "refs/stash")).StandardOutput.Trim();
     }
+
+    /// <summary>
+    /// Writes the newest stash, made by <c>git stash push --message <paramref name="message"/></c>,
+    /// again with the branch name <paramref name="to"/> where its commits' messages name
+    /// <paramref name="from"/>, and puts it in the old one's place; returns its id. Each commit, the
+    /// index's (<c>w^2</c>), the untracked files' (<c>w^3</c>, when there is one) and then the
+    /// stash's own (<c>w</c>), is read with <c>git cat-file commit</c>, its message's leading
+    /// <c>index on &lt;from&gt;: </c>, <c>untracked files on &lt;from&gt;: </c> or
+    /// <c>On &lt;from&gt;: </c> replaced, the stash's own given the new commits as its second and
+    /// third parents, and written with <c>git hash-object -t commit -w --stdin</c>: every other
+    /// byte (tree, author, committer, dates, the message's end) is git's own. Then
+    /// <c>git stash drop</c> and <c>git stash store</c> with git's own entry text, at the clock's
+    /// time, as the push had it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">A commit's message does not start as a stash made on <paramref name="from"/> starts.</exception>
+    internal async Task<string> RenameStashBranchAsync(string from, string to, string message)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(from);
+        ArgumentException.ThrowIfNullOrEmpty(to);
+        ArgumentNullException.ThrowIfNull(message);
+        var stash = (await GitAsync("rev-parse", "--verify", "refs/stash")).StandardOutput.Trim();
+        var (header, body) = await ReadCommitObjectAsync(stash);
+        var parents = header.Where(line => line.StartsWith("parent ", StringComparison.Ordinal)).Select(line => line["parent ".Length..]).ToList();
+        if (parents.Count is not (2 or 3))
+        {
+            throw new InvalidOperationException($"The stash {stash} has {parents.Count} parents, not 2 or 3.");
+        }
+
+        var renamed = new List<string> { parents[0], await RenameCommitAsync(parents[1], "index on ", from, to) };
+        if (parents.Count == 3)
+        {
+            renamed.Add(await RenameCommitAsync(parents[2], "untracked files on ", from, to));
+        }
+
+        var parent = 0;
+        var stashHeader = header.Select(line => line.StartsWith("parent ", StringComparison.Ordinal) ? "parent " + renamed[parent++] : line);
+        var renamedStash = await WriteCommitObjectAsync(stashHeader, Renamed(body, "On ", from, to, stash));
+        await GitAsync("stash", "drop", "--quiet");
+        await GitAsync("stash", "store", "--message", $"On {to}: {message}", renamedStash);
+        return renamedStash;
+    }
+
+    /// <summary>
+    /// The branch HEAD is on (its short name), or null on a detached HEAD: from the git folder's
+    /// <c>HEAD</c> file, with no git call, when the working tree holds the git folder itself (every
+    /// repository this class makes); otherwise from <c>git symbolic-ref --quiet HEAD</c>.
+    /// </summary>
+    private async Task<string?> HeadBranchAsync()
+    {
+        const string Heads = "refs/heads/";
+        var headFile = System.IO.Path.Combine(Path, ".git", "HEAD");
+        string full;
+        if (File.Exists(headFile))
+        {
+            var text = (await File.ReadAllTextAsync(headFile)).Trim();
+            full = text.StartsWith("ref: ", StringComparison.Ordinal) ? text["ref: ".Length..] : string.Empty;
+        }
+        else
+        {
+            var head = await GitAllowingFailureAsync("symbolic-ref", "--quiet", "HEAD");
+            full = head.Succeeded ? head.StandardOutput.Trim() : string.Empty;
+        }
+
+        return full.StartsWith(Heads, StringComparison.Ordinal) ? full[Heads.Length..] : null;
+    }
+
+    /// <summary>Writes the commit <paramref name="sha"/> again with its message's leading <c>&lt;prefix&gt;&lt;from&gt;: </c> naming <paramref name="to"/>; returns the new commit's id.</summary>
+    private async Task<string> RenameCommitAsync(string sha, string prefix, string from, string to)
+    {
+        var (header, body) = await ReadCommitObjectAsync(sha);
+        return await WriteCommitObjectAsync(header, Renamed(body, prefix, from, to, sha));
+    }
+
+    /// <summary><paramref name="body"/>, a commit's message, with its leading <c>&lt;prefix&gt;&lt;from&gt;: </c> naming <paramref name="to"/>.</summary>
+    private static string Renamed(string body, string prefix, string from, string to, string sha)
+    {
+        var start = prefix + from + ": ";
+        return body.StartsWith(start, StringComparison.Ordinal)
+            ? prefix + to + ": " + body[start.Length..]
+            : throw new InvalidOperationException($"The commit {sha}'s message does not start with \"{start}\": {body}");
+    }
+
+    /// <summary>A commit object as <c>git cat-file commit</c> prints it: its header's lines, and its message, every byte as it is.</summary>
+    private async Task<(IReadOnlyList<string> Header, string Body)> ReadCommitObjectAsync(string sha)
+    {
+        var raw = (await GitAsync("cat-file", "commit", sha)).StandardOutput;
+        var end = raw.IndexOf("\n\n", StringComparison.Ordinal);
+        return end < 0
+            ? throw new InvalidOperationException($"git cat-file commit {sha} printed no message.")
+            : (raw[..end].Split('\n'), raw[(end + 2)..]);
+    }
+
+    /// <summary>Writes a commit object of <paramref name="header"/> and <paramref name="body"/> into the repository; returns its id.</summary>
+    private async Task<string> WriteCommitObjectAsync(IEnumerable<string> header, string body) =>
+        (await GitWithInputAsync(string.Join('\n', header) + "\n\n" + body, "hash-object", "-t", "commit", "-w", "--stdin")).StandardOutput.Trim();
 
     /// <summary>
     /// Creates an empty bare repository next to this one's working tree (not inside it) and adds

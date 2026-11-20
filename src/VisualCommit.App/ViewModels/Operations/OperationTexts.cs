@@ -225,8 +225,15 @@ public static partial class OperationTexts
 
     public static string FastForwarded(string branch, string target) => $"Fast-forwarded {branch} to {target}";
 
-    /// <summary>2.7's summary when git refused because the branch is checked out in a worktree.</summary>
+    /// <summary>2.7's summary when git refused because the branch is checked out in a worktree; git's output names the path.</summary>
     public static string FastForwardInOtherWorktree(string branch) => $"{branch} is checked out in another worktree.";
+
+    /// <summary>
+    /// 2.7's summary when the app refused before git ran, because the worktrees it read show the
+    /// branch checked out in another one at <paramref name="path"/> (D420): the dialog has no git
+    /// output to name it, so the summary does.
+    /// </summary>
+    public static string FastForwardInOtherWorktree(string branch, string path) => $"{branch} is checked out in another worktree ({path}).";
 
     /// <summary>2.7's summary when git refused a non-fast-forward (the branch moved meanwhile).</summary>
     public static string FastForwardNotBehind(string branch, string target) => $"{branch} is not behind {target} any more.";

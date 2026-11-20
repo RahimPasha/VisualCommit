@@ -606,10 +606,31 @@ public sealed partial class Phase5ChecksU
     /// <summary>
     /// A transient stash of D91's round trip ("Commits and objects the checks make"), popped at once
     /// and left as an unreferenced commit: the report's short id names a commit with
-    /// <paramref name="subject"/> whose first parent is <paramref name="parent"/>, on every git.
+    /// <paramref name="subject"/> whose first parent is <paramref name="parent"/>, from git 2.36.
+    /// Below 2.36 a stash made on a branch whose name holds a <c>/</c> names the branch's last part
+    /// (<see cref="GitWords.StashText"/>), so its subject and its id differ: it is then the one
+    /// commit <c>git fsck --unreachable --no-reflogs</c> lists with the subject in git's words and
+    /// that first parent. A stash on a branch without <c>/</c> has the report's id on every git.
     /// </summary>
     private static async Task AssertTransientStashAsync(TempRepo repo, string shortId, string subject, string parent)
     {
+        var inGitsWords = GitWords.StashText(subject, await GitWords.VersionAsync());
+        if (inGitsWords != subject)
+        {
+            var unreachable = (await GitLinesAsync(repo, "fsck", "--unreachable", "--no-reflogs"))
+                .Where(line => line.StartsWith("unreachable commit ", StringComparison.Ordinal))
+                .Select(line => line["unreachable commit ".Length..])
+                .ToArray();
+            var found = unreachable.Length == 0
+                ? []
+                : (await GitLinesAsync(repo, ["log", "--no-walk=unsorted", "--format=%H%x1f%s%x1f%P", .. unreachable]))
+                    .Select(line => line.Split('\x1f'))
+                    .Where(fields => fields[1] == inGitsWords && fields[2].Split(' ')[0] == parent)
+                    .ToArray();
+            Assert.True(found.Length == 1, $"{found.Length} unreferenced commits have the subject \"{inGitsWords}\" and the first parent {parent}, not one.");
+            return;
+        }
+
         var sha = await RevParseAsync(repo, shortId + "^{commit}");
         Assert.True(sha is not null, $"No commit {shortId}: the stash is not the one the report gives.");
         var fields = (await GitTextAsync(repo, "log", "-1", "--format=%s%x1f%P", sha!)).Split('\x1f');

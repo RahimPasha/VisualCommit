@@ -606,7 +606,7 @@ public static partial class Phase6Expectations
             GitVersionCommand,
             OpenCommand,
             "git rev-parse --show-prefix",
-            "git rev-parse --git-common-dir",
+            "git rev-parse --path-format=absolute --git-common-dir",
             "git for-each-ref --format=",
             "git remote",
             "git config --null --get-regexp ^remote\\.",

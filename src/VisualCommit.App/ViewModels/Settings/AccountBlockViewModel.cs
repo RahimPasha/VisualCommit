@@ -3,7 +3,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Hosting;
-using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using VisualCommit.Hosting;
@@ -25,9 +24,6 @@ namespace VisualCommit.App.ViewModels.Settings;
 /// </summary>
 public sealed partial class AccountBlockViewModel : ObservableObject
 {
-    /// <summary>The first git that takes the account's credentials through <c>GIT_CONFIG_COUNT</c> (D277).</summary>
-    private static readonly GitVersion GitThatUsesTheAccount = new(2, 31, 0);
-
     /// <summary>
     /// The sign-outs that run, per session and provider, each ending with its reason (null, or why the
     /// keychain kept its entry). A sign-out outlives the screen that started it (D256); a block made
@@ -41,7 +37,6 @@ public sealed partial class AccountBlockViewModel : ObservableObject
     private readonly Func<HostingProvider, Task<bool>>? _signIn;
     private readonly IDialogService _dialogs;
     private readonly IAppLog _log;
-    private readonly GitVersion? _gitVersion;
     private AccountStatus? _account;
     private Func<bool>? _sectionBusy;
     private bool _disposed;
@@ -51,8 +46,7 @@ public sealed partial class AccountBlockViewModel : ObservableObject
     /// <param name="signIn">The window's sign-in entry (10.5), which stacks the provider's dialog over the screen; null without one.</param>
     /// <param name="dialogs">Where the sign-out's confirmation stacks over the screen (D104).</param>
     /// <param name="log">The app's log.</param>
-    /// <param name="gitVersion">The detected git's version, null when unknown (D277).</param>
-    public AccountBlockViewModel(IHostingSession? hosting, HostingProvider provider, Func<HostingProvider, Task<bool>>? signIn, IDialogService dialogs, IAppLog log, GitVersion? gitVersion = null)
+    public AccountBlockViewModel(IHostingSession? hosting, HostingProvider provider, Func<HostingProvider, Task<bool>>? signIn, IDialogService dialogs, IAppLog log)
     {
         ArgumentNullException.ThrowIfNull(dialogs);
         ArgumentNullException.ThrowIfNull(log);
@@ -61,7 +55,6 @@ public sealed partial class AccountBlockViewModel : ObservableObject
         _signIn = signIn;
         _dialogs = dialogs;
         _log = log;
-        _gitVersion = gitVersion;
         _account = hosting?.AccountOf(provider);
         UseForGit = _account?.Account.UseForGit ?? false;
         if (hosting is not null && RunningSignOutOf(hosting, provider) is { } running)
@@ -154,10 +147,8 @@ public sealed partial class AccountBlockViewModel : ObservableObject
     /// <summary>The switch differs from the account's: Save applies it.</summary>
     public bool IsChanged => HasAccount && UseForGit != _account!.Account.UseForGit;
 
-    /// <summary>The switch's note: the provider's (<see cref="Texts.AccountUseForGitNoteOf"/>), or the older git's when the detected git is known and older than 2.31 (D277).</summary>
-    public string UseForGitNote => UsesTheAccount
-        ? Texts.AccountUseForGitNoteOf(Provider, Login ?? string.Empty)
-        : Texts.AccountUseForGitOldGit(_gitVersion!.Value.ToString());
+    /// <summary>The switch's note: the provider's (<see cref="Texts.AccountUseForGitNoteOf"/>), on every git the app supports, all of which take the account's credentials (D420).</summary>
+    public string UseForGitNote => Texts.AccountUseForGitNoteOf(Provider, Login ?? string.Empty);
 
     /// <summary><c>Signing out…</c> while the sign-out runs; null otherwise.</summary>
     [ObservableProperty]
@@ -174,9 +165,6 @@ public sealed partial class AccountBlockViewModel : ObservableObject
 
     /// <summary>Raised when a control should take the keyboard focus, by automation id (<see cref="IdOf"/>); the section forwards it.</summary>
     public event EventHandler<string>? FocusRequested;
-
-    /// <summary>Whether git takes the account's credentials: 2.31 or newer, or the version unknown (D277).</summary>
-    private bool UsesTheAccount => _gitVersion is not { } version || version >= GitThatUsesTheAccount;
 
     /// <summary>
     /// Shows <paramref name="account"/>, the session's account of <see cref="Provider"/>: the switch
@@ -280,7 +268,7 @@ public sealed partial class AccountBlockViewModel : ObservableObject
             return;
         }
 
-        var question = Texts.SignOutQuestionOf(Provider, account.Account.Login, UsesTheAccount);
+        var question = Texts.SignOutQuestionOf(Provider, account.Account.Login);
         if (!await _dialogs.ConfirmAsync(new ConfirmationRequest(Texts.SignOutTitleOf(Provider), question, string.Empty, Texts.SignOutConfirm, IsDestructive: false)))
         {
             return;

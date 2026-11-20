@@ -76,11 +76,21 @@ public class ConflictOperationTests
     [InlineData("zdiff3", true)]
     public async Task Each_conflict_style_git_writes_parses_into_its_block(string style, bool hasBase)
     {
-        using var repo = await MergeAsync(
+        // zdiff3 came with git 2.35: an older git refuses the merge itself, as it would in a terminal.
+        var refused = style == "zdiff3" && !GitWords.HasZdiff3(await GitWords.VersionAsync());
+        var merged = await MergeWithExitAsync(
+            refused ? 128 : 1,
             r => r.WriteFile("f.txt", BaseText),
             r => r.WriteFile("f.txt", OursText),
             r => r.WriteFile("f.txt", TheirsText),
             "-c", $"merge.conflictStyle={style}");
+        using var repo = merged.Repo;
+        if (refused)
+        {
+            Assert.Contains("unknown style 'zdiff3' given for", merged.Merge.StandardError, StringComparison.Ordinal);
+            return;
+        }
+
         var repository = await OpenAsync(repo);
 
         var content = await repository.ReadConflictAsync(await ConflictAsync(repository, "f.txt"), cancellationToken: TestCancelled);
@@ -503,7 +513,15 @@ public class ConflictOperationTests
     /// merging <c>theirs</c> stopped on its conflicts (<paramref name="mergeOptions"/> before
     /// <c>merge</c>, such as <c>-c merge.conflictStyle=diff3</c>).
     /// </summary>
-    internal static async Task<TempRepo> MergeAsync(Action<TempRepo> @base, Action<TempRepo> ours, Action<TempRepo> theirs, params string[] mergeOptions)
+    internal static async Task<TempRepo> MergeAsync(Action<TempRepo> @base, Action<TempRepo> ours, Action<TempRepo> theirs, params string[] mergeOptions) =>
+        (await MergeWithExitAsync(1, @base, ours, theirs, mergeOptions)).Repo;
+
+    /// <summary>
+    /// <see cref="MergeAsync"/>'s repository, its merge ending with <paramref name="exitCode"/>,
+    /// which the caller expects (1: stopped on its conflicts; 128: git refused an option, as git
+    /// before 2.35 refuses <c>merge.conflictStyle=zdiff3</c>), and the merge's own result.
+    /// </summary>
+    internal static async Task<(TempRepo Repo, GitResult Merge)> MergeWithExitAsync(int exitCode, Action<TempRepo> @base, Action<TempRepo> ours, Action<TempRepo> theirs, params string[] mergeOptions)
     {
         var repo = await TempRepo.CreateAsync();
         try
@@ -530,8 +548,8 @@ public class ConflictOperationTests
             }
 
             var merge = await repo.GitAllowingFailureAsync([.. mergeOptions, "merge", "--no-edit", "theirs"]);
-            Assert.Equal(1, merge.ExitCode);
-            return repo;
+            Assert.Equal(exitCode, merge.ExitCode);
+            return (repo, merge);
         }
         catch
         {

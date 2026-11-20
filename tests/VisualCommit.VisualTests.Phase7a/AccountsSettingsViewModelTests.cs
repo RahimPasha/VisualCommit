@@ -132,32 +132,33 @@ public sealed class AccountsSettingsViewModelTests
         Assert.Empty(session.UseForGitCalls);
     }
 
-    [Theory]
-    [InlineData("2.30.0", false)]
-    [InlineData("2.31.0", true)]
-    [InlineData(null, true)]
-    public void The_switch_note_and_the_question_follow_the_detected_git(string? version, bool usesTheAccount)
+    /// <summary>
+    /// Every git the app supports takes the account's credentials (D420): the provider's note and
+    /// the whole question, with the floor's git and with none detected yet.
+    /// </summary>
+    [Fact]
+    public void The_switch_note_and_the_question_are_the_providers_whatever_git_was_detected()
     {
-        GitVersion? git = version is null ? null : GitVersion.TryParse(version, out var parsed) ? parsed : throw new InvalidOperationException(version);
-        var dialogs = new StubDialogs { Answer = false };
-        using var model = new AccountsSettingsViewModel(new StubSession { Account = Status(AccountState.SignedIn, TokenPlace.Keychain) }, null, dialogs, new RecordingLog(), git);
+        foreach (var git in new GitVersion?[] { new GitVersion(2, 34, 1), null })
+        {
+            var dialogs = new StubDialogs { Answer = false };
+            using var model = new AccountsSettingsViewModel(new StubSession { Account = Status(AccountState.SignedIn, TokenPlace.Keychain) }, null, dialogs, new RecordingLog(), git);
 
-        Assert.Equal(
-            usesTheAccount
-                ? "Clone, fetch, pull and push to GitHub over HTTPS use this account's token in place of your git credential helpers. Git in a terminal still uses your helpers."
-                : "This needs Git 2.31 or newer. With Git 2.30.0, clone, fetch, pull and push still use your git credential helpers.",
-            model.GitHub.UseForGitNote);
+            Assert.Equal(
+                "Clone, fetch, pull and push to GitHub over HTTPS use this account's token in place of your git credential helpers. Git in a terminal still uses your helpers.",
+                model.GitHub.UseForGitNote);
 
-        model.GitHub.SignOutCommand.Execute(null);
-        var request = Assert.Single(dialogs.Requests);
-        Assert.Equal("Sign out of GitHub?", request.Title);
-        Assert.Equal(
-            "Sign out of GitHub as Octo? VisualCommit removes its token and the authors' pictures it saved from this computer, and no longer lists pull requests." +
-            (usesTheAccount ? " Git over HTTPS asks your own credential helpers again." : string.Empty),
-            request.Question);
-        Assert.Equal(string.Empty, request.Detail);
-        Assert.Equal("Sign out", request.ConfirmText);
-        Assert.False(request.IsDestructive);
+            model.GitHub.SignOutCommand.Execute(null);
+            var request = Assert.Single(dialogs.Requests);
+            Assert.Equal("Sign out of GitHub?", request.Title);
+            Assert.Equal(
+                "Sign out of GitHub as Octo? VisualCommit removes its token and the authors' pictures it saved from this computer, and no longer lists pull requests." +
+                " Git over HTTPS asks your own credential helpers again.",
+                request.Question);
+            Assert.Equal(string.Empty, request.Detail);
+            Assert.Equal("Sign out", request.ConfirmText);
+            Assert.False(request.IsDestructive);
+        }
     }
 
     [Fact]

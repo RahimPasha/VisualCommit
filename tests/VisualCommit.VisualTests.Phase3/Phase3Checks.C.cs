@@ -234,7 +234,7 @@ public sealed partial class Phase3ChecksC : Phase3Checks
         shot = Shot(app, "13b3-alpha-copy");
         await AssertNoDialogAsync(app);
         var branch = AssertCalled(app, calls, "git branch alpha-copy refs/remotes/origin/feature/alpha");
-        Assert.Contains("branch 'alpha-copy' set up to track 'origin/feature/alpha'.", branch.StandardOutput + branch.StandardError, StringComparison.Ordinal);
+        Assert.Contains(GitWords.TrackingSetUp("alpha-copy", "origin", "feature/alpha", await GitWords.VersionAsync()), branch.StandardOutput + branch.StandardError, StringComparison.Ordinal);
         Assert.Equal(["branch.alpha-copy.remote origin", "branch.alpha-copy.merge refs/heads/feature/alpha"], await GitLinesAsync(repo, "config", "--get-regexp", @"^branch\.alpha-copy\."));
         Assert.Equal("main", await repo.CurrentBranchAsync());
         AssertBranch(app, "main");

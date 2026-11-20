@@ -27,13 +27,17 @@ public sealed class AccountsSettingsViewModel : ObservableObject, IDisposable
     /// <param name="signIn">The window's sign-in entry (10.5), which stacks the provider's dialog over the screen; null without one.</param>
     /// <param name="dialogs">Where a sign-out's confirmation stacks over the screen (D104).</param>
     /// <param name="log">The app's log.</param>
-    /// <param name="gitVersion">The detected git's version, null when unknown (D277).</param>
+    /// <param name="gitVersion">
+    /// The detected git's version, null when unknown. No block reads it: every git the app supports
+    /// takes the account's credentials (D420), so the switch's note and the sign-out's question are
+    /// the provider's on every git.
+    /// </param>
     public AccountsSettingsViewModel(IHostingSession? hosting, Func<HostingProvider, Task<bool>>? signIn, IDialogService dialogs, IAppLog log, GitVersion? gitVersion = null)
     {
         ArgumentNullException.ThrowIfNull(dialogs);
         ArgumentNullException.ThrowIfNull(log);
         _hosting = hosting;
-        Blocks = [.. HostingProviders.InAccountsOrder.Select(provider => new AccountBlockViewModel(hosting, provider, signIn, dialogs, log, gitVersion))];
+        Blocks = [.. HostingProviders.InAccountsOrder.Select(provider => new AccountBlockViewModel(hosting, provider, signIn, dialogs, log))];
         foreach (var block in Blocks)
         {
             // While any block's sign-out runs, every block's buttons are disabled (7a's rule, section-wide).

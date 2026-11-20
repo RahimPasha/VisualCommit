@@ -256,6 +256,90 @@ public class TempRepoTests
         Assert.Equal([new StashListEntry("stash@{0}", stash, "On main: Work")], await repo.StashListAsync());
     }
 
+    /// <summary>
+    /// A stash on a branch whose name holds a <c>/</c> is recorded with the whole name on every git
+    /// (D420): git 2.34 and 2.35 name the last part, and the builder writes the stash again, so its
+    /// id is the one git 2.36 and later give, pinned here as git 2.56 gave it.
+    /// </summary>
+    [Fact]
+    public async Task A_stash_on_a_branch_with_a_slash_names_the_whole_branch_has_git_2_36s_id_and_applies()
+    {
+        using var repo = await SlashBranchWithChangeAsync();
+
+        var stash = await repo.StashAsync("m");
+
+        Assert.Equal([new StashListEntry("stash@{0}", stash, "On a/b: m")], await repo.StashListAsync());
+        Assert.Equal(SlashStash, stash);
+        Assert.Equal(
+            ["On a/b: m", $"index on a/b: {(await repo.GitAsync("rev-parse", "--short", "HEAD")).StandardOutput.Trim()} Base"],
+            [await SubjectAsync(repo, stash), await SubjectAsync(repo, stash + "^2")]);
+        await repo.GitAsync("stash", "apply", "--index", "--quiet");
+        Assert.Equal("b\n", File.ReadAllText(Path.Combine(repo.Path, "a.txt")));
+    }
+
+    /// <summary>
+    /// The rewrite itself, on any git: a stash made as git 2.56 makes it, written as git 2.34 would
+    /// name it (the last part), then back with the whole name, is the first stash again, the same
+    /// id and entry, and applies. So the builder's rewrite of a 2.34 stash gives git 2.36's bytes.
+    /// </summary>
+    [Fact]
+    public async Task A_stash_written_with_the_last_part_and_back_is_the_same_stash()
+    {
+        using var repo = await SlashBranchWithChangeAsync();
+        var stash = await repo.StashAsync("m");
+
+        var lastPart = await repo.RenameStashBranchAsync("a/b", "b", "m");
+        Assert.NotEqual(stash, lastPart);
+        Assert.Equal([new StashListEntry("stash@{0}", lastPart, "On b: m")], await repo.StashListAsync());
+        Assert.Equal("On b: m", await SubjectAsync(repo, lastPart));
+        Assert.StartsWith("index on b: ", await SubjectAsync(repo, lastPart + "^2"), StringComparison.Ordinal);
+
+        var whole = await repo.RenameStashBranchAsync("b", "a/b", "m");
+
+        Assert.Equal(stash, whole);
+        Assert.Equal([new StashListEntry("stash@{0}", stash, "On a/b: m")], await repo.StashListAsync());
+        await repo.GitAsync("stash", "apply", "--index", "--quiet");
+        Assert.Equal("b\n", File.ReadAllText(Path.Combine(repo.Path, "a.txt")));
+    }
+
+    [Fact]
+    public async Task A_stash_on_a_branch_without_a_slash_is_gits_own_with_no_object_written()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        await repo.CommitFileAsync("a.txt", "a\n", "Base");
+        repo.WriteFile("a.txt", "b\n");
+        var calls = repo.Calls.Snapshot().Count;
+
+        var stash = await repo.StashAsync("m");
+
+        Assert.Equal([new StashListEntry("stash@{0}", stash, "On main: m")], await repo.StashListAsync());
+        Assert.DoesNotContain(repo.Calls.Snapshot().Skip(calls), call => call.CommandText.StartsWith("git hash-object", StringComparison.Ordinal));
+    }
+
+    /// <summary>The id of <see cref="A_stash_on_a_branch_with_a_slash_names_the_whole_branch_has_git_2_36s_id_and_applies"/>'s stash, as git 2.56 gives it.</summary>
+    private const string SlashStash = "68c64311cc80c05c0dec5abdcab191f0250de467";
+
+    /// <summary>A repository on the branch <c>a/b</c> with one commit, "Base", and <c>a.txt</c> changed.</summary>
+    private static async Task<TempRepo> SlashBranchWithChangeAsync()
+    {
+        var repo = await TempRepo.CreateAsync();
+        try
+        {
+            await repo.CommitFileAsync("a.txt", "a\n", "Base");
+            await repo.GitAsync("checkout", "--quiet", "-b", "a/b");
+            repo.WriteFile("a.txt", "b\n");
+            return repo;
+        }
+        catch
+        {
+            repo.Dispose();
+            throw;
+        }
+    }
+
+    private static async Task<string> SubjectAsync(TempRepo repo, string revision) =>
+        (await repo.GitAsync("log", "-1", "--format=%s", revision)).StandardOutput.Trim();
+
     [Fact]
     public async Task A_failing_step_can_be_run_without_throwing()
     {

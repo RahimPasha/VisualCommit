@@ -204,28 +204,6 @@ public class AccountCredentialTests
         Assert.DoesNotContain(basic, fetch.StandardError + fetch.StandardOutput, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public async Task What_git_older_than_2_31_sees_asks_the_users_helper_and_the_handler_and_never_the_account()
-    {
-        // git before 2.31 ignores GIT_CONFIG_COUNT: the scope's pairs are as good as absent (D277).
-        await using var setup = await Setup.StartAsync();
-        setup.Handler.Then(PromptAnswer.Cancelled);
-        using var broker = new AskPassBroker(setup.Handler, credentials: setup.Source, gitVersion: () => null);
-        using var scope = broker.Begin("Fetch", "auth", PromptMode.Ask, bindings: [setup.Binding]);
-        var stripped = scope.Environment
-            .Where(variable => !variable.Key.StartsWith("GIT_CONFIG_", StringComparison.Ordinal))
-            .ToDictionary(variable => variable.Key, variable => variable.Value);
-
-        var fetch = await GitAsync(setup.Repo, stripped, ["fetch", "origin"]);
-
-        Assert.False(fetch.Succeeded);
-        var prompt = Assert.Single(setup.Handler.Prompts);
-        Assert.Equal(GitPromptKind.Username, prompt.Kind);
-        Assert.Equal(setup.Account, prompt.Account);
-        Assert.Empty(setup.Source.Gets);
-        setup.AssertUserStoreHasNoToken();
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -448,16 +426,6 @@ public class AccountCredentialTests
             var setup = new Setup(server, repo);
             await repo.GitAsync("config", "--file", repo.Environment["GIT_CONFIG_GLOBAL"]!, "credential.helper", $"store --file='{setup.UserStore.Replace('\\', '/')}'");
             return setup;
-        }
-
-        /// <summary>The user's helper's file, which git may write alice's line to, holds neither the token nor its user name.</summary>
-        public void AssertUserStoreHasNoToken()
-        {
-            if (File.Exists(UserStore))
-            {
-                Assert.DoesNotContain(Token, File.ReadAllText(UserStore), StringComparison.Ordinal);
-                Assert.DoesNotContain("x-access-token", File.ReadAllText(UserStore), StringComparison.Ordinal);
-            }
         }
 
         /// <summary>
