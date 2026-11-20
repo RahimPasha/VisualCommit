@@ -80,6 +80,12 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// <summary>1 once the listening loop has ended.</summary>
     private int _listenEnded;
 
+    /// <summary>Whether the helper is there; set again by <see cref="CheckHelper"/>, read by the scopes on any thread.</summary>
+    private volatile bool _helperFound;
+
+    /// <summary>1 once the line about <c>SSH_ASKPASS_REQUIRE</c> was logged: at the session's first Ask or Deny scope.</summary>
+    private int _askPassRequireLogged;
+
     /// <summary>Starts listening.</summary>
     /// <param name="handler">Answers the prompts (the app's dialogs).</param>
     /// <param name="log">The app log.</param>
@@ -138,7 +144,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
 
         _inheritsParameters = !string.IsNullOrEmpty(Inherited(ConfigParametersVariable));
         HelperPath = Path.GetFullPath(helperPath ?? AskPassLocator.ExpectedPath);
-        HelperFound = File.Exists(HelperPath);
+        _helperFound = File.Exists(HelperPath);
         if (!HelperFound)
         {
             // Every prompt then fails: git cannot start the helper and reports "could not read
@@ -153,11 +159,37 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         _listening = Task.Run(ListenAsync);
     }
 
+    /// <summary>
+    /// The Info line of the session's first Ask or Deny scope: every such scope sets
+    /// <c>SSH_ASKPASS_REQUIRE=force</c>, which an OpenSSH older than 8.4 ignores.
+    /// </summary>
+    public const string AskPassRequireLine =
+        "Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.";
+
     /// <summary>The helper's full path, as the variables of every <c>Ask</c> and <c>Deny</c> scope name it.</summary>
     public string HelperPath { get; }
 
-    /// <summary>Whether the helper was found when the broker started.</summary>
-    public bool HelperFound { get; }
+    /// <summary>Whether the helper was found: when the broker started, or since by <see cref="CheckHelper"/>.</summary>
+    public bool HelperFound => _helperFound;
+
+    /// <summary>The path the helper was looked for at, while it is missing; null once it is there.</summary>
+    public string? MissingHelperPath => HelperFound ? null : HelperPath;
+
+    /// <summary>
+    /// Looks for a missing helper again (the first-run screen's "Check again"), and logs when it is
+    /// there now; a helper that was found stays found. Returns <see cref="MissingHelperPath"/>. Reads
+    /// the disk, so it is called off the UI thread.
+    /// </summary>
+    public string? CheckHelper()
+    {
+        if (!HelperFound && File.Exists(HelperPath))
+        {
+            _helperFound = true;
+            _log.Info($"The askpass helper is there now ({HelperPath}).");
+        }
+
+        return MissingHelperPath;
+    }
 
     /// <summary>The pipe's name, <c>vc-&lt;16 hex&gt;</c>.</summary>
     public string PipeName { get; }
@@ -202,6 +234,12 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         if (used.Count > 0 && _inheritsParameters)
         {
             _log.Debug($"{repositoryName}: {title}: the inherited command-line git configuration is left out of calls bound to the account.");
+        }
+
+        // ssh is never asked for its version: the line says once per session what an old OpenSSH does.
+        if (mode is PromptMode.Ask or PromptMode.Deny && Interlocked.Exchange(ref _askPassRequireLogged, 1) == 0)
+        {
+            _log.Info(AskPassRequireLine);
         }
 
         var scope = new Scope(this, id, title, repositoryName, mode, EnvironmentFor(id, mode, used), group, used);

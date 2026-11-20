@@ -59,11 +59,23 @@ public sealed record SettingsScreenServices(
     /// <summary>The window's sign-in entry (docs/phase-7a-design.md 8.5, docs/phase-7b-design.md 10.5), which each Accounts block's "Sign in…" runs with its provider; null without one.</summary>
     public Func<HostingProvider, Task<bool>>? SignIn { get; init; }
 
-    /// <summary>The detected git's version, null when unknown: the Accounts section's texts on git older than 2.31 (D277).</summary>
+    /// <summary>The detected git's version, null when unknown: the Accounts section's netrc note names it, and shows only below 2.46 (D424).</summary>
     public GitVersion? GitVersion { get; init; }
 
-    /// <summary>What the search for git found when the screen opened; null while none has ended.</summary>
+    /// <summary>What the search for git found when the screen opened; null while none has ended. The Git program row shows it.</summary>
     public GitDetection? Detection { get; init; }
+
+    /// <summary>What a chosen file would give as the git (<c>GitAccess.ProbeAsync</c>): the Git program row's Browse…; null without a session's search.</summary>
+    public Func<string, CancellationToken, Task<GitDetection>>? ProbeGit { get; init; }
+
+    /// <summary>
+    /// Whether the home folder git is given holds a <c>.netrc</c> or <c>_netrc</c> file, called off the
+    /// UI thread when the screen opens (D424); null asks nothing and shows no netrc note.
+    /// </summary>
+    public Func<bool>? HomeHasNetrc { get; init; }
+
+    /// <summary>Tells the window that the netrc note was dismissed, so that it stays away for the session; null for none.</summary>
+    public Action? DismissNetrcNote { get; init; }
 
     /// <summary>Who and what the app is (its name, creator, version and copyright); null without one.</summary>
     public AppIdentity? Identity { get; init; }
@@ -122,7 +134,8 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
             () => services.Settings.Current.Editor,
             _lifetime.Token);
         Shortcuts = services.Shortcuts;
-        Accounts = new AccountsSettingsViewModel(services.Hosting, services.SignIn, services.Dialogs, services.Log, services.GitVersion);
+        Accounts = new AccountsSettingsViewModel(services.Hosting, services.SignIn, services.Dialogs, services.Log, services.GitVersion, services.HomeHasNetrc, services.DismissNetrcNote);
+        GitProgram = new GitProgramViewModel(services.Settings.Current.GitExecutable, services.Detection, services.ProbeGit, services.Folders, _lifetime.Token);
         General.PropertyChanged += OnSectionChanged;
         Git.Global.PropertyChanged += OnSectionChanged;
         Git.Repository.PropertyChanged += OnSectionChanged;
@@ -147,6 +160,9 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
 
     /// <summary>The Accounts section (docs/phase-7a-design.md 8.3): sign-in and sign-out at once (D256), the switch at Save.</summary>
     public AccountsSettingsViewModel Accounts { get; }
+
+    /// <summary>The Git section's "Git program" row (rulings 40, 42), last in its global scope; Save writes its choice.</summary>
+    public GitProgramViewModel GitProgram { get; }
 
     /// <summary>Completes when the reads of the opening have ended (8.1, 8.6, 8.7, 12.3, SD29).</summary>
     public Task Loaded { get; }
@@ -384,11 +400,12 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         Complete(true);
     }
 
-    /// <summary>The settings with General's and Tools' changes, but the theme (7.8 step 2).</summary>
+    /// <summary>The settings with General's, Tools' and the Git program row's changes, but the theme (7.8 step 2).</summary>
     private AppSettings Changed(AppSettings settings)
     {
         var next = General.Apply(settings);
-        return Tools.IsChanged ? next with { Editor = Tools.Setting } : next;
+        next = Tools.IsChanged ? next with { Editor = Tools.Setting } : next;
+        return GitProgram.IsChanged ? next with { GitExecutable = GitProgram.Choice } : next;
     }
 
     /// <summary>
@@ -484,9 +501,11 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         {
             var git = Git.LoadAsync();
             var tools = Tools.StartLookingAsync();
+            var netrc = Accounts.ReadNetrcAsync();
             await git;
             Tools.SetGitEditor(Git.CoreEditor);
             await tools;
+            await netrc;
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested)
         {

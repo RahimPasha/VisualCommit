@@ -1,19 +1,25 @@
+using VisualCommit.App.ViewModels.GitSetup;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Logging;
+using VisualCommit.Git;
 
 namespace VisualCommit.App.Services;
 
 /// <summary>
-/// The app's way to the git runner (D45). Git is looked for once, after the window exists, and
-/// may not be found; services hold this instead of a runner and ask for the runner when they
-/// need it. The session's search goes through an <see cref="IGitSetupProbe"/>, told what the
-/// lookup function gives when the search starts; the first <see cref="DetectAsync"/> starts it,
-/// and every later call answers with that same search.
+/// The app's way to the git runner (D45). Git is looked for once the window exists, and again on
+/// "Check again", and may not be found; services hold this instead of a runner and ask for the
+/// runner when they need it. The session's search goes through an <see cref="IGitSetupProbe"/>,
+/// told what the lookup function gives when each search starts. A search that starts while none
+/// runs swaps in a new pending <see cref="Detection"/>, so that a runner asked for meanwhile is the
+/// new search's; a call while one runs joins it.
 /// </summary>
 public sealed class GitAccess
 {
     /// <summary>What <see cref="GetRunnerAsync"/> says of a git that was found but does not work, and the settings screen of no git at all (docs/phase-6-design.md 7.4).</summary>
     public const string GitNotWorking = "Git is not working on this computer.";
+
+    /// <summary>What <see cref="GetRunnerAsync"/> says when no git was found.</summary>
+    public const string GitNotFound = "Git was not found on this computer.";
 
     private readonly IGitSetupProbe? _probe;
     private readonly Func<GitLookup>? _lookup;
@@ -21,12 +27,19 @@ public sealed class GitAccess
     private readonly IAppLog _log;
     private readonly TimeProvider? _recordClock;
     private readonly IReadOnlyDictionary<string, string?>? _environment;
+    private readonly Lock _gate = new();
 
-    /// <summary>The session's search, pending until the first <see cref="DetectAsync"/> has ended; null for a fixed search.</summary>
-    private readonly TaskCompletionSource<GitDetection>? _search;
+    /// <summary>The latest search's result, pending until it ends; a fixed search's task for the first constructor.</summary>
+    private Task<GitDetection> _detection;
 
-    /// <summary>1 once the session's search has started.</summary>
-    private int _started;
+    /// <summary>The session's search that runs now, which a call joins; null while none runs and for a fixed search.</summary>
+    private Task<GitDetection>? _running;
+
+    /// <summary>The pending result of the session's first search, made with the access so that <see cref="Detection"/> is there at once.</summary>
+    private TaskCompletionSource<GitDetection>? _first;
+
+    /// <summary>1 once the stand-in's warning was logged.</summary>
+    private int _standInWarned;
 
     private GitDetection? _known;
 
@@ -41,7 +54,7 @@ public sealed class GitAccess
     {
         ArgumentNullException.ThrowIfNull(detection);
         _log = NullAppLog.Instance;
-        Detection = detection;
+        _detection = detection;
         _ = detection.ContinueWith(
             ended => Ended(ended.IsCompletedSuccessfully ? ended.Result : null),
             CancellationToken.None,
@@ -51,7 +64,7 @@ public sealed class GitAccess
 
     /// <summary>
     /// The session's search: <paramref name="probe"/> looks for git with what
-    /// <paramref name="lookup"/> gives when the search starts, recording its calls in
+    /// <paramref name="lookup"/> gives when each search starts, recording its calls in
     /// <paramref name="callLog"/> with the times of <paramref name="recordClock"/>, and running them
     /// with the session's git environment <paramref name="environment"/>.
     /// </summary>
@@ -72,48 +85,83 @@ public sealed class GitAccess
         _log = log;
         _recordClock = recordClock;
         _environment = environment;
-        _search = new TaskCompletionSource<GitDetection>(TaskCreationOptions.RunContinuationsAsynchronously);
-        Detection = _search.Task;
+        _first = new TaskCompletionSource<GitDetection>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _detection = _first.Task;
     }
 
-    /// <summary>What was found when the app looked for git: pending until the search has ended.</summary>
-    public Task<GitDetection> Detection { get; }
+    /// <summary>What the latest search for git found: pending until it has ended.</summary>
+    public Task<GitDetection> Detection
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _detection;
+            }
+        }
+    }
 
-    /// <summary>What the search that ended found; null before it has ended, and when it failed or was cancelled.</summary>
+    /// <summary>What the last search that ended found; null before one has ended, and when the last failed or was cancelled.</summary>
     public GitDetection? Known => Volatile.Read(ref _known)
-        ?? (_search is null && Detection.IsCompletedSuccessfully ? Detection.Result : null);
+        ?? (_probe is null && Detection.IsCompletedSuccessfully ? Detection.Result : null);
 
     /// <summary>
-    /// Raised once the search has ended, however it ended, on the thread that ended it. A listener
+    /// Raised once each search has ended, however it ended, on the thread that ended it. A listener
     /// that throws is logged, and changes neither how the search ended nor what the other
     /// listeners hear.
     /// </summary>
     public event EventHandler? Changed;
 
     /// <summary>
-    /// Looks for git: the first call starts the search (<paramref name="cancellationToken"/> then
-    /// cancels it), and every later call answers with that search, waiting for it at most until its
-    /// own <paramref name="cancellationToken"/> is cancelled.
+    /// Looks for git: a call while no search runs starts one (<paramref name="cancellationToken"/>
+    /// then cancels it), first swapping in a new pending <see cref="Detection"/> after the first;
+    /// a call while one runs joins it, waiting for it at most until its own token is cancelled. A
+    /// fixed search answers with its task.
     /// </summary>
     public Task<GitDetection> DetectAsync(CancellationToken cancellationToken = default)
     {
-        if (_search is null || Interlocked.Exchange(ref _started, 1) == 1)
+        if (_probe is null)
         {
             return Detection.WaitAsync(cancellationToken);
         }
 
-        return SearchAsync(_search, cancellationToken);
+        TaskCompletionSource<GitDetection> search;
+        lock (_gate)
+        {
+            if (_running is { IsCompleted: false } running)
+            {
+                return running.WaitAsync(cancellationToken);
+            }
+
+            if (_first is { } first)
+            {
+                search = first;
+                _first = null;
+            }
+            else
+            {
+                search = new TaskCompletionSource<GitDetection>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _detection = search.Task;
+            }
+
+            _running = search.Task;
+        }
+
+        // Started outside the lock: a probe that answers at once ends the search, and tells its
+        // listeners, before this returns.
+        return SearchAsync(search, cancellationToken);
     }
 
-    /// <summary>Waits for the search for git to finish and returns the runner.</summary>
+    /// <summary>Waits for the latest search for git to finish and returns the runner.</summary>
     /// <exception cref="GitUnavailableException">No usable git was found.</exception>
     public async Task<IGitRunner> GetRunnerAsync(CancellationToken cancellationToken = default)
     {
         var detection = await Detection.WaitAsync(cancellationToken).ConfigureAwait(false);
-        return detection.Runner ?? throw new GitUnavailableException(detection.Availability switch
+        return detection.Runner ?? throw new GitUnavailableException(detection switch
         {
-            GitAvailability.NotFound => "Git was not found on this computer.",
-            GitAvailability.TooOld => $"Git {detection.Version} is too old; VisualCommit needs {GitVersion.Minimum} or newer.",
+            { Availability: GitAvailability.NotFound, ChosenMissing: { } chosen } => GitSetupTexts.ChosenNotUsed(chosen),
+            { Availability: GitAvailability.NotFound } => GitNotFound,
+            { Availability: GitAvailability.TooOld } => $"Git {detection.Version} is too old; VisualCommit needs {GitVersion.Minimum} or newer.",
             _ => GitNotWorking,
         });
     }
@@ -134,33 +182,37 @@ public sealed class GitAccess
     public GitGuidance ReadGuidance() => _probe?.ReadGuidance() ?? new GitGuidance(RunningPlatform, null, null);
 
     /// <summary>The platform this process runs on, as the guidance names it.</summary>
-    private static GuidancePlatform RunningPlatform =>
+    public static GuidancePlatform RunningPlatform =>
         OperatingSystem.IsWindows() ? GuidancePlatform.Windows
         : OperatingSystem.IsMacOS() ? GuidancePlatform.MacOS
         : GuidancePlatform.Linux;
 
     /// <summary>
-    /// Runs the session's search and hands its result, its cancellation or its failure to
+    /// Runs one search of the session and hands its result, its cancellation or its failure to
     /// <paramref name="search"/> as well as to the caller. It resumes where it was started (the
-    /// window's start-up, on the UI thread), so <see cref="Detection"/> ends there.
+    /// window's start-up or "Check again", on the UI thread), so <see cref="Detection"/> ends there.
     /// </summary>
     private async Task<GitDetection> SearchAsync(TaskCompletionSource<GitDetection> search, CancellationToken cancellationToken)
     {
         GitDetection? found = null;
         try
         {
-            found = await _probe!.DetectAsync(_lookup!(), _callLog, _log, _recordClock, _environment, cancellationToken);
+            var lookup = _lookup!();
+            WarnOfStandIn(lookup);
+            found = await _probe!.DetectAsync(lookup, _callLog, _log, _recordClock, _environment, cancellationToken);
             Volatile.Write(ref _known, found);
             search.TrySetResult(found);
             return found;
         }
         catch (OperationCanceledException)
         {
+            Volatile.Write(ref _known, null);
             search.TrySetCanceled(cancellationToken);
             throw;
         }
         catch (Exception ex)
         {
+            Volatile.Write(ref _known, null);
             search.TrySetException(ex);
             throw;
         }
@@ -168,6 +220,19 @@ public sealed class GitAccess
         {
             Ended(found);
         }
+    }
+
+    /// <summary>The stand-in's warning (a test switch), once, at the first search that is told of one.</summary>
+    private void WarnOfStandIn(GitLookup lookup)
+    {
+        if (lookup.StandIn is not { } standIn || Interlocked.Exchange(ref _standInWarned, 1) != 0)
+        {
+            return;
+        }
+
+        _log.Warning(GitLocator.IsRunnablePath(standIn)
+            ? $"{GitLocator.StandInVariable} is set (a test switch): unless Settings names a Git, Git is looked for only at {standIn}."
+            : $"{GitLocator.StandInVariable} is set (a test switch): unless Settings names a Git, this computer is treated as having no Git.");
     }
 
     /// <summary>

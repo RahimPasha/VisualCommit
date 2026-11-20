@@ -3,7 +3,15 @@ using Xunit;
 
 namespace VisualCommit.Git.Tests;
 
-public class GitLocatorTests
+/// <summary>
+/// The search for git: the PATH and the usual folders, and since phase 8a the lookup's order
+/// (docs/phase-8a-design.md 5.3, D423, D449): the git chosen in Settings, run whatever it answers
+/// and with no fallback; the stand-in; the PATH's fully qualified folders; macOS's rule for
+/// <c>/usr/bin/git</c>; what a git that does not work said. Every case but the real git's runs on a
+/// context of the test's own and the stand-in for git (<see cref="GitStandIn"/>), never on the
+/// machine's PATH.
+/// </summary>
+public partial class GitLocatorTests
 {
     private static GitSearchContext Windows(string? path, string[] wellKnown, params string[] existingFiles) =>
         new(true, path, wellKnown, file => existingFiles.Contains(file, StringComparer.OrdinalIgnoreCase));
@@ -14,9 +22,10 @@ public class GitLocatorTests
     [Fact]
     public void FindExecutable_returns_the_first_git_on_the_path()
     {
-        var first = Path.Combine("first", "git");
-        var second = Path.Combine("second", "git");
-        var context = Unix("empty:first:second", [], first, second);
+        // Full paths since D449: a relative entry is skipped (A_relative_path_entry_that_holds_git_is_skipped).
+        var first = Path.Combine("/first", "git");
+        var second = Path.Combine("/second", "git");
+        var context = Unix("/empty:/first:/second", [], first, second);
 
         Assert.Equal(first, GitLocator.FindExecutable(context));
     }
@@ -58,8 +67,8 @@ public class GitLocatorTests
     [Fact]
     public void FindExecutable_prefers_the_path_over_the_usual_install_locations()
     {
-        var onPath = Path.Combine("custom", "git");
-        var context = Unix("custom", ["/usr/bin/git"], onPath, "/usr/bin/git");
+        var onPath = Path.Combine("/custom", "git");
+        var context = Unix("/custom", ["/usr/bin/git"], onPath, "/usr/bin/git");
 
         Assert.Equal(onPath, GitLocator.FindExecutable(context));
     }

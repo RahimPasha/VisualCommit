@@ -3,6 +3,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core;
+using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
 using Texts = VisualCommit.App.ViewModels.Operations.OperationTexts.SettingsTexts;
@@ -25,6 +26,9 @@ public partial class MainWindowViewModel
 
     /// <summary>Whether <see cref="LookUpMergeToolsAfterAsync"/> has started the merge-tool lookup (8.10).</summary>
     private bool _mergeToolLookupStarted;
+
+    /// <summary>The Accounts section's netrc note was dismissed: it stays away for the session (D424).</summary>
+    private bool _netrcNoteDismissed;
 
     /// <summary>
     /// The toolbar's <c>SettingsButton</c>'s tooltip and help text (7.2, 6.8): <c>Open settings
@@ -57,6 +61,8 @@ public partial class MainWindowViewModel
         {
             var repository = ActiveTab is { IsDashboard: false, Repository: { Refs: not null, IsSummary: false } open } ? new RepositorySettingsTarget(open) : null;
             var tools = _tabServices.Tools ?? NoTools;
+            var gitSettings = _tabServices.GitSettings;
+            var chosenBefore = _settings.Current.GitExecutable;
             var dialog = new SettingsDialogViewModel(
                 new SettingsScreenServices(
                     _settings,
@@ -78,9 +84,19 @@ public partial class MainWindowViewModel
                     Identity = _tabServices.Identity,
                     Launcher = _tabServices.Launcher,
                     Clipboard = _tabServices.Clipboard,
+                    ProbeGit = _gitAccess is { } access ? access.ProbeAsync : null,
+                    HomeHasNetrc = _netrcNoteDismissed || gitSettings is null ? null : () => HomeHasNetrc(gitSettings),
+                    DismissNetrcNote = () => _netrcNoteDismissed = true,
                 },
                 section);
             await Dialogs.ShowAsync(dialog);
+
+            // A git chosen while git works is used from the next start (ruling 42); while it does
+            // not work, the change is looked for at once.
+            if (_settings.Current.GitExecutable != chosenBefore && Git is not { Availability: GitAvailability.Available })
+            {
+                await CheckGitAgainCommand.ExecuteAsync(null);
+            }
         }
         catch (Exception ex)
         {
@@ -90,6 +106,15 @@ public partial class MainWindowViewModel
 
     /// <summary>Called once from the constructor: the editor failure's "Open settings…" opens the screen through the window (12.7).</summary>
     private void WireSettings() => _tabServices.OpenSettings = ShowSettingsAsync;
+
+    /// <summary>
+    /// Whether the home folder git is given (<see cref="GitConfigLocations.Home"/> over git's
+    /// environment) holds a <c>.netrc</c> or <c>_netrc</c> file: only whether it exists, never what
+    /// it holds. Reads the disk, so the settings screen calls it off the UI thread.
+    /// </summary>
+    private static bool HomeHasNetrc(IGitConfiguration gitSettings) =>
+        GitConfigLocations.Home(gitSettings.Variable, Directory.Exists, OperatingSystem.IsWindows()) is { } home
+        && (File.Exists(Path.Combine(home, ".netrc")) || File.Exists(Path.Combine(home, "_netrc")));
 
     /// <summary>
     /// Starts the lookup of the merge tools git knows, once (8.10): when the first of
@@ -105,7 +130,20 @@ public partial class MainWindowViewModel
             await Task.WhenAny(openings);
         }
 
-        if (_mergeToolLookupStarted || _tabServices.Tools is not { } tools)
+        if (!_mergeToolLookupStarted)
+        {
+            StartMergeToolLookup();
+        }
+    }
+
+    /// <summary>
+    /// Starts the lookup of the merge tools git knows (8.10): the start-up's once, and again after
+    /// "Check again" found git, whose configuration forgot the lookup that ran without it. Its task
+    /// is dropped: a failure is logged.
+    /// </summary>
+    private void StartMergeToolLookup()
+    {
+        if (_tabServices.Tools is not { } tools)
         {
             return;
         }

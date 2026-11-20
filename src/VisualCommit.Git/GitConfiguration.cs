@@ -309,6 +309,22 @@ public sealed class GitConfiguration : IGitConfiguration, IDisposable
     }
 
     /// <summary>
+    /// Drops a merge-tool lookup that has ended, so that the next <see cref="ReadToolHelpAsync"/>
+    /// starts another and asks the git the session uses now (a git found again after it was
+    /// missing). A lookup that still runs is kept: its callers wait for it.
+    /// </summary>
+    public void ForgetToolLookup()
+    {
+        lock (_gate)
+        {
+            if (_toolLookup is { Run.IsCompleted: true })
+            {
+                _toolLookup = null;
+            }
+        }
+    }
+
+    /// <summary>
     /// Stops the merge tools' lookup (the app closes): a run that ends afterwards keeps nothing.
     /// Reads and writes keep working, but no longer make the data folder, which the ended session
     /// may have removed (a test's), so that nothing is written there after the session.

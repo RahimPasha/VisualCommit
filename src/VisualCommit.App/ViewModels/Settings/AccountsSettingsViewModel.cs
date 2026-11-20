@@ -1,5 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.GitSetup;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
 using VisualCommit.Core.Logging;
@@ -18,10 +20,19 @@ namespace VisualCommit.App.ViewModels.Settings;
 /// switches are settings: the screen's Save applies each changed one (<see cref="ApplySwitches"/>,
 /// D216), and Cancel and Esc drop them.
 /// </summary>
-public sealed class AccountsSettingsViewModel : ObservableObject, IDisposable
+public sealed partial class AccountsSettingsViewModel : ObservableObject, IDisposable
 {
     private readonly IHostingSession? _hosting;
+    private readonly GitVersion? _gitVersion;
+    private readonly Func<bool>? _homeHasNetrc;
+    private readonly Action? _dismissNetrcNote;
+    private readonly IAppLog _log;
     private bool _disposed;
+
+    /// <summary>What <see cref="ReadNetrcAsync"/> found: whether the home folder git is given holds a netrc file; null until it has read, and when it could not.</summary>
+    private bool? _homeHasNetrcFile;
+
+    private bool _netrcNoteDismissed;
 
     /// <param name="hosting">The session's hosting; null without one (all off).</param>
     /// <param name="signIn">The window's sign-in entry (10.5), which stacks the provider's dialog over the screen; null without one.</param>
@@ -30,13 +41,31 @@ public sealed class AccountsSettingsViewModel : ObservableObject, IDisposable
     /// <param name="gitVersion">
     /// The detected git's version, null when unknown. No block reads it: every git the app supports
     /// takes the account's credentials (D420), so the switch's note and the sign-out's question are
-    /// the provider's on every git.
+    /// the provider's on every git. The netrc note reads it: below 2.46 a netrc entry can answer
+    /// git's requests before the account (D424).
     /// </param>
-    public AccountsSettingsViewModel(IHostingSession? hosting, Func<HostingProvider, Task<bool>>? signIn, IDialogService dialogs, IAppLog log, GitVersion? gitVersion = null)
+    /// <param name="homeHasNetrc">
+    /// Whether the home folder git is given holds a <c>.netrc</c> or <c>_netrc</c> file, asked off the
+    /// UI thread when the screen opens (<see cref="ReadNetrcAsync"/>); null asks nothing and shows no
+    /// note (the note dismissed for the session, or no git configuration).
+    /// </param>
+    /// <param name="dismissNetrcNote">Tells the window that the note was dismissed, so that it stays away for the session; null for none.</param>
+    public AccountsSettingsViewModel(
+        IHostingSession? hosting,
+        Func<HostingProvider, Task<bool>>? signIn,
+        IDialogService dialogs,
+        IAppLog log,
+        GitVersion? gitVersion = null,
+        Func<bool>? homeHasNetrc = null,
+        Action? dismissNetrcNote = null)
     {
         ArgumentNullException.ThrowIfNull(dialogs);
         ArgumentNullException.ThrowIfNull(log);
         _hosting = hosting;
+        _gitVersion = gitVersion;
+        _homeHasNetrc = homeHasNetrc;
+        _dismissNetrcNote = dismissNetrcNote;
+        _log = log;
         Blocks = [.. HostingProviders.InAccountsOrder.Select(provider => new AccountBlockViewModel(hosting, provider, signIn, dialogs, log))];
         foreach (var block in Blocks)
         {
@@ -86,6 +115,55 @@ public sealed class AccountsSettingsViewModel : ObservableObject, IDisposable
     /// <summary>The block of <paramref name="provider"/>.</summary>
     public AccountBlockViewModel BlockOf(HostingProvider provider) => Blocks.First(block => block.Provider == provider);
 
+    /// <summary>
+    /// The netrc note (<c>AccountsNetrcNote</c>, D424) shows: an account is signed in with "Use for
+    /// git over HTTPS" saved on, the git found is older than 2.46, the home folder git is given
+    /// holds a <c>.netrc</c> or <c>_netrc</c> file, and the note was not dismissed this session.
+    /// </summary>
+    public bool ShowsNetrcNote =>
+        !_netrcNoteDismissed
+        && _homeHasNetrcFile == true
+        && _gitVersion is { } version && version < GitSetupTexts.NetrcSafeFrom
+        && _hosting is { } hosting
+        && HostingProviders.InAccountsOrder.Any(provider => hosting.AccountOf(provider) is { State: AccountState.SignedIn, Account.UseForGit: true });
+
+    /// <summary>The note's text, which names the git found; empty while it does not show.</summary>
+    public string NetrcNote => _gitVersion is { } version ? GitSetupTexts.NetrcNote(version) : string.Empty;
+
+    /// <summary>
+    /// Asks, off the UI thread, whether the home folder git is given holds a netrc file: one of the
+    /// screen's reads when it opens. Only whether the file exists, never what it holds. A failure
+    /// shows no note.
+    /// </summary>
+    public async Task ReadNetrcAsync()
+    {
+        if (_homeHasNetrc is not { } ask)
+        {
+            return;
+        }
+
+        try
+        {
+            _homeHasNetrcFile = await Task.Run(ask);
+        }
+        catch (Exception ex)
+        {
+            _log.Warning("Whether the home folder holds a netrc file could not be read.", ex);
+            _homeHasNetrcFile = null;
+        }
+
+        OnPropertyChanged(nameof(ShowsNetrcNote));
+    }
+
+    /// <summary>The note's Dismiss: gone, and away for the session; nothing is written.</summary>
+    [RelayCommand]
+    private void DismissNetrcNote()
+    {
+        _netrcNoteDismissed = true;
+        _dismissNetrcNote?.Invoke();
+        OnPropertyChanged(nameof(ShowsNetrcNote));
+    }
+
     /// <summary>The screen's Save (D216): each changed switch, one <see cref="IHostingSession.SetUseForGit(HostingProvider, bool)"/> per block, which the session writes off the UI thread.</summary>
     public void ApplySwitches()
     {
@@ -126,5 +204,8 @@ public sealed class AccountsSettingsViewModel : ObservableObject, IDisposable
         {
             block.Follow(_hosting?.AccountOf(e.Provider));
         }
+
+        // A sign-in, a sign-out or a saved switch can show or hide the netrc note.
+        OnPropertyChanged(nameof(ShowsNetrcNote));
     }
 }

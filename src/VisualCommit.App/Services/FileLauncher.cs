@@ -4,6 +4,7 @@ using System.Text;
 using Avalonia.Controls;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using VisualCommit.Core;
 using VisualCommit.Core.Logging;
 
 namespace VisualCommit.App.Services;
@@ -251,32 +252,57 @@ public sealed class FileLauncher : IFileLauncher
     }
 
     /// <summary>
-    /// The absolute path of <paramref name="program"/> in the first folder of
-    /// <paramref name="searchPath"/> (a PATH value, folders split by <paramref name="separator"/>)
-    /// that holds it, or null. Only fully qualified folders are searched: an empty or relative
-    /// entry would name the current folder, which can be a cloned repository that holds a file of
-    /// that name. Started by its bare name, .NET would also look in the app's folder and the
-    /// current folder first, before PATH (on Linux and macOS).
+    /// The absolute path of <paramref name="program"/> in the first fully qualified folder of
+    /// <paramref name="searchPath"/> that holds it, or null: <see cref="ProgramSearch.FindOnPath"/>,
+    /// which the search for git shares.
     /// </summary>
-    public static string? FindOnPath(string program, string? searchPath, char separator, Func<string, bool> fileExists)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(program);
-        ArgumentNullException.ThrowIfNull(fileExists);
-        foreach (var folder in (searchPath ?? string.Empty).Split(separator, StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
-        {
-            if (!Path.IsPathFullyQualified(folder))
-            {
-                continue;
-            }
+    public static string? FindOnPath(string program, string? searchPath, char separator, Func<string, bool> fileExists) =>
+        ProgramSearch.FindOnPath(program, searchPath, separator, fileExists);
 
-            var candidate = Path.Combine(folder, program);
-            if (fileExists(candidate))
+    /// <summary>
+    /// Starts <paramref name="command"/>'s program off the UI thread, not waited for, from the
+    /// program <see cref="ResolveStart"/> names over this process's <c>PATH</c> and the system
+    /// folder; its process object is disposed at once. Throws <see cref="FileNotFoundException"/>
+    /// when a bare name is not found, and the start's own exception when it cannot start. The caller
+    /// logs the start, so that a harness's fake launcher, which starts nothing, logs it the same way.
+    /// </summary>
+    public Task StartAsync(LaunchCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        return Task.Run(
+            () =>
             {
-                return candidate;
-            }
+                var resolved = ResolveStart(
+                    command,
+                    program => FindOnPath(program, Environment.GetEnvironmentVariable("PATH"), Path.PathSeparator, File.Exists),
+                    Environment.SystemDirectory);
+                using var process = Process.Start(resolved.ToStartInfo())
+                    ?? throw new InvalidOperationException($"{resolved.FileName} did not start.");
+            },
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The command <see cref="StartAsync"/> starts, with its program named by a full path:
+    /// <c>cmd.exe</c> from <paramref name="systemFolder"/>, any other bare name through
+    /// <paramref name="findOnPath"/>, and a full path kept as it is. A bare name that is not found
+    /// throws <see cref="FileNotFoundException"/>, before anything starts. Reads nothing itself.
+    /// </summary>
+    public static LaunchCommand ResolveStart(LaunchCommand command, Func<string, string?> findOnPath, string systemFolder)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        ArgumentNullException.ThrowIfNull(findOnPath);
+        ArgumentNullException.ThrowIfNull(systemFolder);
+        if (Path.IsPathFullyQualified(command.FileName))
+        {
+            return command;
         }
 
-        return null;
+        // cmd.exe given a bare name would look in its current folder first: the system's own is named.
+        var program = string.Equals(command.FileName, "cmd.exe", StringComparison.OrdinalIgnoreCase)
+            ? Path.Combine(systemFolder, "cmd.exe")
+            : findOnPath(command.FileName) ?? throw new FileNotFoundException($"{command.FileName} is not on the PATH.", command.FileName);
+        return command with { FileName = program };
     }
 
     /// <summary>
@@ -446,14 +472,19 @@ public sealed record LaunchCommand(string FileName, IReadOnlyList<string> Argume
         ? $"{FileName} {CommandLine}"
         : string.Join(' ', [FileName, .. Arguments.Select(argument => argument.Length == 0 || argument.Contains(' ', StringComparison.Ordinal) ? $"\"{argument}\"" : argument)]);
 
-    /// <summary>The process to start: no shell, the output read when the command is waited for.</summary>
+    /// <summary>
+    /// The process to start: no shell, the output read when the command is waited for. On Windows a
+    /// command <see cref="InNewTerminal"/> starts through the shell, so that it gets a console window
+    /// of its own, and redirects nothing.
+    /// </summary>
     public ProcessStartInfo ToStartInfo()
     {
+        var throughShell = InNewTerminal && OperatingSystem.IsWindows();
         var startInfo = new ProcessStartInfo(FileName)
         {
-            UseShellExecute = false,
-            RedirectStandardOutput = FallBackOnFailure,
-            RedirectStandardError = FallBackOnFailure,
+            UseShellExecute = throughShell,
+            RedirectStandardOutput = FallBackOnFailure && !throughShell,
+            RedirectStandardError = FallBackOnFailure && !throughShell,
         };
 
         if (CommandLine is not null)
@@ -473,7 +504,8 @@ public sealed record LaunchCommand(string FileName, IReadOnlyList<string> Argume
             startInfo.WorkingDirectory = WorkingDirectory;
         }
 
-        foreach (var variable in RemovedVariables)
+        // A start through the shell takes no environment: touching it would make the start throw.
+        foreach (var variable in throughShell ? [] : RemovedVariables)
         {
             // The environment's keys ignore case on Windows, as the process's do.
             foreach (var key in startInfo.Environment.Keys.Where(key => string.Equals(key, variable, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)).ToList())
