@@ -3,8 +3,14 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using Avalonia.Styling;
+using Avalonia.Threading;
 using VisualCommit.App.Services;
+using VisualCommit.App.ViewModels;
+using VisualCommit.App.Views;
 using VisualCommit.Core;
+using VisualCommit.Core.Git;
+using VisualCommit.Core.Settings;
 
 namespace VisualCommit.App;
 
@@ -33,12 +39,90 @@ public partial class App : Application
         // lifetime; they call AppSession.Start themselves with a temporary data folder.
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var session = AppSession.Start(AppPaths.Resolve(), this, startup: AppLaunch.Current.Timeline);
-            desktop.MainWindow = session.MainWindow;
-            desktop.Exit += (_, _) => session.Dispose();
+            var launch = AppLaunch.Current;
+            if (launch is { Mode: AppStartMode.NotAnswered, Guard: { } guard })
+            {
+                ShowNotice(desktop, launch, guard);
+            }
+            else
+            {
+                desktop.MainWindow = StartSession(desktop, launch);
+            }
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    /// <summary>
+    /// Starts the session and hands its main window back; the guard, when there is one, answers a
+    /// second start from the window's opening on (brought forward on the UI thread) and, once the
+    /// window has closed, says the app is ending. No dispatch while the dispatcher stops.
+    /// </summary>
+    private MainWindow StartSession(IClassicDesktopStyleApplicationLifetime desktop, AppLaunch launch)
+    {
+        var session = AppSession.Start(AppPaths.Resolve(), this, startup: launch.Timeline);
+        desktop.Exit += (_, _) => session.Dispose();
+        var window = session.MainWindow;
+        if (launch.Guard is { } guard)
+        {
+            window.Opened += (_, _) => guard.ComeForward =
+                () => Dispatcher.UIThread.InvokeAsync(window.BringForward).GetTask().GetAwaiter().GetResult();
+            window.Closed += (_, _) => guard.ComeForward = () => ForwardAnswer.Closing;
+        }
+
+        return window;
+    }
+
+    /// <summary>
+    /// Another VisualCommit holds the data folder and did not answer (D421): the notice alone, as the
+    /// main window, with no session and nothing written. The lifetime waits for an explicit end, so
+    /// that it outlives the notice when "Try again" finds the folder free and starts the session in
+    /// this process (D422). The exit code stays 2 until a try hands over or starts here. The notice's
+    /// theme is the saved one, read without writing; System is the platform's mode now.
+    /// </summary>
+    private void ShowNotice(IClassicDesktopStyleApplicationLifetime desktop, AppLaunch launch, SingleInstanceGuard guard)
+    {
+        desktop.ShutdownMode = ShutdownMode.OnExplicitShutdown;
+        launch.ExitCode = 2;
+        var paths = AppPaths.Resolve();
+        var platform = OperatingSystem.IsWindows() ? GuidancePlatform.Windows
+            : OperatingSystem.IsMacOS() ? GuidancePlatform.MacOS
+            : GuidancePlatform.Linux;
+        var notice = new InstanceNoticeViewModel(platform, paths.DataDirectory, () => Task.Run(() => InstanceNoticeViewModel.RetryOn(guard)));
+        var dark = InstanceNoticeViewModel.ReadTheme(paths.SettingsFile) switch
+        {
+            AppTheme.Light => false,
+            AppTheme.System => PlatformSystemTheme.IsDarkIn(PlatformSettings?.GetColorValues()),
+            _ => true,
+        };
+        var window = new InstanceNoticeWindow
+        {
+            DataContext = notice,
+            RequestedThemeVariant = dark ? ThemeVariant.Dark : ThemeVariant.Light,
+        };
+
+        // On the UI thread; the window closes itself after this, once the notice has ended.
+        notice.Finished += (_, outcome) =>
+        {
+            switch (outcome)
+            {
+                case NoticeOutcome.StartHere:
+                    var main = StartSession(desktop, launch);
+                    desktop.MainWindow = main;
+                    main.Show();
+                    desktop.ShutdownMode = ShutdownMode.OnLastWindowClose;
+                    launch.ExitCode = 0;
+                    break;
+                case NoticeOutcome.HandedOver:
+                    launch.ExitCode = 0;
+                    desktop.Shutdown(launch.ExitCode);
+                    break;
+                default:
+                    desktop.Shutdown(launch.ExitCode);
+                    break;
+            }
+        };
+        desktop.MainWindow = window;
     }
 
     private static void UseOverlayLayerForToolTip(Control control, RoutedEventArgs e)

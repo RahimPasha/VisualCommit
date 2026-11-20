@@ -28,7 +28,7 @@ public sealed class AppLaunch
 
     /// <summary>
     /// What <c>Program.Main</c> returns once the app has ended: 2 while the notice shows and after
-    /// it closes unanswered (ruling 67); 0 after a hand-over to the other instance or a start in
+    /// it closes unanswered (D421); 0 after a hand-over to the other instance or a start in
     /// this process.
     /// </summary>
     public int ExitCode { get; set; }

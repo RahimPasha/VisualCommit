@@ -29,7 +29,7 @@ public enum NoticeOutcome
     /// <summary>The folder was free: the session starts in this process (D422).</summary>
     StartHere,
 
-    /// <summary>"Close", Esc, the title bar's close or Alt+F4; this process ends with exit code 2 (ruling 67).</summary>
+    /// <summary>"Close", Esc, the title bar's close or Alt+F4; this process ends with exit code 2 (D421).</summary>
     Closed,
 }
 
