@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using System.IO.Pipes;
+using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -396,8 +397,10 @@ public sealed partial class SingleInstanceGuard : IDisposable
 
                 Thread.Sleep(FirstOpenPause);
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
+            catch (Exception ex)
             {
+                // Whatever else stops the open (no access, a path under a file, a name the system
+                // refuses): the app starts as before, since the guard must never stop it.
                 Outcome = GuardOutcome.Unavailable;
                 _log.Warning($"The data folder {Folder} could not be locked against a second VisualCommit ({ex.Message}); this one starts without that guard.");
                 return;
@@ -433,7 +436,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
         {
             first = NewServer(_endpoint);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException or ArgumentException)
+        catch (Exception ex) when (ex is IOException or SocketException or UnauthorizedAccessException or PlatformNotSupportedException or ArgumentException)
         {
             // The guard stays Taken: a second start then gets the notice, not a second session.
             _log.Warning($"The single-instance endpoint could not be opened ({ex.Message}): a second start on this data folder will be told that this one did not answer.");
@@ -526,7 +529,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
                 {
                     return;
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ObjectDisposedException or InvalidOperationException or OperationCanceledException)
+                catch (Exception ex) when (ex is IOException or SocketException or UnauthorizedAccessException or ObjectDisposedException or InvalidOperationException or OperationCanceledException)
                 {
                     // Dropped unanswered: the client went, broke the pipe or is not the current user.
                 }
@@ -541,7 +544,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
                 {
                     next = NewServer(_endpoint!);
                 }
-                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException or ArgumentException)
+                catch (Exception ex) when (ex is IOException or SocketException or UnauthorizedAccessException or PlatformNotSupportedException or ArgumentException)
                 {
                     _log.Warning($"The single-instance endpoint could not be opened ({ex.Message}): a second start on this data folder will be told that this one did not answer.");
                     return;
@@ -586,6 +589,26 @@ public sealed partial class SingleInstanceGuard : IDisposable
         await server.WriteAsync(AnswerJson(word), send.Token).ConfigureAwait(false);
         await server.FlushAsync(send.Token).ConfigureAwait(false);
         _log.Info($"A second VisualCommit (process {pid}) started on this data folder: answered {word}.");
+
+        // The asker hangs up once it has read the answer; until then, within the same time, the
+        // connection stays open, so that closing it can never drop an answer not yet read.
+        await DrainAsync(server, send.Token).ConfigureAwait(false);
+    }
+
+    /// <summary>Reads and drops whatever comes until the other side ends the connection or the token is cancelled.</summary>
+    private static async Task DrainAsync(Stream stream, CancellationToken token)
+    {
+        var buffer = new byte[256];
+        try
+        {
+            while (await stream.ReadAsync(buffer, token).ConfigureAwait(false) > 0)
+            {
+            }
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or SocketException or ObjectDisposedException)
+        {
+            // Hung up, broken, or out of time: the connection ends either way.
+        }
     }
 
     /// <summary>
@@ -624,7 +647,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
             client.Connect((int)AttemptPause.TotalMilliseconds);
             return client;
         }
-        catch (Exception ex) when (ex is TimeoutException or IOException or UnauthorizedAccessException or ArgumentException or PlatformNotSupportedException or InvalidOperationException)
+        catch (Exception ex) when (ex is TimeoutException or IOException or SocketException or UnauthorizedAccessException or ArgumentException or PlatformNotSupportedException or InvalidOperationException)
         {
             client.Dispose();
             return null;
@@ -642,7 +665,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
             connection.FlushAsync(reply.Token).GetAwaiter().GetResult();
             line = ReadLineAsync(connection, reply.Token).GetAwaiter().GetResult();
         }
-        catch (Exception ex) when (ex is IOException or OperationCanceledException or ObjectDisposedException or InvalidOperationException)
+        catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or ObjectDisposedException or InvalidOperationException)
         {
             line = null;
         }
@@ -696,7 +719,7 @@ public sealed partial class SingleInstanceGuard : IDisposable
                 }
             }
         }
-        catch (Exception ex) when (ex is OperationCanceledException or IOException or ObjectDisposedException)
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or SocketException or ObjectDisposedException)
         {
             return null;
         }
