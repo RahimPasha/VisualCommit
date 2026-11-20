@@ -186,18 +186,25 @@ Wave 1:
   with phase 7b's references: 326 changed pictures, 304 inside their expected regions, 22 outside,
   each explained (caret blinks, progress bars, temporary names, placeholders the scan cannot see).
   The comparison of the whole run is step 8's.
-- [ ] 6. §3, the git floor (D406, D420): the worktree check before a fast-forward on every git,
+- [x] 6. §3, the git floor (D406, D420): the worktree check before a fast-forward on every git,
   the stash names below 2.36, the branches the floor makes dead removed; CI's floor job green, and
   in that commit `GitVersion.Minimum` 2.34.1 with the "too old" texts, `continue-on-error`
   removed, `requirements.md`, the README and CLAUDE.md's prerequisites.
-  Under way: the package is merged (2026-11-20, `a63390c`; `wip/p8a-floor`, two commits, 33
-  files; its review found no major), and the lead removed the broker's `gitVersion` at the merge
-  (D420). Nothing of it is proven on git 2.34.1 yet: the laptop runs 2.56. Round 1 is CI's floor
-  job on the push of the three merges; it decides the rewritten stash ids, 2.34's refusal of
-  `zdiff3`, phase 5's U18 from its undo's stash on, and whatever the 20 failing tests hid. Each
-  round's fixes are read on that job; the commit that makes it green moves `Minimum`, removes
-  `continue-on-error` and changes the docs (design 3.8; the builder's exact list is in
-  `D:/Projects/Personal/phase8-work/wave1/for-the-lead.md`).
+  Done 2026-11-20. The package was merged in `a63390c` (`wip/p8a-floor`, two commits, 33 files;
+  its review found no major), and the lead removed the broker's `gitVersion` at the merge (D420).
+  **CI's floor job passed on its first round**: run 44727459663, on the three merges (`d63c012`),
+  7,989 tests on git 2.34.1 with 3 skipped and none failed, in a Test step of 7 min 6 s; before
+  the package it failed 20. So the rewritten stash ids, 2.34's refusal of `zdiff3`, phase 5's U18
+  from its undo's stash on and the fast-forward's worktree read all hold on 2.34.1, and the 20
+  tests hid no further assertion. The lead's commit after it moves `GitVersion.Minimum` to 2.34.1
+  (with `GitVersionTests` and `MainWindowViewModelTests`' "too old" text), removes the floor job's
+  `continue-on-error`, so that its failure fails the run from now on, and changes
+  `requirements.md`, the README, CLAUDE.md's prerequisites and plan.md's line; on that tree
+  `dotnet build` has no warning, and `GitVersionTests`, `GitLocatorTests`, `GitSetupStatesTests`
+  (36 of 36), `MainWindowViewModelTests`, `GitRepositoryProviderTests`, `GitAccessTests` and
+  `StatusBarTests` (28 of 28) pass. No fixer's round was needed. Still to read, in the macOS job's
+  pictures: phase 5's `a2d-show-reads`, which should show the second `rev-parse` call with
+  `--path-format=absolute` (design 3.6).
 - [x] 7. §4, one instance per data folder (D421, D422, D448), part I, and the macOS data folder's
   test in CI's macOS job.
   Merged on 2026-11-20 in `b70abdb` (`wip/p8a-single`, seven commits, 19 files): the guard with
@@ -507,14 +514,14 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: step 8, wave 1's close, and step 6's rounds on CI's floor job. The three packages are
-merged and pushed. In this order: (1) read CI's run for that push: the five regular jobs, the
-Windows job's build of the real-window project, the macOS job's `AppPathsTests`, and the floor
-job's round 1; a fixer then corrects what the floor job shows, the lead pushes, and so on until
-that job has no failure, when the lead's commit moves `GitVersion.Minimum` to 2.34.1, removes the
-job's `continue-on-error` and changes requirements.md, the README and CLAUDE.md (design 3.8). (2)
-With no agent at work: the whole default run through `bash scripts/heavy-run.sh` (about 1 h 50
-min), then the lagged list of design 0.4, one command at a time. (3) §2's comparison: `python -I
+Next: step 8, wave 1's close. Steps 5 to 7 are done: the three packages are merged, CI's floor
+job passed on git 2.34.1 at its first round, and the lead's commit after it moves the minimum to
+2.34.1 and makes that job required. In this order: (1) read CI's runs: the one on the merges
+(44727459663: the Windows job's build of the real-window project, the macOS job's `AppPathsTests`
+and its `a2d-show-reads` picture) and the one on the commit that moves the minimum, in every job.
+(2) With no agent at work: the whole default run through `bash scripts/heavy-run.sh` (about 1 h
+50 min; its log is `D:/Projects/Personal/phase8-work/wave1/default-run-wave1.log`), then the
+lagged list of design 0.4, one command at a time. (3) §2's comparison: `python -I
 scripts/scan-contrast.py D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual <out> --jobs
 4` (its lists must equal `docs/test-reports/phase-8a-contrast/`'s), then `python
 scripts/compare-pictures.py <the same references> artifacts/visual <out> --expected
@@ -543,7 +550,7 @@ every commit.
   of the prompt broker and the credentials 265 of 265; `PromptDialogsTests`, `ThemeTokensTests`,
   `SingleInstanceGuardTests` and `AppSessionTests` 54 of 54. The worktrees
   `D:/Projects/Personal/vc-wt/p8a-colours`, `p8a-floor` and `p8a-single` and their `wip` branches
-  are kept until the floor job is green (a fixer works on from them or from the phase branch).
+  were kept for the floor's rounds; the floor job is green, so they can go at the wave's close.
   Each builder's and fixer's notes for the lead, in full, are in
   `D:/Projects/Personal/phase8-work/wave1/for-the-lead.md`. Still the lead's from them, at the
   close unless named: architecture.md (the tokens' table; the fast-forward's worktree read; the

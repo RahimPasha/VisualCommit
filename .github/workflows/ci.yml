@@ -197,12 +197,10 @@ jobs:
   # The oldest git the release supports (D406). Stock Ubuntu 22.04 carries git 2.34.1, which no
   # other job and no development machine runs: until this job, nothing below 2.43 had run the
   # tests. It is the bare container's job on that image, with the SDK from Microsoft's installer
-  # (22.04's package servers have no .NET 10). Until phase 8a's step 5 has fixed what it finds,
-  # a failure here does not fail the run (continue-on-error); the job's own result still shows it.
+  # (22.04's package servers have no .NET 10).
   git-floor-container:
     name: ubuntu 22.04 container, git 2.34 (the floor)
     runs-on: ubuntu-latest
-    continue-on-error: true
     container:
       image: ubuntu:22.04
       options: --cap-add=IPC_LOCK

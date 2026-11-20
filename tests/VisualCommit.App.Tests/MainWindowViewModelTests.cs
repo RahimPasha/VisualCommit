@@ -213,7 +213,7 @@ public class MainWindowViewModelTests
 
         await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
 
-        Assert.Equal("Git 2.20.5 is too old (needs 2.30.0 or newer)", viewModel.GitStatusText);
+        Assert.Equal("Git 2.20.5 is too old (needs 2.34.1 or newer)", viewModel.GitStatusText);
     }
 
     [Fact]

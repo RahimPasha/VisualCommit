@@ -6,8 +6,12 @@ namespace VisualCommit.Core.Git;
 /// <summary>The version of a git executable, as reported by <c>git --version</c>.</summary>
 public readonly partial record struct GitVersion(int Major, int Minor, int Patch) : IComparable<GitVersion>
 {
-    /// <summary>The oldest git the app works with (decision D2).</summary>
-    public static GitVersion Minimum { get; } = new(2, 30, 0);
+    /// <summary>
+    /// The oldest git the app works with (D2, D406, D420): 2.34.1, the version CI's floor job tests,
+    /// which reverts 2.34.0's fault in <c>.gitignore</c>'s directory patterns that the ignored-files
+    /// guards rely on.
+    /// </summary>
+    public static GitVersion Minimum { get; } = new(2, 34, 1);
 
     public bool IsSupported => this >= Minimum;
 

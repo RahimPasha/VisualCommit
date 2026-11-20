@@ -41,14 +41,15 @@ public class GitVersionTests
     }
 
     [Theory]
-    [InlineData(2, 30, 0, true)]
+    [InlineData(2, 34, 1, true)]
     [InlineData(2, 36, 0, true)]
     [InlineData(3, 0, 0, true)]
-    [InlineData(2, 29, 9, false)]
+    [InlineData(2, 34, 0, false)]
+    [InlineData(2, 30, 0, false)]
     [InlineData(1, 99, 0, false)]
     public void IsSupported_is_true_from_the_minimum_version_up(int major, int minor, int patch, bool expected)
     {
-        Assert.Equal(new GitVersion(2, 30, 0), GitVersion.Minimum);
+        Assert.Equal(new GitVersion(2, 34, 1), GitVersion.Minimum);
         Assert.Equal(expected, new GitVersion(major, minor, patch).IsSupported);
     }
 

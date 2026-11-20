@@ -18,7 +18,7 @@ It does not need to copy GitKraken exactly; where it differs, it should be bette
 | Audience | Public release in the future |
 | UI | Avalonia (all C#), MVVM |
 | Runtime | .NET 10 (LTS) |
-| Git engine | The real `git` executable, driven by the app and never bundled with it (D405). Minimum Git 2.34 from phase 8a (D406); 2.30 in the code until then |
+| Git engine | The real `git` executable, driven by the app and never bundled with it (D405). Minimum Git 2.34.1 (D406, D420), the version CI's floor job runs the tests on |
 | Hosting providers | GitHub (github.com; Enterprise Server in the backlog, D258), Azure DevOps (Azure DevOps Services: dev.azure.com and `<organization>.visualstudio.com`; Azure DevOps Server in the backlog, D347), GitLab (gitlab.com; self-managed GitLab in the backlog, D347) |
 | Accounts / telemetry | None. Everything stays on the user's machine |
 

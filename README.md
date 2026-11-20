@@ -37,7 +37,7 @@ what each phase adds.
 
 ## Build and run
 
-You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and Git 2.30 or newer. On an
+You need the [.NET 10 SDK](https://dotnet.microsoft.com/download) and Git 2.34.1 or newer. On an
 Ubuntu or Debian machine that lacks them, `bash scripts/setup-linux.sh` installs them together
 with the system libraries the tests use.
 
@@ -52,8 +52,8 @@ a headless window; it saves screenshots under `artifacts/visual/`. It does not o
 does not touch your settings or your keychain, and local fakes stand in for GitHub, GitLab and
 Azure DevOps. It takes about 1 h 30 min on the development laptop, with at most four test projects at once
 (`bash scripts/heavy-run.sh`, see CLAUDE.md), and the first run builds a 100,000-commit
-test repository in the temporary folder, which later runs reuse. The tests need Git 2.32 or
-newer. All commands, including the Windows-only real-window test pass, are
+test repository in the temporary folder, which later runs reuse. The tests need Git 2.34.1
+or newer, as the app does. All commands, including the Windows-only real-window test pass, are
 listed in [CLAUDE.md](CLAUDE.md#commands).
 
 Windows is developed and tested first. macOS and Linux are built and tested by CI on every push

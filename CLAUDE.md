@@ -524,8 +524,8 @@ What to know about them:
 - CI has six jobs: one each for Windows, macOS and Linux, two named "bare ubuntu
   container", one for each way the set-up script has of getting the .NET SDK, and, since phase
   8a, one named "ubuntu 22.04 container, git 2.34 (the floor)", which runs the default tests on
-  the oldest git the release supports (D406). Until phase 8a's step 6 (the floor's package) has fixed what that job
-  finds, its failure does not fail the run (`continue-on-error`), so read its own result. A push
+  the oldest git the release supports (D406, D420). Its failure fails the run like any other job's (it ran
+  green first on 2026-11-20, run 44727459663, 7,989 tests on git 2.34.1). A push
   that changes only docs does not start a run.
 - `gh run list` shows the duration of a run's latest attempt only. Each job's time comes from
   `gh run view <run id>`, or from the jobs API (`curl` above), whose `steps` also give each step's
@@ -533,12 +533,12 @@ What to know about them:
 - In Windows PowerShell write `curl.exe` for the two `curl` commands: plain `curl` is a
   different command there.
 
-Prerequisites on any machine: .NET 10 SDK, Git 2.30 or newer (the app's minimum; the tests need
-2.32 or newer, which can leave out the user's git configuration), and a way to read CI results: the
+Prerequisites on any machine: .NET 10 SDK, Git 2.34.1 or newer (the app's minimum since phase 8a
+and the tests', D420), and a way to read CI results: the
 GitHub CLI (`gh`), signed in, or `curl`. `scripts/setup-linux.sh` installs what a Linux machine
 lacks. The Windows development machine runs Git 2.56.0.windows.4 since 2026-10-28, first on
 `PATH` (`C:/Program Files/Git/ucrt64/bin/git.exe` in Git Bash, `C:\Program Files\Git\cmd\git.exe`
-from PowerShell, the same version), where it ran 2.36 before; CI runs 2.43 to 2.56,
+from PowerShell, the same version), where it ran 2.36 before; CI runs 2.34.1 (the floor's job) and 2.43 to 2.56,
 so no machine runs 2.36 any more (D248).
 
 ## Docs map
