@@ -49,7 +49,10 @@ public sealed partial class Phase5ChecksP
             var button = await app.RefRowAsync("Local branches", branch);
             var name = button.GetVisualDescendants().OfType<TextBlock>().Single(block => block.Name == "RefName");
             var colour = (name.Foreground as ISolidColorBrush)?.Color;
-            var expected = branch == head ? palette.Accent : palette.TextPrimary;
+
+            // HEAD's name takes the row's accent while its row is hovered or selected (D418).
+            var accent = button.IsPointerOver || button.Classes.Contains("selected") ? palette.AccentOnRow : palette.Accent;
+            var expected = branch == head ? accent : palette.TextPrimary;
             Assert.True(colour == expected, $"Local branches › {branch} is drawn in {colour}, expected {expected}.");
         }
 

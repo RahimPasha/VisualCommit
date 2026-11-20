@@ -338,13 +338,16 @@ public sealed partial class Phase5ChecksF : Phase5Checks
         Assert.NotEqual(palette.SearchMatch, shot.PixelAt(at.X + 2, at.Y));
     }
 
-    /// <summary>The box shows its placeholder <paramref name="text"/> in the secondary colour while it is empty.</summary>
+    /// <summary>
+    /// The box shows its placeholder <paramref name="text"/> while it is empty, in the placeholder's
+    /// own token (the contrast round, D418; the secondary colour before it).
+    /// </summary>
     private static void AssertPlaceholderShown(ShellDriver app, string text, Palette palette)
     {
         var box = (TextBox)app.FindByAutomationId("SearchBox");
         var placeholder = TextsIn(box);
         Assert.Contains(text, placeholder);
         var block = box.GetVisualDescendants().OfType<TextBlock>().First(candidate => candidate.Text == text && candidate.IsEffectivelyVisible);
-        Assert.Equal(palette.TextSecondary, (block.Foreground as ISolidColorBrush)?.Color);
+        Assert.Equal(palette.TextPlaceholder, (block.Foreground as ISolidColorBrush)?.Color);
     }
 }
