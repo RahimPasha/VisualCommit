@@ -5,6 +5,7 @@
     <AssemblyName>VisualCommit</AssemblyName>
     <RootNamespace>VisualCommit.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Icon\VisualCommit.ico</ApplicationIcon>
     <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
 
@@ -22,6 +23,10 @@
   <ItemGroup>
     <!-- JetBrains Mono NL, the typeface of code in the diff view (D64; OFL, see THIRD-PARTY-NOTICES.md). -->
     <AvaloniaResource Include="Assets\Fonts\**" />
+    <!-- The app's icon (D407): the .ico of the windows and the executable, and the mark at 48 and
+         96 pixels. Made from the SVG masters in assets/brand/ by tools/VisualCommit.IconBuilder,
+         never by hand; run it again after a master changes and commit what it writes. -->
+    <AvaloniaResource Include="Assets\Icon\**" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,0 +1,33 @@
+{
+  "v": 1,
+  "renderer": "Svg.Skia 4.9.1, SkiaSharp 3.119.4",
+  "masters": {
+    "icon.svg": "126fb741748adcceae2a03fed1eef5e4493c1b7bb5aa8ab88b63a0c1004432d6",
+    "icon-small.svg": "aca03c288b02daf043869b6526e4e4c60abf3e21164e9f8b69c0b2d4fe8dc710",
+    "icon-macos.svg": "d80d44152a2641329cf999b16e7aad4f289587f5882a699593388f379dcf1e30"
+  },
+  "files": {
+    "src/VisualCommit.App/Assets/Icon/VisualCommit.ico": [16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256],
+    "src/VisualCommit.App/Assets/Icon/VisualCommit-48.png": [48],
+    "src/VisualCommit.App/Assets/Icon/VisualCommit-96.png": [96],
+    "assets/brand/generated/png/icon-16.png": [16],
+    "assets/brand/generated/png/icon-24.png": [24],
+    "assets/brand/generated/png/icon-32.png": [32],
+    "assets/brand/generated/png/icon-48.png": [48],
+    "assets/brand/generated/png/icon-64.png": [64],
+    "assets/brand/generated/png/icon-128.png": [128],
+    "assets/brand/generated/png/icon-256.png": [256],
+    "assets/brand/generated/png/icon-512.png": [512],
+    "assets/brand/generated/VisualCommit.iconset/icon_16x16.png": [16],
+    "assets/brand/generated/VisualCommit.iconset/icon_16x16@2x.png": [32],
+    "assets/brand/generated/VisualCommit.iconset/icon_32x32.png": [32],
+    "assets/brand/generated/VisualCommit.iconset/icon_32x32@2x.png": [64],
+    "assets/brand/generated/VisualCommit.iconset/icon_128x128.png": [128],
+    "assets/brand/generated/VisualCommit.iconset/icon_128x128@2x.png": [256],
+    "assets/brand/generated/VisualCommit.iconset/icon_256x256.png": [256],
+    "assets/brand/generated/VisualCommit.iconset/icon_256x256@2x.png": [512],
+    "assets/brand/generated/VisualCommit.iconset/icon_512x512.png": [512],
+    "assets/brand/generated/VisualCommit.iconset/icon_512x512@2x.png": [1024],
+    "assets/brand/generated/VisualCommit.icns": [16, 32, 32, 64, 128, 256, 256, 512, 512, 1024]
+  }
+}
