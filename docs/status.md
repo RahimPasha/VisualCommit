@@ -493,6 +493,17 @@ every commit.
   `phase8a-checks-review-L-I` (run `wf_17f3e7ad-e6a`: two Opus reviewers, a verifier for each
   major, one fixer who corrects the report). The owner turned Ultracode on again on 2026-11-20,
   so substantive tasks run as workflows again.
+  WP0's builder ended on 2026-11-20: 26 files changed and 17 added, `dotnet build` with no warning,
+  and its own classes green (`AppVersionInfoTests` 11, `AppLinksTests` 3, `AppShortcutsTests` 9,
+  `GitSetupStatesTests` 5, the 8a project's `Phase8aSupportTests` 6). Still uncommitted: its diff is
+  under a code review, the workflow `phase8a-wp0-code-review` (run `wf_f3bdee43-0f6`: four Opus
+  reviewers, a verifier for each finding, one fixer who edits the working tree and builds). After
+  it the lead builds, runs the classes design 1.16 names (not beside the other workflows' agents),
+  commits, pushes and reads CI's run. The builder's notes for the lead: CLAUDE.md's rows for the
+  8a walk-through and the default of `time-scripted-check.sh` (now `8a`); at §3's merge
+  `HeldRulesTab.cs:129` passes the broker's `gitVersion` by position; §11 takes `OpenUserGuide` out
+  of `AppShortcutsTests`' keyless list when it binds F1; an `.editorconfig` entry for 8a's `*.G.cs`
+  files, as phases 6 and 7a have.
 - **Phase 8's start, 2026-11-18** (no branch yet: everything so far is on `master` or outside the
   repo). The machine changed since phase 7b's gate (Windows updates KB5132061 and KB5132688 on
   2026-11-11, and a boot that day; git 2.56.0.windows.4 and SDK 10.0.303 as before), so step 6's
