@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -9,9 +10,10 @@ using Svg.Skia;
 namespace VisualCommit.IconBuilder;
 
 /// <summary>
-/// The rules every master keeps before anything is drawn from it (D428): its viewBox, paths and
-/// basic shapes with solid fills or simple linear gradients only, and nothing it refers to outside
-/// itself, so that every renderer draws it the same way and it carries nothing but the mark.
+/// The rules every master keeps before anything is drawn from it (D428): its viewBox, a width and
+/// height that are none or the viewBox's size, paths and basic shapes with solid fills or simple
+/// linear gradients only, and nothing it refers to outside itself, so that every renderer draws it
+/// the same way and it carries nothing but the mark.
 /// </summary>
 internal static partial class MasterRules
 {
@@ -45,6 +47,18 @@ internal static partial class MasterRules
         if (viewBox != master.ViewBox)
         {
             problems.Add($"{shown}: has the viewBox \"{viewBox}\"; a master needs \"{master.ViewBox}\".");
+        }
+
+        // Svg.Skia draws the viewBox onto the width and height, and the renderer scales that picture
+        // by the size over the viewBox's size: another width or height would draw the mark at another
+        // size, or stretched.
+        var size = master.Size.ToString(CultureInfo.InvariantCulture);
+        foreach (var dimension in (string[])["width", "height"])
+        {
+            if (root.Attribute(dimension) is { } found && found.Value != size)
+            {
+                problems.Add($"{shown}: has the {dimension} \"{found.Value}\"; a master needs none or \"{size}\".");
+            }
         }
 
         foreach (var element in root.DescendantsAndSelf())

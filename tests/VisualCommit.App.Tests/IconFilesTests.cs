@@ -43,7 +43,16 @@ public sealed partial class IconFilesTests
             var svg = XDocument.Load(path, LoadOptions.None);
             var root = svg.Root!;
             Assert.Equal(XName.Get("svg", SvgNamespace), root.Name);
-            Assert.Equal(name == "icon-small.svg" ? "0 0 16 16" : "0 0 1024 1024", (string?)root.Attribute("viewBox"));
+            var size = name == "icon-small.svg" ? "16" : "1024";
+            Assert.Equal($"0 0 {size} {size}", (string?)root.Attribute("viewBox"));
+
+            // The builder draws the viewBox at the size it is asked for only when the width and height
+            // that Svg.Skia maps the viewBox onto are the viewBox's own.
+            foreach (var dimension in (string[])["width", "height"])
+            {
+                var value = (string?)root.Attribute(dimension);
+                Assert.True(value is null || value == size, $"assets/brand/{name} has the {dimension} \"{value}\"; a master needs none or \"{size}\".");
+            }
 
             var comment = svg.DescendantNodes().OfType<XComment>().FirstOrDefault();
             Assert.True(comment is not null, $"assets/brand/{name} has no comment that says what it is.");
@@ -73,22 +82,37 @@ public sealed partial class IconFilesTests
     [Fact]
     public void The_small_master_has_its_straight_edges_on_whole_units_of_its_16_grid()
     {
-        var root = XDocument.Load(MasterPath("icon-small.svg")).Root!;
-        var problems = new List<string>();
-        foreach (var rect in root.Descendants(XName.Get("rect", SvgNamespace)))
-        {
-            var x = Number(rect, "x");
-            var y = Number(rect, "y");
-            var edges = new[] { ("left", x), ("top", y), ("right", x + Number(rect, "width")), ("bottom", y + Number(rect, "height")) };
-            problems.AddRange(edges.Where(edge => !IsWhole(edge.Item2)).Select(edge => $"a rect's {edge.Item1} edge at {edge.Item2}"));
-        }
-
-        foreach (var path in root.Descendants(XName.Get("path", SvgNamespace)))
-        {
-            problems.AddRange(StraightEdgesOffTheGrid((string)path.Attribute("d")!));
-        }
-
+        var problems = StraightEdgesOffTheGrid(XDocument.Load(MasterPath("icon-small.svg")).Root!);
         Assert.True(problems.Count == 0, "icon-small.svg's straight edges must fall on whole units:\n" + string.Join('\n', problems));
+    }
+
+    /// <summary>
+    /// The check above on drawings made for it: it finds an edge off the grid in every shape it
+    /// follows, an arc's flags written without a space between them included, and refuses what it
+    /// does not follow, so that it never passes a small master it has not read.
+    /// </summary>
+    [Theory]
+    [InlineData("<rect x=\"0.5\" y=\"0\" width=\"15\" height=\"16\"/>", "a rect's left edge at 0.5")]
+    [InlineData("<path d=\"M0 0H16V7.5H0Z\"/>", "a horizontal edge at y 7.5")]
+    [InlineData("<polygon points=\"0,0 16,0 16,7.5 0,7.5\"/>", "a horizontal edge at y 7.5")]
+    [InlineData("<polyline points=\"0.5,0 16,0 16,16 0.5,16\"/>", "a vertical edge at x 0.5")]
+    [InlineData("<path d=\"M1 1a1 1 0 01 2 1.5H14V14H3Z\"/>", "a horizontal edge at y 2.5")]
+    [InlineData("<g transform=\"translate(0.5 0)\"><rect width=\"16\" height=\"16\"/></g>", "a transform, which this check does not follow")]
+    [InlineData("<path d=\"M0 8H16\" stroke=\"#FFFFFF\" stroke-width=\"2\"/>", "a stroke, which this check does not follow")]
+    [InlineData("<line x1=\"0\" y1=\"8\" x2=\"16\" y2=\"8\" stroke=\"#FFFFFF\"/>", "a stroke, which this check does not follow")]
+    [InlineData("<rect width=\"16\" height=\"16\" style=\"stroke:#FFFFFF\"/>", "a style attribute, which this check does not read")]
+    public void The_straight_edge_check_finds_an_edge_off_the_grid_and_refuses_what_it_does_not_follow(string shapes, string expected)
+    {
+        var problems = StraightEdgesOffTheGrid(SmallDrawing(shapes));
+        Assert.True(problems.Any(problem => problem.StartsWith(expected, StringComparison.Ordinal)), $"Expected \"{expected}\" among:\n{string.Join('\n', problems)}");
+    }
+
+    [Fact]
+    public void The_straight_edge_check_passes_edges_on_whole_units_after_an_arc_whose_flags_have_no_space()
+    {
+        // "01" is the large-arc flag 0 and the sweep flag 1: the arc ends at (3, 2), and the edges
+        // that follow lie on whole units.
+        Assert.Empty(StraightEdgesOffTheGrid(SmallDrawing("<path d=\"M1 1a1 1 0 01 2 1H14V14H3Z\"/>")));
     }
 
     // ---- 2. The manifest --------------------------------------------------------------------
@@ -237,7 +261,8 @@ public sealed partial class IconFilesTests
 
         using var made = new TempDirectory("iconutil-icns");
         var icns = made.Combine("VisualCommit.icns");
-        await IconUtilAsync(ct, "-c", "icns", IconFile.RepositoryPath(IconFile.IconSetFolder), "-o", icns);
+        // Options before the operand, as iconutil's synopsis gives them: iconutil -c icns -o <file> <iconset>.
+        await IconUtilAsync(ct, "-c", "icns", "-o", icns, IconFile.RepositoryPath(IconFile.IconSetFolder));
         var start = new byte[4];
         await using (var file = File.OpenRead(icns))
         {
@@ -248,7 +273,7 @@ public sealed partial class IconFilesTests
 
         using var read = new TempDirectory("iconutil-iconset");
         var iconset = read.Combine("VisualCommit.iconset");
-        await IconUtilAsync(ct, "-c", "iconset", IconFile.RepositoryPath(IconFile.IcnsFile), "-o", iconset);
+        await IconUtilAsync(ct, "-c", "iconset", "-o", iconset, IconFile.RepositoryPath(IconFile.IcnsFile));
         Assert.Equal(
             IconFile.IconSetNames.Select(file => file.Name + ".png").Order(StringComparer.Ordinal),
             Directory.EnumerateFileSystemEntries(iconset).Select(entry => Path.GetFileName(entry)).Order(StringComparer.Ordinal));
@@ -306,10 +331,87 @@ public sealed partial class IconFilesTests
 
     private static bool IsWhole(double value) => Math.Abs(value - Math.Round(value)) < 1e-9;
 
+    private static XElement SmallDrawing(string shapes) =>
+        XElement.Parse($"<svg xmlns=\"{SvgNamespace}\" viewBox=\"0 0 16 16\">{shapes}</svg>");
+
+    /// <summary>
+    /// Why a drawing on the 16 grid may have a straight edge off a whole unit (7.3), as far as this
+    /// check can tell: a horizontal or vertical edge of the filled outline of a <c>rect</c>, a
+    /// <c>path</c>, a <c>polygon</c> or a <c>polyline</c> that is not on a whole unit; and, so that
+    /// it never passes a drawing it has not read, what it does not follow: a <c>transform</c>, a
+    /// stroke (the small master is drawn with fills, and a stroke's edges lie half its width off its
+    /// line) and a <c>style</c> attribute. Circles, ellipses and curves have no straight edge.
+    /// </summary>
+    private static List<string> StraightEdgesOffTheGrid(XElement root)
+    {
+        var problems = new List<string>();
+        foreach (var element in root.DescendantsAndSelf())
+        {
+            var name = element.Name.LocalName;
+            if (element.Attribute("transform") is { } transform)
+            {
+                problems.Add($"a transform, which this check does not follow: <{name}> has transform=\"{transform.Value}\"");
+            }
+
+            if (element.Attribute("stroke") is { } stroke && stroke.Value != "none")
+            {
+                problems.Add($"a stroke, which this check does not follow: <{name}> has stroke=\"{stroke.Value}\"");
+            }
+
+            if (element.Attribute("style") is { } style)
+            {
+                problems.Add($"a style attribute, which this check does not read: <{name}> has style=\"{style.Value}\"");
+            }
+
+            if (element.Name.NamespaceName != SvgNamespace)
+            {
+                continue;
+            }
+
+            switch (name)
+            {
+                case "rect":
+                    var x = Number(element, "x");
+                    var y = Number(element, "y");
+                    var edges = new[] { ("left", x), ("top", y), ("right", x + Number(element, "width")), ("bottom", y + Number(element, "height")) };
+                    problems.AddRange(edges.Where(edge => !IsWhole(edge.Item2)).Select(edge => string.Create(CultureInfo.InvariantCulture, $"a rect's {edge.Item1} edge at {edge.Item2}")));
+                    break;
+                case "path":
+                    problems.AddRange(StraightEdgesOffTheGrid((string)element.Attribute("d")!));
+                    break;
+                case "polygon":
+                case "polyline":
+                    // A polyline's fill is closed as a polygon's is, so the edge back to the first point counts too.
+                    var numbers = PathToken().Matches((string?)element.Attribute("points") ?? string.Empty)
+                        .Select(match => double.Parse(match.Value, CultureInfo.InvariantCulture)).ToList();
+                    var points = Enumerable.Range(0, numbers.Count / 2).Select(index => (X: numbers[2 * index], Y: numbers[(2 * index) + 1])).ToList();
+                    for (var index = 0; index < points.Count && points.Count > 1; index++)
+                    {
+                        var (from, to) = (points[index], points[(index + 1) % points.Count]);
+                        if (EdgeOffTheGrid(from.X, from.Y, to.X, to.Y) is { } problem)
+                        {
+                            problems.Add(problem);
+                        }
+                    }
+
+                    break;
+            }
+        }
+
+        return problems;
+    }
+
+    /// <summary>The problem with the segment from one point to another, if it is horizontal or vertical and not on a whole unit.</summary>
+    private static string? EdgeOffTheGrid(double fromX, double fromY, double toX, double toY) =>
+        toX == fromX && toY != fromY && !IsWhole(fromX) ? string.Create(CultureInfo.InvariantCulture, $"a vertical edge at x {fromX}")
+        : toY == fromY && toX != fromX && !IsWhole(fromY) ? string.Create(CultureInfo.InvariantCulture, $"a horizontal edge at y {fromY}")
+        : null;
+
     /// <summary>
     /// The horizontal and vertical segments of a path whose line is not on a whole unit: a
     /// horizontal one's y, a vertical one's x. Curves and slanted lines are no straight edge of the
-    /// grid; a segment of no length is none either.
+    /// grid; a segment of no length is none either. An arc's two flags are read one digit each, as
+    /// SVG's grammar has them, so that "01" is two flags and not the number 1.
     /// </summary>
     private static IEnumerable<string> StraightEdgesOffTheGrid(string data)
     {
@@ -321,19 +423,28 @@ public sealed partial class IconFilesTests
 
         void Edge(double toX, double toY)
         {
-            if (toX == x && toY != y && !IsWhole(x))
+            if (EdgeOffTheGrid(x, y, toX, toY) is { } problem)
             {
-                problems.Add(string.Create(CultureInfo.InvariantCulture, $"a vertical edge at x {x}"));
-            }
-            else if (toY == y && toX != x && !IsWhole(y))
-            {
-                problems.Add(string.Create(CultureInfo.InvariantCulture, $"a horizontal edge at y {y}"));
+                problems.Add(problem);
             }
 
             (x, y) = (toX, toY);
         }
 
         double Next() => double.Parse(tokens[at++], CultureInfo.InvariantCulture);
+
+        // A flag is one digit; the rest of its token, if any, is what follows it.
+        void SkipFlag()
+        {
+            if (tokens[at].Length > 1)
+            {
+                tokens[at] = tokens[at][1..];
+            }
+            else
+            {
+                at++;
+            }
+        }
 
         while (at < tokens.Count)
         {
@@ -385,7 +496,9 @@ public sealed partial class IconFilesTests
                     (x, y) = (baseX + Next(), baseY + Next());
                     break;
                 case 'A':
-                    at += 5;
+                    at += 3;
+                    SkipFlag();
+                    SkipFlag();
                     (x, y) = (baseX + Next(), baseY + Next());
                     break;
                 default:
