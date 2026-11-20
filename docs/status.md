@@ -603,8 +603,19 @@ every commit.
   open points (`D:/Projects/Personal/phase8-work/wave2/checks/lead-rulings.md`), and
   `phase8a-wave2-checks-settle` (run `wf_eceed900-6c6`, three agents, 0.76M tokens) carried the
   rulings into the design (0.5, 0.7, 1.2, 1.3, 1.15, 5.3, 5.6, 6.3.1, 6.3.9, 6.4, 6.5, section 7's
-  opening, 7.5, 7.6, 12.3.4, 12.6, 13.4) and the report. The wave's build follows: three worktrees
-  and one workflow, as wave 1's.
+  opening, 7.5, 7.6, 12.3.4, 12.6, 13.4) and the report. **The wave's build is under way** since
+  2026-11-20: the worktrees `D:/Projects/Personal/vc-wt/p8a-firstrun`, `p8a-keyboard` and `p8a-icon`
+  were made from `fe0d2d4`, on `wip/p8a-firstrun`, `wip/p8a-keyboard` and `wip/p8a-icon`, which are
+  never pushed, and the workflow `phase8a-wave-2` (run `wf_9e189d2e-fb7`; its script is
+  `phase8a-wave-2-build.js` beside wave 1's) builds the three packages side by side, an Opus
+  builder in each worktree, then three reviewers, a verifier for each major and a fixer per
+  package. When it has ended the lead reads each report and diff, merges each branch (`git merge
+  --no-ff`), makes the lead's own changes each builder names (the stand-in's and the tool's lines
+  in `VisualCommit.slnx`, the README's "Name" note, CLAUDE.md's rows), compares each merge's
+  pictures with `references/wave1` and pushes; then the owner is asked for the week's share before
+  step 12's runs. A session that finds the workflow gone reads each worktree's `git log
+  fe0d2d4..HEAD` and `git status`, and builds an unfinished package on from its last commit by the
+  same brief.
   Nothing is uncommitted, and the phase branch is pushed. The run's pictures, the comparison and
   the inspectors' crops are outside the repository: `D:/Projects/Personal/phase8-work/references/`
   (`wave1/`, the references of every later merge, with `wave1-pictures.sha256`),
