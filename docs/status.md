@@ -294,6 +294,15 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [44733772887](https://github.com/RahimPasha/VisualCommit/actions/runs/44733772887), for
+  `bba59c7` (the minimum git 2.34.1; the floor's job required): all six jobs succeeded, none
+  failed a test. `windows-latest` 7,993 tests with 4 skipped, Test step 25 min 51 s of 70;
+  `macos-latest` 7,990 with 3 skipped, Test step 44 min 6 s (under the 56 minutes at which D377
+  raises the limit); `ubuntu-latest` 7,990 with 3 skipped, 4 min 59 s; the two "bare ubuntu
+  container" jobs 7,990 with 3 skipped each, Test steps 5 min 7 s (Ubuntu's packages) and 7 min 7
+  s (Microsoft's installer); the floor's job, now failing the run if it fails, 7,990 on git 2.34.1
+  with 3 skipped and none failed, Test step 5 min 59 s. The commits after it (`fa9ab21`,
+  `0f61cc2`) change only docs and started no run.
 - [44727459663](https://github.com/RahimPasha/VisualCommit/actions/runs/44727459663), for
   `d63c012` (wave 1's three merges and the broker's `gitVersion` removed): all six jobs succeeded,
   none failed a test. **The floor's job passed for the first time**: 7,989 tests on git 2.34.1
