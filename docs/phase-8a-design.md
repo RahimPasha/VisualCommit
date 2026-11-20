@@ -2720,7 +2720,16 @@ with a ladder from 16 to 256 pixels on a dark and a light desk, and a `README.md
 the owner chose and what the owner asked to change, the record of the human part that D407 names.
 The lead committed round 1 on 2026-11-19 (`306f61f`), before the owner's first letter: `a-lens.svg`,
 `b-merge-v.svg`, `c-check.svg`, `d-ring.svg`, `e-viewfinder.svg`; each later round adds
-`round-<n>/`. B, D and E have a dark tile that leans on a thin edge on a dark desk, as B's note says,
+`round-<n>/`. The owner chose A, Lens, on 2026-11-20. Round 2 (`docs/brand/icon/round-2/`, the
+same day) holds its three masters, drawn by 7.3's rules, with a runner-up for the small sizes, and
+waits for the owner's word. With that word before §7 starts, §7's masters are round 2's files as
+they stand, and no placeholder is written; without it §7 starts with the placeholder as below. Two
+things round 2 found for §7: `icon-small.svg` fills its 16 grid, so that its edges fall on whole
+pixels at 16 to 32, and is transparent at its rounded corners alone (its `rx` stays 3.42 or more, so
+that the corner pixel at 16 is clear, 7.4 item 3); and round 2's pictures were rendered by Edge, so
+§7's builder compares the tool's renders of `icon-small.svg` at 16, 20, 24, 30 and 32 with round 2's
+`small-zoom.png` before the files are frozen, and reports each pixel that differs by more than a
+tenth. B, D and E have a dark tile that leans on a thin edge on a dark desk, as B's note says,
 which the tool's printout and B1 show. The chosen one becomes the three masters: the lead writes
 them by 7.3's rules with the new first comment, runs the tool, `IconFilesTests`, `WindowIconTests`,
 parts B and A, inspects, and commits "Icon: the owner's choice": code by the gate's rule, so before

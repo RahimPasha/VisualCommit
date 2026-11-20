@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VisualCommit icon, round 2: Lens worked out for every size</title>
+<style>
+  body { margin: 0; }
+
+  :root {
+    --bg: #14161B; --panel: #1A1D24; --line: #323845; --fg: #E4E7EC; --muted: #9BA3B0; --accent: #7C8CFF;
+    --desk-dark: #202020; --desk-dark-ink: #9BA3B0; --desk-light: #F3F3F3; --desk-light-ink: #5C6572;
+    --text: "Inter", "Segoe UI", system-ui, sans-serif;
+    --mono: "JetBrains Mono", "Cascadia Mono", Consolas, monospace;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg: #FFFFFF; --panel: #F5F6F8; --line: #D2D6DE; --fg: #1B1F27; --muted: #5C6572; --accent: #4353D8;
+      color-scheme: light;
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #FFFFFF; --panel: #F5F6F8; --line: #D2D6DE; --fg: #1B1F27; --muted: #5C6572; --accent: #4353D8;
+    color-scheme: light;
+  }
+  body {
+    background: var(--bg); color: var(--fg); font-family: var(--text); font-size: 15px; line-height: 1.55;
+    padding-block: 40px 64px;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .sheet { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 28px; }
+  header { display: flex; flex-direction: column; gap: 10px; }
+  .eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  h1 { font-size: 30px; line-height: 1.15; font-weight: 700; margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  h2 { font-size: 19px; font-weight: 600; margin: 0; text-wrap: balance; }
+  h3 { font-size: 14px; font-weight: 600; margin: 0 0 6px; }
+  p { margin: 0; }
+  .lede { max-width: 70ch; color: var(--muted); }
+  .lede strong, .note strong { color: var(--fg); font-weight: 600; }
+  section { display: flex; flex-direction: column; gap: 14px; padding: 20px; background: var(--panel);
+            border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+  .note { max-width: 78ch; color: var(--muted); font-size: 14px; }
+  .desks { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .desk { border-radius: 8px; padding: 14px 16px 10px; overflow-x: auto; }
+  .desk.dark { background: var(--desk-dark); color: var(--desk-dark-ink); }
+  .desk.light { background: var(--desk-light); color: var(--desk-light-ink); }
+  .ladder { display: flex; align-items: flex-end; gap: 18px; }
+  .rung { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .rung svg { display: block; max-width: none; }
+  .rung span { font-family: var(--mono); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .pixels { overflow-x: auto; border-radius: 8px; background: #808080; width: fit-content; max-width: 100%; }
+  .pixels img { display: block; max-width: none; image-rendering: pixelated; }
+  .choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 16px; }
+  .option { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+  .tag { align-self: flex-start; font-family: var(--mono); font-size: 12px; color: var(--accent);
+         border: 1px solid var(--line); border-radius: 4px; padding: 0 7px; }
+  ul { margin: 0; padding-left: 20px; color: var(--muted); font-size: 14px; max-width: 78ch; }
+  li + li { margin-top: 4px; }
+  .ask { border-color: var(--accent); }
+  .ask ol { margin: 0; padding-left: 22px; max-width: 78ch; }
+  .ask li + li { margin-top: 8px; }
+  @media (max-width: 720px) { h1 { font-size: 25px; } section { padding: 16px; } }
+</style>
+</head>
+<body>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <symbol id="m-full" viewBox="0 0 1024 1024"><rect x="64" y="64" width="896" height="896" rx="208" ry="208" fill="#4C5BE0"/>
+  <path d="M64 512H184M840 512H960" stroke="#FFFFFF" stroke-width="64" fill="none"/>
+  <path d="M184 512Q512 192 840 512Q512 832 184 512Z" stroke="#FFFFFF" stroke-width="64" stroke-linejoin="round" fill="none"/>
+  <circle cx="512" cy="512" r="96" fill="#FFFFFF"/></symbol>
+    <symbol id="m-small" viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="16" rx="3.75" ry="3.75" fill="#4C5BE0"/>
+  <path d="M0 7H3V9H0ZM13 7H16V9H13Z" fill="#FFFFFF"/>
+  <path d="M1.3 8C3.53 5.33 4.65 4 8 4C11.35 4 12.47 5.33 14.7 8C12.47 10.67 11.35 12 8 12C4.65 12 3.53 10.67 1.3 8ZM3 8C4.5 9.8 5.7 11 7.5 11H8.5C10.3 11 11.5 9.8 13 8C11.5 6.2 10.3 5 8.5 5H7.5C5.7 5 4.5 6.2 3 8Z" fill="#FFFFFF"/>
+  <circle cx="8" cy="8" r="2.1" fill="#FFFFFF"/></symbol>
+    <symbol id="m-alt" viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="16" rx="3.75" ry="3.75" fill="#4C5BE0"/>
+  <path d="M0 7H3V9H0ZM13 7H16V9H13Z" fill="#FFFFFF"/>
+  <path d="M1.3 8C3.53 5.33 4.65 4 8 4C11.35 4 12.47 5.33 14.7 8C12.47 10.67 11.35 12 8 12C4.65 12 3.53 10.67 1.3 8Z" fill="#FFFFFF"/>
+  <circle cx="8" cy="8" r="2.1" fill="#4C5BE0"/></symbol>
+    <symbol id="m-mac" viewBox="0 0 1024 1024"><rect x="96" y="96" width="832" height="832" rx="187" ry="187" fill="#4C5BE0"/>
+  <path d="M96 512H200M824 512H928" stroke="#FFFFFF" stroke-width="64" fill="none"/>
+  <path d="M200 512Q512 192 824 512Q512 832 200 512Z" stroke="#FFFFFF" stroke-width="64" stroke-linejoin="round" fill="none"/>
+  <circle cx="512" cy="512" r="96" fill="#FFFFFF"/></symbol>
+    <symbol id="m-small-light" viewBox="0 0 16 16"><rect x="0" y="0" width="16" height="16" rx="3.75" ry="3.75" fill="#5866E6"/>
+  <path d="M0 7H3V9H0ZM13 7H16V9H13Z" fill="#FFFFFF"/>
+  <path d="M1.3 8C3.53 5.33 4.65 4 8 4C11.35 4 12.47 5.33 14.7 8C12.47 10.67 11.35 12 8 12C4.65 12 3.53 10.67 1.3 8ZM3 8C4.5 9.8 5.7 11 7.5 11H8.5C10.3 11 11.5 9.8 13 8C11.5 6.2 10.3 5 8.5 5H7.5C5.7 5 4.5 6.2 3 8Z" fill="#FFFFFF"/>
+  <circle cx="8" cy="8" r="2.1" fill="#FFFFFF"/></symbol>
+    <symbol id="m-full-light" viewBox="0 0 1024 1024"><rect x="64" y="64" width="896" height="896" rx="208" ry="208" fill="#5866E6"/>
+  <path d="M64 512H184M840 512H960" stroke="#FFFFFF" stroke-width="64" fill="none"/>
+  <path d="M184 512Q512 192 840 512Q512 832 184 512Z" stroke="#FFFFFF" stroke-width="64" stroke-linejoin="round" fill="none"/>
+  <circle cx="512" cy="512" r="96" fill="#FFFFFF"/></symbol>
+  </defs>
+</svg>
+
+<div class="sheet">
+  <header>
+    <div class="eyebrow">Phase 8a &middot; round 2 &middot; 2026-11-20 &middot; D407</div>
+    <h1>Lens, worked out for every size</h1>
+    <p class="lede">You chose <strong>Lens</strong>. At 64 pixels and up it already read well; at 16, where an icon is seen most, a plain shrinking turned it to grey mush. This round keeps your drawing for the large sizes and redraws it on a 16-pixel grid for the small ones, plus a version on Apple's shape for macOS. The colours are yours, unchanged. Say <strong>yes</strong>, or what to change; one choice below is yours either way.</p>
+  </header>
+
+  <section>
+    <h2>Every size, as the app will use it</h2>
+    <p class="note">16 to 32 come from the small drawing, 36 and up from the full one. On a high-density screen your browser draws these sharper than Windows does at 100&nbsp;% scaling; the enlarged strip in the next box shows the real pixels.</p>
+    <div class="desks"><div class="desk dark"><div class="ladder"><div class="rung"><svg width="16" height="16" aria-hidden="true"><use href="#m-small"/></svg><span>16</span></div><div class="rung"><svg width="20" height="20" aria-hidden="true"><use href="#m-small"/></svg><span>20</span></div><div class="rung"><svg width="24" height="24" aria-hidden="true"><use href="#m-small"/></svg><span>24</span></div><div class="rung"><svg width="32" height="32" aria-hidden="true"><use href="#m-small"/></svg><span>32</span></div><div class="rung"><svg width="36" height="36" aria-hidden="true"><use href="#m-full"/></svg><span>36</span></div><div class="rung"><svg width="48" height="48" aria-hidden="true"><use href="#m-full"/></svg><span>48</span></div><div class="rung"><svg width="64" height="64" aria-hidden="true"><use href="#m-full"/></svg><span>64</span></div><div class="rung"><svg width="96" height="96" aria-hidden="true"><use href="#m-full"/></svg><span>96</span></div><div class="rung"><svg width="128" height="128" aria-hidden="true"><use href="#m-full"/></svg><span>128</span></div><div class="rung"><svg width="256" height="256" aria-hidden="true"><use href="#m-full"/></svg><span>256</span></div></div></div><div class="desk light"><div class="ladder"><div class="rung"><svg width="16" height="16" aria-hidden="true"><use href="#m-small"/></svg><span>16</span></div><div class="rung"><svg width="20" height="20" aria-hidden="true"><use href="#m-small"/></svg><span>20</span></div><div class="rung"><svg width="24" height="24" aria-hidden="true"><use href="#m-small"/></svg><span>24</span></div><div class="rung"><svg width="32" height="32" aria-hidden="true"><use href="#m-small"/></svg><span>32</span></div><div class="rung"><svg width="36" height="36" aria-hidden="true"><use href="#m-full"/></svg><span>36</span></div><div class="rung"><svg width="48" height="48" aria-hidden="true"><use href="#m-full"/></svg><span>48</span></div><div class="rung"><svg width="64" height="64" aria-hidden="true"><use href="#m-full"/></svg><span>64</span></div><div class="rung"><svg width="96" height="96" aria-hidden="true"><use href="#m-full"/></svg><span>96</span></div><div class="rung"><svg width="128" height="128" aria-hidden="true"><use href="#m-full"/></svg><span>128</span></div><div class="rung"><svg width="256" height="256" aria-hidden="true"><use href="#m-full"/></svg><span>256</span></div></div></div></div>
+  </section>
+
+  <section>
+    <h2>The real pixels at 16, 20, 24, 30 and 32</h2>
+    <p class="note">Each small size as a taskbar or a title bar draws it, enlarged six times without smoothing: a dark desk above, a light one below. The tile's edges, the line and the pupil sit on whole pixels at 16, 24 and 32; 20 is the softest, because every edge falls on a quarter pixel there.</p>
+    <div class="pixels"><img src="small-zoom.png" alt="The small drawing at 16, 20, 24, 30 and 32 pixels, enlarged six times, on a dark and a light desk"></div>
+  </section>
+
+  <section class="ask">
+    <h2>Your choice: how the eye is drawn at the small sizes</h2>
+    <div class="choice">
+      <div class="option">
+        <span class="tag">1 &middot; outlined (recommended)</span>
+        <div class="desks"><div class="desk dark"><div class="ladder"><div class="rung"><svg width="16" height="16" aria-hidden="true"><use href="#m-small"/></svg><span>16</span></div><div class="rung"><svg width="20" height="20" aria-hidden="true"><use href="#m-small"/></svg><span>20</span></div><div class="rung"><svg width="24" height="24" aria-hidden="true"><use href="#m-small"/></svg><span>24</span></div><div class="rung"><svg width="32" height="32" aria-hidden="true"><use href="#m-small"/></svg><span>32</span></div></div></div><div class="desk light"><div class="ladder"><div class="rung"><svg width="16" height="16" aria-hidden="true"><use href="#m-small"/></svg><span>16</span></div><div class="rung"><svg width="20" height="20" aria-hidden="true"><use href="#m-small"/></svg><span>20</span></div><div class="rung"><svg width="24" height="24" aria-hidden="true"><use href="#m-small"/></svg><span>24</span></div><div class="rung"><svg width="32" height="32" aria-hidden="true"><use href="#m-small"/></svg><span>32</span></div></div></div></div>
+        <p class="note">The eye stays an outline with a white pupil, as in your drawing. It is the same mark at every size.</p>
+      </div>
+      <div class="option">
+        <span class="tag">2 &middot; solid</span>
+        <div class="desks"><div class="desk dark"><div class="ladder"><div class="rung"><svg width="16" height="16" aria-hidden="true"><use href="#m-alt"/></svg><span>16</span></div><div class="rung"><svg width="20" height="20" aria-hidden="true"><use href="#m-alt"/></svg><span>20</span></div><div class="rung"><svg width="24" height="24" aria-hidden="true"><use href="#m-alt"/></svg><span>24</span></div><div class="rung"><svg width="32" height="32" aria-hidden="true"><use href="#m-alt"/></svg><span>32</span></div></div></div><div class="desk light"><div class="ladder"><div class="rung"><svg width="16" height="16" aria-hidden="true"><use href="#m-alt"/></svg><span>16</span></div><div class="rung"><svg width="20" height="20" aria-hidden="true"><use href="#m-alt"/></svg><span>20</span></div><div class="rung"><svg width="24" height="24" aria-hidden="true"><use href="#m-alt"/></svg><span>24</span></div><div class="rung"><svg width="32" height="32" aria-hidden="true"><use href="#m-alt"/></svg><span>32</span></div></div></div></div>
+        <p class="note">A solid white eye with a blue pupil. Crisper and bolder at 16, but the pupil changes from white to blue, it looks closer to the usual "show" eye, and the icon changes character between 32 pixels (solid) and 36 (outlined).</p>
+      </div>
+    </div>
+    <p class="note">The same two as real pixels, enlarged four times. From the top: outlined on a dark desk, solid on a dark desk, outlined on a light desk, solid on a light desk. Each row ends with the full drawing at 36 pixels, the next size up, for comparison:</p>
+    <div class="pixels"><img src="small-compared.png" alt="The outlined and the solid small drawing at 16 to 32 pixels beside the full drawing at 36, on both desks"></div>
+  </section>
+
+  <section>
+    <h2>macOS</h2>
+    <p class="note">The same mark on Apple's rounded square, which is a little smaller than the canvas, as Apple's grid asks. In the picture: the Windows and Linux drawing on the left, the macOS one on the right, both at 256 pixels.</p>
+    <div class="desks"><div class="desk dark"><div class="ladder"><div class="rung"><svg width="32" height="32" aria-hidden="true"><use href="#m-mac"/></svg><span>32</span></div><div class="rung"><svg width="64" height="64" aria-hidden="true"><use href="#m-mac"/></svg><span>64</span></div><div class="rung"><svg width="128" height="128" aria-hidden="true"><use href="#m-mac"/></svg><span>128</span></div><div class="rung"><svg width="256" height="256" aria-hidden="true"><use href="#m-mac"/></svg><span>256</span></div></div></div><div class="desk light"><div class="ladder"><div class="rung"><svg width="32" height="32" aria-hidden="true"><use href="#m-mac"/></svg><span>32</span></div><div class="rung"><svg width="64" height="64" aria-hidden="true"><use href="#m-mac"/></svg><span>64</span></div><div class="rung"><svg width="128" height="128" aria-hidden="true"><use href="#m-mac"/></svg><span>128</span></div><div class="rung"><svg width="256" height="256" aria-hidden="true"><use href="#m-mac"/></svg><span>256</span></div></div></div></div>
+    <div class="pixels"><img src="large.png" alt="The full drawing and the macOS drawing at 256 pixels, on a dark and a light desk"></div>
+  </section>
+
+  <section>
+    <h2>A second question, only if you want it: the blue on a dark taskbar</h2>
+    <p class="note">Your blue, <strong>#4C5BE0</strong>, is at the floor of what Microsoft asks against a dark taskbar (3.0 to 1; it is 4.9 to 1 on a light one). One step lighter in the same hue, <strong>#5866E6</strong>, gives 3.5 to 1 on dark and 4.3 to 1 on light, with the white mark still clear on it. First row: yours. Second row: the lighter one. Keeping yours is fine; this is only so that you have seen it.</p>
+    <div class="desks">
+      <div class="desk dark"><div class="ladder"><div class="rung"><svg width="16" height="16" aria-hidden="true"><use href="#m-small"/></svg><span>16</span></div><div class="rung"><svg width="24" height="24" aria-hidden="true"><use href="#m-small"/></svg><span>24</span></div><div class="rung"><svg width="48" height="48" aria-hidden="true"><use href="#m-full"/></svg><span>48</span></div><div class="rung"><svg width="96" height="96" aria-hidden="true"><use href="#m-full"/></svg><span>96</span></div></div></div>
+      <div class="desk dark"><div class="ladder"><div class="rung"><svg width="16" height="16" aria-hidden="true"><use href="#m-small-light"/></svg><span>16</span></div><div class="rung"><svg width="24" height="24" aria-hidden="true"><use href="#m-small-light"/></svg><span>24</span></div><div class="rung"><svg width="48" height="48" aria-hidden="true"><use href="#m-full-light"/></svg><span>48</span></div><div class="rung"><svg width="96" height="96" aria-hidden="true"><use href="#m-full-light"/></svg><span>96</span></div></div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What is still soft, said plainly</h2>
+    <ul>
+      <li>20 pixels (the title bar at 125&nbsp;% scaling) is the softest small size. 16, 24 and 32 are crisp.</li>
+      <li>At the small sizes the line is twice as heavy as the eye's outline. The 16-pixel grid forces it: a line one pixel tall would fall between two rows and turn grey.</li>
+      <li>The small icons fill their square, with no margin; the large ones keep your drawing's margin. The two never show side by side.</li>
+      <li>On macOS the 16-pixel picture for old, non-Retina screens is mush in every version we drew. Retina screens use the 32-pixel one, which is crisp.</li>
+      <li>On a light taskbar the line's white ends blend into the desk at 16 to 24 pixels, so the tile looks slightly notched at its sides.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>How this round was made</h2>
+    <p class="note">Three draughtsmen each drew a full set with a different aim (faithful to your drawing, pixel first, bold), each rendering its work and judging it by eye, 12 to 13 rounds each. Three judges then looked at the renders: one for the small sizes, one for whether it is still your mark, one for the platforms' rules. All three chose the faithful set; the solid eye above is the runner-up's idea, kept because it is a real choice. Before the files are frozen, the tool that makes the real icon files renders them once more, and the mark is compared with Git's logo and the well-known Git clients' icons.</p>
+  </section>
+</div>
+</body>
+</html>

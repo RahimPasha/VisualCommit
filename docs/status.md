@@ -147,11 +147,27 @@ works in a worktree on `wip/p8a-<key>` and runs only the classes its section nam
 and runs whole projects one at a time through `scripts/heavy-run.sh` (D245), never with an agent
 that runs a process beside them (ruling 23).
 
-- [ ] 4. The lead's first package, WP0 (design section 1, its list in 1.16), in the main checkout:
+- [x] 4. The lead's first package, WP0 (design section 1, its list in 1.16), in the main checkout:
   the contracts and stubs the packages build on, with no behaviour and no picture changed; the
   walk-through project `tests/VisualCommit.VisualTests.Phase8a` with
   `scripts/time-scripted-check.sh`'s `8a` case, and CLAUDE.md's Commands rows for it. (D397's
   `Authors` and `Copyright` and the `.slnx` comment were done in `e04762b`.)
+  Done 2026-11-20 in `fc8a063`: built by one Opus builder (0.40M tokens, 26 minutes), then a code
+  review of its diff (`phase8a-wp0-code-review`, run `wf_f3bdee43-0f6`: four Opus reviewers, a
+  verifier for each finding, one fixer; 25 agents, 3.07M tokens, 29 minutes): 20 findings, all
+  minor, 17 confirmed and fixed, 3 refuted; no contract of section 1 missing or wrong, no behaviour
+  changed. `dotnet build`: 0 warnings. The lead's run of the classes 1.16 names, alone on the
+  machine: `VisualCommit.App.Tests`' `ShellTests`, `MainWindowViewModelTests`, `AppShortcutsTests`,
+  `PaletteEntriesTests`, `SettingsDialogViewTests`, `PromptDialogsTests`,
+  `GitRepositoryProviderTests`, `StatusBarTests`, `AppSessionTests`, `GitAccessTests`,
+  `AppVersionInfoTests` and `AppLinksTests`, 124 of 124 in 2 min 32 s; the 8a project, 7 of 7;
+  `VisualCommit.Git.Tests`' `GitSetupStatesTests` and `GitLocatorTests`, 16 of 16. The first two
+  parts' checks, L and I, were written and reviewed beside it and committed in `a1fc720`, before
+  their UI (D244): `docs/test-reports/phase-8a.md`, nine checks (one Opus writer, 0.35M tokens;
+  the review `phase8a-checks-review-L-I`, run `wf_17f3e7ad-e6a`: two reviewers, a verifier for each
+  of four majors, one fixer; 7 agents, 1.46M tokens, 39 minutes; all twelve findings applied, the
+  design's 12.3 corrected with them). CI's run for the push is in the CI section. (Week: 25 to
+  50 % used at the owner's reading of 2026-11-20, before this step; not read since.)
 
 Wave 1:
 
@@ -453,23 +469,23 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: Progress step 4, the lead's own package, WP0 (design section 1 and its list in 1.16), in the
-main checkout: the contracts and stubs with no behaviour or picture changed, and the walk-through
-project `tests/VisualCommit.VisualTests.Phase8a`; then the classes 1.16 names, a push, and CI's run
-read. On 2026-11-20 the owner gave the week's share, 25 to 50 % used, with which steps 4 to 8 (WP0
-and wave 1) go on and the owner is asked again before wave 2 (step 9; D241), and answered the one
-question the design's review had left: winget is offered for a missing and for a too-old git
-(D453). Wave 1 follows step 4 (steps 5 to 8): part L's and part I's checks are written and
-committed before their packages (D244; the floor has none), then three Opus builders work in
-worktrees `D:/Projects/Personal/vc-wt/p8a-<key>` on `wip/p8a-<key>` (design 0.3), each reading
-sections 0 and 1 and its own. Ultracode was on for the design stage and is off since: sub-agents
-are started one by one, each with its model named, and no workflow runs unless the owner asks for
-one. By hand before §5's merge, the owner told: `cmd.exe` started as the app will start it, with
-`/S /K` and winget's quoted path and `--version`, to see that its window stays open (design 13.4
-item 7). The review's files (the findings in full, the lead's rulings on them, the design's parts
-with their texts from before the corrections) are outside the repository, in
-`D:/Projects/Personal/phase8-work/design/review/`. The icon's first round is with the owner (Notes,
-"The icon").
+Next: wave 1, Progress steps 5 to 7, then step 8. Step 4 is done: WP0 and the checks of parts L
+and I are pushed, and CI's run for that push is to be read and recorded in the CI section. The
+three packages of wave 1 are built side by side, each by an Opus builder in a worktree of its own
+(`git worktree add D:/Projects/Personal/vc-wt/p8a-<key> -b wip/p8a-<key>` from the phase branch;
+the keys `colours`, `floor`, `single`; design 0.3), each reading design sections 0 and 1 and its
+own (2, 3, 4) and the report's part (L for §2, I for §4; the floor has no checks). A builder runs
+only the classes its section names and commits on its `wip` branch, which is never pushed; the
+lead reviews each package's diff (reviewers, a verifier for each finding, a fixer), merges it into
+the phase branch, runs the lagged list at the merges the design names, and pushes. §3's fixes are
+read on CI's floor job after each push; the commit that makes that job green moves
+`GitVersion.Minimum` and removes `continue-on-error` (design 0.4, 3.8). Step 8 closes the wave:
+the lagged list, the whole default run through `scripts/heavy-run.sh` with no agent at work, §2's
+comparison against phase 7b's references, the new references. Before wave 2 (step 9) the owner is
+asked for the week's share again (D241). The icon's round 2 is with the owner (Notes, "The icon").
+By hand before §5's merge, the owner told: `cmd.exe` started as the app will start it, with `/S
+/K` and winget's quoted path and `--version`, to see that its window stays open (design 13.4 item
+7).
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -478,40 +494,16 @@ every commit.
 
 ### Notes for whoever resumes
 
-- **Step 4 under way since 2026-11-20** (uncommitted work in the main checkout; do not discard it).
-  An Opus builder is writing WP0 there (design section 1, its list in 1.16): the contracts and
-  stubs under `src/` and `tests/`, the new project `tests/VisualCommit.VisualTests.Phase8a`, its
-  line in `VisualCommit.slnx` and the `8a` case of `scripts/time-scripted-check.sh`. It does not
-  commit: the lead reads the diff against section 1, builds, runs the classes 1.16 names and then
-  commits and pushes. A second Opus agent is writing parts L's and I's checks into the new file
-  `docs/test-reports/phase-8a.md`, also uncommitted, which a reviewer reads before the lead commits
-  it ahead of wave 1 (D244). A session that finds these changes and no agent at work does the
-  same: the diff against design 1.16, `dotnet build` with no warning, the classes 1.16 names,
-  what is missing finished, then the commit. The checks' writer ended on 2026-11-20 (parts L and
-  I, 60 KB; the lead settled the six points where it found the design at odds with itself, in
-  design 0.7, 1.11, 2.5, 4.7, 12.3.3 and 12.3.4), and their review is under way: the workflow
-  `phase8a-checks-review-L-I` (run `wf_17f3e7ad-e6a`: two Opus reviewers, a verifier for each
-  major, one fixer who corrects the report). The owner turned Ultracode on again on 2026-11-20,
-  so substantive tasks run as workflows again.
-  WP0's builder ended on 2026-11-20 (`dotnet build` with no warning, its own classes green), and
-  its diff went through a code review, the workflow `phase8a-wp0-code-review` (run
-  `wf_f3bdee43-0f6`: four Opus reviewers, a verifier for each finding, one fixer; 25 agents, 3.07M
-  tokens, 29 minutes): 20 findings, all minor, 17 confirmed and 3 refuted; no contract of design
-  section 1 was missing or wrong and no behaviour changed. Fixed: a listener of `GitAccess.Changed`
-  that throws can no longer replace the search's result (each is called in its own guard, logged
-  at Error); `Known` of a fixed search no longer waits for a continuation; stub comments that
-  stated today's state as lasting; new tests (`GitAccessTests`, four; `AppSessionTests`, the
-  timeline's wiring; `Phase8aSupportTests`, the git chosen in Settings reaching the probe). After
-  the fixes: `dotnet build` 0 warnings; `GitAccessTests` 4, `AppSessionTests` 13, the 8a project 7,
-  `AppVersionInfoTests` 11, `AppLinksTests` 3, `AppShortcutsTests` 9, `GitSetupStatesTests` 5.
-  **WP0 is committed locally and not pushed yet**: the lead first runs the classes design 1.16
-  names (`ShellTests`, `MainWindowViewModelTests`, `AppShortcutsTests`, `PaletteEntriesTests`,
-  `SettingsDialogViewTests`, `PromptDialogsTests`, `GitRepositoryProviderTests`, `StatusBarTests`
-  and the 8a project), once the icon's and the checks' workflows have ended, then pushes and reads
-  CI's run. Notes for later packages: at §3's merge `HeldRulesTab.cs:129` passes the broker's
-  `gitVersion` by position; §11 takes `OpenUserGuide` out of `AppShortcutsTests`' keyless list when
-  it binds F1; §5 extends `GitAccessTests`, which exists now; `.editorconfig` has an entry for
-  8a's `*.G.cs` files, as phases 6 and 7a have.
+- **Wave 1 is next (2026-11-20).** WP0 (`fc8a063`) and parts L's and I's checks (`a1fc720`) are
+  pushed; nothing is uncommitted in the main checkout. Notes from WP0 for the packages: at §3's
+  merge `HeldRulesTab.cs:129` passes the broker's `gitVersion` by position; §11 takes
+  `OpenUserGuide` out of `AppShortcutsTests`' keyless list when it binds F1; §5 extends
+  `GitAccessTests`, which exists since WP0; `.editorconfig` has an entry for 8a's `*.G.cs` files,
+  as phases 6 and 7a have; `Phase8aExpectations.Common` holds no colours, so part L adds its own;
+  the 8a project's start helpers are `StartEmptyAsync` and `OpenAsync`, which take a theme and a
+  probe; `AppLaunch.Timeline` is init-only, so §4 gives `Guard` and `Mode` in `Program.Main`'s one
+  initialiser. The owner turned Ultracode on again on 2026-11-20, so substantive tasks run as
+  workflows. The lead's runs of test classes are made with no agent at work beside them.
 - **Phase 8's start, 2026-11-18** (no branch yet: everything so far is on `master` or outside the
   repo). The machine changed since phase 7b's gate (Windows updates KB5132061 and KB5132688 on
   2026-11-11, and a boot that day; git 2.56.0.windows.4 and SDK 10.0.303 as before), so step 6's
@@ -559,23 +551,27 @@ every commit.
   name, which D412's leave did not cover; the handle is public on the repository's page, and the
   lead told the owner. D21's search of 2026-10-06 found the same: no existing product.
 - **The icon** (D407, D447): **the owner chose A, Lens, on 2026-11-20**, with no change asked
-  for. Round 1 (five candidates: Lens, Merge V, Check, Ring, Viewfinder) is in
-  `docs/brand/icon/round-1/` since `306f61f`, each candidate a file of its own, the contact sheet
-  `candidates.html` (16 to 256 pixels on a dark and a light desk) and a README that records the
-  round and the choice; the same sheet is on a private page of the owner's,
-  https://claude.ai/artifact/BDztvt827qm6QeypyqZmxM. Round 2 works Lens out into its three masters
-  (the full drawing, the simpler one on a 16 grid for 32 pixels and below, the one on Apple's
-  grid; design 7.3's rules): a plain down-scaling of the chosen drawing is mush at 16 pixels, its
-  outline one pixel wide and between pixels. Under way since 2026-11-20: the workflow
-  `icon-round-2-lens-masters` (run `wf_b5547917-771`): three Opus draughtsmen (faithful, pixel
-  first, bold), three judges, one final set, in `D:/Projects/Personal/phase8-work/icon/round-2/`
-  (`final/` at its end). The lead can now look at a drawing: `python
+  for (round 1, `docs/brand/icon/round-1/`, `306f61f`; its sheet is also on a private page of the
+  owner's, https://claude.ai/artifact/BDztvt827qm6QeypyqZmxM). **Round 2 is with the owner since
+  2026-11-20**: `docs/brand/icon/round-2/` holds Lens worked out into its three masters by design
+  7.3's rules (`icon.svg`, the chosen drawing at four times its size; `icon-small.svg` on a 16
+  grid for 32 pixels and below; `icon-macos.svg` on Apple's rounded square), a runner-up for the
+  small sizes (`icon-small-alt.svg`, a solid eye with a blue pupil), three pictures of the real
+  pixels, the sheet `candidates.html` and a README with what is still soft; the sheet is also at
+  https://claude.ai/artifact/Xez1bXLnA2p4XNsQ7wtkcb. A plain down-scaling of the chosen drawing is
+  mush at 16 pixels, which is why the round was needed. It was made by the workflow
+  `icon-round-2-lens-masters` (run `wf_b5547917-771`: three Opus draughtsmen with different aims,
+  each rendering and judging its own work, three judges, one final set; 7 agents, 1.35M tokens, 56
+  minutes); all three judges chose the set faithful to the owner's drawing. The working files are
+  in `D:/Projects/Personal/phase8-work/icon/round-2/`. The lead can look at a drawing: `python
   D:/Projects/Personal/phase8-work/icon/render/render_icon_sheet.py <folder with the three
   masters>` renders them with headless Edge at every size on both desks, with the small sizes
-  enlarged. Next: the lead looks at the final set, commits it as `docs/brand/icon/round-2/` with
-  its sheet and README, shows it to the owner, and after the owner's word the masters go to
-  `assets/brand/` with §7 (step 11), which then needs no placeholder mark; the look-alike check
-  against Git's logo and the other clients' icons needs the owner's leave for an image search.
+  enlarged. **Asked of the owner**: yes to the set or what to change; the small sizes outlined
+  (the lead's recommendation) or solid; and, only if wanted, a blue one step lighter (`#5866E6`)
+  for dark taskbars. With the owner's word before §7 starts (step 11), §7's masters are round 2's
+  files and no placeholder is written (design 7.8); §7's builder compares the tool's renders (Skia)
+  with round 2's pictures (Edge) before the files are frozen. The look-alike check against Git's
+  logo and the other clients' icons needs the owner's leave for an image search, or is made by eye.
 - Nothing else is in flight. `master` holds everything; the working tree was clean when phase 7b was
   merged (`3dc7f79`). **Cleaned up on 2026-11-18, at the owner's word** (the 7b handoff's "Do
   first", step 3): the seven worktrees under `D:/Projects/Personal/vc-wt/` (each clean, its branch
@@ -718,9 +714,10 @@ every commit.
     DevOps' and GitLab's on 2026-12-04, and a gate runs the live command twice (D335). Before 8a's
     gate the owner makes each again, with an expiry that also covers 8b's gate, as phase 7a's
     design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token.
-  - **The icon** (D407, D447): the owner chose A, Lens, on 2026-11-20. Next the owner looks at
-    round 2, Lens worked out for the small sizes and for macOS (Notes, "The icon"), and says yes
-    or what to change.
+  - **The icon** (D407, D447): the owner chose A, Lens, on 2026-11-20. Round 2, Lens worked out
+    for the small sizes and for macOS, is with the owner (`docs/brand/icon/round-2/candidates.html`,
+    or https://claude.ai/artifact/Xez1bXLnA2p4XNsQ7wtkcb): yes to the set or what to change; the
+    small sizes outlined (recommended) or solid; and, only if wanted, the lighter blue.
   - **The desktop, told first each time** (design 13.3): the lead's try of the winget terminal
     window before §5's merge; two earlier real-window checks alone at §6's merge (about 2
     minutes); §9's spike (a minute of keys and clicks) and a short listen with Narrator at §9's
