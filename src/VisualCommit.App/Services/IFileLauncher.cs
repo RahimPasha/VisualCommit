@@ -27,6 +27,14 @@ public interface IFileLauncher
     /// a warning is logged when the system could not open it.
     /// </summary>
     Task OpenUrlAsync(Uri url, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Starts <paramref name="command"/>'s program off the UI thread, not waited for. Throws
+    /// <see cref="FileNotFoundException"/> when a bare name is not found, and the start's own
+    /// exception when it cannot start. This default starts nothing and fails with
+    /// <see cref="NotSupportedException"/>.
+    /// </summary>
+    Task StartAsync(LaunchCommand command, CancellationToken cancellationToken = default) => Task.FromException(new NotSupportedException());
 }
 
 /// <summary>Puts text on the clipboard (docs/phase-3-design.md 2.32). The scripted walk-through replaces it with a fake.</summary>

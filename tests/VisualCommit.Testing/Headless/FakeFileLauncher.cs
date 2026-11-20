@@ -9,13 +9,15 @@ namespace VisualCommit.Testing.Headless;
 /// never open an application on the desktop. Since phase 6 it records each editor start too
 /// (docs/phase-6-design.md 12.4): the program, the arguments as a list and the working directory,
 /// and checks no program; <see cref="EditFailure"/> makes the next start throw, as a program that
-/// cannot start does (12.7).
+/// cannot start does (12.7). A program start (<see cref="IFileLauncher.StartAsync"/>) is recorded
+/// the same way and starts nothing; <see cref="StartFailure"/> makes the next one throw.
 /// </summary>
 public sealed class FakeFileLauncher : IFileLauncher
 {
     private readonly Lock _gate = new();
     private readonly List<FileLaunch> _requests = [];
     private Exception? _editFailure;
+    private Exception? _startFailure;
 
     /// <summary>Everything the app asked for, in order.</summary>
     public IReadOnlyList<FileLaunch> Requests
@@ -38,6 +40,9 @@ public sealed class FakeFileLauncher : IFileLauncher
     /// <summary>The editor starts the app asked for, in order ("Open in editor"), each as the command it built.</summary>
     public IReadOnlyList<LaunchCommand> Edits => [.. Requests.Where(request => request.Kind == FileLaunchKind.Edit).Select(request => request.Command!)];
 
+    /// <summary>The program starts the app asked for, in order (<see cref="IFileLauncher.StartAsync"/>), each as the command it built.</summary>
+    public IReadOnlyList<LaunchCommand> Starts => [.. Requests.Where(request => request.Kind == FileLaunchKind.Start).Select(request => request.Command!)];
+
     /// <summary>
     /// Thrown by the next editor start, after it was recorded, then cleared: a
     /// <see cref="FileNotFoundException"/> for a program that is gone, a
@@ -58,6 +63,30 @@ public sealed class FakeFileLauncher : IFileLauncher
             lock (_gate)
             {
                 _editFailure = value;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Thrown by the next program start, after it was recorded, then cleared: a
+    /// <see cref="FileNotFoundException"/> for a bare name that is not found, the start's own
+    /// exception (a <see cref="System.ComponentModel.Win32Exception"/>) for one that cannot start.
+    /// </summary>
+    public Exception? StartFailure
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _startFailure;
+            }
+        }
+
+        set
+        {
+            lock (_gate)
+            {
+                _startFailure = value;
             }
         }
     }
@@ -101,6 +130,21 @@ public sealed class FakeFileLauncher : IFileLauncher
         return failure is null ? Task.CompletedTask : Task.FromException(failure);
     }
 
+    /// <summary>Records <paramref name="command"/> and starts nothing; fails with <see cref="StartFailure"/> when one is set, which it then clears.</summary>
+    public Task StartAsync(LaunchCommand command, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(command);
+        Exception? failure;
+        lock (_gate)
+        {
+            _requests.Add(new FileLaunch(FileLaunchKind.Start, command.FileName, command));
+            failure = _startFailure;
+            _startFailure = null;
+        }
+
+        return failure is null ? Task.CompletedTask : Task.FromException(failure);
+    }
+
     private Task Record(FileLaunch request)
     {
         ArgumentNullException.ThrowIfNull(request.FullPath);
@@ -127,10 +171,13 @@ public enum FileLaunchKind
 
     /// <summary>Open a web address in the default browser (docs/phase-7a-design.md 1.7); its <see cref="FileLaunch.FullPath"/> is the address.</summary>
     OpenUrl,
+
+    /// <summary>Start a program (<see cref="IFileLauncher.StartAsync"/>); its <see cref="FileLaunch.FullPath"/> is the program, its <see cref="FileLaunch.Command"/> the command.</summary>
+    Start,
 }
 
 /// <summary>One request the app made of the file launcher.</summary>
-/// <param name="Kind">Open, show in the file manager, or start the editor.</param>
-/// <param name="FullPath">The full path the app passed, as it passed it; for <see cref="FileLaunchKind.Edit"/> the editor's program; for <see cref="FileLaunchKind.OpenUrl"/> the address.</param>
-/// <param name="Command">For <see cref="FileLaunchKind.Edit"/>, the command the app built; null otherwise.</param>
+/// <param name="Kind">Open, show in the file manager, start the editor, open a web address or start a program.</param>
+/// <param name="FullPath">The full path the app passed, as it passed it; for <see cref="FileLaunchKind.Edit"/> the editor's program; for <see cref="FileLaunchKind.OpenUrl"/> the address; for <see cref="FileLaunchKind.Start"/> the program.</param>
+/// <param name="Command">For <see cref="FileLaunchKind.Edit"/> and <see cref="FileLaunchKind.Start"/>, the command the app built; null otherwise.</param>
 public sealed record FileLaunch(FileLaunchKind Kind, string FullPath, LaunchCommand? Command = null);

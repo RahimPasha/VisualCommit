@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
+using VisualCommit.App.Services;
 using VisualCommit.Core;
 
 namespace VisualCommit.App;
@@ -32,7 +33,7 @@ public partial class App : Application
         // lifetime; they call AppSession.Start themselves with a temporary data folder.
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
-            var session = AppSession.Start(AppPaths.Resolve(), this);
+            var session = AppSession.Start(AppPaths.Resolve(), this, startup: AppLaunch.Current.Timeline);
             desktop.MainWindow = session.MainWindow;
             desktop.Exit += (_, _) => session.Dispose();
         }

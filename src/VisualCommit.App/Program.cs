@@ -21,6 +21,9 @@ internal static class Program
             e.SetObserved();
         };
 
+        // The start's timeline, which App hands the session.
+        AppLaunch.Current = new() { Timeline = StartupTimeline.FromProcess(crashLog) };
+
         try
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);

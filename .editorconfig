@@ -51,3 +51,7 @@ generated_code = false
 # Part G of phase 7a (Phase7aChecks.G.cs, Phase7aExpectations.G.cs, Phase7aExpectationTests.G.cs): the same.
 [tests/VisualCommit.VisualTests.Phase7a*/*.G.cs]
 generated_code = false
+
+# Part G of phase 8a (Phase8aChecks.G.cs, Phase8aExpectations.G.cs, Phase8aExpectationTests.G.cs): the same.
+[tests/VisualCommit.VisualTests.Phase8a*/*.G.cs]
+generated_code = false

@@ -438,6 +438,9 @@ public sealed record LaunchCommand(string FileName, IReadOnlyList<string> Argume
     /// <summary>Variables of this process's environment the program does not get (<c>ELECTRON_RUN_AS_NODE</c> for an editor, 12.4).</summary>
     public IReadOnlyList<string> RemovedVariables { get; init; } = [];
 
+    /// <summary>Windows: in a console window of its own (a start through the shell, <c>UseShellExecute</c>); ignored elsewhere.</summary>
+    public bool InNewTerminal { get; init; }
+
     /// <summary>The command as a user would type it, for the log.</summary>
     public string DisplayText => CommandLine is not null
         ? $"{FileName} {CommandLine}"

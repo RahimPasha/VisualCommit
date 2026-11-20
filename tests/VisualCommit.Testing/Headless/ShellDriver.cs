@@ -150,6 +150,13 @@ public sealed partial class ShellDriver : IDisposable
     /// <paramref name="azureDevOps"/> or <paramref name="gitLab"/> (a fake on a port) says where they
     /// are; all three providers' handlers are the loopback tripwire.
     /// </para>
+    /// <para>
+    /// <paramref name="gitProbe"/> replaces the machine's search for git
+    /// (<see cref="Git.MachineGitSetupProbe"/> when null), <paramref name="askPassHelper"/> names
+    /// where the prompt broker looks for its helper (next to <c>VisualCommit.Git</c> when null), and
+    /// <paramref name="identity"/> is the app's identity, <see cref="TestIdentity.Pinned"/> when null,
+    /// so that no picture shows the commit the tests were built from. No start-up timeline.
+    /// </para>
     /// </summary>
     /// <exception cref="ArgumentException">A fake and <paramref name="hosting"/> are both given, or a fake is in process (<see cref="FakeGitHub.InProcess"/>, <see cref="FakeAzureDevOps.InProcess"/>, <see cref="FakeGitLab.InProcess"/>: its handler goes in <paramref name="hosting"/>).</exception>
     public static ShellDriver Start(
@@ -164,7 +171,10 @@ public sealed partial class ShellDriver : IDisposable
         FakeTokenStore? tokens = null,
         HostingOptions? hosting = null,
         FakeAzureDevOps? azureDevOps = null,
-        FakeGitLab? gitLab = null)
+        FakeGitLab? gitLab = null,
+        IGitSetupProbe? gitProbe = null,
+        string? askPassHelper = null,
+        AppIdentity? identity = null)
     {
         if (gitHub is not null && hosting is not null)
         {
@@ -206,7 +216,10 @@ public sealed partial class ShellDriver : IDisposable
             tools: tools ?? ToolCatalogues.Fixed,
             readClock: readClock,
             hosting: options,
-            tokens: store);
+            tokens: store,
+            gitProbe: gitProbe,
+            askPassHelper: askPassHelper,
+            identity: identity ?? TestIdentity.Pinned);
         if (width is not null)
         {
             session.MainWindow.Width = width.Value;
@@ -253,7 +266,10 @@ public sealed partial class ShellDriver : IDisposable
         FakeTokenStore? tokens = null,
         HostingOptions? hosting = null,
         FakeAzureDevOps? azureDevOps = null,
-        FakeGitLab? gitLab = null)
+        FakeGitLab? gitLab = null,
+        IGitSetupProbe? gitProbe = null,
+        string? askPassHelper = null,
+        AppIdentity? identity = null)
     {
         ArgumentNullException.ThrowIfNull(tabs);
         if (gitHub is not null && hosting is not null)
@@ -269,7 +285,7 @@ public sealed partial class ShellDriver : IDisposable
         WriteSession(
             dataDirectory,
             new SessionState { Tabs = tabs.Select(path => new TabState(path)).ToList(), ActiveTab = activeTab });
-        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools, gitHub, tokens, hosting, azureDevOps, gitLab);
+        return Start(dataDirectory, width, height, promptHandler, systemDark, readClock, tools, gitHub, tokens, hosting, azureDevOps, gitLab, gitProbe, askPassHelper, identity);
     }
 
     /// <summary>

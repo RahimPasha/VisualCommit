@@ -195,6 +195,8 @@ wave own a file. The files that pass between packages, in this order: `AppComman
 §4); `GitIsolation.cs` (WP0, §4); `AskPassBroker.cs`, `AccountsSettingsViewModel.cs`,
 `MainWindowViewModelTests.cs` (§3, §5); `MainWindowViewModel.cs` and `.Settings.cs` (WP0, §5);
 `IGitRunner.cs`, `GitLocator.cs`, `GitSetupProbe.cs`, `GitAccess.cs`, `FileLauncher.cs` (WP0, §5);
+`GitAccessTests.cs` (WP0, whose code review added it with four tests of the fixed search and of a
+failing listener; §5 extends the class and does not create it);
 `SettingsDialogViewModel.cs` (WP0, §5, §8); `SettingsDialogView.axaml` (§5, §8);
 `SettingsDialogViewTests.cs` (§5, §8, §11); `WorkingChangesView.axaml` (§2, §6, §9);
 `LeftPanelView.axaml`, `CompareView.axaml` (§2, §9); `StatusBarView.axaml`, `CommitGraphView.axaml`
@@ -204,7 +206,7 @@ wave own a file. The files that pass between packages, in this order: `AppComman
 `Phase7aExpectations.A.cs` (§3, §8); `Phase7bExpectations.A.cs` (§2, §8); `Phase6Expectations.K.cs`,
 `Phase6ExpectationTests.K.cs`, `PaletteEntriesTests.cs`, `CommandPaletteViewTests.cs` (§8, §11);
 `AppShortcutsTests.cs` (WP0, §11). A package adds `ShellDriver` helpers only in a new partial
-`ShellDriver.Phase8a.<Key>.cs`. The lead's throughout: `AppSession.cs`, `TabServices.cs` (but §8's
+`ShellDriver.Phase8a.<Key>.cs`. The lead's throughout: `AppSession.cs` with `AppSessionTests.cs`, `TabServices.cs` (but §8's
 `SettingsSection.About`), `PromptDialogs.cs` after WP0, `VisualCommit.slnx` (each new project's line
 at its merge), `Directory.Build.props`, `CLAUDE.md`, `README.md`, `requirements.md`, `plan.md`,
 `status.md`, `architecture.md`, the icon's rounds in `docs/brand/icon/` (D447). Every other doc a
@@ -2043,7 +2045,8 @@ Fail first: the lookup, the stand-in, the macOS rule, `ConfigFault`, the reopeni
   `OsReleaseTests` (quotes, escapes, `#`, a later key wins, the `/usr/lib` file), `GitStandInTests`,
   `AskPassBrokerHelperTests` (the ssh line once), `GitConfigurationForgetTests` (over `MergeToolHelpTests`'
   fake runner, `HeldToolHelpRunner`; never the real `git mergetool --tool-help`).
-- App.Tests, no session: `GitAccessTests` (waiters, swap, joining, `Changed`, `ProbeAsync`; the
+- App.Tests, no session: `GitAccessTests` (the class exists since WP0, with four tests, 0.4; added
+  here: waiters, swap, joining, `Changed`, `ProbeAsync`; the
   fixed-detection constructor's `ReadGuidance` has no winget and no distribution),
   `CheckGitAgainTests` (the order, reopening, errors cleared, tools asked again, HelperMissing keeps
   git), `GitSetupTextsTests` (state × platform, `{min}`, the commands; L TooOld shows no command,

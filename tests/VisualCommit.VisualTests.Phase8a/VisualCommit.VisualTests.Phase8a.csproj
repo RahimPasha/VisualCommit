@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The scripted walk-through of the visual test gate (docs/plan.md) for phase 8a: its parts L
+       (the contrast round), I (one instance per data folder), F (first run), K (keyboard), B (the
+       icon), A (About and the notices), U (screen readers) and G (the guide's links), one class per
+       part, each written just before its package (D244), with their expected values
+       (docs/phase-8a-design.md 0.3, 0.5, 1.15). It drives the whole app in Avalonia's headless mode
+       and saves a screenshot after every step under artifacts/visual/phase-8a/ (VisualRun, in
+       VisualCommit.Testing). Its tests that start the app through ShellDriver live here, not in
+       App.Tests (D416). A project of its own, as phases 3 to 7b's are: a test assembly has one
+       headless UI thread, and a second assembly is a second test process that "dotnet test" runs
+       beside the others. It links App.Tests' recorders, as 7a's and 7b's projects do. The
+       real-window pass compiles the Phase8aExpectations files. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia.Headless.XUnit" />
+    <PackageReference Include="xunit.v3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\VisualCommit.App\VisualCommit.App.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
+    <ProjectReference Include="..\..\src\VisualCommit.Hosting\VisualCommit.Hosting.csproj" />
+    <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+  </ItemGroup>
+
+  <!-- App.Tests' recording actions and log, internal there and here (as 7a's and 7b's projects). -->
+  <ItemGroup>
+    <Compile Include="..\VisualCommit.App.Tests\RecordingActions.cs" Link="AppTests\%(Filename)%(Extension)" />
+    <Compile Include="..\VisualCommit.App.Tests\RecordingLog.cs" Link="AppTests\%(Filename)%(Extension)" />
+  </ItemGroup>
+
+</Project>

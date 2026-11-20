@@ -74,6 +74,10 @@ public partial class MainWindowViewModel
                     Hosting = _tabServices.Hosting,
                     SignIn = SignInAsync,
                     GitVersion = Git?.Version,
+                    Detection = Git,
+                    Identity = _tabServices.Identity,
+                    Launcher = _tabServices.Launcher,
+                    Clipboard = _tabServices.Clipboard,
                 },
                 section);
             await Dialogs.ShowAsync(dialog);

@@ -38,7 +38,9 @@ public sealed class TabServices
         IGitConfiguration? gitSettings = null,
         ToolCatalogues? tools = null,
         TimeProvider? readClock = null,
-        IHostingSession? hosting = null)
+        IHostingSession? hosting = null,
+        IStartupTimeline? startup = null,
+        AppIdentity? identity = null)
     {
         ArgumentNullException.ThrowIfNull(repositories);
         ArgumentNullException.ThrowIfNull(folders);
@@ -75,6 +77,8 @@ public sealed class TabServices
 
         // Phase 7a (docs/phase-7a-design.md 1.7): the session's hosting.
         Hosting = hosting ?? NullHostingSession.Instance;
+        Startup = startup ?? NullStartupTimeline.Instance;
+        Identity = identity ?? AppIdentity.FromAssembly(typeof(TabServices).Assembly);
         OpenRepositories = new OpenRepositories(this);
         BulkSlots = new BulkSlots();
         WorkspaceCommands = new WorkspaceCommands(this);
@@ -194,6 +198,12 @@ public sealed class TabServices
     /// gives one: GitHub off.
     /// </summary>
     public IHostingSession Hosting { get; }
+
+    /// <summary>The app's start-up timeline, which a repository tells of its first graph rows; <see cref="NullStartupTimeline"/> unless the session gives one.</summary>
+    public IStartupTimeline Startup { get; }
+
+    /// <summary>Who and what the app is (its name, creator, version and copyright); the app assembly's own unless the session gives another.</summary>
+    public AppIdentity Identity { get; }
 
     /// <summary>
     /// Signs in to a provider (docs/phase-7a-design.md 1.7, docs/phase-7b-design.md 1.7): set by

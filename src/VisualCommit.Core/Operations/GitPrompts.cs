@@ -100,6 +100,12 @@ public interface IGitPromptBroker
     /// <param name="group">The bulk run the operation belongs to (<see cref="GitOperation.PromptGroup"/>, docs/phase-6-design.md 4.4), which every prompt of the scope carries; null outside a run.</param>
     /// <param name="bindings">The URLs whose credentials come from a hosting account (<see cref="GitOperation.CredentialBindings"/>, D255, docs/phase-7a-design.md 0.2); null or empty: none.</param>
     PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null, IReadOnlyList<CredentialBinding>? bindings = null);
+
+    /// <summary>The path the helper for git's questions was looked for at, while it is missing; null when it is there or the broker has none. This default reports none.</summary>
+    string? MissingHelperPath => null;
+
+    /// <summary>Looks for the helper again and returns <see cref="MissingHelperPath"/>. This default looks nowhere and reports none.</summary>
+    string? CheckHelper() => null;
 }
 
 /// <summary>One open prompt scope (3.1): its id, the variables for git's environment and whether the user cancelled a prompt.</summary>

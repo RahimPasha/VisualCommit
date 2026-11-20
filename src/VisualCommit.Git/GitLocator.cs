@@ -7,19 +7,40 @@ namespace VisualCommit.Git;
 public static class GitLocator
 {
     /// <summary>
+    /// The test switch that names the machine's only git (a full path), or says it has none
+    /// (<c>none</c>); read once by the app session at its start. Never set outside a test.
+    /// </summary>
+    public const string StandInVariable = "VISUALCOMMIT_GIT_STAND_IN";
+
+    /// <summary>
     /// Finds git, asks it for its version and returns a runner for it when it is usable.
     /// Never throws for a missing or broken git; the result says what was found. The runner records
     /// its calls in <paramref name="callLog"/> with the times of <paramref name="recordClock"/>
     /// (<see cref="GitRunner"/>) and runs them with the session's git environment
     /// <paramref name="environment"/> (docs/phase-6-design.md 17.2; null for none).
     /// </summary>
+    public static Task<GitDetection> DetectAsync(
+        IGitCallLog? callLog = null,
+        IAppLog? log = null,
+        TimeProvider? recordClock = null,
+        IReadOnlyDictionary<string, string?>? environment = null,
+        CancellationToken cancellationToken = default) =>
+        DetectAsync(new GitLookup(null, null), callLog, log, recordClock, environment, cancellationToken);
+
+    /// <summary>
+    /// Finds git as <see cref="DetectAsync(IGitCallLog?, IAppLog?, TimeProvider?, IReadOnlyDictionary{string, string?}?, CancellationToken)"/>
+    /// does: on the PATH, then in the usual install folders. <paramref name="lookup"/>'s chosen git
+    /// and stand-in are not looked at: every lookup searches the machine the same way.
+    /// </summary>
     public static async Task<GitDetection> DetectAsync(
+        GitLookup lookup,
         IGitCallLog? callLog = null,
         IAppLog? log = null,
         TimeProvider? recordClock = null,
         IReadOnlyDictionary<string, string?>? environment = null,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(lookup);
         log ??= NullAppLog.Instance;
 
         var path = FindExecutable(GitSearchContext.FromSystem());

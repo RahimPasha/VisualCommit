@@ -906,7 +906,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         }
     }
 
-    /// <summary>The graph control drew a frame that showed rows: logs the time since opening began, once (D50).</summary>
+    /// <summary>
+    /// The graph control drew a frame that showed rows: logs the time since opening began, once
+    /// (D50), and tells the session's start-up timeline (<see cref="TabServices.Startup"/>).
+    /// </summary>
     public void OnRowsDrawn()
     {
         if (_firstRowsLogged || Graph.Count == 0)
@@ -916,6 +919,7 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
 
         _firstRowsLogged = true;
         _log.Info(string.Create(CultureInfo.InvariantCulture, $"{Name}: first graph rows drawn after {_sinceOpening.ElapsedMilliseconds} ms"));
+        _services?.Startup.FirstRows(Name);
     }
 
     /// <summary>

@@ -338,6 +338,19 @@ public static class GitIsolation
     ];
 
     /// <summary>
+    /// The stand-in for git's variables (<see cref="GitStandIn"/>): the app's switch that names the
+    /// machine's only git (<see cref="Git.GitLocator.StandInVariable"/>) and the two the stand-in
+    /// itself reads. Removed from every test process and from the app the real-window pass starts,
+    /// so that no run takes a machine's value; a check that wants the stand-in sets them itself.
+    /// </summary>
+    public static IReadOnlyList<string> GitStandInVariables { get; } =
+    [
+        Git.GitLocator.StandInVariable,
+        GitStandIn.VersionVariable,
+        GitStandIn.FailureVariable,
+    ];
+
+    /// <summary>
     /// <c>PATHEXT</c> as the tests have it: Windows' default
     /// (<see cref="Core.ToolCatalogues.DefaultWindowsPathExtensions"/>, the value the harnesses'
     /// fixed catalogues give, docs/phase-6-design.md 12.9), not the machine's, to which installers
@@ -356,8 +369,8 @@ public static class GitIsolation
     /// 0), <c>PATHEXT</c> fixed (<see cref="PathExtensionsVariable"/>), and since phase 7a GitHub off
     /// (<c>VISUALCOMMIT_GITHUB_URL=none</c>; since 7b also <c>VISUALCOMMIT_AZURE_DEVOPS_URL</c> and
     /// <c>VISUALCOMMIT_GITLAB_URL</c>), tokens in memory (<c>VISUALCOMMIT_KEYCHAIN=memory</c>)
-    /// and <see cref="HostingTokenVariables"/> removed (docs/phase-7a-design.md 1.8, ruling 24); a
-    /// check's own variables override them. Applied to the test
+    /// and <see cref="HostingTokenVariables"/> removed (docs/phase-7a-design.md 1.8, ruling 24), and
+    /// <see cref="GitStandInVariables"/> removed; a check's own variables override them. Applied to the test
     /// process (<see cref="IsolateThisProcess"/>), to the app the real-window pass starts
     /// (<c>RealApp.Launch</c>) and to <see cref="TempRepo"/>'s git calls, which then set
     /// <c>GIT_EDITOR</c> and <c>GIT_SEQUENCE_EDITOR</c> to <c>:</c> and their own author.
@@ -379,6 +392,7 @@ public static class GitIsolation
         new(HostingOptions.AzureDevOpsVariable, "none"),
         new(HostingOptions.GitLabVariable, "none"),
         new(TokenStores.Variable, "memory"),
+        .. GitStandInVariables.Select(variable => new KeyValuePair<string, string?>(variable, null)),
     ];
 
     /// <summary>

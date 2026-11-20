@@ -86,18 +86,20 @@ public sealed class PromptDialogs : IGitPromptHandler
     /// <c>AppSession.Start</c>, which disposes the broker at the end of the session.
     /// <paramref name="credentials"/>, <paramref name="sessionEnvironment"/> and
     /// <paramref name="gitVersion"/> go to the broker for the hosting account's bound URLs (D255,
-    /// docs/phase-7a-design.md 1.3, 1.7).
+    /// docs/phase-7a-design.md 1.3, 1.7). <paramref name="helperPath"/> is where the broker looks for
+    /// its helper; null: next to <c>VisualCommit.Git</c>.
     /// </summary>
     public static IGitPromptBroker CreateBroker(
         IGitPromptHandler handler,
         IAppLog log,
         IGitCredentialSource? credentials = null,
         IReadOnlyDictionary<string, string?>? sessionEnvironment = null,
-        Func<GitVersion?>? gitVersion = null)
+        Func<GitVersion?>? gitVersion = null,
+        string? helperPath = null)
     {
         ArgumentNullException.ThrowIfNull(handler);
         ArgumentNullException.ThrowIfNull(log);
-        return new AskPassBroker(handler, log, credentials: credentials, sessionEnvironment: sessionEnvironment, gitVersion: gitVersion);
+        return new AskPassBroker(handler, log, helperPath: helperPath, credentials: credentials, sessionEnvironment: sessionEnvironment, gitVersion: gitVersion);
     }
 
     /// <summary>

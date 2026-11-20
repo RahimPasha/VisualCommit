@@ -264,12 +264,14 @@ public class AppShortcutsTests
         // of no command of this enum (PaletteEntriesTests). D299 amends the list: Clone from GitHub…
         // is a palette command without a key (docs/phase-7a-design.md 9.5); D354 amends D299's as
         // D299 amended D199's: Clone from GitLab… and Clone from Azure DevOps… are two more
-        // (docs/phase-7b-design.md 11.5).
+        // (docs/phase-7b-design.md 11.5). D417: About VisualCommit… has no key; Open the user guide
+        // has none until F1 is bound to it.
         AppCommand[] withoutKey =
         [
             AppCommand.ShowKeyboardShortcuts, AppCommand.NewWorkspace, AppCommand.ShowBackups, AppCommand.CreateTagAtHead, AppCommand.AddRemote,
             AppCommand.ManageRemotes, AppCommand.ShowAllHiddenBranches, AppCommand.StopSoloing, AppCommand.UseDarkTheme, AppCommand.UseLightTheme,
             AppCommand.FollowSystemTheme, AppCommand.CloneFromGitHub, AppCommand.CloneFromGitLab, AppCommand.CloneFromAzureDevOps,
+            AppCommand.About, AppCommand.OpenUserGuide,
         ];
         var keyed = AppShortcuts.Bindings.Select(binding => binding.Command).ToHashSet();
         Assert.Equal(withoutKey.Order(), Enum.GetValues<AppCommand>().Where(command => !keyed.Contains(command)).Order());

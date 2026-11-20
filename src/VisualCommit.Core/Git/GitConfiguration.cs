@@ -50,6 +50,11 @@ public interface IGitConfiguration : IDisposable
 
     /// <summary><c>git mergetool --tool-help</c>, run once per session in the background; the list kept in the data folder answers at once (8.10, D202).</summary>
     Task<MergeToolHelp> ReadToolHelpAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Drops a finished merge-tool lookup, so that the next <see cref="ReadToolHelpAsync"/> asks git again. This default keeps everything.</summary>
+    void ForgetToolLookup()
+    {
+    }
 }
 
 /// <summary>A value's scope as <c>git config --show-scope</c> names it (8.1).</summary>

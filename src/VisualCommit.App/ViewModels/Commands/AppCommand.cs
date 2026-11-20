@@ -61,6 +61,11 @@ public enum AppCommand
     CloneFromGitLab,
     CloneFromAzureDevOps,
 
+    // About and the user guide (D417), after the clones' so that only the keys-only values below
+    // move. The palette lists each one once AppCommands.Resolve has a case for it.
+    About,
+    OpenUserGuide,
+
     // Keys only drawn and listed (KeyPass.View): their views handle them.
     ContextMenu,
     TextUndo,

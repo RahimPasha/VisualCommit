@@ -27,6 +27,13 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly ISettingsStore _settings;
     private readonly IThemeService _themes;
     private readonly Func<CancellationToken, Task<GitDetection>> _detectGit;
+
+    /// <summary>
+    /// The session's search for git, which <c>AppSession.Start</c> hands the window beside its
+    /// search function; null without a session. Nothing reads it yet: the window keeps it so that it
+    /// can search for git again (Check again and the first-run screen).
+    /// </summary>
+    private readonly GitAccess? _gitAccess;
     private readonly IAppLog _log;
     private readonly ISessionStore _session;
     private readonly TabServices _tabServices;
@@ -48,11 +55,13 @@ public partial class MainWindowViewModel : ObservableObject
         IAppLog? log = null,
         TabServices? tabServices = null,
         ISessionStore? session = null,
-        Func<string, string?>? readEnvironment = null)
+        Func<string, string?>? readEnvironment = null,
+        GitAccess? gitAccess = null)
     {
         _settings = settings;
         _themes = themes;
         _detectGit = detectGit;
+        _gitAccess = gitAccess;
         _log = log ?? NullAppLog.Instance;
         _session = session ?? new MemorySessionStore();
         _tabServices = tabServices ?? new TabServices(
@@ -178,9 +187,11 @@ public partial class MainWindowViewModel : ObservableObject
         }
 
         // A restored active dashboard reads its rows beside the restored tabs' openings
-        // (docs/phase-6-design.md 2.10).
-        var opening = Tabs
-            .Where(tab => tab.PendingPath is not null)
+        // (docs/phase-6-design.md 2.10). The start-up timeline counts the tabs that open a
+        // repository before they open.
+        var restored = Tabs.Where(tab => tab.PendingPath is not null).ToList();
+        _tabServices.Startup.TabsRestored(restored.Count);
+        var opening = restored
             .Select(tab => tab.OpenAsync(tab.PendingPath!, remember: false))
             .ToList<Task>();
 

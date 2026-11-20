@@ -61,6 +61,18 @@ public sealed record SettingsScreenServices(
 
     /// <summary>The detected git's version, null when unknown: the Accounts section's texts on git older than 2.31 (D277).</summary>
     public GitVersion? GitVersion { get; init; }
+
+    /// <summary>What the search for git found when the screen opened; null while none has ended.</summary>
+    public GitDetection? Detection { get; init; }
+
+    /// <summary>Who and what the app is (its name, creator, version and copyright); null without one.</summary>
+    public AppIdentity? Identity { get; init; }
+
+    /// <summary>The window's file launcher, which opens web addresses; null without one.</summary>
+    public IFileLauncher? Launcher { get; init; }
+
+    /// <summary>The window's clipboard; null without one.</summary>
+    public IClipboardService? Clipboard { get; init; }
 }
 
 /// <summary>

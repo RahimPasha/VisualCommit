@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace VisualCommit.Core.Settings;
 
 /// <summary>The colour theme of the app (D194). Dark is the default.</summary>
@@ -79,6 +81,13 @@ public sealed record AppSettings
     /// (<c>.py .pl</c>); empty by default.
     /// </summary>
     public string ExtraRunnableExtensions { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The git program chosen in Settings, as a full path; null for none. <c>settings.json</c> holds
+    /// it (<c>gitExecutable</c>) only while it is set.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? GitExecutable { get; init; }
 }
 
 /// <summary>The editor "Open in editor" starts (docs/phase-6-design.md 12). Null in <see cref="AppSettings"/>: none chosen.</summary>

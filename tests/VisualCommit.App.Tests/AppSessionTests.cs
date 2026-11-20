@@ -2,6 +2,9 @@ using Avalonia.Headless.XUnit;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.Core;
+using VisualCommit.Core.Git;
+using VisualCommit.Core.Logging;
+using VisualCommit.Core.Session;
 using VisualCommit.Core.Settings;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Testing;
@@ -14,7 +17,8 @@ namespace VisualCommit.App.Tests;
 /// What <see cref="AppSession.Start"/> wires that no view model sees (docs/phase-6-design.md 18,
 /// the lead's): the workspaces kept in <c>workspaces.json</c> beside the session (D189, 1.3), the
 /// theme's start-up line and its service's end (11.5), the auto-fetch variable's start-up line (7.3),
-/// and the hosting session with its two start-up lines (docs/phase-7a-design.md 7.11).
+/// the hosting session with its two start-up lines (docs/phase-7a-design.md 7.11), and what the
+/// start-up timeline is told (docs/phase-8a-design.md 1.9, 1.10).
 /// </summary>
 public class AppSessionTests
 {
@@ -123,8 +127,62 @@ public class AppSessionTests
         Assert.EndsWith("] Token store: memory.", Assert.Single(lines, entry => entry.Contains("] Token store: ", StringComparison.Ordinal)), StringComparison.Ordinal);
     }
 
-    /// <summary>A session as <see cref="ShellDriver.Start"/> makes one, with <paramref name="readEnvironment"/> as its environment reader.</summary>
-    private static AppSession StartSession(string dataDirectory, Func<string, string?>? readEnvironment) =>
+    [AvaloniaFact]
+    public async Task The_session_tells_its_timeline_the_window_git_found_the_restored_repositories_and_their_first_rows()
+    {
+        // docs/phase-8a-design.md 1.9, 1.10: WindowOpened on the window's Opened, GitFound once the
+        // first search found a usable git (the machine's isolated one), TabsRestored with the tabs
+        // that open a repository (the dashboard is not counted) and FirstRows once per repository.
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.LinearAsync();
+        ShellDriver.WriteWorkspaces(data.Path, new WorkspaceList { Workspaces = [new Workspace("w1", "W one", [])] });
+        ShellDriver.WriteSession(data.Path, new SessionState { Tabs = [new TabState(repo.Path), new TabState(null, "w1")], ActiveTab = 0 });
+        var timeline = new RecordingTimeline();
+
+        using var session = StartSession(data.Path, readEnvironment: null, startup: timeline);
+        session.MainWindow.Show();
+        await session.Initialization;
+
+        Assert.Same(timeline, session.Services.Startup);
+        Assert.Equal(GitAvailability.Available, session.Shell.Git?.Availability);
+        Assert.Equal(1, timeline.WindowOpened);
+        Assert.Equal(1, timeline.GitFound);
+        Assert.Equal([1], timeline.TabsRestored);
+
+        // The restored dashboards come first in the strip (docs/phase-6-design.md 1.11).
+        var repository = Assert.Single(session.Shell.Tabs, tab => tab.Repository is not null).Repository!;
+        repository.OnRowsDrawn();
+        repository.OnRowsDrawn();
+        Assert.Equal([repository.Name], timeline.FirstRows);
+    }
+
+    [AvaloniaFact]
+    public async Task A_first_search_that_finds_no_usable_git_tells_the_timeline_nothing_of_git()
+    {
+        using var data = new TempDirectory("data");
+        var timeline = new RecordingTimeline();
+        var probe = new AnsweringProbe(new GitDetection(GitAvailability.NotFound, null, null, null));
+
+        using var session = StartSession(data.Path, readEnvironment: null, startup: timeline, gitProbe: probe);
+        session.MainWindow.Show();
+        await session.Initialization;
+
+        Assert.Same(probe.Answer, session.Shell.Git);
+        Assert.Equal(1, timeline.WindowOpened);
+        Assert.Equal(0, timeline.GitFound);
+        Assert.Equal([0], timeline.TabsRestored);
+    }
+
+    /// <summary>
+    /// A session as <see cref="ShellDriver.Start"/> makes one, with <paramref name="readEnvironment"/>
+    /// as its environment reader, <paramref name="startup"/> as its start-up timeline and
+    /// <paramref name="gitProbe"/> as its search for git (each null: the session's default).
+    /// </summary>
+    private static AppSession StartSession(
+        string dataDirectory,
+        Func<string, string?>? readEnvironment,
+        IStartupTimeline? startup = null,
+        IGitSetupProbe? gitProbe = null) =>
         AppSession.Start(
             new AppPaths(dataDirectory),
             Avalonia.Application.Current!,
@@ -134,8 +192,77 @@ public class AppSessionTests
             gitEnvironment: GitIsolation.SessionGitEnvironment(dataDirectory),
             systemTheme: new FakeSystemTheme(true),
             tools: ToolCatalogues.Fixed,
-            readEnvironment: readEnvironment);
+            readEnvironment: readEnvironment,
+            gitProbe: gitProbe,
+            startup: startup);
 
     private static List<string> AutoFetchLines(string dataDirectory) =>
         [.. AppLogFile.ReadLines(dataDirectory).Where(entry => entry.Contains(AutoFetchScheduler.MinutesVariable, StringComparison.Ordinal))];
+
+    /// <summary>A timeline that keeps what it was told; <see cref="IStartupTimeline.GitFound"/> may come from another thread.</summary>
+    private sealed class RecordingTimeline : IStartupTimeline
+    {
+        private readonly Lock _gate = new();
+        private readonly List<int> _tabsRestored = [];
+        private readonly List<string> _firstRows = [];
+        private int _windowOpened;
+        private int _gitFound;
+
+        public int WindowOpened => Volatile.Read(ref _windowOpened);
+
+        public int GitFound => Volatile.Read(ref _gitFound);
+
+        public IReadOnlyList<int> TabsRestored
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _tabsRestored];
+                }
+            }
+        }
+
+        public IReadOnlyList<string> FirstRows
+        {
+            get
+            {
+                lock (_gate)
+                {
+                    return [.. _firstRows];
+                }
+            }
+        }
+
+        void IStartupTimeline.WindowOpened() => Interlocked.Increment(ref _windowOpened);
+
+        void IStartupTimeline.GitFound() => Interlocked.Increment(ref _gitFound);
+
+        void IStartupTimeline.TabsRestored(int count)
+        {
+            lock (_gate)
+            {
+                _tabsRestored.Add(count);
+            }
+        }
+
+        void IStartupTimeline.FirstRows(string repositoryName)
+        {
+            lock (_gate)
+            {
+                _firstRows.Add(repositoryName);
+            }
+        }
+    }
+
+    /// <summary>A search for git that answers with one detection.</summary>
+    private sealed class AnsweringProbe(GitDetection answer) : IGitSetupProbe
+    {
+        public GitDetection Answer { get; } = answer;
+
+        public Task<GitDetection> DetectAsync(GitLookup lookup, IGitCallLog? callLog, IAppLog log, TimeProvider? recordClock, IReadOnlyDictionary<string, string?>? environment, CancellationToken cancellationToken) =>
+            Task.FromResult(Answer);
+
+        public GitGuidance ReadGuidance() => new(GuidancePlatform.Linux, null, null);
+    }
 }

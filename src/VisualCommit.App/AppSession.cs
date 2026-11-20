@@ -142,6 +142,20 @@ public sealed class AppSession : IDisposable
     /// environment, never through <paramref name="readEnvironment"/>); the session's
     /// <see cref="HostingSession"/> takes both.
     /// </para>
+    /// <para>
+    /// <paramref name="gitProbe"/> looks for git (null: <see cref="MachineGitSetupProbe"/>), told the
+    /// git chosen in Settings and the stand-in (<see cref="GitLocator.StandInVariable"/>, read from the
+    /// process's environment once, here); <paramref name="askPassHelper"/> is where the prompt broker
+    /// looks for its helper (null: next to <c>VisualCommit.Git</c>, <see cref="VisualCommit.Git.Prompts.AskPassLocator.ExpectedPath"/>);
+    /// <paramref name="startup"/> is told when the window opens and when the first search for git
+    /// ends with a usable git (null: <see cref="NullStartupTimeline"/>); <paramref name="identity"/>
+    /// is the app's name, creator, version and copyright (null: this assembly's,
+    /// <see cref="AppIdentity.FromAssembly"/>). The headless harness (<c>ShellDriver</c>) always gives
+    /// its pinned identity and never a timeline, and gives a probe and a helper's path only when a
+    /// test names them (otherwise the machine's search and the helper next to <c>VisualCommit.Git</c>);
+    /// the real window's launches start the built app, whose <see cref="App"/> gives the process's
+    /// timeline (<see cref="AppLaunch.Current"/>) and nothing else.
+    /// </para>
     /// </summary>
     public static AppSession Start(
         AppPaths paths,
@@ -158,13 +172,18 @@ public sealed class AppSession : IDisposable
         Func<string, string?>? readEnvironment = null,
         TimeProvider? readClock = null,
         HostingOptions? hosting = null,
-        ITokenStore? tokens = null)
+        ITokenStore? tokens = null,
+        IGitSetupProbe? gitProbe = null,
+        string? askPassHelper = null,
+        IStartupTimeline? startup = null,
+        AppIdentity? identity = null)
     {
         ArgumentNullException.ThrowIfNull(paths);
         ArgumentNullException.ThrowIfNull(application);
         recordClock ??= AppClocks.RecordClockFromEnvironment();
         backupClock ??= AppClocks.BackupClockFromEnvironment();
         tools ??= ToolCatalogues.FromEnvironment();
+        var timeline = startup ?? NullStartupTimeline.Instance;
 
         // Every key text is in the platform's words (docs/phase-6-design.md 6.4), set before the
         // window is made: Cmd where the command modifier is Meta (macOS), Ctrl otherwise.
@@ -207,27 +226,26 @@ public sealed class AppSession : IDisposable
         var gitCalls = new GitCallLog(operations: operations);
 
         // Git is looked for once the window exists (MainWindowViewModel.InitializeAsync); the
-        // services that need it wait for that search through GitAccess (D45).
-        var gitFound = new TaskCompletionSource<GitDetection>(TaskCreationOptions.RunContinuationsAsynchronously);
-        async Task<GitDetection> DetectGitAsync(CancellationToken cancellationToken)
+        // services that need it wait for that search through GitAccess (D45). The search is told
+        // the git chosen in Settings and the stand-in, a test switch read here once.
+        var standIn = Environment.GetEnvironmentVariable(GitLocator.StandInVariable);
+        var gitAccess = new GitAccess(
+            gitProbe ?? MachineGitSetupProbe.Instance,
+            () => new GitLookup(settings.Current.GitExecutable, standIn),
+            gitCalls,
+            log,
+            recordClock,
+            gitEnvironment);
+
+        // The timeline hears of the first search's end only, and only of a usable git.
+        var firstSearchEnded = 0;
+        gitAccess.Changed += (_, _) =>
         {
-            try
+            if (Interlocked.Exchange(ref firstSearchEnded, 1) == 0 && gitAccess.Known is { Availability: GitAvailability.Available })
             {
-                var detection = await GitLocator.DetectAsync(gitCalls, log, recordClock, gitEnvironment, cancellationToken);
-                gitFound.TrySetResult(detection);
-                return detection;
+                timeline.GitFound();
             }
-            catch (OperationCanceledException)
-            {
-                gitFound.TrySetCanceled(cancellationToken);
-                throw;
-            }
-            catch (Exception ex)
-            {
-                gitFound.TrySetException(ex);
-                throw;
-            }
-        }
+        };
 
         // Phase 3 (docs/phase-3-design.md 1.7, 2.32, 3.1): one record of the operations, the
         // prompt channel of the session, and the file launcher and clipboard of the window. Phase 5
@@ -251,11 +269,11 @@ public sealed class AppSession : IDisposable
             log,
             hostingSession,
             gitEnvironment,
-            gitVersion: () => gitFound.Task.IsCompletedSuccessfully ? gitFound.Task.Result.Version : null);
+            gitVersion: () => gitAccess.Known?.Version,
+            helperPath: askPassHelper);
 
         // Git's own settings (docs/phase-6-design.md 8.1): one instance over the session's runner,
         // with the kept list of merge tools in the data folder (8.10); disposed with the session.
-        var gitAccess = new GitAccess(gitFound.Task);
         var gitSettings = new GitConfiguration(gitAccess.GetRunnerAsync, paths.DataDirectory, paths.MergeToolsFile, gitEnvironment, log);
 
         // What the machine has installed, unless the harnesses fixed it (12.9): its editors, the
@@ -280,13 +298,16 @@ public sealed class AppSession : IDisposable
             gitSettings: gitSettings,
             tools: tools,
             readClock: readClock,
-            hosting: hostingSession);
-        var shell = new MainWindowViewModel(settings, themes, DetectGitAsync, log, tabServices, session, readEnvironment);
+            hosting: hostingSession,
+            startup: timeline,
+            identity: identity ?? AppIdentity.FromAssembly(typeof(AppSession).Assembly));
+        var shell = new MainWindowViewModel(settings, themes, cancellationToken => gitAccess.DetectAsync(cancellationToken), log, tabServices, session, readEnvironment, gitAccess);
 
         // A prompt dialog names its repository by the window's one rule, as every other dialog (4f).
         promptPresenter.ShowsRepositoryName = () => shell.NamesRepositoryInDialogs;
         mainWindow = new MainWindow { DataContext = shell };
         mainWindow.UseSession(session);
+        mainWindow.Opened += (_, _) => timeline.WindowOpened();
 
         return new AppSession(paths, log, settings, session, workspaces, themes, ownedSystemTheme, gitCalls, tabServices, shell, mainWindow);
     }

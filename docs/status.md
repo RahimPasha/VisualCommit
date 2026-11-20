@@ -493,17 +493,25 @@ every commit.
   `phase8a-checks-review-L-I` (run `wf_17f3e7ad-e6a`: two Opus reviewers, a verifier for each
   major, one fixer who corrects the report). The owner turned Ultracode on again on 2026-11-20,
   so substantive tasks run as workflows again.
-  WP0's builder ended on 2026-11-20: 26 files changed and 17 added, `dotnet build` with no warning,
-  and its own classes green (`AppVersionInfoTests` 11, `AppLinksTests` 3, `AppShortcutsTests` 9,
-  `GitSetupStatesTests` 5, the 8a project's `Phase8aSupportTests` 6). Still uncommitted: its diff is
-  under a code review, the workflow `phase8a-wp0-code-review` (run `wf_f3bdee43-0f6`: four Opus
-  reviewers, a verifier for each finding, one fixer who edits the working tree and builds). After
-  it the lead builds, runs the classes design 1.16 names (not beside the other workflows' agents),
-  commits, pushes and reads CI's run. The builder's notes for the lead: CLAUDE.md's rows for the
-  8a walk-through and the default of `time-scripted-check.sh` (now `8a`); at §3's merge
-  `HeldRulesTab.cs:129` passes the broker's `gitVersion` by position; §11 takes `OpenUserGuide` out
-  of `AppShortcutsTests`' keyless list when it binds F1; an `.editorconfig` entry for 8a's `*.G.cs`
-  files, as phases 6 and 7a have.
+  WP0's builder ended on 2026-11-20 (`dotnet build` with no warning, its own classes green), and
+  its diff went through a code review, the workflow `phase8a-wp0-code-review` (run
+  `wf_f3bdee43-0f6`: four Opus reviewers, a verifier for each finding, one fixer; 25 agents, 3.07M
+  tokens, 29 minutes): 20 findings, all minor, 17 confirmed and 3 refuted; no contract of design
+  section 1 was missing or wrong and no behaviour changed. Fixed: a listener of `GitAccess.Changed`
+  that throws can no longer replace the search's result (each is called in its own guard, logged
+  at Error); `Known` of a fixed search no longer waits for a continuation; stub comments that
+  stated today's state as lasting; new tests (`GitAccessTests`, four; `AppSessionTests`, the
+  timeline's wiring; `Phase8aSupportTests`, the git chosen in Settings reaching the probe). After
+  the fixes: `dotnet build` 0 warnings; `GitAccessTests` 4, `AppSessionTests` 13, the 8a project 7,
+  `AppVersionInfoTests` 11, `AppLinksTests` 3, `AppShortcutsTests` 9, `GitSetupStatesTests` 5.
+  **WP0 is committed locally and not pushed yet**: the lead first runs the classes design 1.16
+  names (`ShellTests`, `MainWindowViewModelTests`, `AppShortcutsTests`, `PaletteEntriesTests`,
+  `SettingsDialogViewTests`, `PromptDialogsTests`, `GitRepositoryProviderTests`, `StatusBarTests`
+  and the 8a project), once the icon's and the checks' workflows have ended, then pushes and reads
+  CI's run. Notes for later packages: at §3's merge `HeldRulesTab.cs:129` passes the broker's
+  `gitVersion` by position; §11 takes `OpenUserGuide` out of `AppShortcutsTests`' keyless list when
+  it binds F1; §5 extends `GitAccessTests`, which exists now; `.editorconfig` has an entry for
+  8a's `*.G.cs` files, as phases 6 and 7a have.
 - **Phase 8's start, 2026-11-18** (no branch yet: everything so far is on `master` or outside the
   repo). The machine changed since phase 7b's gate (Windows updates KB5132061 and KB5132688 on
   2026-11-11, and a boot that day; git 2.56.0.windows.4 and SDK 10.0.303 as before), so step 6's

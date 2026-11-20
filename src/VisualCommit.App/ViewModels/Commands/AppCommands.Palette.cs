@@ -97,6 +97,11 @@ public sealed partial class AppCommands
         Add(AppCommand.UseDarkTheme);
         Add(AppCommand.UseLightTheme);
         Add(AppCommand.FollowSystemTheme);
+
+        // About and the user guide (D417), in their place: each is listed once Resolve has a case
+        // for it.
+        Add(AppCommand.About);
+        Add(AppCommand.OpenUserGuide);
         return entries;
     }
 
