@@ -66,8 +66,8 @@
                  Margin="0,4,0,0"
                  AutomationProperties.AutomationId="GitSetupGuidance" />
 
-      <!-- The command to type, with Copy. -->
-      <StackPanel Name="GitSetupCommandRow" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center" IsVisible="{Binding ShowsCommand}">
+      <!-- The command to type, with Copy at its right; a long command wraps. -->
+      <Grid Name="GitSetupCommandRow" ColumnDefinitions="*,Auto" HorizontalAlignment="Center" IsVisible="{Binding ShowsCommand}">
         <Border Padding="8,4"
                 CornerRadius="4"
                 VerticalAlignment="Center"
@@ -82,16 +82,18 @@
                                AutomationProperties.AutomationId="GitSetupCommand" />
         </Border>
         <Button Name="GitSetupCopyButton"
+                Grid.Column="1"
+                Margin="8,0,0,0"
                 Theme="{StaticResource VcActionButton}"
                 VerticalAlignment="Center"
                 Content="{x:Static gs:GitSetupTexts.Copy}"
                 Command="{Binding CopyCommand}"
                 AutomationProperties.AutomationId="GitSetupCopyButton"
                 AutomationProperties.Name="{x:Static gs:GitSetupTexts.Copy}" />
-      </StackPanel>
+      </Grid>
 
       <!-- The buttons, in this order, those the state offers; they wrap on a narrow window. -->
-      <WrapPanel Name="GitSetupButtons" HorizontalAlignment="Center" ItemSpacing="8" LineSpacing="8" Margin="0,8,0,0">
+      <WrapPanel Name="GitSetupButtons" HorizontalAlignment="Center" ItemsAlignment="Center" ItemSpacing="8" LineSpacing="8" Margin="0,8,0,0">
         <Button Name="GitSetupWingetButton"
                 Theme="{StaticResource VcActionButton}"
                 kr:KeyRegion.IsMain="True"
@@ -166,8 +168,8 @@
                        HorizontalAlignment="Center"
                        AutomationProperties.AutomationId="GitSetupError" />
 
-      <!-- The links: git-scm.com's other ways (macOS, Linux), then the user guide's page. -->
-      <StackPanel Name="GitSetupLinks" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Center">
+      <!-- The links: git-scm.com's other ways (macOS, Linux), then the user guide's page; they wrap on a narrow window. -->
+      <WrapPanel Name="GitSetupLinks" HorizontalAlignment="Center" ItemsAlignment="Center" ItemSpacing="8" LineSpacing="4">
         <Button Name="GitSetupMoreLink"
                 Theme="{StaticResource VcFlatButton}"
                 Padding="6,2"
@@ -185,7 +187,7 @@
                 AutomationProperties.Name="{Binding GuideLinkText}">
           <TextBlock Text="{Binding GuideLinkText}" Foreground="{DynamicResource VcAccentBrush}" />
         </Button>
-      </StackPanel>
+      </WrapPanel>
     </StackPanel>
   </ScrollViewer>
 

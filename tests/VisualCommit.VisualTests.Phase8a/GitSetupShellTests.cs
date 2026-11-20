@@ -1,4 +1,6 @@
 using Avalonia.Automation;
+using Avalonia.Controls;
+using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
@@ -43,6 +45,7 @@ public sealed class GitSetupShellTests : Phase8aChecks
         Assert.Equal(body, app.GitSetupText(F.BodyId));
         Assert.False(view.Focusable);
         AssertNoClippedText(app);
+        AssertInsideTheScreen(app);
 
         app.Window.Width = 1000;
         app.Window.Height = 560;
@@ -50,7 +53,18 @@ public sealed class GitSetupShellTests : Phase8aChecks
         app.MoveToNeutral();
         app.Settle();
         AssertNoClippedText(app);
-        Assert.True(app.BoundsOf(app.GitSetupPart(F.CheckAgainId)!).Right <= 1000);
+        AssertInsideTheScreen(app);
+    }
+
+    /// <summary>Every part of the screen shown lies inside its width: nothing is pushed out of the graph area, where it would be cut off.</summary>
+    private static void AssertInsideTheScreen(ShellDriver app)
+    {
+        var screen = app.BoundsOf(app.GitSetupView());
+        foreach (var part in app.GitSetupView().GetVisualDescendants().OfType<StackPanel>().First().GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible && control.Bounds.Width > 0))
+        {
+            var bounds = app.BoundsOf(part);
+            Assert.True(bounds.Left >= screen.Left - 0.5 && bounds.Right <= screen.Right + 0.5, $"{part.GetType().Name} {part.Name} at {bounds} lies outside the screen at {screen}.");
+        }
     }
 
     private static (FakeGitSetupProbe Probe, string? Helper, string Title, string Body, string Guidance) Setup(string state)
