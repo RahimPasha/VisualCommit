@@ -21,13 +21,17 @@
       <SolidColorBrush x:Key="VcAccentTextBrush" Color="#10121A" />
       <SolidColorBrush x:Key="VcSuccessBrush" Color="#3FB97F" />
       <SolidColorBrush x:Key="VcWarningBrush" Color="#E0A23B" />
-      <SolidColorBrush x:Key="VcDangerBrush" Color="#E5606B" />
-      <!-- Phase 6: text on a danger background, the danger button's label (D198; a dark label is
-           phase 8's question, docs/phase-6-design.md 11.11). -->
-      <SolidColorBrush x:Key="VcDangerTextBrush" Color="#FFFFFF" />
+      <!-- The danger colour raised along its own hue, so that its text reaches 4.5:1 on hovered
+           and selected rows and on a control (D410, D418); lane 3 keeps the old red. -->
+      <SolidColorBrush x:Key="VcDangerBrush" Color="#EA7D86" />
+      <!-- Text on a danger background, the danger button's label: dark, as D410 settled (D418). -->
+      <SolidColorBrush x:Key="VcDangerTextBrush" Color="#10121A" />
       <!-- Commit graph: rows, labels and the lane palette (D48). -->
       <SolidColorBrush x:Key="VcSelectionBrush" Color="#2A3150" />
       <SolidColorBrush x:Key="VcRowHoverBrush" Color="#1C1F27" />
+      <!-- Accent text on a hovered or selected row (VcHoverBackgroundBrush, VcSelectionBrush), used
+           only in the styles of such rows; the accent stays everywhere else (D418). -->
+      <SolidColorBrush x:Key="VcAccentOnRowBrush" Color="#8B9AFF" />
       <SolidColorBrush x:Key="VcLabelTextBrush" Color="#10121A" />
       <SolidColorBrush x:Key="VcLane0Brush" Color="#7C8CFF" />
       <SolidColorBrush x:Key="VcLane1Brush" Color="#3FB97F" />
@@ -69,9 +73,12 @@
       <SolidColorBrush x:Key="TextControlForeground" Color="#E4E7EC" />
       <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#E4E7EC" />
       <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#E4E7EC" />
-      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#9BA3B0" />
-      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#9BA3B0" />
-      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#9BA3B0" />
+      <!-- A text box's placeholder: its own token, a step below the secondary text, drawn at full
+           opacity (TextControlPlaceholderOpacity below), so that it reaches 4.5:1 on the box (D418). -->
+      <SolidColorBrush x:Key="VcTextPlaceholderBrush" Color="#8F97A4" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#8F97A4" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#8F97A4" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#8F97A4" />
       <!-- Tooltips: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="ToolTipBackground" Color="#1A1D24" />
       <SolidColorBrush x:Key="ToolTipForeground" Color="#E4E7EC" />
@@ -101,6 +108,8 @@
       <!-- Commit graph: rows, labels and the lane palette (D48). -->
       <SolidColorBrush x:Key="VcSelectionBrush" Color="#DDE1FA" />
       <SolidColorBrush x:Key="VcRowHoverBrush" Color="#F3F4F7" />
+      <!-- Accent text on a hovered or selected row: the accent itself, which reaches 4.5:1 there (D418). -->
+      <SolidColorBrush x:Key="VcAccentOnRowBrush" Color="#4353D8" />
       <SolidColorBrush x:Key="VcLabelTextBrush" Color="#FFFFFF" />
       <!-- Phase 6: lanes 1, 2, 4 and 7 darker, so that a label's white text reaches 4.5:1 on each
            (docs/phase-6-design.md 11.13, D198, amending D48's light palette). -->
@@ -144,9 +153,12 @@
       <SolidColorBrush x:Key="TextControlForeground" Color="#1B1F27" />
       <SolidColorBrush x:Key="TextControlForegroundPointerOver" Color="#1B1F27" />
       <SolidColorBrush x:Key="TextControlForegroundFocused" Color="#1B1F27" />
-      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#5C6572" />
-      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#5C6572" />
-      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#5C6572" />
+      <!-- A text box's placeholder: its own token, a step below the secondary text, drawn at full
+           opacity (TextControlPlaceholderOpacity below), so that it reaches 4.5:1 on the box (D418). -->
+      <SolidColorBrush x:Key="VcTextPlaceholderBrush" Color="#68707D" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForeground" Color="#68707D" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundPointerOver" Color="#68707D" />
+      <SolidColorBrush x:Key="TextControlPlaceholderForegroundFocused" Color="#68707D" />
       <!-- Tooltips: these keys replace the Fluent theme's own colours for them. -->
       <SolidColorBrush x:Key="ToolTipBackground" Color="#F5F6F8" />
       <SolidColorBrush x:Key="ToolTipForeground" Color="#1B1F27" />
@@ -161,6 +173,9 @@
   <!-- Sizes shared by both themes. -->
   <Thickness x:Key="TextControlBorderThemeThicknessFocused">1</Thickness>
   <x:Double x:Key="TextControlThemeMinHeight">28</x:Double>
+  <!-- Fluent draws a text box's placeholder at 0.5; this key, the same in both themes, replaces
+       Fluent's, so that the placeholder is drawn in its own token as it is (D418). -->
+  <x:Double x:Key="TextControlPlaceholderOpacity">1</x:Double>
   <Thickness x:Key="TextControlThemePadding">8,5,6,5</Thickness>
 
 </ResourceDictionary>

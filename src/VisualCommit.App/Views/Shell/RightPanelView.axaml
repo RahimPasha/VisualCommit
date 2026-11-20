@@ -66,6 +66,11 @@
     <Style Selector="TextBlock.status.renamed">
       <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
     </Style>
+    <!-- On a hovered or selected row the accent text takes the row's own token, which reaches
+         4.5:1 on those backgrounds (D418); after the style above, so that it wins. -->
+    <Style Selector="Button.fileRow:pointerover TextBlock.status.renamed, Button.fileRow.selected TextBlock.status.renamed">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentOnRowBrush}" />
+    </Style>
     <!-- The file whose diff is open. A style outranks the theme's hover background. -->
     <Style Selector="Button.fileRow.selected">
       <Setter Property="Background" Value="{DynamicResource VcSelectionBrush}" />
