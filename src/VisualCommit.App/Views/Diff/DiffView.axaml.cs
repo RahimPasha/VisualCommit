@@ -35,9 +35,6 @@ public partial class DiffView : UserControl
     /// </summary>
     private IInputElement? _focusAtOpen;
 
-    /// <summary>The diff <see cref="_focusAtOpen"/> was taken for.</summary>
-    private DiffViewModel? _focusTakenFor;
-
     public DiffView()
     {
         InitializeComponent();
@@ -150,7 +147,7 @@ public partial class DiffView : UserControl
                     {
                         if (ReferenceEquals(_viewModel, opened))
                         {
-                            TakeFocusAtOpen();
+                            _focusAtOpen = FocusOutsideMenus();
                             DiffText.FocusBody(StillWanted);
                         }
                     },
@@ -168,31 +165,12 @@ public partial class DiffView : UserControl
     {
         if (e.PropertyName == nameof(DiffViewModel.Body) && _viewModel?.ShowsText == true && TakesFocusOnOpen)
         {
-            Dispatcher.UIThread.Post(
-                () =>
-                {
-                    TakeFocusAtOpen();
-                    DiffText.FocusBody(StillWanted);
-                },
-                DispatcherPriority.Loaded);
+            Dispatcher.UIThread.Post(() => DiffText.FocusBody(StillWanted), DispatcherPriority.Loaded);
         }
 
         if (e.PropertyName is nameof(DiffViewModel.BeforeImage) or nameof(DiffViewModel.AfterImage) or nameof(DiffViewModel.Body))
         {
             ShowImages();
-        }
-    }
-
-    /// <summary>
-    /// Takes <see cref="_focusAtOpen"/> once per diff, at the first of its asks for the focus: its
-    /// open's, or its text's when that comes first.
-    /// </summary>
-    private void TakeFocusAtOpen()
-    {
-        if (!ReferenceEquals(_focusTakenFor, _viewModel))
-        {
-            _focusTakenFor = _viewModel;
-            _focusAtOpen = FocusOutsideMenus();
         }
     }
 
