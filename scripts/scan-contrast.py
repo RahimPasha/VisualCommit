@@ -87,6 +87,14 @@ LANE3_CUT = {'phase-6/scripted/l27g-push-dialog-dark.png', 'phase-7a/scripted/n0
 LANE3_PILL = {(266, 344, 91, 5), (532, 687, 182, 11)}
 # A blue fringe of grey text in the Pick dialog, not accent text.
 ACCENT_FRINGE = {'phase-6/scripted/s17b-editor-pick.png'}
+# The round-shape rule (accent_hits) is meant for the graph's working-changes ring, but a
+# two-letter name on HEAD's selected row in the left panel ("ff", 9 by 10 px) is as round, so
+# the lists, which stay equal to the research's (docs/phase-8a-design.md 2.8), leave out its two
+# pictures from accent-on-row (phase-3/scripted/06a-double-click-local-branch.png and
+# phase-5/scripted/u18j-checkout-redone.png, both in any for their placeholder).
+# expected.json takes such a hit where the ring cannot lie: left of the left panel's narrowest
+# width (MainWindow.axaml's MinWidth, 180 px), which the graph never reaches.
+LEFT_PANEL_MIN_WIDTH = 180
 
 # How expected.json's boxes are drawn: each hit grown by GROW px, widened along its text line by
 # the ink of its kind within JOIN px (an ellipsis's dots within DOT_GAP px), and joined with the
@@ -515,12 +523,25 @@ def is_danger_on_row(r):
     return r['theme'] == 'dark' and any(g[5] in ('hover', 'selection') for g in r['danger_plain']['glyph'] + r['danger_dimmed']['glyph'])
 
 
+def is_round(h, s):
+    return abs(h[2] - h[3]) <= 1 and h[2] >= 9 * s
+
+
 def accent_hits(r):
     # The graph's working-changes ring (a 10-px circle) on the selected row, with no dash under it
     # (a repository without commits), is the one shape that passes the glyph rules: drop round ones.
     s = scale_of(r['folder'])
+    return [h for h in r.get('accent_row_plain', []) + r.get('accent_row_dimmed', []) if not is_round(h, s)]
+
+
+def round_name_hits(r):
+    """The round hits accent_hits drops that lie in the left panel, where no ring is: a two-letter
+    name on HEAD's selected row (LEFT_PANEL_MIN_WIDTH). For expected.json alone."""
+    if r['theme'] != 'dark' or key(r) in ACCENT_FRINGE:
+        return []
+    s = scale_of(r['folder'])
     return [h for h in r.get('accent_row_plain', []) + r.get('accent_row_dimmed', [])
-            if not (abs(h[2] - h[3]) <= 1 and h[2] >= 9 * s)]
+            if is_round(h, s) and h[0] + h[2] <= LEFT_PANEL_MIN_WIDTH * s]
 
 
 def is_accent(r):
@@ -640,7 +661,8 @@ def expected_of(rows):
     """Per picture the round changes, the boxes it may change in (the module's docstring): each
     hit grown by GROW px, widened along its text line by the ink of its kind there (a letter or an
     ellipsis the detector's rules leave out), joined with the hits of its line within JOIN px; a
-    danger button whole; the tooltip pictures' boxes measured by hand."""
+    danger button whole; the tooltip pictures' boxes measured by hand; a round name in the left
+    panel (round_name_hits)."""
     expected = {}
     for r in rows:
         if not changes(r):
@@ -662,8 +684,9 @@ def expected_of(rows):
             add(danger_glyphs(r), r['danger_plain'].get('line', []) + r['danger_dimmed'].get('line', []),
                 r['danger_plain'].get('dots', []) + r['danger_dimmed'].get('dots', []))
             buttons += r['danger_plain']['button'] + r['danger_dimmed']['button']
-        if is_accent(r):
-            add(accent_hits(r), r.get('accent_line_plain', []) + r.get('accent_line_dimmed', []),
+        accent = (accent_hits(r) if is_accent(r) else []) + round_name_hits(r)
+        if accent:
+            add(accent, r.get('accent_line_plain', []) + r.get('accent_line_dimmed', []),
                 r.get('accent_dots_plain', []) + r.get('accent_dots_dimmed', []))
         boxes = joined(texts, gap)
         boxes += [grown(b, g, w, h) for b in buttons]
