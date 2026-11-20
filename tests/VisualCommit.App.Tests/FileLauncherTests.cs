@@ -262,6 +262,88 @@ public class FileLauncherTests
             fake.Requests);
     }
 
+    [Fact]
+    public void A_start_names_cmd_exe_from_the_system_folder_a_bare_name_through_the_search_and_keeps_a_full_path()
+    {
+        // docs/phase-8a-design.md 1.3, 5.3 (D449): cmd.exe given a bare name would look in its
+        // current folder first; nothing here reads the PATH or the disk.
+        var system = Path.Combine(Path.GetTempPath(), "system32");
+        var found = Path.Combine(Path.GetTempPath(), "bin", "tool");
+        var full = Path.Combine(Path.GetTempPath(), "bin", OperatingSystem.IsWindows() ? "xcode-select.exe" : "xcode-select");
+        var asked = new List<string>();
+        string? Find(string program)
+        {
+            asked.Add(program);
+            return program == "tool" ? found : null;
+        }
+
+        var cmd = FileLauncher.ResolveStart(new LaunchCommand("cmd.exe", []) { CommandLine = "/S /K \"x\"", InNewTerminal = true }, Find, system);
+        var bare = FileLauncher.ResolveStart(new LaunchCommand("tool", ["--x"]), Find, system);
+        var kept = FileLauncher.ResolveStart(new LaunchCommand(full, ["--install"]), Find, system);
+
+        Assert.Equal(Path.Combine(system, "cmd.exe"), cmd.FileName);
+        Assert.Equal(("/S /K \"x\"", true), (cmd.CommandLine, cmd.InNewTerminal));
+        Assert.Equal(found, bare.FileName);
+        Assert.Equal(["--x"], bare.Arguments);
+        Assert.Equal((full, "--install"), (kept.FileName, Assert.Single(kept.Arguments)));
+        Assert.Equal(["tool"], asked);
+    }
+
+    [Fact]
+    public void A_bare_name_that_is_not_found_throws_before_any_start()
+    {
+        var thrown = Assert.Throws<FileNotFoundException>(() => FileLauncher.ResolveStart(new LaunchCommand("winget.exe", []), _ => null, Path.GetTempPath()));
+
+        Assert.Equal("winget.exe", thrown.FileName);
+    }
+
+    [Fact]
+    public void The_winget_command_starts_through_the_shell_on_windows_in_wingets_folder_with_its_command_line_as_it_is()
+    {
+        var winget = @"C:\Users\demo\AppData\Local\Microsoft\WindowsApps\winget.exe";
+        var command = new LaunchCommand("cmd.exe", [])
+        {
+            CommandLine = "/S /K \"\"" + winget + "\" install --id Git.Git -e --source winget\"",
+            WorkingDirectory = Path.GetDirectoryName(winget),
+            InNewTerminal = true,
+            RemovedVariables = ["ELECTRON_RUN_AS_NODE"],
+        };
+
+        var startInfo = command.ToStartInfo();
+
+        Assert.Equal(OperatingSystem.IsWindows(), startInfo.UseShellExecute);
+        Assert.False(startInfo.RedirectStandardOutput);
+        Assert.False(startInfo.RedirectStandardError);
+        Assert.Equal(command.CommandLine, startInfo.Arguments);
+        Assert.Empty(startInfo.ArgumentList);
+        Assert.Equal(OperatingSystem.IsWindows() ? @"C:\Users\demo\AppData\Local\Microsoft\WindowsApps" : Path.GetDirectoryName(winget) ?? string.Empty, startInfo.WorkingDirectory);
+        Assert.Equal("cmd.exe /S /K \"\"" + winget + "\" install --id Git.Git -e --source winget\"", command.DisplayText);
+    }
+
+    [Fact]
+    public void A_command_in_a_new_terminal_that_is_waited_for_redirects_nothing_on_windows()
+    {
+        var startInfo = new LaunchCommand("cmd.exe", []) { InNewTerminal = true, FallBackOnFailure = true }.ToStartInfo();
+
+        Assert.Equal(!OperatingSystem.IsWindows(), startInfo.RedirectStandardOutput);
+        Assert.Equal(OperatingSystem.IsWindows(), startInfo.UseShellExecute);
+    }
+
+    [Fact]
+    public async Task Starting_a_program_that_is_not_there_throws_the_starts_own_exception_and_starts_nothing()
+    {
+        // The only call of the real StartAsync in a test: a full path, so no PATH is read, to a
+        // program that does not exist in an empty folder; Process.Start throws before anything starts.
+        using var folder = new TempDirectory("start");
+        var missing = Path.Combine(folder.Path, OperatingSystem.IsWindows() ? "missing.exe" : "missing");
+        var launcher = new FileLauncher(() => null);
+
+        var thrown = await Assert.ThrowsAnyAsync<Exception>(() => launcher.StartAsync(new LaunchCommand(missing, ["--version"]), TestContext.Current.CancellationToken));
+
+        Assert.IsType<System.ComponentModel.Win32Exception>(thrown);
+        Assert.Empty(Directory.EnumerateFileSystemEntries(folder.Path));
+    }
+
     private static IReadOnlyList<LaunchCommand> Reveal(string path, RevealPlatform platform, string[]? files = null, string[]? folders = null)
     {
         var fileSet = new HashSet<string>(files ?? [], StringComparer.Ordinal);

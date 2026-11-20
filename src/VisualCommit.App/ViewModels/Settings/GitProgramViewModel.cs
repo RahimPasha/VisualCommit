@@ -114,10 +114,11 @@ public sealed partial class GitProgramViewModel : ObservableObject
     /// <summary>Git works now: a changed choice applies from the next start (ruling 42).</summary>
     private bool GitWorks => _inUse is { Availability: GitAvailability.Available };
 
-    /// <summary>The choice is not the git in use: another path, or none while the git in use was chosen.</summary>
-    private bool DiffersFromInUse => Choice is { } choice
-        ? !(_inUse is { Source: GitSource.Setting, ExecutablePath: { } used } && string.Equals(used, choice, StringComparison.Ordinal))
-        : _inUse is { Source: GitSource.Setting, ExecutablePath: not null };
+    /// <summary>The choice the last search was told and went by: the chosen git in use, or the chosen one it found gone; null when it went by none.</summary>
+    private string? ChoiceInUse => _inUse is { Source: GitSource.Setting } ? _inUse.ExecutablePath ?? _inUse.ChosenMissing : null;
+
+    /// <summary>The choice is not the one the git in use came from: another path, or none while that git was chosen.</summary>
+    private bool DiffersFromInUse => !string.Equals(Choice, ChoiceInUse, StringComparison.Ordinal);
 
     /// <summary>Browse…: the file dialog, then Choose's checks; a git that is found and new enough becomes the choice.</summary>
     [RelayCommand]
