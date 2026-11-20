@@ -49,4 +49,19 @@ public sealed partial class Phase8aExpectationTests
         Assert.Equal(@"C:\Users\demo\AppData\Roaming\VisualCommit", I.WindowsFolder);
         Assert.Equal("/home/demo/.config/VisualCommit", I.LinuxFolder);
     }
+
+    [Fact]
+    public void Part_I_s_launch_facts_are_the_report_s()
+    {
+        Assert.Equal((0, 2, 0), (I.HandOverExitCode, I.ClosedExitCode, I.StartedHereExitCode));
+        Assert.Equal(1, I.FirstInstanceEmptyTabs);
+        Assert.Equal(["harness", "instance.lock", "logs"], I.NoticeDataFolderEntries);
+
+        // The data folder's two files are the app's (AppPaths), by those names.
+        var paths = new VisualCommit.Core.AppPaths(I.LinuxFolder);
+        Assert.Equal("instance.lock", Path.GetFileName(paths.InstanceLockFile));
+        Assert.Equal("instance.json", Path.GetFileName(paths.InstanceFile));
+        Assert.Contains("instance.lock", I.NoticeDataFolderEntries);
+        Assert.DoesNotContain("instance.json", I.NoticeDataFolderEntries);
+    }
 }

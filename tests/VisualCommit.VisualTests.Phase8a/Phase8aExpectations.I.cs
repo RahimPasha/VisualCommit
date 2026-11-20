@@ -99,6 +99,50 @@ public static partial class Phase8aExpectations
 
         public const string NoInstanceFileLine = "VisualCommit holds the data folder {0} but did not answer (no instance.json).";
 
+        // ---- The real window's launches (the report's "The real window (part I)"; 12.3.4 launches 4 to 6)
+
+        /// <summary>I1's first instance: a session of one empty tab, dark, at <see cref="DefaultSize"/>, written before the start.</summary>
+        public const int FirstInstanceEmptyTabs = 1;
+
+        /// <summary>I1's second process, which hands over before any window.</summary>
+        public const int HandOverExitCode = 0;
+
+        /// <summary>Launch 5, after "Close" on the notice.</summary>
+        public const int ClosedExitCode = 2;
+
+        /// <summary>Launch 6, after "Try again" started the app in the same process and its window closed.</summary>
+        public const int StartedHereExitCode = 0;
+
+        /// <summary>I1: the second process exits within this, having shown no window.</summary>
+        public static readonly TimeSpan SecondStartExitsWithin = TimeSpan.FromSeconds(10);
+
+        /// <summary>I1: the minimised first instance is not iconic and visible within this.</summary>
+        public static readonly TimeSpan FirstComesBackWithin = TimeSpan.FromSeconds(2);
+
+        /// <summary>Launches 5 and 6: the process's main window is the notice within this.</summary>
+        public static readonly TimeSpan NoticeShowsWithin = TimeSpan.FromSeconds(15);
+
+        /// <summary>Launch 5: the status reads <see cref="StillNoAnswer"/> within this after Enter.</summary>
+        public static readonly TimeSpan StatusShowsWithin = TimeSpan.FromSeconds(10);
+
+        /// <summary>Launch 5: the process exits with <see cref="ClosedExitCode"/> within this after "Close".</summary>
+        public static readonly TimeSpan ClosedExitWithin = TimeSpan.FromSeconds(5);
+
+        /// <summary>Launch 6: the main window, with <c>GitStatus</c>, within this after Enter, and the exit after its close.</summary>
+        public static readonly TimeSpan StartedHereWithin = TimeSpan.FromSeconds(15);
+
+        /// <summary>Launches 5 and 6: the title-bar click, when needed, and the foreground and focus asserted again within this.</summary>
+        public static readonly TimeSpan ForegroundAgainWithin = TimeSpan.FromSeconds(5);
+
+        /// <summary>Launch 5: what the data folder holds after "Close", by name; no session started, nothing written.</summary>
+        public static IReadOnlyList<string> NoticeDataFolderEntries { get; } = ["harness", "instance.lock", "logs"];
+
+        /// <summary>Launches 5 and 6 fail with this before any key when the notice is not the foreground window with Try again focused.</summary>
+        public const string NotForegroundMessage = "The notice is not the foreground window with Try again focused: a real Enter would reach another window.";
+
+        /// <summary>The masked comparison's failure when the heights differ; {0} the capture's height divided by the scaling, {1} the twin's.</summary>
+        public const string HeightsDifferMessage = "The notice is {0} high and its scripted twin {1}: their layouts differ, so the masked comparison cannot hold.";
+
         /// <summary>The platform's sentence, as the notice shows it on each platform.</summary>
         public static string IfNoWindow(GuidancePlatform platform) => platform switch
         {
