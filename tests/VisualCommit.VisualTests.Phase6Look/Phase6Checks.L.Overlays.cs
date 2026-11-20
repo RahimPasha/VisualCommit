@@ -188,7 +188,8 @@ public sealed partial class Phase6ChecksL
             AssertInk(picture, area, palette.DangerText, palette.Danger, "Delete's label (VcDangerTextBrush, 11.11)");
             Assert.Equal(palette.DangerText, (delete.Foreground as ISolidColorBrush)?.Color);
             var variant = IsDark(palette) ? ThemeVariant.Dark : ThemeVariant.Light;
-            Assert.True(Application.Current!.TryGetResource("VcDangerTextBrush", variant, out var resource) && resource is ISolidColorBrush brush && brush.Color == Colors.White, $"VcDangerTextBrush is not #FFFFFF in the {variant} theme.");
+            // The contrast round's dark label on the danger button, #10121A; light keeps white (D410, D418).
+            Assert.True(Application.Current!.TryGetResource("VcDangerTextBrush", variant, out var resource) && resource is ISolidColorBrush brush && brush.Color == palette.DangerText, $"VcDangerTextBrush is not {Hex(palette.DangerText)} in the {variant} theme.");
             AssertBackdrop(picture, palette);
         });
         app.Click(InDialog<Button>(app, "CancelButton"));

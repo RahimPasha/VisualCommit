@@ -498,8 +498,8 @@ public sealed partial class Phase3ChecksB
 
     /// <summary>
     /// Asserts the left panel's row of the local branch <paramref name="name"/>: its ahead and
-    /// behind marks, and whether it is the branch HEAD is on (the accent colour; the panel draws
-    /// no check mark).
+    /// behind marks, and whether it is the branch HEAD is on (the accent colour, the row's accent
+    /// while the row is hovered or selected, D418; the panel draws no check mark).
     /// </summary>
     private static async Task AssertLocalBranchAsync(ShellDriver app, string name, int ahead, int behind, bool head)
     {
@@ -509,7 +509,8 @@ public sealed partial class Phase3ChecksB
         var text = row.GetVisualDescendants().OfType<TextBlock>().Single(block => block.Name == "RefName");
         var palette = PaletteOf(app);
         var colour = (text.Foreground as ISolidColorBrush)?.Color;
-        Assert.True(head == (colour == palette.Accent), $"{name} is drawn in {colour}; HEAD is {(head ? string.Empty : "not ")}on it.");
+        var accent = row.IsPointerOver || row.Classes.Contains("selected") ? palette.AccentOnRow : palette.Accent;
+        Assert.True(head == (colour == accent), $"{name} is drawn in {colour}; HEAD is {(head ? string.Empty : "not ")}on it.");
         Assert.DoesNotContain(TextsIn(row), part => part.Contains('✓', StringComparison.Ordinal));
         Assert.Equal(ahead > 0, row.GetVisualDescendants().OfType<TextBlock>().Any(block => block.Name == "AheadCount" && block.IsEffectivelyVisible && block.Text == ahead.ToString(CultureInfo.InvariantCulture)));
         Assert.Equal(behind > 0, row.GetVisualDescendants().OfType<TextBlock>().Any(block => block.Name == "BehindCount" && block.IsEffectivelyVisible && block.Text == behind.ToString(CultureInfo.InvariantCulture)));

@@ -39,7 +39,7 @@ public class ContextMenuAdapterTests
     private static readonly Color TextPrimary = Color.Parse("#E4E7EC");
     private static readonly Color TextSecondary = Color.Parse("#9BA3B0");
     private static readonly Color TextDisabled = Color.Parse("#5F6775");
-    private static readonly Color Danger = Color.Parse("#E5606B");
+    private static readonly Color Danger = Color.Parse("#EA7D86"); // the contrast round's dark danger (D410)
     private static readonly Color Hover = Color.Parse("#2F3542");
 
     // --- The Shift+F10 rule (D106) ---------------------------------------------------------

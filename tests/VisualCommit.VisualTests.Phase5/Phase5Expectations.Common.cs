@@ -99,7 +99,7 @@ public static partial class Phase5Expectations
         Accent: Color.Parse("#7C8CFF"),
         Success: Color.Parse("#3FB97F"),
         Warning: Color.Parse("#E0A23B"),
-        Danger: Color.Parse("#E5606B"),
+        Danger: Color.Parse("#EA7D86"), // the contrast round's dark danger (D410); lane 3 keeps #E5606B
         Selection: Color.Parse("#2A3150"),
         RowHover: Color.Parse("#1C1F27"),
         LabelText: Color.Parse("#10121A"),
