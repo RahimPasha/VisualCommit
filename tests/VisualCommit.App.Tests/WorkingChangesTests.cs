@@ -703,6 +703,50 @@ public class WorkingChangesTests
         Assert.True(app.FocusVisible, "The graph shows no keyboard frame.");
     }
 
+    /// <summary>
+    /// Tab walks the whole list, also the rows below its visible part, which the list has not made
+    /// yet (it virtualizes): each row's own button, its Stage, its Discard, row after row, to the
+    /// last of 24, and Shift+Tab walks back up over the rows' own buttons to the first.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Tab_walks_every_row_of_a_list_longer_than_its_view_and_Shift_Tab_walks_back()
+    {
+        using var repo = await TempRepo.CreateAsync();
+        var names = Enumerable.Range(1, 24).Select(number => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"f{number:D2}.txt")).ToList();
+        foreach (var name in names)
+        {
+            repo.WriteFile(name, name + "\n");
+        }
+
+        await repo.CommitAsync("Add 24 files");
+        foreach (var name in names)
+        {
+            repo.WriteFile(name, name + " changed\n");
+        }
+
+        using var data = new TempDirectory("data");
+        using var app = await StageRowsAsync(data, repo);
+        Assert.True(app.StageRows("UnstagedFileList").Count < names.Count, "Every row is made: the list does not reach below its view.");
+        app.PressF6();
+        await app.WaitForAsync(() => app.FocusedRowPath() == names[0], "the focus on the first row");
+
+        for (var row = 1; row < names.Count; row++)
+        {
+            foreach (var id in new[] { "RowStageButton", "RowDiscardButton", "StageFileRow" })
+            {
+                var expected = id == "StageFileRow" ? names[row] : names[row - 1];
+                await app.TabToAsync(focused => focused is Control control && AutomationProperties.GetAutomationId(control) == id && ShellDriver.StageRowOf(control)?.DataContext is ChangedFileRow { Key: var key } && key == expected, $"{expected}'s {id}");
+            }
+        }
+
+        Assert.True(app.FocusVisible, "The last row shows no keyboard frame.");
+        for (var row = names.Count - 2; row >= 0; row--)
+        {
+            var expected = names[row];
+            await app.TabToAsync(_ => app.FocusedRowPath() == expected, $"{expected}'s own button", shift: true);
+        }
+    }
+
     /// <summary>A repository with a.txt, b.txt and c.txt committed and the first <paramref name="changed"/> of them changed in the working tree.</summary>
     private static async Task<TempRepo> ThreeChangedAsync(int changed)
     {
