@@ -384,12 +384,17 @@ public sealed partial class Phase8aChecksL
         AssertBackdrop(picture, colours, colours.Window);
     }
 
-    /// <summary>Cancel: no dialog; <c>src/Calculator.cs</c> still modified and unstaged; the repository as it was.</summary>
+    /// <summary>
+    /// Cancel: no dialog; <c>src/Calculator.cs</c> still modified and unstaged; the repository as it
+    /// was. The status is read without git's optional locks, as the app's reads are, so that it
+    /// writes no refreshed index into the copy and the app's watcher starts no refresh during the
+    /// steps that follow.
+    /// </summary>
     private static async Task CancelDiscardAsync(ShellDriver app, TempRepo repo, string exact)
     {
         app.Click(app.FindByAutomationId(app.TopDialogView!, "CancelButton"));
         await AssertNoDialogAsync(app);
-        Assert.Contains(" M " + L.Calculator, (await repo.GitAsync("status", "--porcelain")).StandardOutput, StringComparison.Ordinal);
+        Assert.Contains(" M " + L.Calculator, (await repo.GitAsync("--no-optional-locks", "status", "--porcelain")).StandardOutput, StringComparison.Ordinal);
         Assert.Equal(exact, await repo.ExactStateAsync());
     }
 
@@ -420,6 +425,9 @@ public sealed partial class Phase8aChecksL
         Assert.True(app.BoundsOf(row).Center.X > TextArea(app, name).Right, "The row's centre lies on main's text.");
         shot = Picture(app, hovered, keepPointer: true);
         Assert.True(row.IsPointerOver, "main's row is not hovered.");
+        // The name's tooltip opens after its delay only while the pointer is over the name's text:
+        // the pointer off the name proves that none will open, and none is open now.
+        Assert.False(name.IsPointerOver, "The pointer is over main's name, whose tooltip would open.");
         Assert.False(ToolTip.GetIsOpen(name), "main's name shows its tooltip.");
         AssertText(app, shot, name, colours.AccentOnRow, colours.Hover, ClearOf(app, row), "main hovered (VcAccentOnRowBrush)", ReplacedIn(app, colours.Accent));
 
