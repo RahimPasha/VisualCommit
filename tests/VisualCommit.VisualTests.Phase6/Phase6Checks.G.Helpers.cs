@@ -33,8 +33,9 @@ public sealed partial class Phase6ChecksG
     /// The left panel's rows as the report writes them (<see cref="PartG.Ig0Panel"/>): a section as
     /// "&lt;title&gt; &lt;count&gt;" (the Remotes section counts remote branches, GD16); below it each
     /// row indented two spaces per level, a remote or folder with " (open)" or " (closed)", the
-    /// local branch HEAD is on with " (accented)" (its name drawn in the accent colour, which this
-    /// asserts), and a local branch's ahead and behind counts as " ↑a" and " ↓b" above 0.
+    /// local branch HEAD is on with " (accented)" (its name drawn in the accent colour, the row's
+    /// accent while the row is hovered or selected, D418, which this asserts), and a local
+    /// branch's ahead and behind counts as " ↑a" and " ↓b" above 0.
     /// </summary>
     private static List<string> LeftPanelLines(ShellDriver app)
     {
@@ -61,7 +62,8 @@ public sealed partial class Phase6ChecksG
                             ?? throw new Xunit.Sdk.XunitException($"The left panel's row of {item.Text}, HEAD's branch, is not laid out.");
                         var name = button.GetVisualDescendants().OfType<TextBlock>().Single(block => block.Name == "RefName");
                         var colour = (name.Foreground as ISolidColorBrush)?.Color;
-                        Assert.True(colour == palette.Accent, $"The left panel's {item.Text}, HEAD's branch, is drawn in {colour}, not the accent colour {palette.Accent}.");
+                        var accent = button.IsPointerOver || button.Classes.Contains("selected") ? palette.AccentOnRow : palette.Accent;
+                        Assert.True(colour == accent, $"The left panel's {item.Text}, HEAD's branch, is drawn in {colour}, not {accent} (the accent, the row's accent while the row is hovered or selected, D418).");
                     }
 
                     break;

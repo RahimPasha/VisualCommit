@@ -41,7 +41,8 @@ public sealed partial class Phase3ChecksA
         Assert.Contains("CurrentBranch:feature/ff", GraphLines(app)[PartA.FastForwardMeRow], StringComparison.Ordinal);
         Assert.Contains("LocalBranch:main", GraphLines(app)[PartA.MainWorkRow], StringComparison.Ordinal);
         Assert.Equal(["▾ Local branches 3", "  ▾ feature", "    conflict", "    ff (head) (selected)", "  main"], LeftPanelLines(app).Take(5));
-        Assert.Equal(PaletteOf(app).Accent, await RefNameColourAsync(app, "Local branches", "feature", "ff"));
+        // ff's row is selected (above): HEAD's name takes the row's accent (D418).
+        Assert.Equal(PaletteOf(app).AccentOnRow, await RefNameColourAsync(app, "Local branches", "feature", "ff"));
         Assert.NotEqual(PaletteOf(app).Accent, await RefNameColourAsync(app, "Local branches", "main"));
 
         // Step 2: double-click the label main: HEAD goes back to main.

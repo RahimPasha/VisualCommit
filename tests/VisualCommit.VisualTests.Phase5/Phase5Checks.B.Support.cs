@@ -368,7 +368,8 @@ public sealed partial class Phase5ChecksB
     }
 
     /// <summary>
-    /// Asserts the history's rows (4.1, BD2, BD13): letter and its colour, short SHA (in the code
+    /// Asserts the history's rows (4.1, BD2, BD13): letter and its colour (a renamed or copied
+    /// file's R and C in the row's accent on the selected row, D418), short SHA (in the code
     /// font), subject, secondary text, author and date (the surface holds both; the columns show as
     /// <paramref name="authorShown"/> and <paramref name="dateShown"/> say), the rows'
     /// <c>FileHistoryRow</c> automation names <c>{short} {subject}</c>, each 26 high from the
@@ -389,7 +390,7 @@ public sealed partial class Phase5ChecksB
             AssertRowAutomation(list, index, "FileHistoryRow", want.Name);
             Assert.Equal(new Rect(page.ListBounds.X, page.ListBounds.Y + (PageRowHeight * index), page.ListBounds.Width, PageRowHeight), bounds);
             Assert.Equal((want.Letter, want.ShortSha, want.Subject, want.Secondary, want.Author, want.Date), (row.Letter, row.ShortSha, row.Subject, row.Secondary, row.Author, row.Date));
-            Assert.Equal(LetterColour(palette, want.Letter), row.LetterColor);
+            Assert.Equal(LetterColour(palette, want.Letter, index == selected), row.LetterColor);
             Assert.Same(code, Named<TextBlock>(list.ContainerFromIndex(index)!, "FileHistorySha").FontFamily);
             Assert.Equal((authorShown, dateShown), (row.AuthorShown, row.DateShown));
             Assert.Equal(index == selected, row.IsSelected);
@@ -401,13 +402,16 @@ public sealed partial class Phase5ChecksB
         }
     }
 
-    /// <summary>A status letter's colour (the texts' "Colours"): A success, M warning, D danger, R and C accent.</summary>
-    private static Color LetterColour(Palette palette, string letter) => letter switch
+    /// <summary>
+    /// A status letter's colour (the texts' "Colours"): A success, M warning, D danger, R and C
+    /// accent, the row's accent on the <paramref name="selected"/> row (D418).
+    /// </summary>
+    private static Color LetterColour(Palette palette, string letter, bool selected) => letter switch
     {
         "A" => palette.Success,
         "M" => palette.Warning,
         "D" => palette.Danger,
-        _ => palette.Accent,
+        _ => selected ? palette.AccentOnRow : palette.Accent,
     };
 
     /// <summary>

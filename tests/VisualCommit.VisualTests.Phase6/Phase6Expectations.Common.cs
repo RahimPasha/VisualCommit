@@ -62,6 +62,7 @@ public static partial class Phase6Expectations
         Color TextSecondary,
         Color TextDisabled,
         Color Accent,
+        Color AccentOnRow,
         Color Success,
         Color Warning,
         Color Danger,
@@ -99,6 +100,7 @@ public static partial class Phase6Expectations
         TextSecondary: Color.Parse("#9BA3B0"),
         TextDisabled: Color.Parse("#5F6775"),
         Accent: Color.Parse("#7C8CFF"),
+        AccentOnRow: Color.Parse("#8B9AFF"), // the contrast round's accent on a hovered or selected row (D418)
         Success: Color.Parse("#3FB97F"),
         Warning: Color.Parse("#E0A23B"),
         Danger: Color.Parse("#EA7D86"), // the contrast round's dark danger (D410); lane 3 keeps #E5606B
@@ -132,6 +134,7 @@ public static partial class Phase6Expectations
         TextSecondary: Color.Parse("#5C6572"),
         TextDisabled: Color.Parse("#A1A8B3"),
         Accent: Color.Parse("#4353D8"),
+        AccentOnRow: Color.Parse("#4353D8"),
         Success: Color.Parse("#187248"),
         Warning: Color.Parse("#895A17"),
         Danger: Color.Parse("#B7323D"),
