@@ -164,6 +164,9 @@ public static partial class Phase8aExpectations
         /// <summary>A file row's tooltip (<c>ChangedFileRow.ToolTip</c>): the path, and for a rename its origin on a second line.</summary>
         public static string RenamedToolTip(string path, string from) => path + "\nrenamed from " + from;
 
+        /// <summary>The diff's body for a diff without hunks (<c>NoContentChange</c>), as a pure rename's diff shows it.</summary>
+        public const string NoContentChange = "No changes to the file's content.";
+
         // ---- The pictures (the report's Screenshots column) -----------------------------------
 
         public const string L1aPlaceholdersDark = "l1a-placeholders-dark";

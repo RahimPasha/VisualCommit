@@ -11,6 +11,7 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels;
+using VisualCommit.App.ViewModels.Diff;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.Views.Commands;
@@ -370,7 +371,19 @@ public sealed partial class Phase8aChecksL : Phase8aChecks
         Assert.True(index >= 0, $"The file history has no row of {L.HeadCommit}.");
         app.Click(app.FileHistoryRowPoint(index));
         await app.WaitForAsync(() => app.FileHistorySnapshot().Selected?.Subject == L.HeadCommit, $"the history's row of {L.HeadCommit} to be selected");
+
+        // The page selected this row, its first, by itself as it opened, so the click starts no read:
+        // the diff part may still be reading the row's change. Wait until it is read (its body no
+        // longer Loading), for this row's file and side label, so that the picture shows it.
+        await app.WaitForAsync(
+            () => app.FileHistorySnapshot() is { Selected: { } selected, Diff: { Body: not DiffBody.Loading } diff, DiffSideLabel: var label }
+                && label == selected.ShortSha && diff.SideLabel == selected.ShortSha && diff.Target.Path == L.MainApp,
+            $"the history's diff of {L.MainApp} at {L.HeadCommit} to be read");
         shot = Picture(app, L.L6hHistoryRenamedSelected);
+        var noChange = app.FindByAutomationId("FileHistoryDiff").GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "NoContentChange");
+        Assert.True(
+            app.FileHistorySnapshot().Diff is { Body: DiffBody.Empty } && noChange.IsEffectivelyVisible && noChange.Text == L.NoContentChange,
+            $"The history's diff of {L.MainApp} at {L.HeadCommit} does not show \"{L.NoContentChange}\" (body {app.FileHistorySnapshot().Diff?.Body}).");
         var history = app.FileHistorySnapshot().Rows[index];
         Assert.Equal(("R", true), (history.Letter, history.IsSelected));
         var item = HistoryItem(app, index);
