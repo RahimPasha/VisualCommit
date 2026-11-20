@@ -237,9 +237,9 @@ Wave 1:
   07:47): `Phase2Checks` 25 of 25; the fifteen App.Tests classes 183 of 183; phase 6's five
   filters 21 of 21; phase 7a's walk-through 205 of 205; phase 7b's 178 of 178; the twelve
   Hosting.Tests classes 126 of 126; the 8a project 25 of 25. CI's runs on the wave are in the CI
-  section, the last, 44750615552, green in all six jobs. (Week: not read since the 25 to 50 % of
-  2026-11-20; the wave's agents used about 14.6M tokens after that reading, WP0's and the icon's
-  among them. The owner is asked before wave 2.)
+  section, the last, 44750615552, green in all six jobs. (Week: 50 to 70 % used, the owner's
+  reading of 2026-11-20 at the wave's close; the agents of step 4 and wave 1, the icon's among
+  them, used about 14.6M tokens after the reading before.)
 
 Wave 2:
 
@@ -562,8 +562,9 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: the owner's reading of the week's share (D241), then wave 2, Progress steps 9 to 12. Wave 1
-is closed (steps 4 to 8). Wave 2 is §5 (first run, part F), §6 (keyboard, part K) and §7 (the
+Next: wave 2, Progress steps 9 to 12. Wave 1 is closed (steps 4 to 8), and the owner gave the
+week's share on 2026-11-20, 50 to 70 % used: wave 2 starts, and the owner is asked again at its
+merge, before step 12's runs and wave 3. Wave 2 is §5 (first run, part F), §6 (keyboard, part K) and §7 (the
 icon's pipeline, part B), in this order of work: (1) the three parts' checks are written into
 `docs/test-reports/phase-8a.md` by a writer each, reviewed (against the design, against the code,
 a verifier for each major) and committed before any of their UI (D244); (2) three worktrees
@@ -574,7 +575,7 @@ workflow did (its script is kept with the session:
 `phase8a-wave-1-wf_463ba2b4-db6.js`); (3) the lead merges, with the lead's doc changes each
 builder names, and compares each merge's pictures with `references/wave1`; (4) step 12: the lagged
 list and the whole default run with no agent at work. §7 takes the icon's masters from
-`docs/brand/icon/round-2/` if the owner has said yes to them by then, else the placeholder
+`docs/brand/icon/round-2/`, to which the owner said yes on 2026-11-20, and writes no placeholder
 (design 7.8). By hand before §5's merge, the owner told: `cmd.exe` started as the app will start
 it, with `/S /K` and winget's quoted path and `--version`, to see that its window stays open
 (design 13.4 item 7); and at §6's merge two earlier real-window checks run alone (design 13.3).
@@ -586,7 +587,12 @@ every commit.
 
 ### Notes for whoever resumes
 
-- **Wave 1 is closed (2026-11-20); the owner is asked for the week's share before wave 2.**
+- **Wave 1 is closed (2026-11-20); wave 2 is under way.** The owner's answers at the close: 50 to
+  70 % of the week used, with which wave 2 starts and the owner is asked again at its merge,
+  before the wave's closing runs and wave 3; yes to the icon's round 2 with the outlined eye; the
+  look-alike check by eye, with no image search; wave 1's worktrees removed (done: `git worktree
+  remove` on the three clean folders; the branches `wip/p8a-colours`, `wip/p8a-floor` and
+  `wip/p8a-single` stay, merged).
   Nothing is uncommitted, and the phase branch is pushed. The run's pictures, the comparison and
   the inspectors' crops are outside the repository: `D:/Projects/Personal/phase8-work/references/`
   (`wave1/`, the references of every later merge, with `wave1-pictures.sha256`),
@@ -594,9 +600,6 @@ every commit.
   `lagged/`, `for-the-lead.md`). A later merge is compared so: `python scripts/compare-pictures.py
   D:/Projects/Personal/phase8-work/references/wave1 artifacts/visual <out> --expected <a file of the
   regions design 0.7 names for that merge>`; without `--expected` every changed picture is listed.
-  The worktrees of wave 1 (`D:/Projects/Personal/vc-wt/p8a-colours`, `p8a-floor`, `p8a-single`)
-  and their `wip` branches are merged and clean; whether they are removed now is asked of the owner
-  with the share, as phase 7b's were removed at the owner's word.
 - **Wave 1 is merged (2026-11-20).** The workflow `phase8a-wave-1` (run
   `wf_463ba2b4-db6`: three Opus builders, nine reviewers, a verifier for each of 11 majors, three
   fixers; 26 agents, 6.33M tokens, 2 h 35 min) built, reviewed and fixed the three packages in
@@ -681,12 +684,11 @@ every commit.
   in `D:/Projects/Personal/phase8-work/icon/round-2/`. The lead can look at a drawing: `python
   D:/Projects/Personal/phase8-work/icon/render/render_icon_sheet.py <folder with the three
   masters>` renders them with headless Edge at every size on both desks, with the small sizes
-  enlarged. **Asked of the owner**: yes to the set or what to change; the small sizes outlined
-  (the lead's recommendation) or solid; and, only if wanted, a blue one step lighter (`#5866E6`)
-  for dark taskbars. With the owner's word before §7 starts (step 11), §7's masters are round 2's
-  files and no placeholder is written (design 7.8); §7's builder compares the tool's renders (Skia)
-  with round 2's pictures (Edge) before the files are frozen. The look-alike check against Git's
-  logo and the other clients' icons needs the owner's leave for an image search, or is made by eye.
+  enlarged. **The owner said yes on 2026-11-20**, with the outlined eye at the small sizes; the blue stays
+  `#4C5BE0` (the lighter `#5866E6` was shown and not asked for). §7's masters (step 11) are round
+  2's files, and no placeholder is written (design 7.8); §7's builder compares the tool's renders (Skia)
+  with round 2's pictures (Edge) before the files are frozen. The look-alike check against Git's logo and the other clients' icons is made by eye, with no
+  image search (the owner, 2026-11-20), and recorded in the report.
 - Nothing else is in flight. `master` holds everything; the working tree was clean when phase 7b was
   merged (`3dc7f79`). **Cleaned up on 2026-11-18, at the owner's word** (the 7b handoff's "Do
   first", step 3): the seven worktrees under `D:/Projects/Personal/vc-wt/` (each clean, its branch
@@ -819,11 +821,8 @@ every commit.
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
-  - **Before wave 2 (step 9): the share of the week's allowance used** (D241). On 2026-11-20 it
-    was 25 to 50 % before step 4; step 4 and wave 1 are done since, and their agents used about
-    14.6M tokens. Asked on 2026-11-20 at wave 1's close.
-  - **Wave 1's worktrees**: three folders under `D:/Projects/Personal/vc-wt/`, merged and clean.
-    Remove them now (the `wip` branches stay), or keep them? Asked with the share.
+  - **At wave 2's merge: the share of the week's allowance used** (D241). On 2026-11-20, at wave
+    1's close, it was 50 to 70 %.
   - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
     above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
     D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on
@@ -832,10 +831,9 @@ every commit.
     DevOps' and GitLab's on 2026-12-04, and a gate runs the live command twice (D335). Before 8a's
     gate the owner makes each again, with an expiry that also covers 8b's gate, as phase 7a's
     design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token.
-  - **The icon** (D407, D447): the owner chose A, Lens, on 2026-11-20. Round 2, Lens worked out
-    for the small sizes and for macOS, is with the owner (`docs/brand/icon/round-2/candidates.html`,
-    or https://claude.ai/artifact/Xez1bXLnA2p4XNsQ7wtkcb): yes to the set or what to change; the
-    small sizes outlined (recommended) or solid; and, only if wanted, the lighter blue.
+  - **The icon** (D407, D447): settled on 2026-11-20. The owner chose A, Lens, and said yes to
+    round 2's masters with the outlined eye at the small sizes; the blue stays `#4C5BE0`. Nothing
+    more is asked unless the owner wants a change after seeing it in the app.
   - **The desktop, told first each time** (design 13.3): the lead's try of the winget terminal
     window before §5's merge; two earlier real-window checks alone at §6's merge (about 2
     minutes); §9's spike (a minute of keys and clicks) and a short listen with Narrator at §9's
@@ -850,10 +848,9 @@ every commit.
     "Phase 8a accepted", before `master` is pushed, by the owner or by the lead with `gh` at the
     owner's word; if the `github-pages` environment then admits more than `master`, the owner's
     leave is asked to set its branch rule.
-  - **Leave for a reverse image search** for the icon's look-alike check (D412 covers only the
-    search for the name): the mark is chosen, so the lead asks with round 2. It would send the
-    unpublished drawing to an image search service; without it the lead compares by eye against
-    Git's logo and the well-known clients' icons.
+  - **The icon's look-alike check**: settled on 2026-11-20. The owner wants no image search; the
+    lead compares by eye against Git's logo and the well-known clients' icons and records it in the
+    report.
   - **Left to 8a's design, now ruled**: the points the readers left to the design (one instance
     per data folder, the git program setting, the netrc note, the OpenSSH line, the guide's tested
     sizes and its generator, risk 44 left alone, no writes to a user's repository for speed, the

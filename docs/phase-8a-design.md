@@ -1015,6 +1015,10 @@ as a later package needs it. The lead keeps this subsection; a later wave adds t
   that the scripted picture does not show hovered, so the pointer is moved to the neutral point
   before Shift+F10; `l2a`, `l2b`, `l5a` and `l5b` show the unstaged list scrolled to bring
   `src/Calculator.cs` into view, and the real window scrolls it the same way.
+- **The icon** (the owner, 2026-11-20). The owner chose Lens and said yes to round 2's masters
+  (`docs/brand/icon/round-2/`), with the outlined eye at the small sizes. §7 builds with them and
+  writes no placeholder (7.8); part B's checks and every picture that shows the icon show the
+  owner's mark from the start. The look-alike check is made by eye, with no image search.
 
 ## 2. colours: the contrast round (D410)
 
@@ -2784,8 +2788,10 @@ The lead committed round 1 on 2026-11-19 (`306f61f`), before the owner's first l
 `b-merge-v.svg`, `c-check.svg`, `d-ring.svg`, `e-viewfinder.svg`; each later round adds
 `round-<n>/`. The owner chose A, Lens, on 2026-11-20. Round 2 (`docs/brand/icon/round-2/`, the
 same day) holds its three masters, drawn by 7.3's rules, with a runner-up for the small sizes, and
-waits for the owner's word. With that word before §7 starts, §7's masters are round 2's files as
-they stand, and no placeholder is written; without it §7 starts with the placeholder as below. Two
+the owner said yes to it that day, with the outlined eye at the small sizes and the blue unchanged.
+So §7's masters are round 2's `icon.svg`, `icon-small.svg` and `icon-macos.svg` as they stand, copied
+into `assets/brand/`, and no placeholder is written: where this section says "the placeholder", read
+the owner's mark (7.3's first comment is already in the files). Two
 things round 2 found for §7: `icon-small.svg` fills its 16 grid, so that its edges fall on whole
 pixels at 16 to 32, and is transparent at its rounded corners alone (its `rx` stays 3.42 or more, so
 that the corner pixel at 16 is clear, 7.4 item 3); and round 2's pictures were rendered by Edge, so

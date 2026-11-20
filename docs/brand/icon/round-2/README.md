@@ -59,7 +59,14 @@ written on every tile) and left what did not.
 
 ## The owner's word
 
-Asked on 2026-11-20, not given yet:
+**Yes to the set, with the outlined eye at the small sizes** (the owner, 2026-11-20). The blue stays
+the owner's `#4C5BE0`: the lighter one was shown and not asked for. The look-alike check is made by
+eye, against Git's logo and the well-known Git clients' icons, with no image search (the owner, the
+same day), and is recorded in the phase's test report. So the masters are `icon.svg`,
+`icon-small.svg` and `icon-macos.svg` as they stand here; `icon-small-alt.svg` stays in this folder
+as the record of the choice.
+
+What was asked:
 
 1. Yes to the set, or what to change.
 2. The small sizes: the outlined eye (`icon-small.svg`, the lead's recommendation, because it is
