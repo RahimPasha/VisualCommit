@@ -308,7 +308,7 @@ public static partial class Phase7bExpectations
 
         public static readonly Color Secondary = Color.Parse("#9BA3B0");
         public static readonly Color Warning = Color.Parse("#E0A23B");
-        public static readonly Color Danger = Color.Parse("#E5606B");
+        public static readonly Color Danger = Color.Parse("#EA7D86"); // the contrast round's dark danger (D410)
         public static readonly Color Accent = Color.Parse("#7C8CFF");
 
         /// <summary>The theme's disabled foreground (<c>VcTextDisabledBrush</c>): Azure DevOps' token link while disabled (A6, A11; the lead's ruling of 2026-11-06).</summary>

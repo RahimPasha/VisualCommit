@@ -44,7 +44,7 @@ public class ConflictResolverViewTests
     private static readonly Color Marker = Color.Parse("#3A2E16");
     private static readonly Color Used = Color.Parse("#1A2E24");
     private static readonly Color Hunk = Color.Parse("#1C2130");
-    private static readonly Color Danger = Color.Parse("#E5606B");
+    private static readonly Color Danger = Color.Parse("#EA7D86"); // the contrast round's dark danger (D410)
     private static readonly Color Accent = Color.Parse("#7C8CFF");
     private static readonly Color TextSecondary = Color.Parse("#9BA3B0");
     private static readonly Color TextDisabled = Color.Parse("#5F6775");

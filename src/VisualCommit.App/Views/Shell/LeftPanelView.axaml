@@ -67,6 +67,11 @@
     <Style Selector="TextBlock.refName.head">
       <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
     </Style>
+    <!-- On a hovered or selected row the accent text takes the row's own token, which reaches
+         4.5:1 on those backgrounds (D418); after the style above, so that it wins. -->
+    <Style Selector="Button:pointerover TextBlock.refName.head, Button.selected TextBlock.refName.head">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentOnRowBrush}" />
+    </Style>
     <!-- The toggles of a hidden or soloed row (8.3): 18 by 18. -->
     <Style Selector="Button.refToggle">
       <Setter Property="Width" Value="18" />

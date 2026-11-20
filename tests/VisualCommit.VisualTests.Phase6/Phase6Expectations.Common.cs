@@ -62,6 +62,7 @@ public static partial class Phase6Expectations
         Color TextSecondary,
         Color TextDisabled,
         Color Accent,
+        Color AccentOnRow,
         Color Success,
         Color Warning,
         Color Danger,
@@ -99,9 +100,10 @@ public static partial class Phase6Expectations
         TextSecondary: Color.Parse("#9BA3B0"),
         TextDisabled: Color.Parse("#5F6775"),
         Accent: Color.Parse("#7C8CFF"),
+        AccentOnRow: Color.Parse("#8B9AFF"), // the contrast round's accent on a hovered or selected row (D418)
         Success: Color.Parse("#3FB97F"),
         Warning: Color.Parse("#E0A23B"),
-        Danger: Color.Parse("#E5606B"),
+        Danger: Color.Parse("#EA7D86"), // the contrast round's dark danger (D410); lane 3 keeps #E5606B
         Selection: Color.Parse("#2A3150"),
         RowHover: Color.Parse("#1C1F27"),
         LabelText: Color.Parse("#10121A"),
@@ -116,7 +118,7 @@ public static partial class Phase6Expectations
         ConflictMarker: Color.Parse("#3A2E16"),
         ConflictUsed: Color.Parse("#1A2E24"),
         SearchMatch: Color.Parse("#F2C94C"),
-        DangerText: Color.Parse("#FFFFFF"),
+        DangerText: Color.Parse("#10121A"), // the contrast round's dark label on the danger (D410, D418)
         MenuShadow: "0 6 16 0 #80000000",
         Lanes: [.. new[] { "#7C8CFF", "#3FB97F", "#E0A23B", "#E5606B", "#4FB3D9", "#B07CE8", "#D97EB6", "#8FB84A" }.Select(Color.Parse)]);
 
@@ -132,6 +134,7 @@ public static partial class Phase6Expectations
         TextSecondary: Color.Parse("#5C6572"),
         TextDisabled: Color.Parse("#A1A8B3"),
         Accent: Color.Parse("#4353D8"),
+        AccentOnRow: Color.Parse("#4353D8"),
         Success: Color.Parse("#187248"),
         Warning: Color.Parse("#895A17"),
         Danger: Color.Parse("#B7323D"),

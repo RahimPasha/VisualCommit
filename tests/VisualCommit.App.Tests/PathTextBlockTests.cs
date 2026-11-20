@@ -150,7 +150,8 @@ public class PathTextBlockTests
         var block = new PathTextBlock { Text = @"C:\x is not a git repository.", Classes = { "error" } };
         using var host = DiffHost.Show(block, 400, 100, ThemeVariant.Dark);
 
-        DiffColors.AssertBrush(Color.Parse("#E5606B"), block.Foreground, "the error's colour");
+        // The dark danger of the contrast round (D410).
+        DiffColors.AssertBrush(Color.Parse("#EA7D86"), block.Foreground, "the error's colour");
     }
 
     /// <summary>The welcome page's error at <paramref name="width"/>: a wrapping, centred <see cref="PathTextBlock"/> at the window's 12.5.</summary>

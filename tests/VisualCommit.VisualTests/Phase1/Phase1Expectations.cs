@@ -46,7 +46,7 @@ public static class Palettes
         RowHover: Color.Parse("#1C1F27"),
         Success: Color.Parse("#3FB97F"),
         Warning: Color.Parse("#E0A23B"),
-        Danger: Color.Parse("#E5606B"));
+        Danger: Color.Parse("#EA7D86")); // the contrast round's dark danger (D410); lane 3 keeps #E5606B
 
     public static Palette Light { get; } = new(
         [.. new[] { "#4353D8", "#1C8655", "#A16A1B", "#C93A46", "#1D7EA6", "#8048C7", "#B54A8C", "#59811C" }.Select(Color.Parse)],

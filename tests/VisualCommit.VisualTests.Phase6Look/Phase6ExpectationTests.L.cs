@@ -132,7 +132,8 @@ public sealed class Phase6ExpectationTestsL : Phase6Checks
         Assert.InRange(Contrast.Ratio(Light.DangerText, Light.Danger), 4.5, 21);
         Assert.InRange(Contrast.Ratio(Light.LabelText, Light.Lane(1)), 4.5, 21);
         Assert.InRange(Contrast.Ratio(Light.LabelText, Light.Lane(2)), 4.5, 21);
-        Assert.Equal(Colors.White, Dark.DangerText);
+        // The contrast round's dark label on the danger button (D410, D418); light keeps white.
+        Assert.Equal(Color.Parse("#10121A"), Dark.DangerText);
         Assert.Equal(Colors.White, Light.DangerText);
     }
 

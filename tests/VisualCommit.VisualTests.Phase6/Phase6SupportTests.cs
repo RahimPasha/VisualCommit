@@ -112,8 +112,9 @@ public sealed class Phase6SupportTests : Phase6Checks
         Assert.Equal(
             ["#FF4353D8", "#FF1C8655", "#FFA16A1B", "#FFC93A46", "#FF1D7EA6", "#FF8048C7", "#FFB54A8C", "#FF59811C"],
             Light.Lanes.Select(colour => colour.ToString().ToUpperInvariant()));
-        Assert.Equal(Avalonia.Media.Color.Parse("#E5606B"), Dark.Danger);
-        Assert.Equal(Avalonia.Media.Colors.White, Dark.DangerText);
+        // The contrast round raised the dark danger and darkened its button's label (D410, D418).
+        Assert.Equal(Avalonia.Media.Color.Parse("#EA7D86"), Dark.Danger);
+        Assert.Equal(Avalonia.Media.Color.Parse("#10121A"), Dark.DangerText);
         Assert.Equal(Avalonia.Media.Colors.White, Light.DangerText);
     }
 

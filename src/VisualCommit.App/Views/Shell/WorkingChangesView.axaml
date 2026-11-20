@@ -57,6 +57,11 @@
     <Style Selector="TextBlock.status.renamed">
       <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
     </Style>
+    <!-- On a hovered or selected row the accent text takes the row's own token, which reaches
+         4.5:1 on those backgrounds (D418); after the style above, so that it wins. -->
+    <Style Selector="Panel.stageRow:pointerover TextBlock.status.renamed, Panel.stageRow.selected TextBlock.status.renamed">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentOnRowBrush}" />
+    </Style>
     <Style Selector="c|Icon.chevron">
       <Setter Property="Width" Value="12" />
       <Setter Property="Height" Value="12" />

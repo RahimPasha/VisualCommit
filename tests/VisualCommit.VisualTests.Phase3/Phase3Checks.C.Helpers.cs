@@ -168,8 +168,9 @@ public sealed partial class Phase3ChecksC
     }
 
     /// <summary>
-    /// Asserts a local branch's row: whether HEAD is on it, drawn in the accent colour (else the
-    /// primary text colour), and its arrows (ahead, behind). The row's button is laid out first.
+    /// Asserts a local branch's row: whether HEAD is on it, drawn in the accent colour (the row's
+    /// accent while the row is hovered or selected, D418; else the primary text colour), and its
+    /// arrows (ahead, behind). The row's button is laid out first.
     /// </summary>
     private static async Task AssertBranchRowAsync(ShellDriver app, string[] path, bool head, int ahead = 0, int behind = 0)
     {
@@ -180,7 +181,8 @@ public sealed partial class Phase3ChecksC
         var button = await app.RefRowAsync(path);
         var name = button.GetVisualDescendants().OfType<TextBlock>().First(text => text.Text == path[^1] && text.IsEffectivelyVisible);
         var palette = PaletteOf(app);
-        Assert.Equal(head ? palette.Accent : palette.TextPrimary, (name.Foreground as ISolidColorBrush)?.Color);
+        var accent = button.IsPointerOver || button.Classes.Contains("selected") ? palette.AccentOnRow : palette.Accent;
+        Assert.Equal(head ? accent : palette.TextPrimary, (name.Foreground as ISolidColorBrush)?.Color);
     }
 
     /// <summary>No row of the left panel is selected (D114: a right-click there selects nothing).</summary>

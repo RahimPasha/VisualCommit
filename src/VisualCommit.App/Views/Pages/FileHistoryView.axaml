@@ -65,6 +65,11 @@
     <Style Selector="TextBlock.status.renamed">
       <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
     </Style>
+    <!-- On a selected or pressed row the accent text takes the row's own token, which reaches 4.5:1
+         on the selection (D418); a hovered row's VcRowHoverBrush needs none. After the style above. -->
+    <Style Selector="ListBox.pageList ListBoxItem:selected TextBlock.status.renamed, ListBox.pageList ListBoxItem:pressed TextBlock.status.renamed">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentOnRowBrush}" />
+    </Style>
     <Style Selector="TextBlock.sha">
       <Setter Property="FontFamily" Value="{DynamicResource VcCodeFontFamily}" />
       <Setter Property="FontSize" Value="12" />

@@ -60,7 +60,9 @@ public static partial class Phase5Expectations
         Color TextPrimary,
         Color TextSecondary,
         Color TextDisabled,
+        Color TextPlaceholder,
         Color Accent,
+        Color AccentOnRow,
         Color Success,
         Color Warning,
         Color Danger,
@@ -96,10 +98,12 @@ public static partial class Phase5Expectations
         TextPrimary: Color.Parse("#E4E7EC"),
         TextSecondary: Color.Parse("#9BA3B0"),
         TextDisabled: Color.Parse("#5F6775"),
+        TextPlaceholder: Color.Parse("#8F97A4"), // the contrast round's placeholder token (D418)
         Accent: Color.Parse("#7C8CFF"),
+        AccentOnRow: Color.Parse("#8B9AFF"), // the contrast round's accent on a hovered or selected row (D418)
         Success: Color.Parse("#3FB97F"),
         Warning: Color.Parse("#E0A23B"),
-        Danger: Color.Parse("#E5606B"),
+        Danger: Color.Parse("#EA7D86"), // the contrast round's dark danger (D410); lane 3 keeps #E5606B
         Selection: Color.Parse("#2A3150"),
         RowHover: Color.Parse("#1C1F27"),
         LabelText: Color.Parse("#10121A"),
@@ -128,7 +132,9 @@ public static partial class Phase5Expectations
         TextPrimary: Color.Parse("#1B1F27"),
         TextSecondary: Color.Parse("#5C6572"),
         TextDisabled: Color.Parse("#A1A8B3"),
+        TextPlaceholder: Color.Parse("#68707D"),
         Accent: Color.Parse("#4353D8"),
+        AccentOnRow: Color.Parse("#4353D8"),
         Success: Color.Parse("#187248"),
         Warning: Color.Parse("#895A17"),
         Danger: Color.Parse("#B7323D"),

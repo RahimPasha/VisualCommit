@@ -261,7 +261,7 @@ public sealed partial class Phase5ChecksB : Phase5Checks
         Assert.Equal((260, SideBySideListRight, ContentTop), (page.ListBounds.Left, page.ListBounds.Right, page.ListBounds.Top));
         Assert.Equal((SideBySideListRight, 1520, ContentTop), (page.DiffBounds.Left, page.DiffBounds.Right, page.DiffBounds.Top));
         AssertHistoryRows(app, page, ReaderHistory, selected: 1, authorShown: true, dateShown: false);
-        Assert.Equal(palette.Accent, page.Rows[1].LetterColor);
+        Assert.Equal(palette.AccentOnRow, page.Rows[1].LetterColor); // the selected row's R (D418), the accent in light
         Assert.Equal(palette.Selection, page.Rows[1].Background);
         AssertColour(palette.Selection, shot, new Point(PageRowX, PageRowCentreY(1) + 8), "selected history row's background");
         Assert.Equal("Mira Kovac", TextsIn(app.Find<ListBox>("FileHistoryList").ContainerFromIndex(1)!).Last());

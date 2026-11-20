@@ -319,6 +319,116 @@ public class PanelViewTests
         }
     }
 
+    /// <summary>
+    /// The empty filter box draws its placeholder in the placeholder's own token at full opacity
+    /// (docs/phase-8a-design.md 1.5, 2.3, 2.4; D418): the keys in <c>Theme/Tokens.axaml</c> reach the
+    /// template part Fluent's text box draws it with, where a style could not.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public void The_filter_boxs_placeholder_is_drawn_at_full_opacity_in_its_own_colour(string theme)
+    {
+        var variant = Variant(theme);
+        using var host = Host.Show(new LeftPanelView { DataContext = new LeftPanelViewModel() }, 260, theme: variant);
+
+        var filter = host.Find<TextBox>("FilterBox");
+        Assert.True(string.IsNullOrEmpty(filter.Text), "The filter box is not empty.");
+        var placeholder = filter.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Name == "PART_Placeholder");
+        Assert.Equal("Filter", placeholder.Text);
+        Assert.True(placeholder.IsEffectivelyVisible, "The empty filter box shows no placeholder.");
+        Assert.True(placeholder.Opacity == 1, $"The placeholder is drawn at opacity {placeholder.Opacity}, not 1.");
+        Assert.Equal(Colour("VcTextPlaceholderBrush", variant), ColourOf(placeholder.Foreground));
+    }
+
+    /// <summary>
+    /// HEAD's branch name is drawn in <c>VcAccentOnRowBrush</c> while its row is hovered or
+    /// selected, and in the accent otherwise (design 1.5, 2.2, 2.3; D418).
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public void HEADs_branch_name_takes_the_row_colour_while_its_row_is_hovered_or_selected(string theme)
+    {
+        var variant = Variant(theme);
+        var panel = new LeftPanelViewModel();
+        panel.Update(LeftPanelViewModelTests.GraphRefs());
+        using var host = Host.Show(new LeftPanelView { DataContext = panel }, 260, theme: variant);
+        var model = panel.Rows.OfType<RefItemRow>().Single(row => row.IsHead);
+        var name = host.Window.GetVisualDescendants().OfType<TextBlock>().First(text => text.Name == "RefName" && text.Text == "main");
+        var row = name.FindAncestorOfType<Button>()!;
+        var accent = Colour("VcAccentBrush", variant);
+        var onRow = Colour("VcAccentOnRowBrush", variant);
+
+        Assert.True(accent == ColourOf(name.Foreground), $"Idle, main is drawn in {ColourOf(name.Foreground)}, not the accent {accent}.");
+
+        host.Window.MouseMove(host.BoundsOf(row).Center);
+        host.Settle();
+        Assert.True(row.IsPointerOver, "The pointer is not over main's row.");
+        Assert.True(onRow == ColourOf(name.Foreground), $"Hovered, main is drawn in {ColourOf(name.Foreground)}, not the row's accent {onRow}.");
+
+        host.Window.MouseMove(new Point(1, 1));
+        model.IsSelected = true;
+        host.Settle();
+        Assert.False(row.IsPointerOver, "The pointer is still over main's row.");
+        Assert.Contains("selected", row.Classes);
+        Assert.True(onRow == ColourOf(name.Foreground), $"Selected, main is drawn in {ColourOf(name.Foreground)}, not the row's accent {onRow}.");
+
+        model.IsSelected = false;
+        host.Settle();
+        Assert.True(accent == ColourOf(name.Foreground), $"Neither hovered nor selected, main is drawn in {ColourOf(name.Foreground)}, not the accent {accent}.");
+    }
+
+    /// <summary>
+    /// A renamed file's "R" in the commit details is drawn in <c>VcAccentOnRowBrush</c> while its
+    /// row is hovered, in the accent otherwise; a deleted file's "D" in the danger colour (design
+    /// 2.2, 2.3; D418). Selected rows and the other views are part L's (design 2.5).
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("Dark")]
+    [InlineData("Light")]
+    public async Task A_renamed_files_R_takes_the_row_colour_while_its_row_is_hovered(string theme)
+    {
+        var variant = Variant(theme);
+        var repository = new CommitDetailsViewModelTests.FakeRepository(sha => Task.FromResult(CommitDetailsViewModelTests.Details(sha) with
+        {
+            Files = [new ChangedFile("src/main-app.txt", FileChangeKind.Renamed, "src/app.txt"), new ChangedFile("docs/notes.txt", FileChangeKind.Deleted)],
+        }));
+        var details = new CommitDetailsViewModel(repository, new MainWindowViewModelTests.FakeSettings(), new DateDisplay(TimeZoneInfo.Utc));
+        using var host = Host.Show(new RightPanelView { DataContext = details }, 400, theme: variant);
+        await details.ShowAsync(new string('a', 40), cancellationToken: TestContext.Current.CancellationToken);
+        host.Settle();
+
+        var letters = host.Window.GetVisualDescendants().OfType<TextBlock>().Where(text => text.Name == "FileStatus" && text.IsEffectivelyVisible).ToList();
+        var renamed = letters.Single(text => text.Text == "R");
+        var deleted = letters.Single(text => text.Text == "D");
+        var row = renamed.FindAncestorOfType<Button>()!;
+        var accent = Colour("VcAccentBrush", variant);
+        var onRow = Colour("VcAccentOnRowBrush", variant);
+
+        host.Window.MouseMove(new Point(1, 1));
+        host.Settle();
+        Assert.True(accent == ColourOf(renamed.Foreground), $"Idle, the R is drawn in {ColourOf(renamed.Foreground)}, not the accent {accent}.");
+        Assert.Equal(Colour("VcDangerBrush", variant), ColourOf(deleted.Foreground));
+
+        host.Window.MouseMove(host.BoundsOf(row).Center);
+        host.Settle();
+        Assert.True(row.IsPointerOver, "The pointer is not over the renamed file's row.");
+        Assert.True(onRow == ColourOf(renamed.Foreground), $"Hovered, the R is drawn in {ColourOf(renamed.Foreground)}, not the row's accent {onRow}.");
+        Assert.Equal(Colour("VcDangerBrush", variant), ColourOf(deleted.Foreground));
+    }
+
+    private static ThemeVariant Variant(string theme) => theme == "Dark" ? ThemeVariant.Dark : ThemeVariant.Light;
+
+    /// <summary>A solid token's colour in <paramref name="variant"/>; fails the test when the theme has no such token.</summary>
+    private static Color Colour(string key, ThemeVariant variant)
+    {
+        Assert.True(Application.Current!.TryGetResource(key, variant, out var value) && value is ISolidColorBrush, $"The {variant} theme has no solid brush {key}.");
+        return ((ISolidColorBrush)value!).Color;
+    }
+
+    private static Color? ColourOf(IBrush? brush) => (brush as ISolidColorBrush)?.Color;
+
     /// <summary>The font size the main window gives everything in it, the details panel included.</summary>
     private static double MainWindowFontSize()
     {
