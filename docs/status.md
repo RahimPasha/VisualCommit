@@ -487,7 +487,12 @@ every commit.
   `docs/test-reports/phase-8a.md`, also uncommitted, which a reviewer reads before the lead commits
   it ahead of wave 1 (D244). A session that finds these changes and no agent at work does the
   same: the diff against design 1.16, `dotnet build` with no warning, the classes 1.16 names,
-  what is missing finished, then the commit.
+  what is missing finished, then the commit. The checks' writer ended on 2026-11-20 (parts L and
+  I, 60 KB; the lead settled the six points where it found the design at odds with itself, in
+  design 0.7, 1.11, 2.5, 4.7, 12.3.3 and 12.3.4), and their review is under way: the workflow
+  `phase8a-checks-review-L-I` (run `wf_17f3e7ad-e6a`: two Opus reviewers, a verifier for each
+  major, one fixer who corrects the report). The owner turned Ultracode on again on 2026-11-20,
+  so substantive tasks run as workflows again.
 - **Phase 8's start, 2026-11-18** (no branch yet: everything so far is on `master` or outside the
   repo). The machine changed since phase 7b's gate (Windows updates KB5132061 and KB5132688 on
   2026-11-11, and a boot that day; git 2.56.0.windows.4 and SDK 10.0.303 as before), so step 6's
@@ -534,16 +539,24 @@ every commit.
   owner's if wanted. One of the five queries also carried the owner's GitHub handle beside the
   name, which D412's leave did not cover; the handle is public on the repository's page, and the
   lead told the owner. D21's search of 2026-10-06 found the same: no existing product.
-- **The icon** (D407, D447): round 1, five candidates drawn by the lead as SVG (Lens, Merge V,
-  Check, Ring, Viewfinder), is in the repository since `306f61f`: `docs/brand/icon/round-1/` holds
-  each candidate as a file of its own, the contact sheet `candidates.html` (each from 16 to 256
-  pixels on a dark and a light desk; it loads nothing from the web) and a README that records the
-  round and will record the owner's choice. The same sheet is on a private page of the owner's,
-  https://claude.ai/artifact/BDztvt827qm6QeypyqZmxM. The design's review found that the round had
-  been kept outside the repository and shown only up to 128 pixels, against D407. The lead had no
-  way to look at the rendered page before publishing it. Next: the owner's letter and changes, each
-  later round in `round-<n>/`; then the look-alike check against Git's logo and the other clients'
-  icons, the small-size drawing, and the chosen mark as the masters in `assets/brand/` (step 11).
+- **The icon** (D407, D447): **the owner chose A, Lens, on 2026-11-20**, with no change asked
+  for. Round 1 (five candidates: Lens, Merge V, Check, Ring, Viewfinder) is in
+  `docs/brand/icon/round-1/` since `306f61f`, each candidate a file of its own, the contact sheet
+  `candidates.html` (16 to 256 pixels on a dark and a light desk) and a README that records the
+  round and the choice; the same sheet is on a private page of the owner's,
+  https://claude.ai/artifact/BDztvt827qm6QeypyqZmxM. Round 2 works Lens out into its three masters
+  (the full drawing, the simpler one on a 16 grid for 32 pixels and below, the one on Apple's
+  grid; design 7.3's rules): a plain down-scaling of the chosen drawing is mush at 16 pixels, its
+  outline one pixel wide and between pixels. Under way since 2026-11-20: the workflow
+  `icon-round-2-lens-masters` (run `wf_b5547917-771`): three Opus draughtsmen (faithful, pixel
+  first, bold), three judges, one final set, in `D:/Projects/Personal/phase8-work/icon/round-2/`
+  (`final/` at its end). The lead can now look at a drawing: `python
+  D:/Projects/Personal/phase8-work/icon/render/render_icon_sheet.py <folder with the three
+  masters>` renders them with headless Edge at every size on both desks, with the small sizes
+  enlarged. Next: the lead looks at the final set, commits it as `docs/brand/icon/round-2/` with
+  its sheet and README, shows it to the owner, and after the owner's word the masters go to
+  `assets/brand/` with §7 (step 11), which then needs no placeholder mark; the look-alike check
+  against Git's logo and the other clients' icons needs the owner's leave for an image search.
 - Nothing else is in flight. `master` holds everything; the working tree was clean when phase 7b was
   merged (`3dc7f79`). **Cleaned up on 2026-11-18, at the owner's word** (the 7b handoff's "Do
   first", step 3): the seven worktrees under `D:/Projects/Personal/vc-wt/` (each clean, its branch
@@ -686,9 +699,9 @@ every commit.
     DevOps' and GitLab's on 2026-12-04, and a gate runs the live command twice (D335). Before 8a's
     gate the owner makes each again, with an expiry that also covers 8b's gate, as phase 7a's
     design 14.6 and phase 7b's design 15.8 say, through the script that never shows a token.
-  - **The icon** (D407, D447): the owner picks among the lead's candidates and directs the changes
-    (Notes, "The icon"); by the counted round the chosen mark, or the owner's word that 8a closes
-    with the placeholder.
+  - **The icon** (D407, D447): the owner chose A, Lens, on 2026-11-20. Next the owner looks at
+    round 2, Lens worked out for the small sizes and for macOS (Notes, "The icon"), and says yes
+    or what to change.
   - **The desktop, told first each time** (design 13.3): the lead's try of the winget terminal
     window before §5's merge; two earlier real-window checks alone at §6's merge (about 2
     minutes); §9's spike (a minute of keys and clicks) and a short listen with Narrator at §9's
@@ -704,7 +717,9 @@ every commit.
     owner's word; if the `github-pages` environment then admits more than `master`, the owner's
     leave is asked to set its branch rule.
   - **Leave for a reverse image search** for the icon's look-alike check (D412 covers only the
-    search for the name): asked when the owner has chosen a mark.
+    search for the name): the mark is chosen, so the lead asks with round 2. It would send the
+    unpublished drawing to an image search service; without it the lead compares by eye against
+    Git's logo and the well-known clients' icons.
   - **Left to 8a's design, now ruled**: the points the readers left to the design (one instance
     per data folder, the git program setting, the netrc note, the OpenSSH line, the guide's tested
     sizes and its generator, risk 44 left alone, no writes to a user's repository for speed, the

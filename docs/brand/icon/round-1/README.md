@@ -23,8 +23,11 @@ Left out on purpose: Git's diamond and its red, any letter G, and a full picture
 
 ## The owner's choice
 
-Not made yet. The candidates were put before the owner on 2026-11-19, first at 16 to 128 pixels on
-a private page, then here with the 256 pixel column.
+**A, Lens**, chosen by the owner on 2026-11-20 ("I pick Lens (A) for the icon design"), with no
+change asked for in this round. The candidates were put before the owner on 2026-11-19, first at
+16 to 128 pixels on a private page, then here with the 256 pixel column. Round 2
+(`../round-2/`) works the chosen mark out into its masters: the full drawing, the simpler one for
+32 pixels and below, and the one on Apple's grid.
 
 ## What follows the choice
 

@@ -332,7 +332,11 @@ round (1,150 scripted, 200 real-window captures, 3 framed captures, 198 differen
 | The shortcuts list's "Help" group (§11) | 62 | `s14f-shortcuts-end`; `s14e-shortcuts-top` in the section's scroll bar only, if at all (§11's builder measures it) | the list's end; the scroll bar |
 
 Every one but the framed captures is in the 1,333, so about 1,336 of 1,353 earlier files change. Every
-other package proves "none": its run's scripted pictures against the current references.
+other package proves "none": its run's scripted pictures against the current references. Two of
+part L's own pictures change at later merges, and the lead's `--expected` file for each merge names
+them: `l3a-palette-placeholder` in the palette's scroll thumb (§8's and §11's merges) and
+`l3f-settings-name-placeholder` in the settings screen (the Git program row at §5's merge, the
+About button at §8's).
 
 How (D419): §2's comparison runs phase 7b's references
 (`D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual/`, ruling 22) against wave 1's whole
@@ -806,7 +810,8 @@ parameterless constructor (§7 gives it the icon), over `ViewModels/InstanceNoti
 trimmed at its start, D448), `InstanceNoticeBody`, `InstanceNoticeIfNoWindow`,
 `InstanceNoticeStatus`, `InstanceNoticeTryAgain`, `InstanceNoticeClose`. A headless test shows it
 through `InstanceNoticeHost.Show(GuidancePlatform platform, string folder, ThemeVariant theme)` (new,
-§4, in 8a's project), which part I and §9's sweep call. The guard never runs in a harness:
+§4, in 8a's project), which part I and §9's sweep call; §4 may add optional parameters after these
+three for its own checks, such as the try that I2 holds and answers (4.6). The guard never runs in a harness:
 `ShellDriver` calls `AppSession.Start` itself, and the real window gives each launch its own folder.
 
 ### 1.12 Automation: names, the sweep, the graph's row (§9, D435)
@@ -1089,7 +1094,7 @@ is confirmed. R: the real window repeats it (§12).
 | L3 | `Scenarios.GraphAsync`; empty, by the routes earlier checks use, each closed unconfirmed: the palette, the search bar, the Pick dialog's `Filter`, the Name dialog, the Remotes form's `Name` and `URL`, the settings screen's user name | each ink the token on `#272C36`. `l3a`…`l3f` |
 | L4 (R: a) | graph: a) `feature/login`'s menu by Shift+F10, "Delete…" highlighted by arrows; b) the palette, a destructive entry highlighted; c) "Add settings page"'s `docs/notes.txt` "D" in the details, hovered, then selected; d) the Remotes dialog's "Remove" at rest, then hovered | ink `#EA7D86` on `#2F3542` (a, c, d hovered), `#2A3150` (b, c selected), `#272C36` (d at rest), more than 8 from `#E5606B`. `l4a`…`l4f` |
 | L5 (R: dark) | changes; the discard of `src/Calculator.cs` asked; Cancel | dark: background `#EA7D86`, label ink `#10121A`, `Foreground` `VcDangerTextBrush`, Cancel focused, the backdrop as before; light: `#B7323D`, white label. `l5a-discard-dialog-dark`, `l5b-discard-dialog-light`; the file still modified |
-| L6 (R: a to c) | graph: HEAD's `main` a) idle (`MoveToNeutral`), b) hovered (`MoveMouse`), c) selected, pointer away; d) "Add settings page"'s "R" idle, hovered, selected; e) `main` compared with `origin/main`, its "R" selected (the builder confirms the rename is listed); f) `src/main-app.txt`'s file history, the rename's row selected; g) changes: staged `src/helpers.py`'s "R" hovered, selected; h) a to c in light | `main` `#7C8CFF` on `#1A1D24`, `#8B9AFF` on `#2F3542`, `#8B9AFF` on `#2A3150`; each "R" `#8B9AFF` hovered or selected, `#7C8CFF` idle; light `#4353D8` always. `l6a`…`l6h` |
+| L6 (R: a to c) | graph: HEAD's `main` a) idle (`MoveToNeutral`), b) hovered (`MoveMouse`), c) selected, pointer away; d) "Add settings page"'s "R" idle, hovered, selected; e) `main` compared with `origin/main`, its "R" selected (the builder confirms the rename is listed); f) `src/main-app.txt`'s file history, the rename's row selected; g) changes: staged `src/helpers.py`'s "R" hovered, selected; h) a to c in light | `main` `#7C8CFF` on `#1A1D24`, `#8B9AFF` on `#2F3542`, `#8B9AFF` on `#2A3150`; each "R" `#8B9AFF` hovered or selected, `#7C8CFF` idle; light `#4353D8` always. One picture per state, `l6a` to `l6m` (a to c are `l6a` to `l6c`, as the real window names them; the report's part L names each) |
 
 Each method under about 40 s alone. `Phase8aExpectations.L.cs` holds the colours, the old colours and the
 names; `Phase8aExpectationTests.L.cs` asserts their ratios at 4.5:1, that each new colour is more than
@@ -1761,7 +1766,7 @@ None. The guard runs only in `Program.Main`, App's change only under a desktop l
 headless app lacks, and `MainWindow` gains a method and a flag. Proof: the builder's run of 4.5 and
 part I; at wave 1's last merge the whole run's scripted pictures against the references
 (`scripts/compare-pictures.py`) show nothing beyond §2's regions (0.7). New: `i2a-notice-dark`,
-`i2b-notice-trying`, `i2c-notice-no-answer`, `i3a-notice-light`, I2's real capture. In the real-window
+`i2b-notice-trying`, `i2c-notice-no-answer`, `i3a-notice-light`, I2's three real captures. In the real-window
 pass each launch's folder gains the two files and its log one Info line; no check lists a data
 folder's files (Grep), and each relaunch waits for the exit.
 
@@ -3971,7 +3976,8 @@ palette, the pass asserts that the highlighted row reads `About VisualCommit…`
 
 `InkOf` is `TextInk.Of`'s rule over the capture's pixels at `Scaling`, with `TextInk.Tolerance` and
 the twin's "replaced" colour. Its rectangle is the element's UI Automation bounds inset to hold the
-text alone (no caret, icon, key text or border toward the foreground); a box is read unfocused only.
+text alone (no caret, icon, key text or border toward the foreground); a box is read unfocused, but
+the text typed into the focused `FilterBox` in launches 1 and 2, which is read less the caret's column.
 Where no such rectangle exists, the comparison carries the colour and run.txt says so. A miss is
 reported to the lead, never met by a wider tolerance (§2.9 item 6).
 
@@ -4018,7 +4024,7 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
    `InstanceNoticeClose`: exit 2 within 5 s; D holds `instance.lock`, `logs/` and the launch's own
    `harness/`, nothing else.
 6. **`Check_I2_notice_try_again_starts_here`**. As 5 to the notice; the test releases the lock; a real
-   click on Try again: within 15 s `OtherWindowOfProcess` finds the main window (`GitStatus` in it);
+   Enter on Try again, as the twin presses it (4.6), so the focus frame matches: within 15 s `OtherWindowOfProcess` finds the main window (`GitStatus` in it);
    `instance.json`'s `pid` is the app's; that window closed, exit 0 within 15 s (D422).
 7. **`Check_F_missing_offers_keys_and_choose`** (F1's session; `StandInEnvironment("none")`). Before the
    app starts, the test looks for winget as the app does, `ProgramSearch.FindOnPath("winget.exe", PATH,
