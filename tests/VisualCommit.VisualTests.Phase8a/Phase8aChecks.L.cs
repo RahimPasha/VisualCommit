@@ -369,6 +369,7 @@ public sealed partial class Phase8aChecksL : Phase8aChecks
         await app.WaitForAsync(() => app.FileHistorySnapshot() is { IsLoading: false } page && page.Rows.Count > 0, "the file history's rows");
         var index = app.FileHistorySnapshot().Rows.ToList().FindIndex(history => history.Subject == L.HeadCommit);
         Assert.True(index >= 0, $"The file history has no row of {L.HeadCommit}.");
+        Assert.True(index == 0, $"The row of {L.HeadCommit} is row {index} of the file history: the wait for its diff below holds only for the page's first row, whose change the page reads by itself as it opens.");
         app.Click(app.FileHistoryRowPoint(index));
         await app.WaitForAsync(() => app.FileHistorySnapshot().Selected?.Subject == L.HeadCommit, $"the history's row of {L.HeadCommit} to be selected");
 

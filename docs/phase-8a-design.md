@@ -1008,6 +1008,13 @@ as a later package needs it. The lead keeps this subsection; a later wave adds t
   the real window's launch facts (exit codes, limits, the data folder's entries after "Close") for
   §12. `Program.Main`'s exit codes and the notice under a real desktop lifetime have run in no
   test: §12's launches 4 to 6 are their first run.
+- **Wave 1's close** (the report's "Wave 1's comparison"). The references of every later merge are
+  `D:/Projects/Personal/phase8-work/references/wave1/`. "Try again" keeps its width while it reads
+  `Trying…` (`9a82a8a`), and L6's `l6h` waits for the history's diff (`24d335f`). For §12: in L4 a's
+  launch the menu opens under a pointer that has not moved, and Windows may then hover an item
+  that the scripted picture does not show hovered, so the pointer is moved to the neutral point
+  before Shift+F10; `l2a`, `l2b`, `l5a` and `l5b` show the unstaged list scrolled to bring
+  `src/Calculator.cs` into view, and the real window scrolls it the same way.
 
 ## 2. colours: the contrast round (D410)
 

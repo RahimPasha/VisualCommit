@@ -409,8 +409,10 @@ Steps, method 5:
 6. Close the diff (`CloseDiffButton`), then the comparison (`CompareClose`); wait until the graph shows
    (`ShowsGraph`): closing the comparison alone leaves its diff in the graph area. Click the graph row of
    "Add settings page"; right-click its details' row of `src/main-app.txt`; click `File history`; wait
-   for the page's rows. Click the row of "Add settings page"; rest the pointer at the neutral point.
-   Screenshot (`l6h-history-renamed-selected`).
+   for the page's rows. Click the row of "Add settings page", the page's first; wait until the page's
+   diff of that row is read (its side label the row's short SHA, its file `src/main-app.txt`, its body
+   no longer loading); rest the pointer at the neutral point. Screenshot
+   (`l6h-history-renamed-selected`).
 
 Steps, method 6:
 1. Open the tab on the fresh "changes"; wait until ready. Take `ExactStateAsync()`.
@@ -437,8 +439,9 @@ Expected:
   `#8B9AFF` on `#2A3150`; in steps 2 to 4 the "D" of `docs/notes.txt` stays `#EA7D86`. Step 5: the
   comparison lists `src/main-app.txt` as renamed from `src/app.txt` (2.5 asks the builder to confirm
   it), its "R", selected, `#8B9AFF` on `#2A3150`. Step 6: the file history's row of "Add settings page"
-  shows "R", selected (`ListBoxItem:selected`), `#8B9AFF` on `#2A3150`. Each hovered or selected "R"
-  more than 8 from `#7C8CFF`.
+  shows "R", selected (`ListBoxItem:selected`), `#8B9AFF` on `#2A3150`, and the page's diff shows
+  `No changes to the file's content.`, as `l6f` does for the same file at the same commit (the commit
+  only renames the file). Each hovered or selected "R" more than 8 from `#7C8CFF`.
 - The "R" of `src/helpers.py`, method 6: step 2 hovered (its tooltip open), `#8B9AFF` on `#2F3542`;
   step 3 selected, `#8B9AFF` on `#2A3150`.
 - Method 7: `main`'s name `#4353D8` in all three states (light `VcAccentOnRowBrush` equals light
@@ -617,7 +620,8 @@ Expected:
   `VcPrimaryButton` and `IsDefault` true; `InstanceNoticeFolder` is a `TrimmedTextBlock` with
   `TextTrimming` `LeadingCharacterEllipsis` and `TextWrapping` `NoWrap`. No text cut. The view model has
   no outcome yet.
-- After step 2: `InstanceNoticeTryAgain` reads `Trying…` and is disabled; `Close` enabled; no status;
+- After step 2: `InstanceNoticeTryAgain` reads `Trying…` and is disabled, and it and `InstanceNoticeClose`
+  have the bounds they had after step 1 (the button keeps its width through a try); `Close` enabled; no status;
   the frame as high as after step 1.
 - After step 3: `InstanceNoticeStatus` reads `It still did not answer.`, below the sentence and above
   the buttons, its ink `#E0A23B`; `InstanceNoticeTryAgain` reads `Try again`, enabled, with the keyboard
@@ -807,6 +811,57 @@ asserted before. Which of them hold on 2.34.1 is CI's floor job's to say (design
 are recorded in status.md's CI section and, at the close, here under "Other platforms". No earlier
 picture changes on the laptop; on macOS phase 5's `a2d-show-reads` shows the second `rev-parse` call
 with `--path-format=absolute` (design 3.6).
+
+### Changed in this report after its first commit
+
+- **L6, method 5, step 6 and its expected result** (2026-11-20, `24d335f`): the step now waits for the
+  file history's diff of the clicked row, and the expected result names what that diff shows. Reason:
+  the page selects its first row, this same row, by itself as it opens, so the click starts no read,
+  and the wait for "the row selected" passed at once. In wave 1's whole run `l6h` was taken while the
+  diff was still loading and showed an empty body; the inspection of the new pictures found it. The
+  check asserts the loaded diff now, and that the row is the page's first.
+- **I2, after step 2** (2026-11-20, `9a82a8a`): "Try again" and "Close" keep their bounds through a try.
+  Reason: "Try again" was 81 px wide and `Trying…` 75, so "Close" moved 6 px to the right during a try
+  and back after it, which the inspection of `i2a` to `i2c` showed. The button now never gets narrower
+  than it has been drawn; the new assertion failed on the code before. `i2b-notice-trying` changed with
+  it; `i2a`, `i2c` and `i3a` are the same files as before.
+
+### Wave 1's comparison with phase 7b's references (2026-11-20)
+
+The whole default run on wave 1's final code (`bba59c7`; 7,993 tests, none failed) against phase 7b's
+gate (`D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual/`), with the scan's `expected.json`
+as the expected regions (D419). `scripts/scan-contrast.py` on the references wrote the eight lists,
+each equal to the committed one. Of the 1,150 earlier scripted pictures, 1,141 changed and 9 are the
+same file; none changed size. 1,083 changed only inside their expected regions. The other 58 (54
+changed also outside their regions, 4 changed that the scan lists under none) were looked at one by
+one by six inspectors, each reading both pictures' pixels:
+
+- **42 differ from run to run by nature**, and wave 1 changed nothing they show: a temporary folder's
+  random name in a path, in git's output or in a tooltip (15: phase 1's `11a`, `13b`, `14a`, `14b`;
+  phase 3's `16j`, `30g`; phase 5's `u21v`; phase 6's `k10e`, `l30c` dark and light, `l32a`, `l32b`
+  dark and light, `w1e`, `w3a`); a caret that blinked (12: `21a`; `f10b`, `f10c`, `f10e`, `f10f`,
+  `f11c`; `l27g`, `l31g`, `w6a`; 7a's `b01a`, `n06b`; 7b's `n01a`); a progress text or bar caught at
+  another moment (5: `17d`, `18b`, `21b2`, `21b3`, 7b's `n04b`); two reads of the activity log in the
+  other order, which start together (2: `a2d`, `a2g`, as phase 5's and 7b's reports already say);
+  anti-aliasing pixels one or two levels apart with no shape (8: `03e`, `21b1`, `27d`, `32d`; `a3c`,
+  `c11f`; `u23e`, `u23f`).
+- **16 are the round's own colours where the scan's boxes do not reach**: the placeholder under a
+  menu's shadow, cut by a dialog or in a disabled box (7: phase 3's `04c`, `09b2`, `26g`; phase 4's
+  `c16a`; phase 6's `l31e` dark and light; 7a's `n07a`), and danger text or its icon just outside a
+  box, mostly a line's first letter or a text under a backdrop (9: phase 5's `a2c`, `a2e`; phase 6's
+  `w2b`, `w7a`, `w7b`, `w7c`; 7a's `n04a`, `n08b`; 7b's `n05d`). In each the pixels go from the old
+  colour to the new one and nothing else moved.
+- **None shows a change the design does not name** (ruling 3), and none is unexplained.
+
+The 35 new pictures were each checked against this report's text by three inspectors, colours by
+their pixels: 34 show what is expected; `l6h` did not (above). Two things they noted for the
+real-window twins: in L4 a's launch the menu opens under a pointer that has not moved, where Windows
+may hover an item the scripted picture does not show hovered; and `l2a`, `l2b`, `l5a` and `l5b` show
+the unstaged list scrolled to bring `src/Calculator.cs` into view, which the real window must match.
+
+After the two fixes above the run's scripted pictures are the references of every later merge
+(`D:/Projects/Personal/phase8-work/references/wave1/`, 1,185 pictures with their hashes beside
+them). The 200 real-window captures were not taken again; the gate takes them.
 
 ## Found by the gate
 
