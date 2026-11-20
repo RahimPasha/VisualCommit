@@ -494,8 +494,21 @@ every commit.
 
 ### Notes for whoever resumes
 
-- **Wave 1 is next (2026-11-20).** WP0 (`fc8a063`) and parts L's and I's checks (`a1fc720`) are
-  pushed; nothing is uncommitted in the main checkout. Notes from WP0 for the packages: at §3's
+- **Wave 1 is under way since 2026-11-20.** WP0 (`fc8a063`) and parts L's and I's checks (`a1fc720`)
+  are pushed (the branch at `d37036a`); nothing is uncommitted in the main checkout. The three
+  worktrees `D:/Projects/Personal/vc-wt/p8a-colours`, `p8a-floor` and `p8a-single` were made from
+  `d37036a`, on the branches `wip/p8a-colours`, `wip/p8a-floor` and `wip/p8a-single`, which are
+  never pushed. The workflow `phase8a-wave-1` (run `wf_463ba2b4-db6`) builds the three packages
+  side by side, an Opus builder in each worktree, and then, for each package, three reviewers
+  (the design, correctness and safety, the tests), a verifier for each major and a fixer, all
+  committing on the package's `wip` branch. The floor's builder leaves `GitVersion.Minimum` and
+  the floor job's `continue-on-error` to the lead's commit after CI's reading (design 3.8). When
+  the workflow has ended, the lead reads each package's report and diff, merges each `wip` branch
+  into the phase branch (`git merge --no-ff`, as phase 7b's merges), makes the lead's own doc
+  changes each builder names, and pushes. A session that finds the workflow gone reads each
+  worktree's `git log d37036a..HEAD` and `git status`: a package whose builder did not finish is
+  built on from its last commit by the same brief (design section 0, 1 and its own; the report's
+  part), then reviewed. Notes from WP0 for the packages: at §3's
   merge `HeldRulesTab.cs:129` passes the broker's `gitVersion` by position; §11 takes
   `OpenUserGuide` out of `AppShortcutsTests`' keyless list when it binds F1; §5 extends
   `GitAccessTests`, which exists since WP0; `.editorconfig` has an entry for 8a's `*.G.cs` files,
