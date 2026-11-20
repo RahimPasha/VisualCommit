@@ -283,7 +283,6 @@ public static partial class Phase8aExpectations
             public const string CloneNameBox = "CloneNameBox";
             public const string CloneFromGitHubFilter = "CloneFromGitHubFilter";
             public const string CloneFromGitHubList = "CloneFromGitHubList";
-            public const string CancelButton = "CancelButton";
             public const string ConfirmButton = "ConfirmButton";
         }
 

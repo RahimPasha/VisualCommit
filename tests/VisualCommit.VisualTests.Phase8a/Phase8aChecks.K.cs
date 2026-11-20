@@ -399,8 +399,8 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
 
     /// <summary>
     /// Method 5, K5 on one empty tab, the fake of GitHub serving a copy of 7a's "hosting" on a free
-    /// port: "From GitHub…" by Shift+Tab and Enter, <c>octo/hello</c> by Tab and Home, Choose by the
-    /// keys; the form filled, "From GitHub…" focused without a frame, no <c>clone</c> call.
+    /// port: "From GitHub…" by Shift+Tab and Enter, <c>octo/hello</c> by Tab, Home and Enter; the form
+    /// filled, "From GitHub…" focused without a frame, no <c>clone</c> call.
     /// </summary>
     [AvaloniaFact]
     public async Task Check_K5_focus_after_choose()
@@ -452,10 +452,7 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         await app.WaitForAsync(() => browser.Selected?.FullName == K.OctoHello, "octo/hello selected");
         Assert.True(app.FindByAutomationId(app.TopDialogView!, K.Ids.ConfirmButton).IsEffectivelyEnabled, "Choose is disabled with octo/hello selected.");
 
-        // Step 6 (k5a): Choose, by the keys. Enter in the list is the list's item's (it selects
-        // and chooses nothing), so Choose is reached by Tab and pressed by Enter.
-        await app.TabToAsync(focused => focused is Control { Name: K.Ids.CancelButton }, "Cancel");
-        await app.TabToAsync(focused => focused is Control { Name: K.Ids.ConfirmButton }, K.Choose);
+        // Step 6 (k5a): Enter in the list chooses the selected row.
         app.PressKey(Key.Enter);
         await app.WaitForAsync(() => browser.IsClosed && button.IsFocused, $"the browser closed and From GitHub… focused (it is on {app.DescribeFocus()})");
         app.MoveToNeutral();

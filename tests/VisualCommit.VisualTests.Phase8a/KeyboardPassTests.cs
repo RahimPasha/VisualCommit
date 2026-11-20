@@ -181,9 +181,8 @@ public sealed class KeyboardPassTests
 
     /// <summary>
     /// F5-A: after Choose and after Esc in the repository browser, "From GitHub…" has the focus
-    /// back, without the keyboard's frame (6.3.5); the browser disabled it while it ran. Choose is
-    /// reached by Tab from the list and pressed by Enter: Enter in the list itself is the list's
-    /// item's, which selects it and chooses nothing.
+    /// back, without the keyboard's frame (6.3.5); the browser disabled it while it ran. The row is
+    /// chosen by Enter in the list, as 6.3.9's route and K5 have it.
     /// </summary>
     [AvaloniaFact]
     public async Task After_Choose_and_after_Esc_in_the_repository_browser_its_button_has_the_focus()
@@ -207,8 +206,6 @@ public sealed class KeyboardPassTests
         await app.TabToAsync(focused => focused is Control control && control.GetSelfAndVisualAncestors().OfType<Control>().Any(ancestor => AutomationProperties.GetAutomationId(ancestor) == "CloneFromGitHubList"), "the browser's list");
         app.PressKey(Key.Home);
         await app.WaitForAsync(() => browser.Selected?.FullName == Phase8aExpectations.K.OctoHello, "octo/hello selected");
-        await app.TabToAsync(focused => focused is Control { Name: "CancelButton" }, "Cancel");
-        await app.TabToAsync(focused => focused is Control { Name: "ConfirmButton" }, "Choose");
         app.PressKey(Key.Enter);
         await app.WaitForAsync(() => browser.IsClosed, "the browser to close");
         await app.WaitForAsync(() => button.IsFocused, $"From GitHub… to have the focus after Choose (it is on {app.DescribeFocus()})");
@@ -224,6 +221,37 @@ public sealed class KeyboardPassTests
         await app.WaitForAsync(() => button.IsFocused, $"From GitHub… to have the focus after Esc (it is on {app.DescribeFocus()})");
         Assert.False(app.FocusVisible, "From GitHub… shows the keyboard's frame after Esc.");
         Assert.DoesNotContain(app.GitCalls(), call => call.CommandText.StartsWith("git clone", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Enter in the repository browser's list chooses only a selected row, when Choose can run: with
+    /// the focus in the list and no row selected, the browser stays open and the form's URL empty.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Enter_in_the_repository_browsers_list_with_no_row_selected_chooses_nothing()
+    {
+        await using var served = await ServeAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.Start(data.Path, gitHub: served.GitHub);
+        await app.WaitUntilReadyAsync();
+        app.MoveToNeutral();
+        app.Click(app.FindByAutomationId("CloneRepoButton"));
+        await app.SignInAsync(served.OctoToken, Cancelled);
+        var button = app.Find<Button>("CloneFromGitHubButton");
+        await app.WaitForAsync(() => button.IsEffectivelyVisible, "From GitHub… to show");
+        app.Click(button);
+        var browser = await app.WaitForDialogAsync<CloneFromGitHubDialogViewModel>();
+        await app.WaitForAsync(() => browser.Load.IsCompleted, "the browser's list");
+        await app.TabToAsync(focused => focused is Control control && control.GetSelfAndVisualAncestors().OfType<Control>().Any(ancestor => AutomationProperties.GetAutomationId(ancestor) == "CloneFromGitHubList"), "the browser's list");
+        Assert.Null(browser.Selected);
+
+        app.PressKey(Key.Enter);
+        app.Settle();
+
+        Assert.False(browser.IsClosed, "Enter in the list closed the browser while no row was selected.");
+        Assert.True(string.IsNullOrEmpty(app.Session.Shell.ActiveTab.Welcome.CloneUrl), $"The form's URL is {app.Session.Shell.ActiveTab.Welcome.CloneUrl}.");
+        browser.CancelCommand.Execute(null);
+        await app.WaitForAsync(() => browser.IsClosed, "the browser to close");
     }
 
     /// <summary>After the create form's Pick of a base, closed by Esc or by its choice, the form's "Choose…" has the focus (ruling 51).</summary>
