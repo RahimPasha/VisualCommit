@@ -720,16 +720,67 @@ their parts.
 
 ### Part L: the contrast round (ruling 28, 31; D410, D419; design 0.7, 2.4, 2.6)
 
-The round changes earlier expectations on purpose (ruling 28). Each changed expectation is named here
-once, with its reason, when §2's commits make it (design 2.4, whose three groups are the dark danger
-`#E5606B` to `#EA7D86`, the dark danger button's label white to `#10121A`, and HEAD's name read as the
-accent where its row is hovered or selected); every lane list keeps `#E5606B`. The earlier pictures the
-round changes are not listed one by one: this report replaces plan.md's 35 danger-label pictures (plan
-line 768) by the scan's lists (ruling 31, D419), which §2 commits in `docs/test-reports/phase-8a-contrast/`
-(`colours-any.txt`, `-none`, `-placeholder`, `-placeholder-double-backdrop`, `-danger`, `-danger-on-row`,
-`-danger-button`, `-accent-on-row`): 1,333 of phase 7b's 1,350 pictures change (1,137 scripted, 196
-captures; the placeholder 1,293, dark danger text 360, the danger button 41, the accent on a row 13), and
-17 do not (`colours-none.txt`).
+The round changes earlier expectations on purpose (ruling 28). Each is named here once, with its
+reason. The values are design 1.5's; every lane list keeps `#E5606B`. The package's commits are
+`bfd6b61` to `a1a4064` on `wip/p8a-colours`, merged in `3b9d159`.
+
+1. **The dark danger colour, `#E5606B` to `#EA7D86`** (D410, D418: the old colour was 4.15:1 on a
+   control's background, 3.64 on a hovered row and 3.76 on a selected one; the new one is 5.18, 4.55
+   and 4.70). Changed: `ConflictResolverViewTests`, `ContextMenuAdapterTests`, `PathTextBlockTests`,
+   `ThemeTokensTests` (the value moved to `The_contrast_rounds_values_are_the_designs`), the `Danger`
+   of `Phase1Expectations` and of the `Expectations.Common` of phases 3, 4, 5, 6, 7a and 7b,
+   `Phase7bExpectations.A`, and `Phase6SupportTests`.
+2. **The dark danger button's label, white to `#10121A`** (D418: white on `#EA7D86` would be 2.70:1,
+   `#10121A` is 6.92). Changed: `DangerText` in the `Expectations.Common` of phases 6, 7a and 7b
+   (dark), `Phase6SupportTests`, `Phase6ExpectationTests.L`, and phase 6's L31
+   (`Phase6Checks.L.Overlays`), which now compares `VcDangerTextBrush` with the palette's label;
+   `l31b-delete-question-dark` shows it.
+3. **HEAD's name on a hovered or selected row of the left panel, the row's accent** (D418:
+   `VcAccentOnRowBrush`, `#8B9AFF` in dark, where the plain accent `#7C8CFF` was under 4.5:1; light
+   keeps `#4353D8`). Changed, with `AccentOnRow` added to the palettes of phases 3, 5 and 6:
+   - phase 3's check 32 (`32e`, `32g`), through `Phase3Checks.B.Support`'s `AssertLocalBranchAsync`;
+   - phase 3's check 14 (`14d`), through `Phase3Checks.C.Helpers`' `AssertBranchRowAsync`;
+   - phase 3's check 6, step 1 (`06a-double-click-local-branch`): `ff` is checked out and its row is
+     selected (`Phase3Checks.A.Pointer.cs`; found by the package's review);
+   - phase 5's P25, through `Phase5Checks.P.Helpers`' `AssertLeftPanelAsync`;
+   - phase 6's G25, step 5: `main` is checked out by a double-click on its row, which leaves the row
+     hovered and selected (`Phase6Checks.G.Helpers`' `LeftPanelLines`; found by the review).
+   Unchanged, because the row they read is idle and they passed: `Phase3Checks.D.Helpers`,
+   `Phase4Checks.A.Helpers`, `Phase4Checks.C`, `Phase5Checks.F.Helpers` and `F.Filters`,
+   `PanelViewTests:91`.
+4. **A renamed or copied file's letter on the file history's selected row, the row's accent** (D418,
+   through `FileHistoryView`'s style for a selected row). Changed: phase 5's B5, steps 4 and 5
+   (`b5c-rename-row`, `b5d-from-commit`), through `Phase5Checks.B.Support`'s `AssertHistoryRows`, and
+   `Phase5Checks.B.cs:264` (`b5k-side-by-side-light`, where the colour is the same in light). Found
+   by the package's review; design 2.4 names three groups, and this is a fourth.
+5. **The search box's placeholder, its own colour** (D418: the placeholder has its own token,
+   `#8F97A4` in dark, and no longer the secondary text's `#9BA3B0` at half opacity). Changed: phase
+   5's F10 and F11, through `Phase5Checks.F`'s `AssertPlaceholderShown`, which read the placeholder as
+   the secondary text (design 2.9 item 2's risk, found by running the class).
+
+The files of items 3 to 5 that design 0.4 does not list for the package (`Phase5Checks.F.cs`,
+`Phase3Checks.A.Pointer.cs`, `Phase5Checks.B.Support.cs`, `Phase5Checks.B.cs`,
+`Phase6Checks.G.Helpers.cs`) belong to no other package; ruling 28 has the round change every earlier
+expectation it makes false.
+
+The earlier pictures the round changes are not listed one by one: this report replaces plan.md's 35
+danger-label pictures (plan line 768) by the scan's lists (ruling 31, D419), committed in
+`docs/test-reports/phase-8a-contrast/` (`colours-any.txt`, `-none`, `-placeholder`,
+`-placeholder-double-backdrop`, `-danger`, `-danger-on-row`, `-danger-button`, `-accent-on-row`): 1,333
+of phase 7b's 1,350 pictures change (1,137 scripted, 196 captures; the placeholder 1,293, dark danger
+text 360, the danger button 41, the accent on a row 13), and 17 do not (`colours-none.txt`). The lists
+are the research's, line for line, which `scripts/scan-contrast.py` reproduces. One thing they
+understate: the accent on a row changes in 15 pictures, not 13. In `06a-double-click-local-branch`
+(phase 3) and `u18j-checkout-redone` (phase 5) the two-letter name `ff` on HEAD's selected row is
+taken for the graph's ring by the scan's rule for round shapes; both are in `colours-any.txt` for
+their placeholder, so the total holds, and the scan's `expected.json` gives each a box around `ff`.
+
+Part L's own pictures: `l4e` and `l4f` show origin's address, a temporary folder under the machine's
+user folder, as phase 6's `l27h` does, so they differ between machines by nature. The report's open
+points 2 and 3 are confirmed on the "graph" scenario: "delete main" gives "Delete main on origin…"
+with the detail `origin/main` as its first row; the comparison from `origin/main` to `main` lists
+`src/main-app.txt` renamed from `src/app.txt`; the file history's row of "Add settings page" shows
+"R".
 
 ### Part I: no earlier picture; one earlier test replaced (design 4.5, 4.7; ruling 68)
 
@@ -739,6 +790,23 @@ which compared the method with its own call, is replaced by
 `<home>/Library/Application Support/VisualCommit` on macOS, on Linux `$XDG_CONFIG_HOME/VisualCommit` when
 it starts with `/`, else `<home>/.config/VisualCommit`); `Everything_lives_under_the_data_folder` gains
 `instance.lock` and `instance.json`.
+
+No expected result of I2 or I3 was changed by the package (`e6f74e5` to `894829a` on
+`wip/p8a-single`, merged in `b70abdb`). Its review found that I3 asserted less than its text says
+("as I2 after step 1, in light" includes what is read in the tree: the window's title, that it
+cannot be resized, the default button); I3 asserts it now (`79d6ac8`).
+
+### The floor: git's words by version, no picture (design 3.4, 3.6)
+
+The floor's package (`d0d4279`, `3e6f89e` on `wip/p8a-floor`, merged in `a63390c`) changes earlier
+tests so that they hold on every git from 2.34.1: where git 2.34 words a message or an exit code
+otherwise, the test takes the words through `GitWords`; the scenarios' stashes are rebuilt below 2.36,
+so that the ids the earlier reports pin hold on every git; phase 5's U18 finds the undo's stash by
+`git fsck` where git names it otherwise. On the laptop's git 2.56 every one of them asserts what it
+asserted before. Which of them hold on 2.34.1 is CI's floor job's to say (design 3.3.5); its rounds
+are recorded in status.md's CI section and, at the close, here under "Other platforms". No earlier
+picture changes on the laptop; on macOS phase 5's `a2d-show-reads` shows the second `rev-parse` call
+with `--path-format=absolute` (design 3.6).
 
 ## Found by the gate
 

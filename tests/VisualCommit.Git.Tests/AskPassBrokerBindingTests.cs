@@ -400,7 +400,7 @@ public class AskPassBrokerBindingTests
         IReadOnlyDictionary<string, string?>? session = null,
         IAppLog? log = null,
         Func<string, string?>? process = null) =>
-        new(new RecordingPromptHandler(), log, null, source ?? new RecordingCredentialSource("t"), session, null, process ?? (_ => null));
+        new(new RecordingPromptHandler(), log, null, source ?? new RecordingCredentialSource("t"), session, process ?? (_ => null));
 
     /// <summary>A scope that is offered bindings but may not use them has exactly the variables of one offered none.</summary>
     private static void AssertToday(AskPassBroker broker, PromptMode mode)

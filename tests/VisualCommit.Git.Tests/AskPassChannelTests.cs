@@ -96,7 +96,7 @@ public class AskPassChannelTests
 
     /// <summary>A broker with bindings in use: the helper next to the tests, a credential source, no inherited <c>GIT_CONFIG_COUNT</c>.</summary>
     private static AskPassBroker Broker(RecordingCredentialSource source, IAppLog log, RecordingPromptHandler? handler = null) =>
-        new(handler ?? new RecordingPromptHandler(), log, null, source, null, null, _ => null);
+        new(handler ?? new RecordingPromptHandler(), log, null, source, null, _ => null);
 
     private static string TokenOf(PromptScope scope) => scope.Environment[AskPassProtocol.TokenVariable]!;
 

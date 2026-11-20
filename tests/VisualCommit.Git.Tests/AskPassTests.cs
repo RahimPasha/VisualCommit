@@ -484,7 +484,7 @@ public class AskPassTests
         // keeper, which only shows that there was a file to go. The process's own
         // GIT_CONFIG_COUNT is left out, as in AskPassChannelTests.
         var log = new ListLog();
-        var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource("github_pat_FAKE-octocat-1"), null, null, _ => null);
+        var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource("github_pat_FAKE-octocat-1"), null, _ => null);
         var socket = broker.SocketPath;
         try
         {

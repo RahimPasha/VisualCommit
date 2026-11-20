@@ -86,15 +86,13 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// <param name="helperPath">The helper to name in the variables; null finds it next to this assembly (<see cref="AskPassLocator"/>).</param>
     /// <param name="credentials">Where a bound URL's credential comes from (D255, docs/phase-7a-design.md 1.3); null: none, and no binding is used.</param>
     /// <param name="sessionEnvironment">The session's git environment (D220), which with the process's gives the <c>GIT_CONFIG_COUNT</c> and <c>GIT_CONFIG_PARAMETERS</c> git already gets (4.6); null: none.</param>
-    /// <param name="gitVersion">Not read: every git the app supports reads <c>GIT_CONFIG_COUNT</c> (Git 2.31 and later), so the bindings no longer depend on the version (D420).</param>
     public AskPassBroker(
         IGitPromptHandler handler,
         IAppLog? log = null,
         string? helperPath = null,
         IGitCredentialSource? credentials = null,
-        IReadOnlyDictionary<string, string?>? sessionEnvironment = null,
-        Func<GitVersion?>? gitVersion = null)
-        : this(handler, log, helperPath, credentials, sessionEnvironment, gitVersion, Environment.GetEnvironmentVariable)
+        IReadOnlyDictionary<string, string?>? sessionEnvironment = null)
+        : this(handler, log, helperPath, credentials, sessionEnvironment, Environment.GetEnvironmentVariable)
     {
     }
 
@@ -109,7 +107,6 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         string? helperPath,
         IGitCredentialSource? credentials,
         IReadOnlyDictionary<string, string?>? sessionEnvironment,
-        Func<GitVersion?>? gitVersion,
         Func<string, string?> processEnvironment)
     {
         ArgumentNullException.ThrowIfNull(handler);

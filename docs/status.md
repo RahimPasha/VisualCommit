@@ -172,15 +172,43 @@ that runs a process beside them (ruling 23).
 
 Wave 1:
 
-- [ ] 5. §2, the contrast round (D410, D418, D419), part L: the placeholder, the dark danger colour
+- [x] 5. §2, the contrast round (D410, D418, D419), part L: the placeholder, the dark danger colour
   with the dark label, the dark accent on hovered and selected rows; `ThemeTokensTests` as one
   table with no list of gaps; the scan's script and lists, `compare-pictures.py --expected`.
+  Merged on 2026-11-20 in `3b9d159` (`wip/p8a-colours`, nine commits, 44 files). The builder saw 10
+  of `ThemeTokensTests`' and `PanelViewTests`' 24 red on the old code and green after; part L's
+  seven scripted methods wrote their 31 pictures (the class alone: 131 s). Its review (three
+  readers, a verifier for each major) found one thing three times over: earlier checks the round
+  makes false that the builder had not changed (phase 3's check 6, phase 5's B5, phase 6's G25),
+  each seen red and then corrected, with one minor fault in part L's own helper (a plain `git
+  status` that rewrote the index under the running app). Every changed expectation is in the
+  report with its reason ("Changes to expected results"). The builder's comparison of its own runs
+  with phase 7b's references: 326 changed pictures, 304 inside their expected regions, 22 outside,
+  each explained (caret blinks, progress bars, temporary names, placeholders the scan cannot see).
+  The comparison of the whole run is step 8's.
 - [ ] 6. §3, the git floor (D406, D420): the worktree check before a fast-forward on every git,
   the stash names below 2.36, the branches the floor makes dead removed; CI's floor job green, and
   in that commit `GitVersion.Minimum` 2.34.1 with the "too old" texts, `continue-on-error`
   removed, `requirements.md`, the README and CLAUDE.md's prerequisites.
-- [ ] 7. §4, one instance per data folder (D421, D422, D448), part I, and the macOS data folder's
+  Under way: the package is merged (2026-11-20, `a63390c`; `wip/p8a-floor`, two commits, 33
+  files; its review found no major), and the lead removed the broker's `gitVersion` at the merge
+  (D420). Nothing of it is proven on git 2.34.1 yet: the laptop runs 2.56. Round 1 is CI's floor
+  job on the push of the three merges; it decides the rewritten stash ids, 2.34's refusal of
+  `zdiff3`, phase 5's U18 from its undo's stash on, and whatever the 20 failing tests hid. Each
+  round's fixes are read on that job; the commit that makes it green moves `Minimum`, removes
+  `continue-on-error` and changes the docs (design 3.8; the builder's exact list is in
+  `D:/Projects/Personal/phase8-work/wave1/for-the-lead.md`).
+- [x] 7. §4, one instance per data folder (D421, D422, D448), part I, and the macOS data folder's
   test in CI's macOS job.
+  Merged on 2026-11-20 in `b70abdb` (`wip/p8a-single`, seven commits, 19 files): the guard with
+  its 17 tests, the notice, `BringForward`, `Program.Main`'s exit codes, part I's scripted I2 and
+  I3 with their four pictures, `AppPathsTests`' test of each platform's documented folder. Its
+  review found two faults that tests now hold: on Windows `instance.json` could not be replaced
+  while a second start had it open, so the holder now tries for up to a second before its
+  Warning; and an endpoint name the pipe API refuses threw where it must count as a refused
+  connection. `Program.Main`'s exit codes and the notice under a real desktop lifetime are proven
+  only by the real-window launches (step 18). The macOS job's reading of `AppPathsTests` is with
+  the CI run of the merges' push.
 - [ ] 8. Wave 1's close: the lagged list (D262) and the whole default run; §2's comparison against
   phase 7b's references (`D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual/`) with the
   scan's boxes, every difference outside them explained; the run's scripted pictures then become
@@ -479,23 +507,24 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: wave 1, Progress steps 5 to 7, then step 8. Step 4 is done: WP0 and the checks of parts L
-and I are pushed, and CI's run for that push is green in the five regular jobs (the CI section). The
-three packages of wave 1 are built side by side, each by an Opus builder in a worktree of its own
-(`git worktree add D:/Projects/Personal/vc-wt/p8a-<key> -b wip/p8a-<key>` from the phase branch;
-the keys `colours`, `floor`, `single`; design 0.3), each reading design sections 0 and 1 and its
-own (2, 3, 4) and the report's part (L for §2, I for §4; the floor has no checks). A builder runs
-only the classes its section names and commits on its `wip` branch, which is never pushed; the
-lead reviews each package's diff (reviewers, a verifier for each finding, a fixer), merges it into
-the phase branch, runs the lagged list at the merges the design names, and pushes. §3's fixes are
-read on CI's floor job after each push; the commit that makes that job green moves
-`GitVersion.Minimum` and removes `continue-on-error` (design 0.4, 3.8). Step 8 closes the wave:
-the lagged list, the whole default run through `scripts/heavy-run.sh` with no agent at work, §2's
-comparison against phase 7b's references, the new references. Before wave 2 (step 9) the owner is
-asked for the week's share again (D241). The icon's round 2 is with the owner (Notes, "The icon").
-By hand before §5's merge, the owner told: `cmd.exe` started as the app will start it, with `/S
-/K` and winget's quoted path and `--version`, to see that its window stays open (design 13.4 item
-7).
+Next: step 8, wave 1's close, and step 6's rounds on CI's floor job. The three packages are
+merged and pushed. In this order: (1) read CI's run for that push: the five regular jobs, the
+Windows job's build of the real-window project, the macOS job's `AppPathsTests`, and the floor
+job's round 1; a fixer then corrects what the floor job shows, the lead pushes, and so on until
+that job has no failure, when the lead's commit moves `GitVersion.Minimum` to 2.34.1, removes the
+job's `continue-on-error` and changes requirements.md, the README and CLAUDE.md (design 3.8). (2)
+With no agent at work: the whole default run through `bash scripts/heavy-run.sh` (about 1 h 50
+min), then the lagged list of design 0.4, one command at a time. (3) §2's comparison: `python -I
+scripts/scan-contrast.py D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual <out> --jobs
+4` (its lists must equal `docs/test-reports/phase-8a-contrast/`'s), then `python
+scripts/compare-pictures.py <the same references> artifacts/visual <out> --expected
+<out>/expected.json`; every picture under "Changed outside the expected regions" and "Changed, not
+expected" is explained or is a finding; the lead inspects part L's and part I's pictures. (4) The
+run's scripted pictures are copied to `D:/Projects/Personal/phase8-work/references/wave1/` and are
+the references from then on. Then step 8 is ticked, and before wave 2 (step 9) the owner is asked
+for the week's share (D241). The icon's round 2 is with the owner (Notes, "The icon"). By hand
+before §5's merge, the owner told: `cmd.exe` started as the app will start it, with `/S /K` and
+winget's quoted path and `--version`, to see that its window stays open (design 13.4 item 7).
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -504,29 +533,29 @@ every commit.
 
 ### Notes for whoever resumes
 
-- **Wave 1 is under way since 2026-11-20.** WP0 (`fc8a063`) and parts L's and I's checks (`a1fc720`)
-  are pushed (the branch at `d37036a`); nothing is uncommitted in the main checkout. The three
-  worktrees `D:/Projects/Personal/vc-wt/p8a-colours`, `p8a-floor` and `p8a-single` were made from
-  `d37036a`, on the branches `wip/p8a-colours`, `wip/p8a-floor` and `wip/p8a-single`, which are
-  never pushed. The workflow `phase8a-wave-1` (run `wf_463ba2b4-db6`) builds the three packages
-  side by side, an Opus builder in each worktree, and then, for each package, three reviewers
-  (the design, correctness and safety, the tests), a verifier for each major and a fixer, all
-  committing on the package's `wip` branch. The floor's builder leaves `GitVersion.Minimum` and
-  the floor job's `continue-on-error` to the lead's commit after CI's reading (design 3.8). When
-  the workflow has ended, the lead reads each package's report and diff, merges each `wip` branch
-  into the phase branch (`git merge --no-ff`, as phase 7b's merges), makes the lead's own doc
-  changes each builder names, and pushes. A session that finds the workflow gone reads each
-  worktree's `git log d37036a..HEAD` and `git status`: a package whose builder did not finish is
-  built on from its last commit by the same brief (design section 0, 1 and its own; the report's
-  part), then reviewed. Notes from WP0 for the packages: at §3's
-  merge `HeldRulesTab.cs:129` passes the broker's `gitVersion` by position; §11 takes
-  `OpenUserGuide` out of `AppShortcutsTests`' keyless list when it binds F1; §5 extends
-  `GitAccessTests`, which exists since WP0; `.editorconfig` has an entry for 8a's `*.G.cs` files,
-  as phases 6 and 7a have; `Phase8aExpectations.Common` holds no colours, so part L adds its own;
-  the 8a project's start helpers are `StartEmptyAsync` and `OpenAsync`, which take a theme and a
-  probe; `AppLaunch.Timeline` is init-only, so §4 gives `Guard` and `Mode` in `Program.Main`'s one
-  initialiser. The owner turned Ultracode on again on 2026-11-20, so substantive tasks run as
-  workflows. The lead's runs of test classes are made with no agent at work beside them.
+- **Wave 1 is merged (2026-11-20); step 8, its close, is next.** The workflow `phase8a-wave-1` (run
+  `wf_463ba2b4-db6`: three Opus builders, nine reviewers, a verifier for each of 11 majors, three
+  fixers; 26 agents, 6.33M tokens, 2 h 35 min) built, reviewed and fixed the three packages in
+  their worktrees; no file was changed by more than one. The lead merged them in the order
+  colours, floor, single (`3b9d159`, `a63390c`, `b70abdb`), removed the broker's `gitVersion`
+  (D420), and ran on the merged tree, alone on the machine: `dotnet build` and the builds of the
+  real-window and live projects, 0 warnings; the 8a project 25 of 25 (53 s); the Git.Tests classes
+  of the prompt broker and the credentials 265 of 265; `PromptDialogsTests`, `ThemeTokensTests`,
+  `SingleInstanceGuardTests` and `AppSessionTests` 54 of 54. The worktrees
+  `D:/Projects/Personal/vc-wt/p8a-colours`, `p8a-floor` and `p8a-single` and their `wip` branches
+  are kept until the floor job is green (a fixer works on from them or from the phase branch).
+  Each builder's and fixer's notes for the lead, in full, are in
+  `D:/Projects/Personal/phase8-work/wave1/for-the-lead.md`. Still the lead's from them, at the
+  close unless named: architecture.md (the tokens' table; the fast-forward's worktree read; the
+  guard, the notice and the data folder's two new files; the removed D277 passages); plan.md (line
+  768's 35 pictures replaced by the scan's lists; line 778 closed by `AppPathsTests`; the risks the
+  floor names: the mirror refspec, a branch being rebased or bisected in another worktree on 2.34;
+  a data folder on a network share); design as-built notes for sections 2 to 4 (the scan's boxes
+  beyond "grown by 3 px"; `instance.json` retried for a second; a Warning that 4.3.5 lacks; the
+  setting `DOTNET_SYSTEM_IO_DISABLEFILELOCKING`, which 1.14 does not list). For the later packages:
+  §7 gives the notice window its icon; §9's sweep shows the notice through
+  `InstanceNoticeHost.Show`; §12 links `Phase8aExpectations*.cs`, whose parts L and I hold the
+  launches' facts; `l3a` and `l3f` change at §5's, §8's and §11's merges (design 0.7).
 - **Phase 8's start, 2026-11-18** (no branch yet: everything so far is on `master` or outside the
   repo). The machine changed since phase 7b's gate (Windows updates KB5132061 and KB5132688 on
   2026-11-11, and a boot that day; git 2.56.0.windows.4 and SDK 10.0.303 as before), so step 6's

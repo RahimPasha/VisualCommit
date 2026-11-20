@@ -269,7 +269,6 @@ public sealed class AppSession : IDisposable
             log,
             hostingSession,
             gitEnvironment,
-            gitVersion: () => gitAccess.Known?.Version,
             helperPath: askPassHelper);
 
         // Git's own settings (docs/phase-6-design.md 8.1): one instance over the session's runner,

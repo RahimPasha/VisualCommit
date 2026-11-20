@@ -126,7 +126,7 @@ internal sealed class HeldRulesTab : IAsyncDisposable
             var runner = detection.Runner ?? throw new InvalidOperationException("The tests need git, and no usable git was found.");
             var prompts = new ScriptedPromptHandler();
             var session = new HostingSession(new AppPaths(data.Path), scenario.Options, new FakeTokenStore(), log, action => Dispatcher.UIThread.Post(action), TimeProvider.System);
-            var broker = PromptDialogs.CreateBroker(prompts, log, session, environment, () => detection.Version);
+            var broker = PromptDialogs.CreateBroker(prompts, log, session, environment);
             var repositories = new Repositories(runner);
             var services = new TabServices(
                 repositories,

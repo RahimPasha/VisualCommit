@@ -507,7 +507,7 @@ public sealed class CoverageGitMatchTests
         // Without a token the app's helper answers nothing, so git asks; useHttpPath off is
         // macOS', Linux's and every test run's, on is Git for Windows' system file's (8.3).
         var handler = new RecordingPromptHandler(PromptAnswer.Refused);
-        using var broker = new AskPassBroker(handler, new ListLog(), null, new RecordingCredentialSource(), null, null, _ => null);
+        using var broker = new AskPassBroker(handler, new ListLog(), null, new RecordingCredentialSource(), null, _ => null);
         var binding = CredentialBinding.Select([new RemoteEffectiveUrls("origin", ["https://dev.azure.com/myorg/p/_git/r"], ["https://dev.azure.com/myorg/p/_git/r"])], AzureDevOpsCoverageVectors.Coverage);
         using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: binding);
         using var repo = await TempRepo.CreateAsync();
@@ -524,7 +524,7 @@ public sealed class CoverageGitMatchTests
     private static async Task<(bool Asked, bool AskedOtherUser, string Output, IReadOnlyList<string> Lines)> FillAsync(TempRepo repo, IReadOnlyList<CredentialBinding> bindings, string url)
     {
         var log = new ListLog();
-        using var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource(Token), null, null, _ => null);
+        using var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource(Token), null, _ => null);
         using var scope = broker.Begin("Fetch", "repo", PromptMode.Deny, "op-" + Guid.NewGuid().ToString("N"), bindings: bindings);
 
         var result = await GitAsync(repo, scope.Environment, ["credential", "fill"], $"url={url}\n\n");
@@ -537,7 +537,7 @@ public sealed class CoverageGitMatchTests
     private static async Task<(bool Asked, bool AskedOtherUser, string Error)> LsRemoteAsync(TempRepo repo, IReadOnlyList<CredentialBinding> bindings, string url)
     {
         var log = new ListLog();
-        using var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource(Token), null, null, _ => null);
+        using var broker = new AskPassBroker(new RecordingPromptHandler(), log, null, new RecordingCredentialSource(Token), null, _ => null);
         using var scope = broker.Begin("Fetch", "repo", PromptMode.Deny, "op-" + Guid.NewGuid().ToString("N"), bindings: bindings);
 
         var result = await GitAsync(repo, scope.Environment, ["ls-remote", url]);
