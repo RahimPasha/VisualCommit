@@ -1,0 +1,210 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:kr="using:VisualCommit.App.Views"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:c="using:VisualCommit.App.Controls"
+             xmlns:gs="using:VisualCommit.App.ViewModels.GitSetup"
+             x:Class="VisualCommit.App.Views.Shell.GitSetupView"
+             x:DataType="gs:GitSetupViewModel"
+             Focusable="False"
+             AutomationProperties.AutomationId="GitSetup"
+             AutomationProperties.Name="{Binding Title}"
+             AutomationProperties.HelpText="{Binding Body}">
+
+  <!-- The first-run screen (R4, D423) in the welcome page's place, laid out as the welcome page:
+       the title, the body, the git's or the helper's path, git's own words under "Git said:" (six
+       lines, then a scroll bar), the guidance, the command with Copy, the buttons, the error, the
+       links. An element the state has no text for is not shown. Every button is the graph area's
+       focus target in turn (KeyRegion.IsMain): F6 gives the focus to the first one shown. The
+       screen itself takes no focus; its automation name and help text are the state's title and
+       body. Tokens only. -->
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+    <StackPanel Margin="24" MaxWidth="520" VerticalAlignment="Center" Spacing="8">
+      <TextBlock Name="GitSetupTitle"
+                 Text="{Binding Title}"
+                 FontSize="16" FontWeight="SemiBold"
+                 TextWrapping="Wrap" TextAlignment="Center"
+                 HorizontalAlignment="Center"
+                 AutomationProperties.AutomationId="GitSetupTitle" />
+      <TextBlock Name="GitSetupBody"
+                 Classes="secondary"
+                 Text="{Binding Body}"
+                 TextWrapping="Wrap" TextAlignment="Center"
+                 HorizontalAlignment="Center"
+                 AutomationProperties.AutomationId="GitSetupBody" />
+      <c:PathTextBlock Name="GitSetupPath"
+                       Text="{Binding PathText}"
+                       IsVisible="{Binding ShowsPath}"
+                       TextWrapping="Wrap" TextAlignment="Center"
+                       HorizontalAlignment="Center"
+                       AutomationProperties.AutomationId="GitSetupPath" />
+
+      <!-- Git's own words: a git that did not report its version, a broken configuration's line. -->
+      <StackPanel Name="GitSetupGitSaidBlock" Spacing="4" Margin="0,4,0,0" IsVisible="{Binding ShowsGitSaid}">
+        <TextBlock Name="GitSetupGitSaidLabel"
+                   Classes="secondary"
+                   Text="{x:Static gs:GitSetupTexts.GitSaid}" />
+        <Border Padding="10,8"
+                CornerRadius="5"
+                Background="{DynamicResource VcControlBackgroundBrush}"
+                BorderBrush="{DynamicResource VcBorderBrush}"
+                BorderThickness="1">
+          <ScrollViewer MaxHeight="96" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+            <SelectableTextBlock Name="GitSetupGitSaid"
+                                 Text="{Binding GitSaid}"
+                                 FontFamily="{StaticResource VcCodeFontFamily}"
+                                 FontSize="12"
+                                 TextWrapping="Wrap"
+                                 AutomationProperties.AutomationId="GitSetupGitSaid" />
+          </ScrollViewer>
+        </Border>
+      </StackPanel>
+
+      <TextBlock Name="GitSetupGuidance"
+                 Text="{Binding GuidanceText}"
+                 TextWrapping="Wrap" TextAlignment="Center"
+                 HorizontalAlignment="Center"
+                 Margin="0,4,0,0"
+                 AutomationProperties.AutomationId="GitSetupGuidance" />
+
+      <!-- The command to type, with Copy at its right; a long command wraps. -->
+      <Grid Name="GitSetupCommandRow" ColumnDefinitions="*,Auto" HorizontalAlignment="Center" IsVisible="{Binding ShowsCommand}">
+        <Border Padding="8,4"
+                CornerRadius="4"
+                VerticalAlignment="Center"
+                Background="{DynamicResource VcControlBackgroundBrush}"
+                BorderBrush="{DynamicResource VcBorderBrush}"
+                BorderThickness="1">
+          <SelectableTextBlock Name="GitSetupCommand"
+                               Text="{Binding Command}"
+                               FontFamily="{StaticResource VcCodeFontFamily}"
+                               FontSize="12"
+                               TextWrapping="Wrap"
+                               AutomationProperties.AutomationId="GitSetupCommand" />
+        </Border>
+        <Button Name="GitSetupCopyButton"
+                Grid.Column="1"
+                Margin="8,0,0,0"
+                Theme="{StaticResource VcActionButton}"
+                VerticalAlignment="Center"
+                Content="{x:Static gs:GitSetupTexts.Copy}"
+                Command="{Binding CopyCommand}"
+                AutomationProperties.AutomationId="GitSetupCopyButton"
+                AutomationProperties.Name="{x:Static gs:GitSetupTexts.Copy}" />
+      </Grid>
+
+      <!-- The buttons, in this order, those the state offers; they wrap on a narrow window. -->
+      <WrapPanel Name="GitSetupButtons" HorizontalAlignment="Center" ItemsAlignment="Center" ItemSpacing="8" LineSpacing="8" Margin="0,8,0,0">
+        <Button Name="GitSetupWingetButton"
+                Theme="{StaticResource VcActionButton}"
+                kr:KeyRegion.IsMain="True"
+                Content="{Binding WingetText}"
+                Command="{Binding WingetCommand}"
+                IsVisible="{Binding ShowsWinget}"
+                AutomationProperties.AutomationId="GitSetupWingetButton"
+                AutomationProperties.Name="{Binding WingetText}" />
+        <Button Name="GitSetupDownloadButton"
+                Theme="{StaticResource VcActionButton}"
+                kr:KeyRegion.IsMain="True"
+                Content="{x:Static gs:GitSetupTexts.DownloadGitForWindows}"
+                Command="{Binding DownloadCommand}"
+                IsVisible="{Binding ShowsDownload}"
+                AutomationProperties.AutomationId="GitSetupDownloadButton"
+                AutomationProperties.Name="{x:Static gs:GitSetupTexts.DownloadGitForWindows}" />
+        <Button Name="GitSetupCltButton"
+                Theme="{StaticResource VcActionButton}"
+                kr:KeyRegion.IsMain="True"
+                Content="{x:Static gs:GitSetupTexts.InstallCommandLineTools}"
+                Command="{Binding CommandLineToolsCommand}"
+                IsVisible="{Binding ShowsCommandLineTools}"
+                AutomationProperties.AutomationId="GitSetupCltButton"
+                AutomationProperties.Name="{x:Static gs:GitSetupTexts.InstallCommandLineTools}" />
+        <Button Name="GitSetupShowFileButton"
+                Theme="{StaticResource VcActionButton}"
+                kr:KeyRegion.IsMain="True"
+                Content="{x:Static gs:GitSetupTexts.ShowTheFile}"
+                Command="{Binding ShowFileCommand}"
+                IsVisible="{Binding ShowsShowFile}"
+                AutomationProperties.AutomationId="GitSetupShowFileButton"
+                AutomationProperties.Name="{x:Static gs:GitSetupTexts.ShowTheFile}" />
+        <Button Name="GitSetupChooseButton"
+                Theme="{StaticResource VcActionButton}"
+                kr:KeyRegion.IsMain="True"
+                Content="{Binding ChooseText}"
+                Command="{Binding ChooseCommand}"
+                IsVisible="{Binding ShowsChoose}"
+                AutomationProperties.AutomationId="GitSetupChooseButton"
+                AutomationProperties.Name="{Binding ChooseText}" />
+        <Button Name="GitSetupUsePathButton"
+                Theme="{StaticResource VcActionButton}"
+                kr:KeyRegion.IsMain="True"
+                Content="{Binding UsePathText}"
+                Command="{Binding UsePathCommand}"
+                IsVisible="{Binding ShowsUsePath}"
+                AutomationProperties.AutomationId="GitSetupUsePathButton"
+                AutomationProperties.Name="{Binding UsePathText}" />
+        <Button Name="GitSetupCheckAgainButton"
+                Theme="{StaticResource VcActionButton}"
+                kr:KeyRegion.IsMain="True"
+                Content="{Binding CheckAgainText}"
+                Command="{Binding CheckAgainCommand}"
+                AutomationProperties.AutomationId="GitSetupCheckAgainButton"
+                AutomationProperties.Name="{Binding CheckAgainText}" />
+        <Button Name="GitSetupContinueButton"
+                Theme="{StaticResource VcActionButton}"
+                kr:KeyRegion.IsMain="True"
+                Content="{x:Static gs:GitSetupTexts.ContinueWithoutIt}"
+                Command="{Binding ContinueCommand}"
+                IsVisible="{Binding ShowsContinue}"
+                AutomationProperties.AutomationId="GitSetupContinueButton"
+                AutomationProperties.Name="{x:Static gs:GitSetupTexts.ContinueWithoutIt}" />
+      </WrapPanel>
+
+      <c:PathTextBlock Name="GitSetupError"
+                       Classes="error"
+                       Classes.secondary="{Binding IsChoiceBeingChecked}"
+                       Text="{Binding ErrorText}"
+                       IsVisible="{Binding ShowsError}"
+                       TextWrapping="Wrap" TextAlignment="Center"
+                       HorizontalAlignment="Center"
+                       AutomationProperties.AutomationId="GitSetupError" />
+
+      <!-- The links: git-scm.com's other ways (macOS, Linux), then the user guide's page; they wrap on a narrow window. -->
+      <WrapPanel Name="GitSetupLinks" HorizontalAlignment="Center" ItemsAlignment="Center" ItemSpacing="8" LineSpacing="4">
+        <Button Name="GitSetupMoreLink"
+                Theme="{StaticResource VcFlatButton}"
+                Classes="gitSetupLink"
+                Padding="6,2"
+                Command="{Binding MoreLinkCommand}"
+                IsVisible="{Binding ShowsMoreLink}"
+                AutomationProperties.AutomationId="GitSetupMoreLink"
+                AutomationProperties.Name="{x:Static gs:GitSetupTexts.OtherWaysToInstallGit}">
+          <TextBlock Text="{x:Static gs:GitSetupTexts.OtherWaysToInstallGit}" />
+        </Button>
+        <Button Name="GitSetupGuideLink"
+                Theme="{StaticResource VcFlatButton}"
+                Classes="gitSetupLink"
+                Padding="6,2"
+                Command="{Binding GuideLinkCommand}"
+                AutomationProperties.AutomationId="GitSetupGuideLink"
+                AutomationProperties.Name="{Binding GuideLinkText}">
+          <TextBlock Text="{Binding GuideLinkText}" />
+        </Button>
+      </WrapPanel>
+    </StackPanel>
+  </ScrollViewer>
+
+  <UserControl.Styles>
+    <!-- Choose's "Checking…" in the error's place is secondary, not an error. -->
+    <Style Selector="TextBlock#GitSetupError.secondary">
+      <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+    <!-- A link's text is the accent; on the hover background, the accent made for it, since the
+         accent itself is never text on a hover. -->
+    <Style Selector="Button.gitSetupLink TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+    <Style Selector="Button.gitSetupLink:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentOnRowBrush}" />
+    </Style>
+  </UserControl.Styles>
+</UserControl>

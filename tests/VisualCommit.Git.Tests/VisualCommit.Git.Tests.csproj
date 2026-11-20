@@ -12,6 +12,9 @@
     <ProjectReference Include="..\..\src\VisualCommit.Core\VisualCommit.Core.csproj" />
     <ProjectReference Include="..\..\src\VisualCommit.Git\VisualCommit.Git.csproj" />
     <ProjectReference Include="..\VisualCommit.Testing\VisualCommit.Testing.csproj" />
+    <!-- The stand-in for git (docs/phase-8a-design.md 1.14): its app host lands in this output
+         folder, where GitLocatorTests and GitStandInTests run it. -->
+    <ProjectReference Include="..\VisualCommit.GitStandIn\VisualCommit.GitStandIn.csproj" />
   </ItemGroup>
 
 </Project>

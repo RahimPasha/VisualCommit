@@ -20,9 +20,23 @@
     <DockPanel>
 
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+        <!-- Set up Git… (Details… while the helper is missing) in the first-run screen's states
+             only (R4); hidden, it takes no room. -->
+        <Button Name="GitSetupButton"
+                Theme="{StaticResource VcFlatButton}"
+                IsVisible="{Binding GitSetup.InScreenState}"
+                Command="{Binding ShowGitSetupCommand}"
+                CornerRadius="0"
+                AutomationProperties.AutomationId="GitSetupButton"
+                AutomationProperties.Name="{Binding GitSetup.StatusButtonText}">
+          <TextBlock Text="{Binding GitSetup.StatusButtonText}" FontSize="11.5" VerticalAlignment="Center" />
+        </Button>
+        <!-- The git in use and where it came from: the tooltip, and the help text a screen reader gives. -->
         <TextBlock Name="GitStatus"
                    Classes="secondary"
                    Text="{Binding GitStatusText}"
+                   ToolTip.Tip="{Binding GitStatusToolTip}"
+                   AutomationProperties.HelpText="{Binding GitStatusToolTip}"
                    FontSize="11.5" Margin="12,0" VerticalAlignment="Center"
                    AutomationProperties.AutomationId="GitStatus" />
         <Button Name="ActivityLogToggle"

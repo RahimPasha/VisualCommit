@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.GitSetup;
 using VisualCommit.App.ViewModels.Menus;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
@@ -20,7 +21,8 @@ namespace VisualCommit.App.ViewModels;
 /// shows. The window's regions show the active tab. Phase 6's parts each live in a file of their
 /// own (docs/phase-6-design.md 18): the session's tabs (<c>.Session.cs</c>), the workspaces and
 /// their dashboards (<c>.Workspaces.cs</c>), the keys and the palette (<c>.Commands.cs</c>), the
-/// settings screen (<c>.Settings.cs</c>) and the theme (<c>.Theme.cs</c>).
+/// settings screen (<c>.Settings.cs</c>) and the theme (<c>.Theme.cs</c>); git's setup, the
+/// first-run screen and "Check again", in <c>.Git.cs</c>.
 /// </summary>
 public partial class MainWindowViewModel : ObservableObject
 {
@@ -30,8 +32,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// The session's search for git, which <c>AppSession.Start</c> hands the window beside its
-    /// search function; null without a session. Nothing reads it yet: the window keeps it so that it
-    /// can search for git again (Check again and the first-run screen).
+    /// search function; null without a session (view-model tests, which search through the function
+    /// alone). "Check again" searches through it, the first-run screen reads its guidance and probes
+    /// a chosen git through it, and the settings screen's Git program row probes through it.
     /// </summary>
     private readonly GitAccess? _gitAccess;
     private readonly IAppLog _log;
@@ -85,6 +88,9 @@ public partial class MainWindowViewModel : ObservableObject
 
         // The editor failure's "Open settings…" opens the settings screen through the window (12.7).
         WireSettings();
+
+        // The first-run screen, which every tab is given, and "Check again" (R4).
+        InitializeGitSetup();
 
         // A menu that waited for a read opens only over its own tab, and never over a dialog (4a).
         // On a dashboard the log line names the workspace (docs/phase-6-design.md 2.7).
@@ -153,7 +159,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>The git part of the status bar, such as "Git 2.47.0".</summary>
     [ObservableProperty]
-    public partial string GitStatusText { get; private set; } = "Looking for Git...";
+    public partial string GitStatusText { get; private set; } = GitSetupTexts.LookingForGit;
 
     /// <summary>The open tabs, from left to right. Never empty.</summary>
     public ObservableCollection<RepoTabViewModel> Tabs { get; } = [];
@@ -164,16 +170,18 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// Start-up work that needs the window to exist first: finds git and reports it in the status
-    /// bar, then opens the repositories of the tabs restored from the last session. Completes
-    /// when every restored tab has loaded its history.
+    /// bar and, when git cannot be used, on the first-run screen with its guidance (the refresh of
+    /// "Check again"), then opens the repositories of the tabs restored from the last session.
+    /// Completes when every restored tab has loaded its history.
     /// </summary>
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        _lifetime = cancellationToken;
+        GitDetection? git;
+        Exception? failure = null;
         try
         {
-            var git = await _detectGit(cancellationToken);
-            Git = git;
-            GitStatusText = Describe(git);
+            git = await _detectGit(cancellationToken);
         }
         catch (OperationCanceledException)
         {
@@ -183,8 +191,11 @@ public partial class MainWindowViewModel : ObservableObject
         catch (Exception ex)
         {
             _log.Error("Looking for Git failed.", ex);
-            GitStatusText = "Git is not working";
+            git = null;
+            failure = ex;
         }
+
+        await ShowGitAsync(git, failure);
 
         // A restored active dashboard reads its rows beside the restored tabs' openings
         // (docs/phase-6-design.md 2.10). The start-up timeline counts the tabs that open a
@@ -430,7 +441,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private RepoTabViewModel AddTab()
     {
-        var tab = new RepoTabViewModel(_tabServices);
+        var tab = new RepoTabViewModel(_tabServices) { GitSetup = GitSetup };
         tab.RepositoryOpened += OnRepositoryOpened;
         Tabs.Add(tab);
         return tab;
@@ -472,14 +483,6 @@ public partial class MainWindowViewModel : ObservableObject
         var active = Math.Max(0, Tabs.IndexOf(ActiveTab));
         _session.Update(state => state with { Tabs = tabs, ActiveTab = active });
     }
-
-    private static string Describe(GitDetection git) => git.Availability switch
-    {
-        GitAvailability.Available => $"Git {git.Version}",
-        GitAvailability.TooOld => $"Git {git.Version} is too old (needs {GitVersion.Minimum} or newer)",
-        GitAvailability.NotFound => "Git not found",
-        _ => "Git is not working",
-    };
 
     /// <summary>A session that is not saved anywhere, for view-model tests that do not need one.</summary>
     private sealed class MemorySessionStore : ISessionStore

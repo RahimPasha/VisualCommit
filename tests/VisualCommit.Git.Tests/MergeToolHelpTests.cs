@@ -386,7 +386,7 @@ public class MergeToolHelpTests
     /// once with <see cref="FakeVersion"/>, <c>git mergetool --tool-help</c> waits until
     /// <see cref="Release"/> gives its result or its token is cancelled.
     /// </summary>
-    private sealed class HeldToolHelpRunner : IGitRunner
+    internal sealed class HeldToolHelpRunner : IGitRunner
     {
         private readonly TaskCompletionSource<GitResult> _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
         private readonly TaskCompletionSource _started = new(TaskCreationOptions.RunContinuationsAsynchronously);

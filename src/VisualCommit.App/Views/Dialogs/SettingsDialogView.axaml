@@ -8,6 +8,7 @@
                   xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
                   xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
                   xmlns:hosting="using:VisualCommit.App.ViewModels.Hosting"
+                  xmlns:gs="using:VisualCommit.App.ViewModels.GitSetup"
                   x:Class="VisualCommit.App.Views.Dialogs.SettingsDialogView"
                   x:DataType="vm:SettingsDialogViewModel"
                   AutomationProperties.AutomationId="SettingsDialog"
@@ -391,6 +392,42 @@
                   </Grid>
                 </StackPanel>
                 </Panel>
+
+                <!-- The Git program (D423): last in the global scope, in every state of the
+                     section (also while git cannot be used), never in "This repository". -->
+                <Panel IsVisible="{Binding IsGlobalScope}">
+                  <Grid Name="GitProgramRow" ColumnDefinitions="132,12,*" Margin="0,18,0,0"
+                        DataContext="{Binding $parent[local:DialogView].((vm:SettingsDialogViewModel)DataContext).GitProgram, FallbackValue={x:Null}}"
+                        x:DataType="settings:GitProgramViewModel">
+                    <TextBlock Classes="settingsLabel" Text="{Binding Label}" Margin="0,6,0,0" />
+                    <StackPanel Grid.Column="2">
+                      <Grid ColumnDefinitions="*,Auto,Auto">
+                        <c:TrimmedTextBlock Name="GitProgramPath"
+                                            Text="{Binding PathText}"
+                                            TextTrimming="LeadingCharacterEllipsis"
+                                            TextWrapping="NoWrap"
+                                            VerticalAlignment="Center"
+                                            ToolTip.Tip="{Binding PathText}"
+                                            AutomationProperties.AutomationId="GitProgramPath" />
+                        <Button Name="GitProgramBrowseButton" Grid.Column="1" Theme="{StaticResource VcActionButton}" Margin="10,0,0,0"
+                                Content="{x:Static gs:GitSetupTexts.Browse}"
+                                Command="{Binding BrowseCommand}"
+                                AutomationProperties.AutomationId="GitProgramBrowseButton" AutomationProperties.Name="{x:Static gs:GitSetupTexts.Browse}" />
+                        <Button Name="GitProgramUsePathButton" Grid.Column="2" Theme="{StaticResource VcActionButton}" Margin="8,0,0,0"
+                                Content="{Binding UsePathText}"
+                                Command="{Binding UsePathCommand}"
+                                IsVisible="{Binding ShowsUsePath}"
+                                AutomationProperties.AutomationId="GitProgramUsePathButton" AutomationProperties.Name="{Binding UsePathText}" />
+                      </Grid>
+                      <TextBlock Name="GitProgramNote" Classes="settingsNote" Text="{Binding NoteText}"
+                                 AutomationProperties.AutomationId="GitProgramNote" />
+                      <TextBlock Name="GitProgramStatus" Classes="settingsNote" Classes.dialogError="{Binding IsStatusRefusal}"
+                                 Text="{Binding StatusText}"
+                                 IsVisible="{Binding ShowsStatus}"
+                                 AutomationProperties.AutomationId="GitProgramStatus" />
+                    </StackPanel>
+                  </Grid>
+                </Panel>
               </StackPanel>
               </Panel>
 
@@ -557,7 +594,7 @@
                           </StackPanel>
                         </Grid>
 
-                        <!-- With an account: the switch, which stays enabled on an older git, for a newer one (D277). -->
+                        <!-- With an account: the switch, on every git the app supports (D420); the netrc note under the blocks names git below 2.46 (D424). -->
                         <Grid ColumnDefinitions="132,12,*" IsVisible="{Binding HasAccount}">
                           <TextBlock Classes="settingsLabel" Text="{x:Static ops:OperationTexts+AccountTexts.GitLabel}" Margin="0,1,0,0" />
                           <StackPanel Grid.Column="2">
@@ -581,6 +618,20 @@
                   <ContentControl Name="AccountsAzureDevOps" Content="{Binding AzureDevOps}" IsVisible="{Binding AzureDevOps.IsShown}"
                                   AutomationProperties.AutomationId="AccountsAzureDevOps" />
                 </StackPanel>
+
+                <!-- The netrc note under the blocks (D424): an account used for git, git below 2.46, a
+                     .netrc or _netrc file in git's home folder; dismissed for the session. -->
+                <Grid Name="AccountsNetrcNoteRow" ColumnDefinitions="132,12,*" IsVisible="{Binding ShowsNetrcNote}">
+                  <StackPanel Grid.Column="2" Spacing="6">
+                    <TextBlock Name="AccountsNetrcNote" Classes="settingsNote notice warning" TextWrapping="Wrap"
+                               Text="{Binding NetrcNote}"
+                               AutomationProperties.AutomationId="AccountsNetrcNote" />
+                    <Button Name="AccountsNetrcDismiss" Theme="{StaticResource VcActionButton}" HorizontalAlignment="Left"
+                            Content="{x:Static gs:GitSetupTexts.Dismiss}"
+                            Command="{Binding DismissNetrcNoteCommand}"
+                            AutomationProperties.AutomationId="AccountsNetrcDismiss" AutomationProperties.Name="{x:Static gs:GitSetupTexts.Dismiss}" />
+                  </StackPanel>
+                </Grid>
               </StackPanel>
               </Panel>
             </Panel>

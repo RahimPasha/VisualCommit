@@ -47,6 +47,27 @@ public class JsonSettingsStoreTests
     }
 
     [Fact]
+    public void The_git_program_is_written_only_while_it_is_set_and_read_back()
+    {
+        // docs/phase-8a-design.md 1.4 (ruling 40): "gitExecutable" is absent unless a git was chosen.
+        using var folder = new TempDirectory("settings");
+        var file = folder.Combine("settings.json");
+        var chosen = folder.Combine("PortableGit", "cmd", OperatingSystem.IsWindows() ? "git.exe" : "git");
+
+        new JsonSettingsStore(file).Update(settings => settings with { Theme = AppTheme.Light });
+        Assert.DoesNotContain("gitExecutable", File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.Null(new JsonSettingsStore(file).Current.GitExecutable);
+
+        new JsonSettingsStore(file).Update(settings => settings with { GitExecutable = chosen });
+        Assert.Contains("\"gitExecutable\"", File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.Equal(chosen, new JsonSettingsStore(file).Current.GitExecutable);
+
+        new JsonSettingsStore(file).Update(settings => settings with { GitExecutable = null });
+        Assert.DoesNotContain("gitExecutable", File.ReadAllText(file), StringComparison.Ordinal);
+        Assert.Equal(AppTheme.Light, new JsonSettingsStore(file).Current.Theme);
+    }
+
+    [Fact]
     public void The_data_folder_is_created_on_the_first_save()
     {
         using var folder = new TempDirectory("settings");

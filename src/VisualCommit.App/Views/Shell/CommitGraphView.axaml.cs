@@ -222,7 +222,8 @@ public partial class CommitGraphView : UserControl
     /// <summary>
     /// The element the graph area gives the focus to (docs/phase-6-design.md 6.6), as
     /// <see cref="FocusGraphAreaContent"/> chooses it, for F6's navigation: the dashboard's list; the
-    /// page's, the interactive list's or the welcome page's main element (<see cref="KeyRegion.IsMainProperty"/>);
+    /// page's, the interactive list's, the welcome page's or the first-run screen's main element
+    /// (<see cref="KeyRegion.IsMainProperty"/>: the screen's first button shown);
     /// the graph; the resolver's result's text or its card's first button; otherwise the first part
     /// that takes the focus. Null when nothing shown can take it.
     /// </summary>
@@ -237,6 +238,12 @@ public partial class CommitGraphView : UserControl
         if (_tab is { ShowsWelcome: true })
         {
             return MainOf(this.GetVisualDescendants().OfType<WelcomeView>().FirstOrDefault()) ?? FirstFocusable(this.GetVisualDescendants().OfType<WelcomeView>().FirstOrDefault());
+        }
+
+        // The first-run screen: its first button shown (each is marked as a main element).
+        if (_tab is { ShowsGitSetup: true })
+        {
+            return MainOf(GitSetupSlot) ?? FirstFocusable(GitSetupSlot);
         }
 
         switch (_repository)

@@ -425,6 +425,117 @@ public class SettingsDialogViewTests
         Assert.Equal(Brush(app, "VcAccentBrush"), ((ISolidColorBrush)box.Background!).Color);
     }
 
+    [AvaloniaFact]
+    public async Task The_git_program_row_is_last_in_the_global_scope_in_every_state_and_save_writes_its_choice()
+    {
+        // docs/phase-8a-design.md 5.3 (rulings 40, 42), with no session: the screen in a window of
+        // its own, git's configuration a fake that cannot be read, so that the fields do not show.
+        var chosen = Path.Combine(Path.GetTempPath(), "PortableGit", OperatingSystem.IsWindows() ? "git.exe" : "git");
+        var settings = new MainWindowViewModelTests.FakeSettings();
+        var folders = new FakeFolderPicker().AnswerFile(chosen);
+        var git = new GitSettingsViewModelTests.FakeGitConfiguration { ReadFailure = new Core.Git.GitUnavailableException(GitAccess.GitNotFound) };
+        var dialog = new SettingsDialogViewModel(
+            new SettingsScreenServices(settings, AppTheme.Dark, _ => { }, null, git, ToolCatalogues.Fixed, ShortcutTable, folders, new DialogHostViewModel(), null, new RecordingLog())
+            {
+                Detection = new Core.Git.GitDetection(Core.Git.GitAvailability.Available, @"C:\Program Files\Git\cmd\git.exe", new Core.Git.GitVersion(2, 47, 1), null),
+                ProbeGit = (path, _) => Task.FromResult(new Core.Git.GitDetection(Core.Git.GitAvailability.Available, path, new Core.Git.GitVersion(2, 47, 1), null) { Source = Core.Git.GitSource.Setting }),
+            },
+            SettingsSection.Git);
+        var window = new Window { Width = 1100, Height = 700, Content = new SettingsDialogView { DataContext = dialog } };
+        window.Show();
+        try
+        {
+            await dialog.Loaded;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var section = Find<StackPanel>(window, "SettingsGit");
+            var row = Find<Grid>(window, "GitProgramRow");
+
+            // Shown although the fields are not (git's configuration could not be read), and last.
+            Assert.True(row.IsEffectivelyVisible);
+            Assert.True(Find<TextBlock>(window, "GitReadError").IsEffectivelyVisible || Find<TextBlock>(window, "GitUnavailable").IsEffectivelyVisible);
+            Assert.False(Find<TextBox>(window, "UserNameBox").IsEffectivelyVisible);
+            var lastShown = section.GetVisualDescendants().OfType<Control>()
+                .Where(control => control.IsEffectivelyVisible && control.Bounds.Height > 0 && control is TextBlock or Button)
+                .MaxBy(control => control.TranslatePoint(new Point(0, control.Bounds.Height), window)!.Value.Y);
+            Assert.True(lastShown is not null && lastShown.GetSelfAndVisualAncestors().Contains(row), $"The last shown control of the Git section is {lastShown?.Name}, not the Git program row's.");
+            Assert.Equal(new GridLength(132), row.ColumnDefinitions[0].Width);
+            Assert.Equal(18, row.Margin.Top);
+            Assert.Equal(@"C:\Program Files\Git\cmd\git.exe", Find<VisualCommit.App.Controls.TrimmedTextBlock>(window, "GitProgramPath").Text);
+            Assert.Equal("Found on the PATH.", Find<TextBlock>(window, "GitProgramNote").Text);
+            Assert.Equal("Browse…", Find<Button>(window, "GitProgramBrowseButton").Content);
+            Assert.False(Find<Button>(window, "GitProgramUsePathButton").IsEffectivelyVisible);
+
+            await dialog.GitProgram.BrowseCommand.ExecuteAsync(null);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            Assert.Equal("Chosen here. VisualCommit uses it from its next start.", Find<TextBlock>(window, "GitProgramNote").Text);
+            Assert.True(Find<Button>(window, "GitProgramUsePathButton").IsEffectivelyVisible);
+            Assert.Null(settings.Current.GitExecutable);
+
+            await dialog.ConfirmCommand.ExecuteAsync(null);
+
+            Assert.Equal(chosen, settings.Current.GitExecutable);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    [AvaloniaFact]
+    public async Task The_netrc_note_lies_under_the_accounts_blocks_in_the_warning_colour_and_dismiss_hides_it()
+    {
+        var dismissed = 0;
+        var hosting = new HostingSessionStub(new Uri("https://github.example.com/"), "octo", "github_pat_FAKE-octo-1");
+        var dialog = new SettingsDialogViewModel(
+            new SettingsScreenServices(new MainWindowViewModelTests.FakeSettings(), AppTheme.Dark, _ => { }, null, new GitSettingsViewModelTests.FakeGitConfiguration(), ToolCatalogues.Fixed, ShortcutTable, new FakeFolderPicker(), new DialogHostViewModel(), null, new RecordingLog())
+            {
+                Hosting = hosting,
+                GitVersion = new Core.Git.GitVersion(2, 43, 0),
+                HomeHasNetrc = () => true,
+                DismissNetrcNote = () => dismissed++,
+            },
+            SettingsSection.Accounts);
+        var window = new Window { Width = 1100, Height = 700, Content = new SettingsDialogView { DataContext = dialog } };
+        window.Show();
+        try
+        {
+            await dialog.Loaded;
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+            var note = Find<TextBlock>(window, "AccountsNetrcNote");
+            var dismiss = Find<Button>(window, "AccountsNetrcDismiss");
+            var block = Find<ContentControl>(window, "AccountsGitHub");
+
+            Assert.True(note.IsEffectivelyVisible);
+            Assert.Contains("settingsNote", note.Classes);
+            Assert.Contains("notice", note.Classes);
+            Assert.True(window.TryFindResource("VcWarningBrush", window.ActualThemeVariant, out var warning));
+            Assert.Equal(((ISolidColorBrush)warning!).Color, ((ISolidColorBrush)note.Foreground!).Color);
+            Assert.StartsWith("Your home folder has a .netrc or _netrc file. With Git 2.43.0,", note.Text, StringComparison.Ordinal);
+            Assert.Equal("Dismiss", dismiss.Content);
+
+            // Under the blocks: below the bottom of the panel that holds all three, not only GitHub's.
+            var blocks = (StackPanel)block.GetVisualParent()!;
+            Assert.Contains(Find<ContentControl>(window, "AccountsAzureDevOps"), blocks.Children);
+            Assert.True(note.TranslatePoint(default, window)!.Value.Y > blocks.TranslatePoint(new Point(0, blocks.Bounds.Height), window)!.Value.Y - 0.5);
+
+            dismiss.Command!.Execute(null);
+            Avalonia.Threading.Dispatcher.UIThread.RunJobs();
+
+            Assert.False(note.IsEffectivelyVisible);
+            Assert.False(dismiss.IsEffectivelyVisible);
+            Assert.Equal(1, dismissed);
+        }
+        finally
+        {
+            window.Close();
+        }
+    }
+
+    private static T Find<T>(Window window, string name)
+        where T : Control =>
+        window.GetVisualDescendants().OfType<T>().FirstOrDefault(control => control.Name == name)
+        ?? throw new InvalidOperationException($"No {typeof(T).Name} named {name}.");
+
     private static Color Brush(ShellDriver app, string key) =>
         app.Window.TryFindResource(key, app.Window.ActualThemeVariant, out var value) && value is ISolidColorBrush brush
             ? brush.Color

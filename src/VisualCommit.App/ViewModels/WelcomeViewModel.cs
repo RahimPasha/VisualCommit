@@ -31,6 +31,9 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     private bool _nameTyped;
     private bool _settingName;
 
+    /// <summary>The error shown when git could not be used, which "Check again" drops once git is found; null for none.</summary>
+    private string? _gitErrorText;
+
     public WelcomeViewModel(RepoTabViewModel tab, TabServices services)
     {
         _tab = tab;
@@ -138,8 +141,27 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
     /// </summary>
     public Task? RunningClone => _cloneTask is { IsCompleted: false } running ? running : IsCloning ? Task.CompletedTask : null;
 
-    /// <summary>Shows a failure under the buttons.</summary>
-    public void ShowError(string message) => ErrorText = message;
+    /// <summary>
+    /// Shows a failure under the buttons; <paramref name="fromMissingGit"/> when git could not be
+    /// used (<see cref="GitUnavailableException"/>), an error that <see cref="ClearGitError"/> drops
+    /// once git is found.
+    /// </summary>
+    public void ShowError(string message, bool fromMissingGit = false)
+    {
+        ErrorText = message;
+        _gitErrorText = fromMissingGit ? message : null;
+    }
+
+    /// <summary>"Check again" found git: an error the missing git gave goes; any other stays.</summary>
+    public void ClearGitError()
+    {
+        if (_gitErrorText is not null && ErrorText == _gitErrorText)
+        {
+            ErrorText = null;
+        }
+
+        _gitErrorText = null;
+    }
 
     [RelayCommand]
     private async Task OpenAsync()
@@ -196,7 +218,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _services.Log.Error($"Initialising a repository in {path} failed.", ex);
-            ErrorText = ex is GitException git ? git.StandardError.Trim() : ex.Message;
+            ShowError(ex is GitException git ? git.StandardError.Trim() : ex.Message, fromMissingGit: ex is GitUnavailableException);
         }
     }
 
@@ -354,7 +376,7 @@ public sealed partial class WelcomeViewModel : ObservableObject, IDisposable
                 _services.Log.Error($"Cloning {GitCommand.HideCredentials(url)} failed.", ex);
             }
 
-            ErrorText = ex is GitException git ? git.StandardError.Trim() : ex.Message;
+            ShowError(ex is GitException git ? git.StandardError.Trim() : ex.Message, fromMissingGit: ex is GitUnavailableException);
         }
         finally
         {

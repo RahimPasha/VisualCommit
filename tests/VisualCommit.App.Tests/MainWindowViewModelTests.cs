@@ -249,6 +249,102 @@ public class MainWindowViewModelTests
         Assert.Empty(log.Entries);
     }
 
+    [Fact]
+    public async Task The_status_bar_names_a_chosen_git_that_is_gone_and_says_where_a_git_came_from()
+    {
+        var gone = Create(git: new GitDetection(GitAvailability.NotFound, null, null, null) { ChosenMissing = Path.Combine(Path.GetTempPath(), "git.exe") });
+        var chosen = Create(git: GitFound with { Source = GitSource.Setting });
+        var standIn = Create(git: GitFound with { Source = GitSource.StandIn });
+
+        await gone.InitializeAsync(TestContext.Current.CancellationToken);
+        await chosen.InitializeAsync(TestContext.Current.CancellationToken);
+        await standIn.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal("Chosen Git not found", gone.GitStatusText);
+        Assert.Null(gone.GitStatusToolTip);
+        Assert.Equal("Git 2.47.1", chosen.GitStatusText);
+        Assert.Equal("/usr/bin/git, chosen in Settings", chosen.GitStatusToolTip);
+        Assert.Equal("/usr/bin/git, from VISUALCOMMIT_GIT_STAND_IN (a test switch)", standIn.GitStatusToolTip);
+    }
+
+    [Theory]
+    [InlineData(GitAvailability.NotFound)]
+    [InlineData(GitAvailability.TooOld)]
+    [InlineData(GitAvailability.Broken)]
+    public async Task A_git_that_cannot_be_used_shows_the_first_run_screen_in_the_welcome_pages_place(GitAvailability availability)
+    {
+        var viewModel = Create(git: new GitDetection(availability, availability == GitAvailability.NotFound ? null : "/usr/bin/git", availability == GitAvailability.TooOld ? new GitVersion(2, 29, 0) : null, null));
+        Assert.False(viewModel.GitSetup.IsShown);
+        Assert.True(viewModel.ActiveTab.ShowsWelcome);
+
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.True(viewModel.GitSetup.IsShown);
+        Assert.True(viewModel.GitSetup.InScreenState);
+        Assert.Equal("Set up Git…", viewModel.GitSetup.StatusButtonText);
+        Assert.Same(viewModel.GitSetup, viewModel.ActiveTab.GitSetup);
+        Assert.True(viewModel.ActiveTab.ShowsGitSetup);
+        Assert.False(viewModel.ActiveTab.ShowsWelcome);
+        Assert.Equal(GitAccess.RunningPlatform, viewModel.GitSetup.Guidance?.Platform);
+        Assert.Null(viewModel.GitSetup.Guidance?.WingetPath);
+    }
+
+    [Fact]
+    public async Task A_working_git_shows_no_screen_and_no_set_up_button()
+    {
+        var viewModel = Create();
+
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        Assert.False(viewModel.GitSetup.IsShown);
+        Assert.False(viewModel.GitSetup.InScreenState);
+        Assert.True(viewModel.ActiveTab.ShowsWelcome);
+        Assert.Equal("/usr/bin/git, found on the PATH", viewModel.GitStatusToolTip);
+    }
+
+    [Fact]
+    public async Task A_new_tab_shows_the_screen_too()
+    {
+        var viewModel = Create(git: new GitDetection(GitAvailability.NotFound, null, null, null));
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        viewModel.NewTabCommand.Execute(null);
+
+        Assert.Equal(2, viewModel.Tabs.Count);
+        Assert.All(viewModel.Tabs, tab => Assert.True(tab.ShowsGitSetup));
+    }
+
+    [Theory]
+    [InlineData(false, 2)]
+    [InlineData(true, 1)]
+    public async Task A_git_program_saved_while_git_does_not_work_is_looked_for_at_once_and_one_saved_while_it_works_at_the_next_start(bool gitWorks, int searches)
+    {
+        // docs/phase-8a-design.md 5.3 (ruling 42): after the settings screen closes, a changed
+        // setting while git does not work runs Check again; while git works it waits for the next start.
+        var settings = new FakeSettings();
+        settings.Update(current => current with { GitExecutable = Path.Combine(Path.GetTempPath(), "PortableGit", "git.exe") });
+        var searched = 0;
+        var viewModel = new MainWindowViewModel(
+            settings,
+            new FakeThemes(),
+            _ =>
+            {
+                searched++;
+                return Task.FromResult(gitWorks ? GitFound : new GitDetection(GitAvailability.NotFound, null, null, null));
+            });
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        var showing = viewModel.ShowSettingsAsync(SettingsSection.Git);
+        var dialog = Assert.IsType<VisualCommit.App.ViewModels.Dialogs.SettingsDialogViewModel>(viewModel.Dialogs.Current);
+        await dialog.Loaded;
+        dialog.GitProgram.UsePathCommand.Execute(null);
+        await dialog.ConfirmCommand.ExecuteAsync(null);
+        await showing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.Null(settings.Current.GitExecutable);
+        Assert.Equal(searches, searched);
+    }
+
     /// <summary>The log's theme lines, among whatever else the view model logs.</summary>
     private static List<string> ThemeLines(RecordingLog log) =>
         [.. log.Messages.Where(message => message.StartsWith("Theme", StringComparison.Ordinal))];

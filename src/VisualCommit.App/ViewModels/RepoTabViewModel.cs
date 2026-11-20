@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using CommunityToolkit.Mvvm.ComponentModel;
 using VisualCommit.App.ViewModels.Commands;
+using VisualCommit.App.ViewModels.GitSetup;
 using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.ViewModels.Workspaces;
@@ -25,6 +26,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     private readonly CommitDetailsViewModel _emptyDetails;
     private readonly ToolbarViewModel _emptyToolbar = new(null);
     private readonly OperationStatusViewModel _emptyStatus;
+    private GitSetupViewModel? _gitSetup;
     private bool _disposed;
 
     public RepoTabViewModel(TabServices services)
@@ -61,7 +63,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
     /// <summary>The repository open in this tab, or null for the welcome page.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasRepository), nameof(ShowsWelcome), nameof(LeftPanel), nameof(Details), nameof(BranchText), nameof(Changes), nameof(ShowsWorkingChanges))]
+    [NotifyPropertyChangedFor(nameof(HasRepository), nameof(ShowsWelcome), nameof(ShowsGitSetup), nameof(LeftPanel), nameof(Details), nameof(BranchText), nameof(Changes), nameof(ShowsWorkingChanges))]
     [NotifyPropertyChangedFor(nameof(Toolbar), nameof(OperationStatus))]
     [NotifyPropertyChangedFor(nameof(ShowsRightPanel), nameof(ShowsDetailsPanel), nameof(ShowsStagePanel), nameof(GraphColumnSpan))]
     public partial RepositoryViewModel? Repository { get; private set; }
@@ -86,7 +88,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     /// </summary>
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsDashboard), nameof(ShowsDashboard), nameof(ShowsLeftPanel), nameof(GraphColumn), nameof(TabAutomationId), nameof(OperationStatus))]
-    [NotifyPropertyChangedFor(nameof(Toolbar), nameof(BranchText), nameof(ShowsWelcome), nameof(ShowsRightPanel), nameof(ShowsDetailsPanel), nameof(ShowsStagePanel), nameof(GraphColumnSpan))]
+    [NotifyPropertyChangedFor(nameof(Toolbar), nameof(BranchText), nameof(ShowsWelcome), nameof(ShowsGitSetup), nameof(ShowsRightPanel), nameof(ShowsDetailsPanel), nameof(ShowsStagePanel), nameof(GraphColumnSpan))]
     public partial DashboardViewModel? Dashboard { get; private set; }
 
     /// <summary>
@@ -130,11 +132,53 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
 
     /// <summary>A repository is being opened: the graph area shows neither the welcome page nor a graph yet.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsWelcome))]
+    [NotifyPropertyChangedFor(nameof(ShowsWelcome), nameof(ShowsGitSetup))]
     public partial bool IsOpening { get; private set; }
 
-    /// <summary>The graph area shows the welcome page: not on a dashboard (2.1).</summary>
-    public bool ShowsWelcome => Repository is null && !IsOpening && !IsDashboard;
+    /// <summary>The graph area shows the welcome page: not on a dashboard (2.1), nor while the first-run screen stands in its place.</summary>
+    public bool ShowsWelcome => Repository is null && !IsOpening && !IsDashboard && !ShowsGitSetup;
+
+    /// <summary>
+    /// The window's first-run screen (one per window), which the window sets when it adds the tab;
+    /// null for a tab without a window (view-model tests).
+    /// </summary>
+    public GitSetupViewModel? GitSetup
+    {
+        get => _gitSetup;
+        set
+        {
+            if (ReferenceEquals(_gitSetup, value))
+            {
+                return;
+            }
+
+            if (_gitSetup is not null)
+            {
+                _gitSetup.PropertyChanged -= OnGitSetupPropertyChanged;
+            }
+
+            _gitSetup = value;
+            if (value is not null)
+            {
+                value.PropertyChanged += OnGitSetupPropertyChanged;
+            }
+
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ShowsGitSetup));
+            OnPropertyChanged(nameof(ShowsWelcome));
+            OnPropertyChanged(nameof(GitSetupForView));
+        }
+    }
+
+    /// <summary>The graph area shows the first-run screen in the welcome page's place: an empty tab, not opening, not a dashboard, while the screen shows.</summary>
+    public bool ShowsGitSetup => Repository is null && !IsOpening && !IsDashboard && GitSetup?.IsShown == true;
+
+    /// <summary>
+    /// The screen for the graph area to make its view of: <see cref="GitSetup"/> once it has first
+    /// shown (<see cref="GitSetupViewModel.HasShown"/>), null before. A session that finds git never
+    /// makes the view.
+    /// </summary>
+    public GitSetupViewModel? GitSetupForView => GitSetup is { HasShown: true } shown ? shown : null;
 
     public WelcomeViewModel Welcome { get; }
 
@@ -226,6 +270,23 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     }
 
     /// <summary>
+    /// Opens again the folder whose restore failed (<see cref="FailedPath"/>), as the restore did:
+    /// pending under its folder's name, then opened without a new entry in the recent list. "Check
+    /// again" calls it once git is found. The welcome page's error from the missing git goes first.
+    /// </summary>
+    public Task<bool> ReopenAsync()
+    {
+        if (FailedPath is not { } path || _disposed)
+        {
+            return Task.FromResult(false);
+        }
+
+        Welcome.ClearGitError();
+        ShowPending(path);
+        return OpenAsync(path, remember: false);
+    }
+
+    /// <summary>
     /// Opens the repository at <paramref name="path"/> in this tab. Returns false and shows the
     /// reason on the welcome page when it cannot be opened. A tab restored from the session
     /// passes <paramref name="remember"/> false, so restoring does not reorder the recent list.
@@ -269,7 +330,7 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
             PendingPath = null;
             IsOpening = false;
             Title = Repository is null ? EmptyTitle : previousTitle;
-            Welcome.ShowError(ex is GitException git ? git.StandardError.Trim() : ex.Message);
+            Welcome.ShowError(ex is GitException git ? git.StandardError.Trim() : ex.Message, fromMissingGit: ex is GitUnavailableException);
             if (ex is not NotARepositoryException)
             {
                 _services.Log.Error($"Opening {path} failed.", ex);
@@ -355,6 +416,11 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
         }
 
         _disposed = true;
+        if (_gitSetup is not null)
+        {
+            _gitSetup.PropertyChanged -= OnGitSetupPropertyChanged;
+        }
+
         Welcome.Dispose();
         _emptyStatus.Dispose();
         if (Dashboard is { } dashboard)
@@ -383,6 +449,21 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     {
         adopted.Promote(sinceOpening ?? Stopwatch.StartNew());
         return adopted;
+    }
+
+    /// <summary>The screen shows or hides: so does it in this tab, and the welcome page the other way.</summary>
+    private void OnGitSetupPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(GitSetupViewModel.HasShown) or null)
+        {
+            OnPropertyChanged(nameof(GitSetupForView));
+        }
+
+        if (e.PropertyName is nameof(GitSetupViewModel.IsShown) or null)
+        {
+            OnPropertyChanged(nameof(ShowsGitSetup));
+            OnPropertyChanged(nameof(ShowsWelcome));
+        }
     }
 
     private void OnDashboardPropertyChanged(object? sender, PropertyChangedEventArgs e)
