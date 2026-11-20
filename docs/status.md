@@ -133,12 +133,13 @@ Design:
   `phase8a-design-fixes` (run `wf_77d18914-cbf`: a fixer per section on its own part of the design,
   three checkers, which found 33 misses, and a repair pass; 18 agents, 4.27M tokens, 39 minutes),
   then by the lead's rulings on what the passes left open (design 13.5). The review's decisions are
-  D447 to D452. One finding waits on the owner: D405 offers the winget install for a git that is
-  missing, too old or not working, and ruling 44 with D423 had narrowed it to a missing git
-  ("Waiting on the owner"). The design is now 355 KB: sections 0 and 1, which every builder reads,
+  D447 to D452. One finding went to the owner: D405 offers the winget install for a git that is
+  missing, too old or not working, and ruling 44 with D423 had narrowed it to a missing git. The
+  owner answered on 2026-11-20: a missing and a too-old git, not one that does not work (D453,
+  carried into design 0.2, 1.3, 5.3 to 5.5, 12.3.4 and section 13). The design is now 356 KB: sections 0 and 1, which every builder reads,
   31 and 44 KB, and the briefs 18 to 29 KB, §5's alone over D242's 25. The stage's agents used
-  13.8M tokens in three workflows (5.20M, 4.32M, 4.27M), after step 2's 2.96M. (Week: share not
-  read since the reset of 2026-11-19, D415, which ends here; the owner is asked before step 4.)
+  13.8M tokens in three workflows (5.20M, 4.32M, 4.27M), after step 2's 2.96M. (Week: 25 to 50 %
+  used, the owner's reading of 2026-11-20 after this stage; D415 ended here.)
 
 Build, in the order of the design's waves (design 0.4). Each part's visual checks are written into
 `docs/test-reports/phase-8a.md` and committed just before its package is built (D244). A builder
@@ -173,8 +174,8 @@ Wave 2:
 - [ ] 9. §5, the first-run experience (R4, D405, D423, D424, D449), part F: the detection's states
   with git's own message for a broken `~/.gitconfig` and the missing askpass helper, "Check again"
   without a restart, the "Git program" setting, the winget install after a confirm, the macOS and
-  Linux guidance, the OpenSSH line and the netrc note. Starts only after the owner's answer on
-  winget for a git that is too old or not working ("Waiting on the owner").
+  Linux guidance, the OpenSSH line and the netrc note; winget for a missing and for a too-old git
+  (D453).
 - [ ] 10. §6, the keyboard pass (R7, D425 to D427, D452), part K: the gaps each shown by a failing
   test first, the focus after "Choose" and after a row's action, the loading diff's late focus,
   the commit boxes while "Committing…" runs (D392), "Cancel {title}" in the palette.
@@ -452,24 +453,23 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: the owner's answers, then Progress step 4. The design is drafted, reviewed and corrected
-(step 3), which ends D415. Before step 4 the session asks the owner for the share of the week's
-allowance used (D241) and puts the one question the review left to the owner: whether the
-first-run screen offers the winget install also for a git that is too old or not working, as D405
-reads ("Waiting on the owner"). The answer becomes a decision of its own (D453 on), and the lead
-brings design 1.3, 5.3, 5.5, 13.1, 13.3 and 13.4 item 22 into line with it; §5's builder (step 9)
-starts only after it, and steps 4 to 8 do not wait for it. Step 4 is the lead's own package, WP0
-(design section 1 and its list in 1.16), in the main checkout: the contracts and stubs with no
-behaviour or picture changed and the walk-through project; then the classes 1.16 names, a push,
-and CI's run read. Wave 1 follows (steps 5 to 8): part L's and part I's checks are written and
+Next: Progress step 4, the lead's own package, WP0 (design section 1 and its list in 1.16), in the
+main checkout: the contracts and stubs with no behaviour or picture changed, and the walk-through
+project `tests/VisualCommit.VisualTests.Phase8a`; then the classes 1.16 names, a push, and CI's run
+read. On 2026-11-20 the owner gave the week's share, 25 to 50 % used, with which steps 4 to 8 (WP0
+and wave 1) go on and the owner is asked again before wave 2 (step 9; D241), and answered the one
+question the design's review had left: winget is offered for a missing and for a too-old git
+(D453). Wave 1 follows step 4 (steps 5 to 8): part L's and part I's checks are written and
 committed before their packages (D244; the floor has none), then three Opus builders work in
 worktrees `D:/Projects/Personal/vc-wt/p8a-<key>` on `wip/p8a-<key>` (design 0.3), each reading
-sections 0 and 1 and its own. By hand before §5's merge, the owner told: `cmd.exe` started as the
-app will start it, with `/S /K` and winget's quoted path and `--version`, to see that its window
-stays open (design 13.4 item 7). The review's files (the findings in full, the lead's rulings on
-them, the design's parts with their texts from before the corrections) are outside the repository,
-in `D:/Projects/Personal/phase8-work/design/review/`. The icon's first round is with the owner
-(Notes, "The icon").
+sections 0 and 1 and its own. Ultracode was on for the design stage and is off since: sub-agents
+are started one by one, each with its model named, and no workflow runs unless the owner asks for
+one. By hand before §5's merge, the owner told: `cmd.exe` started as the app will start it, with
+`/S /K` and winget's quoted path and `--version`, to see that its window stays open (design 13.4
+item 7). The review's files (the findings in full, the lead's rulings on them, the design's parts
+with their texts from before the corrections) are outside the repository, in
+`D:/Projects/Personal/phase8-work/design/review/`. The icon's first round is with the owner (Notes,
+"The icon").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -666,20 +666,12 @@ every commit.
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
-  - **Before step 4: the share of the week's allowance used** (D241). D415's leave to go on without
-    the check ended with the design's review.
-  - **Before wave 2: winget for a git that is too old or not working.** D405, the owner's, offers
-    the winget install "when git is missing, too old or not working". The lead's ruling 44 and D423
-    narrowed it to a missing git without saying that this changes D405, which the design's review
-    found (finding O3). The choices: (a) a missing and a too-old git, the lead's recommendation:
-    winget's install upgrades a Git for Windows that is installed, and it cannot repair one that
-    does not work, where the screen shows git's own message, the download, "Choose git.exe" and
-    "Check again"; (b) a missing git only, as ruling 44; (c) all three states, as D405 reads. That
-    winget upgrades a Git for Windows which its own installer put there is not tried: the laptop
-    has the newest git.
+  - **Before wave 2 (step 9): the share of the week's allowance used** (D241). On 2026-11-20 it
+    was 25 to 50 %, with which step 4 and wave 1 go on.
   - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
     above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
-    D452; design 13.5). None of them is the owner's own, so the owner can overturn any.
+    D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on
+    winget, is the owner's answer of 2026-11-20.)
   - **The three live tokens expire before 8a's gate can run**: GitHub's on 2026-11-29, Azure
     DevOps' and GitLab's on 2026-12-04, and a gate runs the live command twice (D335). Before 8a's
     gate the owner makes each again, with an expiry that also covers 8b's gate, as phase 7a's

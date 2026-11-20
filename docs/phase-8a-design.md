@@ -3,7 +3,7 @@
 This is phase 8a's design: what the phase builds, how it is cut into work packages, the contracts the
 packages share, and one brief per package for its builder. Once the phase is built it is kept as
 history, as phases 3 to 7b's designs are. Its decisions are recorded only in `docs/decisions.md`
-(D243): the design names them by number, D416 to D452 and the owner's answer on winget (13.3), and
+(D243): the design names them by number, D416 to D453, and
 does not repeat them. The phase's report, handoff and status cite its sections as "design N.N".
 Binding inputs: the owner's decisions D399 to D415; `docs/plan.md`'s "Phase 8a", "Workflow" and
 "Visual test gate" sections and its risks; the 7b handoff's "Patterns to follow", "Known issues" and
@@ -44,8 +44,7 @@ section 13); requirements.md; CLAUDE.md and plan.md's "Workflow" and "Visual tes
 D247). The research is outside the repository: `D:/Projects/Personal/phase8-work/research2/` (eight
 inputs, cited "colours.md 3.2") and `research/` (the digests and web briefs; a web brief's skeptic
 file wins where they differ). Line numbers are those of `27c5109`. "§n" is this design's section n,
-the brief of one package. The design's own decisions are D416 to D452 and the owner's answer on
-winget (13.3); they stand in `docs/decisions.md` alone (D243), and the sections cite them by number.
+the brief of one package. The design's own decisions are D416 to D453; they stand in `docs/decisions.md` alone (D243), and the sections cite them by number.
 
 ### 0.1 Scope against the Delivers list
 
@@ -141,8 +140,8 @@ The decisions are cited, not restated (D243); each line names the mechanism and 
   GitHub owner `demo--alex`. §11.
 - **D452** (the review; amends D417): "Cancel {title}" cancels only while the titled operation is
   still the one running; K10 takes a fourth PageDown from §11's merge. 1.8; §6, §8, §11.
-- The owner's answer (13.3), on winget for a git that is too old or not working (ruling 44 and D423
-  narrow D405): a decision of its own once given; until then ruling 44 stands, and §5 starts after it.
+- **D453** (the owner's answer of 2026-11-20; amends D405, D423 and ruling 44): winget is offered for
+  a missing and for a too-old git, not for one that does not work. 1.3; §5, §12.
 
 ### 0.3 How 8a is named
 
@@ -176,7 +175,7 @@ The decisions are cited, not restated (D243); each line names the mechanism and 
 | colours: the contrast round | 2 | 1 | WP0 | `Tokens.axaml`; added styles in `LeftPanelView`, `RightPanelView`, `CompareView`, `WorkingChangesView`, `FileHistoryView` (`.axaml`); `ThemeTokensTests.cs`, `PanelViewTests.cs`; ruling 28's files (2.4: four App.Tests files, `Phase1Expectations.cs` and the `Phase3` to `Phase7b` `Expectations.Common.cs`, `Phase7bExpectations.A.cs`, `Phase6SupportTests.cs`, `Phase6ExpectationTests.L.cs`, `Phase6Checks.L.Overlays.cs`, the HEAD helpers of phases 3 to 5, `Phase5Checks.F.Filters.cs`); `scripts/scan-contrast.py`, `compare-pictures.py`; `docs/test-reports/phase-8a-contrast/` (2.2); part L |
 | floor | 3 | 1 | WP0 | `GitVersion.cs`, `IGitRepository.cs`; `GitRepository.Branches.cs`, `.Search.cs`, `GitRepository.cs`; D277's code in `AskPassBroker.cs`, `AccountBlockViewModel.cs`, `AccountsSettingsViewModel.cs`, `OperationTexts.Hosting.Accounts.cs`; `OperationTexts.cs`; `RepositoryOperations.Branches.cs`; `TempRepo.cs`, `GitWords.cs`; 3.4's test files; `ci.yml` |
 | single: one instance per data folder | 4 | 1 | WP0 | `AppPaths.cs`, `SingleInstanceGuard.cs`, `AppLaunch.cs`, `Program.cs`, `App.axaml.cs`, `MainWindow.axaml.cs`, `InstanceNoticeWindow.axaml(.cs)`, `InstanceNoticeViewModel.cs`, `InstanceNoticeTexts.cs`; `GitIsolation.cs:74`'s comment; `AppPathsTests.cs` and 4.5's classes; part I with `InstanceNoticeHost` |
-| firstrun | 5 | 2 | §3; the owner's answer (13.3) | `IGitRunner.cs`, `GitLocator.cs`, `GitSetupProbe.cs`, `OsRelease.cs`, `VisualCommit.Core/ProgramSearch.cs`, `GitConfiguration.cs`, the helper in `AskPassBroker.cs`; `GitAccess.cs`, `FileLauncher.cs`; `MainWindowViewModel.cs`, `.Settings.cs`, `.Git.cs`, `RepoTabViewModel.cs`, `WelcomeViewModel.cs`, `ViewModels/GitSetup/`, `GitProgramViewModel.cs`, `AccountsSettingsViewModel.cs`; `GitSetupView`, `CommitGraphView.axaml(.cs)`, `StatusBarView.axaml`, `SettingsDialogView.axaml`, `SettingsDialogViewModel.cs`; `tests/VisualCommit.GitStandIn`, `FakeGitSetupProbe.cs`, `MergeToolHelpTests.cs` (its `HeldToolHelpRunner` made `internal`, 5.2); 5.4's test files; part F |
+| firstrun | 5 | 2 | §3 | `IGitRunner.cs`, `GitLocator.cs`, `GitSetupProbe.cs`, `OsRelease.cs`, `VisualCommit.Core/ProgramSearch.cs`, `GitConfiguration.cs`, the helper in `AskPassBroker.cs`; `GitAccess.cs`, `FileLauncher.cs`; `MainWindowViewModel.cs`, `.Settings.cs`, `.Git.cs`, `RepoTabViewModel.cs`, `WelcomeViewModel.cs`, `ViewModels/GitSetup/`, `GitProgramViewModel.cs`, `AccountsSettingsViewModel.cs`; `GitSetupView`, `CommitGraphView.axaml(.cs)`, `StatusBarView.axaml`, `SettingsDialogView.axaml`, `SettingsDialogViewModel.cs`; `tests/VisualCommit.GitStandIn`, `FakeGitSetupProbe.cs`, `MergeToolHelpTests.cs` (its `HeldToolHelpRunner` made `internal`, 5.2); 5.4's test files; part F |
 | keyboard | 6 | 2 | §2 | `DiffTextView.cs`, `DiffPane.cs`, `HunkHeaders.cs`, `DiffView.axaml.cs`, `BlameTextEditor.cs`, `BlameView.axaml.cs`, `AppCommands.Palette.cs`, `WorkingChangesView.axaml(.cs)`, `WorkingChangesViewModel.cs`, `WelcomeView.axaml.cs`, `CreatePullRequestDialogView.axaml.cs`, `FocusReturn.cs`; `MainWindow.axaml.cs` (D427); `ActivityLogView.axaml` only if 6.3.8's test fails; `HeldGitRunner.cs`; 6.4's test files, `Phase2Checks.Helpers.cs`; part K |
 | icon | 7 | 2 | §4 | `tools/VisualCommit.IconBuilder`, `assets/brand/`, `Assets/Icon/`, `AppIcon.cs`, `VisualCommit.App.csproj`, `MainWindow.axaml`, the notice window's `Icon`, `Directory.Packages.props`, `.gitattributes` (`*.icns binary`, D447); `IconFile.cs`; part B |
 | about: About and notices | 8 | 3 | §5, §7 | `THIRD-PARTY-NOTICES.md`, `notices/`, `EmbeddedTexts.cs`, `OperationTexts.About.cs`, the About section, `SettingsDialogView.axaml(.cs)`, `SettingsDialogViewModel.cs`, `SettingsSection.About`, the text dialog, `VcLinkButton` (`Theme/Controls.axaml`, `SignInDialogView.axaml`), `Theme/Dialogs.axaml`, `App.axaml(.cs)`, `AppCommands.cs`, the csproj, `ci.yml`; 8.4's earlier files; part A |
@@ -278,7 +277,7 @@ a project of its own, as D230 did for phase 6.
 
 Every new screen has a real-window picture: the first-run screen (F1, F4, F5, F6), its winget
 confirm (F2), the notice (I2), About (A1), the text dialog (A4), the icon in the title bar and the
-taskbar (B1, B2). F1 and F2 need `winget.exe` on the gate's machine's `PATH`: without it they fail,
+taskbar (B1, B2). F1, F2 and F5 need `winget.exe` on the gate's machine's `PATH`: without it they fail,
 never "Not run" (D449; the laptop has it, 13.4 item 7).
 
 Checks by hand, in the report: the Narrator walk-through (D411, the owner, about 20 minutes, §9's
@@ -352,8 +351,8 @@ to expected results" (ruling 28). Every picture is inspected (D247).
 
 ### 0.8 What the phase asks of the owner
 
-13.3 lists it by when: now, to look at the rulings and D416 to D452, and to answer on winget for a
-git that is too old or not working (before wave 2); beside the build, the icon's rounds
+13.3 lists it by when: now, to look at the rulings and D416 to D453 (the question on winget
+was answered on 2026-11-20, D453); beside the build, the icon's rounds
 (`docs/brand/icon/`, D447); the takeovers of the desktop (the spike, §6's merge, §12's build, the
 series), told first; before the counted round, the chosen mark or the placeholder; before the gate,
 the three live tokens and D246's two runs; at the gate, the Narrator walk-through, phase 6's System
@@ -564,7 +563,7 @@ empty `TempDirectory`: it reads no `PATH` (the rule above), `ResolveStart` keeps
 `Process.Start` throws the start's own exception before anything starts. No test starts `cmd.exe`,
 winget, `xcode-select`, a terminal or a browser.
 
-The two starts (§5): on Windows with git missing and winget found (ruling 44), with `wingetPath` the
+The two starts (§5): on Windows with git missing or too old and winget found (ruling 44, D453), with `wingetPath` the
 guidance's `WingetPath`,
 `new LaunchCommand("cmd.exe", []) { CommandLine = "/S /K \"\"" + wingetPath + "\" install --id Git.Git -e --source winget\"", WorkingDirectory = Path.GetDirectoryName(wingetPath), InNewTerminal = true }`,
 after a confirm that shows `winget install --id Git.Git -e --source winget`; on macOS with the tools
@@ -577,7 +576,7 @@ unchanged; the log line stays `Started in a terminal: {the command's DisplayText
 either start: both harnesses hand them to the fake, which asserts the command (ruling 6), the winget
 start with the seam's `WingetPath`, quoted so, and that working folder. Settled (the lead,
 2026-11-19): the laptop has `winget.exe` on its `PATH`, an app execution alias for which `File.Exists`
-is true; the real-window checks F1 and F2 need winget on the gate's machine (D449, 12.3.4 launch 7).
+is true; the real-window checks F1, F2 and F5 need winget on the gate's machine (D449, D453; 12.3.4 launches 7 and 8).
 Still to try by hand once before §5's merge, with the owner told:
 `cmd.exe /S /K ""<the path found>" --version"`, whose window should stay open where Windows Terminal is
 the default console (13.4 item 7).
@@ -1802,8 +1801,8 @@ Key `firstrun`, wave 2, after §3 (the texts read `GitVersion.Minimum`, 2.34.1).
 no `ssh -V` probe and the netrc note; D449 (amends D423), winget started by its path and the full paths
 a git must have.
 
-§5's builder starts only after the owner's answer on winget for a git that is too old or not working
-(13.3); until then the section stands as ruling 44 has it.
+The owner answered on winget on 2026-11-20 (D453): the screen offers it for a missing and for a
+too-old git, not for one that does not work, and this section says so throughout.
 
 ### 5.1 Delivers and leaves
 
@@ -1908,7 +1907,7 @@ button (§9's sweep and Narrator steps 20 and 21 read them); no picture changes.
 
 | Id | Text | Shown | Does |
 |---|---|---|---|
-| `GitSetupWingetButton` | `Install with winget…` | W Missing, `WingetPath` set (and ChosenMissing without a candidate where the owner's answer, 13.3, allows it) | confirm, then 1.3's start |
+| `GitSetupWingetButton` | Missing, ChosenMissing: `Install with winget…`; TooOld: `Update with winget…` | W with `WingetPath` set: Missing; ChosenMissing without a candidate; TooOld when the git was found on the machine, not chosen (a chosen git changes by `Use the Git on the PATH` or Choose). Never NotWorking (D453) | confirm, then 1.3's start |
 | `GitSetupDownloadButton` | `Download Git for Windows` | W Missing, TooOld, NotWorking without a fault, ChosenMissing without a candidate | `https://git-scm.com/install/windows` |
 | `GitSetupCltButton` | `Install the Command Line Tools` | M Missing with the tools missing; M NotWorking with `xcrun: error` or `requesting installation of command line developer tools` | 1.3's start, no confirm |
 | `GitSetupShowFileButton` | `Show the file` | a config fault | `RevealAsync(file)` |
@@ -1936,11 +1935,17 @@ Linux commands by `ID`, then each `ID_LIKE` token: `debian`, `ubuntu`: `sudo apt
 `fedora`, `rhel`, `centos`: `sudo dnf install git`; `arch`: `sudo pacman -S git`; `suse`, `opensuse`,
 `opensuse-*`: `sudo zypper install git`; else unknown.
 
-**winget** (rulings 6, 44): the confirm is `ConfirmationRequest("Install Git with winget?", "VisualCommit
+**winget** (rulings 6, 44; D453): the confirm is `ConfirmationRequest("Install Git with winget?", "VisualCommit
 opens a terminal window that runs winget install --id Git.Git -e --source winget", "winget downloads Git
 for Windows from its community repository, which the Git for Windows project does not maintain, and runs
 the installer; Windows may ask for permission. When it has finished, close the window and press Check
-again.", "Install", IsDestructive: false)`; Install starts 1.3's command (D449),
+again.", "Install", IsDestructive: false)`. For a too-old git the title is `Update Git with winget?`,
+the button `Update` and the last text `winget downloads the newest Git for Windows from its community
+repository, which the Git for Windows project does not maintain, and runs the installer, which updates
+the one installed; Windows may ask for permission. When it has finished, close the window and press
+Check again.`; the command is the same, since winget's install upgrades a package that is installed
+(unverified on a Git for Windows that its own installer put there: the laptop has the newest; the
+download stays beside it). Install, or Update, starts 1.3's command (D449),
 `new LaunchCommand("cmd.exe", []) { CommandLine = "/S /K \"\"" + wingetPath + "\" install --id Git.Git -e --source winget\"", WorkingDirectory = Path.GetDirectoryName(wingetPath), InNewTerminal = true }`
 with `wingetPath` the guidance's `WingetPath`, not waited for, logged Info `Started in a terminal: {the
 command's DisplayText}`. winget runs from the path the guidance found, never from its bare name: given
@@ -2037,7 +2042,9 @@ Fail first: the lookup, the stand-in, the macOS rule, `ConfigFault`, the reopeni
   fixed-detection constructor's `ReadGuidance` has no winget and no distribution),
   `CheckGitAgainTests` (the order, reopening, errors cleared, tools asked again, HelperMissing keeps
   git), `GitSetupTextsTests` (state × platform, `{min}`, the commands; L TooOld shows no command,
-  whatever `ID` or `ID_LIKE`), `GitSetupViewModelTests` (Install hands the launcher one `Start` whose
+  whatever `ID` or `ID_LIKE`), `GitSetupViewModelTests` (the winget button by state, D453: Missing and a too-old git found on the
+  machine with `WingetPath` set, not a too-old chosen git, never NotWorking, none without `WingetPath`;
+  TooOld's button and confirm read Update; Install hands the launcher one `Start` whose
   command line holds the seam's `WingetPath`, quoted as 5.3 has it, and whose `WorkingDirectory` is that
   path's folder; ChosenMissing with a candidate and without one), `GitProgramViewModelTests`,
   `AccountsNetrcNoteTests`; added to `FileLauncherTests`: `ResolveStart` (`cmd.exe` to the given System
@@ -2063,7 +2070,7 @@ Dark, 1100×700, the fake probe and launcher unless named. 14 checks; RW the rea
 | F2 Offers (RW: confirm, Cancel) | Install…, Cancel; Install; Download | `f2a-winget-confirm`; no start after Cancel; one `Start`, 1.3's, with the seam's `WingetPath` and its folder, `InNewTerminal`; one `OpenUrl` |
 | F3 Chosen gone | ChosenMissing with a candidate; Use the Git it found | `f3a-chosen-gone`; then the key gone, screen gone |
 | F4 Found again (RW: native dialog) | Missing, then Real; Check again | `Checking…`; the tab's graph; status, tooltip; tools asked; `f4a-found-again` |
-| F5 Too old (RW: stand-in) | 2.29.0 | `{v}`, `{min}`, path, Download, no winget; `f5a-too-old` |
+| F5 Too old (RW: stand-in) | W with winget, 2.29.0; Update…, Cancel | `{v}`, `{min}`, path, Download, `Update with winget…` (D453); `f5a-too-old`; the confirm `Update Git with winget?`, `f5b-winget-update-confirm`; no start after Cancel |
 | F6 Config fault (RW: stand-in) | Show the file | git's line, `line 1 of C:/Users/demo/.gitconfig`; `Reveal`; `f6a-config-fault`. F6b (RW): real git, `[user` in the session's global file: `fatal: bad config line 1 in file`, no picture |
 | F7 Not started | | `could not be started: {message}`; `f7a-not-started` |
 | F8 Choose | too old; then `RealAt(D:\Tools\PortableGit\cmd\git.exe)` | refusal, settings.json untouched, `f8a-choose-too-old`; key written, screen gone |
@@ -2110,7 +2117,7 @@ winget, `xcode-select`, a terminal or a browser; the lead's by-hand `cmd.exe /S 
   where Windows Terminal is the default console: the lead's by-hand `cmd.exe /S /K ""<the path
   found>" --version"` before the merge, the owner told. Settled (the lead, 2026-11-19): the laptop's
   winget is `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`, an app execution alias that `File.Exists`
-  finds on the `PATH`; the real-window F1 and F2 need winget on the gate's machine and fail without it
+  finds on the `PATH`; the real-window F1, F2 and F5 need winget on the gate's machine and fail without it
   (D449). A Mac (`xcode-select -p`, the shim, `--install`): 8b's checklist. git-scm.com's pages and
   commands: read by the input only.
 - The note reads git's home only: curl's `NETRC`, or Windows without `HOME`, can escape it; the
@@ -3882,7 +3889,7 @@ the taskbar's icon. Its decisions: D442, one launch per session, each holding ex
 and starting theme, so that the 3 % (D33) measures rendering and not a tab strip; D443 as D448 amends
 it, the notice compared with its folder line masked, once its height equals its twin's; D444, nothing
 pressed that leaves the app; D445 as D450 amends it, the graph row's LiveRegionChanged; D446, F4's git;
-D449, F1 and F2 need winget on the gate's machine.
+D449 and D453, F1, F2 and F5 need winget on the gate's machine.
 
 Leaves: the scripted checks and their expectations (§2, §4 to §9); `Phase8aPerformance` (§10), which
 skips in the gate's pass (ruling 65); part G (no real window opens a browser); the checks by hand (0.5);
@@ -4016,8 +4023,8 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
 7. **`Check_F_missing_offers_keys_and_choose`** (F1's session; `StandInEnvironment("none")`). Before the
    app starts, the test looks for winget as the app does, `ProgramSearch.FindOnPath("winget.exe", PATH,
    ';', File.Exists)` over its own `PATH`, which `RealApp.Launch` passes on unchanged (as D446 finds
-   git in the test process); none: the method fails with `winget.exe is not on this machine's PATH: F1
-   and F2 need it (install App Installer from the Microsoft Store).` (D449; never "Not run"); found:
+   git in the test process); none: the method fails with `winget.exe is not on this machine's PATH: F1,
+   F2 and F5 need it (install App Installer from the Microsoft Store).` (D449; never "Not run"); found:
    run.txt names the path. F1: the screen's title, body and buttons as `Phase8aExpectations.F`,
    `GitSetupWingetButton` among them; `GitStatus` `Git not found`; `GitSetupButton` `Set up Git…`;
    `f1a-missing-windows`. F2: a real click on `GitSetupWingetButton`; the confirm `Install Git with
@@ -4034,7 +4041,9 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
    is `git`; `f4a-found-again`.
 8. **`Check_F5_too_old_stand_in`** (F5's session; `StandInEnvironment(StandInPath, version: "git
    version 2.29.0")`). The title `Git 2.29.0 is too old`, `{min}` from `GitVersion.Minimum`,
-   `GitSetupPath` the stand-in's path, Download shown, no winget button; `GitStatus`'s help text
+   `GitSetupPath` the stand-in's path, Download shown, and `GitSetupWingetButton` reading `Update with
+   winget…` (D453: the stand-in's git counts as found on the machine; the method fails as launch 7's
+   does when the machine has no winget), not clicked; `GitStatus`'s help text
    `{path}, from VISUALCOMMIT_GIT_STAND_IN (a test switch)`; the log's stand-in Warning once (1.14);
    `f5a-too-old` (the path differs from the twin's, ruling 47). run.txt names the stand-in's path and whether
    it holds a space.
@@ -4223,8 +4232,8 @@ reader tested.
 nine phase 6 pictures named; written to `settings.json` only when set. 41. A chosen git that is gone
 is a state of its own, with no silent fallback. 42. A change while git works applies at the next
 start; "Check again" at once. 43. The helper-missing state is proven by scripted checks only.
-44. git-scm.com's winget line, in a terminal that stays open, only when git is missing (narrows D405;
-the owner's answer, 13.3); too old: the download and "Check again". 45. On macOS
+44. git-scm.com's winget line, in a terminal that stays open, only when git is missing; too old: the
+download and "Check again" (amended by D453, the owner's answer: also for a too-old git). 45. On macOS
 `xcode-select --install` without the app's confirm.
 46. A Windows git that is not Git for Windows is used, with a Warning. 47. A real-window picture may
 show the stand-in's path; the difference stays under 3 %. 48. The screen's platform and winget come
@@ -4279,7 +4288,7 @@ activity log's splitter goes to a fixer (D427).
 
 | When | What |
 |---|---|
-| Now, before wave 1 | Look at the 75 rulings (13.1) and D416 to D452: above all those that amend a ruling, D420 (ruling 73's common-dir item), D424 (ruling 7's log line), D425 (ruling 49's F4) and D434 (ruling 58), and D447 to D452, what the design's review changed (13.5). Answer, before wave 2, on winget for a git that is too old or not working (13.4 item 22): the owner's D405 offers the winget install when git is missing, too old or not working, and ruling 44 and D423 narrowed it to a missing git. Offer it (a) for a missing and a too-old git, the lead's recommendation, since winget's install upgrades an installed package and cannot repair one that does not work; (b) for a missing git only, as ruling 44; (c) in all three states, as D405 reads. §5's builder starts only after the answer, which becomes a decision of its own. The share of the week before each stage after the design's review (D241, D415). |
+| Now, before wave 1 | Look at the 75 rulings (13.1) and D416 to D453: above all those that amend a ruling, D420 (ruling 73's common-dir item), D424 (ruling 7's log line), D425 (ruling 49's F4) and D434 (ruling 58), and D447 to D452, what the design's review changed (13.5). The question on winget for a git that is too old or not working (13.4 item 22) was answered on 2026-11-20: a missing and a too-old git, D453. The share of the week before each stage after the design's review (D241, D415). |
 | Beside the build | The icon (D407, D447): the lead's candidates, one to three rounds, each committed in `docs/brand/icon/round-<n>/`: each candidate an SVG of its own, the contact sheet `candidates.html` with a ladder from 16 to 256 pixels on a dark and a light desk, and a `README.md` with the date, what the owner chose and what the owner asked to change (7.8). Round 1 is committed (2026-11-19, `306f61f`), before the owner's first letter. Leave for a reverse image search for the look-alike board (D412 covers the name's search only). |
 | §6's merge | Told before two earlier real-window checks run alone on the laptop, phase 2's `Check_17` and phase 5's `Check_A4_real_keys` (6.8 item 5; about 2 minutes of the desktop). |
 | §9's spike and merge | Told before the spike (a minute of keys and clicks); at §9's merge, a short Narrator listen (9.3.9's steps 2 to 6 and 14, about 5 minutes; 13.4 item 13). |
@@ -4325,8 +4334,8 @@ question for the owner (13.5).
    `winget.exe` on its `PATH` (1.3). The lead, before §5's merge. **Settled** in part (the lead,
    2026-11-19, on the review): the laptop has it, `%LOCALAPPDATA%\Microsoft\WindowsApps\winget.exe`,
    an app execution alias (a reparse point) for which `File.Exists` is true, version v1.29.380, found
-   on the `PATH`. The real-window checks F1 and F2 need winget on the gate's machine and fail without
-   it, with `winget.exe is not on this machine's PATH: F1 and F2 need it (install App Installer from the Microsoft Store).`;
+   on the `PATH`. The real-window checks F1, F2 and F5 need winget on the gate's machine and fail without
+   it, with `winget.exe is not on this machine's PATH: F1, F2 and F5 need it (install App Installer from the Microsoft Store).`;
    there is no "Not run" (D449, 12.3.4 launch 7). Still open: whether
    `cmd.exe /S /K ""<the path found>" --version"`, started with `UseShellExecute`, shows a window that
    stays open where Windows Terminal is the default console, which also shows `cmd.exe` starting the
@@ -4380,7 +4389,7 @@ question for the owner (13.5).
     install upgrades an installed package and cannot repair one that does not work. (b) For a missing
     git only, as ruling 44. (c) In all three states, as D405 reads. §5's builder starts only after the
     answer, which becomes a decision of its own; until then §5 stands as ruling 44 has it (13.3). The
-    owner, before wave 2.
+    owner, before wave 2. **Answered** (the owner, 2026-11-20): (a), a missing and a too-old git; D453.
 
 ### 13.5 What the design's review changed
 
@@ -4388,8 +4397,8 @@ The review of 2026-11-19 read the draft at `85169db` through four lenses (git's 
 the gate, the contracts, the owner's scope) with five readers, and a verifier checked each blocker and
 major. It made 58 findings: 17 blockers and majors, all confirmed (two blockers, O1 and O3, and 13
 majors after verification; A1 and B5 judged minor), and 41 minors. Four pairs say the same thing: S1
-and O5, S2 and A2, T2 and B4, B1 within O1. The lead accepted every finding as ruled; O3 alone waits
-on the owner. The findings' full text, the verifiers' reasoning and the lead's rulings stay outside
+and O5, S2 and A2, T2 and B4, B1 within O1. The lead accepted every finding as ruled; O3 alone went
+to the owner (D453). The findings' full text, the verifiers' reasoning and the lead's rulings stay outside
 the repository, in `D:/Projects/Personal/phase8-work/design/review/`.
 
 The new decisions, with the findings behind them:
@@ -4402,7 +4411,7 @@ The new decisions, with the findings behind them:
 - **D449** (amends D423): S1 and O5, winget started by the full path the screen found, through
   `cmd.exe /S /K`, in winget's folder (1.3, 5.3, 5.4, 5.5, 12.3.4, 13.4 item 7); S5, a chosen git and
   the stand-in full paths (`.exe` on Windows), and a chosen `/usr/bin/git` behind macOS's gate (1.14,
-  5.3, 5.4); O4, no third-party package source named (5.3, 5.4, 5.5, 11.3.2); T7, F1 and F2 need
+  5.3, 5.4); O4, no third-party package source named (5.3, 5.4, 5.5, 11.3.2); T7, F1 and F2 (and, with D453, F5) need
   winget on the gate's machine (0.5, 12.3.4 launch 7, 13.4 item 7).
 - **D450** (amends D445): O12, the graph row's proof a `LiveRegionChanged` event, a Name change alone
   failing (9.3.1, 12.3.4 launch 13).
@@ -4430,6 +4439,6 @@ them (7.3); 0.4's list of files that pass between packages names the files WP0 w
 finishes; no Windows state shows a command to copy, so the winget line shows in the confirm and the
 guide alone (1.3).
 
-Waiting on the owner: O3, winget for a git that is too old or not working (§5's opening sentence,
-13.1's ruling 44, 13.3, 13.4 item 22). §5's builder starts after the answer, and until then the
-section stands as ruling 44 has it; the answer becomes a decision of its own.
+O3, winget for a git that is too old or not working, went to the owner, who answered on 2026-11-20:
+a missing and a too-old git, not one that does not work (**D453**; 0.2, 1.3, 5.3, 5.4, 5.5's F5,
+12.3.4 launch 8, 13.1's ruling 44, 13.3, 13.4 item 22).
