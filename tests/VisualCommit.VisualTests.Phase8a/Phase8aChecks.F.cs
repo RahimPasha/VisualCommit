@@ -5,6 +5,7 @@
 // Fifteen methods, fifteen starts, as the report's methods table has them; methods 1, 4, 5 and 6 are the
 // twins of the real window's launches 7 to 10. Every start but method 6's gives a fake probe; nothing is
 // started: the launcher is the harness's fake. The helpers are in Phase8aChecks.F.Helpers.cs.
+using System.Text.Json;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -157,8 +158,12 @@ public sealed partial class Phase8aChecksF : Phase8aChecks
         using var data = new TempDirectory("data");
         var exact = await repo.ExactStateAsync();
         var probe = new FakeGitSetupProbe(FakeGitSetupProbe.Windows(), FakeGitAnswer.Missing);
-        using var app = await StartFirstRunAsync(data, probe, [repo.Path], AppTheme.Light);
-        var settings = SettingsText(app);
+
+        // The theme written before the start, and the file read then: what the start was given.
+        var file = Path.Combine(data.Path, "settings.json");
+        new JsonSettingsStore(file).Update(current => current with { Theme = AppTheme.Light });
+        var settings = File.ReadAllText(file);
+        using var app = await StartFirstRunAsync(data, probe, [repo.Path]);
 
         // F1 step 1, light.
         await app.WaitForGitSetupAsync(guidance: F.MissingGuidanceWindows, choose: F.ChooseGitExe, winget: true);
@@ -215,9 +220,9 @@ public sealed partial class Phase8aChecksF : Phase8aChecks
         app.Click(app.GitSetupPart(F.UsePathId)!);
         await app.WaitForAsync(() => !app.ShowsGitSetupView() && !app.Session.Shell.CheckGitAgainCommand.IsRunning, "the screen to go");
         app.Settle();
-        Assert.Null(SavedGitExecutable(app));
-        Assert.Contains("\"theme\"", SettingsText(app), StringComparison.Ordinal);
-        Assert.Equal(before.Length - before.Split('\n').Count(line => line.Contains("gitExecutable", StringComparison.Ordinal)) * 0, before.Length);
+        var after = SettingsText(app)!;
+        Assert.DoesNotContain("\"gitExecutable\"", after, StringComparison.Ordinal);
+        Assert.Equal(PropertiesBut(before, "gitExecutable"), PropertiesBut(after, "gitExecutable"));
         Assert.Equal(Paths(F.Chosen, null), ChosenPaths(probe));
         Assert.True(app.Session.Shell.ActiveTab.ShowsWelcome);
         Assert.False(app.FindByAutomationId("WelcomeError").IsEffectivelyVisible);
@@ -299,8 +304,11 @@ public sealed partial class Phase8aChecksF : Phase8aChecks
         Assert.True(GitFileNames.SamePath(GitIsolation.SessionGlobalConfigFile(data.Path), file), $"Git named {file}, not the session's global file.");
         Assert.Equal(Format(F.ConfigFaultGuidanceFormat, 1, file), app.GitSetupText(F.GuidanceId));
         Assert.NotNull(app.GitSetupPart(F.ShowFileId));
-        Assert.Equal(app.Session.Shell.Git?.ExecutablePath, app.GitSetupText(F.PathId));
-        Assert.NotNull(app.GitSetupText(F.PathId));
+
+        // The git the machine's search found, by the harness's own search (TempRepo's), not the screen's.
+        var machineGit = VisualCommit.Git.GitLocator.FindExecutable(VisualCommit.Git.GitSearchContext.FromSystem());
+        Assert.NotNull(machineGit);
+        Assert.Equal(machineGit, app.GitSetupText(F.PathId));
         AssertGitStatus(app, F.GitNotWorking, app.Session.Shell.GitStatusToolTip, F.SetUpGit);
         Assert.Contains(app.LogLines(), line => line.Contains("[WRN]", StringComparison.Ordinal) && line.Contains(F.ConfigFaultPrefix + file, StringComparison.Ordinal));
     }
@@ -515,12 +523,14 @@ public sealed partial class Phase8aChecksF : Phase8aChecks
         Picture(app, F.F12aRowNextStart);
         Assert.Equal([title], app.Folders.FileTitles);
         AssertRow(app, F.Chosen, F.ChosenHereNote + F.NextStartSuffix, F.UseTheGitOnThePath, null);
-        Assert.Null(SavedGitExecutable(app));
+        Assert.Null(SettingsText(app));
         Assert.Equal(Paths(null, F.Chosen), ChosenPaths(probe));
 
-        // Step 4: Save writes the key; the git in use stays (ruling 42).
+        // Step 4: Save writes the key, the other keys as they were (the defaults: no file before it); the git in use stays (ruling 42).
         await SaveAndCloseAsync(app);
         Assert.Equal(F.Chosen, SavedGitExecutable(app));
+        var step4 = SettingsText(app)!;
+        Assert.Equal(DefaultPropertiesBut("gitExecutable"), PropertiesBut(step4, "gitExecutable"));
         Assert.Equal(2, probe.Lookups.Count);
         AssertGitStatus(app, Format(F.GitFormat, MachineVersion(app)), OnPath(F.WindowsGit), null);
 
@@ -537,7 +547,9 @@ public sealed partial class Phase8aChecksF : Phase8aChecks
         await SaveAndCloseAsync(app);
         Assert.Null(SavedGitExecutable(app));
         Assert.Equal(2, probe.Lookups.Count);
-        var saved = SettingsText(app);
+        var saved = SettingsText(app)!;
+        Assert.DoesNotContain("\"gitExecutable\"", saved, StringComparison.Ordinal);
+        Assert.Equal(PropertiesBut(step4, "gitExecutable"), PropertiesBut(saved, "gitExecutable"));
 
         // Step 8: reopened, a too-old file refused.
         await OpenGitSectionAsync(app);
@@ -572,7 +584,9 @@ public sealed partial class Phase8aChecksF : Phase8aChecks
 
         // Step 1: signed in; the account used for git.
         await app.SignInAsync(served.OctoToken, TestContext.Current.CancellationToken);
-        await app.WaitForAsync(() => File.Exists(app.Session.Paths.AccountsFile) && File.ReadAllText(app.Session.Paths.AccountsFile).Replace(" ", string.Empty, StringComparison.Ordinal).Contains("\"useForGit\":true", StringComparison.Ordinal), "accounts.json's record with useForGit on");
+        await app.WaitForAsync(() => AccountRecords(app) is [var only] && only.TryGetProperty("useForGit", out var used) && used.ValueKind == JsonValueKind.True, "accounts.json's one record with useForGit on");
+        var record = Assert.Single(AccountRecords(app)!);
+        Assert.Equal(("github", "octo", true), (record.GetProperty("provider").GetString(), record.GetProperty("login").GetString(), record.GetProperty("useForGit").GetBoolean()));
         Assert.Null(app.SettingsDialog);
         Assert.Equal(Format(F.GitFormat, F.NetrcVersion), app.Session.Shell.GitStatusText);
 

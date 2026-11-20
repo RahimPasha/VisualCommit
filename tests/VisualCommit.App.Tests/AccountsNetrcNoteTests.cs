@@ -1,3 +1,4 @@
+using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Settings;
 using VisualCommit.Core.Git;
@@ -103,6 +104,33 @@ public class AccountsNetrcNoteTests
         Assert.False(section.ShowsNetrcNote);
         Assert.Contains(log.Entries, entry => entry.Message == "Whether the home folder holds a netrc file could not be read." && entry.Exception is IOException);
     }
+
+    public static TheoryData<string> NetrcNames => [".netrc", "_netrc"];
+
+    [Theory]
+    [MemberData(nameof(NetrcNames))]
+    public void The_window_asks_for_either_file_in_gits_home_folder(string name)
+    {
+        var file = Path.Combine(DemoHome, name);
+
+        Assert.True(MainWindowViewModel.HomeHasNetrc(Home(DemoHome), _ => false, path => path == file, OperatingSystem.IsWindows()));
+    }
+
+    [Fact]
+    public void Another_file_or_no_home_folder_is_no_netrc_file()
+    {
+        Assert.False(MainWindowViewModel.HomeHasNetrc(Home(DemoHome), _ => false, path => path == Path.Combine(DemoHome, "netrc"), OperatingSystem.IsWindows()));
+
+        var asked = 0;
+        Assert.False(MainWindowViewModel.HomeHasNetrc(_ => null, _ => false, _ => ++asked > 0, OperatingSystem.IsWindows()));
+        Assert.Equal(0, asked);
+    }
+
+    /// <summary>A made-up home folder on the machine the tests run on.</summary>
+    private static string DemoHome => OperatingSystem.IsWindows() ? @"C:\Users\demo" : "/home/demo";
+
+    /// <summary>Git's variables with only <c>HOME</c> set, to <paramref name="home"/>.</summary>
+    private static Func<string, string?> Home(string home) => name => name == "HOME" ? home : null;
 
     private static HostingSessionStub Stub() => new(new Uri("https://github.example.com/"), "octo", "github_pat_FAKE-octo-1");
 

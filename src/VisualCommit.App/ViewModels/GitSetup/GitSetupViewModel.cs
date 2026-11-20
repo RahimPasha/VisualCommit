@@ -281,7 +281,7 @@ public sealed partial class GitSetupViewModel : ObservableObject
 
         ErrorText = null;
         _services.Settings.Update(settings => settings with { GitExecutable = file });
-        await _services.CheckAgain.ExecuteAsync(null);
+        await CheckAgainAfterRunningAsync(_services.CheckAgain);
     }
 
     /// <summary>"Use the Git it found" and "Use the Git on the PATH": the setting removed, then a search.</summary>
@@ -289,7 +289,23 @@ public sealed partial class GitSetupViewModel : ObservableObject
     private async Task UsePathAsync()
     {
         _services.Settings.Update(settings => settings with { GitExecutable = null });
-        await _services.CheckAgain.ExecuteAsync(null);
+        await CheckAgainAfterRunningAsync(_services.CheckAgain);
+    }
+
+    /// <summary>
+    /// "Check again" for a setting just changed, once a search that runs now has ended: that search
+    /// went by the setting it read when it started, and a call while it runs would join it.
+    /// </summary>
+    public static async Task CheckAgainAfterRunningAsync(IAsyncRelayCommand checkAgain)
+    {
+        ArgumentNullException.ThrowIfNull(checkAgain);
+        while (checkAgain.ExecutionTask is { IsCompleted: false } running)
+        {
+            // Its outcome is its own: it reports and logs it.
+            await Task.WhenAny(running);
+        }
+
+        await checkAgain.ExecuteAsync(null);
     }
 
     /// <summary>"Continue without it": the screen hidden for the session while the helper is missing.</summary>

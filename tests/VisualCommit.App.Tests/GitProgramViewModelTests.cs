@@ -44,6 +44,36 @@ public class GitProgramViewModelTests
     }
 
     [Fact]
+    public void Before_a_search_has_ended_or_after_one_failed_the_row_says_none_found()
+    {
+        // The window's Git is null then: no search has ended, or the last one threw.
+        var row = Row(null, null);
+
+        Assert.Equal("None found", row.PathText);
+        Assert.Equal("No Git was found on the PATH or in the usual install folders.", row.NoteText);
+        Assert.Equal("Chosen here. VisualCommit looks for Git again when you save.", Row(Chosen, null).NoteText);
+    }
+
+    [Fact]
+    public void A_gone_choice_dropped_says_what_save_does_next()
+    {
+        // No other git was found: the note for no git in use, then when the change applies.
+        var gone = new GitDetection(GitAvailability.NotFound, null, null, null) { Source = GitSource.Setting, ChosenMissing = Chosen };
+        var none = Row(Chosen, gone);
+        none.UsePathCommand.Execute(null);
+
+        Assert.Equal("None found", none.PathText);
+        Assert.Equal("No Git was found on the PATH or in the usual install folders. VisualCommit looks for Git again when you save.", none.NoteText);
+
+        // Another git was found but is not in use (no fallback): only what Save does next.
+        var found = Row(Chosen, gone with { PathCandidate = WindowsGit });
+        found.UsePathCommand.Execute(null);
+
+        Assert.Equal("None found", found.PathText);
+        Assert.Equal("VisualCommit looks for Git again when you save.", found.NoteText);
+    }
+
+    [Fact]
     public async Task Browse_takes_a_git_that_works_as_the_choice_used_from_the_next_start_while_git_works()
     {
         var folders = new FakeFolderPicker().AnswerFile(Chosen);

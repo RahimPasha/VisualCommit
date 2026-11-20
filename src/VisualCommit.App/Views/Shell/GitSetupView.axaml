@@ -172,20 +172,22 @@
       <WrapPanel Name="GitSetupLinks" HorizontalAlignment="Center" ItemsAlignment="Center" ItemSpacing="8" LineSpacing="4">
         <Button Name="GitSetupMoreLink"
                 Theme="{StaticResource VcFlatButton}"
+                Classes="gitSetupLink"
                 Padding="6,2"
                 Command="{Binding MoreLinkCommand}"
                 IsVisible="{Binding ShowsMoreLink}"
                 AutomationProperties.AutomationId="GitSetupMoreLink"
                 AutomationProperties.Name="{x:Static gs:GitSetupTexts.OtherWaysToInstallGit}">
-          <TextBlock Text="{x:Static gs:GitSetupTexts.OtherWaysToInstallGit}" Foreground="{DynamicResource VcAccentBrush}" />
+          <TextBlock Text="{x:Static gs:GitSetupTexts.OtherWaysToInstallGit}" />
         </Button>
         <Button Name="GitSetupGuideLink"
                 Theme="{StaticResource VcFlatButton}"
+                Classes="gitSetupLink"
                 Padding="6,2"
                 Command="{Binding GuideLinkCommand}"
                 AutomationProperties.AutomationId="GitSetupGuideLink"
                 AutomationProperties.Name="{Binding GuideLinkText}">
-          <TextBlock Text="{Binding GuideLinkText}" Foreground="{DynamicResource VcAccentBrush}" />
+          <TextBlock Text="{Binding GuideLinkText}" />
         </Button>
       </WrapPanel>
     </StackPanel>
@@ -195,6 +197,14 @@
     <!-- Choose's "Checking…" in the error's place is secondary, not an error. -->
     <Style Selector="TextBlock#GitSetupError.secondary">
       <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
+    </Style>
+    <!-- A link's text is the accent; on the hover background, the accent made for it, since the
+         accent itself is never text on a hover. -->
+    <Style Selector="Button.gitSetupLink TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+    </Style>
+    <Style Selector="Button.gitSetupLink:pointerover TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentOnRowBrush}" />
     </Style>
   </UserControl.Styles>
 </UserControl>

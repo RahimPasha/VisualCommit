@@ -512,7 +512,11 @@ public class SettingsDialogViewTests
             Assert.Equal(((ISolidColorBrush)warning!).Color, ((ISolidColorBrush)note.Foreground!).Color);
             Assert.StartsWith("Your home folder has a .netrc or _netrc file. With Git 2.43.0,", note.Text, StringComparison.Ordinal);
             Assert.Equal("Dismiss", dismiss.Content);
-            Assert.True(note.TranslatePoint(default, window)!.Value.Y > block.TranslatePoint(new Point(0, block.Bounds.Height), window)!.Value.Y - 0.5);
+
+            // Under the blocks: below the bottom of the panel that holds all three, not only GitHub's.
+            var blocks = (StackPanel)block.GetVisualParent()!;
+            Assert.Contains(Find<ContentControl>(window, "AccountsAzureDevOps"), blocks.Children);
+            Assert.True(note.TranslatePoint(default, window)!.Value.Y > blocks.TranslatePoint(new Point(0, blocks.Bounds.Height), window)!.Value.Y - 0.5);
 
             dismiss.Command!.Execute(null);
             Avalonia.Threading.Dispatcher.UIThread.RunJobs();

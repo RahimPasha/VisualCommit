@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Commands;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.GitSetup;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
@@ -95,7 +96,7 @@ public partial class MainWindowViewModel
             // not work, the change is looked for at once.
             if (_settings.Current.GitExecutable != chosenBefore && Git is not { Availability: GitAvailability.Available })
             {
-                await CheckGitAgainCommand.ExecuteAsync(null);
+                await GitSetupViewModel.CheckAgainAfterRunningAsync(CheckGitAgainCommand);
             }
         }
         catch (Exception ex)
@@ -109,12 +110,26 @@ public partial class MainWindowViewModel
 
     /// <summary>
     /// Whether the home folder git is given (<see cref="GitConfigLocations.Home"/> over git's
-    /// environment) holds a <c>.netrc</c> or <c>_netrc</c> file: only whether it exists, never what
-    /// it holds. Reads the disk, so the settings screen calls it off the UI thread.
+    /// environment) holds a <c>.netrc</c> or <c>_netrc</c> file. Reads the disk, so the settings
+    /// screen calls it off the UI thread.
     /// </summary>
     private static bool HomeHasNetrc(IGitConfiguration gitSettings) =>
-        GitConfigLocations.Home(gitSettings.Variable, Directory.Exists, OperatingSystem.IsWindows()) is { } home
-        && (File.Exists(Path.Combine(home, ".netrc")) || File.Exists(Path.Combine(home, "_netrc")));
+        HomeHasNetrc(gitSettings.Variable, Directory.Exists, File.Exists, OperatingSystem.IsWindows());
+
+    /// <summary>
+    /// Whether the home folder that git's <paramref name="variable"/>s give, on Windows or not
+    /// (<paramref name="windows"/>), holds a <c>.netrc</c> or <c>_netrc</c> file, as
+    /// <paramref name="fileExists"/> sees it: only whether it exists, never what it holds. No home
+    /// folder: no file. Public for the tests, since the app has no <c>InternalsVisibleTo</c>.
+    /// </summary>
+    public static bool HomeHasNetrc(Func<string, string?> variable, Func<string, bool> directoryExists, Func<string, bool> fileExists, bool windows)
+    {
+        ArgumentNullException.ThrowIfNull(variable);
+        ArgumentNullException.ThrowIfNull(directoryExists);
+        ArgumentNullException.ThrowIfNull(fileExists);
+        return GitConfigLocations.Home(variable, directoryExists, windows) is { } home
+            && (fileExists(Path.Combine(home, ".netrc")) || fileExists(Path.Combine(home, "_netrc")));
+    }
 
     /// <summary>
     /// Starts the lookup of the merge tools git knows, once (8.10): when the first of

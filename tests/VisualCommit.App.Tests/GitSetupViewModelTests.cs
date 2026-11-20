@@ -310,6 +310,37 @@ public class GitSetupViewModelTests
     }
 
     [Fact]
+    public async Task Choose_and_use_the_git_on_the_path_while_a_search_runs_check_again_once_it_has_ended()
+    {
+        // A search that runs went by the setting it read when it started, and a call while it runs
+        // would join it: the changed setting gets a search of its own, after that one.
+        var chosen = Path.Combine(Path.GetTempPath(), "PortableGit", OperatingSystem.IsWindows() ? "git.exe" : "git");
+        var running = new TaskCompletionSource();
+        var startedAfterTheRunningOne = new List<bool>();
+        using var lab = new Lab(
+            probe: (_, _) => Task.FromResult(new GitDetection(GitAvailability.Available, chosen, new GitVersion(2, 47, 1), null) { Source = GitSource.Setting }),
+            checkAgain: () =>
+            {
+                startedAfterTheRunningOne.Add(running.Task.IsCompleted);
+                return startedAfterTheRunningOne.Count == 1 ? running.Task : Task.CompletedTask;
+            });
+        await lab.Screen.ShowAsync(Missing, null);
+
+        var checking = lab.Screen.CheckAgainCommand.ExecuteAsync(null);
+        lab.Folders.AnswerFile(chosen);
+        var choosing = lab.Screen.ChooseCommand.ExecuteAsync(null);
+        var usingPath = lab.Screen.UsePathCommand.ExecuteAsync(null);
+
+        Assert.Equal(1, lab.ChecksAgain);
+        Assert.False(choosing.IsCompleted);
+        Assert.False(usingPath.IsCompleted);
+        running.SetResult();
+        await Task.WhenAll(checking, choosing, usingPath);
+
+        Assert.Equal([false, true, true], startedAfterTheRunningOne);
+    }
+
+    [Fact]
     public async Task Continue_without_the_helper_hides_the_screen_for_the_session_and_details_brings_it_back()
     {
         using var lab = new Lab();

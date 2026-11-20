@@ -388,9 +388,13 @@ public static class GitSetupTexts
         };
     }
 
-    /// <summary>The settings row's note on where a git in use came from (<c>GitProgramNote</c>), before any suffix.</summary>
+    /// <summary>
+    /// The settings row's note on where a git in use came from (<c>GitProgramNote</c>), before any
+    /// suffix; null <paramref name="git"/> (no search has ended, or the last one failed) has none in use.
+    /// </summary>
     public static string SourceNote(GitDetection? git, bool windows) => git switch
     {
+        null => NoGitFoundNote,
         { Availability: GitAvailability.NotFound, ChosenMissing: { } chosen } => GitLocator.IsRunnablePath(chosen) ? ChosenGoneNote : ChosenNotRunnableNote,
         { ExecutablePath: null } => NoGitFoundNote,
         { Source: GitSource.Setting } => ChosenHereNote,

@@ -346,6 +346,7 @@ public class GitSetupTextsTests
         Assert.Equal("Chosen here.", GitSetupTexts.SourceNote(found with { Source = GitSource.Setting }, windows: true));
         Assert.Equal("From VISUALCOMMIT_GIT_STAND_IN, a test switch.", GitSetupTexts.SourceNote(found with { Source = GitSource.StandIn }, windows: true));
         Assert.Equal("No Git was found on the PATH or in the usual install folders.", GitSetupTexts.SourceNote(Missing, windows: true));
+        Assert.Equal("No Git was found on the PATH or in the usual install folders.", GitSetupTexts.SourceNote(null, windows: true));
         Assert.Equal("Chosen here. There is no file at this path.", GitSetupTexts.SourceNote(Missing with { ChosenMissing = Path.Combine(Path.GetTempPath(), OperatingSystem.IsWindows() ? "git.exe" : "git") }, windows: true));
         Assert.Equal("Chosen here. VisualCommit runs Git only from a full path to the program itself.", GitSetupTexts.SourceNote(Missing with { ChosenMissing = "git.exe" }, windows: true));
     }

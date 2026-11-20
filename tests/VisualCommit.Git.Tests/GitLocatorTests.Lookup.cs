@@ -107,11 +107,12 @@ public partial class GitLocatorTests
     [MemberData(nameof(RelativePaths))]
     public async Task A_stand_in_that_is_not_a_full_path_counts_as_none(string standIn)
     {
+        // A git on the PATH too: counted as none, the stand-in leaves the machine unsearched.
         var calls = new GitCallLog();
 
-        var found = await DetectAsync(new GitLookup(null, standIn), Machine(null, [], standIn), calls);
+        var found = await DetectAsync(new GitLookup(null, standIn), Machine(Rooted("tools"), [], standIn, Rooted("tools", GitName)), calls);
 
-        Assert.Equal(GitAvailability.NotFound, found.Availability);
+        Assert.Equal((GitAvailability.NotFound, (string?)null, GitSource.StandIn), (found.Availability, found.ExecutablePath, found.Source));
         Assert.Empty(calls.Snapshot());
     }
 
@@ -124,13 +125,15 @@ public partial class GitLocatorTests
         var log = new ListLog();
 
         var chosen = await DetectAsync(new GitLookup(script, null), Machine(null, [], script), calls, log);
-        var standIn = await DetectAsync(new GitLookup(null, script), Machine(null, [], script), calls, log);
+        var standIn = await DetectAsync(new GitLookup(null, script), Machine(Rooted("tools"), [], script, Rooted("tools", GitName)), calls, log);
 
         if (OperatingSystem.IsWindows())
         {
             Assert.Equal((GitAvailability.NotFound, script), (chosen.Availability, chosen.ChosenMissing));
             Assert.Contains((LogLevel.Warning, $"The Git chosen in Settings is not used: {script} is not an .exe file."), log.Entries);
-            Assert.Equal(GitAvailability.NotFound, standIn.Availability);
+
+            // A git on the PATH too: the stand-in counts as none and the machine is not searched.
+            Assert.Equal((GitAvailability.NotFound, (string?)null, GitSource.StandIn), (standIn.Availability, standIn.ExecutablePath, standIn.Source));
             Assert.Empty(calls.Snapshot());
             Assert.False(GitLocator.IsRunnablePath(script));
         }
@@ -230,6 +233,18 @@ public partial class GitLocatorTests
         Assert.Equal(new GitConfigFault("C:/Users/demo/.gitconfig", 1), broken.ConfigFault);
         Assert.Equal((GitAvailability.Broken, (int?)0, "this is no version line"), (noVersion.Availability, noVersion.ExitCode, noVersion.ErrorText));
         Assert.Null(noVersion.ConfigFault);
+    }
+
+    [Fact]
+    public async Task A_stand_in_found_as_a_working_git_answers_only_version_through_the_runner_it_gives()
+    {
+        // The runner the search gives runs the stand-in with the search's environment: anything but --version is refused.
+        var found = await DetectAsync(new GitLookup(null, StandIn), Machine(null, []), environment: StandInEnvironment(version: "git version 2.47.0.windows.1"));
+
+        Assert.Equal((GitAvailability.Available, StandIn, GitSource.StandIn), (found.Availability, found.ExecutablePath, found.Source));
+        var status = await found.Runner!.RunAsync(new GitCommand("status"), TestCancelled);
+        Assert.Equal((1, string.Empty), (status.ExitCode, status.StandardOutput));
+        Assert.Equal("fatal: VisualCommit's stand-in for git answers only --version", status.StandardError.Trim());
     }
 
     [Fact]

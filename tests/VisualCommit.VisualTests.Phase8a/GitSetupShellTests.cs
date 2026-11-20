@@ -2,6 +2,7 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.VisualTree;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
 using VisualCommit.Core.Git;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
@@ -54,6 +55,35 @@ public sealed class GitSetupShellTests : Phase8aChecks
         app.Settle();
         AssertNoClippedText(app);
         AssertInsideTheScreen(app);
+    }
+
+    /// <summary>
+    /// A hovered link's text takes the accent made for a hovered background, and the accent again
+    /// once the pointer has left (design 1.5: the accent is never text on a hover).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_hovered_links_text_takes_the_accent_made_for_the_hover_background()
+    {
+        using var data = new TempDirectory("phase8a gitsetup");
+        var (probe, helper, _, _, guidance) = Setup("missing on macos without the tools");
+        using var app = await StartEmptyAsync(data, gitProbe: probe, askPassHelper: helper);
+        await app.WaitForGitSetupAsync(guidance: guidance);
+
+        foreach (var id in new[] { F.MoreLinkId, F.GuideLinkId })
+        {
+            var link = (Button)app.GitSetupPart(id)!;
+            var text = link.GetVisualDescendants().OfType<TextBlock>().First(block => block.IsEffectivelyVisible);
+            Assert.Equal(F.AccentDark, ((ISolidColorBrush)text.Foreground!).Color);
+
+            app.MoveMouse(link);
+            app.Settle();
+            Assert.True(link.IsPointerOver, $"{id} is not hovered.");
+            Assert.Equal(F.AccentOnRowDark, ((ISolidColorBrush)text.Foreground!).Color);
+
+            app.MoveToNeutral();
+            app.Settle();
+            Assert.Equal(F.AccentDark, ((ISolidColorBrush)text.Foreground!).Color);
+        }
     }
 
     /// <summary>Every part of the screen shown lies inside its width: nothing is pushed out of the graph area, where it would be cut off.</summary>

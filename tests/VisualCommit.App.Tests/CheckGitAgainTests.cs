@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Avalonia.Headless.XUnit;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
@@ -44,8 +45,17 @@ public class CheckGitAgainTests
         Assert.Equal("Git not found", lab.Window.GitStatusText);
         await DashboardTestSupport.WaitUntilAsync(() => lab.Order.Contains("tools"), "the start's merge-tool lookup");
 
+        // The reopening held: the merge tools are not asked again until it has ended.
         lab.GitFound = true;
-        await lab.Window.CheckGitAgainCommand.ExecuteAsync(null);
+        var reopening = new TaskCompletionSource();
+        lab.Provider.Gate = reopening;
+        var refused = lab.OpensOf(api.WorkingDirectory);
+        var checking = lab.Window.CheckGitAgainCommand.ExecuteAsync(null);
+        await DashboardTestSupport.WaitUntilAsync(() => lab.OpensOf(api.WorkingDirectory) > refused, "the failed tab's reopening to start");
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(["tools", "forget"], lab.Order);
+        reopening.SetResult();
+        await checking;
 
         Assert.Equal(2, lab.Searches);
         Assert.Same(Found, lab.Window.Git);
@@ -103,6 +113,30 @@ public class CheckGitAgainTests
         Assert.Equal(api.WorkingDirectory, lab.Window.Tabs[0].FailedPath);
         Assert.Equal(["tools"], lab.Order);
         Assert.True(lab.Window.Tabs[0].ShowsGitSetup);
+    }
+
+    [AvaloniaFact]
+    public async Task Check_again_that_finds_git_reads_the_active_dashboard_again_and_one_that_does_not_reads_nothing()
+    {
+        using var lab = new Lab(Missing, Missing, Found);
+        var web = lab.Provider.Add("web");
+        lab.Workspaces.Update(_ => new WorkspaceList { Workspaces = [new Workspace("web", "Web", [new WorkspaceRepository(web.WorkingDirectory)])] });
+        await lab.StartWithAsync([new TabState(null, "web")]);
+        Assert.True(lab.Window.ActiveTab.IsDashboard);
+        await DashboardTestSupport.WaitUntilAsync(() => lab.OpensOf(web.WorkingDirectory) > 0, "the dashboard's first read");
+        await DashboardTestSupport.SettleAsync();
+        var read = lab.OpensOf(web.WorkingDirectory);
+
+        await lab.Window.CheckGitAgainCommand.ExecuteAsync(null);
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(read, lab.OpensOf(web.WorkingDirectory));
+
+        lab.GitFound = true;
+        await lab.Window.CheckGitAgainCommand.ExecuteAsync(null);
+        await DashboardTestSupport.WaitUntilAsync(() => lab.OpensOf(web.WorkingDirectory) > read, "the dashboard's read after git was found");
+        await DashboardTestSupport.SettleAsync();
+        Assert.Equal(read + 1, lab.OpensOf(web.WorkingDirectory));
+        Assert.Same(Found, lab.Window.Git);
     }
 
     [AvaloniaFact]
@@ -167,10 +201,11 @@ public class CheckGitAgainTests
         Assert.Single(lab.Window.Tabs);
     }
 
-    /// <summary>The window over fakes: a search that answers from a queue, a provider that refuses while git is missing, a broker whose helper a test hides, the tools and git's settings recording their order.</summary>
+    /// <summary>The window over fakes: a search that answers from a queue, a provider that refuses while git is missing and records every open, a broker whose helper a test hides, the tools and git's settings recording their order.</summary>
     private sealed class Lab : IDisposable
     {
         private readonly Queue<GitDetection> _answers;
+        private readonly ConcurrentQueue<string> _opens = new();
         private int _searches;
 
         public Lab(params GitDetection[] answers)
@@ -187,7 +222,7 @@ public class CheckGitAgainTests
                 },
                 ToolCatalogues.Fixed.PathExtensions);
             Services = new TabServices(
-                new GatedProvider(Provider, () => GitFound),
+                new GatedProvider(Provider, () => GitFound, _opens.Enqueue),
                 new FakeFolderPicker(),
                 Settings,
                 Session,
@@ -196,10 +231,12 @@ public class CheckGitAgainTests
                 prompts: Prompts,
                 gitSettings: new ForgettingConfiguration(Order),
                 tools: tools,
-                workspaces: new InMemoryWorkspaceStore());
+                workspaces: Workspaces);
         }
 
         public FakeProvider Provider { get; }
+
+        public InMemoryWorkspaceStore Workspaces { get; } = new();
 
         public DashboardTestSupport.MemorySession Session { get; }
 
@@ -223,12 +260,18 @@ public class CheckGitAgainTests
         public MainWindowViewModel Window { get; private set; } = null!;
 
         /// <summary>Writes the session's tabs (a folder, or null for an empty tab), makes the window and runs its start.</summary>
-        public async Task StartAsync(params string?[] tabs)
+        public Task StartAsync(params string?[] tabs) => StartWithAsync([.. tabs.Select(path => new TabState(path))]);
+
+        /// <summary>Writes the session's tabs, the first active, makes the window and runs its start.</summary>
+        public async Task StartWithAsync(IReadOnlyList<TabState> tabs)
         {
-            Session.Update(state => state with { Tabs = [.. tabs.Select(path => new TabState(path))], ActiveTab = 0 });
+            Session.Update(state => state with { Tabs = [.. tabs], ActiveTab = 0 });
             Window = new MainWindowViewModel(Settings, new MainWindowViewModelTests.FakeThemes(), SearchAsync, Log, Services, Session);
             await Window.InitializeAsync(TestContext.Current.CancellationToken);
         }
+
+        /// <summary>How many opens the provider was asked for at <paramref name="path"/>, refused ones among them.</summary>
+        public int OpensOf(string path) => _opens.Count(open => string.Equals(open, path, StringComparison.OrdinalIgnoreCase));
 
         public void Dispose()
         {
@@ -249,11 +292,14 @@ public class CheckGitAgainTests
         }
     }
 
-    /// <summary>Opens through the fake provider while git is found; refuses as the app's provider does while it is missing.</summary>
-    private sealed class GatedProvider(FakeProvider inner, Func<bool> gitFound) : IRepositoryProvider
+    /// <summary>Opens through the fake provider while git is found; refuses as the app's provider does while it is missing. Tells <paramref name="opening"/> of every open asked for.</summary>
+    private sealed class GatedProvider(FakeProvider inner, Func<bool> gitFound, Action<string> opening) : IRepositoryProvider
     {
-        public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default) =>
-            gitFound() ? inner.OpenAsync(path, cancellationToken) : Task.FromException<IGitRepository>(new GitUnavailableException(GitAccess.GitNotFound));
+        public Task<IGitRepository> OpenAsync(string path, CancellationToken cancellationToken = default)
+        {
+            opening(path);
+            return gitFound() ? inner.OpenAsync(path, cancellationToken) : Task.FromException<IGitRepository>(new GitUnavailableException(GitAccess.GitNotFound));
+        }
 
         public Task<IGitRepository> InitAsync(string path, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 

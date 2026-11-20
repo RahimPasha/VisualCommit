@@ -268,6 +268,9 @@ public static partial class Phase8aExpectations
 
         public static readonly Color AccentLight = Color.Parse("#4353D8");
 
+        /// <summary><c>VcAccentOnRowBrush</c>, dark: a hovered link's text, on the hover background (design 1.5; no picture hovers one).</summary>
+        public static readonly Color AccentOnRowDark = Color.Parse("#8B9AFF");
+
         /// <summary><c>VcBorderBrush</c>: "Git said:"'s border.</summary>
         public static readonly Color BorderDark = Color.Parse("#323845");
 

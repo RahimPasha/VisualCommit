@@ -24,23 +24,18 @@ public sealed partial class Phase8aChecksF
     /// <summary>
     /// Starts the app on <paramref name="data"/> with <paramref name="tabs"/> restored (none: one
     /// empty tab, no session written), git looked for by <paramref name="probe"/> (the machine's
-    /// search when null), the theme written before the start as the support's starts write it, and
-    /// waits for the start-up work to end. The pointer rests at the neutral point.
+    /// search when null), and waits for the start-up work to end. It writes no settings: a check
+    /// that starts on other settings than the defaults writes them first. The pointer rests at the
+    /// neutral point.
     /// </summary>
     private static async Task<ShellDriver> StartFirstRunAsync(
         TempDirectory data,
         IGitSetupProbe? probe,
         IReadOnlyList<string?>? tabs = null,
-        AppTheme theme = AppTheme.Dark,
         ToolCatalogues? tools = null,
         string? askPassHelper = null,
         HostingOptions? hosting = null)
     {
-        if (theme != AppTheme.Dark)
-        {
-            new JsonSettingsStore(Path.Combine(data.Path, "settings.json")).Update(settings => settings with { Theme = theme });
-        }
-
         var app = tabs is null
             ? ShellDriver.Start(data.Path, tools: tools, hosting: hosting, gitProbe: probe, askPassHelper: askPassHelper)
             : ShellDriver.StartWithTabs(data.Path, tabs, tools: tools, hosting: hosting, gitProbe: probe, askPassHelper: askPassHelper);
@@ -204,6 +199,33 @@ public sealed partial class Phase8aChecksF
     {
         using var document = JsonDocument.Parse(json);
         return [.. document.RootElement.EnumerateObject().Where(property => property.Name != left).Select(property => property.Name + "=" + property.Value.GetRawText())];
+    }
+
+    /// <summary>
+    /// The default settings' properties but <paramref name="left"/>, as the app's own store writes
+    /// them: a file written in a folder of its own (with a git set, since the store writes only a
+    /// change), read back.
+    /// </summary>
+    private static List<string> DefaultPropertiesBut(string left)
+    {
+        using var scratch = new TempDirectory("defaults");
+        var file = Path.Combine(scratch.Path, "settings.json");
+        new JsonSettingsStore(file).Update(settings => settings with { GitExecutable = "-" });
+        return PropertiesBut(File.ReadAllText(file), left);
+    }
+
+    /// <summary>accounts.json's records, or null while there is no file or it cannot be read yet (F14 step 1).</summary>
+    private static JsonElement[]? AccountRecords(ShellDriver app)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(File.ReadAllText(app.Session.Paths.AccountsFile));
+            return document.RootElement.TryGetProperty("accounts", out var accounts) ? [.. accounts.EnumerateArray().Select(record => record.Clone())] : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
     }
 
     /// <summary>The settings file's text, or null when there is none.</summary>

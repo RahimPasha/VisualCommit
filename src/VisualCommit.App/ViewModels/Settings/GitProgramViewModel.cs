@@ -80,10 +80,16 @@ public sealed partial class GitProgramViewModel : ObservableObject
                     ? GitSetupTexts.SourceNote(_inUse, windows)
                     : GitSetupTexts.ChosenHereNote;
             }
+            else if (_inUse is { ChosenMissing: not null, PathCandidate: not null })
+            {
+                // The gone choice dropped while the search found another git it did not use: no git
+                // is in use, yet one was found, so what Save does next is the only thing to say.
+                return GitSetupTexts.WhenYouSaveSuffix.Trim();
+            }
             else if (_inUse is { ChosenMissing: not null })
             {
-                // The gone choice dropped: what Save does next is the only thing to say.
-                return GitSetupTexts.WhenYouSaveSuffix.Trim();
+                // The gone choice dropped and no other git found: none is in use.
+                note = GitSetupTexts.NoGitFoundNote;
             }
             else
             {
