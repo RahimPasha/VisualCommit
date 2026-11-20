@@ -9,6 +9,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Logging;
 using VisualCommit.Hosting;
 using VisualCommit.Core.Settings;
 using VisualCommit.Testing;
@@ -259,4 +260,25 @@ public sealed partial class Phase8aChecksF
     /// <summary>How many log lines end with <paramref name="message"/>.</summary>
     private static int Logged(ShellDriver app, string message) =>
         app.LogLines().Count(line => line.EndsWith(": " + message, StringComparison.Ordinal) || line.EndsWith(" " + message, StringComparison.Ordinal));
+
+    /// <summary>
+    /// Method 6's probe: the machine's search for git (<c>MachineGitSetupProbe.Instance</c>'s) with
+    /// fixed guidance, the running platform without winget or a distribution, so that no PATH folder
+    /// is searched for <c>winget.exe</c> and no <c>os-release</c> is read.
+    /// </summary>
+    private sealed class MachineSearchProbe : IGitSetupProbe
+    {
+        public static MachineSearchProbe Instance { get; } = new();
+
+        public Task<GitDetection> DetectAsync(
+            GitLookup lookup,
+            IGitCallLog? callLog,
+            IAppLog log,
+            TimeProvider? recordClock,
+            IReadOnlyDictionary<string, string?>? environment,
+            CancellationToken cancellationToken) =>
+            VisualCommit.Git.MachineGitSetupProbe.Instance.DetectAsync(lookup, callLog, log, recordClock, environment, cancellationToken);
+
+        public GitGuidance ReadGuidance() => new(GitAccess.RunningPlatform, null, null);
+    }
 }

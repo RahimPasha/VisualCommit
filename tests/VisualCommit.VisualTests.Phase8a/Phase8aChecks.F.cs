@@ -3,8 +3,9 @@
 // winget offer, the download, "Choose git.exe…", "Check again", the Command Line Tools, the distribution's
 // package, the missing helper, the settings screen's Git program row and the Accounts section's netrc note.
 // Fifteen methods, fifteen starts, as the report's methods table has them; methods 1, 4, 5 and 6 are the
-// twins of the real window's launches 7 to 10. Every start but method 6's gives a fake probe; nothing is
-// started: the launcher is the harness's fake. The helpers are in Phase8aChecks.F.Helpers.cs.
+// twins of the real window's launches 7 to 10. Every start but method 6's gives a fake probe; method 6's
+// searches the machine for git, its guidance fixed. Nothing is started: the launcher is the harness's
+// fake. The helpers are in Phase8aChecks.F.Helpers.cs.
 using System.Text.Json;
 using Avalonia.Automation;
 using Avalonia.Controls;
@@ -287,13 +288,17 @@ public sealed partial class Phase8aChecksF : Phase8aChecks
         Assert.Single(probe.Lookups);
     }
 
-    /// <summary>Method 6, F6b (the twin of the real window's launch 10): real git with <c>[user</c> on line 1 of the session's global file. No picture.</summary>
+    /// <summary>
+    /// Method 6, F6b (the twin of the real window's launch 10): real git with <c>[user</c> on line 1
+    /// of the session's global file, found by the machine's search, the guidance fixed (no winget, no
+    /// distribution). No picture.
+    /// </summary>
     [AvaloniaFact]
     public async Task Check_F6b_real_git_broken_config()
     {
         using var data = new TempDirectory("data");
         ShellDriver.SeedGlobalGitConfig(data.Path, F.BrokenConfigLine + "\n");
-        using var app = await StartFirstRunAsync(data, probe: null);
+        using var app = await StartFirstRunAsync(data, MachineSearchProbe.Instance);
 
         // Step 1.
         await app.WaitForGitSetupAsync(guidancePrefix: F.ConfigFaultGuidancePrefix);
