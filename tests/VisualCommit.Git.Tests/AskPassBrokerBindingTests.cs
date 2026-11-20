@@ -145,35 +145,6 @@ public class AskPassBrokerBindingTests
         Assert.Empty(none.Environment);
     }
 
-    [Theory]
-    [InlineData(2, 30, 0, false)]
-    [InlineData(2, 31, 0, true)]
-    [InlineData(2, 56, 0, true)]
-    public void Git_older_than_2_31_gets_todays_variables_and_2_31_or_later_the_pairs(int major, int minor, int patch, bool pairs)
-    {
-        using var broker = Broker(version: () => new GitVersion(major, minor, patch));
-
-        if (pairs)
-        {
-            using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo]);
-            Assert.Equal("3", scope.Environment["GIT_CONFIG_COUNT"]);
-        }
-        else
-        {
-            AssertToday(broker, PromptMode.Ask);
-            AssertToday(broker, PromptMode.Deny);
-        }
-    }
-
-    [Fact]
-    public void A_version_not_yet_known_counts_as_2_31()
-    {
-        using var broker = Broker(version: () => null);
-        using var scope = broker.Begin("Fetch", "repo", PromptMode.Ask, "op-1", bindings: [Repo]);
-
-        Assert.Equal("3", scope.Environment["GIT_CONFIG_COUNT"]);
-    }
-
     [Fact]
     public void A_deny_scope_without_bindings_is_todays_and_is_not_registered()
     {
@@ -329,18 +300,6 @@ public class AskPassBrokerBindingTests
         Assert.Equal("1", environment["GIT_TRACE_REDACT"]);
     }
 
-    [Fact]
-    public void At_git_2_30_three_providers_bindings_leave_todays_environment()
-    {
-        using var broker = Broker(version: () => new GitVersion(2, 30, 0));
-        var id = Guid.NewGuid().ToString("N");
-        using var offered = broker.Begin("Fetch", "repo", PromptMode.Ask, id + "-a", bindings: [Azure, VisualStudio, GitLabProject, GitLabTwin]);
-        using var none = broker.Begin("Fetch", "repo", PromptMode.Ask, id + "-b");
-
-        var expected = new Dictionary<string, string?>(none.Environment) { [AskPassProtocol.OperationVariable] = offered.Id };
-        Assert.Equal(expected, offered.Environment);
-    }
-
     [Theory]
     [InlineData("dev.azure.com", "MyOrg", true)]
     [InlineData("dev.azure.com", "myorg", true)]
@@ -439,10 +398,9 @@ public class AskPassBrokerBindingTests
     private static AskPassBroker Broker(
         RecordingCredentialSource? source = null,
         IReadOnlyDictionary<string, string?>? session = null,
-        Func<GitVersion?>? version = null,
         IAppLog? log = null,
         Func<string, string?>? process = null) =>
-        new(new RecordingPromptHandler(), log, null, source ?? new RecordingCredentialSource("t"), session, version, process ?? (_ => null));
+        new(new RecordingPromptHandler(), log, null, source ?? new RecordingCredentialSource("t"), session, null, process ?? (_ => null));
 
     /// <summary>A scope that is offered bindings but may not use them has exactly the variables of one offered none.</summary>
     private static void AssertToday(AskPassBroker broker, PromptMode mode)

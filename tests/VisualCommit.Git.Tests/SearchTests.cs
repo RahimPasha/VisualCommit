@@ -319,20 +319,6 @@ public class SearchTests(SearchTests.Rows rows) : IClassFixture<SearchTests.Rows
     }
 
     [Fact]
-    public async Task A_git_without_diff_merges_searches_changes_with_first_parent_alone()
-    {
-        var runner = new NoDiffMergesRunner(NewRunner());
-        var repository = await GitRepository.OpenAsync(runner, rows.Repo.Path, TestCancelled);
-        repository.FirstSearchChunk = 4;
-
-        Assert.Equal([rows.SideMerge, rows.Side], await SearchAsync(repository, SearchMode.Changes, "side text", rows.All));
-
-        // Refused once; every later call leaves the option out.
-        Assert.Equal(1, runner.Refused);
-        Assert.Equal(2, runner.Searches);
-    }
-
-    [Fact]
     public async Task Cancelling_stops_the_search_and_starts_no_other_call()
     {
         var calls = new GitCallLog();
@@ -371,34 +357,5 @@ public class SearchTests(SearchTests.Rows rows) : IClassFixture<SearchTests.Rows
     private sealed class SynchronousProgress(Action<int> report) : IProgress<int>
     {
         public void Report(int value) => report(value);
-    }
-
-    /// <summary>A runner that answers the first call with <c>--diff-merges</c> as Git 2.30 does, and counts the searches.</summary>
-    private sealed class NoDiffMergesRunner(IGitRunner inner) : IGitRunner
-    {
-        private int _refused;
-        private int _searches;
-
-        public string ExecutablePath => inner.ExecutablePath;
-
-        public int Refused => _refused;
-
-        public int Searches => _searches;
-
-        public Task<GitResult> RunAsync(GitCommand command, CancellationToken cancellationToken = default)
-        {
-            if (command.Arguments.Contains("--diff-merges=first-parent"))
-            {
-                Interlocked.Increment(ref _refused);
-                return Task.FromResult(new GitResult(128, string.Empty, "fatal: unrecognized argument: --diff-merges=first-parent\n", TimeSpan.Zero));
-            }
-
-            if (command.Arguments.Contains("--no-walk=unsorted"))
-            {
-                Interlocked.Increment(ref _searches);
-            }
-
-            return inner.RunAsync(command, cancellationToken);
-        }
     }
 }

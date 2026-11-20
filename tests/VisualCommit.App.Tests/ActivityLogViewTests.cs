@@ -539,7 +539,7 @@ public class ActivityLogViewTests
 
     private const string OpeningRevParse = "git rev-parse --is-inside-work-tree --show-toplevel --absolute-git-dir --git-common-dir";
 
-    private const string CommonDirRevParse = "git rev-parse --git-common-dir";
+    private const string CommonDirRevParse = "git rev-parse --path-format=absolute --git-common-dir";
 
     /// <summary>The names of the log's top-level rows, top to bottom.</summary>
     private static List<string> TopLevelNames(ShellDriver app) =>

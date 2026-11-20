@@ -50,9 +50,6 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// <summary>How long a connected helper has to send its request.</summary>
     private static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(10);
 
-    /// <summary>The oldest git that reads <c>GIT_CONFIG_COUNT</c> (D277).</summary>
-    private static readonly GitVersion BindingsVersion = new(2, 31, 0);
-
     /// <summary>The <c>GIT_CONFIG_COUNT</c> pairs a bound URL takes (4.6, D340).</summary>
     private const int PairsPerBinding = 3;
 
@@ -63,7 +60,6 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     private readonly IAppLog _log;
     private readonly IGitCredentialSource _credentials;
     private readonly bool _hasCredentials;
-    private readonly Func<GitVersion?> _gitVersion;
 
     /// <summary>The <c>GIT_CONFIG_COUNT</c> git already gets, after which a bound scope numbers its pairs; null when it is not one git accepts.</summary>
     private readonly int? _inheritedCount;
@@ -90,7 +86,7 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// <param name="helperPath">The helper to name in the variables; null finds it next to this assembly (<see cref="AskPassLocator"/>).</param>
     /// <param name="credentials">Where a bound URL's credential comes from (D255, docs/phase-7a-design.md 1.3); null: none, and no binding is used.</param>
     /// <param name="sessionEnvironment">The session's git environment (D220), which with the process's gives the <c>GIT_CONFIG_COUNT</c> and <c>GIT_CONFIG_PARAMETERS</c> git already gets (4.6); null: none.</param>
-    /// <param name="gitVersion">The detected git's version, or null while unknown; below 2.31 no binding is used (D277). A function, as the broker is made before git's detection ends.</param>
+    /// <param name="gitVersion">Not read: every git the app supports reads <c>GIT_CONFIG_COUNT</c> (Git 2.31 and later), so the bindings no longer depend on the version (D420).</param>
     public AskPassBroker(
         IGitPromptHandler handler,
         IAppLog? log = null,
@@ -122,7 +118,6 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         _log = log ?? NullAppLog.Instance;
         _credentials = credentials ?? NullGitCredentialSource.Instance;
         _hasCredentials = credentials is not null;
-        _gitVersion = gitVersion ?? (() => null);
 
         // What git already gets: the session's value when the session names the variable (null
         // removes it), else the process's. The session's environment is applied after the process's.
@@ -189,11 +184,11 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
     /// <remarks>
     /// Every prompt of the scope carries <paramref name="group"/> (<see cref="GitPrompt.Group"/>,
     /// docs/phase-6-design.md 4.4). <paramref name="bindings"/> are used (docs/phase-7a-design.md
-    /// 4.6, D274, D277) only when the helper was found, a credential source was given, the
-    /// inherited <c>GIT_CONFIG_COUNT</c> is valid, the mode is <see cref="PromptMode.Ask"/> or
-    /// <see cref="PromptMode.Deny"/> and git is not older than 2.31 (a version not yet known counts
-    /// as 2.31); otherwise the scope is today's, byte for byte. A deny scope is registered, and
-    /// gets the pipe, only when it uses bindings.
+    /// 4.6, D274) only when the helper was found, a credential source was given, the inherited
+    /// <c>GIT_CONFIG_COUNT</c> is valid and the mode is <see cref="PromptMode.Ask"/> or
+    /// <see cref="PromptMode.Deny"/>, on every git the app supports, all of which read
+    /// <c>GIT_CONFIG_COUNT</c> (D420); otherwise the scope is today's, byte for byte. A deny scope is
+    /// registered, and gets the pipe, only when it uses bindings.
     /// </remarks>
     public PromptScope Begin(string title, string repositoryName, PromptMode mode, string? operationId = null, PromptGroup? group = null, IReadOnlyList<CredentialBinding>? bindings = null)
     {
@@ -245,12 +240,11 @@ public sealed class AskPassBroker : IGitPromptBroker, IDisposable
         }
     }
 
-    /// <summary>The bindings a scope uses (4.6, D274, D277): none unless every condition holds; each URL once.</summary>
+    /// <summary>The bindings a scope uses (4.6, D274): none unless every condition holds; each URL once.</summary>
     private List<CredentialBinding> UsedBindings(PromptMode mode, IReadOnlyList<CredentialBinding>? bindings)
     {
         if (bindings is null || bindings.Count == 0 || !HelperFound || !_hasCredentials || _inheritedCount is null
-            || mode is not (PromptMode.Ask or PromptMode.Deny)
-            || _gitVersion() is { } version && version < BindingsVersion)
+            || mode is not (PromptMode.Ask or PromptMode.Deny))
         {
             return [];
         }

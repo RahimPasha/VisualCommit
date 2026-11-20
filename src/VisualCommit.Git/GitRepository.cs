@@ -209,10 +209,12 @@ public sealed partial class GitRepository : IGitRepository
     }
 
     /// <summary>
-    /// <c>--git-common-dir</c> prints a path relative to the folder git ran in, and before Git 2.31
-    /// there is no option to make it absolute. Git's folder is the physical one, so where the
-    /// folder that was opened is not the top level (a subfolder, or a path through a symbolic
-    /// link), the question is asked again in the top level, whose path git itself reported.
+    /// The opening call's <c>--git-common-dir</c> can be a path relative to the folder git ran in
+    /// (a main worktree's <c>.git</c>), which resolves against the top level only where the folder
+    /// that was opened is the top level. Elsewhere (a subfolder, or a path through a symbolic link
+    /// or a short name, while git reports the physical folder) one more read asks for the absolute
+    /// path, <c>git rev-parse --path-format=absolute --git-common-dir</c>, in the top level git
+    /// reported, and its answer is taken as it is. The opening call itself keeps its words.
     /// </summary>
     private static async Task<string> ResolveCommonDirectoryAsync(
         IGitRunner runner,
@@ -232,7 +234,7 @@ public sealed partial class GitRepository : IGitRepository
             return NormalizePath(reported, workingDirectory);
         }
 
-        var command = ReadCommand(workingDirectory, "rev-parse", "--git-common-dir");
+        var command = ReadCommand(workingDirectory, "rev-parse", "--path-format=absolute", "--git-common-dir");
         var result = (await runner.RunAsync(command, cancellationToken).ConfigureAwait(false)).EnsureSuccess(command);
         return NormalizePath(result.StandardOutput.Trim(), workingDirectory);
     }

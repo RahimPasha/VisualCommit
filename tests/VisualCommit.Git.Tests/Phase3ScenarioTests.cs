@@ -376,11 +376,21 @@ public class Phase3ScenarioTests
         var secondListed = Lines(await second.GitAsync("worktree", "list", "--porcelain")).Last(line => line.StartsWith("worktree ", StringComparison.Ordinal));
         AssertSameFolderAs(second.SiblingPath(Scenarios.EdgeCasesWorktree), secondListed["worktree ".Length..]);
 
-        // Fast-forwarding side through git fetch . is refused, and side stays behind main.
+        // Fast-forwarding side through git fetch . is refused from git 2.35, and side stays behind
+        // main. Git 2.34 checks only the current branch and moves side (on this copy alone), the
+        // reason the app reads the worktrees before its own fetch (D420).
         var fetch = await repo.GitAllowingFailureAsync("fetch", ".", "refs/heads/main:refs/heads/side");
-        Assert.False(fetch.Succeeded);
-        Assert.Contains("refusing to fetch into", fetch.StandardError, StringComparison.Ordinal);
-        Assert.Equal("691f8cf Initial commit", await LogOneAsync(repo, "refs/heads/side"));
+        if (GitWords.FetchGuardsEveryWorktree(await GitWords.VersionAsync()))
+        {
+            Assert.False(fetch.Succeeded);
+            Assert.Contains("refusing to fetch into", fetch.StandardError, StringComparison.Ordinal);
+            Assert.Equal("691f8cf Initial commit", await LogOneAsync(repo, "refs/heads/side"));
+        }
+        else
+        {
+            Assert.True(fetch.Succeeded, fetch.StandardError);
+            Assert.Equal(await LogOneAsync(repo, "refs/heads/main"), await LogOneAsync(repo, "refs/heads/side"));
+        }
     }
 
     // ---- AuthRemoteAsync ------------------------------------------------------------------------

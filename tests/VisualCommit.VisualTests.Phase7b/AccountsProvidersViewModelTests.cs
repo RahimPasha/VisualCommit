@@ -377,30 +377,6 @@ public sealed class AccountsProvidersViewModelTests
     }
 
     [Fact]
-    public async Task An_old_git_takes_7a_s_older_note_and_question_for_every_provider()
-    {
-        var session = new ProvidersSession();
-        session.Accounts[HostingProvider.GitLab] = Status(Ada, AccountState.SignedIn, TokenPlace.Keychain);
-        session.Accounts[HostingProvider.AzureDevOps] = Status(Fernhill, AccountState.SignedIn, TokenPlace.Keychain);
-        var dialogs = new RecordingDialogs { Answer = false };
-        using var model = new AccountsSettingsViewModel(session, null, dialogs, new RecordingLog(), new GitVersion(2, 30, 0));
-
-        Assert.Equal(
-            "This needs Git 2.31 or newer. With Git 2.30.0, clone, fetch, pull and push still use your git credential helpers.",
-            model.GitLab.UseForGitNote);
-        Assert.Equal(model.GitLab.UseForGitNote, model.AzureDevOps.UseForGitNote);
-        await model.GitLab.SignOutCommand.ExecuteAsync(null);
-        await model.AzureDevOps.SignOutCommand.ExecuteAsync(null);
-        Assert.Equal(
-            [
-                "Sign out of GitLab as ada? VisualCommit removes its token from this computer and no longer lists merge requests.",
-                "Sign out of Azure DevOps for Fernhill-Labs? VisualCommit removes its token from this computer and no longer lists pull requests.",
-            ],
-            dialogs.Requests.Select(request => request.Question));
-        Assert.Empty(session.SignOuts);
-    }
-
-    [Fact]
     public void Dispose_unsubscribes_once_for_the_three_blocks()
     {
         var session = new ProvidersSession();

@@ -89,7 +89,8 @@ public class FetchRefspecsParityTests
                     Assert.Equal((source.Remote, source.RemoteRef), (git.Remote, git.Merge));
                     break;
                 case RemoteSourceKind.AmbiguousRemotes:
-                    Assert.True(git.ExitCode == 128 && git.Error.Contains("not tracking: ambiguous information", StringComparison.Ordinal), what);
+                    // "Not tracking: …" up to git 2.34, "not tracking: …" from 2.35 (branch.c v2.34.1:156, v2.35.0:252).
+                    Assert.True(git.ExitCode == 128 && git.Error.Contains("not tracking: ambiguous information", StringComparison.OrdinalIgnoreCase), what);
                     Assert.Equal((null, null), (git.Remote, git.Merge));
                     if (await GitIs236Async())
                     {

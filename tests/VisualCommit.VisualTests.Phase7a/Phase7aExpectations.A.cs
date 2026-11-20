@@ -49,7 +49,6 @@ public static partial class Phase7aExpectations
         public const string SignOutNoteLocked = "Signed out, but the token could not be removed from this computer's keychain: the keychain stayed locked.";
         public const string UseForGit = "Use for git over HTTPS";
         public const string UseForGitNote = "Clone, fetch, pull and push to GitHub over HTTPS use this account's token in place of your git credential helpers. Git in a terminal still uses your helpers.";
-        public const string UseForGitOldGit230 = "This needs Git 2.31 or newer. With Git 2.30.0, clone, fetch, pull and push still use your git credential helpers.";
 
         /// <summary>The section list's buttons, top to bottom.</summary>
         public static IReadOnlyList<string> NavButtons { get; } = ["General", "Git", "Tools", "Keyboard shortcuts", AccountsButton];
