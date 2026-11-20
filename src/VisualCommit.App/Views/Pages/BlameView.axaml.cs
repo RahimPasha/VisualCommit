@@ -16,12 +16,16 @@ namespace VisualCommit.App.Views.Pages;
 /// The blame page (docs/phase-5-design.md 4.2): see <see cref="BlameViewModel"/>. The code-behind
 /// fills the text and the gutter from the view model, keeps the gutter's width by the page's
 /// (130, or 200 from a page 700 wide), turns a click on a run, in the gutter or on its text, into
-/// picking it and a double-click into "Show in graph", opens a run's menu (a right-click picks
-/// the run first, BD9), gives the text the keyboard focus when the page opens (BD10), and closes
-/// the page on Esc (<see cref="EscapeOrder.Page"/>) unless a diff covers it or a text box has the focus.
+/// picking it and a double-click into "Show in graph", picks the caret's run after an arrow key as
+/// a click would, opens a run's menu (a right-click picks the run first, BD9), gives the text the
+/// keyboard focus when the page opens (BD10), and closes the page on Esc
+/// (<see cref="EscapeOrder.Page"/>) unless a diff covers it or a text box has the focus.
 /// </summary>
 public partial class BlameView : UserControl
 {
+    /// <summary>The keys that move the caret by lines or pages, alone or with any modifier: after each, the caret's run is picked.</summary>
+    private static readonly HashSet<Key> CaretKeys = [Key.Up, Key.Down, Key.Left, Key.Right, Key.PageUp, Key.PageDown, Key.Home, Key.End];
+
     private BlameViewModel? _viewModel;
     private IDisposable? _escape;
 
@@ -35,6 +39,9 @@ public partial class BlameView : UserControl
         // A press on the text picks its line's run; AvaloniaEdit's own handlers place the
         // selection and may mark the press handled, so this one sees it first.
         BlameText.AddHandler(PointerPressedEvent, OnTextPressed, RoutingStrategies.Tunnel, handledEventsToo: true);
+
+        // After AvaloniaEdit has moved the caret (it marks the key handled), its run is picked.
+        BlameText.AddHandler(KeyDownEvent, OnTextKeyDown, RoutingStrategies.Bubble, handledEventsToo: true);
         AddHandler(ContextRequestedEvent, OnContextRequested);
     }
 
@@ -148,6 +155,32 @@ public partial class BlameView : UserControl
         }
     }
 
+    /// <summary>
+    /// The keyboard's way to pick a run: after Up, Down, Left, Right, PageUp, PageDown, Home or End,
+    /// alone or with any modifier, the run of the caret's line is picked when it is not the picked
+    /// one, as a click picks it: its lines on the selection background, its commit in the right panel.
+    /// Any modifier, because the text's caret keys are the platform's: on macOS Cmd with an arrow
+    /// takes the caret to a line's or the text's end and Option with one moves it by words, where
+    /// Windows and Linux use Ctrl.
+    /// </summary>
+    private void OnTextKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (!CaretKeys.Contains(e.Key)
+            || _viewModel is not { IsClosed: false } viewModel || CaretRun(viewModel) is not { } run
+            || ReferenceEquals(run, viewModel.SelectedRun))
+        {
+            return;
+        }
+
+        viewModel.Pick(run);
+    }
+
+    /// <summary>The run of the caret's line, or null before the text shows.</summary>
+    private BlameRun? CaretRun(BlameViewModel viewModel) =>
+        BlameText.Document is not null && BlameGutter.RunOfLine(BlameText.TextArea.Caret.Line) is { } index && index < viewModel.Runs.Count
+            ? viewModel.Runs[index]
+            : null;
+
     /// <summary>A click picks the run (its commit in the right panel, 11.3); a double-click shows it in the graph (4.2).</summary>
     private void OnRunPressed(int index, int clickCount)
     {
@@ -167,7 +200,11 @@ public partial class BlameView : UserControl
         }
     }
 
-    /// <summary>A run's menu (BD8, BD9): a right-click on the gutter or the text picks the run, then opens it at the pointer; the Menu key at the top of the text, for the picked run.</summary>
+    /// <summary>
+    /// A run's menu (BD8, BD9): a right-click on the gutter or the text picks the run, then opens it
+    /// at the pointer; the Menu key or Shift+F10 at the top of the text, for the picked run, or the
+    /// caret's while none is picked (a page just opened has run 0's).
+    /// </summary>
     private void OnContextRequested(object? sender, ContextRequestedEventArgs e)
     {
         if (e.Handled || _viewModel is not { IsClosed: false } viewModel || !viewModel.ShowsText || ContextMenuRequests.Layer(this) is not { } layer
@@ -187,7 +224,7 @@ public partial class BlameView : UserControl
         }
         else
         {
-            run = viewModel.SelectedRun;
+            run = viewModel.SelectedRun ?? CaretRun(viewModel);
             var corner = BlameText.TranslatePoint(default, topLevel) ?? default;
             (position, openedBy) = (new MenuPosition(corner.X, corner.Y), MenuOpenedBy.Keyboard);
         }

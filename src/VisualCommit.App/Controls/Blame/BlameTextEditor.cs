@@ -53,6 +53,10 @@ public sealed class BlameTextEditor : CodeTextEditor
             EnableRectangularSelection = false,
             AllowScrollBelowDocument = false,
             HighlightCurrentLine = false,
+
+            // The text is read-only: Tab and Shift+Tab move the focus on, as in any other view,
+            // instead of AvaloniaEdit keeping them for itself (D426).
+            AcceptsTab = false,
         };
 
         var area = TextArea;

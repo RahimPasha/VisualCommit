@@ -4,8 +4,10 @@ using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Input;
 using Avalonia.Media;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using AvaloniaEdit.Rendering;
 using VisualCommit.App.Views;
 using VisualCommit.Core.Diff;
@@ -68,6 +70,9 @@ public sealed class DiffTextView : UserControl, IDiffPaneHost
     public static readonly DirectProperty<DiffTextView, IReadOnlySet<DiffLineRef>> SelectedChangesProperty =
         AvaloniaProperty.RegisterDirect<DiffTextView, IReadOnlySet<DiffLineRef>>(nameof(SelectedChanges), view => view.SelectedChanges);
 
+    /// <summary>The pseudo-class of an element that shows the keyboard's frame (its focus came by Tab or the arrows).</summary>
+    private const string FocusVisibleClass = ":focus-visible";
+
     private static readonly IReadOnlySet<DiffLineRef> NoChanges = ImmutableHashSet<DiffLineRef>.Empty;
 
     private readonly Grid _grid;
@@ -91,7 +96,11 @@ public sealed class DiffTextView : UserControl, IDiffPaneHost
 
     private PendingScroll? _pendingScroll;
     private bool _pendingFocus;
+    private Func<bool>? _focusStillWanted;
     private bool _syncingScroll;
+
+    /// <summary>The last hunk action was asked for by a button that showed the keyboard's frame (Enter or Space on it).</summary>
+    private bool _actionByKeyboard;
 
     public DiffTextView()
     {
@@ -105,6 +114,19 @@ public sealed class DiffTextView : UserControl, IDiffPaneHost
         _grid.Children.Add(_divider);
         _grid.Children.Add(_right.Editor);
         Content = _grid;
+
+        // The text is a tab stop; Tab goes on from it to its hunk bars' buttons, in hunk order, and
+        // then out of the diff, and Shift+Tab from it to the toolbar before it (D426).
+        foreach (var pane in new[] { _left, _right })
+        {
+            KeyboardNavigation.SetTabNavigation(pane.Editor, KeyboardNavigationMode.Continue);
+            KeyboardNavigation.SetTabNavigation(pane.Editor.TextArea, KeyboardNavigationMode.Continue);
+
+            // The text area takes the focus itself whenever an element inside it gets it: a bar's
+            // button keeps it (the event stops at the bars' layer, below the text area).
+            pane.Headers.AddHandler(GotFocusEvent, (_, e) => e.Handled = true);
+            pane.Headers.BarRemoving += (_, bar) => OnBarRemoving(bar);
+        }
 
         AutomationProperties.SetAutomationId(this, "DiffTextView");
         AutomationProperties.SetName(this, "Diff");
@@ -205,10 +227,16 @@ public sealed class DiffTextView : UserControl, IDiffPaneHost
         UpdateSelectedChanges();
     }
 
-    /// <summary>Gives the text the keyboard focus (the left pane side by side). Before the view is shown, it gets the focus once it is.</summary>
-    public void FocusBody()
+    /// <summary>
+    /// Gives the text the keyboard focus (the left pane side by side). Before the view is shown, it
+    /// gets the focus once it is, as long as <paramref name="stillWanted"/>, when given, still holds
+    /// then: once it does not, the request is dropped, so that a focus the user has moved meanwhile
+    /// stays where it is.
+    /// </summary>
+    public void FocusBody(Func<bool>? stillWanted = null)
     {
         _pendingFocus = true;
+        _focusStillWanted = stillWanted;
         TryFocus();
     }
 
@@ -270,7 +298,12 @@ public sealed class DiffTextView : UserControl, IDiffPaneHost
     /// <summary>The weight the character at <paramref name="column"/> of a line's text is drawn with on its own side.</summary>
     public FontWeight FontWeightAt(DiffLineRef line, int column) => ElementAt(line, column)?.TextRunProperties.Typeface.Weight ?? FontWeight.Normal;
 
-    internal void RaiseHunkAction(int hunk, HunkAction action) => HunkActionRequested?.Invoke(this, new HunkActionEventArgs(hunk, action));
+    internal void RaiseHunkAction(int hunk, HunkAction action)
+    {
+        _actionByKeyboard = FocusedElement() is Visual focused && focused.Classes.Contains(FocusVisibleClass)
+            && (_left.Headers.IsVisualAncestorOf(focused) || _right.Headers.IsVisualAncestorOf(focused));
+        HunkActionRequested?.Invoke(this, new HunkActionEventArgs(hunk, action));
+    }
 
     /// <summary>A row's background: by the kind of the line on the pane's side (<see cref="DiffPalette.RowBackground"/>).</summary>
     IImmutableBrush IDiffPaneHost.RowBackground(DiffPane pane, DiffDisplayRow row, DiffCell? cell) => Palette.RowBackground(row, cell);
@@ -610,11 +643,42 @@ public sealed class DiffTextView : UserControl, IDiffPaneHost
 
     private void TryFocus()
     {
+        if (_focusStillWanted is { } stillWanted && !stillWanted())
+        {
+            _pendingFocus = false;
+            _focusStillWanted = null;
+            return;
+        }
+
         if (_left.Editor.TextArea.Focus())
         {
             _pendingFocus = false;
+            _focusStillWanted = null;
         }
     }
+
+    /// <summary>
+    /// A hunk bar is about to leave (scrolled away, or made again after the diff was read again):
+    /// when it holds the focused element, and that has the keyboard's frame or asked for the action
+    /// that changed the diff, the text takes the focus first, without a frame. Left alone, Avalonia
+    /// would hand the focus to an element of its own choosing, with the frame.
+    /// </summary>
+    private void OnBarRemoving(HunkHeaderBar bar)
+    {
+        if (FocusedElement() is not Visual focused || !bar.IsVisualAncestorOf(focused))
+        {
+            return;
+        }
+
+        if (focused.Classes.Contains(FocusVisibleClass) || _actionByKeyboard)
+        {
+            _actionByKeyboard = false;
+            _left.Editor.TextArea.Focus(NavigationMethod.Unspecified);
+        }
+    }
+
+    /// <summary>The element with the keyboard focus in this view's window, or null.</summary>
+    private IInputElement? FocusedElement() => TopLevel.GetTopLevel(this)?.FocusManager?.GetFocusedElement();
 
     /// <summary>
     /// The diff line of the first row whose top is in view (or that row's hunk header), to keep at

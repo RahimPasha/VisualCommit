@@ -468,6 +468,28 @@ public class ConflictPanesTests
         Assert.True(panes.BarButton(0, ConflictPaneSide.Theirs, ConflictChoice.UseTheirs)!.IsFocused);
     }
 
+    /// <summary>
+    /// The keyboard pass (docs/phase-8a-design.md 6.4, D426): a click in the ours text gives its text
+    /// area the focus, and Tab from there goes to the first bar's first button; AvaloniaEdit no
+    /// longer keeps Tab to itself.
+    /// </summary>
+    [AvaloniaFact]
+    public void After_a_click_in_the_ours_text_Tab_goes_to_the_first_bars_first_button()
+    {
+        var panes = new ConflictPanes { Parts = TwoBlocks() };
+        using var host = DiffHost.Show(panes, Width, Height, ThemeVariant.Dark);
+        host.Capture();
+        var row = panes.RowBounds(ConflictPaneSide.Ours, 0)!.Value;
+        host.Click(panes, new Point(panes.TextLeft(ConflictPaneSide.Ours)!.Value + 30, row.Center.Y));
+        var area = ((AvaloniaEdit.TextEditor)panes.PaneEditor(ConflictPaneSide.Ours)).TextArea;
+        Assert.True(area.IsFocused, "The click did not give the ours text the focus.");
+
+        host.PressKey(Avalonia.Input.Key.Tab);
+
+        var first = panes.BarButton(0, ConflictPaneSide.Ours, ConflictChoice.UseOurs)!;
+        Assert.True(first.IsFocused, $"Tab from the ours text did not reach the first bar's first button: the focus is on {host.Window.FocusManager?.GetFocusedElement()?.GetType().Name ?? "nothing"}.");
+    }
+
     [AvaloniaFact]
     public void UI_Automation_finds_the_panes_and_the_bar_buttons_by_their_ids_which_the_owner_can_set()
     {

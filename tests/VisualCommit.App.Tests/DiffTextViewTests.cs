@@ -696,6 +696,140 @@ public class DiffTextViewTests
         Assert.True(view.IsKeyboardFocusWithin);
     }
 
+    /// <summary>
+    /// The keyboard pass (docs/phase-8a-design.md 6.3.1, D426): Tab from the text goes to the first
+    /// hunk's "Stage hunk", then its "Discard hunk", then the next hunk's, each with the keyboard's
+    /// frame, and then out of the diff; Enter on a focused button asks for its action.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Tab_from_the_text_reaches_each_hunks_buttons_in_hunk_order_and_then_leaves_the_diff()
+    {
+        var view = await CalculatorAsync();
+        var (root, _, after) = Between(view);
+        var asked = new List<(int Hunk, HunkAction Action)>();
+        view.HunkActionRequested += (_, e) => asked.Add((e.Hunk, e.Action));
+        using var host = DiffHost.Show(root, InlineWidth, InlineHeight + 80, ThemeVariant.Dark);
+        view.FocusBody();
+        host.Capture();
+        Assert.True(TextArea(view, 0).IsFocused, $"The text does not have the focus: {Focused(host)}.");
+
+        var buttons = Buttons(view);
+        Assert.Equal(["StageHunkButton", "DiscardHunkButton", "StageHunkButton", "DiscardHunkButton"], buttons.Select(AutomationProperties.GetAutomationId));
+        for (var i = 0; i < buttons.Count; i++)
+        {
+            host.PressKey(Key.Tab);
+            Assert.True(buttons[i].IsFocused, $"Tab {i + 1} did not reach hunk button {i}: the focus is on {Focused(host)}.");
+            Assert.Contains(":focus-visible", buttons[i].Classes);
+        }
+
+        host.PressKey(Key.Tab);
+        Assert.True(after.IsFocused, $"Tab from the last hunk button did not leave the diff: the focus is on {Focused(host)}.");
+
+        // Enter on a focused button asks for its action, as a click does.
+        view.FocusBody();
+        host.Capture();
+        host.PressKey(Key.Tab);
+        Assert.True(buttons[0].IsFocused, $"Tab did not reach the first Stage hunk: the focus is on {Focused(host)}.");
+        host.PressKey(Key.Enter);
+        Assert.Equal([(0, HunkAction.Stage)], asked);
+    }
+
+    /// <summary>Side by side the left bars have no buttons: Tab from the old file's text goes to the new file's text, then to the hunks' buttons (6.3.1).</summary>
+    [AvaloniaFact]
+    public async Task Side_by_side_Tab_goes_from_the_old_files_text_to_the_new_files_text_and_then_to_the_buttons()
+    {
+        var view = await CalculatorAsync(DiffMode.SideBySide);
+        var (root, _, _) = Between(view);
+        using var host = DiffHost.Show(root, SideWidth, SideHeight, ThemeVariant.Dark);
+        view.FocusBody();
+        host.Capture();
+        Assert.True(TextArea(view, 0).IsFocused, $"The old file's text does not have the focus: {Focused(host)}.");
+
+        host.PressKey(Key.Tab);
+        Assert.True(TextArea(view, 1).IsFocused, $"Tab did not reach DiffTextRight's text: the focus is on {Focused(host)}.");
+        host.PressKey(Key.Tab);
+        var first = Buttons(view)[0];
+        Assert.Equal("StageHunkButton", AutomationProperties.GetAutomationId(first));
+        Assert.True(first.IsFocused, $"Tab from the new file's text did not reach the first Stage hunk: the focus is on {Focused(host)}.");
+    }
+
+    /// <summary>A hunk button that has the keyboard's frame and scrolls out of view with its bar hands the focus to the text first (6.3.1, D426).</summary>
+    [AvaloniaFact]
+    public async Task A_framed_hunk_button_whose_bar_scrolls_out_of_view_leaves_the_focus_on_the_text()
+    {
+        var view = await CalculatorAsync();
+        using var host = DiffHost.Show(view, InlineWidth, 120, ThemeVariant.Dark);
+        view.FocusBody();
+        host.Capture();
+        host.PressKey(Key.Tab);
+        var first = Buttons(view)[0];
+        Assert.True(first.IsFocused, $"Tab did not reach the first Stage hunk: the focus is on {Focused(host)}.");
+
+        host.Window.MouseWheel(host.ToWindow(view, new Point(200, 60)), new Vector(0, -3));
+        host.Capture();
+
+        Assert.Null(view.RowBounds(0));
+        Assert.False(first.IsAttachedToVisualTree(), "The first hunk's bar is still in the view.");
+        var text = TextArea(view, 0);
+        Assert.True(text.IsFocused, $"The text did not take the focus when the bar left: the focus is on {Focused(host)}.");
+        Assert.DoesNotContain(":focus-visible", text.Classes);
+    }
+
+    /// <summary>
+    /// A focus request whose condition no longer holds is dropped (6.3.6): asked before the view
+    /// shows, with a condition that says no, it leaves the focus in a box the user moved it to.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task FocusBody_with_a_condition_that_no_longer_holds_leaves_the_focus_where_it_is()
+    {
+        var view = await CalculatorAsync();
+        view.IsVisible = false;
+        var box = new TextBox();
+        var root = new StackPanel { Children = { box, view } };
+        view.Height = InlineHeight;
+        using var host = DiffHost.Show(root, InlineWidth, InlineHeight + 40, ThemeVariant.Dark);
+        Assert.True(box.Focus());
+
+        view.FocusBody(() => false);
+        view.IsVisible = true;
+        host.Capture();
+
+        Assert.True(box.IsFocused, $"The box lost the focus to {Focused(host)}.");
+        Assert.False(view.IsKeyboardFocusWithin);
+
+        // A condition that holds still gives the text the focus once the view shows.
+        view.IsVisible = false;
+        DiffHost.Settle();
+        view.FocusBody(() => true);
+        view.IsVisible = true;
+        host.Capture();
+        Assert.True(TextArea(view, 0).IsFocused, $"The text did not take the focus: {Focused(host)}.");
+    }
+
+    /// <summary>The view between two buttons, in the Tab order before and after it, so that Tab and Shift+Tab can leave it.</summary>
+    private static (Control Root, Button Before, Button After) Between(Control view)
+    {
+        var before = new Button { Content = "Before" };
+        var after = new Button { Content = "After" };
+        Grid.SetRow(view, 1);
+        Grid.SetRow(after, 2);
+        var root = new Grid { RowDefinitions = new RowDefinitions("Auto,*,Auto") };
+        root.Children.Add(before);
+        root.Children.Add(view);
+        root.Children.Add(after);
+        return (root, before, after);
+    }
+
+    /// <summary>The text area of the view's editor <paramref name="index"/>: 0 the left (inline the only), 1 the right.</summary>
+    private static AvaloniaEdit.Editing.TextArea TextArea(DiffTextView view, int index) =>
+        ((AvaloniaEdit.TextEditor)Editors(view)[index]).TextArea;
+
+    /// <summary>The focused element, in words, for a failure's message.</summary>
+    private static string Focused(DiffHost host) =>
+        host.Window.FocusManager?.GetFocusedElement() is { } focused
+            ? $"{focused.GetType().Name} \"{(focused as Control is { } control ? AutomationProperties.GetAutomationId(control) ?? control.Name : null)}\""
+            : "nothing";
+
     private static async Task<DiffTextView> CalculatorAsync(DiffMode mode = DiffMode.Inline)
     {
         var diffs = await DiffScenario.DiffsAsync();

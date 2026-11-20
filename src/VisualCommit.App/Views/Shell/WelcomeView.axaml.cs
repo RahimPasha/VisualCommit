@@ -16,6 +16,18 @@ public partial class WelcomeView : UserControl
         InitializeComponent();
         DataContextChanged += (_, _) => Watch(DataContext as WelcomeViewModel);
         WorkspaceList.AddHandler(ContextRequestedEvent, OnWorkspaceContextRequested);
+
+        // The browser's run disables the button that opened it, so the window cannot give the
+        // focus back to it when the browser closes: it gets it once the run has ended, with no
+        // frame, unless the focus is somewhere in the form by then. The palette's way to the
+        // browser keeps the focus where the window put it.
+        CloneFromGitHubButton.Click += (_, _) =>
+        {
+            if (_viewModel is { } viewModel)
+            {
+                FocusReturn.AfterRun(viewModel.BrowseCommand, CloneForm, () => CloneFromGitHubButton, NavigationMethod.Unspecified);
+            }
+        };
     }
 
     private void Watch(WelcomeViewModel? viewModel)

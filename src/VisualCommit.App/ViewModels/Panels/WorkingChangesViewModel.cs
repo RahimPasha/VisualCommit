@@ -180,7 +180,11 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
 
     /// <summary>There is a commit to amend, and no list or rebase is stopped (docs/phase-4-design.md 5.3).</summary>
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(CanToggleAmend))]
     public partial bool CanAmend { get; private set; }
+
+    /// <summary>"Amend previous commit" can be ticked or unticked: there is a commit to amend and no commit runs (D392).</summary>
+    public bool CanToggleAmend => CanAmend && !IsCommitting;
 
     /// <summary>
     /// Why "Amend previous commit" is disabled during a list of picks or reverts or a rebase stop
@@ -190,7 +194,7 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     public partial string? AmendToolTip { get; private set; }
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CommitButtonText), nameof(CanCommit), nameof(CommitToolTip))]
+    [NotifyPropertyChangedFor(nameof(CommitButtonText), nameof(CanCommit), nameof(CommitToolTip), nameof(CanToggleAmend))]
     [NotifyCanExecuteChangedFor(nameof(CommitCommand))]
     public partial bool IsCommitting { get; private set; }
 
@@ -488,7 +492,11 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
     /// <summary>
     /// The commit button: commits (or amends) with the boxes' message; during a list or a rebase
     /// it is the banner's Continue with the boxes' message (5.3). The commit that concludes a
-    /// merge or a single pick or revert asks first when markers are staged (14.3).
+    /// merge or a single pick or revert asks first when markers are staged (14.3). The boxes stay
+    /// editable while it runs (D392): the commit takes the message and Amend as they were when it
+    /// started, and once it has succeeded it empties the boxes only if both still hold that
+    /// message, so that what was typed meanwhile stays; Amend, which cannot be changed while the
+    /// commit runs (<see cref="CanToggleAmend"/>), is unticked.
     /// </summary>
     [RelayCommand(CanExecute = nameof(CanCommit))]
     private async Task Commit()
@@ -508,16 +516,21 @@ public sealed partial class WorkingChangesViewModel : ObservableObject
                 return;
             }
 
+            var (summary, description, amend) = (Summary, Description, IsAmend);
             var message = JoinedMessage;
-            var error = IsAmend ? await _host.CommitAsync(message, amend: true, _amendedHead) : await _host.CommitAsync(message, amend: false);
+            var error = amend ? await _host.CommitAsync(message, amend: true, _amendedHead) : await _host.CommitAsync(message, amend: false);
             if (error is not null)
             {
                 ErrorText = error;
                 return;
             }
 
-            Summary = string.Empty;
-            Description = string.Empty;
+            if (string.Equals(Summary, summary, StringComparison.Ordinal) && string.Equals(Description, description, StringComparison.Ordinal))
+            {
+                Summary = string.Empty;
+                Description = string.Empty;
+            }
+
             IsAmend = false;
         }
         finally

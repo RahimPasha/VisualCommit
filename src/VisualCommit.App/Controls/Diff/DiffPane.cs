@@ -75,6 +75,10 @@ internal sealed class DiffPane
                 HighlightCurrentLine = false,
                 CutCopyWholeLine = false,
                 EnableImeSupport = false,
+
+                // The text is read-only: Tab and Shift+Tab move the focus on, as in any other
+                // view, instead of AvaloniaEdit keeping them for itself (D426).
+                AcceptsTab = false,
             },
         };
 

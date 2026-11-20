@@ -56,12 +56,24 @@ internal sealed class HunkHeaderLayer : Panel
         pane.TextView.ScrollOffsetChanged += (_, _) => InvalidateArrange();
     }
 
+    /// <summary>
+    /// A bar is about to leave the layer, scrolled out of view or dropped to be made again: raised
+    /// while it is still in the layer, so that a button of it that has the focus can hand the focus
+    /// on first instead of leaving it to Avalonia.
+    /// </summary>
+    internal event EventHandler<HunkHeaderBar>? BarRemoving;
+
     /// <summary>The bar of header row <paramref name="row"/>, or null when that row is not in view.</summary>
     public HunkHeaderBar? BarAt(int row) => _bars.GetValueOrDefault(row);
 
     /// <summary>Drops every bar and makes them again: the theme, the buttons or the rows changed.</summary>
     public void Rebuild()
     {
+        foreach (var bar in _bars.Values.ToList())
+        {
+            BarRemoving?.Invoke(this, bar);
+        }
+
         _bars.Clear();
         Children.Clear();
         Update();
@@ -86,6 +98,7 @@ internal sealed class HunkHeaderLayer : Panel
 
         foreach (var row in _bars.Keys.Where(row => !inView.Contains(row)).ToList())
         {
+            BarRemoving?.Invoke(this, _bars[row]);
             Children.Remove(_bars[row]);
             _bars.Remove(row);
         }

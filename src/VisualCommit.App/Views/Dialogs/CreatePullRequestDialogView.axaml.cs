@@ -1,5 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
+using VisualCommit.App.ViewModels.Dialogs;
 
 namespace VisualCommit.App.Views.Dialogs;
 
@@ -7,13 +9,21 @@ namespace VisualCommit.App.Views.Dialogs;
 /// The "Create pull request" form (<c>CreatePullRequestDialog</c>, docs/phase-7a-design.md 12.4) of
 /// a <see cref="ViewModels.Dialogs.CreatePullRequestDialogViewModel"/>: the title takes the focus,
 /// with the caret at its end; Enter there creates and Mod+Enter in the description does
-/// (DialogView's rules).
+/// (DialogView's rules). The base's "Choose…" gets the focus back, with no frame, once the pick it
+/// opened has ended, unless the focus is somewhere in the form by then.
 /// </summary>
 public partial class CreatePullRequestDialogView : DialogView
 {
     public CreatePullRequestDialogView()
     {
         InitializeComponent();
+        PullRequestBaseChooseButton.Click += (_, _) =>
+        {
+            if (DataContext is CreatePullRequestDialogViewModel viewModel)
+            {
+                FocusReturn.AfterRun(viewModel.ChooseBaseCommand, this, () => PullRequestBaseChooseButton, NavigationMethod.Unspecified);
+            }
+        };
     }
 
     protected override TextBox? InitialTextBox => PullRequestTitle;

@@ -352,6 +352,178 @@ public class StatusBarTests
         Assert.Equal("Ready", parts.Status.Text);
     }
 
+    /// <summary>
+    /// The palette's "Cancel {title}" (D417, docs/phase-8a-design.md 1.8, 6.3.3): while a fetch runs
+    /// and can be cancelled, the palette's first entry is "Cancel Fetch origin", with no key, no
+    /// detail on one tab and not destructive; Enter on it cancels the fetch.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task While_a_fetch_can_be_cancelled_the_palette_lists_Cancel_Fetch_origin_first_and_Enter_cancels_it()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fetching = repository.Queue.RunAsync(HeldNetwork("Fetch origin", "Fetching from origin…", held));
+        await app.WaitForAsync(() => parts.Cancel.IsVisible, "Cancel");
+
+        app.MoveToNeutral();
+        app.PressPalette();
+        await app.WaitForAsync(() => app.IsPaletteOpen, "the palette");
+        var first = app.Palette.Shown[0];
+        Assert.Equal(("Cancel Fetch origin", (string?)null, (string?)null, true, false), (first.Label, first.Detail, first.KeyText, first.IsEnabled, first.IsDestructive));
+        Assert.Null(first.Command);
+        var row = app.PaletteSnapshot().Rows[0];
+        Assert.Equal(("Cancel Fetch origin", (string?)null, true), (row.Label, row.KeyText, row.IsHighlighted));
+
+        app.PressKey(Avalonia.Input.Key.Enter);
+        await app.WaitForAsync(() => fetching.IsCompleted, "the fetch to end after the palette's Cancel");
+        Assert.Equal(OperationOutcome.Cancelled, (await fetching).Outcome);
+        await app.WaitForIdleAsync(repository);
+        Assert.Equal("Fetch origin cancelled", parts.Status.Text);
+        Assert.DoesNotContain(app.LogLines(), line => line.Contains("that operation is no longer running", StringComparison.Ordinal));
+    }
+
+    /// <summary>"Cancel {title}" is listed only while it applies (1.8): not with nothing running, not for a local operation, not once the fetch's cancel window has ended.</summary>
+    [AvaloniaFact]
+    public async Task The_palette_lists_no_Cancel_with_nothing_running_for_a_local_operation_or_past_the_cancel_window()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+        await AssertNoCancelEntryAsync(app);
+
+        var local = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var creating = repository.Queue.RunAsync(new GitOperation("Create branch hotfix", "Creating hotfix…", OperationKind.Local, RefreshScope.None, async _ =>
+        {
+            await local.Task;
+            return OperationReport.Done("Created hotfix and checked it out");
+        }));
+        await app.WaitForAsync(() => parts.Status.Text == "Creating hotfix…", "the local operation's running text");
+        await AssertNoCancelEntryAsync(app);
+        local.SetResult();
+        await creating;
+        await app.WaitForIdleAsync(repository);
+
+        var windowEnded = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fetching = repository.Queue.RunAsync(new GitOperation("Fetch origin", "Fetching from origin…", OperationKind.Network, RefreshScope.None, async context =>
+        {
+            context.EndCancelWindow();
+            windowEnded.SetResult();
+            await held.Task;
+            return OperationReport.Done("Fetched from origin");
+        }));
+        await windowEnded.Task;
+        await app.WaitForAsync(() => parts.Status.Text == "Fetching from origin…" && !parts.Cancel.IsVisible, "the fetch past its cancel window");
+        await AssertNoCancelEntryAsync(app);
+        held.SetResult();
+        await fetching;
+        await app.WaitForIdleAsync(repository);
+    }
+
+    /// <summary>
+    /// D452: the entry listed for a fetch that has ended cancels nothing, even when another operation
+    /// that can be cancelled runs by then; it writes an Info line instead, and the push runs on.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Cancel_Fetch_origin_chosen_after_the_fetch_ended_cancels_nothing_and_says_so_in_the_log()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+        var fetchHeld = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fetching = repository.Queue.RunAsync(HeldNetwork("Fetch origin", "Fetching from origin…", fetchHeld));
+        await app.WaitForAsync(() => parts.Cancel.IsVisible, "Cancel");
+
+        app.MoveToNeutral();
+        app.PressPalette();
+        await app.WaitForAsync(() => app.IsPaletteOpen, "the palette");
+        Assert.Equal("Cancel Fetch origin", app.Palette.Shown[0].Label);
+
+        var pushHeld = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var pushing = repository.Queue.RunAsync(HeldNetwork("Push main", "Pushing main to origin/main…", pushHeld));
+        fetchHeld.SetResult();
+        await app.WaitForAsync(() => fetching.IsCompleted && repository.OperationStatus.RunningTitle == "Push main" && repository.OperationStatus.CanCancel, "the push to run after the fetch");
+
+        app.PressKey(Avalonia.Input.Key.Enter);
+        await app.WaitForAsync(() => !app.IsPaletteOpen, "the palette to close");
+        Assert.False(pushing.IsCompleted, "The fetch's entry cancelled the push.");
+        await app.WaitForAsync(
+            () => app.LogLines().Any(line => line.EndsWith("Cancel Fetch origin: that operation is no longer running.", StringComparison.Ordinal)),
+            "the log line of an entry whose operation has ended");
+
+        pushHeld.SetResult();
+        Assert.Equal(OperationOutcome.Succeeded, (await pushing).Outcome);
+        Assert.Equal(OperationOutcome.Succeeded, (await fetching).Outcome);
+        await app.WaitForIdleAsync(repository);
+    }
+
+    /// <summary>The walk to Cancel (G7): with a commit's details in the right panel, from F6 there at most 200 Tabs reach the status bar's Cancel while a fetch runs.</summary>
+    [AvaloniaFact]
+    public async Task From_F6_on_the_right_panel_Tab_reaches_Cancel_within_200_presses()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        app.Click(app.GraphRowPoint(0));
+        await app.WaitForAsync(() => repository.SelectedIndex == 0, "the first commit selected");
+        app.WaitForCommitDetails();
+        var fetching = repository.Queue.RunAsync(HeldNetwork("Fetch origin", "Fetching from origin…", held));
+        await app.WaitForAsync(() => parts.Cancel.IsVisible, "Cancel");
+
+        for (var f6 = 0; app.FocusedRegion() != VisualCommit.App.Views.KeyRegionRole.Right; f6++)
+        {
+            Assert.True(f6 < 4, $"Four F6 did not reach the right panel: the focus is on {app.DescribeFocus()}.");
+            app.PressF6();
+        }
+
+        var tabs = 0;
+        while (!parts.Cancel.IsFocused)
+        {
+            Assert.True(tabs < 200, $"200 Tabs did not reach Cancel: the focus is on {app.DescribeFocus()}.");
+            app.PressKey(Avalonia.Input.Key.Tab);
+            tabs++;
+        }
+
+        TestContext.Current.TestOutputHelper?.WriteLine($"Tabs from the right panel to Cancel: {tabs}");
+        app.PressKey(Avalonia.Input.Key.Enter);
+        await app.WaitForAsync(() => fetching.IsCompleted, "the fetch to end after Enter on Cancel");
+        Assert.Equal(OperationOutcome.Cancelled, (await fetching).Outcome);
+    }
+
+    /// <summary>A network operation that waits for <paramref name="held"/> or its cancel, and then succeeds.</summary>
+    private static GitOperation HeldNetwork(string title, string running, TaskCompletionSource held) =>
+        new(title, running, OperationKind.Network, RefreshScope.None, async context =>
+        {
+            await held.Task.WaitAsync(context.CancellationToken);
+            return OperationReport.Done(title + " done");
+        });
+
+    /// <summary>Opens the palette, asserts that no entry's label starts with "Cancel ", and closes it.</summary>
+    private static async Task AssertNoCancelEntryAsync(ShellDriver app)
+    {
+        app.MoveToNeutral();
+        app.PressPalette();
+        await app.WaitForAsync(() => app.IsPaletteOpen, "the palette");
+        Assert.DoesNotContain(app.Palette.Shown, entry => entry.Label.StartsWith("Cancel ", StringComparison.Ordinal));
+        app.PressKey(Avalonia.Input.Key.Escape);
+        await app.WaitForAsync(() => !app.IsPaletteOpen, "the palette to close");
+    }
+
     /// <summary>The merge tool's operation (docs/phase-4-design.md 11.9): local, it can be cancelled (D149), and it runs until it is.</summary>
     private static Task<OperationResult> RunMergeTool(RepositoryViewModel repository) =>
         repository.Queue.RunAsync(new GitOperation("Merge tool for notes.txt", "Waiting for fake to close…", OperationKind.Local, RefreshScope.None, async context =>

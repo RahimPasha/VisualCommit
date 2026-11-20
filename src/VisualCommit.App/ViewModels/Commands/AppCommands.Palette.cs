@@ -4,6 +4,7 @@ using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.ViewModels.Workspaces;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Logging;
 using VisualCommit.Core.Workspaces;
 
 namespace VisualCommit.App.ViewModels.Commands;
@@ -29,8 +30,9 @@ public sealed partial class AppCommands
     ];
 
     /// <summary>
-    /// The palette's commands for the active tab (5.4), in its rows' order: the repository's
-    /// (rows 1 to 10) on a repository tab; Refresh, Fetch all and Pull all and the workspace's
+    /// The palette's commands for the active tab (5.4), in its rows' order: on a repository tab
+    /// "Cancel {title}" first while its running operation can be cancelled (<see cref="CancelEntry"/>),
+    /// then the repository's (rows 1 to 10); Refresh, Fetch all and Pull all and the workspace's
     /// edits on a dashboard (rows 8, 11, 12); then the window's (rows 13 to 21).
     /// </summary>
     public IReadOnlyList<PaletteEntry> PaletteCommands()
@@ -51,6 +53,11 @@ public sealed partial class AppCommands
             entries.Add(new PaletteEntry(label, null, null, reason is null, reason, destructive, PaletteEntryKind.Command, entries.Count, run));
 
         var tab = snapshot.Tab;
+        if (snapshot.Repository is { } repository && CancelEntry(repository, snapshot.RepositoryDetail) is { } cancel)
+        {
+            entries.Add(cancel);
+        }
+
         if (snapshot.Repository is not null)
         {
             foreach (var command in RepositoryRows)
@@ -103,6 +110,41 @@ public sealed partial class AppCommands
         Add(AppCommand.About);
         Add(AppCommand.OpenUserGuide);
         return entries;
+    }
+
+    /// <summary>
+    /// The Info line of a "Cancel {title}" entry run after its operation stopped being the running
+    /// one (D452): it then cancels nothing.
+    /// </summary>
+    public static string CancelNoLongerRunning(string title) => $"Cancel {title}: that operation is no longer running.";
+
+    /// <summary>
+    /// "Cancel {title}" (D417, D452), first on a repository tab while its running operation can be
+    /// cancelled, with no key, not destructive, the repository's name as its detail while dialogs
+    /// name it. Run, it cancels only while the operation it was listed for is still the one running
+    /// (its title the running title) and can still be cancelled: Cancel stops whatever runs now, which
+    /// may by then be an operation that waited behind it. Otherwise it does nothing and says so in the
+    /// log. Null while nothing can be cancelled.
+    /// </summary>
+    private PaletteEntry? CancelEntry(RepositoryViewModel repository, string? detail)
+    {
+        var status = repository.OperationStatus;
+        if (!status.CanCancel || status.RunningTitle is not { } title)
+        {
+            return null;
+        }
+
+        return new PaletteEntry(DashboardTexts.CancelTitle(title), detail, null, true, null, false, PaletteEntryKind.Command, 0, () =>
+        {
+            if (status.CancelCommand.CanExecute(null) && string.Equals(status.RunningTitle, title, StringComparison.Ordinal))
+            {
+                status.CancelCommand.Execute(null);
+            }
+            else
+            {
+                _shell.Services.Log.Info(CancelNoLongerRunning(title));
+            }
+        });
     }
 
     /// <summary>
