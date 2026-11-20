@@ -3979,8 +3979,11 @@ palette, the pass asserts that the highlighted row reads `About VisualCommit…`
 
 `InkOf` is `TextInk.Of`'s rule over the capture's pixels at `Scaling`, with `TextInk.Tolerance` and
 the twin's "replaced" colour. Its rectangle is the element's UI Automation bounds inset to hold the
-text alone (no caret, icon, key text or border toward the foreground); a box is read unfocused, but
-the text typed into the focused `FilterBox` in launches 1 and 2, which is read less the caret's column.
+text alone (no caret, icon, key text or border toward the foreground; `CommitSummary`'s rectangle ends at its
+40 px right padding, so that `SummaryCounter` lies outside it); a box is read unfocused, but
+the text typed into the focused `FilterBox` in launch 1 (L1's and L2's `sea`), which is read less the
+caret's column. No key is sent to a window that is not the foreground window: a launch whose first
+input is a key (launches 5 and 6) first asserts `ForegroundIsThis`.
 Where no such rectangle exists, the comparison carries the colour and run.txt says so. A miss is
 reported to the lead, never met by a wider tolerance (§2.9 item 6).
 
@@ -3992,7 +3995,8 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
    `l1b`; the filter emptied as the twin's L5 starts. L5 dark: the discard of `src/Calculator.cs` asked
    as the twin asks it; a spot of the danger button `#EA7D86` (`AssertColour`), its label's ink `#10121A`;
    `l5a`; Cancel; `git status --porcelain` still lists the file modified. A real click on `ThemeSwitch`;
-   L2: the same three boxes `#68707D` on `#FFFFFF`, then `sea`; `l2a`, `l2b`.
+   L2: the same three boxes `#68707D` on `#FFFFFF`; `l2a`; Ctrl+Shift+E, `sea` typed on the real
+   keyboard: its ink `#1B1F27` on `#FFFFFF`, less the caret's column; `l2b`.
 2. **`Check_L_graph_danger_item_and_head_row`** (`Scenarios.GraphAsync`). L4 a: `feature/login`'s
    menu by a real Shift+F10, real Down until "Delete…" is highlighted: its ink `#EA7D86` on `#2F3542`;
    `l4a` (pointer kept); Esc. L6: `main`'s row in the left panel a) pointer at neutral: `#7C8CFF`;
@@ -4011,7 +4015,7 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
    captured by its bounds as `b2-taskbar-button` and `b2-taskbar-button-enlarged`; asserted to exist.
    None found: run.txt says `B2's taskbar button: Not run (no taskbar button named VisualCommit was
    found within 10 s).` and the gate checks it by hand.
-4. **`Check_I1_second_start_hands_over`** (one empty tab, data folder D). The app `Minimise()`d;
+4. **`Check_I1_second_start_hands_over`** (data folder D; a session of one empty tab written before the start, `RealApp.Launch(D, session)`). The app `Minimise()`d;
    `session.json`'s and `instance.json`'s bytes read; `StartBeside(D, the same environment)`: the second
    start exits 0 within 10 s; the app is not iconic and is visible within 2 s; `ForegroundIsThis` noted,
    not asserted (the test host is not the foreground process); D's log holds the second's `it was asked
@@ -4019,15 +4023,22 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
    `session.json`'s bytes unchanged; `instance.json`'s bytes unchanged (a `Held` guard's `Dispose`
    touches no file, 1.11); the app closes with 0.
 5. **`Check_I2_notice_and_exit_code_2`**. The test opens D's `InstanceLockFile` with `FileShare.None`
-   and holds it; `RealApp.Launch(D)` finds the notice as the process's main window, within 15 s; not
+   and holds it; `RealApp.Launch(D)`, without a session (nothing written into D before the start, as the twin has
+   none), finds the notice as the process's main window, within 15 s; not
    sized. `InstanceNoticeFolder`'s automation name is D's path; `CompareMasked` with
-   `i2a-notice-dark`. A real click on `InstanceNoticeTryAgain`: while it reads `Trying…`, disabled,
+   `i2a-notice-dark`. Before any key: `ForegroundIsThis` and `InstanceNoticeTryAgain` as UI Automation's focused element; if
+   either fails, a real click on the notice's title bar (its non-client area, which focuses no control)
+   and both asserted again within 5 s, else the method fails before any key with `The notice is not the
+   foreground window with Try again focused: a real Enter would reach another window.`; then a real
+   Enter, as the twin presses it (4.6; the lead's ruling of 2026-11-20), so the focus frame matches:
+   while it reads `Trying…`, disabled,
    `CompareMasked` with `i2b-notice-trying`; within 10 s `InstanceNoticeStatus` reads
    `It still did not answer.`; `CompareMasked` with `i2c-notice-no-answer`. A real click on
    `InstanceNoticeClose`: exit 2 within 5 s; D holds `instance.lock`, `logs/` and the launch's own
    `harness/`, nothing else.
-6. **`Check_I2_notice_try_again_starts_here`**. As 5 to the notice; the test releases the lock; a real
-   Enter on Try again, as the twin presses it (4.6), so the focus frame matches: within 15 s `OtherWindowOfProcess` finds the main window (`GitStatus` in it);
+6. **`Check_I2_notice_try_again_starts_here`**. As 5 to the notice; the test releases the lock; launch 5's guard
+   (`ForegroundIsThis` and Try again focused, a title-bar click only if not, no key until both hold); a
+   real Enter on Try again, as the twin presses it (4.6), so the focus frame matches: within 15 s `OtherWindowOfProcess` finds the main window (`GitStatus` in it);
    `instance.json`'s `pid` is the app's; that window closed, exit 0 within 15 s (D422).
 7. **`Check_F_missing_offers_keys_and_choose`** (F1's session; `StandInEnvironment("none")`). Before the
    app starts, the test looks for winget as the app does, `ProgramSearch.FindOnPath("winget.exe", PATH,
