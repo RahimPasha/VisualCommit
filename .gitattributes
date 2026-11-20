@@ -7,4 +7,5 @@
 
 *.png binary
 *.ico binary
+*.icns binary
 *.ttf binary

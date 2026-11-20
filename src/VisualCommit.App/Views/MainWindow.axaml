@@ -6,6 +6,7 @@
         x:Class="VisualCommit.App.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="VisualCommit"
+        Icon="/Assets/Icon/VisualCommit.ico"
         Width="1280" Height="800"
         MinWidth="1000" MinHeight="560"
         WindowStartupLocation="CenterScreen"

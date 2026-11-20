@@ -5,6 +5,7 @@
         x:Class="VisualCommit.App.Views.InstanceNoticeWindow"
         x:DataType="vm:InstanceNoticeViewModel"
         Title="{x:Static vm:InstanceNoticeTexts.Title}"
+        Icon="/Assets/Icon/VisualCommit.ico"
         Width="480"
         SizeToContent="Height"
         CanResize="False"

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The icon's builder (D407, D428, D429, D447): renders the three SVG masters in assets/brand/
+       into the app's .ico and PNGs, Linux's PNGs, macOS's .iconset and .icns, and a manifest of the
+       masters' hashes. Run by hand from any folder of the repository (dotnet run with this project)
+       and its files committed. It is never shipped and never run by a test or by CI, which only
+       build it with the solution; it references no project, so nothing of it reaches the app. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <RootNamespace>VisualCommit.IconBuilder</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Svg.Skia" />
+    <PackageReference Include="SkiaSharp" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux" />
+    <PackageReference Include="HarfBuzzSharp.NativeAssets.Linux" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <!-- VisualCommit's mark, chosen by the owner on 2026-11-20 (D407). -->
+  <rect x="96" y="96" width="832" height="832" rx="187" ry="187" fill="#4C5BE0"/>
+  <path d="M96 512H200M824 512H928" stroke="#FFFFFF" stroke-width="64" fill="none"/>
+  <path d="M200 512Q512 192 824 512Q512 832 200 512Z" stroke="#FFFFFF" stroke-width="64" stroke-linejoin="round" fill="none"/>
+  <circle cx="512" cy="512" r="96" fill="#FFFFFF"/>
+</svg>
