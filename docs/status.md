@@ -478,6 +478,16 @@ every commit.
 
 ### Notes for whoever resumes
 
+- **Step 4 under way since 2026-11-20** (uncommitted work in the main checkout; do not discard it).
+  An Opus builder is writing WP0 there (design section 1, its list in 1.16): the contracts and
+  stubs under `src/` and `tests/`, the new project `tests/VisualCommit.VisualTests.Phase8a`, its
+  line in `VisualCommit.slnx` and the `8a` case of `scripts/time-scripted-check.sh`. It does not
+  commit: the lead reads the diff against section 1, builds, runs the classes 1.16 names and then
+  commits and pushes. A second Opus agent is writing parts L's and I's checks into the new file
+  `docs/test-reports/phase-8a.md`, also uncommitted, which a reviewer reads before the lead commits
+  it ahead of wave 1 (D244). A session that finds these changes and no agent at work does the
+  same: the diff against design 1.16, `dotnet build` with no warning, the classes 1.16 names,
+  what is missing finished, then the commit.
 - **Phase 8's start, 2026-11-18** (no branch yet: everything so far is on `master` or outside the
   repo). The machine changed since phase 7b's gate (Windows updates KB5132061 and KB5132688 on
   2026-11-11, and a boot that day; git 2.56.0.windows.4 and SDK 10.0.303 as before), so step 6's
