@@ -560,7 +560,24 @@ every commit.
 
 ### Notes for whoever resumes
 
-- **Wave 1 is merged (2026-11-20); step 8, its close, is next.** The workflow `phase8a-wave-1` (run
+- **Step 8 under way (2026-11-20).** Done so far, on the tree of `bba59c7` (the commits after it
+  change only docs): the whole default run through `scripts/heavy-run.sh`, alone on the machine,
+  7,993 tests with 4 skipped and none failed in 1 h 32 min 7 s (04:42 to 06:16; its log is
+  `D:/Projects/Personal/phase8-work/wave1/default-run-wave1.log`). The run's pictures were copied
+  at once to `D:/Projects/Personal/phase8-work/references/wave1/` (1,185 scripted pictures, 35 of
+  them phase 8a's; the real-window folders in it are phase 7b's old captures), with their hashes
+  in `references/wave1-pictures.sha256`. `scripts/scan-contrast.py` on phase 7b's references took
+  6 min 39 s and wrote the eight lists, each equal to the committed one. The comparison
+  (`D:/Projects/Personal/phase8-work/wave1/compare/out/summary.md`): of 1,150 earlier scripted
+  pictures 1,141 changed and 9 are the same file; 1,083 changed only inside their expected
+  regions, 54 also outside them, 4 changed that were not expected to; none changed size; the 196
+  "expected, not changed" are the real-window captures, which no pass has taken again. The 58
+  are being explained one by one, and the 35 new pictures checked against the report, by the
+  workflow `phase8a-wave1-picture-inspection` (run `wf_8a580486-289`: nine Opus inspectors, and a
+  second look at whatever is not variance or the round's own colours). Still to do after it: the
+  lead's ruling on its findings; the lagged list of design 0.4, with no agent at work; step 8's
+  tick; the worktrees and `wip` branches of wave 1 removed.
+- **Wave 1 is merged (2026-11-20).** The workflow `phase8a-wave-1` (run
   `wf_463ba2b4-db6`: three Opus builders, nine reviewers, a verifier for each of 11 majors, three
   fixers; 26 agents, 6.33M tokens, 2 h 35 min) built, reviewed and fixed the three packages in
   their worktrees; no file was changed by more than one. The lead merged them in the order
