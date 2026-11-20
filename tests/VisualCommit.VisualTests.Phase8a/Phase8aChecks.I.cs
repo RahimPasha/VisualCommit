@@ -100,6 +100,7 @@ public sealed partial class Phase8aChecksI : Phase8aChecks
         await host.WaitForAsync(() => ReferenceEquals(host.Focused, tryAgain), "Try again to take the keyboard focus");
         var opened = ShotNotice(host, I.I3aNoticeLight);
         AssertNoticeAsOpened(host, opened, GuidancePlatform.Linux, I.LinuxFolder, dark: false);
+        AssertNoticeInTheTree(host);
 
         // Steps 2 to 4: Tab, Tab, Shift+Tab.
         host.PressKey(Key.Tab);
@@ -186,7 +187,7 @@ public sealed partial class Phase8aChecksI : Phase8aChecks
         Assert.Equal(0, host.Try.Asked);
     }
 
-    /// <summary>What neither the frame nor the real capture shows, read in the tree (I2 after step 1).</summary>
+    /// <summary>What neither the frame nor the real capture shows, read in the tree (I2 and I3 after step 1).</summary>
     private static void AssertNoticeInTheTree(InstanceNoticeHost host)
     {
         var window = host.Window;
