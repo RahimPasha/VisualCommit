@@ -32,6 +32,13 @@ public sealed class SingleInstanceGuardTests
 
     private static readonly int Pid = Environment.ProcessId;
 
+    /// <summary>
+    /// A process id no process has (no Windows id is odd, Linux's and macOS's stay far below it), and
+    /// not -1, which <c>AllowSetForegroundWindow</c> takes as "any": since holder and asker share this
+    /// test's process, a line that names it shows whose id it took.
+    /// </summary>
+    private const int NoProcess = int.MaxValue;
+
     [Fact]
     public void A_second_guard_on_a_taken_folder_is_held_and_one_on_another_folder_takes_it()
     {
@@ -87,6 +94,16 @@ public sealed class SingleInstanceGuardTests
         await WaitForLineAsync(holderLog, Info($"A second VisualCommit (process {Pid}) started on this data folder: answered starting."));
         Assert.Contains(Info($"VisualCommit is starting on the data folder {paths.DataDirectory} (process {Pid}); this start ends."), askerLog.Entries.Select(Line));
         Assert.Equal(GuardOutcome.Held, asker.Outcome);
+
+        // The holder's line names the pid of the request, and the asker's the pid in instance.json.
+        holder.ComeForward = () => ForwardAnswer.Activated;
+        var answer = await ExchangeLineAsync(holder.Endpoint!, $"{{\"v\":1,\"request\":\"come-forward\",\"pid\":{NoProcess},\"args\":[]}}\n");
+        Assert.Equal("{\"v\":1,\"answer\":\"activated\"}\n", answer);
+        await WaitForLineAsync(holderLog, Info($"A second VisualCommit (process {NoProcess}) started on this data folder: answered activated."));
+
+        WriteInstanceFile(paths, InstanceJson(NoProcess, holder.Endpoint!));
+        Assert.Equal(ForwardAnswer.Activated, asker.AskToComeForward());
+        Assert.Contains(Info($"VisualCommit already runs on the data folder {paths.DataDirectory} (process {NoProcess}); it was asked to come to the front, and this start ends."), askerLog.Entries.Select(Line));
     }
 
     [Fact]
@@ -124,8 +141,10 @@ public sealed class SingleInstanceGuardTests
             var log = new RecordingLog();
             using var second = SingleInstanceGuard.TryTake(paths, log, Patient);
 
+            // The line names the pid in instance.json, which holder and asker would share here.
+            WriteInstanceFile(paths, InstanceJson(NoProcess, holder.Endpoint!));
             Assert.Equal(ForwardAnswer.Closing, second.AskToComeForward());
-            Assert.Contains(Info($"VisualCommit on the data folder {paths.DataDirectory} (process {Pid}) is closing; this start waits up to 30 s for it."), log.Entries.Select(Line));
+            Assert.Contains(Info($"VisualCommit on the data folder {paths.DataDirectory} (process {NoProcess}) is closing; this start waits up to 30 s for it."), log.Entries.Select(Line));
 
             var disposal = Task.Run(
                 async () =>
@@ -166,7 +185,7 @@ public sealed class SingleInstanceGuardTests
         var stale = StaleEndpoint();
         try
         {
-            WriteInstanceFile(paths, InstanceJson(4242, stale));
+            WriteInstanceFile(paths, InstanceJson(NoProcess, stale));
 
             using var guard = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient);
             Assert.Equal(GuardOutcome.Taken, guard.Outcome);
@@ -198,7 +217,8 @@ public sealed class SingleInstanceGuardTests
         var stale = StaleEndpoint();
         try
         {
-            WriteInstanceFile(paths, InstanceJson(4242, stale));
+            // A pid no process has: on Windows the asker lets the pid it reads take the foreground.
+            WriteInstanceFile(paths, InstanceJson(NoProcess, stale));
             using var asker = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient);
             Assert.Equal(GuardOutcome.Held, asker.Outcome);
 
@@ -249,6 +269,105 @@ public sealed class SingleInstanceGuardTests
 
         Assert.NotEqual(first.Endpoint, second.Endpoint);
         Assert.True(SingleInstanceGuard.ServerPipeOptions.HasFlag(PipeOptions.CurrentUserOnly));
+
+        // Random per run, not per folder: the same folder taken again gets another endpoint.
+        var firstRun = first.Endpoint;
+        first.Dispose();
+        using var nextRun = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient);
+        Assert.Equal(GuardOutcome.Taken, nextRun.Outcome);
+        Assert.NotNull(nextRun.Endpoint);
+        Assert.NotEqual(firstRun, nextRun.Endpoint);
+    }
+
+    [Fact]
+    public void A_stale_instance_json_naming_a_file_in_another_folder_or_of_another_form_leaves_that_file()
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        var hex = RandomNumberGenerator.GetHexString(16, lowercase: true);
+        string[] files =
+        [
+            // The guard's name, in a folder that is neither the temp folder nor /tmp.
+            root.Combine("VisualCommit-" + hex),
+
+            // The temp folder, with names of another form: 15 hex digits, and a suffix.
+            Path.GetTempPath() + "VisualCommit-" + hex[..15],
+            Path.GetTempPath() + "VisualCommit-" + hex + "-old",
+        ];
+        try
+        {
+            foreach (var file in files)
+            {
+                File.WriteAllText(file, "not a socket of the guard's");
+                WriteInstanceFile(paths, InstanceJson(NoProcess, file));
+
+                using (var guard = SingleInstanceGuard.TryTake(paths, new RecordingLog(), Patient))
+                {
+                    Assert.Equal(GuardOutcome.Taken, guard.Outcome);
+                }
+
+                Assert.True(File.Exists(file), $"{file} was deleted, though it is no socket path of the guard's form.");
+            }
+        }
+        finally
+        {
+            foreach (var file in files)
+            {
+                File.Delete(file);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task The_holder_writes_instance_json_also_while_a_second_start_has_it_open_for_a_moment()
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        WriteInstanceFile(paths, InstanceJson(NoProcess, "VisualCommit-" + RandomNumberGenerator.GetHexString(16, lowercase: true)));
+        var log = new RecordingLog();
+
+        // Opened as a second start reads it, and let go 300 ms later by a thread of its own, which
+        // a busy thread pool cannot hold up.
+        using var reader = new FileStream(paths.InstanceFile, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        var release = Task.Factory.StartNew(
+            () =>
+            {
+                Thread.Sleep(300);
+                reader.Dispose();
+            },
+            CancellationToken.None,
+            TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
+        using var guard = SingleInstanceGuard.TryTake(paths, log, Patient);
+        await release;
+
+        Assert.Equal(GuardOutcome.Taken, guard.Outcome);
+        Assert.DoesNotContain(log.Entries, entry => entry.Level == LogLevel.Warning);
+        Assert.Contains(Info($"This VisualCommit holds the data folder {paths.DataDirectory}: a second start on it is sent here."), log.Entries.Select(Line));
+        using var file = JsonDocument.Parse(File.ReadAllBytes(paths.InstanceFile));
+        Assert.Equal(Pid, file.RootElement.GetProperty("pid").GetInt32());
+        Assert.Equal(guard.Endpoint, file.RootElement.GetProperty("endpoint").GetString());
+    }
+
+    [Fact]
+    public void An_instance_json_naming_an_endpoint_no_pipe_can_have_is_not_answered_and_nothing_is_thrown()
+    {
+        using var root = new TempDirectory("guard");
+        var paths = DataFolder(root);
+        Directory.CreateDirectory(paths.DataDirectory);
+        using var held = new FileStream(paths.InstanceLockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+
+        // A name the pipe client refuses as it is made: "anonymous" is reserved.
+        WriteInstanceFile(paths, InstanceJson(NoProcess, "anonymous"));
+        var options = new SingleInstanceOptions(TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(300), TimeSpan.FromSeconds(30));
+        var log = new RecordingLog();
+        using var asker = SingleInstanceGuard.TryTake(paths, log, options);
+        Assert.Equal(GuardOutcome.Held, asker.Outcome);
+
+        Assert.Equal(ForwardAnswer.NotAnswered, asker.AskToComeForward());
+        Assert.Contains(Warning($"VisualCommit holds the data folder {paths.DataDirectory} but did not answer (its endpoint refused the connection)."), log.Entries.Select(Line));
     }
 
     [Fact]
@@ -497,6 +616,35 @@ public sealed class SingleInstanceGuardTests
             }
 
             answer.Write(buffer, 0, read);
+        }
+    }
+
+    /// <summary>
+    /// Connects to <paramref name="endpoint"/> as a second start does, sends <paramref name="line"/>
+    /// and reads the answer up to its <c>\n</c>, then hangs up, as a second start does, so that the
+    /// holder need not wait out its reply's time: the answer with its <c>\n</c>, or what came before
+    /// the holder ended the connection.
+    /// </summary>
+    private static async Task<string> ExchangeLineAsync(string endpoint, string line)
+    {
+        var cancel = TestContext.Current.CancellationToken;
+        using var client = new NamedPipeClientStream(".", endpoint, PipeDirection.InOut, PipeOptions.CurrentUserOnly | PipeOptions.Asynchronous);
+        await client.ConnectAsync((int)WaitLimit.TotalMilliseconds, cancel);
+        await client.WriteAsync(Encoding.UTF8.GetBytes(line), cancel);
+        await client.FlushAsync(cancel);
+
+        using var limit = CancellationTokenSource.CreateLinkedTokenSource(cancel);
+        limit.CancelAfter(WaitLimit);
+        var answer = new MemoryStream();
+        var buffer = new byte[256];
+        while (true)
+        {
+            var read = await client.ReadAsync(buffer, limit.Token);
+            answer.Write(buffer, 0, read);
+            if (read == 0 || Array.IndexOf(buffer, (byte)'\n', 0, read) >= 0)
+            {
+                return Encoding.UTF8.GetString(answer.ToArray());
+            }
         }
     }
 

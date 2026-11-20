@@ -112,6 +112,11 @@ public sealed partial class SingleInstanceGuard : IDisposable
     /// <summary>How often <see cref="WaitToTake"/> tries the lock.</summary>
     private static readonly TimeSpan TakePause = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>How long the holder keeps trying to write its instance file while a second start reads it.</summary>
+    private static readonly TimeSpan InstanceFileRetries = TimeSpan.FromSeconds(1);
+
+    private static readonly TimeSpan InstanceFilePause = TimeSpan.FromMilliseconds(20);
+
     private static readonly UTF8Encoding Utf8 = new(encoderShouldEmitUTF8Identifier: false);
 
     private readonly Lock _gate = new();
@@ -447,17 +452,42 @@ public sealed partial class SingleInstanceGuard : IDisposable
         var token = _serving.Token;
         _server = Task.Run(() => ServeAsync(first, token), CancellationToken.None);
 
-        try
+        if (WriteInstanceFile(_endpoint) is { } failure)
         {
-            DurableFile.Replace(_paths.InstanceFile, InstanceJson(Environment.ProcessId, _endpoint, DateTimeOffset.Now));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            _log.Warning($"The data folder {Folder} has no instance.json ({ex.Message}): a second start on it will be told that this one did not answer.");
+            _log.Warning($"The data folder {Folder} has no instance.json ({failure.Message}): a second start on it will be told that this one did not answer.");
             return;
         }
 
         _log.Info($"This VisualCommit holds the data folder {Folder}: a second start on it is sent here.");
+    }
+
+    /// <summary>
+    /// Writes <see cref="AppPaths.InstanceFile"/> naming <paramref name="endpoint"/>, again every
+    /// 20 ms for up to a second while that fails: a second start that reads the file holds it open
+    /// for a moment, and Windows replaces no file that is open. Null once written; the last failure
+    /// when it never was.
+    /// </summary>
+    private Exception? WriteInstanceFile(string endpoint)
+    {
+        var text = InstanceJson(Environment.ProcessId, endpoint, DateTimeOffset.Now);
+        var clock = Stopwatch.StartNew();
+        while (true)
+        {
+            try
+            {
+                DurableFile.Replace(_paths.InstanceFile, text);
+                return null;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                if (clock.Elapsed >= InstanceFileRetries)
+                {
+                    return ex;
+                }
+
+                Thread.Sleep(InstanceFilePause);
+            }
+        }
     }
 
     /// <summary>A crashed run's socket, named in the instance file it left, exactly of this guard's form; deleted only then.</summary>
@@ -638,18 +668,23 @@ public sealed partial class SingleInstanceGuard : IDisposable
         }
     }
 
-    /// <summary>A connection to <paramref name="endpoint"/>, or null when it refused it within the attempt's 100 ms.</summary>
+    /// <summary>
+    /// A connection to <paramref name="endpoint"/>, or null when it refused it within the attempt's
+    /// 100 ms. A name the pipe client refuses as it is made (the instance file is read as it stands)
+    /// counts as a refused connection.
+    /// </summary>
     private static NamedPipeClientStream? TryConnect(string endpoint)
     {
-        var client = new NamedPipeClientStream(".", endpoint, PipeDirection.InOut, ClientPipeOptions);
+        NamedPipeClientStream? client = null;
         try
         {
+            client = new NamedPipeClientStream(".", endpoint, PipeDirection.InOut, ClientPipeOptions);
             client.Connect((int)AttemptPause.TotalMilliseconds);
             return client;
         }
         catch (Exception ex) when (ex is TimeoutException or IOException or SocketException or UnauthorizedAccessException or ArgumentException or PlatformNotSupportedException or InvalidOperationException)
         {
-            client.Dispose();
+            client?.Dispose();
             return null;
         }
     }
