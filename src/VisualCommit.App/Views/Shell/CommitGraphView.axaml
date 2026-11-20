@@ -9,6 +9,7 @@
              xmlns:conflicts="using:VisualCommit.App.Views.Conflicts"
              xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
              xmlns:workspaces="using:VisualCommit.App.Views.Workspaces"
+             xmlns:gs="using:VisualCommit.App.ViewModels.GitSetup"
              x:Class="VisualCommit.App.Views.Shell.CommitGraphView"
              x:DataType="vm:RepoTabViewModel"
              AutomationProperties.AutomationId="CommitGraph">
@@ -26,10 +27,21 @@
     <Panel Grid.Row="0" IsVisible="{Binding ShowsWelcome}">
       <shell:WelcomeView DataContext="{Binding Welcome}" />
     </Panel>
-    <!-- The first-run screen in the welcome page's place while git cannot be used (R4). -->
-    <Panel Name="GitSetupSlot" Grid.Row="0" IsVisible="{Binding ShowsGitSetup}">
-      <shell:GitSetupView Name="GitSetupContent" DataContext="{Binding GitSetup}" />
-    </Panel>
+    <!-- The first-run screen in the welcome page's place while git cannot be used (R4). Its view is
+         made only once the screen has first shown: a session that finds git never has one, so that
+         nothing of the window draws otherwise than before. -->
+    <ContentControl Name="GitSetupSlot"
+                    Grid.Row="0"
+                    IsVisible="{Binding ShowsGitSetup}"
+                    Content="{Binding GitSetupForView}"
+                    HorizontalContentAlignment="Stretch"
+                    VerticalContentAlignment="Stretch">
+      <ContentControl.ContentTemplate>
+        <DataTemplate x:DataType="gs:GitSetupViewModel">
+          <shell:GitSetupView />
+        </DataTemplate>
+      </ContentControl.ContentTemplate>
+    </ContentControl>
     <!-- A workspace's dashboard in place of the graph (docs/phase-6-design.md 2.4): the activity
          log stays under it. -->
     <Panel Name="DashboardSlot" Grid.Row="0" IsVisible="{Binding ShowsDashboard}">

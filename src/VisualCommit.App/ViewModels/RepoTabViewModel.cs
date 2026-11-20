@@ -166,11 +166,19 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
             OnPropertyChanged();
             OnPropertyChanged(nameof(ShowsGitSetup));
             OnPropertyChanged(nameof(ShowsWelcome));
+            OnPropertyChanged(nameof(GitSetupForView));
         }
     }
 
     /// <summary>The graph area shows the first-run screen in the welcome page's place: an empty tab, not opening, not a dashboard, while the screen shows.</summary>
     public bool ShowsGitSetup => Repository is null && !IsOpening && !IsDashboard && GitSetup?.IsShown == true;
+
+    /// <summary>
+    /// The screen for the graph area to make its view of: <see cref="GitSetup"/> once it has first
+    /// shown (<see cref="GitSetupViewModel.HasShown"/>), null before. A session that finds git never
+    /// makes the view.
+    /// </summary>
+    public GitSetupViewModel? GitSetupForView => GitSetup is { HasShown: true } shown ? shown : null;
 
     public WelcomeViewModel Welcome { get; }
 
@@ -446,6 +454,11 @@ public sealed partial class RepoTabViewModel : ObservableObject, IDisposable
     /// <summary>The screen shows or hides: so does it in this tab, and the welcome page the other way.</summary>
     private void OnGitSetupPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(GitSetupViewModel.HasShown) or null)
+        {
+            OnPropertyChanged(nameof(GitSetupForView));
+        }
+
         if (e.PropertyName is nameof(GitSetupViewModel.IsShown) or null)
         {
             OnPropertyChanged(nameof(ShowsGitSetup));

@@ -77,6 +77,10 @@ public sealed partial class GitSetupViewModel : ObservableObject
     /// <summary><see cref="ErrorText"/> is Choose's <c>Checking…</c>, drawn secondary, not as an error.</summary>
     public bool IsChoiceBeingChecked => ErrorText == GitSetupTexts.Checking;
 
+    /// <summary>A state of the screen's has shown it once this session; it stays so. The graph area makes the screen's view only then.</summary>
+    [ObservableProperty]
+    public partial bool HasShown { get; private set; }
+
     /// <summary>The screen shows: a state of its own with its guidance read, and the helper's state until "Continue without it".</summary>
     public bool IsShown => Content is not null && !(State == GitSetupState.HelperMissing && _continued);
 
@@ -341,6 +345,10 @@ public sealed partial class GitSetupViewModel : ObservableObject
         ErrorText = null;
         Content = content;
         State = state;
+        if (content is not null)
+        {
+            HasShown = true;
+        }
     }
 
     /// <summary>The guidance, read once for the session; a read that fails gives the running platform's, with no winget and no distribution.</summary>
