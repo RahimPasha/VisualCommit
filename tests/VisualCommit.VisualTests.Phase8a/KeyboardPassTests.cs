@@ -72,6 +72,38 @@ public sealed class KeyboardPassTests
     }
 
     /// <summary>
+    /// Tab to the first hunk's "Discard hunk" and Enter, the question confirmed: the question's close
+    /// gives the button its focus back without the frame (D104), and when its bar leaves with the
+    /// diff read again, the text takes the focus, without a frame, because the button asked for the
+    /// action while it had the frame (6.3.1's "or raised the action while it had").
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Tab_and_Enter_on_Discard_hunk_confirmed_leave_the_focus_in_the_text()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        await OpenCalculatorDiffAsync(app);
+
+        await app.TabToAsync(focused => focused is Control control && AutomationProperties.GetAutomationId(control) == "StageHunkButton", "Stage hunk");
+        await app.TabToAsync(focused => focused is Control control && AutomationProperties.GetAutomationId(control) == "DiscardHunkButton", "Discard hunk");
+        Assert.True(app.FocusVisible, "Discard hunk shows no keyboard frame.");
+        var diff = Repository(app).Diff!;
+        var before = diff.Diff;
+        app.PressKey(Key.Enter);
+        await app.WaitForDialogAsync<ConfirmationViewModel>();
+        app.Click(app.Find<Button>("ConfirmButton"));
+        await app.WaitForAsync(() => !ReferenceEquals(diff.Diff, before) && diff.ShowsText, "the diff read again");
+        await app.WaitForIdleAsync();
+
+        // The first hunk, Add's change, is gone from the working tree; the four added lines stay.
+        Assert.Equal(Phase8aExpectations.K.UnstagedAfterHunk, await NumstatAsync(repo, cached: false));
+        Assert.Empty(await NumstatAsync(repo, cached: true));
+        await app.WaitForAsync(() => app.FocusedAutomationId() == "DiffText", $"the focus in the diff's text (it is on {app.DescribeFocus()})");
+        Assert.False(app.FocusVisible, "The text shows the keyboard's frame.");
+    }
+
+    /// <summary>
     /// G1: F6 from another region gives the diff's text the focus; Ctrl+Home, Down to row 4 of the
     /// second hunk (past the first hunk's header and lines; its own header row 0, then git's three
     /// context lines) and Shift+Down twice select that hunk's added empty line and <c>Negate</c>, two
