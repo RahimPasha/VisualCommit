@@ -592,7 +592,14 @@ every commit.
   before the wave's closing runs and wave 3; yes to the icon's round 2 with the outlined eye; the
   look-alike check by eye, with no image search; wave 1's worktrees removed (done: `git worktree
   remove` on the three clean folders; the branches `wip/p8a-colours`, `wip/p8a-floor` and
-  `wip/p8a-single` stay, merged).
+  `wip/p8a-single` stay, merged). Wave 2's first step is under way: the workflow
+  `phase8a-wave2-checks` (run `wf_4044f49a-3bc`) writes parts F, K and B's checks, each into a
+  file of its own under `D:/Projects/Personal/phase8-work/wave2/checks/`, has each reviewed by two
+  readers with a verifier for each major and corrected, and its last agent puts the three parts
+  into `docs/test-reports/phase-8a.md`, uncommitted: the lead reads its result, rules on what it
+  leaves for the design, commits the report before any builder starts (D244) and then starts the
+  wave's build. A session that finds the workflow gone and the report uncommitted reads the part
+  files and the report's diff, and finishes the same way.
   Nothing is uncommitted, and the phase branch is pushed. The run's pictures, the comparison and
   the inspectors' crops are outside the repository: `D:/Projects/Personal/phase8-work/references/`
   (`wave1/`, the references of every later merge, with `wave1-pictures.sha256`),
