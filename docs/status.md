@@ -166,7 +166,8 @@ that runs a process beside them (ruling 23).
   their UI (D244): `docs/test-reports/phase-8a.md`, nine checks (one Opus writer, 0.35M tokens;
   the review `phase8a-checks-review-L-I`, run `wf_17f3e7ad-e6a`: two reviewers, a verifier for each
   of four majors, one fixer; 7 agents, 1.46M tokens, 39 minutes; all twelve findings applied, the
-  design's 12.3 corrected with them). CI's run for the push is in the CI section. (Week: 25 to
+  design's 12.3 corrected with them). CI's run for the push, 44703936572, is green in the five
+  regular jobs (the CI section). (Week: 25 to
   50 % used at the owner's reading of 2026-11-20, before this step; not read since.)
 
 Wave 1:
@@ -258,6 +259,15 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", does not fail the run until
 step 6 has fixed what it finds.
 
+- [44703936572](https://github.com/RahimPasha/VisualCommit/actions/runs/44703936572), for
+  `d37036a` (WP0, `fc8a063`; parts L's and I's checks; the icon's round 2): the run succeeded.
+  `windows-latest` green, 7,924 tests with 4 skipped, Test step 40 min 49 s of 70;
+  `macos-latest` green, 7,921 with 3 skipped, Test step 45 min 44 s (under the 56 minutes at which
+  D377 raises the limit, and close to phase 7b's worst, 46 min 21 s); `ubuntu-latest` green, 7,921
+  with 3 skipped, 6 min 37 s; the two "bare ubuntu container" jobs green, 7,921 with 3 skipped
+  each, Test steps 5 min 2 s (Ubuntu's packages) and 7 min 0 s (Microsoft's installer); the
+  floor's job failed the same 20 of 7,921 on git 2.34.1 (Test step 7 min 22 s), which does not
+  fail the run until step 6. WP0 added 32 tests and changed no earlier one's result.
 - [44479788558](https://github.com/RahimPasha/VisualCommit/actions/runs/44479788558), for
   `e04762b` (the floor's job, D397's two properties, the solution's comment). First attempt:
   `ubuntu-latest` green (Test step 5 min 7 s) and `macos-latest` green (Test step 36 min 38 s, its
@@ -470,7 +480,7 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 night on `phase/8a-release-readiness` (Progress, step 1).
 
 Next: wave 1, Progress steps 5 to 7, then step 8. Step 4 is done: WP0 and the checks of parts L
-and I are pushed, and CI's run for that push is to be read and recorded in the CI section. The
+and I are pushed, and CI's run for that push is green in the five regular jobs (the CI section). The
 three packages of wave 1 are built side by side, each by an Opus builder in a worktree of its own
 (`git worktree add D:/Projects/Personal/vc-wt/p8a-<key> -b wip/p8a-<key>` from the phase branch;
 the keys `colours`, `floor`, `single`; design 0.3), each reading design sections 0 and 1 and its
