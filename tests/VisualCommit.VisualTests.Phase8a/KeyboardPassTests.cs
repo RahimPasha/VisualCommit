@@ -7,6 +7,7 @@ using Avalonia.VisualTree;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Pages;
+using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.App.Views;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
@@ -71,9 +72,11 @@ public sealed class KeyboardPassTests
     }
 
     /// <summary>
-    /// G1: F6 from another region gives the diff's text the focus; Ctrl+Home, Down four times and
-    /// Shift+Down twice select rows 4 and 5 (the removed and the added line in Add); Shift+F10's
-    /// "Stage selected lines" stages them (passes before the keyboard pass too).
+    /// G1: F6 from another region gives the diff's text the focus; Ctrl+Home, Down to row 4 of the
+    /// second hunk (past the first hunk's header and lines; its own header row 0, then git's three
+    /// context lines) and Shift+Down twice select that hunk's added empty line and <c>Negate</c>, two
+    /// of its four added lines; Shift+F10's "Stage selected lines" stages those two alone (passes
+    /// before the keyboard pass too).
     /// </summary>
     [AvaloniaFact]
     public async Task Lines_chosen_by_F6_the_arrows_and_Shift_F10_are_staged()
@@ -82,6 +85,8 @@ public sealed class KeyboardPassTests
         using var data = new TempDirectory("data");
         using var app = await OpenAsync(data, repo.Path);
         await OpenCalculatorDiffAsync(app);
+        var diff = Repository(app).Diff!;
+        Assert.Equal(2, diff.Diff!.Hunks.Count);
         app.PressF6();
         await app.WaitForAsync(() => app.FocusedRegion() != KeyRegionRole.GraphArea, "the focus out of the graph area");
         for (var f6 = 0; app.FocusedAutomationId() != "DiffText"; f6++)
@@ -91,7 +96,8 @@ public sealed class KeyboardPassTests
         }
 
         app.PressKey(Key.Home, RawInputModifiers.Control);
-        for (var down = 0; down < Phase8aExpectations.K.DownsToLines; down++)
+        var downs = 1 + diff.Diff!.Hunks[0].Lines.Count + Phase8aExpectations.K.DownsToLines;
+        for (var down = 0; down < downs; down++)
         {
             app.PressKey(Key.Down);
         }
@@ -101,7 +107,11 @@ public sealed class KeyboardPassTests
             app.PressKey(Key.Down, RawInputModifiers.Shift);
         }
 
-        await app.WaitForAsync(() => Repository(app).Diff!.SelectedChanges.Count == 2, "two changed lines selected");
+        await app.WaitForAsync(() => diff.SelectedChanges.Count == 2, "two changed lines selected");
+        Assert.All(diff.SelectedChanges, line => Assert.Equal(1, line.Hunk));
+        Assert.Equal(
+            [string.Empty, "    public int Negate(int a) => -a;"],
+            diff.SelectedChanges.OrderBy(line => line.Line).Select(line => diff.Diff!.Hunks[line.Hunk].Lines[line.Line].Text));
         app.MoveToNeutral();
         app.PressKey(Key.F10, RawInputModifiers.Shift);
         var menu = app.Menu();
@@ -109,11 +119,12 @@ public sealed class KeyboardPassTests
         Assert.Equal(Phase8aExpectations.K.StageSelectedLines, menu.Highlighted?.Label);
         app.PressKey(Key.Enter);
         await app.WaitForAsync(() => !app.IsMenuOpen, "the menu to close");
-        await app.WaitForAsync(() => Repository(app).Diff!.SelectedChanges.Count == 0, "the diff read again");
+        await app.WaitForAsync(() => diff.SelectedChanges.Count == 0, "the diff read again");
         await app.WaitForIdleAsync();
 
-        Assert.Equal(Phase8aExpectations.K.StagedAfterHunk, await NumstatAsync(repo, cached: true));
-        Assert.Equal(Phase8aExpectations.K.UnstagedAfterHunk, await NumstatAsync(repo, cached: false));
+        Assert.Equal(Phase8aExpectations.K.StagedAfterG1, await NumstatAsync(repo, cached: true));
+        Assert.Equal(Phase8aExpectations.K.UnstagedAfterG1, await NumstatAsync(repo, cached: false));
+        Assert.Equal(Phase8aExpectations.K.IndexAfterG1, (await repo.GitAsync("show", ":src/Calculator.cs")).StandardOutput.ReplaceLineEndings("\n"));
     }
 
     /// <summary>A blame just opened, nothing picked, answers Shift+F10 with run 0's menu, the caret's run (6.3.2).</summary>
@@ -238,7 +249,7 @@ public sealed class KeyboardPassTests
         await app.WaitForAsync(() => app.FocusedRowPath() == Phase8aExpectations.K.Readme, "the focus on README.md's row");
         held.HoldNext(Phase8aExpectations.K.DiffFilesWord);
         app.PressKey(Key.Enter);
-        var call = await held.Started.WaitAsync(Cancelled);
+        var call = await held.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, Cancelled);
         Assert.Equal(Phase8aExpectations.K.DiffFilesWord, call.Arguments[0]);
         app.PressKey(Key.F10, RawInputModifiers.Shift);
         app.Menu();
@@ -259,7 +270,7 @@ public sealed class KeyboardPassTests
 
         held.HoldNext(Phase8aExpectations.K.DiffFilesWord);
         app.PressKey(Key.Enter);
-        call = await held.Started.WaitAsync(Cancelled);
+        call = await held.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, Cancelled);
         Assert.StartsWith(Phase8aExpectations.K.HeldDiffStart, string.Join(' ', call.Arguments), StringComparison.Ordinal);
         Assert.EndsWith(Phase8aExpectations.K.HeldDiffEnd, string.Join(' ', call.Arguments), StringComparison.Ordinal);
         app.PressKey(Key.M, RawInputModifiers.Control | RawInputModifiers.Shift);
@@ -338,7 +349,7 @@ public sealed class KeyboardPassTests
         held.HoldNext(Phase8aExpectations.K.CommitWord);
         var changes = Repository(app).Changes;
         changes.CommitCommand.Execute(null);
-        await held.Started.WaitAsync(Cancelled);
+        await held.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, Cancelled);
         app.Settle();
         Assert.False(amend.IsEffectivelyEnabled, "Amend is enabled while the commit runs.");
         Assert.Equal(Phase8aExpectations.K.Committing, changes.CommitButtonText);
@@ -350,6 +361,114 @@ public sealed class KeyboardPassTests
         Assert.True(amend.IsEffectivelyEnabled);
         Assert.True(app.FocusVisible, "Amend shows no keyboard frame after the commit.");
         Assert.Equal(Phase8aExpectations.K.First, (await repo.GitAsync("log", "-1", "--format=%s")).StandardOutput.Trim());
+    }
+
+    /// <summary>
+    /// Amend, focused by Tab when a held commit starts, gets the focus back only if the commit took
+    /// it away: the user's Ctrl+Shift+M to the summary while the commit runs leaves the focus in
+    /// the summary once the commit has ended (6.3.5, 6.3.7).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Amend_focused_by_Tab_leaves_the_focus_the_user_moved_while_the_commit_ran()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        var held = new HeldGitRunner();
+        using var app = await OpenAsync(data, repo.Path, held.Probe);
+        await ShowStagePanelAsync(app);
+        app.PressKey(Key.M, RawInputModifiers.Control | RawInputModifiers.Shift);
+        await app.WaitForAsync(() => app.FocusedAutomationId() == "CommitSummary", "the focus in the summary");
+        app.Type(Phase8aExpectations.K.First);
+        var amend = app.Find<CheckBox>("AmendCheckBox");
+        await app.TabToAsync(focused => focused is TextBox { Name: "CommitDescription" }, "the description");
+        await app.TabToAsync(focused => ReferenceEquals(focused, amend), "Amend");
+        Assert.True(app.FocusVisible, "Amend shows no keyboard frame.");
+
+        held.HoldNext(Phase8aExpectations.K.CommitWord);
+        var changes = Repository(app).Changes;
+        changes.CommitCommand.Execute(null);
+        await held.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, Cancelled);
+        app.PressKey(Key.M, RawInputModifiers.Control | RawInputModifiers.Shift);
+        await app.WaitForAsync(() => app.FocusedAutomationId() == "CommitSummary", "the focus in the summary while the commit runs");
+
+        held.Release();
+        await app.WaitForAsync(() => !changes.IsCommitting && !changes.CommitCommand.IsRunning, "the commit to end");
+        await app.WaitForIdleAsync();
+        app.Settle();
+
+        Assert.Equal(Phase8aExpectations.K.First, (await repo.GitAsync("log", "-1", "--format=%s")).StandardOutput.Trim());
+        Assert.True(app.FocusedAutomationId() == "CommitSummary", $"The commit's return took the focus from the summary to {app.DescribeFocus()}.");
+    }
+
+    /// <summary>
+    /// A keyboard Stage of README.md, held at <c>git add</c>, while the user moves the focus to the
+    /// summary by Ctrl+Shift+M: once the stage has ended and the lists show it, the summary keeps the
+    /// focus. The return after a row's action places a focus the action took away, never one the
+    /// user moved meanwhile (6.3.4, 6.3.5).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_keyboard_Stage_held_while_the_user_moves_to_the_summary_leaves_the_focus_there()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        var held = new HeldGitRunner();
+        using var app = await OpenAsync(data, repo.Path, held.Probe);
+        await ShowStagePanelAsync(app);
+        var repository = Repository(app);
+        await PressReadmesStageHeldAsync(app, held);
+
+        app.PressKey(Key.M, RawInputModifiers.Control | RawInputModifiers.Shift);
+        await app.WaitForAsync(() => app.FocusedAutomationId() == "CommitSummary", "the focus in the summary while the stage runs");
+        held.Release();
+        await WaitForReadmeStagedAsync(app, repo, repository);
+
+        Assert.True(app.FocusedAutomationId() == "CommitSummary", $"The stage's return took the focus from the summary to {app.DescribeFocus()}.");
+    }
+
+    /// <summary>
+    /// A keyboard Stage of README.md, held at <c>git add</c>, while the user goes to another tab whose
+    /// stage panel shows: once the stage has ended, the focus is where the switch of tabs left it, and
+    /// no row of the other tab's lists has taken it (6.3.4, 6.3.5).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone()
+    {
+        using var first = await Scenarios.ChangesAsync();
+        using var second = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        var held = new HeldGitRunner();
+        using var app = ShellDriver.StartWithTabs(data.Path, [first.Path, second.Path], activeTab: 1, gitProbe: held.Probe);
+        await app.WaitForRepositoryAsync();
+        await app.WaitForWatchersQuietAsync();
+        app.MoveToNeutral();
+
+        // The second tab's stage panel, then the first tab's, where README.md's Stage is pressed.
+        await ShowStagePanelAsync(app);
+        var other = Repository(app);
+        app.PressCtrlTab();
+        await app.WaitForAsync(() => app.Session.Shell.ActiveTab.Repository is { } shown && !ReferenceEquals(shown, other), "the first tab");
+        await app.WaitForRepositoryAsync();
+        await app.WaitForWatchersQuietAsync();
+        await ShowStagePanelAsync(app);
+        var mine = Repository(app);
+        await PressReadmesStageHeldAsync(app, held);
+
+        app.PressCtrlTab();
+        await app.WaitForAsync(
+            () => ReferenceEquals(app.Session.Shell.ActiveTab.Repository, other) && app.StageRows("UnstagedFileList").Count > 0,
+            "the second tab's stage panel");
+        app.Settle();
+        var afterSwitch = app.FocusedElement;
+        var afterSwitchText = app.DescribeFocus();
+        held.Release();
+        await WaitForReadmeStagedAsync(app, first, mine);
+
+        Assert.True(
+            ReferenceEquals(app.FocusedElement, afterSwitch),
+            $"The stage's return moved the focus from {afterSwitchText}, where the switch of tabs left it, to {app.DescribeFocus()}.");
+        Assert.False(
+            app.FocusIsWithin(app.FindByAutomationId("UnstagedFileList")) || app.FocusIsWithin(app.FindByAutomationId("StagedFileList")),
+            $"A row of the second tab's lists has the focus: {app.DescribeFocus()}.");
     }
 
     /// <summary>G9: in the browser of two signed-in providers, Enter on the switch's other provider keeps the focus there, and Tab goes on to the filter.</summary>
@@ -557,6 +676,40 @@ public sealed class KeyboardPassTests
         await app.WaitForAsync(
             () => Repository(app).Page is BlameViewModel { ShowsText: true } && app.FocusedAutomationId() == "BlameText",
             $"the blame with the focus in its text (it is on {app.DescribeFocus()})");
+    }
+
+    /// <summary>
+    /// F6 to README.md's row, Tab to its Stage (with the keyboard's frame), the next <c>git add</c>
+    /// held, Enter: the held call has started.
+    /// </summary>
+    private static async Task PressReadmesStageHeldAsync(ShellDriver app, HeldGitRunner held)
+    {
+        app.PressF6();
+        await app.WaitForAsync(() => app.FocusedRowPath() == Phase8aExpectations.K.Readme, "the focus on README.md's row");
+        await app.TabToAsync(
+            focused => focused is Control control && AutomationProperties.GetAutomationId(control) == "RowStageButton"
+                && ShellDriver.StageRowOf(control)?.DataContext is ChangedFileRow { Key: Phase8aExpectations.K.Readme },
+            "README.md's Stage");
+        Assert.True(app.FocusVisible, "README.md's Stage shows no keyboard frame.");
+        held.HoldNext(Phase8aExpectations.K.AddWord);
+        app.PressKey(Key.Enter);
+        var call = await held.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, Cancelled);
+        Assert.Equal((Phase8aExpectations.K.AddWord, Phase8aExpectations.K.Readme), (call.Arguments[0], call.Arguments[^1]));
+    }
+
+    /// <summary>
+    /// The held stage of README.md released: waits until its run has ended and the lists show it
+    /// (six unstaged rows), and for the queue to be idle; git's index has README.md staged.
+    /// </summary>
+    private static async Task WaitForReadmeStagedAsync(ShellDriver app, TempRepo repo, RepositoryViewModel repository)
+    {
+        var changes = repository.Changes;
+        await app.WaitForAsync(
+            () => !changes.StageFileCommand.IsRunning && changes.UnstagedTitle == Phase8aExpectations.K.Unstaged6,
+            "README.md's stage to end and the lists to show it");
+        await app.WaitForIdleAsync(repository);
+        app.Settle();
+        Assert.Equal("M  README.md", (await repo.GitAsync("status", "--porcelain", "--", Phase8aExpectations.K.Readme)).StandardOutput.TrimEnd('\r', '\n'));
     }
 
     /// <summary><c>git diff [--cached] --numstat -- src/Calculator.cs</c>, its two tabs written as single spaces.</summary>

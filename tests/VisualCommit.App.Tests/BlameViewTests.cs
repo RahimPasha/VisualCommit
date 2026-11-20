@@ -223,6 +223,33 @@ public class BlameViewTests
         Assert.Equal([AddTracingSha, AddParserSha], pageHost.Shown);
     }
 
+    /// <summary>
+    /// The caret keys pick with any modifier (6.3.2): macOS moves the caret by Cmd with the arrows
+    /// (to a line's or the text's ends) and by Option with them (by words), its platform's keys for
+    /// Windows' Ctrl with them, so an arrow with Cmd or Option picks the caret's run as one with Ctrl
+    /// or Shift does. The headless platform moves no caret on these keys, so the caret is put where
+    /// macOS's keys would take it before each.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task An_arrow_with_Cmd_or_Option_picks_the_carets_run()
+    {
+        using var page = ThreeRuns(out var pageHost);
+        var view = new BlameView { DataContext = page };
+        using var host = DiffHost.Show(view, 700, 400, ThemeVariant.Dark);
+        await page.LoadAsync();
+        DiffHost.Settle();
+        var text = Text(view);
+        Assert.True(text.TextArea.Focus());
+
+        text.TextArea.Caret.Line = 5;
+        host.PressKey(Avalonia.Input.Key.Down, Avalonia.Input.RawInputModifiers.Meta);
+        Assert.Equal(2, page.SelectedRun?.Index);
+        text.TextArea.Caret.Line = 3;
+        host.PressKey(Avalonia.Input.Key.Left, Avalonia.Input.RawInputModifiers.Alt);
+        Assert.Equal(1, page.SelectedRun?.Index);
+        Assert.Equal([AddTracingSha, RenameSha], pageHost.Shown);
+    }
+
     /// <summary>Tab leaves the blame's read-only text (ruling 52, D426): AvaloniaEdit no longer keeps it.</summary>
     [AvaloniaFact]
     public async Task Tab_leaves_the_text()

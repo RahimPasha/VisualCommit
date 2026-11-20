@@ -81,7 +81,9 @@ public partial class WorkingChangesView : UserControl
     /// at its place in that list, else that list's last row, else the other list's first row, else
     /// the summary; when the panel itself has gone (the tree is clean), to the graph. A row's place
     /// is its index in the list. A Discard cancelled in its question gives the focus back to its
-    /// row. The focus comes with the keyboard's frame, as Tab gives it.
+    /// row. The focus comes with the keyboard's frame, as Tab gives it. This happens only when the
+    /// run took the focus away: a focus the user moved meanwhile, to the summary or elsewhere, stays,
+    /// and after a switch to another tab the panel's lists are that tab's and nothing is done.
     /// </summary>
     private void OnRowButtonClick(RoutedEventArgs e, ItemsControl list, ItemsControl other)
     {
@@ -96,12 +98,34 @@ public partial class WorkingChangesView : UserControl
 
         var place = list.IndexFromContainer(container);
         var topLevel = TopLevel.GetTopLevel(this);
-        FocusReturn.AfterRun(command, row, () => RowFocusTarget(topLevel, list, other, place), NavigationMethod.Tab);
+        var armed = DataContext;
+        var pressedPath = (row.DataContext as ChangedFileRow)?.Key;
+
+        // The pressed button keeps the focus while its row stays (a failed action); a list that
+        // reuses the row's controls for another row leaves it on that row, which counts as lost.
+        bool StillOnItsRow() =>
+            ReferenceEquals(DataContext, armed) && row.IsAttachedToVisualTree()
+            && row.DataContext is ChangedFileRow { Key: var path } && path == pressedPath;
+        FocusReturn.AfterRun(
+            command,
+            row,
+            () => RowFocusTarget(armed, topLevel, list, other, place),
+            NavigationMethod.Tab,
+            FocusReturn.LostFrom(topLevel, button, StillOnItsRow));
     }
 
-    /// <summary>Where the focus goes after a row's action (<see cref="OnRowButtonClick"/>).</summary>
-    private InputElement? RowFocusTarget(TopLevel? topLevel, ItemsControl list, ItemsControl other, int place)
+    /// <summary>
+    /// Where the focus goes after a row's action (<see cref="OnRowButtonClick"/>); nowhere when the
+    /// panel shows another tab's lists, its data no longer <paramref name="armed"/>, the one the
+    /// action was pressed in.
+    /// </summary>
+    private InputElement? RowFocusTarget(object? armed, TopLevel? topLevel, ItemsControl list, ItemsControl other, int place)
     {
+        if (!ReferenceEquals(DataContext, armed))
+        {
+            return null;
+        }
+
         if (!this.IsAttachedToVisualTree() || !IsEffectivelyVisible)
         {
             // The panel went with the change it showed: the graph area's own target, the graph.
@@ -233,15 +257,22 @@ public partial class WorkingChangesView : UserControl
 
     /// <summary>
     /// A commit starts while Amend shows the keyboard's frame: Amend, disabled while the commit runs
-    /// (<see cref="WorkingChangesViewModel.CanToggleAmend"/>), gets the focus back once it ends. Seen
-    /// as the commit starts, before Amend is disabled: the panel's state says so first.
+    /// (<see cref="WorkingChangesViewModel.CanToggleAmend"/>), gets the focus back once it ends,
+    /// unless the user has moved the focus meanwhile or the panel shows another tab's. Seen as the
+    /// commit starts, before Amend is disabled: the panel's state says so first.
     /// </summary>
     private void OnViewModelChanged(object? sender, PropertyChangedEventArgs e)
     {
         if (e.PropertyName == nameof(WorkingChangesViewModel.IsCommitting) && _viewModel is { IsCommitting: true } viewModel
             && AmendCheckBox.IsFocused && AmendCheckBox.Classes.Contains(FocusVisibleClass))
         {
-            FocusReturn.AfterRun(viewModel.CommitCommand, AmendCheckBox, () => AmendCheckBox, NavigationMethod.Tab);
+            var armed = DataContext;
+            FocusReturn.AfterRun(
+                viewModel.CommitCommand,
+                AmendCheckBox,
+                () => ReferenceEquals(DataContext, armed) ? AmendCheckBox : null,
+                NavigationMethod.Tab,
+                FocusReturn.LostFrom(TopLevel.GetTopLevel(this), AmendCheckBox, static () => false));
         }
     }
 }

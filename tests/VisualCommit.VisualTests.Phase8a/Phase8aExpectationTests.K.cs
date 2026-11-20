@@ -68,6 +68,15 @@ public sealed class Phase8aExpectationTestsK
         Assert.Equal(K.UnstagedAfterLines, Numstat(2, 0));
         Assert.EndsWith("\n    public int Square(int a) => a * a;\n}\n", Scenarios.ChangesFiles.CalculatorWorking, StringComparison.Ordinal);
 
+        // G1 (KeyboardPassTests): the second hunk's empty line and Negate staged on the untouched
+        // diff: two lines added (2 0 staged), Add's change and the other two still unstaged (3 1).
+        var afterG1 = Lines(K.IndexAfterG1);
+        Assert.Equal(committed.Count + 2, afterG1.Count);
+        Assert.Equal(["    }", string.Empty, "    public int Negate(int a) => -a;", "}"], afterG1.TakeLast(4));
+        Assert.Equal(committed.Take(committed.Count - 1), afterG1.Take(committed.Count - 1));
+        Assert.Equal(K.StagedAfterG1, Numstat(2, 0));
+        Assert.Equal(K.UnstagedAfterG1, Numstat(3, 1));
+
         static string Numstat(int added, int removed) => $"{added} {removed} {K.Calculator}";
     }
 
@@ -77,8 +86,22 @@ public sealed class Phase8aExpectationTestsK
         // Each row: its own button, its Stage, its Discard; src/Calculator.cs is the seventh row.
         Assert.Equal(7, K.UnstagedRows.Count);
         Assert.Equal(K.Calculator, K.UnstagedRows[^1]);
-        Assert.Equal(K.TabsToCalculator, 3 * (K.UnstagedRows.Count - 1));
+        Assert.Equal(["StageFileRow", "RowStageButton", "RowDiscardButton"], K.RowStops);
+        Assert.Equal(K.TabsToCalculator, K.RowStops.Count * (K.UnstagedRows.Count - 1));
         Assert.Equal(["README.md", "config/settings.json", "src/helpers.py"], K.StagedRows);
+
+        // The walk, Tab by Tab from README.md's own button: README.md's Stage and Discard, then each
+        // next row's own button, Stage and Discard, and last src/Calculator.cs's own button.
+        Assert.Equal(K.TabsToCalculator, K.CalculatorWalk.Count);
+        var expected = new List<(string Row, string Id)>();
+        for (var row = 0; row < K.UnstagedRows.Count; row++)
+        {
+            expected.AddRange(K.RowStops.Select(id => (K.UnstagedRows[row], id)));
+        }
+
+        Assert.Equal(expected.Skip(1).Take(K.TabsToCalculator), K.CalculatorWalk);
+        Assert.Equal((K.Readme, K.Ids.RowStageButton), K.CalculatorWalk[0]);
+        Assert.Equal((K.Calculator, K.Ids.StageFileRow), K.CalculatorWalk[^1]);
 
         // From line 1, each Down a line: lines 2, 3, 4, the runs 0, 1 and 2.
         Assert.Equal(K.DownsToRun2, K.BlameDowns.Count);

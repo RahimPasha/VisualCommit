@@ -680,6 +680,7 @@ public class WorkingChangesTests
         Assert.Equal("a.txt", Assert.Single(host.Staged).Path);
         var summary = view.GetVisualDescendants().OfType<TextBox>().Single(box => box.Name == "CommitSummary");
         Assert.True(summary.IsFocused, $"The summary does not have the focus: {window.Window.FocusManager?.GetFocusedElement()?.GetType().Name ?? "nothing"}.");
+        Assert.Contains(":focus-visible", summary.Classes);
     }
 
     /// <summary>

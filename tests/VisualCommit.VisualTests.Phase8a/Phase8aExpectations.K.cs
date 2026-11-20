@@ -37,6 +37,17 @@ public static partial class Phase8aExpectations
         /// <summary>Tabs from the unstaged list's first row's own button to <c>src/Calculator.cs</c>'s: each row's own button, its Stage, its Discard (6.3.4).</summary>
         public const int TabsToCalculator = 18;
 
+        /// <summary>An unstaged row's stops in Tab's order (6.3.4): its own button, its Stage, its Discard.</summary>
+        public static IReadOnlyList<string> RowStops { get; } = [Ids.StageFileRow, Ids.RowStageButton, Ids.RowDiscardButton];
+
+        /// <summary>
+        /// K1's step 4: the row and the id each of the 18 Tabs reaches, in order, from <c>README.md</c>'s
+        /// own button (F6's) along <see cref="UnstagedRows"/> and <see cref="RowStops"/>, ending on
+        /// <c>src/Calculator.cs</c>'s own button.
+        /// </summary>
+        public static IReadOnlyList<(string Row, string Id)> CalculatorWalk { get; } =
+            [.. Enumerable.Range(1, TabsToCalculator).Select(tab => (UnstagedRows[tab / RowStops.Count], RowStops[tab % RowStops.Count]))];
+
         /// <summary>The Downs after Ctrl+Home that bring the caret to row 4 of the remaining hunk (its header row 0).</summary>
         public const int DownsToLines = 4;
 
@@ -57,6 +68,20 @@ public static partial class Phase8aExpectations
 
         /// <summary><c>git diff --numstat -- src/Calculator.cs</c> after the two lines.</summary>
         public const string UnstagedAfterLines = "2 0 src/Calculator.cs";
+
+        /// <summary>
+        /// <c>KeyboardPassTests</c>' G1, on the diff as the scenario has it: the second hunk's added
+        /// empty line and <c>Negate</c> staged by "Stage selected lines", so that the lines staged are
+        /// not a whole hunk. <c>git diff --cached --numstat -- src/Calculator.cs</c> then.
+        /// </summary>
+        public const string StagedAfterG1 = "2 0 src/Calculator.cs";
+
+        /// <summary><c>git diff --numstat -- src/Calculator.cs</c> after G1: <c>Add</c>'s changed line and the second empty line and <c>Square</c>.</summary>
+        public const string UnstagedAfterG1 = "3 1 src/Calculator.cs";
+
+        /// <summary>The index's <c>src/Calculator.cs</c> after G1: the committed file with the empty line and <c>Negate</c> before its last <c>}</c>.</summary>
+        public static string IndexAfterG1 { get; } = Scenarios.ChangesFiles.CalculatorCommitted
+            .Replace("        return a / b;\n    }\n}\n", "        return a / b;\n    }\n\n    public int Negate(int a) => -a;\n}\n", StringComparison.Ordinal);
 
         /// <summary>The index's <c>src/Calculator.cs</c> after the hunk: the committed file with <c>Add</c>'s changed line and no other.</summary>
         public static string IndexAfterHunk { get; } = Scenarios.ChangesFiles.CalculatorCommitted
@@ -148,12 +173,18 @@ public static partial class Phase8aExpectations
         public const string Private = "Private";
         public const string Hello = "hello";
 
+        /// <summary>K5 after step 4: the browser's four rows of "hosting", in phase 7a's order (its <c>Phase7aExpectations.B.Rows</c>, GitHub's: the most recently updated first).</summary>
+        public static IReadOnlyList<string> BrowserRows { get; } = [OctoHello, "octo/tool", "octo/notes", "octo/website"];
+
         /// <summary>The URL "Choose" fills for <c>octo/hello</c> on the fake's port.</summary>
         public static string HelloUrl(int port) => string.Create(System.Globalization.CultureInfo.InvariantCulture, $"http://127.0.0.1:{port}/octo/hello.git");
 
         /// <summary>The git calls the K6 and K7 holds wait for: the unstaged diff's read and the commit (6.4).</summary>
         public const string DiffFilesWord = "diff-files";
         public const string CommitWord = "commit";
+
+        /// <summary>The git call <c>KeyboardPassTests</c>' held keyboard Stage waits for: a row's Stage is <c>add --all -- &lt;path&gt;</c>.</summary>
+        public const string AddWord = "add";
         public const string HeldDiffStart = "diff-files -p";
         public const string HeldDiffEnd = "-- README.md";
         public const string HeldCommit = "commit --file=- --cleanup=whitespace";
@@ -185,6 +216,76 @@ public static partial class Phase8aExpectations
 
         /// <summary>The rounds of method 3's hold: 150 s, under the hang watchdog's 3 minutes (open point 42).</summary>
         public const int FetchHoldRounds = 300;
+
+        // ---- The ids the steps wait on and read (the report's steps and expected results) ---------
+
+        /// <summary>
+        /// The automation ids, and the names of the controls found by name, that part K's steps wait
+        /// on and its expected results read, as the report writes them; §12's twins of methods 1 and 2
+        /// wait on the same ids.
+        /// </summary>
+        public static class Ids
+        {
+            // The stage panel.
+            public const string UnstagedFileList = "UnstagedFileList";
+            public const string StagedFileList = "StagedFileList";
+            public const string UnstagedTitle = "UnstagedTitle";
+            public const string StageFileRow = "StageFileRow";
+            public const string RowStageButton = "RowStageButton";
+            public const string RowDiscardButton = "RowDiscardButton";
+            public const string RowUnstageButton = "RowUnstageButton";
+            public const string CommitSummary = "CommitSummary";
+            public const string CommitDescription = "CommitDescription";
+            public const string SummaryCounter = "SummaryCounter";
+            public const string CommitButton = "CommitButton";
+            public const string AmendCheckBox = "AmendCheckBox";
+            public const string CommitError = "CommitError";
+            public const string NoStaged = "NoStaged";
+
+            // The diff.
+            public const string DiffView = "DiffView";
+            public const string DiffText = "DiffText";
+            public const string DiffTextHost = "DiffTextHost";
+            public const string DiffFileName = "DiffFileName";
+            public const string DiffFolder = "DiffFolder";
+            public const string StageHunkButton = "StageHunkButton";
+            public const string DiscardHunkButton = "DiscardHunkButton";
+            public const string InlineDiffButton = "InlineDiffButton";
+            public const string SideBySideDiffButton = "SideBySideDiffButton";
+            public const string StageFileButton = "StageFileButton";
+            public const string DiscardFileButton = "DiscardFileButton";
+            public const string StageLinesButton = "StageLinesButton";
+            public const string DiscardLinesButton = "DiscardLinesButton";
+            public const string UnstageLinesButton = "UnstageLinesButton";
+            public const string UnstageFileButton = "UnstageFileButton";
+
+            // The blame and the commit's details.
+            public const string BlameText = "BlameText";
+            public const string BlameGutter = "BlameGutter";
+            public const string BlameTitle = "BlameTitle";
+            public const string BlameCaption = "BlameCaption";
+            public const string DetailsSubject = "DetailsSubject";
+            public const string RightPanel = "RightPanel";
+
+            // The status bar and the panels.
+            public const string OperationStatus = "OperationStatus";
+            public const string OperationProgress = "OperationProgress";
+            public const string OperationCancelButton = "OperationCancelButton";
+            public const string MainArea = "MainArea";
+            public const string LeftPanel = "LeftPanel";
+            public const string LeftSplitter = "LeftSplitter";
+
+            // The clone form and its browser.
+            public const string CloneRepoButton = "CloneRepoButton";
+            public const string CloneFromGitHubButton = "CloneFromGitHubButton";
+            public const string CloneUrlBox = "CloneUrlBox";
+            public const string CloneParentBox = "CloneParentBox";
+            public const string CloneNameBox = "CloneNameBox";
+            public const string CloneFromGitHubFilter = "CloneFromGitHubFilter";
+            public const string CloneFromGitHubList = "CloneFromGitHubList";
+            public const string CancelButton = "CancelButton";
+            public const string ConfirmButton = "ConfirmButton";
+        }
 
         // ---- The pictures (the report's Screenshots column) -------------------------------------------
 

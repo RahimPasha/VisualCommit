@@ -62,13 +62,12 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         AssertFocusedRowAlone(app, K.Readme);
 
         // Step 4: 18 Tabs along each row's own button, its Stage and its Discard.
-        for (var tab = 1; tab <= K.TabsToCalculator; tab++)
+        for (var tab = 1; tab <= K.CalculatorWalk.Count; tab++)
         {
-            var row = K.UnstagedRows[tab / 3];
-            var id = (tab % 3) switch { 1 => "RowStageButton", 2 => "RowDiscardButton", _ => "StageFileRow" };
+            var (row, id) = K.CalculatorWalk[tab - 1];
             await app.TabToAsync(focused => IsRowButton(focused, row, id), $"{row}'s {id} (Tab {tab})");
             Assert.True(app.FocusVisible, $"{row}'s {id} shows no keyboard frame (Tab {tab}).");
-            AssertRowButtonsAfterTab(app, row, id, previous: tab % 3 == 0 ? K.UnstagedRows[(tab / 3) - 1] : null);
+            AssertRowButtonsAfterTab(app, row, id, previous: id == K.Ids.StageFileRow ? K.CalculatorWalk[tab - 2].Row : null);
         }
 
         Assert.Equal(K.Calculator, app.FocusedRowPath());
@@ -77,11 +76,11 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         // Step 5: Enter opens the diff; the text takes the focus, without a frame.
         app.PressKey(Key.Enter);
         await app.WaitForAsync(() => Repository(app).Diff is { ShowsText: true } diff && diff.Target.Path == K.Calculator, "src/Calculator.cs's diff");
-        await app.WaitForAsync(() => app.FocusedAutomationId() == "DiffText", $"the focus in DiffText (it is on {app.DescribeFocus()})");
+        await app.WaitForAsync(() => app.FocusedAutomationId() == K.Ids.DiffText, $"the focus in DiffText (it is on {app.DescribeFocus()})");
         Assert.False(app.FocusVisible, "The diff's text shows the keyboard's frame.");
         AssertDiffHeader(app);
         AssertToolbar(app, lines: false);
-        Assert.Equal(["StageHunkButton", "DiscardHunkButton", "StageHunkButton", "DiscardHunkButton"], HunkButtons(app).Select(AutomationProperties.GetAutomationId));
+        Assert.Equal([K.Ids.StageHunkButton, K.Ids.DiscardHunkButton, K.Ids.StageHunkButton, K.Ids.DiscardHunkButton], HunkButtons(app).Select(AutomationProperties.GetAutomationId));
         Assert.True(Rows(app).Unstaged.Rows.Single(row => row.Key == K.Calculator).IsSelected, "src/Calculator.cs's row is not selected.");
 
         // Step 6 (k1a): Tab, the first hunk's Stage hunk with the frame.
@@ -103,22 +102,22 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         Assert.Equal(K.StagedAfterHunk, await NumstatAsync(repo, cached: true));
         Assert.Equal(K.UnstagedAfterHunk, await NumstatAsync(repo, cached: false));
         Assert.Equal(K.IndexAfterHunk, await IndexFileAsync(repo));
-        Assert.Equal(["StageHunkButton", "DiscardHunkButton"], HunkButtons(app).Select(AutomationProperties.GetAutomationId));
+        Assert.Equal([K.Ids.StageHunkButton, K.Ids.DiscardHunkButton], HunkButtons(app).Select(AutomationProperties.GetAutomationId));
         Assert.Equal(4, diff.Diff!.Hunks.Single().Lines.Count(line => line.Kind == DiffLineKind.Added));
         Assert.Contains(K.Calculator, Rows(app).Staged.Rows.Select(row => row.Key));
         Assert.Contains(K.Calculator, Rows(app).Unstaged.Rows.Select(row => row.Key));
         Assert.Equal(K.Unstaged7, Rows(app).UnstagedTitle);
-        Assert.True(app.FocusedAutomationId() == "DiffText", $"The focus is on {app.DescribeFocus()}, not in the diff's text.");
+        Assert.True(app.FocusedAutomationId() == K.Ids.DiffText, $"The focus is on {app.DescribeFocus()}, not in the diff's text.");
         Assert.False(app.FocusVisible, "The text shows the keyboard's frame after the hunk.");
 
         // Step 8 (k1c): Shift+Tab, Discard file with the frame.
         app.PressKey(Key.Tab, RawInputModifiers.Shift);
-        Assert.True(app.FocusedAutomationId() == "DiscardFileButton", $"Shift+Tab did not reach Discard file: the focus is on {app.DescribeFocus()}.");
+        Assert.True(app.FocusedAutomationId() == K.Ids.DiscardFileButton, $"Shift+Tab did not reach Discard file: the focus is on {app.DescribeFocus()}.");
         Assert.True(app.FocusVisible, "Discard file shows no keyboard frame.");
         Picture(app, K.K1cToolbar);
 
         // Step 9 (k1d): Tab back into the text; Ctrl+Home, four Downs, two Shift+Downs; Shift+F10.
-        await app.TabToAsync(focused => FocusedId(focused) == "DiffText", "the diff's text");
+        await app.TabToAsync(focused => FocusedId(focused) == K.Ids.DiffText, "the diff's text");
         app.PressKey(Key.Home, RawInputModifiers.Control);
         for (var down = 0; down < K.DownsToLines; down++)
         {
@@ -156,20 +155,20 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
             diff.Diff!.Hunks.SelectMany(hunk => hunk.Lines).Where(line => line.Kind == DiffLineKind.Added).Select(line => line.Text));
 
         // Step 11, scripted only: Tab to the text, Shift+Tab to Side by side, Enter.
-        for (var tab = 0; FocusedId(app.FocusedElement) != "DiffText"; tab++)
+        for (var tab = 0; FocusedId(app.FocusedElement) != K.Ids.DiffText; tab++)
         {
             Assert.True(tab < K.ModeWalkLimit, $"{K.ModeWalkLimit} Tabs did not reach the diff's text: the focus is on {app.DescribeFocus()}.");
             await app.TabToAsync(_ => true, "the next element");
         }
 
-        for (var tab = 0; FocusedId(app.FocusedElement) != "SideBySideDiffButton"; tab++)
+        for (var tab = 0; FocusedId(app.FocusedElement) != K.Ids.SideBySideDiffButton; tab++)
         {
             Assert.True(tab < K.ModeWalkLimit, $"{K.ModeWalkLimit} Shift+Tabs did not reach Side by side: the focus is on {app.DescribeFocus()}.");
             await app.TabToAsync(_ => true, "the element before", shift: true);
         }
 
         app.PressKey(Key.Enter);
-        await app.WaitForAsync(() => app.Find<Button>("SideBySideDiffButton").Classes.Contains("selected"), "Side by side selected");
+        await app.WaitForAsync(() => app.Find<Button>(K.Ids.SideBySideDiffButton).Classes.Contains("selected"), "Side by side selected");
         Assert.Equal(K.StagedAfterLines, await NumstatAsync(repo, cached: true));
         Assert.Equal(K.UnstagedAfterLines, await NumstatAsync(repo, cached: false));
 
@@ -197,21 +196,21 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         app.PressF6();
         await app.WaitForAsync(() => app.FocusedRowPath() == K.Reader, "the focus on src/Reader.cs's row");
         app.PressKey(Key.Enter);
-        await app.WaitForAsync(() => Repository(app).Diff is { ShowsText: true } && app.FocusedAutomationId() == "DiffText", "src/Reader.cs's diff with the focus in its text");
+        await app.WaitForAsync(() => Repository(app).Diff is { ShowsText: true } && app.FocusedAutomationId() == K.Ids.DiffText, "src/Reader.cs's diff with the focus in its text");
 
         // Step 4: Ctrl+Shift+B, the blame with the focus in its text; nothing picked.
         app.PressKey(Key.B, RawInputModifiers.Control | RawInputModifiers.Shift);
         await app.WaitForAsync(
-            () => Repository(app).Page is BlameViewModel { ShowsText: true } && app.FocusedAutomationId() == "BlameText",
+            () => Repository(app).Page is BlameViewModel { ShowsText: true } && app.FocusedAutomationId() == K.Ids.BlameText,
             $"the blame with the focus in its text (it is on {app.DescribeFocus()})");
         var blame = (BlameViewModel)Repository(app).Page!;
-        var text = app.Find<BlameTextEditor>("BlameText");
-        Assert.Equal(K.BlameTitle, app.Find<TextBlock>("BlameTitle").Text);
-        Assert.Equal(K.BlameCaption, app.Find<TextBlock>("BlameCaption").Text);
+        var text = app.Find<BlameTextEditor>(K.Ids.BlameText);
+        Assert.Equal(K.BlameTitle, app.Find<TextBlock>(K.Ids.BlameTitle).Text);
+        Assert.Equal(K.BlameCaption, app.Find<TextBlock>(K.Ids.BlameCaption).Text);
         Assert.Equal(K.BlameLines, text.Document.LineCount);
         Assert.Equal(K.BlameRuns, blame.Runs.Count);
         Assert.Null(blame.SelectedRun);
-        Assert.Null(app.Find<BlameGutter>("BlameGutter").SelectedRun);
+        Assert.Null(app.Find<BlameGutter>(K.Ids.BlameGutter).SelectedRun);
         Assert.Equal(1, text.TextArea.Caret.Line);
 
         // Step 5 (k2a): three Downs, each picking the caret's run and showing its commit.
@@ -221,7 +220,7 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
             await app.WaitForAsync(() => blame.SelectedRun?.Index == run && text.TextArea.Caret.Line == line, $"run {run} picked on line {line}");
             if (subject is null)
             {
-                await app.WaitForAsync(() => app.Session.Shell.ActiveTab.ShowsStagePanel && TextOf(app, "UnstagedTitle") == K.Unstaged1, "the stage panel for the run not committed yet");
+                await app.WaitForAsync(() => app.Session.Shell.ActiveTab.ShowsStagePanel && TextOf(app, K.Ids.UnstagedTitle) == K.Unstaged1, "the stage panel for the run not committed yet");
                 Assert.True(Repository(app).IsWorkingRowSelected, "The working-changes row is not selected behind the page.");
             }
             else
@@ -229,17 +228,17 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
                 await WaitForSubjectAsync(app, subject);
             }
 
-            Assert.True(app.FocusedAutomationId() == "BlameText", $"The focus left the blame's text for {app.DescribeFocus()}.");
+            Assert.True(app.FocusedAutomationId() == K.Ids.BlameText, $"The focus left the blame's text for {app.DescribeFocus()}.");
         }
 
         var shot = Picture(app, K.K2aBlameRun);
-        var gutter = app.BoundsOf(app.Find<BlameGutter>("BlameGutter"));
+        var gutter = app.BoundsOf(app.Find<BlameGutter>(K.Ids.BlameGutter));
         AssertColour(K.SelectionLight, shot, new Point(gutter.Right - 2, LineCentreY(app, text, 4)), "run 2's gutter beside line 4 (VcSelectionBrush)");
         AssertColour(K.PanelLight, shot, new Point(gutter.Right - 2, LineCentreY(app, text, 1)), "run 0's gutter beside line 1 (VcPanelBackgroundBrush)");
         AssertColour(K.WindowLight, shot, new Point(gutter.Right - 2, LineCentreY(app, text, 3)), "run 1's gutter beside line 3 (VcWindowBackgroundBrush)");
         Assert.StartsWith(K.Run2Sha, Assert.Single(Repository(app).SelectedCommits).Sha, StringComparison.Ordinal);
-        Assert.Equal(K.RenameTheParser, TextOf(app, "DetailsSubject"));
-        Assert.Contains(app.FindByAutomationId("RightPanel").GetVisualDescendants().OfType<TextBlock>(), block => block.IsEffectivelyVisible && block.Text is { } author && author.Contains(K.MiraKovac, StringComparison.Ordinal) && author.Contains(K.MiraEmail, StringComparison.Ordinal));
+        Assert.Equal(K.RenameTheParser, TextOf(app, K.Ids.DetailsSubject));
+        Assert.Contains(app.FindByAutomationId(K.Ids.RightPanel).GetVisualDescendants().OfType<TextBlock>(), block => block.IsEffectivelyVisible && block.Text is { } author && author.Contains(K.MiraKovac, StringComparison.Ordinal) && author.Contains(K.MiraEmail, StringComparison.Ordinal));
         Assert.False(app.IsMenuOpen);
 
         // Step 6 (k2b): Shift+F10, run 2's menu.
@@ -320,8 +319,8 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
 
         // Step 8: F6 to the right panel, Tab until Cancel, Enter.
         await F6ToRightPanelAsync(app);
-        var cancel = app.Find<Button>("OperationCancelButton");
-        var tabs = await WalkAsync(app, () => cancel.IsFocused, "OperationCancelButton");
+        var cancel = app.Find<Button>(K.Ids.OperationCancelButton);
+        var tabs = await WalkAsync(app, () => cancel.IsFocused, K.Ids.OperationCancelButton);
         TestContext.Current.TestOutputHelper?.WriteLine($"K8: Tabs from the right panel to Cancel: {tabs.ToString(CultureInfo.InvariantCulture)}");
         app.PressKey(Key.Enter);
         await AssertFetchCancelledAsync(app, fetch, repo, refs);
@@ -329,11 +328,11 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         // Step 9 (k8a): the hold released; F6 to the right panel, Tab until LeftSplitter, Right.
         hold.Release();
         await F6ToRightPanelAsync(app);
-        var splitter = app.Find<GridSplitter>("LeftSplitter");
-        tabs = await WalkAsync(app, () => splitter.IsFocused, "LeftSplitter");
+        var splitter = app.Find<GridSplitter>(K.Ids.LeftSplitter);
+        tabs = await WalkAsync(app, () => splitter.IsFocused, K.Ids.LeftSplitter);
         TestContext.Current.TestOutputHelper?.WriteLine($"K8: Tabs from the right panel to LeftSplitter: {tabs.ToString(CultureInfo.InvariantCulture)}");
         Assert.True(app.FocusVisible, "LeftSplitter shows no keyboard frame.");
-        var columns = app.Find<Grid>("MainArea").ColumnDefinitions;
+        var columns = app.Find<Grid>(K.Ids.MainArea).ColumnDefinitions;
         var graphLeft = columns[0].ActualWidth;
         var graphWidth = columns[1].ActualWidth;
         Assert.Equal(K.LeftBefore, graphLeft, 1.0);
@@ -343,10 +342,10 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         await app.WaitForAsync(() => app.Session.SessionState.Current.LeftPanelWidth is { } width && Math.Abs(width - K.LeftAfter) < 0.5, "the session's left width 270");
         Picture(app, K.K8aSplitter);
         Assert.True(splitter.IsFocused && app.FocusVisible, "LeftSplitter lost the focus or its frame.");
-        Assert.Equal(K.LeftAfter, app.FindByAutomationId("LeftPanel").Bounds.Width, 1.0);
+        Assert.Equal(K.LeftAfter, app.FindByAutomationId(K.Ids.LeftPanel).Bounds.Width, 1.0);
         Assert.Equal(graphWidth - 10, columns[1].ActualWidth, 1.0);
         Assert.Equal(K.RightWidth, columns[2].ActualWidth, 1.0);
-        Assert.Equal(K.RightWidth, app.FindByAutomationId("RightPanel").Bounds.Width, 1.0);
+        Assert.Equal(K.RightWidth, app.FindByAutomationId(K.Ids.RightPanel).Bounds.Width, 1.0);
         Assert.Equal(exact, await repo.ExactStateAsync());
 
         // The method's end: no held fetch gave up (the hold is disposed, a release, by its using).
@@ -373,11 +372,11 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         AssertFocusedRowAlone(app, K.Readme);
 
         // Step 4 (k4a): Tab, Stage drawn and framed.
-        await app.TabToAsync(focused => IsRowButton(focused, K.Readme, "RowStageButton"), "README.md's Stage");
+        await app.TabToAsync(focused => IsRowButton(focused, K.Readme, K.Ids.RowStageButton), "README.md's Stage");
         Picture(app, K.K4aRowStage);
-        var row = app.StageRow("UnstagedFileList", K.Readme)!;
+        var row = app.StageRow(K.Ids.UnstagedFileList, K.Readme)!;
         Assert.True(app.FocusVisible, "Stage shows no keyboard frame.");
-        Assert.Equal((1.0, 0.0), (ShellDriver.RowButton(row, "RowStageButton").Opacity, ShellDriver.RowButton(row, "RowDiscardButton").Opacity));
+        Assert.Equal((1.0, 0.0), (ShellDriver.RowButton(row, K.Ids.RowStageButton).Opacity, ShellDriver.RowButton(row, K.Ids.RowDiscardButton).Opacity));
         Assert.Equal(exact, await repo.ExactStateAsync());
 
         // Step 5 (k4b): Enter stages README.md; the focus on the row now first.
@@ -391,10 +390,10 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         AssertChangedOnlyIn(exact, await repo.ExactStateAsync(), K.Readme);
         Assert.Equal(K.Logo, Rows(app).Unstaged.Rows[0].Key);
         Assert.Equal(K.Staged3, Rows(app).StagedTitle);
-        Assert.True(app.FocusIsWithin(app.FindByAutomationId("UnstagedFileList")), "The focus is not in the unstaged list.");
+        Assert.True(app.FocusIsWithin(app.FindByAutomationId(K.Ids.UnstagedFileList)), "The focus is not in the unstaged list.");
         Assert.True(app.FocusVisible, "assets/logo.png's row shows no keyboard frame.");
-        var logo = app.StageRow("UnstagedFileList", K.Logo)!;
-        Assert.Equal((0.0, 0.0), (ShellDriver.RowButton(logo, "RowStageButton").Opacity, ShellDriver.RowButton(logo, "RowDiscardButton").Opacity));
+        var logo = app.StageRow(K.Ids.UnstagedFileList, K.Logo)!;
+        Assert.Equal((0.0, 0.0), (ShellDriver.RowButton(logo, K.Ids.RowStageButton).Opacity, ShellDriver.RowButton(logo, K.Ids.RowDiscardButton).Opacity));
         Assert.Null(Repository(app).Diff);
     }
 
@@ -426,9 +425,9 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         await app.SignInAsync(served.OctoToken, TestContext.Current.CancellationToken);
 
         // Step 2: the clone form, its URL box focused.
-        app.Click(app.FindByAutomationId("CloneRepoButton"));
-        var button = app.Find<Button>("CloneFromGitHubButton");
-        await app.WaitForAsync(() => app.FocusedAutomationId() == "CloneUrlBox" && button.IsEffectivelyVisible, "the clone form with the URL box focused");
+        app.Click(app.FindByAutomationId(K.Ids.CloneRepoButton));
+        var button = app.Find<Button>(K.Ids.CloneFromGitHubButton);
+        await app.WaitForAsync(() => app.FocusedAutomationId() == K.Ids.CloneUrlBox && button.IsEffectivelyVisible, "the clone form with the URL box focused");
         Assert.Equal(K.FromGitHub, AutomationProperties.GetName(button));
 
         // Step 3: Shift+Tab to From GitHub….
@@ -439,34 +438,33 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         app.PressKey(Key.Enter);
         var browser = await app.WaitForDialogAsync<CloneFromGitHubDialogViewModel>();
         await app.WaitForAsync(() => browser.Load.IsCompleted, "the browser's list");
-        await app.WaitForAsync(() => app.FocusedAutomationId() == "CloneFromGitHubFilter", "the filter focused");
+        await app.WaitForAsync(() => app.FocusedAutomationId() == K.Ids.CloneFromGitHubFilter, "the filter focused");
         Assert.Equal(K.CloneFromGitHubTitle, browser.Title);
         Assert.True(string.IsNullOrEmpty(browser.Filter));
-        Assert.Equal(4, browser.Rows.Count);
-        Assert.Equal(K.OctoHello, browser.Rows[0].FullName);
+        Assert.Equal(K.BrowserRows, browser.Rows.Select(row => row.FullName));
         Assert.Contains(K.Private, browser.Rows[0].Detail ?? string.Empty, StringComparison.Ordinal);
         Assert.Null(browser.Selected);
-        Assert.False(app.FindByAutomationId(app.TopDialogView!, "ConfirmButton").IsEffectivelyEnabled, "Choose is enabled with nothing selected.");
+        Assert.False(app.FindByAutomationId(app.TopDialogView!, K.Ids.ConfirmButton).IsEffectivelyEnabled, "Choose is enabled with nothing selected.");
 
         // Step 5: Tab into the list, Home selects octo/hello.
-        await app.TabToAsync(focused => focused is Control control && control.GetSelfAndVisualAncestors().OfType<Control>().Any(ancestor => AutomationProperties.GetAutomationId(ancestor) == "CloneFromGitHubList"), "the browser's list");
+        await app.TabToAsync(focused => focused is Control control && control.GetSelfAndVisualAncestors().OfType<Control>().Any(ancestor => AutomationProperties.GetAutomationId(ancestor) == K.Ids.CloneFromGitHubList), "the browser's list");
         app.PressKey(Key.Home);
         await app.WaitForAsync(() => browser.Selected?.FullName == K.OctoHello, "octo/hello selected");
-        Assert.True(app.FindByAutomationId(app.TopDialogView!, "ConfirmButton").IsEffectivelyEnabled, "Choose is disabled with octo/hello selected.");
+        Assert.True(app.FindByAutomationId(app.TopDialogView!, K.Ids.ConfirmButton).IsEffectivelyEnabled, "Choose is disabled with octo/hello selected.");
 
         // Step 6 (k5a): Choose, by the keys. Enter in the list is the list's item's (it selects
         // and chooses nothing), so Choose is reached by Tab and pressed by Enter.
-        await app.TabToAsync(focused => focused is Control { Name: "CancelButton" }, "Cancel");
-        await app.TabToAsync(focused => focused is Control { Name: "ConfirmButton" }, K.Choose);
+        await app.TabToAsync(focused => focused is Control { Name: K.Ids.CancelButton }, "Cancel");
+        await app.TabToAsync(focused => focused is Control { Name: K.Ids.ConfirmButton }, K.Choose);
         app.PressKey(Key.Enter);
         await app.WaitForAsync(() => browser.IsClosed && button.IsFocused, $"the browser closed and From GitHub… focused (it is on {app.DescribeFocus()})");
         app.MoveToNeutral();
         Picture(app, K.K5aChosen);
         var welcome = app.Session.Shell.ActiveTab.Welcome;
         Assert.Equal(K.HelloUrl(served.GitHub.Port), welcome.CloneUrl);
-        Assert.Equal(K.HelloUrl(served.GitHub.Port), app.Find<TextBox>("CloneUrlBox").Text);
-        Assert.True(string.IsNullOrEmpty(app.Find<TextBox>("CloneParentBox").Text));
-        Assert.Equal(K.Hello, app.Find<TextBox>("CloneNameBox").Text);
+        Assert.Equal(K.HelloUrl(served.GitHub.Port), app.Find<TextBox>(K.Ids.CloneUrlBox).Text);
+        Assert.True(string.IsNullOrEmpty(app.Find<TextBox>(K.Ids.CloneParentBox).Text));
+        Assert.Equal(K.Hello, app.Find<TextBox>(K.Ids.CloneNameBox).Text);
         Assert.True(button.IsEffectivelyEnabled && button.IsFocused, "From GitHub… is not enabled with the focus.");
         Assert.False(app.FocusVisible, "From GitHub… shows the keyboard's frame.");
         Assert.DoesNotContain(CallsSince(app, mark), call => call.StartsWith("git clone", StringComparison.Ordinal));
@@ -496,17 +494,17 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         await app.WaitForAsync(() => app.FocusedRowPath() == K.Readme, "the focus on README.md's row");
         held.HoldNext(K.DiffFilesWord);
         app.PressKey(Key.Enter);
-        var call = string.Join(' ', (await held.Started.WaitAsync(TestContext.Current.CancellationToken)).Arguments);
+        var call = string.Join(' ', (await held.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken)).Arguments);
         Assert.StartsWith(K.HeldDiffStart, call, StringComparison.Ordinal);
         Assert.EndsWith(K.HeldDiffEnd, call, StringComparison.Ordinal);
         app.Settle();
         Assert.Equal(K.Readme, Repository(app).Diff?.Target.Path);
-        Assert.False(app.Find<Panel>("DiffTextHost").IsEffectivelyVisible, "The diff's text shows while its read is held.");
+        Assert.False(app.Find<Panel>(K.Ids.DiffTextHost).IsEffectivelyVisible, "The diff's text shows while its read is held.");
         Assert.Equal(K.Readme, app.FocusedRowPath());
 
         // Step 4: Ctrl+Shift+M, the summary with its focused border.
         app.PressKey(Key.M, RawInputModifiers.Control | RawInputModifiers.Shift);
-        await app.WaitForAsync(() => app.FocusedAutomationId() == "CommitSummary", "the focus in the summary");
+        await app.WaitForAsync(() => app.FocusedAutomationId() == K.Ids.CommitSummary, "the focus in the summary");
         AssertFocusedBorder(app, picture: null);
 
         // Step 5 (k6a): the release; the diff shows, the summary keeps the focus.
@@ -515,9 +513,9 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         await app.WaitForIdleAsync();
         var shot = Picture(app, K.K6aSummaryKept);
         Assert.Contains(Repository(app).Diff!.Diff!.Hunks.SelectMany(hunk => hunk.Lines), line => line.Text == K.ReadmeWorkingLine);
-        Assert.True(app.FocusedAutomationId() == "CommitSummary", $"The read took the focus from the summary to {app.DescribeFocus()}.");
+        Assert.True(app.FocusedAutomationId() == K.Ids.CommitSummary, $"The read took the focus from the summary to {app.DescribeFocus()}.");
         AssertFocusedBorder(app, shot);
-        Assert.False(app.FocusIsWithin(app.FindByAutomationId("DiffView")), "Something in the diff has the focus.");
+        Assert.False(app.FocusIsWithin(app.FindByAutomationId(K.Ids.DiffView)), "Something in the diff has the focus.");
         Assert.Equal(exact, await repo.ExactStateAsync());
     }
 
@@ -540,26 +538,26 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         app.Click(app.WorkingRowPoint());
         await WaitForStagePanelAsync(app, K.Unstaged7, K.Staged3);
         app.PressKey(Key.M, RawInputModifiers.Control | RawInputModifiers.Shift);
-        await app.WaitForAsync(() => app.FocusedAutomationId() == "CommitSummary", "the focus in the summary");
+        await app.WaitForAsync(() => app.FocusedAutomationId() == K.Ids.CommitSummary, "the focus in the summary");
         app.Type(K.First);
-        var summary = app.Find<TextBox>("CommitSummary");
-        var commit = app.Find<Button>("CommitButton");
-        var amend = app.Find<CheckBox>("AmendCheckBox");
+        var summary = app.Find<TextBox>(K.Ids.CommitSummary);
+        var commit = app.Find<Button>(K.Ids.CommitButton);
+        var amend = app.Find<CheckBox>(K.Ids.AmendCheckBox);
         Assert.Equal(K.First, summary.Text);
-        Assert.Equal(K.FirstCounter, TextOf(app, "SummaryCounter"));
+        Assert.Equal(K.FirstCounter, TextOf(app, K.Ids.SummaryCounter));
         Assert.Equal((K.Commit3Files, true), (commit.Content as string, commit.IsEffectivelyEnabled));
         Assert.Equal((K.AmendPreviousCommit, true, false), (amend.Content as string, amend.IsEffectivelyEnabled, amend.IsChecked == true));
 
         // Step 4 (k7a): the commit held.
         held.HoldNext(K.CommitWord);
         app.PressKey(Key.Enter, RawInputModifiers.Control);
-        var call = string.Join(' ', (await held.Started.WaitAsync(TestContext.Current.CancellationToken)).Arguments);
+        var call = string.Join(' ', (await held.Started.WaitAsync(ShellDriver.DefaultWaitTimeout, TestContext.Current.CancellationToken)).Arguments);
         Assert.Equal(K.HeldCommit, call);
         await app.WaitForAsync(() => commit.Content as string == K.Committing && !amend.IsEffectivelyEnabled, "Committing… with Amend disabled");
         var shot = Picture(app, K.K7aCommitting);
         Assert.False(commit.IsEffectivelyEnabled, "The commit button is enabled while committing.");
         Assert.False(amend.IsChecked == true);
-        Assert.True(summary.IsEffectivelyEnabled && app.Find<TextBox>("CommitDescription").IsEffectivelyEnabled, "A message box is disabled while committing.");
+        Assert.True(summary.IsEffectivelyEnabled && app.Find<TextBox>(K.Ids.CommitDescription).IsEffectivelyEnabled, "A message box is disabled while committing.");
         Assert.Equal(K.First, summary.Text);
         Assert.True(summary.IsFocused, $"The summary lost the focus to {app.DescribeFocus()}.");
         AssertFocusedBorder(app, shot);
@@ -570,7 +568,7 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         app.PressKey(Key.A, RawInputModifiers.Control);
         app.Type(K.Next);
         Assert.Equal(K.Next, summary.Text);
-        Assert.Equal(K.NextCounter, TextOf(app, "SummaryCounter"));
+        Assert.Equal(K.NextCounter, TextOf(app, K.Ids.SummaryCounter));
         Assert.Equal(K.Committing, commit.Content as string);
         Assert.False(amend.IsEffectivelyEnabled, "Amend is enabled while committing.");
         AssertIdleStatusBar(app);
@@ -586,20 +584,20 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         Assert.Equal(unstaged, (await repo.GitAsync("diff", "--numstat")).StandardOutput);
         Assert.Equal(untracked, (await repo.GitAsync("ls-files", "--others", "--exclude-standard")).StandardOutput);
         Assert.Equal(K.Next, summary.Text);
-        Assert.Equal(K.NextCounter, TextOf(app, "SummaryCounter"));
+        Assert.Equal(K.NextCounter, TextOf(app, K.Ids.SummaryCounter));
         Assert.True(summary.IsFocused, $"The summary lost the focus to {app.DescribeFocus()}.");
         AssertFocusedBorder(app, shot);
-        Assert.True(string.IsNullOrEmpty(app.Find<TextBox>("CommitDescription").Text));
+        Assert.True(string.IsNullOrEmpty(app.Find<TextBox>(K.Ids.CommitDescription).Text));
         Assert.Equal((true, false), (amend.IsEffectivelyEnabled, amend.IsChecked == true));
         Assert.Equal((K.StageFilesToCommit, false), (commit.Content as string, commit.IsEffectivelyEnabled));
         Assert.Equal(K.Staged0, Rows(app).StagedTitle);
-        Assert.True(app.Find<TextBlock>("NoStaged").IsEffectivelyVisible && app.Find<TextBlock>("NoStaged").Text == K.NoStagedChanges, "No staged changes does not show.");
+        Assert.True(app.Find<TextBlock>(K.Ids.NoStaged).IsEffectivelyVisible && app.Find<TextBlock>(K.Ids.NoStaged).Text == K.NoStagedChanges, "No staged changes does not show.");
         Assert.Equal(K.Unstaged7, Rows(app).UnstagedTitle);
         var top = Repository(app).Graph.CommitAt(0);
         Assert.Equal(K.First, top.Subject);
         Assert.Equal((K.Main, top.Sha), (Repository(app).Refs?.Head.BranchName, Repository(app).Refs?.Head.Sha));
         Assert.True(Repository(app).IsWorkingRowSelected, "The working-changes row is no longer selected.");
-        Assert.False(app.Find<TextBlock>("CommitError").IsEffectivelyVisible, "CommitError shows.");
+        Assert.False(app.Find<TextBlock>(K.Ids.CommitError).IsEffectivelyVisible, "CommitError shows.");
         AssertIdleStatusBar(app);
     }
 
@@ -646,14 +644,14 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
     {
         await app.WaitForAsync(
             () => app.Session.Shell.ActiveTab.ShowsStagePanel && Rows(app).UnstagedTitle == unstaged && Rows(app).StagedTitle == staged
-                && app.StageRows("UnstagedFileList").Count + app.StageRows("StagedFileList").Count > 0,
+                && app.StageRows(K.Ids.UnstagedFileList).Count + app.StageRows(K.Ids.StagedFileList).Count > 0,
             $"the stage panel with {unstaged} and {staged}");
         await app.WaitForIdleAsync();
     }
 
     /// <summary>The details' subject, once the right panel shows it.</summary>
     private static Task WaitForSubjectAsync(ShellDriver app, string subject) =>
-        app.WaitForAsync(() => TextOf(app, "DetailsSubject") == subject, $"the details of \"{subject}\"");
+        app.WaitForAsync(() => TextOf(app, K.Ids.DetailsSubject) == subject, $"the details of \"{subject}\"");
 
     /// <summary>The text of the shown control whose automation id is <paramref name="automationId"/>, or null while none shows.</summary>
     private static string? TextOf(ShellDriver app, string automationId) =>
@@ -672,7 +670,7 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
     private static bool IsRowButton(IInputElement? focused, string path, string id) =>
         focused is Control control && AutomationProperties.GetAutomationId(control) == id
         && ShellDriver.StageRowOf(control)?.DataContext is ChangedFileRow { Key: var key } && key == path
-        && control.GetVisualAncestors().OfType<Control>().Any(ancestor => AutomationProperties.GetAutomationId(ancestor) == "UnstagedFileList");
+        && control.GetVisualAncestors().OfType<Control>().Any(ancestor => AutomationProperties.GetAutomationId(ancestor) == K.Ids.UnstagedFileList);
 
     /// <summary>
     /// The state after F6 (K1 step 3, K4 step 3; phase 6's k12b): <paramref name="path"/>'s own button
@@ -683,13 +681,26 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
     {
         Assert.True(app.FocusVisible, $"{path}'s row shows no keyboard frame.");
         Assert.Equal(KeyRegionRole.Right, app.FocusedRegion());
-        var row = app.StageRow("UnstagedFileList", path)!;
+        var row = app.StageRow(K.Ids.UnstagedFileList, path)!;
         Assert.False(row.IsPointerOver || row.Classes.Contains("selected"), $"{path}'s row is hovered or selected.");
-        var stage = ShellDriver.RowButton(row, "RowStageButton");
-        var discard = ShellDriver.RowButton(row, "RowDiscardButton");
+        var stage = ShellDriver.RowButton(row, K.Ids.RowStageButton);
+        var discard = ShellDriver.RowButton(row, K.Ids.RowDiscardButton);
         Assert.True(stage.IsEffectivelyVisible && discard.IsEffectivelyVisible, $"{path}'s buttons are not shown in the tree.");
         Assert.Equal((0.0, 0.0), (stage.Opacity, discard.Opacity));
         AssertNoOtherRowButtons(app, row);
+
+        // Every realized row keeps its buttons in the visual tree, shown or not: an unstaged row its
+        // Stage and Discard, a staged row its Unstage (RowButton fails for a row without one).
+        foreach (var unstaged in app.StageRows(K.Ids.UnstagedFileList))
+        {
+            _ = ShellDriver.RowButton(unstaged, K.Ids.RowStageButton);
+            _ = ShellDriver.RowButton(unstaged, K.Ids.RowDiscardButton);
+        }
+
+        foreach (var staged in app.StageRows(K.Ids.StagedFileList))
+        {
+            _ = ShellDriver.RowButton(staged, K.Ids.RowUnstageButton);
+        }
     }
 
     /// <summary>
@@ -700,20 +711,20 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
     /// </summary>
     private static void AssertRowButtonsAfterTab(ShellDriver app, string path, string id, string? previous)
     {
-        var row = app.StageRow("UnstagedFileList", path)!;
-        var stage = ShellDriver.RowButton(row, "RowStageButton");
-        var discard = ShellDriver.RowButton(row, "RowDiscardButton");
+        var row = app.StageRow(K.Ids.UnstagedFileList, path)!;
+        var stage = ShellDriver.RowButton(row, K.Ids.RowStageButton);
+        var discard = ShellDriver.RowButton(row, K.Ids.RowDiscardButton);
         var expected = id switch
         {
-            "RowStageButton" => (1.0, 0.0),
-            "RowDiscardButton" => (0.0, 1.0),
+            K.Ids.RowStageButton => (1.0, 0.0),
+            K.Ids.RowDiscardButton => (0.0, 1.0),
             _ => (0.0, 0.0),
         };
         Assert.Equal(expected, (stage.Opacity, discard.Opacity));
         if (previous is not null)
         {
             Assert.False(
-                app.StageRow("UnstagedFileList", previous) is { } left && ShellDriver.RowButton(left, "RowStageButton").IsEffectivelyVisible,
+                app.StageRow(K.Ids.UnstagedFileList, previous) is { } left && ShellDriver.RowButton(left, K.Ids.RowStageButton).IsEffectivelyVisible,
                 $"{previous}'s buttons still show after the focus left its row.");
         }
 
@@ -722,34 +733,38 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
 
     private static void AssertNoOtherRowButtons(ShellDriver app, Panel row)
     {
-        foreach (var other in app.StageRows("UnstagedFileList").Concat(app.StageRows("StagedFileList")).Where(other => !ReferenceEquals(other, row)))
+        foreach (var other in app.StageRows(K.Ids.UnstagedFileList).Concat(app.StageRows(K.Ids.StagedFileList)).Where(other => !ReferenceEquals(other, row)))
         {
             Assert.DoesNotContain(
                 other.GetVisualDescendants().OfType<Button>(),
-                button => button.IsEffectivelyVisible && AutomationProperties.GetAutomationId(button) is "RowStageButton" or "RowDiscardButton" or "RowUnstageButton");
+                button => button.IsEffectivelyVisible && AutomationProperties.GetAutomationId(button) is K.Ids.RowStageButton or K.Ids.RowDiscardButton or K.Ids.RowUnstageButton);
         }
     }
 
     /// <summary>K1's diff header: <c>Calculator.cs</c> in <c>src</c>, inline.</summary>
     private static void AssertDiffHeader(ShellDriver app)
     {
-        Assert.Equal(K.CalculatorName, app.Find<TextBlock>("DiffFileName").Text);
-        Assert.Equal(K.CalculatorFolder, app.Find<TextBlock>("DiffFolder").Text);
-        Assert.True(app.Find<Button>("InlineDiffButton").Classes.Contains("selected"), "Inline is not selected.");
-        Assert.False(app.Find<Button>("SideBySideDiffButton").Classes.Contains("selected"), "Side by side is selected.");
-        Assert.Equal((K.Inline, K.SideBySide), (app.Find<Button>("InlineDiffButton").Content as string, app.Find<Button>("SideBySideDiffButton").Content as string));
+        Assert.Equal(K.CalculatorName, app.Find<TextBlock>(K.Ids.DiffFileName).Text);
+        Assert.Equal(K.CalculatorFolder, app.Find<TextBlock>(K.Ids.DiffFolder).Text);
+        Assert.True(app.Find<Button>(K.Ids.InlineDiffButton).Classes.Contains("selected"), "Inline is not selected.");
+        Assert.False(app.Find<Button>(K.Ids.SideBySideDiffButton).Classes.Contains("selected"), "Side by side is selected.");
+        Assert.Equal((K.Inline, K.SideBySide), (app.Find<Button>(K.Ids.InlineDiffButton).Content as string, app.Find<Button>(K.Ids.SideBySideDiffButton).Content as string));
     }
 
     /// <summary>
-    /// The diff's toolbar on an unstaged diff: Stage file and Discard file shown and enabled, or, with
-    /// <paramref name="lines"/>, Stage lines and Discard lines in their place; the unstage buttons never.
+    /// The diff's toolbar on an unstaged diff: Inline and Side by side shown and enabled, Stage file and
+    /// Discard file shown and enabled, or, with <paramref name="lines"/>, Stage lines and Discard lines
+    /// in their place; the unstage buttons never. The others are hidden, not disabled: no toolbar
+    /// button is disabled.
     /// </summary>
     private static void AssertToolbar(ShellDriver app, bool lines)
     {
-        string[] shown = lines ? ["StageLinesButton", "DiscardLinesButton"] : ["StageFileButton", "DiscardFileButton"];
+        string[] shown = lines
+            ? [K.Ids.InlineDiffButton, K.Ids.SideBySideDiffButton, K.Ids.StageLinesButton, K.Ids.DiscardLinesButton]
+            : [K.Ids.InlineDiffButton, K.Ids.SideBySideDiffButton, K.Ids.StageFileButton, K.Ids.DiscardFileButton];
         string[] hidden = lines
-            ? ["StageFileButton", "DiscardFileButton", "UnstageLinesButton", "UnstageFileButton"]
-            : ["StageLinesButton", "DiscardLinesButton", "UnstageLinesButton", "UnstageFileButton"];
+            ? [K.Ids.StageFileButton, K.Ids.DiscardFileButton, K.Ids.UnstageLinesButton, K.Ids.UnstageFileButton]
+            : [K.Ids.StageLinesButton, K.Ids.DiscardLinesButton, K.Ids.UnstageLinesButton, K.Ids.UnstageFileButton];
         foreach (var id in shown)
         {
             var button = app.Find<Button>(id);
@@ -761,17 +776,17 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
             Assert.False(app.Find<Button>(id).IsEffectivelyVisible, $"{id} is shown.");
         }
 
-        Assert.Equal(lines ? (K.StageLines, K.DiscardLines) : (K.StageFile, K.DiscardFile), (app.Find<Button>(shown[0]).Content as string, app.Find<Button>(shown[1]).Content as string));
+        Assert.Equal(lines ? (K.StageLines, K.DiscardLines) : (K.StageFile, K.DiscardFile), (app.Find<Button>(shown[2]).Content as string, app.Find<Button>(shown[3]).Content as string));
     }
 
     /// <summary>The hunk bars' buttons shown in the diff, in hunk order.</summary>
     private static List<Button> HunkButtons(ShellDriver app) =>
-        [.. app.Find<DiffTextView>("DiffText").GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible)];
+        [.. app.Find<DiffTextView>(K.Ids.DiffText).GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible)];
 
     /// <summary>The summary has the focus with Fluent's focused border: its template's <c>PART_BorderElement</c> in <c>TextControlBorderBrushFocused</c>, the box's own brush as it was, and in <paramref name="picture"/> the left border's pixel.</summary>
     private static void AssertFocusedBorder(ShellDriver app, Screenshot? picture)
     {
-        var summary = app.Find<TextBox>("CommitSummary");
+        var summary = app.Find<TextBox>(K.Ids.CommitSummary);
         Assert.True(summary.IsFocused, $"The summary does not have the focus: {app.DescribeFocus()}.");
         var border = summary.GetVisualDescendants().OfType<Border>().First(part => part.Name == "PART_BorderElement");
         Assert.Equal(K.FocusedBorderDark, (border.BorderBrush as ISolidColorBrush)?.Color);
@@ -786,9 +801,9 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
     /// <summary>The status bar while a stage-panel write runs or after it: Ready, no progress, no Cancel (K7).</summary>
     private static void AssertIdleStatusBar(ShellDriver app)
     {
-        Assert.Equal(K.Ready, TextOf(app, "OperationStatus"));
-        Assert.False(app.FindByAutomationId("OperationProgress").IsEffectivelyVisible, "The progress bar shows.");
-        Assert.False(app.FindByAutomationId("OperationCancelButton").IsEffectivelyVisible, "Cancel shows.");
+        Assert.Equal(K.Ready, TextOf(app, K.Ids.OperationStatus));
+        Assert.False(app.FindByAutomationId(K.Ids.OperationProgress).IsEffectivelyVisible, "The progress bar shows.");
+        Assert.False(app.FindByAutomationId(K.Ids.OperationCancelButton).IsEffectivelyVisible, "Cancel shows.");
     }
 
     private static void AssertColour(Color expected, Screenshot picture, Point point, string what)
@@ -828,11 +843,11 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
         Assert.Equal(K.Origin, menu.Header);
         app.ClickMenuItem(K.FetchOrigin);
         await hold.WaitForHeldAsync(1);
-        await app.WaitForAsync(() => app.FindByAutomationId("OperationCancelButton").IsEffectivelyVisible, "Cancel to show");
+        await app.WaitForAsync(() => app.FindByAutomationId(K.Ids.OperationCancelButton).IsEffectivelyVisible, "Cancel to show");
         AssertStatus(app, K.FetchingFromOrigin);
-        var progress = (ProgressBar)app.FindByAutomationId("OperationProgress");
+        var progress = (ProgressBar)app.FindByAutomationId(K.Ids.OperationProgress);
         Assert.True(progress.IsEffectivelyVisible && progress.IsIndeterminate, "The progress bar is not shown without a percentage.");
-        Assert.Contains(K.StatusCancel, VisibleTexts.In(app.FindByAutomationId("OperationCancelButton")).Append(AutomationProperties.GetName(app.FindByAutomationId("OperationCancelButton")) ?? string.Empty));
+        Assert.Contains(K.StatusCancel, VisibleTexts.In(app.FindByAutomationId(K.Ids.OperationCancelButton)).Append(AutomationProperties.GetName(app.FindByAutomationId(K.Ids.OperationCancelButton)) ?? string.Empty));
         return operations;
     }
 
@@ -843,13 +858,13 @@ public sealed partial class Phase8aChecksK : Phase8aChecks
     /// <summary>The fetch ended cancelled: its record, the status bar's text, no progress or Cancel, and no remote ref moved (K3 step 5, K8 step 8).</summary>
     private static async Task AssertFetchCancelledAsync(ShellDriver app, int fetch, TempRepo repo, string refs)
     {
-        await app.WaitForAsync(() => FetchEnded(app, fetch), "the fetch to end", TimeSpan.FromSeconds(170));
+        await app.WaitForAsync(() => FetchEnded(app, fetch), "the fetch to end");
         await app.WaitForAsync(() => !app.IsPaletteOpen, "the palette to close");
         Assert.Equal(OperationOutcome.Cancelled, app.Session.Operations.Snapshot().Skip(fetch).Last(record => record.Title == K.FetchOrigin).Outcome);
         await app.WaitForIdleAsync();
         AssertStatus(app, K.FetchOriginCancelled);
-        Assert.False(app.FindByAutomationId("OperationProgress").IsEffectivelyVisible, "The progress bar shows.");
-        Assert.False(app.FindByAutomationId("OperationCancelButton").IsEffectivelyVisible, "Cancel shows.");
+        Assert.False(app.FindByAutomationId(K.Ids.OperationProgress).IsEffectivelyVisible, "The progress bar shows.");
+        Assert.False(app.FindByAutomationId(K.Ids.OperationCancelButton).IsEffectivelyVisible, "Cancel shows.");
         Assert.Equal(refs, await RefsAsync(repo));
     }
 

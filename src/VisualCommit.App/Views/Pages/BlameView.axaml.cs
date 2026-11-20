@@ -23,7 +23,7 @@ namespace VisualCommit.App.Views.Pages;
 /// </summary>
 public partial class BlameView : UserControl
 {
-    /// <summary>The keys that move the caret by lines or pages, with or without Ctrl or Shift: after each, the caret's run is picked.</summary>
+    /// <summary>The keys that move the caret by lines or pages, alone or with any modifier: after each, the caret's run is picked.</summary>
     private static readonly HashSet<Key> CaretKeys = [Key.Up, Key.Down, Key.Left, Key.Right, Key.PageUp, Key.PageDown, Key.Home, Key.End];
 
     private BlameViewModel? _viewModel;
@@ -156,13 +156,16 @@ public partial class BlameView : UserControl
     }
 
     /// <summary>
-    /// The keyboard's way to pick a run: after Up, Down, Left, Right, PageUp, PageDown, Home or End
-    /// (with or without Ctrl or Shift) the run of the caret's line is picked when it is not the picked
+    /// The keyboard's way to pick a run: after Up, Down, Left, Right, PageUp, PageDown, Home or End,
+    /// alone or with any modifier, the run of the caret's line is picked when it is not the picked
     /// one, as a click picks it: its lines on the selection background, its commit in the right panel.
+    /// Any modifier, because the text's caret keys are the platform's: on macOS Cmd with an arrow
+    /// takes the caret to a line's or the text's end and Option with one moves it by words, where
+    /// Windows and Linux use Ctrl.
     /// </summary>
     private void OnTextKeyDown(object? sender, KeyEventArgs e)
     {
-        if (!CaretKeys.Contains(e.Key) || (e.KeyModifiers & ~(KeyModifiers.Control | KeyModifiers.Shift)) != KeyModifiers.None
+        if (!CaretKeys.Contains(e.Key)
             || _viewModel is not { IsClosed: false } viewModel || CaretRun(viewModel) is not { } run
             || ReferenceEquals(run, viewModel.SelectedRun))
         {
