@@ -3,6 +3,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
 using VisualCommit.App.Services;
@@ -37,6 +38,20 @@ public partial class MainWindow : Window
         {
             splitter.DragStarted += (_, _) => _dragged = splitter;
             splitter.DragCompleted += (_, _) => PanelDragged(splitter);
+
+            // A focused splitter moved by the arrows raises no drag's end: the move is fitted and
+            // remembered as one is (D427), once the layout has drawn the new widths.
+            splitter.AddHandler(
+                KeyDownEvent,
+                (_, e) =>
+                {
+                    if (e.Handled && e.Key is Key.Left or Key.Right or Key.Up or Key.Down)
+                    {
+                        Dispatcher.UIThread.Post(() => PanelDragged(splitter), DispatcherPriority.Loaded);
+                    }
+                },
+                RoutingStrategies.Bubble,
+                handledEventsToo: true);
         }
 
         // Seen even when a control under the focus has handled it, as the diff's text may.
