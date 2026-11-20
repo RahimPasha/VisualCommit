@@ -72,7 +72,9 @@ public static class GitIsolation
     /// The test processes' <c>XDG_CONFIG_HOME</c>: an empty <c>&lt;ceiling&gt;/isolation/xdg</c>,
     /// so that no git call of a test reads the user's <c>~/.config/git/</c> files (its
     /// <c>ignore</c> and <c>attributes</c>, which <c>GIT_CONFIG_GLOBAL</c> does not cover, 0.10).
-    /// On Linux and macOS .NET's <c>SpecialFolder.ApplicationData</c> follows it too (8.12).
+    /// On Linux alone .NET's <c>SpecialFolder.ApplicationData</c> follows it too (8.12); on macOS
+    /// it is <c>~/Library/Application Support</c> whatever this variable says (since .NET 8;
+    /// docs/phase-8a-design.md 4.2, ruling 68).
     /// </summary>
     public static string ProcessXdgConfigHome => Path.Combine(IsolationFolder, "xdg");
 

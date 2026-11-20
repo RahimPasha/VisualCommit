@@ -1,0 +1,71 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:VisualCommit.App.ViewModels"
+        xmlns:controls="using:VisualCommit.App.Controls"
+        x:Class="VisualCommit.App.Views.InstanceNoticeWindow"
+        x:DataType="vm:InstanceNoticeViewModel"
+        Title="{x:Static vm:InstanceNoticeTexts.Title}"
+        Width="480"
+        SizeToContent="Height"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource VcPanelBackgroundBrush}"
+        Foreground="{DynamicResource VcTextPrimaryBrush}"
+        FontSize="12.5"
+        AutomationProperties.AutomationId="InstanceNotice"
+        AutomationProperties.Name="{Binding Heading}"
+        AutomationProperties.HelpText="{Binding HelpText}">
+
+  <!-- The notice when another VisualCommit holds the data folder and did not answer (D421, D422):
+       the heading, the data folder on a line of its own (its start cut first when it is too long,
+       so that the notice's height never depends on the path, D448), the body, the platform's
+       sentence, the status after an unanswered try, then Close and Try again. Try again has the
+       focus at open; Enter is Try again, Esc is Close. The colours are tokens only. The window is
+       named by its heading and described by the body and the sentence, which a screen reader
+       speaks while the focus is on a button. -->
+  <Border Padding="20">
+    <StackPanel>
+      <TextBlock Name="InstanceNoticeHeading"
+                 Classes="dialogTitle"
+                 Text="{Binding Heading}"
+                 AutomationProperties.AutomationId="InstanceNoticeHeading" />
+      <controls:TrimmedTextBlock Name="InstanceNoticeFolder"
+                                 Classes="dialogRepository"
+                                 Text="{Binding Folder}"
+                                 TextTrimming="LeadingCharacterEllipsis"
+                                 TextWrapping="NoWrap"
+                                 ToolTip.Tip="{Binding Folder}"
+                                 AutomationProperties.AutomationId="InstanceNoticeFolder"
+                                 AutomationProperties.Name="{Binding Folder}" />
+      <TextBlock Name="InstanceNoticeBody"
+                 Classes="dialogText"
+                 Text="{Binding Body}"
+                 AutomationProperties.AutomationId="InstanceNoticeBody" />
+      <TextBlock Name="InstanceNoticeIfNoWindow"
+                 Classes="dialogText"
+                 Text="{Binding IfNoWindow}"
+                 AutomationProperties.AutomationId="InstanceNoticeIfNoWindow" />
+      <TextBlock Name="InstanceNoticeStatus"
+                 Classes="dialogWarning"
+                 Text="{Binding Status}"
+                 IsVisible="{Binding ShowsStatus}"
+                 AutomationProperties.AutomationId="InstanceNoticeStatus" />
+      <StackPanel Classes="dialogButtons">
+        <Button Name="InstanceNoticeClose"
+                Theme="{StaticResource VcActionButton}"
+                Content="{Binding CloseText}"
+                Command="{Binding CloseCommand}"
+                IsCancel="True"
+                AutomationProperties.AutomationId="InstanceNoticeClose"
+                AutomationProperties.Name="{Binding CloseText}" />
+        <Button Name="InstanceNoticeTryAgain"
+                Theme="{StaticResource VcPrimaryButton}"
+                Content="{Binding TryAgainText}"
+                Command="{Binding TryAgainCommand}"
+                IsDefault="True"
+                AutomationProperties.AutomationId="InstanceNoticeTryAgain"
+                AutomationProperties.Name="{Binding TryAgainText}" />
+      </StackPanel>
+    </StackPanel>
+  </Border>
+</Window>

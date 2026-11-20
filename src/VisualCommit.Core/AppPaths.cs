@@ -33,6 +33,19 @@ public sealed record AppPaths(string DataDirectory)
     public string LogDirectory => Path.Combine(DataDirectory, "logs");
 
     /// <summary>
+    /// The lock that keeps a second VisualCommit off this data folder (D421): the instance that
+    /// opens it alone holds it for its process's life. Never deleted, so that two processes can
+    /// never lock two files of one name.
+    /// </summary>
+    public string InstanceLockFile => Path.Combine(DataDirectory, "instance.lock");
+
+    /// <summary>
+    /// Where the instance that holds <see cref="InstanceLockFile"/> says how to reach it: the file
+    /// version, its process id, its endpoint and when it started. Deleted by that instance as it ends.
+    /// </summary>
+    public string InstanceFile => Path.Combine(DataDirectory, "instance.json");
+
+    /// <summary>
     /// The data folder for this process: <see cref="DataDirectoryVariable"/> when it is set,
     /// otherwise the per-user default.
     /// </summary>
@@ -46,8 +59,9 @@ public sealed record AppPaths(string DataDirectory)
 
     /// <summary>
     /// %APPDATA%\VisualCommit on Windows, ~/Library/Application Support/VisualCommit on macOS,
-    /// $XDG_CONFIG_HOME/VisualCommit (usually ~/.config/VisualCommit) on Linux.
-    /// Only names the folder; whoever writes to it creates it.
+    /// $XDG_CONFIG_HOME/VisualCommit (usually ~/.config/VisualCommit) on Linux: .NET's
+    /// <see cref="Environment.SpecialFolder.ApplicationData"/>, which follows <c>XDG_CONFIG_HOME</c>
+    /// on Linux alone. Only names the folder; whoever writes to it creates it.
     /// </summary>
     public static string DefaultDataDirectory() =>
         Path.Combine(

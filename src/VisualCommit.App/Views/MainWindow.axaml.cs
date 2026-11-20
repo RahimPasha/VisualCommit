@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
 using VisualCommit.App.Controls;
+using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Menus;
@@ -21,6 +22,7 @@ public partial class MainWindow : Window
     private PixelPoint? _normalPosition;
     private Size? _normalSize;
     private bool _wasMaximized;
+    private bool _closed;
     private GridSplitter? _dragged;
     private readonly List<(int Order, IEscapeHandler Handler)> _escapeHandlers = [];
     private readonly Dictionary<DialogViewModel, IInputElement?> _focusBeforeDialog = [];
@@ -58,6 +60,9 @@ public partial class MainWindow : Window
         // A dashboard reads its rows when the user comes back to the window (docs/phase-6-design.md 2.10, Q4).
         Activated += (_, _) => (DataContext as MainWindowViewModel)?.OnWindowActivated();
 
+        // A second start that asks after this has closed is told the app is ending (BringForward).
+        Closed += (_, _) => _closed = true;
+
         PositionChanged += (_, _) => RememberNormalPlacement();
         SizeChanged += (_, _) => RememberNormalPlacement();
         PropertyChanged += (_, e) =>
@@ -69,6 +74,29 @@ public partial class MainWindow : Window
                 _wasMaximized = WindowState == WindowState.Maximized;
             }
         };
+    }
+
+    /// <summary>
+    /// What a second start on the same data folder asks for (D421): a minimised window comes back
+    /// as it was before, maximised or normal, and is activated; <see cref="ForwardAnswer.Activated"/>.
+    /// While "Finishing operations" shows the window is still open, so it comes forward too. After
+    /// the window has closed, <see cref="ForwardAnswer.Closing"/>: the app is ending. Where the
+    /// platform refuses the foreground, Windows flashes the taskbar button instead.
+    /// </summary>
+    public ForwardAnswer BringForward()
+    {
+        if (_closed)
+        {
+            return ForwardAnswer.Closing;
+        }
+
+        if (WindowState == WindowState.Minimized)
+        {
+            WindowState = _wasMaximized ? WindowState.Maximized : WindowState.Normal;
+        }
+
+        Activate();
+        return ForwardAnswer.Activated;
     }
 
     /// <summary>The widths the side panels are drawn at now, for tests and the session.</summary>

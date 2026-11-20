@@ -12,7 +12,10 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        var crashLog = new FileAppLog(AppPaths.Resolve().LogDirectory);
+        // An updater's start-up hook, when the app has one, goes first, before the guard below: it
+        // starts the app with arguments of its own, and must never be handed over to a running one.
+        var paths = AppPaths.Resolve();
+        var crashLog = new FileAppLog(paths.LogDirectory);
         AppDomain.CurrentDomain.UnhandledException += (_, e) =>
             crashLog.Error("Unhandled exception.", e.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, e) =>
@@ -21,13 +24,36 @@ internal static class Program
             e.SetObserved();
         };
 
-        // The start's timeline, which App hands the session.
-        AppLaunch.Current = new() { Timeline = StartupTimeline.FromProcess(crashLog) };
+        // One instance per data folder (D421). A second start asks the first to come to the front
+        // and ends with 0 before Avalonia starts; when the first does not answer, the app shows a
+        // notice and no session. Every wait here comes before any UI thread exists. Disposed after
+        // the lifetime, and on the rethrow below.
+        using var guard = SingleInstanceGuard.TryTake(paths, crashLog);
+        var mode = AppStartMode.Normal;
+        if (guard.Outcome == GuardOutcome.Held)
+        {
+            switch (guard.AskToComeForward())
+            {
+                case ForwardAnswer.Activated or ForwardAnswer.Starting:
+                    return 0;
+                case ForwardAnswer.Closing:
+                    mode = guard.WaitToTake() ? AppStartMode.Normal : AppStartMode.NotAnswered;
+                    break;
+                default:
+                    mode = AppStartMode.NotAnswered;
+                    break;
+            }
+        }
+
+        // The start's timeline, the guard and what the window shows, which App reads.
+        AppLaunch.Current = new() { Timeline = StartupTimeline.FromProcess(crashLog), Guard = guard, Mode = mode };
 
         try
         {
             BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
-            return 0;
+
+            // 2 when the notice closed unanswered (D421), else 0.
+            return AppLaunch.Current.ExitCode;
         }
         catch (Exception ex)
         {
