@@ -1,10 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <!-- The stand-in for git (docs/phase-8a-design.md 1.1, 1.14): a small framework-dependent console
-       program, visualcommit-git-stand-in, that answers its version question as an old or a broken git would, so
-       that the tests and the real window reach the first-run screen's states without touching the
-       machine's git. It references nothing; the test projects that need it reference it, and its app
-       host lands in their output folders. Never named git, never shipped. -->
+       program, visualcommit-git-stand-in, that answers git's version question as an old or a broken
+       git would, so that the tests and the real window reach the first-run screen's states without
+       touching the machine's git. It references nothing; the test projects that need it reference it
+       (Git.Tests, and the real-window pass), and its app host lands in their output folders. Its
+       namespace is not VisualCommit.GitStandIn, which would hide the tests' type of that name. Never
+       named git, never shipped. -->
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>

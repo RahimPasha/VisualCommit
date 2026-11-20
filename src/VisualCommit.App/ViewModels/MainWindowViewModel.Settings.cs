@@ -91,7 +91,7 @@ public partial class MainWindowViewModel
                 section);
             await Dialogs.ShowAsync(dialog);
 
-            // A git chosen while git works is used from the next start (ruling 42); while it does
+            // A git chosen while git works is used from the next start (D423); while it does
             // not work, the change is looked for at once.
             if (_settings.Current.GitExecutable != chosenBefore && Git is not { Availability: GitAvailability.Available })
             {

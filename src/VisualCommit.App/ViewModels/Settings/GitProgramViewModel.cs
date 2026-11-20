@@ -8,7 +8,7 @@ using VisualCommit.Git;
 namespace VisualCommit.App.ViewModels.Settings;
 
 /// <summary>
-/// The settings screen's "Git program" row (rulings 40, 42; D423): last in the Git section's global
+/// The settings screen's "Git program" row (D423): last in the Git section's global
 /// scope, in every state of the section. It shows the pending choice, else the git in use, else
 /// <c>None found</c>, with a note on where it came from and, while the choice differs from the git
 /// in use, when it applies: from the next start while git works, at Save while it does not. Browse…
@@ -111,7 +111,7 @@ public sealed partial class GitProgramViewModel : ObservableObject
     /// <summary>The path of the git the session uses now; null for none.</summary>
     private string? InUsePath => _inUse?.ExecutablePath;
 
-    /// <summary>Git works now: a changed choice applies from the next start (ruling 42).</summary>
+    /// <summary>Git works now: a changed choice applies from the next start (D423).</summary>
     private bool GitWorks => _inUse is { Availability: GitAvailability.Available };
 
     /// <summary>The choice the last search was told and went by: the chosen git in use, or the chosen one it found gone; null when it went by none.</summary>

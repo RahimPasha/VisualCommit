@@ -314,6 +314,37 @@ public class MainWindowViewModelTests
         Assert.All(viewModel.Tabs, tab => Assert.True(tab.ShowsGitSetup));
     }
 
+    [Theory]
+    [InlineData(false, 2)]
+    [InlineData(true, 1)]
+    public async Task A_git_program_saved_while_git_does_not_work_is_looked_for_at_once_and_one_saved_while_it_works_at_the_next_start(bool gitWorks, int searches)
+    {
+        // docs/phase-8a-design.md 5.3 (ruling 42): after the settings screen closes, a changed
+        // setting while git does not work runs Check again; while git works it waits for the next start.
+        var settings = new FakeSettings();
+        settings.Update(current => current with { GitExecutable = Path.Combine(Path.GetTempPath(), "PortableGit", "git.exe") });
+        var searched = 0;
+        var viewModel = new MainWindowViewModel(
+            settings,
+            new FakeThemes(),
+            _ =>
+            {
+                searched++;
+                return Task.FromResult(gitWorks ? GitFound : new GitDetection(GitAvailability.NotFound, null, null, null));
+            });
+        await viewModel.InitializeAsync(TestContext.Current.CancellationToken);
+
+        var showing = viewModel.ShowSettingsAsync(SettingsSection.Git);
+        var dialog = Assert.IsType<VisualCommit.App.ViewModels.Dialogs.SettingsDialogViewModel>(viewModel.Dialogs.Current);
+        await dialog.Loaded;
+        dialog.GitProgram.UsePathCommand.Execute(null);
+        await dialog.ConfirmCommand.ExecuteAsync(null);
+        await showing.WaitAsync(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken);
+
+        Assert.Null(settings.Current.GitExecutable);
+        Assert.Equal(searches, searched);
+    }
+
     /// <summary>The log's theme lines, among whatever else the view model logs.</summary>
     private static List<string> ThemeLines(RecordingLog log) =>
         [.. log.Messages.Where(message => message.StartsWith("Theme", StringComparison.Ordinal))];

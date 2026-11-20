@@ -71,7 +71,7 @@ public partial class MainWindowViewModel
     }
 
     /// <summary>
-    /// "Check again" in 1.2's order: <c>Looking for Git...</c>; the search; <see cref="Git"/>, the
+    /// "Check again", in order: <c>Looking for Git...</c>; the search; <see cref="Git"/>, the
     /// status text and its tooltip; the helper looked for again, off the UI thread; the screen. When
     /// git is found: the merge tools' lookup forgotten, every tab whose restore failed reopened, every
     /// empty tab's error from the missing git dropped, the active dashboard read, then the merge

@@ -393,7 +393,7 @@
                 </StackPanel>
                 </Panel>
 
-                <!-- The Git program (rulings 40, 42): last in the global scope, in every state of the
+                <!-- The Git program (D423): last in the global scope, in every state of the
                      section (also while git cannot be used), never in "This repository". -->
                 <Panel IsVisible="{Binding IsGlobalScope}">
                   <Grid Name="GitProgramRow" ColumnDefinitions="132,12,*" Margin="0,18,0,0"

@@ -21,7 +21,8 @@ namespace VisualCommit.App.ViewModels;
 /// shows. The window's regions show the active tab. Phase 6's parts each live in a file of their
 /// own (docs/phase-6-design.md 18): the session's tabs (<c>.Session.cs</c>), the workspaces and
 /// their dashboards (<c>.Workspaces.cs</c>), the keys and the palette (<c>.Commands.cs</c>), the
-/// settings screen (<c>.Settings.cs</c>) and the theme (<c>.Theme.cs</c>).
+/// settings screen (<c>.Settings.cs</c>) and the theme (<c>.Theme.cs</c>); git's setup, the
+/// first-run screen and "Check again", in <c>.Git.cs</c>.
 /// </summary>
 public partial class MainWindowViewModel : ObservableObject
 {

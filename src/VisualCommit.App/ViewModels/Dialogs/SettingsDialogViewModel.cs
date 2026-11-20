@@ -161,7 +161,7 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
     /// <summary>The Accounts section (docs/phase-7a-design.md 8.3): sign-in and sign-out at once (D256), the switch at Save.</summary>
     public AccountsSettingsViewModel Accounts { get; }
 
-    /// <summary>The Git section's "Git program" row (rulings 40, 42), last in its global scope; Save writes its choice.</summary>
+    /// <summary>The Git section's "Git program" row (D423), last in its global scope; Save writes its choice.</summary>
     public GitProgramViewModel GitProgram { get; }
 
     /// <summary>Completes when the reads of the opening have ended (8.1, 8.6, 8.7, 12.3, SD29).</summary>
