@@ -1,0 +1,7 @@
+phase-2/scripted/09a-guide-staged.png
+phase-3/scripted/06d-remote-label-menu.png
+phase-3/scripted/09c-conflicted-file.png
+phase-4/scripted/c10d-stage-panel.png
+phase-6/real-window/k10b-palette-delete-main.png
+phase-6/scripted/k10b-palette-delete-main.png
+phase-6/scripted/l27c-danger-item-dark.png

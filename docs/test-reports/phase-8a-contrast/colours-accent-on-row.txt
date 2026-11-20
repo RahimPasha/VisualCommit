@@ -1,0 +1,13 @@
+phase-3/real-window/14g-reapplied-with-conflicts.png
+phase-3/scripted/05e-left-panel-shift-f10.png
+phase-3/scripted/14d-stashed-and-checked-out.png
+phase-3/scripted/14g-reapplied-with-conflicts.png
+phase-3/scripted/24e-last-clicked-ref.png
+phase-3/scripted/32e-checked-out.png
+phase-3/scripted/32g-back-without-confirmation.png
+phase-5/real-window/b5c-rename-row.png
+phase-5/scripted/b5c-rename-row.png
+phase-5/scripted/b5d-from-commit.png
+phase-5/scripted/p25c-main-again.png
+phase-5/scripted/u18p-detached-redone.png
+phase-5/scripted/u18t-stash-checkout-redone.png

@@ -1,0 +1,17 @@
+phase-1/real-window/06a-filter-sea.png
+phase-1/scripted/06a-filter-sea.png
+phase-6/real-window/w1c-empty-dashboard.png
+phase-6/real-window/w1d-api-added.png
+phase-6/real-window/w1e-scan-checklist.png
+phase-6/scripted/k13b-next-dashboard.png
+phase-6/scripted/l30a-dashboard-light.png
+phase-6/scripted/l30b-row-menu-light.png
+phase-6/scripted/l30c-scan-checklist-dark.png
+phase-6/scripted/l30c-scan-checklist-light.png
+phase-6/scripted/w1c-empty-dashboard.png
+phase-6/scripted/w1d-api-added.png
+phase-6/scripted/w1e-scan-checklist.png
+phase-6/scripted/w3a-ten-rows-wide-light.png
+phase-7a/scripted/p08a-filter-author.png
+phase-7a/scripted/p08b-filter-login.png
+phase-7b/scripted/p07a-gitlab-filter-number.png
