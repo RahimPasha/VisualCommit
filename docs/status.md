@@ -568,9 +568,8 @@ every commit.
   guard, the notice and the data folder's two new files; the removed D277 passages); plan.md (line
   768's 35 pictures replaced by the scan's lists; line 778 closed by `AppPathsTests`; the risks the
   floor names: the mirror refspec, a branch being rebased or bisected in another worktree on 2.34;
-  a data folder on a network share); design as-built notes for sections 2 to 4 (the scan's boxes
-  beyond "grown by 3 px"; `instance.json` retried for a second; a Warning that 4.3.5 lacks; the
-  setting `DOTNET_SYSTEM_IO_DISABLEFILELOCKING`, which 1.14 does not list). For the later packages:
+  a data folder on a network share). What wave 1 built otherwise than written is in the design's
+  1.17, which the later packages' builders read with section 1. For the later packages:
   §7 gives the notice window its icon; §9's sweep shows the notice through
   `InstanceNoticeHost.Show`; §12 links `Phase8aExpectations*.cs`, whose parts L and I hold the
   launches' facts; `l3a` and `l3f` change at §5's, §8's and §11's merges (design 0.7).

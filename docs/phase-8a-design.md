@@ -954,6 +954,61 @@ each page exists, reading `VisualRun.RepoRoot`), `GitSetupStatesTests`, and the 
 `PaletteEntriesTests`, `SettingsDialogViewTests`, `PromptDialogsTests`, `GitRepositoryProviderTests`,
 `StatusBarTests` and the 8a project, and pushes before wave 1 branches from it.
 
+### 1.17 As built: WP0 and wave 1
+
+What the first package and wave 1 (§2, §3, §4) built otherwise than the sections above say, as far
+as a later package needs it. The lead keeps this subsection; a later wave adds to it.
+
+- **WP0** (`fc8a063`). `GitAccessTests` (App.Tests) exists, with four tests; §5 extends it (0.4). A
+  listener of `GitAccess.Changed` that throws is logged at Error and cannot replace the search's
+  result. `TabServices.Identity` falls back to the app assembly's identity; only `ShellDriver` pins
+  `TestIdentity.Pinned`. The 8a project's start helpers are `StartEmptyAsync` and `OpenAsync`, which
+  take a theme and a probe; `Phase8aExpectations.Common` holds no colours, so each part brings its
+  own. `AppShortcutsTests`' keyless list holds `About` and `OpenUserGuide`; §11 takes the second out
+  when it binds F1. The stand-in's variable is read from the process's environment, so a headless
+  test gives a probe (`gitProbe`) and never sets the variable.
+- **The broker's `gitVersion` is gone** (the lead, at §3's merge; D420): `AskPassBroker`'s two
+  constructors, `PromptDialogs.CreateBroker` and `AppSession.Start` no longer take or give it.
+  `AccountsSettingsViewModel` keeps its `gitVersion`, unread, for §5's netrc note.
+- **The floor** (§3, `a63390c`; `GitVersion.Minimum` is 2.34.1 since `bba59c7`, when CI's floor job
+  became required). `BranchCheckedOutElsewhereException(branch, worktreePath)` is in
+  `IGitRepository.cs`; `RepositoryOperations.FastForwardFailureDisplay` is public. In the harness,
+  `GitWords` has the members 1.15 lists, and `TempRepo.StashAsync` rebuilds a stash's branch word
+  below 2.36 through the internal `RenameStashBranchAsync`. A test that depends on git's words or
+  version goes through `GitWords`, never through a literal.
+- **The contrast round** (§2, `3b9d159`). The tokens are 1.5's. The palettes of the earlier phases'
+  expectations gained members: `AccentOnRow` in phases 3, 5 and 6, `TextPlaceholder` in phase 5;
+  the real-window project links those files and compiles with them. An earlier check that reads
+  HEAD's name, or a renamed file's letter, on a hovered or selected row expects the row's accent
+  (the report's "Changes to expected results" lists them). `scripts/scan-contrast.py <pictures>
+  <output> --jobs N` writes one `scan.json`, the eight lists, `report.txt` and `expected.json`; its
+  boxes are wider than "each hit grown by 3 px" (a hit is widened along its text line by ink of its
+  kind within 24 px, a dot's within 4). `scripts/compare-pictures.py --expected <file>`, given once
+  or more, unites the boxes of every key that matches a picture, exact or a pattern, and writes the
+  four headings of 2.6; its difference pictures draw changes inside the boxes in amber, outside in
+  red, the boxes' edges in blue. The accent on a row changes in 15 earlier pictures, two more than
+  the list's 13 (`06a` of phase 3, `u18j` of phase 5; both are in `colours-any.txt`).
+  `Phase8aExpectations.L` holds part L's colours by token, its texts, its 31 picture names and the
+  real window's two launches (`ChangesLaunch`, `GraphLaunch`) for §12. Part L alone takes about
+  two minutes.
+- **Single instance** (§4, `b70abdb`). `InstanceNoticeHost` is internal to the 8a project:
+  `Show(GuidancePlatform platform, string folder, ThemeVariant theme, HeldNoticeTry? tryAgain =
+  null)`, with `Window`, `Notice`, `Try`, `Find<T>(automationId)`, `PressKey`, `Capture`; §9's sweep
+  calls it with three arguments. `InstanceNoticeViewModel(GuidancePlatform, string folder,
+  Func<Task<NoticeRetry>> tryAgain)`; the try's mapping is the public static
+  `InstanceNoticeViewModel.RetryOn(SingleInstanceGuard)`. `SingleInstanceGuard.ServerPipeOptions` is
+  the public constant the server is made with (D448). When `instance.json` cannot be replaced (on
+  Windows a second start may have it open) the holder tries again for up to a second, then logs the
+  Warning `The data folder {folder} has no instance.json ({reason}): a second start on it will be
+  told that this one did not answer.`, a line 4.3.5 does not list. The guard reads
+  `DOTNET_SYSTEM_IO_DISABLEFILELOCKING` and the switch `System.IO.DisableFileLocking` on macOS and
+  Linux for its Warning; 1.14 does not list them, because the runtime reads them once at the
+  process's start and a test cannot remove them. `InstanceNoticeWindow.axaml` has no `Icon` yet
+  (§7's). `Phase8aExpectations.I` holds the masked element's id (`FolderId`), the picture names and
+  the real window's launch facts (exit codes, limits, the data folder's entries after "Close") for
+  §12. `Program.Main`'s exit codes and the notice under a real desktop lifetime have run in no
+  test: §12's launches 4 to 6 are their first run.
+
 ## 2. colours: the contrast round (D410)
 
 Wave 1, after WP0; part L. Branch `wip/p8a-colours`, worktree `D:/Projects/Personal/vc-wt/p8a-colours`.
@@ -4467,6 +4522,11 @@ a keyboard Discard that leaves the tree clean gives the focus to the graph (6.3.
 them (7.3); 0.4's list of files that pass between packages names the files WP0 writes and §5
 finishes; no Windows state shows a command to copy, so the winget line shows in the confirm and the
 guide alone (1.3).
+
+What the build changed is in 1.17, wave by wave, and each changed expectation is in the report
+(`docs/test-reports/phase-8a.md`, "Changes to expected results"). WP0's code review made 20 findings,
+all minor; wave 1's reviews 11 majors (the same three faults seen through more than one lens) and
+12 minors, all applied. CI's floor job passed on git 2.34.1 at its first round after §3's merge.
 
 O3, winget for a git that is too old or not working, went to the owner, who answered on 2026-11-20:
 a missing and a too-old git, not one that does not work (**D453**; 0.2, 1.3, 5.3, 5.4, 5.5's F5,
