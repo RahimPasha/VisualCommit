@@ -291,9 +291,20 @@ Recorded here at the end of each phase, after each merge and after each change m
 outside a phase that starts a run: the last CI run, its commit and its result in each job.
 
 Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jobs since
-`e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", does not fail the run until
-step 6 has fixed what it finds.
+`e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
+`bba59c7`, which made it required after its first green run.
 
+- [44727459663](https://github.com/RahimPasha/VisualCommit/actions/runs/44727459663), for
+  `d63c012` (wave 1's three merges and the broker's `gitVersion` removed): all six jobs succeeded,
+  none failed a test. **The floor's job passed for the first time**: 7,989 tests on git 2.34.1
+  with 3 skipped, Test step 7 min 6 s (20 failed in every run before). `windows-latest` 7,992
+  tests with 4 skipped, Test step 40 min 23 s of 70, its keychain step green and "Build the
+  opt-in projects" green (the real-window project compiles with the palettes' new members);
+  `macos-latest` 7,989 with 3 skipped, Test step 39 min 41 s (`AppPathsTests`' test of the
+  documented data folder ran there and passed: the skipped count is the same 3 as before, which
+  closes plan.md's doubt about the macOS folder); `ubuntu-latest` 7,989 with 3 skipped, 6 min 46
+  s; the two "bare ubuntu container" jobs 7,989 with 3 skipped each, Test steps 4 min 57 s
+  (Ubuntu's packages) and 7 min 3 s (Microsoft's installer). Wave 1 added 68 tests.
 - [44703936572](https://github.com/RahimPasha/VisualCommit/actions/runs/44703936572), for
   `d37036a` (WP0, `fc8a063`; parts L's and I's checks; the icon's round 2): the run succeeded.
   `windows-latest` green, 7,924 tests with 4 skipped, Test step 40 min 49 s of 70;
