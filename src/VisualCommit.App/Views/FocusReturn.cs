@@ -22,8 +22,8 @@ public static class FocusReturn
     /// and enabled. The focus is lost when nothing has it, the window has it, or it lies outside
     /// <paramref name="scope"/>; or, when <paramref name="stillLost"/> is given, when that says so
     /// of the focused element (null for none), the scope then being only where the window is found.
-    /// A focus the user moved where it is not lost meanwhile stays where it is. Call it as the run
-    /// starts, or just before (a button's click, which comes before its command runs).
+    /// A focus the user has moved meanwhile to a place that does not count as lost stays there. Call
+    /// it as the run starts, or just before (a button's click, which comes before its command runs).
     /// </summary>
     public static void AfterRun(
         IAsyncRelayCommand command,
