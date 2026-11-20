@@ -23,6 +23,17 @@ namespace VisualCommit.VisualTests.Phase8a;
 
 public sealed partial class Phase8aChecksL
 {
+    /// <summary>
+    /// A picture of part L (<see cref="Phase8aChecks.Shot"/>): saved under its name, then, as every
+    /// window picture of the phase, no text cut off but shortened text whole in its tooltip.
+    /// </summary>
+    private static Screenshot Picture(ShellDriver app, string name, bool keepPointer = false)
+    {
+        var picture = Shot(app, name, keepPointer);
+        AssertNoClippedText(app);
+        return picture;
+    }
+
     /// <summary>The colours of the theme the window shows.</summary>
     private static L.Colours ColoursOf(ShellDriver app) => app.ShowsDarkTheme ? L.Dark : L.Light;
 
@@ -399,7 +410,7 @@ public sealed partial class Phase8aChecksL
         app.MoveToNeutral();
         var (row, name) = await RefNameAsync(app, path);
         Assert.True(((RefItemRow)app.RefRowModel(path)).IsHead, "main is not HEAD's branch.");
-        var shot = Shot(app, idle);
+        var shot = Picture(app, idle);
         Assert.False(row.IsPointerOver || IsSelected(app, row, path), "main's row is hovered or selected.");
         AssertText(app, shot, name, colours.Accent, colours.Panel, ClearOf(app, row), "main idle (VcAccentBrush)", ReplacedIn(app, colours.AccentOnRow));
 
@@ -407,7 +418,7 @@ public sealed partial class Phase8aChecksL
         app.MoveMouse(row);
         await app.WaitForAsync(() => row.IsPointerOver, "main's row to be hovered");
         Assert.True(app.BoundsOf(row).Center.X > TextArea(app, name).Right, "The row's centre lies on main's text.");
-        shot = Shot(app, hovered, keepPointer: true);
+        shot = Picture(app, hovered, keepPointer: true);
         Assert.True(row.IsPointerOver, "main's row is not hovered.");
         Assert.False(ToolTip.GetIsOpen(name), "main's name shows its tooltip.");
         AssertText(app, shot, name, colours.AccentOnRow, colours.Hover, ClearOf(app, row), "main hovered (VcAccentOnRowBrush)", ReplacedIn(app, colours.Accent));
@@ -416,7 +427,7 @@ public sealed partial class Phase8aChecksL
         app.Click(row);
         app.MoveToNeutral();
         await app.WaitForAsync(() => IsSelected(app, row, path) && !row.IsPointerOver, "main's row to be selected, the pointer away");
-        shot = Shot(app, selected);
+        shot = Picture(app, selected);
         if (otherSelected is var (section, folder, branch))
         {
             Assert.False(((RefItemRow)app.RefRowModel(section, folder, branch)).IsSelected, $"{folder}/{branch}'s row is still selected.");
