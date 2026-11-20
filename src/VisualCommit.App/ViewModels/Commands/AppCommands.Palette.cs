@@ -53,7 +53,7 @@ public sealed partial class AppCommands
             entries.Add(new PaletteEntry(label, null, null, reason is null, reason, destructive, PaletteEntryKind.Command, entries.Count, run));
 
         var tab = snapshot.Tab;
-        if (snapshot.Repository is { } running && CancelEntry(running, snapshot.RepositoryDetail) is { } cancel)
+        if (snapshot.Repository is { } repository && CancelEntry(repository, snapshot.RepositoryDetail) is { } cancel)
         {
             entries.Add(cancel);
         }
