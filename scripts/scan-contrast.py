@@ -31,7 +31,8 @@ captures are at 200 %, so every size limit doubles there. Each detector runs on 
    #FFFFFF light) whose brightest (dark) or darkest (light) channels are VcTextSecondaryBrush at
    0.5 (#616773 dark, #ADB2B8 light), not VcTextDisabledBrush (#5F6775, #A1A8B3). A second pass
    looks for it under two backdrops (a sign-in dialog over the settings screen: x 0.16 dark,
-   x 0.36 light), only in pictures the first found none in; its hits are of lower confidence.
+   x 0.36 light): for the lists only in pictures the first found none in, its hits of lower
+   confidence; for expected.json's boxes in every picture with a backdrop.
  2 dark danger: components that hold a VcDangerBrush (#E5606B) core: glyph-sized ones (text,
    icons, dots) and the danger button (a filled area with a white label inside). Lane 3
    (#E5606B too) is left out by shape: lines, label pills and dots are taller than a glyph or
@@ -88,11 +89,13 @@ LANE3_PILL = {(266, 344, 91, 5), (532, 687, 182, 11)}
 ACCENT_FRINGE = {'phase-6/scripted/s17b-editor-pick.png'}
 
 # How expected.json's boxes are drawn: each hit grown by GROW px, widened along its text line by
-# the ink of its kind within JOIN px, and joined with the hits of its line within JOIN px (both
-# doubled at 200 %), so that a word whose letters the detector finds only in part is one box
-# (docs/phase-8a-design.md 2.6, 2.9 item 4).
+# the ink of its kind within JOIN px (an ellipsis's dots within DOT_GAP px), and joined with the
+# hits of its line within JOIN px (all doubled at 200 %), so that a word whose letters the
+# detector finds only in part is one box (docs/phase-8a-design.md 2.6, 2.9 item 4).
 GROW = 3
 JOIN = 24
+# The gap across which a dot-sized piece of ink without a core joins its line (doubled at 200 %).
+DOT_GAP = 4
 
 # The plan's list of 35 dark danger-label pictures (plan.md, phase 8a's items from phase 6),
 # which the danger buttons found replace (ruling 31).
@@ -289,11 +292,11 @@ def continues(mask, lab, c, s):
     return bool(above.any() or below.any())
 
 
-def coloured(img, core, reddish, k, s=1, line=None):
-    """The components of the colour's family that hold a core pixel. When `line` is given, the
-    line's ink goes into it as (x, y, w, h): every component with a core up to 15 * s high,
-    whatever its shape (a glyph the size rules leave out), and every one under 5 * s high (an
-    ellipsis's dots, smoothed to no core pixel), so that expected.json's boxes take the whole text."""
+def coloured(img, core, reddish, k, s=1, line=None, dots=None):
+    """The components of the colour's family that hold a core pixel. For expected.json's boxes,
+    the text's other ink, as (x, y, w, h): into `line` every component with a core up to 15 * s
+    high, whatever its shape (a glyph the size rules leave out); into `dots` every one under 5 * s
+    high without a core (an ellipsis's dots, smoothed to no core pixel)."""
     r, g, b = img[..., 0], img[..., 1], img[..., 2]
     if reddish:
         mask = (r - np.maximum(g, b) >= 35 * k) & (r >= 60 * k)
@@ -308,8 +311,10 @@ def coloured(img, core, reddish, k, s=1, line=None):
     out = []
     for i in range(1, n + 1):
         h, w = int(y1[i] - y0[i] + 1), int(x1[i] - x0[i] + 1)
-        if line is not None and ((hascore[i] and h <= 15 * s) or h < 5 * s):
+        if line is not None and hascore[i] and h <= 15 * s:
             line.append((int(x0[i]), int(y0[i]), w, h))
+        if dots is not None and not hascore[i] and h < 5 * s:
+            dots.append((int(x0[i]), int(y0[i]), w, h))
         if not hascore[i]:
             continue
         out.append(dict(i=i, x=int(x0[i]), y=int(y0[i]), w=w, h=h, area=int(area[i]),
@@ -318,8 +323,8 @@ def coloured(img, core, reddish, k, s=1, line=None):
 
 
 def danger(img, s, k):
-    res = dict(glyph=[], button=[], graphlike=0, tall=0, line=[])
-    mask, lab, comps = coloured(img, DANGER, True, k, s, res['line'])
+    res = dict(glyph=[], button=[], graphlike=0, tall=0, line=[], dots=[])
+    mask, lab, comps = coloured(img, DANGER, True, k, s, res['line'], res['dots'])
     white = near(img, WHITE * k, 10)
     for c in comps:
         if c['h'] >= 20 * s and c['w'] >= 40 * s and c['fill'] >= 0.5:
@@ -339,8 +344,8 @@ def danger(img, s, k):
     return res
 
 
-def accent_on_row(img, s, k, line=None):
-    mask, lab, comps = coloured(img, ACCENT, False, k, s, line)
+def accent_on_row(img, s, k, line=None, dots=None):
+    mask, lab, comps = coloured(img, ACCENT, False, k, s, line, dots)
     hits = []
     for c in comps:
         # a SemiBold "R" with subpixel smoothing fills about 0.76 of its box; a ticked check box or
@@ -374,21 +379,23 @@ def scan(path, folder):
     r['backdrop'] = sum(int(near(img, c * k, 1).sum()) for c in under) >= 0.02 * img.shape[0] * img.shape[1]
     layers = (('plain', 1.0), ('dimmed', k)) if r['backdrop'] else (('plain', 1.0),)
     for name in ('placeholder', 'danger', 'accent_row'):
-        r[name + '_dimmed'] = [] if name != 'danger' else dict(glyph=[], button=[], graphlike=0, tall=0, line=[])
+        r[name + '_dimmed'] = [] if name != 'danger' else dict(glyph=[], button=[], graphlike=0, tall=0, line=[], dots=[])
     for layer, k in layers:
         line = []
         r['placeholder_' + layer] = placeholder(img, th, s, k, line)
         r['placeholder_line_' + layer] = line
         if th == 'dark':
             r['danger_' + layer] = danger(img, s, k)
-            line = []
-            r['accent_row_' + layer] = accent_on_row(img, s, k, line)
+            line, dots = [], []
+            r['accent_row_' + layer] = accent_on_row(img, s, k, line, dots)
             r['accent_line_' + layer] = line
+            r['accent_dots_' + layer] = dots
     return r
 
 
-def double_placeholder(img, th, s):
-    """The placeholder under two backdrops: None when the picture shows no second backdrop."""
+def double_placeholder(img, th, s, line=None):
+    """The placeholder under two backdrops: None when the picture shows no second backdrop. Every
+    small ink component in a box goes into `line` when given."""
     k = DIM[th] ** 2
     under = DARK_BG[:2] if th == 'dark' else LIGHT_BG[:2]
     if sum(int(near(img, c * k, 1).sum()) for c in under) < 0.02 * img.shape[0] * img.shape[1]:
@@ -407,6 +414,8 @@ def double_placeholder(img, th, s):
     hits = []
     for i in range(1, n + 1):
         h, w = y1[i] - y0[i] + 1, x1[i] - x0[i] + 1
+        if h <= 16 * s and w <= 120 * s and line is not None:
+            line.append((int(x0[i]), int(y0[i]), int(w), int(h)))
         if not (3 * s <= h <= 16 * s and w <= 120 * s and area[i] >= 4 * s * s):
             continue
         v = mx[i] if th == 'dark' else mn[i]
@@ -452,10 +461,18 @@ def scan_one(item):
     r.update(scan(path, folder))
     s = scale_of(folder)
     img = None
-    if not (r['placeholder_plain'] or r['placeholder_dimmed']):
+    if r['backdrop'] or not (r['placeholder_plain'] or r['placeholder_dimmed']):
         img = read(path)
-        hits = double_placeholder(img, r['theme'], s)
-        r['placeholder_double'] = dict(double_backdrop=hits is not None, hits=hits or [])
+        line = []
+        hits = double_placeholder(img, r['theme'], s, line)
+        if not (r['placeholder_plain'] or r['placeholder_dimmed']):
+            # The second pass of the lists: only where the first found nothing.
+            r['placeholder_double'] = dict(double_backdrop=hits is not None, hits=hits or [])
+        else:
+            # For expected.json alone: the window's placeholder under two backdrops (a dialog
+            # over the settings screen) beside the dialog's own boxes.
+            r['placeholder_double_boxes'] = hits or []
+        r['placeholder_line_double'] = line
     if r['theme'] == 'dark' and not (r['danger_plain']['glyph'] or r['danger_plain']['button']) \
             and (r['danger_dimmed']['glyph'] or r['danger_dimmed']['button']):
         img = read(path) if img is None else img
@@ -581,18 +598,21 @@ def union(a, b):
     return [min(a[0], b[0]), min(a[1], b[1]), max(a[2], b[2]), max(a[3], b[3])]
 
 
-def along_line(box, line, gap):
-    """The box widened along its text line: every component of `line` (grown boxes) whose rows
-    overlap the box's and that lies within `gap` across of it, again and again, joins it."""
+def along_line(box, line, gap, dots=(), dot_gap=0):
+    """The box widened along its text line, again and again: every component of `line` (grown
+    boxes) whose rows overlap the box's within `gap` across of it, and every one of `dots` within
+    `dot_gap`, joins it. A dot's gap is short, so that the fringes of the grey text beside a letter
+    stay out while an ellipsis's dots, a pixel or two apart, come in."""
     box = list(box)
-    left = list(line)
+    left = [(c, gap) for c in line] + [(c, dot_gap) for c in dots]
     grew = True
     while grew:
         grew = False
-        for c in left:
-            if same_line(box, c) and gap_across(box, c) <= gap:
+        for item in left:
+            c, limit = item
+            if same_line(box, c) and gap_across(box, c) <= limit:
                 box = union(box, c)
-                left.remove(c)
+                left.remove(item)
                 grew = True
                 break
     return box
@@ -629,18 +649,22 @@ def expected_of(rows):
         g, w, h, gap = GROW * s, r['w'], r['h'], JOIN * s
         texts, buttons = [], []
 
-        def add(hits, line):
+        def add(hits, line, dots=()):
             ink = [grown(c, g, w, h) for c in line]
-            texts.extend(along_line(grown(hit, g, w, h), ink, gap) for hit in hits)
+            small = [grown(c, g, w, h) for c in dots]
+            texts.extend(along_line(grown(hit, g, w, h), ink, gap, small, DOT_GAP * s) for hit in hits)
 
         if is_placeholder(r):
-            add(r['placeholder_plain'] + r['placeholder_dimmed'] + r.get('placeholder_double', {}).get('hits', []),
-                r.get('placeholder_line_plain', []) + r.get('placeholder_line_dimmed', []))
+            add(r['placeholder_plain'] + r['placeholder_dimmed'] + r.get('placeholder_double', {}).get('hits', [])
+                + r.get('placeholder_double_boxes', []),
+                r.get('placeholder_line_plain', []) + r.get('placeholder_line_dimmed', []) + r.get('placeholder_line_double', []))
         if is_danger(r):
-            add(danger_glyphs(r), r['danger_plain'].get('line', []) + r['danger_dimmed'].get('line', []))
+            add(danger_glyphs(r), r['danger_plain'].get('line', []) + r['danger_dimmed'].get('line', []),
+                r['danger_plain'].get('dots', []) + r['danger_dimmed'].get('dots', []))
             buttons += r['danger_plain']['button'] + r['danger_dimmed']['button']
         if is_accent(r):
-            add(accent_hits(r), r.get('accent_line_plain', []) + r.get('accent_line_dimmed', []))
+            add(accent_hits(r), r.get('accent_line_plain', []) + r.get('accent_line_dimmed', []),
+                r.get('accent_dots_plain', []) + r.get('accent_dots_dimmed', []))
         boxes = joined(texts, gap)
         boxes += [grown(b, g, w, h) for b in buttons]
         boxes += TOOLTIP_OVER_FILTER.get(key(r), [])
@@ -677,7 +701,9 @@ def main():
     with open(os.path.join(args.output, 'report.txt'), 'w', encoding='utf-8', newline='\n') as fh:
         fh.write(report)
     with open(os.path.join(args.output, 'expected.json'), 'w', encoding='utf-8', newline='\n') as fh:
-        json.dump(expected_of(rows), fh, indent=1, sort_keys=True)
+        # One picture per line, its boxes after it.
+        expected = expected_of(rows)
+        fh.write('{\n' + ',\n'.join(f'{json.dumps(name)}: {json.dumps(expected[name])}' for name in sorted(expected)) + '\n}\n')
     print(report, end='')
     print(f'{len(lists["any"])} of {len(rows)} pictures change; lists, report.txt and expected.json in {args.output}')
 
