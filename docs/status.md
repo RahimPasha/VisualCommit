@@ -216,10 +216,30 @@ Wave 1:
   connection. `Program.Main`'s exit codes and the notice under a real desktop lifetime are proven
   only by the real-window launches (step 18). The macOS job's reading of `AppPathsTests` is with
   the CI run of the merges' push.
-- [ ] 8. Wave 1's close: the lagged list (D262) and the whole default run; §2's comparison against
+- [x] 8. Wave 1's close: the lagged list (D262) and the whole default run; §2's comparison against
   phase 7b's references (`D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual/`) with the
   scan's boxes, every difference outside them explained; the run's scripted pictures then become
   the references of every later merge (`D:/Projects/Personal/phase8-work/references/wave1/`).
+  Done 2026-11-20, each run alone on the machine. **The whole default run** on `bba59c7`: 7,993
+  tests with 4 skipped, none failed, 1 h 32 min 7 s. **The comparison** (the report, "Wave 1's
+  comparison with phase 7b's references"): the scan's eight lists equal the committed ones; of
+  1,150 earlier scripted pictures 1,141 changed, none in size, 1,083 only inside their expected
+  regions; the other 58 were read one by one by the workflow
+  `phase8a-wave1-picture-inspection` (run `wf_8a580486-289`, nine Opus inspectors, 1.24M tokens):
+  42 vary from run to run by nature (temporary names, carets, progress, the order of two reads,
+  anti-aliasing), 16 are the round's own colours outside the scan's boxes, and none is a change
+  the design does not name. The 35 new pictures were checked against the report: 34 as expected;
+  `l6h` had been taken while its diff was loading, and the notice's "Close" moved 6 px during a
+  try. Both were corrected and verified (`24d335f`, `9a82a8a`, `23e12bb`; the workflow
+  `phase8a-wave1-inspection-fixes`, run `wf_9142be5e-92f`, 0.36M tokens), with their reasons in
+  the report. **The references** are the run's 1,185 scripted pictures with those two replaced.
+  **The lagged list** (design 0.4, `VISUALCOMMIT_WATCHER_LAG_MS=1500`, on `23e12bb`'s code, 07:08 to
+  07:47): `Phase2Checks` 25 of 25; the fifteen App.Tests classes 183 of 183; phase 6's five
+  filters 21 of 21; phase 7a's walk-through 205 of 205; phase 7b's 178 of 178; the twelve
+  Hosting.Tests classes 126 of 126; the 8a project 25 of 25. CI's runs on the wave are in the CI
+  section, the last, 44750615552, green in all six jobs. (Week: not read since the 25 to 50 % of
+  2026-11-20; the wave's agents used about 14.6M tokens after that reading, WP0's and the icon's
+  among them. The owner is asked before wave 2.)
 
 Wave 2:
 
@@ -542,24 +562,22 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: step 8, wave 1's close. Steps 5 to 7 are done: the three packages are merged, CI's floor
-job passed on git 2.34.1 at its first round, and the lead's commit after it moves the minimum to
-2.34.1 and makes that job required. In this order: (1) read CI's runs: the one on the merges
-(44727459663: the Windows job's build of the real-window project, the macOS job's `AppPathsTests`
-and its `a2d-show-reads` picture) and the one on the commit that moves the minimum, in every job.
-(2) With no agent at work: the whole default run through `bash scripts/heavy-run.sh` (about 1 h
-50 min; its log is `D:/Projects/Personal/phase8-work/wave1/default-run-wave1.log`), then the
-lagged list of design 0.4, one command at a time. (3) §2's comparison: `python -I
-scripts/scan-contrast.py D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual <out> --jobs
-4` (its lists must equal `docs/test-reports/phase-8a-contrast/`'s), then `python
-scripts/compare-pictures.py <the same references> artifacts/visual <out> --expected
-<out>/expected.json`; every picture under "Changed outside the expected regions" and "Changed, not
-expected" is explained or is a finding; the lead inspects part L's and part I's pictures. (4) The
-run's scripted pictures are copied to `D:/Projects/Personal/phase8-work/references/wave1/` and are
-the references from then on. Then step 8 is ticked, and before wave 2 (step 9) the owner is asked
-for the week's share (D241). The icon's round 2 is with the owner (Notes, "The icon"). By hand
-before §5's merge, the owner told: `cmd.exe` started as the app will start it, with `/S /K` and
-winget's quoted path and `--version`, to see that its window stays open (design 13.4 item 7).
+Next: the owner's reading of the week's share (D241), then wave 2, Progress steps 9 to 12. Wave 1
+is closed (steps 4 to 8). Wave 2 is §5 (first run, part F), §6 (keyboard, part K) and §7 (the
+icon's pipeline, part B), in this order of work: (1) the three parts' checks are written into
+`docs/test-reports/phase-8a.md` by a writer each, reviewed (against the design, against the code,
+a verifier for each major) and committed before any of their UI (D244); (2) three worktrees
+`D:/Projects/Personal/vc-wt/p8a-firstrun`, `p8a-keyboard` and `p8a-icon` on `wip/p8a-<key>` from the
+phase branch, an Opus builder in each reading design sections 0 and 1 (with 1.17, what is built)
+and its own, then three reviewers, a verifier for each major and a fixer per package, as wave 1's
+workflow did (its script is kept with the session:
+`phase8a-wave-1-wf_463ba2b4-db6.js`); (3) the lead merges, with the lead's doc changes each
+builder names, and compares each merge's pictures with `references/wave1`; (4) step 12: the lagged
+list and the whole default run with no agent at work. §7 takes the icon's masters from
+`docs/brand/icon/round-2/` if the owner has said yes to them by then, else the placeholder
+(design 7.8). By hand before §5's merge, the owner told: `cmd.exe` started as the app will start
+it, with `/S /K` and winget's quoted path and `--version`, to see that its window stays open
+(design 13.4 item 7); and at §6's merge two earlier real-window checks run alone (design 13.3).
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -568,23 +586,17 @@ every commit.
 
 ### Notes for whoever resumes
 
-- **Step 8 under way (2026-11-20).** Done so far, on the tree of `bba59c7` (the commits after it
-  change only docs): the whole default run through `scripts/heavy-run.sh`, alone on the machine,
-  7,993 tests with 4 skipped and none failed in 1 h 32 min 7 s (04:42 to 06:16; its log is
-  `D:/Projects/Personal/phase8-work/wave1/default-run-wave1.log`). The run's pictures were copied
-  at once to `D:/Projects/Personal/phase8-work/references/wave1/` (1,185 scripted pictures, 35 of
-  them phase 8a's; the real-window folders in it are phase 7b's old captures), with their hashes
-  in `references/wave1-pictures.sha256`. `scripts/scan-contrast.py` on phase 7b's references took
-  6 min 39 s and wrote the eight lists, each equal to the committed one. The comparison
-  (`D:/Projects/Personal/phase8-work/wave1/compare/out/summary.md`): of 1,150 earlier scripted
-  pictures 1,141 changed and 9 are the same file; 1,083 changed only inside their expected
-  regions, 54 also outside them, 4 changed that were not expected to; none changed size; the 196
-  "expected, not changed" are the real-window captures, which no pass has taken again. The 58
-  are being explained one by one, and the 35 new pictures checked against the report, by the
-  workflow `phase8a-wave1-picture-inspection` (run `wf_8a580486-289`: nine Opus inspectors, and a
-  second look at whatever is not variance or the round's own colours). Still to do after it: the
-  lead's ruling on its findings; the lagged list of design 0.4, with no agent at work; step 8's
-  tick; the worktrees and `wip` branches of wave 1 removed.
+- **Wave 1 is closed (2026-11-20); the owner is asked for the week's share before wave 2.**
+  Nothing is uncommitted, and the phase branch is pushed. The run's pictures, the comparison and
+  the inspectors' crops are outside the repository: `D:/Projects/Personal/phase8-work/references/`
+  (`wave1/`, the references of every later merge, with `wave1-pictures.sha256`),
+  `D:/Projects/Personal/phase8-work/wave1/` (`default-run-wave1.log`, `compare/`, `inspect/`,
+  `lagged/`, `for-the-lead.md`). A later merge is compared so: `python scripts/compare-pictures.py
+  D:/Projects/Personal/phase8-work/references/wave1 artifacts/visual <out> --expected <a file of the
+  regions design 0.7 names for that merge>`; without `--expected` every changed picture is listed.
+  The worktrees of wave 1 (`D:/Projects/Personal/vc-wt/p8a-colours`, `p8a-floor`, `p8a-single`)
+  and their `wip` branches are merged and clean; whether they are removed now is asked of the owner
+  with the share, as phase 7b's were removed at the owner's word.
 - **Wave 1 is merged (2026-11-20).** The workflow `phase8a-wave-1` (run
   `wf_463ba2b4-db6`: three Opus builders, nine reviewers, a verifier for each of 11 majors, three
   fixers; 26 agents, 6.33M tokens, 2 h 35 min) built, reviewed and fixed the three packages in
@@ -808,7 +820,10 @@ every commit.
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
   - **Before wave 2 (step 9): the share of the week's allowance used** (D241). On 2026-11-20 it
-    was 25 to 50 %, with which step 4 and wave 1 go on.
+    was 25 to 50 % before step 4; step 4 and wave 1 are done since, and their agents used about
+    14.6M tokens. Asked on 2026-11-20 at wave 1's close.
+  - **Wave 1's worktrees**: three folders under `D:/Projects/Personal/vc-wt/`, merged and clean.
+    Remove them now (the `wip` branches stay), or keep them? Asked with the share.
   - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
     above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
     D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on
