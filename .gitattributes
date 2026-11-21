@@ -4,6 +4,9 @@
 *.cs    text diff=csharp
 *.axaml text
 *.sh    text eol=lf
+# The icon's tool writes its manifest with LF on every machine, so the checkout keeps LF too and a
+# run of the tool with nothing changed leaves the file as it is.
+assets/brand/generated/manifest.json text eol=lf
 
 *.png binary
 *.ico binary

@@ -125,7 +125,7 @@ public class DialogView : UserControl
                     return;
                 }
 
-                if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyEnabled: true, Command: { } command } confirm
+                if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyVisible: true, IsEffectivelyEnabled: true, Command: { } command } confirm
                     && command.CanExecute(confirm.CommandParameter))
                 {
                     command.Execute(confirm.CommandParameter);
