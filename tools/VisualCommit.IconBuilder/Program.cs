@@ -225,11 +225,19 @@ static void RemoveOthers(string root, IReadOnlyCollection<string> written, Place
         }
 
         // The deepest first (a folder's path is longer than its parent's), each looked at just before
-        // it would go, so that a folder left empty by its last subfolder's going goes too.
+        // it would go, so that a folder left empty by its last subfolder's going goes too. Each look
+        // is a step of its own, so that a folder that cannot be read then is named as the one that
+        // failed.
         placement.Listing(owned);
-        foreach (var empty in Directory.EnumerateDirectories(folder, "*", SearchOption.AllDirectories).OrderByDescending(path => path.Length).Where(path => !Directory.EnumerateFileSystemEntries(path).Any()))
+        var subfolders = Directory.EnumerateDirectories(folder, "*", SearchOption.AllDirectories).OrderByDescending(path => path.Length).ToList();
+        foreach (var subfolder in subfolders)
         {
-            placement.DeleteFolder(Path.GetRelativePath(root, empty).Replace(Path.DirectorySeparatorChar, '/'));
+            var relative = Path.GetRelativePath(root, subfolder).Replace(Path.DirectorySeparatorChar, '/');
+            placement.Listing(relative);
+            if (!Directory.EnumerateFileSystemEntries(subfolder).Any())
+            {
+                placement.DeleteFolder(relative);
+            }
         }
     }
 }
@@ -273,7 +281,7 @@ internal sealed class Placement(string root, string drawn, string aside)
         File.Delete(target);
     }
 
-    /// <summary>Notes that the owned folder <paramref name="relative"/> is being looked through, for a failure's message.</summary>
+    /// <summary>Notes that the folder <paramref name="relative"/>, an owned one or one inside it, is being read, for a failure's message.</summary>
     public void Listing(string relative) => Failing = $"{relative}: could not be read";
 
     /// <summary>Deletes the repository's empty folder <paramref name="relative"/>; git keeps no folder, so none is put back.</summary>
