@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Automation;
-using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Documents;
 using Avalonia.Data;
@@ -23,7 +22,8 @@ namespace VisualCommit.App.Controls;
 /// <para>
 /// The geometry is fixed by the phase 1 test report: rows <see cref="RowHeight"/> high, columns
 /// as <see cref="GraphColumns"/> computes them, lanes 16 apart. UI Automation sees the control
-/// as one element; single rows are not exposed in phase 1 (D49).
+/// as a list whose one child is the selected row, not one element per row (D435, which amends
+/// D49; CommitGraphControl.Automation.cs).
 /// </para>
 /// <para>
 /// <see cref="SelectedIndex"/> and <see cref="ScrollOffset"/> bind two-way by default, so that a
@@ -370,8 +370,6 @@ public sealed partial class CommitGraphControl : Control
         }
     }
 
-    protected override AutomationPeer OnCreateAutomationPeer() => new CommitGraphAutomationPeer(this);
-
     protected override Size ArrangeOverride(Size finalSize)
     {
         UpdateExtent(finalSize);
@@ -442,6 +440,11 @@ public sealed partial class CommitGraphControl : Control
         else if (change.Property == AvatarsProperty)
         {
             OnAvatarsChanged(change.GetNewValue<Hosting.AuthorAvatars?>());
+        }
+
+        if (AffectsExposedRow(change.Property))
+        {
+            ScheduleAutomationUpdate();
         }
     }
 
@@ -762,6 +765,9 @@ public sealed partial class CommitGraphControl : Control
         }
 
         UpdateHover();
+
+        // The focus row may arrive with this page.
+        ScheduleAutomationUpdate();
     }
 
     private void OnThemeChanged()
@@ -850,20 +856,6 @@ public sealed partial class CommitGraphControl : Control
         }
 
         return string.Join("\n", data.LabelsAt(row).Select(LabelTipLine));
-    }
-
-    /// <summary>
-    /// Exposes the graph to UI Automation as one element with its accessible name, so the
-    /// real-window pass can find it by its automation id (D49). The base control's peer hides
-    /// a plain control from the control view.
-    /// </summary>
-    private sealed class CommitGraphAutomationPeer(CommitGraphControl owner) : ControlAutomationPeer(owner)
-    {
-        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Custom;
-
-        protected override bool IsContentElementCore() => true;
-
-        protected override bool IsControlElementCore() => true;
     }
 }
 
