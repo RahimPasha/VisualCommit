@@ -329,7 +329,7 @@ round (1,150 scripted, 200 real-window captures, 3 framed captures, 198 differen
 | The contrast round (§2) | 13, D410 | 1,333 of 1,350: 1,137 scripted, 196 captures; placeholder 1,293, dark danger 360, danger button 41, accent on a row 13 (`research2/colours-*.txt`); 17 unchanged (`colours-none.txt`) | the scan's boxes (`research2/scan/part-*/scan.json`) |
 | The window's icon (§7) | 3 | the 3 framed captures (phase 0 `A`, `B`; phase 6 `s15`) | the title bar; at the gate also §2's `FilterBox` placeholder: their twins' scan box `[29, 203, 99, 235]` moved to the client area's place in the framed capture ((13, 58) in phase 7b's 2226×1471 references, so `[42, 261, 112, 293]`) |
 | The Git program row (§5) | 40 | 9 scripted: `s14c`, `s14i`, `s18a`, `s18d`, `s19a`, `s19d`, `s20b`, `l31e-settings-git-dark`, `l31e-settings-git-light` | the global scope's bottom |
-| The About nav button (§8) | 3, 14, D409 | 83 scripted, 8 captures | x 141–317, y 255–285 at 1100×700 (x 551–727, y 415–445 at 1920×1080) |
+| The About nav button (§8) | 3, 14, D409 | 83 scripted, 8 captures | x 140–317, y 255–285 at 1100×700 (x 550–727, y 415–445 at 1920×1080) |
 | Two palette commands (§8, §11) | 54 | 4 scripted (`k10a`, `k10f`, `l31c` dark, light), 2 captures; K10's constants and `CommandPaletteViewTests`' count (and, from §11, a fourth PageDown in both, D452; 11.4) | the scroll thumb, x 837–838 |
 | The shortcuts list's "Help" group (§11) | 62 | `s14f-shortcuts-end`; `s14e-shortcuts-top` in the section's scroll bar only, if at all (§11's builder measures it) | the list's end; the scroll bar |
 
@@ -338,18 +338,22 @@ three framed captures also change in the left panel's `FilterBox` placeholder (�
 scan's boxes, which cover only their client-area twins (`colours-placeholder.txt` lines 1, 2 and 935;
 the scan's `expected.json` has no `with-frame` key). The lead's file gives each of the three the title
 bar and its twin's box moved by the frame. Every
-other package proves "none": its run's scripted pictures against the current references. Three of
+other package proves "none": its run's scripted pictures against the current references. Six of
 8a's own pictures change at later merges, and the lead's `--expected` file for each merge names
 them: `k3a-palette-cancel` in the palette's scroll thumb (§8's and §11's merges), `l3a-palette-placeholder` in the palette's scroll thumb (§8's and §11's merges) and
 `l3f-settings-name-placeholder` in the settings screen (the Git program row at §5's merge, the
-About button at §8's).
+About button at §8's); and part F's `f12a-row-next-start`, `f12b-row-too-old` and
+`f14a-netrc-note`, which show the settings screen's section list, in x 140–317, y 255–285 at §8's
+merge.
 
 How (D419): §2's comparison runs phase 7b's references
 (`D:/Projects/Personal/phase7b-work/gate/round-3dc0887/visual/`, ruling 22) against wave 1's whole
 run, with the scan's boxes as the expected regions (ruling 30): a difference outside them is a
 finding. The run's scripted pictures, once that comparison passes, are the new references
-(`D:/Projects/Personal/phase8-work/references/wave1/`); every later merge and the gate compare
-against them with `scripts/compare-pictures.py --expected <file>`, whose file maps
+(`D:/Projects/Personal/phase8-work/references/wave1/`); from then on every later merge and the gate
+compare against the references of the last closed wave (wave 2's from its close,
+`D:/Projects/Personal/phase8-work/references/wave2/`, and after wave 3's close wave 3's; the lead,
+2026-11-21) with `scripts/compare-pictures.py --expected <file>`, whose file maps
 `phase-N/<folder>/<name>.png`, or an `fnmatch` pattern, to boxes `[left, top, right, bottom]` in the
 picture's own pixels (2.6): the lead writes one for the regions above. `--expected` may be given more
 than once; a picture's boxes are those of every key that matches it, exact or a pattern, from every
@@ -364,11 +368,11 @@ to expected results" (ruling 28). Every picture is inspected (D247).
 13.3 lists it by when: now, to look at the rulings and D416 to D453 (the question on winget
 was answered on 2026-11-20, D453); beside the build, the icon's rounds
 (`docs/brand/icon/`, D447); the takeovers of the desktop (the spike, §6's merge, §12's build, the
-series), told first; before the counted round, the chosen mark or the placeholder; before the gate,
-the three live tokens and D246's two runs; at the gate, the Narrator walk-through, phase 6's System
-step and a second start through the lead's isolating start file; at "Phase 8a accepted", before
-`master` is pushed, GitHub Pages' source (ruling 64, D408), and the environment's branch rule if it
-admits more than `master`.
+series), told first; before the counted round, no choice of the icon: the owner chose the mark
+before §7 was built (1.17, 7.8), so nothing waits there; before the gate, the three live tokens and
+D246's two runs; at the gate, the Narrator walk-through, phase 6's System step and a second start
+through the lead's isolating start file; at "Phase 8a accepted", before `master` is pushed, GitHub
+Pages' source (ruling 64, D408), and the environment's branch rule if it admits more than `master`.
 
 ## 1. Shared contracts (WP0's brief)
 
@@ -836,7 +840,7 @@ fallback; no tooltip changes, ruling 34):
 | `DismissRestoreButton`, `ActivityLogToggle` | "Dismiss the restore offer", "Activity log" |
 | `LeftSplitter`, `RightSplitter`, `ActivityLogSplitter` | "Resize the left panel", "Resize the right panel", "Resize the activity log" |
 | `RowStageButton`, `RowDiscardButton`, `RowUnstageButton` | `StageFileFormat` "Stage {0}", `DiscardFileFormat` "Discard {0}", `UnstageFileFormat` "Unstage {0}", over `ChangedFileRow.Key` |
-| `RefHiddenToggle`, `RefSoloToggle` | `ShowRefFormat` "Show {0} in the graph", `StopSoloingRefFormat` "Stop soloing {0}", over `RefItemRow.Text` |
+| `RefHiddenToggle`, `RefSoloToggle` | `ShowRefFormat` "Show {0} in the graph", `StopSoloingRefFormat` "Stop soloing {0}", over the ref's full name (the string the row's tooltip shows for a branch or a tag, `RefItemRow.ToolTip`, or a property of its own that holds the same), not over `RefItemRow.Text` (the lead, 2026-11-21) |
 
 The formats bind with `StringFormat={x:Static …}`, or through a converter in `AutomationNames` if the
 compiled binding refuses that. A stage row's buttons exist in UI Automation only on a hovered,
@@ -1016,7 +1020,9 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   §12. `Program.Main`'s exit codes and the notice under a real desktop lifetime have run in no
   test: §12's launches 4 to 6 are their first run.
 - **Wave 1's close** (the report's "Wave 1's comparison"). The references of every later merge are
-  `D:/Projects/Personal/phase8-work/references/wave1/`. "Try again" keeps its width while it reads
+  `D:/Projects/Personal/phase8-work/references/wave1/` until wave 2's close; from then they are those
+  of the last closed wave (wave 2's, `D:/Projects/Personal/phase8-work/references/wave2/`, and after
+  wave 3's close wave 3's; the lead, 2026-11-21). "Try again" keeps its width while it reads
   `Trying…` (`9a82a8a`), and L6's `l6h` waits for the history's diff (`24d335f`). For §12: in L4 a's
   launch the menu opens under a pointer that has not moved, and Windows may then hover an item
   that the scripted picture does not show hovered, so the pointer is moved to the neutral point
@@ -3295,17 +3301,24 @@ Dark, 1100×700, an empty tab, `settings.json` unwritten and nothing launched un
 
 Each method under about 40 s alone. `Phase8aExpectations.A.cs` holds the texts as literals, the nav
 slots, the address and the names; `Phase8aExpectationTests.A.cs` asserts the names' pattern and no "@".
-For §12 (12.3.4 launch 3): A1 up to the Tab walk by real keys (no link pressed), under 3 % from
-`a1a-about-dark` (and `a3a-about-1920` where 1920×1080 fits), `AboutVersion`'s name equal to the built
-`VisualCommit.dll`'s `ProductVersion` read as `AppVersionInfo.Parse` does; then A4 by a real Enter on
-Show license…, under 3 % from `a4a-license`, and Esc, "Copy all" never pressed.
+About's places are asserted within 2, as 7a's and 7b's section list is (Accounts at (140, 223) and
+(550, 383)), and About lies exactly 32 below Accounts with the same left (the lead, 2026-11-21); so
+0.7's and 8.6's region starts at x 140 (x 550). Method 1 takes A4 after A1's first Tab, which lands
+on Show license…, and A1's walk goes on after Esc gives the focus back (part A's reading, the lead,
+2026-11-21).
+For §12 (12.3.4 launch 3): A1 up to the Tab walk, not including it, by real keys (no link pressed),
+under 3 % from `a1a-about-dark` (and `a3a-about-1920` where 1920×1080 fits), `AboutVersion`'s name
+equal to the built `VisualCommit.dll`'s `ProductVersion` read as `AppVersionInfo.Parse` does and
+ending with ` (`, seven hexadecimal digits and `)`: a Release build without a commit fails the launch,
+saying so, and the lead rules then (the lead, 2026-11-21); then A4 by a real Enter on Show license…,
+under 3 % from `a4a-license`, and Esc, "Copy all" never pressed.
 
 ### 8.6 Earlier pictures
 
 Two changes, named by ruling 3 (rulings 14, 54; D409):
 - The section list: `settings-list-pictures.tsv`'s 83 scripted pictures (phase 6 31, 7a 23, 7b 29) and
   8 captures (phase 6 `s14a-general`, `l31d-settings-light`; 7a `a01a`, `a02b`, `a05a`; 7b `a02d`,
-  `a05b`, `a06b`) with their difference pictures, in x 141–317, y 255–285 at 1100×700 (x 551–727, y
+  `a05b`, `a06b`) with their difference pictures, in x 140–317, y 255–285 at 1100×700 (x 550–727, y
   415–445 at 1920×1080; doubled at 200 %).
 - The palette's thumb, x 837–838: `k10a-palette-commands`, `k10f-palette-names-repository`,
   `l31c-palette-dark`, `l31c-palette-light`; captures `k10a`, `l31c-palette-light`.
@@ -3313,8 +3326,12 @@ Two changes, named by ruling 3 (rulings 14, 54; D409):
 Nothing else: `VcLinkButton` is the sign-in theme moved unchanged, the native menu draws nothing on
 Windows, no typed query of an earlier check matches the command. Proof: the builder runs phase 6's
 part S, K10 and L31 and 7a's and 7b's part A (the sign-in dialogs among them), then
-`compare-pictures.py --expected` against `D:/Projects/Personal/phase8-work/references/wave1/` with these
-regions and wave 2's: every other picture the same file. Captures at the gate (0.7).
+`compare-pictures.py --expected` against the references of the last closed wave (wave 2's from its
+close, `D:/Projects/Personal/phase8-work/references/wave2/`; the lead, 2026-11-21) with these regions
+and the six of 8a's own pictures that 0.7 names for §8 (`k3a-palette-cancel` and
+`l3a-palette-placeholder` in the thumb, `l3f-settings-name-placeholder` and part F's
+`f12a-row-next-start`, `f12b-row-too-old` and `f14a-netrc-note` in the About button's region): every
+other picture the same file. Captures at the gate (0.7).
 
 ### 8.7 Lagged list, time, real-window pass
 
@@ -3342,7 +3359,9 @@ alone, the two classes about one. The pass: A1 in the launch shared with part B,
 5. The macOS and Linux natives are proven only in CI's macOS and Linux jobs.
 6. Unverified until a push changes only the notices: the `paths` order rule.
 7. Unverified: `ProductVersion` carrying `+<commit>` in the real window's build.
-8. Part A shows §7's placeholder; its pictures change when the chosen mark is regenerated.
+8. Settled (1.17, 7.8): the owner chose the mark before §7 was built, so part A shows it from its
+   first run; should the masters change again, part A's pictures change with part B's and are
+   inspected again.
 
 While the settings screen or any dialog is open, the macOS item does nothing, as Mod+, does. Open
 point: 13.4, item 12.
@@ -3489,7 +3508,11 @@ setter (`Theme/Controls.axaml:216`, kept as a fallback):
 `AutomationProperties.Name="{x:Static cmd:AutomationNames.PreviousConflict}"`. The rows bind formats:
 `StageFileFormat` `Stage {0}`, `DiscardFileFormat` `Discard {0}`, `UnstageFileFormat` `Unstage {0}` over
 `ChangedFileRow.Key` (the path); `ShowRefFormat` `Show {0} in the graph`, `StopSoloingRefFormat`
-`Stop soloing {0}` over `RefItemRow.Text`; as `{Binding Key, StringFormat={x:Static cmd:AutomationNames.StageFileFormat}}`,
+`Stop soloing {0}` over the ref's full name (the string the row's tooltip shows for a branch or a
+tag, `RefItemRow.ToolTip`, or a property of its own that holds the same), not over `RefItemRow.Text`,
+as the menus word it: `Show feature/alpha in the graph`, `Show origin/feature/alpha in the graph`,
+`Stop soloing feature/ff` (the lead, 2026-11-21); as
+`{Binding Key, StringFormat={x:Static cmd:AutomationNames.StageFileFormat}}`,
 or a converter in `AutomationNames` if the compiled binding refuses that. No tooltip, help text, key,
 template or style changes. A control outside 1.12 that the sweep reports is named only at the lead's
 word, from its area's texts class, never by a tooltip's change.
@@ -3515,6 +3538,17 @@ SelectionItem, ExpandCollapse, RangeValue or a writable Value. Rules:
 - `duplicate`: two checked peers with one automation id and one name under the same items container
   (the nearest ancestor peer whose owner is an `ItemsControl`).
 
+The `duplicate` rule has one exemption (the lead, 2026-11-21): it does not apply to `RefItem` under
+`RefList`. `AutomationSweep` holds that one exemption by the automation id, with its reason in a
+comment: a row of the branch list is told apart by its place under its section and its folders; its
+full name is its tooltip, which the peer is expected to give as its help text (that fallback from
+tooltip to help text is unverified until §9's first run of U3, 9.9 item 7); the left panel as a tree
+with levels is the Backlog's (ruling 36). A `RefItem` row keeps its automation name, the row's text
+(the leaf: `main`, `feature`, `alpha`), as every earlier test and every real-window helper finds it
+(`RealApp.RefRow`, `Phase1Checks.Graph`): no earlier test, helper or picture changes. The toggles
+inside the rows are unique by their full names (9.3.6). Any other duplicate the sweep's first run
+finds is the lead's at §9's merge, the same way.
+
 `AutomationProblem` and `AssertNamed` as 1.12.
 
 `AccessibleNameSweepTests`, one `[AvaloniaFact]` and one start each, about 15: (1) the welcome page
@@ -3534,25 +3568,37 @@ state's title (`GitSetupTitle`'s text) and its help text the state's body (`GitS
 
 #### 9.3.9 Narrator by hand, and the guide
 
-The walk-through (D411, the owner, about 20 minutes, at the gate) on copies of the ops scenario with
-README.md changed and of a stopped merge, started by the lead's PowerShell line with CLAUDE.md's
-isolating variables; for steps 20 and 21, last, the lead's start line with
-`VISUALCOMMIT_GIT_STAND_IN=none` beside the isolating variables, so that the app finds no Git and shows
-the first-run screen (1.14). Narrator: Ctrl+Win+Enter. Each step: "as expected", or the words heard.
-1. The app in front: its title. 2. F6 to the graph: "Commit graph, list", then the selected row.
-3. Down: the next row's subject, author, date, refs. 4. HEAD's row: "…, current branch main…".
-5. Home, End, PageDown: each landing row, once. 6. Shift+Down twice: each focus row; is "3 commits
-selected" heard? 7. Down: one row, no count. 8. Up to "Working changes". 9. Shift+F10: the menu's
-first item; Esc: back. 10. A branch clicked in the left panel: its commit's row. 11. F6, Tab to a
-file: its path, "button". 12. Ctrl+Shift+M (the commit message), Shift+Tab to README.md's row, then
-Tab: "Stage README.md, button". 13. The status bar's toggle: "Activity log, button, Ctrl+J".
-14. Ctrl+Shift+F: the result; are the progress steps read? 15. Ctrl+F, a word, Enter: the match's row,
-the focus in the box. 16. Ctrl+Shift+P, "fet": entries with keys. 17. Ctrl+,, Down to About, Enter,
+The walk-through (D411, the owner, about 20 minutes, at the gate) on one session of two tabs, a copy
+of the ops scenario with README.md changed, active, and a stopped merge's copy second, started by the
+lead's PowerShell line with CLAUDE.md's isolating variables and `VISUALCOMMIT_TIME_ZONE=UTC`, so that
+the dates heard are 9.3.5's; steps 20 and 21, last, by a second start, the lead's start line with
+`VISUALCOMMIT_GIT_STAND_IN=none` beside the isolating variables, made after the first app has been
+closed, since one instance runs per data folder (D421), so that the app finds no Git and shows the
+first-run screen (1.14) (the lead, 2026-11-21). Narrator: Ctrl+Win+Enter. Each step: "as expected", or
+the words heard; a step whose words differ is written down as heard.
+1. The app in front: its title. 2. F6 to the graph: "Commit graph, list" alone while no row is
+selected (9.3.2, 9.3.4). 3. Down: the next row's subject, author, date, refs; the first Down selects
+the working-changes row, and each later step that assumed a selection is worded from the row the
+keys really reach, as part U's hand check has them. 4. HEAD's row: "…, current branch main…".
+5. Home, End, PageDown: each landing row, once: Home "Working changes"; End the last row, "Initial
+commit…"; PageDown on the last row moves nothing, so nothing new is heard (9.3.4). 6. Up until "Main
+work" is heard, then Shift+Down twice: "Alpha two…", then "Alpha one…"; is "3 commits selected"
+heard? 7. Down: one row, no count. 8. Up to "Working changes". 9. Shift+F10: the menu's first item;
+Esc: back. 10. A branch clicked in the left panel: its commit's row. 11. F6 to the right panel: the
+first changed file's row, its name, "button". 12. Ctrl+Shift+M (the commit message), Shift+Tab to
+README.md's row, then Tab: "Stage README.md, button". 13. The status bar's toggle: "Activity log,
+button, Ctrl+J".
+14. Ctrl+Shift+F: the result; are the progress steps read? 15. Ctrl+F, `alpha` (it matches Alpha one
+and Alpha two), Enter: the match's row, its name and ", matches the search" if its hint is read; the
+focus stays in the box. 16. Ctrl+Shift+P, "fet": entries with keys. 17. Ctrl+,, Down to About, Enter,
 then Narrator+W: the owner's name and the version. 18. The resolver: "Next conflict, button,
 Alt+Down". 19. Narrator+Tab on the graph: "Commit graph, list" (ruling 35). 20. The first-run screen
 shows: the state's title, "VisualCommit needs Git", and its body. 21. Tab to "Check again", Enter: its
-result is spoken (no Git found again, the focus back on "Check again").
-Silence at steps 2, 3 or 5: the live region does not reach Narrator (9.9, risk 1).
+result is spoken (no Git found again): "Checking…" while the search runs, then "Check again,
+button", the focus given back (5.3).
+Silence where a row's name is expected (step 3's rows, step 5's Home and End): the live region does
+not reach Narrator (9.9, risk 1). Step 2's lone "Commit graph, list" and step 5's PageDown on the last
+row are no finding.
 
 For §11 (ruling 39): "VisualCommit is tested with Narrator on Windows. Other screen readers, NVDA,
 JAWS, VoiceOver and Orca among them, have not been tried. In the commit graph, the selected commit is
@@ -3579,8 +3625,11 @@ New, each written first and failing on the code before (recorded in the merge no
 
 Earlier tests that change: `CommitGraphControlTests.The_graph_is_one_ui_automation_element_with_its_name`
 becomes `The_graph_is_a_ui_automation_list_with_its_name` and asserts `List` (D435: no longer
-one element); its builders `Linear`, `Branch` and `Host` become `internal`, no assertion changed. No
-other: `ShellToolTipTests` reads tooltips, help texts and keys, `HideAndSoloTests` tooltips;
+one element); its builders `Linear`, `Branch` and `Host` become `internal`, no assertion changed.
+`KeyboardPassTests.ReadmesStageFact` (8a's project, `1355a20`) becomes `Button RowStageButton "Stage
+README.md" of README.md in UnstagedFileList [Right], framed`, since `FocusFact` reads the automation
+name that 1.12's `StageFileFormat` sets. No other earlier test: `ShellToolTipTests` reads tooltips,
+help texts and keys, `HideAndSoloTests` tooltips;
 `CommitKeyTests`, `RegionKeysTests`, `CommandPaletteViewTests` and `Phase6RealWindowPass.K.cs:224` the
 focus on `GraphRows`, which stays (ruling 35).
 
@@ -3588,11 +3637,14 @@ focus on `GraphRows`, which stays (ruling 35).
 
 Dark, 1100×700, the ops scenario with README.md changed unless named; the window's peer made through
 `ShellDriver.Phase8a.Uia.cs`.
-- **U1, the graph's row** (real window: yes). F6, "Main work" selected: a picture, the peer made, the
-  same picture again, same bytes (`u1a-graph-row-head`); Down; Up to the stash row and the working
-  row; Shift+Down twice (`u1b-graph-rows-three-selected`); the working row (`u1c-graph-working-row`);
-  a ref clicked in the left panel. Each step: one child `GraphSelectedRow`, ListItem, 9.3.5's name and
-  hint, one Name change per move, the focus on `GraphRows` (on `RefItem` after the click).
+- **U1, the graph's row** (real window: yes). A click on `Local branches › main`, then F6, "Main
+  work" selected: a picture, the peer made, the same picture again, same bytes
+  (`u1a-graph-row-head`); Down; Up; Shift+Down twice (`u1b-graph-rows-three-selected`); six Ups
+  through the stash to the working-changes row (`u1c-graph-working-row`); a branch clicked in the
+  left panel. Each step: one child `GraphSelectedRow`, ListItem, 9.3.5's name and hint, one Name
+  change per move, the focus on `GraphRows` (on `RefItem` after the click). The order is the lead's
+  (2026-11-21), as part U has it: from the working-changes row or a stash, Shift with an arrow has
+  no anchor and moves as without (phase 4's 4h), so three rows are selected from "Main work" first.
 - **U2, the sweep** (real window: no). `AccessibleNameSweepTests` passes; the report lists the states
   and the first run's findings. One picture of the busiest state: the activity log, a selected and a
   hovered stage row, two hidden branches (`u2a-sweep-ops-tab`).
@@ -3615,7 +3667,10 @@ fails and is written to `run.txt` (D450).
 None (ruling 3): names, live settings and peers take no part in layout or drawing. Proven by a grep
 at the review (each `.axaml` hunk adds only `AutomationProperties.*` or an `xmlns` line; the graph's
 diff has no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange), by U1's same bytes, and
-by `scripts/compare-pictures.py` against wave 1's references: nothing outside §8's About region.
+by `scripts/compare-pictures.py` against the references of the last closed wave (wave 2's from its
+close, `D:/Projects/Personal/phase8-work/references/wave2/`; the lead, 2026-11-21): nothing outside
+what §8 changes (0.7's rows for §8: the About button's region and the palette's scroll thumb, with
+0.7's six of 8a's own pictures), since §9 merges after §8.
 
 ### 9.7 Lagged list, run time, real-window pass
 
@@ -3635,15 +3690,19 @@ once, outside the pass.
 
 ### 9.9 Risks, the unverified and open points
 
-1. A row's node exists only once a client has reached it (uia.md 2): S1 tests the cold case, steps 2,
-   3 and 5 Narrator. Silence found at the gate reopens the route: a decision and a gate round.
-2. Narrator may read a List's selection on focus, and the row twice (step 2).
+1. A row's node exists only once a client has reached it (uia.md 2): S1 tests the cold case, steps 3
+   and 5 Narrator. Silence found at the gate reopens the route: a decision and a gate round.
+2. Narrator may read a List's selection on focus, and the row twice (step 11's first F6).
 3. Whether a live region's help text is spoken (the count, the search) is unverified (step 6); the
    details panel's "3 commits selected" says it too.
 4. `OperationStatus` may chatter through git's progress (S5, step 14).
 5. `StringFormat` with `x:Static`, and the row's parent: the build and a test verify; the fallbacks
    are a converter and the parent Avalonia sets when it lists children.
 6. VoiceOver may announce a live Name change (uia.md 2), untried; Linux announces nothing (D411).
+7. Unverified until §9's first run of U3 (the lead, 2026-11-21): the peer's fallback from a control's
+   tooltip to its help text, read in Avalonia 12.1.3's source (9.3.3), which no code has run yet.
+   9.3.8's exemption rests on it (a `RefItem`'s full name is its tooltip), and so does the Narrator
+   walk-through's step 11, where a file's path is heard only as its help text.
 
 The spike's branch `wip/p8a-uia-spike` is never pushed and is deleted after §9's merge, its events
 in the merge notes. Open points: 13.4, items 13 to 16; item 16's two first-run steps are 9.3.9's
@@ -3886,8 +3945,9 @@ None. The app's log is a file; the activity log shows the operation log and the 
 (`AppSession.cs:205-207`), not `IAppLog`; no git call and no control is added. Proof: the builder
 runs phase 1's walk-through (`dotnet test --project tests/VisualCommit.VisualTests --filter-class
 "*Phase1Checks"`, the graph and the 100k repository) and
-`python scripts/compare-pictures.py D:/Projects/Personal/phase8-work/references/wave1 artifacts/visual <folder>`
-lists no changed picture of phase 1; wave 3's whole run confirms it for every phase.
+`python scripts/compare-pictures.py D:/Projects/Personal/phase8-work/references/wave2 artifacts/visual <folder>`
+(the references of the last closed wave, wave 2's from its close; the lead, 2026-11-21) lists no
+changed picture of phase 1; wave 3's whole run confirms it for every phase.
 
 ### 10.7 Lagged list, default run, real-window pass
 
@@ -4316,7 +4376,7 @@ text alone (no caret, icon, key text or border toward the foreground; `CommitSum
 40 px right padding, so that `SummaryCounter` lies outside it); a box is read unfocused, but
 the text typed into the focused `FilterBox` in launch 1 (L1's and L2's `sea`), which is read less the
 caret's column. No key is sent to a window that is not the foreground window: a launch whose first
-input is a key (launches 5 and 6) first asserts `ForegroundIsThis`.
+input is a key (launches 3, 5 and 6) first asserts `ForegroundIsThis`.
 Where no such rectangle exists, the comparison carries the colour and run.txt says so. A miss is
 reported to the lead, never met by a wider tolerance (§2.9 item 6).
 
@@ -4338,12 +4398,21 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
 3. **`Check_A_and_B_about_and_icon`** (one empty tab). B1 as §7.5 a) to c): the executable's
    associated icon and `WM_GETICON`'s two against the `.ico`'s frames (`IconFile`, the file under the
    `RepoRoot` metadata), within 2; `b1-title-bar-dark-with-frame` and `b1-title-bar-icon-dark` (the title
-   bar's left 64 × caption height, four times, nearest-neighbour). A1: About by the twin's route;
-   `AboutVersion`'s automation name equals `BuiltVersionDisplay()` (ruling 59); A1's dark picture (the
+   bar's left 64 × caption height, four times, nearest-neighbour). Before A1's first key (B1 presses
+   nothing, so A1's Ctrl+Shift+P is the launch's first input) `ForegroundIsThis` is asserted (12.3.3);
+   if it fails, one real click on the window's title bar, away from its left end (where the icon
+   opens the system menu) and from the caption buttons, then `ForegroundIsThis` asserted again within
+   5 s, else the method fails before any key (12.3.5's second ruling, for the main window too; no
+   click at the neutral point; the lead, 2026-11-21). A1: About by the twin's route;
+   `AboutVersion`'s automation name equals `BuiltVersionDisplay()` (ruling 59) and also ends with
+   ` (`, seven hexadecimal digits and `)`; if the pass's Release build carries no commit, the launch
+   fails saying so, and the lead rules then (unverified until §12's first run); A1's dark picture (the
    twin shows `PinnedVersion`, seven characters apart); at 1920×1080 too when `app.Fits(1920, 1080)`,
    else run.txt says it does not fit (plan step 4). A4: Tab to `AboutShowLicenseButton`, a real Enter:
-   the dialog, `TextDocumentText` focused, under 3 % from `a4a-license`; Esc, the focus back on the
-   button. Esc. A real click on `ThemeSwitch`; B2:
+   the dialog, the focus in the text by part K's text wait (UI Automation's focused element is
+   `TextDocumentText`, or lies inside its bounds and is no button, since AvaloniaEdit's inner
+   `TextArea` has no automation id; run.txt says which held; the lead, 2026-11-21), under 3 % from
+   `a4a-license`; Esc, the focus back on the button. Esc. A real click on `ThemeSwitch`; B2:
    `b2-title-bar-light-with-frame`, `b2-title-bar-icon-light`; `TaskbarButton("VisualCommit", 10 s)`:
    found within 10 s, its existence and bounds asserted, and it is captured by its bounds as
    `b2-taskbar-button` and `b2-taskbar-button-enlarged`. None found: the method does not fail on it,
@@ -4455,7 +4524,9 @@ tooltip or a hover look (a member of `Phase8aExpectations.F`), rests the scripte
 there too, and shows by the files' hashes that both scripted pictures stay the same files (headless
 no pointer is drawn, and nothing hovers at either point); if one changes, §12 tells the lead before
 going on. (2) Launches 5 and 6: the fallback click on the notice's title bar lands away from its
-left end, where the icon now opens the system menu.
+left end, where the icon now opens the system menu. It covers launch 3's main window too (the lead,
+2026-11-21; 12.3.4 launch 3): its fallback click on the title bar lands away from the left end and
+from the caption buttons.
 
 **Part F (launches 7 to 10).**
 
@@ -4592,7 +4663,9 @@ left end, where the icon now opens the system menu.
 - The notice window carries the same `Icon`, so launches 5 and 6 show the mark at the left of its
   title bar; I2's captures are its client area and do not change. Their fallback click on the
   notice's title bar must land away from that left end: a click on a window's icon opens its system
-  menu (and a double click closes the window) instead of only activating it.
+  menu (and a double click closes the window) instead of only activating it. Launch 3's fallback
+  click on the main window's title bar does the same, and also keeps away from the caption buttons
+  (the lead's ruling (2), for the main window too; 12.3.4 launch 3).
 - In the light theme the white line's ends meet a light title bar or taskbar and open the tile's
   outline at left and right; `b2-title-bar-icon-light` and `b2-taskbar-button` are inspected with
   that as the mark, not a cut.
@@ -4666,8 +4739,9 @@ with `System.Reflection.Metadata`); a LiveRegionChanged from `GraphSelectedRow` 
 first build); F4's dialog title and box 1148 (S14's pattern).
 
 Risks: a gate's machine without `winget.exe` on its `PATH` fails launch 7 (D449); a run in the
-worktree proves no path with a space (the main checkout's does); the owner's icon, chosen after D246's
-runs, changes B's captures, which the counted pass shows.
+worktree proves no path with a space (the main checkout's does). The owner's icon is no longer one:
+the owner chose the mark before §7 was built (1.17, 7.8), so B's captures show it from D246's runs on
+and nothing waits there.
 
 Settled: §5 gives the focus back after Check again (5.3), and F13 asserts it; U's untracked file
 takes no picture (9.5); winget is on the laptop's `PATH` (the lead, 2026-11-19; 13.4 item 7). No open
@@ -4813,17 +4887,17 @@ activity log's splitter goes to a fixer (D427).
 | §9's spike and merge | Told before the spike (a minute of keys and clicks); at §9's merge, a short Narrator listen (9.3.9's steps 2 to 6 and 14, about 5 minutes; 13.4 item 13). |
 | §10's merge and the series | Told before the first run (about 5 minutes of the desktop) and the series (rested, the desktop for 12 to 18 minutes per run, M6 clicks Fetch). |
 | §12's build (status step 18) | Told before each of its 13 methods runs alone and before phase 0's `Check_8` runs alone (12.4, 12.8 item 3): about 15 minutes of the desktop in all, never beside a heavy run (ruling 23). |
-| Before the counted round | The chosen mark regenerated, or the decision that 8a closes with the placeholder (the handoff says so, the choice moves to 8b) or that the gate waits. |
+| Before the counted round | Nothing: the owner chose the mark before §7 was built (1.17, 7.8), and §7 built with it, so nothing waits there. |
 | Before the gate | The three live tokens made again (GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04), through the masked script; told before each live run (D335). Present for D246's two runs of 8a's real-window checks; told before the pass. |
-| At the gate, by hand | The Narrator walk-through (9.3.9's 21 steps, about 20 minutes; steps 20 and 21 on the first-run screen, through the lead's start line with `VISUALCOMMIT_GIT_STAND_IN=none`), phase 6's System step (D224), and a second start through the lead's isolating start file (4.6): a `.cmd` file outside the repository that sets CLAUDE.md's isolating variables and starts the Release build, which the owner starts twice, the second time while another window is in front. |
+| At the gate, by hand | The Narrator walk-through (9.3.9's 21 steps, about 20 minutes; its one session of two tabs, the ops copy active and the stopped merge second, started by the lead's line with CLAUDE.md's isolating variables and `VISUALCOMMIT_TIME_ZONE=UTC`; steps 20 and 21 on the first-run screen, by a second start with `VISUALCOMMIT_GIT_STAND_IN=none` after the first app has been closed, D421), phase 6's System step (D224), and a second start through the lead's isolating start file (4.6): a `.cmd` file outside the repository that sets CLAUDE.md's isolating variables and starts the Release build, which the owner starts twice, the second time while another window is in front. |
 | At "Phase 8a accepted" | Before `master` is pushed, GitHub Pages' source set to "GitHub Actions", by the owner or by the lead through `gh api` at the owner's word (ruling 64, D408). After the push, the guide's run on `master` read, and run again by `workflow_dispatch` if it ran before the setting; then the live address checked. The `github-pages` environment's branch rule read: if it admits more than `master`, the owner's leave asked to set it. |
 
 ### 13.4 Open points
 
-Each with who settles it and before what. "Settled" marks what the lead ruled on 2026-11-19, after
-the integration and before the design's review; a section that a ruling changes says so in its own
-text. Items 7 and 9 also say what the lead settled on the review, and item 22 is the review's
-question for the owner (13.5).
+Each with who settles it and before what. "Settled" marks what the lead ruled, each with its date
+(2026-11-19, after the integration and before the design's review, where the mark names none); a
+section that a ruling changes says so in its own text. Items 7 and 9 also say what the lead settled
+on the review, and item 22 is the review's question for the owner (13.5).
 1. Whether the scan's eight lists enter the repository (`docs/test-reports/phase-8a-contrast/`) or
    only the report's counts and the 41 danger-button names (ruling 31). The lead, before §2's merge.
    **Settled:** the eight lists enter the repository, in `docs/test-reports/phase-8a-contrast/`, in
@@ -4881,7 +4955,11 @@ question for the owner (13.5).
     image search; the lead compares by eye and records it in the report's checks by hand (the owner,
     2026-11-20).
 12. A5's bound of 1 s and End reaching the true last line with word wrap are unverified until part A
-    runs; if either fails, no wrap or a later bound. The lead, during §8.
+    runs; if either fails, no wrap or a later bound. The lead, during §8. **Settled (the lead,
+    2026-11-21):** the bound stays 8.5's and is asserted by the scripted check wherever it runs; the
+    check also writes the time it measured to its output. If the whole default run or one of CI's
+    jobs fails it, the lead rules then, with the measured times, and no bound is loosened ahead of
+    that.
 13. A short Narrator listen by the owner after the spike or at §9's merge, so a change of route lands
     before the review, not after the gate. The lead, at the spike. **Settled:** the lead asks the
     owner for it at §9's merge (13.3 names it).
@@ -4895,7 +4973,12 @@ question for the owner (13.5).
 16. Whether the Narrator walk-through adds a first-run state (the stand-in's variable in the start
     line). The lead, before the gate. **Settled:** yes, two steps: the first-run screen is the first
     thing a new user with a screen reader meets. The lead gives the owner the start line with the
-    stand-in's variables.
+    stand-in's variables. **Settled (the lead, 2026-11-21):** the start is one session of two tabs,
+    the ops copy active and the stopped merge second, by the lead's start line with CLAUDE.md's
+    isolating variables and `VISUALCOMMIT_TIME_ZONE=UTC`, so that the dates heard are 9.3.5's; steps
+    20 and 21 by a second start with `VISUALCOMMIT_GIT_STAND_IN=none` after the first app has been
+    closed, since one instance runs per data folder (D421). The owner hears the steps at the gate; a
+    step whose words differ is written down as heard (9.3.9).
 17. Whether a measure that a fix changes takes its bound from the "after" series (ruling 65 says
     "before"). The lead, in that fix's ruling.
 18. The Pull budget is the highest count among CI's six jobs; if the floor job counts more than the

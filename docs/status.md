@@ -626,11 +626,10 @@ night on `phase/8a-release-readiness` (Progress, step 1).
 Next: the last part of step 12, then wave 3 (steps 13 to 16), in full: the owner said "Continue" on
 2026-11-21 and, asked how far with the week's share read as 70 to 85 % used the day before, answered
 "all of wave 3 now" ("Waiting on the owner"). Step 12 is closed: the lead's check of the 35 new pictures found no fault (Progress, step 12; the
-report, "Wave 2's comparison with wave 1's references"). Under way: wave 3's checks, parts A (About, six checks) and U (screen readers,
-three checks, with the Narrator walk-through by hand), written and reviewed into
-`D:/Projects/Personal/phase8-work/wave3/checks/part-A.md` and `part-U.md` (the workflow
-`phase8a-wave3-checks`, run `wf_8c265922-772`), which the lead has put into the report and commits
-before any of their UI (D244); §10 has no part. For the three takeovers of the desktop in wave 3
+report, "Wave 2's comparison with wave 1's references"). Wave 3's checks are written, reviewed and committed before any of their UI (D244): parts A (About,
+six checks, nine pictures) and U (screen readers, three checks, six pictures, and the Narrator
+walk-through's 21 steps by hand) are in `docs/test-reports/phase-8a.md`, which now holds 42 checks
+and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the three takeovers of the desktop in wave 3
 (the spike, §10's first run, the "before" series) the owner said on 2026-11-21: start each when it is
 ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
 its merge. Then the build: worktrees
@@ -659,6 +658,30 @@ every commit.
 
 ### Notes for whoever resumes
 
+- **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
+  the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
+  as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two
+  reviewers each (against the design, against the code), with a verifier for each of 11 majors, all
+  confirmed, and a fixer per part (`phase8a-wave3-checks`, run `wf_8c265922-772`, 19 agents, 4.66M
+  tokens). The lead ruled on what they left open
+  (`D:/Projects/Personal/phase8-work/wave3/checks/lead-rulings.md`): the branch toggles are named by
+  the ref's full name (`Show feature/alpha in the graph`); a `RefItem` row keeps its name, the row's
+  text, and the sweep's duplicate rule exempts it, so no earlier test, helper or picture changes;
+  launch 3 asserts that it is the foreground window before its first key, with one click on the
+  title bar as its fallback; six of 8a's own pictures change at §8's merge, part F's three settings
+  pictures among them; the references of every later merge are the last closed wave's, wave 2's
+  now; the About button's region starts at x 140 (x 550 at 1920×1080); A5's bound of 1 s stays and
+  is ruled on only if a run fails it; the Narrator walk-through's words follow the code (F6 to the
+  graph speaks no row while none is selected). Two more workflows carried the rulings into the
+  design and the parts, put the parts into the report and checked the result
+  (`phase8a-wave3-checks-settle`, run `wf_3ddc3c22-6e8`, 5 agents, 1.11M; a checker's dozen misses
+  repaired and verified by `phase8a-wave3-checks-repair`, run `wf_5b0f2234-5c5`, 3 agents, 0.69M).
+  The design changed in 0.7, 0.8, 1.12, 1.17, 8.5, 8.6, 8.9, 9.3.6, 9.3.8, 9.3.9, 9.4, 9.5, 9.6, 9.9,
+  10.6, 12.3.3 to 12.3.5, 12.9, 13.3 and 13.4. **§10** has no part and has been built since the
+  morning in `D:/Projects/Personal/vc-wt/p8a-perf` (the workflow `phase8a-wave-3`, run
+  `wf_ee9f40a9-6e3`). The workflows of the night took about eleven hours of the clock for an hour
+  or two of work: the agents stood still for most of it (the plan's usage limit, by the look of
+  it).
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
