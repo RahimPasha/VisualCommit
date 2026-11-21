@@ -28,6 +28,9 @@ public sealed class ThirdPartyNoticesTests
         "SkiaSharp.NativeAssets.macOS", "SkiaSharp.NativeAssets.Linux", "HarfBuzzSharp.NativeAssets.macOS", "HarfBuzzSharp.NativeAssets.Linux",
     ];
 
+    /// <summary>NuGet's placeholder for "no asset for this framework", which ships nothing.</summary>
+    private const string NuGetPlaceholder = "_._";
+
     /// <summary>The asset kinds of a deps.json library that put a file in the build output.</summary>
     private static readonly string[] ShippedAssetKinds = ["runtime", "runtimeTargets", "native", "resources"];
 
@@ -254,6 +257,7 @@ public sealed class ThirdPartyNoticesTests
             var files = ShippedAssetKinds
                 .Where(kind => library.Value.TryGetProperty(kind, out _))
                 .SelectMany(kind => library.Value.GetProperty(kind).EnumerateObject().Select(asset => Path.GetFileName(asset.Name)))
+                .Where(file => file != NuGetPlaceholder)
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
             if (files.Count > 0)

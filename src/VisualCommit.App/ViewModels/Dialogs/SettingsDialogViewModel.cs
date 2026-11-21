@@ -90,8 +90,9 @@ public sealed record SettingsScreenServices(
 /// <summary>
 /// The settings screen (<c>SettingsDialog</c>, docs/phase-6-design.md 7): a large dialog of the
 /// dialog layer (D69) with six sections, General, Git, Tools, Keyboard shortcuts, Accounts
-/// (docs/phase-7a-design.md 8.3) and About (D409), behind a section list. About saves nothing. Its reads start when it opens
-/// (<see cref="Loaded"/>); changes apply at Save only (7.8), in 7.8's order: validation, the app's settings in one update, the theme through the
+/// (docs/phase-7a-design.md 8.3) and About (D409), behind a section list; About saves nothing.
+/// Its reads start when it opens (<see cref="Loaded"/>); changes apply at Save only (7.8), in
+/// 7.8's order: validation, the app's settings in one update, the theme through the
 /// shell's <c>UseTheme</c>, the global git writes, this repository's writes as one operation of its
 /// queue, the read back, the tabs told, and the close unless a key is still decided by another
 /// file of its scope or a write failed. Cancel and Esc change nothing, with D256's exception:
