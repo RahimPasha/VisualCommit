@@ -270,7 +270,7 @@ Wave 2:
   so no placeholder was ever written. No major in its review; part B's 2 methods and 2 pictures;
   the README's note, the tool and the stand-in in the solution, and CLAUDE.md's rows at the merge
   (`578d07c`).
-- [ ] 12. Wave 2's close: the lagged list and the whole default run; the pictures against wave 1's
+- [x] 12. Wave 2's close: the lagged list and the whole default run; the pictures against wave 1's
   references, with only the changes design 0.7 names (D427's fixer ran at the merge, step 10).
   **Done on 2026-11-20 but for one part** (the report, "Wave 2's comparison with wave 1's
   references"): the lagged list, with one failure of an older fetch test in 201 that passed alone
@@ -278,9 +278,12 @@ Wave 2:
   skipped, none failed, 1 h 46 min 41 s; the comparison, 1,126 of 1,185 earlier pictures the same
   files, the ten expected ones changed only inside their regions, the other 49 each a picture that
   varies by nature; the references saved (`references/wave2/`); design 6.8 item 5's two real-window
-  checks alone, both passed. **Left**: the lead's check of the 35 new pictures of parts F, K and B
-  against the report, which waits for the week's reset or the owner's word (D241: 70 to 85 % used
-  on 2026-11-20).
+  checks alone, both passed. **The lead's check of the 35 new pictures** of parts F, K and B
+  against the report, on 2026-11-21 after the owner's "Continue" (the workflow
+  `phase8a-wave2-new-pictures`, run `wf_70d1619d-305`: eight inspectors and two second looks, 1.69M
+  tokens, 19 minutes): no fault; two pictures held back as unsure, `f3a` (a path that wraps at its
+  space) and `f6a` (the report's "one line" of git's words, now said plainly), each judged no fault
+  by a second inspector. Step 12 is done.
 
 Wave 3:
 
@@ -622,16 +625,15 @@ night on `phase/8a-release-readiness` (Progress, step 1).
 
 Next: the last part of step 12, then wave 3 (steps 13 to 16), in full: the owner said "Continue" on
 2026-11-21 and, asked how far with the week's share read as 70 to 85 % used the day before, answered
-"all of wave 3 now" ("Waiting on the owner"). Under way since then, side by side, both reading the
-repository only: (1) the lead's check of the 35 new pictures of parts F (19), K (14) and B (2)
-against the report (the workflow `phase8a-wave2-new-pictures`, run `wf_70d1619d-305`: eight
-inspectors, then a second look at each fault; its crops under
-`D:/Projects/Personal/phase8-work/wave2/inspect/`), each fault then corrected with its reason in the
-report, which closes step 12; (2) wave 3's checks, parts A (About, six checks) and U (screen readers,
+"all of wave 3 now" ("Waiting on the owner"). Step 12 is closed: the lead's check of the 35 new pictures found no fault (Progress, step 12; the
+report, "Wave 2's comparison with wave 1's references"). Under way: wave 3's checks, parts A (About, six checks) and U (screen readers,
 three checks, with the Narrator walk-through by hand), written and reviewed into
 `D:/Projects/Personal/phase8-work/wave3/checks/part-A.md` and `part-U.md` (the workflow
 `phase8a-wave3-checks`, run `wf_8c265922-772`), which the lead has put into the report and commits
-before any of their UI (D244); §10 has no part. Then the build: worktrees
+before any of their UI (D244); §10 has no part. For the three takeovers of the desktop in wave 3
+(the spike, §10's first run, the "before" series) the owner said on 2026-11-21: start each when it is
+ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
+its merge. Then the build: worktrees
 `D:/Projects/Personal/vc-wt/p8a-about`, `p8a-uia` and `p8a-perf` on `wip/p8a-<key>` from the phase
 branch, an Opus builder in each reading design sections 0 and 1 (with 1.17) and its own, three
 reviewers, a verifier for each major and a fixer per package, as waves 1 and 2 (the scripts are kept

@@ -1053,8 +1053,7 @@ Steps, method 6 (F6b):
 Expected:
 - Method 5, after step 1: `GitSetupTitle` `Git is not working`; `GitSetupBody` `VisualCommit found Git at
   the path below, but it did not report its version.`; `GitSetupPath` `C:\Program Files\Git\cmd\git.exe`;
-  `Git said:` over `GitSetupGitSaid` `fatal: bad config line 1 in file C:/Users/demo/.gitconfig` (one
-  line, in `VcCodeFontFamily`, selectable); `GitSetupGuidance` `Git cannot read line 1 of
+  `Git said:` over `GitSetupGitSaid` `fatal: bad config line 1 in file C:/Users/demo/.gitconfig` (one line of git's words, wrapped to the box's width, in `VcCodeFontFamily`, selectable); `GitSetupGuidance` `Git cannot read line 1 of
   C:/Users/demo/.gitconfig. Correct that line, or rename the file, then press Check again.`. The
   buttons, in order (5.3's table order, open point 7): `GitSetupDownloadButton` `Download Git for
   Windows` (a git that does not work gets the download, D405, D453), `GitSetupShowFileButton` `Show the
@@ -2622,6 +2621,10 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   x 608. Reason: open points 44 and 45 left the form and the lines to §7's builder; at the regular
   weight `TextInk` could not read the token from `20` and `32` on white (10 off, past its tolerance of
   8), and in SemiBold every size reads its token exactly in both themes.
+- **F6, after step 1, a clarification** (2026-11-21, the lead's check of the new pictures): "one line"
+  of `GitSetupGitSaid` now reads "one line of git's words, wrapped to the box's width". The box wraps
+  a long line by design (5.3), `f6a-config-fault` shows git's one line over two rows, and the check
+  asserts one line of text. No expected result changed.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
@@ -2693,10 +2696,34 @@ read the other 16 by their changed pixels (three of them enlarged, reference bes
   `27d`, `32d`; phase 4's `c11f`; phase 5's `b6b`, `u16q`, `u23e`; phase 6's `g23i` (7 pixels of the
   toolbar, 5 levels); phase 7a's `a09b`, `n04a`; phase 7b's `n05b`, `n05d`.
 
-**The 35 new pictures** of parts F (19), K (14) and B (2) were inspected by their builders and
-reviewers at the build. The lead's own check of each against this report, which wave 1's close made
-through a workflow of inspectors, is **not made yet**: the owner read the week's allowance as 70 to 85
-% used and no workflow of agents runs before the reset or the owner's word (status.md).
+**The 35 new pictures** of parts F (19), K (14) and B (2), which their builders and reviewers had
+inspected at the build, were checked by the lead against this report on 2026-11-21 (the workflow
+`phase8a-wave2-new-pictures`: eight inspectors, four to six pictures each, every text read word for
+word and every colour from its pixels; then a second inspector for each picture not passed; 1.69M
+tokens; the crops under `D:/Projects/Personal/phase8-work/wave2/inspect/`). **No fault.** 33 passed at
+once. Two were held back as unsure, and the second look judged neither a fault:
+
+- `f3a-chosen-gone`: the guidance `VisualCommit found another Git at C:\Program Files\Git\cmd\git.exe.`
+  breaks after `C:\Program`. The text is the report's word for word; the line cannot hold it at
+  1100×700 (392 px of content, about 400 needed), and the break at the path's space is the one the
+  app's rule for paths in running text gives (D227). The chosen path above it stands whole on its own
+  line.
+- `f6a-config-fault`: git's line shows over two rows in the "Git said:" box, where F6 said "one line".
+  The check reads one line of text (`Assert.Single` of its lines), the view wraps it on purpose (5.3:
+  six lines, then a scroll bar), and launch 9's twin calls it "that line": the words meant one line of
+  git's. F6's text now says so ("Changed in this report after its first commit").
+
+What the inspectors noted beside the checks, none of it a fault of wave 2: `k5a-chosen` differs from
+phase 7a's `b06a-chosen` only in the URL box, (381,349)-(502,362), the port that differs by run (the
+lead's own pixel comparison); in `k8a-splitter` the graph's Date column is hidden at the left panel's
+new width (430 px of graph area: the column rule of D49 lets Date give way before the message is
+narrower than 120), which K8 does not name; in `k4b-row-staged` the row's focus frame is drawn over the
+list's overlay scroll thumb at its right end, Fluent's layering, the frame whole; in `f9a` the three
+buttons stand on two lines, in their order; in `f12a` the Git program row's path column is 195 px and
+the path 193, so a longer chosen path is shortened at its start, as designed; the part B sheets show
+each of the 23 files pixel for pixel (at most 1 level off on dark, none on light), so the mark's look is
+the files' own. Launch 11's real-window capture must show the unstaged list scrolled as `k1a` to `k1d`
+do (design 12.3.5).
 
 **The references** of the later merges are this run's 1,220 scripted pictures,
 `D:/Projects/Personal/phase8-work/references/wave2/` (their hashes in `wave2-pictures.sha256` beside
