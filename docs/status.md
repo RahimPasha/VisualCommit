@@ -636,8 +636,13 @@ ready, without asking again; §9's Narrator listen needs the owner in person and
 its merge. Then the build: worktrees
 `D:/Projects/Personal/vc-wt/p8a-about`, `p8a-uia` and `p8a-perf` on `wip/p8a-<key>` from the phase
 branch, an Opus builder in each reading design sections 0 and 1 (with 1.17) and its own, three
-reviewers, a verifier for each major and a fixer per package, as waves 1 and 2 (the scripts are kept
-with the session: `phase8a-wave-1-wf_463ba2b4-db6.js`, `phase8a-wave-2-build.js`). §9 builds in two
+reviewers, a verifier for each major and a fixer per package, as waves 1 and 2. Wave 3's script is
+`phase8a-wave-3-wf_ee9f40a9-6e3.js`, kept with the session beside the earlier ones; it takes the
+packages to run in its arguments (`about`, `uia-spike`, `uia`, `perf`), each with its base commit.
+**§10 is being built since 2026-11-21** (it has no checks to wait for): the worktree `p8a-perf` on
+`wip/p8a-perf` from `b812f17`, the workflow's run `wf_ee9f40a9-6e3`. A session that finds a workflow
+gone reads the worktree's `git log <base>..HEAD` and `git status` and builds the package on from
+its last commit by the same brief. §9 builds in two
 stages: its first commits are the peers of design 9.3.2 to 9.3.5 and the spike on
 `wip/p8a-uia-spike`, which the lead runs once on the desktop, the owner told (a minute of keys and
 clicks, no heavy run beside), and whose events decide whether the route stands (9.3.1); the rest of
