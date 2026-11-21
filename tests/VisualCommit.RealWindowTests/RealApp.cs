@@ -512,6 +512,17 @@ public sealed partial class RealApp : IDisposable
         WaitUntilIdle();
     }
 
+    /// <summary>
+    /// Puts the real pointer on the centre of an element in one jump (SetCursorPos), crossing
+    /// nothing on the way: the point <see cref="ClickWithMouse"/> clicks, so that a timed
+    /// <see cref="ClickWithMouse"/> that follows finds the pointer there and moves nothing.
+    /// </summary>
+    public void SetPointerOn(AutomationElement element)
+    {
+        Mouse.Position = CentreOnScreen(element);
+        WaitUntilIdle();
+    }
+
     /// <summary>Moves the real mouse to the centre of an element and clicks the right button.</summary>
     public void RightClickWithMouse(AutomationElement element)
     {

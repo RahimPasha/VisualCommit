@@ -387,13 +387,18 @@ public sealed class Phase8aPerformance(Phase8aPerformanceRun fixture) : IClassFi
                 using (var app = RealApp.Launch(data, Session(clone), LaunchEnvironment))
                 {
                     WaitForLine(app, data, Loaded(name, before), OneLoad, $"{label}: the history's {before} commits loaded");
-                    Thread.Sleep(Settle);
+
+                    // The pointer is put on Fetch before the settle, so that the click after T0 moves
+                    // nothing: the span is the click's to the reload line, without the pointer's travel.
                     var fetch = app.Find("FetchButton");
+                    app.SetPointerOn(fetch);
+                    Thread.Sleep(Settle);
                     clicked = DateTimeOffset.Now;
                     app.ClickWithMouse(fetch);
                     WaitForLine(app, data, Reloaded(name, after), Reload, $"{label}: the reload line with {after} commits after the fetch");
 
-                    // The fetch's span is only noted: a line that does not come is written "no line".
+                    // The Fetch operation's span, its refresh included, is only noted: a line that
+                    // does not come is written "no line".
                     try
                     {
                         WaitForLine(app, data, FetchEnded(name), Reload, $"{label}: the fetch's end");
@@ -412,7 +417,7 @@ public sealed class Phase8aPerformance(Phase8aPerformanceRun fixture) : IClassFi
                 var reloadLine = Number(data, Reloaded(name, after), label);
                 reloads.Add(reload);
                 reloadLines.Add(reloadLine);
-                series.Write(Invariant($"M6 run {run}: {PerformanceSeries.Format(reload)} ms (the reload line's {reloadLine} ms; Fetch succeeded after {Noted(data, FetchEnded(name))} ms)"));
+                series.Write(Invariant($"M6 run {run}: {PerformanceSeries.Format(reload)} ms (the reload line's {reloadLine} ms; the Fetch operation ended after {Noted(data, FetchEnded(name))} ms, its refresh included)"));
             }
 
             series.Write(PerformanceSeries.Summary("M6", "ms", reloads, M6BoundMilliseconds));
@@ -575,7 +580,11 @@ public sealed class Phase8aPerformance(Phase8aPerformanceRun fixture) : IClassFi
     private static Regex Heap(string repository, int commits) =>
         Line(Invariant($@"{Regex.Escape(repository)}: managed heap (\d+) MB after loading {commits} commits\."));
 
-    /// <summary>The toolbar's Fetch ended with success (<see cref="AppLogFile.OperationEnded"/>'s line, its message after it); the group its milliseconds.</summary>
+    /// <summary>
+    /// The toolbar's Fetch ended with success (<see cref="AppLogFile.OperationEnded"/>'s line, its
+    /// message after it); the group its milliseconds, which the queue counts to the end of the
+    /// refresh after the fetch, the reload and the status read after it included.
+    /// </summary>
     private static Regex FetchEnded(string repository) =>
         Line(Invariant($@"{Regex.Escape(repository)}: Fetch: {OperationOutcome.Succeeded} after (\d+) ms(?:: .*)?"));
 
