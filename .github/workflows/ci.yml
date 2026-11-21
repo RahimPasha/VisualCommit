@@ -7,17 +7,28 @@ name: CI
 # at. The real-window pass is Windows-only, takes over the mouse and never runs here; nor does the
 # live command against real GitHub (D250, D337), which needs the owner's token.
 
+# A push or pull request that changes only docs starts no run. The app embeds LICENSE,
+# THIRD-PARTY-NOTICES.md and notices/, and a test holds them to the build (D433), so they are build
+# inputs: the list leaves the docs out, then takes these back (a later pattern wins over an earlier "!").
 on:
   push:
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**.md'
+      - '!LICENSE'
+      - 'THIRD-PARTY-NOTICES.md'
       - 'LICENSE'
+      - 'notices/**'
   pull_request:
-    paths-ignore:
-      - 'docs/**'
-      - '**.md'
+    paths:
+      - '**'
+      - '!docs/**'
+      - '!**.md'
+      - '!LICENSE'
+      - 'THIRD-PARTY-NOTICES.md'
       - 'LICENSE'
+      - 'notices/**'
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
