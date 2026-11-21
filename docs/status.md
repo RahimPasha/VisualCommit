@@ -292,7 +292,9 @@ Wave 3:
 - [ ] 14. §9, screen readers (D411, D435, D450), part U: the spike first (the owner told), the
   graph's selected row, a name on every control with the sweep; merged after §8; a short listen
   with Narrator by the owner at its merge.
-- [ ] 15. §10, the performance pass (D436 to D438): the log lines and the opt-in class.
+- [x] 15. §10, the performance pass (D436 to D438): the log lines and the opt-in class. Built, reviewed
+  and merged on 2026-11-21 (`86ecb3a`); the first run on the desktop and the "before" series are
+  step 16's (Notes, "Wave 3 is under way").
 - [ ] 16. Wave 3's close: the lagged list, the whole default run and the pictures; then the
   "before" series on the rested laptop, the owner told, and a change only where a trigger fires,
   after a ruling.
@@ -677,9 +679,27 @@ every commit.
   (`phase8a-wave3-checks-settle`, run `wf_3ddc3c22-6e8`, 5 agents, 1.11M; a checker's dozen misses
   repaired and verified by `phase8a-wave3-checks-repair`, run `wf_5b0f2234-5c5`, 3 agents, 0.69M).
   The design changed in 0.7, 0.8, 1.12, 1.17, 8.5, 8.6, 8.9, 9.3.6, 9.3.8, 9.3.9, 9.4, 9.5, 9.6, 9.9,
-  10.6, 12.3.3 to 12.3.5, 12.9, 13.3 and 13.4. **§10** has no part and has been built since the
-  morning in `D:/Projects/Personal/vc-wt/p8a-perf` (the workflow `phase8a-wave-3`, run
-  `wf_ee9f40a9-6e3`). The workflows of the night took about eleven hours of the clock for an hour
+  10.6, 12.3.3 to 12.3.5, 12.9, 13.3 and 13.4. **§10 is built, reviewed and merged** (`86ecb3a`, 2026-11-21; the workflow `phase8a-wave-3`, run
+  `wf_ee9f40a9-6e3`: a builder in `D:/Projects/Personal/vc-wt/p8a-perf`, three reviewers, a verifier
+  for each of three majors, of which one was confirmed and fixed, a fixer; 8 agents, 1.98M tokens).
+  On the merged tree the lead ran, beside the wave's other builders and so with plain class runs:
+  the builds of the root and of the real-window and live projects, 0 warnings; `StartupTimelineTests`,
+  `RepositoryViewModelTests`, `RepositoryViewModelFilterTests`, `RepositoryOperationsPullTests` and
+  `SummaryModeTests`, 62 of 62; `PerformanceSeriesTests`, 19 of 19; `Phase8aPerformance` without its
+  variable, 5 skipped and no file written. CI's run on the merge, 44952559495, is being read (the
+  Pull budget of 23 git calls is counted in all six jobs; `artifacts/visual/pull-budget.txt` of each
+  job's artifact holds its count). **Still the lead's for §10**: the first run with
+  `VISUALCOMMIT_PERF_RUNS=1` on the desktop (design 10.8; about 5 minutes; M6 clicks Fetch), which
+  the owner let start when it is ready; the lagged list, which waits for the wave's last merge
+  because the other builders cannot pause; after the wave's close the "before" series with
+  `VISUALCOMMIT_PERF_RUNS=5` on the rested laptop, the bounds written into `Phase8aPerformance`, each
+  trigger decided and the report's table (10.3.6); the docs (design 1.17's as-built note, CLAUDE.md's
+  row for the series, architecture.md and plan.md's risk 10 at the close). The builder's and the
+  fixer's notes in full: `D:/Projects/Personal/phase8-work/wave3/for-the-lead.md`. **§8 and the first
+  stage of §9** have been building since the afternoon in `p8a-about` and `p8a-uia`, from `592686e`
+  (the same workflow script, run `wf_fbc91d85-cad`); when §9's stage ends, the lead runs the spike in
+  `D:/Projects/Personal/vc-wt/p8a-uia-spike` once on the desktop and starts the second stage with its
+  result. The workflows of the night took about eleven hours of the clock for an hour
   or two of work: the agents stood still for most of it (the plan's usage limit, by the look of
   it).
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
