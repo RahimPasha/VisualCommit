@@ -30,6 +30,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The texts About shows (D431, D433), embedded word for word so that nothing lies beside
+         the executable: the app's license, the third-party notices and each vendor's notice file.
+         EmbeddedTexts names them; ThirdPartyNoticesTests holds them to the repository's files. -->
+    <EmbeddedResource Include="..\..\LICENSE" LogicalName="VisualCommit.License.txt" />
+    <EmbeddedResource Include="..\..\THIRD-PARTY-NOTICES.md" LogicalName="VisualCommit.ThirdPartyNotices.md" />
+    <EmbeddedResource Include="..\..\notices\*" LogicalName="VisualCommit.Notices.%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\VisualCommit.Core\VisualCommit.Core.csproj" />
     <ProjectReference Include="..\VisualCommit.Git\VisualCommit.Git.csproj" />
     <ProjectReference Include="..\VisualCommit.Hosting\VisualCommit.Hosting.csproj" />
