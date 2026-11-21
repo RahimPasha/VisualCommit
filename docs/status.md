@@ -345,6 +345,16 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [44952559495](https://github.com/RahimPasha/VisualCommit/actions/runs/44952559495), for
+  `86ecb3a` (§10's merge, the performance pass): all six jobs succeeded at the first attempt, none
+  failed a test. `windows-latest` 8,301 tests with 5 skipped, Test step 27 min 13 s of 70;
+  `macos-latest` 8,298 with 3 skipped, 31 min 55 s; `ubuntu-latest` 8,298 with 4 skipped, 5 min 54
+  s; the two "bare ubuntu container" jobs 8,298 with 4 skipped each, 7 min 24 s (Ubuntu's packages)
+  and 6 min 1 s (Microsoft's installer); the floor job 8,298 with 4 skipped on git 2.34.1, 5 min 19
+  s. The Pull budget's theory passed in every job, so none counted more than 23 git calls for a
+  fast-forward or a merge, the floor job's git 2.34.1 among them, and the budget stays 23 (design
+  10.8). Each job's own count is in `pull-budget.txt` of its pictures' artifact; the lead did not
+  download them.
 - [44862521774](https://github.com/RahimPasha/VisualCommit/actions/runs/44862521774), for
   `c9835e9` (wave 2 merged, with the words added to one test's timeout): all six jobs succeeded at
   the first attempt, none failed a test. `windows-latest` 8,283 tests with 5 skipped, Test step 43
@@ -686,9 +696,8 @@ every commit.
   the builds of the root and of the real-window and live projects, 0 warnings; `StartupTimelineTests`,
   `RepositoryViewModelTests`, `RepositoryViewModelFilterTests`, `RepositoryOperationsPullTests` and
   `SummaryModeTests`, 62 of 62; `PerformanceSeriesTests`, 19 of 19; `Phase8aPerformance` without its
-  variable, 5 skipped and no file written. CI's run on the merge, 44952559495, is being read (the
-  Pull budget of 23 git calls is counted in all six jobs; `artifacts/visual/pull-budget.txt` of each
-  job's artifact holds its count). **Still the lead's for §10**: the first run with
+  variable, 5 skipped and no file written. CI's run on the merge, 44952559495, is green in all six jobs at the first attempt, and the
+  Pull budget of 23 git calls held in each, git 2.34.1 among them (the CI section). **Still the lead's for §10**: the first run with
   `VISUALCOMMIT_PERF_RUNS=1` on the desktop (design 10.8; about 5 minutes; M6 clicks Fetch), which
   the owner let start when it is ready; the lagged list, which waits for the wave's last merge
   because the other builders cannot pause; after the wave's close the "before" series with
