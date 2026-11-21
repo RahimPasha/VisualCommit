@@ -84,6 +84,28 @@ public class RepositoryViewModelFilterTests
     }
 
     [Fact]
+    public async Task Hiding_reloads_the_graph_with_a_heap_line_and_no_reload_line()
+    {
+        // D438: the reload line says the refs changed, which a filter alone does not; every load
+        // ends with the heap line.
+        using var repo = await Scenarios.FiltersAsync();
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var repository = app.Repository;
+        var before = repository.Graph;
+
+        await app.Operations.HideBranchAsync(Alpha);
+
+        Assert.NotSame(before, repository.Graph);
+        Assert.Equal(12, repository.Graph.Count);
+        Assert.DoesNotContain(app.Log.Messages, message => message.Contains(" reloaded ", StringComparison.Ordinal));
+        Assert.Equal(
+            [$"{repository.Name}: managed heap N MB after loading 15 commits.", $"{repository.Name}: managed heap N MB after loading 12 commits."],
+            app.Log.Messages
+                .Where(message => message.Contains(": managed heap ", StringComparison.Ordinal))
+                .Select(message => System.Text.RegularExpressions.Regex.Replace(message, @": managed heap \d+ MB ", ": managed heap N MB ")));
+    }
+
+    [Fact]
     public async Task A_filter_from_the_session_loads_the_first_graph_and_names_gone_since_are_dropped()
     {
         using var repo = await Scenarios.FiltersAsync();
