@@ -1175,7 +1175,17 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   (`fc123ec`): the machine's search for git with the fixed guidance `new
   GitGuidance(GitAccess.RunningPlatform, null, null)`, so that check reads neither the `PATH` for
   `winget.exe` nor `/etc/os-release`. `VisualCommit.slnx` holds the stand-in and, in a folder
-  `/tools/`, the icon's tool (`578d07c`).
+  `/tools/`, the icon's tool (`578d07c`). A second round (D454, `24b9d16`): the browser's Enter
+  stands once in `DialogView`, as `ConfirmsOnEnter(ListBox)`, which the pick dialog's `PickList`
+  uses too, and `ConfirmsOnEnterOnChecked(ItemsControl)` does the same for the checked option of
+  `ChoiceOptions` and `PushRemotes`; so 6.3.9's "dialogs" are no longer unchanged, and §11's
+  page of keys may say that Enter in such a list confirms. The icon's tool names the folder whose
+  reading failed (`ff71793`). `KeyboardPassTests` (`1355a20`) also states where Ctrl+Tab leaves
+  the focus: from a stage row's own button or its Stage on nothing, the first F6 then starting at
+  the left panel; from the graph or the summary on the same element. The lead's ruling: step 19's
+  round fixes the first in `WorkingChangesView` (the graph area's target takes the focus), and no
+  picture changes. A row's Discard cancelled in its question gives the focus back to the row's
+  own button, with the frame (6.3.4), which a test now holds.
 
 ## 2. colours: the contrast round (D410)
 
@@ -2554,6 +2564,7 @@ Changed or proven by 8a:
 | Choose a blame run; its menu | arrows; M (F2) | K2; `BlameViewTests` |
 | Cancel the running operation | P "Cancel {title}" (F3); a long T walk | K3, K8; `StatusBarTests` |
 | Clone browser's Choose | T, arrows, Enter; the focus after (F5) | K5 |
+| A pick dialog's choice; a choice or push dialog's option | T into the list, arrows, Enter on the selected row; Enter on the checked option (D454) | `KeyboardPassTests` |
 | Resize a panel | T to its splitter, arrows by 10 | K8 |
 | Commits not next to each other | the mouse only (ruling 50) | the guide |
 
