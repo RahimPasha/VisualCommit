@@ -1,0 +1,96 @@
+<local:DialogView xmlns="https://github.com/avaloniaui"
+                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                  xmlns:local="using:VisualCommit.App.Views.Dialogs"
+                  xmlns:c="using:VisualCommit.App.Controls"
+                  xmlns:vm="using:VisualCommit.App.ViewModels.Dialogs"
+                  xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
+                  x:Class="VisualCommit.App.Views.Dialogs.TextDocumentDialogView"
+                  x:DataType="vm:TextDocumentDialogViewModel"
+                  AutomationProperties.AutomationId="TextDocumentDialog"
+                  AutomationProperties.Name="{Binding Title}">
+
+  <!-- The text dialog (D432): the license or the third-party notices, read-only, on a large card of
+       its own over the settings screen. The title; 12 below it, with several texts, the switch, its
+       flat buttons 28 high and 4 apart, the shown one selected; 8 below, the text (12 below the title
+       when there is no switch); 20 below the text, "Copy all" at the left and "Close" at the right. -->
+  <Panel Classes="dialogBackdrop">
+    <Border Name="TextDocumentCard" Classes="dialogCard document">
+      <Grid RowDefinitions="Auto,Auto,*,Auto">
+        <TextBlock Name="DialogTitle"
+                   Classes="dialogTitle"
+                   Text="{Binding Title}"
+                   AutomationProperties.AutomationId="DialogTitle" />
+
+        <ItemsControl Name="TextDocumentSwitch"
+                      Grid.Row="1"
+                      Margin="0,12,0,0"
+                      ItemsSource="{Binding Parts}"
+                      IsVisible="{Binding ShowsSwitch}"
+                      AutomationProperties.AutomationId="TextDocumentSwitch">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <WrapPanel Orientation="Horizontal" ItemSpacing="4" LineSpacing="4" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate x:DataType="vm:TextDocumentPart">
+              <Button Theme="{StaticResource VcFlatButton}"
+                      Classes="documentPart"
+                      Classes.selected="{Binding IsShown}"
+                      Content="{Binding Label}"
+                      Command="{Binding $parent[local:DialogView].((vm:TextDocumentDialogViewModel)DataContext).ShowCommand, FallbackValue={x:Null}}"
+                      CommandParameter="{Binding}"
+                      AutomationProperties.AutomationId="{Binding AutomationId}"
+                      AutomationProperties.Name="{Binding Label}" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+
+        <c:DocumentTextView Name="TextDocumentText"
+                            Grid.Row="2"
+                            Classes="documentText"
+                            Classes.single="{Binding !ShowsSwitch}"
+                            FontFamily="{DynamicResource VcCodeFontFamily}"
+                            Foreground="{DynamicResource VcTextPrimaryBrush}"
+                            Background="{DynamicResource VcControlBackgroundBrush}"
+                            BorderBrush="{DynamicResource VcBorderBrush}"
+                            BorderThickness="1"
+                            Padding="8,6,2,6"
+                            AutomationProperties.AutomationId="TextDocumentText"
+                            AutomationProperties.Name="{Binding Title}" />
+
+        <Grid Grid.Row="3" Margin="0,20,0,0" ColumnDefinitions="Auto,*,Auto">
+          <Button Name="TextDocumentCopyButton"
+                  Theme="{StaticResource VcActionButton}"
+                  Content="{x:Static ops:OperationTexts+AboutTexts.CopyAll}"
+                  Command="{Binding CopyAllCommand}"
+                  AutomationProperties.AutomationId="TextDocumentCopyButton"
+                  AutomationProperties.Name="{x:Static ops:OperationTexts+AboutTexts.CopyAll}" />
+          <Button Name="ConfirmButton"
+                  Grid.Column="2"
+                  Theme="{StaticResource VcPrimaryButton}"
+                  Content="{x:Static ops:OperationTexts+AboutTexts.Close}"
+                  Command="{Binding ConfirmCommand}"
+                  AutomationProperties.AutomationId="ConfirmButton"
+                  AutomationProperties.Name="{x:Static ops:OperationTexts+AboutTexts.Close}" />
+        </Grid>
+      </Grid>
+    </Border>
+  </Panel>
+
+  <local:DialogView.Styles>
+    <!-- The switch's buttons: the flat look, 28 high, the shown text's selected. -->
+    <Style Selector="Button.documentPart">
+      <Setter Property="Height" Value="28" />
+      <Setter Property="Padding" Value="10,0" />
+    </Style>
+    <!-- The text 8 below the switch; with one text, no switch, 12 below the title, as a dialog's body is.
+         By class: the editor's style key is AvaloniaEdit's TextEditor. -->
+    <Style Selector=":is(Control).documentText">
+      <Setter Property="Margin" Value="0,8,0,0" />
+    </Style>
+    <Style Selector=":is(Control).documentText.single">
+      <Setter Property="Margin" Value="0,12,0,0" />
+    </Style>
+  </local:DialogView.Styles>
+</local:DialogView>

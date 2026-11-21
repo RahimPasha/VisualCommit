@@ -127,6 +127,7 @@ public sealed partial class ShellDriver
             SettingsSection.Tools => "SettingsNavTools",
             SettingsSection.KeyboardShortcuts => "SettingsNavShortcuts",
             SettingsSection.Accounts => "SettingsNavAccounts",
+            SettingsSection.About => "SettingsNavAbout",
             _ => "SettingsNavGeneral",
         }));
         Settle();

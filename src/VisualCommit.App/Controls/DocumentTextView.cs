@@ -1,0 +1,220 @@
+using Avalonia;
+using Avalonia.Automation.Peers;
+using Avalonia.Automation.Provider;
+using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Input;
+using Avalonia.Interactivity;
+using Avalonia.Media;
+using AvaloniaEdit;
+using AvaloniaEdit.Document;
+using AvaloniaEdit.Editing;
+using VisualCommit.App.Controls.Diff;
+
+namespace VisualCommit.App.Controls;
+
+/// <summary>
+/// A long text shown whole and read-only (D432): the license and the third-party notices. AvaloniaEdit
+/// lays out only the lines in view, so some 200 KB open at once, where a text block would stall the
+/// window. The text is wrapped, in the code font at 11.5, with no caret drawn; Tab and Shift+Tab move
+/// the focus on (D426). The keys scroll it as a reader expects: Up and Down a line, PageUp and PageDown
+/// the view less a line, Home and End (also with Ctrl) to its start and its end, End showing the true
+/// last line once the wrapped lines below are measured. Ctrl+C copies a selection. Its UI Automation
+/// peer is a document whose value is the text, named by <c>AutomationProperties.Name</c>.
+/// </summary>
+public sealed class DocumentTextView : CodeTextEditor
+{
+    /// <summary>The size of the code font in the view.</summary>
+    public const double TextFontSize = 11.5;
+
+    private ScrollViewer? _scrollViewer;
+
+    /// <summary>End was pressed: the view keeps to the text's end while the measured lines change the extent.</summary>
+    private bool _keepAtEnd;
+
+    public DocumentTextView()
+        : base(new TextArea())
+    {
+        IsReadOnly = true;
+        WordWrap = true;
+        ShowLineNumbers = false;
+        FontSize = TextFontSize;
+        HorizontalScrollBarVisibility = ScrollBarVisibility.Disabled;
+        VerticalScrollBarVisibility = ScrollBarVisibility.Auto;
+        Options = new TextEditorOptions
+        {
+            EnableHyperlinks = false,
+            EnableEmailHyperlinks = false,
+            EnableTextDragDrop = false,
+            EnableRectangularSelection = false,
+            AllowScrollBelowDocument = false,
+            HighlightCurrentLine = false,
+
+            // Read-only: Tab and Shift+Tab move the focus on, as in any other view (D426).
+            AcceptsTab = false,
+        };
+
+        var area = TextArea;
+        area.SelectionBorder = null;
+        area.SelectionForeground = null;
+        area.SelectionCornerRadius = 0;
+        area.CaretBrush = Brushes.Transparent;
+        AddHandler(KeyDownEvent, OnKeyDownForScrolling, RoutingStrategies.Tunnel);
+        ActualThemeVariantChanged += (_, _) => UseSelectionBrush();
+    }
+
+    /// <summary>The scroll viewer's extent; empty before the template is applied.</summary>
+    public Size ScrollExtent => _scrollViewer?.Extent ?? default;
+
+    /// <summary>The scroll viewer's viewport; empty before the template is applied.</summary>
+    public Size ScrollViewport => _scrollViewer?.Viewport ?? default;
+
+    /// <summary>The height of one line of the code font in the view.</summary>
+    public double LineHeight => TextArea.TextView.DefaultLineHeight;
+
+    /// <summary>Shows <paramref name="text"/> from its top, with nothing selected.</summary>
+    public void Show(string text)
+    {
+        ArgumentNullException.ThrowIfNull(text);
+        _keepAtEnd = false;
+        Document = new TextDocument(text);
+        TextArea.Caret.Offset = 0;
+        ScrollTo(0, 0);
+    }
+
+    /// <summary>Gives the keyboard focus to the text, without the keyboard's frame (it has no caret to show either).</summary>
+    public bool FocusText() => TextArea.Focus(NavigationMethod.Unspecified);
+
+    protected override AutomationPeer OnCreateAutomationPeer() => new DocumentTextAutomationPeer(this);
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        UseSelectionBrush();
+    }
+
+    /// <summary>A selection in the theme's selection colour, the text keeping its own colour (the editor's default is the accent).</summary>
+    private void UseSelectionBrush()
+    {
+        if (this.TryFindResource("VcSelectionBrush", ActualThemeVariant, out var brush) && brush is IBrush selection)
+        {
+            TextArea.SelectionBrush = selection;
+        }
+    }
+
+    protected override void OnApplyTemplate(TemplateAppliedEventArgs e)
+    {
+        if (_scrollViewer is not null)
+        {
+            _scrollViewer.ScrollChanged -= OnScrollChanged;
+        }
+
+        base.OnApplyTemplate(e);
+        _scrollViewer = e.NameScope.Find<ScrollViewer>("PART_ScrollViewer");
+        if (_scrollViewer is not null)
+        {
+            _scrollViewer.ScrollChanged += OnScrollChanged;
+        }
+    }
+
+    /// <summary>
+    /// The reading keys, taken on the way down so that the hidden caret does not move a line at a
+    /// time: Up, Down, PageUp and PageDown scroll; Home and End, alone or with Ctrl, go to the start
+    /// or the end. Every other key is the editor's (a selection, Ctrl+C).
+    /// </summary>
+    private void OnKeyDownForScrolling(object? sender, KeyEventArgs e)
+    {
+        if (e.Handled || _scrollViewer is not { } viewer)
+        {
+            return;
+        }
+
+        var modifiers = e.KeyModifiers;
+        var line = LineHeight;
+        var page = Math.Max(line, viewer.Viewport.Height - line);
+        switch (e.Key)
+        {
+            case Key.Up when modifiers == KeyModifiers.None:
+                ScrollBy(-line);
+                break;
+            case Key.Down when modifiers == KeyModifiers.None:
+                ScrollBy(line);
+                break;
+            case Key.PageUp when modifiers == KeyModifiers.None:
+                ScrollBy(-page);
+                break;
+            case Key.PageDown when modifiers == KeyModifiers.None:
+                ScrollBy(page);
+                break;
+            case Key.Home when modifiers is KeyModifiers.None or KeyModifiers.Control:
+                _keepAtEnd = false;
+                TextArea.ClearSelection();
+                TextArea.Caret.Offset = 0;
+                ScrollTo(0, 0);
+                break;
+            case Key.End when modifiers is KeyModifiers.None or KeyModifiers.Control:
+                TextArea.ClearSelection();
+                TextArea.Caret.Offset = Document?.TextLength ?? 0;
+                _keepAtEnd = true;
+                ScrollToTextEnd();
+                break;
+            default:
+                return;
+        }
+
+        e.Handled = true;
+    }
+
+    private void ScrollBy(double delta)
+    {
+        _keepAtEnd = false;
+        ScrollTo(null, Math.Max(0, ScrollOffset.Y + delta));
+    }
+
+    /// <summary>The scroll viewer's end: it clamps an offset past the extent to the last place.</summary>
+    private void ScrollToTextEnd()
+    {
+        if (_scrollViewer is { } viewer)
+        {
+            ScrollTo(null, Math.Max(0, viewer.Extent.Height - viewer.Viewport.Height));
+        }
+    }
+
+    /// <summary>
+    /// After End, the wrapped lines that come into view are measured and the extent grows or shrinks:
+    /// the view goes on to the new end, until the reader scrolls away from it.
+    /// </summary>
+    private void OnScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (!_keepAtEnd || _scrollViewer is not { } viewer)
+        {
+            return;
+        }
+
+        var end = Math.Max(0, viewer.Extent.Height - viewer.Viewport.Height);
+        if (e.ExtentDelta.Y != 0 || e.ViewportDelta.Y != 0)
+        {
+            ScrollToTextEnd();
+        }
+        else if (viewer.Offset.Y < end - 1)
+        {
+            _keepAtEnd = false;
+        }
+    }
+
+    /// <summary>The text as UI Automation sees it: a document whose read-only value is the text.</summary>
+    private sealed class DocumentTextAutomationPeer(DocumentTextView owner) : ControlAutomationPeer(owner), IValueProvider
+    {
+        public bool IsReadOnly => true;
+
+        public string? Value => owner.Document?.Text;
+
+        public void SetValue(string? value) => throw new InvalidOperationException("The text is read-only.");
+
+        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Document;
+
+        protected override bool IsContentElementCore() => true;
+
+        protected override bool IsControlElementCore() => true;
+    }
+}

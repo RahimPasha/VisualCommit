@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
@@ -5,6 +6,7 @@ using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Styling;
 using Avalonia.Threading;
+using CommunityToolkit.Mvvm.Input;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.Views;
@@ -28,9 +30,28 @@ public partial class App : Application
         ToolTip.ToolTipOpeningEvent.AddClassHandler<Control>(UseOverlayLayerForToolTip, handledEventsToo: true);
     }
 
+    public App()
+    {
+        AboutCommand = new RelayCommand(ShowAbout);
+    }
+
+    /// <summary>The window's shell, once the session has started; null before, and in a harness that sets none.</summary>
+    public MainWindowViewModel? Shell { get; set; }
+
+    /// <summary>
+    /// The macOS application menu's "About VisualCommit" (D431): the settings screen on About, as
+    /// the palette's "About VisualCommit…" opens it. While a dialog is open, the settings screen
+    /// among them, it does nothing, as Mod+, does.
+    /// </summary>
+    public ICommand AboutCommand { get; }
+
     public override void Initialize()
     {
         AvaloniaXamlLoader.Load(this);
+        if (NativeMenu.GetMenu(this)?.Items.OfType<NativeMenuItem>().FirstOrDefault() is { } about)
+        {
+            about.Command = AboutCommand;
+        }
     }
 
     public override void OnFrameworkInitializationCompleted()
@@ -62,6 +83,7 @@ public partial class App : Application
     {
         var session = AppSession.Start(AppPaths.Resolve(), this, startup: launch.Timeline);
         desktop.Exit += (_, _) => session.Dispose();
+        Shell = session.Shell;
         var window = session.MainWindow;
         if (launch.Guard is { } guard)
         {
@@ -123,6 +145,14 @@ public partial class App : Application
             }
         };
         desktop.MainWindow = window;
+    }
+
+    private void ShowAbout()
+    {
+        if (Shell is { } shell && !shell.Dialogs.IsOpen)
+        {
+            shell.OpenSettingsCommand.Execute(SettingsSection.About);
+        }
     }
 
     private static void UseOverlayLayerForToolTip(Control control, RoutedEventArgs e)

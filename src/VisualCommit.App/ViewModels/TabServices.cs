@@ -251,8 +251,11 @@ public enum SettingsSection
     Tools,
     KeyboardShortcuts,
 
-    /// <summary>The GitHub account (D256, docs/phase-7a-design.md 1.7): the last section.</summary>
+    /// <summary>The GitHub account (D256, docs/phase-7a-design.md 1.7).</summary>
     Accounts,
+
+    /// <summary>Who made the app, its version, license and notices: the last section (D409).</summary>
+    About,
 }
 
 /// <summary>A repository in the welcome page's recent list.</summary>

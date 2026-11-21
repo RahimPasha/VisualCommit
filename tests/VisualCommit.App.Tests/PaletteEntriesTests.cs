@@ -144,7 +144,8 @@ public class PaletteEntriesTests
         var shell = app.Session.Shell;
         var commands = shell.Commands.PaletteCommands();
 
-        // K10 step 2's 33 commands, in 5.4's order (KD1), no detail on one tab without a dashboard.
+        // K10 step 2's 34 commands, in 5.4's order (KD1), no detail on one tab without a dashboard;
+        // "About VisualCommit…" last (D417).
         Assert.Equal(
             [
                 "Fetch all remotes · Ctrl+Shift+F", "Pull · Ctrl+Shift+L", "Push · Ctrl+Shift+K", "Create branch… · Ctrl+B",
@@ -156,7 +157,7 @@ public class PaletteEntriesTests
                 "New tab · Ctrl+T", "Close tab · ops · Ctrl+W", "Next tab · Ctrl+Tab (disabled: There is only one tab)", "Previous tab · Ctrl+Shift+Tab (disabled: There is only one tab)",
                 "Open repository… · Ctrl+O", "Clone repository… · Ctrl+Shift+C", "Init repository… · Ctrl+Shift+I", "New workspace…",
                 "Show the activity log · Ctrl+J", "Open settings… · Ctrl+,", "Show keyboard shortcuts…", "Choose an editor…",
-                "Use the light theme", "Follow the system's theme",
+                "Use the light theme", "Follow the system's theme", "About VisualCommit…",
             ],
             commands.Select(Line));
         Assert.All(commands, entry => Assert.Equal(PaletteEntryKind.Command, entry.Kind));
@@ -337,7 +338,7 @@ public class PaletteEntriesTests
                 "New tab · Ctrl+T", "Close tab · Solo · Ctrl+W", "Next tab · Ctrl+Tab", "Previous tab · Ctrl+Shift+Tab", "Go to the next dashboard · Solo · Ctrl+Shift+D",
                 "Open repository… · Ctrl+O", "Clone repository… · Ctrl+Shift+C", "Init repository… · Ctrl+Shift+I", "New workspace…",
                 "Show the activity log · Ctrl+J (disabled: Select a repository to see its activity)", "Open settings… · Ctrl+,", "Show keyboard shortcuts…", "Choose an editor…",
-                "Use the light theme", "Follow the system's theme",
+                "Use the light theme", "Follow the system's theme", "About VisualCommit…",
             ],
             shell.Commands.PaletteCommands().Select(Line));
         Assert.True(shell.Commands.PaletteCommands().Single(entry => entry.Label == "Delete workspace…").IsDestructive);

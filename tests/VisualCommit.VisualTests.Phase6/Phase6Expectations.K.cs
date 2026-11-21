@@ -267,21 +267,24 @@ public static partial class Phase6Expectations
 
         public const double DetailSize = 11.5;
 
-        /// <summary>The empty palette's commands with nothing typed (K10 step 2): 33 on "ops", 22 on "Web"'s dashboard, 34 on web-app beside it.</summary>
-        public const int OpsCommandCount = 33;
+        /// <summary>
+        /// The empty palette's commands with nothing typed (K10 step 2): 34 on "ops", 23 on "Web"'s
+        /// dashboard, 35 on web-app beside it; "About VisualCommit…" the last of each (ruling 54, D417).
+        /// </summary>
+        public const int OpsCommandCount = 34;
 
-        public const int DashboardCommandCount = 22;
+        public const int DashboardCommandCount = 23;
 
-        public const int WebAppCommandCount = 34;
+        public const int WebAppCommandCount = 35;
 
-        /// <summary>The highlight after each of K10 step 2's three PageDowns: rows 11, 22 and 32 (clamped at the end).</summary>
-        public static readonly int[] PageDownRows = [11, 22, 32];
+        /// <summary>The highlight after each of K10 step 2's three PageDowns: rows 11, 22 and 33, the last reached exactly.</summary>
+        public static readonly int[] PageDownRows = [11, 22, 33];
 
-        /// <summary>The row the pointer's move to <see cref="WheelPoint"/> highlights: the sixth in view, rows 21 to 32 showing.</summary>
-        public const int WheelRow = 26;
+        /// <summary>The row the pointer's move to <see cref="WheelPoint"/> highlights: the sixth in view, rows 22 to 33 showing.</summary>
+        public const int WheelRow = 27;
 
-        /// <summary>The first row in view after the Up that wraps to the last (rows 21 to 32 showing).</summary>
-        public const int FirstRowInViewAtEnd = 21;
+        /// <summary>The first row in view after the Up that wraps to the last (rows 22 to 33 showing).</summary>
+        public const int FirstRowInViewAtEnd = 22;
 
         /// <summary>The width of <c>Open repository web-app</c> at 12.5 (k10e's Notes).</summary>
         public const double OpenWebAppLabelWidth = 152.1;
@@ -382,6 +385,7 @@ public static partial class Phase6Expectations
             E("Choose an editor…"),
             E("Use the light theme"),
             E("Follow the system's theme"),
+            E("About VisualCommit…"),
         ];
 
         /// <summary>K10 step 3 (<c>k10b</c>): <c>delete main</c>, both tier 0, the enabled first.</summary>
@@ -448,6 +452,7 @@ public static partial class Phase6Expectations
             E("Choose an editor…"),
             E("Use the light theme"),
             E("Follow the system's theme"),
+            E("About VisualCommit…"),
         ];
 
         /// <summary>K10 step 8 (<c>k10f</c>): web-app's palette beside the dashboard, its first twelve: the repository's commands name it (5.4, 3.8, KD2).</summary>

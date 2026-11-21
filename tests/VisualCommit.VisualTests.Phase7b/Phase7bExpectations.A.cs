@@ -93,10 +93,10 @@ public static partial class Phase7bExpectations
         public const string GitLabRefusedNote = "GitLab refused the token. Sign in again with a new token.";
         public const string AzureDevOpsRefusedNote = "Azure DevOps refused the token. Sign in again with a new token.";
 
-        /// <summary>The section list's buttons, top to bottom (7a's).</summary>
-        public static IReadOnlyList<string> NavButtons { get; } = ["General", "Git", "Tools", "Keyboard shortcuts", AccountsButton];
+        /// <summary>The section list's buttons, top to bottom (7a's, with About last since D409).</summary>
+        public static IReadOnlyList<string> NavButtons { get; } = ["General", "Git", "Tools", "Keyboard shortcuts", AccountsButton, "About"];
 
-        public static IReadOnlyList<string> NavIds { get; } = ["SettingsNavGeneral", "SettingsNavGit", "SettingsNavTools", "SettingsNavShortcuts", "SettingsNavAccounts"];
+        public static IReadOnlyList<string> NavIds { get; } = ["SettingsNavGeneral", "SettingsNavGit", "SettingsNavTools", "SettingsNavShortcuts", "SettingsNavAccounts", "SettingsNavAbout"];
 
         /// <summary>The blocks' containers in D353's order.</summary>
         public static IReadOnlyList<string> BlockIds { get; } = ["AccountsGitHub", "AccountsGitLab", "AccountsAzureDevOps"];

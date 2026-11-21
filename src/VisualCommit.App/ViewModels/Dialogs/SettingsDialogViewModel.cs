@@ -89,8 +89,8 @@ public sealed record SettingsScreenServices(
 
 /// <summary>
 /// The settings screen (<c>SettingsDialog</c>, docs/phase-6-design.md 7): a large dialog of the
-/// dialog layer (D69) with five sections, General, Git, Tools, Keyboard shortcuts and Accounts
-/// (docs/phase-7a-design.md 8.3), behind a section list. Its reads start when it opens
+/// dialog layer (D69) with six sections, General, Git, Tools, Keyboard shortcuts, Accounts
+/// (docs/phase-7a-design.md 8.3) and About (D409), behind a section list. About saves nothing. Its reads start when it opens
 /// (<see cref="Loaded"/>); changes apply at Save only (7.8), in 7.8's order: validation, the app's settings in one update, the theme through the
 /// shell's <c>UseTheme</c>, the global git writes, this repository's writes as one operation of its
 /// queue, the read back, the tabs told, and the close unless a key is still decided by another
@@ -136,6 +136,7 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         Shortcuts = services.Shortcuts;
         Accounts = new AccountsSettingsViewModel(services.Hosting, services.SignIn, services.Dialogs, services.Log, services.GitVersion, services.HomeHasNetrc, services.DismissNetrcNote);
         GitProgram = new GitProgramViewModel(services.Settings.Current.GitExecutable, services.Detection, services.ProbeGit, services.Folders, _lifetime.Token);
+        About = new AboutSettingsViewModel(services.Identity ?? AppIdentity.FromAssembly(typeof(App).Assembly), services.Dialogs, services.Launcher, services.Clipboard, services.Log);
         General.PropertyChanged += OnSectionChanged;
         Git.Global.PropertyChanged += OnSectionChanged;
         Git.Repository.PropertyChanged += OnSectionChanged;
@@ -164,12 +165,15 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
     /// <summary>The Git section's "Git program" row (D423), last in its global scope; Save writes its choice.</summary>
     public GitProgramViewModel GitProgram { get; }
 
+    /// <summary>The About section (D409, D431): read-only, the license and the notices in the text dialog, the links in the browser.</summary>
+    public AboutSettingsViewModel About { get; }
+
     /// <summary>Completes when the reads of the opening have ended (8.1, 8.6, 8.7, 12.3, SD29).</summary>
     public Task Loaded { get; }
 
     /// <summary>The section shown.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowsGeneral), nameof(ShowsGit), nameof(ShowsTools), nameof(ShowsShortcuts), nameof(ShowsAccounts))]
+    [NotifyPropertyChangedFor(nameof(ShowsGeneral), nameof(ShowsGit), nameof(ShowsTools), nameof(ShowsShortcuts), nameof(ShowsAccounts), nameof(ShowsAbout))]
     public partial SettingsSection SelectedSection { get; private set; }
 
     public bool ShowsGeneral => SelectedSection == SettingsSection.General;
@@ -181,6 +185,8 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
     public bool ShowsShortcuts => SelectedSection == SettingsSection.KeyboardShortcuts;
 
     public bool ShowsAccounts => SelectedSection == SettingsSection.Accounts;
+
+    public bool ShowsAbout => SelectedSection == SettingsSection.About;
 
     /// <summary>The section list's error dots (<c>SettingsNavError</c>): after a Save, while the section shows an error (SD9).</summary>
     public bool GeneralHasError => _saveAttempted && General.HasError;

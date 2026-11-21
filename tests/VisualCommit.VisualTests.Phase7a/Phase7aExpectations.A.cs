@@ -51,10 +51,10 @@ public static partial class Phase7aExpectations
         public const string UseForGitNote = "Clone, fetch, pull and push to GitHub over HTTPS use this account's token in place of your git credential helpers. Git in a terminal still uses your helpers.";
 
         /// <summary>The section list's buttons, top to bottom.</summary>
-        public static IReadOnlyList<string> NavButtons { get; } = ["General", "Git", "Tools", "Keyboard shortcuts", AccountsButton];
+        public static IReadOnlyList<string> NavButtons { get; } = ["General", "Git", "Tools", "Keyboard shortcuts", AccountsButton, "About"];
 
         /// <summary>The section list's buttons' automation ids, top to bottom.</summary>
-        public static IReadOnlyList<string> NavIds { get; } = ["SettingsNavGeneral", "SettingsNavGit", "SettingsNavTools", "SettingsNavShortcuts", "SettingsNavAccounts"];
+        public static IReadOnlyList<string> NavIds { get; } = ["SettingsNavGeneral", "SettingsNavGit", "SettingsNavTools", "SettingsNavShortcuts", "SettingsNavAccounts", "SettingsNavAbout"];
 
         // ---- The confirmation (D291, D296) -----------------------------------------------------
 
