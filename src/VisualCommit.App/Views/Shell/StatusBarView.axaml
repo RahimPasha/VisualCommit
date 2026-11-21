@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels"
              xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
@@ -47,7 +48,8 @@
                 ToolTip.Tip="{Binding ActivityLog.ToggleToolTip}"
                 AutomationProperties.HelpText="{Binding ActivityLog.ToggleToolTip}"
                 AutomationProperties.AcceleratorKey="{Binding Keys.ActivityLog}"
-                AutomationProperties.AutomationId="ActivityLogToggle">
+                AutomationProperties.AutomationId="ActivityLogToggle"
+                AutomationProperties.Name="{x:Static cmd:AutomationNames.ActivityLog}">
           <StackPanel Orientation="Horizontal" Spacing="5">
             <c:Icon Data="{StaticResource IconActivityLog}" Width="13" Height="13" />
             <TextBlock Text="Activity log" FontSize="11.5" VerticalAlignment="Center" />

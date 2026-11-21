@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels.Panels"
              xmlns:shell="using:VisualCommit.App.Views.Shell"
@@ -175,7 +176,8 @@
                         Command="{Binding ShowHiddenCommand}"
                         ToolTip.Tip="Hidden in the graph. Click to show it"
                         shell:RefDrag.IsExcluded="True"
-                        AutomationProperties.AutomationId="RefHiddenToggle">
+                        AutomationProperties.AutomationId="RefHiddenToggle"
+                        AutomationProperties.Name="{Binding ToolTip, StringFormat={x:Static cmd:AutomationNames.ShowRefFormat}}">
                   <c:Icon Data="{StaticResource IconEyeOff}" Width="12" Height="12" />
                 </Button>
                 <Button DockPanel.Dock="Right"
@@ -187,7 +189,8 @@
                         Command="{Binding StopSoloingCommand}"
                         ToolTip.Tip="Soloed. Click to stop soloing it"
                         shell:RefDrag.IsExcluded="True"
-                        AutomationProperties.AutomationId="RefSoloToggle">
+                        AutomationProperties.AutomationId="RefSoloToggle"
+                        AutomationProperties.Name="{Binding ToolTip, StringFormat={x:Static cmd:AutomationNames.StopSoloingRefFormat}}">
                   <c:Icon Data="{StaticResource IconSolo}" Width="12" Height="12" />
                 </Button>
                 <!-- The branch's open pull request (docs/phase-7a-design.md 10.3, D308), left of the

@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:d="using:VisualCommit.App.Controls.Diff"
              xmlns:vm="using:VisualCommit.App.ViewModels.Diff"
@@ -52,7 +53,8 @@
                 Command="{Binding CloseCommand}"
                 IsVisible="{Binding ShowsClose}"
                 ToolTip.Tip="Close"
-                AutomationProperties.AutomationId="CloseDiffButton">
+                AutomationProperties.AutomationId="CloseDiffButton"
+                AutomationProperties.Name="{x:Static cmd:AutomationNames.CloseDiff}">
           <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
         </Button>
         <TextBlock DockPanel.Dock="Right"
