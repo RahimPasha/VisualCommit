@@ -699,7 +699,9 @@ every commit.
   variable, 5 skipped and no file written. CI's run on the merge, 44952559495, is green in all six jobs at the first attempt, and the
   Pull budget of 23 git calls held in each, git 2.34.1 among them (the CI section). **Still the lead's for §10**: the first run with
   `VISUALCOMMIT_PERF_RUNS=1` on the desktop (design 10.8; about 5 minutes; M6 clicks Fetch), which
-  the owner let start when it is ready; the lagged list, which waits for the wave's last merge
+  the owner let start when it is ready, and which the lead holds back until §8's and §9's builders
+  have ended: it opens ten tabs on 100k-commit histories, and beside a builder's test runs each
+  would make the other's waits time out; the lagged list, which waits for the wave's last merge
   because the other builders cannot pause; after the wave's close the "before" series with
   `VISUALCOMMIT_PERF_RUNS=5` on the rested laptop, the bounds written into `Phase8aPerformance`, each
   trigger decided and the report's table (10.3.6); the docs (design 1.17's as-built note, CLAUDE.md's
@@ -1075,8 +1077,10 @@ every commit.
     that by itself decides if the route stays. The lead gives the start file
     (`D:/Projects/Personal/phase8-work/wave3/spike/narrator-listen.cmd`, outside the repository:
     the spike's build on a throwaway repository, with the isolating variables) and the steps:
-    Narrator on (Ctrl+Win+Enter), click a commit in the graph, press Down three times, then F6
-    twice and Down again; is each commit's line spoken?
+    Narrator on (Ctrl+Win+Enter), click a commit in the graph, press Down three times, then
+    Shift+F6, F6 and Down twice more; is each commit's line spoken? Asked on 2026-11-21 after the
+    spike; the owner answered "not now", so it is asked again at §9's merge, as design 13.3 has it.
+    The start file and its throwaway repository stay ready until then.
   - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
     above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
     D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on
