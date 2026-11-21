@@ -2660,6 +2660,66 @@ After the two fixes above the run's scripted pictures are the references of ever
 (`D:/Projects/Personal/phase8-work/references/wave1/`, 1,185 pictures with their hashes beside
 them). The 200 real-window captures were not taken again; the gate takes them.
 
+### Wave 2's comparison with wave 1's references (2026-11-20)
+
+The lead's runs at wave 2's close (status.md's step 12), each alone on the machine, on `c9835e9` (the
+merged wave with the merge's fixes; the commit itself only adds words to one test's timeout).
+
+**The whole default run**, through `scripts/heavy-run.sh`: 8,283 tests, 8,278 passed, 5 skipped, none
+failed, 1 h 46 min 41 s (20:53 to 22:40).
+
+**The pictures**, with `scripts/compare-pictures.py` against
+`D:/Projects/Personal/phase8-work/references/wave1` and an `--expected` file of the regions design 0.7
+names for wave 2 (the Git program row in nine of phase 6's settings pictures and 8a's own `l3f`, for §5;
+nothing for §6; nothing scripted for §7): of the 1,185 earlier scripted pictures 1,126 are the same
+files and 59 changed, none in size. The ten expected ones changed only inside their boxes (`s14c`,
+`s14i`, `s18a`, `s18d`, `s19a`, `s19d`, `s20b`, `l31e-settings-git-dark`, `l31e-settings-git-light` and
+`l3f-settings-name-placeholder`), and none of them stayed unchanged. The other 49 are named in no
+expectation; each is a picture that varies from run to run by nature, and none shows a change of wave
+2. 33 of them are pictures wave 1's inspection had already read, with the same regions now; the lead
+read the other 16 by their changed pixels (three of them enlarged, reference beside new):
+
+- A temporary folder's random name in a text (16): phase 1's `11a`, `13b`, `14a`, `14b`; phase 3's
+  `16j`, `30g`; phase 5's `u21v`; phase 6's `k10e`, `l30c` dark and light, `l32a` dark and light, `l32b`
+  dark and light, `w1e`, `w3a`.
+- A text box's caret, one column of 16 pixels, drawn in one picture and not in the other (14): phase
+  5's `f10b`, `f10c`, `f10d`, `f10e`, `f11b`, `f11c`, `f11d`; phase 6's `k10a`, `k10f`, `l27g`; phase
+  7a's `n06b`; phase 7b's `n01a`, `b06b`; 8a's own `l3d`.
+- A progress bar or a fetch's percentage caught at another moment (5, three of them with a caret too):
+  phase 3's `17d`, `21a`, `21b2`, `21b3`; phase 6's `l31g`.
+- Anti-aliased edges a few levels apart, 1 to 7 pixels (14): phase 2's `18c` and phase 5's `u16h` (3
+  pixels of the working-changes ring and 1 of the status bar's icon, at most 11 levels: what phase 2's
+  `17c-restored` showed at §5's and §6's builds, which did not change in this run); phase 3's `21b1`,
+  `27d`, `32d`; phase 4's `c11f`; phase 5's `b6b`, `u16q`, `u23e`; phase 6's `g23i` (7 pixels of the
+  toolbar, 5 levels); phase 7a's `a09b`, `n04a`; phase 7b's `n05b`, `n05d`.
+
+**The 35 new pictures** of parts F (19), K (14) and B (2) were inspected by their builders and
+reviewers at the build. The lead's own check of each against this report, which wave 1's close made
+through a workflow of inspectors, is **not made yet**: the owner read the week's allowance as 70 to 85
+% used and no workflow of agents runs before the reset or the owner's word (status.md).
+
+**The references** of the later merges are this run's 1,220 scripted pictures,
+`D:/Projects/Personal/phase8-work/references/wave2/` (their hashes in `wave2-pictures.sha256` beside
+it); a picture the lead's check corrects is replaced there.
+
+**The lagged list** (design 0.4, `VISUALCOMMIT_WATCHER_LAG_MS=1500`, on `1821089`'s code, 19:46 to
+20:39): `Phase2Checks` 25 of 25; phase 6's five filters 21 of 21; phase 7a's walk-through 205 of 205;
+phase 7b's 178 of 178; the twelve Hosting.Tests classes 126 of 126; the 8a project 103 of 103. The
+fifteen App.Tests classes: 200 of 201 in the first round, 201 of 201 in a second. The one failure was
+phase 3's `RepositoryOperationsFetchTests.Through_the_window_a_held_fetch_shows_its_progress_and_Cancel_and_the_toolbars_Fetch_brings_the_remote_work`,
+`Timed out after 60 s waiting for the fetch's percentage.` Run alone it passed five times under the
+lag and twice without. Its cause is not known: the wait did not say whether the test's server had held
+the response or what the status bar read. Both of the test's waits now add that to a timeout
+(`c9835e9`; no condition and no assertion changed), so that the next failure tells a hold that came at
+another point of git's output from a fault of the app. It is not counted as R8's fault until then, and
+it is not waved through: status.md keeps it open for the review before the gate.
+
+**Two earlier real-window checks alone** (design 6.8 item 5; the owner told, 22:41): phase 2's
+`Check_17` passed (46.7 s) and phase 5's `Check_A4_real_keys` passed (1 min 14 s), each started through
+`scripts/heavy-run.sh` with its own `--filter-method`. So a stage row's buttons that stay in UI
+Automation at `Opacity` 0 while the row has the keyboard focus (D425) do not disturb the two earlier
+checks that find a row's button by its id.
+
 ## Found by the gate
 
 Not yet.

@@ -272,7 +272,15 @@ Wave 2:
   (`578d07c`).
 - [ ] 12. Wave 2's close: the lagged list and the whole default run; the pictures against wave 1's
   references, with only the changes design 0.7 names (D427's fixer ran at the merge, step 10).
-  Before its runs the owner gives the week's share (D241).
+  **Done on 2026-11-20 but for one part** (the report, "Wave 2's comparison with wave 1's
+  references"): the lagged list, with one failure of an older fetch test in 201 that passed alone
+  seven times and is kept open (Notes); the whole default run on `c9835e9`, 8,283 tests with 5
+  skipped, none failed, 1 h 46 min 41 s; the comparison, 1,126 of 1,185 earlier pictures the same
+  files, the ten expected ones changed only inside their regions, the other 49 each a picture that
+  varies by nature; the references saved (`references/wave2/`); design 6.8 item 5's two real-window
+  checks alone, both passed. **Left**: the lead's check of the 35 new pictures of parts F, K and B
+  against the report, which waits for the week's reset or the owner's word (D241: 70 to 85 % used
+  on 2026-11-20).
 
 Wave 3:
 
@@ -332,6 +340,13 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [44862521774](https://github.com/RahimPasha/VisualCommit/actions/runs/44862521774), for
+  `c9835e9` (wave 2 merged, with the words added to one test's timeout): all six jobs succeeded at
+  the first attempt, none failed a test. `windows-latest` 8,283 tests with 5 skipped, Test step 43
+  min 38 s of 70 (the limit is raised at 56); `macos-latest` 8,280 with 3 skipped, 36 min 13 s;
+  `ubuntu-latest` 8,280 with 4 skipped, 7 min 22 s; the two "bare ubuntu container" jobs 8,280 with
+  4 skipped each, 6 min 17 s (Ubuntu's packages) and 6 min 42 s (Microsoft's installer); the floor
+  job 8,280 with 4 skipped on git 2.34.1, 5 min 17 s.
 - [44851353430](https://github.com/RahimPasha/VisualCommit/actions/runs/44851353430), for
   `1821089` (wave 2's merge: §7, §6 and §5 with the lead's fixes at the merge): **all six jobs
   succeeded on the run's second attempt.** In the first attempt `macos-latest` failed one test of
@@ -605,27 +620,21 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: step 12, wave 2's close, and then a stop: the owner read the week's share on 2026-11-20 as 70
-to 85 % used, so after step 12's runs and its picture comparison nothing that spends agents starts
-(the inspection of the pictures the comparison flags, wave 3) until the week's reset or the
-owner's word ("Waiting on the owner"). CI's run on the merge, 44851353430, is green in all
-six jobs on its second attempt: one macOS test of phase 6's dashboard timed out in the first (the CI
-section). Wave 2 (steps 9 to 11) is built and merged, with the lead's fixes at the
-merge (Notes, "Wave 2 is built and merged"). Step 12, with no agent at work and each run alone on
-the machine: (1) the lagged list (design 0.4: `VISUALCOMMIT_WATCHER_LAG_MS=1500` in front of each
-command, through `scripts/heavy-run.sh`), with the classes wave 2 adds to it; (2) the whole
-default run, `bash scripts/heavy-run.sh`; (3) the run's pictures against
-`D:/Projects/Personal/phase8-work/references/wave1` with an `--expected` file of the regions design
-0.7 names for wave 2 (the Git program row in nine of phase 6's settings pictures and 8a's own
-`l3f`, for §5; nothing for §6; nothing scripted for §7), every difference outside them explained
-in the report, the new pictures of parts F, K and B checked against the report, and the run's
-pictures saved as the references of the later merges; (4) with the owner told and present,
-design 6.8 item 5: `*Phase2RealWindowPass.Check_17*` and `*Check_A4_real_keys*` alone in the real
-window (about two minutes, the mouse taken). Then wave 3, steps 13 to 16: §8 (About), §9 (screen
-readers, its spike first) and §10 (performance), their checks written and committed first (D244),
-built in worktrees from the phase branch as waves 1 and 2 were (the scripts are kept with the
-session: `phase8a-wave-1-wf_463ba2b4-db6.js`, `phase8a-wave-2-build.js`), each builder reading
-design sections 0 and 1 with 1.17 and its own.
+Next: nothing that spends agents until the week's reset or the owner's word: the owner read the
+week's share on 2026-11-20 as 70 to 85 % used ("Waiting on the owner"). Wave 2 is built, merged and
+pushed, CI is green on it in all six jobs (the CI section), and step 12's runs and comparison are
+done (the report, "Wave 2's comparison with wave 1's references"). When work goes on: (1) the one
+part of step 12 that is left, the lead's check of the 35 new pictures of parts F (19), K (14) and B
+(2) against the report, by a workflow of inspectors as at wave 1's close (about 1.5M tokens; the
+pictures are in `artifacts/visual/phase-8a/scripted/` after a run of the 8a project, and the run's
+copies in `D:/Projects/Personal/phase8-work/references/wave2/phase-8a/scripted/`), each fault
+corrected with its reason in the report; (2) wave 3, steps 13 to 16: §8 (About), §9 (screen readers,
+its spike first, the owner told) and §10 (performance), their checks written and committed first
+(D244), built in worktrees from the phase branch as waves 1 and 2 were (the scripts are kept with
+the session: `phase8a-wave-1-wf_463ba2b4-db6.js`, `phase8a-wave-2-build.js`), each builder reading
+design sections 0 and 1 with 1.17 and its own; about 15 to 18M tokens, so the owner is asked for
+the week's share before it starts. Two timeouts of older tests are open and are step 19's to look
+at unless one comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -634,8 +643,27 @@ every commit.
 
 ### Notes for whoever resumes
 
+- **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
+  attempt on the merge (44851353430), macOS:
+  `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
+  for the dashboard's line `Solo: read … repositories in … ms`; the job run again passed, and so
+  did the next run's macOS job. The lead's reading, not proven: a dashboard's pass logs that line
+  only when it read a row, and a read held past the pass's patience (2 s for the folder check, 10 s
+  for a git call) on a loaded runner ends the pass without it. (2) The lagged list's App.Tests
+  command at wave 2's close:
+  `RepositoryOperationsFetchTests.Through_the_window_a_held_fetch_shows_its_progress_and_Cancel_and_the_toolbars_Fetch_brings_the_remote_work`
+  waited 60 s for the fetch's percentage; alone it passed five times under the lag and twice
+  without, and the command passed whole in a second round. Its two waits now say at a timeout
+  whether the server held the response, what the status bar read and how many requests came
+  (`c9835e9`). Both tests are from earlier phases and nothing of wave 2 touches them; what the
+  merge changed is the load: about 290 more tests, many with real git (CI's Windows Test step 41 to
+  44 min where it was 30 min 31 s, macOS's 30 to 36 min where it was 20 min 7 s; the laptop's whole
+  run 1 h 46 min 41 s where it was 1 h 32 min 7 s). Step 19's review looks at both waits (a wait
+  that asks for a second pass or a hold at a chosen percentage is a change of the harness; no
+  assertion is loosened), and a second failure of either brings that forward. For plan.md's risks
+  at the close: the default run and CI's Windows and macOS Test steps grow with each wave.
 - **Wave 2 is built and merged (2026-11-20); the owner read the week's share as 70 to 85 % used,
-  so only step 12's runs and comparison follow before a stop.** The workflow `phase8a-wave-2` (run `wf_9e189d2e-fb7`; its script is `phase8a-wave-2-build.js`
+  so only step 12's runs and comparison followed, and the work stops there.** The workflow `phase8a-wave-2` (run `wf_9e189d2e-fb7`; its script is `phase8a-wave-2-build.js`
   beside wave 1's: three Opus builders in the worktrees `D:/Projects/Personal/vc-wt/p8a-firstrun`,
   `p8a-keyboard` and `p8a-icon`, made from `fe0d2d4` on `wip/p8a-<key>`, which are never pushed;
   nine reviewers, a verifier for each of 11 majors, three fixers; 26 agents, 7.57M tokens, 4 h 14
