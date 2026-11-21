@@ -77,7 +77,8 @@
                    MaxWidth="520"
                    TextTrimming="CharacterEllipsis"
                    Margin="16,0,0,0" VerticalAlignment="Center"
-                   AutomationProperties.AutomationId="OperationStatus" />
+                   AutomationProperties.AutomationId="OperationStatus"
+                   AutomationProperties.LiveSetting="Polite" />
         <!-- The offer beside a success (D317, docs/phase-7a-design.md 12.2): hidden, it takes no room. -->
         <Button Name="OperationOfferButton" Theme="{StaticResource VcFlatButton}"
                 IsVisible="{Binding ActiveTab.OperationStatus.HasOffer}"

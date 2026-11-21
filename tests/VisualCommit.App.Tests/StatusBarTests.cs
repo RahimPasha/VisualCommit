@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
@@ -503,6 +505,47 @@ public class StatusBarTests
         app.PressKey(Avalonia.Input.Key.Enter);
         await app.WaitForAsync(() => fetching.IsCompleted, "the fetch to end after Enter on Cancel");
         Assert.Equal(OperationOutcome.Cancelled, (await fetching).Outcome);
+    }
+
+    /// <summary>
+    /// The operation's text is a polite live region (D435, ruling 36): Windows speaks each new text,
+    /// which its peer raises as one Name change; the text's peer is made as a client's read makes it.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task The_operation_text_is_a_polite_live_region()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path]);
+        await app.WaitUntilReadyAsync();
+        var repository = await GraphShownAsync(app);
+        var parts = Parts(app);
+        Assert.Equal("Ready", parts.Status.Text);
+
+        var peer = ControlAutomationPeer.CreatePeerForElement(parts.Status);
+        var names = new List<(object? Old, object? New)>();
+        peer.PropertyChanged += (_, change) =>
+        {
+            if (change.Property == AutomationElementIdentifiers.NameProperty)
+            {
+                names.Add((change.OldValue, change.NewValue));
+            }
+        };
+
+        Assert.Equal(AutomationLiveSetting.Polite, peer.GetLiveSetting());
+        Assert.Equal(AutomationLiveSetting.Polite, AutomationProperties.GetLiveSetting(parts.Status));
+        Assert.Equal("Ready", peer.GetName());
+
+        var held = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var fetching = repository.Queue.RunAsync(HeldNetwork("Fetch origin", "Fetching from origin…", held));
+        await app.WaitForAsync(() => parts.Status.Text == "Fetching from origin…", "the running text");
+        app.Settle();
+
+        Assert.Equal([((object?)"Ready", (object?)"Fetching from origin…")], names);
+        Assert.Equal("Fetching from origin…", peer.GetName());
+
+        held.SetResult();
+        await fetching;
     }
 
     /// <summary>A network operation that waits for <paramref name="held"/> or its cancel, and then succeeds.</summary>
