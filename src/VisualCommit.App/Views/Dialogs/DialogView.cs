@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -14,7 +15,10 @@ namespace VisualCommit.App.Views.Dialogs;
 /// <item>When it opens, the focus goes to its first text box that can be typed into (the caret at
 /// the end), or else to the control <see cref="InitialFocus"/> names (the confirmation's Cancel).</item>
 /// <item>Enter runs the confirm button (<c>ConfirmButton</c>) while it is enabled, unless the focus
-/// is in a box that takes Enter as a new line, or on a button (which handles Enter itself: a click).</item>
+/// is in a box that takes Enter as a new line, or on a button (which handles Enter itself: a click).
+/// In a list of rows to choose from (<see cref="ConfirmsOnEnter"/>) it does so while a row is
+/// selected, and in a list of radio buttons (<see cref="ConfirmsOnEnterOnChecked"/>) on the checked
+/// one.</item>
 /// <item>Its root is a UI Automation control element (a pane named by the dialog's title), so the
 /// real-window pass finds <c>ErrorDialog</c> and the others by their automation ids (4a, 4f).</item>
 /// </list>
@@ -83,6 +87,52 @@ public class DialogView : UserControl
 
         InitialFocus?.Focus(NavigationMethod.Tab);
     }
+
+    /// <summary>
+    /// Enter with no modifier in <paramref name="list"/>, while a row is selected, runs the confirm
+    /// button's command as a click on it does, when the button is enabled and the command can run;
+    /// the key is then handled. With no row selected the row's item keeps the key. Taken on the way
+    /// down: a list's item takes Enter for itself (it selects its row), so the dialog's own Enter
+    /// never sees it there.
+    /// </summary>
+    protected void ConfirmsOnEnter(ListBox list)
+    {
+        ArgumentNullException.ThrowIfNull(list);
+        ConfirmOnEnterIn(list, _ => list.SelectedItem is not null);
+    }
+
+    /// <summary>
+    /// Enter with no modifier on a checked radio button of <paramref name="options"/> runs the
+    /// confirm button's command as a click on it does, when the button is enabled and the command
+    /// can run; the key is then handled. On an option not checked the radio button keeps the key,
+    /// which checks it. Taken on the way down: a radio button takes Enter for itself (a click, which
+    /// only checks it), so the dialog's own Enter never sees it there.
+    /// </summary>
+    protected void ConfirmsOnEnterOnChecked(ItemsControl options)
+    {
+        ArgumentNullException.ThrowIfNull(options);
+        ConfirmOnEnterIn(options, e => (e.Source as Visual)?.GetSelfAndVisualAncestors().OfType<RadioButton>().FirstOrDefault() is { IsChecked: true });
+    }
+
+    /// <summary>Enter with no modifier inside <paramref name="list"/>, on the way down, runs the confirm button when <paramref name="chosen"/> holds.</summary>
+    private void ConfirmOnEnterIn(Control list, Func<KeyEventArgs, bool> chosen) =>
+        list.AddHandler(
+            KeyDownEvent,
+            (_, e) =>
+            {
+                if (e.Handled || e.Key != Key.Enter || e.KeyModifiers != KeyModifiers.None || !chosen(e))
+                {
+                    return;
+                }
+
+                if (this.FindControl<Button>("ConfirmButton") is { IsEffectivelyEnabled: true, Command: { } command } confirm
+                    && command.CanExecute(confirm.CommandParameter))
+                {
+                    command.Execute(confirm.CommandParameter);
+                    e.Handled = true;
+                }
+            },
+            RoutingStrategies.Tunnel);
 
     private void OnKeyDownForEnter(object? sender, KeyEventArgs e)
     {

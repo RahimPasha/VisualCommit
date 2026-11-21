@@ -3,12 +3,16 @@ using Avalonia.VisualTree;
 
 namespace VisualCommit.App.Views.Dialogs;
 
-/// <summary>The remote choice dialog (<c>ChoiceDialog</c>, docs/phase-3-design.md 2.29, 4f). The checked radio button takes the focus.</summary>
+/// <summary>
+/// The remote choice dialog (<c>ChoiceDialog</c>, docs/phase-3-design.md 2.29, 4f). The checked radio
+/// button takes the focus. Enter on the checked option confirms it, as the confirm button does.
+/// </summary>
 public partial class ChoiceDialogView : DialogView
 {
     public ChoiceDialogView()
     {
         InitializeComponent();
+        ConfirmsOnEnterOnChecked(ChoiceOptions);
     }
 
     protected override Control? InitialFocus =>

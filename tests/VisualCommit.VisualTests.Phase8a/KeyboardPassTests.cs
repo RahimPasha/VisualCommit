@@ -24,9 +24,10 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// The keyboard pass's tests that start the app (docs/phase-8a-design.md 6.4; D416, D417, D425 to
 /// D427, D452): the diff's toolbar and hunks by Tab, chosen lines by the arrows and Shift+F10, a
 /// blame's menu just opened, the focus after "Choose" in the repository browser and the create
-/// form's Pick, a loading diff that no longer takes a focus the user moved, Amend while a commit
-/// runs, the browser's switch of providers, the splitters by the arrows, and Tab out of the
-/// read-only texts. No pictures: part K's checks take those.
+/// form's Pick, Enter on a dialog's selected row or checked option, a loading diff that no longer
+/// takes a focus the user moved, Amend while a commit runs, the browser's switch of providers, the
+/// splitters by the arrows, and Tab out of the read-only texts. No pictures: part K's checks take
+/// those.
 /// </summary>
 public sealed class KeyboardPassTests
 {
@@ -252,6 +253,107 @@ public sealed class KeyboardPassTests
         Assert.True(string.IsNullOrEmpty(app.Session.Shell.ActiveTab.Welcome.CloneUrl), $"The form's URL is {app.Session.Shell.ActiveTab.Welcome.CloneUrl}.");
         browser.CancelCommand.Execute(null);
         await app.WaitForAsync(() => browser.IsClosed, "the browser to close");
+    }
+
+    /// <summary>
+    /// Enter on a selected row of a pick dialog's list confirms it, as a click on its confirm button
+    /// does: in "Set upstream for topic", Tab from the filter into the list, Enter with no row
+    /// selected confirms nothing (the row's item has the key), End selects origin/published, and
+    /// Enter sets it as topic's upstream.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Enter_on_a_selected_row_of_a_pick_list_confirms_it_as_its_button_does()
+    {
+        using var repo = await Scenarios.RemoteSyncAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        app.RightClick(await app.RefRowAsync("Local branches", "topic"));
+        await app.WaitForAsync(() => app.Session.Shell.Menu.IsOpen, "topic's menu");
+        app.ClickMenuItem("Set upstream…");
+        var pick = await app.WaitForDialogAsync<PickDialogViewModel>();
+        await app.WaitForAsync(() => app.FocusedAutomationId() == "PickFilter", $"the focus in the filter (it is on {app.DescribeFocus()})");
+        await app.TabToAsync(focused => focused is Control control && control.GetSelfAndVisualAncestors().OfType<Control>().Any(ancestor => AutomationProperties.GetAutomationId(ancestor) == "PickList"), "the pick list");
+        Assert.Null(pick.Selected);
+
+        app.PressKey(Key.Enter);
+        app.Settle();
+        Assert.False(pick.IsClosed, "Enter in the list closed the pick dialog while no row was selected.");
+
+        app.PressKey(Key.End);
+        await app.WaitForAsync(() => pick.Selected == "origin/published", "origin/published selected");
+        app.PressKey(Key.Enter);
+        await app.WaitForAsync(() => pick.IsClosed, "the pick dialog to close");
+        await app.WaitForIdleAsync();
+
+        Assert.Equal("refs/heads/published", (await repo.GitAsync("config", "--get", "branch.topic.merge")).StandardOutput.Trim());
+    }
+
+    /// <summary>
+    /// Enter on a choice dialog's checked option confirms it, as a click on its button does; on an
+    /// option not checked, Enter is the radio button's own and checks it. "Push v1.0…" with two
+    /// remotes opens on mirror, checked and focused; Tab to origin and Enter check origin, Shift+Tab
+    /// to mirror and Enter check mirror again, and Enter pushes the tag to mirror.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Enter_on_a_choice_dialogs_checked_option_confirms_it_as_its_button_does()
+    {
+        using var repo = await Scenarios.OperationsAsync();
+        await repo.AddBareRemoteAsync("mirror");
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        app.RightClick(await app.RefRowAsync("Tags", "v1.0"));
+        await app.WaitForAsync(() => app.Session.Shell.Menu.IsOpen, "v1.0's menu");
+        app.ClickMenuItem("Push v1.0…");
+        var choice = await app.WaitForDialogAsync<ChoiceDialogViewModel>();
+        await app.WaitForAsync(() => app.FocusedElement is RadioButton { IsChecked: true } radio && AutomationProperties.GetName(radio) == "mirror", $"the focus on mirror, checked (it is on {app.DescribeFocus()})");
+
+        await app.TabToAsync(focused => focused is RadioButton radio && AutomationProperties.GetName(radio) == "origin", "origin");
+        app.PressKey(Key.Enter);
+        app.Settle();
+        Assert.False(choice.IsClosed, "Enter on origin, not checked, closed the choice.");
+        Assert.Equal("origin", choice.Selected);
+        await app.TabToAsync(focused => focused is RadioButton radio && AutomationProperties.GetName(radio) == "mirror", "mirror", shift: true);
+        app.PressKey(Key.Enter);
+        app.Settle();
+        Assert.False(choice.IsClosed, "Enter on mirror, not checked, closed the choice.");
+        Assert.Equal("mirror", choice.Selected);
+
+        app.PressKey(Key.Enter);
+        await app.WaitForAsync(() => choice.IsClosed, "the choice to close");
+        await app.WaitForIdleAsync();
+
+        Assert.Equal(await repo.RefTargetAsync("refs/tags/v1.0"), (await repo.GitAsync("ls-remote", "mirror", "refs/tags/v1.0")).StandardOutput.Split('\t')[0]);
+    }
+
+    /// <summary>
+    /// Enter on the push dialog's checked remote pushes, as a click on Push does: "Push topic…" with
+    /// two remotes, Shift+Tab from the branch box to origin, not checked, Enter checks it, and Enter
+    /// again pushes topic to origin.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Enter_on_the_push_dialogs_checked_remote_pushes_as_its_button_does()
+    {
+        using var repo = await Scenarios.RemoteSyncAsync();
+        await repo.AddBareRemoteAsync("mirror");
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        app.RightClick(await app.RefRowAsync("Local branches", "topic"));
+        await app.WaitForAsync(() => app.Session.Shell.Menu.IsOpen, "topic's menu");
+        app.ClickMenuItem("Push topic…");
+        var push = await app.WaitForDialogAsync<PushDialogViewModel>();
+        await app.WaitForAsync(() => app.FocusedAutomationId() == "PushBranchBox", $"the focus in the branch box (it is on {app.DescribeFocus()})");
+
+        await app.TabToAsync(focused => focused is RadioButton radio && AutomationProperties.GetName(radio) == "origin", "origin", shift: true);
+        app.PressKey(Key.Enter);
+        app.Settle();
+        Assert.False(push.IsClosed, "Enter on origin, not checked, closed the push dialog.");
+        Assert.True(((RadioButton)app.FocusedElement!).IsChecked, "Enter on origin did not check it.");
+
+        app.PressKey(Key.Enter);
+        await app.WaitForAsync(() => push.IsClosed, "the push dialog to close");
+        await app.WaitForIdleAsync();
+
+        Assert.Equal(await repo.RefTargetAsync("refs/heads/topic"), (await repo.GitAsync("ls-remote", "origin", "refs/heads/topic")).StandardOutput.Split('\t')[0]);
     }
 
     /// <summary>After the create form's Pick of a base, closed by Esc or by its choice, the form's "Choose…" has the focus (ruling 51).</summary>

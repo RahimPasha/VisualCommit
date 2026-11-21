@@ -11,13 +11,15 @@ namespace VisualCommit.App.Views.Dialogs;
 /// <summary>
 /// The pick dialog (<c>PickDialog</c>, docs/phase-3-design.md 2.21, 4f). The filter box takes the
 /// focus. Since phase 6 an item may show a detail after its text (docs/phase-6-design.md 7.7),
-/// which is also the item's help text; the item keeps its id and its name, the text.
+/// which is also the item's help text; the item keeps its id and its name, the text. Enter in the
+/// list confirms its selected row, as the confirm button does.
 /// </summary>
 public partial class PickDialogView : DialogView
 {
     public PickDialogView()
     {
         InitializeComponent();
+        ConfirmsOnEnter(PickList);
 
         // Each PickItem's help text is its option's detail (7.7, 15.5); a container is prepared again
         // whenever it shows another item.
