@@ -620,21 +620,30 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: nothing that spends agents until the week's reset or the owner's word: the owner read the
-week's share on 2026-11-20 as 70 to 85 % used ("Waiting on the owner"). Wave 2 is built, merged and
-pushed, CI is green on it in all six jobs (the CI section), and step 12's runs and comparison are
-done (the report, "Wave 2's comparison with wave 1's references"). When work goes on: (1) the one
-part of step 12 that is left, the lead's check of the 35 new pictures of parts F (19), K (14) and B
-(2) against the report, by a workflow of inspectors as at wave 1's close (about 1.5M tokens; the
-pictures are in `artifacts/visual/phase-8a/scripted/` after a run of the 8a project, and the run's
-copies in `D:/Projects/Personal/phase8-work/references/wave2/phase-8a/scripted/`), each fault
-corrected with its reason in the report; (2) wave 3, steps 13 to 16: §8 (About), §9 (screen readers,
-its spike first, the owner told) and §10 (performance), their checks written and committed first
-(D244), built in worktrees from the phase branch as waves 1 and 2 were (the scripts are kept with
-the session: `phase8a-wave-1-wf_463ba2b4-db6.js`, `phase8a-wave-2-build.js`), each builder reading
-design sections 0 and 1 with 1.17 and its own; about 15 to 18M tokens, so the owner is asked for
-the week's share before it starts. Two timeouts of older tests are open and are step 19's to look
-at unless one comes again sooner (Notes, "Two timeouts").
+Next: the last part of step 12, then wave 3 (steps 13 to 16), in full: the owner said "Continue" on
+2026-11-21 and, asked how far with the week's share read as 70 to 85 % used the day before, answered
+"all of wave 3 now" ("Waiting on the owner"). Under way since then, side by side, both reading the
+repository only: (1) the lead's check of the 35 new pictures of parts F (19), K (14) and B (2)
+against the report (the workflow `phase8a-wave2-new-pictures`, run `wf_70d1619d-305`: eight
+inspectors, then a second look at each fault; its crops under
+`D:/Projects/Personal/phase8-work/wave2/inspect/`), each fault then corrected with its reason in the
+report, which closes step 12; (2) wave 3's checks, parts A (About, six checks) and U (screen readers,
+three checks, with the Narrator walk-through by hand), written and reviewed into
+`D:/Projects/Personal/phase8-work/wave3/checks/part-A.md` and `part-U.md` (the workflow
+`phase8a-wave3-checks`, run `wf_8c265922-772`), which the lead has put into the report and commits
+before any of their UI (D244); §10 has no part. Then the build: worktrees
+`D:/Projects/Personal/vc-wt/p8a-about`, `p8a-uia` and `p8a-perf` on `wip/p8a-<key>` from the phase
+branch, an Opus builder in each reading design sections 0 and 1 (with 1.17) and its own, three
+reviewers, a verifier for each major and a fixer per package, as waves 1 and 2 (the scripts are kept
+with the session: `phase8a-wave-1-wf_463ba2b4-db6.js`, `phase8a-wave-2-build.js`). §9 builds in two
+stages: its first commits are the peers of design 9.3.2 to 9.3.5 and the spike on
+`wip/p8a-uia-spike`, which the lead runs once on the desktop, the owner told (a minute of keys and
+clicks, no heavy run beside), and whose events decide whether the route stands (9.3.1); the rest of
+§9 follows. §9 merges after §8 and sweeps About. At the merges, the owner told each time: §9's
+short Narrator listen (about 5 minutes), §10's first run with `VISUALCOMMIT_PERF_RUNS=1` (about 5
+minutes of the desktop) and, after wave 3's close, the "before" series on the rested laptop (12 to
+18 minutes a run). Two timeouts of older tests are open and are step 19's to look at unless one
+comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -980,9 +989,12 @@ every commit.
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
-      - **The week's allowance: 70 to 85 % used** (the owner, 2026-11-20, at wave 2's merge; D241). So
-    the lead runs only wave 2's closing runs and the picture comparison and then stops: **wave 3
-    does not start, and no workflow of agents runs, until the week's reset or the owner's word.**
+        - **The week's allowance: "all of wave 3 now"** (the owner, 2026-11-21; D241). The owner said
+    "Continue" and, told that wave 3 needs 15 to 18M tokens and could reach the week's limit before
+    Thursday's reset, chose all of it now over the picture check alone or the checks alone. The
+    owner is asked again before wave 4 (the guide, the review before the gate, the real-window
+    part). The day before: **70 to 85 % used** (2026-11-20, at wave 2's merge), on which the lead
+    ran only wave 2's closing runs and the picture comparison and stopped.
     Wave 2's agents used about 17.6M tokens (its checks 6.44M, their settling 0.76M, the build
     7.57M, the merge's notes and two rounds of fixes 2.82M); wave 3 is expected to need about as
     much, and the inspection of the closing run's pictures about 1.5M.
