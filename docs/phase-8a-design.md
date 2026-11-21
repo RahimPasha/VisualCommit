@@ -959,10 +959,11 @@ each page exists, reading `VisualRun.RepoRoot`), `GitSetupStatesTests`, and the 
 `PaletteEntriesTests`, `SettingsDialogViewTests`, `PromptDialogsTests`, `GitRepositoryProviderTests`,
 `StatusBarTests` and the 8a project, and pushes before wave 1 branches from it.
 
-### 1.17 As built: WP0 and wave 1
+### 1.17 As built: WP0, wave 1 and wave 2
 
-What the first package and wave 1 (§2, §3, §4) built otherwise than the sections above say, as far
-as a later package needs it. The lead keeps this subsection; a later wave adds to it.
+What the first package, wave 1 (§2, §3, §4) and wave 2 (§5, §6, §7) built otherwise than the
+sections above say, as far as a later package needs it. The lead keeps this subsection; a later
+wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
 
 - **WP0** (`fc8a063`). `GitAccessTests` (App.Tests) exists, with four tests; §5 extends it (0.4). A
   listener of `GitAccess.Changed` that throws is logged at Error and cannot replace the search's
@@ -1008,8 +1009,9 @@ as a later package needs it. The lead keeps this subsection; a later wave adds t
   told that this one did not answer.`, a line 4.3.5 does not list. The guard reads
   `DOTNET_SYSTEM_IO_DISABLEFILELOCKING` and the switch `System.IO.DisableFileLocking` on macOS and
   Linux for its Warning; 1.14 does not list them, because the runtime reads them once at the
-  process's start and a test cannot remove them. `InstanceNoticeWindow.axaml` has no `Icon` yet
-  (§7's). `Phase8aExpectations.I` holds the masked element's id (`FolderId`), the picture names and
+  process's start and a test cannot remove them. `InstanceNoticeWindow.axaml` has its `Icon` since
+  §7's merge (`6fe69bd`). `Phase8aExpectations.I` holds the masked element's id (`FolderId`), the
+  picture names and
   the real window's launch facts (exit codes, limits, the data folder's entries after "Close") for
   §12. `Program.Main`'s exit codes and the notice under a real desktop lifetime have run in no
   test: §12's launches 4 to 6 are their first run.
@@ -1024,6 +1026,156 @@ as a later package needs it. The lead keeps this subsection; a later wave adds t
   (`docs/brand/icon/round-2/`), with the outlined eye at the small sizes. §7 builds with them and
   writes no placeholder (7.8); part B's checks and every picture that shows the icon show the
   owner's mark from the start. The look-alike check is made by eye, with no image search.
+- **First run: the lookup** (§5, merged at `53fc353`). The search runs on the thread pool. Public
+  additions: `GitLocator.IsRunnablePath` (the machine's rule), `FirstLine`, `MacOSSystemGit`,
+  `ErrorTextLimit`; `GitAccess.RunningPlatform`, `GitAccess.GitNotFound`. On macOS
+  `GitSearchContext.FromSystem()` asks `/usr/bin/xcode-select -p` (5 s) at most once per search,
+  on meeting `/usr/bin/git`, the harness's searches too (the lead: no start of a program). A
+  stand-in the locator does not run logs Info `Git was not looked for on this computer:
+  VISUALCOMMIT_GIT_STAND_IN names no git program ({value}).` at each search no setting answers.
+- **First run: the screen** (`e34fc68`, `1daecda`). `CommitGraphView`'s row 0 holds the
+  `ContentControl` `GitSetupSlot`, whose content is `RepoTabViewModel.GitSetupForView`: the
+  screen once it has first shown (`GitSetupViewModel.HasShown`), so a session that finds git makes
+  no `GitSetupView`. The buttons sit in the `WrapPanel` `GitSetupButtons`, the links in
+  `GitSetupLinks`, in 5.3's table order, as `GitSetupTexts.For` gives them; Copy sits beside the
+  command. Each button of `GitSetupButtons` carries `KeyRegion.IsMain` (Copy and the links do
+  not), so the graph area's target is the first shown. The links are `VcFlatButton`s of class
+  `gitSetupLink`, coloured by the view's own styles: `VcAccentBrush`, `VcAccentOnRowBrush` on hover.
+- **First run: Check again and the starts.** Choose, `Use the Git…` and the settings screen's
+  close (a setting changed while git does not work) wait for a running Check again to end, then
+  run their own (`GitSetupViewModel.CheckAgainAfterRunningAsync`): that search went by the old
+  setting. `GitAccess` still joins a running search (1.2). `CheckHelper()` runs only while git
+  works and the helper was missing. The view model, not `FileLauncher.StartAsync`, logs `Started
+  in a terminal: …` and `Started: …`, with the `DisplayText` of the command before `ResolveStart`
+  (`cmd.exe`, not its full path). `WingetCommand` allows concurrent runs, so its button stays
+  enabled under its confirm.
+- **First run: the row, the netrc note, the ssh line.** After the row's `Use the Git it found` (the
+  chosen git gone, another found), `GitProgramPath` reads `None found` and `GitProgramNote` only
+  `VisualCommit looks for Git again when you save.` (the lead's ruling). The netrc question is one
+  of `SettingsDialogViewModel.Loaded`'s reads, not asked again that session once the note is
+  dismissed. `MainWindowViewModel.HomeHasNetrc(variable, directoryExists, fileExists, windows)` is
+  public static, for the tests. The ssh line is the constant `AskPassBroker.AskPassRequireLine`.
+- **First run: names (§9).** Each button's and link's automation name is its text, bound where the
+  text changes, so `GitSetupCheckAgainButton`'s reads `Checking…` during a search. `GitStatus`'s
+  help text is `GitStatusToolTip`, none without a path; `GitSetupButton` sits left of `GitStatus`.
+  The panels, the label `Git said:`, the row's `Grid` `GitProgramRow` and `AccountsNetrcNoteRow`
+  have no automation id. `GitProgramPath`'s tooltip is its path, with no help text.
+- **First run: the harness.** A headless test reaches a state by `StartEmptyAsync(data, gitProbe:,
+  askPassHelper:)` with a `FakeGitSetupProbe`, then `WaitForGitSetupAsync`, as `GitSetupShellTests`
+  does for twelve states (`ShellDriver.Phase8a.FirstRun.cs` also has `GitSetupPart`,
+  `GitSetupText`, `GitSetupButtonIds`, `GitSetupLinkIds`). The probe adds `Windows(wingetPath)`,
+  `MacOS`, `Linux(distribution)`, `Ubuntu`, `Alpine` (`PRETTY_NAME` `Alpine Linux v3.20`) and
+  `HoldNext()`, whose `ProbeHold` (`Started`, `Release()`) holds the next lookup once recorded.
+  `FakeGitAnswer.ChosenMissing` throws for a lookup without a `ChosenPath`, so a start that reaches
+  it by Check again (9.3.8's state 10) writes `gitExecutable` first, as F3 does. `RealAt`'s log
+  lines name the machine's git. The stand-in's namespace is `VisualCommit.GitStandInProgram`.
+- **First run, for §12.** `Phase8aExpectations.F` (BCL, Avalonia and Core only) holds launches 7
+  to 10's facts: `RealWindowPictures`, `MissingLaunchScenario`, `MissingLaunchStandIn`,
+  `TooOldVersionLine`, `NativePickerTitle`, `NativePickerWithin` (30 s), `FoundAgainWithin` (60 s),
+  `ConfirmClosesWithin` (5 s), `MostF6Presses` (4), `FocusOrderWithWinget`, the two failure
+  messages, the log lines and F6's texts.
+- **The keyboard pass** (§6, merged in `e463392`). `FocusReturn.AfterRun` (`Views/FocusReturn.cs`)
+  takes a last, optional `Func<IInputElement?, bool>? stillLost`, and `FocusReturn.LostFrom(TopLevel?
+  topLevel, InputElement pressed, Func<bool> stillThere)` is that test for a pressed element (`2185f06`;
+  6.3.5 as corrected). `AppCommands.CancelNoLongerRunning(string title)` (public, static) gives D452's
+  Info line. `HunkHeaderLayer.BarRemoving` (internal) is raised by `Rebuild` too, which every
+  `DiffPane.Redraw` calls, so a framed hunk button also hands the focus to the text, without a frame,
+  when the bars are made again for a theme switch or a large diff's late colouring.
+- **What 6.9 left open** (§6). Tab from the diff's text (`Continue`) enters its bars' buttons in hunk
+  order and then leaves the diff, and Enter runs a framed button inside the text area; `:focus-within`
+  with `:not()` works in Avalonia 12.1.3; `GridSplitter`'s arrows move 10 per press and raise no
+  `DragCompleted`, so `MainWindow` posts `PanelDragged` at `Loaded` after an arrow the splitter handled,
+  on `LeftSplitter` and `RightSplitter` (`94842f7`, D427); `DetailsBody` and `ActivityLogPartText` take
+  no keyboard focus, so Tab never stops in them and `ActivityLogView.axaml` is unchanged; a tab's git
+  calls take the detection's runner. The blame picks the caret's run after a caret key with any
+  modifier (`2185f06`; 6.3.2 as corrected).
+- **The stage rows** (§6). A row that holds the keyboard focus shows its `rowActions` with its buttons
+  at `Opacity` 0 (D425), in the visual tree and in UI Automation: a hovered row and a focused other row
+  show two rows' buttons there, and §9's names (1.12) and its sweep meet a focused row's buttons too.
+  Tab and Shift+Tab walk both lists in their rows' order, rows below the view included, by
+  `WorkingChangesView`'s own tunnel `KeyDown` (`55b8d3a`; 6.3.4 as corrected). After a row's action by
+  the keys the focus moves only if the run took it away, and after a switch of tabs nothing is done
+  (6.3.5 as corrected).
+- **Part K's harness** (§6). `HeldGitRunner` has `Probe`, `HoldNext(string word)`, `Started` (a
+  `Task<GitCommand>`) and `Release()`; a row's Stage is `add --all -- <path>` (`K.AddWord`).
+  `ShellDriver.Phase8a.Keyboard.cs` holds `FocusVisible`, `StageRows(list)`, `StageRow(list, path)`,
+  the static `StageRowOf(visual)` and `RowButton(row, id)`, `FocusedRowPath()`, `TabToAsync(expected,
+  what, shift = false)` (one press, then a wait whose failure names the focus) and `DescribeFocus()`.
+  For §12, `Phase8aExpectations.K` holds the 50 ids (`K.Ids`), K1's walk (`CalculatorWalk`, its 18
+  (row, id) stops), `DownsToLines` 4 and `ShiftDownsForLines` 2 on the hunk that remains, the
+  `--numstat` lines, K2's `BlameDowns` (run, line, subject; none for run 1) and the launches
+  `ChangesLaunch` and `HistoryLaunch`. K8's walks took 8 Tabs from the right panel to Cancel, then 1 to
+  `LeftSplitter`: the splitters come after the panels in `MainWindow.axaml`, before the status bar.
+  Method 3 writes the copy's `origin` URL with forward slashes before `HoldIn` (the report's K3 note).
+  Part K alone takes about two minutes. Phase 2's `17c-restored` flips between two files from run to
+  run, on the branch's base too.
+- **For the guide** (§11; 6.3.10 as built). The blame's run is picked by the arrows, PageUp, PageDown,
+  Home and End, with any modifier; Tab from a stage row's own button reaches its Stage and Discard
+  buttons (icons, tooltips `Stage` and `Discard`; `Unstage` on a staged row), then the next row's own
+  button; "Cancel {title}" is in the palette, keyless, only while the running operation can be
+  cancelled; a focused splitter moves 10 per arrow, and a side panel keeps its width as after a drag.
+- **The icon's masters** (§7, `6fe69bd`). Round 2's three masters, copied byte for byte into
+  `assets/brand/`, each with `width` and `height` equal to its viewBox; `icon-macos.svg`'s plate is
+  832 wide, 96 in from each edge, radius 187 (7.3: about 824 and 100). `IconFilesTests` item 1 also
+  holds the first comment to its chosen form, so a placeholder's comment fails it, and refuses a
+  `width` or `height` other than the viewBox's; a further test holds `icon-small.svg`'s straight
+  edges to whole units and refuses a `transform`, a `stroke` other than `none` and a `style` in it,
+  which it does not follow (tests of that check run on drawings of their own).
+- **The icon's tool** (`tools/VisualCommit.IconBuilder`). It owns `assets/brand/generated/` and
+  `src/VisualCommit.App/Assets/Icon/` (not `assets/brand/` beside the masters): each run deletes
+  every other file and every empty folder in them, so no later package puts a file of its own
+  there; `IconFilesTests` items 4 to 6 also fail on any other entry in `generated/png/`,
+  `generated/VisualCommit.iconset/` and `Assets/Icon/`. It rewrites every file on each run, the same
+  bytes when no master changed. `Placement` (in `Program.cs`) copies each file aside before
+  replacing or deleting it and puts all back on a failure; 7.3 lists the texts. `--root` is taken
+  as given, without looking for `VisualCommit.slnx`. Its printout at the build: 100 % of the opaque
+  pixels at 3:1 on `#202020` at every `.ico` size (the blue about 3.01:1, just over the floor), 71
+  to 82 % on `#F3F3F3`.
+- **`IconFile`** (Testing) is 1.15's, with more. `IconSetNames` is `(Name, Size)` pairs;
+  `IcnsFiles` names the `.iconset` file whose bytes each `IcnsTypes` entry holds, in order;
+  `Masters`, `SmallMasterUpTo` (32) and `IcoPngSize` (256); the folders and files as constants
+  (`IcoFile`, `PngFolder`, `IconSetFolder`, `IcnsFile`, `ManifestFile` and others) with
+  `PngFile(n)`, `AppImageFile(n)` and `IconSetFile(name)`; `IsPng`; `DecodePng(byte[])`, which
+  gives `(Width, Height, Bgra)` of an 8-bit RGBA or RGB PNG, not interlaced, with a reader of its
+  own. `IconFrame.Bgra()` decodes the PNG entry, the 256, too. `PngHeader.Read` takes a path or bytes.
+- **The app's icon.** `MainWindow` and `InstanceNoticeWindow` carry
+  `Icon="/Assets/Icon/VisualCommit.ico"`, loaded as each window is made (its cost unmeasured, §10);
+  the `.ico` is 162,197 bytes. `AppIcon` is 1.6's. About's `VisualCommit-96.png` is `icon.svg` at
+  96: the tile `#4C5BE0` inside a transparent margin of one sixteenth (6 px, 3 at 48×48), the line,
+  the eye's outline and the pupil white. The app shows no new text, and no control gains a name.
+- **Part B.** `IconSheet` (internal to the 8a project) has no ids: the checks read its `Heading`,
+  `Row1`, `Row1Sizes`, `Row2` and `Row2Files`. A size is the bare number at 11 in SemiBold, centred
+  under its image on a whole pixel (at the regular weight `TextInk` could not read `20` and `32` on
+  white); the heading is 13 in `VcTextPrimaryBrush`; the rows' bottoms lie on y 312 and 488. The
+  checks make a plain `Window` and start no app (B1's picture 1.1 s after its start, B2's 0.15 s).
+  `Phase8aExpectations.B` holds launch 3's facts for §12: `RealWindowPictures` (six names in the
+  launch's order), `WindowTitle`, `TitleBarCropWidth` 64, `Enlargement` 4,
+  `TaskbarButtonNameStart`, `TaskbarButtonLimit` 10 s, `TaskbarButtonNotRun` (run.txt's line) and
+  `IconTolerance` 2.
+- **Open at §7's merge.** `IconFilesTests` item 8 has run nowhere: it skips off macOS, and its
+  `iconutil -c icns -o <icns> <iconset>` and `-c iconset -o <folder> <icns>` wait for the merge's
+  CI run, whose macOS log must show it passed (7.8 item 3). Should `iconutil` refuse `icp4` and
+  `icp5`, a fixer drops them from `IconOutputs.IcnsEntries`, `IconFile.IcnsTypes` and `IcnsFiles`,
+  makes item 8's read-back expect the eight names left (it compares with `IconSetNames`' ten) and
+  runs the tool again. Part I's checks were not run at §7's build (the notice's headless frame has
+  no title bar). 7.6's comparison changed only phase 0's `06c-restarted-first-frame`, by the
+  first-frame race phase-0.md's check 6 records.
+- **At wave 2's merge** (the lead, 2026-11-20). Three faults that belonged to no package were fixed
+  on the merged branch, each with a test that failed first and each read by a second agent. Enter on
+  the selected row of the repository browser's list chooses it (`25dd5c8`): Avalonia's `ListBox`
+  takes Enter on an item for itself, so `DialogView`'s own Enter never saw it; now
+  `CloneFromGitHubDialogView`, the one view of all three providers, takes plain Enter on
+  `CloneFromGitHubList` on the way down and runs `ConfirmButton`'s command while a row is selected
+  and the command can run, and with no row selected the key stays the item's. So K5's step 6 and
+  6.3.9's route "T, arrows, Enter" hold as written. The activity log's splitter moved by Up or Down
+  is fitted and kept as a drag's end is (`9b63f26`, D427): `CommitGraphView` posts
+  `ActivityLogDragged` at `Loaded` after an arrow the splitter handled, and the test
+  `Up_on_the_activity_logs_splitter_reached_by_Tab_heightens_the_log_by_10_and_keeps_it` is no
+  longer skipped. F6b starts with the private `MachineSearchProbe` of `Phase8aChecks.F.Helpers.cs`
+  (`fc123ec`): the machine's search for git with the fixed guidance `new
+  GitGuidance(GitAccess.RunningPlatform, null, null)`, so that check reads neither the `PATH` for
+  `winget.exe` nor `/etc/os-release`. `VisualCommit.slnx` holds the stand-in and, in a folder
+  `/tools/`, the icon's tool (`578d07c`).
 
 ## 2. colours: the contrast round (D410)
 
@@ -1977,12 +2129,18 @@ search that throws is NotWorking without a path, its message as git's words.
 
 **Place.** One `GitSetupViewModel` per window; `AddTab` sets the new `RepoTabViewModel.GitSetup`.
 `ShowsGitSetup => Repository is null && !IsOpening && !IsDashboard && GitSetup?.IsShown == true`;
-`ShowsWelcome` adds `&& !ShowsGitSetup`. `CommitGraphView`'s row 0 holds `GitSetupView`; the first
-button is its focus target (`kr:KeyRegion.IsMain`); it takes no focus itself, and hidden while holding
+`ShowsWelcome` adds `&& !ShowsGitSetup`. `CommitGraphView`'s row 0 holds the `ContentControl`
+`GitSetupSlot`, whose content is `RepoTabViewModel.GitSetupForView`: the screen once it has first
+shown (`GitSetupViewModel.HasShown`), null before, so a session that finds git makes no
+`GitSetupView`. Each button of the `WrapPanel` `GitSetupButtons` carries `kr:KeyRegion.IsMain` (Copy
+and the links do not), so the first shown is the graph area's focus target
+(`CommitGraphView.GraphAreaFocusTarget`); the view takes no focus itself, and hidden while holding
 it gives it to the graph area's target. Layout as the welcome page, `MaxWidth` 520: title (16,
 SemiBold), body (`secondary`), the path (`PathTextBlock`), "Git said:" over a `SelectableTextBlock`
 (`VcCodeFontFamily`, `VcBorderBrush`, six lines, then a scroll bar), guidance, the command with Copy,
-buttons (`VcActionButton`), `GitSetupError`, links (`VcFlatButton`, `VcAccentBrush`). Tokens only.
+buttons (`VcActionButton`), `GitSetupError`, links (`VcFlatButton`s of class `gitSetupLink` in the
+`WrapPanel` `GitSetupLinks`; their text `VcAccentBrush`, `VcAccentOnRowBrush` on hover, set by
+`GitSetupView`'s own styles). Tokens only.
 `GitSetupView`'s `AutomationProperties.Name` is the state's title and its `AutomationProperties.HelpText`
 the state's body, so that a screen reader speaks them when the screen shows with the focus on its first
 button (§9's sweep and Narrator steps 20 and 21 read them); no picture changes.
@@ -2055,13 +2213,16 @@ could not be started: {message}` in `GitSetupError`.
 
 **Choose**: the picker (`Choose git.exe`; `Choose the git program`); on Windows a name without `.exe`
 gets `SettingsTexts.ProgramNotExe` unrun; `GitSetupError` reads `Checking…`; `ProbeAsync`. Found:
-`settings.Update(GitExecutable = path)`, Check again. Else, settings untouched, `GitSetupError`: `Git
+`settings.Update(GitExecutable = path)`, then Check again once a running one has ended
+(`GitSetupViewModel.CheckAgainAfterRunningAsync`, as for `Use the Git…`: a running search went by
+the old setting, and a call during it would join it, 1.2). Else, settings untouched, `GitSetupError`: `Git
 {v} at this path is too old: VisualCommit needs {min} or newer.`, `This Git did not report its
 version. Git said: {first line}`, `This file could not be started: {message}` or
 `SettingsTexts.ProgramMissing`.
 
 **Check again** (`MainWindowViewModel.Git.cs`), 1.2's order: `Looking for Git...`; the search; `Git`,
-`GitStatusText`, `GitStatusToolTip`; `CheckHelper()` off the UI thread; the screen. Found:
+`GitStatusText`, `GitStatusToolTip`; `CheckHelper()` off the UI thread, only while git works and the
+helper was missing; the screen. Found:
 `ForgetToolLookup`, the merge tools' lookup after the reopenings; each tab with `FailedPath`:
 `ReopenAsync()` (new: `Welcome.ClearGitError()`, `ShowPending`, `OpenAsync(remember: false)`); each
 empty tab `Welcome.ClearGitError()` (new: drops an error from `GitUnavailableException`); the active
@@ -2088,14 +2249,19 @@ usual install folder.`), `Chosen here.`, `Chosen here. There is no file at this 
 the lookup does not run, `Chosen here. VisualCommit runs Git only from a full path to the program
 itself.`), `From VISUALCOMMIT_GIT_STAND_IN, a test switch.`, `No Git was found on the PATH or in the
 usual install folders.`; then, while the choice differs from the git in use, ` VisualCommit uses it
-from its next start.` (git works) or ` VisualCommit looks for Git again when you save.`;
+from its next start.` (git works) or ` VisualCommit looks for Git again when you save.`; after `Use
+the Git it found` while the chosen git is gone and another was found, the note is `VisualCommit
+looks for Git again when you save.` alone (no git is in use, yet one was found, so none of the texts
+above is true);
 `GitProgramBrowseButton` `Browse…` (Choose's checks; `GitProgramStatus`); `GitProgramUsePathButton`
 `Use the Git on the PATH` while a path is chosen; `Use the Git it found` instead in ChosenMissing with a
 candidate, as on the screen, and while a pending choice would give way to a git in use that the install
 folders gave (`GitSource.InstallFolder`). Save's step 2 writes `GitExecutable`. After the screen
-closes, a changed setting while git does not work runs Check again.
+closes, a changed setting while git does not work runs Check again, once a running one has ended (as
+Choose).
 
-**Netrc note** (ruling 8): `AccountsNetrcNote` (`settingsNote notice`, `VcWarningBrush`) and
+**Netrc note** (ruling 8): `AccountsNetrcNote` (classes `settingsNote notice warning`: the existing
+`TextBlock.notice.warning` style gives `VcWarningBrush`) and
 `AccountsNetrcDismiss` `Dismiss`, under the blocks, while an account is signed in with "Use for git
 over HTTPS" saved on, git is below 2.46.0, and `HomeHasNetrc()` (off the UI thread) said yes: `Your home
 folder has a .netrc or _netrc file. With Git {v}, an entry in that file for a host can answer git's
@@ -2292,8 +2458,9 @@ e.Handled = true)` (as `ConflictPanes.cs:198-208`). With `AcceptsTab = false`:
 - F6 and Ctrl+End are unchanged (`KeyRegion.IsMain` on the left editor).
 
 **6.3.2 F2, the blame.** `BlameText.AddHandler(KeyDownEvent, OnTextKeyDown, RoutingStrategies.Bubble,
-handledEventsToo: true)`: after Up, Down, Left, Right, PageUp, PageDown, Home or End, with or without
-Ctrl or Shift, the run of `TextArea.Caret.Line` (`BlameGutter.RunOfLine`) is picked
+handledEventsToo: true)`: after Up, Down, Left, Right, PageUp, PageDown, Home or End, with any modifier
+(on macOS Cmd and Option with an arrow move the caret too), the run of `TextArea.Caret.Line`
+(`BlameGutter.RunOfLine`) is picked
 (`BlameViewModel.Pick`) when it is not the picked one: the gutter draws it, the right panel shows its
 commit. No other key picks. `OnContextRequested`'s keyboard branch takes `SelectedRun ?? the caret's
 run`, so Shift+F10 right after opening shows run 0's menu. Opening picks nothing (b6a to b6h come from
@@ -2315,7 +2482,11 @@ become, in this order: `Panel.stageRow StackPanel.rowActions` hidden; shown on `
 last `Panel.stageRow StackPanel.rowActions Button:focus-visible` opacity 1.
 - F6 still gives the row's own button (`KeyRegions.cs:237-243`): `k12b`'s state, nothing drawn.
 - Tab from it: "Stage" then "Discard" (unstaged) or "Unstage" (staged), each drawn and framed, then
-  the next row. Shift+Tab reaches a row's own button, not its buttons. The panel is an overlay.
+  the next row's own button. `WorkingChangesView` handles Tab from a row's last stop and Shift+Tab from
+  its first inside the two lists itself (a tunnel `KeyDown`), in the rows' order: the row is brought into
+  view first, and past a list's end the panel's next or previous stop takes the focus, the other list's
+  rows in their order. The lists virtualize and reuse their rows' controls, so Avalonia's own order
+  stops at the rows made. Shift+Tab reaches a row's own button, not its buttons. The panel is an overlay.
 - After a row action started by keyboard (the button had `:focus-visible`), once the lists show its
   result, the focus is on the row now at its place in that list, else that list's last row, else the
   other list's first row, else the summary (`Tab`, 6.3.5). When the action leaves the tree clean (a
@@ -2325,15 +2496,23 @@ last `Panel.stageRow StackPanel.rowActions Button:focus-visible` opacity 1.
 
 **6.3.5 F5, the focus after "Choose"** (F5-A: D104's rule where the opener was disabled). New
 `FocusReturn.AfterRun(IAsyncRelayCommand command, Control scope, Func<InputElement?> target,
-NavigationMethod method)`: when `command` stops running, at `Loaded` priority, if the focused element
-is null, the window or outside `scope`, `target()` takes the focus when shown and enabled.
+NavigationMethod method, Func<IInputElement?, bool>? stillLost = null)`: when `command`'s current or next
+run ends, at `Loaded` priority, if the focus is lost, `target()` takes it when shown and enabled. Lost:
+nothing, the window or an element not shown has the focus, or one outside `scope`; with `stillLost`,
+what that says of the focused element (the scope then serves only to find the window).
+`FocusReturn.LostFrom(TopLevel? topLevel, InputElement pressed, Func<bool> stillThere)` is that test for
+a pressed element: nothing, the window, an element not shown or not enabled, or `pressed` itself once
+`stillThere()` is false. A focus the user moved meanwhile elsewhere stays.
 - `WelcomeView`: `BrowseCommand`, scope `CloneForm`, `CloneFromGitHubButton`, `Unspecified`: after
   Choose or Esc in the browser, "From GitHub…" (or "From an account…") has the focus, with no frame;
   the palette's path keeps the focus where D104 put it.
 - `CreatePullRequestDialogView`: `ChooseBaseCommand`, the dialog's view, `PullRequestBaseChooseButton`,
   `Unspecified` (ruling 51). If 7a's or 7b's part N pictures change, it comes out as a known issue.
 - `WorkingChangesView`: the row actions (6.3.4) and Amend (6.3.7), `Tab`, armed only when the element
-  had `:focus-visible`.
+  had `:focus-visible`, each with `LostFrom`: a row's pressed button keeps the focus while it still
+  stands on its row (a failed action), while Amend itself counts as lost and is given the focus again;
+  the target is null once the panel's `DataContext` is no longer the one the action was armed in (a
+  switch of tabs), so nothing is done then.
 `MainWindow.OnDialogRemoving` does not change.
 
 **6.3.6 F6, the loading diff.** `DiffView` keeps `_focusAtOpen`, taken when the open's post runs: the focused element outside menus, as
@@ -2426,16 +2605,23 @@ session's calls bypass it anyway, K6 and K7 keep their tests and drop their pict
   right panel at most 200 Tabs reach `OperationCancelButton` (G7, passes today).
 - `KeyboardPassTests` (8a project, D416): Shift+Tab from the diff's text focuses
   `DiscardFileButton` (fails first); Tab, Enter on "Stage hunk" stages that hunk alone and leaves the
-  focus on `DiffText` (fails first); F6 from another region (from the diff's own toolbar the text is reached by Tab, 6.5's K1), Down,
-  Shift+Down twice, Shift+F10, Enter on "Stage selected
-  lines" stages two lines (G1, passes today); a blame just opened answers Shift+F10 with run 0's menu
+  focus on `DiffText` (fails first); F6 round the regions back to the diff's text, Ctrl+Home, Down
+  past the first hunk to row 4 of the
+  second (its header row 0), Shift+Down twice, Shift+F10, Enter on "Stage selected lines" stages that
+  hunk's added empty line and `Negate` alone: `--numstat` `2 0` staged and `3 1` unstaged, the index's
+  file `IndexAfterG1` (`Phase8aExpectations.K.StagedAfterG1`, `UnstagedAfterG1`; G1, passes today);
+  a blame just opened answers Shift+F10 with run 0's menu
   (fails first); after Choose and after Esc in the repository browser (fake GitHub, as
   `WelcomeCloneFromGitHubTests`) `CloneFromGitHubButton` has the focus (fails first); after the create
-  form's Pick `PullRequestBaseChooseButton` has it (ruling 51; passing today, nothing changes); a held
+  form's Pick, closed by Esc and by its choice, `PullRequestBaseChooseButton` has it (ruling 51; fails
+  first: on the base the focus is on nothing after the Pick's Esc, the button disabled while
+  `ChooseBaseCommand` ran); a held
   `diff-files` read (an unstaged file, `GitRepository.Changes.cs:201`) with Mod+Shift+M before its
   release leaves the focus in `CommitSummary`, and so does an
-  `Empty` body turning to `Text` (fails first); a diff opened by Enter on a row or from its menu still
-  takes the focus (passes today); with a held `commit` Amend is disabled and, focused by Tab before,
+  `Empty` body turning to `Text` (fails first); a diff opened by Enter on a row still
+  takes the focus (passes today; no menu of a stage row opens a diff), and a read held while the row's
+  menu is opened by Shift+F10 and closed by Esc still gives the text the focus (6.9 item 6); with a
+  held `commit` Amend is disabled and, focused by Tab before,
   gets the focus back (fails first); the providers' switch keeps the focus and Tab goes to
   `CloneFromGitHubFilter` (G9, passes today); Tab reaches `LeftSplitter`, Right widens the left panel
   by 10 and the session's `LeftPanelWidth` holds it (G8; the second half may fail first: D427);
@@ -2606,11 +2792,19 @@ and `RepositoryPath`).
 
 **The masters' rules** (any mark, the placeholder and the owner's choice alike; web-brand 1.2, 1.4,
 1.5; R5):
-- Paths and basic shapes, solid fills, at most simple linear gradients. No `text`, `tspan`, `image`,
+- Paths and basic shapes, solid fills, at most simple linear gradients: every element in SVG's
+  namespace and one of `svg`, `g`, `defs`, `title`, `desc`, `path`, `rect`, `circle`, `ellipse`, `line`,
+  `polyline`, `polygon`, `linearGradient` and `stop` (the tool's `MasterRules` and `IconFilesTests`
+  item 1 hold this list; any other element gets `holds a <{element}> element`). No `text`, `tspan`, `image`,
   `filter`, `script`, `style`, `foreignObject` or `pattern` element; no `href`, `xlink:href` or
   `url(…)` that points outside the file (anything but `#id`).
-- `icon.svg` and `icon-macos.svg` have `viewBox="0 0 1024 1024"`; `icon-small.svg` has
-  `viewBox="0 0 16 16"`, its straight edges on whole units.
+- `icon.svg` and `icon-macos.svg` have `viewBox="0 0 1024 1024"`; `icon-small.svg` has `viewBox="0 0
+  16 16"`, its straight edges on whole units. A master's `width` and
+  `height` are absent or exactly its viewBox's size, `1024`, or `16` for `icon-small.svg` (`16px` is
+  refused): Svg.Skia draws the viewBox onto them, and the tool scales by the size over the viewBox's
+  size, so another value would draw the mark smaller or stretched. `icon-small.svg` is drawn with
+  fills alone: `IconFilesTests`' check of its straight edges refuses a `transform`, a `stroke` other
+  than `none` and a `style` attribute in it, which that check does not follow.
 - Transparent around the shape. No Git logo, no orange-red rotated square, no bare branch or merge
   glyph as the main shape, no letter G, nothing of another client's.
 - `icon-macos.svg` is the mark as an opaque squircle of about 824 on the 1024 canvas, with a margin of
@@ -2647,8 +2841,10 @@ the mark holds 3:1 on both (Microsoft's rule, web-brand 1.4).
 Linux's scalable icon is `icon.svg` itself (8b copies it); 8b's bundle takes the committed `.icns`.
 If `iconutil` refuses the PNG data in `icp4` and `icp5` (7.4 item 8), a fixer drops those two
 entries after §7's merge, when CI's macOS job shows the refusal (the builder's own run skips item 8,
-and a `wip` branch is not pushed), so that macOS scales the 1x 16 and 32 from `ic11` and `ic12`, and says so here, in
-`IconOutputs` and in `IconFile.IcnsTypes` (1.15). The manifest lists the `.icns` with its entries'
+and a `wip` branch is not pushed), so that macOS scales the 1x 16 and 32 from `ic11` and `ic12`, and
+says so here, in `IconOutputs.IcnsEntries` and in `IconFile.IcnsTypes` and `IconFile.IcnsFiles`
+(1.15, 1.17), and makes `IconFilesTests` item 8's read-back expect the eight names the `.icns` then
+holds. The manifest lists the `.icns` with its entries'
 sizes in order. The manifest has no time stamp, so a run with nothing changed writes the same bytes:
 
 ```json
@@ -2666,9 +2862,11 @@ Windows checkout's line ends do not count (`*.svg` is text by `.gitattributes`).
 3. Each size: an `SKSurface` of N×N, transparent, the master's `SKPicture` scaled by N over the
    viewBox, antialiased; PNG by SkiaSharp's encoder. `IcnsWriter` then puts the `.icns` together from
    the `.iconset`'s PNG bytes, as the table above says.
-4. All is written to a temporary folder, then moved into place, the manifest last; a file in the
-   generated folders that is not in the list is deleted. A failure leaves the committed files as they
-   were.
+4. All is written to a temporary folder, then moved into place, the manifest last; a file in
+   `assets/brand/generated/` or `src/VisualCommit.App/Assets/Icon/` that is not in the list is
+   deleted, and every empty folder in them. Each file replaced or deleted is first copied aside, and a
+   failure puts each back from its copy and deletes the new ones, so it leaves the committed files as
+   they were (a folder deleted is not made again: git keeps none).
 5. Per `.ico` size it prints the share of opaque pixels at 3:1 on `#202020` and on `#F3F3F3`, for the
    owner's rounds; nothing asserts it.
 
@@ -2677,14 +2875,23 @@ Its console texts (the app shows none of them):
 - `No VisualCommit.slnx above {folder}: give the repository's folder with --root.` (exit 2)
 - `{path}: is missing.`, `{path}: is not well-formed XML: {message}`, `{path}: has the viewBox "{found}";
   a master needs "{expected}".`, `{path}: holds a <{element}> element, which a master may not use.`,
-  `{path}: refers outside itself: {value}` (exit 1, nothing written)
-- `Wrote {path} ({n} sizes: {sizes}).`, `Wrote {path}.` (the manifest), `{size} px: {a} % of the opaque
+  `{path}: refers outside itself: {value}`, `{path}: has the width "{found}"; a master needs none or
+  "{size}".` (the same with `height`), `{path}: could not be drawn: Svg.Skia made no picture of it.`
+  (exit 1, nothing written)
+- `{path}: could not be written: {message}`, `{path}: could not be deleted: {message}`, `{folder}: could
+  not be read: {message}` (an owned folder), each followed by `{path}: could not be put back as it was:
+  {message}` for a file it could not restore (exit 1: every file replaced or deleted is put back from its
+  copy, every new one deleted, and no `Wrote` or `Deleted` line is printed)
+- `Wrote {path} ({n} sizes: {sizes}).` (`1 size` for a file of one size), `Wrote {path}.` (the manifest),
+  `Deleted {path}, which this tool does not write.` (a file in an owned folder; these lines are printed
+  only once every step has succeeded), `{size} px: {a} % of the opaque
   pixels at 3:1 on #202020, {b} % on #F3F3F3.`, `Done. Commit assets/brand and src/VisualCommit.App/Assets/Icon.` (exit 0)
 
 **The app** shows no new text; the title stays "VisualCommit"; no control gains a name (§9's sweep
 sees nothing new). Avalonia hands the `.ico` to the platform (Windows' small and big icons; headless,
 a stub). It is embedded three times (the apphost's and the DLL's Win32 resources, an Avalonia
-resource), about 0.6 MB; the build output gains no file (1.1).
+resource), about 0.5 MB (three copies of the 162,197-byte `.ico` and the two PNGs; not measured on a
+build); the build output gains no file (1.1).
 
 **The README's "Name" note** (D412), which the lead writes at the merge, a trademark reservation only
 that keeps the files free to redistribute (web-verify B8):
@@ -2742,8 +2949,10 @@ app's resources (the `.Icon` hits in `tests/` are the glyph control's); `ShellTe
 Written into the report just before the package (D244). `IconSheet` is a harness control in a
 headless `Window` of 1100×700 with the app's resources, `RequestedThemeVariant` Dark or Light and
 `VcWindowBackgroundBrush` behind. Row 1, headed `VisualCommit.ico`: its 14 frames, left 24, gap 12,
-bottoms aligned, each an `Image` at its own pixel size (`Stretch="None"`, whole-pixel positions), the
-size below in `VcTextSecondaryBrush` at 11. Row 2: `png/icon-16` to `icon-128`, then `VisualCommit.iconset`'s
+bottoms aligned, each an `Image` at its own pixel size (`Stretch="None"`, whole-pixel positions),
+the size below, the bare number at 11 in SemiBold, centred under its image on a whole pixel, in
+`VcTextSecondaryBrush`; the heading at 13 in `VcTextPrimaryBrush` (the report's open point 44). Row
+2: `png/icon-16` to `icon-128`, then `VisualCommit.iconset`'s
 `icon_16x16`, `icon_32x32` and `icon_128x128`. The sheet reads its files through
 `IconFile.RepositoryPath` (1.15): the `.ico` at `src/VisualCommit.App/Assets/Icon/VisualCommit.ico`,
 its frames by `IconFile.Read`, and row 2's PNGs under `assets/brand/generated/`, which are no Avalonia
@@ -4223,6 +4432,161 @@ reported to the lead, never met by a wider tolerance (§2.9 item 6).
 
 The app shows no text of this package's; the pass's own messages are the lines quoted here.
 
+#### 12.3.5 What wave 2's build tells the launches
+
+What §5's, §6's and §7's builders, reviewers and fixers found that 12.3.4 does not say, each item
+checked against the merged code (the lead, 2026-11-20). `F`, `K` and `B` are
+`Phase8aExpectations.F`, `.K` and `.B`.
+
+**The lead's rulings.** (1) Part F's resting point: in `f5a` (launch 8) and the scripted-only `f10c`
+the neutral point lies on `GitStatus`'s text, which has a tooltip since §5, and a real pointer
+resting there opens it. §12 gives part F a resting point of its own that lies on no control with a
+tooltip or a hover look (a member of `Phase8aExpectations.F`), rests the scripted `f5a` and `f10c`
+there too, and shows by the files' hashes that both scripted pictures stay the same files (headless
+no pointer is drawn, and nothing hovers at either point); if one changes, §12 tells the lead before
+going on. (2) Launches 5 and 6: the fallback click on the notice's title bar lands away from its
+left end, where the icon now opens the system menu.
+
+**Part F (launches 7 to 10).**
+
+- Launch 7 runs with `StandInEnvironment("none")`. Each search that no setting answers logs Info
+  `Git was not looked for on this computer: VISUALCOMMIT_GIT_STAND_IN names no git program (none).`
+  and nothing else, so F13's "one more search logged" is one more of these lines. `GitAccess`'s
+  Warning `VISUALCOMMIT_GIT_STAND_IN is set (a test switch): unless Settings names a Git, this
+  computer is treated as having no Git.` comes once, at the start's search.
+- Launch 7, F2 then F13: `WingetCommand` allows concurrent executions, so `GitSetupWingetButton`
+  stays enabled under its confirm, and after Cancel D104 should give it the focus back without the
+  outline (`NavigationMethod.Unspecified`); no scripted check asserts that focus. The first real F6
+  then leaves the graph area, and a later one brings the focus back to the button with the outline,
+  within `Phase8aExpectations.F.MostF6Presses` (4).
+- Launch 7, F13's Enter on Check again: while the search runs, `GitSetupCheckAgainButton` is
+  disabled and its UI Automation name reads `Checking…`; with the stand-in `none` the search ends
+  almost at once, so the launch need not see either. When `CheckGitAgainCommand.IsRunning` falls,
+  `GitSetupView` posts the focus back at `DispatcherPriority.Loaded`, only if the focus is then on
+  nothing or the window, and by Tab, since the button had `:focus-visible` when Enter pressed it.
+  Wait for it with `WaitForFocusedElement`; never read it at once.
+- Launch 7, F4 through Choose: the native picker's title is `Choose git.exe` (the guidance's
+  platform), and on Windows a file whose name does not end in `.exe` is refused unrun. Choose first
+  probes the file (`GitAccess.ProbeAsync`, which ignores the stand-in); the probe logs Info `Using
+  Git {v} at {git}.` and Debug `The Git in use came from the setting.`. It then writes
+  `gitExecutable`, waits for any running Check again to end and runs its own, whose search logs both
+  lines again: a wait on the Info line must not take the probe's for the search's. The failed tab
+  then reopens (`RepoTabViewModel.ReopenAsync`, no new recent entry), and the merge tools' lookup
+  starts once the reopening has ended.
+- Launch 8: the stand-in's path must be fully qualified and end in `.exe`. Otherwise the app counts
+  it as `none`: the screen shows Missing, not TooOld, and the log has the Info `… names no git
+  program ({value}).` and the Warning for `none`. A full `.exe` path with no file there gives the
+  Warning `… Git is looked for only at {path}.` and still Missing. A good path logs that Warning
+  once and, per search, the Warning `Git 2.29.0 at {path} is older than the minimum, 2.34.1.`.
+- Launch 8's `f5a`: the neutral point (760, 687) lies on `GitStatus`'s text `Git 2.29.0 is too old
+  (needs 2.34.1 or newer)` (in `f6a`, launch 9's, it lies left of `GitSetupButton`, on nothing).
+  `GitStatus` now has the tooltip `{path}, from VISUALCOMMIT_GIT_STAND_IN (a test switch)`, which a
+  real pointer resting there opens after the hover delay. The scripted `f5a` shows none (part F's
+  `Picture` asserts it closed), so the capture must be taken without it: the lead's first ruling
+  above.
+- Launch 9: the stand-in writes `VISUALCOMMIT_GIT_STAND_IN_FAILURE`'s text and a line end to
+  standard error and exits 128, whatever the arguments. The app keeps the text trimmed as git's
+  words, reads `ConfigFault` (`C:/Users/demo/.gitconfig`, line 1) from it, and logs the Warning `Git
+  at {path} did not report its version: exit 128, "fatal: bad config line 1 in file
+  C:/Users/demo/.gitconfig".`, besides `GitAccess`'s `… Git is looked for only at {path}.` once.
+  `GitStatus`'s help text is `{path}, from VISUALCOMMIT_GIT_STAND_IN (a test switch)`.
+- Launch 10: `GitSetupPath` is the first `git.exe` in a fully qualified folder of the `PATH` the app
+  inherits (a relative entry is skipped, D449), else the usual folders. The scripted twin compares
+  it with `GitLocator.FindExecutable(GitSearchContext.FromSystem())` in the test process, and the
+  launch can do the same because `RealApp.Launch` passes the `PATH` on. `git --version` runs with
+  the session's git environment, so it reads the session's broken global file; this was seen by hand
+  on git 2.56 only. The Warning `Git at {path} did not report its version: exit {n}, "fatal: bad
+  config line 1 in file …".` names git's first line.
+- The stand-in: with 12.2's `<ProjectReference
+  Include="..\VisualCommit.GitStandIn\VisualCommit.GitStandIn.csproj" />`, its framework-dependent
+  app host `visualcommit-git-stand-in.exe` (`GitStandIn.FileName` in Testing) lands beside the test
+  assembly, as it does in Git.Tests' output, where `GitStandInTests` run it.
+- The screen shows only once its guidance is read, and the guidance is read once per session, at the
+  screen's first show, so `GitSetupWingetButton` either shows with the screen's first frame or not
+  at all. Its `WingetPath` is looked for over the app's own `PATH`
+  (`ProgramSearch.FindOnPath("winget.exe", PATH, ';', File.Exists)`).
+- `GitSetupButton` (`Set up Git…`, a `VcFlatButton` named by its text) sits left of `GitStatus` in
+  the status bar's right-hand group. `GitStatus` has no help text while no git path is known, as in
+  launch 7's F1.
+
+**Part K (launches 11 and 12).**
+
+- Launch 11's walk: the real F6 gives `README.md`'s `StageFileRow` (its UI Automation name the
+  path); the 18 real Tabs then reach, in order, the (row, id) pairs of
+  `Phase8aExpectations.K.CalculatorWalk` (built from `UnstagedRows` and `RowStops`: each row's
+  `StageFileRow`, `RowStageButton`, `RowDiscardButton`), ending on `src/Calculator.cs`'s
+  `StageFileRow`. Tab and Shift+Tab between rows are `WorkingChangesView`'s own (a tunnel
+  `KeyDown`): it scrolls the list to the next row and, when that row has not been made yet, gives it
+  the focus one layout pass later (posted at `Loaded`), so each Tab is waited on by its focused
+  element, never by time. `src/Calculator.cs` lies below the list's view at 1100×700, and the walk
+  leaves the list scrolled as the scripted twin leaves it.
+- The real pointer stays off the stage rows through the walk and at every capture (the neutral
+  point): a row that holds the keyboard focus has its `RowStageButton` and `RowDiscardButton` in UI
+  Automation at `Opacity` 0 (D425), and a hovered other row adds its own, drawn, so a find of a
+  row's button by id alone can meet two rows' buttons. The same holds for
+  `Phase2RealWindowPass.ClickRowButton` and `Phase5RealWindowPass.ClickFileRowButton`, which wait
+  for exactly one; design 6.8 item 5's runs of `*Phase2RealWindowPass.Check_17*` and
+  `*Check_A4_real_keys*` alone, the owner told, are the lead's.
+- In launch 11 nothing may move the focus between the real Enter on the row and the text's wait: the
+  diff's text takes the focus only while the focus is still where it was when the diff opened, or on
+  nothing, the window or inside the diff (6.3.6).
+- After the real Enter on `Stage hunk` the focus stays on the button until the diff's re-read makes
+  the bars again; the text takes it then, not at the key. So the text's wait (no button) comes after
+  `git diff --cached --numstat -- src/Calculator.cs` prints `K.StagedAfterHunk` (`1 1
+  src/Calculator.cs`) and one `StageHunkButton` is left. The scripted twin waits for the view
+  model's `StagedTitle` `Staged files (4)` and the re-read; the app's `StagedTitle` text block has
+  that automation id, which `K.Ids` does not hold.
+- The chosen lines are taken on the one hunk left after `k1b`: Ctrl+Home, `K.DownsToLines` (4)
+  Downs, `K.ShiftDownsForLines` (2) Shift+Downs. The diff's caret is not drawn and its selection is
+  not in UI Automation (the text's peer is a plain `Document`), but `StageLinesButton` and
+  `DiscardLinesButton` show in place of `StageFileButton` and `DiscardFileButton` while lines are
+  selected; they show from the first Shift+Down on, so they prove a selection, not its two rows,
+  which git's lines after Enter prove: `K.StagedAfterLines` (`3 1 src/Calculator.cs`), with
+  `K.UnstagedAfterLines` (`2 0 src/Calculator.cs`).
+- Launch 12: `K.BlameDowns` gives each Down's run, line and subject: (0, line 2, `Add the parser`),
+  (1, line 3, none: the stage panel shows, `UnstagedTitle` reads `Unstaged files (1)`), (2, line 4,
+  `Rename the parser to reader`); `K.DownsToRun2` is 3. The blame picks after a caret key with any
+  modifier held, and only while the keyboard focus is in `BlameText`, which takes it when the page
+  opens from Ctrl+Shift+B; the page opens with the caret on line 1 and no run picked, and a click on
+  the text would pick its line's run.
+- `Phase8aExpectations.K.ChangesLaunch` (`Check_K1_hunk_by_keys`, "changes", dark, 1100×700, `k1a`
+  to `k1d`) and `HistoryLaunch` (`Check_K2_blame_by_arrows`, "history", light, 1100×700, `k2a`,
+  `k2b`) are `K.Launch(Method, Scenario, Dark, Size, Captures)` records; `K.Ids` holds the 50 ids
+  part K's steps wait on or read.
+
+**Part B (launch 3) and the notice (launches 5 and 6).**
+
+- `IconFile.Read(IconFile.RepositoryPath(IconFile.IcoFile))` gives the 14 frames in the file's
+  order, `IconFile.IcoSizes` (16, 20, 24, 30, 32, 36, 40, 48, 60, 64, 72, 80, 96, 256);
+  `IconFrame.Bgra()` gives a frame's pixels top-down and unpremultiplied for the bitmaps and for the
+  256's PNG alike, so B1 (a) and (b) compare the extracted icon's alpha-255 pixels with it directly,
+  within `Phase8aExpectations.B.IconTolerance` (2). `IconFile.RepositoryPath` resolves under the
+  `RepoRoot` metadata of the `VisualCommit.Testing` assembly, which the real-window project already
+  references; `IconFile` itself uses no Avalonia type.
+- B1 (a): on the laptop `Icon.ExtractAssociatedIcon` of the Debug `VisualCommit.exe` gave 32×32, a
+  size the `.ico` holds. The Release build the pass's command makes carries the same
+  `ApplicationIcon`, but neither it nor the size under the test host's DPI awareness has been tried.
+- The `.ico`'s frames at 32 and below are drawn from `icon-small.svg` (the tile filling its square
+  but for its rounded corners, radius 3.75 of 16); from 36 up from `icon.svg`, the tile inside a
+  transparent margin of one sixteenth (31.5 px at 36). At the laptop's 200 % `SM_CXSMICON` (32) and
+  `SM_CXICON` (64) are both frames of the `.ico`; at 175 % the small metric, 28, is none, so B1
+  (c)'s rule for a size the `.ico` lacks applies.
+- `Phase8aExpectations.B` holds launch 3's facts: `RealWindowPictures`
+  (`b1-title-bar-dark-with-frame`, `b1-title-bar-icon-dark`, `b2-title-bar-light-with-frame`,
+  `b2-title-bar-icon-light`, `b2-taskbar-button`, `b2-taskbar-button-enlarged`, in that order),
+  `WindowTitle` (`VisualCommit`), `TitleBarCropWidth` 64, `Enlargement` 4, `TaskbarButtonNameStart`
+  (`VisualCommit`), `TaskbarButtonLimit` (10 s), `TaskbarButtonNotRun` (run.txt's line, word for
+  word the report's) and `IconTolerance` 2. The file uses `Avalonia.Media` (`Color`, `FontWeight`)
+  as 7b's linked expectations do; the real-window project links no `Phase8aExpectations*.cs` yet
+  (§12's 8a link line).
+- The notice window carries the same `Icon`, so launches 5 and 6 show the mark at the left of its
+  title bar; I2's captures are its client area and do not change. Their fallback click on the
+  notice's title bar must land away from that left end: a click on a window's icon opens its system
+  menu (and a double click closes the window) instead of only activating it.
+- In the light theme the white line's ends meet a light title bar or taskbar and open the tile's
+  outline at left and right; `b2-title-bar-icon-light` and `b2-taskbar-button` are inspected with
+  that as the mark, not a cut.
+
 ### 12.4 Tests
 
 - `Phase8aRealWindowPass`, 13 methods (12.3.4). None fails first: each behaviour was proven by an
@@ -4481,10 +4845,12 @@ question for the owner (13.5).
    an app execution alias (a reparse point) for which `File.Exists` is true, version v1.29.380, found
    on the `PATH`. The real-window checks F1, F2 and F5 need winget on the gate's machine and fail without
    it, with `winget.exe is not on this machine's PATH: F1, F2 and F5 need it (install App Installer from the Microsoft Store).`;
-   there is no "Not run" (D449, 12.3.4 launch 7). Still open: whether
-   `cmd.exe /S /K ""<the path found>" --version"`, started with `UseShellExecute`, shows a window that
-   stays open where Windows Terminal is the default console, which also shows `cmd.exe` starting the
-   alias by its path. The lead tries it by hand, the owner told, before §5's merge.
+   there is no "Not run" (D449, 12.3.4 launch 7). **Settled** for the rest (the lead, by hand on the
+   laptop, 2026-11-20, before §5's merge): started
+    as 1.3 gives it, with `UseShellExecute` and `cmd.exe /S /K ""<the path found>" --version"`, the
+    console's window opens and stays open where Windows Terminal is the default console, and
+    `cmd.exe /S /C ""<the path found>" --version"` ends with exit code 0 and prints `v1.29.380`, so
+    `cmd.exe` starts the alias by its full path. No install was run.
 8. The focus after a row action started by keys (6.3.4): the row now in its place, else the list's
    last row, else the other list's first, else the summary; keyboard.md left it to Avalonia. The lead,
    before §6. **Settled:** this rule, with a test for each of its four cases; when the action leaves

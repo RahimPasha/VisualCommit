@@ -780,7 +780,10 @@ launches, five captures.
   where it opens one). A method that gives the session a tab writes it with `ShellDriver.StartWithTabs`;
   "one empty tab" is a start with no session written, where the app opens its one empty tab (`New tab`),
   as the real window's twin does. Every start but F6b's gives `gitProbe` a `FakeGitSetupProbe`; F6b's
-  (method 6) gives none, so the machine's search runs as in every earlier check. `askPassHelper` is left
+  (method 6) gives the check's own `MachineSearchProbe`, whose search for git is the machine's, as in
+  every earlier check, and whose guidance is fixed (`new GitGuidance(GitAccess.RunningPlatform, null,
+  null)`), so that the check reads neither the `PATH` for `winget.exe` nor `/etc/os-release` (the lead
+  at wave 2's merge, `fc123ec`; no expected result changed). `askPassHelper` is left
   null (the helper next to `VisualCommit.Git`, which the build puts there) but in F11.
 - **Where things are read** (1.2's ids). The screen by its ids: `GitSetup` (the view), `GitSetupTitle`,
   `GitSetupBody`, `GitSetupPath`, `GitSetupGitSaid`, `GitSetupGuidance`, `GitSetupCommand`, the buttons
@@ -874,7 +877,7 @@ in the same order (F1, F2, F13, F4; its F4 by "Check again", the real window's b
 | 3 | `Check_F3_chosen_gone_use_the_git_it_found` | F3 | one empty tab; `gitExecutable` `{chosen}` written before the start through `JsonSettingsStore.Update(settings => settings with { GitExecutable = {chosen} })`, as the support's `UseTheme` writes the theme; the probe: Windows, `WingetPath` winget's; answers `ChosenMissing` with the candidate `C:\Program Files\Git\cmd\git.exe`, then `RealAt(C:\Program Files\Git\cmd\git.exe, Path)` | 1100×700, dark | `f3a` |
 | 4 | `Check_F5_too_old_update_offer` | F5 | one empty tab; the probe: Windows, `WingetPath` winget's; answers `TooOld` at `C:\Program Files\Git\cmd\git.exe`, `Path`, `2.29.0` | 1100×700, dark | `f5a`, `f5b` |
 | 5 | `Check_F6_config_fault_show_the_file` | F6 | one empty tab; the probe: Windows, `WingetPath` winget's; answers `ConfigFault`: not working at `C:\Program Files\Git\cmd\git.exe`, `Path`, exit 128, git's words `fatal: bad config line 1 in file C:/Users/demo/.gitconfig`, `ConfigFault("C:/Users/demo/.gitconfig", 1)` | 1100×700, dark | `f6a` |
-| 6 | `Check_F6b_real_git_broken_config` | F6b | one empty tab; no probe (the machine's search); the session's global file `GitIsolation.SessionGlobalConfigFile(data)` holds `[user` on its line 1 | 1100×700, dark | none |
+| 6 | `Check_F6b_real_git_broken_config` | F6b | one empty tab; the check's own probe (the machine's search for git, fixed guidance); the session's global file `GitIsolation.SessionGlobalConfigFile(data)` holds `[user` on its line 1 | 1100×700, dark | none |
 | 7 | `Check_F7_not_started` | F7 | one empty tab; the probe: Windows, `WingetPath` winget's; answers `NotStarted` at `C:\Program Files\Git\cmd\git.exe`, `Path` | 1100×700, dark | `f7a` |
 | 8 | `Check_F8_choose_too_old_then_found` | F8 | one empty tab; the probe: Windows, no `WingetPath`; answers `Missing`; `AnswerFor({old}, TooOld 2.29.0 at {old})`, `AnswerFor({chosen}, RealAt({chosen}, Setting))`; the picker's files `{old}`, then `{chosen}` | 1100×700, dark | `f8a` |
 | 9 | `Check_F9_macos_tools_missing_then_broken` | F9 | one empty tab; the probe: macOS; answers `CommandLineToolsMissing`, then `NotWorking` at `/usr/bin/git` with git's words starting `xcrun: error` | 1100×700, dark | `f9a`, `f9b` |
@@ -1076,8 +1079,8 @@ Steps:
 Expected: `GitSetupTitle` `Git is not working`; `GitSetupBody` `VisualCommit found Git at the path below,
 but it could not be started: {message}`, `{message}` the fake's start failure (open point 8);
 `GitSetupPath` `C:\Program Files\Git\cmd\git.exe`; `GitSetupGuidance` `Repair or reinstall Git for
-Windows, then press Check again.`; "Git said:" and `GitSetupGitSaid` as §5's builder settles (open point
-13). The buttons, in order: `Download Git for Windows`, `Choose git.exe…`, `Check again`; no
+Windows, then press Check again.`; "Git said:" and `GitSetupGitSaid` not shown (open point 13). The buttons,
+in order: `Download Git for Windows`, `Choose git.exe…`, `Check again`; no
 `GitSetupWingetButton`, `GitSetupShowFileButton` or `GitSetupUsePathButton`. The links: `How VisualCommit
 finds Git`. `GitStatus` `Git is not working`; `GitSetupButton` `Set up Git…`.
 
@@ -1257,9 +1260,9 @@ Steps:
 5. Press Tab. 6. Press Tab. 7. Press Tab.
 8. Press Enter; wait until the command has ended: `Lookups` holds two, `CheckGitAgainCommand.IsRunning`
    is false, and `GitSetupCheckAgainButton` reads `Check again` and is enabled. Neither `Lookups` nor
-   `GitStatus` marks that end: the second lookup is recorded when the search starts, and `GitStatus`
-   reads `Git not found` again before `CheckHelper()` runs off the UI thread and before the screen and
-   the command end (5.3's order; 1.2).
+   `GitStatus` marks that end: the second lookup is recorded when the search starts, and `GitStatus` reads
+   `Git not found` again before the screen and the command end (5.3's order; 1.2; `CheckHelper()` runs only
+   while git works and the helper was missing, so not here).
 
 Expected:
 - After step 4: at least one F6 was sent; `GitSetupWingetButton` has the keyboard focus, with the
@@ -1380,7 +1383,9 @@ install folder.`, `Found in a usual install folder.`, `Chosen here.`, `Chosen he
 this path.`, `Chosen here. VisualCommit runs Git only from a full path to the program itself.`, `From
 VISUALCOMMIT_GIT_STAND_IN, a test switch.`, `No Git was found on the PATH or in the usual install
 folders.`, each followed, while the choice differs from the git in use, by ` VisualCommit uses it from its
-next start.` (git works) or ` VisualCommit looks for Git again when you save.`; `Browse…`, `Use the Git on
+next start.` (git works) or ` VisualCommit looks for Git again when you save.`; after `Use the Git it found`
+while the chosen git is gone and another was found, `VisualCommit looks for Git again when you save.` alone
+(the lead's ruling on the review's FD5 and FT8; no check shows it); `Browse…`, `Use the Git on
 the PATH`, `Use the Git it found`. The netrc note (5.3): `Your home folder has a .netrc or _netrc file.
 With Git {v}, an entry in that file for a host can answer git's requests to it before your signed-in
 account. Git 2.46 or later stops this for git's own requests; git-lfs reads the file with every version of
@@ -1776,6 +1781,13 @@ Expected:
   operation, D452).
 - After step 6: no palette row's label starts with `Cancel `.
 
+Note (§6's build, `55b8d3a`): before `HoldIn`, method 3 writes the "graph" copy's `origin` URL again
+with forward slashes, the same folder (`git remote set-url origin`). Reason: `FetchHold`'s script
+(phase 6's harness) names its marker after the remote's path behind its last forward slash
+(`${remote##*/}`); on Windows git hands it the copy's `origin.git` path with backslashes, so the
+marker's name held the whole path, the script failed (`No such file or directory`) and no fetch was
+held. `FetchHold.cs` stays as it is; no expected result of K3 or K8 changes.
+
 **K4. A row's buttons by Tab, and the focus after its action** (not R; D425; design 6.1 F4, 6.3.4,
 6.3.5, 6.5). Method 4.
 
@@ -2123,19 +2135,22 @@ Steps:
 
 Expected:
 - After step 1, the frame is 1100×700 and the window's `ActualThemeVariant` is Dark.
-- Row 1's heading is a text that reads `VisualCommit.ico` (7.5), wholly above row 1's images; under it,
+- Row 1's heading is a text that reads `VisualCommit.ico` (7.5), `FontSize` 13, `Foreground` `#E4E7EC`
+  (`VcTextPrimaryBrush`), wholly above row 1's images; under it,
   row 1: 14 `Image`s, left to right in `IconFile.IcoSizes`' order, 16, 20, 24, 30, 32, 36, 40, 48, 60,
   64, 72, 80, 96 and 256, each showing the `.ico`'s frame of that size as `IconFile.Read` gives it; each
-  `Stretch` `None`, its `Bounds` exactly N×N, its left and top on whole pixels, the 14 bottoms on one
-  line; their lefts at x 24, 52, 84, 120, 162, 206, 254, 306, 366, 438, 514, 598, 690 and 798 (left 24,
-  gap 12), the 256 ending at x 1054. (These lefts, and open point 45's, hold while each size's text is no
-  wider than its image, as the bare number at 11 is; another form, open point 44, changes them, and §7's
-  builder then writes them in `Phase8aExpectations.B`.) Under each image its size (open point 44):
-  `Foreground` `#9BA3B0` (`VcTextSecondaryBrush`), `FontSize` 11, its ink `#9BA3B0` on `#14161B`.
+  `Stretch` `None`, its `Bounds` exactly N×N, its left and top on whole pixels, the 14 bottoms on one line, y
+  312; their lefts at x 24, 52, 84, 120, 162, 206, 254, 306, 366, 438, 514, 598, 690 and 798 (left 24,
+  gap 12), the 256 ending at x 1054. (These lefts, and open point 45's, hold: open point 44 kept the bare
+  number, no wider than its
+  image.) Under each image its size, the bare number (open point 44): `Foreground` `#9BA3B0`
+  (`VcTextSecondaryBrush`), `FontSize` 11, `FontWeight` SemiBold, under its image and within its width
+  (the sheet centres it on a whole pixel), its ink `#9BA3B0` on `#14161B`.
 - Row 2, wholly below row 1's sizes: nine `Image`s in this order, `png/icon-16`, `-24`, `-32`, `-48`,
   `-64`, `-128`, `VisualCommit.iconset/icon_16x16`, `icon_32x32` and `icon_128x128`, each showing the
   file of that name; each `Stretch` `None`, its `Bounds` exactly its pixel size (16, 24, 32, 48, 64, 128,
-  16, 32, 128), on whole pixels, the row laid out as row 1 (open point 45).
+  16, 32, 128), on whole pixels, the row laid out as row 1, its bottoms on one line, y 488, its last image ending at
+  x 608 (open point 45).
 - Every image of both rows lies wholly inside the 1100×700 frame.
 - Every image of both rows: its centre equals its file's centre pixel composited over `#14161B`, within
   2 per channel; with the owner's mark, white, the pupil's.
@@ -2171,7 +2186,7 @@ Expected:
   image's centre equals its file's centre pixel composited over `#FFFFFF`, within 2 per channel; every
   image's top-left pixel `#FFFFFF`, the row's background (open point 47); the gaps `#FFFFFF`; the sizes
   under row 1 `Foreground` `#5C6572`, their ink `#5C6572` on `#FFFFFF`; the same images, sizes, order,
-  lefts and bottoms; the heading `VisualCommit.ico`; no text cut.
+  lefts and bottoms; the heading `VisualCommit.ico`, its `Foreground` `#1B1F27`; no text cut.
 - Inspected: as B1, on white. The tile's edge holds against `#FFFFFF`; where the white line reaches the
   tile's left and right edges it meets the white background, so the tile's outline is open there, at
   every size (round 2's README: on a light desk the line's white ends blend into it at 16 to 24 pixels).
@@ -2183,7 +2198,9 @@ Expected:
 The app shows no new text (7.3): the window's title stays `VisualCommit`, which the real window's framed
 captures show right of the mark; no control gains a name (§9's sweep sees nothing new). The sheet's texts
 are the harness's, not the app's: row 1's heading `VisualCommit.ico` and, under each of its frames, its
-size (7.5; its form is open point 44). The files' names and sizes are 7.3's: the `.ico`'s 16, 20, 24, 30,
+size (7.5; open point 44): the bare number, `16` to `256`, at 11 in SemiBold in `VcTextSecondaryBrush`,
+centred under its image on a whole pixel; the heading at 13 in `VcTextPrimaryBrush`. Row 2 has no heading
+and no labels. The files' names and sizes are 7.3's: the `.ico`'s 16, 20, 24, 30,
 32, 36, 40, 48, 60, 64, 72, 80, 96 and 256; `assets/brand/generated/png/icon-<N>.png` for 16, 24, 32,
 48, 64, 128, 256 and 512; the `.iconset`'s `icon_16x16`, `icon_16x16@2x`, `icon_32x32`, `icon_32x32@2x`,
 `icon_128x128`, `icon_128x128@2x`, `icon_256x256`, `icon_256x256@2x`, `icon_512x512` and
@@ -2334,14 +2351,14 @@ with their parts.
 |---|---|---|
 | The contrast fixes in one round (D410; plan.md's items from phase 6, 768 and 769) | L1 to L6; real window L1, L2, L4 a, L5 dark, L6 a to c | `ThemeTokensTests` (`Every_text_reaches_4_5_to_1_on_every_background_it_lies_on`, `The_contrast_rounds_values_are_the_designs`, `The_placeholder_has_its_own_token_at_full_opacity`, `Both_themes_hold_the_same_keys`); `PanelViewTests`' three tests; `Phase8aExpectationTests.L`; wave 1's masked comparison against phase 7b's references with the scan's boxes, and the scan's eight lists in `docs/test-reports/phase-8a-contrast/` (design 0.7, 2.6) |
 | Two instances; the macOS data folder (plan.md 778) | I1 (real window), I2 (and real window), I3; by hand: a second start behind another window | `SingleInstanceGuardTests`, `InstanceNoticeViewModelTests`, `MainWindowBringForwardTests`; `AppPathsTests.The_default_data_folder_is_the_platforms_documented_one`, read in CI's macOS job's log; `Phase8aExpectationTests.I` |
-| First-run experience (R4, D405; plan.md 757; D423, D449, D453): git missing, too old or not working, each state with its own text; "Check again" without a restart; "Choose git.exe"; winget on Windows after a confirm, in a visible terminal, where winget exists; the Command Line Tools or Homebrew on macOS, the distribution's package on Linux; the missing askpass helper; with plan.md 781's visual check (missing, too old, not working, found again by "Check again") | F1 to F13; real window F1, F2, F4, F5, F6, F6b, F13 | `GitSetupShellTests` (each state: no clipped text at 1100×700 and 1000×560; the view's name and help text); Git.Tests' `GitLocatorTests`, `OsReleaseTests`, `GitStandInTests`, `GitConfigurationForgetTests`; App.Tests' `GitAccessTests`, `CheckGitAgainTests`, `GitSetupTextsTests`, `GitSetupViewModelTests`, `GitProgramViewModelTests`, `FileLauncherTests` (`ResolveStart`, `ToStartInfo` of the winget command, the one real `StartAsync`), `JsonSettingsStoreTests`, `MainWindowViewModelTests`, `SettingsDialogViewTests`; `Phase8aExpectationTests.F`; §9's sweep in the states (10) to (13) and the Narrator walk-through's steps 20 and 21 (part U, by hand); the guide's troubleshooting page and the first-run links (§11, part G); the lead's by-hand `cmd.exe /S /K ""<the path found>" --version"` before §5's merge (13.4 item 7) |
+| First-run experience (R4, D405; plan.md 757; D423, D449, D453): git missing, too old or not working, each state with its own text; "Check again" without a restart; "Choose git.exe"; winget on Windows after a confirm, in a visible terminal, where winget exists; the Command Line Tools or Homebrew on macOS, the distribution's package on Linux; the missing askpass helper; with plan.md 781's visual check (missing, too old, not working, found again by "Check again") | F1 to F13; real window F1, F2, F4, F5, F6, F6b, F13 | `GitSetupShellTests` (each state: no clipped text at 1100×700 and 1000×560; the view's name and help text); Git.Tests' `GitLocatorTests`, `OsReleaseTests`, `GitStandInTests`, `GitConfigurationForgetTests`; App.Tests' `GitAccessTests`, `CheckGitAgainTests`, `GitSetupTextsTests`, `GitSetupViewModelTests`, `GitProgramViewModelTests`, `FileLauncherTests` (`ResolveStart`, `ToStartInfo` of the winget command, the one real `StartAsync`), `JsonSettingsStoreTests`, `MainWindowViewModelTests`, `SettingsDialogViewTests`; `Phase8aExpectationTests.F`; §9's sweep in the states (10) to (13) and the Narrator walk-through's steps 20 and 21 (part U, by hand); the guide's troubleshooting page and the first-run links (§11, part G); the lead's by-hand `cmd.exe /S /K ""<the path found>" --version"` before §5's merge (13.4 item 7; done on 2026-11-20: the console's window stays open where Windows Terminal is the default console) |
 | A broken `~/.gitconfig` shows its own message (plan.md 767, from phase 6's design 8.5) | F6 (the fake), F6b (real git, also in CI's floor job on 2.34.1); real window F6 (the stand-in), F6b (real git) | `GitLocatorTests`: real git with `[user` in `GIT_CONFIG_GLOBAL` gives `ConfigFault(file, 1)`, on every CI job |
 | OpenSSH older than 8.4 ignores `SSH_ASKPASS_REQUIRE` (plan.md 766, risk 15; ruling 7, D424) | none: a log line, nothing on screen | `AskPassBrokerHelperTests` (the Info line `Git and ssh get SSH_ASKPASS_REQUIRE=force, so that ssh asks through VisualCommit; OpenSSH older than 8.4 ignores it and asks in the terminal VisualCommit was started from, if there is one.` once per session, at the first Ask or Deny scope); the guide's page (§11), whose proof is added with part G |
 | The netrc note (plan.md 773, risk 35; ruling 8, D424) | F14 | `AccountsNetrcNoteTests` |
-| Keyboard gaps (R7; plan.md 759, 784 and "Done when" 786: every main action reached by keyboard): a hunk and chosen lines from the diff, a blame run and its menu, "Cancel {title}" in the palette, the stage rows' buttons on keyboard focus; Tab out of every read-only text view; a panel resized by the keys (design 0.1, 6.1, 6.3.9) | K1, K2, K3, K4, K8; real window K1, K2 | `KeyboardPassTests`; `DiffTextViewTests`, `ConflictPanesTests`, `BlameViewTests`, `WorkingChangesTests`, `StatusBarTests` (6.4's fail-first tests); `RegionKeysTests`, `CommandPaletteViewTests`, `PaletteEntriesTests`, `AppShortcutsTests` passing alone (6.8 item 1); phase 2's `Check_17` and phase 5's `Check_A4_real_keys` alone in the real window at §6's merge (6.8 item 5); the inventory of main actions (design 6.3.9) in the report, from §6's merge report, with its rows "Inline or side by side", proven by K1 (its scripted-only step 11: Tab and Shift+Tab to `SideBySideDiffButton`, Enter), and "Amend", proven by K7 (disabled while committing) and `KeyboardPassTests` (focused by Tab, the focus given back), as the lead settled open point 40 |
-| Focus after "Choose" (plan.md 771; phase 7a's design 17 item 5) | K5 | `KeyboardPassTests` (after Choose and after Esc in the browser; the create form's Pick, ruling 51) |
+| Keyboard gaps (R7; plan.md 759, 784 and "Done when" 786: every main action reached by keyboard): a hunk and chosen lines from the diff, a blame run and its menu, "Cancel {title}" in the palette, the stage rows' buttons on keyboard focus; Tab out of every read-only text view; a panel resized by the keys (design 0.1, 6.1, 6.3.9) | K1, K2, K3, K4, K8; real window K1, K2 | `KeyboardPassTests` (among them `Tab_and_Enter_on_Discard_hunk_confirmed_leave_the_focus_in_the_text`, `A_keyboard_Stage_held_while_the_user_moves_to_the_summary_leaves_the_focus_there`, `A_keyboard_Stage_held_while_the_user_goes_to_another_tab_leaves_that_tabs_lists_alone` and, for the activity log's splitter, `Up_on_the_activity_logs_splitter_reached_by_Tab_heightens_the_log_by_10_and_keeps_it`); `DiffTextViewTests`, `ConflictPanesTests`, `BlameViewTests` (`An_arrow_with_Cmd_or_Option_picks_the_carets_run` among them), `WorkingChangesTests` (`Tab_walks_every_row_of_a_list_longer_than_its_view_and_Shift_Tab_walks_back` among them), `StatusBarTests` (6.4's fail-first tests); `RegionKeysTests`, `CommandPaletteViewTests`, `PaletteEntriesTests`, `AppShortcutsTests` passing alone (6.8 item 1); phase 2's `Check_17` and phase 5's `Check_A4_real_keys` alone in the real window at §6's merge (6.8 item 5); the inventory of main actions (design 6.3.9) in the report, from §6's merge report, with its rows "Inline or side by side", proven by K1 (its scripted-only step 11: Tab and Shift+Tab to `SideBySideDiffButton`, Enter), and "Amend", proven by K7 (disabled while committing) and `KeyboardPassTests` (focused by Tab, the focus given back), as the lead settled open point 40 |
+| Focus after "Choose" (plan.md 771; phase 7a's design 17 item 5) | K5 | `KeyboardPassTests` (after Choose, reached by Home and Enter in the list, and after Esc in the browser; `Enter_in_the_repository_browsers_list_with_no_row_selected_chooses_nothing`; the create form's Pick, ruling 51) |
 | The loading diff (plan.md 772; phase 7a's design 17 item 11) | K6 | `DiffTextViewTests` (`FocusBody(() => false)`), `KeyboardPassTests` (a held read, an `Empty` body turning to `Text`, a diff opened by Enter still taking the focus) |
-| The commit boxes (plan.md 774; D392) | K7 | `WorkingChangesTests` (a held `CommitAsync`, `CanToggleAmend`), `KeyboardPassTests` (Amend focused by Tab gets the focus back) |
+| The commit boxes (plan.md 774; D392) | K7 | `WorkingChangesTests` (a held `CommitAsync`, `CanToggleAmend`), `KeyboardPassTests` (Amend focused by Tab gets the focus back; `Amend_focused_by_Tab_leaves_the_focus_the_user_moved_while_the_commit_ran`) |
 | Icons and branding (R5, D407; plan.md 764): the icon's SVG, the tool that makes the `.ico`, the `.icns` and the PNG files, the window's and the executable's icon; with plan.md 782's visual check, the icon in the window and the taskbar | B1, B2; real window B1 (a) to (c) and B2 (the executable's icon, the window's two icons, the title bar dark and light, the taskbar button) | `IconFilesTests` (items 1 to 8: the masters' rules, the manifest's hashes, the `.ico`, the `.iconset`, `png/`, `Assets/Icon`, the `.icns` (item 7, D447) and `iconutil` both ways (item 8, in CI's macOS job, whose log shows it passed, not skipped)); `WindowIconTests` (the main window's and the notice window's `Icon`, `AppIcon`'s three URIs); `Phase8aExpectationTests.B`; the files: the masters in `assets/brand/`, the generated files, `tools/VisualCommit.IconBuilder` (built in CI's six jobs; a second run of it leaves `git status` clean, 7.8 item 2); the owner's choice recorded in `docs/brand/icon/round-1/` and `round-2/` (D447); the look-alike check by eye, with the checks by hand |
 | The README's "Name" note names the icon (D412; plan.md 764) | none | The README's "Name" note, design 7.3's text, written by the lead at §7's merge: proven by the file (design 0.1). No check of part B proves it; it stands here because it lands at §7's merge |
 
@@ -2473,7 +2490,12 @@ with `--path-format=absolute` (design 3.6).
   three texts stay, the too-old one reading `GitVersion.Minimum`; `Using Git {version} at {path}.` stays
   word for word; phase 6's part S still finds its nine properties in `settings.json`, with no
   `gitExecutable` (1.4, 5.8); `FileLauncher.FindOnPath` stays as a forward, so its tests and callers are
-  unchanged (5.2); `MergeToolHelpTests.HeldToolHelpRunner` becomes `internal` and asserts nothing new.
+  unchanged (5.2); `MergeToolHelpTests.HeldToolHelpRunner` becomes `internal` and asserts nothing new. Two
+  earlier tests change their input, not what they assert (D449):
+  `GitLocatorTests.FindExecutable_returns_the_first_git_on_the_path` and
+  `FindExecutable_prefers_the_path_over_the_usual_install_locations` now give rooted `PATH` folders (`/empty`,
+  `/first`, `/second`; `/custom`) instead of relative ones, since the search skips a relative entry
+  (`A_relative_path_entry_that_holds_git_is_skipped`).
   Phase 6's S14 asserts that the global scope fits without a scroll bar at `s14c` (1100×700) and `s14i`
   (1920×1080) (`Phase6Checks.S.Helpers`' `AssertFits`); the row must keep that true (in the references'
   `s14c`, wave 1's, about 150 px lie free under the merge tool's note at 1100×700): if it does not,
@@ -2489,6 +2511,15 @@ running phase 2's walk-through, `Phase5ChecksB`, `Phase6ChecksK`, `Phase7aChecks
 `D:/Projects/Personal/phase8-work/references/wave1/` (`scripts/compare-pictures.py`): no difference. A
 difference stops the package, but in part N of 7a or 7b, where a change from the create form's fix comes
 out as a known issue instead (6.3.5, ruling 51).
+
+The comparison for §6's merge, run on `12aa3a4` (the merged app code but for a comment) against wave
+1's references, showed no difference the package made, none in part N either: of the 208 pictures 198
+were the same files, and the other 10 differ from run to run by nature, like those wave 1's comparison
+lists: a caret (`k10a`, `k10f`, 7a's `n06b`), the progress bar without a percentage (7a's `n02b`,
+`n07a`, 7b's `n04b`), a temporary folder's name (`k10e`), anti-aliasing one level apart (7b's `n05b`,
+`n05d`), and phase 2's `17c-restored`. Phase 2's `17c-restored` flips between two files from run to
+run on the branch's base (`fe0d2d4`) as well, so a later comparison that shows it reads it as
+run-to-run variance, not as this package's change.
 
 One of part K's own pictures changes at later merges: `k3a-palette-cancel` in the palette's scroll thumb
 (x 837–838 at 1100×700), at §8's and §11's merges (ruling 54, D417), as `l3a-palette-placeholder` does;
@@ -2536,7 +2567,11 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   title bar, the app shows no new text and no control gains a name (7.3). Proof (7.6): §7's builder runs
   `dotnet test --project tests/VisualCommit.VisualTests --filter-class "*Phase0Checks"`, then
   `python scripts/compare-pictures.py D:/Projects/Personal/phase8-work/references/wave1 artifacts/visual <out>`:
-  nothing changed; the lead's wave-2 run shows nothing from this package.
+  no picture changed by §7. At §7's build (2026-11-20) the comparison found 13 pictures the same file,
+  `b1-icon-sizes-dark` and `b2-icon-sizes-light` new, and one changed, not by §7: phase 0's
+  `06c-restarted-first-frame`, 603 pixels in the status bar, which reads `Git 2.56.0` where the
+  reference reads `Looking for Git...`, the first-frame race that phase-0.md's check 6 records. The
+  lead's wave-2 run shows nothing from this package.
 - **No earlier test changes** (7.4): no test reads a window's `Icon` or the app's resources (the `.Icon`
   hits in `tests/` are the glyph control's); `ShellTests`, `PanelViewTests` and `MainWindowCloseTests`
   make a `MainWindow` and pass unchanged (7.8 item 1).
@@ -2559,6 +2594,34 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   and back after it, which the inspection of `i2a` to `i2c` showed. The button now never gets narrower
   than it has been drawn; the new assertion failed on the code before. `i2b-notice-trying` changed with
   it; `i2a`, `i2c` and `i3a` are the same files as before.
+- **F7, expected result** (2026-11-20, §5's build): "Git said:" and `GitSetupGitSaid` are not shown. The
+  report as first committed left them to §5's builder (open point 13); the build puts a start's message
+  in the body alone, and F7 asserts it. This completes a result the report left open and reverses none.
+- **F13, step 8** (2026-11-20, §5's build): the step's explanation no longer says that `CheckHelper()`
+  runs after `GitStatus` reads `Git not found`: as built it runs only while git works and the helper was
+  missing. The step's actions, waits and expected results are unchanged.
+- **Part F's texts, the settings row's note** (2026-11-20, the lead's ruling on the review's FD5 and
+  FT8): after `Use the Git it found` while the chosen git is gone and another was found, the note reads
+  `VisualCommit looks for Git again when you save.` alone, since none of 5.3's other texts is true
+  there. No check shows it; `GitProgramViewModelTests` pins it.
+- **F6b's start** (2026-11-20, the lead at wave 2's merge, `fc123ec`): the check's own probe in place of
+  none, so that the check reads the machine only for git. Reason: without a probe the app's own probe
+  also looked for `winget.exe` in every folder of the machine's `PATH` and read `/etc/os-release`,
+  which no check may depend on. No expected result changed.
+- **K3 and K8, step 1** (2026-11-20, §6's build, `55b8d3a`): before `HoldIn` the copy's `origin` URL is
+  written again with forward slashes (the note under K3). No expected result changed.
+- **K5, step 6** (2026-11-20, the lead at wave 2's merge, `25dd5c8`): the step stands as first written,
+  "Press Enter" with the row selected, and passes by a fix of the app: Enter on the selected row of the
+  browser's list did nothing before it (Avalonia's list takes Enter on an item for itself), and §6's
+  check had gone round it by Tab to `Choose`. The test
+  `Enter_in_the_repository_browsers_list_with_no_row_selected_chooses_nothing` holds the other half:
+  with no row selected, Enter chooses nothing.
+- **B1 and B2, after step 1** (2026-11-20, §7's build, `27c3327`): the sizes under row 1 are the bare
+  numbers at 11 in SemiBold, each under its image and within its width; the heading is at 13 in
+  `VcTextPrimaryBrush`; row 1's bottoms lie on y 312, row 2's on y 488, and row 2's last image ends at
+  x 608. Reason: open points 44 and 45 left the form and the lines to §7's builder; at the regular
+  weight `TextInk` could not read the token from `20` and `32` on white (10 off, past its tolerance of
+  8), and in SemiBold every size reads its token exactly in both themes.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
@@ -2714,7 +2777,11 @@ lead settled on 2026-11-20 says so:
    `Continue without it`, and for F13 `GitSetupWingetButton`, `GitSetupDownloadButton`,
    `GitSetupChooseButton`, `GitSetupCheckAgainButton`; and the links the same way, 5.3's table order:
    `GitSetupMoreLink` before `GitSetupGuideLink` (F9 a, F10). §5's builder confirms; the lead rules if
-   the screen lays them out otherwise, and the report's F13 and every "in order" follow.
+   the screen lays them out otherwise, and the report's F13 and every "in order" follow. **Settled by §5's
+   build (merged at `53fc353`):** as this report reads it. The buttons sit in 5.3's table order in the panel
+   `GitSetupButtons`, the links in `GitSetupLinks`, `GitSetupMoreLink` first; F13's order with winget found is
+   `GitSetupWingetButton`, `GitSetupDownloadButton`, `GitSetupChooseButton`, `GitSetupCheckAgainButton`
+   (`Phase8aExpectations.F.FocusOrderWithWinget`).
 8. **The fake's values.** 5.3 gives `C:\Program Files\Git\cmd\git.exe`, `C:/Users/demo/.gitconfig`,
    Ubuntu's three values and "Alpine". This report adds the conventions' table: winget's path, `/usr/bin/git`
    for the macOS and Linux states, `2.29.0` for every too-old git (F5's, 1.14's default), Alpine's `ID`
@@ -2727,8 +2794,13 @@ lead settled on 2026-11-20 says so:
    `ChosenPath` is its path, probe or search alike (the two reach it as the same call), and every
    lookup it receives is recorded in `Lookups`, in order. **Settled by the lead on 2026-11-20** for the
    lookups' rule: 1.15's `FakeGitSetupProbe` row now states it (FD2): `AnswerFor` answers every lookup
-   whose `ChosenPath` is the path, and `Lookups` holds every lookup received, probes among them, in
-   order. The rest of this point stands.
+   whose `ChosenPath` is the path, and `Lookups` holds every lookup received, probes among them, in order.
+   **Settled by §5's build (merged at `53fc353`)** for the rest: F7's `{message}` is `The system cannot find
+   the file specified.`; F9 b's words are `xcrun: error: invalid active developer path
+   (/Library/Developer/CommandLineTools), missing xcrun at:
+   /Library/Developer/CommandLineTools/usr/bin/xcrun`, with exit code 1; Alpine's `PRETTY_NAME` is `Alpine
+   Linux v3.20`, which no check shows (`alpine` names no command, so the guidance is the unknown one).
+   `FakeGitSetupProbe` holds them, and `Phase8aExpectations.F` as `NotStartedMessage` and `ToolsBrokenWords`.
 9. **A chosen path on macOS and Linux.** `GitSetupTexts` applies the lookup's rule to a chosen path
    (5.3: a full path, on Windows ending in `.exe`, D449), and `Path.IsPathFullyQualified` is the running
    platform's: on CI's macOS and Linux jobs 5.5's `D:\Tools\PortableGit\cmd\git.exe` is no full path, so
@@ -2752,17 +2824,26 @@ lead settled on 2026-11-20 says so:
     the lines but not whether the screen's view model or `FileLauncher.StartAsync` writes them; written
     by the launcher, the fake (which records and starts nothing) never shows them. The scripted checks
     assert them only if the view model writes them, and always the fake's `Starts`; the real window
-    asserts the first's absence after Cancel either way. §5's builder.
+    asserts the first's absence after Cancel either way. §5's builder. **Settled by §5's build (merged at
+    `53fc353`):** the screen's view model writes both lines, once the launcher's `StartAsync` has returned;
+    `FileLauncher.StartAsync` logs nothing. So the scripted checks see each line once, beside the fake's
+    `Starts` (F2 method 2, F9 step 2).
 12. **Transient states.** `Checking…` on `GitSetupCheckAgainButton`, `Looking for Git...` in
     `GitStatus` (F4, F13) and `Checking…` in `GitSetupError` (F8) last while the probe answers; 1.15's
     fake has no hold, so a check cannot wait inside the search. §5's builder adds an optional held answer
     to `FakeGitSetupProbe` (as part I's `HeldNoticeTry`), or the check reads them in the dispatcher turn
     of the click; without either, those three expectations are read by `CheckGitAgainTests` and
-    `GitSetupViewModelTests` alone, and the report says so.
+    `GitSetupViewModelTests` alone, and the report says so. **Settled by §5's build (merged at `53fc353`):** a
+    held answer. `FakeGitSetupProbe.HoldNext()` holds the next lookup, once recorded, until its
+    `ProbeHold.Release()`. F4 and F13 assert `Checking…` as the automation name of the disabled
+    `GitSetupCheckAgainButton` and `Looking for Git...` in `GitStatus` while the search is held; F8 asserts
+    `Checking…` in `GitSetupError` while Choose's probe is held.
 13. **"Git said:" for a git that could not be started** (F7). 5.3 puts the start's message in the body
     (`… could not be started: {message}`) and `ErrorText` holds the same message (1.2); it does not say
     whether "Git said:" and `GitSetupGitSaid` show it too. §5's builder; the lead, before F7's expected
-    result is completed.
+    result is completed. **Settled by §5's build (merged at `53fc353`):** the start's message is in the body
+    alone; "Git said:" and `GitSetupGitSaid` are not shown (F7 asserts it). A search that throws, which has no
+    path, shows its message under "Git said:".
 14. **`GitStatus`'s help text.** 5.3 gives `GitStatus` a `ToolTip.Tip`; 12.3.4 (launches 7 and 8)
     reads its help text through UI Automation. This report expects both, equal, as the app's other
     tooltipped controls set both. §5's builder.
@@ -2771,38 +2852,58 @@ lead settled on 2026-11-20 says so:
     Automation; no picture changes.
 15. **The status bar's tooltip in ChosenMissing.** "Null without a path" (5.3): whether the detection of
     a gone choice carries the chosen path as its `ExecutablePath` is not said; F3 does not assert the
-    tooltip. §5's builder.
+    tooltip. §5's builder. **Settled by §5's build (merged at `53fc353`):** it does not: a gone choice's
+    detection has no `ExecutablePath`, so in ChosenMissing `GitStatus` (`Chosen Git not found`) has no tooltip
+    and no help text.
 16. **The row's note after Save** (F12 step 5). This report reads 5.3's "while the choice differs from
     the git in use" as covering a choice saved but not yet used (ruling 42): `Chosen here. VisualCommit
-    uses it from its next start.` on reopening. §5's builder; the lead if otherwise.
+    uses it from its next start.` on reopening. §5's builder; the lead if otherwise. **Settled by §5's build
+    (merged at `53fc353`):** as this report reads it; F12 asserts that note after steps 3 and 5.
 17. **The picker's title and the `.exe` check in the settings row.** The row has no guidance, so its
     W and M L forms (`Choose git.exe`, `Choose the git program`) follow the running platform in this
-    report; the screen's follow the guidance's. §5's builder.
+    report; the screen's follow the guidance's. §5's builder. **Settled by §5's build (merged at `53fc353`):**
+    as this report reads it; every `.exe` refusal, the screen's Choose's too, follows the running machine
+    (`OperatingSystem.IsWindows()`).
 18. **What F14 waits on before asserting no note.** `HomeHasNetrc` runs off the UI thread (1.10, 5.3);
     an absence can be asserted only after a known end: this report asks that the question be one of the
     screen's reads that `WaitForSettingsReadsAsync` waits for, or a condition of its own. §5's builder.
+    **Settled by §5's build (merged at `53fc353`):** one of the screen's reads:
+    `SettingsDialogViewModel.Loaded` awaits `AccountsSettingsViewModel.ReadNetrcAsync`, which asks the
+    question off the UI thread, so F14 waits for the reads as for any other.
 19. **The neutral point and the status bar.** The neutral point (760, 687) lies in the status bar; with
     `GitSetupButton` beside `GitStatus` and a long text (`Git 2.29.0 is too old (needs 2.34.1 or newer)`),
     it may fall on either, so that a picture shows a hover or `GitStatus`'s new tooltip. Every part F
     picture asserts neither; if one fails, the lead moves part F's resting point (5.3 does not place
-    `GitSetupButton`).
+    `GitSetupButton`). **Settled by §5's build (merged at `53fc353`)** for the scripted run: `GitSetupButton`
+    sits left of `GitStatus`, and every part F picture passes both assertions. In `f5a` and `f10c` the neutral
+    point lies on `GitStatus`'s text `Git 2.29.0 is too old (needs 2.34.1 or newer)`, which now has a tooltip;
+    the scripted run opened none. A real pointer resting there in launch 8 can open it after the hover delay,
+    so §12 gives part F a resting point of its own, on no control with a tooltip, for the scripted `f5a` and
+    `f10c` and for launch 8, the scripted pictures staying the same files (the lead's ruling, design 12.3.5).
 20. **Phase 6's `AssertFits`, and F12.** The global scope with the row must still fit at 1100×700 and
     1920×1080 (phase 6's S14 at `s14c` and `s14i`); if it does not, ruling 3: §5's builder stops and
     asks the lead. F12 asserts no fit of its own (the design fixes none): on "graph" the global scope
     also holds the two notes `graph sets its own: …` under Name and Email (as part L's
     `l3f-settings-name-placeholder` shows), so less room lies free there than in `s14c`, and the row's
     height is §5's builder's to set. If the row does not fit there, `f12a` and `f12b` show a scroll bar,
-    and §5's builder tells the lead.
+    and §5's builder tells the lead. **Settled by §5's build (merged at `53fc353`):** it fits. Phase 6's S14
+    passed at `s14c` and `s14i` in the builder's run of `*Phase6ChecksS`, and `f12a` and `f12b` show no scroll
+    bar; F12 still asserts no fit of its own.
 21. **The scenario of F1, F4 and F12.** 5.5 names none; this report takes "graph" (`Scenarios.GraphAsync()`),
     which `Phase8aExpectations.F` names for §12's launch 7. §5's builder may take another before the
-    merge, with the report's text changed to match.
+    merge, with the report's text changed to match. **Settled by §5's build (merged at `53fc353`):** "graph",
+    for methods 1, 2 and 14.
 22. **The helper's path in F11.** `askPassHelper` is "a path without a file" (1.10); this report gives
     a made-up path per platform so that `f11a` is the same on every run. If the session turns it into a
     full path of its own (a path relative to the current folder off Windows), §5's builder uses a path
-    under the data folder instead and the picture's Notes say it varies by nature.
+    under the data folder instead and the picture's Notes say it varies by nature. **Settled by §5's build
+    (merged at `53fc353`):** the made-up path is kept as given (`Phase8aExpectations.F.MissingHelper`); it is
+    a full path on its platform, so the session keeps it.
 23. **F14's sign-in.** This report signs in through `SignInAsync` (phase 7a's A11), not the dialog, with
     GitHub's fake in process (no port, ruling 20); §5's builder may take another route that leaves
-    `useForGit` saved on.
+    `useForGit` saved on. **Settled by §5's build (merged at `53fc353`):** `SignInAsync`, as this report has
+    it; step 1 waits until `accounts.json` holds exactly one record, with `useForGit` true, and asserts it is
+    GitHub's `octo`.
 24. **Launch 7's stand-in Warning.** 12.3.4 asserts the stand-in's Warning in launch 8 alone; this
     report adds launch 7's (`… this computer is treated as having no Git.`, 1.14). §12's builder; the
     lead.
@@ -2822,13 +2923,18 @@ lead settled on 2026-11-20 says so:
     `TextBlock.notice.warning` sets `VcWarningBrush` (`SettingsDialogView.axaml:646`). F14 therefore
     asserts that the note's classes include `settingsNote` and `notice` and that its brush resolves to
     `VcWarningBrush`, not the exact list of classes. §5's builder chooses between the class `warning`
-    and the token set on the note.
+    and the token set on the note. **Settled by §5's build (merged at `53fc353`):** the class `warning`. The
+    note's classes are `settingsNote notice warning`, and the existing `TextBlock.notice.warning` style gives
+    `VcWarningBrush`; F14 asserts as written.
 28. **The focus after F2's Cancel** (F13, launch 7). Whether F2's Cancel gives `GitSetupWingetButton`
     the focus back depends on how §5 builds the winget command, which the design leaves open (5.3:
     "confirm, then 1.3's start"): a command that is disabled while it awaits its confirm is not given
     the focus back by D104 (the case 6.3.5 handles for other openers). F13 does not depend on which
     way it is built (its step 4 always sends at least one F6), and F2 asserts nothing about the focus
-    after Cancel. §5's builder.
+    after Cancel. §5's builder. **Settled by §5's build (merged at `53fc353`):** the winget command allows
+    concurrent executions (`GitSetupViewModel.WingetCommand`), so its button stays enabled while its confirm
+    is open, and D104 can give it the focus back after Cancel, without the outline. F2 still asserts nothing
+    about that focus, and F13 always sends the first F6.
 29. **The screen before its guidance.** 5.3 reads the guidance off the UI thread while the screen
     shows, and does not say what the screen shows before it arrives: another platform's texts, no
     winget button, no command. Every check waits for it (the conventions' "Waiting for the screen";
@@ -2858,7 +2964,11 @@ another; §12's builder follows the report's steps.
     **Settled by the lead on 2026-11-20:** K1's route as this part has it: F6 gives the unstaged list's
     first row, and `src/Calculator.cs` is the seventh; the walk is F6 and then 18 Tabs along 6.3.4's order
     (each row's own button, its Stage, its Discard). The design's 6.5 and 12.3.4 launch 11 follow; §6's
-    builder confirms the counts, and `Phase8aExpectations.K` holds them.
+    builder confirms the counts, and `Phase8aExpectations.K` holds them. **Confirmed by §6's build**
+    (merged in `e463392`): 18 Tabs (`Phase8aExpectations.K.TabsToCalculator`; the row and id each Tab
+    reaches in `CalculatorWalk`). The walk reaches the rows below the list's view because
+    `WorkingChangesView` walks the lists in their rows' order (design 6.3.4; `55b8d3a`); Avalonia's own
+    order stopped at the rows the list had made.
 31. **K1's chosen lines.** 6.5 and 12.3.4 write "F6, Down, Shift+Down twice, Shift+F10" after the
     Shift+Tab to `Discard file`. F6 from the toolbar goes to the next region, the right panel, and the
     graph area gives back its last focused element, the toolbar's button (D213; `KeyRegionNavigator`), so
@@ -2872,14 +2982,20 @@ another; §12's builder follows the report's steps.
     **Settled by the lead on 2026-11-20:** K1's lines as this part has them: chosen by Tab back into the
     text, Ctrl+Home, four Downs and two Shift+Downs (rows 4 and 5 of the remaining hunk), not by "F6,
     Down, Shift+Down twice". The design's 6.5 and 12.3.4 launch 11 follow; §6's builder confirms the
-    counts, and `Phase8aExpectations.K` holds them.
+    counts, and `Phase8aExpectations.K` holds them. **Confirmed by §6's build:** `DownsToLines` 4 and
+    `ShiftDownsForLines` 2 select the added empty line and `    public int Negate(int a) => -a;`; git
+    then prints `3 1` staged and `2 0` unstaged (`StagedAfterLines`, `UnstagedAfterLines`), and the
+    index's file is `IndexAfterLines`.
 32. **K2's run 2 and its count of Down.** 6.3.2 numbers the runs from 0 ("run 0's menu"), so run 2 is the
     third run, line 4, `0575c7f`; keyboard.md's test (a), which the design draws on, says "run 2:
     `SelectedRun.Index == 1`". This part takes index 2: 6.5's "its commit in the right panel" holds only for
     it, run 1 (line 3) being not committed yet. The count, three Downs, takes the caret on line 1 when the
     page opens: 6.3.2 says opening picks nothing, not where the caret is. §6's builder confirms both, and
     `Phase8aExpectations.K` holds them (6.5). The real window waits for each Down by the right panel, not
-    by the caret (open point 41).
+    by the caret (open point 41). **Settled by §6's build** as this part reads it: run 2 is index 2
+    (`0575c7f`, line 4); the page opens with the caret on line 1 and no run picked; three Downs
+    (`DownsToRun2`), the run, line and subject of each in `BlameDowns` (no subject for run 1, where
+    the stage panel shows).
 33. **K5's keys.** 6.5 writes "From GitHub…" by Tab and Enter, and "a row, Enter". The button lies before
     `CloneUrlBox` in the Tab order (`WelcomeView.axaml`'s `DockPanel`), and the form opens with the focus in
     the box (phase 7a's B1), so this part takes one Shift+Tab. For the row it takes Tab into the list and
@@ -2887,32 +3003,69 @@ another; §12's builder follows the report's steps.
     values are `b06a`'s; 6.3.9's inventory writes "arrows". How `k5a` is held against `b06a` ("`b06a`'s form
     outside the URL's text", 6.5) the design does not say: this part leaves it to the gate's inspection,
     the URL's port differing by run; a masked comparison would need a box the lead names.
+    **Settled by §6's build:** steps 3 and 5 as this part has them: one Shift+Tab from `CloneUrlBox`
+    gives `From GitHub…` the focus with `:focus-visible`; Tab from the filter enters the list, and Home
+    selects `octo/hello` and enables `Choose`. `k5a` against `b06a` stays the gate's inspection.
 34. **K7's "type Next".** The summary holds `First` while the commit is held; typed onto it, `Next` would
     give `FirstNext`. This part selects the summary's text first (Ctrl+A), so that the summary reads `Next`
-    as 6.5 expects.
+    as 6.5 expects. **Settled by §6's build** as this part has it: Ctrl+A, then `Next`; the summary
+    reads `Next` (`SummaryCounter` `68`) and HEAD's message is `First`.
 35. **K8.** "With K3's held fetch" is read as a second fetch held the same way: K3's own fetch ends at K3's
     Enter. 6.5 puts the numbers of Tabs "in the report" but gives no bound for the walk to `LeftSplitter`:
     this part bounds both walks by 6.4's 200 (G7's bound) and records both numbers. After Enter on Cancel
     the button hides as the fetch ends, and the design does not say where the focus goes, so the walk to
     `LeftSplitter` starts from F6 to the right panel again. The 10 per press is keyboard.md's, unverified
     until G8's test (6.9 item 3); whether D427's code is needed is that test's to say (6.1), and the
-    expected result, the session's `LeftPanelWidth` 270, holds either way.
+    expected result, the session's `LeftPanelWidth` 270, holds either way. **Settled by §6's build** as
+    this part reads it: a second fetch held by `Arm()`, both walks bounded by 200 (`WalkLimit`), both
+    numbers written to the test's output. On the build's runs 8 Tabs reached `OperationCancelButton`
+    from where F6 put the focus in the right panel, and, after F6 to the right panel again, 1 Tab
+    reached `LeftSplitter`: the splitters come after the panels in `MainWindow.axaml`, before the status
+    bar. `GridSplitter`'s Right moves 10 and raises no drag's end, so D427's code was needed (the test
+    failed first on the base, the session's width unset): `MainWindow` keeps a keyboard move of
+    `LeftSplitter` and `RightSplitter` as a drag's end, and the session's `LeftPanelWidth` is 270.
 36. **K3's held fetch.** 6.4's `StatusBarTests` hold a "Fetch origin" queued straight on the tab; a scripted
     check starts the real one from the remote's menu and holds it at the remote (`FetchHold`, phase 6's).
     On "graph" the remote holds nothing new, so a fetch that was not cancelled would move no ref either:
     K3's proof of the cancel is the operation's outcome and the status text, and "no remote ref moved"
     (6.5) is asserted as the design asks. A commit added to `origin.git` before the start would make it a
-    proof of its own; the lead may ask the builder for it.
+    proof of its own; the lead may ask the builder for it. **Settled by §6's build** as this part has
+    it, no commit added to `origin.git`: the proof is the fetch's `Cancelled` outcome, `Fetch origin
+    cancelled` and `git for-each-ref` unchanged. On Windows the hold needed the copy's `origin` URL
+    written with forward slashes (the note under K3).
 37. **Unverified points of 6.9 that the checks meet.** Tab from a focusable `TextArea` set to `Continue`
     entering the bars, then leaving, and Enter reaching a button inside it (item 1; K1); `:focus-within`
     with `:not()` in Avalonia 12.1.3 (item 2; K1, K4); `GridSplitter`'s arrows and `DragCompleted` (item 3;
     K8); a tab's git calls using the detection's runner (item 5; K6, K7, whose pictures drop if not, 6.4).
     §6's fail-first tests settle them before the checks run; a check that meets one unsettled is reported
-    to the lead.
+    to the lead. **Settled by §6's build:** Tab from the text, set to `Continue`, enters the bars'
+    buttons in hunk order and then leaves the diff, and Enter runs a framed button inside the text area
+    (`DiffTextViewTests`, `ConflictPanesTests`, K1); `:focus-within` with `:not()` works in Avalonia
+    12.1.3 (`WorkingChangesTests`, K1, K4); `GridSplitter`'s arrows move 10 per press and raise no
+    `DragCompleted`, so D427's code was built (`KeyboardPassTests`, K8); a tab's git calls take the
+    detection's runner, so `HeldGitRunner` holds them and K6 and K7 keep their pictures.
 38. **The focus frame's look.** The design names no colour for Fluent's frame (6.3.1); the checks assert
     `:focus-visible` and the gate inspects the frame in `k1a`, `k1c`, `k4a`, `k4b` and `k8a`.
 39. **The inventory** (6.3.9) enters the report from §6's merge report, with 6.3.10's lines for the guide
-    (to §11): the lead, at §6's merge.
+    (to §11): the lead, at §6's merge. **Settled at §6's merge (`e463392`):** 6.3.9's inventory holds as
+    the design lists it, the rows it calls unchanged included. The rows changed or proven by 8a, as
+    built, with their proofs: a hunk's Stage, Unstage and Discard, Tab to its buttons, in hunk order
+    (K1; `DiffTextViewTests`, `ConflictPanesTests` for the resolver's bars, `KeyboardPassTests`); Inline
+    or side by side, Shift+Tab from the text (K1's step 11); chosen lines, F6 back to the text or Tab
+    from the toolbar, Ctrl+Home, the arrows and Shift with the arrows, then Shift+F10 or the palette
+    (K1; `KeyboardPassTests`' G1); a file row's buttons, Tab from the row, in the rows' order, rows
+    below the list's view included (K4, K1's walk; `WorkingChangesTests`,
+    `Tab_walks_every_row_of_a_list_longer_than_its_view_and_Shift_Tab_walks_back` among them); Amend,
+    Tab, disabled while committing, the focus given back (K7; `KeyboardPassTests`); a blame run, the
+    arrows, PageUp, PageDown, Home and End with any modifier, and its menu by Shift+F10, run 0's while
+    none is picked (K2; `BlameViewTests`, `KeyboardPassTests`); the running operation's Cancel, "Cancel
+    {title}" in the palette, or a walk of Tabs from the right panel, 8 in K8 (K3, K8; `StatusBarTests`);
+    the clone browser's Choose as 6.3.9's row has it, the focus back on `From GitHub…` without a frame
+    (K5; `KeyboardPassTests`); a panel's size, Tab to its splitter, 10 per arrow, a side panel's width
+    kept as after a drag (K8; `KeyboardPassTests`); commits not next to each other, the mouse only
+    (ruling 50; the guide). 6.3.10's lines for the guide hold, with the blame's PageUp, PageDown, Home
+    and End, Tab from a stage row on to the next row, and the palette's entry listed only while the
+    running operation can be cancelled.
 40. **The inventory's proofs of two rows.** 6.3.9 cites K1 for "Inline or side by side" by Shift+Tab and
     K7 for "Amend" by Tab. As written, K1's Shift+Tab ends on `Discard file`, and K7 reaches Amend by no
     key. This part takes `KeyboardPassTests`' "Amend focused by Tab gets the focus back" (6.4) as the proof
@@ -2941,6 +3094,8 @@ another; §12's builder follows the report's steps.
     the final `Dispose`; and K8's walk of up to 200 Tabs must end before its own fetch's hold gives up.
     This part installs the hold with `rounds: 300` (`HeldFor` 150 s, under the hang watchdog's 3 minutes)
     and releases it after each cancel (K3's step 6, K8's step 9). The lead may set other rounds.
+    **Settled by §6's build:** `rounds: 300` (`Phase8aExpectations.K.FetchHoldRounds`), released after
+    each cancel; no held fetch gave up (`FetchHold.GaveUp()` empty at the method's end).
 43. **K5's start.** 8a's `StartEmptyAsync` takes a theme and a probe and no fake of GitHub (1.17; every
     provider stays off, `Phase8aChecks.Support.cs`). This part starts K5 as 7a's `StartEmptyAsync(data,
     served)` does, on a copy of 7a's "hosting" served on a free port; the lead may instead give 8a's
@@ -2972,14 +3127,32 @@ Still open, each with who settles it; a point the lead settled on 2026-11-20 say
     §7's builder fixes them in `Phase8aExpectations.B`; `IconSheet` writes its heading itself, not from
     `Phase8aExpectations.B`, so that the assertion compares two copies. Row 1's lefts (B1), and open
     point 45's, hold while each size's text is no wider than its image, as the bare number at 11 is;
-    another form changes them, and §7's builder then writes them in `Phase8aExpectations.B`. §7's
-    builder, with the lead quoting them under part B's texts before §7's merge.
+    another form changes them, and §7's builder then writes them in `Phase8aExpectations.B`. §7's builder,
+    with the lead quoting them under part B's texts before §7's merge.
+    **Settled at §7's merge on 2026-11-20 (`6fe69bd`):** a size is the bare number, `16` to `256`, at 11
+    in `FontWeight` SemiBold, in `VcTextSecondaryBrush`, centred under its image on a whole pixel
+    (`IconSheet.ArrangeOverride`). At the regular weight `TextInk` could not read the token on white:
+    `48` centred in a box as wide as its image read `#6B6572`, 15 off `#5C6572`, and on whole pixels `20`
+    and `32` read `#666572`, 10 off, past its tolerance of 8; in SemiBold every size reads its token
+    exactly in both themes. The heading is `VisualCommit.ico` at 13 in `VcTextPrimaryBrush` (`#E4E7EC`
+    dark, `#1B1F27` light); row 2 has no heading and no labels. Each size is no wider than its image, so
+    row 1's lefts and open point 45's hold. `Phase8aExpectations.B` holds them (`HeadingFontSize`,
+    `SizeFontSize`, `SizeFontWeight`); the checks also assert the heading's font size and colour and
+    each size's weight, and part B's texts quote them.
 45. **Row 2's layout.** 7.5 gives row 1's layout (left 24, gap 12, bottoms aligned) and row 2's contents
     and order only. This report reads row 2 as laid out as row 1, below row 1's sizes: lefts 24, 52, 88,
     132, 192, 268, 408, 436 and 480, ending at x 608. Neither row's top nor the heading's height is fixed:
     the checks assert bottoms aligned, whole pixels and both rows inside 1100×700. §7's builder confirms.
+    **Settled at §7's merge on 2026-11-20 (`6fe69bd`):** as this report reads it, row 2's lefts 24, 52,
+    88, 132, 192, 268, 408, 436 and 480, ending at x 608 (`Phase8aExpectations.B.Row2Lefts`, `Row2End`).
+    §7's builder fixed the lines too: the heading's top at y 24, row 1's bottoms on y 312, the sizes'
+    tops at y 316 and row 2's bottoms on y 488 (`HeadingTop`, `Row1Bottom`, `SizesTop`, `Row2Bottom`);
+    the checks assert both bottom lines and both rows' ends, x 1054 and 608, exactly.
 46. **The sheet's ids.** 7.5 names none. No step clicks or focuses anything in the sheet, so the checks
     read `IconSheet`'s images and texts from the control itself, row by row in order. §7's builder.
+    **Settled at §7's merge on 2026-11-20 (`6fe69bd`):** no ids. The checks read `IconSheet`'s `Heading`,
+    `Row1`, `Row1Sizes` and `Row2` in order, and compare its `Row2Files` with
+    `Phase8aExpectations.B.Row2`.
 47. **The centre pixel and the gaps.** 7.5 gives no index for "its centre pixel": this report reads the
     pixel (N/2, N/2), zero-based. With the owner's mark it lies inside the opaque white pupil in every
     file, so its composite is white over either background: it proves only that the image is drawn with
@@ -3047,6 +3220,16 @@ Still open, each with who settles it; a point the lead settled on 2026-11-20 say
     DPI, `WM_GETICON`'s and `ExtractAssociatedIcon`'s sizes under per-monitor DPI, the taskbar button's
     name and its reach from the desktop root, and a capture outside the window by §12's first runs and
     D246's. §7's builder and §12's builder; the lead at each merge.
+    **Settled at §7's merge on 2026-11-20 (`6fe69bd`)** for §7's part: the tool's `.ico` frames from
+    `icon-small.svg` at 16, 20, 24, 30 and 32, over `#202020` and `#F3F3F3`, against Edge's pixels read
+    from `small-zoom.png`: at 16 and 24 no pixel differs by more than a tenth (25.5 of 255 in a
+    channel); at 20 six on each desk do, at 30 two and at 32 five (up to 42), all on antialiased curves
+    (the tile's rounded corners, the eye's outline, the pupil), none on a straight edge of the grid, and
+    nothing shifted (a mean difference of 1.4 to 2.5 per channel), so no master is at fault. The
+    inspection of `b1-icon-sizes-dark` and `b2-icon-sizes-light` read 16 and 32 crisp, 20 the softest,
+    24's line two solid rows with a half-covered row above and below, and the `.iconset`'s
+    `icon_16x16` soft. `WindowIconTests` and `ShellTests` pass, so `HeadlessIconLoaderStub` takes the
+    `.ico`. The rest of this point, §12's, stands.
 55. **The framed captures' second region.** 0.7's row "The window's icon", its sentence "Every one but
     the framed captures is in the 1,333", 7.6 ("at the title bar's left only") and 12.6 name only the
     title bar for the three framed captures. §2's placeholder (1.5) also changes them, in the
