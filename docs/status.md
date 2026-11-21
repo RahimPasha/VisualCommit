@@ -706,9 +706,16 @@ every commit.
   row for the series, architecture.md and plan.md's risk 10 at the close). The builder's and the
   fixer's notes in full: `D:/Projects/Personal/phase8-work/wave3/for-the-lead.md`. **§8 and the first
   stage of §9** have been building since the afternoon in `p8a-about` and `p8a-uia`, from `592686e`
-  (the same workflow script, run `wf_fbc91d85-cad`); when §9's stage ends, the lead runs the spike in
-  `D:/Projects/Personal/vc-wt/p8a-uia-spike` once on the desktop and starts the second stage with its
-  result. The workflows of the night took about eleven hours of the clock for an hour
+  (the same workflow script, run `wf_fbc91d85-cad`); **The spike ran on 2026-11-21** (15:23, 1 min 43 s on the desktop, in
+  `D:/Projects/Personal/vc-wt/p8a-uia-spike`; its events are kept in
+  `D:/Projects/Personal/phase8-work/wave3/spike/events-run-1.txt`): cold, no event from the graph's
+  row; warm, one Name change and one LiveRegionChanged per move with the design's words; the rest
+  as expected. The lead's decision is D455: the public route stands with the risk recorded, and
+  the owner's short Narrator listen is brought forward, because only it shows whether Narrator
+  reaches the row by itself ("Waiting on the owner"). **§9's second stage** (the names, the status
+  bar, the sweep, part U's checks) has been building since then in `p8a-uia` (run
+  `wf_f2f691e2-7bf`, the spike's result in its brief). The spike's branch and worktree are removed
+  after §9's merge (design 9.9). The workflows of the night took about eleven hours of the clock for an hour
   or two of work: the agents stood still for most of it (the plan's usage limit, by the look of
   it).
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
@@ -1062,6 +1069,14 @@ every commit.
     taken, the desktop unlocked); wave 2's three worktrees are removed (done: `git worktree
     remove` on the clean folders; the branches `wip/p8a-firstrun`, `wip/p8a-keyboard` and
     `wip/p8a-icon` stay, merged).
+    - **A short listen with Windows Narrator, as soon as the owner can** (D455; design 13.4 items 13
+    and 14; about 5 minutes, in person). The spike showed that the graph's selected row speaks to a
+    UI Automation client only once that client has read below the graph. Whether Narrator does
+    that by itself decides if the route stays. The lead gives the start file
+    (`D:/Projects/Personal/phase8-work/wave3/spike/narrator-listen.cmd`, outside the repository:
+    the spike's build on a throwaway repository, with the isolating variables) and the steps:
+    Narrator on (Ctrl+Win+Enter), click a commit in the graph, press Down three times, then F6
+    twice and Down again; is each commit's line spoken?
   - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
     above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
     D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on

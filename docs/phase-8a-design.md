@@ -3710,7 +3710,9 @@ once, outside the pass.
 ### 9.9 Risks, the unverified and open points
 
 1. A row's node exists only once a client has reached it (uia.md 2): S1 tests the cold case, steps 3
-   and 5 Narrator. Silence found at the gate reopens the route: a decision and a gate round.
+   and 5 Narrator. Silence found at the gate reopens the route: a decision and a gate round. The
+   spike showed it (D455): cold, no event; warm, every move. Whether Narrator warms the row by
+   itself is what the owner's listen shows, brought forward from §9's merge.
 2. Narrator may read a List's selection on focus, and the row twice (step 11's first F6).
 3. Whether a live region's help text is spoken (the count, the search) is unverified (step 6); the
    details panel's "3 commits selected" says it too.
@@ -4543,7 +4545,10 @@ tooltip or a hover look (a member of `Phase8aExpectations.F`), rests the scripte
 there too, and shows by the files' hashes that both scripted pictures stay the same files (headless
 no pointer is drawn, and nothing hovers at either point); if one changes, §12 tells the lead before
 going on. (2) Launches 5 and 6: the fallback click on the notice's title bar lands away from its
-left end, where the icon now opens the system menu. It covers launch 3's main window too (the lead,
+left end, where the icon now opens the system menu. (3) From the spike (D455), for launch 13: the
+launch reads the graph's first child (`FindFirstChild` of `GraphRows`) before its first move; cold,
+a move raises no event from `GraphSelectedRow`, so without that read every move would fail D450's
+rule for the wrong reason. It covers launch 3's main window too (the lead,
 2026-11-21; 12.3.4 launch 3): its fallback click on the title bar lands away from the left end and
 from the caption buttons.
 
@@ -4984,7 +4989,11 @@ on the review, and item 22 is the review's question for the owner (13.5).
     owner for it at §9's merge (13.3 names it).
 14. If the spike's S1 (cold) finds no event and S2 (warm) does: the public route stands with the risk
     recorded, or a decision names the `[PrivateApi]` route and its guarding test. The lead, at the
-    spike, before §9's build goes on.
+    spike, before §9's build goes on. **Settled (the lead, 2026-11-21; D455):** the spike found
+    exactly this (S1 no event, S2 one Name change and one LiveRegionChanged per move; S3, S4 and S6
+    as 9.3.1 expects; its events are in the merge notes), and the public route stands with the risk
+    recorded. The owner's Narrator listen (item 13) is brought forward to the first build the owner
+    can hear; silence there brings a new decision on the route before the review.
 15. The hunk bars' repeated "Stage hunk" and "Discard hunk" names (`HunkHeaders.cs:252-253`) lie in
     no items container, so the sweep does not flag them; a help text with the hunk's header would
     change no picture, but no ruling takes it. Recommended: the Backlog, beside ruling 36's item. The
