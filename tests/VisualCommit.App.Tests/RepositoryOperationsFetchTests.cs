@@ -493,7 +493,7 @@ public class RepositoryOperationsFetchTests
         // Step 2: "Fetch origin", held with a percentage shown.
         var held = server.HoldNextFetchPack();
         var fetch = repository.Operations.FetchAsync("origin");
-        await app.WaitForAsync(() => held.IsCompleted && status.Text?.EndsWith('%') == true, "the fetch's percentage", NetworkTimeout);
+        await WaitForPercentageAsync(app, server, held, status, "the fetch's percentage");
         app.Settle();
         TestPictures.Save(app, "remotes-17b-fetch-progress");
         Assert.Matches(@"^Fetching from origin… Counting objects \d{1,3}%$", status.Text);
@@ -518,7 +518,7 @@ public class RepositoryOperationsFetchTests
         // Step 4: the toolbar's Fetch, held, then released.
         held = server.HoldNextFetchPack();
         app.Click(app.FindByAutomationId("FetchButton"));
-        await app.WaitForAsync(() => held.IsCompleted && status.Text?.EndsWith('%') == true, "the toolbar fetch's percentage", NetworkTimeout);
+        await WaitForPercentageAsync(app, server, held, status, "the toolbar fetch's percentage");
         app.Settle();
         TestPictures.Save(app, "remotes-17d-fetch-all-progress");
         Assert.Matches(@"^Fetching from all remotes… Counting objects \d{1,3}%$", status.Text);
@@ -531,6 +531,25 @@ public class RepositoryOperationsFetchTests
         Assert.Equal("Remote work", (await repo.GitAsync("log", "-1", "--format=%s", "refs/remotes/origin/main")).StandardOutput.Trim());
         Assert.Equal(1, repository.Operations.CurrentBranch?.Behind);
         Assert.False(app.Session.Services.DialogHost.IsOpen);
+    }
+
+    /// <summary>
+    /// Waits until the server holds the fetch and the status bar shows a percentage. A timeout says
+    /// what was there instead: whether the response was held, what the status bar read and how many
+    /// requests the server had, so that a failure under load can be told from a fault of the app.
+    /// </summary>
+    private static async Task WaitForPercentageAsync(ShellDriver app, AuthRemoteServer server, Task held, TextBlock status, string what)
+    {
+        try
+        {
+            await app.WaitForAsync(() => held.IsCompleted && status.Text?.EndsWith('%') == true, what, NetworkTimeout);
+        }
+        catch (TimeoutException ex)
+        {
+            throw new TimeoutException(
+                $"{ex.Message} The response was {(held.IsCompleted ? "held" : "not held")}; the status bar read \"{status.Text}\"; the server had {server.Requests.Count} request(s).",
+                ex);
+        }
     }
 
     [AvaloniaFact]
