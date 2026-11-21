@@ -332,6 +332,31 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [44851353430](https://github.com/RahimPasha/VisualCommit/actions/runs/44851353430), for
+  `1821089` (wave 2's merge: §7, §6 and §5 with the lead's fixes at the merge): **all six jobs
+  succeeded on the run's second attempt.** In the first attempt `macos-latest` failed one test of
+  8,280, `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own`,
+  with `Timed out after 60 s waiting for log line 1 like /Solo: read \d+ repositor(y|ies) in \d+
+  ms/.`; the other five jobs were green, and the macOS job run again alone passed every test. The
+  lead's reading, not proven: the test is phase 6's and nothing of wave 2 touches it or the
+  dashboard; a dashboard's pass logs that line only when it read a row, and a read that a loaded
+  runner holds past the pass's patience (2 s for the folder check, 10 s for a git call) ends the
+  pass without the line, so the test's wait cannot end. App.Tests took 27 min 57 s in that attempt
+  (24 min 15 s in the second) against 17 min 12 s at wave 1's close: wave 2 added about 290 tests,
+  many with real git. It is one failure so far; step 19's round looks at the wait (asking for a
+  second pass is a harness change; no assertion is loosened), and a second failure brings that
+  forward. `windows-latest` 8,283 tests with 5 skipped, Test step 41 min 1 s of 70 (30 min 31 s at
+  wave 1's close; the limit is raised at 56); `macos-latest` 8,280 with 3 skipped, 29 min 32 s
+  (30 min 40 s in the first attempt); `ubuntu-latest` 8,280 with 4 skipped, 6 min 38 s; the two
+  "bare ubuntu container" jobs 8,280 with 4 skipped each, 7 min 29 s (Ubuntu's packages) and 5 min
+  26 s (Microsoft's installer); the floor job 8,280 with 4 skipped on git 2.34.1, 5 min 7 s.
+  `IconFilesTests`' test of Apple's `iconutil` ran in the macOS job and passed (3 skipped there,
+  the three keychains' own tests; 4 in the Linux jobs, with it), so `iconutil` makes an `.icns`
+  from the `.iconset` and reads the tool's `.icns` back with `icp4` and `icp5` in it (D447, design
+  7.8 item 3). The build has 0 warnings in every job, so `ApplicationIcon` warns nowhere (design
+  7.9 item 4), and the icon's tool builds in all six. Part F, `GitSetupShellTests`, F6b and
+  `GitLocatorTests`' real git with a broken global file passed on macOS, Linux and git 2.34.1, their
+  first runs off the laptop.
 - [44750615552](https://github.com/RahimPasha/VisualCommit/actions/runs/44750615552), for
   `23e12bb` (the two corrections the pictures' inspection asked for: `l6h` waits for its diff, and
   the notice's "Try again" keeps its width): all six jobs succeeded, none failed a test.
@@ -583,8 +608,9 @@ night on `phase/8a-release-readiness` (Progress, step 1).
 Next: step 12, wave 2's close, and then a stop: the owner read the week's share on 2026-11-20 as 70
 to 85 % used, so after step 12's runs and its picture comparison nothing that spends agents starts
 (the inspection of the pictures the comparison flags, wave 3) until the week's reset or the
-owner's word ("Waiting on the owner"). CI's run on the merge, 44851353430, failed in one macOS
-test and is being run again there (the CI section). Wave 2 (steps 9 to 11) is built and merged, with the lead's fixes at the
+owner's word ("Waiting on the owner"). CI's run on the merge, 44851353430, is green in all
+six jobs on its second attempt: one macOS test of phase 6's dashboard timed out in the first (the CI
+section). Wave 2 (steps 9 to 11) is built and merged, with the lead's fixes at the
 merge (Notes, "Wave 2 is built and merged"). Step 12, with no agent at work and each run alone on
 the machine: (1) the lagged list (design 0.4: `VISUALCOMMIT_WATCHER_LAG_MS=1500` in front of each
 command, through `scripts/heavy-run.sh`), with the classes wave 2 adds to it; (2) the whole

@@ -1152,12 +1152,11 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   launch's order), `WindowTitle`, `TitleBarCropWidth` 64, `Enlargement` 4,
   `TaskbarButtonNameStart`, `TaskbarButtonLimit` 10 s, `TaskbarButtonNotRun` (run.txt's line) and
   `IconTolerance` 2.
-- **Open at §7's merge.** `IconFilesTests` item 8 has run nowhere: it skips off macOS, and its
-  `iconutil -c icns -o <icns> <iconset>` and `-c iconset -o <folder> <icns>` wait for the merge's
-  CI run, whose macOS log must show it passed (7.8 item 3). Should `iconutil` refuse `icp4` and
-  `icp5`, a fixer drops them from `IconOutputs.IcnsEntries`, `IconFile.IcnsTypes` and `IcnsFiles`,
-  makes item 8's read-back expect the eight names left (it compares with `IconSetNames`' ten) and
-  runs the tool again. Part I's checks were not run at §7's build (the notice's headless frame has
+- **Settled by the merge's CI run** (44851353430). `IconFilesTests` item 8 ran in the macOS job
+  and passed: Apple's `iconutil -c icns -o <icns> <iconset>` takes the `.iconset`, and `-c iconset
+  -o <folder> <icns>` reads the tool's `.icns` back with `icp4` and `icp5` in it, so D447's ten
+  entries stay (7.8 item 3). The build warns in no job, so `ApplicationIcon` is quiet on macOS
+  and Linux (7.9 item 4), and the tool builds in all six jobs. Part I's checks were not run at §7's build (the notice's headless frame has
   no title bar). 7.6's comparison changed only phase 0's `06c-restarted-first-frame`, by the
   first-frame race phase-0.md's check 6 records.
 - **At wave 2's merge** (the lead, 2026-11-20). Three faults that belonged to no package were fixed
