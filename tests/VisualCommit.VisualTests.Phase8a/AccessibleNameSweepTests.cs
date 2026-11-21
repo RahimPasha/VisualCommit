@@ -13,9 +13,11 @@ using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.Views.Pages;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
+using VisualCommit.Core.Logging;
 using VisualCommit.Core.Operations;
 using VisualCommit.Core.Workspaces;
 using VisualCommit.Git.Prompts;
+using VisualCommit.Hosting;
 using VisualCommit.Testing;
 using VisualCommit.Testing.Headless;
 using VisualCommit.Testing.Hosting;
@@ -121,6 +123,8 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
             (new FinishingDialogViewModel([new FinishingItem("Fetch origin — demo", false)]), "the finishing"),
             (new ErrorDialogViewModel("Push rejected", "origin has commits that your main does not have.", "demo", "! [rejected] main -> main (fetch first)", "git push origin main", "Pull"), "the error"),
             (new MessageDialogViewModel("Rebase stopped", "The rebase stopped at a commit to edit.", "OK"), "the message"),
+            (WorkspaceNameDialogViewModel.Create(["Web"]), "the workspace's name"),
+            (new CloneFromGitHubDialogViewModel([HostingProvider.GitHub, HostingProvider.AzureDevOps, HostingProvider.GitLab], HostingProvider.GitHub, ListedRepositories, NullAppLog.Instance), "the repository browser"),
         };
 
         foreach (var (dialog, state) in shown)
@@ -129,6 +133,13 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
             if (ReferenceEquals(dialog, remotes))
             {
                 await remotes.Loading;
+            }
+
+            if (dialog is CloneFromGitHubDialogViewModel browser)
+            {
+                // The welcome page starts the list when it shows the browser; here the sweep does.
+                var listing = browser.Start();
+                await app.WaitForAsync(() => listing.IsCompleted && browser.Rows.Count == 2, "the browser's two rows");
             }
 
             app.Settle();
@@ -548,6 +559,26 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
 
             Assert.Fail(message.ToString());
         }
+    }
+
+    /// <summary>Each provider's list in the repository browser: two made-up repositories of the account <c>demo</c>.</summary>
+    private static Task<HostingResult<RepositoryList>> ListedRepositories(HostingProvider provider, CancellationToken cancellationToken)
+    {
+        var updated = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+        RepositoryInfo Repository(string name, bool isPrivate) => new(
+            new HostedRepository(provider, "example.com", "demo", name),
+            "main",
+            isPrivate,
+            IsFork: false,
+            IsArchived: false,
+            Description: null,
+            new Uri($"https://example.com/demo/{name}.git"),
+            new Uri($"https://example.com/demo/{name}"),
+            updated,
+            CanPush: true,
+            Parent: null,
+            ParentDefaultBranch: null);
+        return Task.FromResult(HostingResult<RepositoryList>.Ok(new RepositoryList([Repository("app", isPrivate: true), Repository("site", isPrivate: false)], MoreExist: false, SomeHiddenBySso: false)));
     }
 
     /// <summary>The Remotes dialog's actions over a fixed list: the sweep only reads it.</summary>
