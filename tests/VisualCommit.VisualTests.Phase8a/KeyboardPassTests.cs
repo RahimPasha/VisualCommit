@@ -25,9 +25,9 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// D427, D452): the diff's toolbar and hunks by Tab, chosen lines by the arrows and Shift+F10, a
 /// blame's menu just opened, the focus after "Choose" in the repository browser and the create
 /// form's Pick, Enter on a dialog's selected row or checked option, a loading diff that no longer
-/// takes a focus the user moved, Amend while a commit runs, the browser's switch of providers, the
-/// splitters by the arrows, and Tab out of the read-only texts. No pictures: part K's checks take
-/// those.
+/// takes a focus the user moved, Amend while a commit runs, Ctrl+Tab from the stage panel and the
+/// graph, a row's Discard cancelled, the browser's switch of providers, the splitters by the
+/// arrows, and Tab out of the read-only texts. No pictures: part K's checks take those.
 /// </summary>
 public sealed class KeyboardPassTests
 {
@@ -631,6 +631,211 @@ public sealed class KeyboardPassTests
         Assert.False(
             app.FocusIsWithin(app.FindByAutomationId("UnstagedFileList")) || app.FocusIsWithin(app.FindByAutomationId("StagedFileList")),
             $"A row of the second tab's lists has the focus: {app.DescribeFocus()}.");
+    }
+
+    /// <summary>
+    /// Ctrl+Tab from a stage row's own button, focused by F6, to another tab whose stage panel shows,
+    /// nothing running: the panel is shared by the tabs, and its list drops the first tab's rows, the
+    /// focused button with them, so the focus is on nothing; the first F6 then starts at the first
+    /// region, the left panel's first section, with the keyboard's frame.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Ctrl_Tab_from_a_focused_stage_row_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel()
+    {
+        var facts = await CtrlTabFromAsync(FocusReadmesRowAsync);
+
+        Assert.Equal(ReadmesRowFact, facts.Placed);
+        Assert.False(facts.PlacedStillInWindow, "README.md's row's own button is still in the window after Ctrl+Tab.");
+        Assert.Equal(NothingFact, facts.AfterSwitch);
+        Assert.Equal(LeftSectionFact, facts.AfterF6);
+    }
+
+    /// <summary>
+    /// Ctrl+Tab from a stage row's Stage, reached by Tab from the row, nothing running: as from the
+    /// row's own button, the button leaves the window with the first tab's rows and the focus is on
+    /// nothing, and the first F6 starts at the left panel's first section. A running Stage is not
+    /// what leaves the focus on nothing.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Ctrl_Tab_from_a_stage_rows_Stage_reached_by_Tab_leaves_the_focus_on_nothing_and_F6_then_starts_at_the_left_panel()
+    {
+        var facts = await CtrlTabFromAsync(async app =>
+        {
+            await FocusReadmesRowAsync(app);
+            await app.TabToAsync(focused => focused is Control control && AutomationProperties.GetAutomationId(control) == "RowStageButton", "README.md's Stage");
+        });
+
+        Assert.Equal(ReadmesStageFact, facts.Placed);
+        Assert.False(facts.PlacedStillInWindow, "README.md's Stage is still in the window after Ctrl+Tab.");
+        Assert.Equal(NothingFact, facts.AfterSwitch);
+        Assert.Equal(LeftSectionFact, facts.AfterF6);
+    }
+
+    /// <summary>
+    /// Ctrl+Tab from the graph, focused by the click on the working-changes row, nothing running: the
+    /// graph's control is shared by the tabs and keeps the focus, now showing the second tab's graph;
+    /// the first F6 then goes to the next region, the second tab's stage panel, on its first row's
+    /// own button with the keyboard's frame.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Ctrl_Tab_from_the_graph_keeps_the_focus_on_the_graph_and_F6_then_goes_to_the_other_tabs_first_stage_row()
+    {
+        var facts = await CtrlTabFromAsync(app => app.WaitForAsync(() => app.FocusedAutomationId() == "GraphRows", $"the focus on the graph (it is on {app.DescribeFocus()})"));
+
+        Assert.Equal(GraphFact, facts.Placed);
+        Assert.True(facts.SameAfterSwitch, "Another element than the graph has the focus after Ctrl+Tab.");
+        Assert.Equal(GraphFact, facts.AfterSwitch);
+        Assert.Equal(ReadmesRowFact, facts.AfterF6);
+    }
+
+    /// <summary>
+    /// Ctrl+Tab from the commit summary, focused by Ctrl+Shift+M, nothing running: the summary's box
+    /// is the shared panel's and keeps the focus, now holding the second tab's summary; the first F6
+    /// then goes past the right panel, the last region shown, round to the left panel's first
+    /// section, with the keyboard's frame.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task Ctrl_Tab_from_the_commit_summary_keeps_the_focus_in_the_summary_and_F6_then_goes_round_to_the_left_panel()
+    {
+        var facts = await CtrlTabFromAsync(async app =>
+        {
+            app.PressKey(Key.M, RawInputModifiers.Control | RawInputModifiers.Shift);
+            await app.WaitForAsync(() => app.FocusedAutomationId() == "CommitSummary", "the focus in the summary");
+        });
+
+        Assert.Equal(SummaryFact, facts.Placed);
+        Assert.True(facts.SameAfterSwitch, "Another element than the summary has the focus after Ctrl+Tab.");
+        Assert.Equal(SummaryFact, facts.AfterSwitch);
+        Assert.Equal(LeftSectionFact, facts.AfterF6);
+    }
+
+    /// <summary>
+    /// A stage row's Discard, reached by Tab and pressed by Enter, cancelled in its question by Esc
+    /// and then by Enter on its focused Cancel: each time the focus is back on the row's own button,
+    /// with the keyboard's frame, its Discard undrawn, and the working tree as it was (6.3.4's "gives
+    /// the focus back to its row").
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_rows_Discard_by_the_keys_cancelled_in_its_question_gives_the_focus_to_the_rows_own_button_with_the_frame()
+    {
+        using var repo = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        using var app = await OpenAsync(data, repo.Path);
+        await ShowStagePanelAsync(app);
+        var exact = await repo.ExactStateAsync();
+        await FocusReadmesRowAsync(app);
+
+        foreach (var cancel in new[] { "Esc", "Cancel" })
+        {
+            await app.TabToAsync(focused => focused is Control control && AutomationProperties.GetAutomationId(control) == "RowStageButton", "README.md's Stage");
+            await app.TabToAsync(focused => focused is Control control && AutomationProperties.GetAutomationId(control) == "RowDiscardButton", "README.md's Discard");
+            var discard = (Button)app.FocusedElement!;
+            Assert.True(app.FocusVisible, "README.md's Discard shows no keyboard frame.");
+            app.PressKey(Key.Enter);
+            var question = await app.WaitForDialogAsync<ConfirmationViewModel>();
+            await app.WaitForAsync(() => app.FocusedElement is Button { Name: "CancelButton" }, $"the focus on the question's Cancel (it is on {app.DescribeFocus()})");
+            app.PressKey(cancel == "Esc" ? Key.Escape : Key.Enter);
+            await app.WaitForAsync(() => question.IsClosed, $"the question to close by {cancel}");
+            await app.WaitForIdleAsync();
+            app.Settle();
+
+            Assert.True(FocusFact(app) == ReadmesRowFact, $"After {cancel} in the question the focus is on {FocusFact(app)}.");
+            Assert.Equal(0.0, discard.Opacity);
+        }
+
+        Assert.Equal(exact, await repo.ExactStateAsync());
+    }
+
+    // The focus as FocusFact names it.
+    private const string NothingFact = "nothing";
+    private const string ReadmesRowFact = "Button StageFileRow \"README.md\" of README.md in UnstagedFileList [Right], framed";
+    private const string ReadmesStageFact = "Button RowStageButton \"Stage\" of README.md in UnstagedFileList [Right], framed";
+    private const string GraphFact = "CommitGraphControl GraphRows \"Commit graph\" [GraphArea]";
+    private const string SummaryFact = "TextBox CommitSummary \"Summary\" [Right]";
+    private const string LeftSectionFact = "Button Section \"Local branches\" [Left], framed";
+
+    /// <summary>F6 from the graph to the stage panel's first row, README.md's own button.</summary>
+    private static async Task FocusReadmesRowAsync(ShellDriver app)
+    {
+        app.PressF6();
+        await app.WaitForAsync(() => app.FocusedRowPath() == Phase8aExpectations.K.Readme, $"the focus on README.md's row (it is on {app.DescribeFocus()})");
+    }
+
+    /// <summary>
+    /// The focused element: "nothing", "the window", or its type, its own automation id, its name,
+    /// the stage row and list it lies in, its region, and ", framed" when it shows the keyboard's
+    /// frame.
+    /// </summary>
+    private static string FocusFact(ShellDriver app)
+    {
+        switch (app.FocusedElement)
+        {
+            case null:
+                return NothingFact;
+            case Window:
+                return "the window";
+            case Control control:
+                var id = AutomationProperties.GetAutomationId(control);
+                var fact = $"{control.GetType().Name} {(string.IsNullOrEmpty(id) ? "(no id)" : id)} \"{AutomationProperties.GetName(control)}\"";
+                if (ShellDriver.StageRowOf(control)?.DataContext is ChangedFileRow { Key: var path })
+                {
+                    fact += $" of {path}";
+                }
+
+                if (control.GetVisualAncestors().OfType<ItemsControl>().FirstOrDefault(list => list.Name is "UnstagedFileList" or "StagedFileList") is { } list)
+                {
+                    fact += $" in {list.Name}";
+                }
+
+                return fact + $" [{app.FocusedRegion()}]" + (app.FocusVisible ? ", framed" : string.Empty);
+            case var other:
+                return other.GetType().Name;
+        }
+    }
+
+    /// <summary>Where the focus was put, whether that element is still in the window and has the focus after Ctrl+Tab, and the focus after Ctrl+Tab and after the first F6.</summary>
+    private sealed record TabSwitchFacts(string Placed, bool PlacedStillInWindow, bool SameAfterSwitch, string AfterSwitch, string AfterF6);
+
+    /// <summary>
+    /// Two tabs on "changes", each showing its stage panel, nothing running, the first active;
+    /// <paramref name="place"/> puts the focus somewhere in it; then Ctrl+Tab to the second, and F6.
+    /// </summary>
+    private static async Task<TabSwitchFacts> CtrlTabFromAsync(Func<ShellDriver, Task> place)
+    {
+        using var first = await Scenarios.ChangesAsync();
+        using var second = await Scenarios.ChangesAsync();
+        using var data = new TempDirectory("data");
+        using var app = ShellDriver.StartWithTabs(data.Path, [first.Path, second.Path], activeTab: 1);
+        await app.WaitForRepositoryAsync();
+        await app.WaitForWatchersQuietAsync();
+        app.MoveToNeutral();
+
+        // The second tab's stage panel, then the first tab's, where the focus is put.
+        await ShowStagePanelAsync(app);
+        var other = Repository(app);
+        app.PressCtrlTab();
+        await app.WaitForAsync(() => app.Session.Shell.ActiveTab.Repository is { } shown && !ReferenceEquals(shown, other), "the first tab");
+        await app.WaitForRepositoryAsync();
+        await app.WaitForWatchersQuietAsync();
+        await ShowStagePanelAsync(app);
+        await place(app);
+        app.Settle();
+        var placed = app.FocusedElement as Visual;
+        var placedFact = FocusFact(app);
+
+        app.PressCtrlTab();
+        await app.WaitForAsync(
+            () => ReferenceEquals(app.Session.Shell.ActiveTab.Repository, other) && app.StageRows("UnstagedFileList").Count > 0,
+            "the second tab's stage panel");
+        await app.WaitForIdleAsync();
+        app.Settle();
+        var stillInWindow = placed?.IsAttachedToVisualTree() == true;
+        var same = placed is not null && ReferenceEquals(app.FocusedElement, placed);
+        var afterSwitch = FocusFact(app);
+
+        app.PressF6();
+        app.Settle();
+        return new TabSwitchFacts(placedFact, stillInWindow, same, afterSwitch, FocusFact(app));
     }
 
     /// <summary>G9: in the browser of two signed-in providers, Enter on the switch's other provider keeps the focus there, and Tab goes on to the filter.</summary>
