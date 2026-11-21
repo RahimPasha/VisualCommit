@@ -1191,6 +1191,25 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   round fixes the first in `WorkingChangesView` (the graph area's target takes the focus), and no
   picture changes. A row's Discard cancelled in its question gives the focus back to the row's
   own button, with the frame (6.3.4), which a test now holds.
+- **The performance pass** (§10, merged at `86ecb3a`, 2026-11-21). `StartupTimeline` has a second
+  public overload, `FromProcess(IAppLog, Func<DateTimeOffset>)`, for the test of its Warning, and
+  its texts are public constants (`WindowOpenedFormat`, `GitFoundFormat`, `FirstRowsFormat`,
+  `OneRestoredTab`, `RestoredTabsFormat`, `StartTimeUnreadable`). The series' clones are made with
+  `git clone --local --no-hardlinks`, with `gc.auto=0` and `maintenance.auto=false`: a hard link
+  would let `TempDirectory.Dispose` clear the read-only attribute of the shared 100k pack.
+  `Phase8aPerformance` runs its facts in the order M2, M3, M4_M5, M6, M7 (`Phase8aPerformanceOrder`;
+  the fixture is `Phase8aPerformanceRun`). Beyond 10.3.5's lines its file holds one trigger line per
+  measure, a `<measure> failed: …` line before a failure is rethrown, two summary lines and two
+  bounds for M4 (after the load, the peak after the reload), and `no line` for a noted value that
+  is missing. M6 puts the pointer on Fetch before the settle (`RealApp.SetPointerOn`, a third
+  helper beside `Memory()` and `LogTime(…)`, §12's to use or to leave), so that T0 to the reload
+  line holds no pointer travel; the span it notes is the Fetch operation's, which the queue counts
+  to the end of its refresh, the reload included (10.3.4's "fetch span" and 10.9 read so). The Pull
+  budget is 23 git calls, for a fast-forward and for a merge; each run of the theory appends its
+  count, its budget and git's version to `artifacts/visual/pull-budget.txt`, which CI uploads with
+  each job's pictures. `PerformanceSeriesTests` has five methods (19 cases). 10.6's comparison ran
+  against wave 2's references. Not run by the builder, and the lead's on the desktop:
+  `Phase8aPerformance` itself (10.8).
 
 ## 2. colours: the contrast round (D410)
 
