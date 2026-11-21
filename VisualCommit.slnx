@@ -22,6 +22,10 @@
          own command (D250, D346). -->
     <Project Path="tests/VisualCommit.App.Tests/VisualCommit.App.Tests.csproj" />
     <Project Path="tests/VisualCommit.Git.Tests/VisualCommit.Git.Tests.csproj" />
+    <!-- The stand-in for git of the first-run checks: a small program that answers only the
+         question for git's version, which the tests point the app at in place of the machine's
+         git. -->
+    <Project Path="tests/VisualCommit.GitStandIn/VisualCommit.GitStandIn.csproj" />
     <Project Path="tests/VisualCommit.Hosting.Tests/VisualCommit.Hosting.Tests.csproj" />
     <Project Path="tests/VisualCommit.Testing/VisualCommit.Testing.csproj" />
     <Project Path="tests/VisualCommit.VisualTests/VisualCommit.VisualTests.csproj" />
@@ -34,5 +38,10 @@
     <Project Path="tests/VisualCommit.VisualTests.Phase7a/VisualCommit.VisualTests.Phase7a.csproj" />
     <Project Path="tests/VisualCommit.VisualTests.Phase7b/VisualCommit.VisualTests.Phase7b.csproj" />
     <Project Path="tests/VisualCommit.VisualTests.Phase8a/VisualCommit.VisualTests.Phase8a.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <!-- Makes the icon's files from the masters in assets/brand/. It is built with the solution,
+         never shipped, and run by hand when a master changes (D428). -->
+    <Project Path="tools/VisualCommit.IconBuilder/VisualCommit.IconBuilder.csproj" />
   </Folder>
 </Solution>

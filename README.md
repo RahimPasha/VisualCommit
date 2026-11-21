@@ -93,5 +93,7 @@ Third-party work it includes is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-N
 
 ## Name
 
-The MIT licence covers the code, not the name. If you redistribute a changed version of
-VisualCommit, please give it another name, so that users can tell your version from this one.
+The MIT licence covers the code, and the icon's files in `assets/brand/` and those made from them,
+so a package of VisualCommit may carry them. It does not cover the name or the icon as marks: if
+you redistribute a changed version of VisualCommit, please give it another name and another icon,
+so that users can tell your version from this one.
