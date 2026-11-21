@@ -136,6 +136,40 @@ public sealed partial class RealApp : IDisposable
     public static string ReadLog(string dataDirectory) => AppLogFile.ReadText(dataDirectory);
 
     /// <summary>
+    /// The time of the first log line in a data folder that <paramref name="line"/> matches, or null
+    /// when none does: the text before the line's <c> [</c>, which the app writes as
+    /// <c>yyyy-MM-dd HH:mm:ss.fff zzz</c>. The offset makes it an instant, so a check compares it with
+    /// its own <see cref="DateTimeOffset.Now"/> on the same machine (the performance series' reloads).
+    /// </summary>
+    public static DateTimeOffset? LogTime(string dataDirectory, System.Text.RegularExpressions.Regex line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        var found = AppLogFile.ReadLines(dataDirectory).FirstOrDefault(line.IsMatch);
+        if (found is null)
+        {
+            return null;
+        }
+
+        var end = found.IndexOf(" [", StringComparison.Ordinal);
+        if (end < 0 || !DateTimeOffset.TryParseExact(found[..end], "yyyy-MM-dd HH:mm:ss.fff zzz", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out var time))
+        {
+            throw new FormatException($"The log line \"{found}\" does not start with its time.");
+        }
+
+        return time;
+    }
+
+    /// <summary>
+    /// The app's memory now, in bytes, as Windows reports it after a fresh read: its working set, its
+    /// private bytes and the peak of its working set so far (the performance series' M4).
+    /// </summary>
+    public (long WorkingSet, long Private, long PeakWorkingSet) Memory()
+    {
+        _process.Refresh();
+        return (_process.WorkingSet64, _process.PrivateMemorySize64, _process.PeakWorkingSet64);
+    }
+
+    /// <summary>
     /// Starts the built app on a data folder and waits for its main window. The app's environment
     /// is cut off from the machine as the scripted walk-through's is; <paramref name="environment"/>
     /// then adds variables (such as <c>VISUALCOMMIT_*</c> ones a check needs), or removes those
@@ -475,6 +509,17 @@ public sealed partial class RealApp : IDisposable
     public void ClickWithMouse(AutomationElement element)
     {
         Mouse.Click(CentreOnScreen(element));
+        WaitUntilIdle();
+    }
+
+    /// <summary>
+    /// Puts the real pointer on the centre of an element in one jump (SetCursorPos), crossing
+    /// nothing on the way: the point <see cref="ClickWithMouse"/> clicks, so that a timed
+    /// <see cref="ClickWithMouse"/> that follows finds the pointer there and moves nothing.
+    /// </summary>
+    public void SetPointerOn(AutomationElement element)
+    {
+        Mouse.Position = CentreOnScreen(element);
         WaitUntilIdle();
     }
 

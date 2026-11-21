@@ -741,13 +741,16 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                     _refreshAgain = false;
                 }
 
+                // Each pass is timed from its read of the refs to its swap, for the reload's line.
+                var stopwatch = Stopwatch.StartNew();
                 var refs = await Repository.ReadRefsAsync(cancellationToken);
 
                 // A filter's change joins the refs' in the comparison (docs/phase-5-design.md 8.2):
                 // the new graph loads off screen and is swapped in when complete.
                 CorrectFilters(refs, firstRead: false);
                 var filter = GraphFilter;
-                if (refs.Fingerprint == _fingerprint && filter?.Key == _loadedFilterKey)
+                var shownFingerprint = _fingerprint;
+                if (refs.Fingerprint == shownFingerprint && filter?.Key == _loadedFilterKey)
                 {
                     // Upstreams and their counts can change without moving a ref.
                     ApplyRefs(refs);
@@ -759,6 +762,12 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
                     ApplyRefs(refs);
                     _loadedFilterKey = filter?.Key;
                     SwapGraph(data);
+
+                    // Only a change of the refs is a reload the line names; a filter alone is not (D438).
+                    if (refs.Fingerprint != shownFingerprint)
+                    {
+                        _log.Info(string.Create(CultureInfo.InvariantCulture, $"{Name}: graph reloaded after a change of the refs, {data.Count} commits in {stopwatch.ElapsedMilliseconds} ms."));
+                    }
                 }
 
                 IsReloadingGraph = GraphFilter?.Key != _loadedFilterKey;
@@ -1751,6 +1760,10 @@ public sealed partial class RepositoryViewModel : ObservableObject, IDisposable,
         cancellationToken.ThrowIfCancellationRequested();
 
         _log.Info(string.Create(CultureInfo.InvariantCulture, $"{Name}: loaded {data.Count} commits in {stopwatch.ElapsedMilliseconds} ms"));
+
+        // The managed heap as the last collection left it, which forces no collection (D438).
+        var heap = Math.Round(GC.GetGCMemoryInfo().HeapSizeBytes / 1_048_576.0, MidpointRounding.AwayFromZero);
+        _log.Info(string.Create(CultureInfo.InvariantCulture, $"{Name}: managed heap {heap:0} MB after loading {data.Count} commits."));
     }
 
     private void ApplyRefs(RepoRefs refs)

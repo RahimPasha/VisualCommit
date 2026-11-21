@@ -1,6 +1,8 @@
+using System.Text.RegularExpressions;
 using VisualCommit.App.ViewModels;
 using VisualCommit.Core;
 using VisualCommit.Core.Git;
+using VisualCommit.Core.Logging;
 using VisualCommit.Git;
 using VisualCommit.Testing;
 using Xunit;
@@ -110,6 +112,39 @@ public class RepositoryViewModelTests
     }
 
     [Fact]
+    public async Task An_outside_commit_logs_one_reload_line_and_a_heap_line_after_each_load()
+    {
+        // D438: the reload line only at a swap whose refs changed, the heap line at each load's end.
+        using var repo = await Scenarios.GraphAsync();
+        var log = new RecordingLog();
+        using var viewModel = await OpenAsync(repo, log);
+        Assert.Equal([HeapLine(13)], HeapLines(log));
+
+        await repo.CommitFileAsync("terminal.txt", "from a terminal\n", "Commit from a terminal");
+        await viewModel.RefreshAsync();
+
+        Assert.Equal(14, viewModel.Graph.Count);
+        var reload = Assert.Single(log.Entries, entry => entry.Message.Contains(" reloaded ", StringComparison.Ordinal));
+        Assert.Equal(LogLevel.Info, reload.Level);
+        Assert.Matches(@"^graph: graph reloaded after a change of the refs, 14 commits in \d+ ms\.$", reload.Message);
+        Assert.Equal([HeapLine(13), HeapLine(14)], HeapLines(log));
+        Assert.All(log.Entries.Where(entry => entry.Message.Contains(": managed heap ", StringComparison.Ordinal)), entry => Assert.Equal(LogLevel.Info, entry.Level));
+    }
+
+    [Fact]
+    public async Task A_refresh_without_changes_logs_no_reload_line_and_no_heap_line()
+    {
+        using var repo = await Scenarios.GraphAsync();
+        var log = new RecordingLog();
+        using var viewModel = await OpenAsync(repo, log);
+
+        await viewModel.RefreshAsync();
+
+        Assert.DoesNotContain(log.Messages, message => message.Contains(" reloaded ", StringComparison.Ordinal));
+        Assert.Equal([HeapLine(13)], HeapLines(log));
+    }
+
+    [Fact]
     public async Task A_detached_head_shows_in_the_branch_text()
     {
         using var repo = await Scenarios.GraphAsync();
@@ -140,6 +175,15 @@ public class RepositoryViewModelTests
         Assert.Single(log.Messages, message => message.StartsWith("graph: first graph rows drawn after ", StringComparison.Ordinal));
         Assert.Contains("graph: graph frames: 20 drawn, 95th percentile 19.0 ms, longest 20.0 ms", log.Messages);
     }
+
+    /// <summary>The graph scenario's heap line after a load of <paramref name="commits"/> commits, as a pattern; its megabytes any whole number.</summary>
+    private static string HeapLine(int commits) => $"graph: managed heap N MB after loading {commits} commits.";
+
+    /// <summary>The heap lines in the log, in order, their megabytes written N (<see cref="HeapLine"/>).</summary>
+    private static List<string> HeapLines(RecordingLog log) =>
+        [.. log.Messages
+            .Where(message => message.Contains(": managed heap ", StringComparison.Ordinal))
+            .Select(message => Regex.Replace(message, @"^graph: managed heap \d+ MB ", "graph: managed heap N MB "))];
 
     private static async Task<RepositoryViewModel> OpenAsync(TempRepo repo, RecordingLog? log = null)
     {
