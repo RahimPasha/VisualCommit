@@ -23,6 +23,9 @@ public sealed class AboutSettingsViewModel
     private readonly Func<string, string> _readText;
     private readonly Func<IReadOnlyList<string>> _vendorNotices;
 
+    /// <summary>A Show button's texts are being read: a second press meanwhile opens nothing more.</summary>
+    private bool _reading;
+
     /// <param name="identity">Who and what the app is.</param>
     /// <param name="dialogs">The window's dialog layer, where the text dialog stacks over the screen (D104).</param>
     /// <param name="launcher">Opens the links in the browser; null disables them.</param>
@@ -49,10 +52,13 @@ public sealed class AboutSettingsViewModel
         _log = log;
         _readText = readText ?? EmbeddedTexts.Read;
         _vendorNotices = vendorNotices ?? EmbeddedTexts.VendorNotices;
-        ShowLicenseCommand = new AsyncRelayCommand(ShowLicenseAsync);
-        ShowNoticesCommand = new AsyncRelayCommand(ShowNoticesAsync);
-        OpenRepositoryCommand = new AsyncRelayCommand(() => OpenAsync(AppLinks.Repository, Texts.RepositoryFailed), () => _launcher is not null);
-        OpenGuideCommand = new AsyncRelayCommand(() => OpenAsync(AppLinks.Guide(GuidePage.Start), Texts.GuideFailed), () => _launcher is not null);
+        // A command that runs keeps its button enabled: a disabled button would lose the keyboard
+        // focus, which the dialog gives back to it when it closes (and a link keeps after Enter).
+        const AsyncRelayCommandOptions Enabled = AsyncRelayCommandOptions.AllowConcurrentExecutions;
+        ShowLicenseCommand = new AsyncRelayCommand(ShowLicenseAsync, Enabled);
+        ShowNoticesCommand = new AsyncRelayCommand(ShowNoticesAsync, Enabled);
+        OpenRepositoryCommand = new AsyncRelayCommand(() => OpenAsync(AppLinks.Repository, Texts.RepositoryFailed), () => _launcher is not null, Enabled);
+        OpenGuideCommand = new AsyncRelayCommand(() => OpenAsync(AppLinks.Guide(GuidePage.Start), Texts.GuideFailed), () => _launcher is not null, Enabled);
     }
 
     /// <summary>The app's name (<c>AboutName</c>).</summary>
@@ -103,7 +109,22 @@ public sealed class AboutSettingsViewModel
     /// </summary>
     private async Task ShowAsync(string title, IReadOnlyList<(string Resource, string Label, string AutomationId)> texts)
     {
-        var read = await Task.Run(() => texts.Select(text => (text, Text: TryRead(text.Resource))).ToList());
+        if (_reading)
+        {
+            return;
+        }
+
+        _reading = true;
+        List<((string Resource, string Label, string AutomationId) text, string? Text)> read;
+        try
+        {
+            read = await Task.Run(() => texts.Select(text => (text, Text: TryRead(text.Resource))).ToList());
+        }
+        finally
+        {
+            _reading = false;
+        }
+
         if (read.Any(text => text.Text is null))
         {
             return;

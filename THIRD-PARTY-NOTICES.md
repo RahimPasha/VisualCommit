@@ -1,14 +1,14 @@
 # Third-party notices
 
-VisualCommit is released under the MIT License: its own license is the file `LICENSE`. It is built on
-the components below, and its build output ships them, each under its own license. This list covers
-what the build output ships on Windows, macOS and Linux; the installers add the .NET runtime's own
-notices. The notice files that components ship themselves are kept word for word in the `notices/`
-folder. VisualCommit carries this file, `LICENSE` and the `notices/` files inside its program, and
-shows them in Settings, About.
+VisualCommit is released under the MIT License: its own license is the file `LICENSE`. It is built
+on the components below, and its build output ships them, each under its own license. This list
+covers what the build output ships on Windows, macOS and Linux; the installers add the .NET
+runtime's own notices. The notice files that components ship themselves are kept word for word in
+the `notices/` folder. VisualCommit carries this file, `LICENSE` and the `notices/` files inside its
+program, and shows them in Settings, About.
 
-Each component below names its NuGet packages and their versions (`Packages:`), the files it ships on
-any of the three systems (`Files:`), where its source is (`Source:`), its copyright lines and its
+Each component below names its NuGet packages and their versions (`Packages:`), the files it ships
+on any of the three systems (`Files:`), where its source is (`Source:`), its copyright lines and its
 license (`License:`). The copyright lines are quoted as their sources write them, without the e-mail
 addresses some of them carry. A license text that names nobody follows the list once, under "License
 texts"; a BSD-3-Clause text, whose third clause names a holder, once for each holder.
@@ -17,8 +17,8 @@ texts"; a BSD-3-Clause text, whose third clause names a holder, once for each ho
 
 ### Avalonia
 
-The cross-platform user interface framework the app is written with. `libAvaloniaNative.dylib` ships on
-macOS only.
+The cross-platform user interface framework the app is written with. `libAvaloniaNative.dylib` ships
+on macOS only.
 
 Packages: Avalonia 12.1.3, Avalonia.Desktop 12.1.3, Avalonia.Fonts.Inter 12.1.3, Avalonia.FreeDesktop 12.1.3, Avalonia.FreeDesktop.AtSpi 12.1.3, Avalonia.HarfBuzz 12.1.3, Avalonia.Native 12.1.3, Avalonia.Remote.Protocol 12.1.3, Avalonia.Skia 12.1.3, Avalonia.Themes.Fluent 12.1.3, Avalonia.Win32 12.1.3, Avalonia.X11 12.1.3
 
@@ -32,24 +32,25 @@ All Rights Reserved
 Copyright 2013-2026 © The AvaloniaUI Project
 ```
 
-License: MIT, notices/Avalonia-NOTICE.md. Avalonia is under the MIT License. It incorporates works that
-its file `NOTICE.md` names with their own licenses (WPF, Silverlight Toolkit under the Microsoft Public
-License, wayland-protocols, Metsys.Bson, RichTextKit, Mono, Collections.Pooled, EllipticalArc.java, WinUI,
-Chromium, Flutter and Reactive Extensions); that file, at the same commit, is kept whole as
-`notices/Avalonia-NOTICE.md`.
+License: MIT, notices/Avalonia-NOTICE.md. Avalonia is under the MIT License. It incorporates works
+that its file `NOTICE.md` names with their own licenses (WPF, Silverlight Toolkit under the
+Microsoft Public License, wayland-protocols, Metsys.Bson, RichTextKit, Mono, Collections.Pooled,
+EllipticalArc.java, WinUI, Chromium, Flutter and Reactive Extensions); that file, at the same
+commit, is kept whole as `notices/Avalonia-NOTICE.md`.
 
 ### ANGLE, as Avalonia builds it
 
 The OpenGL ES library through which Avalonia draws with Direct3D 11 on Windows: Avalonia's fork of
-ANGLE, built for Direct3D 11 alone. It ships on Windows only. Compiled into it are parts of abseil-cpp,
-zlib with Chromium's compression utilities, xxHash and Chromium's copy of libc++, each named below.
+ANGLE, built for Direct3D 11 alone. It ships on Windows only. Compiled into it are parts of
+abseil-cpp, zlib with Chromium's compression utilities, xxHash and Chromium's copy of libc++, each
+named below.
 
 Packages: Avalonia.Angle.Windows.Natives 2.1.27548.20260419
 
 Files: av_libglesv2.dll
 
-Source: https://github.com/AvaloniaUI/angle (commit 1c89805903c1482166356d3b950d474973180e61), a fork of
-https://chromium.googlesource.com/angle/angle
+Source: https://github.com/AvaloniaUI/angle (commit 1c89805903c1482166356d3b950d474973180e61), a
+fork of https://chromium.googlesource.com/angle/angle
 
 ```
 Copyright 2018 The ANGLE Project Authors.
@@ -59,32 +60,34 @@ All rights reserved.
 Compiled into it, as that commit's `DEPS` and build files take them:
 
 - abseil-cpp (https://github.com/abseil/abseil-cpp, Chromium's copy at commit
-  677093525ed5a2f357482681a222274866088a2c): its files carry lines of the form "Copyright 2017 The Abseil
-  Authors."; Apache-2.0.
-- zlib (https://zlib.net, Chromium's copy at commit b80f1d1e5256ac25f6aea3f31f13d458981cb1f9):
-  "(C) 1995-2026 Jean-loup Gailly and Mark Adler"; zlib.
+  677093525ed5a2f357482681a222274866088a2c): its files carry lines of the form "Copyright 2017 The
+  Abseil Authors."; Apache-2.0.
+- zlib (https://zlib.net, Chromium's copy at commit b80f1d1e5256ac25f6aea3f31f13d458981cb1f9): "(C)
+  1995-2026 Jean-loup Gailly and Mark Adler"; zlib.
 - Chromium's compression utilities, in the same copy of zlib: "Copyright 2019 The Chromium Authors";
   BSD-3-Clause (Google LLC).
-- xxHash (https://github.com/Cyan4973/xxHash, in ANGLE's `src/common/third_party/xxhash`): "Copyright (c)
-  2012-2021 Yann Collet. All rights reserved."; BSD-2-Clause.
+- xxHash (https://github.com/Cyan4973/xxHash, in ANGLE's `src/common/third_party/xxhash`):
+  "Copyright (c) 2012-2021 Yann Collet. All rights reserved."; BSD-2-Clause.
 - libc++ (https://libcxx.llvm.org, Chromium's copy): Apache-2.0 with the LLVM exception, under which
   the compiled library needs no notice; it is named here so that the list is whole.
 
-License: BSD-3-Clause (ANGLE), Apache-2.0, zlib, BSD-3-Clause (Google LLC), BSD-2-Clause. ANGLE is under
-the BSD-3-Clause text whose third clause names TransGaming Inc., Google Inc. and 3DLabs Inc. Ltd.; the
-works compiled into it are under the licenses given with each.
+License: BSD-3-Clause (ANGLE), Apache-2.0, zlib, BSD-3-Clause (Google LLC), BSD-2-Clause. ANGLE is
+under the BSD-3-Clause text whose third clause names TransGaming Inc., Google Inc. and 3DLabs Inc.
+Ltd.; the works compiled into it are under the licenses given with each.
 
 ### SkiaSharp and HarfBuzzSharp
 
 The .NET bindings of the Skia graphics library and of the HarfBuzz text shaper, with their native
-libraries: the `.dll` files ship on Windows, the `.dylib` files on macOS and the `.so` files on Linux.
+libraries: the `.dll` files ship on Windows, the `.dylib` files on macOS and the `.so` files on
+Linux.
 
 Packages: SkiaSharp 3.119.4, SkiaSharp.NativeAssets.Win32 3.119.4, SkiaSharp.NativeAssets.macOS 3.119.4, SkiaSharp.NativeAssets.Linux 3.119.4, HarfBuzzSharp 8.3.1.3, HarfBuzzSharp.NativeAssets.Win32 8.3.1.3, HarfBuzzSharp.NativeAssets.macOS 8.3.1.3, HarfBuzzSharp.NativeAssets.Linux 8.3.1.3
 
 Files: SkiaSharp.dll, libSkiaSharp.dll, libSkiaSharp.dylib, libSkiaSharp.so, HarfBuzzSharp.dll, libHarfBuzzSharp.dll, libHarfBuzzSharp.dylib, libHarfBuzzSharp.so
 
-Source: https://github.com/mono/SkiaSharp (SkiaSharp 3.119.4 at commit f568ac94dd768ef9a2f593537cfde2dd0d348ef5;
-HarfBuzzSharp 8.3.1.3 at commit 2888c737ad016d584c74525e2d35db5097ea8576)
+Source: https://github.com/mono/SkiaSharp (SkiaSharp 3.119.4 at commit
+f568ac94dd768ef9a2f593537cfde2dd0d348ef5; HarfBuzzSharp 8.3.1.3 at commit
+2888c737ad016d584c74525e2d35db5097ea8576)
 
 ```
 Copyright (c) 2015-2016 Xamarin, Inc.
@@ -92,12 +95,12 @@ Copyright (c) 2017-2018 Microsoft Corporation.
 © Microsoft Corporation. All rights reserved.
 ```
 
-License: MIT, notices/SkiaSharp-THIRD-PARTY-NOTICES.txt. SkiaSharp and HarfBuzzSharp are under the MIT
-License. The native libraries incorporate the works their packages' file `THIRD-PARTY-NOTICES.txt` names
-(ANGLE, HarfBuzz, Skia, etc1, gif, libpng, the DNG SDK, expat, FreeType, ICU, imgui, jsoncpp,
-libjpeg-turbo, libwebp, libmicrohttpd, piex, SDL, sfntly, SPIR-V Headers, SPIR-V Tools and zlib), the
-same file in all eight packages; it is kept whole as `notices/SkiaSharp-THIRD-PARTY-NOTICES.txt`. Two
-more works found in the native libraries follow.
+License: MIT, notices/SkiaSharp-THIRD-PARTY-NOTICES.txt. SkiaSharp and HarfBuzzSharp are under the
+MIT License. The native libraries incorporate the works their packages' file
+`THIRD-PARTY-NOTICES.txt` names (ANGLE, HarfBuzz, Skia, etc1, gif, libpng, the DNG SDK, expat,
+FreeType, ICU, imgui, jsoncpp, libjpeg-turbo, libwebp, libmicrohttpd, piex, SDL, sfntly, SPIR-V
+Headers, SPIR-V Tools and zlib), the same file in all eight packages; it is kept whole as
+`notices/SkiaSharp-THIRD-PARTY-NOTICES.txt`. Two more works found in the native libraries follow.
 
 ### Wuffs, in SkiaSharp's native libraries
 
@@ -112,8 +115,8 @@ Source: https://github.com/google/wuffs
 Copyright 2017 The Wuffs Authors.
 ```
 
-License: MIT, Apache-2.0. Wuffs "is distributed under the terms of both the MIT license and the Apache
-License (Version 2.0)", as its README says.
+License: MIT, Apache-2.0. Wuffs "is distributed under the terms of both the MIT license and the
+Apache License (Version 2.0)", as its README says.
 
 ### SPIRV-Cross, in SkiaSharp's native library on Windows
 
@@ -128,8 +131,8 @@ Source: https://github.com/KhronosGroup/SPIRV-Cross
 Copyright 2015-2021 Arm Limited
 ```
 
-License: Apache-2.0, MIT. Its files say `SPDX-License-Identifier: Apache-2.0 OR MIT`: the material may be
-taken under either license.
+License: Apache-2.0, MIT. Its files say `SPDX-License-Identifier: Apache-2.0 OR MIT`: the material
+may be taken under either license.
 
 ### MicroCom.Runtime
 
@@ -180,8 +183,8 @@ Copyright © .NET Foundation and Contributors
 All rights reserved.
 ```
 
-License: MIT, notices/CommunityToolkit.Mvvm-ThirdPartyNotices.txt. The toolkit is under the MIT License;
-the works it incorporates are named in the package's `ThirdPartyNotices.txt`, kept whole as
+License: MIT, notices/CommunityToolkit.Mvvm-ThirdPartyNotices.txt. The toolkit is under the MIT
+License; the works it incorporates are named in the package's `ThirdPartyNotices.txt`, kept whole as
 `notices/CommunityToolkit.Mvvm-ThirdPartyNotices.txt`.
 
 ### AvaloniaEdit
@@ -217,19 +220,20 @@ Source: https://github.com/danipen/TextMateSharp (commit 622d1b240a5be474939857c
 Copyright (c) 2021 Daniel Peñalba
 ```
 
-License: MIT. TextMateSharp is a port of microsoft/vscode-textmate based on the Java port eclipse/tm4e.
+License: MIT. TextMateSharp is a port of microsoft/vscode-textmate based on the Java port
+eclipse/tm4e.
 
 ### Onigwrap and Oniguruma
 
-The regular expression library under TextMateSharp: Onigwrap wraps Oniguruma. Its native library ships
-as `libonigwrap.dll` on Windows, `libonigwrap.dylib` on macOS and `libonigwrap.so` on Linux.
+The regular expression library under TextMateSharp: Onigwrap wraps Oniguruma. Its native library
+ships as `libonigwrap.dll` on Windows, `libonigwrap.dylib` on macOS and `libonigwrap.so` on Linux.
 
 Packages: Onigwrap 1.0.11
 
 Files: Onigwrap.dll, libonigwrap.dll, libonigwrap.dylib, libonigwrap.so
 
-Source: https://github.com/aikawayataro/Onigwrap (commit dd8a1cbbe3190c18033b96f2922b95c1761ae793); Oniguruma,
-https://github.com/kkos/oniguruma
+Source: https://github.com/aikawayataro/Onigwrap (commit dd8a1cbbe3190c18033b96f2922b95c1761ae793);
+Oniguruma, https://github.com/kkos/oniguruma
 
 ```
 Copyright (c) 2024 Aikawa Yataro
@@ -237,10 +241,10 @@ Copyright (c) 2002-2021  K.Kosako
 Copyright (c) 2015 Fluent Solutions
 ```
 
-License: MIT, BSD-2-Clause, notices/Onigwrap-THIRD-PARTY-NOTICES.txt. Onigwrap is under the MIT License;
-Oniguruma, the second line, under BSD-2-Clause; fluentCODE/onigwrap, the third, under the MIT License.
-The package's `THIRD-PARTY-NOTICES.TXT` names them, with TextMateSharp and SkiaSharp, and is kept whole
-as `notices/Onigwrap-THIRD-PARTY-NOTICES.txt`.
+License: MIT, BSD-2-Clause, notices/Onigwrap-THIRD-PARTY-NOTICES.txt. Onigwrap is under the MIT
+License; Oniguruma, the second line, under BSD-2-Clause; fluentCODE/onigwrap, the third, under the
+MIT License. The package's `THIRD-PARTY-NOTICES.TXT` names them, with TextMateSharp and SkiaSharp,
+and is kept whole as `notices/Onigwrap-THIRD-PARTY-NOTICES.txt`.
 
 ### TextMate grammars and themes: TextMateSharp.Grammars
 
@@ -258,12 +262,13 @@ Copyright (c) 2021 Daniel Peñalba
 Copyright (c) 2015 - present Microsoft Corporation
 ```
 
-License: MIT, TextMate bundle license, BSD-3-Clause (Google LLC), Apache-2.0. The package is under the
-MIT License. Each grammar folder holds a grammar from the repository the table names, under the license
-the package states for it (its own words, where they differ, in parentheses), and the extension files
-of Visual Studio Code around it (`package.json`, `language-configuration.json` and the snippets), which
-are Visual Studio Code's under the MIT License, "Copyright (c) 2015 - present Microsoft Corporation",
-but those of asciidoc (Matt Neuburg, MIT), typst (Myriad-Dreamin, Apache-2.0) and x86asm (RysteQ, MIT).
+License: MIT, TextMate bundle license, BSD-3-Clause (Google LLC), Apache-2.0. The package is under
+the MIT License. Each grammar folder holds a grammar from the repository the table names, under the
+license the package states for it (its own words, where they differ, in parentheses), and the
+extension files of Visual Studio Code around it (`package.json`, `language-configuration.json` and
+the snippets), which are Visual Studio Code's under the MIT License, "Copyright (c) 2015 - present
+Microsoft Corporation", but those of asciidoc (Matt Neuburg, MIT), typst (Myriad-Dreamin,
+Apache-2.0) and x86asm (RysteQ, MIT).
 
 | Folder | Repository | License |
 |---|---|---|
@@ -334,11 +339,13 @@ The copyright lines that the package carries for its grammars:
 - https://github.com/dart-lang/dart-syntax-highlight: "Copyright 2020, the Dart project authors."
 - https://github.com/textmate/diff.tmbundle: "Copyright (c) textmate-diff.tmbundle project authors"
 - https://github.com/textmate/git.tmbundle: "Copyright (c) 2008 Tim Harper"
-- https://github.com/textmate/groovy.tmbundle: "Copyright (c) textmate-groovy.tmbundle project authors"
+- https://github.com/textmate/groovy.tmbundle: "Copyright (c) textmate-groovy.tmbundle project
+  authors"
 - https://github.com/daaain/Handlebars: "Copyright (c) daaain/Handlebars project authors"
 - https://github.com/textmate/html.tmbundle: "Copyright (c) textmate-html.tmbundle project authors"
 - https://github.com/textmate/ini.tmbundle: "Copyright (c) textmate-ini.tmbundle project authors"
-- https://github.com/textmate/javascript.tmbundle: "Copyright (c) textmate-javascript.tmbundle project authors"
+- https://github.com/textmate/javascript.tmbundle: "Copyright (c) textmate-javascript.tmbundle
+  project authors"
 - https://github.com/jlelong/vscode-latex-basics: "Copyright (c) vscode-latex-basics authors"
 - https://github.com/sumneko/lua.tmbundle: "Copyright (c) sumneko-lua.tmbundle project authors"
 - https://github.com/fadeevab/make.tmbundle: "Copyright (c) textmate-make.tmbundle project authors"
@@ -347,7 +354,8 @@ The copyright lines that the package carries for its grammars:
 - https://github.com/textmate/ruby.tmbundle: "Copyright (c) textmate-ruby.tmbundle project authors"
 - https://github.com/owensd/vscode-swift: "Copyright (c) 2015 David Owens II"
 - https://github.com/freebroccolo/atom-language-swift: "Copyright (c) 2014 Darin Morrison"
-- https://github.com/textmate/asp.vb.net.tmbundle: "Copyright (c) textmate-asp.vb.net.tmbundle project authors"
+- https://github.com/textmate/asp.vb.net.tmbundle: "Copyright (c) textmate-asp.vb.net.tmbundle
+  project authors"
 - https://github.com/textmate/yaml.tmbundle: "Copyright (c) 2015 FichteFoll"
 
 The themes, each by its name, its file in the package and where it comes from:
@@ -377,9 +385,10 @@ The themes, each by its name, its file in the package and where it comes from:
 | Visual Studio Light | visual-studio-light-theme.json | none stated |
 
 Six themes in the package, Dracula, Atom One Dark, Atom One Light, OneDark, Visual Studio Dark and
-Visual Studio Light, state no origin in the package or in TextMateSharp's history, and TextMateSharp is
-a port of microsoft/vscode-textmate based on the Java port eclipse/tm4e. They are listed here under
-TextMateSharp's own declared license, the MIT License, which is all the package states for them.
+Visual Studio Light, state no origin in the package or in TextMateSharp's history, and TextMateSharp
+is a port of microsoft/vscode-textmate based on the Java port eclipse/tm4e. They are listed here
+under TextMateSharp's own declared license, the MIT License, which is all the package states for
+them.
 
 ### Inter
 
@@ -404,8 +413,8 @@ copyright line.
 ### JetBrains Mono
 
 The typeface of code in the diff, the blame and the conflict resolver: JetBrains Mono NL Regular,
-version 2.304, unchanged, inside `VisualCommit.dll` (from `src/VisualCommit.App/Assets/Fonts/`; decision
-D64).
+version 2.304, unchanged, inside `VisualCommit.dll` (from `src/VisualCommit.App/Assets/Fonts/`;
+decision D64).
 
 Files: JetBrainsMonoNL-Regular.ttf
 
@@ -419,8 +428,8 @@ License: OFL-1.1.
 
 ### Lucide and Feather
 
-The icon outlines in `src/VisualCommit.App/Theme/Icons.axaml`, inside `VisualCommit.dll`, are taken from
-Lucide (https://lucide.dev), rewritten as path strings.
+The icon outlines in `src/VisualCommit.App/Theme/Icons.axaml`, inside `VisualCommit.dll`, are taken
+from Lucide (https://lucide.dev), rewritten as path strings.
 
 Source: https://github.com/lucide-icons/lucide; Feather, https://github.com/feathericons/feather
 
@@ -429,8 +438,8 @@ Copyright (c) 2026 Lucide Icons and Contributors
 Copyright (c) 2013-present Cole Bemis
 ```
 
-License: ISC, MIT. Lucide is under the ISC License, the first line; Feather under the MIT License, the
-second.
+License: ISC, MIT. Lucide is under the ISC License, the first line; Feather under the MIT License,
+the second.
 
 Some Lucide icons derive from the Feather project. Of the icons used here, these do: arrow-down,
 arrow-up, check, chevron-down, chevron-left, chevron-right, chevron-up, cloud, crosshair, download,
@@ -900,13 +909,14 @@ suitability for any purpose.
 
 ## Keeping this file true
 
-`ThirdPartyNoticesTests` holds this file to the build: a package that the build ships and this file does
-not name with its version, a file it ships that is not on its entry's `Files:` line, a package named
-here that the build no longer ships, a grammar or theme that is not listed, or a license named with no
-text fails it. Each entry keeps the form above: one `Packages:` line of `<id> <version>` pairs (NuGet
-packages only), one `Files:` line of file names, and a `License:` line whose names, up to its first full
-stop, are headings under "License texts" or files in `notices/`. When a package is added or updated,
-take its license, its copyright lines and its notice files from the package in the NuGet cache
-(`~/.nuget/packages/<id>/<version>/`) and from its source at the commit its `.nuspec` names in
-`<repository>`, and replace a vendor's file in `notices/` whole. The app embeds this file, `LICENSE` and
-`notices/` (`VisualCommit.App.csproj`), so a change to any of them is a change to the app.
+`ThirdPartyNoticesTests` holds this file to the build: a package that the build ships and this file
+does not name with its version, a file it ships that is not on its entry's `Files:` line, a package
+named here that the build no longer ships, a grammar or theme that is not listed, or a license named
+with no text fails it. Each entry keeps the form above: one `Packages:` line of `<id> <version>`
+pairs (NuGet packages only), one `Files:` line of file names, and a `License:` line whose names, up
+to its first full stop, are headings under "License texts" or files in `notices/`. When a package is
+added or updated, take its license, its copyright lines and its notice files from the package in the
+NuGet cache (`~/.nuget/packages/<id>/<version>/`) and from its source at the commit its `.nuspec`
+names in `<repository>`, and replace a vendor's file in `notices/` whole. The app embeds this file,
+`LICENSE` and `notices/` (`VisualCommit.App.csproj`), so a change to any of them is a change to the
+app.
