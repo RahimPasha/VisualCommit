@@ -580,8 +580,11 @@ split into 8a and 8b) to D415, carried into plan.md's "Phase 8a" and "Phase 8b" 
 `requirements.md`, the README and CLAUDE.md's counting of phases. Phase 8a was started the same
 night on `phase/8a-release-readiness` (Progress, step 1).
 
-Next: the owner's reading of the week's share (D241), asked on 2026-11-20 at wave 2's merge; then
-step 12, wave 2's close. Wave 2 (steps 9 to 11) is built and merged, with the lead's fixes at the
+Next: step 12, wave 2's close, and then a stop: the owner read the week's share on 2026-11-20 as 70
+to 85 % used, so after step 12's runs and its picture comparison nothing that spends agents starts
+(the inspection of the pictures the comparison flags, wave 3) until the week's reset or the
+owner's word ("Waiting on the owner"). CI's run on the merge, 44851353430, failed in one macOS
+test and is being run again there (the CI section). Wave 2 (steps 9 to 11) is built and merged, with the lead's fixes at the
 merge (Notes, "Wave 2 is built and merged"). Step 12, with no agent at work and each run alone on
 the machine: (1) the lagged list (design 0.4: `VISUALCOMMIT_WATCHER_LAG_MS=1500` in front of each
 command, through `scripts/heavy-run.sh`), with the classes wave 2 adds to it; (2) the whole
@@ -605,8 +608,8 @@ every commit.
 
 ### Notes for whoever resumes
 
-- **Wave 2 is built and merged (2026-11-20); the owner is asked for the week's share before step
-  12.** The workflow `phase8a-wave-2` (run `wf_9e189d2e-fb7`; its script is `phase8a-wave-2-build.js`
+- **Wave 2 is built and merged (2026-11-20); the owner read the week's share as 70 to 85 % used,
+  so only step 12's runs and comparison follow before a stop.** The workflow `phase8a-wave-2` (run `wf_9e189d2e-fb7`; its script is `phase8a-wave-2-build.js`
   beside wave 1's: three Opus builders in the worktrees `D:/Projects/Personal/vc-wt/p8a-firstrun`,
   `p8a-keyboard` and `p8a-icon`, made from `fe0d2d4` on `wip/p8a-<key>`, which are never pushed;
   nine reviewers, a verifier for each of 11 majors, three fixers; 26 agents, 7.57M tokens, 4 h 14
@@ -923,14 +926,17 @@ every commit.
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
-    - **Asked on 2026-11-20 at wave 2's merge: the share of the week's allowance used** (D241),
-    before step 12's runs and wave 3. At wave 1's close it was 50 to 70 %; wave 2's agents used
-    about 17.6M tokens since (its checks 6.44M, their settling 0.76M, the build 7.57M, the merge's
-    notes and two rounds of fixes 2.82M).
-  - **Asked with it: the two earlier real-window checks alone** (design 6.8 item 5; about two
-    minutes, the mouse taken, the owner present), and whether wave 2's three worktrees under
-    `D:/Projects/Personal/vc-wt/` go now, as wave 1's did (they are merged and clean; the `wip`
-    branches stay).
+      - **The week's allowance: 70 to 85 % used** (the owner, 2026-11-20, at wave 2's merge; D241). So
+    the lead runs only wave 2's closing runs and the picture comparison and then stops: **wave 3
+    does not start, and no workflow of agents runs, until the week's reset or the owner's word.**
+    Wave 2's agents used about 17.6M tokens (its checks 6.44M, their settling 0.76M, the build
+    7.57M, the merge's notes and two rounds of fixes 2.82M); wave 3 is expected to need about as
+    much, and the inspection of the closing run's pictures about 1.5M.
+  - **Answered with it** (2026-11-20): the two earlier real-window checks of design 6.8 item 5 run
+    alone as soon as the closing runs end, without asking again (about two minutes, the mouse
+    taken, the desktop unlocked); wave 2's three worktrees are removed (done: `git worktree
+    remove` on the clean folders; the branches `wip/p8a-firstrun`, `wip/p8a-keyboard` and
+    `wip/p8a-icon` stay, merged).
   - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
     above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
     D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on
