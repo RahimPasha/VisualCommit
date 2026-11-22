@@ -1540,16 +1540,22 @@ six captures in two launches.
   17.2) stands for a slow remote: installed in the session's data folder (`FetchHold.Install`) and set
   on the scenario's copy (`HoldIn`) before the start, it makes git's upload-pack at `origin.git` wait for
   its release, so a fetch shows running, without a percentage, with Cancel. A held fetch's shell gives
-  up `FetchHold.HeldFor` after it started (`rounds` × 0.5 s of `sleep`: 60 s for the default 120
-  rounds, longer on Windows, where each `sleep` is a process, `FetchHold.cs`) and leaves a `gave-up-`
-  marker, on which `WaitForHeldAsync`, `Release()` and `Dispose()` fail. On Linux and macOS a cancel
-  kills git alone (`GitRunner.Kill`, D36), so a cancelled held fetch's shell keeps waiting until a
-  release: a cancel does not stop that clock. Method 3 therefore installs the hold with `rounds: 300`
+  up when its rounds are over, `FetchHold.HeldFor` after it started (`rounds` × 0.5 s of `sleep`: 60 s
+  for the default 120 rounds, longer on Windows, where each `sleep` is a process, `FetchHold.cs`), at a
+  look that finds no release, and leaves a `gave-up-` marker, on which `WaitForHeldAsync`, `Release()`
+  and `Dispose()` fail; a shell that saw the release goes on without looking again, so that `Arm()`,
+  which deletes `release`, never makes it give up (`f019688`, open point 42). On Linux and macOS a
+  cancel kills git alone (`GitRunner.Kill`, D36), so a cancelled held fetch's shell keeps waiting until
+  a release: a cancel does not stop that clock. Method 3 therefore installs the hold with `rounds: 300`
   (`FetchHold.Install(data.Path, rounds: 300)`, `HeldFor` 150 s, under the hang watchdog's 3 minutes),
   so that it outlasts K8's walks of up to 200 Tabs on a slow runner; it releases (`Release()`) once
-  each cancelled fetch has ended and been checked (K3's step 6, K8's step 9), so that no cancelled
-  fetch's shell waits on; `Arm()` holds again before the next fetch (K8's step 7); and the method
-  disposes the hold (a release) in a `finally`. `HeldGitRunner` (1.15) stands for a slow git: an
+  each cancelled fetch has ended and been checked (K3's step 6, K8's step 9), so that a cancelled
+  fetch's shell goes on; `Arm()` holds again before the next fetch (K8's step 7); and the method
+  disposes the hold (a release) in a `finally`. On Linux and macOS K3's cancelled shell may not look
+  at `release` between step 6's release and step 7's `Arm()`, when both fall within one of its sleeps:
+  it then waits on through K8's hold until step 9, which does no harm, since its marker is in `Arm()`'s
+  baseline and not counted, and its rounds started only seconds before K8's fetch's.
+  `HeldGitRunner` (1.15) stands for a slow git: an
   `IGitRunner` over the found git, given to the session as the detection's `Runner` by a probe over
   `MachineGitSetupProbe`, that holds the next call whose first argument is the word the step names
   (`diff-files`, the unstaged diff's read,
@@ -1801,7 +1807,9 @@ with forward slashes, the same folder (`git remote set-url origin`). Reason: `Fe
 (phase 6's harness) names its marker after the remote's path behind its last forward slash
 (`${remote##*/}`); on Windows git hands it the copy's `origin.git` path with backslashes, so the
 marker's name held the whole path, the script failed (`No such file or directory`) and no fetch was
-held. `FetchHold.cs` stays as it is; no expected result of K3 or K8 changes.
+held. §6's build left `FetchHold.cs` as it was, and no expected result of K3 or K8 changed. Wave 3
+changed its script (`f019688`: a fetch that saw its release goes on without looking again; the
+conventions' "What a fake stands for", open point 42); no expected result of K3 or K8 changed with it.
 
 **K4. A row's buttons by Tab, and the focus after its action** (not R; D425; design 6.1 F4, 6.3.4,
 6.3.5, 6.5). Method 4.
@@ -2435,8 +2443,38 @@ pressed.
   `PaletteEntriesTests`, phase 6's K10). The links disabled without a launcher, a launcher that throws
   (`Opening the repository's page failed.`, `Opening the user guide failed.`), a text that cannot be read
   (`The text {name} could not be read.`) and a failed copy (`Copying the text to the clipboard failed.`)
-  (`AboutSettingsViewModelTests`, `TextDocumentDialogViewModelTests`). `DocumentTextView`'s keys but End
-  (Down, PageDown, Home, Tab leaving the view) and its Document peer's value (`DocumentTextViewTests`).
+  (`AboutSettingsViewModelTests`, `TextDocumentDialogViewModelTests`). The texts read off the caller's
+  thread, a second press while they are read opening nothing more, and a screen closed during the read
+  showing no dialog (`AboutSettingsViewModelTests`'
+  `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more` and
+  `A_screen_closed_while_the_texts_are_read_shows_no_dialog`). `DocumentTextView`'s keys but End, in
+  the headless `DocumentTextViewTests` alone (no picture and no real-window step shows them): Down,
+  PageDown and Home, and Home and End with the platform's command key
+  (`Down_scrolls_a_line_and_PageDown_the_view_less_a_line`, `End_shows_the_last_line_and_Home_the_first`);
+  Tab leaving the view (`Tab_leaves_the_text`); a move up after End letting the end go, though the lines
+  it brings in wrap (`A_wheel_up_after_End_leaves_the_end_though_the_lines_it_brings_in_wrap`); Enter,
+  with or without modifiers, leaving the view where it is, a plain Enter going on unhandled
+  (`Enter_with_or_without_modifiers_leaves_the_view_where_it_is_and_plain_Enter_goes_on_unhandled`);
+  typed text and every key that would move, extend or use the hidden caret taken and doing nothing
+  (`Keys_that_would_move_extend_or_use_the_hidden_caret_or_type_do_nothing`); cut, paste, undo and redo
+  changing nothing (`Cut_paste_undo_and_redo_change_nothing_and_leave_the_view_where_it_is`); the
+  platform's select-all and copy keys
+  (`The_select_all_key_selects_the_whole_text_and_leaves_the_view_where_it_is`,
+  `The_copy_key_copies_a_selection_and_nothing_without_one`); another editor still taking its own keys
+  (`Another_editor_still_takes_its_keys_line_breaks_typing_deleting_and_moving_its_caret`); and its
+  Document peer's value (`The_peer_is_a_document_whose_value_is_the_text_and_whose_name_is_the_title`).
+  A held key is shown only as three headless key downs, and no test shows a Mac's Cmd keys: the
+  headless platform's command key is Ctrl on every system, and the reading for a real Mac rests on
+  Avalonia 12.1.3's and AvaloniaEdit 12.0.0's code. Left as they are by the lead (2026-11-21): PageUp
+  and PageDown with Ctrl, Alt or Meta and no Shift, which Avalonia's scroll viewer takes and pages by a
+  whole viewport, and Home and End clearing a selection made with the mouse. A plain Enter in the
+  license's text closing the dialog as Close does, the focus back on `Show license…` with its frame,
+  and Enter with a modifier doing nothing
+  (`AboutSectionTests.Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back`);
+  a held Enter on `Show license…` then opens and closes the dialog in turn, as in any dialog with a
+  default button that a button opens by Enter (the lead, 2026-11-21), which no test shows. The
+  notices' e-mail addresses, only those their copyright lines carry, each inside a fenced block
+  (`ThirdPartyNoticesTests.The_notices_files_only_addresses_are_its_copyright_lines`; open point 70).
   The guide link pressed (part G's G3, 11.5). The sweep's names over About (part U, §9). A link's
   underline on hover (open point 63).
 - **The lagged list** (8.7, 0.4): part A runs in 8a's project, which is on the list, at wave 3's close
@@ -2800,7 +2838,7 @@ walk-through, 21 steps by the owner, is this part's check by hand (9.3.9; D411, 
   the 5 s it waits for each event; 9.5's last paragraph); `Phase8aExpectationTests.U.cs` (the names
   equal `AutomationNames`' constants and formats; the words equal `GraphRowSpeech`'s constants; every
   picture name matches 0.3's pattern and is used once); `AccessibleNameSweepTests.cs` (8a's project,
-  ruling 37; about 15 facts, one start each, 9.3.8); `ShellDriver.Phase8a.Uia.cs` (`GraphRowPeer()`, the
+  ruling 37; 14 facts, one start each, 9.3.8); `ShellDriver.Phase8a.Uia.cs` (`GraphRowPeer()`, the
   window's peer made once, `RecordNameChanges(AutomationPeer)`; 1.15); `AutomationSweep` (Testing:
   `FindProblems`, `AssertNamed`, `AutomationProblem`; 1.12). The App.Tests classes of 9.4
   (`GraphRowSpeechTests`, `CommitGraphControlAutomationTests`, `AutomationSweepTests`,
@@ -2856,16 +2894,27 @@ walk-through, 21 steps by the owner, is this part's check by hand (9.3.9; D411, 
   (`WindowLayout.RowHeight`), inside the graph control's bounds, its vertical centre the
   graph's own `RowBounds` (or `WorkingRowBounds`) centre in the window's coordinates, `IsOffscreen`
   false. A sweep's result is `AutomationSweep.AssertNamed(window, state)`: no problem of 9.3.8's four
-  rules (`empty`, `type name`, `key text`, `duplicate`), the `duplicate` rule not applying to `RefItem`
-  under `RefList`, the one exemption `AutomationSweep` holds by the automation id, with its reason in a
-  comment (open point 81). Git's state is the scenario's `ExactStateAsync()`, read before the first step
-  and at the end.
+  rules (`empty`, `type name`, `key text`, `duplicate`), as D456 reads them (U2), the `duplicate` rule
+  not applying to `RefItem` under `RefList`, the one exemption `AutomationSweep` holds by the automation
+  id, with its reason in a comment (open point 81); a sweep that finds a problem throws
+  `AutomationSweepException`, which names every problem. Git's state is the scenario's
+  `ExactStateAsync()`, read before the first step and at the end.
 - **The sweep's states** (9.3.8; 1.17's bullets on wave 2). `AccessibleNameSweepTests`, one
-  `[AvaloniaFact]` and one start each: (1) the welcome page and the palette; (2) the settings screen,
-  each section, the Git program row, Accounts and each provider's sign-in dialog; (3) About and its
-  license's text dialog (§8's, swept at §9's merge, which comes after §8's, 0.4); (4) every dialog kind
-  through its presenter, as `PromptDialogTests` does; (5) the ops tab: two branches hidden, then one
-  soloed, a commit with files and parent links, two unstaged and one staged file with one row selected
+  `[AvaloniaFact]` and one start each, 14 in all: (1) the welcome page and the palette; (2) the
+  settings screen, each section (About's among them, `2: settings, About`), the Git program row,
+  Accounts with the three providers' fakes on and each provider's sign-in dialog; (3) About
+  (`3: about`), the license's text dialog over it (`3: the license`: one text, no switch) and the
+  notices' dialog on Avalonia's file, reached by its switch (`3: the notices, Avalonia's file`), each
+  dialog closed before the next opens and the screen before the fact ends (§8's, swept since §9's
+  merge, which came after §8's, 0.4; D456 (5): only the notices' dialog has a switch, so a vendor file
+  is reached there); (4) every dialog kind through its presenter, as `PromptDialogTests` does: through
+  the dialog host the remotes, branch name, tag, stash, reset, pick, choice, push, finishing, error and
+  message dialogs, the workspace's name, the repository browser over the three providers, the
+  add-repositories checklist with two repositories found (`app`, `site`) and the create-pull-request
+  form with its base given (a fixed fake of its actions), then the confirmation, and git's six prompt
+  kinds through `PromptDialogPresenter` (the palette is state 1's, the settings screen and the sign-in
+  dialogs state 2's); (5) the ops tab: two branches hidden, then one soloed, a commit with files and
+  parent links, two unstaged and one staged file with one row selected
   and the pointer over another, the diff's hunk bars, the restore bar after a discard, the activity log,
   the graph's row, a context menu on the graph and on a file; (6) search, compare, file history,
   blame, reflog; (7) the rebase list; (8) the resolver, its card, the banner; (9) the dashboard; the
@@ -2912,7 +2961,7 @@ walk-through, 21 steps by the owner, is this part's check by hand (9.3.9; D411, 
 #### Test methods and app starts (part U)
 
 Three methods, three starts (9.7), each on a fresh copy of its scenario and a fresh data folder; beside
-them `AccessibleNameSweepTests`, about 15 starts (9.3.8). Method 2 makes on the stopped merge what the
+them `AccessibleNameSweepTests`, 14 starts (9.3.8). Method 2 makes on the stopped merge what the
 real window's launch 13 reads of the graph's rows (it has no capture, so it has no twin; 12.3.4). The
 step letters run on in the table's order: `u3a` in method 2, `u3b` in method 3 (9.5's names).
 
@@ -3041,15 +3090,36 @@ Steps, method 3:
    window (state `U2: the ops tab`).
 
 Expected:
-- `AccessibleNameSweepTests`: each of its facts passes, `AssertNamed` reporting nothing in each of the
-  14 states (the conventions' list), and in states (10) to (13) `GitSetup`'s automation name and help
-  text are the state's title and body (9.3.8; part F's texts). Its first run, on the code before §9's
-  change (9.4: each new class fails first), reports at least `ActivityLogToggle` (`type name`), the
-  three splitters (`empty`), the resolver's five and the search bar's three (`key text`), and
-  duplicates of `RowStageButton`, `RowDiscardButton` and `RefHiddenToggle` (`duplicate`). This report
-  lists that run's findings, state by state, under U2 at §9's merge (open point 90); a control the
-  sweep reports outside 1.12's table is named only at the lead's word, from its area's texts class
-  (9.3.6), and any other duplicate the first run finds is the lead's at §9's merge (open point 81).
+- `AccessibleNameSweepTests`: each of its 14 facts passes, `AssertNamed` reporting nothing in each of
+  the 14 states (the conventions' list), and in states (10) to (13) `GitSetup`'s automation name and
+  help text are the state's title and body (9.3.8; part F's texts). The rules are 9.3.8's as D456 reads
+  them at §9's merge: a control whose control type is ScrollBar, and what lies inside it (its thumb,
+  its line and page buttons), is not checked (D456 (1): a scroll bar is a part of a scrolling control's
+  template, which a screen reader announces by its type and value); a control's container for
+  `duplicate` is the nearest list above it, the search ending at the root of the dialog it lies in
+  (`DialogView`), so that two dialogs that lie over each other, a sign-in dialog over the settings
+  screen, each have a Cancel of their own (D456 (2)); and a part of a name's last parenthesis is a key
+  text also when it is two key texts joined by ` to ` (`Ctrl+1 to Ctrl+8`, the form in which the app's
+  own key texts give a run of keys, `ShortcutText.FormatAll`; D456 (4)). Its first run, on the code
+  before §9's change (9.4: each new class fails first), reports at least `ActivityLogToggle`
+  (`type name`), the three splitters (`empty`), the resolver's five and the search bar's three
+  (`key text`), and duplicates of `RowStageButton`, `RowDiscardButton` and `RefHiddenToggle`
+  (`duplicate`). This report lists that run's findings, state by state, under U2 at §9's merge (open
+  point 90); a control the sweep reports outside 1.12's table is named only at the lead's word, from
+  its area's texts class (9.3.6), and any other duplicate the first run finds is the lead's at §9's
+  merge (open point 81).
+- The first run's findings (§9's build, on the code before 1.12's names; 13 facts then, state 3 not
+  yet written; 12 failed, state 14's alone passed): in every state of 1 to 13, `LeftSplitter` and
+  `RightSplitter` (`empty`, Thumb) and `ActivityLogToggle` (`type name`, its name
+  `Avalonia.Controls.StackPanel`), the dashboard (9) showing the toggle alone; (1) the palette's
+  `PART_VerticalScrollBar` (`empty`); (2) Keyboard shortcuts' `PART_VerticalScrollBar` (`empty`), and
+  in each provider's sign-in dialog over the settings screen `CancelButton` (`duplicate`); (5) from
+  `feature/alpha` hidden on, `RefHiddenToggle` `Hidden in the graph. Click to show it` (`duplicate`),
+  with the activity log shown `ActivityLogSplitter` (`empty`), and the stage rows' `RowStageButton`
+  `Stage` and `RowDiscardButton` `Discard` (`duplicate`); (6) the search's `SearchPrevious`,
+  `SearchNext` and `SearchClose` (`key text`) and the blame's `PART_HorizontalScrollBar` (`empty`);
+  (8) the resolver's five (`key text`); (14) nothing. After 1.12's names only the scroll bars and the
+  stacked dialogs' Cancel were left, outside the table: D456 (1) and (2) settle them (open point 90).
 - After step 2: the search bar's names as U3's table; after its Esc no search bar.
 - After step 3: the comparison of `feature/conflict` with `main`, a branch comparison (`IsBranches`), so
   `CompareSwap` and `CompareClose` show (U3's table); after the click on `CompareClose` it has closed.
@@ -3081,13 +3151,17 @@ Steps, method 2, after U1's step 3:
    (`u3a-resolver-names`).
 5. Read the resolver's five names. Run `AutomationSweep.AssertNamed` on the window (state `U3: the
    resolver`).
-6. Press Esc; wait until the resolver has closed. Take `ExactStateAsync()` again.
+6. Press Esc; the resolver stays: the double-click left the keyboard focus in its result, where Esc is
+   the resolver's own and closes nothing (phase 4's design 11.10). Click `ResolverCloseButton`; wait
+   until the resolver has closed. Take `ExactStateAsync()` again.
 
 Steps, method 3, after U2's step 7:
 
 8. Read the names of README.md's and `u-untracked.txt`'s `RowStageButton` and `RowDiscardButton`,
    `CloseDiffButton`, `ActivityLogToggle`, `ActivityLogClose`, `LeftSplitter`, `RightSplitter`,
-   `ActivityLogSplitter`, and the two `RefHiddenToggle`s.
+   `ActivityLogSplitter`, and the two `RefHiddenToggle`s. Read the help texts of the two `alpha` rows,
+   `Local branches › feature › alpha` and `Remotes › origin › feature › alpha` (`RefItem`), each
+   through its own peer.
 9. Right-click `Local branches › feature › ff`; click `Solo feature/ff`; wait until `ff`'s row shows
    `RefSoloToggle`.
 10. Rest the pointer on the staged list's row of `src/core.txt` until its tooltip, `src/core.txt`, shows.
@@ -3103,15 +3177,17 @@ Steps, method 3, after U2's step 7:
 
 Expected: each control in the window at its step has the name of this table (1.12's, word for word),
 and its tooltip (`ToolTip.Tip`), help text and accelerator key as they were (9.3.6: no tooltip, help
-text or key changes; ruling 34), today's texts as the code has them on `d2318ba`; the Windows words are
-quoted, CI's macOS job reading the same constants' own (the conventions). A help text is the peer's
+text or key changes; ruling 34, whose one exception, the branch rows' help text, D456 (3), method 3
+reads at step 8), today's texts as the code has them on `d2318ba`; the Windows words are quoted, CI's
+macOS job reading the same constants' own (the conventions). A help text is the peer's
 `GetHelpText()`, as a client reads it. Avalonia 12.1.3's `ControlAutomationPeer.GetHelpTextCore` gives
 `AutomationProperties.HelpText`, else a data-validation error, else a string `ToolTip.Tip` (the base's
-fallback to the tooltip, which design 9.3.3 overrides for the graph's row alone). That fallback stays
-unverified until §9's first run of U3 (the lead, 2026-11-21): it rests on a reading of Avalonia
-12.1.3's source and on 9.3.3, and no code has run it yet. Where the table says "the tooltip", the
-control sets `AutomationProperties.HelpText` to the tooltip's text, as `ShellToolTipTests` reads it.
-Where it says "the tooltip, by the peer's fallback", the control sets no
+fallback to the tooltip, which design 9.3.3 overrides for the graph's row alone). That fallback rested
+on a reading of Avalonia 12.1.3's source and on 9.3.3 until §9's build ran U3: each control the table
+gives "by the peer's fallback" gave its tooltip through its peer (design 9.9 item 7). It falls back
+only to the control's own tooltip, never to one inside it (open point 81). Where the table says "the
+tooltip", the control sets `AutomationProperties.HelpText` to the tooltip's text, as
+`ShellToolTipTests` reads it. Where it says "the tooltip, by the peer's fallback", the control sets no
 `AutomationProperties.HelpText`, as before §9 (ruling 34), and its peer still gives the tooltip: the
 check asserts the peer's value equal to the tooltip and `AutomationProperties.GetHelpText` null there,
 as on `d2318ba`, never the second in place of the first. Where the Help text column says "none" (the
@@ -3140,15 +3216,19 @@ splitters), the control has neither, and the peer gives none:
 | `RefSoloToggle` (`feature/ff`) | `Stop soloing feature/ff` (open point 75) | `Soloed. Click to stop soloing it` | the tooltip, by the peer's fallback | none |
 | `DismissRestoreButton` | `Dismiss the restore offer` | `Close` | the tooltip, by the peer's fallback | none |
 
-- Method 2, after step 4 (`u3a`): the resolver of `notes.txt` in the graph area, as phase 4's C10 shows
-  it after its step 5 (two blocks, at lines 2 and 10); the banner above it; the right panel the stage
-  panel with `notes.txt` and `u-untracked.txt`.
+- Method 2, after step 4 (`u3a`): the resolver of `notes.txt` in the graph area, spanning the right
+  panel's column (phase 4's design 11.2), as phase 4's C10 shows it after its step 5 (two blocks, at
+  lines 2 and 10); the banner above it; no stage panel beside it.
 - Method 2, after step 5: the five names, tooltips, help texts and keys of the table; each a Button in
   UI Automation; `AssertNamed` reports nothing.
-- Method 2, after step 6: no resolver; `ExactStateAsync()` unchanged (`notes.txt` still both modified,
-  `.git/MERGE_HEAD` as before, `u-untracked.txt` untracked).
+- Method 2, after step 6: after Esc the resolver still shows; after the click on `ResolverCloseButton`
+  no resolver; `ExactStateAsync()` unchanged (`notes.txt` still both modified, `.git/MERGE_HEAD` as
+  before, `u-untracked.txt` untracked).
 - Method 3, after step 8: the table's rows for the two unstaged rows, `CloseDiffButton`, the activity
-  log's two, the three splitters and the two eyes; nothing else of the window changed since `u2a`.
+  log's two, the three splitters and the two eyes; the two `alpha` rows' help texts, each the ref's
+  full name (`RefItemRow.ToolTip`; D456 (3)): `feature/alpha` and `origin/feature/alpha`, and neither
+  row's button with a tooltip (`ToolTip.Tip` null), so nothing drawn changes; nothing else of the
+  window changed since `u2a`.
 - Method 3, after step 9: `ff` soloed: its row shows `RefSoloToggle`; the hidden `alpha` rows keep their
   eyes (in solo mode a hidden branch stays marked hidden).
 - Method 3, after step 10 (`u3b`): `src/core.txt`'s row hovered (its `RowUnstageButton` drawn, its tooltip
@@ -3199,7 +3279,10 @@ the start line sets, so that the dates heard are 9.3.5's (open point 85). Expect
    changes`, its first item highlighted, D105); Esc: back on the graph.
 10. A branch clicked in the left panel (`Local branches › feature` opened, then `alpha`): its commit's
     row, "Alpha two, Test Author, {date}, branch feature/alpha, remote branch origin/feature/alpha",
-    though the focus stays on the left panel's row (9.3.4).
+    though the focus stays on the left panel's row (9.3.4). Narrator may also read the focused branch
+    row, "alpha, button", now with its help text, the ref's full name, "feature/alpha" (D456 (3)); and
+    as the folder opens it may name a row "Avalonia.Controls.DockPanel" for a moment (the spike's S4;
+    open point 93). Whatever is heard is written down as heard.
 11. F6 to the right panel, twice from the left panel: the first F6 gives the graph, "Commit graph,
     list" and Alpha two's row once more (9.3.4: the graph takes the focus with a row exposed; Narrator
     may read the List's selection, or the row twice, 9.9 item 2: note which); the second puts the focus
@@ -3264,7 +3347,9 @@ providers are off); `No message`; `Stash: {subject}, {date}`; the working-change
 read as `, `, else `Working changes`; the hint `Commit {short SHA}`, then `, {n} commits selected` while n
 ≥ 2, then `, matches the search`. The graph's peer keeps today's name `Commit graph` and id `GraphRows`;
 the row's id `GraphSelectedRow`, class `CommitGraphRow` (9.3.3). The sweep's rules `empty`, `type name`,
-`key text`, `duplicate`, and `AutomationProblem`'s fields (1.12).
+`key text`, `duplicate`, and `AutomationProblem`'s fields (1.12). The branch rows' help text, the
+ref's full name (`RefItemRow.ToolTip`; D456 (3)): `feature/alpha` and `origin/feature/alpha` for the
+two `alpha` rows (`Phase8aExpectations.U.RefRowHelpTexts`).
 
 Today's texts the steps pass through, as the code has them on `d2318ba`: the tooltips, help texts and
 keys of U3's table (where a control sets no `AutomationProperties.HelpText`, its help text as a client
@@ -3275,7 +3360,9 @@ resolve it`); the menus' `Hide feature/alpha`, `Solo feature/ff`, `Compare featu
 (`OperationTexts.MenuTexts`, over the branch's name), the working-changes row's menu `Working changes`
 with `Stage all`; the confirmation `Discard changes?` with `Discard`; the restore bar's `Discarded
 changes to README.md.` and `Restore`; the status bar's `Fetching from all remotes…` and `Fetched from
-all remotes` (the walk-through's step 14); the search bar's mode `Commits`.
+all remotes` (the walk-through's step 14); the search bar's mode `Commits`; the comparison's ends
+`From main` and `To feature/conflict` (`CompareViewModel.FromText` and `ToText`), which method 3's
+step 3 reads.
 
 The walk-through's words are the texts above, part F's first-run texts (5.3) and part A's About.
 
@@ -3296,11 +3383,12 @@ as method 2 writes it).
     twin). Wait until the graph shows its rows below the merge's banner.
     - **The row.** A real click on display row 1, "Ours edits" (`GraphRowCentreY(1)`, which takes the
       banner into account); wait until UI Automation's focused element is `GraphRows`. Read
-      `GraphSelectedRow` once (its node made), its name `Ours edits, Test Author, 2026-01-01 12:09,
-      current branch main`; then `RecordSelectedRowEvents()`, which queues each Name change and
-      LiveRegionChanged on `GraphRows`' subtree (kind, id, time). Real Up, then real Down twice, one at a
-      time. After each, within 5 s, a LiveRegionChanged from `GraphSelectedRow` (D445 as D450 amends it):
-      a Name change alone fails the method and is written to run.txt (D450; open point 87). Then
+      `GraphSelectedRow`, the graph's first child, once (its node made; D455), its name
+      `Ours edits, Test Author, 2026-01-01 12:09, current branch main`; then `RecordSelectedRowEvents()`,
+      which queues each Name change and LiveRegionChanged on `GraphRows`' subtree (kind, id, time).
+      Real Up, then real Down twice, one at a time. After each, within 5 s, a LiveRegionChanged from
+      `GraphSelectedRow` (D445 as D450 amends it): a Name change alone fails the method and is written
+      to run.txt (D450; open point 87). Then
       `GraphSelectedRow`'s name and help text are method 2's table's (`Phase8aExpectations.U`): after Up
       `Working changes, 1 conflict` and an empty help text; after the first Down `Ours edits, Test
       Author, 2026-01-01 12:09, current branch main`, `Commit da31c97`; after the second `Kinds edits,
@@ -3314,7 +3402,9 @@ as method 2 writes it).
       - the resolver's five: a real click on display row 0, the working-changes row (open point 87), and,
         once the stage panel lists it, a real double-click on `notes.txt`'s row (phase 4's way); once
         the resolver shows, `ResolverPreviousConflict`, `ResolverNextConflict`, `ResolverPreviousFile`,
-        `ResolverNextFile`, `ResolverCloseButton`; a real Esc, and a wait until the resolver has closed;
+        `ResolverNextFile`, `ResolverCloseButton`; a real click on `ResolverCloseButton`, and a wait
+        until the resolver has closed (a real Esc would leave it open: the double-click leaves the
+        focus in its result, phase 4's design 11.10; the lead at §9's merge);
       - a real Ctrl+J; once the activity log shows, `ActivityLogToggle` `Activity log`,
         `ActivityLogClose` `Close the activity log`, and the three splitters, `Resize the left panel`,
         `Resize the right panel`, `Resize the activity log`;
@@ -3390,7 +3480,7 @@ its own, with no scripted twin); "Real window" says "n/a" for a check the pass d
 | A6 | "About VisualCommit…" on a repository tab: one row, highlighted, no key, no detail; Enter opens About; nothing in the repository changes (D417, ruling 54); "graph", dark, 1100×700 | Not run yet | n/a | `a6a-palette-about` | Not R. Method 5. `a6a` shows the box's caret, which varies by nature |
 | U1 | The graph's selected row in UI Automation: `GraphRows` a List with one child, the ListItem `GraphSelectedRow`, named by its subject, author, date and refs (`Main work, Test Author, 2026-01-01 12:04, current branch main, remote branch origin/main, tag v1.1`; `Stash: On main: Experiment, …, stash@{0}`; `Working changes`), its help text `Commit {short SHA}` with `, 3 commits selected` on the focus row, live setting Polite; one Name change per move (Down, Up, Shift+Down twice, Up through the stash to the working-changes row, a branch clicked in the left panel); the focus on `GraphRows`, on `RefItem` after the click; the peer changes no pixel; the stopped merge's working row and next two rows (D411, D435, D450, D49); "ops" with README.md changed and the stopped merge, dark, 1100×700 | Not run yet | Not run yet | `u1a-graph-row-head`, `u1b-graph-rows-three-selected`, `u1c-graph-working-row`; real window none | R: on the stopped merge with `u-untracked.txt` (launch 13): real Up and Down twice, each raising a LiveRegionChanged from `GraphSelectedRow` within 5 s, a Name change alone failing (D450); no capture. Methods 1 and 2. Open points 76, 77 and 78 |
 | U2 | The sweep: `AccessibleNameSweepTests` reports nothing in its 14 states (the first-run screen's name and help text its title and body in states 10 to 13); the busiest state of the ops tab, the activity log, a selected and a hovered stage row, two hidden branches, swept with nothing reported (D411, D435); "ops" with three changes, dark, 1100×700 | Not run yet | n/a | `u2a-sweep-ops-tab` | Not R. Method 3 and `AccessibleNameSweepTests`; the first run's findings, on the code before, listed under U2 at §9's merge. Open points 79, 80, 81 and 90 |
-| U3 | The names of 1.12's table with every tooltip, help text and key as before: the resolver's five, the search bar's three, the comparison's two, `Close the diff`, `Activity log` and `Close the activity log`, the three splitters, `Stage README.md`, `Discard README.md`, `Unstage src/core.txt`, `Show feature/alpha in the graph`, `Stop soloing feature/ff`, `Dismiss the restore offer` (D411, D435; ruling 34); the stopped merge and "ops", dark, 1100×700 | Not run yet | Not run yet | `u3a-resolver-names`, `u3b-stage-row-names`; real window none | R: in launch 13, the resolver's five, the activity log's two, the three splitters, the search bar's three and `u-untracked.txt`'s three, each with its `AcceleratorKey` in run.txt; no capture. Methods 2 and 3; method 3 confirms a discard (D67's backup ref). Open points 75, 82, 83 and 84 |
+| U3 | The names of 1.12's table with every tooltip, help text and key as before: the resolver's five, the search bar's three, the comparison's two, `Close the diff`, `Activity log` and `Close the activity log`, the three splitters, `Stage README.md`, `Discard README.md`, `Unstage src/core.txt`, `Show feature/alpha in the graph`, `Stop soloing feature/ff`, `Dismiss the restore offer` (D411, D435; ruling 34); the two `alpha` rows' help texts `feature/alpha` and `origin/feature/alpha` (D456); the stopped merge and "ops", dark, 1100×700 | Not run yet | Not run yet | `u3a-resolver-names`, `u3b-stage-row-names`; real window none | R: in launch 13, the resolver's five, the activity log's two, the three splitters, the search bar's three and `u-untracked.txt`'s three, each with its `AcceleratorKey` in run.txt; no capture. Methods 2 and 3; method 3 confirms a discard (D67's backup ref). Open points 75, 82, 83 and 84 |
 
 ## Checks by hand
 
@@ -3425,9 +3515,9 @@ added with their parts.
 | The commit boxes (plan.md 774; D392) | K7 | `WorkingChangesTests` (a held `CommitAsync`, `CanToggleAmend`), `KeyboardPassTests` (Amend focused by Tab gets the focus back; `Amend_focused_by_Tab_leaves_the_focus_the_user_moved_while_the_commit_ran`) |
 | Icons and branding (R5, D407; plan.md 764): the icon's SVG, the tool that makes the `.ico`, the `.icns` and the PNG files, the window's and the executable's icon; with plan.md 782's visual check, the icon in the window and the taskbar | B1, B2; real window B1 (a) to (c) and B2 (the executable's icon, the window's two icons, the title bar dark and light, the taskbar button) | `IconFilesTests` (items 1 to 8: the masters' rules, the manifest's hashes, the `.ico`, the `.iconset`, `png/`, `Assets/Icon`, the `.icns` (item 7, D447) and `iconutil` both ways (item 8, in CI's macOS job, whose log shows it passed, not skipped)); `WindowIconTests` (the main window's and the notice window's `Icon`, `AppIcon`'s three URIs); `Phase8aExpectationTests.B`; the files: the masters in `assets/brand/`, the generated files, `tools/VisualCommit.IconBuilder` (built in CI's six jobs; a second run of it leaves `git status` clean, 7.8 item 2); the owner's choice recorded in `docs/brand/icon/round-1/` and `round-2/` (D447); the look-alike check by eye, with the checks by hand |
 | The README's "Name" note names the icon (D412; plan.md 764) | none | The README's "Name" note, design 7.3's text, written by the lead at §7's merge: proven by the file (design 0.1). No check of part B proves it; it stands here because it lands at §7's merge |
-| Third-party notices, complete for what the app ships and reachable from the app (plan.md 762; R6; D431, D433, D434; design 0.1, 8.1, 8.3.4) | A5 (the notices file and the vendors' files in the app's text dialog); A4 (the license) | `ThirdPartyNoticesTests` (`Every_shipped_package_is_named_with_its_version`, `Every_shipped_file_is_named`, `Every_named_package_ships`, `Every_grammar_and_theme_is_listed`, `Every_license_named_has_its_text`, `The_app_embeds_the_texts_word_for_word`, `The_identity_matches_LICENSE`), red on the base first and green in CI's six jobs (8.8; the macOS and Linux natives proven only in CI's macOS and Linux jobs, 8.9 item 5); `TextDocumentDialogViewModelTests`, `DocumentTextViewTests`; `AboutSectionTests` (the notices' switch shows Avalonia's file); the files `THIRD-PARTY-NOTICES.md` and `notices/` (the vendor files' sources and SHA-256 in §8's merge note, 8.8); `ci.yml`'s `paths`, which take the notices and `LICENSE` as build inputs (D433; unverified until a push changes only the notices, 8.9 item 6) |
-| The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6; real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher); `AboutSectionTests`; `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); part G's G3 (About's guide link); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
-| An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states, each failing first on the code before); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's sentence on Narrator (§11, ruling 39), whose proof is added with part G; to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
+| Third-party notices, complete for what the app ships and reachable from the app (plan.md 762; R6; D431, D433, D434; design 0.1, 8.1, 8.3.4) | A5 (the notices file and the vendors' files in the app's text dialog); A4 (the license) | `ThirdPartyNoticesTests` (`Every_shipped_package_is_named_with_its_version`, `Every_shipped_file_is_named`, `Every_named_package_ships`, `Every_grammar_and_theme_is_listed`, `Every_license_named_has_its_text`, `The_app_embeds_the_texts_word_for_word`, `The_identity_matches_LICENSE`, `The_notices_files_only_addresses_are_its_copyright_lines`), red on the base first and green in CI's six jobs (8.8; the macOS and Linux natives proven only in CI's macOS and Linux jobs, 8.9 item 5); `TextDocumentDialogViewModelTests`, `DocumentTextViewTests` (the text's keys, part A's "Shown by no check": `The_copy_key_copies_a_selection_and_nothing_without_one`, `The_select_all_key_selects_the_whole_text_and_leaves_the_view_where_it_is`, `Keys_that_would_move_extend_or_use_the_hidden_caret_or_type_do_nothing`, `Cut_paste_undo_and_redo_change_nothing_and_leave_the_view_where_it_is`, `Enter_with_or_without_modifiers_leaves_the_view_where_it_is_and_plain_Enter_goes_on_unhandled`, `Another_editor_still_takes_its_keys_line_breaks_typing_deleting_and_moving_its_caret`, `A_wheel_up_after_End_leaves_the_end_though_the_lines_it_brings_in_wrap` among them); `AboutSectionTests` (the notices' switch shows Avalonia's file; `Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back`); the files `THIRD-PARTY-NOTICES.md` and `notices/` (the vendors' files byte for byte as the vendors ship them, `notices/** -text` in `.gitattributes`: two with CRLF, two with LF; 8.2, 8.8); `ci.yml`'s `paths`, which take the notices and `LICENSE` as build inputs (D433; unverified until a push changes only the notices, 8.9 item 6) |
+| The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6; real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher; `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more`, `A_screen_closed_while_the_texts_are_read_shows_no_dialog`); `AboutSectionTests` (`Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back` among them); `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); part G's G3 (About's guide link); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
+| An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states; on the code before §9's names 12 of the first 13 failed, the notice's had nothing to find, and About's came at the merge: U2); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's sentence on Narrator (§11, ruling 39), whose proof is added with part G; to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
 
 Plan.md 786's "Done when" ("the About screen … the complete notices … exist") rests on the rows of the
 third-party notices and the About screen.
@@ -3702,7 +3792,11 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
      Up from row 0 wraps to 33, then 32. Reason: ruling 54.
 
   §8's builder Greps for others (`SettingsNavAccounts`, `Follow the system's theme`, `Shown.Count`) and
-  names any here. `RealApp.Phase6.Settings.cs`' `SettingsNavIds` gains nothing: no real-window step clicks
+  names any here. As built (merged at `f014b2b`), no other earlier test's assertion changed; the
+  comments these changes made false were corrected with them (K10's PageDown rows in
+  `Phase6Checks.K.cs`, the 34 commands in `PaletteEntriesTests`, six buttons in 7a's and 7b's part A
+  helpers), and the real-window pass's on K10's rows (`Phase6RealWindowPass.K.cs`) by the lead at the
+  merge. `RealApp.Phase6.Settings.cs`' `SettingsNavIds` gains nothing: no real-window step clicks
   About's button (launch 3 opens About from the palette); nor does its `ShownSettingsSection`: launch 3
   waits on `AboutVersion` itself.
 - **8a's own expectations.** None changes: parts L, I, F, K and B assert no section list or palette count.
@@ -3749,7 +3843,11 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   it (`RealApp.RefRow`, `Phase1Checks.Graph`). The lead chose the `duplicate` rule's exemption for
   `RefItem` under `RefList` over naming the rows by their full names, which would have changed those
   helpers' lookups, because a row of the branch list is told apart by its place under its section and
-  its folders, and its full name is its tooltip, which its peer gives as its help text.
+  its folders, and by its help text, the ref's full name. As built that help text was missing: the
+  full name was the tooltip of the row's name text alone, and the row's peer gave none. D456 (3) binds
+  the row's button's `AutomationProperties.HelpText` to `RefItemRow.ToolTip`, the one exception to
+  ruling 34, with no tooltip on the button: it draws nothing, so no picture changes, and no earlier
+  test reads a row's help text.
 - **No expected result of 8a's earlier parts changes.** Part K's checks assert ids, the rows' names
   (their paths) and the names of buttons outside 1.12's table, which §9 does not touch (`Stage hunk`
   and `From GitHub…` among them); part K's real window: "the UI Automation names the walk meets are
@@ -3803,6 +3901,45 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   of `GitSetupGitSaid` now reads "one line of git's words, wrapped to the box's width". The box wraps
   a long line by design (5.3), `f6a-config-fault` shows git's one line over two rows, and the check
   asserts one line of text. No expected result changed.
+- **Part K's "What a fake stands for", the note under K3 and open point 42** (2026-11-21, the fetch
+  hold's fix, `f019688`, merged at `eba3717`): the convention says when a held fetch's shell gives up
+  (at a look that finds no release once its rounds are over; one that saw the release never looks
+  again) and that on Linux and macOS K3's cancelled shell may wait through K8's hold until step 9,
+  which does no harm; the note no longer says that `FetchHold.cs` stays as it is. Reason: CI's run
+  44969394972 failed K3 and K8's method on Linux by the script's second look at `release` after
+  `Arm()`, and the fix changed the script. No step and no expected result of K3 or K8 changed.
+- **U2 and part U's conventions: the sweep's rules and its states** (2026-11-21, D456 at §9's merge):
+  the rules as D456 reads them (a scroll bar and what lies inside it are not checked; a dialog is its
+  own container for `duplicate`; two key texts joined by ` to ` are a key text), and the states as
+  built: 14 facts, state 3 with three sweeps (About, the license's text dialog, the notices' dialog on
+  Avalonia's file), state 4 with the add-repositories and create-pull-request dialogs; and the first
+  run's findings under U2. Reason: §9's first run left Fluent's unnamed scroll bars and the stacked
+  dialogs' Cancel, outside 1.12's table, to the lead (9.3.8); the report's state 3 named About and the
+  license's text dialog alone, while a vendor file's text is reached only through the notices' dialog
+  (D456 (5)); and §9's review found state 4 without two dialog kinds. U2's expected result, nothing
+  reported in each state, is unchanged.
+- **U3, method 2, step 6 and its expected result, and launch 13's close of the resolver** (2026-11-21,
+  the lead's ruling at §9's merge; the check since `96d94bf`): Esc leaves the resolver open, and
+  `ResolverCloseButton` closes it, by a real click in launch 13; the check asserts both. Reason: the
+  report misread phase 4: after the double-click on `notes.txt` the keyboard focus is in the
+  resolver's result, where Esc is the resolver's own and closes nothing (phase 4's design 11.10). The
+  end is unchanged: no resolver, the repository as it was.
+- **U3, `u3a`'s expected result** (2026-11-21, the same ruling): the resolver spans the right panel's
+  column, so no stage panel shows beside it; the sentence that put the stage panel with `notes.txt`
+  and `u-untracked.txt` in the right panel is gone. Reason: phase 4's design 11.2, as phase 4's `c10e`
+  shows; the report misread it. The check does not assert the right panel there.
+- **U3, method 3, step 8 and its expected result** (2026-11-21, D456 (3)): the step also reads the two
+  `alpha` rows' help texts through their own peers, `feature/alpha` and `origin/feature/alpha`, with no
+  tooltip on either row's button. Reason: the `duplicate` rule's exemption of `RefItem` rested on the
+  row's peer giving the ref's full name as its help text, and as built it gave none (the full name was
+  the tooltip of the row's name text); D456 (3) binds the row's help text to `RefItemRow.ToolTip`, the
+  one exception to ruling 34, and the assertion failed on the code before the binding. A new expected
+  result; nothing drawn changes.
+- **The Narrator walk-through, step 10** (2026-11-21, D456 (3) and the lead's ruling at §9's merge on
+  the spike's S4): Narrator may also read the clicked branch row with its help text, and the owner
+  listens, as the folder opens, for a row named `Avalonia.Controls.DockPanel` for a moment (open point
+  93); what is heard is written down. Reason: the row gained its help text, and the spike's S4 met that
+  name once.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
@@ -4366,6 +4503,17 @@ another; §12's builder follows the report's steps.
     and releases it after each cancel (K3's step 6, K8's step 9). The lead may set other rounds.
     **Settled by §6's build:** `rounds: 300` (`Phase8aExpectations.K.FetchHoldRounds`), released after
     each cancel; no held fetch gave up (`FetchHold.GaveUp()` empty at the method's end).
+    **At wave 3 (`f019688`, merged at `eba3717`):** this point named only the route where the rounds
+    run out. CI's run 44969394972 found a second, in its container with the SDK from Ubuntu's packages:
+    K3's cancelled fetch's shell left its loop at step 6's release, looked at `release` a second time
+    after step 7's `Arm()` had deleted it, and wrote its marker, and the method failed after 4.9 s with
+    "The hold gave up". The script now looks at `release` only in its loop's test and gives up only when
+    that look finds none once its rounds are over (the conventions' "What a fake stands for");
+    `FetchHoldTests.A_fetch_that_saw_the_release_does_not_give_up_when_the_hold_is_armed_again_before_it_goes_on`
+    holds a shell that saw the release inside its `rm` until after `Arm()`, and failed on the old
+    script. A shell that misses a short release still counts its rounds from its own start (`Arm()`'s
+    comment says so); no test comes near that. No expected result changed. The exception that hid the
+    first failure is open point 94.
 43. **K5's start.** 8a's `StartEmptyAsync` takes a theme and a probe and no fake of GitHub (1.17; every
     provider stays off, `Phase8aChecks.Support.cs`). This part starts K5 as 7a's `StartEmptyAsync(data,
     served)` does, on a copy of 7a's "hosting" served on a free port; the lead may instead give 8a's
@@ -4551,6 +4699,8 @@ Still open, each with the reading this report takes and who settles it; a point 
     file for §8's merge takes the region from x 140, and the design's 0.7 and 8.6 give it as x 140–317,
     y 255–285 at 1100×700 (x 550–727, y 415–445 at 1920×1080): phase 7a's and 7b's expectations put the
     section list's buttons at x 140 and 550, asserted within 2. 8.5's places for About stay as written.
+    **Settled by §8's build (merged at `f014b2b`):** `Phase8aExpectations.A.AboutAt` (141, 255) and
+    `AboutAtFull` (551, 415), asserted within 2.
 57. **Method 1's order.** 8.5 lists A1's three Tabs before A4; 12.3.4 has the real window go from A1's
     picture to A4 by "Tab to `AboutShowLicenseButton`". Method 1 takes A4 after A1's first Tab, which
     lands on `Show license…`, and A1's walk goes on from there after Esc gives the focus back: the three
@@ -4563,19 +4713,32 @@ Still open, each with the reading this report takes and who settles it; a point 
     settings card follows (`Theme/Dialogs.axaml`: stretched both ways and centred by its maximum). §8's
     builder confirms and `Phase8aExpectations.A` holds it; the checks assert its size and place within 2.
     **Settled (the lead, 2026-11-21):** as this report reads it; §8's builder fixes the values in
-    `Phase8aExpectations.A`.
+    `Phase8aExpectations.A`. **Settled by §8's build (merged at `f014b2b`):** 760 × 600 at (170, 50)
+    (`Phase8aExpectations.A.DialogCard`), asserted within 2.
 59. **The gaps with one part.** 8.3.2 gives 12 below the title for the switch and 8 below the switch for
     the text; with one part (the license) it does not say whether the text lies 8, 12 or 20 below the
     title. A4 asserts the order (title, text, buttons) and the buttons 20 below the text, not that gap; A5
     asserts 12 and 8. §8's builder fixes it in `Phase8aExpectations.A`. **Settled (the lead,
     2026-11-21):** as this report reads it; §8's builder fixes the values in `Phase8aExpectations.A`.
+    **Settled by §8's build (merged at `f014b2b`):** with one text and no switch the text lies 12 below
+    the title (`TextBelowTitleAlone`); with the switch, the switch 12 below the title and the text 8
+    below the switch (`SwitchBelowTitle`, `TextBelowSwitch`). Method 1 asserts the 12 in A4 as well,
+    within 0.5.
 60. **A5's 1 s and End with word wrap** (8.9 item 3, 13.4 item 12): unverified until part A runs; if either
     fails, the lead rules during §8 (no wrap, or a later bound). The bound is also read in CI's six jobs,
     whose runners are slower than the laptop (macOS's above all): the lead's ruling says whether it holds
     there or is asserted on the laptop alone. **Settled (the lead, 2026-11-21):** the bound stays 8.5's
     and is asserted by the scripted check wherever it runs; the check also writes the time it measured to
     its output. If the whole default run or one of CI's jobs fails it, the lead rules then, with the
-    measured times, and no bound is loosened ahead of that.
+    measured times, and no bound is loosened ahead of that. **At §8's merge (the lead, 2026-11-21):**
+    the bound stays. §8's build asserts it at the method's end, not right after step 3, so that a slow
+    opening still lets steps 4 to 7 run and save their pictures; the time is still the one from the
+    click to step 3's wait, written to the output. It held in the lead's runs and in all six jobs of
+    CI's run 44969394972, the merge's; it failed in the builder's and a fixer's runs on the laptop
+    while other agents built and tested beside them (1,001 to 2,119 ms; 1,164 to 1,759 ms). No ruling
+    until the whole default run or a CI job fails it. End with word wrap shows the true last line in
+    §8's runs, and the view lets go of the end when the reader moves up
+    (`DocumentTextViewTests.A_wheel_up_after_End_leaves_the_end_though_the_lines_it_brings_in_wrap`).
 61. **The texts' last line.** `THIRD-PARTY-NOTICES.md` is expected to end with a line end, after which
     AvaloniaEdit counts an empty last line. A5 reads 8.5's "its last line at the bottom" as: the scroll
     offset at its end; the document's last line, that empty line, as the view's last visual line; and the
@@ -4584,10 +4747,15 @@ Still open, each with the reading this report takes and who settles it; a point 
     (`Document.LineCount` 22, its last line empty); if `Phase8aExpectations.A` holds a count, it keeps the
     file's 21 and asserts `LineCount` as that count + 1. §8's builder confirms. **Settled (the lead,
     2026-11-21):** as this report reads it; §8's builder fixes the values in `Phase8aExpectations.A`.
+    **Settled by §8's build (merged at `f014b2b`):** `LICENSE` has 21 lines
+    (`Phase8aExpectations.A.LicenseLines`), the document 22 (`LineCount` asserted as 21 + 1), and A4
+    asserts lines 1 to 22 in view.
 62. **The icon's pixels.** 8.3.1 gives `AboutIcon` 48 × 48, decorative, drawn in high quality from the 96
     PNG. This report adds part B's two readings (the centre pixel white, the top-left pixel the card's
     background, each within 2), from 1.17's description of `VisualCommit-96.png`. The lead keeps or
-    drops them before §8's build. **Settled (the lead, 2026-11-21):** kept.
+    drops them before §8's build. **Settled (the lead, 2026-11-21):** kept. **Settled by §8's build
+    (merged at `f014b2b`):** A1, A2 and A3 also assert the conventions' source, the 96 × 96 bitmap, and
+    `BitmapInterpolationMode.HighQuality`.
 63. **A link's hover.** 8.3.1: the links underline while hovered or focused. A1 shows the focus's underline;
     no check hovers a link (G3 is part G's, by Tab). The lead, if a hover step is wanted (a picture with
     the pointer kept on `AboutRepositoryLink`, its tooltip then open). **Settled (the lead,
@@ -4619,7 +4787,10 @@ Still open, each with the reading this report takes and who settles it; a point 
     Automation reports the editor or its `TextArea` as the focused element is confirmed by §12's first
     run, through run.txt's note of which condition of the text's wait held (as part K's launches 11 and
     12). **Settled (the lead, 2026-11-21):** as this report reads it; §8's builder and §12's first run, as
-    it says.
+    it says. **Settled by §8's build (merged at `f014b2b`):** the text area's caret brush is
+    `Brushes.Transparent` (`DocumentTextView`), and A4 and A5 assert a solid brush whose alpha is 0, so
+    that a missing brush fails; the text takes the focus at opening without the keyboard's frame
+    (`NavigationMethod.Unspecified`, as the diff's text does). What UI Automation reports stays §12's.
 67. **8a's own pictures with the settings screen.** 0.7 and 8.6 omit `f12a-row-next-start`,
     `f12b-row-too-old` and `f14a-netrc-note` (part F, 5.5), which show the section list at 1100×700 and so
     change in x 140–317, y 255–285 at §8's merge. The lead names them in the `--expected` file for §8's
@@ -4647,12 +4818,20 @@ Still open, each with the reading this report takes and who settles it; a point 
     quotes them, and the `@` rule is About's own texts'. The lead, if any line should be kept out of a
     picture (a scroll position, or another vendor file than Avalonia's for `a5c`). **Settled (the lead,
     2026-11-21):** as this report reads it; the lead at §8's merge, if a line should be kept out of a
-    picture.
+    picture. **At §8's merge (the lead, 2026-11-21):** `THIRD-PARTY-NOTICES.md` quotes the copyright
+    lines word for word, their holders' e-mail addresses included (8.3.4 as written): "no e-mail
+    address" meant the owner's and About's own texts, not third parties' notices. Six addresses, each
+    inside a fenced block, which `ThirdPartyNoticesTests.The_notices_files_only_addresses_are_its_copyright_lines`
+    admits and no other; About's own texts hold no `@`, as before. They lie on the file's lines 72 to
+    376 of 945, out of `a5a`'s and `a5b`'s view, and Avalonia's file holds none. The vendors' files
+    are kept byte for byte (`notices/** -text`). No line is kept out of a picture.
 71. **The neutral point at 1920×1080.** (760, 687) lies inside the settings card, which ends at y 880, in
     the section's column; About's form, "about 356 high" (8.3.1), ends above it, so nothing is hovered
     there. If the form reaches it (a link would then show its hover underline in `a3a`, and a real pointer
     could open a tooltip), §8's builder tells the lead, who moves part A's resting point at that size in
     both harnesses. **Settled (the lead, 2026-11-21):** as this report reads it; §8's builder, as it says.
+    **Settled by §8's build (merged at `f014b2b`):** About's form ends at about y 591 at 1920×1080, by
+    the builder's reading, so nothing lies under the neutral point and the resting point stays.
 72. **Launch 3's first key.** By 12.3.3's rule the launch asserts `ForegroundIsThis` before A1's
     `Ctrl+Shift+P`; 12.3.4 names the rule for launches 5 and 6 only and gives launch 3 no fallback. This
     report gives it one: if `ForegroundIsThis` fails, a real click at the neutral point (on nothing on the
@@ -4670,14 +4849,23 @@ Still open, each with the reading this report takes and who settles it; a point 
     `AboutLicense` (8.3.1 says "tokens only", and names none): the checks assert none of them by value. The
     switch buttons' widths: 8.5 expects the five in one row of the card's content (718 wide at 1100×700);
     if `SkiaSharp and HarfBuzzSharp` wraps to a second row, §8's builder tells the lead. §8's builder.
-    **Settled (the lead, 2026-11-21):** as this report reads it; §8's builder, as it says.
+    **Settled (the lead, 2026-11-21):** as this report reads it; §8's builder, as it says. **Settled by
+    §8's build (merged at `f014b2b`):** `SkiaSharp and HarfBuzzSharp` stays on the switch's one row (A5
+    asserts the five buttons' tops equal); the four colours are asserted by no value.
 74. **Unverified in the build** (8.9 items 1, 2, 4 to 6): `NativeMenuItem.Command` in Avalonia 12.1.3 and a
     `NativeMenu` under the headless platform (`AboutEntryTests`; without `Command`, `App.ShowAbout`); the
     macOS menu itself (8b's Mac checklist); Wuffs, SPIRV-Cross and any other component Microsoft's file
     omits, whose licenses are read at the source; the macOS and Linux natives, proven only in CI's macOS
     and Linux jobs; `ci.yml`'s `paths` order rule, until a push changes only the notices. No check of
     part A depends on them. §8's builder; the lead at §8's merge. **Settled (the lead, 2026-11-21):** as
-    this report reads it; §8's builder and the lead at §8's merge, as it says.
+    this report reads it; §8's builder and the lead at §8's merge, as it says. **Settled by §8's build
+    (merged at `f014b2b`) and CI's run on the merge:** `NativeMenuItem.Command` exists in Avalonia
+    12.1.3, so the item's `Command` is `App.AboutCommand`, and `NativeMenu.GetMenu(Application.Current)`
+    reads the menu under the headless platform (`AboutEntryTests`); Wuffs (MIT and Apache-2.0) and
+    SPIRV-Cross (Apache-2.0 or MIT) have their licenses as read at their sources; `ThirdPartyNoticesTests`
+    passed in all six of CI's jobs in run 44969394972, the macOS and Linux natives among what it checks
+    (8.9 item 5). Still open: the macOS menu itself (8b's Mac checklist) and `ci.yml`'s `paths` order
+    rule, until a push changes only the notices (8.9 item 6).
 
 ### Part U: screen readers: the graph's row, the names and the sweep
 
@@ -4748,7 +4936,8 @@ Still open, each with the reading this report takes and who settles it; a point 
     row and "old null" for none to a row, and does not say which holds here. U1 asserts the old value
     from the second change on. §9's builder. **Settled (the lead, 2026-11-21):** as this part reads it;
     §9's builder fixes the value in `Phase8aExpectations.U`, and the lead quotes it in the report at §9's
-    merge.
+    merge. **Settled by §9's build (merged at `769f459`):** null (`Phase8aExpectations.U.FirstOldName`),
+    which methods 1 and 2 assert for their first change.
 78. **The stash row's hint.** 9.3.5 gives `Commit {short SHA}` as the hint and names no other for a
     stash's row; this report expects `Commit 0e95aca`. §9's builder; the lead if another is wanted.
     **Settled (the lead, 2026-11-21):** `Commit {short SHA}`, as this part reads 9.3.5.
@@ -4757,12 +4946,20 @@ Still open, each with the reading this report takes and who settles it; a point 
     report's, so that "Unstage …" has a row and two unstaged rows can be selected and hovered (9.3.8's
     state 5: two unstaged and one staged file). `Phase8aExpectations.U` holds the contents. **Settled (the
     lead, 2026-11-21):** as this part reads it; §9's builder fixes the contents in
-    `Phase8aExpectations.U`, and the lead quotes them in the report at §9's merge.
+    `Phase8aExpectations.U`, and the lead quotes them in the report at §9's merge. **Settled by §9's
+    build (merged at `769f459`):** README.md is written as
+    `# Operations\n\nA change for the screen readers' checks.\n` (methods 1 and 3; `U.ReadmeChanged`);
+    `src/core.txt` as `core\nmain work\nstaged for the names\n`, then staged (method 3;
+    `U.CoreChanged`); `u-untracked.txt` holds `An untracked file whose row's buttons are named.\n`
+    (methods 2 and 3 and launch 13; `U.UntrackedContent`).
 80. **"Two branches hidden"** (9.5's U2, 9.3.8's state 5) is read as `Hide feature/alpha`, which hides
     `origin/feature/alpha` with it (phase 5's FL1), both rows shown once both `feature` folders are open.
     §9's builder. **Settled (the lead, 2026-11-21):** as this part reads it; §9's builder fixes the
     contents and the values in `Phase8aExpectations.U`, and the lead quotes them in the report at §9's
-    merge.
+    merge. **Settled by §9's build (merged at `769f459`):** `Hide feature/alpha` (`U.HideFeatureAlpha`)
+    hides `origin/feature/alpha` with it; method 3's step 4 waits for both rows' eyes, named
+    `Show feature/alpha in the graph` and `Show origin/feature/alpha in the graph` (U3's table), and
+    the two rows' help texts are `feature/alpha` and `origin/feature/alpha` (D456 (3); step 8).
 81. **The left panel's rows themselves.** `RefItem` and `Section` are Buttons named by their row's text
     (`LeftPanelView.axaml`), so on the ops tab `RefList` holds two `RefItem`s named `main` (Local branches'
     and `origin`'s) and two named `feature` (the two folders), and two named `alpha` once both folders are
@@ -4777,27 +4974,46 @@ Still open, each with the reading this report takes and who settles it; a point 
     every real-window helper finds it (`RealApp.RefRow`, `Phase1Checks.Graph`): no earlier test, helper
     or picture changes. 9.3.8's `duplicate` rule does not apply to `RefItem` under `RefList`:
     `AutomationSweep` holds that one exemption by the automation id, with its reason in a comment (a row
-    of the branch list is told apart by its place under its section and its folders; its full name is
-    its tooltip, which the peer gives as its help text; the left panel as a tree with levels is the
-    Backlog's, ruling 36). So `AssertNamed` reports nothing on the ops tab, U2's sweep state 5 passes,
-    and U1's step 8 reads the focus on the `RefItem` named `alpha` (the row's text), not
-    `feature/alpha`. The toggles inside the rows are unique by open point 75's ruling. Any other
-    duplicate the sweep's first run finds (an activity log's rows, for one) is the lead's at §9's merge,
-    the same way.
+    of the branch list is told apart by its place under its section and its folders, and by its help
+    text; the left panel as a tree with levels is the Backlog's, ruling 36). So `AssertNamed` reports
+    nothing on the ops tab, U2's sweep state 5 passes, and U1's step 8 reads the focus on the `RefItem`
+    named `alpha` (the row's text), not `feature/alpha`. The toggles inside the rows are unique by open
+    point 75's ruling. **Settled at §9's merge (D456 (2), (3); 2026-11-21):** the exemption's reason, as
+    first written, was that the row's full name is its tooltip, which its peer gives as its help text;
+    as built the peer gave none, since the full name was the tooltip of the row's name text (`RefName`)
+    and Avalonia's peer falls back only to its own control's tooltip. The `RefItem` button's
+    `AutomationProperties.HelpText` is now bound to `RefItemRow.ToolTip`, the one exception to ruling
+    34, with no tooltip on the button and nothing drawn: a branch's or a tag's row gives the ref's full
+    name (`feature/alpha`, `origin/feature/alpha`; never `NameToolTip`, which reads "… is hidden in the
+    graph" for a hidden branch), a folder's row its path (`feature`, `origin/feature`), a remote's row
+    its name (`origin`), a stash's row its message; only a section's row (`Section`, a template of its
+    own) gives none. Method 3's step 8 asserts the two `alpha` rows'. So the exemption's reason holds,
+    and the sweep's comment says so. The first run's other duplicates (open point 90) are gone: the
+    stage rows' buttons and the eyes by 1.12's names (open point 75), and the stacked dialogs' Cancel by
+    D456 (2), a dialog being its own container.
 82. **The comparison's route.** 9.5 names "the comparison's two" and no route; this report opens
     `Compare feature/conflict with main` from the left panel's menu (phase 5's 6.2), a branch comparison,
     so that `CompareClose` shows (`IsBranches`). §9's builder. **Settled (the lead, 2026-11-21):** as
     this part reads it; §9's builder fixes the contents and the values in `Phase8aExpectations.U`, and
-    the lead quotes them in the report at §9's merge.
+    the lead quotes them in the report at §9's merge. **Settled by §9's build (merged at `769f459`):**
+    `Compare feature/conflict with main` from the menu of the folder's `conflict` row; the comparison's
+    ends read `From main` and `To feature/conflict` (`U.CompareFrom`, `U.CompareTo`), and it is one of
+    branches (`IsBranches`); method 3's step 3 asserts both.
 83. **The restore offer.** "Dismiss the restore offer" shows only after a discard (D62), so method 3
     confirms a discard of README.md and its end state carries README.md as committed and one backup ref
     (D67), as the sweep's state 5 does. The lead, if another route is wanted. **Settled (the lead,
     2026-11-21):** as this part reads it; §9's builder fixes the contents and the values in
-    `Phase8aExpectations.U`, and the lead quotes them in the report at §9's merge.
+    `Phase8aExpectations.U`, and the lead quotes them in the report at §9's merge. **Settled by §9's
+    build (merged at `769f459`):** method 3's end state is the start's with README.md as committed
+    (`# Operations\n`, `U.ReadmeCommitted`), README.md's status line gone, and one ref under
+    `refs/visualcommit/backup/` whose commit holds README.md as it was (`U.ReadmeChanged`, read by
+    `git show`); `src/core.txt` still staged, `u-untracked.txt` still untracked.
 84. **"Close the diff"** (1.12's `CloseDiffButton`) is read in method 3, where README.md's diff is open,
     though 9.5's U3 list does not name it; launch 13 does not read it. **Settled (the lead,
     2026-11-21):** as this part reads it; §9's builder fixes the contents and the values in
-    `Phase8aExpectations.U`, and the lead quotes them in the report at §9's merge.
+    `Phase8aExpectations.U`, and the lead quotes them in the report at §9's merge. **Settled by §9's
+    build (merged at `769f459`):** read in method 3's step 8, README.md's diff open: `Close the diff`,
+    its tooltip `Close`, its help text the tooltip by the peer's fallback, no key (U3's table).
 85. **The walk-through's start.** 9.3.9 starts "copies of the ops scenario with README.md changed and of
     a stopped merge" by the lead's line with CLAUDE.md's isolating variables, which do not set
     `VISUALCOMMIT_TIME_ZONE`: the heard dates are then the machine's zone, not 9.3.5's UTC. This report
@@ -4844,7 +5060,11 @@ Still open, each with the reading this report takes and who settles it; a point 
     records its words in §9's merge notes and status.md and quotes them under part U.
 90. **The first run's findings** (9.4, 9.5: "the report lists the states and the first run's
     findings"): `AccessibleNameSweepTests` on the code before §9's change, state by state, recorded
-    under U2 at §9's merge; the list given in U2 is 9.4's "at least".
+    under U2 at §9's merge; the list given in U2 is 9.4's "at least". **Settled at §9's merge
+    (2026-11-21):** listed under U2. On the code before 1.12's names, 12 of the 13 facts then written
+    failed and state 14's alone passed; every finding of 9.4's list came, and beside them the unnamed
+    scroll bars of the palette, Keyboard shortcuts and the blame, and each sign-in dialog's Cancel over
+    the settings screen's, which D456 (1) and (2) settle.
 91. **The references of 9.6's comparison.** 9.6, 0.7 and 1.17 name wave 1's
     (`D:/Projects/Personal/phase8-work/references/wave1/`); the report's "Wave 2's comparison" makes wave
     2's the references of the later merges. This part reads wave 2's, with the lead's `--expected` file
@@ -4857,3 +5077,19 @@ Still open, each with the reading this report takes and who settles it; a point 
     **Settled (the lead, 2026-11-21):** the design's 9.4 gains `KeyboardPassTests.ReadmesStageFact`, as
     the part's `forTheDesign` words it. (The pre-gate round's Ctrl+Tab ruling rewrites that test later;
     that is status.md's step 19.)
+
+Found at wave 3's merges, numbered on; neither is this wave's (the lead, 2026-11-21): each goes to the
+review before the gate (status.md's step 19).
+
+93. **A branch row's name while its folder opens** (the spike's S4). When `Local branches › feature` was
+    clicked, UI Automation's FocusChanged named the focused `RefItem` `Avalonia.Controls.DockPanel` for
+    a moment: by §9's builder's reading, the row's name binding is null while the folder's rows are
+    rebuilt, and the peer falls back to its content's `ToString()`. The sweep, which looks once the
+    panel has settled, does not see it; it is older than 8a and outside 1.12's table. The review before
+    the gate reproduces it in a test, and the Narrator walk-through listens for it when a folder opens
+    (step 10).
+94. **A check whose `using var hold` throws in its `Dispose` hides the first exception.** In CI's run
+    44969394972 part K's method 3 failed with the fetch hold's `Dispose` throwing "The hold gave up",
+    which replaced the exception of the step that failed first (most likely `WaitForHeldAsync` at K8's
+    step 7; open point 42). It is older than this wave, and the hold's fix (`f019688`) does not change
+    it.
