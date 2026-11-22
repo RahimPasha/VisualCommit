@@ -347,6 +347,24 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [44969394972](https://github.com/RahimPasha/VisualCommit/actions/runs/44969394972), for `02ef340`
+  (§8's merge, About and the notices, with the lead's changes at the merge): **failed in two jobs,
+  each on one test**; four jobs succeeded. `windows-latest` 8,348 tests with 5 skipped, Test step 41
+  min 36 s of 70; `ubuntu-latest`, the floor's job and the container with the SDK from Microsoft's
+  installer 8,345 tests with 4 skipped each (Test steps 5 min 24 s, 6 min 13 s and 5 min 42 s).
+  `macos-latest` (Test step 38 min 2 s) failed
+  `DocumentTextViewTests.Ctrl_C_copies_a_selection_and_nothing_without_one`, a test that §8's review
+  fixes added: it presses Ctrl+C, which is not the copy key on macOS, so nothing was copied. The
+  fault is the test's; it is corrected at the next merge to press the platform's copy gesture. "bare
+  ubuntu container, SDK from ubuntu packages" (Test step 6 min 36 s) failed wave 2's
+  `Phase8aChecksK.Check_K3_K8_cancel_in_the_palette_and_the_walks` after 4.9 s with "The hold gave
+  up": by the lead's reading a race in the harness's fetch hold (`FetchHold`): on Linux and macOS a
+  cancel kills git alone (D36), the hold's script of the cancelled fetch lives on, and when `Arm()`
+  deletes `release` between the script's two looks at that file the script writes its gave-up marker
+  after a few seconds. A fixer with a test first and an independent check are at it in
+  `D:/Projects/Personal/vc-wt/p8a-hold` (`wip/p8a-hold`, run `wf_dc316640-968`). In all six jobs
+  `ThirdPartyNoticesTests` passed, the macOS and Linux natives among what it checks (design 8.9 item
+  5), and A5's bound of 1 s held.
 - [44952559495](https://github.com/RahimPasha/VisualCommit/actions/runs/44952559495), for
   `86ecb3a` (§10's merge, the performance pass): all six jobs succeeded at the first attempt, none
   failed a test. `windows-latest` 8,301 tests with 5 skipped, Test step 27 min 13 s of 70;
