@@ -5,6 +5,7 @@ using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Automation.Provider;
 using Avalonia.Controls;
+using VisualCommit.App.Views.Dialogs;
 
 namespace VisualCommit.Testing.Headless;
 
@@ -48,7 +49,7 @@ public sealed class AutomationSweepException : Exception
 /// hyperlink, slider, thumb) or a pattern to act through (invoke, toggle, selection item, expand
 /// and collapse, range value, a writable value). A control that is not shown
 /// (<see cref="Avalonia.Visual.IsVisible"/> false on it or above it) is not walked; one drawn at
-/// opacity 0 is, as UI Automation keeps it.
+/// opacity 0 is, as UI Automation keeps it. A scroll bar is not walked either (D456).
 /// </summary>
 public static partial class AutomationSweep
 {
@@ -61,7 +62,7 @@ public static partial class AutomationSweep
     /// <summary>The rule for a name that ends in its keys in parentheses: the key is the accelerator key's, never the name's.</summary>
     public const string KeyText = "key text";
 
-    /// <summary>The rule for two controls of one list with one automation id and one name.</summary>
+    /// <summary>The rule for two controls of one list, or of one dialog outside its lists, with one automation id and one name.</summary>
     public const string Duplicate = "duplicate";
 
     /// <summary>
@@ -119,6 +120,14 @@ public static partial class AutomationSweep
                 return;
             }
 
+            // A scroll bar and what lies inside it are not checked (D456 (1)): it is a part of a
+            // scrolling control's template; a screen reader announces it by its type and value, and
+            // a reader scrolls with the keys of the control that holds it.
+            if (peer.GetAutomationControlType() == AutomationControlType.ScrollBar)
+            {
+                return;
+            }
+
             if (peer.IsControlElement() && IsInteractive(peer))
             {
                 var name = peer.GetName();
@@ -131,7 +140,11 @@ public static partial class AutomationSweep
                 checkedPeers.Add((peer, list, peer.GetAutomationId(), name));
             }
 
-            var childList = peer is ControlAutomationPeer { Owner: ItemsControl } ? peer : list;
+            // A control's container is the nearest list above it, the search ending at the root of
+            // the dialog it lies in (D456 (2)): two dialogs that lie over each other in the window's
+            // dialog layer (a sign-in dialog over the settings screen) each have a Cancel, told
+            // apart by their dialogs.
+            var childList = peer is ControlAutomationPeer { Owner: ItemsControl or DialogView } ? peer : list;
             foreach (var child in peer.GetChildren())
             {
                 Walk(child, childList);

@@ -2,8 +2,12 @@ using Avalonia.Automation;
 using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
 using Avalonia.Headless.XUnit;
+using Avalonia.Layout;
 using Avalonia.Styling;
+using Avalonia.VisualTree;
+using VisualCommit.App.Views.Dialogs;
 using VisualCommit.Testing.Headless;
 using Xunit;
 
@@ -115,6 +119,43 @@ public sealed class AutomationSweepTests
     }
 
     [AvaloniaFact]
+    public void A_dialog_is_its_own_container_so_two_stacked_dialogs_cancels_pass_and_one_name_twice_in_a_dialog_does_not()
+    {
+        // The window's dialog layer: the settings screen with a sign-in dialog over it, each with a Cancel (D456 (2)).
+        var settings = Dialog(Button("CancelButton", name: "Cancel"), Button("ConfirmButton", name: "Save"));
+        var signIn = Dialog(Button("CancelButton", name: "Cancel"), Button("CopyButton", name: "Copy"), Button("CopyButton", name: "Copy"));
+        var layer = new ItemsControl { ItemsPanel = new FuncTemplate<Panel?>(() => new Panel()), Items = { settings, signIn } };
+        AutomationProperties.SetAutomationId(layer, "DialogLayer");
+        using var host = Show(layer);
+
+        var problems = AutomationSweep.FindProblems(host.Window, State);
+
+        Assert.Equal([("CopyButton", AutomationSweep.Duplicate), ("CopyButton", AutomationSweep.Duplicate)], Ids(problems));
+    }
+
+    [AvaloniaFact]
+    public void A_scroll_bar_and_what_lies_inside_it_are_not_checked_and_an_unnamed_button_beside_it_is()
+    {
+        // A scrolling control's template part, without a name (D456 (1)), its line buttons and thumb
+        // shown. Fluent names those parts ("Line up", "Position"); the thumb's name is taken away
+        // here, so that a part inside the bar breaks a rule too.
+        var bar = new ScrollBar { Orientation = Orientation.Vertical, Height = 200, Maximum = 100, ViewportSize = 20, Visibility = ScrollBarVisibility.Visible, AllowAutoHide = false };
+        AutomationProperties.SetAutomationId(bar, "PART_VerticalScrollBar");
+        using var host = Show(bar, Button("Bare", name: null));
+        var thumb = bar.GetVisualDescendants().OfType<Thumb>().Single();
+        AutomationProperties.SetAutomationId(thumb, "Thumb");
+        AutomationProperties.SetName(thumb, string.Empty);
+        var peers = new[] { ControlAutomationPeer.CreatePeerForElement(bar), ControlAutomationPeer.CreatePeerForElement(thumb) };
+
+        var problems = AutomationSweep.FindProblems(host.Window, State);
+
+        Assert.Equal(
+            [(AutomationControlType.ScrollBar, true, AutomationSweep.Empty), (AutomationControlType.Thumb, true, AutomationSweep.Empty)],
+            peers.Select(peer => (peer.GetAutomationControlType(), peer.IsControlElement(), AutomationSweep.RuleBroken(peer.GetName(), peer.GetAcceleratorKey()))));
+        Assert.Equal([("Bare", AutomationSweep.Empty)], Ids(problems));
+    }
+
+    [AvaloniaFact]
     public void An_invisible_button_is_not_walked_and_one_drawn_at_opacity_zero_is()
     {
         var hidden = Button("Hidden", name: null);
@@ -204,6 +245,14 @@ public sealed class AutomationSweepTests
         }
 
         return button;
+    }
+
+    /// <summary>A dialog's root, as the window's dialog layer holds each open dialog, around <paramref name="controls"/>.</summary>
+    private static DialogView Dialog(params Control[] controls)
+    {
+        var panel = new StackPanel();
+        panel.Children.AddRange(controls);
+        return new DialogView { Content = panel };
     }
 
     private static DiffHost Show(params Control[] controls)
