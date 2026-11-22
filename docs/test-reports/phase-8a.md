@@ -2377,8 +2377,13 @@ pressed.
   `FocusedAutomationId()` (the nearest ancestor with an id) is `TextDocumentText` and the editor's
   `TextArea.IsFocused` is true, as part K reads `DiffText` and `BlameText`. "Framed" means the focused
   element has `:focus-visible`, as part K reads it. A link is "underlined" when the `TextBlock` it shows has
-  `TextDecorations` Underline (8.3.1). `TextDocumentText` is read as a `CodeTextEditor`: its document's
-  text, its options (`IsReadOnly`, `WordWrap`, `Options.AcceptsTab`), its scroll offset
+  `TextDecorations` Underline (8.3.1). The repository link that A1's step 9 frames is also read in its
+  picture, against `a1a`, where it is not focused (`AssertFramedLink`, by `LinkFrame` in
+  `VisualCommit.Testing`): the text's pixels unchanged but for the underline's rows, the underline shown
+  across the text, a whole frame in the theme's frame colour (Fluent's
+  `SystemControlFocusVisualPrimaryBrush`, part K's conventions) on four sides outside the text, and the
+  background between the frame and the text's ink. `TextDocumentText` is read as a `CodeTextEditor`: its
+  document's text, its options (`IsReadOnly`, `WordWrap`, `Options.AcceptsTab`), its scroll offset
   (`CodeTextEditor.ScrollOffset`) against its extent and viewport, and which document lines its text
   view shows whole. "Shown" is `IsEffectivelyVisible` with a laid-out size. Places are window
   coordinates at scale 1, within 2, as phase 7a's and 7b's part A assert the section list's places
@@ -2565,7 +2570,8 @@ Expected:
 - After step 8: `AboutShowNoticesButton` focused, framed; no dialog; the launcher has no request.
 - After step 9 (`a1b`): `AboutRepositoryLink` focused, framed, its text underlined (8.3.1: underlined
   while focused; the pointer at the neutral point, so not by hover); `AboutGuideLink` not underlined; no
-  tooltip open; the launcher has no request.
+  tooltip open; the launcher has no request. The check reads the frame and the underline in `a1b` too,
+  against `a1a` (the conventions' "Where things are read").
 - After step 10: the launcher's `Requests` holds exactly one request, an `OpenUrl` of
   `https://github.com/RahimPasha/VisualCommit` (`AppLinks.Repository`, 1.7), and nothing else; the
   screen still open on About; `AboutRepositoryLink` still focused; the log has no `Opening the
@@ -3511,8 +3517,8 @@ owner; each is recorded here when the gate runs. Result values as under "Checks"
 
 ## What proves each Delivers item
 
-The rows of the Delivers items of parts L, I, F, K, B, A and U (design 0.1); the other items' rows are
-added with their parts.
+The rows of the Delivers items of parts L, I, F, K, B, A and U, and of the performance pass, which has
+no part (design 0.1, 10.5); the other items' rows are added with their parts.
 
 | Delivers item | Checks | Elsewhere |
 |---|---|---|
@@ -3529,8 +3535,9 @@ added with their parts.
 | Icons and branding (R5, D407; plan.md 764): the icon's SVG, the tool that makes the `.ico`, the `.icns` and the PNG files, the window's and the executable's icon; with plan.md 782's visual check, the icon in the window and the taskbar | B1, B2; real window B1 (a) to (c) and B2 (the executable's icon, the window's two icons, the title bar dark and light, the taskbar button) | `IconFilesTests` (items 1 to 8: the masters' rules, the manifest's hashes, the `.ico`, the `.iconset`, `png/`, `Assets/Icon`, the `.icns` (item 7, D447) and `iconutil` both ways (item 8, in CI's macOS job, whose log shows it passed, not skipped)); `WindowIconTests` (the main window's and the notice window's `Icon`, `AppIcon`'s three URIs); `Phase8aExpectationTests.B`; the files: the masters in `assets/brand/`, the generated files, `tools/VisualCommit.IconBuilder` (built in CI's six jobs; a second run of it leaves `git status` clean, 7.8 item 2); the owner's choice recorded in `docs/brand/icon/round-1/` and `round-2/` (D447); the look-alike check by eye, with the checks by hand |
 | The README's "Name" note names the icon (D412; plan.md 764) | none | The README's "Name" note, design 7.3's text, written by the lead at §7's merge: proven by the file (design 0.1). No check of part B proves it; it stands here because it lands at §7's merge |
 | Third-party notices, complete for what the app ships and reachable from the app (plan.md 762; R6; D431, D433, D434; design 0.1, 8.1, 8.3.4) | A5 (the notices file and the vendors' files in the app's text dialog); A4 (the license) | `ThirdPartyNoticesTests` (`Every_shipped_package_is_named_with_its_version`, `Every_shipped_file_is_named`, `Every_named_package_ships`, `Every_grammar_and_theme_is_listed`, `Every_license_named_has_its_text`, `The_app_embeds_the_texts_word_for_word`, `The_identity_matches_LICENSE`, `The_notices_files_only_addresses_are_its_copyright_lines`), red on the base first and green in CI's six jobs (8.8; the macOS and Linux natives proven only in CI's macOS and Linux jobs, 8.9 item 5); `TextDocumentDialogViewModelTests`, `DocumentTextViewTests` (the text's keys, part A's "Shown by no check": `The_copy_key_copies_a_selection_and_nothing_without_one`, `The_select_all_key_selects_the_whole_text_and_leaves_the_view_where_it_is`, `Keys_that_would_move_extend_or_use_the_hidden_caret_or_type_do_nothing`, `Cut_paste_undo_and_redo_change_nothing_and_leave_the_view_where_it_is`, `Enter_with_or_without_modifiers_leaves_the_view_where_it_is_and_plain_Enter_goes_on_unhandled`, `Another_editor_still_takes_its_keys_line_breaks_typing_deleting_and_moving_its_caret`, `A_wheel_up_after_End_leaves_the_end_though_the_lines_it_brings_in_wrap` among them); `AboutSectionTests` (the notices' switch shows Avalonia's file; `Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back`); the files `THIRD-PARTY-NOTICES.md` and `notices/` (the vendors' files byte for byte as the vendors ship them, `notices/** -text` in `.gitattributes`: two with CRLF, two with LF; 8.2, 8.8); `ci.yml`'s `paths`, which take the notices and `LICENSE` as build inputs (D433; unverified until a push changes only the notices, 8.9 item 6) |
-| The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6; real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher; `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more`, `A_screen_closed_while_the_texts_are_read_shows_no_dialog`); `AboutSectionTests` (`Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back` among them); `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); part G's G3 (About's guide link); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
+| The About screen (plan.md 763 and 776; R6, D398, D409; with plan.md 782's visual check "The About screen") | A1 to A6; real window A1 (with a 1920×1080 capture where it fits) and A4 | `AboutSettingsViewModelTests` (the texts, the dialogs, the links' addresses, no launcher, a throwing launcher; `The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more`, `A_screen_closed_while_the_texts_are_read_shows_no_dialog`); `AboutSectionTests` (`Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back` among them); `LinkFocusFrameTests` (App.Tests, 12 cases: a link focused by the keyboard shows its whole text and its underline inside the frame, not under it, in About, dark and light, and in GitLab's sign-in dialog, `An_About_link_focused_by_Tab_shows_its_text_and_underline_inside_the_frame` and `A_sign_in_link_focused_by_Shift_Tab_shows_its_text_and_underline_inside_the_frame`; the frame moves nothing and a link draws outside its bounds only while focused, `The_frame_moves_nothing_and_a_link_draws_outside_its_bounds_only_while_focused`; the frame takes no pointer, `A_pointer_on_the_frame_reaches_what_lies_under_it_not_the_link`; a link focused by a click is underlined without the frame, `An_About_link_focused_by_a_click_is_underlined_without_the_frame` and `A_sign_in_link_focused_by_a_click_is_underlined_without_the_frame`); `AboutEntryTests` (the palette on a welcome, a repository and a dashboard tab; the macOS menu's one item `About VisualCommit`, no `Avalonia`, its `Command` with and without a dialog open); `SettingsDialogViewTests` (Down from Accounts reaches About, Down stays); `PaletteEntriesTests`, `CommandPaletteViewTests` and phase 6's K10 (the entry after `Follow the system's theme`); `AppVersionInfoTests` (WP0) and `The_identity_matches_LICENSE`; `Phase8aExpectationTests.A`; §9's sweep over About (part U); part G's G3 (About's guide link); About in macOS's application menu, 8b's Mac checklist (8.9 item 2) |
 | An accessible name on every control and the graph's selected row exposed to UI Automation, with one Narrator walk-through by hand (R7, D411, D49 as D435 amends it, D450; plan.md 759's "an accessible name on every control; the graph's selected row exposed to UI Automation (D49); and one walk-through with Windows Narrator by hand", 770's icon buttons without a name, 784's visual check "the accessible names read through UI Automation in the real window", and "Done when" 786's "every control has an accessible name"; design 0.1) | U1, U2, U3; real window U1 and U3 (launch 13); by hand: the Narrator walk-through | `AccessibleNameSweepTests` (14 states; on the code before §9's names 12 of the first 13 failed, the notice's had nothing to find, and About's came at the merge: U2); `AutomationSweepTests`; `GraphRowSpeechTests`; `CommitGraphControlAutomationTests` (no peer without a client, one row peer for 100,000 rows, one Name change per move, bounds, the request's words, the same bytes after ten moves back); `CommitGraphControlTests.The_graph_is_a_ui_automation_list_with_its_name`; `StatusBarTests.The_operation_text_is_a_polite_live_region` (the status bar's live region, ruling 36); `Phase8aExpectationTests.U`; the spike's events in §9's merge notes (9.3.1); 9.6's grep (only `AutomationProperties.*` and `xmlns` lines in the `.axaml` hunks; no `Render`, `AffectsRender`, `InvalidateVisual`, measure or arrange in the graph's diff; no `IEmbeddedRootProvider`, `[PrivateApi]` or window peer in `src/` without a decision); the guide's sentence on Narrator (§11, ruling 39), whose proof is added with part G; to the Backlog at the close, an item status on the left panel's rows (ruling 36) and the hunk bars' repeated names (13.4 item 15) |
+| Performance pass (plan.md's Delivers list; D436 to D438, D457; design 0.1, 10.5) | none: §10 has no part (design 0.5, 10.5) | This report's section "The performance series" and its table (design 10.3.6's step 5); `PerformanceSeriesTests` (RealWindowTests, no window: the median of odd and even counts, the range, the bound's rounding, `ParseRuns`, the summary line); App.Tests' `StartupTimelineTests` (the start-up lines), `RepositoryViewModelTests` and `RepositoryViewModelFilterTests` (the reload's and the heap's log lines) and `RepositoryOperationsPullTests` (a Pull's git calls held to their budgets), design 10.4's classes; Q1 in phase 1's real-window pass (`Phase1RealWindowPass.Checks_8_and_9_the_100k_commit_repo_and_Q1`; D50, D436); still to come in wave 4, ruling 76's package `restore`, proven by its alternated series and the lead's probe (D457) |
 
 Plan.md 786's "Done when" ("the About screen … the complete notices … exist") rests on the rows of the
 third-party notices and the About screen.
@@ -3993,6 +4000,15 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   listens, as the folder opens, for a row named `Avalonia.Controls.DockPanel` for a moment (open point
   93); what is heard is written down. Reason: the row gained its help text, and the spike's S4 met that
   name once.
+- **A1, after step 9, and part A's conventions, "Where things are read"** (2026-11-22, the link frame's
+  fix, merged at `fcf8c1e`): the check also reads the focused repository link in `a1b`, against `a1a`
+  (`AssertFramedLink`, by `LinkFrame`): the text's pixels unchanged but for the underline's rows, the
+  underline shown, a whole frame in the theme's frame colour on four sides outside the text, the
+  background between frame and ink. Reason: in wave 3's whole run `a1b` showed the theme's frame over
+  the link's text and its underline hidden, which the check, reading the underline in the tree alone,
+  did not see; the inspection of the new pictures found it ("Wave 3's comparison with wave 2's
+  references"). The check asserts more of an unchanged expected result: no step and no expected result
+  changed.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
@@ -4114,6 +4130,285 @@ it is not waved through: status.md keeps it open for the review before the gate.
 `scripts/heavy-run.sh` with its own `--filter-method`. So a stage row's buttons that stay in UI
 Automation at `Opacity` 0 while the row has the keyboard focus (D425) do not disturb the two earlier
 checks that find a row's button by its id.
+
+### Wave 3's comparison with wave 2's references (2026-11-22)
+
+The lead's runs at wave 3's close (status.md's step 16), each with no agent building or testing beside
+it, on `85e2884`'s code (wave 3's last merges: §9, the fetch hold's fix and §8's fixes after its
+merge); the docs' agents read and wrote beside the default run's first 25 minutes.
+
+**The whole default run**, through `scripts/heavy-run.sh`: 8,436 tests, 8,431 passed, 5 skipped, none
+failed, 2 h 9 min 24 s (22:18 to 00:31). A5's bound of 1 s held in it (open point 60).
+
+**The pictures**, with `scripts/compare-pictures.py` against
+`D:/Projects/Personal/phase8-work/references/wave2` and the `--expected` file
+`D:/Projects/Personal/phase8-work/wave3/about/expected-about.json`, which names §8's regions (design
+0.7, 8.6; part A's "Changes to expected results"): the About button in the settings screen's section
+list, x 140–317, y 255–285 at 1100×700 (x 550–727, y 415–445 at 1920×1080), in 87 pictures, and the
+palette's scroll thumb, x 837–838, in six. Of the 1,220 earlier scripted pictures 1,077 are the same
+files and 143 changed, none in size. 90 changed only inside their expected regions, and none of the 93
+expected stayed unchanged. The other 53 are 3 that changed outside their regions too
+(`k10a-palette-commands`, `l31c-palette-light`, `l31e-settings-git-light`) and 50 named in no
+expectation. Five inspectors read each of the 53 by its pixels, reference beside new (the workflow
+`phase8a-wave3-pictures`, run `wf_2349d4b8-a4a`, with the new pictures' inspection below: 10 agents,
+1.65M tokens; the crops under `D:/Projects/Personal/phase8-work/wave3/inspect/`): each is a picture
+that varies from run to run by nature, and none shows a change of wave 3. In the three that changed
+outside their regions, the change inside them is the design's: the palette's thumb ends at y 266, not
+269, in `k10a` and `l31c`, for one more command, and `About` stands under `Accounts`, dimmed behind the
+merge tool dialog's backdrop, in `l31e`.
+
+- A text box's caret, one column of 16 pixels at the start of an empty box or after its last letter,
+  drawn in one picture and not in the other (22): phase 3's `21a`, `21b3`; phase 5's `f10a`, `f10c`,
+  `f10d`, `f10e`, `f11b`; phase 6's `k10a`, `l26b`, `l27f`, `l27g`, `l31c` light, `l31e` light, `l31g`
+  dark and light; phase 7a's `b09a`; phase 7b's `b03a`, `b03b`, `b06a`, `b06b`, `n04c`; 8a's own `k7a`.
+  In `l27g` and `l31g` dark also 3 and 2 pixels of a rounded corner, 1 or 2 levels apart.
+- A temporary folder's random name in a text (16): the twelve characters after `plain-`, `clones-`,
+  `ops-`, `edges-`, `sync-` or `workspace-` in a path, in git's output or in a tooltip, and the text
+  after them drawn a little aside: phase 1's `11a`, `13b`, `14a`, `14b`; phase 3's `16j`, `30g`; phase
+  5's `u21v`; phase 6's `k10e`, `l30c` dark and light, `l32a` dark and light, `l32b` dark and light,
+  `w1e`, `w3a`, the same 16 as in wave 2's comparison. `16j` also has 4 pixels of a tag icon's edge, 5
+  to 15 levels apart.
+- A fake's port in a clone form's address (2): phase 7b's `b07b` and 8a's own `k5a`.
+- A progress bar or a tooltip caught at another moment (2): phase 1's `10b-second-tab` and phase 7a's
+  `n07a`.
+- Anti-aliased edge pixels, 1 to 21 in a picture, 1 to 25 levels apart, no shape changed (11): phase
+  2's `18c`; phase 3's `21b1`, `27d`; phase 5's `b6b`, `u16q`, `u20c`, `u20e`, `u23f`; phase 6's `g23i`,
+  `l27e`; phase 7b's `n05d`. `u20c` and `u20e` reach 25 levels on the outermost pixels of the toolbar's
+  Settings and Theme icons, a form of that region that 97 of phase 5's pictures of wave 2's own run
+  show; wave 3 changed no toolbar file.
+
+The two caught at another moment: in phase 7a's `n07a` the status bar's progress bar, which runs
+without a percentage while the push gives none, shows its track empty in wave 2's picture and its
+moving segment at the track's right end in wave 3's. In phase 1's `10b-second-tab` the new tab's
+tooltip `New tab` is open over the toolbar's Fetch and Pull icons, (139,37)-(205,66): check 10 clicks
+`+` (`AddRepoButton`) and takes the picture at once, the pointer left on the new tab, with no move to
+the neutral point and no wait for a tooltip (`Phase1Checks.Shell.cs` lines 70 and 71), so whether the
+tooltip shows depends on how long the click and the capture take against Avalonia's delay for a
+tooltip. The lists of the gates of phases 1 to 5 hold one hash for `10b`, so this is the first run
+that caught it, most likely on a machine loaded by the whole run; it is on the list of the review
+before the gate (status.md's step 19). The two ports: in phase 7b's `b07b` the fake of Azure DevOps
+did not get its port 47397 in this run and fell back to a free one, 56841 (D363); in `k5a` the fake of
+GitHub's port, chosen per run, changes the address in the URL box, (381,349)-(502,362), which K5's
+notes set aside.
+
+**The 15 new pictures** of parts A (9) and U (6) were checked by the lead against this report on
+2026-11-22, in the same workflow: four inspectors, three to five pictures each, every text read word
+for word and every colour from its pixels; then a second inspector for the one picture not passed, who
+tried to refute its fault and found its cause. 14 passed. **One fault, `a1b-about-link-focus`.** A1's
+step 9 expects `AboutRepositoryLink` "focused, framed, its text underlined". The picture showed
+Fluent's focus frame on the link's own bounds, (481,375)-(709,390), which are its text's line box: its
+2 px white outer line, on columns 481–482 and 708–709 and rows 375–376 and 389–390, turned the first
+`g`'s left stroke and the last `t`'s right side white; its 1 px inner line, on columns 483 and 707 and
+rows 377 and 388, darkened the tops of the capitals and ascenders and the descenders; and the
+underline, which the text had in the tree, lay under the inner line and the white row 389, unseen.
+The cause was the theme `VcLinkButton` (`Theme/Controls.axaml`): `Padding` 0, a template that was only
+a `ContentPresenter`, and Fluent's default focus adorner, which is drawn on the control's bounds. The
+sign-in dialog's two token links use the same theme; no picture of 7a or 7b shows one focused. The
+check had passed because it asserted the underline in the tree (`TextDecorations` Underline) and read
+a link's ink only while it was not underlined.
+
+The fix (`8ef7e86`, `77c1936`, `5177cec`; merged at `fcf8c1e`, 2026-11-22 04:40): `VcLinkButton` takes
+no focus adorner (`FocusAdorner` null) and does not clip (`ClipToBounds` False). Its template is a
+`Panel` that holds the `ContentPresenter` and, laid over it, `Border#FocusFrame` (`Margin` -4,-3,
+`BorderThickness` 2, `IsHitTestVisible` False) with `Border#FocusFrameInner` (`BorderThickness` 1)
+inside it; their brushes, Fluent's `SystemControlFocusVisualPrimaryBrush` and
+`SystemControlFocusVisualSecondaryBrush`, are set only under `:focus-visible`. So the frame's outer
+line lies 4 px outside the link's bounds left and right and 3 above and below, the inner line 1 px
+inside it, with 1 px of the background between it and the text's ink left and right; above and below,
+the line box keeps the letters 2 px and the underline 1 px clear of it. The panel takes the content's
+size and the frame's negative margin gives back its borders, so nothing moves. The frame is only
+drawn, never hit: a pointer on it reaches what lies under it, so a hover or a click just outside the
+text is none on the link, focused or not. It is the keyboard focus's alone: a link focused by a click
+is underlined without it, and a link not focused draws nothing outside its bounds. It was built by a
+fixer with its tests first and checked by an independent verifier, in three rounds (run
+`wf_939ded6a-40e`: 6 agents, 1.35M tokens; the account in
+`D:/Projects/Personal/phase8-work/wave3/linkframe/result-rounds.txt`, the last check's crops under
+`wave3/linkframe/verify3/`). Round 1's verifier found that the frame, then built round the content,
+took clicks: a click 3.5 px left of the link's bounds opened the repository's address. Round 2 laid it
+over the content, never hit, and its verifier found that no test held the frame to the keyboard's
+focus: with `:focus` for `:focus-visible` a click drew 870 pixels of the guide link's frame, and every
+test passed. Round 3 added the cases of a link focused by a click, and its verifier found no fault.
+`LinkFocusFrameTests` (App.Tests, 12 cases: the About links focused by Tab, in dark and light, three;
+GitLab's two sign-in links focused by Shift+Tab, two; the frame moving nothing, one; the pointer on the
+frame, one; the About links focused by a click, three; the sign-in links focused by a click, two), with
+the helper `LinkFrame` in `VisualCommit.Testing`, and A1's step 9 (`AssertFramedLink`) hold it: each
+of four mutations fails some of them, the old theme (seven cases and A1's step 9), no air beside the
+text (seven cases), a frame that is hit (the pointer's case) and `:focus` for `:focus-visible` (the
+five cases of a click).
+
+The lead's checks on the merged tree, whose code is the verified `5177cec`'s (the diff outside `docs`
+prints nothing): `LinkFocusFrameTests` 12 of 12, part A's three classes (`Phase8aChecksA`,
+`AboutSectionTests`, `AboutEntryTests`) 13 of 13, `Phase7aChecksA` 8 of 8 and `Phase7bChecksA` 9 of 9
+(`D:/Projects/Personal/phase8-work/wave3/linkframe/merge/summary.txt`). Of their pictures only `a1b`
+differs from wave 3's references, in (477,372)-(714,394), the link's bounds grown by 4 and 3 (2,952
+pixels): the whole text as in `a1a`, the underline across it in rows 388 and 389, the frame whole
+round them. The other eight pictures of part A and every picture of 7a's part A (24) and 7b's (29),
+the sign-in dialogs among them, are the same files, but for 7a's `a09b-git-refused`, 2 pixels one
+level apart at (350,206), the anti-aliasing wave 2's comparison already lists for it.
+
+What the inspectors noted beside the checks, none of it a fault: the settings form's left lies 1 px
+right of this report's 336 and 480 (746 and 890 at 1920×1080), within its 2 px, as phase 7a's Accounts
+picture `a05a-signed-in` shows too; `u3a` equals phase 4's `c10e-resolver-open` pixel for pixel; in
+`u2a` the activity log is open and empty, as the check leaves it (no git write before the picture,
+"Show reads" off); the notices' text shows the app's usual thin scroll thumb, `#858585` and 2 px wide,
+Fluent's colour, as `k3a`'s palette and `k1a`'s diff do, which A5 does not name; in `u1c` the graph's
+focus frame covers the top 3 px of the selected first row, the same `:focus-visible` adorner as in
+phase 6's `k12a`.
+
+**The references** of the later merges are this run's 1,235 scripted pictures,
+`D:/Projects/Personal/phase8-work/references/wave3/` (their hashes in `wave3-pictures.sha256` beside
+it), with `a1b-about-link-focus` there the fix's picture (SHA-256 `ad85f645…`; the list beside them
+corrected).
+
+**The lagged list** (design 0.4, `VISUALCOMMIT_WATCHER_LAG_MS=1500`, on `85e2884`'s code, 20:54 to
+22:18, each command's time with the lock and its build): `Phase2Checks` 25 of 25 (227 s); the fifteen
+App.Tests classes 207 of 207 (868 s); phase 6's five filters 21 of 21 (563 s); phase 7a's walk-through
+205 of 205 (688 s); phase 7b's 178 of 178 (583 s); the twelve Hosting.Tests classes 126 of 126 (1,473
+s); the 8a project 144 of 144 (665 s).
+
+## The performance series (design 10.3.6; D457)
+
+Phase 8a's performance pass (§10; D436 to D438) measures M2 to M7 (design 10.3.4) with the opt-in
+class `Phase8aPerformance`, on the laptop, in the Release build, outside the gate; M1, Q1, stays in
+phase 1's real-window pass (below). Times here are the laptop's, indications for any other machine.
+
+**How a series is taken.** The lead, the owner told, runs
+`VISUALCOMMIT_PERF_RUNS=5 bash scripts/heavy-run.sh --project tests/VisualCommit.RealWindowTests -c Release --filter-class "*Phase8aPerformance"`
+(CLAUDE.md's row): five counted runs of each measure, M2 and M3 each after one uncounted warm-up
+launch, M4 in M5's launches (D437). It writes `artifacts/perf/phase-8a/series-<date>-<commit>.txt`.
+From now on (D457 (2)) the real-window project is built in Release on the very commit at least ten
+minutes before, nothing is committed in between, and Windows' Task Scheduler is read for what is due
+in the next ten minutes and, afterwards, for what ran (CLAUDE.md's note). The reason: a start straight
+after a build is slow; a commit made after the build makes the command build again, since the build
+is stamped with the commit; and a scheduled task with an idle trigger, which a rested and untouched
+laptop invites, ran beside one series (D457 (1); plan.md's risk 10).
+
+**The three series** (D457 (1)), on 2026-11-22, five runs each, git 2.56.0.windows.4; each file with
+its `summary.txt` copied to `D:/Projects/Personal/phase8-work/wave3/perf-before/`, `perf-before-2/`
+and `perf-before-3/`. Between them only docs, the link button's theme and its tests changed. None was
+quiet throughout:
+1. 00:47 on `86ef5b0`, 7 min 8 s (549 s with the lock and the build), the laptop rested from 00:33.
+   The command built first, since the merges after §10's first run had changed the projects, so M2 ran
+   within two minutes of a Release build, which its windows show (opened after 9.2, 5.3, 4.9, 5.1 and
+   4.1 s).
+2. 04:59 on `fcf8c1e`, 7 min 4 s (433 s with the lock and the build's check; the Release build made
+   at 04:41). Office's updater (`\Microsoft\Office\Office Automatic Updates 2.0`, a task with an idle
+   trigger) started at 05:00:45, as M2 ended and M3 began; two small `SoftLanding` tasks ran at
+   05:06:01, during M7.
+3. 05:53 on `1afb980`, 7 min 20 s (520 s with the lock, of which 82 s a Release build: the status
+   commit `1afb980`, made after the build of 04:41, changed the commit the build is stamped with), so
+   M2 again ran straight after a build. The scheduler ran Windows Error Reporting's `QueueReporting`
+   at 05:52:08 and the Customer Experience Program's `Consolidator` at 06:00:01.
+
+One row per measure (design 10.3.6's step 5): before, the median and the range of the five runs of
+each series, a disturbed take marked; after; the bound; the trigger with its numbers; the decision
+(D457 (3), (4)).
+
+| Measure | Before: series 1, 2 and 3 | After | Bound | Trigger | Decision (D457) |
+|---|---|---|---|---|---|
+| M2: the start with one restored 100,000-commit tab, from the process's start to its first rows | 1: 7,825 ms (6,753 to 13,898), after a build; 2: 4,621 ms (4,570 to 4,872); 3: 8,184 ms (6,630 to 10,368), after a build | no change | 6,100 ms, from the second series alone (4,872) | none but the bound | None. A bound drawn from a series that ran straight after a build guards nothing, so M2's comes from the quiet take; if the unchanged build's M2 passes it in a series taken as D457 (2) says, it is raised by a ruling with the numbers |
+| M3: the start with ten such tabs, the active one's first rows | 1: 6,759 ms (6,622 to 9,556); 2: 9,367 ms (7,822 to 10,988), with Office's updater; 3: 8,284 ms (6,523 to 12,776) | after ruling 76's change, in wave 4 | unset until the change's series | the median above 1.25 times M2's median. The series' own lines compare within one series: not fired in the first (against 9,781.3 ms) and the third (10,230 ms), whose M2 was disturbed, fired in the second (5,776.3 ms). Against 1.25 times the quiet M2 (4,621 ms), 5,776 ms, the fastest of M3's fifteen runs, 6,523 ms, lies above: **fired** (D457 (4)) | A change in wave 4: ruling 76, the restore order (below) |
+| M4 after the load: the working set 2 s after the `loaded` line, in M5's launches | 1: 286.3 MB (285.8 to 286.8); 2: 286.5 MB (286.2 to 289.7); 3: 287.4 MB (286.2 to 288.9) | no change | 370 MB (289.7) | read in the peak's row | None |
+| M4's peak after the reload: the peak working set 2 s after the reload line | 1: 346 MB (344.9 to 348.2); 2: 346.9 MB (346.3 to 348.3); 3: 351.1 MB (345.2 to 352) | no change | 440 MB (352) | the peak's median above twice the median after the load: 346 against 572.6, 346.9 against 573, 351.1 against 574.9 MB, not fired | None: not fired |
+| M5: the reload after an outside commit, from git's return to the reload line; and the reload line's own time (refs read to swap) | 1: 3,232.7 ms (3,066.6 to 3,668.9), the line's median 2,927 ms; 2: 3,227.5 ms (3,057.6 to 3,573.9), the line's 2,928 ms; 3: 2,839.1 ms (2,623.6 to 3,157.7), the line's 2,547 ms | no change | 4,600 ms (3,668.9) | the reload line's median above 2,000 ms: **fired** in every series | To plan.md's Backlog: no stall was seen, about nine tenths of the reload is the one `git log --date-order` of D47, and every change that would cut it amends D47 or D52 |
+| M6: the reload after a fetch, from the click on Fetch to the reload line; and the reload line's own time | 1: 6,018.2 ms (5,447.9 to 6,321.2), the line's median 3,418 ms; 2: 5,932.8 ms (4,855.6 to 6,578.1), the line's 3,004 ms; 3: 6,643.2 ms (5,996.6 to 7,024.9), the line's 4,013 ms | no change | 8,800 ms (7,024.9) | as M5's: **fired** in every series | To the Backlog, with M5 |
+| M7: Pull's settings reads, the median of 20 calls of `ReadPullConfigurationAsync("main")`, no window | 1: 326.7 ms (295.7 to 338); 2: 464.6 ms (439.6 to 499.7), two small `SoftLanding` tasks beside it; 3: 316.2 ms (279.3 to 355.3) | no change | 630 ms (499.7) | the median at 250 ms or more: **fired** in every series | To the Backlog: S8's batch would save 2 of a Pull's 23 git calls, about 0.2 s of a plain Pull on Windows and nothing of Pull (rebase), and would rewrite the reader that decides how Pull integrates and about 19 earlier tests in 11 files |
+
+Each bound is the slowest counted run, in brackets, times 1.25, rounded up (times to 100 ms, M7's to
+10 ms, memory to 10 MB; design 10.3.6's step 2): M2's from the second series alone, the others from
+all fifteen runs, which no build touched (D457 (3)). The bounds D457 gives go into `Phase8aPerformance`
+in a commit of their own; each counted run of a later series is held to them.
+
+**The reload's stall probe** (the lead's, by hand, outside any test, 00:59;
+`D:/Projects/Personal/phase8-work/wave3/reload-probe/reload_stall_probe.ps1`, its result
+`wave3/reload-probe-run1.txt`): the Release build on a clone of the tests' 100,000-commit repository,
+with a data folder, a git configuration and a keychain of its own; three times an empty commit made
+outside the app, and meanwhile the window's thread asked an empty message every 15 ms until 1.5 s
+after the reload line, the time of each answer kept. During the three reloads (3,433, 2,997 and 3,444
+ms by their lines) the longest answer took 36.1 ms, the 95th percentile at most 2.4 ms, and none 50 ms
+or more; idle, the longest took 24.7 ms. No stall was seen, which is what design 10.3.6's step 3 asks
+before the reload goes to the backlog.
+
+**The probes of the start with several tabs** (the lead's, by hand, outside any test, 06:01 to 06:08;
+`D:/Projects/Personal/phase8-work/wave3/startup10-probe/`: the script `startup_tabs_probe.ps1`,
+`run1.txt`, `run2-small.txt` and the data folders with the app's logs): the Release build started on a
+data folder of its own whose session restores clones of the tests' 100,000-commit repository, the
+active tab first, with a git configuration and a keychain of its own and the providers off; no input;
+from the moment the window existed until every tab's `loaded` line, the window's thread asked an empty
+message every 15 ms. `run1.txt` set one large tab against ten large tabs, `run2-small.txt` one large tab
+against one large tab beside nine tabs of 2,000 commits, the cases alternately, three times each. Their
+numbers are indications: alternated, but few. By the active tab's own clock (its line `first graph rows
+drawn after`, D50's and Q1's quantity), a 100,000-commit tab restored alone showed its first rows after
+2,105 ms (the warm-up), 2,557, 2,686 and 2,310 ms in the first probe and 1,771, 2,189 and 2,813 ms in
+the second; beside nine more such tabs after 6,644, 5,044 and 5,219 ms; beside nine tabs of 2,000
+commits after 4,287, 6,145 and 7,763 ms. The delay lies before the active tab's refs are read (its
+`refs read after` 3.2 to 6.2 s, against 0.7 to 1.4 s alone): in the about eighty git processes that
+ten openings start at once, not in the nine large walks (D457). The window's thread answered after up
+to 435, 1,148 and 483 ms with ten large tabs (13, 19 and 16 answers of 50 ms or more), up to 304, 420
+and 581 ms with nine small ones (7, 10 and 11), and up to 164 to 349 ms with one tab. All loads had
+ended after 22 to 28 s with ten large tabs and after 10 to 15 s with nine small ones. So the cost falls
+on every Windows session with many restored tabs, on the quantity Q1 names, for the tab the user looks
+at (D457). The probes' app found `C:\Program Files\Git\cmd\git.exe`, Git for Windows' launcher, as a
+user's desktop does; the series and the real-window pass start the app from Git Bash, whose PATH finds
+git itself (`ucrt64\bin\git.exe`).
+
+**The two panels**, read only, each of four analysts and then three judges with different lenses (the
+user's, the phase's and the rules'): run `wf_eb13d24d-e57` on M5, M6 and M7 (7 agents, 1.88M tokens)
+and run `wf_23f00a94-3d2` on M3 (7 agents, 1.99M tokens), their accounts in
+`D:/Projects/Personal/phase8-work/wave3/perf-triggers-result.json` and `perf-m3-result.json`. The lead
+took their advice before each ruling (D457). The reload (M5, M6): all three judges for a backlog row.
+Pull's reads (M7): the user's and the phase's judges for a backlog row, the rules' judge for the batch
+in wave 4, because the 250 ms had been set before the series as the line between the batch and the
+backlog, and every reason given for a row (the gain's size, the tests it rewrites, the alternation's
+time) had been weighed when the line was set, so a row would undo by taste after the measure what the
+trigger was set to decide. The restore (M3), on the series alone: the user's and the phase's judges
+for a backlog row, the rules' judge for a change, the active tab first. Each of the two for the backlog
+named what would change the answer: a stall of the window during a ten-tab start (an answer of 100 ms
+or more, by the user's judge; one of 250 ms or more, or several of 50 ms or more, by the phase's), or
+the same delay with ordinary background tabs (the shown tab about 0.5 s or more slower beside nine of
+1,000 to 10,000 commits, by the user's; of about 10,000, by the phase's). The probes showed both.
+
+**Ruling 76, the restore order** (D457 (5)), which wave 4 builds and proves. When the session's active
+restored tab is a repository's, it opens first and alone. The other restored tabs open at the earliest
+of: its graph has its first page; its opening or its first load fails or ends without a page; its tab
+is closed; 5 s have passed on the session's clock. They then open at most four at once, as "Add
+repositories" opens and a dashboard reads (D207); the package measures the window's answers and may
+lower the four with its numbers. A waiting tab that the user shows opens at once; a waiting tab that is
+closed never opens. When the active tab is a dashboard or holds no repository, every restored tab
+opens at once, as today. `InitializeAsync` keeps its contract (it completes when every restored tab
+has loaded its history, `MainWindowViewModel.cs:171-176`), so no harness wait changes; the start-up
+line still counts every restored tab; the merge tools' lookup still starts when the first restored
+load ends (D202). The package `restore` (`wip/p8a-restore`): a design section first; its tests written
+first and failing on today's code; `SettingsEntryTests`' test of the merge-tool lookup rewritten (it
+asks for both openings at once); a review; and the proof D436 asks, M2 and M3 with the two builds run
+alternately, five times each, taken as D457 (2) says, with the lead's probe (the tab's own clock and
+the window's answers, beside nine large and beside nine small tabs). It is proven when the fix's M3
+median is at or under 1.25 times its M2 median while the base's is above, and the fix's M2 lies within
+the base's range; if the alternation does not show it, the change is reverted and the row goes to the
+Backlog with the numbers. Its cost belongs to the week's share the owner is asked for before wave 4
+(D241). Not chosen: design 10.3.6's own candidate, background tabs in summary mode promoted when
+shown, which breaks that contract and the checks that wait on it, puts a whole load on the first
+switch to such a tab and moves D289's reads; it goes to plan.md's Backlog with the memory it would
+save (about 800 MB of working set with ten 100,000-commit tabs, against 286 MB with one).
+
+**What reopens the backlog rows** (plan.md's Backlog). Pull's batch: a rested median of about 600 ms,
+or the owner (D457). The reload: D457 and the row name no measure; a change to it amends D47 or D52,
+and design 10.3.6's step 3 sent it to the backlog because no stall was seen. Background tabs in
+summary mode: the row names none; ruling 76 orders the openings instead.
+
+**The one cost D457 records for the reload**, in the backlog's row: an operation that moves a ref
+keeps its running text until the reload ends, because the queue awaits the refresh
+(`OperationQueue.cs:603-617`), so in a 100,000-commit history a fetch shows as running for about 6 s.
+
+**M1 (Q1)** is not in the series: phase 1's real-window pass asserts it at every gate
+(`Phase1RealWindowPass.Checks_8_and_9_the_100k_commit_repo_and_Q1`: the first rows within 2,000 ms,
+the frames' 95th percentile within 8 ms and the longest within 33 ms, D50), and the gate's pass keeps
+it there alone (D436). That pass, like the series, starts the app from Git Bash, whose PATH finds git
+itself (`ucrt64\bin\git.exe`), where a user who starts the app from the desktop finds `cmd\git.exe`,
+Git for Windows' launcher, which starts git as a child. By the tab's clock Q1 was 1,771 to 2,813 ms in
+the probes (1,970 ms in the stall probe of 00:59), against 1,400 to 1,827 ms in the last gates' passes,
+so the pass does not measure what an installed user gets (D457): the review before the gate has it
+(status.md's step 19; open point 98).
 
 ## Found by the gate
 
@@ -5157,3 +5452,21 @@ review before the gate (status.md's step 19).
     which replaced the exception of the step that failed first (most likely `WaitForHeldAsync` at K8's
     step 7; open point 42). It is older than this wave, and the hold's fix (`f019688`) does not change
     it.
+
+Found at wave 3's close (the lead, 2026-11-22), numbered on: 95 to 97 by the link frame's fixer and
+verifiers, 98 by the performance pass.
+
+95. **A link's frame at a display scaling that is no whole number** (125 %, 150 %). No check renders
+    one: the headless pictures are at 100 %, and the real window runs at the owner's 200 %, where the
+    frame's 4, 3, 2 and 1 px are whole pixels. At 150 % the 1 px inner line could round into the line
+    box, as Fluent's own frame would.
+96. **The frame under GitLab's legacy token link.** With the legacy link focused, the frame's top lies
+    1 px from the token link's line box, the two links lying 4 apart; it is clear of the ink. No check
+    takes a picture of it.
+97. **`VcRadioButton`'s frame** (`Theme/Dialogs.axaml`) is built round its content, so it probably
+    takes clicks just outside the radio button while it has the keyboard's focus, as `VcLinkButton`'s
+    did in the link frame's first round. Not checked; for the review before the gate (status.md's step
+    19).
+98. **Q1 and the launcher.** The real-window pass measures Q1 with git itself on the PATH (Git Bash's
+    `ucrt64\bin\git.exe`), not through `cmd\git.exe`, the launcher an installed user's PATH finds
+    (D457; "The performance series"): for the review before the gate (status.md's step 19).
