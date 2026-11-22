@@ -22,6 +22,7 @@ public sealed class AboutSettingsViewModel
     private readonly IAppLog _log;
     private readonly Func<string, string> _readText;
     private readonly Func<IReadOnlyList<string>> _vendorNotices;
+    private readonly CancellationToken _lifetime;
 
     /// <summary>A Show button's texts are being read: a second press meanwhile opens nothing more.</summary>
     private bool _reading;
@@ -33,6 +34,7 @@ public sealed class AboutSettingsViewModel
     /// <param name="log">Where a text that cannot be read and a link that cannot be opened are logged.</param>
     /// <param name="readText">Reads an embedded text by its resource's name; null reads the app's (<see cref="EmbeddedTexts.Read"/>).</param>
     /// <param name="vendorNotices">The vendors' notice files' resource names, in order; null takes the app's (<see cref="EmbeddedTexts.VendorNotices"/>).</param>
+    /// <param name="lifetime">The settings screen's token, cancelled when Cancel, Esc or the session's end closes it: texts read after that show no dialog.</param>
     public AboutSettingsViewModel(
         AppIdentity identity,
         DialogHostViewModel dialogs,
@@ -40,7 +42,8 @@ public sealed class AboutSettingsViewModel
         IClipboardService? clipboard,
         IAppLog log,
         Func<string, string>? readText = null,
-        Func<IReadOnlyList<string>>? vendorNotices = null)
+        Func<IReadOnlyList<string>>? vendorNotices = null,
+        CancellationToken lifetime = default)
     {
         ArgumentNullException.ThrowIfNull(identity);
         ArgumentNullException.ThrowIfNull(dialogs);
@@ -52,6 +55,8 @@ public sealed class AboutSettingsViewModel
         _log = log;
         _readText = readText ?? EmbeddedTexts.Read;
         _vendorNotices = vendorNotices ?? EmbeddedTexts.VendorNotices;
+        _lifetime = lifetime;
+
         // A command that runs keeps its button enabled: a disabled button would lose the keyboard
         // focus, which the dialog gives back to it when it closes (and a link keeps after Enter).
         const AsyncRelayCommandOptions Enabled = AsyncRelayCommandOptions.AllowConcurrentExecutions;
@@ -105,7 +110,8 @@ public sealed class AboutSettingsViewModel
 
     /// <summary>
     /// Reads the texts off the UI thread and shows them in the text dialog, without waiting for it to
-    /// close. A text that cannot be read is logged as an Error, and then no dialog shows.
+    /// close. A text that cannot be read is logged as an Error, and then no dialog shows; nor does one
+    /// when the settings screen closed while the texts were read.
     /// </summary>
     private async Task ShowAsync(string title, IReadOnlyList<(string Resource, string Label, string AutomationId)> texts)
     {
@@ -125,7 +131,7 @@ public sealed class AboutSettingsViewModel
             _reading = false;
         }
 
-        if (read.Any(text => text.Text is null))
+        if (_lifetime.IsCancellationRequested || read.Any(text => text.Text is null))
         {
             return;
         }

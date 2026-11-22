@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Settings;
@@ -13,7 +14,9 @@ namespace VisualCommit.App.Tests;
 /// The settings screen's About section as a view model (D409, D431, D432): the pinned identity's
 /// texts, the license and the notices in the text dialog (read from the app's own assembly), the
 /// links handed to the launcher and nothing else, disabled without one, and the failures logged:
-/// a link the launcher cannot open as a Warning, a text that cannot be read as an Error. No window.
+/// a link the launcher cannot open as a Warning, a text that cannot be read as an Error. The texts
+/// are read off the caller's thread; a second press while they are read opens nothing more, and a
+/// screen closed meanwhile shows no dialog. No window.
 /// </summary>
 public sealed class AboutSettingsViewModelTests
 {
@@ -94,6 +97,70 @@ public sealed class AboutSettingsViewModelTests
             [EmbeddedTexts.Read(EmbeddedTexts.ThirdPartyNotices), .. EmbeddedTexts.VendorNotices().Select(EmbeddedTexts.Read)],
             dialog.Parts.Select(part => part.Text));
         Assert.Same(dialog.Parts[0], dialog.Shown);
+    }
+
+    [Fact]
+    public async Task The_texts_are_read_off_the_callers_thread_and_a_second_press_meanwhile_opens_nothing_more()
+    {
+        var dialogs = new DialogHostViewModel();
+        using var started = new ManualResetEventSlim();
+        using var gate = new ManualResetEventSlim();
+        var readers = new ConcurrentQueue<int>();
+        var about = new AboutSettingsViewModel(
+            TestIdentity.Pinned,
+            dialogs,
+            new FakeFileLauncher(),
+            null,
+            new RecordingLog(),
+            name =>
+            {
+                readers.Enqueue(Environment.CurrentManagedThreadId);
+                started.Set();
+                gate.Wait(TimeSpan.FromSeconds(30));
+                return EmbeddedTexts.Read(name);
+            });
+        var caller = Environment.CurrentManagedThreadId;
+
+        var first = about.ShowLicenseCommand.ExecuteAsync(null);
+        Assert.True(started.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "The license was not read.");
+        await about.ShowLicenseCommand.ExecuteAsync(null);
+        Assert.Empty(dialogs.Open);
+        gate.Set();
+        await first;
+
+        var reader = Assert.Single(readers);
+        Assert.NotEqual(caller, reader);
+        Assert.IsType<TextDocumentDialogViewModel>(Assert.Single(dialogs.Open));
+    }
+
+    [Fact]
+    public async Task A_screen_closed_while_the_texts_are_read_shows_no_dialog()
+    {
+        var dialogs = new DialogHostViewModel();
+        var log = new RecordingLog();
+        using var lifetime = new CancellationTokenSource();
+        using var started = new ManualResetEventSlim();
+        var about = new AboutSettingsViewModel(
+            TestIdentity.Pinned,
+            dialogs,
+            new FakeFileLauncher(),
+            null,
+            log,
+            name =>
+            {
+                started.Set();
+                lifetime.Token.WaitHandle.WaitOne(TimeSpan.FromSeconds(30));
+                return EmbeddedTexts.Read(name);
+            },
+            lifetime: lifetime.Token);
+
+        var showing = about.ShowNoticesCommand.ExecuteAsync(null);
+        Assert.True(started.Wait(TimeSpan.FromSeconds(30), TestContext.Current.CancellationToken), "The notices were not read.");
+        lifetime.Cancel();
+        await showing;
+
+        Assert.Empty(dialogs.Open);
+        Assert.Empty(log.Entries);
     }
 
     [Fact]

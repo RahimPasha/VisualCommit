@@ -137,7 +137,13 @@ public sealed partial class SettingsDialogViewModel : DialogViewModel<bool>
         Shortcuts = services.Shortcuts;
         Accounts = new AccountsSettingsViewModel(services.Hosting, services.SignIn, services.Dialogs, services.Log, services.GitVersion, services.HomeHasNetrc, services.DismissNetrcNote);
         GitProgram = new GitProgramViewModel(services.Settings.Current.GitExecutable, services.Detection, services.ProbeGit, services.Folders, _lifetime.Token);
-        About = new AboutSettingsViewModel(services.Identity ?? AppIdentity.FromAssembly(typeof(App).Assembly), services.Dialogs, services.Launcher, services.Clipboard, services.Log);
+        About = new AboutSettingsViewModel(
+            services.Identity ?? AppIdentity.FromAssembly(typeof(App).Assembly),
+            services.Dialogs,
+            services.Launcher,
+            services.Clipboard,
+            services.Log,
+            lifetime: _lifetime.Token);
         General.PropertyChanged += OnSectionChanged;
         Git.Global.PropertyChanged += OnSectionChanged;
         Git.Repository.PropertyChanged += OnSectionChanged;

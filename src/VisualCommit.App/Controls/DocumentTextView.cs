@@ -19,8 +19,9 @@ namespace VisualCommit.App.Controls;
 /// window. The text is wrapped, in the code font at 11.5, with no caret drawn; Tab and Shift+Tab move
 /// the focus on (D426). The keys scroll it as a reader expects: Up and Down a line, PageUp and PageDown
 /// the view less a line, Home and End (also with Ctrl) to its start and its end, End showing the true
-/// last line once the wrapped lines below are measured. Ctrl+C copies a selection. Its UI Automation
-/// peer is a document whose value is the text, named by <c>AutomationProperties.Name</c>.
+/// last line once the wrapped lines below are measured. Ctrl+C copies a selection, and nothing without
+/// one. Its UI Automation peer is a document whose value is the text, named by
+/// <c>AutomationProperties.Name</c>.
 /// </summary>
 public sealed class DocumentTextView : CodeTextEditor
 {
@@ -49,6 +50,12 @@ public sealed class DocumentTextView : CodeTextEditor
             EnableRectangularSelection = false,
             AllowScrollBelowDocument = false,
             HighlightCurrentLine = false,
+
+            // Ctrl+C copies a selection only: without one, AvaloniaEdit would copy the hidden caret's line.
+            CutCopyWholeLine = false,
+
+            // Nothing is typed into a read-only text.
+            EnableImeSupport = false,
 
             // Read-only: Tab and Shift+Tab move the focus on, as in any other view (D426).
             AcceptsTab = false,
@@ -188,6 +195,15 @@ public sealed class DocumentTextView : CodeTextEditor
     {
         if (!_keepAtEnd || _scrollViewer is not { } viewer)
         {
+            return;
+        }
+
+        // The reader moved up (the wheel, the scroll bar's thumb). A long move measures the lines it
+        // brings into view, so the extent may grow in the same pass; the view's own moves to its end
+        // go up only when the extent shrank or the viewport changed.
+        if (e.OffsetDelta.Y < 0 && e.ExtentDelta.Y >= 0 && e.ViewportDelta.Y == 0)
+        {
+            _keepAtEnd = false;
             return;
         }
 
