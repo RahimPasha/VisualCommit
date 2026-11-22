@@ -6,10 +6,12 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
+using Avalonia.VisualTree;
 using AvaloniaEdit;
 using AvaloniaEdit.Document;
 using AvaloniaEdit.Editing;
 using VisualCommit.App.Controls.Diff;
+using VisualCommit.App.Views;
 
 namespace VisualCommit.App.Controls;
 
@@ -18,13 +20,32 @@ namespace VisualCommit.App.Controls;
 /// lays out only the lines in view, so some 200 KB open at once, where a text block would stall the
 /// window. The text is wrapped, in the code font at 11.5, with no caret drawn; Tab and Shift+Tab move
 /// the focus on (D426). The keys scroll it as a reader expects: Up and Down a line, PageUp and PageDown
-/// the view less a line, Home and End (also with Ctrl) to its start and its end, End showing the true
-/// last line once the wrapped lines below are measured. Ctrl+C copies a selection, and nothing without
-/// one. Its UI Automation peer is a document whose value is the text, named by
+/// the view less a line, Home and End (also with the platform's command key, Ctrl or Cmd) to its start
+/// and its end, End showing the true last line once the wrapped lines below are measured. The
+/// platform's copy key copies a selection, and nothing without one; its select-all selects the whole
+/// text. With no caret shown, the text takes no key that would move, extend or use one, or type: such a
+/// key is taken and does nothing (no scroll, no change of the text or the selection). Enter, with or
+/// without modifiers, is not the text's: it neither scrolls nor is taken, so a plain Enter is the
+/// dialog's (its Close). Its UI Automation peer is a document whose value is the text, named by
 /// <c>AutomationProperties.Name</c>.
 /// </summary>
 public sealed class DocumentTextView : CodeTextEditor
 {
+    /// <summary>
+    /// The editor's commands whose own keys stay the editor's: copy and select-all (which the view
+    /// also runs on the platform's keys), and cut, paste, undo and redo, which do nothing in a
+    /// read-only text.
+    /// </summary>
+    private static readonly RoutedCommand[] KeptCommands =
+    [
+        ApplicationCommands.Copy,
+        ApplicationCommands.SelectAll,
+        ApplicationCommands.Cut,
+        ApplicationCommands.Paste,
+        ApplicationCommands.Undo,
+        ApplicationCommands.Redo,
+    ];
+
     /// <summary>The size of the code font in the view.</summary>
     public const double TextFontSize = 11.5;
 
@@ -66,7 +87,9 @@ public sealed class DocumentTextView : CodeTextEditor
         area.SelectionForeground = null;
         area.SelectionCornerRadius = 0;
         area.CaretBrush = Brushes.Transparent;
-        AddHandler(KeyDownEvent, OnKeyDownForScrolling, RoutingStrategies.Tunnel);
+        RemoveEnterBindings(area.DefaultInputHandler);
+        AddHandler(KeyDownEvent, OnKeyDownInText, RoutingStrategies.Tunnel);
+        AddHandler(TextInputEvent, OnTextInputInText, RoutingStrategies.Tunnel);
         ActualThemeVariantChanged += (_, _) => UseSelectionBrush();
     }
 
@@ -125,17 +148,24 @@ public sealed class DocumentTextView : CodeTextEditor
     }
 
     /// <summary>
-    /// The reading keys, taken on the way down so that the hidden caret does not move a line at a
-    /// time: Up, Down, PageUp and PageDown scroll; Home and End, alone or with Ctrl, go to the start
-    /// or the end. Every other key is the editor's (a selection, Ctrl+C).
+    /// The text's keys, taken on the way down, before the editor's own bindings see them. The reading
+    /// keys scroll, so that the hidden caret does not move a line at a time: Up, Down, PageUp and
+    /// PageDown alone; Home and End alone or with the platform's command key go to the start or the
+    /// end. The platform's copy and select-all (Avalonia's <c>HotkeyConfiguration</c>, where
+    /// AvaloniaEdit picks its own keys by the operating system) run the editor's commands. A key that
+    /// would move, extend or use the hidden caret, or edit, is taken and does nothing
+    /// (<see cref="MovesOrUsesTheCaret"/>). Every other key is the editor's (cut, paste, undo and redo,
+    /// which do nothing in a read-only text) or goes on (Tab, Esc, Enter).
     /// </summary>
-    private void OnKeyDownForScrolling(object? sender, KeyEventArgs e)
+    private void OnKeyDownInText(object? sender, KeyEventArgs e)
     {
         if (e.Handled || _scrollViewer is not { } viewer)
         {
             return;
         }
 
+        var hotkeys = this.GetPlatformSettings()?.HotkeyConfiguration;
+        var command = ShortcutKeys.CommandModifierOf(hotkeys);
         var modifiers = e.KeyModifiers;
         var line = LineHeight;
         var page = Math.Max(line, viewer.Viewport.Height - line);
@@ -153,23 +183,100 @@ public sealed class DocumentTextView : CodeTextEditor
             case Key.PageDown when modifiers == KeyModifiers.None:
                 ScrollBy(page);
                 break;
-            case Key.Home when modifiers is KeyModifiers.None or KeyModifiers.Control:
+            case Key.Home when modifiers == KeyModifiers.None || modifiers == command:
                 _keepAtEnd = false;
                 TextArea.ClearSelection();
                 TextArea.Caret.Offset = 0;
                 ScrollTo(0, 0);
                 break;
-            case Key.End when modifiers is KeyModifiers.None or KeyModifiers.Control:
+            case Key.End when modifiers == KeyModifiers.None || modifiers == command:
                 TextArea.ClearSelection();
                 TextArea.Caret.Offset = Document?.TextLength ?? 0;
                 _keepAtEnd = true;
                 ScrollToTextEnd();
                 break;
             default:
-                return;
+                if (hotkeys?.Copy.Any(gesture => gesture.Matches(e)) == true)
+                {
+                    // A selection only (CutCopyWholeLine is off): without one, nothing.
+                    ApplicationCommands.Copy.Execute(null, TextArea);
+                }
+                else if (hotkeys?.SelectAll.Any(gesture => gesture.Matches(e)) == true)
+                {
+                    ApplicationCommands.SelectAll.Execute(null, TextArea);
+                }
+                else if (!MovesOrUsesTheCaret(e))
+                {
+                    return;
+                }
+
+                break;
         }
 
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// A key that would move, extend or use the hidden caret, or edit: Left, Right, Backspace and
+    /// Delete with any modifiers; Up, Down, Home, End, PageUp and PageDown with Shift and any others;
+    /// and every other key the editor's text area binds, its own key bindings and its commands' keys,
+    /// but those of the commands it keeps. Each of these brought the caret into view, a jump of the
+    /// text, or moved, extended or replaced the selection; Avalonia's scroll viewer paged the view by
+    /// its whole height on PageUp and PageDown with Shift and another modifier.
+    /// </summary>
+    private bool MovesOrUsesTheCaret(KeyEventArgs e)
+    {
+        if (e.Key is Key.Left or Key.Right or Key.Back or Key.Delete)
+        {
+            return true;
+        }
+
+        if (e.KeyModifiers.HasFlag(KeyModifiers.Shift) && e.Key is Key.Up or Key.Down or Key.Home or Key.End or Key.PageUp or Key.PageDown)
+        {
+            return true;
+        }
+
+        return KeyBindingsOf(TextArea.DefaultInputHandler).Any(binding => binding.Gesture?.Matches(e) == true)
+            || TextArea.CommandBindings.Any(binding => binding.Command.Gesture?.Matches(e) == true && !KeptCommands.Contains(binding.Command));
+    }
+
+    /// <summary>The key bindings of an input handler and of the handlers nested in it.</summary>
+    private static IEnumerable<KeyBinding> KeyBindingsOf(ITextAreaInputHandler handler) =>
+        handler is TextAreaInputHandler input
+            ? input.KeyBindings.Concat(input.NestedInputHandlers.SelectMany(KeyBindingsOf))
+            : [];
+
+    /// <summary>
+    /// Typed text, Space among it, is taken and dropped: the text area would type nothing into the
+    /// read-only text, but bring the hidden caret into view, a jump of the text. What the text area
+    /// leaves (no text, Esc, Backspace and Delete as characters) goes on as before.
+    /// </summary>
+    private static void OnTextInputInText(object? sender, TextInputEventArgs e)
+    {
+        if (!e.Handled && !string.IsNullOrEmpty(e.Text) && e.Text is not ("\u001b" or "\b" or "\u007f"))
+        {
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// The editor takes no Enter, with or without modifiers. Read-only, it types nothing, but its
+    /// paragraph and line breaks (Enter, Shift+Enter) still bring the hidden caret into view, a jump
+    /// back to the top or the end, and they take the key: a plain Enter goes on to the dialog, whose
+    /// own Enter is its Close. The bindings are this text area's own copies; every other editor keeps
+    /// AvaloniaEdit's.
+    /// </summary>
+    private static void RemoveEnterBindings(TextAreaInputHandler handler)
+    {
+        foreach (var binding in handler.KeyBindings.Where(binding => binding.Gesture?.Key == Key.Enter).ToList())
+        {
+            handler.KeyBindings.Remove(binding);
+        }
+
+        foreach (var nested in handler.NestedInputHandlers.OfType<TextAreaInputHandler>())
+        {
+            RemoveEnterBindings(nested);
+        }
     }
 
     private void ScrollBy(double delta)

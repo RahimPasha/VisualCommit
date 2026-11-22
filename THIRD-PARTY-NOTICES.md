@@ -440,9 +440,12 @@ Source: https://github.com/JetBrains/JetBrainsMono
 
 ```
 Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
+
+Copyright 2020 The JetBrains Mono NL Project Authors (https://github.com/JetBrains/JetBrainsMonoNL)
 ```
 
-License: OFL-1.1.
+License: OFL-1.1. The first line heads JetBrains Mono's license file; the last is the font file's
+own copyright line.
 
 ### Lucide and Feather
 
@@ -930,11 +933,13 @@ suitability for any purpose.
 `ThirdPartyNoticesTests` holds this file to the build: a package that the build ships and this file
 does not name with its version, a file it ships that is not on its entry's `Files:` line, a package
 named here that the build no longer ships, a grammar or theme that is not listed, or a license named
-with no text fails it. Each entry keeps the form above: one `Packages:` line of `<id> <version>`
-pairs (NuGet packages only), one `Files:` line of file names, and a `License:` line whose names, up
-to its first full stop, are headings under "License texts" or files in `notices/`. When a package is
-added or updated, take its license, its copyright lines and its notice files from the package in the
-NuGet cache (`~/.nuget/packages/<id>/<version>/`) and from its source at the commit its `.nuspec`
-names in `<repository>`, and replace a vendor's file in `notices/` whole. The app embeds this file,
-`LICENSE` and `notices/` (`VisualCommit.App.csproj`), so a change to any of them is a change to the
-app.
+with no text fails it. It also holds the file's e-mail addresses to those its copyright lines carry
+(`The_notices_files_only_addresses_are_its_copyright_lines`): no line outside a fenced block holds
+an at sign, and the addresses are exactly those on the test's list, which a new one has to join.
+Each entry keeps the form above: one `Packages:` line of `<id> <version>` pairs (NuGet packages
+only), one `Files:` line of file names, and a `License:` line whose names, up to its first full
+stop, are headings under "License texts" or files in `notices/`. When a package is added or updated,
+take its license, its copyright lines and its notice files from the package in the NuGet cache
+(`~/.nuget/packages/<id>/<version>/`) and from its source at the commit its `.nuspec` names in
+`<repository>`, and replace a vendor's file in `notices/` whole. The app embeds this file, `LICENSE`
+and `notices/` (`VisualCommit.App.csproj`), so a change to any of them is a change to the app.
