@@ -241,6 +241,11 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
         app.RightClick(await app.RefRowAsync(U.LocalBranches, U.Feature, U.Alpha));
         app.ClickMenuItem(U.HideFeatureAlpha);
         await app.WaitForAsync(() => app.RefRowMarks(U.LocalBranches, U.Feature, U.Alpha).ShowsHiddenToggle, "feature/alpha hidden");
+
+        // A hide is no operation of the queue: its graph reloads through a refresh, which the
+        // queue's idle does not wait for (docs/phase-5-design.md 8.2), and the state is the graph
+        // without the two.
+        await app.WaitForGraphReloadAsync();
         app.Click(await app.RefRowAsync(U.Remotes, U.Origin, U.Feature));
         await app.WaitForAsync(() => app.RefRowMarks(U.Remotes, U.Origin, U.Feature, U.Alpha).ShowsHiddenToggle, "origin/feature/alpha hidden");
         await app.WaitForIdleAsync();
@@ -280,7 +285,9 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
         app.RightClick(await app.RefRowAsync(U.LocalBranches, U.Feature, U.Ff));
         app.ClickMenuItem(U.SoloFeatureFf);
         await app.WaitForAsync(() => app.RefRowMarks(U.LocalBranches, U.Feature, U.Ff).ShowsSoloToggle, "feature/ff soloed");
-        await app.WaitForIdleAsync();
+
+        // As the hide's: the solo's graph reloads through a refresh, not the queue.
+        await app.WaitForGraphReloadAsync();
         sweeps.Look(app.Window, "5: one branch soloed");
 
         // The restore bar after a discard of README.md.
