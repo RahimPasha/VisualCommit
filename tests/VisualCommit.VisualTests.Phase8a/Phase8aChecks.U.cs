@@ -296,7 +296,11 @@ public sealed class Phase8aChecksU : Phase8aChecks
         app.ClickMenuItem(U.SoloFeatureFf);
         await app.WaitForAsync(() => app.RefRowMarks(U.LocalBranches, U.Feature, U.Ff).ShowsSoloToggle, "ff's solo button");
         Assert.True(app.RefRowMarks(U.LocalBranches, U.Feature, U.Alpha).ShowsHiddenToggle, "alpha's eye went in solo mode.");
-        await app.WaitForIdleAsync();
+
+        // A solo is no operation of the queue: its graph reloads through a refresh, which the
+        // queue's idle does not wait for (docs/phase-5-design.md 8.2), and step 10's picture is of
+        // the soloed graph.
+        await app.WaitForGraphReloadAsync();
 
         // Step 10 (u3b): src/core.txt hovered until its tooltip shows; the names; the sweep.
         tip = await app.RestPointerOnAsync(RowOwnButton(app, U.StagedListId, U.Core));

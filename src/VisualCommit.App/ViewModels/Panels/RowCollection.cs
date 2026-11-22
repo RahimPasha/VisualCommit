@@ -20,7 +20,12 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// changed when that part is small: the rows before and after it that
     /// <paramref name="showSame"/> calls equal stay as they are. A folder opened in a long list
     /// then inserts its children without the list laying itself out again from estimated sizes,
-    /// which moved the rows under the pointer.
+    /// which moved the rows under the pointer. When the part that changed has as many rows as
+    /// before, each of its rows is compared with the one rebuilt in its place, and only those that
+    /// show something new are replaced, one by one: two rows marked far apart (a refresh's counts,
+    /// the hidden branches' tooltips once the graph without them is shown) leave every row between
+    /// them, and its control, as it was, so that a press on one of those rows is still a click when
+    /// its release comes after the rebuild.
     /// </summary>
     public void ReplaceAll(IReadOnlyList<T> rows, Func<T, T, bool> showSame)
     {
@@ -41,6 +46,12 @@ public sealed class RowCollection<T> : ObservableCollection<T>
 
         var removed = Count - prefix - suffix;
         var added = rows.Count - prefix - suffix;
+        if (removed == added)
+        {
+            ReplaceChanged(rows, prefix, removed, showSame);
+            return;
+        }
+
         if (removed + added > MaxPartialChange)
         {
             ReplaceAll(rows);
@@ -55,6 +66,34 @@ public sealed class RowCollection<T> : ObservableCollection<T>
         for (var i = 0; i < added; i++)
         {
             Insert(prefix + i, rows[prefix + i]);
+        }
+    }
+
+    /// <summary>
+    /// The <paramref name="count"/> rows from <paramref name="start"/> on, where as many rows were
+    /// rebuilt: each that does not show the same as its rebuilt row is replaced by it, and the view
+    /// is told once per row replaced; more than <see cref="MaxPartialChange"/> reset the list.
+    /// </summary>
+    private void ReplaceChanged(IReadOnlyList<T> rows, int start, int count, Func<T, T, bool> showSame)
+    {
+        var changed = new List<int>();
+        for (var i = start; i < start + count; i++)
+        {
+            if (!showSame(this[i], rows[i]))
+            {
+                changed.Add(i);
+            }
+        }
+
+        if (changed.Count > MaxPartialChange)
+        {
+            ReplaceAll(rows);
+            return;
+        }
+
+        foreach (var index in changed)
+        {
+            this[index] = rows[index];
         }
     }
 
