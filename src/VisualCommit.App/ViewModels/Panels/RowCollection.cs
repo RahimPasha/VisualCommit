@@ -95,9 +95,9 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// a remove and an insert leave them where they were in each case. Where the heights differ, as
     /// in the left panel, whose 30 px headers sit among 26 px rows, the estimate misses by rows deep
     /// in the list, and the panel then makes the controls of the rows in view again: a press on one
-    /// of them is no click any more, which is what keeping the rows between two changed ones is for.
-    /// So the left panel keeps the replace and its cost, a row of offset when its top row in view
-    /// changes.
+    /// of them is no click any more, the very loss that keeping the rows between two changed ones
+    /// prevents. So the left panel keeps the replace and its cost, a row of offset when its top row
+    /// in view changes.
     /// </para>
     /// </summary>
     private void ReplaceChanged(IReadOnlyList<T> rows, int start, int count, Func<T, T, bool> showSame, bool rowsOfOneHeight)
