@@ -24,8 +24,10 @@ namespace VisualCommit.Testing;
 /// well within about 60 s or the hold no longer holds: a fetch that gave up leaves a marker
 /// <c>gave-up-&lt;remote folder&gt;.&lt;pid&gt;</c>, on which <see cref="WaitForHeldAsync"/>,
 /// <see cref="Release"/> and <see cref="Dispose"/> fail, so that a test never passes on a hold that
-/// held nothing. Disposing releases, so that a cancelled fetch's shell ends (call it in a
-/// <c>finally</c>, as <see cref="Scenarios.ReleaseWaitingMergeTool"/>).
+/// held nothing. It gives up only at a look that finds no <c>release</c> once its rounds are over: a
+/// fetch that saw <c>release</c> goes on without looking again, so that <see cref="Arm"/>, which
+/// deletes the file, never makes it give up. Disposing releases, so that a cancelled fetch's shell
+/// ends (call it in a <c>finally</c>, as <see cref="Scenarios.ReleaseWaitingMergeTool"/>).
 /// </para>
 /// </summary>
 public sealed class FetchHold : IDisposable
@@ -68,7 +70,9 @@ public sealed class FetchHold : IDisposable
     /// The script for <paramref name="rounds"/> rounds of <c>sleep 0.5</c>. <c>$0</c> is its own
     /// path and <c>$1</c> the remote's folder, as git hands an upload-pack command; its files are
     /// found beside it by parameter expansion, which starts no process. A fetch whose rounds run
-    /// out before the release leaves a <see cref="GaveUpPrefix"/> marker and goes on.
+    /// out before the release leaves a <see cref="GaveUpPrefix"/> marker and goes on; one that saw
+    /// <c>release</c> goes on without looking again, since <see cref="Arm"/> may have deleted it
+    /// meanwhile.
     /// </summary>
     public static string ScriptFor(int rounds)
     {
@@ -82,14 +86,17 @@ public sealed class FetchHold : IDisposable
             "  marker=\"$here/held-${remote##*/}.$$\"\n" +
             "  : > \"$marker\"\n" +
             "  rounds=0\n" +
-            "  while [ ! -e \"$here/release\" ] && [ \"$rounds\" -lt " + rounds.ToString(System.Globalization.CultureInfo.InvariantCulture) + " ]; do\n" +
+            "  # Gives up only at a look that finds no release when the rounds are over: one that saw release\n" +
+            "  # never looks again, as the next hold may have deleted it meanwhile.\n" +
+            "  while [ ! -e \"$here/release\" ]; do\n" +
+            "    if [ \"$rounds\" -ge " + rounds.ToString(System.Globalization.CultureInfo.InvariantCulture) + " ]; then\n" +
+            "      : > \"$here/gave-up-${remote##*/}.$$\"\n" +
+            "      break\n" +
+            "    fi\n" +
             "    sleep 0.5\n" +
             "    rounds=$((rounds + 1))\n" +
             "  done\n" +
             "  rm -f \"$marker\"\n" +
-            "  if [ ! -e \"$here/release\" ]; then\n" +
-            "    : > \"$here/gave-up-${remote##*/}.$$\"\n" +
-            "  fi\n" +
             "fi\n" +
             "exec git upload-pack \"$1\"\n";
     }
@@ -172,6 +179,12 @@ public sealed class FetchHold : IDisposable
     /// Holds again after a release: deletes <c>release</c> and takes the markers there now as the
     /// baseline, so that <see cref="Held"/> and <see cref="WaitForHeldAsync"/> count only the fetches
     /// that wait from now on. <see cref="Install"/> arms.
+    /// <para>
+    /// On macOS and Linux a cancel kills git alone (D36), so a cancelled fetch's script waits on
+    /// until a release. One that has not looked since the release (a release and an arming within
+    /// one of its sleeps) waits on through this hold too: its marker is in the baseline, so it is not
+    /// counted, and it goes on at the next release; its rounds still count from its own start.
+    /// </para>
     /// </summary>
     public void Arm()
     {
