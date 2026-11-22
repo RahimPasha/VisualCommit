@@ -1,6 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:kr="using:VisualCommit.App.Views"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels.Shell"
              xmlns:panels="using:VisualCommit.App.ViewModels.Panels"
@@ -92,6 +93,7 @@
                   Command="{Binding CloseCommand}"
                   ToolTip.Tip="{x:Static vm:CompareViewModel.CloseToolTip}"
                   AutomationProperties.AutomationId="CompareClose"
+                  AutomationProperties.Name="{x:Static cmd:AutomationNames.CloseComparison}"
                   AutomationProperties.HelpText="{x:Static vm:CompareViewModel.CloseToolTip}">
             <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
           </Button>
@@ -102,6 +104,7 @@
                   Command="{Binding SwapCommand}"
                   ToolTip.Tip="{x:Static vm:CompareViewModel.SwapToolTip}"
                   AutomationProperties.AutomationId="CompareSwap"
+                  AutomationProperties.Name="{x:Static cmd:AutomationNames.SwapFromAndTo}"
                   AutomationProperties.HelpText="{x:Static vm:CompareViewModel.SwapToolTip}">
             <StackPanel Orientation="Horizontal" Spacing="0">
               <c:Icon Data="{StaticResource IconArrowDown}" Width="11" Height="14" />

@@ -167,7 +167,8 @@
                     Theme="{StaticResource VcIconButton}"
                     Command="{Binding DismissRestoreCommand}"
                     ToolTip.Tip="Close"
-                    AutomationProperties.AutomationId="DismissRestoreButton">
+                    AutomationProperties.AutomationId="DismissRestoreButton"
+                    AutomationProperties.Name="{x:Static cmd:AutomationNames.DismissRestoreOffer}">
               <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
             </Button>
           </StackPanel>
@@ -277,14 +278,16 @@
                           Command="{Binding $parent[ItemsControl].((vm:WorkingChangesViewModel)DataContext).StageFileCommand}"
                           CommandParameter="{Binding}"
                           ToolTip.Tip="Stage"
-                          AutomationProperties.AutomationId="RowStageButton">
+                          AutomationProperties.AutomationId="RowStageButton"
+                          AutomationProperties.Name="{Binding Key, StringFormat={x:Static cmd:AutomationNames.StageFileFormat}}">
                     <c:Icon Data="{StaticResource IconPlus}" Width="14" Height="14" />
                   </Button>
                   <Button Theme="{StaticResource VcIconButton}"
                           Command="{Binding $parent[ItemsControl].((vm:WorkingChangesViewModel)DataContext).DiscardFileCommand}"
                           CommandParameter="{Binding}"
                           ToolTip.Tip="Discard"
-                          AutomationProperties.AutomationId="RowDiscardButton">
+                          AutomationProperties.AutomationId="RowDiscardButton"
+                          AutomationProperties.Name="{Binding Key, StringFormat={x:Static cmd:AutomationNames.DiscardFileFormat}}">
                     <c:Icon Data="{StaticResource IconUndo}" Width="14" Height="14" />
                   </Button>
                 </StackPanel>
@@ -387,7 +390,8 @@
                           Command="{Binding $parent[ItemsControl].((vm:WorkingChangesViewModel)DataContext).UnstageFileCommand}"
                           CommandParameter="{Binding}"
                           ToolTip.Tip="Unstage"
-                          AutomationProperties.AutomationId="RowUnstageButton">
+                          AutomationProperties.AutomationId="RowUnstageButton"
+                          AutomationProperties.Name="{Binding Key, StringFormat={x:Static cmd:AutomationNames.UnstageFileFormat}}">
                     <c:Icon Data="{StaticResource IconMinus}" Width="14" Height="14" />
                   </Button>
                 </StackPanel>

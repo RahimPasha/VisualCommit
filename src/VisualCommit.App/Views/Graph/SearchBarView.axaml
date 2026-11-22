@@ -1,5 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
              xmlns:c="using:VisualCommit.App.Controls"
              xmlns:vm="using:VisualCommit.App.ViewModels.Graph"
              x:Class="VisualCommit.App.Views.Graph.SearchBarView"
@@ -64,6 +65,7 @@
                 ToolTip.Tip="{x:Static vm:SearchViewModel.PreviousToolTip}"
                 ToolTip.ShowOnDisabled="True"
                 AutomationProperties.AutomationId="SearchPrevious"
+                AutomationProperties.Name="{x:Static cmd:AutomationNames.PreviousMatch}"
                 AutomationProperties.HelpText="{x:Static vm:SearchViewModel.PreviousToolTip}"
                 AutomationProperties.AcceleratorKey="{x:Static vm:SearchViewModel.PreviousKey}">
           <c:Icon Data="{StaticResource IconChevronUp}" Width="14" Height="14" />
@@ -77,6 +79,7 @@
                 ToolTip.Tip="{x:Static vm:SearchViewModel.NextToolTip}"
                 ToolTip.ShowOnDisabled="True"
                 AutomationProperties.AutomationId="SearchNext"
+                AutomationProperties.Name="{x:Static cmd:AutomationNames.NextMatch}"
                 AutomationProperties.HelpText="{x:Static vm:SearchViewModel.NextToolTip}"
                 AutomationProperties.AcceleratorKey="{x:Static vm:SearchViewModel.NextKey}">
           <c:Icon Data="{StaticResource IconChevronDown}" Width="14" Height="14" />
@@ -89,6 +92,7 @@
                 Command="{Binding CloseCommand}"
                 ToolTip.Tip="{x:Static vm:SearchViewModel.CloseToolTip}"
                 AutomationProperties.AutomationId="SearchClose"
+                AutomationProperties.Name="{x:Static cmd:AutomationNames.CloseSearch}"
                 AutomationProperties.HelpText="{x:Static vm:SearchViewModel.CloseToolTip}">
           <c:Icon Data="{StaticResource IconClose}" Width="14" Height="14" />
         </Button>

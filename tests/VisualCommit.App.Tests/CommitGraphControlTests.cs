@@ -507,14 +507,17 @@ public partial class CommitGraphControlTests
     }
 
     [AvaloniaFact]
-    public void The_graph_is_one_ui_automation_element_with_its_name()
+    public void The_graph_is_a_ui_automation_list_with_its_name()
     {
+        // D435 (amending D49): a list whose one child is the selected row; its rows' peers are
+        // CommitGraphControlAutomationTests'.
         var control = new CommitGraphControl { Data = Linear(5) };
 
         var peer = Avalonia.Automation.Peers.ControlAutomationPeer.CreatePeerForElement(control);
 
         Assert.Equal("GraphRows", peer.GetAutomationId());
         Assert.Equal("Commit graph", peer.GetName());
+        Assert.Equal(Avalonia.Automation.Peers.AutomationControlType.List, peer.GetAutomationControlType());
         Assert.True(peer.IsControlElement());
         Assert.True(control.Focusable);
     }
@@ -951,7 +954,7 @@ public partial class CommitGraphControlTests
         Assert.Equal("Working changes · 2 conflicts", control.WorkingRowText);
     }
 
-    private static CommitGraphData Linear(int count, IReadOnlyList<Func<string, GitRef>>? refsOnTop = null, int detachedAt = -1)
+    internal static CommitGraphData Linear(int count, IReadOnlyList<Func<string, GitRef>>? refsOnTop = null, int detachedAt = -1)
     {
         var commits = LinearCommits(count);
         var top = count > 0 ? commits[0].Sha : ShaOf(1);
@@ -970,13 +973,13 @@ public partial class CommitGraphControlTests
         return data;
     }
 
-    private static Func<string, GitRef> Branch(string name, bool head = false) =>
+    internal static Func<string, GitRef> Branch(string name, bool head = false) =>
         sha => new GitRef("refs/heads/" + name, name, RefKind.LocalBranch, sha, IsHead: head);
 
-    private static Func<string, GitRef> Remote(string name) =>
+    internal static Func<string, GitRef> Remote(string name) =>
         sha => new GitRef("refs/remotes/" + name, name, RefKind.RemoteBranch, sha, RemoteName: name.Split('/')[0]);
 
-    private static Func<string, GitRef> Tag(string name) =>
+    internal static Func<string, GitRef> Tag(string name) =>
         sha => new GitRef("refs/tags/" + name, name, RefKind.Tag, sha);
 
     private sealed record ScenarioRow((string Name, RefLabelKind Kind)[] Labels, int Lane, int Color, Node Node, string Message, string Date, string Sha);
@@ -1008,7 +1011,7 @@ public partial class CommitGraphControlTests
     }
 
     /// <summary>A window that shows one control or view, at a size and in a theme of its own, and drives it with simulated input.</summary>
-    private sealed class Host : IDisposable
+    internal sealed class Host : IDisposable
     {
         private Host(Window window)
         {

@@ -749,7 +749,7 @@ public sealed class KeyboardPassTests
     // The focus as FocusFact names it.
     private const string NothingFact = "nothing";
     private const string ReadmesRowFact = "Button StageFileRow \"README.md\" of README.md in UnstagedFileList [Right], framed";
-    private const string ReadmesStageFact = "Button RowStageButton \"Stage\" of README.md in UnstagedFileList [Right], framed";
+    private const string ReadmesStageFact = "Button RowStageButton \"Stage README.md\" of README.md in UnstagedFileList [Right], framed";
     private const string GraphFact = "CommitGraphControl GraphRows \"Commit graph\" [GraphArea]";
     private const string SummaryFact = "TextBox CommitSummary \"Summary\" [Right]";
     private const string LeftSectionFact = "Button Section \"Local branches\" [Left], framed";

@@ -1,5 +1,6 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:cmd="using:VisualCommit.App.ViewModels.Commands"
         xmlns:vm="using:VisualCommit.App.ViewModels"
         xmlns:shell="using:VisualCommit.App.Views.Shell"
         xmlns:dialogs="using:VisualCommit.App.Views.Dialogs"
@@ -57,7 +58,8 @@
                     Background="Transparent"
                     ZIndex="1"
                     IsVisible="{Binding ActiveTab.ShowsLeftPanel}"
-                    AutomationProperties.AutomationId="LeftSplitter" />
+                    AutomationProperties.AutomationId="LeftSplitter"
+                    AutomationProperties.Name="{x:Static cmd:AutomationNames.ResizeLeftPanel}" />
       <GridSplitter Name="RightSplitter"
                     Grid.Column="2"
                     Width="7" Margin="-3,0,0,0"
@@ -67,7 +69,8 @@
                     Background="Transparent"
                     ZIndex="1"
                     IsVisible="{Binding ActiveTab.ShowsRightPanel}"
-                    AutomationProperties.AutomationId="RightSplitter" />
+                    AutomationProperties.AutomationId="RightSplitter"
+                    AutomationProperties.Name="{x:Static cmd:AutomationNames.ResizeRightPanel}" />
     </Grid>
 
     <shell:StatusBarView Grid.Row="3" />
