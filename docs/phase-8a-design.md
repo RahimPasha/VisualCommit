@@ -1246,9 +1246,9 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `MergeMoves`, `EventWait` 5 s, `LaunchNameIds`, `LaunchRowNames`); launch 13 reads no branch row,
   so the branch row's help text is read in no real window.
 - **At wave 3's merges** (the lead, 2026-11-21). The notices quote the copyright lines word for
-  word, their holders' e-mail addresses included (8.3.4 as written): the builder had read "never an
-  e-mail address" (section 1's rules for every package) as reaching third parties' notices, where it
-  means the owner's address and About's own texts, which hold no "@" (8.3.5). The vendors' notice
+  word, their holders' e-mail addresses included (8.3.4 as written): the builder had read its brief's
+  "no e-mail address" as reaching third parties' notices, where it meant the owner's address and
+  About's own texts, which hold no "@" (8.3.5). The vendors' notice
   files are byte for byte the vendors' (8.2). D433's lines are in CLAUDE.md, plan.md's gate step 6
   and the README. Enter in the text dialog's text is the dialog's, and the text takes no key that
   would use its hidden caret (8.3.2). D456 rules on what §9's sweep left (9.3.6, 9.3.8), with two
@@ -3310,10 +3310,9 @@ from the nuspec's `<repository>`).
 As built: a component that is no NuGet package has no `Packages:` line: Inter, JetBrains Mono, Wuffs
 and SPIRV-Cross have a `Files:` line alone, and Lucide and Feather, whose outlines are path data
 inside `VisualCommit.dll`, have neither; the test checks a package's files on the entry whose
-`Packages:` line names it. The copyright lines stand word for word in fenced blocks, their holders'
-e-mail addresses included (the lead, at §8's merge, 2026-11-21: "never an e-mail address", in
-section 1's rules for every package, means the owner's address and About's own texts, 8.3.5, not
-third parties' notices);
+`Packages:` line names it. The copyright lines stand word for word, their holders' e-mail addresses
+included (the lead, at §8's merge, 2026-11-21: the builder's brief's "no e-mail address" meant the
+owner's address and About's own texts, 8.3.5, not third parties' notices);
 `ThirdPartyNoticesTests.The_notices_files_only_addresses_are_its_copyright_lines` admits exactly the
 six addresses those lines carry (Tmds.DBus's two, zlib's two authors, Oniguruma's and the yaml
 grammar's), each inside a fenced block. "Keeping this file true" also says that guard: no line
@@ -3823,7 +3822,8 @@ New, each written first and failing on the code before (recorded in the merge no
   rows; Shift+End's one selected peer; bounds equal `RowBounds` in window coordinates; the request's
   words equal the label's tooltip line; a capture before the peer and after ten moves back, same bytes.
   As built, 22 tests; the "old null" of a row after none and of the focus's arrival is asserted after
-  another name has been raised first, so that a peer that always passed its last name would fail.
+  a name has been raised first (another row's before the time with none; the same row's before the
+  focus comes back), so that a peer that always passed its last name would fail.
 - `AutomationSweepTests` (App.Tests, hand-built windows, about 10): each rule's failing and passing
   examples, an invisible button not walked, the message's id and class. As built, 12, with D456's
   cases: an unnamed scroll bar and its thumb not checked while an unnamed button beside them is; the
