@@ -18,8 +18,9 @@ namespace VisualCommit.Testing;
 /// covered by anything else;</item>
 /// <item>the underline shows: across the text's ink, from its first column to its last, every column
 /// whose underline rows lay on the background holds there the link's colour over the background, at
-/// least <see cref="MinUnderline"/> of a pixel in all between the first and last columns, and such
-/// columns are most of the text's;</item>
+/// least <see cref="MinUnderline"/> of a pixel in all, but where a piece of the line ends: the first
+/// and last columns, and one column alone beside a letter that crosses the line, which the line skips
+/// (<c>UnderlineColumns.PieceEnd</c>); and such columns are most of the text's;</item>
 /// </list>
 /// and outside the box, the frame: a line of exactly the frame's colour on each of the four sides,
 /// within <see cref="Reach"/> of the box, the four lines closing a ring (no side cut by a parent's
@@ -125,7 +126,8 @@ public static class LinkFrame
 
         // The underline across the text's ink: in every column whose underline rows lay on the
         // background without the focus, those rows hold the link's colour over it, together at
-        // least MinUnderline of a pixel (the line is thinner than a pixel and antialiased over two).
+        // least MinUnderline of a pixel (the line is thinner than a pixel and antialiased over two),
+        // but where a piece of the line ends (PieceEnd).
         if (changed.Count == 0)
         {
             problems.Add(Text($"{what} shows no underline in its box {Box(left, top, right, bottom)}: the focus changes none of its pixels."));
@@ -133,18 +135,20 @@ public static class LinkFrame
         else if (changed.Count <= UnderlineRows)
         {
             var width = inkRight - inkLeft + 1;
-            var clear = Enumerable.Range(inkLeft, width).Where(x => changed.All(y => unfocused.PixelAt(x, y) == background)).ToList();
-            // The text's first and last columns may hold less: the line's ends are antialiased too.
-            var weak = clear.Where(x => Underline(focused, x, changed, link, background) is not { } share || (x > inkLeft && x < inkRight && share < MinUnderline)).ToList();
+            var clear = Enumerable.Range(inkLeft, width).Where(x => changed.All(y => unfocused.PixelAt(x, y) == background)).ToHashSet();
+            var line = new UnderlineColumns(focused, changed, clear, inkLeft, inkRight, link, background);
+            var faults = clear.Order().Where(x => line.Share(x) is not { } share || (share < MinUnderline && !line.PieceEnd(x))).ToList();
             if (clear.Count * 2 < width)
             {
                 problems.Add(Text($"{what}'s underline rows {string.Join(", ", changed)} cross the letters in {width - clear.Count} of the {width} columns {inkLeft} to {inkRight}: they are no underline under the text."));
             }
 
-            if (weak.Count > 0)
+            if (faults.Count > 0)
             {
-                var colours = string.Join(", ", changed.Select(y => Hex(focused.PixelAt(weak[0], y))));
-                problems.Add(Text($"{what}'s underline in the rows {string.Join(", ", changed)} is not the link's {Hex(link)} over {Hex(background)} (at {MinUnderline} of a pixel or more inside its ends) in {weak.Count} of the {clear.Count} columns clear of the letters, the first {weak[0]} ({colours})."));
+                const int Named = 8;
+                var named = faults.Take(Named).Select(x => Text($"{x}: {line.Describe(x)} ({string.Join(", ", changed.Select(y => Hex(focused.PixelAt(x, y))))}), beside {x - 1}: {line.Describe(x - 1)} and {x + 1}: {line.Describe(x + 1)}"));
+                var more = faults.Count > Named ? Text($"; and {faults.Count - Named} more") : string.Empty;
+                problems.Add(Text($"{what}'s underline in the rows {string.Join(", ", changed)} is not the link's {Hex(link)} over {Hex(background)} at {MinUnderline} of a pixel or more (less only at the text's first and last columns and, alone, beside a letter that crosses the line, where a piece of the line ends) in {faults.Count} of the {clear.Count} columns clear of the letters; each with its share of a pixel in each row, or the colour of a row that is not the link's over the background: {string.Join("; ", named)}{more}."));
             }
         }
 
@@ -217,25 +221,76 @@ public static class LinkFrame
     private static bool Between(byte value, byte from, byte to) =>
         value >= Math.Min(from, to) - TextInk.Tolerance && value <= Math.Max(from, to) + TextInk.Tolerance;
 
-    /// <summary>
-    /// A column's underline: how much of a pixel of the link's colour its <paramref name="rows"/> hold
-    /// over the background, the sum of each row's <see cref="Coverage"/>; null when a row holds
-    /// another colour.
-    /// </summary>
-    private static double? Underline(Screenshot picture, int x, IReadOnlyList<int> rows, Color link, Color background)
+    /// <summary>The underline's columns across the text's ink, in the picture with the focus.</summary>
+    /// <param name="focused">The picture with the focus.</param>
+    /// <param name="rows">The underline's rows.</param>
+    /// <param name="clear">The columns whose underline rows lay on the background without the focus.</param>
+    /// <param name="inkLeft">The text's first column.</param>
+    /// <param name="inkRight">The text's last column.</param>
+    /// <param name="link">The link's colour.</param>
+    /// <param name="background">The colour behind the link.</param>
+    private sealed class UnderlineColumns(Screenshot focused, IReadOnlyList<int> rows, IReadOnlySet<int> clear, int inkLeft, int inkRight, Color link, Color background)
     {
-        var total = 0.0;
-        foreach (var y in rows)
+        /// <summary>
+        /// How much of a pixel of the link's colour column <paramref name="x"/>'s rows hold over the
+        /// background, the sum of each row's <see cref="Coverage"/>; null when a row holds another colour.
+        /// </summary>
+        public double? Share(int x)
         {
-            if (Coverage(picture.PixelAt(x, y), background, link) is not { } share)
+            var total = 0.0;
+            foreach (var y in rows)
             {
-                return null;
+                if (Coverage(focused.PixelAt(x, y), background, link) is not { } share)
+                {
+                    return null;
+                }
+
+                total += share;
             }
 
-            total += share;
+            return total;
         }
 
-        return total;
+        /// <summary>
+        /// Whether a clear column may hold less than <see cref="MinUnderline"/> because a piece of the line
+        /// ends in it: the text's first and last columns (the line's own ends), and a column beside a letter
+        /// that crosses the underline's rows, alone, no clear column beside it holding less. Avalonia's
+        /// underline skips the ink of a letter that crosses it (12.1.3's <c>TextDecoration.Draw</c>: it
+        /// leaves out the glyph's outline just under the line, as <c>GlyphRun.GetIntersections</c> gives
+        /// it, and the line's thickness on each side, and draws each piece with flat ends at fractional
+        /// x), so the column where a piece ends holds the part of a pixel the piece covers, 0 to all of
+        /// it. That column lies next to the letter's ink in the line's rows wherever the ink reaches
+        /// within a pixel of the piece's end: for GitLab's legacy link (g and y, the pieces 371.000 to
+        /// 452.008, 456.431 to 472.332 and 475.216 to 564.928 on Windows), Windows and Linux draw the y's
+        /// tail in the line's rows over 472 to 476 and macOS over 473 to 475, so on macOS 472 is clear and
+        /// holds a third of the line (CI run 45019059991: 0.09 and 0.17). A piece cut short by more than a
+        /// column, or a faint column away from the letters, is no piece's end.
+        /// </summary>
+        public bool PieceEnd(int x) =>
+            x == inkLeft || x == inkRight || ((Letter(x - 1) || Letter(x + 1)) && !Faint(x - 1) && !Faint(x + 1));
+
+        /// <summary>Column <paramref name="x"/>'s underline for a message: each row's share of a pixel (or its colour when it is not the link's over the background) and their sum; "a letter" where a letter's ink crosses the rows.</summary>
+        public string Describe(int x)
+        {
+            if (x < inkLeft || x > inkRight)
+            {
+                return "past the text's ends";
+            }
+
+            if (Letter(x))
+            {
+                return "a letter";
+            }
+
+            var each = string.Join(" + ", rows.Select(y => Coverage(focused.PixelAt(x, y), background, link) is { } share ? Text($"{share:0.00}") : Hex(focused.PixelAt(x, y))));
+            return Share(x) is { } total ? Text($"{each} = {total:0.00}") : each;
+        }
+
+        /// <summary>A column inside the text's ink whose underline rows hold a letter's ink without the focus.</summary>
+        private bool Letter(int x) => x >= inkLeft && x <= inkRight && !clear.Contains(x);
+
+        /// <summary>A clear column holding less than <see cref="MinUnderline"/> of the line, or another colour.</summary>
+        private bool Faint(int x) => clear.Contains(x) && (Share(x) is not { } share || share < MinUnderline);
     }
 
     /// <summary>
