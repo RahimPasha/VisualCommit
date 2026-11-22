@@ -11,7 +11,8 @@ namespace VisualCommit.Git.Tests;
 /// The fetch hold (<see cref="FetchHold"/>, docs/phase-6-design.md 17.2) with real git on the
 /// workspace's file remotes, from a data folder of the test's under the temp folder: the line
 /// reads back, held fetches wait until released, a fetch after the release goes through, a second
-/// run under one hold waits for its own, and a repository without a remote is neither held nor
+/// run under one hold waits for its own, a fetch that saw its release does not give up when the
+/// hold is armed again before it goes on, and a repository without a remote is neither held nor
 /// holdable.
 /// </summary>
 public class FetchHoldTests
@@ -166,9 +167,116 @@ public class FetchHoldTests
         Assert.Empty(Directory.EnumerateFiles(hold.Folder, "held-*"));
     }
 
+    [Fact]
+    public async Task A_fetch_that_saw_the_release_does_not_give_up_when_the_hold_is_armed_again_before_it_goes_on()
+    {
+        // CI's run 44969394972 (K3 and K8 in a Linux container): on macOS and Linux a cancel kills
+        // git alone (D36), so a cancelled fetch's script waits on and sees the release that follows;
+        // Arm, for the next hold, may delete release in the moment between the script's wait and its
+        // going on. A stand-in for rm, first on the script's PATH, holds the script in just that
+        // moment (its rm of the marker) until the test has armed again, on every system.
+        using var data = new TempDirectory("data");
+        using var standIn = new TempDirectory("stand-in");
+        using var copy = await Scenarios.WorkspaceAsync();
+        var hold = FetchHold.Install(data.Path);
+        var api = copy.Repo("api");
+        var launcher = WriteRmStandIn(standIn, hold);
+        var go = standIn.Combine("rm-go");
+        try
+        {
+            var command = new GitCommand("-c", "remote.origin.uploadpack=sh " + ShellQuote(launcher), "fetch", "--progress", "origin")
+            {
+                WorkingDirectory = api.Path,
+                Environment = api.Environment,
+            };
+            var fetch = api.Runner.RunAsync(command, TestCancelled);
+            await hold.WaitForHeldAsync(1, StepTimeout);
+
+            hold.Release();
+            await WaitForFileAsync(standIn.Combine("rm-entered"), "the script's rm of its marker after it saw the release");
+            hold.Arm();
+            File.WriteAllText(go, string.Empty);
+            var result = await fetch.WaitAsync(StepTimeout, TestCancelled);
+
+            Assert.True(File.Exists(standIn.Combine("rm-let-go")), "The stand-in for rm stopped waiting before the test armed again.");
+            Assert.Equal(0, result.ExitCode);
+            Assert.Empty(hold.GaveUp());
+            Assert.Empty(Directory.EnumerateFiles(hold.Folder, FetchHold.MarkerPrefix + "*"));
+            Assert.Equal(0, hold.Held);
+        }
+        finally
+        {
+            // Whatever failed: the stand-in and the script go on and end.
+            File.WriteAllText(go, string.Empty);
+            File.WriteAllText(Path.Combine(hold.Folder, FetchHold.ReleaseName), string.Empty);
+        }
+    }
+
     private static Task<GitResult> FetchAsync(TempRepo repo, CancellationToken cancellationToken)
     {
         var command = new GitCommand("fetch", "--progress", "origin") { WorkingDirectory = repo.Path, Environment = repo.Environment };
         return repo.Runner.RunAsync(command, cancellationToken);
+    }
+
+    /// <summary>
+    /// Writes into <paramref name="folder"/> a stand-in for <c>rm</c> and a launcher, and returns the
+    /// launcher's path: git runs the launcher as the remote's upload-pack, and it runs the hold's
+    /// script as git would (<c>sh '&lt;script&gt;' "$1"</c>) with the folder first on its
+    /// <c>PATH</c>, after git's own folders, which Git for Windows puts first. The stand-in makes
+    /// <c>rm-entered</c>, waits for <c>rm-go</c> (at most 1,200 rounds of <c>sleep 0.05</c>), makes
+    /// <c>rm-let-go</c> if it came, and then removes what it was given with the system's <c>rm</c>.
+    /// </summary>
+    private static string WriteRmStandIn(TempDirectory folder, FetchHold hold)
+    {
+        var launcher = folder.Combine("launch.sh");
+        WriteScript(
+            launcher,
+            "#!/bin/sh\n" +
+            "# FetchHoldTests: the hold's script as git runs it, with this folder first on its PATH.\n" +
+            "PATH=\"$(cd \"${0%/*}\" && pwd):$PATH\"\n" +
+            "export PATH\n" +
+            "exec sh " + ShellQuote(hold.ScriptPath) + " \"$1\"\n");
+        WriteScript(
+            folder.Combine("rm"),
+            "#!/bin/sh\n" +
+            "# FetchHoldTests: rm, held until the file rm-go is beside it.\n" +
+            "here=\"${0%/*}\"\n" +
+            ": > \"$here/rm-entered\"\n" +
+            "i=0\n" +
+            "while [ ! -e \"$here/rm-go\" ] && [ \"$i\" -lt 1200 ]; do\n" +
+            "  sleep 0.05\n" +
+            "  i=$((i + 1))\n" +
+            "done\n" +
+            "if [ -e \"$here/rm-go\" ]; then\n" +
+            "  : > \"$here/rm-let-go\"\n" +
+            "fi\n" +
+            "command -p rm \"$@\"\n");
+        return launcher;
+    }
+
+    private static void WriteScript(string path, string text)
+    {
+        File.WriteAllText(path, text, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(path, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    /// <summary>A path for sh: forward slashes, in single quotes, as <see cref="FetchHold.UploadPackCommand"/> writes it.</summary>
+    private static string ShellQuote(string path) => "'" + path.Replace('\\', '/').Replace("'", "'\\''", StringComparison.Ordinal) + "'";
+
+    private static async Task WaitForFileAsync(string path, string what)
+    {
+        var clock = Stopwatch.StartNew();
+        while (!File.Exists(path))
+        {
+            if (clock.Elapsed >= StepTimeout)
+            {
+                throw new TimeoutException($"Timed out after {StepTimeout.TotalSeconds:0} s waiting for {what} ({path}).");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(20), TestCancelled);
+        }
     }
 }
