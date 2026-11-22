@@ -96,10 +96,10 @@ public class CommandPaletteViewTests
         app.Click(MainWorkRow);
         app.PressPalette();
         var palette = app.Palette;
-        Assert.Equal(33, palette.Shown.Count);
+        Assert.Equal(34, palette.Shown.Count);
 
-        // PageDown three times: rows 11, 22 and 32 (clamped), each scrolled whole into view.
-        foreach (var expected in new[] { 11, 22, 32 })
+        // PageDown three times: rows 11, 22 and 33, each scrolled whole into view.
+        foreach (var expected in new[] { 11, 22, 33 })
         {
             app.PressKey(Key.PageDown);
             var snapshot = app.PaletteSnapshot();
@@ -111,9 +111,9 @@ public class CommandPaletteViewTests
         app.PressKey(Key.Down);
         Assert.Equal(0, palette.HighlightedIndex);
         app.PressKey(Key.Up);
-        Assert.Equal(32, palette.HighlightedIndex);
+        Assert.Equal(33, palette.HighlightedIndex);
         app.PressKey(Key.Up);
-        Assert.Equal(31, palette.HighlightedIndex);
+        Assert.Equal(32, palette.HighlightedIndex);
 
         // Tab stays in the box; typing filters, with the first match highlighted.
         app.PressKey(Key.Tab);

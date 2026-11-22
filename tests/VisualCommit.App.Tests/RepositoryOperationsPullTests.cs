@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
@@ -69,6 +70,59 @@ public class RepositoryOperationsPullTests
         Assert.Equal("main is already up to date", app.StatusText);
         Assert.Equal(remote, await repo.HeadAsync());
         Assert.Empty(app.Dialogs.Shown);
+    }
+
+    /// <summary>
+    /// A Pull's own git calls, the calls with an operation id, held to a budget (D280: a count that
+    /// is a cost), so that a read added to the Pull fails here: a fast-forward and a merge, as
+    /// <see cref="Pull_fast_forwards_counts_the_commits_and_says_when_there_was_nothing_to_pull"/> and
+    /// <see cref="Pull_merges_diverged_branches_as_git_pull_would_and_says_so"/> set them up. Each budget
+    /// is the count measured. The watcher's refreshes and the refresh after the operation carry no
+    /// operation id, so the watcher's lag (D262) cannot change the count. Each run writes its count to
+    /// <see cref="PullBudgetRecordFile"/>, which CI uploads with each job's screenshots.
+    /// </summary>
+    [Theory]
+    // Measured on git 2.56.0.windows.4 on 2026-11-21: 23 calls for each, the fast-forward's merge
+    // included. A count that is higher on another git, CI's floor job's 2.34.1 among them, raises the
+    // budget to the highest count of CI's six jobs, with the reason (pull-budget.txt in each job's
+    // uploaded screenshots gives every job's count).
+    [InlineData("fast-forward", 23)]
+    [InlineData("merge", 23)]
+    public async Task A_pulls_own_git_calls_stay_within_their_budget(string integration, int budget)
+    {
+        using var repo = await Scenarios.RemoteSyncAsync();
+        var remote = await Scenarios.PushFromElsewhereAsync(repo, "main", "src/remote.txt", "remote\n", "Remote change");
+        string? local = null;
+        if (integration == "merge")
+        {
+            local = await repo.CommitFileAsync("src/local.txt", "local\n", "Local change");
+        }
+
+        using var app = await OperationsHarness.OpenAsync(repo);
+        var mark = app.Calls.Snapshot().Count;
+
+        await app.Operations.PullAsync();
+
+        // The Pull did what its set-up asks for, so that its calls are a Pull's.
+        if (local is null)
+        {
+            Assert.Equal(("Pulled 1 commit into main (fast-forward)", remote), (app.StatusText, await repo.HeadAsync()));
+        }
+        else
+        {
+            Assert.Equal("Pulled and merged origin/main into main", app.StatusText);
+            var parents = (await repo.GitAsync("rev-list", "--parents", "-n", "1", "HEAD")).StandardOutput.Trim().Split(' ');
+            Assert.Equal([local, remote], parents[1..]);
+        }
+
+        Assert.Empty(app.Dialogs.Shown);
+        var calls = OperationCalls(app, mark);
+        var git = await GitWords.VersionAsync();
+        var unwritten = GrowthMeasures.AppendRecord(
+            PullBudgetRecordFile,
+            "One line for each run of RepositoryOperationsPullTests.A_pulls_own_git_calls_stay_within_their_budget: the time in UTC, the Pull, the calls with an operation id it made, its budget, the tests' git.",
+            string.Create(CultureInfo.InvariantCulture, $"{DateTimeOffset.UtcNow:yyyy-MM-dd HH:mm:ss} UTC; {integration}; {calls.Count} calls; budget {budget}; git {git}"));
+        GitCallBudget.AssertAtMost(calls, budget, $"The {integration} Pull on git {git}{(unwritten is null ? string.Empty : " (" + unwritten + ")")}");
     }
 
     [Fact]
@@ -451,6 +505,13 @@ public class RepositoryOperationsPullTests
         "merge" => 4,
         _ => 6,
     };
+
+    /// <summary>
+    /// Where <see cref="A_pulls_own_git_calls_stay_within_their_budget"/> appends a line for each run,
+    /// passed or failed: <c>artifacts/visual/pull-budget.txt</c> under the repository's root, which CI
+    /// uploads with each job's screenshots, so that each job's count is read also when it passed.
+    /// </summary>
+    internal static string PullBudgetRecordFile => Path.Combine(VisualRun.RepoRoot, "artifacts", "visual", "pull-budget.txt");
 
     /// <summary>The command texts of the calls operations made since <paramref name="mark"/>.</summary>
     private static List<string> OperationCalls(OperationsHarness app, int mark) =>

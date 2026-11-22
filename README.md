@@ -89,7 +89,9 @@ Rahim Khajei
 ## Licence
 
 VisualCommit was created by Rahim Khajei and is released under the [MIT licence](LICENSE).
-Third-party work it includes is listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The third-party work its build ships on Windows, macOS and Linux is listed in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), and the notice files those components ship
+themselves are kept in [notices/](notices/). The app shows all of them under Settings, About.
 
 ## Name
 

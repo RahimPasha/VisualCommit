@@ -1,10 +1,21 @@
 <Application xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ops="using:VisualCommit.App.ViewModels.Operations"
              x:Class="VisualCommit.App.App"
              Name="VisualCommit"
              RequestedThemeVariant="Dark">
   <!-- Dark is the default theme. AppSession replaces it with the saved theme before the main
        window is created. -->
+
+  <!-- The macOS application menu's own item, declared here so that it exists before Avalonia's menu
+       exporter reads the application's menu: with it, Avalonia's "About Avalonia" goes; Services,
+       Hide, Hide Others, Show All and Quit stay (D431). Its command is App.AboutCommand, set in
+       Initialize. Nothing is drawn on Windows or Linux. -->
+  <NativeMenu.Menu>
+    <NativeMenu>
+      <NativeMenuItem Header="{x:Static ops:OperationTexts+AboutTexts.MenuItem}" />
+    </NativeMenu>
+  </NativeMenu.Menu>
 
   <Application.Resources>
     <ResourceDictionary>

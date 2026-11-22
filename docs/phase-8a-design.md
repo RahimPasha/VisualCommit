@@ -1191,6 +1191,25 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   round fixes the first in `WorkingChangesView` (the graph area's target takes the focus), and no
   picture changes. A row's Discard cancelled in its question gives the focus back to the row's
   own button, with the frame (6.3.4), which a test now holds.
+- **The performance pass** (§10, merged at `86ecb3a`, 2026-11-21). `StartupTimeline` has a second
+  public overload, `FromProcess(IAppLog, Func<DateTimeOffset>)`, for the test of its Warning, and
+  its texts are public constants (`WindowOpenedFormat`, `GitFoundFormat`, `FirstRowsFormat`,
+  `OneRestoredTab`, `RestoredTabsFormat`, `StartTimeUnreadable`). The series' clones are made with
+  `git clone --local --no-hardlinks`, with `gc.auto=0` and `maintenance.auto=false`: a hard link
+  would let `TempDirectory.Dispose` clear the read-only attribute of the shared 100k pack.
+  `Phase8aPerformance` runs its facts in the order M2, M3, M4_M5, M6, M7 (`Phase8aPerformanceOrder`;
+  the fixture is `Phase8aPerformanceRun`). Beyond 10.3.5's lines its file holds one trigger line per
+  measure, a `<measure> failed: …` line before a failure is rethrown, two summary lines and two
+  bounds for M4 (after the load, the peak after the reload), and `no line` for a noted value that
+  is missing. M6 puts the pointer on Fetch before the settle (`RealApp.SetPointerOn`, a third
+  helper beside `Memory()` and `LogTime(…)`, §12's to use or to leave), so that T0 to the reload
+  line holds no pointer travel; the span it notes is the Fetch operation's, which the queue counts
+  to the end of its refresh, the reload included (10.3.4's "fetch span" and 10.9 read so). The Pull
+  budget is 23 git calls, for a fast-forward and for a merge; each run of the theory appends its
+  count, its budget and git's version to `artifacts/visual/pull-budget.txt`, which CI uploads with
+  each job's pictures. `PerformanceSeriesTests` has five methods (19 cases). 10.6's comparison ran
+  against wave 2's references. Not run by the builder, and the lead's on the desktop:
+  `Phase8aPerformance` itself (10.8).
 
 ## 2. colours: the contrast round (D410)
 
@@ -3691,7 +3710,9 @@ once, outside the pass.
 ### 9.9 Risks, the unverified and open points
 
 1. A row's node exists only once a client has reached it (uia.md 2): S1 tests the cold case, steps 3
-   and 5 Narrator. Silence found at the gate reopens the route: a decision and a gate round.
+   and 5 Narrator. Silence found at the gate reopens the route: a decision and a gate round. The
+   spike showed it (D455): cold, no event; warm, every move. Whether Narrator warms the row by
+   itself is what the owner's listen shows, brought forward from §9's merge.
 2. Narrator may read a List's selection on focus, and the row twice (step 11's first F6).
 3. Whether a live region's help text is spoken (the count, the search) is unverified (step 6); the
    details panel's "3 commits selected" says it too.
@@ -4524,7 +4545,10 @@ tooltip or a hover look (a member of `Phase8aExpectations.F`), rests the scripte
 there too, and shows by the files' hashes that both scripted pictures stay the same files (headless
 no pointer is drawn, and nothing hovers at either point); if one changes, §12 tells the lead before
 going on. (2) Launches 5 and 6: the fallback click on the notice's title bar lands away from its
-left end, where the icon now opens the system menu. It covers launch 3's main window too (the lead,
+left end, where the icon now opens the system menu. (3) From the spike (D455), for launch 13: the
+launch reads the graph's first child (`FindFirstChild` of `GraphRows`) before its first move; cold,
+a move raises no event from `GraphSelectedRow`, so without that read every move would fail D450's
+rule for the wrong reason. It covers launch 3's main window too (the lead,
 2026-11-21; 12.3.4 launch 3): its fallback click on the title bar lands away from the left end and
 from the caption buttons.
 
@@ -4965,7 +4989,11 @@ on the review, and item 22 is the review's question for the owner (13.5).
     owner for it at §9's merge (13.3 names it).
 14. If the spike's S1 (cold) finds no event and S2 (warm) does: the public route stands with the risk
     recorded, or a decision names the `[PrivateApi]` route and its guarding test. The lead, at the
-    spike, before §9's build goes on.
+    spike, before §9's build goes on. **Settled (the lead, 2026-11-21; D455):** the spike found
+    exactly this (S1 no event, S2 one Name change and one LiveRegionChanged per move; S3, S4 and S6
+    as 9.3.1 expects; its events are in the merge notes), and the public route stands with the risk
+    recorded. The owner's Narrator listen (item 13) is brought forward to the first build the owner
+    can hear; silence there brings a new decision on the route before the review.
 15. The hunk bars' repeated "Stage hunk" and "Discard hunk" names (`HunkHeaders.cs:252-253`) lie in
     no items container, so the sweep does not flag them; a help text with the hunk's header would
     change no picture, but no ruling takes it. Recommended: the Backlog, beside ruling 36's item. The

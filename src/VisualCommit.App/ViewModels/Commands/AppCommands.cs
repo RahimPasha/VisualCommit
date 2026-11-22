@@ -339,6 +339,10 @@ public sealed partial class AppCommands
             case AppCommand.FollowSystemTheme:
                 return Theme(AppTheme.System, "Follow the system's theme");
 
+            case AppCommand.About:
+                // On every kind of tab, enabled, keyless (D417): the settings screen on About.
+                return Always(OperationTexts.AboutTexts.PaletteCommand, () => shell.OpenSettingsCommand.Execute(SettingsSection.About));
+
             default:
                 // The keys only drawn and listed: their views take them (6.4).
                 return NotListed(command.ToString());

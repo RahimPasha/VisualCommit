@@ -213,7 +213,7 @@ public sealed partial class Phase7aChecksA
 
     /// <summary>
     /// Asserts the settings card's frame and section list at 1100×700 or 1920×1080: the card exactly,
-    /// five buttons in order, 176 × 30 and 2 apart, Accounts at its place, only it selected and
+    /// six buttons in order, 176 × 30 and 2 apart, Accounts at its place, only it selected and
     /// without an error dot.
     /// </summary>
     private static void AssertFrame(ShellDriver app, bool full)

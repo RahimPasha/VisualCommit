@@ -287,12 +287,16 @@ Wave 2:
 
 Wave 3:
 
-- [ ] 13. §8, the About section and the complete third-party notices (R6, D398, D409, D431 to
-  D434), part A.
+- [x] 13. §8, the About section and the complete third-party notices (R6, D398, D409, D431 to D434),
+  part A. Built, reviewed and merged on 2026-11-21 (`f014b2b`), with the lead's rulings at the
+  merge: the copyright lines word for word, the vendor files byte for byte, D433's lines in the docs
+  (Notes, "Wave 3 is under way").
 - [ ] 14. §9, screen readers (D411, D435, D450), part U: the spike first (the owner told), the
   graph's selected row, a name on every control with the sweep; merged after §8; a short listen
   with Narrator by the owner at its merge.
-- [ ] 15. §10, the performance pass (D436 to D438): the log lines and the opt-in class.
+- [x] 15. §10, the performance pass (D436 to D438): the log lines and the opt-in class. Built, reviewed
+  and merged on 2026-11-21 (`86ecb3a`); the first run on the desktop and the "before" series are
+  step 16's (Notes, "Wave 3 is under way").
 - [ ] 16. Wave 3's close: the lagged list, the whole default run and the pictures; then the
   "before" series on the rested laptop, the owner told, and a change only where a trigger fires,
   after a ruling.
@@ -343,6 +347,16 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [44952559495](https://github.com/RahimPasha/VisualCommit/actions/runs/44952559495), for
+  `86ecb3a` (§10's merge, the performance pass): all six jobs succeeded at the first attempt, none
+  failed a test. `windows-latest` 8,301 tests with 5 skipped, Test step 27 min 13 s of 70;
+  `macos-latest` 8,298 with 3 skipped, 31 min 55 s; `ubuntu-latest` 8,298 with 4 skipped, 5 min 54
+  s; the two "bare ubuntu container" jobs 8,298 with 4 skipped each, 7 min 24 s (Ubuntu's packages)
+  and 6 min 1 s (Microsoft's installer); the floor job 8,298 with 4 skipped on git 2.34.1, 5 min 19
+  s. The Pull budget's theory passed in every job, so none counted more than 23 git calls for a
+  fast-forward or a merge, the floor job's git 2.34.1 among them, and the budget stays 23 (design
+  10.8). Each job's own count is in `pull-budget.txt` of its pictures' artifact; the lead did not
+  download them.
 - [44862521774](https://github.com/RahimPasha/VisualCommit/actions/runs/44862521774), for
   `c9835e9` (wave 2 merged, with the words added to one test's timeout): all six jobs succeeded at
   the first attempt, none failed a test. `windows-latest` 8,283 tests with 5 skipped, Test step 43
@@ -632,24 +646,29 @@ walk-through's 21 steps by hand) are in `docs/test-reports/phase-8a.md`, which n
 and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the three takeovers of the desktop in wave 3
 (the spike, §10's first run, the "before" series) the owner said on 2026-11-21: start each when it is
 ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
-its merge. Then the build: worktrees
-`D:/Projects/Personal/vc-wt/p8a-about`, `p8a-uia` and `p8a-perf` on `wip/p8a-<key>` from the phase
-branch, an Opus builder in each reading design sections 0 and 1 (with 1.17) and its own, three
-reviewers, a verifier for each major and a fixer per package, as waves 1 and 2. Wave 3's script is
-`phase8a-wave-3-wf_ee9f40a9-6e3.js`, kept with the session beside the earlier ones; it takes the
-packages to run in its arguments (`about`, `uia-spike`, `uia`, `perf`), each with its base commit.
-**§10 is being built since 2026-11-21** (it has no checks to wait for): the worktree `p8a-perf` on
-`wip/p8a-perf` from `b812f17`, the workflow's run `wf_ee9f40a9-6e3`. A session that finds a workflow
-gone reads the worktree's `git log <base>..HEAD` and `git status` and builds the package on from
-its last commit by the same brief. §9 builds in two
-stages: its first commits are the peers of design 9.3.2 to 9.3.5 and the spike on
-`wip/p8a-uia-spike`, which the lead runs once on the desktop, the owner told (a minute of keys and
-clicks, no heavy run beside), and whose events decide whether the route stands (9.3.1); the rest of
-§9 follows. §9 merges after §8 and sweeps About. At the merges, the owner told each time: §9's
-short Narrator listen (about 5 minutes), §10's first run with `VISUALCOMMIT_PERF_RUNS=1` (about 5
-minutes of the desktop) and, after wave 3's close, the "before" series on the rested laptop (12 to
-18 minutes a run). Two timeouts of older tests are open and are step 19's to look at unless one
-comes again sooner (Notes, "Two timeouts").
+its merge.
+§10 and §8 are merged (`86ecb3a`, `f014b2b`), and §10's first run on the desktop is done (Notes). §9
+is built and reviewed, and the lead's rulings on what it left are D456. Next, in this order. (1) Two
+fixes in the worktrees, by the wave's pattern (a fixer, then an independent check): in
+`D:/Projects/Personal/vc-wt/p8a-about`, Enter in the text dialog's text and the JetBrains Mono
+entry's second line; in `D:/Projects/Personal/vc-wt/p8a-uia`, on top of the phase branch, D456's
+rulings with About as the sweep's state 3
+(`D:/Projects/Personal/phase8-work/wave3/uia/lead-rulings.md`). A session that finds a workflow gone
+reads the worktree's `git log` and `git status` and carries the rulings out from its last commit.
+(2) Both merged into the phase branch (`git merge --no-ff`), the lead's class runs, the push and CI.
+(3) The owner asked again for the short Narrator listen (about 5 minutes; the start file
+`D:\Projects\Personal\phase8-work\wave3\spike arrator-listen.cmd`, pointed at the merged tree's
+Release build), which decides D455's open point; the merge does not wait for it. (4) Step 16: with
+no agent at work, the lagged list (design 0.4) and the whole default run, the pictures compared with
+wave 2's references (`D:/Projects/Personal/phase8-work/references/wave2/`; §8's regions in
+`D:/Projects/Personal/phase8-work/wave3/about/expected-about.json`), the lead's check of the new
+pictures of parts A and U, new references under `references/wave3`; then, the laptop rested 10
+minutes, the "before" series (`VISUALCOMMIT_PERF_RUNS=5`, 12 to 18 minutes of the desktop, which the
+owner let start when it is ready), the bounds in a commit of their own, each trigger decided and the
+report's table (design 10.3.6). (5) The wave's docs: design 1.17's as-built notes for §8 and §9, the
+report's corrections and open points, CLAUDE.md's row for the series. Then the owner is asked for
+the week's share before wave 4. Two timeouts of older tests are open and are step 19's to look at
+unless one comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -677,11 +696,83 @@ every commit.
   (`phase8a-wave3-checks-settle`, run `wf_3ddc3c22-6e8`, 5 agents, 1.11M; a checker's dozen misses
   repaired and verified by `phase8a-wave3-checks-repair`, run `wf_5b0f2234-5c5`, 3 agents, 0.69M).
   The design changed in 0.7, 0.8, 1.12, 1.17, 8.5, 8.6, 8.9, 9.3.6, 9.3.8, 9.3.9, 9.4, 9.5, 9.6, 9.9,
-  10.6, 12.3.3 to 12.3.5, 12.9, 13.3 and 13.4. **§10** has no part and has been built since the
-  morning in `D:/Projects/Personal/vc-wt/p8a-perf` (the workflow `phase8a-wave-3`, run
-  `wf_ee9f40a9-6e3`). The workflows of the night took about eleven hours of the clock for an hour
+  10.6, 12.3.3 to 12.3.5, 12.9, 13.3 and 13.4. **§10 is built, reviewed and merged** (`86ecb3a`, 2026-11-21; the workflow `phase8a-wave-3`, run
+  `wf_ee9f40a9-6e3`: a builder in `D:/Projects/Personal/vc-wt/p8a-perf`, three reviewers, a verifier
+  for each of three majors, of which one was confirmed and fixed, a fixer; 8 agents, 1.98M tokens).
+  On the merged tree the lead ran, beside the wave's other builders and so with plain class runs:
+  the builds of the root and of the real-window and live projects, 0 warnings; `StartupTimelineTests`,
+  `RepositoryViewModelTests`, `RepositoryViewModelFilterTests`, `RepositoryOperationsPullTests` and
+  `SummaryModeTests`, 62 of 62; `PerformanceSeriesTests`, 19 of 19; `Phase8aPerformance` without its
+  variable, 5 skipped and no file written. CI's run on the merge, 44952559495, is green in all six jobs at the first attempt, and the
+  Pull budget of 23 git calls held in each, git 2.34.1 among them (the CI section). **§10's first
+  run** (design 10.8) ran on the desktop on 2026-11-21 at 17:12, on `4ca874a`, while
+  §9's package was only being read by its reviewers and §8's had ended: the five facts passed in 3 min
+  47 s (295 s with the lock), the file `artifacts/perf/phase-8a/series-20261121-171224-4ca874a.txt`
+  holds the head line, both warm-ups, every run's line and each measure's summary and trigger lines
+  with no "no line" note, and M6's reload line followed the fetch (the reload line's 4,718 ms inside
+  the Fetch operation's 8,158 ms). Its values are one run on a busy laptop, indications only: M2 15.4 s
+  (the window after 10.3 s), M3 24.0 s with ten tabs (808 MB working set), M4 290 MB after the load and
+  346 MB at the peak after the reload (managed heap 72 and 124 MB), M5 5.6 s (the reload line's 5.3 s),
+  M6 8.1 s, M7 559 ms. Three starts by hand right after it, outside the harness, on a data folder of
+  their own: the window opened after 4.3, 5.5 and 5.7 s, and a restored 100k tab had its first rows
+  after 8.6 s; the log shows no stall, the time is the app's own start (about 0.35 s to the instance
+  guard's line, 1.3 to 1.5 s more to the "started" line, 2.6 to 3.7 s more until the window is open,
+  the git search running beside it; the open itself then drew its first rows in 2.8 s). The "before"
+  series on the rested laptop decides the bounds and the triggers (10.3.6); what a start costs in a
+  build that is not compiled ahead of time is a point for 8b's published build (ReadyToRun), which the
+  lead writes into the report's table and plan.md at the series. **Still the lead's for §10**: the
+  lagged list, which waits for the wave's last merge
+  because the other builders cannot pause; after the wave's close the "before" series with
+  `VISUALCOMMIT_PERF_RUNS=5` on the rested laptop, the bounds written into `Phase8aPerformance`, each
+  trigger decided and the report's table (10.3.6); the docs (design 1.17's as-built note, CLAUDE.md's
+  row for the series, architecture.md and plan.md's risk 10 at the close). The builder's and the
+  fixer's notes in full: `D:/Projects/Personal/phase8-work/wave3/for-the-lead.md`. **§8 and the first
+  stage of §9** have been building since the afternoon in `p8a-about` and `p8a-uia`, from `592686e`
+  (the same workflow script, run `wf_fbc91d85-cad`); **The spike ran on 2026-11-21** (15:23, 1 min 43 s on the desktop, in
+  `D:/Projects/Personal/vc-wt/p8a-uia-spike`; its events are kept in
+  `D:/Projects/Personal/phase8-work/wave3/spike/events-run-1.txt`): cold, no event from the graph's
+  row; warm, one Name change and one LiveRegionChanged per move with the design's words; the rest
+  as expected. The lead's decision is D455: the public route stands with the risk recorded, and
+  the owner's short Narrator listen is brought forward, because only it shows whether Narrator
+  reaches the row by itself ("Waiting on the owner"). **§9's second stage** (the names, the status
+  bar, the sweep, part U's checks) has been building since then in `p8a-uia` (run
+  `wf_f2f691e2-7bf`, the spike's result in its brief). The spike's branch and worktree are removed
+  after §9's merge (design 9.9). The workflows of the night took about eleven hours of the clock for an hour
   or two of work: the agents stood still for most of it (the plan's usage limit, by the look of
   it).
+  **§8 is built, reviewed and merged** (`f014b2b`, 2026-11-21; run `wf_fbc91d85-cad`: a builder in
+  `p8a-about`, three reviewers, a verifier for each of four majors, of which one was confirmed (the
+  caret's assertion passed on a brush that was not there) and fixed with eleven minors, a fixer;
+  with the spike's builder 10 agents, 2.96M tokens). At the merge the lead ruled that the notices
+  quote the copyright lines word for word, their holders' addresses included: the brief's "no e-mail
+  address" meant the owner's and About's own texts, and the builder had left the addresses out. A
+  fixer restored six addresses in five entries (Tmds.DBus, zlib's authors, Oniguruma, the yaml
+  grammar) and turned the guard test round, so that it admits those six inside fenced blocks and no
+  other; a verifier checked 25 blocks against their sources and found no fault (run
+  `wf_611039ff-03f`, 2 agents, 0.41M). The lead kept the four vendor files byte for byte
+  (`notices/** -text` in `.gitattributes`: the SHA-256 in git are the vendors', two files with CRLF
+  and two with LF), wrote D433's lines into CLAUDE.md (the "Phase N accepted" diff, the rule on a
+  phase that awaits acceptance, the CI note), plan.md's gate step 6 and the README, and corrected a
+  stale comment of the real-window pass (34 commands). On the merged tree: the builds of the root
+  and of the real-window and live projects, 0 warnings; About's classes in App.Tests, 98 of 98; 8a's
+  part A with its tests, 40 of 40; phase 6's expectation tests, 56 of 56. A5's bound of 1 s held in
+  every run of the fixers and the lead (601 to 788 ms; 1,001 to 2,119 ms in the builder's runs
+  beside other packages' work): it is ruled on only if the whole run or a CI job fails it. Open at
+  §8, each in a fix that follows the merge: Enter in the text dialog's text is taken by the editor,
+  changes nothing and scrolls the view back to its hidden caret (a verifier's reading of the code;
+  the fix, with a test first, makes a plain Enter run the dialog's Close as in every other dialog);
+  the JetBrains Mono entry quotes the license's line and not the shipped font's own, as Inter's
+  entry does. **§9 is built and reviewed** (run `wf_f2f691e2-7bf`, 12 agents, 2.87M tokens; seven
+  majors confirmed, fixed in `fbc96fd` on `wip/p8a-uia`). What it left to the lead is ruled in D456
+  (`D:/Projects/Personal/phase8-work/wave3/uia/lead-rulings.md`): scroll bars are not named; a
+  dialog is its own container for the duplicate rule; a branch row's help text is the ref's full
+  name, the one exception to ruling 34; a run of keys is a key text; About is the sweep's state 3;
+  the report's two places where part U misread phase 4 (Esc in the resolver's result, the resolver
+  over the right panel's column) are corrected with their reasons; the name a branch row gives for a
+  moment while its folder opens is step 19's. The accounts of both packages' builders, reviewers and
+  fixers are in `D:/Projects/Personal/phase8-work/wave3/about/` (`report.md`,
+  `workflow-result.json`, `copyright-lines-result.json`) and
+  `D:/Projects/Personal/phase8-work/wave3/uia/` (`built.md`, `majors.md`, `minors.md`, `fixed.md`).
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
@@ -1033,6 +1124,16 @@ every commit.
     taken, the desktop unlocked); wave 2's three worktrees are removed (done: `git worktree
     remove` on the clean folders; the branches `wip/p8a-firstrun`, `wip/p8a-keyboard` and
     `wip/p8a-icon` stay, merged).
+    - **A short listen with Windows Narrator, as soon as the owner can** (D455; design 13.4 items 13
+    and 14; about 5 minutes, in person). The spike showed that the graph's selected row speaks to a
+    UI Automation client only once that client has read below the graph. Whether Narrator does
+    that by itself decides if the route stays. The lead gives the start file
+    (`D:/Projects/Personal/phase8-work/wave3/spike/narrator-listen.cmd`, outside the repository:
+    the spike's build on a throwaway repository, with the isolating variables) and the steps:
+    Narrator on (Ctrl+Win+Enter), click a commit in the graph, press Down three times, then
+    Shift+F6, F6 and Down twice more; is each commit's line spoken? Asked on 2026-11-21 after the
+    spike; the owner answered "not now", so it is asked again at §9's merge, as design 13.3 has it.
+    The start file and its throwaway repository stay ready until then.
   - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
     above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
     D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on

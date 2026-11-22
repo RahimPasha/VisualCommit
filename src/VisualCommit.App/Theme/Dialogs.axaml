@@ -116,6 +116,17 @@
     <Setter Property="Padding" Value="20" />
   </Style>
 
+  <!-- The text dialog's card (the license, the third-party notices; D432): at most 760 × 600, 40 from
+       the window's edges, stretched both ways and centred by its maximum, so that at 1100×700 it is
+       760 × 600 at (170, 50), over the settings screen's card. -->
+  <Style Selector="Border.dialogCard.document">
+    <Setter Property="MaxWidth" Value="760" />
+    <Setter Property="MaxHeight" Value="600" />
+    <Setter Property="Margin" Value="40" />
+    <Setter Property="HorizontalAlignment" Value="Stretch" />
+    <Setter Property="VerticalAlignment" Value="Stretch" />
+  </Style>
+
   <!-- A settings row's label, in the form's first column, top-aligned with its control's first line (7.1). -->
   <Style Selector="TextBlock.settingsLabel">
     <Setter Property="Foreground" Value="{DynamicResource VcTextSecondaryBrush}" />
