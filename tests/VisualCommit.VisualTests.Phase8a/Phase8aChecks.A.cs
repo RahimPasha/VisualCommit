@@ -120,12 +120,14 @@ public sealed partial class Phase8aChecksA : Phase8aChecks
         Assert.IsType<SettingsDialogViewModel>(app.Session.Services.DialogHost.Current);
         Assert.Empty(app.Launcher.Requests);
 
-        // Step 9: Tab to the repository link, underlined while focused.
+        // Step 9: Tab to the repository link, underlined while focused; in the picture its whole text
+        // as in a1a, the underline under it and the frame around them, outside the text.
         app.PressKey(Key.Tab);
         await WaitForFocusAsync(app, A.RepositoryLinkId);
         var linkFocus = Picture(app, A.A1bAboutLinkFocus);
         Assert.True(app.FocusVisible);
         AssertLink(app, linkFocus, A.RepositoryLinkId, A.RepositoryLink, A.RepositoryTip, underlined: true);
+        AssertFramedLink(app, about, linkFocus, A.RepositoryLinkId);
         AssertLink(app, linkFocus, A.GuideLinkId, A.OpenUserGuide, A.GuideTip, underlined: false);
         Assert.Empty(app.Launcher.Requests);
 
