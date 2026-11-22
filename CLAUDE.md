@@ -456,10 +456,10 @@ What to know about them:
   ten restored 100,000-commit tabs, memory, the reload after an outside commit and after a fetch,
   and Pull's settings reads. It is no part of the gate. Its numbers move with whatever else the
   laptop does: on 2026-11-22 two of three series ran their first measure within two minutes of a
-  Release build and read 7.8 and 8.2 s where the quiet take read 4.6 s, and the third met Office's
-  updater, a scheduled task with an idle trigger, which an untouched laptop invites (D457; plan.md's
-  risk 10). To see what Windows' Task Scheduler will start in the next ten minutes (PowerShell, read
-  only):
+  Release build and read 7.8 and 8.2 s where the quiet take read 4.6 s, and the other one, the
+  second, met Office's updater, a scheduled task with an idle trigger, which an untouched laptop
+  invites (D457; plan.md's risk 10). To see what Windows' Task Scheduler will start in the next ten
+  minutes (PowerShell, read only):
   `Get-ScheduledTask | Where-Object State -ne 'Disabled' | ForEach-Object { $i = $_ | Get-ScheduledTaskInfo; if ($i.NextRunTime -and $i.NextRunTime -le (Get-Date).AddMinutes(10)) { "$($i.NextRunTime.ToString('HH:mm:ss')) $($_.TaskPath)$($_.TaskName)" } }`;
   with `$i.LastRunTime -ge (Get-Date '05:50')` as the condition and `LastRunTime` in the text it
   shows what ran since a time. A task with an idle trigger shows no next time, and a task can run

@@ -3781,12 +3781,14 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   Git section) and `f14a-netrc-note` (the Accounts section), which show the settings screen's section
   list too (design 5.5, as part F built them): the lead's `--expected` file for §8's merge names all six,
   as the design's 0.7, corrected, does.
-- **Nothing else** (8.6): `VcLinkButton` is the sign-in dialogs' `SignInLinkButton` moved unchanged, the
-  native menu draws nothing on Windows, and no typed query of an earlier check matches the command. Proof
-  (8.6): §8's builder runs phase 6's part S, K10 and L31 and 7a's and 7b's part A (the sign-in dialogs
-  among them), then `scripts/compare-pictures.py --expected` against the references of the last closed
-  wave, wave 2's (`D:/Projects/Personal/phase8-work/references/wave2/`; open point 68), with these
-  regions: every other picture the same file. The captures are compared at the gate (0.7).
+- **Nothing else** (8.6): `VcLinkButton` is the sign-in dialogs' `SignInLinkButton` moved unchanged (so
+  at §8's merge; its keyboard frame was rebuilt at wave 3's close, `fcf8c1e`, and every picture of an
+  unfocused link stayed the same file: "Wave 3's comparison with wave 2's references"), the native menu
+  draws nothing on Windows, and no typed query of an earlier check matches the command. Proof (8.6): §8's
+  builder runs phase 6's part S, K10 and L31 and 7a's and 7b's part A (the sign-in dialogs among them),
+  then `scripts/compare-pictures.py --expected` against the references of the last closed wave, wave 2's
+  (`D:/Projects/Personal/phase8-work/references/wave2/`; open point 68), with these regions: every other
+  picture the same file. The captures are compared at the gate (0.7).
 - **Earlier tests** (8.4; each reason once here):
   1. `SettingsDialogViewTests` (`:176-187` at `27c5109`): Down from Accounts reaches `SettingsNavAbout`,
      Down on it stays, three Ups reach Tools; the comment names About last. Reason: About is the sixth
@@ -4007,8 +4009,8 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   background between frame and ink. Reason: in wave 3's whole run `a1b` showed the theme's frame over
   the link's text and its underline hidden, which the check, reading the underline in the tree alone,
   did not see; the inspection of the new pictures found it ("Wave 3's comparison with wave 2's
-  references"). The check asserts more of an unchanged expected result: no step and no expected result
-  changed.
+  references"). The check asserts more of an unchanged expected result: the expected state is
+  unchanged.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
@@ -4164,12 +4166,12 @@ dialog's backdrop, in `l31e`.
   dark and light; phase 7a's `b09a`; phase 7b's `b03a`, `b03b`, `b06a`, `b06b`, `n04c`; 8a's own `k7a`.
   In `l27g` also 3 pixels of the Push button's two right corners, and in `l31g` dark 2 of the
   rounded left end of the status bar's progress track, 1 or 2 levels apart.
-- A temporary folder's random name in a text (16): the twelve characters after `plain-`, `clones-`,
-  `ops-`, `edges-`, `sync-` or `workspace-` in a path, in git's output or in a tooltip, and the text
-  after them drawn a little aside: phase 1's `11a`, `13b`, `14a`, `14b`; phase 3's `16j`, `30g`; phase
-  5's `u21v`; phase 6's `k10e`, `l30c` dark and light, `l32a` dark and light, `l32b` dark and light,
-  `w1e`, `w3a`, the same 16 as in wave 2's comparison. `16j` also has 4 pixels of a tag icon's edge, 5
-  to 15 levels apart.
+- A temporary folder's random name in a text (16): the twelve characters, or their visible start,
+  after `plain-`, `clones-`, `ops-`, `edges-`, `sync-` or `workspace-` in a path, in git's output or
+  in a tooltip, and the text after them drawn a little aside: phase 1's `11a`, `13b`, `14a`, `14b`;
+  phase 3's `16j`, `30g`; phase 5's `u21v`; phase 6's `k10e`, `l30c` dark and light, `l32a` dark and
+  light, `l32b` dark and light, `w1e`, `w3a`, the same 16 as in wave 2's comparison. `16j` also has 4
+  pixels of a tag icon's edge, 5 to 15 levels apart.
 - A fake's port in a clone form's address (2): phase 7b's `b07b` and 8a's own `k5a`.
 - A progress bar or a tooltip caught at another moment (2): phase 1's `10b-second-tab` and phase 7a's
   `n07a`.
@@ -4218,15 +4220,15 @@ no focus adorner (`FocusAdorner` null) and does not clip (`ClipToBounds` False).
 `BorderThickness` 2, `IsHitTestVisible` False) with `Border#FocusFrameInner` (`BorderThickness` 1)
 inside it; their brushes, Fluent's `SystemControlFocusVisualPrimaryBrush` and
 `SystemControlFocusVisualSecondaryBrush`, are set only under `:focus-visible`. So the frame's outer
-line lies 4 px outside the link's bounds left and right and 3 above and below, the inner line 1 px
+line lies 4 px outside the link's bounds left and right and 3 above and below, the 1 px inner line just
 inside it, with 1 px of the background between it and the text's ink left and right; above and below,
 the line box keeps the letters 2 px and the underline 1 px clear of it. The panel takes the content's
-size and the frame's negative margin gives back its borders, so nothing moves. The frame is only
-drawn, never hit: a pointer on it reaches what lies under it, so a hover or a click just outside the
-text is none on the link, focused or not. It is the keyboard focus's alone: a link focused by a click
-is underlined without it, and a link not focused draws nothing outside its bounds. It was built by a
-fixer with its tests first and checked by an independent verifier, in three rounds (run
-`wf_939ded6a-40e`: 6 agents, 1.35M tokens; the account in
+size and the frame's negative margin gives back its borders, so nothing moves. The frame is only drawn,
+never hit: a pointer on it reaches what lies under it, so a hover or a click just outside the text is
+none on the link, focused or not. It is the keyboard focus's alone: a link focused by a click is
+underlined without it, and a link not focused draws nothing outside its bounds. It was built by a fixer
+with its tests first and checked by an independent verifier, in three rounds (run `wf_939ded6a-40e`: 6
+agents, 1.35M tokens; the account in
 `D:/Projects/Personal/phase8-work/wave3/linkframe/result-rounds.txt`, the last check's crops under
 `wave3/linkframe/verify3/`). Round 1's verifier found that the frame, then built round the content,
 took clicks: a click 3.5 px left of the link's bounds opened the repository's address. Round 2 laid it
@@ -4236,10 +4238,10 @@ test passed. Round 3 added the cases of a link focused by a click, and its verif
 `LinkFocusFrameTests` (App.Tests, 12 cases: the About links focused by Tab, in dark and light, three;
 GitLab's two sign-in links focused by Shift+Tab, two; the frame moving nothing, one; the pointer on the
 frame, one; the About links focused by a click, three; the sign-in links focused by a click, two), with
-the helper `LinkFrame` in `VisualCommit.Testing`, and A1's step 9 (`AssertFramedLink`) hold it: each
-of four mutations fails some of them, the old theme (seven cases and A1's step 9), no air beside the
-text (seven cases), a frame that is hit (the pointer's case) and `:focus` for `:focus-visible` (the
-five cases of a click).
+the helper `LinkFrame` in `VisualCommit.Testing`, and A1's step 9 (`AssertFramedLink`) hold it: each of
+four mutations fails some of them, the old theme (seven cases and A1's step 9), no air beside the text
+(seven cases), a frame that is hit (the pointer's case) and `:focus` for `:focus-visible` (the five
+cases of a click).
 
 The lead's checks on the merged tree, whose code is the verified `5177cec`'s (the diff outside `docs`
 prints nothing): `LinkFocusFrameTests` 12 of 12, part A's three classes (`Phase8aChecksA`,
@@ -4319,10 +4321,11 @@ each series, a disturbed take marked; after; the bound; the trigger with its num
 | M6: the reload after a fetch, from the click on Fetch to the reload line; and the reload line's own time | 1: 6,018.2 ms (5,447.9 to 6,321.2), the line's median 3,418 ms; 2: 5,932.8 ms (4,855.6 to 6,578.1), the line's 3,004 ms; 3: 6,643.2 ms (5,996.6 to 7,024.9), the line's 4,013 ms | no change | 8,800 ms (7,024.9) | as M5's: **fired** in every series | To the Backlog, with M5 |
 | M7: Pull's settings reads, the median of 20 calls of `ReadPullConfigurationAsync("main")`, no window | 1: 326.7 ms (295.7 to 338); 2: 464.6 ms (439.6 to 499.7), two small `SoftLanding` tasks beside it; 3: 316.2 ms (279.3 to 355.3) | no change | 630 ms (499.7) | the median at 250 ms or more: **fired** in every series | To the Backlog: S8's batch would save 2 of a Pull's 23 git calls, about 0.2 s of a plain Pull on Windows and nothing of Pull (rebase), and would rewrite the reader that decides how Pull integrates and about 19 earlier tests in 11 files |
 
-Each bound is the slowest counted run, in brackets, times 1.25, rounded up (times to 100 ms, M7's to
-10 ms, memory to 10 MB; design 10.3.6's step 2): M2's from the second series alone, the others from
-all fifteen runs, which no build touched (D457 (3)). The bounds D457 gives go into `Phase8aPerformance`
-in a commit of their own; each counted run of a later series is held to them.
+Each bound is the slowest counted run, in brackets, times 1.25, rounded up (times to 100 ms, M7's to 10
+ms, memory to 10 MB; design 10.3.6's step 2): M2's from the second series alone, the others from all
+fifteen runs, which no build touched (D457 (3)). The bounds D457 gives are in `Phase8aPerformance`
+since `0bfbe92`, a commit of their own (2026-11-22; M3's field stays unset); each counted run of a
+later series is held to them.
 
 **The reload's stall probe** (the lead's, by hand, outside any test, 00:59;
 `D:/Projects/Personal/phase8-work/wave3/reload-probe/reload_stall_probe.ps1`, its result
@@ -4339,25 +4342,24 @@ before the reload goes to the backlog.
 `run1.txt`, `run2-small.txt` and the data folders with the app's logs): the Release build started on a
 data folder of its own whose session restores the case's tabs, the active one listed first (tab 0):
 clones of the tests' 100,000-commit repository, or, in the small case, one such clone and nine
-repositories of 2,000 commits; with a git configuration and a keychain of its own and the providers
-off; no input;
-from the moment the window existed until every tab's `loaded` line, the window's thread asked an empty
-message every 15 ms. `run1.txt` set one large tab against ten large tabs, `run2-small.txt` one large tab
-against one large tab beside nine tabs of 2,000 commits, the cases alternately, three times each. Their
-numbers are indications: alternated, but few. By the active tab's own clock (its line `first graph rows
-drawn after`, D50's and Q1's quantity), a 100,000-commit tab restored alone showed its first rows after
-2,105 ms (the warm-up), 2,557, 2,686 and 2,310 ms in the first probe and 1,771, 2,189 and 2,813 ms in
-the second; beside nine more such tabs after 6,644, 5,044 and 5,219 ms; beside nine tabs of 2,000
-commits after 4,287, 6,145 and 7,763 ms. The delay lies before the active tab's refs are read (its
-`refs read after` 3.2 to 6.2 s, against 0.7 to 1.4 s alone): in the about eighty git processes that
-ten openings start at once, not in the nine large walks (D457). The window's thread answered after up
-to 435, 1,148 and 483 ms with ten large tabs (13, 19 and 16 answers of 50 ms or more), up to 304, 420
-and 581 ms with nine small ones (7, 10 and 11), and up to 164 to 349 ms with one tab. All loads had
-ended after 22 to 28 s with ten large tabs and after 10 to 15 s with nine small ones. So the cost falls
-on every Windows session with many restored tabs, on the quantity Q1 names, for the tab the user looks
-at (D457). The probes' app found `C:\Program Files\Git\cmd\git.exe`, Git for Windows' launcher, as a
-user's desktop does; the series and the real-window pass start the app from Git Bash, whose PATH finds
-git itself (`ucrt64\bin\git.exe`).
+repositories of 2,000 commits; with a git configuration and a keychain of its own and the providers off;
+no input; from the moment the window existed until every tab's `loaded` line, the window's thread asked
+an empty message every 15 ms. `run1.txt` set one large tab against ten large tabs, `run2-small.txt` one
+large tab against one large tab beside nine tabs of 2,000 commits, the cases alternately, three times
+each. Their numbers are indications: alternated, but few. By the active tab's own clock (its line `first
+graph rows drawn after`, D50's and Q1's quantity), a 100,000-commit tab restored alone showed its first
+rows after 2,105 ms (the warm-up), 2,557, 2,686 and 2,310 ms in the first probe and 1,771, 2,189 and
+2,813 ms in the second; beside nine more such tabs after 6,644, 5,044 and 5,219 ms; beside nine tabs of
+2,000 commits after 4,287, 6,145 and 7,763 ms. The delay lies before the active tab's refs are read (its
+`refs read after` 3.2 to 6.2 s, against 0.7 to 1.4 s alone): in the about eighty git processes that ten
+openings start at once, not in the nine large walks (D457). The window's thread answered after up to
+435, 1,148 and 483 ms with ten large tabs (13, 19 and 16 answers of 50 ms or more), up to 304, 420 and
+581 ms with nine small ones (7, 10 and 11), and up to 164 to 349 ms with one tab. All loads had ended
+after 22 to 28 s with ten large tabs and after 10 to 15 s with nine small ones. So the cost falls on
+every Windows session with many restored tabs, on the quantity Q1 names, for the tab the user looks at
+(D457). The probes' app found `C:\Program Files\Git\cmd\git.exe`, Git for Windows' launcher, as a user's
+desktop does; the series and the real-window pass start the app from Git Bash, whose PATH finds git
+itself (`ucrt64\bin\git.exe`).
 
 **The two panels**, read only, each of four analysts and then three judges with different lenses (the
 user's, the phase's and the rules'): run `wf_eb13d24d-e57` on M5, M6 and M7 (7 agents, 1.88M tokens)
