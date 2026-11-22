@@ -4184,8 +4184,11 @@ tooltip `New tab` is open over the toolbar's Fetch and Pull icons, (139,37)-(205
 `+` (`AddRepoButton`) and takes the picture at once, the pointer left on the new tab, with no move to
 the neutral point and no wait for a tooltip (`Phase1Checks.Shell.cs` lines 70 and 71), so whether the
 tooltip shows depends on how long the click and the capture take against Avalonia's delay for a
-tooltip. The lists of the gates of phases 1 to 5 hold one hash for `10b`, so this is the first run
-that caught it, most likely on a machine loaded by the whole run; it is on the list of the review
+tooltip. The lists of the gates of phases 1 to 5 hold one hash for `10b`. The later gates' pictures
+of it and wave 1's and wave 2's references are other files, but none of those still on the machine
+shows the tooltip: phase 7b's gate picture, the same file as 7a's, and wave 2's reference, the same
+file as wave 1's (phase 6's gate picture is no longer on the machine). So this is the first run
+known to catch it, most likely on a machine loaded by the whole run; it is on the list of the review
 before the gate (status.md's step 19). The two ports: in phase 7b's `b07b` the fake of Azure DevOps
 did not get its port 47397 in this run and fell back to a free one, 56841 (D363); in `k5a` the fake of
 GitHub's port, chosen per run, changes the address in the URL box, (381,349)-(502,362), which K5's
@@ -4196,7 +4199,7 @@ notes set aside.
 for word and every colour from its pixels; then a second inspector for the one picture not passed, who
 tried to refute its fault and found its cause. 14 passed. **One fault, `a1b-about-link-focus`.** A1's
 step 9 expects `AboutRepositoryLink` "focused, framed, its text underlined". The picture showed
-Fluent's focus frame on the link's own bounds, (481,375)-(709,390), which are its text's line box: its
+Fluent's focus frame on the link's own bounds, (481,375)-(710,391), which are its text's line box: its
 2 px white outer line, on columns 481–482 and 708–709 and rows 375–376 and 389–390, turned the first
 `g`'s left stroke and the last `t`'s right side white; its 1 px inner line, on columns 483 and 707 and
 rows 377 and 388, darkened the tops of the capitals and ascenders and the descenders; and the
@@ -4239,12 +4242,12 @@ five cases of a click).
 The lead's checks on the merged tree, whose code is the verified `5177cec`'s (the diff outside `docs`
 prints nothing): `LinkFocusFrameTests` 12 of 12, part A's three classes (`Phase8aChecksA`,
 `AboutSectionTests`, `AboutEntryTests`) 13 of 13, `Phase7aChecksA` 8 of 8 and `Phase7bChecksA` 9 of 9
-(`D:/Projects/Personal/phase8-work/wave3/linkframe/merge/summary.txt`). Of their pictures only `a1b`
-differs from wave 3's references, in (477,372)-(714,394), the link's bounds grown by 4 and 3 (2,952
+(`D:/Projects/Personal/phase8-work/wave3/linkframe/merge/summary.txt`). Of their pictures `a1b`
+differs from wave 3's references in (477,372)-(714,394), the link's bounds grown by 4 and 3 (2,952
 pixels): the whole text as in `a1a`, the underline across it in rows 388 and 389, the frame whole
-round them. The other eight pictures of part A and every picture of 7a's part A (24) and 7b's (29),
-the sign-in dialogs among them, are the same files, but for 7a's `a09b-git-refused`, 2 pixels one
-level apart at (350,206), the anti-aliasing wave 2's comparison already lists for it.
+round them. Beside it only 7a's `a09b-git-refused` differs, 2 pixels one level apart at (350,206), the
+anti-aliasing wave 2's comparison already lists for it. The other eight pictures of part A, the other
+23 of 7a's part A and the 29 of 7b's, the sign-in dialogs among them, are the same files.
 
 What the inspectors noted beside the checks, none of it a fault: the settings form's left lies 1 px
 right of this report's 336 and 480 (746 and 890 at 1920×1080), within its 2 px, as phase 7a's Accounts
