@@ -501,7 +501,7 @@ public class LeftPanelViewModelTests
     }
 
     [Fact]
-    public void A_rebuild_that_marks_two_rows_replaces_those_two_alone_and_keeps_every_row_between_them()
+    public void A_rebuild_that_marks_two_rows_marks_those_two_in_place_and_tells_the_list_of_no_row()
     {
         // Two branches hidden while the graph that still has their commits is shown (8.3): no
         // tooltip yet. Then the graph without them is swapped in, and the panel asks again.
@@ -511,29 +511,106 @@ public class LeftPanelViewModelTests
         panel.IsInGraph = sha => oldGraph || (sha != Sha('f') && sha != Sha('r'));
         panel.UpdateFilters(new RepositoryGraphFilter("C:/repo", ["refs/heads/feature/search", "refs/remotes/origin/main"], [], [], [], ["origin"], default));
         var before = panel.Rows.ToList();
-        var search = before.IndexOf(Item(panel, "search", RefItemKind.LocalBranch));
-        var remoteMain = before.IndexOf(Item(panel, "main", RefItemKind.RemoteBranch));
-        Assert.True(remoteMain - search > 1, "No row lies between the two hidden branches' rows.");
-        var changes = new List<(NotifyCollectionChangedAction Action, int Index)>();
-        panel.Rows.CollectionChanged += (_, e) => changes.Add((e.Action, e.NewStartingIndex));
+        var search = Item(panel, "search", RefItemKind.LocalBranch);
+        var remoteMain = Item(panel, "main", RefItemKind.RemoteBranch);
+        Assert.True(before.IndexOf(remoteMain) - before.IndexOf(search) > 1, "No row lies between the two hidden branches' rows.");
+        var changes = Record(panel.Rows);
+        var told = new List<(string Row, string? Property)>();
+        search.PropertyChanged += (_, e) => told.Add(("search", e.PropertyName));
+        remoteMain.PropertyChanged += (_, e) => told.Add(("origin/main", e.PropertyName));
 
         oldGraph = false;
         panel.RefreshMarks();
 
-        Assert.Equal("feature/search is hidden in the graph", Item(panel, "search", RefItemKind.LocalBranch).NameToolTip);
-        Assert.Equal("origin/main is hidden in the graph", Item(panel, "main", RefItemKind.RemoteBranch).NameToolTip);
+        // The two rows show the tooltips themselves and tell their controls; the list is told of no
+        // row, and every row is the one shown before, so the control of a row a press is on stays
+        // and its release is still a click, wherever the list is scrolled.
+        Assert.Equal("feature/search is hidden in the graph", search.NameToolTip);
+        Assert.Equal("origin/main is hidden in the graph", remoteMain.NameToolTip);
+        Assert.Contains(("search", nameof(RefItemRow.NameToolTip)), told);
+        Assert.Contains(("origin/main", nameof(RefItemRow.NameToolTip)), told);
+        Assert.Empty(changes);
+        Assert.Equal(before, panel.Rows);
+        Assert.All(Enumerable.Range(0, before.Count), i => Assert.Same(before[i], panel.Rows[i]));
+    }
 
-        // Only the two rows that show something new are replaced: every other row is the one shown
-        // before, so the control of a row a press is on stays, and its release is still a click.
-        Assert.Equal([(NotifyCollectionChangedAction.Replace, search), (NotifyCollectionChangedAction.Replace, remoteMain)], changes);
-        Assert.Equal(before.Count, panel.Rows.Count);
-        for (var i = 0; i < before.Count; i++)
+    [Fact]
+    public void A_solo_and_its_end_mark_every_branch_row_in_place_and_tell_the_list_of_no_row()
+    {
+        var panel = Updated(GraphRefs());
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 1));
+        var before = panel.Rows.ToList();
+        var changes = Record(panel.Rows);
+
+        panel.UpdateFilters(new RepositoryGraphFilter("C:/repo", [], ["refs/heads/feature/search"], [], [], ["origin"], default));
+
+        Assert.Empty(changes);
+        Assert.All(Enumerable.Range(0, before.Count), i => Assert.Same(before[i], panel.Rows[i]));
+        Assert.True(Item(panel, "search", RefItemKind.LocalBranch).ShowsSoloToggle);
+        Assert.True(Item(panel, "login", RefItemKind.LocalBranch).IsDimmed);
+        Assert.True(Item(panel, "main", RefItemKind.RemoteBranch).IsDimmed);
+        Assert.False(Item(panel, "main", RefItemKind.LocalBranch).IsDimmed);
+
+        panel.UpdateFilters(null);
+
+        Assert.Empty(changes);
+        Assert.All(Enumerable.Range(0, before.Count), i => Assert.Same(before[i], panel.Rows[i]));
+        Assert.All(panel.Rows.OfType<RefItemRow>(), row => Assert.Equal(RefRowMarks.None, row.Marks));
+    }
+
+    [Fact]
+    public void A_refresh_that_moves_a_branch_and_changes_a_closed_sections_count_changes_those_rows_in_place()
+    {
+        var panel = Updated(GraphRefs());
+        panel.Activate(Section(panel, RefSection.Tags));
+        var before = panel.Rows.ToList();
+        var main = Item(panel, "main", RefItemKind.LocalBranch);
+        var tags = Section(panel, RefSection.Tags);
+        var changes = Record(panel.Rows);
+        var told = new List<string?>();
+        main.PropertyChanged += (_, e) => told.Add(e.PropertyName);
+
+        // A commit on main: it points to another commit and is two ahead; a tag made outside, in the
+        // closed Tags section, shows only in its count.
+        var refs = GraphRefs();
+        panel.Update(refs with
         {
-            if (i != search && i != remoteMain)
-            {
-                Assert.Same(before[i], panel.Rows[i]);
-            }
-        }
+            Refs =
+            [
+                .. refs.Refs.Select(gitRef => gitRef.Name == "main" && gitRef.Kind == RefKind.LocalBranch
+                    ? gitRef with { TargetSha = Sha('z'), Ahead = 2 }
+                    : gitRef),
+                Tag("v0.3", 'z'),
+            ],
+        });
+
+        Assert.Empty(changes);
+        Assert.All(Enumerable.Range(0, before.Count), i => Assert.Same(before[i], panel.Rows[i]));
+        Assert.Equal(Sha('z'), main.TargetSha);
+        Assert.Equal("2", main.AheadText);
+        Assert.Contains(nameof(RefItemRow.AheadText), told);
+        Assert.Equal("3", tags.CountText);
+        Assert.Contains("> Tags 3", Describe(panel));
+    }
+
+    [Fact]
+    public void A_rebuild_that_changes_what_a_row_cannot_change_itself_replaces_that_row_alone()
+    {
+        // A row's text is one of the things it does not change itself: here the stash's message,
+        // as if the stash's commit were listed with another one.
+        var panel = Updated(GraphRefs());
+        var before = panel.Rows.ToList();
+        var stash = Item(panel, "On main: Work in progress on README", RefItemKind.Stash);
+        var index = before.IndexOf(stash);
+        var changes = Record(panel.Rows);
+        var refs = GraphRefs();
+
+        panel.Update(refs with { Stashes = [refs.Stashes[0] with { Message = "On main: Another message" }] });
+
+        Assert.Equal([(NotifyCollectionChangedAction.Replace, index)], changes);
+        Assert.NotSame(stash, panel.Rows[index]);
+        Assert.Equal("On main: Another message", panel.Rows[index].Text);
+        Assert.All(Enumerable.Range(0, before.Count).Where(i => i != index), i => Assert.Same(before[i], panel.Rows[i]));
     }
 
     [Fact]
@@ -556,6 +633,14 @@ public class LeftPanelViewModelTests
         panel.SoloToggleClicked += (_, row) => stopped.Add(LeftPanelViewModel.RefNameOf(row));
         search.StopSoloingCommand.Execute(null);
         Assert.Equal(["refs/heads/feature/search"], stopped);
+    }
+
+    /// <summary>What <paramref name="rows"/> tell the view from now on: each change's kind and its index.</summary>
+    private static List<(NotifyCollectionChangedAction Action, int Index)> Record(INotifyCollectionChanged rows)
+    {
+        var changes = new List<(NotifyCollectionChangedAction Action, int Index)>();
+        rows.CollectionChanged += (_, e) => changes.Add((e.Action, e.Action == NotifyCollectionChangedAction.Remove ? e.OldStartingIndex : e.NewStartingIndex));
+        return changes;
     }
 
     private static LeftPanelViewModel Updated(RepoRefs refs)
