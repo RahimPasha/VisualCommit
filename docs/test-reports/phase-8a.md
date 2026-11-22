@@ -2470,8 +2470,8 @@ pressed.
   and PageDown with Ctrl, Alt or Meta and no Shift, which Avalonia's scroll viewer takes and pages by a
   whole viewport, and Home and End clearing a selection made with the mouse. A plain Enter in the
   license's text closing the dialog as Close does, the focus back on `Show license…` with its frame,
-  and Enter with a modifier doing nothing
-  (`AboutSectionTests.Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back`);
+  and Enter with a modifier doing nothing (`AboutSectionTests`'
+  `Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back`);
   a held Enter on `Show license…` then opens and closes the dialog in turn, as in any dialog with a
   default button that a button opens by Enter (the lead, 2026-11-21), which no test shows. The
   notices' e-mail addresses, only those their copyright lines carry, each inside a fenced block
@@ -2839,8 +2839,9 @@ walk-through, 21 steps by the owner, is this part's check by hand (9.3.9; D411, 
   the 5 s it waits for each event; 9.5's last paragraph); `Phase8aExpectationTests.U.cs` (the names
   equal `AutomationNames`' constants and formats; the words equal `GraphRowSpeech`'s constants; every
   picture name matches 0.3's pattern and is used once); `AccessibleNameSweepTests.cs` (8a's project,
-  ruling 37; 14 facts, one start each, 9.3.8); `ShellDriver.Phase8a.Uia.cs` (`GraphRowPeer()`, the
-  window's peer made once, `RecordNameChanges(AutomationPeer)`; 1.15); `AutomationSweep` (Testing:
+  ruling 37; 14 facts, 9.3.8: 13 start the app once each, and state 14 shows §4's notice window
+  alone); `ShellDriver.Phase8a.Uia.cs` (`GraphRowPeer()`, the window's peer made once,
+  `RecordNameChanges(AutomationPeer)`; 1.15); `AutomationSweep` (Testing:
   `FindProblems`, `AssertNamed`, `AutomationProblem`; 1.12). The App.Tests classes of 9.4
   (`GraphRowSpeechTests`, `CommitGraphControlAutomationTests`, `AutomationSweepTests`,
   `StatusBarTests.The_operation_text_is_a_polite_live_region`) are not checks; "What proves each
@@ -2903,7 +2904,7 @@ walk-through, 21 steps by the owner, is this part's check by hand (9.3.9; D411, 
   end (U2). Git's state is the scenario's `ExactStateAsync()`, read before the first step and at the
   end.
 - **The sweep's states** (9.3.8; 1.17's bullets on wave 2). `AccessibleNameSweepTests`, one
-  `[AvaloniaFact]` and one start each, 14 in all: (1) the welcome page and the palette; (2) the
+  `[AvaloniaFact]` each, 14 in all, 13 with one start: (1) the welcome page and the palette; (2) the
   settings screen, each section (About's among them, `2: settings, About`), the Git program row,
   Accounts with the three providers' fakes on and each provider's sign-in dialog; (3) About
   (`3: about`), the license's text dialog over it (`3: the license`: one text, no switch) and the
@@ -2927,7 +2928,7 @@ walk-through, 21 steps by the owner, is this part's check by hand (9.3.9; D411, 
   `ChosenPath`, so the fact writes `gitExecutable` before the start, as F3 does; 1.17), (11) macOS's
   Missing, (12) Linux's Missing, (13) HelperMissing (`askPassHelper` a path without a file), and in each
   state of (10) to (13) `GitSetup`'s automation name the state's title (`GitSetupTitle`'s text) and its
-  help text the state's body (`GitSetupBody`'s text); (14) §4's notice through
+  help text the state's body (`GitSetupBody`'s text); (14) §4's notice window alone, no app, through
   `InstanceNoticeHost.Show(platform, folder, theme)`, three arguments (1.11, 1.17). §5's buttons and links
   are named by their own texts, bound where the text changes (`GitSetupCheckAgainButton` reads
   `Checking…` during a search; 1.17), and a stage row that holds the keyboard focus has its two buttons
@@ -2965,9 +2966,10 @@ walk-through, 21 steps by the owner, is this part's check by hand (9.3.9; D411, 
 #### Test methods and app starts (part U)
 
 Three methods, three starts (9.7), each on a fresh copy of its scenario and a fresh data folder; beside
-them `AccessibleNameSweepTests`, 14 starts (9.3.8). Method 2 makes on the stopped merge what the
-real window's launch 13 reads of the graph's rows (it has no capture, so it has no twin; 12.3.4). The
-step letters run on in the table's order: `u3a` in method 2, `u3b` in method 3 (9.5's names).
+them `AccessibleNameSweepTests`, 14 facts: 13 starts of the app, and state 14's notice window shown
+alone (9.3.8). Method 2 makes on the stopped merge what the real window's launch 13 reads of the
+graph's rows (it has no capture, so it has no twin; 12.3.4). The step letters run on in the table's
+order: `u3a` in method 2, `u3b` in method 3 (9.5's names).
 
 | # | Test method | Checks | Start and what is set before it | Window, theme | Pictures |
 |---|---|---|---|---|---|
@@ -3428,12 +3430,13 @@ as method 2 writes it).
         quotes the name read.
     - The app closed by its window, exit code 0.
 
-The spike (9.3.1; D455) saw no event from `GraphSelectedRow` while its client had read nothing below
-the graph, and one Name change and one LiveRegionChanged per move once it had read the graph's first
-child, which is why the launch reads that child first. Unverified until D246's runs (12.9), in this
-launch: a LiveRegionChanged from `GraphSelectedRow` reaching FlaUI's handler (ruling 32; D450); the
-row's bounds under per-monitor DPI at 200 %; how many events a move raises in the real bridge (run.txt
-records it; the scripted run asserts one Name change).
+The spike (9.3.1; D455), a FlaUI UIA3 client on the Release build of §9's first stage, on "ops" at
+200 %, saw no event from `GraphSelectedRow` while it had read nothing below the graph; once it had
+read the graph's first child, its handler received one Name change and one LiveRegionChanged from the
+row per move, which is why the launch reads that child first. Unverified until D246's runs (12.9):
+this launch's own run, on the stopped merge and the merged code (its events and their counts in
+run.txt; a LiveRegionChanged asserted per move, ruling 32 and D450; the scripted run asserts one Name
+change), and the row's bounds under per-monitor DPI at 200 %, which the spike did not record.
 
 ## Checks
 
@@ -3936,20 +3939,22 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
 - **U2 and part U's conventions: the sweep's rules, its states and how a sweep fails** (2026-11-21,
   D456 at §9's merge): the rules as D456 reads them (a scroll bar and what lies inside it are not
   checked; a dialog is its own container for `duplicate`; two key texts joined by ` to ` are a key
-  text), and the states as built: 14 facts, state 3 with three sweeps (About, the license's text
-  dialog, the notices' dialog on Avalonia's file), state 4 with the add-repositories and
-  create-pull-request dialogs; and the first run's findings under U2. Reason: §9's first run left
-  Fluent's unnamed scroll bars and the stacked dialogs' Cancel, outside 1.12's table, to the lead
-  (9.3.8); the report's state 3 named About and the license's text dialog alone, while a vendor
-  file's text is reached only through the notices' dialog, the one with a switch (D456 (5) makes
-  About and its text dialog state 3; the build's correction at §9's merge, which the lead took, adds
-  the notices' dialog); and §9's review found state 4 without two dialog kinds. Also how a sweep
-  fails, as built: `AutomationSweep.AssertNamed`, which methods 2 and 3 run, throws its own
-  `AutomationSweepException`, naming every problem, since the Testing project has no xUnit
-  `Assert`; `AccessibleNameSweepTests` does not run `AssertNamed` at each state, as U2's expected
-  result first said, but reads each state's problems with `AutomationSweep.FindProblems` and fails
-  once at the fact's end, listing them state by state, so that one run gives every finding. U2's
-  expected result, nothing reported in each state, is unchanged.
+  text), and the states as built: 14 facts, 13 with one start of the app and state 14 with §4's
+  notice window alone (`InstanceNoticeHost`, with no session; the conventions had said one start
+  each); state 3 with three sweeps (About, the license's text dialog, the notices' dialog on
+  Avalonia's file), state 4 with the add-repositories and create-pull-request dialogs; and the first
+  run's findings under U2. Reason: §9's first run left Fluent's unnamed scroll bars and the stacked
+  dialogs' Cancel, outside 1.12's table, to the lead (9.3.8); the report's state 3 named About and
+  the license's text dialog alone, while a vendor file's text is reached only through the notices'
+  dialog, the one with a switch (D456 (5) makes About and its text dialog state 3; the build's
+  correction at §9's merge, which the lead took, adds the notices' dialog); and §9's review found
+  state 4 without two dialog kinds. Also how a sweep fails, as built: `AutomationSweep.AssertNamed`,
+  which methods 2 and 3 run, throws its own `AutomationSweepException`, naming every problem, since
+  the Testing project has no xUnit `Assert`; `AccessibleNameSweepTests` does not run `AssertNamed` at
+  each state, as U2's expected result first said, but reads each state's problems with
+  `AutomationSweep.FindProblems` and fails once at the fact's end, listing them state by state, so
+  that one run gives every finding. U2's expected result, nothing reported in each state, is
+  unchanged.
 - **U3, method 2, step 6 and its expected result, and launch 13's close of the resolver and its read
   of the graph's first child** (2026-11-21, the lead's ruling at §9's merge; the check since
   `96d94bf`): Esc leaves the resolver open, and `ResolverCloseButton` closes it, by a real click in
@@ -3957,11 +3962,12 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   `notes.txt` the keyboard focus is in the resolver's result, where Esc is the resolver's own and
   closes nothing (phase 4's design 11.10). The end is unchanged: no resolver, the repository as it
   was. Launch 13 already read `GraphSelectedRow` once before `RecordSelectedRowEvents()`; the step
-  now names it the graph's first child, and the paragraph below the launch no longer waits on the
-  spike. Reason: D455 records the spike's run: no event from the row while no client had read below
-  the graph, and one Name change and one LiveRegionChanged per move once its client had read the
-  graph's first child, so launch 13 reads that child first (the lead at §9's merge). What waits on
-  D246's runs is unchanged.
+  now names it the graph's first child, and the paragraph below the launch and open point 88 no
+  longer wait on the spike. Reason: D455 records the spike's run: no event from the row while no
+  client had read below the graph, and one Name change and one LiveRegionChanged per move, received
+  by its FlaUI client at 200 %, once it had read the graph's first child, so launch 13 reads that
+  child first (the lead at §9's merge). What waits on D246's runs is this launch's own run, with its
+  events and their counts, and the row's bounds at 200 %, which the spike did not record.
 - **U3, `u3a`'s expected result** (2026-11-21, the same ruling): the resolver spans the right panel's
   column, so no stage panel shows beside it; the sentence that put the stage panel with `notes.txt`
   and `u-untracked.txt` in the right panel is gone. Reason: phase 4's design 11.2, as phase 4's `c10e`
@@ -4551,8 +4557,8 @@ another; §12's builder follows the report's steps.
     after step 7's `Arm()` had deleted it, and wrote its marker, and the method failed after 4.9 s with
     "The hold gave up". Once it has made its marker, the script now looks at `release` only in its
     loop's test, and gives up only when that look finds none once its rounds are over (the
-    conventions' "What a fake stands for");
-    `FetchHoldTests.A_fetch_that_saw_the_release_does_not_give_up_when_the_hold_is_armed_again_before_it_goes_on`
+    conventions' "What a fake stands for"); `FetchHoldTests`'
+    `A_fetch_that_saw_the_release_does_not_give_up_when_the_hold_is_armed_again_before_it_goes_on`
     holds a shell that saw the release inside its `rm` until after `Arm()`, and failed on the old
     script. A shell that misses a short release still counts its rounds from its own start (`Arm()`'s
     comment says so); no test comes near that. No expected result changed. The exception that hid the
@@ -5099,7 +5105,14 @@ Still open, each with the reading this report takes and who settles it; a point 
 88. **The spike** (9.3.1; 13.4 item 14). If S1 (cold) finds no LiveRegionChanged from
     `GraphSelectedRow` and S2 (warm) does, the lead decides whether the public route stands; if neither
     does, the build stops until a decision names the `[PrivateApi]` route, and then U1 and launch 13 also
-    assert its focus event (D445). The lead, at the spike, before §9's build goes on.
+    assert its focus event (D445). The lead, at the spike, before §9's build goes on. **Settled (the
+    lead, 2026-11-21; D455):** with a cold client (S1) no event came from `GraphSelectedRow`; once
+    the client had read the graph's first child (S2), each move raised one Name change and one
+    LiveRegionChanged. The public route stands with the risk recorded: nothing uses `[PrivateApi]`,
+    so neither U1 nor launch 13 asserts a focus event (D445), and launch 13 reads the graph's first
+    child before its moves. The cold case stays as D455 has it (the lead at §9's merge): the owner's
+    Narrator listen decides whether the route stands, and if Narrator is silent a new decision names
+    the route before the review.
 89. **The short listen at §9's merge** (13.3, 13.4 item 13): steps 2 to 6 and 14, by the owner; the lead
     records its words in §9's merge notes and status.md and quotes them under part U.
 90. **The first run's findings** (9.4, 9.5: "the report lists the states and the first run's
