@@ -6,11 +6,13 @@ using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Styling;
+using VisualCommit.App.Controls;
 using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Conflicts;
 using VisualCommit.App.ViewModels.Dialogs;
 using VisualCommit.App.ViewModels.Operations;
+using VisualCommit.App.Views.Dialogs;
 using VisualCommit.App.Views.Pages;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
@@ -32,8 +34,7 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// U2): one fact and one start per group of states, each state swept by
 /// <see cref="AutomationSweep"/> from the window's own peer as a client reads it. A fact sweeps all
 /// its states before it fails, and its failure lists every problem of every state, so that one run
-/// gives the whole list. State 3, About and its license's text dialog, is swept from the merge of
-/// the package that builds About (the place is marked below).
+/// gives the whole list.
 /// </summary>
 public sealed class AccessibleNameSweepTests : Phase8aChecks
 {
@@ -94,12 +95,42 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
         sweeps.AssertNone();
     }
 
-    // (3) About and its license's text dialog: swept from the merge of the package that builds the
-    // About section. It needs the settings screen on About (SettingsNavAbout, then SettingsAbout
-    // with AboutShowLicenseButton, AboutShowNoticesButton, AboutRepositoryLink and AboutGuideLink),
-    // then the license's text dialog (AboutShowLicenseButton: DialogTitle, TextDocumentSwitch with
-    // TextDocumentPartMain and one TextDocumentPart<name> per vendor file, TextDocumentText,
-    // TextDocumentCopyButton, ConfirmButton), each swept as "3: about" and "3: the license".
+    /// <summary>
+    /// (3) The settings screen on About; the license's text dialog over it, one text and no switch;
+    /// and one vendor file's text through the switch, which only the notices' text dialog has (D456
+    /// (5)). Each text dialog is closed before the next opens, and the screen before the fact ends.
+    /// </summary>
+    [AvaloniaFact]
+    public async Task State_03_about_and_its_license()
+    {
+        using var data = new TempDirectory("phase8a sweep");
+        using var app = await StartEmptyAsync(data);
+        var sweeps = new Sweeps();
+
+        var settings = await app.OpenSettingsAsync();
+        app.ChooseSection(SettingsSection.About);
+        await app.WaitForAsync(() => settings.ShowsAbout, "the settings screen on About");
+        await app.WaitForSettingsReadsAsync(settings);
+        sweeps.Look(app.Window, "3: about");
+
+        var license = await OpenTextDialogAsync(app, A.ShowLicenseId, A.LicenseTitle, showsSwitch: false);
+        sweeps.Look(app.Window, "3: the license");
+        await CloseTextDialogAsync(app, license);
+
+        var notices = await OpenTextDialogAsync(app, A.ShowNoticesId, A.NoticesTitle, showsSwitch: true);
+        app.Click(app.FindByAutomationId(app.TopDialogView!, A.NoticesSwitchIds[1]));
+        var text = (DocumentTextView)app.FindByAutomationId(app.TopDialogView!, A.TextId);
+        await app.WaitForAsync(
+            () => notices.Shown.Label == A.NoticesSwitch[1] && text.Document?.Text == notices.Shown.Text
+                && text.TextArea.TextView.VisualLinesValid && text.TextArea.TextView.GetVisualLine(1) is not null,
+            "Avalonia's file laid out");
+        sweeps.Look(app.Window, "3: the notices, Avalonia's file");
+        await CloseTextDialogAsync(app, notices);
+
+        app.CancelSettings();
+        await app.WaitForAsync(() => app.SettingsDialog is null, "the settings screen to close");
+        sweeps.AssertNone();
+    }
 
     /// <summary>(4) Every kind of dialog through the dialog host, and each kind of git's prompts through its presenter.</summary>
     [AvaloniaFact]
@@ -525,6 +556,30 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
         Assert.Equal((title, body), (screen.GetName(), screen.GetHelpText()));
         Assert.Equal((title, body), (app.GitSetupText(F.TitleId), app.GitSetupText(F.BodyId)));
         sweeps.Look(app.Window, state);
+    }
+
+    /// <summary>
+    /// Clicks About's <paramref name="buttonId"/> and waits until its text dialog is on top with its
+    /// text laid out and focused; asserts its title and whether it shows the switch.
+    /// </summary>
+    private static async Task<TextDocumentDialogViewModel> OpenTextDialogAsync(ShellDriver app, string buttonId, string title, bool showsSwitch)
+    {
+        app.Click(app.FindByAutomationId(app.TopDialogView!, buttonId));
+        var dialog = await app.WaitForDialogAsync<TextDocumentDialogViewModel>();
+        await app.WaitForAsync(
+            () => app.TopDialogView is TextDocumentDialogView view
+                && app.FindByAutomationId(view, A.TextId) is DocumentTextView { TextArea.TextView.VisualLinesValid: true }
+                && app.FocusedAutomationId() == A.TextId,
+            $"the text dialog of {buttonId}");
+        Assert.Equal((title, showsSwitch), (dialog.Title, dialog.ShowsSwitch));
+        return dialog;
+    }
+
+    /// <summary>Closes the text dialog on top by its Close and waits until the settings screen is on top again.</summary>
+    private static async Task CloseTextDialogAsync(ShellDriver app, TextDocumentDialogViewModel dialog)
+    {
+        app.Click(app.FindByAutomationId(app.TopDialogView!, A.CloseId));
+        await app.WaitForAsync(() => dialog.IsClosed && app.Session.Services.DialogHost.Current is SettingsDialogViewModel, "the text dialog to close");
     }
 
     /// <summary>The file the resolver shows, or null while none is shown.</summary>
