@@ -704,42 +704,49 @@ All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its f
 `85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`), the wave's docs (`b593097`),
 the link frame's fix (`fcf8c1e`), the two fixes of what CI's run on that merge found (`70a8fc0`,
 `809b77f`) and the performance bounds (`0bfbe92`). **Step 16 is under way**; what is done and what
-is left, as of 2026-11-22 08:50 (the details in Notes, "Wave 3's close"). Done: the lagged list and
+is left, as of 2026-11-22 14:55 (the details in Notes, "Wave 3's close"). Done: the lagged list and
 the whole default run on `85e2884`'s code; the pictures compared with wave 2's references and
 inspected; the fault they showed (`a1b-about-link-focus`) fixed and merged; the new references
 (`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures); three "before"
 series, two probes, two panels and **D457** (the bounds, two backlog rows, **the restore order as
 ruling 76, a change in wave 4**); CI's two failures on the link frame's merge fixed, and **CI's run
 45035307735 on `cb31275` green in all six jobs**; the report's and the design's sections on wave 3's
-close merged (`c914fb7`, the lead's wording fixes `b6c9e7b`). Under way: **(a) the row list's scroll
-fix.** A read-only review of `809b77f`'s app change (`RowCollection`, which now replaces single
-rows) traced from Avalonia's source a fault that change brought and nobody has seen yet: a scrolled
-stage list whose top visible rows are replaced can end rows short or jump to its top. A fixer, tests
-first, and an independent verifier work on it, up to three rounds, in
-`D:/Projects/Personal/vc-wt/p8a-rows-scroll` (`wip/p8a-rows-scroll`, made from `b6c9e7b`; run
-`wf_6702b8e4-d46`; notes under `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-scroll/`, the
-review's under `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-review/`), with direct tests of
-`RowCollection` and a pull request row that compares its whole record. Left for the lead, in this
-order: when the fix is sound, its merge, its classes on the merged tree, the push, CI's run read and
-recorded. (b) **The whole default run** through `scripts/heavy-run.sh` on the merged code, no agent
-building beside it, and every scripted picture against wave 3's references (the list
-`D:/Projects/Personal/phase8-work/references/wave3-pictures.sha256`, its `/scripted/` lines checked
-with `sha256sum -c --quiet` at the repo root), because `RowCollection` serves the left panel and the
-stage lists of every walk-through. A first such run, on `cb31275`, was stopped after 49 minutes when
-the review's finding came, and counts for nothing. (c) The docs: in the report a subsection on CI's
-two failures, their fixes, the review and the scroll fix, part A's convention on the underline's
-rule (a piece's faint end beside a letter), and U2/U3's step 9, which now waits for the solo's graph
-reload, with its entry under "Changed in this report after its first commit"; in the design 1.17's
-note and what its checkers left for the lead (0.6 and 13.3 still say 12 to 18 minutes for a series;
-13.1's opening and 0.2 still say 75 rulings; ruling 65 does not say that D457 amends it; 8.6 still
-calls `VcLinkButton` "moved unchanged"; 13.3 has no row for the restore package's series). (d) The
-worktrees removed (`p8a-ci-underline`, `p8a-ci-sweep05`, `p8a-close-docs`, `p8a-rows-scroll`). Then
-step 16 is ticked and **the owner is asked for the week's share before wave 4** ("Waiting on the
-owner"), which holds the restore order's package (ruling 76: a design section, the build with its
-tests first, a review, the alternated series, about half an hour of the desktop, and the probe)
-beside §11, §12 and the review. The owner's Narrator listen can come at any time before the review
-of step 19; it is best not taken beside a test run. Two timeouts of older tests are open and are
-step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
+close merged (`c914fb7`, the lead's wording fixes `b6c9e7b`). Under way: **(a) the row list's fix.**
+A read-only review of `809b77f`'s app change (`RowCollection`, which then replaced single rows)
+traced from Avalonia's source a fault that change brought: a scrolled list whose top visible rows
+are replaced can end rows short or jump to its top. A fixer, tests first, and an independent
+verifier worked on it for three rounds (run `wf_6702b8e4-d46`) in
+`D:/Projects/Personal/vc-wt/p8a-rows-scroll` (`wip/p8a-rows-scroll`, eight commits on `b6c9e7b`,
+head `ab2cbb2` after round 3, not merged): the fault shows in headless tests of the real app; the
+stage lists now remove and insert a changed row, which held in every case tried; the left panel's
+ref rows and section headers now change themselves in place, so a hide, a solo and a refresh tell
+the view nothing of the list; a pull request row compares its whole record. The third verifier left
+one fault: left-panel rows that only shift (a branch renamed) are still replaced, and a list
+scrolled by less than their height goes to its top and loses a click, which the code before
+`48f403c` did not do. **A fourth round runs on that alone** (run `wf_1c642ecd-da4`, a fixer and a
+verifier, up to two rounds, in the same worktree; the lead's rule for it and the criterion it is
+judged by are in Notes, "The row list's fix"; notes under
+`D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-scroll/`, `three-rounds.txt` first; the
+review's under `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-review/`). Left for the lead,
+in this order: when the fix is sound, the diff read, its merge, its classes on the merged tree, the
+push, CI's run read and recorded, and `docs/architecture.md`'s sentences on `RowCollection`
+rewritten (they describe `48f403c`). (b) **The whole default run** through `scripts/heavy-run.sh` on
+the merged code, no agent building beside it, and every scripted picture against wave 3's references
+(the list `D:/Projects/Personal/phase8-work/references/wave3-pictures.sha256`, its `/scripted/`
+lines checked with `sha256sum -c --quiet` at the repo root), because `RowCollection` serves the left
+panel and the stage lists of every walk-through. A first such run, on `cb31275`, was stopped after
+49 minutes when the review's finding came, and counts for nothing. (c) The docs: in the report a
+subsection on CI's two failures, their fixes, the review and the row list's fix, part A's convention
+on the underline's rule (a piece's faint end beside a letter), and U2/U3's step 9, which now waits
+for the solo's graph reload, with its entry under "Changed in this report after its first commit";
+in the design 1.17's note on `LinkFrame`'s rule and the row list (what its checkers left for the
+lead is done, `3a78882`). (d) The last worktree removed (`p8a-rows-scroll`; the three merged ones
+are gone). Then step 16 is ticked and **the owner is asked for the week's share before wave 4**
+("Waiting on the owner"), which holds the restore order's package (ruling 76: a design section, the
+build with its tests first, a review, the alternated series, about half an hour of the desktop, and
+the probe) beside §11, §12 and the review. The owner's Narrator listen can come at any time before
+the review of step 19; it is best not taken beside a test run. Two timeouts of older tests are open
+and are step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -1135,6 +1142,48 @@ every commit.
   still loses that press; the row that itself shows something new still loses its press, its focus
   and its tooltip at a rebuild; other phases' walk-throughs were not searched for a hide or a solo
   followed only by `WaitForIdleAsync`, which does not wait for the reload.
+  **The row list's fix** (run `wf_6702b8e4-d46`: three rounds of a fixer, tests first, and an
+  independent verifier, 6 agents, 1.71M tokens;
+  `D:/Projects/Personal/phase8-work/wave3/rows-scroll-result.json`, readable in
+  `wave3/ci-fixes/rows-scroll/three-rounds.txt`; branch `wip/p8a-rows-scroll`, head `ab2cbb2`, not
+  merged). (A) shows, headless, in the real app on `b6c9e7b`: in the unstaged list (15 files, 24 px
+  rows) at offset 50, a status read that changes the top row in view leaves the offset at 26 and the
+  extent at 336 for 50 and 360; at offset 12 the list goes to its top, every row in view lies 12 px
+  lower with a new control, and a press released after the read selects nothing. The code before
+  `48f403c` held all of these and lost only the rows between two changed ones. Round 1 removed and
+  inserted each changed row: exact in the stage lists in every case the three verifiers tried (deep
+  offsets, tree mode, two reads before one layout, presses). In the left panel, whose 30 px headers
+  sit among 26 px rows, a remove at or above the first realized row makes Avalonia estimate the top
+  row from the mean height, which misses by rows deep in the list (60 branches, scrolled to the
+  bottom, a branch hidden above the view: offset 1226 for 1356, the rows in view get new controls
+  and the click is lost), as before `48f403c`. Round 2 let the caller choose (`rowsOfOneHeight`) and
+  kept the replace in the left panel; its verifier measured the replace's real cost there: the shift
+  is the summed height of the consecutive replaced rows from the top row in view down to the first
+  kept one, so a solo, which dims every other branch row, at offset 40 or 100 sent the list to its
+  top and lost the click, and at the bottom left the offset 16 rows short. Round 3 made the left
+  panel's ref rows and section headers change themselves (`IUpdatableRow`: the marks, the commit,
+  HEAD, the counts, the pull request's text; a header's count), so a hide, a solo and its end, and a
+  refresh tell the view nothing of the list: exact in every such case, the controls following their
+  rows (`Check_L28`'s twelve pictures the references' files). (C) is `e40c9ae`:
+  `PullRequestRow.ShowsSameAs` also compares the record. New tests after round 3:
+  `StageListScrollTests` (7), `LeftPanelScrollTests` (8), `RowCollectionTests` (15), four in
+  `LeftPanelViewModelTests` (its notification test is now
+  `A_rebuild_that_marks_two_rows_marks_those_two_in_place_and_tells_the_list_of_no_row`) and one in
+  `PullRequestSectionTests`. **Left by the third verifier, new with `48f403c`:** rows that only
+  shift are still replaced: with 20 branches at offset 100, the top row in view renamed to sort
+  last, the list goes to its top and the click is lost, where the code before gave 105 for 100 and
+  kept it. **The lead's rule for the fourth round** (run `wf_1c642ecd-da4`): in the left panel, a
+  run of consecutive rows the view is told of that holds another item than its rebuilt row (another
+  key) is removed and inserted, as the whole span was before `48f403c`; a run of same-key rows that
+  cannot change themselves (a pull request row that shows something new, a message row) is still
+  replaced, its cost accepted as a known limit and stated in `RowCollection`'s comment. The round is
+  judged by: nowhere worse than the code before `48f403c` but for that limit; `48f403c`'s gain kept;
+  each behaviour pinned by a test that fails on a wrong implementation; the comments true. What is
+  not exact but no worse than before phase 8a (Avalonia's estimate after a remove at or above the
+  first realized row; a rebuild that changes the list's length deep in the left panel) is older than
+  the phase and goes on step 19's list, with two more: Space on the focused eye of a hidden row
+  shows the branch and drops the focus ((D)'s kind), and a solo's cost with thousands of branches is
+  not measured.
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
