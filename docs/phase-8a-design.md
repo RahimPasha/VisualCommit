@@ -194,24 +194,24 @@ order (D457 (5); `wip/p8a-restore`): its design section first, written when wave
 tests written first and failing on today's code, a review, and the proof by M2 and M3 with the two
 builds run alternately and by the lead's probe, subject to the week's share the owner is asked for
 before wave 4 (D241). At most three packages are built at once; one owner per file and test class,
-and a file passes only at a merge. No two packages of one
-wave own a file. The files that pass between packages, in this order: `AppCommands.Palette.cs` (WP0,
-§6); `AppCommands.cs` (§8, §11); `App.axaml.cs` (WP0, §4, §8); `Program.cs`, `AppLaunch.cs` (WP0,
-§4); `GitIsolation.cs` (WP0, §4); `AskPassBroker.cs`, `AccountsSettingsViewModel.cs`,
-`MainWindowViewModelTests.cs` (§3, §5); `MainWindowViewModel.cs` and `.Settings.cs` (WP0, §5);
-`IGitRunner.cs`, `GitLocator.cs`, `GitSetupProbe.cs`, `GitAccess.cs`, `FileLauncher.cs` (WP0, §5);
-`GitAccessTests.cs` (WP0, whose code review added it with four tests of the fixed search and of a
-failing listener; §5 extends the class and does not create it);
-`SettingsDialogViewModel.cs` (WP0, §5, §8); `SettingsDialogView.axaml` (§5, §8);
-`SettingsDialogViewTests.cs` (§5, §8, §11); `WorkingChangesView.axaml` (§2, §6, §9);
-`LeftPanelView.axaml`, `CompareView.axaml` (§2, §9); `StatusBarView.axaml`, `CommitGraphView.axaml`
-(§5, §9); `StatusBarTests.cs` (§6, §9); `MainWindow.axaml.cs` (§4, §6); `MainWindow.axaml` (§7, §9);
-`ActivityLogView.axaml` (§6 if needed, §9); the notice window (§4, §7); `App.csproj` (§7, §8);
-`RepositoryViewModel.cs` (WP0, §10); `RealApp.cs` (§10, §12); `ci.yml` (§3, §8, §11);
-`Phase7aExpectations.A.cs` (§3, §8); `Phase7bExpectations.A.cs` (§2, §8); `Phase6Expectations.K.cs`,
-`Phase6ExpectationTests.K.cs`, `PaletteEntriesTests.cs`, `CommandPaletteViewTests.cs` (§8, §11);
-`AppShortcutsTests.cs` (WP0, §11). A package adds `ShellDriver` helpers only in a new partial
-`ShellDriver.Phase8a.<Key>.cs`. The lead's throughout: `AppSession.cs` with `AppSessionTests.cs`, `TabServices.cs` (but §8's
+and a file passes only at a merge. No two packages of one wave own a file. The files that pass
+between packages, in this order: `AppCommands.Palette.cs` (WP0, §6); `AppCommands.cs` (§8, §11);
+`App.axaml.cs` (WP0, §4, §8); `Program.cs`, `AppLaunch.cs` (WP0, §4); `GitIsolation.cs` (WP0, §4);
+`AskPassBroker.cs`, `AccountsSettingsViewModel.cs`, `MainWindowViewModelTests.cs` (§3, §5);
+`MainWindowViewModel.cs` and `.Settings.cs` (WP0, §5); `IGitRunner.cs`, `GitLocator.cs`,
+`GitSetupProbe.cs`, `GitAccess.cs`, `FileLauncher.cs` (WP0, §5); `GitAccessTests.cs` (WP0, whose
+code review added it with four tests of the fixed search and of a failing listener; §5 extends the
+class and does not create it); `SettingsDialogViewModel.cs` (WP0, §5, §8);
+`SettingsDialogView.axaml` (§5, §8); `SettingsDialogViewTests.cs` (§5, §8, §11);
+`WorkingChangesView.axaml` (§2, §6, §9); `LeftPanelView.axaml`, `CompareView.axaml` (§2, §9);
+`StatusBarView.axaml`, `CommitGraphView.axaml` (§5, §9); `StatusBarTests.cs` (§6, §9);
+`MainWindow.axaml.cs` (§4, §6); `MainWindow.axaml` (§7, §9); `ActivityLogView.axaml` (§6 if needed,
+§9); the notice window (§4, §7); `App.csproj` (§7, §8); `RepositoryViewModel.cs` (WP0, §10);
+`RealApp.cs` (§10, §12); `ci.yml` (§3, §8, §11); `Phase7aExpectations.A.cs` (§3, §8);
+`Phase7bExpectations.A.cs` (§2, §8); `Phase6Expectations.K.cs`, `Phase6ExpectationTests.K.cs`,
+`PaletteEntriesTests.cs`, `CommandPaletteViewTests.cs` (§8, §11); `AppShortcutsTests.cs` (WP0, §11).
+A package adds `ShellDriver` helpers only in a new partial `ShellDriver.Phase8a.<Key>.cs`. The
+lead's throughout: `AppSession.cs` with `AppSessionTests.cs`, `TabServices.cs` (but §8's
 `SettingsSection.About`), `PromptDialogs.cs` after WP0, `VisualCommit.slnx` (each new project's line
 at its merge), `Directory.Build.props`, `CLAUDE.md`, `README.md`, `requirements.md`, `plan.md`,
 `status.md`, `architecture.md`, the icon's rounds in `docs/brand/icon/` (D447). Every other doc a
@@ -231,13 +231,13 @@ whole project; whole projects are the lead's, through `scripts/heavy-run.sh` (D2
 read against phase 7b's references first (0.7). After wave 3, the lead runs §10's "before" series on
 the rested laptop; a change it calls for is a fix package after a ruling (ruling 66), with no
 section, but for D457's `restore`, which has one (wave 4). §3's fixes are read on CI's floor job
-after each push of the phase
-branch; the commit that makes the job green removes `continue-on-error` and moves `Minimum`
-(rulings 10, 71). After the gate commit, `docs/guide/**` stays docs: a change to it is checked by the
-guide workflow's run, whose step "App's links" runs `AppLinksTests` and `GuideShortcutsPageTests`, the
-two App.Tests classes that read the pages (D451, 11.3.4), and the lead reads that run and records it
-beside CI's in `status.md`. `guide.yml`, the shots and the links are code, so they come before the
-counted round; from §8's merge the notices and `LICENSE` count as code (D433).
+after each push of the phase branch; the commit that makes the job green removes `continue-on-error`
+and moves `Minimum` (rulings 10, 71). After the gate commit, `docs/guide/**` stays docs: a change to
+it is checked by the guide workflow's run, whose step "App's links" runs `AppLinksTests` and
+`GuideShortcutsPageTests`, the two App.Tests classes that read the pages (D451, 11.3.4), and the
+lead reads that run and records it beside CI's in `status.md`. `guide.yml`, the shots and the links
+are code, so they come before the counted round; from §8's merge the notices and `LICENSE` count as
+code (D433).
 
 **The lagged list** (D262), at each wave's last merge and at the merge of §5, §6, §9 and §10, in Git
 Bash, one command at a time, before the wave's whole run: phase 7b's list (its design 0.4: 7a's list
@@ -4247,24 +4247,25 @@ that one (13.4 item 17). If the unchanged build's M2 passes 6,100 ms in a series
 says, the bound was drawn too tight and is raised by a ruling with the numbers. Step 3's triggers
 (D457 (4)): M4's did not fire; M5's and M6's fired in every series (the reload line's medians
 against 2,000 ms), and so did M7's (against 250 ms), and those three go to plan.md's Backlog with
-their numbers and what reopens each; M3's fired wherever a quiet M3 is set against the quiet M2 (the
-fastest of its fifteen runs, 6,523 ms, above 1.25 times 4,621 ms, 5,776 ms; the class's own trigger
-line compares within one series and read "not fired" in the first and the third only because their
-M2 was disturbed), and it gets a change in wave 4, ruling 76 (13.1). That is not step 3's
-candidate, which breaks the contract step 3 cites, now at `MainWindowViewModel.cs:171-176`, and
-goes to the Backlog. Step 3's "unless a stall is seen" was looked at by the lead's probe, by hand and
-outside any test (00:59; the script in `D:/Projects/Personal/phase8-work/wave3/reload-probe/`, its
-output `wave3/reload-probe-run1.txt`): an empty commit made outside the app three times on a
-100,000-commit clone, and the window's thread asked an empty message every 15 ms; during the three
-reloads, of 3.0 to 3.4 s, the longest answer took 36 ms, idle 25 ms, so no stall was seen. Step 4
-proves ruling 76's change: M2 and M3 with the two builds run alternately, five times each, taken as
-D457 (2) says, and beside them the lead's probe of the start with several tabs (by hand, outside
-any test; `D:/Projects/Personal/phase8-work/wave3/startup10-probe/`), the tab's own clock and the
-window's answers beside nine large and beside nine small tabs. It is proven when the fix's M3
-median is at or under 1.25 times its M2 median while the base's is above, and the fix's M2 lies
-within the base's range; if the alternation does not show it, the change is reverted and the row
-goes to the Backlog with the numbers. Step 5's table is the report's section "The performance
-series", and plan.md's risk 10 holds the medians.
+their numbers, Pull's reads with what reopens the row (a rested median of about 600 ms, or the
+owner); M3's fired wherever a quiet M3 is set against the quiet M2 (the fastest of its fifteen
+runs, 6,523 ms, above 1.25 times 4,621 ms, 5,776 ms; the class's own trigger line compares within
+one series and read "not fired" in the first and the third only because their M2 was disturbed),
+and it gets a change in wave 4, ruling 76 (13.1). That is not step 3's candidate, which breaks
+the contract step 3 cites, now at `MainWindowViewModel.cs:171-176`, and goes to the Backlog.
+Step 3's "unless a stall is seen" was looked at by the lead's probe, by hand and outside any
+test (00:59; the script in `D:/Projects/Personal/phase8-work/wave3/reload-probe/`, its output
+`wave3/reload-probe-run1.txt`): an empty commit made outside the app three times on a 100,000-commit
+clone, and the window's thread asked an empty message every 15 ms; during the three reloads, of
+3.0 to 3.4 s, the longest answer took 36 ms, idle 25 ms, so no stall was seen. Step 4 proves ruling
+76's change: M2 and M3 with the two builds run alternately, five times each, taken as D457 (2)
+says, and beside them the lead's probe of the start with several tabs (by hand, outside any test;
+`D:/Projects/Personal/phase8-work/wave3/startup10-probe/`), the tab's own clock and the window's
+answers beside nine large and beside nine small tabs. It is proven when the fix's M3 median is at
+or under 1.25 times its M2 median while the base's is above, and the fix's M2 lies within the base's
+range; if the alternation does not show it, the change is reverted and the row goes to the Backlog
+with the numbers. Step 5's table is the report's section "The performance series", and plan.md's
+risk 10 holds the medians.
 
 ### 10.4 Tests
 
