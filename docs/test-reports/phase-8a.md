@@ -2380,13 +2380,15 @@ pressed.
   `TextDecorations` Underline (8.3.1). The repository link that A1's step 9 frames is also read in its
   picture, against `a1a`, where it is not focused (`AssertFramedLink`, by `LinkFrame` in
   `VisualCommit.Testing`): the text's pixels unchanged but for the underline's rows, the underline shown
-  across the text, a whole frame in the theme's frame colour (Fluent's
-  `SystemControlFocusVisualPrimaryBrush`, part K's conventions) on four sides outside the text, and the
-  background between the frame and the text's ink. `TextDocumentText` is read as a `CodeTextEditor`: its
-  document's text, its options (`IsReadOnly`, `WordWrap`, `Options.AcceptsTab`), its scroll offset
-  (`CodeTextEditor.ScrollOffset`) against its extent and viewport, and which document lines its text
-  view shows whole. "Shown" is `IsEffectivelyVisible` with a laid-out size. Places are window
-  coordinates at scale 1, within 2, as phase 7a's and 7b's part A assert the section list's places
+  across the text (in every column clear of the letters at least half a pixel of the link's colour over the
+  background, less only where a piece of the line ends: at the text's first and last columns and in one column
+  alone beside a letter that crosses the line, which Avalonia's underline skips), a whole frame in the theme's
+  frame colour (Fluent's `SystemControlFocusVisualPrimaryBrush`, part K's conventions) on four sides outside
+  the text, and the background between the frame and the text's ink. `TextDocumentText` is read as a
+  `CodeTextEditor`: its document's text, its options (`IsReadOnly`, `WordWrap`, `Options.AcceptsTab`), its
+  scroll offset (`CodeTextEditor.ScrollOffset`) against its extent and viewport, and which document lines its
+  text view shows whole. "Shown" is `IsEffectivelyVisible` with a laid-out size. Places are window coordinates
+  at scale 1, within 2, as phase 7a's and 7b's part A assert the section list's places
   (`Phase7aExpectations.A.Tolerance`).
 - **The screen's form** (8.3.1). About is laid out as the Accounts section is: rows 18 apart (the stack's
   `Spacing`), each row a `Grid` `132,12,*` with its label (`settingsLabel`) in the first column and its
@@ -3176,7 +3178,9 @@ Steps, method 3, after U2's step 7:
    `Local branches › feature › alpha` and `Remotes › origin › feature › alpha` (`RefItem`), each
    through its own peer.
 9. Right-click `Local branches › feature › ff`; click `Solo feature/ff`; wait until `ff`'s row shows
-   `RefSoloToggle`.
+   `RefSoloToggle` and the graph has been read again for the solo (`WaitForGraphReloadAsync`: a solo's reload,
+   like a hide's, runs outside the operations queue, phase 5's design 8.2, so no wait for the queue covers
+   it).
 10. Rest the pointer on the staged list's row of `src/core.txt` until its tooltip, `src/core.txt`, shows.
     Screenshot, pointer kept (`u3b-stage-row-names`). Read the names of its `RowUnstageButton`,
     `RefSoloToggle` and the two `RefHiddenToggle`s. Run `AutomationSweep.AssertNamed` on the window (state
@@ -4011,6 +4015,29 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   did not see; the inspection of the new pictures found it ("Wave 3's comparison with wave 2's
   references"). The check asserts more of an unchanged expected result: the expected state is
   unchanged.
+- **Part A's conventions, "Where things are read": how the underline is read** (2026-11-22, `8f50a34`, merged
+  at `70a8fc0`): "the underline shown across the text" now says what that asks of each column clear of the
+  letters, half a pixel of the link's colour or more, and where a column may hold less: at the text's first
+  and last columns and, alone, beside a letter that crosses the line. Reason: CI's macOS job (run 45019059991,
+  on the link frame's merge) failed `LinkFocusFrameTests`' case for `SignInLegacyTokenLink` on one column of
+  the 182 clear of the letters, which held about a quarter of a pixel. Avalonia 12.1.3 draws an underline in
+  pieces that stop a line's thickness short of each letter that crosses it, between fractional positions
+  (`TextDecoration.Draw`), so the column where a piece ends holds whatever part of a pixel the piece covers;
+  in "Or create a legacy token, filled in" the piece before the y of "legacy" ends at 472.332, a column that
+  lies under the y's ink on Windows and Linux and clear of it on macOS, which draws the y one column narrower.
+  The rule was wrong, not the app. Two faint columns side by side, a faint column away from the letters and
+  any colour that is not the link's over the background still fail (`LinkFrameTests`, seven cases on made
+  pictures, five of which fail on the rule as it was). No expected result changes: A1's step 9 and the sign-in
+  links' cases assert what they asserted, with the rule's one exception said; CI's next run, 45035307735,
+  passed them in all six jobs.
+- **U2 and U3, method 3, step 9** (2026-11-22, `996b9fc`, merged at `809b77f`): the step also waits until the
+  graph has been read again for the solo. Reason: a hide's and a solo's reload run outside the operations
+  queue (phase 5's design 8.2), so the wait for the row's `RefSoloToggle` could end before the reload had
+  swapped the graph in, and the left panel could rebuild under the next step's pointer. CI's Windows job
+  failed `AccessibleNameSweepTests.State_05_the_ops_tab` in that way after its two hides (the same run: a
+  click on `main`'s row whose release came after the swap was lost), which was the app's fault and is fixed in
+  the app (`RowCollection`, `48f403c`); the sweep's state 05 and this step wait for the reload beside that, so
+  that each reads a panel that has come to rest. A step waits for more; no expected result changes.
 
 ### Wave 1's comparison with phase 7b's references (2026-11-20)
 
