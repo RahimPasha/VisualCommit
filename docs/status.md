@@ -349,6 +349,18 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45019059991](https://github.com/RahimPasha/VisualCommit/actions/runs/45019059991), for `fcf8c1e`
+  (the link frame's fix): **failed in two jobs, each on one test**; the four Linux jobs succeeded.
+  `macos-latest`: 8,445 tests, 1 failed, 3 skipped, Test step 27 min 42 s of 70; the failure is
+  `LinkFocusFrameTests.A_sign_in_link_focused_by_Shift_Tab_shows_its_text_and_underline_inside_the_frame`
+  for `SignInLegacyTokenLink`: one column of the 182 clear of the letters holds about a quarter of a
+  pixel of the link's colour in the underline's two rows, where the new rule asks half; the eleven
+  other cases and A1's step 9 passed there. `windows-latest`: 8,448 tests, 1 failed, 5 skipped, Test
+  step 39 min 15 s of 70; the failure is `AccessibleNameSweepTests.State_05_the_ops_tab`, `Timed out
+  after 60 s waiting for Main work selected.` `ubuntu-latest` 8,445 tests with 4 skipped (Test step
+  6 min 9 s); the floor's job and the two containers succeeded (Test steps 5 min 57 s, 4 min 55 s
+  with Microsoft's installer and 7 min 39 s with Ubuntu's packages). Both failures are with fixers
+  (Notes, "Wave 3's close"); the next run is the one of their merges with the bounds' commit.
 - [44982678813](https://github.com/RahimPasha/VisualCommit/actions/runs/44982678813), for `85e2884`
   (wave 3's last merges: §9, the fetch hold's fix, §8's fixes after its merge): all six jobs
   succeeded at the first attempt, none failed a test. `windows-latest` 8,436 tests with 5 skipped,
@@ -680,35 +692,35 @@ its merge.
 All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge
 `85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`), the wave's docs (`b593097`)
 and the link frame's fix (`fcf8c1e`). **Step 16 is under way**; what is done and what is left, as of
-2026-11-22 05:15 (the details in Notes, "Wave 3's close"). Done: the lagged list (seven commands,
-all passed) and the whole default run on `85e2884`'s code (8,436 tests, 8,431 passed, 5 skipped,
-none failed, 2 h 9 min 24 s); the pictures compared with wave 2's references and inspected; the one
-fault they showed (`a1b-about-link-focus`: a focused link's frame lay over its text) fixed with its
-tests first, checked in three rounds and merged (`fcf8c1e`, pushed); the new references
-(`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures, `a1b` the fix's);
-wave 3's seven worktrees removed and the spike's branch deleted; a probe that found no stall of the
-window during a reload; a panel's advice on the triggers of M5, M6 and M7 (the backlog for all
-three, M7 by two judges to one); two "before" series (00:47 and 04:59), **neither of them quiet
-throughout**: the first ran M2 straight after a build, and the second met Office's updater, an
-idle-triggered task, as M3 began. Read on its quiet take, M2 is 4,621 ms, and **M3's trigger fires
-as well** (6,759 ms against 1.25 times 4,621, which is 5,776). Under way: a read-only panel on M3
-(run `wf_23f00a94-3d2`: four analysts and three judges; its notes under
-`D:/Projects/Personal/phase8-work/wave3/perf-m3/`), and CI's run 45019059991 on `fcf8c1e` (its four
-Linux jobs had passed by 05:10, macOS and Windows were still running: read it and record it in the
-CI section). Left, in this order: (1) a third "before" series in a slot that Windows' Task Scheduler
-leaves free (the query is in Notes), with the Release build as it is (made 04:41), the tree clean
-and no agent at work; about 8 minutes of the desktop, which the owner let start when it is ready.
-(2) The lead's ruling on the four fired triggers as D457: M5, M6 and M7 to the backlog, M3 after its
-panel; plan.md's Backlog and risk 10 with the medians. (3) The bounds in a commit of their own
-(`Phase8aPerformance`'s seven fields; `PerformanceSeries.Bound` gives the rounding), from the runs
-that no named disturbance touched, pushed, CI read. (4) The report and the design by the lead's
-brief `D:/Projects/Personal/phase8-work/wave3/close-docs-brief.md` (an editor for each, an
-independent check, repairs; in a worktree, merged by the lead): "Wave 3's comparison with wave 2's
-references", a section for the performance series with its table, the row of the Delivers item,
-design 1.17's and 10.3.6's notes; CLAUDE.md's row for the series. Then step 16 is ticked and the
-owner is asked for the week's share before wave 4. The owner's Narrator listen can come at any time
-before the review of step 19; it is best not taken beside a test run. Two timeouts of older tests
-are open and are step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
+2026-11-22 06:20 (the details in Notes, "Wave 3's close"). Done: the lagged list and the whole
+default run on `85e2884`'s code; the pictures compared with wave 2's references and inspected; the
+one fault they showed (`a1b-about-link-focus`) fixed and merged; the new references
+(`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures); wave 3's worktrees
+removed; three "before" series, two probes of the start with several tabs, two panels; **D457**: the
+bounds, the reload (M5, M6) and Pull's reads (M7) to the backlog, and **the restore order as ruling
+76, a change in wave 4**; plan.md's Backlog and risk 10 and CLAUDE.md's row and note for the series.
+Under way: **(a) CI's run 45019059991 on the link frame's merge failed in two jobs, each on one
+test** (the CI section): on macOS one case of the new `LinkFocusFrameTests`, on Windows
+`AccessibleNameSweepTests.State_05_the_ops_tab`, a timeout. A fixer with an independent verifier
+works on each, up to three rounds, in `D:/Projects/Personal/vc-wt/p8a-ci-underline`
+(`wip/p8a-ci-underline`) and `D:/Projects/Personal/vc-wt/p8a-ci-sweep05` (`wip/p8a-ci-sweep05`),
+both made from `1afb980` (run `wf_0f64d026-e39`; notes under
+`D:/Projects/Personal/phase8-work/wave3/ci-fixes/`). When a track is sound the lead merges it and
+runs its classes on the merged tree. Left for the lead, in this order: (b) the bounds in a commit of
+their own, six fields of `Phase8aPerformance` (M2 6,100 ms; M4 370 MB after the load and 440 MB at
+the peak; M5 4,600 ms; M6 8,800 ms; M7 630 ms; M3's stays unset, D457), made with the CI fixes'
+merges so that one push starts one CI run; that run read and recorded, above all its macOS and
+Windows jobs. (c) The report and the design by the lead's brief
+`D:/Projects/Personal/phase8-work/wave3/close-docs-brief.md` (an editor for each, an independent
+check, repairs; in a worktree, merged by the lead): "Wave 3's comparison with wave 2's references",
+the section of the performance series with its table, the row of the Delivers item, design 1.17's
+and 10.3.6's notes and ruling 76 in section 13. Then step 16 is ticked and **the owner is asked for
+the week's share before wave 4** ("Waiting on the owner"), which now holds the restore order's
+package (ruling 76: a design section, the build with its tests first, a review, the alternated
+series, about half an hour of the desktop, and the probe) beside §11, §12 and the review. The
+owner's Narrator listen can come at any time before the review of step 19; it is best not taken
+beside a test run. Two timeouts of older tests are open and are step 19's to look at unless one
+comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -979,6 +991,58 @@ every commit.
   on a key set in two scopes (a global `pull.ff=only` under a local `pull.ff=1`) may make the app
   refuse a Pull that `git pull` would run (to be shown by a test on git 2.34.1 and 2.56); a scrolled
   graph may shift by the rows a reload adds above.
+  **The third series** (2026-11-22 05:53 on `1afb980`; 520 s with the lock, of which 82 s were a
+  Release build: the status commit `1afb980`, made after the build of 04:41, changed the commit the
+  build is stamped with, so the command built again and M2 ran straight after it, as in the first
+  series; `artifacts/perf/phase-8a/series-20261122-055310-1afb980.txt`, a copy in
+  `D:/Projects/Personal/phase8-work/wave3/perf-before-3/`): M2 8,184 ms (6,630 to 10,368); M3 8,284
+  ms (6,523 to 12,776); M4 287.4 MB after the load (286.2 to 288.9) and 351.1 MB at the peak (345.2
+  to 352); M5 2,839.1 ms (2,623.6 to 3,157.7), the reload line's median 2,547 ms; M6 6,643.2 ms
+  (5,996.6 to 7,024.9), the reload line's median 4,013 ms; M7 316.2 ms (279.3 to 355.3). The
+  scheduler ran `Windows Error Reporting\QueueReporting` at 05:52:08 and the Customer Experience
+  Program's `Consolidator` at 06:00:01. **So the quiet take of M2 is the second series' alone, 4,621
+  ms**, and the lesson is in CLAUDE.md's row: build on the very commit, commit nothing before the
+  series.
+  **The panel on M3** (run `wf_23f00a94-3d2`, 7 agents, 1.99M tokens, read only;
+  `D:/Projects/Personal/phase8-work/wave3/perf-m3-result.json`, notes under `wave3/perf-m3/`). What
+  it read in the code: every restored tab's opening starts in one loop
+  (`MainWindowViewModel.cs:203-212`), each with eight git processes (a `rev-parse`, the refs read's
+  five, a status, the log), about eighty for ten tabs, and nothing limits them or gives the shown
+  tab precedence; each open also saves `session.json` with a flush on the window's thread. On the
+  series alone, two judges were for a backlog row and one for a change (the active tab first), and
+  each of the two said what would change the answer: a stall of the window during a ten-tab start,
+  or the same delay with ordinary background tabs.
+  **The lead's probes of the start with several tabs** (06:01 to 06:08;
+  `D:/Projects/Personal/phase8-work/wave3/startup10-probe/`: `startup_tabs_probe.ps1`, `run1.txt`,
+  `run2-small.txt`, the data folders with the app's logs): the Release build started by hand on a
+  data folder of its own, the cases alternately, three times each, no input, the window's thread
+  asked an empty message every 15 ms. By the active tab's own clock (the line `first graph rows
+  drawn after`, D50's and Q1's quantity), a 100,000-commit tab restored alone showed its first rows
+  after 2,105 (the warm-up), 2,557, 2,686 and 2,310 ms, then 1,771, 2,189 and 2,813 ms; beside nine
+  more such tabs after 6,644, 5,044 and 5,219 ms; beside nine tabs of 2,000 commits after 4,287,
+  6,145 and 7,763 ms. The delay lies before the active tab's refs are read (`refs read after` 3.2 to
+  6.2 s instead of 0.7 to 1.4 s; the log's first commits were ready at once after that): in the
+  storm of process starts, not in the nine large walks. With ten large tabs the window's thread
+  answered after up to 435, 1,148 and 483 ms (13 to 19 answers of 50 ms or more), with nine small
+  ones after up to 304, 420 and 581 ms, with one tab after up to 164 to 349 ms. All loads had ended
+  after 22 to 28 s with ten large tabs, after 10 to 15 s with nine small ones. **So D457 rules a
+  change: ruling 76, the active restored tab first, the others after its first page, at most four at
+  once.** The probes' app found `C:\Program Files\Git\cmd\git.exe`, the launcher, as a user's
+  desktop does; the series and the real-window pass find git itself from Git Bash's PATH (`which -a
+  git` there: `/ucrt64/bin/git` before `/cmd/git`). **For step 19's list**: whether the real-window
+  pass starts the app with a user's PATH, and what that means for Q1's limit (plan.md's risk 10 has
+  the numbers).
+  **CI's run 45019059991** on `fcf8c1e` failed in two jobs, each on one test (the CI section has the
+  jobs). On macOS, `LinkFocusFrameTests`' case for `SignInLegacyTokenLink`: `SignInLegacyTokenLink's
+  underline in the rows 340, 341 is not the link's #7C8CFF over #1A1D24 (at 0.5 of a pixel or more
+  inside its ends) in 1 of the 182 columns clear of the letters, the first 472 (#232739, #2B324C).`
+  The verifiers had said that macOS and Linux would run the pixel rules for the first time in CI;
+  Linux passed. On Windows, `AccessibleNameSweepTests.State_05_the_ops_tab`: `Timed out after 60 s
+  waiting for Main work selected.` (its line 250: after two branches are hidden through the left
+  panel's menu, a click on the branch row `main`), a test of §9 that passed in every earlier run and
+  in this run's five other jobs. Neither is waved through: each has a fixer who must find the cause
+  and a verifier who defaults to fault ("Next step", (a)); the failed log's lines are in
+  `D:/Projects/Personal/phase8-work/wave3/ci-45019059991-failed.log`.
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
@@ -1316,6 +1380,16 @@ every commit.
 
 - **Phase 8a, from the owner** (2026-11-19; the owner's answers D399 to D415 are below, under "For
   phase 8, before its design"):
+  - **To ask before wave 4: the week's share, with the restore order in it** (D241, D457; the lead
+    asks when step 16 is ticked). Wave 4 was the guide (§11), the real-window part (§12) and the
+    review before the gate; D457 adds a small package, the restore order (ruling 76): with several
+    restored tabs the active one opens first. The lead's probes showed that with ten restored tabs
+    the shown tab's first rows come 2.5 to 5 s later than with one, with nine small tabs as with
+    nine large ones, and that the window answers late meanwhile; the package costs a design section,
+    a builder with a review, and about half an hour of the rested desktop for its proof. The owner
+    may also overrule the two backlog rows of D457 (the reload after a commit or a fetch, 2.5 to 4 s
+    in a 100,000-commit history; Pull's three settings reads made one, about 0.2 s of a Pull), each
+    ruled on a panel's advice, the second by two judges to one.
         - **The week's allowance: "all of wave 3 now"** (the owner, 2026-11-21; D241). The owner said
     "Continue" and, told that wave 3 needs 15 to 18M tokens and could reach the week's limit before
     Thursday's reset, chose all of it now over the picture check alone or the checks alone. The
