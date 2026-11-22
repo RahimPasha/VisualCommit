@@ -1071,20 +1071,30 @@ to a real parent from there and is solid. Lanes, colours and nodes are as before
 
 - `ViewModels/Panels/WorkingChangesViewModel` is the stage panel (`Views/Shell/WorkingChangesView`):
   the unstaged and staged lists (two `ChangedFileList`s, flat or tree as D44 and D70 say), their
-  titles, the summary and description with the counter of what is left of 72, the amend box
-  (which fills empty boxes with HEAD's message), the commit button's label and state, git's
-  message after a failed write (`ErrorText`, shown as `CommitError`), and the restore bar. It
-  only shows what `Update(status)` gives it; every action goes to its `IWorkingChangesHost`.
-  Since phase 6 a status read keeps every row that shows what it showed (`ChangedFileList.Show`
-  with `keepFolders`, `ChangedFileRow.ShowsSameAs`, as the left panel does), so a read that changed
-  nothing touches no row: a click on a row that a read reaches between its press and its release
-  still counts. macOS's watcher delivers the index's change after a write's own refresh, and the
-  read it started used to replace every row, which lost a click of phase 2's check 10 on CI
-  (`StageListRefreshTests`). Since phase 6 the commit button's tooltip is "{its text} ({key})"
-  (`CommitToolTip`; its reason `CommitDisabledReason`, which the palette's commit entry reads),
-  Mod+Enter in the message boxes commits (see "Keyboard shortcuts"), and a ticked Amend keeps the
-  HEAD it was ticked on, against which the commit's operation checks HEAD first (D235, see
-  "Operations").
+  titles, the summary and description with the counter of what is left of 72, the amend box (which
+  fills empty boxes with HEAD's message), the commit button's label and state, git's message after a
+  failed write (`ErrorText`, shown as `CommitError`), and the restore bar. It only shows what
+  `Update(status)` gives it; every action goes to its `IWorkingChangesHost`. Since phase 6 a status
+  read keeps every row that shows what it showed (`ChangedFileList.Show` with `keepFolders`,
+  `ChangedFileRow.ShowsSameAs`, as the left panel does), so a read that changed nothing touches no
+  row: a click on a row that a read reaches between its press and its release still counts. macOS's
+  watcher delivers the index's change after a write's own refresh, and the read it started used to
+  replace every row, which lost a click of phase 2's check 10 on CI (`StageListRefreshTests`). Since
+  phase 8a a rebuild that changes rows on both sides of such a row keeps it too, as long as the list
+  keeps its length: `RowCollection.ReplaceAll(rows, showSame)`
+  (`ViewModels/Panels/RowCollection.cs`), which the left panel's `Rebuild` and the two stage lists
+  use, compares row with row in the part that changed and replaces only the rows that show something
+  new, one notification each (a reset above 64), where it used to remove and insert every row from
+  the first changed one to the last. The graph that a hide's reload swaps in marks the hidden
+  branch's two rows in the left panel, the local and the remote one, and a click on a row between
+  them whose release came after the swap was lost, once on CI's Windows job
+  (`AccessibleNameSweepTests.State_05_the_ops_tab`; `LeftPanelViewModelTests`, `HideAndSoloTests`).
+  A rebuild that changes the list's length while rows change on both sides of a pressed row still
+  replaces the rows between, and that press is lost. Since phase 6 the commit button's tooltip is
+  "{its text} ({key})" (`CommitToolTip`; its reason `CommitDisabledReason`, which the palette's
+  commit entry reads), Mod+Enter in the message boxes commits (see "Keyboard shortcuts"), and a
+  ticked Amend keeps the HEAD it was ticked on, against which the commit's operation checks HEAD
+  first (D235, see "Operations").
 - `RepositoryViewModel` is that host, and the diff view's (`IDiffHost`). Every write runs through
   `WriteAsync`, which queues it as a local operation of the repository's queue (titles "Stage",
   "Unstage", "Discard", "Restore", "Commit", "Apply lines"; `ErrorDisplay.StagePanel`,
