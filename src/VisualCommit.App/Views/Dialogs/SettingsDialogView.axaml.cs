@@ -4,8 +4,11 @@ using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Media.Imaging;
+using Avalonia.Platform;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
+using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Dialogs;
 
@@ -19,11 +22,19 @@ namespace VisualCommit.App.Views.Dialogs;
 /// </summary>
 public partial class SettingsDialogView : DialogView
 {
+    /// <summary>About's image: the app's mark at 96 pixels, drawn at 48 × 48 so that it stays sharp at 200 %; decoded once.</summary>
+    private static readonly Lazy<Bitmap> AboutImage = new(() =>
+    {
+        using var stream = AssetLoader.Open(new Uri(AppIcon.Image96Uri));
+        return new Bitmap(stream);
+    });
+
     private SettingsDialogViewModel? _model;
 
     public SettingsDialogView()
     {
         InitializeComponent();
+        AboutIcon.Source = AboutImage.Value;
         DataContextChanged += (_, _) => Follow(DataContext as SettingsDialogViewModel);
         SettingsNav.AddHandler(KeyDownEvent, OnNavKeyDown, RoutingStrategies.Tunnel);
     }
@@ -40,6 +51,7 @@ public partial class SettingsDialogView : DialogView
         SettingsSection.Tools => SettingsNavTools,
         SettingsSection.KeyboardShortcuts => SettingsNavShortcuts,
         SettingsSection.Accounts => SettingsNavAccounts,
+        SettingsSection.About => SettingsNavAbout,
         _ => SettingsNavGeneral,
     };
 

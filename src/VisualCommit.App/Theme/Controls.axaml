@@ -142,6 +142,31 @@
     </ControlTheme>
 
 
+    <!-- A link: text in the accent colour on no background, the hand cursor, reached by Tab; a
+         view underlines its text while it is hovered or focused (the sign-in dialogs' tokenLink,
+         About's links). Disabled (Azure DevOps' token link while its box gives no organization):
+         the disabled text colour and the arrow cursor, so that it invites no click that does
+         nothing. Moved unchanged from the sign-in dialog, the first view to use it. -->
+    <ControlTheme x:Key="VcLinkButton" TargetType="Button">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="Template">
+        <ControlTemplate>
+          <ContentPresenter Name="PART_ContentPresenter"
+                            Background="{TemplateBinding Background}"
+                            Padding="{TemplateBinding Padding}"
+                            Content="{TemplateBinding Content}"
+                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+        </ControlTemplate>
+      </Setter>
+      <Style Selector="^:disabled">
+        <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
+        <Setter Property="Cursor" Value="Arrow" />
+      </Style>
+    </ControlTheme>
+
     <!-- A small text button: Flat and Tree (the one in use with the selection background, class
          "selected"), and the stage panel's and diff view's actions. -->
     <ControlTheme x:Key="FileListToggle" TargetType="Button">
