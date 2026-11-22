@@ -4161,7 +4161,8 @@ merge tool dialog's backdrop, in `l31e`.
   drawn in one picture and not in the other (22): phase 3's `21a`, `21b3`; phase 5's `f10a`, `f10c`,
   `f10d`, `f10e`, `f11b`; phase 6's `k10a`, `l26b`, `l27f`, `l27g`, `l31c` light, `l31e` light, `l31g`
   dark and light; phase 7a's `b09a`; phase 7b's `b03a`, `b03b`, `b06a`, `b06b`, `n04c`; 8a's own `k7a`.
-  In `l27g` and `l31g` dark also 3 and 2 pixels of a rounded corner, 1 or 2 levels apart.
+  In `l27g` also 3 pixels of the Push button's two right corners, and in `l31g` dark 2 of the
+  rounded left end of the status bar's progress track, 1 or 2 levels apart.
 - A temporary folder's random name in a text (16): the twelve characters after `plain-`, `clones-`,
   `ops-`, `edges-`, `sync-` or `workspace-` in a path, in git's output or in a tooltip, and the text
   after them drawn a little aside: phase 1's `11a`, `13b`, `14a`, `14b`; phase 3's `16j`, `30g`; phase
@@ -4190,8 +4191,8 @@ shows the tooltip: phase 7b's gate picture, the same file as 7a's, and wave 2's 
 file as wave 1's (phase 6's gate picture is no longer on the machine). So this is the first run
 known to catch it, most likely on a machine loaded by the whole run; it is on the list of the review
 before the gate (status.md's step 19). The two ports: in phase 7b's `b07b` the fake of Azure DevOps
-did not get its port 47397 in this run and fell back to a free one, 56841 (D363); in `k5a` the fake of
-GitHub's port, chosen per run, changes the address in the URL box, (381,349)-(502,362), which K5's
+did not get its port 47397 in this run and fell back to a free one, 56841 (D363); in `k5a` the port of
+GitHub's fake, chosen per run, changes the address in the URL box, (381,349)-(502,362), which K5's
 notes set aside.
 
 **The 15 new pictures** of parts A (9) and U (6) were checked by the lead against this report on
@@ -4310,7 +4311,7 @@ each series, a disturbed take marked; after; the bound; the trigger with its num
 | Measure | Before: series 1, 2 and 3 | After | Bound | Trigger | Decision (D457) |
 |---|---|---|---|---|---|
 | M2: the start with one restored 100,000-commit tab, from the process's start to its first rows | 1: 7,825 ms (6,753 to 13,898), after a build; 2: 4,621 ms (4,570 to 4,872); 3: 8,184 ms (6,630 to 10,368), after a build | no change | 6,100 ms, from the second series alone (4,872) | none but the bound | None. A bound drawn from a series that ran straight after a build guards nothing, so M2's comes from the quiet take; if the unchanged build's M2 passes it in a series taken as D457 (2) says, it is raised by a ruling with the numbers |
-| M3: the start with ten such tabs, the active one's first rows | 1: 6,759 ms (6,622 to 9,556); 2: 9,367 ms (7,822 to 10,988), with Office's updater; 3: 8,284 ms (6,523 to 12,776) | after ruling 76's change, in wave 4 | unset until the change's series | the median above 1.25 times M2's median. The series' own lines compare within one series: not fired in the first (against 9,781.3 ms) and the third (10,230 ms), whose M2 was disturbed, fired in the second (5,776.3 ms). Against 1.25 times the quiet M2 (4,621 ms), 5,776 ms, the fastest of M3's fifteen runs, 6,523 ms, lies above: **fired** (D457 (4)) | A change in wave 4: ruling 76, the restore order (below) |
+| M3: the start with ten such tabs, the active one's first rows | 1: 6,759 ms (6,622 to 9,556); 2: 9,367 ms (7,822 to 10,988), with Office's updater; 3: 8,284 ms (6,523 to 12,776) | after ruling 76's change, in wave 4 | unset until the change's series | the median above 1.25 times M2's median. The series' own lines compare within one series: not fired in the first (against 9,781.3 ms) and the third (against 10,230 ms), whose M2 was disturbed; fired in the second (against 5,776.3 ms). 1.25 times the quiet M2 (4,621 ms) is 5,776 ms, and the fastest of M3's fifteen runs, 6,523 ms, lies above it: **fired** (D457 (4)) | A change in wave 4: ruling 76, the restore order (below) |
 | M4 after the load: the working set 2 s after the `loaded` line, in M5's launches | 1: 286.3 MB (285.8 to 286.8); 2: 286.5 MB (286.2 to 289.7); 3: 287.4 MB (286.2 to 288.9) | no change | 370 MB (289.7) | read in the peak's row | None |
 | M4's peak after the reload: the peak working set 2 s after the reload line | 1: 346 MB (344.9 to 348.2); 2: 346.9 MB (346.3 to 348.3); 3: 351.1 MB (345.2 to 352) | no change | 440 MB (352) | the peak's median above twice the median after the load: 346 against 572.6, 346.9 against 573, 351.1 against 574.9 MB, not fired | None: not fired |
 | M5: the reload after an outside commit, from git's return to the reload line; and the reload line's own time (refs read to swap) | 1: 3,232.7 ms (3,066.6 to 3,668.9), the line's median 2,927 ms; 2: 3,227.5 ms (3,057.6 to 3,573.9), the line's 2,928 ms; 3: 2,839.1 ms (2,623.6 to 3,157.7), the line's 2,547 ms | no change | 4,600 ms (3,668.9) | the reload line's median above 2,000 ms: **fired** in every series | To plan.md's Backlog: no stall was seen, about nine tenths of the reload is the one `git log --date-order` of D47, and every change that would cut it amends D47 or D52 |
@@ -4335,8 +4336,10 @@ before the reload goes to the backlog.
 **The probes of the start with several tabs** (the lead's, by hand, outside any test, 06:01 to 06:08;
 `D:/Projects/Personal/phase8-work/wave3/startup10-probe/`: the script `startup_tabs_probe.ps1`,
 `run1.txt`, `run2-small.txt` and the data folders with the app's logs): the Release build started on a
-data folder of its own whose session restores clones of the tests' 100,000-commit repository, the
-active tab first, with a git configuration and a keychain of its own and the providers off; no input;
+data folder of its own whose session restores the case's tabs, the active one listed first (tab 0):
+clones of the tests' 100,000-commit repository, or, in the small case, one such clone and nine
+repositories of 2,000 commits; with a git configuration and a keychain of its own and the providers
+off; no input;
 from the moment the window existed until every tab's `loaded` line, the window's thread asked an empty
 message every 15 ms. `run1.txt` set one large tab against ten large tabs, `run2-small.txt` one large tab
 against one large tab beside nine tabs of 2,000 commits, the cases alternately, three times each. Their
