@@ -7,15 +7,18 @@ using Xunit;
 namespace VisualCommit.App.Tests;
 
 /// <summary>
-/// <see cref="RowCollection{T}.ReplaceAll(IReadOnlyList{T}, Func{T, T, bool}, bool)"/> on its own: which
-/// rows a rebuild keeps, what it tells the view, and what the list holds afterwards. A rebuild with
-/// as many rows as before changes each row that shows something new and keeps every other row: a
-/// row that can show the new content itself (<see cref="IUpdatableRow{T}"/>, the left panel's
-/// branch rows and headers) does, and the view is told nothing of it; of the others, up to 64 are
-/// told of one by one, and more reset the list: for rows of one height (the stage lists) each such
-/// row is removed and its rebuilt row inserted, for other rows (the left panel) it is replaced. A
-/// rebuild that changes the number of rows keeps the rows before and after the part that changed,
-/// for either.
+/// The two forms of <c>RowCollection.ReplaceAll</c> with a comparison on their own: which rows a
+/// rebuild keeps, what it tells the view, and what the list holds afterwards. A rebuild with as many
+/// rows as before changes each row that shows something new and keeps every other row: a row that
+/// can show the new content itself (<see cref="IUpdatableRow{T}"/>, the left panel's branch rows and
+/// headers) does, and the view is told nothing of it; the others are told of, and more than 64 of
+/// them reset the list. In the form for rows of one height (the stage lists) each such row is removed
+/// and its rebuilt row inserted. In the form for rows of mixed heights (the left panel) they are
+/// taken by runs of consecutive rows: a run whose rows are all the same items as their rebuilt rows
+/// (here the same name, there the same key) is replaced row by row, and a run that holds another
+/// item (rows that only shift) is removed, last to first, and its rebuilt rows inserted, first to
+/// last. A rebuild that changes the number of rows keeps the rows before and after the part that
+/// changed, for either form.
 /// </summary>
 public class RowCollectionTests
 {
@@ -29,7 +32,7 @@ public class RowCollectionTests
         var rebuilt = Rebuilt(before, 3, 15);
         var changes = Record(list);
 
-        list.ReplaceAll(rebuilt, Row.ShowSame, rowsOfOneHeight);
+        Replace(list, rebuilt, Row.ShowSame, Row.SameItem, rowsOfOneHeight);
 
         Assert.Equal(Told(rowsOfOneHeight, 3, 15), changes);
         AssertKept(before, list, changed: [3, 15]);
@@ -69,7 +72,7 @@ public class RowCollectionTests
         var rebuilt = Rebuilt(before, changed);
         var changes = Record(list);
 
-        list.ReplaceAll(rebuilt, Row.ShowSame, rowsOfOneHeight);
+        Replace(list, rebuilt, Row.ShowSame, Row.SameItem, rowsOfOneHeight);
 
         Assert.Equal(Told(rowsOfOneHeight, changed), changes);
         AssertKept(before, list, changed);
@@ -80,7 +83,7 @@ public class RowCollectionTests
         var more = Rebuilt(longer.ToList(), [.. Enumerable.Range(0, 65).Select(i => 1 + (2 * i))]);
         var resets = Record(longer);
 
-        longer.ReplaceAll(more, Row.ShowSame, rowsOfOneHeight);
+        Replace(longer, more, Row.ShowSame, Row.SameItem, rowsOfOneHeight);
 
         Assert.Equal([(NotifyCollectionChangedAction.Reset, -1)], resets);
         Assert.Equal(more, longer);
@@ -98,7 +101,7 @@ public class RowCollectionTests
         List<Row> rebuilt = [Copy(before[0]), Copy(before[1]), .. before.Skip(3).Take(4).Select(Copy), new Row("n", 0), .. before.Skip(7).Select(Copy)];
         Assert.Equal(before.Count, rebuilt.Count);
 
-        list.ReplaceAll(rebuilt, Row.ShowSame, rowsOfOneHeight);
+        Replace(list, rebuilt, Row.ShowSame, Row.SameItem, rowsOfOneHeight);
 
         Assert.Equal(rebuilt, list);
         Assert.Same(before[0], list[0]);
@@ -116,7 +119,7 @@ public class RowCollectionTests
         List<Row> rebuilt = [Copy(before[0]), Copy(before[1]), new Row("x", 0), new Row("y", 0), new Row("z", 0), Copy(before[4]), Copy(before[5])];
         var changes = Record(list);
 
-        list.ReplaceAll(rebuilt, Row.ShowSame, rowsOfOneHeight);
+        Replace(list, rebuilt, Row.ShowSame, Row.SameItem, rowsOfOneHeight);
 
         Assert.Equal(
             [
@@ -140,7 +143,7 @@ public class RowCollectionTests
         var before = list.ToList();
         var changes = Record(list);
 
-        list.ReplaceAll([.. before.Select(Copy)], Row.ShowSame, rowsOfOneHeight);
+        Replace(list, [.. before.Select(Copy)], Row.ShowSame, Row.SameItem, rowsOfOneHeight);
 
         Assert.Empty(changes);
         AssertKept(before, list, changed: []);
@@ -163,7 +166,7 @@ public class RowCollectionTests
         })];
         var changes = Record(list);
 
-        list.ReplaceAll(rebuilt, Changing.ShowSame, rowsOfOneHeight);
+        Replace(list, rebuilt, Changing.ShowSame, Changing.SameItem, rowsOfOneHeight);
 
         Assert.Equal(Told(rowsOfOneHeight, 9), changes);
         AssertKept(before, list, changed: [9]);
@@ -183,7 +186,7 @@ public class RowCollectionTests
         var before = list.ToList();
         var changes = Record(list);
 
-        list.ReplaceAll([.. before.Select(row => new Changing(row.Name, row.Kind, row.Version + 1))], Changing.ShowSame, rowsOfOneHeight);
+        Replace(list, [.. before.Select(row => new Changing(row.Name, row.Kind, row.Version + 1))], Changing.ShowSame, Changing.SameItem, rowsOfOneHeight);
 
         Assert.Empty(changes);
         AssertKept(before, list, changed: []);
@@ -197,7 +200,7 @@ public class RowCollectionTests
         List<Changing> rebuilt = [.. shown.Select((row, index) => kinds.Contains(index) ? new Changing(row.Name, row.Kind + 1, row.Version) : new Changing(row.Name, row.Kind, row.Version + 1))];
         var told = Record(mixed);
 
-        mixed.ReplaceAll(rebuilt, Changing.ShowSame, rowsOfOneHeight);
+        Replace(mixed, rebuilt, Changing.ShowSame, Changing.SameItem, rowsOfOneHeight);
 
         Assert.Equal(Told(rowsOfOneHeight, kinds), told);
         AssertKept(shown, mixed, kinds);
@@ -209,10 +212,26 @@ public class RowCollectionTests
         List<Changing> rebuiltMore = [.. longer.ToList().Select((row, index) => more.Contains(index) ? new Changing(row.Name, row.Kind + 1, row.Version) : new Changing(row.Name, row.Kind, row.Version + 1))];
         var resets = Record(longer);
 
-        longer.ReplaceAll(rebuiltMore, Changing.ShowSame, rowsOfOneHeight);
+        Replace(longer, rebuiltMore, Changing.ShowSame, Changing.SameItem, rowsOfOneHeight);
 
         Assert.Equal([(NotifyCollectionChangedAction.Reset, -1)], resets);
         Assert.All(Enumerable.Range(0, rebuiltMore.Count), i => Assert.Same(rebuiltMore[i], longer[i]));
+    }
+
+    /// <summary>
+    /// The stage lists' form for rows of one height (<paramref name="rowsOfOneHeight"/>), the left
+    /// panel's otherwise, with <paramref name="sameItem"/> saying which rows stand for the same item.
+    /// </summary>
+    private static void Replace<TRow>(RowCollection<TRow> list, IReadOnlyList<TRow> rebuilt, Func<TRow, TRow, bool> showSame, Func<TRow, TRow, bool> sameItem, bool rowsOfOneHeight)
+    {
+        if (rowsOfOneHeight)
+        {
+            list.ReplaceAll(rebuilt, showSame);
+        }
+        else
+        {
+            list.ReplaceAll(rebuilt, showSame, sameItem);
+        }
     }
 
     /// <summary>A list of <paramref name="count"/> rows that can change their version themselves, r00 on, each of kind 0 at version 0.</summary>
@@ -271,6 +290,9 @@ public class RowCollectionTests
     private sealed record Row(string Name, int Version)
     {
         public static bool ShowSame(Row shown, Row rebuilt) => shown == rebuilt;
+
+        /// <summary>A row's name is its item, as a left-panel row's key is.</summary>
+        public static bool SameItem(Row shown, Row rebuilt) => shown.Name == rebuilt.Name;
     }
 
     /// <summary>A row that shows its name, its kind and its version, and can change its version itself.</summary>
@@ -284,6 +306,8 @@ public class RowCollectionTests
 
         public static bool ShowSame(Changing shown, Changing rebuilt) =>
             shown.Name == rebuilt.Name && shown.Kind == rebuilt.Kind && shown.Version == rebuilt.Version;
+
+        public static bool SameItem(Changing shown, Changing rebuilt) => shown.Name == rebuilt.Name;
 
         public bool CanUpdateTo(Changing rebuilt) => rebuilt.Name == Name && rebuilt.Kind == Kind;
 

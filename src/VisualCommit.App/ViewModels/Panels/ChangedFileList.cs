@@ -154,7 +154,7 @@ public sealed class ChangedFileList
         if (keepRows)
         {
             // Only the stage lists keep their rows, and they show every row 24 px high (WorkingChangesView).
-            Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt), rowsOfOneHeight: true);
+            Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt));
         }
         else
         {
