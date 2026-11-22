@@ -3193,7 +3193,7 @@ as the app shows it whole.
 | File | Change |
 |---|---|
 | `THIRD-PARTY-NOTICES.md` | rewritten (8.3.4) |
-| `notices/Avalonia-NOTICE.md`, `…/CommunityToolkit.Mvvm-ThirdPartyNotices.txt`, `…/Onigwrap-THIRD-PARTY-NOTICES.txt`, `…/SkiaSharp-THIRD-PARTY-NOTICES.txt` (new) | byte for byte as each vendor ships it (the lead, at §8's merge): Avalonia's `NOTICE.md` at `8eeda4f6`; the files of CommunityToolkit.Mvvm 8.4.2, Onigwrap 1.0.11, SkiaSharp.NativeAssets.Win32 3.119.4; CommunityToolkit's and SkiaSharp's with CRLF, the other two with LF; sources and SHA-256 in the merge note, and the SHA-256 in git the vendors' own |
+| `notices/Avalonia-NOTICE.md`, `…/CommunityToolkit.Mvvm-ThirdPartyNotices.txt`, `…/Onigwrap-THIRD-PARTY-NOTICES.txt`, `…/SkiaSharp-THIRD-PARTY-NOTICES.txt` (new) | byte for byte as each vendor ships it (the lead, at §8's merge): Avalonia's `NOTICE.md` at `8eeda4f6`; the files of CommunityToolkit.Mvvm 8.4.2, Onigwrap 1.0.11, SkiaSharp.NativeAssets.Win32 3.119.4; CommunityToolkit's and SkiaSharp's with CRLF, the other two with LF; the SHA-256 in git the vendors' own (`494981a`; status.md's note on §8's merge) |
 | `.gitattributes` | `notices/** -text` (the lead, at §8's merge), so that git changes no line end in `notices/` on any machine; the app reads the files with `\r\n` made `\n` (1.13) |
 | `src/VisualCommit.App/VisualCommit.App.csproj` | `EmbeddedResource`s of 1.13 (`notices\*` as `VisualCommit.Notices.%(Filename)%(Extension)`) |
 | `Services/EmbeddedTexts.cs`, `ViewModels/Operations/OperationTexts.About.cs`, `ViewModels/Settings/AboutSettingsViewModel.cs` (new) | 1.13 whole; `AboutTexts` (8.3.5); 8.3.1 |
@@ -3684,9 +3684,11 @@ or style changes, but one help text, the one exception to ruling 34 (D456 (3)): 
 graph" for a hidden branch; no tooltip is added to the button, and nothing drawn changes. 9.3.8's
 exemption rests on it, since the button had no help text of its own (9.9 item 7). No
 `RefItemRow.ToolTip` is null: a folder row's help text is its path (`feature`, `origin/feature`), a
-remote's row its name, a stash's row its message, and only a section row (`RefSectionRow`, another
-template) has none. A control outside 1.12 that the sweep reports is named only at the lead's word,
-from its area's texts class, never by a tooltip's change.
+remote's row its name, a stash's row its message. The rows of `RefList`'s three other templates give
+none: a section (`RefSectionRow`) has no tooltip, and an open pull request (`PullRequestRow`) and a
+message of the Pull requests section (`PullRequestMessageRow`) have theirs on a part inside the
+button, which the button's peer does not read (9.9 item 7). A control outside 1.12 that the sweep
+reports is named only at the lead's word, from its area's texts class, never by a tooltip's change.
 
 #### 9.3.7 The status bar
 
@@ -3917,7 +3919,7 @@ once, outside the pass.
 ### 9.8 Done when
 
 1. The spike's events are recorded; the route is the public one, or a decision names the private one.
-2. 9.4's classes, `Phase8aChecksU` and `Phase8aExpectationTests.U` pass; each new class failed first.
+2. 9.4's classes, `Phase8aChecksU` and `Phase8aExpectationTestsU` pass; each new class failed first.
 3. 9.6's grep is clean; `IEmbeddedRootProvider`, `[PrivateApi]` and a window peer appear nowhere in
    `src/` without that decision; the build has no warning.
 4. 9.6's comparison shows nothing of this package; the lagged list passes; About's states are swept.
