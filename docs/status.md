@@ -679,30 +679,36 @@ ready, without asking again; §9's Narrator listen needs the owner in person and
 its merge.
 All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge
 `85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`) and the wave's docs
-(`b593097`); §10's first run on the desktop is done (Notes). **Step 16 is under way**: wave 3's
-closing runs were started on 2026-11-21 at 20:54 on `85e2884` with no agent that builds or tests at
-work (`wave3_close_runs.sh`, kept with the session; its summary and logs under
-`D:/Projects/Personal/phase8-work/wave3/close/`). **The lagged list passed in all seven commands**
-(20:54 to 22:18; with the lock and each build 227 s, 868 s, 563 s, 688 s, 583 s, 1,473 s and 665 s),
-and the whole default run started at 22:18 on the same code; after it the script writes the list of
-the run's pictures (`wave3-pictures.sha256` there). A session that finds the run gone reads
-`close-summary.txt` there and starts the default run again (`bash scripts/heavy-run.sh`; CLAUDE.md's
-Commands say how to see who holds the heavy-run lock). CI's run on `85e2884` is read and recorded
-(the CI section), and the docs are merged. After the run, in this order: (1) The pictures compared
-with wave 2's references (`scripts/compare-pictures.py` with
-`D:/Projects/Personal/phase8-work/references/wave2` and `--expected
-D:/Projects/Personal/phase8-work/wave3/about/expected-about.json`), every change outside §8's
-regions explained, the lead's check of the new pictures of parts A and U (15 names) by inspectors,
-new references copied to `D:/Projects/Personal/phase8-work/references/wave3`, the comparison written
-into the report. (2) The laptop rested 10 minutes, then the "before" series
-(`VISUALCOMMIT_PERF_RUNS=5`, about 15 minutes of the desktop, which the owner let start when it is
-ready; not in the night's hours of other programs' tasks, risk 10), the bounds in a commit of their
-own, each trigger decided and the report's table (design 10.3.6), CLAUDE.md's row for the series.
-(3) The worktrees of wave 3 removed as wave 2's were (the owner's word of 2026-11-20), the spike's
-with its branch (design 9.9). Then the owner is asked for the week's share before wave 4. The
-owner's Narrator listen can come at any time before the review of step 19; it is best not taken
-beside a test run. Two timeouts of older tests are open and are step 19's to look at unless one
-comes again sooner (Notes, "Two timeouts").
+(`b593097`). **Step 16 is under way**; what is done and what is left, as of 2026-11-22 01:40 (the
+details in Notes, "Wave 3's close"). Done: the lagged list (seven commands, all passed) and the
+whole default run on `85e2884`'s code (8,436 tests, 8,431 passed, 5 skipped, none failed, 2 h 9 min
+24 s); the pictures compared with wave 2's references, the 53 changes outside §8's regions each read
+by its pixels and each a kind that differs from run to run; the 15 new pictures of parts A and U
+inspected, 14 as the report expects and **one fault, `a1b-about-link-focus`** (a focused link's
+frame lies over its text); the new references (`D:/Projects/Personal/phase8-work/references/wave3/`,
+1,235 scripted pictures); the "before" series (five runs each, 00:47), in which the triggers of M5,
+M6 and M7 fired; a probe that found no stall of the window during a reload. Under way, each in the
+background: (a) the link frame's fix in `D:/Projects/Personal/vc-wt/p8a-linkframe`
+(`wip/p8a-linkframe`; run `wf_939ded6a-40e`: a fixer with tests first, then an independent verifier,
+up to three rounds). When it is sound the lead merges it, runs part A's classes and the sign-in
+dialogs' checks of 7a and 7b on the merged tree, compares their pictures with wave 3's references
+(only `a1b` may change, around the link), pushes and reads CI. (b) The panel on the three triggers
+(run `wf_eb13d24d-e57`: four analysts and three judges, read only; its notes under
+`D:/Projects/Personal/phase8-work/wave3/perf-triggers/`), after which the lead rules on M5, M6 and
+M7 in a new decision (D457): a fix package in wave 4, or a backlog row with its reason (design
+10.3.6). Then, in this order: (1) a second "before" series at about 03:20, with the Release build
+made at least ten minutes before and no agent at work: the first ran M2 straight after a two-minute
+build, and its windows opened about 2 s later than M3's, which M3's trigger is read against (the
+owner let the series start when it is ready; about 8 minutes of the desktop; not between 02:00 and
+03:15, risk 10). (2) The bounds from the slowest run of both series, in a commit of their own
+(`Phase8aPerformance`'s seven fields; `PerformanceSeries.Bound` gives the rounding), pushed, CI
+read. (3) The report: "Wave 3's comparison with wave 2's references", the performance table, the
+link frame under "Found by the lead's inspection"; plan.md's risk 10 with the medians; CLAUDE.md's
+row for the series; design 1.17's note. (4) The worktrees of wave 3 removed as wave 2's were (the
+owner's word of 2026-11-20), the spike's with its branch (design 9.9). Then step 16 is ticked and
+the owner is asked for the week's share before wave 4. The owner's Narrator listen can come at any
+time before the review of step 19; it is best not taken beside a test run. Two timeouts of older
+tests are open and are step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -851,6 +857,66 @@ every commit.
   19's list** as well, from the docs' checks: two checks assert more than their expected results say
   (A4 the 12 between the title and the text, U2's step 3 `From main` and `To feature/conflict`),
   which the report holds only in its texts and open points 59 and 82.
+- **Wave 3's close** (2026-11-21 20:54 to 2026-11-22; step 16). **The runs**, on `85e2884`'s code
+  with no agent that builds or tests beside them: the lagged list's seven commands passed (227 s,
+  868 s, 563 s, 688 s, 583 s, 1,473 s and 665 s with the lock and each build); the whole default run
+  passed, 8,436 tests, 8,431 passed, 5 skipped, 2 h 9 min 24 s (22:18 to 00:31; the docs' agents
+  read and wrote beside its first 25 minutes). Its projects' own times: App.Tests 1 h 45 min 13 s,
+  Hosting.Tests 1 h 20 min 59 s, Git.Tests 1 h 10 min 33 s, phase 3's walk-through 40 min 14 s,
+  phase 5's 34 min 8 s and 32 min 13 s, 7b's 22 min 34 s, 8a's 20 min 44 s, phase 4's 19 min 37 s,
+  phase 6's 18 min 23 s and 15 min 23 s, 7a's 16 min 58 s, phases 0 to 2's 15 min 55 s. A5's bound
+  of 1 s held. The logs: `D:/Projects/Personal/phase8-work/wave3/close/`.
+  **The pictures** (`scripts/compare-pictures.py` against wave 2's references, with
+  `wave3/about/expected-about.json`; output in `D:/Projects/Personal/phase8-work/wave3/compare/`):
+  of the 1,220 earlier scripted pictures 1,077 are the same files and 143 changed, none in size; 90
+  changed only inside §8's expected regions (the About button in the settings' section list, the
+  palette's thumb); 53 changed outside them or are named in no expectation. Five inspectors read
+  each of the 53 by its pixels, reference beside new (run `wf_2349d4b8-a4a`, with the new pictures'
+  inspection: 10 agents, 1.65M tokens; crops under
+  `D:/Projects/Personal/phase8-work/wave3/inspect/`, the result as data in
+  `wave3/inspect-result.json`): every one is a kind that differs from run to run, none a change of
+  wave 3: 22 carets, 16 temporary folders' names, 2 ports (8a's `k5a`; 7b's `b07b`, whose Azure
+  DevOps fake fell back from port 47397 to a free one, D363), 2 caught at another moment (7a's
+  `n07a`, the progress bar's segment; phase 1's `10b-second-tab`, where the second tab's tooltip
+  "New tab" is open: the check leaves the pointer on the tab it clicked and takes the picture with
+  no move to the neutral point, `Phase1Checks.Shell.cs` lines 70 and 71; the lists of the gates of
+  phases 1 to 5 have one hash for `10b`, so this is the first run that caught it; **for step 19's
+  list**), and 11 with a few anti-aliased edge pixels (phase 5's `u20c` and `u20e` up to 25 levels
+  on two toolbar icons' edges, a form that 97 other pictures of wave 2's own run show).
+  **The 15 new pictures** of parts A and U, by four inspectors against the report and a second look
+  at each one not passed: 14 show what is expected. **`a1b-about-link-focus` does not**: A1's step 9
+  expects the repository link "focused, framed, its text underlined", and the picture shows Fluent's
+  focus frame drawn on the link's own bounds, (481,375)-(709,390), over the text: the first and last
+  letters' outer strokes are white, the capitals' tops and the descenders darkened by the frame's
+  inner line, and the underline, which the text has in the tree, lies under the frame's bottom edge.
+  The cause is the theme `VcLinkButton` (`Theme/Controls.axaml`: `Padding` 0, a template that is
+  only a `ContentPresenter`, Fluent's default focus adorner), which the sign-in dialog's two token
+  links use too; no picture of 7a or 7b shows one focused. The check passed because it asserts the
+  underline in the tree, not in the picture. The fix is under way ("Next step", (a)): the frame
+  outside the text, nothing moved, each unfocused picture the same file. What the inspectors noted
+  beside the checks, none a fault: the settings form's left is 1 px right of the report's 336 and
+  480 (within its 2 px, and the same in 7a's Accounts picture); `u3a` equals phase 4's `c10e` pixel
+  for pixel; in `u2a` the activity log is open and empty, as the check leaves it; the notices' text
+  shows the app's usual thin scroll thumb.
+  **The "before" series** (design 10.3.6; 2026-11-22 00:47, the laptop rested from 00:33, five runs
+  each, 7 min 8 s, 549 s with the lock and the build;
+  `artifacts/perf/phase-8a/series-20261122-004711-86ef5b0.txt`, a copy in
+  `D:/Projects/Personal/phase8-work/wave3/perf-before/`): M2 median 7,825 ms (6,753 to 13,898; its
+  windows opened after 9.2, 5.3, 4.9, 5.1 and 4.1 s); M3 6,759 ms (6,622 to 9,556; windows after 2.8
+  to 3.3 s; 784 to 810 MB after the ten loads), its trigger not fired against 1.25 times M2's
+  median, 9,781 ms; M4 286.3 MB after the load (285.8 to 286.8) and 346 MB at the peak after the
+  reload (344.9 to 348.2), not fired; M5 3,232.7 ms (3,066.6 to 3,668.9), the reload line's median
+  2,927 ms against 2,000: **fired**; M6 6,018.2 ms (5,447.9 to 6,321.2), the reload line's median
+  3,418 ms: **fired**; M7 326.7 ms (295.7 to 338) against 250: **fired**. M2 ran straight after the
+  command's own two-minute Release build (the merges since the first run had changed the projects),
+  which its windows' times show; hence the second series ("Next step", (1)). **The reload's stall
+  probe** (the lead, 00:59; `wave3/reload-probe/reload_stall_probe.ps1` and
+  `wave3/reload-probe-run1.txt`): the Release build on a 100,000-commit clone, an empty commit made
+  outside the app three times, and the time the window's thread took to answer an empty message,
+  asked every 15 ms: the longest answer during the three reloads (3,433, 2,997 and 3,444 ms by their
+  log lines) was 36 ms, the 95th percentile at most 2.4 ms, none of 50 ms or more; idle, the longest
+  was 25 ms. No stall was seen, which is what design 10.3.6 asks before the reload goes to the
+  backlog.
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
