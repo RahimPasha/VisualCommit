@@ -9,11 +9,13 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// <see cref="RowCollection{T}.ReplaceAll(IReadOnlyList{T}, Func{T, T, bool}, bool)"/> on its own: which
 /// rows a rebuild keeps, what it tells the view, and what the list holds afterwards. A rebuild with
-/// as many rows as before changes each row that shows something new and keeps every other row, up
-/// to 64 such rows, and resets the list above that: for rows of one height (the stage lists) each
-/// such row is removed and its rebuilt row inserted, for other rows (the left panel) it is
-/// replaced. A rebuild that changes the number of rows keeps the rows before and after the part
-/// that changed, for either.
+/// as many rows as before changes each row that shows something new and keeps every other row: a
+/// row that can show the new content itself (<see cref="IUpdatableRow{T}"/>, the left panel's
+/// branch rows and headers) does, and the view is told nothing of it; of the others, up to 64 are
+/// told of one by one, and more reset the list: for rows of one height (the stage lists) each such
+/// row is removed and its rebuilt row inserted, for other rows (the left panel) it is replaced. A
+/// rebuild that changes the number of rows keeps the rows before and after the part that changed,
+/// for either.
 /// </summary>
 public class RowCollectionTests
 {
@@ -144,6 +146,83 @@ public class RowCollectionTests
         AssertKept(before, list, changed: []);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_rebuild_with_as_many_rows_changes_the_rows_that_can_change_themselves_in_place_and_tells_the_view_only_of_the_others(bool rowsOfOneHeight)
+    {
+        // Rows 2 and 15 show a new version, which they can show themselves; row 9 shows a new kind,
+        // which it cannot.
+        var list = Updatable(20);
+        var before = list.ToList();
+        List<Changing> rebuilt = [.. before.Select((row, index) => index switch
+        {
+            2 or 15 => new Changing(row.Name, row.Kind, row.Version + 1),
+            9 => new Changing(row.Name, row.Kind + 1, row.Version),
+            _ => new Changing(row.Name, row.Kind, row.Version),
+        })];
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Changing.ShowSame, rowsOfOneHeight);
+
+        Assert.Equal(Told(rowsOfOneHeight, 9), changes);
+        AssertKept(before, list, changed: [9]);
+        Assert.Same(rebuilt[9], list[9]);
+        Assert.Equal(1, list[2].Version);
+        Assert.Equal(1, list[15].Version);
+        Assert.All(Enumerable.Range(0, rebuilt.Count), i => Assert.True(Changing.ShowSame(list[i], rebuilt[i]), $"Row {i} does not show what its rebuilt row shows."));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void Rows_that_change_themselves_reset_no_list_however_many_and_only_the_others_count_for_a_reset(bool rowsOfOneHeight)
+    {
+        // A hundred rows that each show a new version: no row is told of, every row stays.
+        var list = Updatable(100);
+        var before = list.ToList();
+        var changes = Record(list);
+
+        list.ReplaceAll([.. before.Select(row => new Changing(row.Name, row.Kind, row.Version + 1))], Changing.ShowSame, rowsOfOneHeight);
+
+        Assert.Empty(changes);
+        AssertKept(before, list, changed: []);
+        Assert.All(list, row => Assert.Equal(1, row.Version));
+
+        // Every other row from row 1 on shows a new kind, sixty-four of them, and every row between
+        // them a new version: only the sixty-four are told of, one by one.
+        var mixed = Updatable(130);
+        var shown = mixed.ToList();
+        var kinds = Enumerable.Range(0, 64).Select(i => 1 + (2 * i)).ToArray();
+        List<Changing> rebuilt = [.. shown.Select((row, index) => kinds.Contains(index) ? new Changing(row.Name, row.Kind + 1, row.Version) : new Changing(row.Name, row.Kind, row.Version + 1))];
+        var told = Record(mixed);
+
+        mixed.ReplaceAll(rebuilt, Changing.ShowSame, rowsOfOneHeight);
+
+        Assert.Equal(Told(rowsOfOneHeight, kinds), told);
+        AssertKept(shown, mixed, kinds);
+        Assert.All(Enumerable.Range(0, rebuilt.Count), i => Assert.True(Changing.ShowSame(mixed[i], rebuilt[i]), $"Row {i} does not show what its rebuilt row shows."));
+
+        // Sixty-five such rows reset the list once, and it holds the rebuilt rows.
+        var longer = Updatable(132);
+        var more = Enumerable.Range(0, 65).Select(i => 1 + (2 * i)).ToArray();
+        List<Changing> rebuiltMore = [.. longer.ToList().Select((row, index) => more.Contains(index) ? new Changing(row.Name, row.Kind + 1, row.Version) : new Changing(row.Name, row.Kind, row.Version + 1))];
+        var resets = Record(longer);
+
+        longer.ReplaceAll(rebuiltMore, Changing.ShowSame, rowsOfOneHeight);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Reset, -1)], resets);
+        Assert.All(Enumerable.Range(0, rebuiltMore.Count), i => Assert.Same(rebuiltMore[i], longer[i]));
+    }
+
+    /// <summary>A list of <paramref name="count"/> rows that can change their version themselves, r00 on, each of kind 0 at version 0.</summary>
+    private static RowCollection<Changing> Updatable(int count)
+    {
+        var list = new RowCollection<Changing>();
+        list.ReplaceAll(Enumerable.Range(0, count).Select(i => new Changing(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"r{i:D2}"), 0, 0)));
+        return list;
+    }
+
     /// <summary>A list of <paramref name="count"/> rows, r00 on, each at version 0.</summary>
     private static RowCollection<Row> Rows(int count)
     {
@@ -175,7 +254,8 @@ public class RowCollectionTests
     }
 
     /// <summary>Every row of <paramref name="before"/> but those at <paramref name="changed"/> is the same object at the same index in <paramref name="list"/>.</summary>
-    private static void AssertKept(IReadOnlyList<Row> before, IReadOnlyList<Row> list, int[] changed)
+    private static void AssertKept<TRow>(IReadOnlyList<TRow> before, IReadOnlyList<TRow> list, int[] changed)
+        where TRow : class
     {
         Assert.Equal(before.Count, list.Count);
         for (var i = 0; i < before.Count; i++)
@@ -191,5 +271,22 @@ public class RowCollectionTests
     private sealed record Row(string Name, int Version)
     {
         public static bool ShowSame(Row shown, Row rebuilt) => shown == rebuilt;
+    }
+
+    /// <summary>A row that shows its name, its kind and its version, and can change its version itself.</summary>
+    private sealed class Changing(string name, int kind, int version) : IUpdatableRow<Changing>
+    {
+        public string Name { get; } = name;
+
+        public int Kind { get; } = kind;
+
+        public int Version { get; private set; } = version;
+
+        public static bool ShowSame(Changing shown, Changing rebuilt) =>
+            shown.Name == rebuilt.Name && shown.Kind == rebuilt.Kind && shown.Version == rebuilt.Version;
+
+        public bool CanUpdateTo(Changing rebuilt) => rebuilt.Name == Name && rebuilt.Kind == Kind;
+
+        public void UpdateTo(Changing rebuilt) => Version = rebuilt.Version;
     }
 }
