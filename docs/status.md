@@ -349,6 +349,16 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [44982678813](https://github.com/RahimPasha/VisualCommit/actions/runs/44982678813), for `85e2884`
+  (wave 3's last merges: §9, the fetch hold's fix, §8's fixes after its merge): all six jobs
+  succeeded at the first attempt, none failed a test. `windows-latest` 8,436 tests with 5 skipped,
+  Test step 38 min 35 s of 70; `macos-latest` 8,433 with 3 skipped, 33 min 58 s of 70;
+  `ubuntu-latest`, the floor's job and the two containers 8,433 with 4 skipped each (Test steps 5
+  min 46 s, 7 min 4 s, 5 min 54 s with Microsoft's installer and 7 min 47 s with Ubuntu's packages).
+  The two failures of the run before are gone: the copy test passed on macOS with the platform's
+  copy key, and `FetchHoldTests`' new test of the race passed in its first runs on macOS and Linux,
+  with K3_K8 in every job. `AccessibleNameSweepTests`' 14 facts, part U's three methods and A5's
+  bound of 1 s passed in all six jobs.
 - [44969394972](https://github.com/RahimPasha/VisualCommit/actions/runs/44969394972), for `02ef340`
   (§8's merge, About and the notices, with the lead's changes at the merge): **failed in two jobs,
   each on one test**; four jobs succeeded. `windows-latest` 8,348 tests with 5 skipped, Test step 41
