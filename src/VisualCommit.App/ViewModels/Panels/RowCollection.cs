@@ -25,7 +25,7 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// show something new are replaced, one by one: two rows marked far apart (a refresh's counts,
     /// the hidden branches' tooltips once the graph without them is shown) leave every row between
     /// them, and its control, as it was, so that a press on one of those rows is still a click when
-    /// its release comes after the rebuild.
+    /// its release comes after the rebuild (<see cref="ReplaceChanged"/>).
     /// </summary>
     public void ReplaceAll(IReadOnlyList<T> rows, Func<T, T, bool> showSame)
     {
@@ -71,8 +71,22 @@ public sealed class RowCollection<T> : ObservableCollection<T>
 
     /// <summary>
     /// The <paramref name="count"/> rows from <paramref name="start"/> on, where as many rows were
-    /// rebuilt: each that does not show the same as its rebuilt row is replaced by it, and the view
-    /// is told once per row replaced; more than <see cref="MaxPartialChange"/> reset the list.
+    /// rebuilt: each that does not show the same as its rebuilt row is removed and the rebuilt row
+    /// inserted at its index, from the first to the last, and the view is told of both; more than
+    /// <see cref="MaxPartialChange"/> reset the list.
+    /// <para>
+    /// A remove and an insert, not a replace: Avalonia's virtualising stack panel (12.1.3) empties a
+    /// replaced row's slot and keeps the place of the first row it has made, and its search for the
+    /// row at the top of the view passes over an empty slot without counting its height. A replaced
+    /// top row in view then put the rows below it a row higher in the list, and the list moved its
+    /// offset with them: a whole row short until the user scrolled back to the top, or, when the
+    /// offset was smaller than that row, the list went to its top and made every row's control
+    /// again, the click under a press lost with them. A removed first row makes the panel estimate
+    /// the top row's place from the rows' heights instead, which is exact when they are all one
+    /// height (the stage lists' 24 px), and a few pixels off where they are not (the left panel's
+    /// 30 px headers among its 26 px rows), as before; a row removed and inserted further down
+    /// leaves every other row with its control.
+    /// </para>
     /// </summary>
     private void ReplaceChanged(IReadOnlyList<T> rows, int start, int count, Func<T, T, bool> showSame)
     {
@@ -93,7 +107,8 @@ public sealed class RowCollection<T> : ObservableCollection<T>
 
         foreach (var index in changed)
         {
-            this[index] = rows[index];
+            RemoveAt(index);
+            Insert(index, rows[index]);
         }
     }
 
