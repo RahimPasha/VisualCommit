@@ -697,11 +697,24 @@ every commit.
   `RepositoryViewModelTests`, `RepositoryViewModelFilterTests`, `RepositoryOperationsPullTests` and
   `SummaryModeTests`, 62 of 62; `PerformanceSeriesTests`, 19 of 19; `Phase8aPerformance` without its
   variable, 5 skipped and no file written. CI's run on the merge, 44952559495, is green in all six jobs at the first attempt, and the
-  Pull budget of 23 git calls held in each, git 2.34.1 among them (the CI section). **Still the lead's for §10**: the first run with
-  `VISUALCOMMIT_PERF_RUNS=1` on the desktop (design 10.8; about 5 minutes; M6 clicks Fetch), which
-  the owner let start when it is ready, and which the lead holds back until §8's and §9's builders
-  have ended: it opens ten tabs on 100k-commit histories, and beside a builder's test runs each
-  would make the other's waits time out; the lagged list, which waits for the wave's last merge
+  Pull budget of 23 git calls held in each, git 2.34.1 among them (the CI section). **§10's first
+  run** (design 10.8) ran on the desktop on 2026-11-21 at 17:12, on `4ca874a`, while
+  §9's package was only being read by its reviewers and §8's had ended: the five facts passed in 3 min
+  47 s (295 s with the lock), the file `artifacts/perf/phase-8a/series-20261121-171224-4ca874a.txt`
+  holds the head line, both warm-ups, every run's line and each measure's summary and trigger lines
+  with no "no line" note, and M6's reload line followed the fetch (the reload line's 4,718 ms inside
+  the Fetch operation's 8,158 ms). Its values are one run on a busy laptop, indications only: M2 15.4 s
+  (the window after 10.3 s), M3 24.0 s with ten tabs (808 MB working set), M4 290 MB after the load and
+  346 MB at the peak after the reload (managed heap 72 and 124 MB), M5 5.6 s (the reload line's 5.3 s),
+  M6 8.1 s, M7 559 ms. Three starts by hand right after it, outside the harness, on a data folder of
+  their own: the window opened after 4.3, 5.5 and 5.7 s, and a restored 100k tab had its first rows
+  after 8.6 s; the log shows no stall, the time is the app's own start (about 0.35 s to the instance
+  guard's line, 1.3 to 1.5 s more to the "started" line, 2.6 to 3.7 s more until the window is open,
+  the git search running beside it; the open itself then drew its first rows in 2.8 s). The "before"
+  series on the rested laptop decides the bounds and the triggers (10.3.6); what a start costs in a
+  build that is not compiled ahead of time is a point for 8b's published build (ReadyToRun), which the
+  lead writes into the report's table and plan.md at the series. **Still the lead's for §10**: the
+  lagged list, which waits for the wave's last merge
   because the other builders cannot pause; after the wave's close the "before" series with
   `VISUALCOMMIT_PERF_RUNS=5` on the rested laptop, the bounds written into `Phase8aPerformance`, each
   trigger decided and the report's table (10.3.6); the docs (design 1.17's as-built note, CLAUDE.md's
