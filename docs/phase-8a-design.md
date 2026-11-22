@@ -1,13 +1,13 @@
 # Phase 8a design — Release readiness in the app
 
-This is phase 8a's design: what the phase builds, how it is cut into work packages, the contracts the
-packages share, and one brief per package for its builder. Once the phase is built it is kept as
+This is phase 8a's design: what the phase builds, how it is cut into work packages, the contracts
+the packages share, and one brief per package for its builder. Once the phase is built it is kept as
 history, as phases 3 to 7b's designs are. Its decisions are recorded only in `docs/decisions.md`
-(D243): the design names them by number, D416 to D453, and
-does not repeat them. The phase's report, handoff and status cite its sections as "design N.N".
-Binding inputs: the owner's decisions D399 to D415; `docs/plan.md`'s "Phase 8a", "Workflow" and
-"Visual test gate" sections and its risks; the 7b handoff's "Patterns to follow", "Known issues" and
-"For the next phase"; the lead's 75 rulings of 2026-11-19 ("ruling n"), which section 13 carries in
+(D243): the design names them by number, D416 to D453, and does not repeat them. The phase's report,
+handoff and status cite its sections as "design N.N". Binding inputs: the owner's decisions D399 to
+D415; `docs/plan.md`'s "Phase 8a", "Workflow" and "Visual test gate" sections and its risks; the 7b
+handoff's "Patterns to follow", "Known issues" and "For the next phase"; the lead's 75 rulings of
+2026-11-19 and ruling 76 of 2026-11-22 (D457) ("ruling n"), which section 13 carries, the 75 in
 short form. The research is outside the repository: the eight inputs in
 `D:/Projects/Personal/phase8-work/research2/` ("colours.md 3.2"), with their measurements, and the
 digests and web briefs of 2026-11-18 in `D:/Projects/Personal/phase8-work/research/`, where a
@@ -39,12 +39,14 @@ holds a real person's data: examples use made-up authors at `example.com` and `/
 ## 0. Scope, packages and parts
 
 A builder reads section 0, section 1 and its own section, and nothing else. Binding, in this order:
-D399 to D415; plan.md's "Phase 8a"; the lead's 75 rulings ("ruling n", carried in short form in
-section 13); requirements.md; CLAUDE.md and plan.md's "Workflow" and "Visual test gate" (D241 to
-D247). The research is outside the repository: `D:/Projects/Personal/phase8-work/research2/` (eight
-inputs, cited "colours.md 3.2") and `research/` (the digests and web briefs; a web brief's skeptic
-file wins where they differ). Line numbers are those of `27c5109`. "§n" is this design's section n,
-the brief of one package. The design's own decisions are D416 to D453; they stand in `docs/decisions.md` alone (D243), and the sections cite them by number.
+D399 to D415; plan.md's "Phase 8a"; the lead's rulings ("ruling n": the 75 of 2026-11-19, carried in
+short form in section 13, and D457's ruling 76); requirements.md; CLAUDE.md and plan.md's "Workflow"
+and "Visual test gate" (D241 to D247). The research is outside the repository:
+`D:/Projects/Personal/phase8-work/research2/` (eight inputs, cited "colours.md 3.2") and `research/`
+(the digests and web briefs; a web brief's skeptic file wins where they differ). Line numbers are
+those of `27c5109`. "§n" is this design's section n, the brief of one package. The design's own
+decisions are D416 to D453; they stand in `docs/decisions.md` alone (D243), and the sections cite
+them by number.
 
 ### 0.1 Scope against the Delivers list
 
@@ -310,8 +312,8 @@ the Command Line Tools, a second start) go to 8b's Mac checklist.
   D442) and I1's second process, 25 to 60 s each: **+9 to 11 minutes, about 43 to 45**. D246's two
   runs of 8a's part about 10 to 12 minutes each.
 - **The perf series** (D436, D437): one run of the class at five runs takes 12 to 18 minutes of the
-  laptop with the desktop, plus a rest of 10 minutes, nothing beside (ruling 23); a change adds the
-  alternated runs, 40 to 60 minutes.
+  laptop with the desktop (the estimate; about 8 minutes as taken, 10.7), plus a rest of 10 minutes,
+  nothing beside (ruling 23); a change adds the alternated runs, 40 to 60 minutes.
 - **CI** (D377's limits 70 for the Test steps, 14 for the containers; the floor job's own 25 and 35,
   ruling 74). At 7b's gate: Windows 23 min 41 s (worst 41 min 6 s), macOS 33 min 9 s (worst 46 min
   21 s), Linux 6 min 23 s, containers 5 min 28 s and 5 min 51 s; the floor job's Test step 7 min 13
@@ -1296,9 +1298,9 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `Border` `FocusFrame` (2 px, margin -4,-3) holding `FocusFrameInner` (1 px), which take Fluent's
   `SystemControlFocusVisualPrimaryBrush` and `SystemControlFocusVisualSecondaryBrush` under
   `:focus-visible` alone. The frame reaches 4 px outside the bounds left and right, keeping 1 px of
-  background between its inner line and the ink, and 3 above and below, where the line box keeps
-  the letters 2 px and the underline 1 px clear of it; its negative margin gives back its borders,
-  so nothing moves; it is never hit (`IsHitTestVisible` false), so a pointer on it reaches what lies
+  background between its inner line and the ink, and 3 above and below, where the line box keeps the
+  letters 2 px and the underline 1 px clear of it; its negative margin gives back its borders, so
+  nothing moves; it is never hit (`IsHitTestVisible` false), so a pointer on it reaches what lies
   under it; without the keyboard's focus it draws nothing, and a link focused by a click is
   underlined without it. The rule for whoever uses the theme: the button does not clip
   (`ClipToBounds` false), and neither may what holds it; 4 px left and right of a link and 3 above
@@ -1307,32 +1309,33 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   pixels unchanged but for the underline's rows, the underline shown, a whole frame in the theme's
   frame colour on four sides outside the text, and background between frame and ink. A1's step 9
   asserts it (`AssertFramedLink`), and `LinkFocusFrameTests` (App.Tests, 12 cases) holds it for
-  About's two links, dark and light, and for GitLab's two token links, with nothing moved, nothing
+  About's links, in dark and in light, and for GitLab's two token links, with nothing moved, nothing
   drawn outside the bounds without the focus, no other control under the frame, the frame never hit
   and no frame after a click. `VcRadioButton` (`Theme/Dialogs.axaml`) builds its focus frame round
   its content and was not changed: that its frame probably takes clicks just outside it while it has
-  the keyboard's focus is on the list of the review before the gate (status step 19). The
-  references of every later merge are wave 3's, `D:/Projects/Personal/phase8-work/references/wave3/`
-  (1,235 scripted pictures; `a1b-about-link-focus` there is the fix's). The "before" series (10.3.6,
-  as built) was taken three times, because none was quiet throughout (D457 (1)): the first (00:47,
-  `86ef5b0`) and the third (05:53, `1afb980`) ran M2 within two minutes of a Release build that the
-  command itself made, the third because a docs commit after the build changed the commit the build
-  is stamped with, and the second (04:59, `fcf8c1e`) met Office's updater, an idle-triggered task of
-  Windows' Task Scheduler, as M3 began. From now on a series is taken as D457 (2) and CLAUDE.md's
-  row for it say: the real-window project built in Release on the very commit at least ten minutes
-  before, nothing committed in between, the Task Scheduler read for what is due in the next ten
-  minutes and afterwards for what ran. The bounds are the ones D457 gives, in a commit of their own:
-  M2 6,100 ms, from the second series alone; M4 370 MB after the load and 440 MB at the peak; M5
-  4,600 ms; M6 8,800 ms; M7 630 ms; M3's stays unset until its change's "after" series. M4's trigger
-  did not fire. M5's and M6's fired in every series and go to plan.md's Backlog: no stall of the
-  window was seen, and every change that would cut the reload amends D47 or D52. M7's fired in every
-  series and goes to the Backlog, by two judges to one; a rested median of about 600 ms, or the
-  owner, reopens it. M3's fired wherever a quiet M3 is set against the quiet M2 (D457 (4)) and gets
-  a change in wave 4: ruling 76 (13.1), the restore order, by which the session's active restored
-  tab opens first and alone and the others after its first page, or after 5 s at the latest, at
-  most four at once, with `InitializeAsync`'s contract kept. Wave 4 builds and proves that package,
-  `restore`, subject to the week's share the owner is asked for before wave 4 (D241); it gets a
-  design section of its own when wave 4 starts, written from D457 (5). §11's page
+  the keyboard's focus is on the list of the review before the gate (status step 19). The references
+  of every later merge are wave 3's, `D:/Projects/Personal/phase8-work/references/wave3/` (1,235
+  scripted pictures; `a1b-about-link-focus` there is the fix's). The "before" series (10.3.6, as
+  built) was taken three times, none of them quiet throughout (D457 (1)), the second because of the
+  first's build and the third because of the second's updater: the first (00:47, `86ef5b0`) and the
+  third (05:53, `1afb980`) ran M2 within two minutes of a Release build that the command itself
+  made, the third because a docs commit after the build changed the commit the build is stamped
+  with, and the second (04:59, `fcf8c1e`) met Office's updater, an idle-triggered task of Windows'
+  Task Scheduler, as M3 began. From now on a series is taken as D457 (2) and CLAUDE.md's row for it
+  say: the real-window project built in Release on the very commit at least ten minutes before,
+  nothing committed in between, the Task Scheduler read for what is due in the next ten minutes and
+  afterwards for what ran. The bounds are the ones D457 gives, in a commit of their own: M2 6,100
+  ms, from the second series alone; M4 370 MB after the load and 440 MB at the peak; M5 4,600 ms; M6
+  8,800 ms; M7 630 ms; M3's stays unset until its change's "after" series. M4's trigger did not
+  fire. M5's and M6's fired in every series and go to plan.md's Backlog: no stall of the window was
+  seen, and every change that would cut the reload amends D47 or D52. M7's fired in every series and
+  goes to the Backlog, by two judges to one; a rested median of about 600 ms, or the owner, reopens
+  it. M3's fired wherever a quiet M3 is set against the quiet M2 (D457 (4)) and gets a change in
+  wave 4: ruling 76 (13.1), the restore order, by which the session's active restored tab opens
+  first and alone and the others after its first page, or after 5 s at the latest, at most four at
+  once, with `InitializeAsync`'s contract kept. Wave 4 builds and proves that package, `restore`,
+  subject to the week's share the owner is asked for before wave 4 (D241); it gets a design section
+  of its own when wave 4 starts, written from D457 (5). §11's page
   `troubleshooting/large-repositories.md` takes from the report's table ("The performance series")
   what 10.3.6's step 5 names, as indications on the laptop (ruling 19): 100,000 commits, ten
   restored tabs of that size and the memory measured; its "first rows in about 2 s (Q1)" is one
@@ -3541,12 +3544,13 @@ Two changes, named by ruling 3 (rulings 14, 54; D409):
 - The palette's thumb, x 837–838: `k10a-palette-commands`, `k10f-palette-names-repository`,
   `l31c-palette-dark`, `l31c-palette-light`; captures `k10a`, `l31c-palette-light`.
 
-Nothing else: `VcLinkButton` is the sign-in theme moved unchanged, the native menu draws nothing on
-Windows, no typed query of an earlier check matches the command. Proof: the builder runs phase 6's
-part S, K10 and L31 and 7a's and 7b's part A (the sign-in dialogs among them), then
-`compare-pictures.py --expected` against the references of the last closed wave (wave 2's from its
-close, `D:/Projects/Personal/phase8-work/references/wave2/`; the lead, 2026-11-21) with these regions
-and the six of 8a's own pictures that 0.7 names for §8 (`k3a-palette-cancel` and
+Nothing else: `VcLinkButton` is the sign-in theme moved unchanged (so at §8's merge; its keyboard
+frame was rebuilt at wave 3's close, 1.17), the native menu draws nothing on Windows, no typed query
+of an earlier check matches the command. Proof: the builder runs phase 6's part S, K10 and L31 and
+7a's and 7b's part A (the sign-in dialogs among them), then `compare-pictures.py --expected` against
+the references of the last closed wave (wave 2's from its close,
+`D:/Projects/Personal/phase8-work/references/wave2/`; the lead, 2026-11-21) with these regions and
+the six of 8a's own pictures that 0.7 names for §8 (`k3a-palette-cancel` and
 `l3a-palette-placeholder` in the thumb, `l3f-settings-name-placeholder` and part F's
 `f12a-row-next-start`, `f12b-row-too-old` and `f14a-netrc-note` in the About button's region): every
 other picture the same file. Captures at the gate (0.7).
@@ -5157,8 +5161,9 @@ item 7's by-hand try of the terminal window is §5's, before its merge.
 ### 13.1 The rulings in short form
 
 The lead wrote 75 rulings on 2026-11-19, before the drafting (D243), from the readers' questions (1 to
-23) and the eight inputs' open points (24 to 75). The design cites them as "ruling n". The owner has
-not seen them (13.3). A ruling that a decision amends says so.
+23) and the eight inputs' open points (24 to 75). The design cites them as "ruling n". The owner has not
+seen them (13.3). A ruling that a decision amends says so. Ruling 76 came later, on 2026-11-22, from
+D457 (5), and stands at the end in D457's own words.
 
 **Scope.** 1. 8a is in-app work only: no installer, updater, signing or release; what 8b needs only
 where cheap, testable and named (rulings 4, 9, 16). 2. Hosting code is left alone: risks 38, 39, 40,
@@ -5260,10 +5265,11 @@ when 8a is merged.
 
 **Performance, single instance, macOS (perfsingle.md).** 65. M1 to M7, bounds of the slowest
 "before" run times 1.25, the triggers; nine clones for ten tabs; the lead's rested series; the gate
-keeps Q1 alone. 66. A trigger for batched config reads may change earlier exact-call tests, each
-named; deferred background loads need a new ruling. 67. A lock file and a per-run endpoint in
-`Program.Main`; the notice with "Try again"; exit codes 0 and 2; 8b's key and the macOS limits are
-8b's. 68. The macOS data folder in the docs is right; a test per platform closes plan.md's line.
+keeps Q1 alone (amended by D457: M3's bound comes from its change's "after" series, ruling 76). 66.
+A trigger for batched config reads may change earlier exact-call tests, each named; deferred
+background loads need a new ruling. 67. A lock file and a per-run endpoint in `Program.Main`; the
+notice with "Try again"; exit codes 0 and 2; 8b's key and the macOS limits are 8b's. 68. The macOS
+data folder in the docs is right; a test per platform closes plan.md's line.
 
 **The floor (floor.md).** 69. `Minimum` 2.34.1. 70. P1's worktree check on every git, the refusal
 naming the path; git's own from 2.35 the second guard. 71. "Required" means `continue-on-error`
@@ -5301,7 +5307,8 @@ activity log's splitter goes to a fixer (D427).
 | Beside the build | The icon (D407, D447): the lead's candidates, one to three rounds, each committed in `docs/brand/icon/round-<n>/`: each candidate an SVG of its own, the contact sheet `candidates.html` with a ladder from 16 to 256 pixels on a dark and a light desk, and a `README.md` with the date, what the owner chose and what the owner asked to change (7.8). Round 1 is committed (2026-11-19, `306f61f`), before the owner's first letter. Leave for a reverse image search for the look-alike board (D412 covers the name's search only). |
 | §6's merge | Told before two earlier real-window checks run alone on the laptop, phase 2's `Check_17` and phase 5's `Check_A4_real_keys` (6.8 item 5; about 2 minutes of the desktop). |
 | §9's spike and merge | Told before the spike (a minute of keys and clicks); at §9's merge, a short Narrator listen (9.3.9's steps 2 to 6 and 14, about 5 minutes; 13.4 item 13). |
-| §10's merge and the series | Told before the first run (about 5 minutes of the desktop) and the series (rested, the desktop for 12 to 18 minutes per run, M6 clicks Fetch). |
+| §10's merge and the series | Told before the first run (about 5 minutes of the desktop) and the series (rested, the desktop for 12 to 18 minutes per run as estimated, about 8 as taken (10.7); M6 clicks Fetch). |
+| The restore order's proof (ruling 76, D457; wave 4) | Asked first for the week's share (D241). Told before the alternated series of M2 and M3 (the two builds five times each, taken as D457 (2) says: about half an hour of the rested desktop) and before the lead's probe (the app started by hand on a data folder of its own, a few minutes, no input). |
 | §12's build (status step 18) | Told before each of its 13 methods runs alone and before phase 0's `Check_8` runs alone (12.4, 12.8 item 3): about 15 minutes of the desktop in all, never beside a heavy run (ruling 23). |
 | Before the counted round | Nothing: the owner chose the mark before §7 was built (1.17, 7.8), and §7 built with it, so nothing waits there. |
 | Before the gate | The three live tokens made again (GitHub's expires on 2026-11-29, Azure DevOps' and GitLab's on 2026-12-04), through the masked script; told before each live run (D335). Present for D246's two runs of 8a's real-window checks; told before the pass. |
