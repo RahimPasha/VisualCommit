@@ -24,7 +24,8 @@ namespace VisualCommit.App.Tests;
 /// 8.3.1): a link focused by the keyboard shows its whole text, its underline and Fluent's frame
 /// around them, not over them, in About (dark and light) and in the sign-in dialog (GitLab's, with
 /// both its links, 4 apart); the frame moves nothing, a link not focused draws nothing outside its
-/// bounds, and the frame takes no pointer: a hover or a click on it is none on the link. The
+/// bounds, and the frame takes no pointer: a hover or a click on it is none on the link; and the
+/// frame is the keyboard's alone: a link focused by a click is underlined without it. The
 /// headless app, its pictures read with <see cref="LinkFrame"/>;
 /// <see cref="TestPictures"/> saves them when asked.
 /// </summary>
@@ -171,6 +172,57 @@ public class LinkFocusFrameTests
         }
     }
 
+    /// <summary>
+    /// The frame is the keyboard's alone (<c>:focus-visible</c>; part K's conventions): an About link
+    /// focused by a click opens its address once and is underlined, as while hovered, but shows no
+    /// frame, so nothing of its frame's ring changes against the picture before the click and it draws
+    /// nothing outside its bounds (a frame under <c>:focus</c> drew 870 pixels of the guide link's ring
+    /// after a click).
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("AboutRepositoryLink", true)]
+    [InlineData("AboutGuideLink", true)]
+    [InlineData("AboutGuideLink", false)]
+    public async Task An_About_link_focused_by_a_click_is_underlined_without_the_frame(string id, bool dark)
+    {
+        using var data = new TempDirectory("data");
+        using var app = await StartOnAboutAsync(data, dark);
+        var unfocused = app.Capture();
+        var requests = app.Launcher.Requests.Count;
+
+        app.Click(Link(app, id));
+        await app.WaitForAsync(() => app.Launcher.Requests.Count > requests, $"the address of {id} asked for");
+        app.MoveToNeutral();
+        app.Settle();
+
+        TestPictures.Save(app, $"link-clicked-{id}-{(dark ? "dark" : "light")}");
+        AssertFocusedByPointerWithoutFrame(app, unfocused, Link(app, id), id);
+        Assert.Single(app.Launcher.Requests.Skip(requests));
+    }
+
+    /// <summary>
+    /// The same in GitLab's sign-in dialog, whose two links lie 4 apart: a link focused by a click is
+    /// underlined and shows no frame. The dialog's session knows no provider, so the click asks for
+    /// no address.
+    /// </summary>
+    [AvaloniaTheory]
+    [InlineData("SignInTokenLink")]
+    [InlineData("SignInLegacyTokenLink")]
+    public async Task A_sign_in_link_focused_by_a_click_is_underlined_without_the_frame(string id)
+    {
+        using var data = new TempDirectory("data");
+        using var app = await StartOnGitLabSignInAsync(data);
+        var unfocused = app.Capture();
+
+        app.Click(Link(app, id));
+        await WaitForFocusAsync(app, id);
+        app.MoveToNeutral();
+        app.Settle();
+
+        TestPictures.Save(app, $"link-clicked-{id}");
+        AssertFocusedByPointerWithoutFrame(app, unfocused, Link(app, id), id);
+    }
+
     /// <summary>The app on the settings screen's About, its reads ended, the focus on its section button, the pointer at rest.</summary>
     private static async Task<ShellDriver> StartOnAboutAsync(TempDirectory data, bool dark)
     {
@@ -240,6 +292,54 @@ public class LinkFocusFrameTests
         Assert.Equal(accent, Assert.IsAssignableFrom<ISolidColorBrush>(text.Foreground).Color);
         var problems = LinkFrame.Problems(unfocused, focused, app.BoundsOf(text), accent, Colour(app, "VcPanelBackgroundBrush"), Colour(app, "SystemControlFocusVisualPrimaryBrush"), id);
         Assert.True(problems.Count == 0, string.Join('\n', problems));
+    }
+
+    /// <summary>
+    /// <paramref name="link"/>, just clicked, the pointer then moved away: it has the focus without the
+    /// keyboard's frame (not <c>:focus-visible</c>) and is not hovered; its text is underlined and the
+    /// underline drawn inside its bounds; every pixel of its frame's ring (its bounds grown by
+    /// <see cref="FrameReach"/>, less its bounds) is as in <paramref name="unfocused"/>, the picture
+    /// before the click; and it draws nothing outside its bounds.
+    /// </summary>
+    private static void AssertFocusedByPointerWithoutFrame(ShellDriver app, Screenshot unfocused, Button link, string id)
+    {
+        Assert.True(app.FocusedAutomationId() == id, Text($"A click on {id} leaves the focus on {app.FocusedAutomationId() ?? "nothing"}."));
+        Assert.False(app.FocusVisible, $"{id} focused by a click has the keyboard's frame (:focus-visible).");
+        Assert.False(link.IsPointerOver, $"{id} is hovered.");
+        Assert.Same(Application.Current!.FindResource("VcLinkButton"), link.Theme);
+        var text = link.GetVisualDescendants().OfType<TextBlock>().Single();
+        Assert.True(text.TextDecorations is { Count: > 0 }, $"{id} focused by a click is not underlined.");
+
+        var focused = app.Capture();
+        var bounds = PixelBox(app, link);
+        var ring = bounds.Grown(FrameReach);
+        var inside = new List<(int X, int Y)>();
+        var outside = new List<(int X, int Y)>();
+        for (var y = ring.Top; y < ring.Bottom; y++)
+        {
+            for (var x = ring.Left; x < ring.Right; x++)
+            {
+                if (focused.PixelAt(x, y) != unfocused.PixelAt(x, y))
+                {
+                    (bounds.Contains(x, y) ? inside : outside).Add((x, y));
+                }
+            }
+        }
+
+        if (outside.Count > 0)
+        {
+            var (x, y) = outside[0];
+            Assert.Fail(Text($"{id} focused by a click changes {outside.Count} pixels of its frame's ring at {ring} against the picture before the click, the first at ({x}, {y}): {Hex(unfocused.PixelAt(x, y))} became {Hex(focused.PixelAt(x, y))}; a frame shows without the keyboard."));
+        }
+
+        Assert.True(inside.Count > 0, Text($"{id} focused by a click changes no pixel of its bounds {bounds}: its underline does not show."));
+        var middle = (bounds.Top + bounds.Bottom) / 2;
+        if (inside.FindIndex(p => p.Y < middle) is >= 0 and var above)
+        {
+            Assert.Fail(Text($"{id} focused by a click changes {inside.Count(p => p.Y < middle)} pixels of its bounds {bounds} above their lower half, the first at ({inside[above].X}, {inside[above].Y}): more than an underline is drawn."));
+        }
+
+        AssertDrawsInside(app, link, (0, 0), id + " focused by a click");
     }
 
     /// <summary>
@@ -410,6 +510,8 @@ public class LinkFocusFrameTests
             : throw new InvalidOperationException($"No brush {key}.");
 
     private static string Text(FormattableString text) => text.ToString(CultureInfo.InvariantCulture);
+
+    private static string Hex(Color colour) => Text($"#{colour.R:X2}{colour.G:X2}{colour.B:X2}");
 
     /// <summary>A box of whole pixels, its right and bottom exclusive.</summary>
     private sealed record Box(int Left, int Top, int Right, int Bottom)
