@@ -678,33 +678,31 @@ and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the t
 ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
 its merge.
 All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge
-`85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`); §10's first run on the desktop
-is done (Notes). **Step 16 is under way**: wave 3's closing runs were started on 2026-11-21 at 20:57
-on `85e2884` with no agent that builds or tests at work (`wave3_close_runs.sh`, kept with the
-session; its summary and logs under `D:/Projects/Personal/phase8-work/wave3/close/`): the lagged
-list's seven commands, then the whole default run, then the list of the run's pictures
-(`wave3-pictures.sha256` there). A lagged command that fails stops the chain before the default run.
-A session that finds the runs gone reads `close-summary.txt` there and starts again from the command
-that did not end (CLAUDE.md's Commands say how to see who holds the heavy-run lock). After the runs,
-in this order: (1) CI's run 44982678813 on `85e2884` read and recorded, above all the macOS job (the
-copy test) and the Linux jobs (the fetch hold's new test, first run there). (2) The pictures
-compared with wave 2's references (`scripts/compare-pictures.py` with
+`85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`) and the wave's docs
+(`b593097`); §10's first run on the desktop is done (Notes). **Step 16 is under way**: wave 3's
+closing runs were started on 2026-11-21 at 20:54 on `85e2884` with no agent that builds or tests at
+work (`wave3_close_runs.sh`, kept with the session; its summary and logs under
+`D:/Projects/Personal/phase8-work/wave3/close/`). **The lagged list passed in all seven commands**
+(20:54 to 22:18; with the lock and each build 227 s, 868 s, 563 s, 688 s, 583 s, 1,473 s and 665 s),
+and the whole default run started at 22:18 on the same code; after it the script writes the list of
+the run's pictures (`wave3-pictures.sha256` there). A session that finds the run gone reads
+`close-summary.txt` there and starts the default run again (`bash scripts/heavy-run.sh`; CLAUDE.md's
+Commands say how to see who holds the heavy-run lock). CI's run on `85e2884` is read and recorded
+(the CI section), and the docs are merged. After the run, in this order: (1) The pictures compared
+with wave 2's references (`scripts/compare-pictures.py` with
 `D:/Projects/Personal/phase8-work/references/wave2` and `--expected
 D:/Projects/Personal/phase8-work/wave3/about/expected-about.json`), every change outside §8's
 regions explained, the lead's check of the new pictures of parts A and U (15 names) by inspectors,
-new references copied to `D:/Projects/Personal/phase8-work/references/wave3`. (3) The laptop rested
-10 minutes, then the "before" series (`VISUALCOMMIT_PERF_RUNS=5`, about 15 minutes of the desktop,
-which the owner let start when it is ready; not in the night's hours of other programs' tasks, risk
-10), the bounds in a commit of their own, each trigger decided and the report's table (design
-10.3.6), CLAUDE.md's row for the series. (4) The wave's docs: an editor and a checker per document
-are carrying the merges' rulings into the design and the report in
-`D:/Projects/Personal/vc-wt/p8a-docs` (`wip/p8a-docs`, run `wf_b439758c-9ac`, by the brief
-`D:/Projects/Personal/phase8-work/wave3/docs-brief.md`); the lead merges that branch when both are
-sound. (5) The worktrees of wave 3 removed as wave 2's were (the owner's word of 2026-11-20), the
-spike's with its branch (design 9.9). Then the owner is asked for the week's share before wave 4.
-The owner's Narrator listen can come at any time before the review of step 19; it is best not taken
-beside the closing runs. Two timeouts of older tests are open and are step 19's to look at unless
-one comes again sooner (Notes, "Two timeouts").
+new references copied to `D:/Projects/Personal/phase8-work/references/wave3`, the comparison written
+into the report. (2) The laptop rested 10 minutes, then the "before" series
+(`VISUALCOMMIT_PERF_RUNS=5`, about 15 minutes of the desktop, which the owner let start when it is
+ready; not in the night's hours of other programs' tasks, risk 10), the bounds in a commit of their
+own, each trigger decided and the report's table (design 10.3.6), CLAUDE.md's row for the series.
+(3) The worktrees of wave 3 removed as wave 2's were (the owner's word of 2026-11-20), the spike's
+with its branch (design 9.9). Then the owner is asked for the week's share before wave 4. The
+owner's Narrator listen can come at any time before the review of step 19; it is best not taken
+beside a test run. Two timeouts of older tests are open and are step 19's to look at unless one
+comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -839,6 +837,20 @@ every commit.
   "Avalonia.Controls.DockPanel"), to be shown by a test there and listened for in the owner's
   walk-through. The accounts: `D:/Projects/Personal/phase8-work/wave3/merge-fixes.md`,
   `text-keys.md` and `hold-race-result.json`.
+  **The wave's docs are merged** (`b593097`, 2026-11-21; run `wf_b439758c-9ac`, 12 agents, 3.87M
+  tokens: an editor per document, then three rounds of an independent check and repairs, by the
+  lead's brief `D:/Projects/Personal/phase8-work/wave3/docs-brief.md`; the account as data in
+  `D:/Projects/Personal/phase8-work/wave3/docs-result.json`). The design's 1.17 has "As built" for
+  §8 and §9 and "At wave 3's merges"; its sections 8, 9, 12 and 13 say what was built and ruled. The
+  report's parts A, U and K, its changes of expected results and its open points (93 and 94 new) say
+  the same. The last check left one point per document to the lead, both corrected in `5c7e215`: the
+  vendor files' sources and SHA-256, which design 8.8 asks for, are now in the design's 1.17 (the
+  lead fetched Avalonia's `NOTICE.md` at `8eeda4f6` again: 16,954 bytes, the same SHA-256 as the
+  repository's file), and the report gives D455's timing of the owner's listen. Left as they are:
+  8.7's and 9.7's counts, which are the design's estimates as in every earlier section. **For step
+  19's list** as well, from the docs' checks: two checks assert more than their expected results say
+  (A4 the 12 between the title and the text, U2's step 3 `From main` and `To feature/conflict`),
+  which the report holds only in its texts and open points 59 and 82.
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
