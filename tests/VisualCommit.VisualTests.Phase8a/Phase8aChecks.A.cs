@@ -261,12 +261,21 @@ public sealed partial class Phase8aChecksA : Phase8aChecks
         AssertInk(top, FirstLineRect(app, text), colours.Primary, colours.Control, "the notices' first line");
         Assert.Empty(app.Launcher.Requests);
 
-        // Step 4: End: the notices' end at the view's bottom.
+        // Step 4: End: the notices' end at the view's bottom; a timeout names the offset, the extent
+        // and the viewport as they were when the wait gave up.
         app.PressKey(Key.End);
-        await app.WaitForAsync(() => AtEnd(text), $"the notices scrolled to their end ({ScrollState(text)})");
-        Picture(app, A.A5bNoticesEnd);
+        try
+        {
+            await app.WaitForAsync(() => AtEnd(text), "the notices scrolled to their end");
+        }
+        catch (TimeoutException timeout)
+        {
+            throw new TimeoutException($"{timeout.Message} ({ScrollState(text)})", timeout);
+        }
+
+        var end = Picture(app, A.A5bNoticesEnd);
         AssertAtTheEnd(text, notices);
-        AssertSwitch(app, top, A.NoticesSwitchIds[0]);
+        AssertSwitch(app, end, A.NoticesSwitchIds[0]);
 
         // Step 5: Avalonia's file, from its top.
         var avalonia = RepositoryText(A.AvaloniaNoticeFile);
@@ -328,8 +337,7 @@ public sealed partial class Phase8aChecksA : Phase8aChecks
         await WaitForFocusAsync(app, A.NavAboutId);
         Assert.True(app.FocusVisible);
         Assert.Contains("selected", InSettings<Button>(app, A.NavAboutId).Classes);
-        Assert.Equal(PinnedVersion, InSettings<TextBlock>(app, A.VersionId).Text);
-        Assert.Equal(A.Creator, InSettings<TextBlock>(app, A.CreatorId).Text);
+        AssertAboutTexts(app);
 
         // Step 4: Esc; the repository as it was.
         app.PressKey(Key.Escape);

@@ -208,7 +208,7 @@ public class PaletteEntriesTests
     [AvaloniaFact]
     public async Task The_commit_entry_is_the_commit_buttons_text_state_and_reason()
     {
-        // 5.4's row 6 on ops (5.12): not listed without working changes (the 33 commands above);
+        // 5.4's row 6 on ops (5.12): not listed without working changes (the 34 commands above);
         // with a file staged and a summary typed, "Commit 1 file" enabled with its key.
         using var repo = await Scenarios.OperationsAsync();
         await File.WriteAllTextAsync(Path.Combine(repo.Path, "src", "core.txt"), "core\nmain work\nmore\n", TestContext.Current.CancellationToken);

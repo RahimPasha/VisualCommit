@@ -9,6 +9,7 @@ using Avalonia.Automation.Peers;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Media;
+using Avalonia.Media.Imaging;
 using Avalonia.Styling;
 using Avalonia.VisualTree;
 using AvaloniaEdit.Rendering;
@@ -128,8 +129,9 @@ public sealed partial class Phase8aChecksA
 
     /// <summary>
     /// About as A1 reads it after its step 3, in the window's theme and at its size: only About shows;
-    /// its rows 18 apart; the head (the icon, then 16 to its right the name at 20 SemiBold over the
-    /// creator, secondary); the version, its name its text; the copyright line; the license with
+    /// its rows 18 apart; the head (the icon, the 96 × 96 bitmap drawn at 48 × 48 in high quality,
+    /// then 16 to its right the name at 20 SemiBold over the creator, secondary); the version, its
+    /// name its text; the copyright line; the license with
     /// Show license… 10 below; the note with Show third-party notices… 10 below; the two links with
     /// their tooltips, enabled, not underlined, in the accent colour; each label secondary at the
     /// section's left and each value at the values' left; every button and link named by its text;
@@ -164,6 +166,8 @@ public sealed partial class Phase8aChecksA
         var iconBounds = app.BoundsOf(icon);
         Assert.Equal((A.IconSize, A.IconSize), (iconBounds.Width, iconBounds.Height));
         Assert.Equal(sectionX, iconBounds.X, A.Tolerance);
+        Assert.True(icon.Source is Bitmap { PixelSize: { Width: 96, Height: 96 } }, "The icon is not drawn from the 96 × 96 bitmap.");
+        Assert.Equal(BitmapInterpolationMode.HighQuality, RenderOptions.GetBitmapInterpolationMode(icon));
         Assert.True(string.IsNullOrEmpty(AutomationProperties.GetName(icon)), "The icon is decorative but has a name.");
         AssertNear(Colors.White, picture, iconBounds.Center, A.IconTolerance, "icon's centre");
         AssertNear(colours.Panel, picture, iconBounds.TopLeft, A.IconTolerance, "icon's top-left pixel");
@@ -219,6 +223,42 @@ public sealed partial class Phase8aChecksA
             var button = InSettings<Button>(app, id);
             Assert.Equal(text, AutomationProperties.GetName(button));
             Assert.Equal(card.Bottom - 21, app.BoundsOf(button).Bottom, A.Tolerance);
+        }
+
+        AssertNoAddress(section);
+    }
+
+    /// <summary>
+    /// About's texts as A1 reads them, without its places and colours (A6 after its step 3): the name,
+    /// the creator, the labels in order, the version (its name its text), the copyright line, the
+    /// license, the note, the two Show buttons and the two links, each named by its text, the links
+    /// with their tooltips; no "@" in the section.
+    /// </summary>
+    private static void AssertAboutTexts(ShellDriver app)
+    {
+        var section = InSettings<StackPanel>(app, A.SectionId);
+        Assert.Equal(A.Name, InSettings<TextBlock>(app, A.NameId).Text);
+        Assert.Equal(A.Creator, InSettings<TextBlock>(app, A.CreatorId).Text);
+        Assert.Equal(A.Labels, section.GetVisualDescendants().OfType<TextBlock>().Where(text => text.Classes.Contains("settingsLabel")).Select(label => label.Text));
+        var version = InSettings<TextBlock>(app, A.VersionId);
+        Assert.Equal(PinnedVersion, version.Text);
+        Assert.Equal(PinnedVersion, AutomationProperties.GetName(version));
+        Assert.Equal(A.Copyright, InSettings<TextBlock>(app, A.CopyrightId).Text);
+        Assert.Equal(A.MitLicense, InSettings<TextBlock>(app, A.LicenseId).Text);
+        Assert.Equal(A.NoticesNote, InSettings<TextBlock>(app, A.NoticesNoteId).Text);
+        foreach (var (id, text) in new[] { (A.ShowLicenseId, A.ShowLicense), (A.ShowNoticesId, A.ShowNotices) })
+        {
+            var button = InSettings<Button>(app, id);
+            Assert.Equal(text, button.Content);
+            Assert.Equal(text, AutomationProperties.GetName(button));
+        }
+
+        foreach (var (id, text, tip) in new[] { (A.RepositoryLinkId, A.RepositoryLink, A.RepositoryTip), (A.GuideLinkId, A.OpenUserGuide, A.GuideTip) })
+        {
+            var link = InSettings<Button>(app, id);
+            Assert.Equal(text, TextOf(link).Text);
+            Assert.Equal(text, AutomationProperties.GetName(link));
+            Assert.Equal(tip, ToolTip.GetTip(link) as string);
         }
 
         AssertNoAddress(section);
@@ -304,7 +344,8 @@ public sealed partial class Phase8aChecksA
         AssertBrush(colours.Control, text.Background, "TextDocumentText's background");
         AssertBrush(colours.Border, text.BorderBrush, "TextDocumentText's border");
         Assert.Equal(new Thickness(1), text.BorderThickness);
-        Assert.Equal(0, (text.TextArea.CaretBrush as ISolidColorBrush)?.Color.A ?? 0);
+        var caret = Assert.IsAssignableFrom<ISolidColorBrush>(text.TextArea.CaretBrush);
+        Assert.Equal(0, caret.Color.A);
         var peer = ControlAutomationPeer.CreatePeerForElement(text);
         Assert.Equal(AutomationControlType.Document, peer.GetAutomationControlType());
         Assert.Equal(title, peer.GetName());

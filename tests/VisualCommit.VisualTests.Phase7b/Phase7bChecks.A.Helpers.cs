@@ -614,7 +614,7 @@ public sealed partial class Phase7bChecksA
     }
 
     /// <summary>
-    /// The settings card and section list at 1100×700 as 7a's A1: the card exactly, five buttons in
+    /// The settings card and section list at 1100×700 as 7a's A1: the card exactly, six buttons in
     /// order, 176 × 30 and 2 apart, Accounts at its place (±2), only it selected, no error dot; and
     /// <c>Cancel</c> and <c>Save</c> as phase 6's part S at 1100×700 (its S14 step 2): Save in the
     /// primary look, 8 right of Cancel, ending about 22 inside the card's right, both on the row y 607

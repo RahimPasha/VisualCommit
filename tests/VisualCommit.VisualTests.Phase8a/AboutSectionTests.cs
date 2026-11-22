@@ -103,9 +103,17 @@ public sealed class AboutSectionTests
         var view = app.TopDialogView!;
         var text = (DocumentTextView)app.FindByAutomationId(view, A.TextId);
         Assert.Equal(EmbeddedTexts.Read(EmbeddedTexts.ThirdPartyNotices), text.Document.Text);
+
+        // End first takes the main file to its end, so that "from its top" is the switch's doing.
+        await app.WaitForAsync(() => text.TextArea.IsFocused, "the focus in the notices' text");
         app.PressKey(Key.End);
+        await app.WaitForAsync(
+            () => text.ScrollExtent.Height > text.ScrollViewport.Height
+                && Math.Abs(text.ScrollOffset.Y - (text.ScrollExtent.Height - text.ScrollViewport.Height)) <= 1,
+            "the notices scrolled to their end");
 
         app.Click(app.FindByAutomationId(view, "TextDocumentPartAvalonia"));
+        await app.WaitForAsync(() => text.TextArea.TextView.VisualLinesValid, "Avalonia's file laid out");
 
         Assert.Equal("Avalonia", dialog.Shown.Label);
         Assert.Equal(EmbeddedTexts.Read(EmbeddedTexts.VendorNoticePrefix + "Avalonia-NOTICE.md"), text.Document.Text);
