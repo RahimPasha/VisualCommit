@@ -3333,10 +3333,12 @@ the start line sets, so that the dates heard are 9.3.5's (open point 85). Expect
 Silence where a row's name is expected (step 3's rows, step 5's Home and End) means that the live
 region does not reach Narrator (9.9 item 1): a finding that reopens the route, by a decision and a
 gate round. The silences this text expects (no row after step 2's "Commit graph, list", none being
-selected; step 5's PageDown on the last row) are no finding. At §9's merge, before the gate, the owner
-makes a short listen, steps 2 to 6 and 14 (about 5 minutes; 13.3, 13.4 item 13), so that a change of
-route lands before the review; its words go into §9's merge notes and status.md, and the report quotes
-them here at the merge (open point 89).
+selected; step 5's PageDown on the last row) are no finding. Before the gate the owner makes a short
+listen, steps 2 to 6 and 14 (about 5 minutes; 13.3, 13.4 item 13), so that a change of route lands
+before the review: D455 brought it forward from §9's merge to the first build the owner can hear,
+and the owner was asked after the spike and again at §9's merge (status.md, "Waiting on the owner",
+names its start file). Its words go into status.md, and the report quotes them here once the listen
+is held (open point 89).
 
 #### Texts these checks rely on (part U)
 
@@ -3968,6 +3970,9 @@ returns). `ActivityLogView.axaml` changes only if 6.3.8's test fails. K10's four
   by its FlaUI client at 200 %, once it had read the graph's first child, so launch 13 reads that
   child first (the lead at §9's merge). What waits on D246's runs is this launch's own run, with its
   events and their counts, and the row's bounds at 200 %, which the spike did not record.
+  The walk-through's paragraph on the owner's short listen and open point 89 now give D455's timing,
+  the first build the owner can hear in place of §9's merge (the lead, after the check of this
+  report's edit); no step and no expected result changes by it.
 - **U3, `u3a`'s expected result** (2026-11-21, the same ruling): the resolver spans the right panel's
   column, so no stage panel shows beside it; the sentence that put the stage panel with `notes.txt`
   and `u-untracked.txt` in the right panel is gone. Reason: phase 4's design 11.2, as phase 4's `c10e`
@@ -5113,8 +5118,10 @@ Still open, each with the reading this report takes and who settles it; a point 
     child before its moves. The cold case stays as D455 has it (the lead at §9's merge): the owner's
     Narrator listen decides whether the route stands, and if Narrator is silent a new decision names
     the route before the review.
-89. **The short listen at §9's merge** (13.3, 13.4 item 13): steps 2 to 6 and 14, by the owner; the lead
-    records its words in §9's merge notes and status.md and quotes them under part U.
+89. **The short listen** (13.3, 13.4 item 13; D455): steps 2 to 6 and 14, by the owner, which D455
+    brought forward from §9's merge to the first build the owner can hear. Asked for after the spike
+    and again at §9's merge, and not held yet (status.md, "Waiting on the owner", names its start
+    file). The lead records its words in status.md and quotes them under part U.
 90. **The first run's findings** (9.4, 9.5: "the report lists the states and the first run's
     findings"): `AccessibleNameSweepTests` on the code before §9's change, state by state, recorded
     under U2 at §9's merge; the list given in U2 is 9.4's "at least". **Settled at §9's merge

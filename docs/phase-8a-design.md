@@ -1246,14 +1246,28 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   `MergeMoves`, `EventWait` 5 s, `LaunchNameIds`, `LaunchRowNames`); launch 13 reads no branch row,
   so the branch row's help text is read in no real window.
 - **At wave 3's merges** (the lead, 2026-11-21). The notices quote the copyright lines word for
-  word, their holders' e-mail addresses included (8.3.4 as written): the builder had read its brief's
-  "no e-mail address" as reaching third parties' notices, where it meant the owner's address and
-  About's own texts, which hold no "@" (8.3.5). The vendors' notice
-  files are byte for byte the vendors' (8.2). D433's lines are in CLAUDE.md, plan.md's gate step 6
-  and the README. Enter in the text dialog's text is the dialog's, and the text takes no key that
+  word, their holders' e-mail addresses included (8.3.4 as written): the builder had read its
+  brief's "no e-mail address" as reaching third parties' notices, where it meant the owner's address
+  and About's own texts, which hold no "@" (8.3.5). The vendors' notice files are byte for byte the
+  vendors' (8.2). Their sources and SHA-256, which 8.8 asks for, are recorded here, since no merge's
+  message holds them: `notices/Avalonia-NOTICE.md` is `NOTICE.md` at commit
+  `8eeda4f6f546165b3f72e63c9f42247abb306905` of AvaloniaUI/Avalonia, the commit that Avalonia
+  12.1.3's nuspec names (16,954 bytes,
+  `dd6f80852d16320c865a2e403ffd1a8b07a0e34c5b37122c0bc2343639ff68e6`; the lead fetched it again on
+  2026-11-21 and it hashed the same); `notices/CommunityToolkit.Mvvm-ThirdPartyNotices.txt` is
+  `ThirdPartyNotices.txt` of CommunityToolkit.Mvvm 8.4.2's package (8,600 bytes,
+  `7774f8b0ab66bfb47ec154ce24a2d6d574febc44a74d940b8a037d1c56756163`);
+  `notices/Onigwrap-THIRD-PARTY-NOTICES.txt` is `THIRD-PARTY-NOTICES.TXT` of Onigwrap 1.0.11's
+  package (4,875 bytes, `5662cc07e23c65fd5d3790d9b8a4d7113f1de881de150a0e93296a2faa1418a9`);
+  `notices/SkiaSharp-THIRD-PARTY-NOTICES.txt` is `THIRD-PARTY-NOTICES.txt` of
+  SkiaSharp.NativeAssets.Win32 3.119.4's package, the same bytes as in
+  HarfBuzzSharp.NativeAssets.Win32 8.3.1.3's (139,775 bytes,
+  `21504c46c4c58aa64c1055bd2dcbc5f9a136b4b8c412ed3cc6740e22c5b127f5`). `sha256sum notices/*` prints
+  these four values in a checkout on any machine. D433's lines are in CLAUDE.md, plan.md's gate step
+  6 and the README. Enter in the text dialog's text is the dialog's, and the text takes no key that
   would use its hidden caret (8.3.2). D456 rules on what §9's sweep left (9.3.6, 9.3.8), with two
-  corrections from the build: state 3 sweeps the About section, the license's text dialog (one
-  text, no switch) and the notices' dialog on Avalonia's file, reached by its switch; and no
+  corrections from the build: state 3 sweeps the About section, the license's text dialog (one text,
+  no switch) and the notices' dialog on Avalonia's file, reached by its switch; and no
   `RefItemRow.ToolTip` is null. Part U's method 2, step 6: Esc in the resolver's result leaves the
   resolver open, then `ResolverCloseButton` (`96d94bf`; 9.5), and launch 13 closes the resolver by a
   real click on that button and reads the graph's first child before it records the row's events
@@ -3193,7 +3207,7 @@ as the app shows it whole.
 | File | Change |
 |---|---|
 | `THIRD-PARTY-NOTICES.md` | rewritten (8.3.4) |
-| `notices/Avalonia-NOTICE.md`, `…/CommunityToolkit.Mvvm-ThirdPartyNotices.txt`, `…/Onigwrap-THIRD-PARTY-NOTICES.txt`, `…/SkiaSharp-THIRD-PARTY-NOTICES.txt` (new) | byte for byte as each vendor ships it (the lead, at §8's merge): Avalonia's `NOTICE.md` at `8eeda4f6`; the files of CommunityToolkit.Mvvm 8.4.2, Onigwrap 1.0.11, SkiaSharp.NativeAssets.Win32 3.119.4; CommunityToolkit's and SkiaSharp's with CRLF, the other two with LF; the SHA-256 in git the vendors' own (`494981a`; status.md's note on §8's merge) |
+| `notices/Avalonia-NOTICE.md`, `…/CommunityToolkit.Mvvm-ThirdPartyNotices.txt`, `…/Onigwrap-THIRD-PARTY-NOTICES.txt`, `…/SkiaSharp-THIRD-PARTY-NOTICES.txt` (new) | byte for byte as each vendor ships it (the lead, at §8's merge): Avalonia's `NOTICE.md` at `8eeda4f6`; the files of CommunityToolkit.Mvvm 8.4.2, Onigwrap 1.0.11, SkiaSharp.NativeAssets.Win32 3.119.4; CommunityToolkit's and SkiaSharp's with CRLF, the other two with LF; the SHA-256 in git the vendors' own (`494981a`; the sources and the values in 1.17, "At wave 3's merges") |
 | `.gitattributes` | `notices/** -text` (the lead, at §8's merge), so that git changes no line end in `notices/` on any machine; the app reads the files with `\r\n` made `\n` (1.13) |
 | `src/VisualCommit.App/VisualCommit.App.csproj` | `EmbeddedResource`s of 1.13 (`notices\*` as `VisualCommit.Notices.%(Filename)%(Extension)`) |
 | `Services/EmbeddedTexts.cs`, `ViewModels/Operations/OperationTexts.About.cs`, `ViewModels/Settings/AboutSettingsViewModel.cs` (new) | 1.13 whole; `AboutTexts` (8.3.5); 8.3.1 |
@@ -3489,8 +3503,9 @@ alone, the two classes about one. The pass: A1 in the launch shared with part B,
 
 ### 8.8 Done when
 
-- `ThirdPartyNoticesTests` green on the laptop and in CI's six jobs, shown red on the base first; the
-  vendor files' sources and SHA-256 in the merge note.
+- `ThirdPartyNoticesTests` green on the laptop and in CI's six jobs, shown red on the base first;
+  the vendor files' sources and SHA-256 recorded at the merge (as built: in 1.17, "At wave 3's
+  merges", a merge's message holding no such note).
 - 8.3 built, 8.4's classes pass, 8.4's earlier changes made with their reasons drafted; no warning.
 - Part A passes, each method under 40 s, its pictures inspected; 8.6's comparison as named.
 - The merge's push ran CI green (the floor job as §3 leaves it); D433's doc lines are in.
@@ -3748,8 +3763,9 @@ which has no `Assert`; `AccessibleNameSweepTests` gathers each state's problems 
 `FindProblems` and fails once at its fact's end, with every problem state by state, so that one run
 gives the whole list.
 
-`AccessibleNameSweepTests`, one `[AvaloniaFact]` and one start each, 14 as built: (1) the welcome
-page and the palette; (2) settings, each section (About among them), the Git program row, Accounts
+`AccessibleNameSweepTests`, one `[AvaloniaFact]` each, 14 as built, 13 with one start of the app
+(state 14 shows §4's notice window alone, no app started): (1) the welcome page and the palette;
+(2) settings, each section (About among them), the Git program row, Accounts
 with the three providers' fakes started on ports the system picks (the section shows no sign-in
 button while a provider is off) and each provider's sign-in dialog; (3) About, added at §9's merge
 on the tree that holds §8 (D456 (5)): the settings screen on About, the license's text dialog (one
@@ -4998,11 +5014,11 @@ Unverified, settled in the builder's first runs and D246's: the taskbar button's
 the desktop root, a capture outside the window; `WM_GETICON` and `ExtractAssociatedIcon`'s size
 under per-monitor DPI; `ProductVersion` holding `+<commit>` (else `BuiltVersionDisplay` reads the
 attribute with `System.Reflection.Metadata`); a LiveRegionChanged from `GraphSelectedRow` reaching
-FlaUI (first §9's spike, ruling 32; D450: the spike saw one per move only once its client had read
-the graph's first child, D455, so launch 13 reads it first); full-coverage ink at 200 % under
-ClearType (§2.9 item 6); a tooltip over `main` in `l6b`; the notice found by `GetMainWindow`; the
-stand-in's runtime files in this output (the first build); F4's dialog title and box 1148 (S14's
-pattern).
+FlaUI (settled by §9's spike, ruling 32 and D450: its FlaUI client received one per move, but only
+once it had read the graph's first child, D455, so launch 13 reads it first; launch 13's own run,
+with its events' counts, is left to D246's runs); full-coverage ink at 200 % under ClearType (§2.9
+item 6); a tooltip over `main` in `l6b`; the notice found by `GetMainWindow`; the stand-in's runtime
+files in this output (the first build); F4's dialog title and box 1148 (S14's pattern).
 
 Risks: a gate's machine without `winget.exe` on its `PATH` fails launch 7 (D449); a run in the
 worktree proves no path with a space (the main checkout's does). The owner's icon is no longer one:
