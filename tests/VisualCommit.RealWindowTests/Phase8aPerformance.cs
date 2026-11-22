@@ -160,16 +160,19 @@ public sealed class Phase8aPerformance(Phase8aPerformanceRun fixture) : IClassFi
     /// <summary>The 100,000 commits of <see cref="LargeHistory"/>, which every measured repository opens with first.</summary>
     private const int Commits = LargeHistory.CommitCount;
 
-    // The bounds (D436): null until the lead writes them after the "before" series, in a commit of
-    // their own: the slowest counted run times 1.25, rounded up (PerformanceSeries.Bound): times to
-    // 100 ms, M7's to 10 ms, memory to 10 MB. While null, a fact asserts only its guards.
-    private static readonly long? M2BoundMilliseconds = null;
+    // The bounds (D436, D457): the slowest counted run times 1.25, rounded up (PerformanceSeries.Bound):
+    // times to 100 ms, M7's to 10 ms, memory to 10 MB. Written by the lead from the three "before"
+    // series of 2026-11-22: M2's from the second series alone (4,872 ms), because the other two ran M2
+    // straight after a Release build; the others from the slowest of all fifteen runs (289.7 and 352 MB,
+    // 3,668.9, 7,024.9 and 499.7 ms). M3's stays null until the restore order's "after" series (D457,
+    // ruling 76) and is written from that one. While null, a fact asserts only its guards.
+    private static readonly long? M2BoundMilliseconds = 6_100;
     private static readonly long? M3BoundMilliseconds = null;
-    private static readonly long? M4LoadBoundMegabytes = null;
-    private static readonly long? M4PeakBoundMegabytes = null;
-    private static readonly long? M5BoundMilliseconds = null;
-    private static readonly long? M6BoundMilliseconds = null;
-    private static readonly long? M7BoundMilliseconds = null;
+    private static readonly long? M4LoadBoundMegabytes = 370;
+    private static readonly long? M4PeakBoundMegabytes = 440;
+    private static readonly long? M5BoundMilliseconds = 4_600;
+    private static readonly long? M6BoundMilliseconds = 8_800;
+    private static readonly long? M7BoundMilliseconds = 630;
 
     /// <summary>The triggers of 10.3.4, read against the medians: M5's and M6's reload line above this.</summary>
     private const double ReloadTrigger = 2_000;
