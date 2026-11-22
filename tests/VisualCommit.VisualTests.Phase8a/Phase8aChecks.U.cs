@@ -109,7 +109,7 @@ public sealed class Phase8aChecksU : Phase8aChecks
         app.Click(alpha);
         lastName = await AssertOneNameChangeAsync(app, names, before, U.AlphaTwo.Name, lastName, "the click on alpha");
         AssertExposedRow(app, graph, row, U.AlphaTwo, U.AlphaTwo.Hint, selected: 1, focus: U.RefItemId);
-        Assert.Equal(U.Alpha, AutomationProperties.GetName((Control)app.FocusedElement!));
+        Assert.Equal(U.Alpha, ControlAutomationPeer.CreatePeerForElement((Control)app.FocusedElement!).GetName());
         Assert.False(row.HasKeyboardFocus());
 
         // Step 9.
@@ -131,11 +131,12 @@ public sealed class Phase8aChecksU : Phase8aChecks
         // Step 1.
         using var app = await OpenAsync(data, repo.Path);
         var repository = Repository(app);
-        await app.WaitForAsync(() => app.FindByAutomationId(ShellDriver.BannerContinueId).IsEffectivelyVisible || repository.Status.Conflicts.Count == 1, "the merge's banner");
+        await app.WaitForAsync(() => IsShown(app, ShellDriver.BannerContinueId), "the merge's banner");
         await app.WaitForAsync(() => repository.Graph.IsComplete && app.GraphControl().ShowsWorkingRow, "the graph with the working-changes row");
         var exact = await repo.ExactStateAsync();
 
         // Step 2: Ours edits clicked; the peers made.
+        Assert.True(IsShown(app, ShellDriver.BannerContinueId), "The merge's banner does not show.");
         app.Click(app.GraphRowPoint(0));
         await app.WaitForAsync(() => repository.SelectedCommits is [{ Subject: "Ours edits" }] && app.FocusedAutomationId() == U.GraphRowsId, "Ours edits selected with the focus on the graph");
         await app.WaitForIdleAsync();
@@ -227,6 +228,9 @@ public sealed class Phase8aChecksU : Phase8aChecks
         app.RightClick(await app.RefRowAsync(U.LocalBranches, U.Feature, U.Conflict));
         app.ClickMenuItem(U.CompareConflictWithMain);
         await app.WaitForAsync(() => app.FindByAutomationId("CompareSwap").IsEffectivelyVisible && app.FindByAutomationId("CompareClose").IsEffectivelyVisible, "the comparison's two buttons");
+        var comparison = app.Compare()!;
+        Assert.Equal((U.CompareFrom, U.CompareTo), (comparison.From, comparison.To));
+        Assert.True(repository.Comparison is { IsBranches: true }, "The comparison is not one of branches.");
         foreach (var id in U.CompareIds)
         {
             AssertNamed(app, U.FixedNames.Single(named => named.Id == id));
@@ -309,14 +313,17 @@ public sealed class Phase8aChecksU : Phase8aChecks
         app.Click(confirm);
         await app.WaitForAsync(() => TextOf(app, "RestoreBarText") == U.RestoreText, "the restore bar");
         await app.WaitForIdleAsync();
-        Assert.Equal(U.Restore, AutomationProperties.GetName(app.FindByAutomationId("RestoreDiscardButton")));
+        Assert.Equal(U.Restore, ControlAutomationPeer.CreatePeerForElement(app.FindByAutomationId("RestoreDiscardButton")).GetName());
         Assert.DoesNotContain(U.Readme, repository.Changes.Unstaged.Rows.Select(changed => changed.Key));
         AssertNamed(app, U.FixedNames.Single(named => named.Id == "DismissRestoreButton"));
         AutomationSweep.AssertNamed(app.Window, U.SweepRestoreBar);
 
-        // Step 12: README.md as committed (its file and its status line), one backup ref more; nothing else.
+        // Step 12: README.md as committed (its file and its status line), one backup ref more, whose
+        // commit holds README.md as it was (D67); nothing else.
         var after = (await repo.ExactStateAsync()).Split('\n').ToList();
         var backup = Assert.Single(after, line => line.StartsWith(U.BackupRefPrefix, StringComparison.Ordinal));
+        var backupCommit = backup[(backup.LastIndexOf(' ') + 1)..];
+        Assert.Equal(U.ReadmeChanged, (await repo.GitAsync("show", backupCommit + ":" + U.Readme)).StandardOutput);
         after.Remove(backup);
         var expected = exact.Replace(U.Readme + ": " + U.ReadmeChanged, U.Readme + ": " + U.ReadmeCommitted, StringComparison.Ordinal)
             .Split('\n')
@@ -346,6 +353,10 @@ public sealed class Phase8aChecksU : Phase8aChecks
             TextBox box => box.Text,
             _ => null,
         };
+
+    /// <summary>Whether a control whose automation id is <paramref name="automationId"/> shows; false while none is in the window.</summary>
+    private static bool IsShown(ShellDriver app, string automationId) =>
+        app.Window.GetVisualDescendants().OfType<Control>().Any(control => control.IsEffectivelyVisible && AutomationProperties.GetAutomationId(control) == automationId);
 
     private static List<string> GraphSubjects(RepositoryViewModel repository) =>
         [.. Enumerable.Range(0, repository.Graph.Count).Select(index => repository.Graph.CommitAt(index).Subject)];

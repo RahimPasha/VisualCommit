@@ -178,6 +178,12 @@ public sealed class CommitGraphControlAutomationTests
         using var host = Host.Show(control, AreaWidth, RowsHeight, ThemeVariant.Dark);
         var graph = ControlAutomationPeer.CreatePeerForElement(control);
         var row = Assert.Single(graph.GetChildren());
+
+        // A name raised before the time with none: the row that comes back still has no old value.
+        var before = new Recorder(graph, row);
+        control.SelectedIndex = 4;
+        Dispatcher.UIThread.RunJobs();
+        Assert.Equal(new (string?, string?)[] { (null, "Commit 6, Test Author, 2026-01-01 12:05") }, before.Names);
         control.SelectedIndex = -1;
         Dispatcher.UIThread.RunJobs();
         Assert.Empty(graph.GetChildren());
@@ -285,9 +291,11 @@ public sealed class CommitGraphControlAutomationTests
         Assert.False(row.HasKeyboardFocus());
         Assert.Single(events.Names);
 
+        // Each arrival speaks the row anew: no old value, though its name was raised before.
         control.Focus();
         Dispatcher.UIThread.RunJobs();
         Assert.Equal(2, events.Names.Count);
+        Assert.Equal((null, "Commit 2, Test Author, 2026-01-01 12:01"), events.Names[1]);
         Assert.Equal(0, events.SelectionChanges);
     }
 

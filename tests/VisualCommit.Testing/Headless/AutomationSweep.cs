@@ -67,9 +67,10 @@ public static partial class AutomationSweep
     /// <summary>
     /// The one control exempt from <see cref="Duplicate"/>, by its automation id, under the list
     /// that holds it. A row of the branch list is told apart by its place under its section and its
-    /// folders (two <c>main</c> rows, under Local branches and under a remote), and its full name is
-    /// its tooltip; the left panel as a tree with levels is the backlog's. Naming the rows by their
-    /// full names instead would change every lookup that finds a row by its text.
+    /// folders alone (two <c>main</c> rows, under Local branches and under a remote): its full name
+    /// is the tooltip of its name's text (<c>RefName</c>), not of the row's button, so the row's peer
+    /// gives no help text; the left panel as a tree with levels is the backlog's. Naming the rows by
+    /// their full names instead would change every lookup that finds a row by its text.
     /// </summary>
     private static readonly (string AutomationId, string ListAutomationId) DuplicateExemption = ("RefItem", "RefList");
 
@@ -196,7 +197,11 @@ public static partial class AutomationSweep
         return inside.Split(", ").All(IsKeyRange);
     }
 
-    /// <summary>A key text, or two joined by " to " (<c>Ctrl+1 to Ctrl+8</c>).</summary>
+    /// <summary>
+    /// A key text, or two joined by " to " (<c>Ctrl+1 to Ctrl+8</c>), the form in which the app's
+    /// own key texts give a run of keys (<c>ShortcutText.FormatAll</c>), which design 9.3.8's
+    /// wording leaves out.
+    /// </summary>
     private static bool IsKeyRange(string part)
     {
         var ends = part.Split(" to ");

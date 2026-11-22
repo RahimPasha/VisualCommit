@@ -132,6 +132,12 @@ public static partial class Phase8aExpectations
         public const string HideFeatureAlpha = "Hide feature/alpha";
         public const string SoloFeatureFf = "Solo feature/ff";
         public const string CompareConflictWithMain = "Compare feature/conflict with main";
+
+        /// <summary>The comparison's two ends after "Compare feature/conflict with main" (method 3's step 3): from the current branch to the menu's.</summary>
+        public const string CompareFrom = "From main";
+
+        public const string CompareTo = "To feature/conflict";
+
         public const string CommitsMode = "Commits";
         public const string ThreeCommitsSelected = "3 commits selected";
         public const string Unstaged1 = "Unstaged files (1)";

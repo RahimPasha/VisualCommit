@@ -10,6 +10,7 @@ using VisualCommit.App.Services;
 using VisualCommit.App.ViewModels;
 using VisualCommit.App.ViewModels.Conflicts;
 using VisualCommit.App.ViewModels.Dialogs;
+using VisualCommit.App.ViewModels.Operations;
 using VisualCommit.App.Views.Pages;
 using VisualCommit.Core.Git;
 using VisualCommit.Core.Hosting;
@@ -109,6 +110,10 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
         var dialogs = app.Session.Services.DialogHost;
         var sweeps = new Sweeps();
 
+        // The folder "Add repositories" searches: two empty repositories, app and site, side by side.
+        using var found = await TempRepo.CreateAsync("app");
+        await found.GitAsync("init", "--quiet", "--initial-branch", "main", found.SiblingPath("site"));
+
         var remotes = new RemotesDialogViewModel(new ListedRemotes(new RemoteInfo("origin", "https://example.com/demo/app.git", null)));
         var shown = new List<(DialogViewModel Dialog, string State)>
         {
@@ -125,6 +130,8 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
             (new MessageDialogViewModel("Rebase stopped", "The rebase stopped at a commit to edit.", "OK"), "the message"),
             (WorkspaceNameDialogViewModel.Create(["Web"]), "the workspace's name"),
             (new CloneFromGitHubDialogViewModel([HostingProvider.GitHub, HostingProvider.AzureDevOps, HostingProvider.GitLab], HostingProvider.GitHub, ListedRepositories, NullAppLog.Instance), "the repository browser"),
+            (new AddRepositoriesDialogViewModel("Web", Path.GetDirectoryName(found.Path)!, app.Session.Services.Repositories, _ => false), "the add repositories"),
+            (new CreatePullRequestDialogViewModel(new FixedCreateActions(), NullAppLog.Instance), "the create pull request"),
         };
 
         foreach (var (dialog, state) in shown)
@@ -140,6 +147,13 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
                 // The welcome page starts the list when it shows the browser; here the sweep does.
                 var listing = browser.Start();
                 await app.WaitForAsync(() => listing.IsCompleted && browser.Rows.Count == 2, "the browser's two rows");
+            }
+
+            if (dialog is AddRepositoriesDialogViewModel adding)
+            {
+                // The workspace's command starts the search when it shows the checklist; here the sweep does.
+                var search = adding.Start();
+                await app.WaitForAsync(() => search.IsCompleted && adding.ShowsList && adding.Rows.Count == 2, "the checklist's two rows");
             }
 
             app.Settle();
@@ -593,5 +607,44 @@ public sealed class AccessibleNameSweepTests : Phase8aChecks
         public Task<string?> SetRemoteUrlAsync(string name, string url) => Task.FromResult<string?>(null);
 
         public Task RemoveRemoteAsync(string name) => Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// The create-request form's actions with its base given, so that the form is ready at once,
+    /// and a note of what Create pushes first: the sweep only reads the form, and nothing it does
+    /// reaches git or a service.
+    /// </summary>
+    private sealed class FixedCreateActions : ICreatePullRequestActions
+    {
+        public PullRequestEnd Head { get; } = new("topic", "demo/app");
+
+        public string DefaultTitle => "Topic work";
+
+        public PullRequestEnd? GivenBase { get; } = new("main", "demo/app");
+
+        public bool CanCancelCreate => false;
+
+        public event EventHandler? CanCancelCreateChanged
+        {
+            add { }
+            remove { }
+        }
+
+        public string? HeadNote() => OperationTexts.CreatePullRequestTexts.PushedFirstWithUpstream("origin");
+
+        public Task<CreatePullRequestStart> StartAsync(CancellationToken ct) => Task.FromResult(new CreatePullRequestStart(GivenBase, null));
+
+        public Task<PullRequestEnd?> ChooseBaseAsync(PullRequestEnd? current) => Task.FromResult<PullRequestEnd?>(null);
+
+        public bool IsSameBranch(PullRequestEnd baseEnd) => false;
+
+        public Task<CreatePullRequestOutcome> CreateAsync(PullRequestEnd baseEnd, string title, string body, bool draft) =>
+            Task.FromResult(new CreatePullRequestOutcome(false, null, null));
+
+        public Task OpenExistingAsync() => Task.CompletedTask;
+
+        public void CancelCreate()
+        {
+        }
     }
 }
