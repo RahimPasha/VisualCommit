@@ -9,9 +9,9 @@ program, and shows them in Settings, About.
 
 Each component below names its NuGet packages and their versions (`Packages:`), the files it ships
 on any of the three systems (`Files:`), where its source is (`Source:`), its copyright lines and its
-license (`License:`). The copyright lines are quoted as their sources write them, without the e-mail
-addresses some of them carry. A license text that names nobody follows the list once, under "License
-texts"; a BSD-3-Clause text, whose third clause names a holder, once for each holder.
+license (`License:`). The copyright lines are quoted as their sources write them. A license text
+that names nobody follows the list once, under "License texts"; a BSD-3-Clause text, whose third
+clause names a holder, once for each holder.
 
 ## Components
 
@@ -62,12 +62,26 @@ Compiled into it, as that commit's `DEPS` and build files take them:
 - abseil-cpp (https://github.com/abseil/abseil-cpp, Chromium's copy at commit
   677093525ed5a2f357482681a222274866088a2c): its files carry lines of the form "Copyright 2017 The
   Abseil Authors."; Apache-2.0.
-- zlib (https://zlib.net, Chromium's copy at commit b80f1d1e5256ac25f6aea3f31f13d458981cb1f9): "(C)
-  1995-2026 Jean-loup Gailly and Mark Adler"; zlib.
+- zlib (https://zlib.net, Chromium's copy at commit b80f1d1e5256ac25f6aea3f31f13d458981cb1f9): the
+  lines below, as that copy's `LICENSE` writes them; zlib.
+
+```
+(C) 1995-2026 Jean-loup Gailly and Mark Adler
+
+Jean-loup Gailly        Mark Adler
+jloup@gzip.org          madler@alumni.caltech.edu
+```
+
 - Chromium's compression utilities, in the same copy of zlib: "Copyright 2019 The Chromium Authors";
   BSD-3-Clause (Google LLC).
-- xxHash (https://github.com/Cyan4973/xxHash, in ANGLE's `src/common/third_party/xxhash`):
-  "Copyright (c) 2012-2021 Yann Collet. All rights reserved."; BSD-2-Clause.
+- xxHash (https://github.com/Cyan4973/xxHash, in ANGLE's `src/common/third_party/xxhash`): the lines
+  below, as the `LICENSE` there writes them; BSD-2-Clause.
+
+```
+Copyright (c) 2012-2021 Yann Collet
+All rights reserved.
+```
+
 - libc++ (https://libcxx.llvm.org, Chromium's copy): Apache-2.0 with the LLVM exception, under which
   the compiled library needs no notice; it is named here so that the list is whole.
 
@@ -161,9 +175,9 @@ Files: Tmds.DBus.Protocol.dll
 Source: https://github.com/tmds/Tmds.DBus (commit b4a7fed0b878f74cb54f7cca84d2889af4e596ba)
 
 ```
-Copyright 2006 Alp Toker
+Copyright 2006 Alp Toker <alp@atoker.com>
 Copyright 2010 Other Contributors
-Copyright 2016 Tom Deseyn
+Copyright 2016 Tom Deseyn <tom.deseyn@gmail.com>
 ```
 
 License: MIT.
@@ -237,7 +251,7 @@ Oniguruma, https://github.com/kkos/oniguruma
 
 ```
 Copyright (c) 2024 Aikawa Yataro
-Copyright (c) 2002-2021  K.Kosako
+Copyright (c) 2002-2021  K.Kosako  <kkosako0@gmail.com>
 Copyright (c) 2015 Fluent Solutions
 ```
 
@@ -356,7 +370,11 @@ The copyright lines that the package carries for its grammars:
 - https://github.com/freebroccolo/atom-language-swift: "Copyright (c) 2014 Darin Morrison"
 - https://github.com/textmate/asp.vb.net.tmbundle: "Copyright (c) textmate-asp.vb.net.tmbundle
   project authors"
-- https://github.com/textmate/yaml.tmbundle: "Copyright (c) 2015 FichteFoll"
+- https://github.com/textmate/yaml.tmbundle: the line below
+
+```
+Copyright (c) 2015 FichteFoll <fichtefoll2@googlemail.com>
+```
 
 The themes, each by its name, its file in the package and where it comes from:
 

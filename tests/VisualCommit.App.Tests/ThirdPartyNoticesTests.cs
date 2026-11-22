@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using TextMateSharp.Grammars;
 using VisualCommit.App.Services;
 using VisualCommit.Testing.Headless;
@@ -12,12 +13,13 @@ namespace VisualCommit.App.Tests;
 /// of the app's <c>VisualCommit.deps.json</c> that ships a file is named with its version, and every
 /// file it ships on that package's entry; no entry names a package the build does not ship; every
 /// grammar and theme of TextMateSharp.Grammars' assembly is listed; every license named has its
-/// text; and the app embeds <c>LICENSE</c>, the notices and the vendors' files word for word. The
+/// text; the only e-mail addresses are those of the copyright lines; and the app embeds
+/// <c>LICENSE</c>, the notices and the vendors' files word for word. The
 /// deps.json read is the one beside this assembly, the app's own as this machine built it: on
 /// Windows only this machine's natives (D239), on macOS and Linux every platform's, so CI's macOS
 /// and Linux jobs prove the natives Windows does not ship. Reads files only.
 /// </summary>
-public sealed class ThirdPartyNoticesTests
+public sealed partial class ThirdPartyNoticesTests
 {
     /// <summary>
     /// The packages that ship only on macOS and Linux: a Windows build trims their natives (D239), so
@@ -189,14 +191,43 @@ public sealed class ThirdPartyNoticesTests
     }
 
     [Fact]
-    public void The_notices_file_holds_no_email_address()
+    public void The_notices_files_only_addresses_are_its_copyright_lines()
     {
-        // The vendors' files are kept word for word and may hold addresses; the file the
-        // repository writes holds none (D409's rule for the owner's own texts, kept for all).
+        // The copyright lines are quoted as their holders wrote them, with the addresses some of
+        // them carry (design 8.3.4; the lead's ruling of 2026-11-21). Every "@" lies inside a
+        // fenced block, and the addresses are exactly these: a new one is a change to this list.
         var lines = ReadRepositoryText("THIRD-PARTY-NOTICES.md").Split('\n');
-        var found = lines.Select((line, index) => (Line: line, Number: index + 1)).Where(line => line.Line.Contains('@', StringComparison.Ordinal)).ToList();
-        Assert.True(found.Count == 0, "THIRD-PARTY-NOTICES.md holds an \"@\":\n" + string.Join('\n', found.Select(line => $"{line.Number}: {line.Line}")));
+        var outside = new List<string>();
+        var fenced = false;
+        for (var index = 0; index < lines.Length; index++)
+        {
+            if (lines[index].StartsWith("```", StringComparison.Ordinal))
+            {
+                fenced = !fenced;
+            }
+            else if (!fenced && lines[index].Contains('@', StringComparison.Ordinal))
+            {
+                outside.Add($"{index + 1}: {lines[index]}");
+            }
+        }
+
+        Assert.True(outside.Count == 0, "THIRD-PARTY-NOTICES.md holds an \"@\" outside a fenced block:\n" + string.Join('\n', outside));
+        var found = lines.SelectMany(line => EmailAddress().Matches(line)).Select(match => match.Value).Distinct(StringComparer.Ordinal).Order(StringComparer.Ordinal);
+        Assert.Equal(CopyrightAddresses.Order(StringComparer.Ordinal), found);
     }
+
+    /// <summary>
+    /// The e-mail addresses that the copyright lines of <c>THIRD-PARTY-NOTICES.md</c> carry, each as
+    /// its source writes it: Tmds.DBus' <c>COPYING</c>, zlib's <c>LICENSE</c> in Chromium's copy,
+    /// Oniguruma's notice in Onigwrap's package and the yaml grammar's manifest in TextMateSharp.Grammars.
+    /// </summary>
+    private static readonly string[] CopyrightAddresses =
+    [
+        "alp@atoker.com", "tom.deseyn@gmail.com", "jloup@gzip.org", "madler@alumni.caltech.edu", "kkosako0@gmail.com", "fichtefoll2@googlemail.com",
+    ];
+
+    [GeneratedRegex(@"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", RegexOptions.CultureInvariant)]
+    private static partial Regex EmailAddress();
 
     /// <summary>The path of a file of the repository, from the root the build names.</summary>
     private static string RepositoryPath(string relative) =>
