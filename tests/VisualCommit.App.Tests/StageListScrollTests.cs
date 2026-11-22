@@ -14,12 +14,13 @@ namespace VisualCommit.App.Tests;
 /// <summary>
 /// A status read that keeps the number of rows of a scrolled stage list and changes some of them
 /// leaves the list where it was: its offset and its extent stay, and every row it keeps in view
-/// stays at its place in the window with its control, so that a press on such a row is still a
-/// click when its release comes after the read. The unstaged list of the real stage panel, 24 px a
-/// row, shows the fifteen files a.txt to o.txt, each modified; the window is short enough that it
-/// scrolls. A row replaced at the top of the list's view used to leave an empty slot whose height
-/// Avalonia's layout left out, so that the rows below it moved up a row and the list's offset with
-/// them, or the list jumped to its top.
+/// stays at its place in the window, the same object with its control, so that a press on such a
+/// row is still a click when its release comes after the read. The unstaged list of the real stage
+/// panel, 24 px a row, shows the fifteen files a.txt to o.txt, each modified; the window is short
+/// enough that it scrolls. A row replaced at the top of the list's view used to leave an empty slot
+/// whose height Avalonia's layout left out, so that the rows below it moved up a row and the list's
+/// offset with them, or the list jumped to its top; the stage lists' rows, all of one height, are
+/// now removed and inserted again (<c>RowCollection.ReplaceChanged</c>).
 /// </summary>
 public class StageListScrollTests
 {
@@ -53,6 +54,19 @@ public class StageListScrollTests
             change: repo => repo.DeleteFile("a.txt"),
             changed: ["a.txt"],
             watched: "d.txt");
+    }
+
+    [AvaloniaFact]
+    public async Task A_press_on_a_row_in_view_is_still_a_click_when_a_read_changes_the_top_row_before_its_release()
+    {
+        // a.txt, the top row in view under an offset smaller than a row, is deleted between the
+        // press on c.txt's row and its release.
+        await AssertReadKeepsTheListAsync(
+            offset: 12,
+            change: repo => repo.DeleteFile("a.txt"),
+            changed: ["a.txt"],
+            watched: "d.txt",
+            pressed: "c.txt");
     }
 
     [AvaloniaFact]
@@ -102,11 +116,12 @@ public class StageListScrollTests
     /// The app on a repository whose unstaged list shows <see cref="Shown"/>, scrolled to
     /// <paramref name="offset"/>; then <paramref name="change"/> in the working tree and one status
     /// read. Asserts that the offset and the extent are as before, that every row in view before
-    /// that <paramref name="changed"/> does not name is at the same place in the window with the
-    /// same button, and that <paramref name="watched"/> is one of them. With no change given, the
-    /// last row in view is deleted.
+    /// that <paramref name="changed"/> does not name is at the same place in the window, the same
+    /// row with the same button, and that <paramref name="watched"/> is one of them. With no change
+    /// given, the last row in view is deleted. With <paramref name="pressed"/>, the mouse is pressed
+    /// on that file's row before the change and released after the read, and the release selects it.
     /// </summary>
-    private static async Task AssertReadKeepsTheListAsync(double offset, Action<TempRepo>? change, string[]? changed, string watched)
+    private static async Task AssertReadKeepsTheListAsync(double offset, Action<TempRepo>? change, string[]? changed, string watched, string? pressed = null)
     {
         using var repo = await FifteenChangedAsync();
         using var data = new TempDirectory("data");
@@ -136,6 +151,14 @@ public class StageListScrollTests
 
         Assert.True(before.ContainsKey(watched), $"{watched} is not in view: {string.Join(", ", before.Keys)}.");
         Assert.DoesNotContain(watched, changed!);
+        Point? pressedAt = null;
+        if (pressed is not null)
+        {
+            Assert.True(before.ContainsKey(pressed), $"{pressed} is not in view: {string.Join(", ", before.Keys)}.");
+            Assert.DoesNotContain(pressed, changed!);
+            pressedAt = app.BoundsOf(before[pressed].Button).Center;
+            app.PressMouse(pressedAt.Value);
+        }
 
         change(repo);
         await repository.RefreshStatusAsync();
@@ -169,9 +192,25 @@ public class StageListScrollTests
                 problems.Add(string.Create(CultureInfo.InvariantCulture, $"{path} at y {now.Y} for {row.Y}"));
             }
 
+            if (!ReferenceEquals(now.Row, row.Row))
+            {
+                problems.Add($"{path} is another row");
+            }
+
             if (!ReferenceEquals(now.Button, row.Button))
             {
                 problems.Add($"{path} has another button");
+            }
+        }
+
+        if (pressedAt is { } point)
+        {
+            app.ReleaseMouse(point);
+            await app.WaitForIdleAsync();
+            var selected = repository.Changes.Unstaged.Rows.Where(row => row.IsSelected).Select(row => row.Key).ToList();
+            if (selected is not [var only] || only != pressed)
+            {
+                problems.Add($"the press on {pressed} selected {(selected.Count == 0 ? "nothing" : string.Join(", ", selected))}");
             }
         }
 
@@ -183,24 +222,24 @@ public class StageListScrollTests
     private static ScrollViewer Scroller(ShellDriver app) =>
         app.FindByAutomationId(List).GetVisualDescendants().OfType<ScrollViewer>().First();
 
-    /// <summary>The file rows that meet the list's view, top to bottom: each one's place in the window and its own button.</summary>
-    private static Dictionary<string, (double Y, Button Button)> InView(ShellDriver app, ScrollViewer scroller)
+    /// <summary>The file rows that meet the list's view, top to bottom: each one's place in the window, its own button and its row.</summary>
+    private static Dictionary<string, (double Y, Button Button, ChangedFileRow Row)> InView(ShellDriver app, ScrollViewer scroller)
     {
         var view = app.BoundsOf(scroller);
-        var rows = new Dictionary<string, (double Y, Button Button)>(StringComparer.Ordinal);
+        var rows = new Dictionary<string, (double Y, Button Button, ChangedFileRow Row)>(StringComparer.Ordinal);
         foreach (var row in app.StageRows(List).OrderBy(row => app.BoundsOf(row).Y))
         {
             var bounds = app.BoundsOf(row);
-            if (bounds.Bottom > view.Top && bounds.Top < view.Bottom && row.DataContext is ChangedFileRow { Key: var key })
+            if (bounds.Bottom > view.Top && bounds.Top < view.Bottom && row.DataContext is ChangedFileRow { Key: var key } file)
             {
-                rows[key] = (bounds.Y, ShellDriver.RowButton(row, "StageFileRow"));
+                rows[key] = (bounds.Y, ShellDriver.RowButton(row, "StageFileRow"), file);
             }
         }
 
         return rows;
     }
 
-    private static string Describe(Dictionary<string, (double Y, Button Button)> rows) =>
+    private static string Describe(Dictionary<string, (double Y, Button Button, ChangedFileRow Row)> rows) =>
         string.Join(", ", rows.Select(entry => string.Create(CultureInfo.InvariantCulture, $"{entry.Key}@{entry.Value.Y}")));
 
     private static string Committed(string name) => name + "\n";

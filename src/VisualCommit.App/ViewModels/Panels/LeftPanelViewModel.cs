@@ -421,7 +421,8 @@ public partial class LeftPanelViewModel : ObservableObject
             }
         }
 
-        Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt));
+        // The headers are 30 px high and the other rows 26 (LeftPanelView).
+        Rows.ReplaceAll(rows, (shown, rebuilt) => shown.ShowsSameAs(rebuilt), rowsOfOneHeight: false);
     }
 
     /// <summary>

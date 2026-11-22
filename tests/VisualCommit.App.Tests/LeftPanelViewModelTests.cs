@@ -515,7 +515,7 @@ public class LeftPanelViewModelTests
         var remoteMain = before.IndexOf(Item(panel, "main", RefItemKind.RemoteBranch));
         Assert.True(remoteMain - search > 1, "No row lies between the two hidden branches' rows.");
         var changes = new List<(NotifyCollectionChangedAction Action, int Index)>();
-        panel.Rows.CollectionChanged += (_, e) => changes.Add((e.Action, e.Action == NotifyCollectionChangedAction.Remove ? e.OldStartingIndex : e.NewStartingIndex));
+        panel.Rows.CollectionChanged += (_, e) => changes.Add((e.Action, e.NewStartingIndex));
 
         oldGraph = false;
         panel.RefreshMarks();
@@ -523,16 +523,9 @@ public class LeftPanelViewModelTests
         Assert.Equal("feature/search is hidden in the graph", Item(panel, "search", RefItemKind.LocalBranch).NameToolTip);
         Assert.Equal("origin/main is hidden in the graph", Item(panel, "main", RefItemKind.RemoteBranch).NameToolTip);
 
-        // Only the two rows that show something new are replaced, each removed and its new row
-        // inserted at its index (RowCollection.ReplaceChanged says why not with a Replace): every
-        // other row is the one shown before, so the control of a row a press is on stays, and its
-        // release is still a click.
-        Assert.Equal(
-            [
-                (NotifyCollectionChangedAction.Remove, search), (NotifyCollectionChangedAction.Add, search),
-                (NotifyCollectionChangedAction.Remove, remoteMain), (NotifyCollectionChangedAction.Add, remoteMain),
-            ],
-            changes);
+        // Only the two rows that show something new are replaced: every other row is the one shown
+        // before, so the control of a row a press is on stays, and its release is still a click.
+        Assert.Equal([(NotifyCollectionChangedAction.Replace, search), (NotifyCollectionChangedAction.Replace, remoteMain)], changes);
         Assert.Equal(before.Count, panel.Rows.Count);
         for (var i = 0; i < before.Count; i++)
         {

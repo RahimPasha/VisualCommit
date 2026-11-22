@@ -7,7 +7,7 @@ using Xunit;
 namespace VisualCommit.App.Tests;
 
 /// <summary>
-/// <see cref="RowCollection{T}.ReplaceAll(IReadOnlyList{T}, Func{T, T, bool})"/> on its own: which
+/// <see cref="RowCollection{T}.ReplaceAll(IReadOnlyList{T}, Func{T, T, bool}, bool)"/> on its own: which
 /// rows a rebuild keeps, what it tells the view, and what the list holds afterwards. A rebuild with
 /// as many rows as before removes and inserts again each row that shows something new and keeps
 /// every other row, up to 64 such rows, and resets the list above that; a rebuild that changes the
@@ -23,7 +23,7 @@ public class RowCollectionTests
         var rebuilt = Rebuilt(before, 3, 15);
         var changes = Record(list);
 
-        list.ReplaceAll(rebuilt, Row.ShowSame);
+        list.ReplaceAll(rebuilt, Row.ShowSame, rowsOfOneHeight: true);
 
         Assert.Equal([(NotifyCollectionChangedAction.Remove, 3), (NotifyCollectionChangedAction.Add, 3), (NotifyCollectionChangedAction.Remove, 15), (NotifyCollectionChangedAction.Add, 15)], changes);
         AssertKept(before, list, changed: [3, 15]);
@@ -61,7 +61,7 @@ public class RowCollectionTests
         var rebuilt = Rebuilt(before, changed);
         var changes = Record(list);
 
-        list.ReplaceAll(rebuilt, Row.ShowSame);
+        list.ReplaceAll(rebuilt, Row.ShowSame, rowsOfOneHeight: true);
 
         Assert.Equal(changed.SelectMany(index => new[] { (NotifyCollectionChangedAction.Remove, index), (NotifyCollectionChangedAction.Add, index) }), changes);
         AssertKept(before, list, changed);
@@ -72,7 +72,7 @@ public class RowCollectionTests
         var more = Rebuilt(longer.ToList(), [.. Enumerable.Range(0, 65).Select(i => 1 + (2 * i))]);
         var resets = Record(longer);
 
-        longer.ReplaceAll(more, Row.ShowSame);
+        longer.ReplaceAll(more, Row.ShowSame, rowsOfOneHeight: true);
 
         Assert.Equal([(NotifyCollectionChangedAction.Reset, -1)], resets);
         Assert.Equal(more, longer);
@@ -88,7 +88,7 @@ public class RowCollectionTests
         List<Row> rebuilt = [Copy(before[0]), Copy(before[1]), .. before.Skip(3).Take(4).Select(Copy), new Row("n", 0), .. before.Skip(7).Select(Copy)];
         Assert.Equal(before.Count, rebuilt.Count);
 
-        list.ReplaceAll(rebuilt, Row.ShowSame);
+        list.ReplaceAll(rebuilt, Row.ShowSame, rowsOfOneHeight: true);
 
         Assert.Equal(rebuilt, list);
         Assert.Same(before[0], list[0]);
@@ -104,7 +104,7 @@ public class RowCollectionTests
         List<Row> rebuilt = [Copy(before[0]), Copy(before[1]), new Row("x", 0), new Row("y", 0), new Row("z", 0), Copy(before[4]), Copy(before[5])];
         var changes = Record(list);
 
-        list.ReplaceAll(rebuilt, Row.ShowSame);
+        list.ReplaceAll(rebuilt, Row.ShowSame, rowsOfOneHeight: true);
 
         Assert.Equal(
             [
@@ -126,7 +126,7 @@ public class RowCollectionTests
         var before = list.ToList();
         var changes = Record(list);
 
-        list.ReplaceAll([.. before.Select(Copy)], Row.ShowSame);
+        list.ReplaceAll([.. before.Select(Copy)], Row.ShowSame, rowsOfOneHeight: true);
 
         Assert.Empty(changes);
         AssertKept(before, list, changed: []);
