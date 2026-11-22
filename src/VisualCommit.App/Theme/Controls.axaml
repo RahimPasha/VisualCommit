@@ -146,21 +146,44 @@
          view underlines its text while it is hovered or focused (the sign-in dialogs' tokenLink,
          About's links). Disabled (Azure DevOps' token link while its box gives no organization):
          the disabled text colour and the arrow cursor, so that it invites no click that does
-         nothing. Moved unchanged from the sign-in dialog, the first view to use it. -->
+         nothing. Moved from the sign-in dialog, the first view to use it.
+         The keyboard focus (:focus-visible) is a frame round the text in the colours of the
+         theme's frame (2 px, and 1 px inside it), drawn outside the button's bounds: the theme's
+         own frame lay on the bounds, which are the text's line box, and covered the first and last
+         letters and the underline (phase 8a's A1, a1b). The text's ink reaches the line box's left
+         and right, so the frame keeps 1 px clear of it there; the line box itself keeps the
+         letters 2 px clear of the frame above and the underline 1 px below. FocusFrame takes no
+         room: its negative margin gives back what its borders and padding take, so nothing
+         moves; it reaches 4
+         outside the bounds left and right and 3 above and below, so the button does not clip and
+         neither may what holds it (GitLab's two links lie 4 apart). Without the focus its borders
+         have no brush, so they draw nothing and take no clicks. -->
     <ControlTheme x:Key="VcLinkButton" TargetType="Button">
       <Setter Property="Background" Value="Transparent" />
       <Setter Property="Foreground" Value="{DynamicResource VcAccentBrush}" />
       <Setter Property="Padding" Value="0" />
       <Setter Property="Cursor" Value="Hand" />
+      <Setter Property="FocusAdorner" Value="{x:Null}" />
+      <Setter Property="ClipToBounds" Value="False" />
       <Setter Property="Template">
         <ControlTemplate>
-          <ContentPresenter Name="PART_ContentPresenter"
-                            Background="{TemplateBinding Background}"
-                            Padding="{TemplateBinding Padding}"
-                            Content="{TemplateBinding Content}"
-                            ContentTemplate="{TemplateBinding ContentTemplate}" />
+          <Border Name="FocusFrame" Margin="-4,-3" BorderThickness="2">
+            <Border Name="FocusFrameInner" BorderThickness="1" Padding="1,0">
+              <ContentPresenter Name="PART_ContentPresenter"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}" />
+            </Border>
+          </Border>
         </ControlTemplate>
       </Setter>
+      <Style Selector="^:focus-visible /template/ Border#FocusFrame">
+        <Setter Property="BorderBrush" Value="{DynamicResource SystemControlFocusVisualPrimaryBrush}" />
+      </Style>
+      <Style Selector="^:focus-visible /template/ Border#FocusFrameInner">
+        <Setter Property="BorderBrush" Value="{DynamicResource SystemControlFocusVisualSecondaryBrush}" />
+      </Style>
       <Style Selector="^:disabled">
         <Setter Property="Foreground" Value="{DynamicResource VcTextDisabledBrush}" />
         <Setter Property="Cursor" Value="Arrow" />

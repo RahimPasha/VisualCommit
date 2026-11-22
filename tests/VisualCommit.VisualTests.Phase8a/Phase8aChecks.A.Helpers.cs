@@ -295,6 +295,25 @@ public sealed partial class Phase8aChecksA
         }
     }
 
+    /// <summary>
+    /// A link focused by the keyboard in <paramref name="focused"/> against itself in
+    /// <paramref name="unfocused"/>, a picture of the same screen without its focus (A1's step 9
+    /// against a1a), by <see cref="LinkFrame"/>: its text's ink all as there, the first and last
+    /// letters too; the underline under it in the accent across the text; Fluent's frame
+    /// (<c>SystemControlFocusVisualPrimaryBrush</c>, part K's conventions: Fluent's own colours)
+    /// whole on four sides, outside the text.
+    /// </summary>
+    private static void AssertFramedLink(ShellDriver app, Screenshot unfocused, Screenshot focused, string id)
+    {
+        var colours = ColoursOf(app);
+        Assert.True(
+            app.Window.TryFindResource("SystemControlFocusVisualPrimaryBrush", app.Window.ActualThemeVariant, out var resource) && resource is ISolidColorBrush,
+            "The theme has no SystemControlFocusVisualPrimaryBrush.");
+        var frame = ((ISolidColorBrush)resource!).Color;
+        var problems = LinkFrame.Problems(unfocused, focused, app.BoundsOf(TextOf(InSettings<Button>(app, id))), colours.Accent, colours.Panel, frame, id);
+        Assert.True(problems.Count == 0, string.Join('\n', problems));
+    }
+
     private static TextBlock TextOf(Button link) => link.GetVisualDescendants().OfType<TextBlock>().Single();
 
     private static bool IsUnderlined(TextBlock block) =>
