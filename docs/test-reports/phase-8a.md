@@ -4149,13 +4149,14 @@ palette's scroll thumb, x 837–838, in six. Of the 1,220 earlier scripted pictu
 files and 143 changed, none in size. 90 changed only inside their expected regions, and none of the 93
 expected stayed unchanged. The other 53 are 3 that changed outside their regions too
 (`k10a-palette-commands`, `l31c-palette-light`, `l31e-settings-git-light`) and 50 named in no
-expectation. Five inspectors read each of the 53 by its pixels, reference beside new (the workflow
-`phase8a-wave3-pictures`, run `wf_2349d4b8-a4a`, with the new pictures' inspection below: 10 agents,
-1.65M tokens; the crops under `D:/Projects/Personal/phase8-work/wave3/inspect/`): each is a picture
-that varies from run to run by nature, and none shows a change of wave 3. In the three that changed
-outside their regions, the change inside them is the design's: the palette's thumb ends at y 266, not
-269, in `k10a` and `l31c`, for one more command, and `About` stands under `Accounts`, dimmed behind the
-merge tool dialog's backdrop, in `l31e`.
+expectation. Five inspectors read the 53 by their pixels, eight to twelve pictures each, reference
+beside new (the workflow `phase8a-wave3-pictures`, run `wf_2349d4b8-a4a`, with the new pictures'
+inspection below: 10 agents, 1.65M tokens; the crops under
+`D:/Projects/Personal/phase8-work/wave3/inspect/`): each is a picture that varies from run to run by
+nature, and none shows a change of wave 3. In the three that changed outside their regions, the
+change inside them is the design's: the palette's thumb ends at y 266, not 269, in `k10a` and
+`l31c`, for one more command, and `About` stands under `Accounts`, dimmed behind the merge tool
+dialog's backdrop, in `l31e`.
 
 - A text box's caret, one column of 16 pixels at the start of an empty box or after its last letter,
   drawn in one picture and not in the other (22): phase 3's `21a`, `21b3`; phase 5's `f10a`, `f10c`,
