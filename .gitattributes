@@ -7,6 +7,10 @@
 # The icon's tool writes its manifest with LF on every machine, so the checkout keeps LF too and a
 # run of the tool with nothing changed leaves the file as it is.
 assets/brand/generated/manifest.json text eol=lf
+# The vendors' own notice files are kept byte for byte as each vendor ships them (two with CRLF,
+# two with LF), so git changes no line end in them: the app embeds them, and their SHA-256 stays the
+# vendor's on every machine (phase 8a's design 8.2).
+notices/** -text
 
 *.png binary
 *.ico binary

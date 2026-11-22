@@ -70,7 +70,7 @@ public partial class Phase6RealWindowPass
         AssertOneLogLine(app, mark, "] " + PartK.PaletteOpened(PartK.Ops));
         Compare(app, "k10a-palette-commands");
 
-        // PageDown three times: rows 11, 22 and 32 (clamped), each whole in view; Down wraps to 0, Up back to 32.
+        // PageDown three times: rows 11, 22 and 33, each whole in view; Down wraps to 0, Up back to 33.
         foreach (var row in PartK.PageDownRows)
         {
             app.PressKeys(VirtualKeyShort.NEXT);

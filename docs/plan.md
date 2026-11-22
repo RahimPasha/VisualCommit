@@ -218,7 +218,9 @@ too, but they do not replace it.
    the last commit it ran on stands for its own (after two such fixes in a row, still the commit
    of the last default run, not the commit just before), when
    `git diff --stat <that commit> <this one> -- . ':(exclude)tests/VisualCommit.RealWindowTests' ':(exclude)docs' ':(exclude)*.md'`
-   prints nothing and the list of pictures written after the round before
+   prints nothing, `git diff --stat <that commit> <this one> -- LICENSE THIRD-PARTY-NOTICES.md notices`
+   prints nothing too (the app embeds those files since phase 8a's About, and `*.md` leaves two
+   of them out of the first command, D433) and the list of pictures written after the round before
    (`phase-N-pictures.sha256`, checked as the Commands in `CLAUDE.md` say, before the pass) shows
    the scripted pictures unchanged; the list is written again after the pass. Phase 6's rounds 3 and 4 changed only `RealApp.cs` and still ran the
    default run again, about 1.8 hours. A second exception (D335): a commit after the counted round
