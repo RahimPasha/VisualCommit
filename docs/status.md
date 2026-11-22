@@ -349,6 +349,16 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
 `e04762b`: the sixth, "ubuntu 22.04 container, git 2.34 (the floor)", did not fail the run until
 `bba59c7`, which made it required after its first green run.
 
+- [45035307735](https://github.com/RahimPasha/VisualCommit/actions/runs/45035307735), for `cb31275`
+  (the two CI fixes' merges `70a8fc0` and `809b77f`, the bounds `0bfbe92`, architecture.md):
+  **success in all six jobs**. `windows-latest`: 8,457 tests, 8,452 passed, 5 skipped, Test step 37
+  min 56 s of 70. `macos-latest`: 8,454 tests, 8,451 passed, 3 skipped, Test step 22 min 32 s of 70.
+  `ubuntu-latest`: 8,454 tests, 8,450 passed, 4 skipped, Test step 7 min 26 s. The floor's job (git
+  2.34.1) 8,454 tests with 4 skipped, Test step 5 min 36 s; the two containers 8,454 tests with 4
+  skipped each, Test steps 7 min 43 s with Microsoft's installer and 6 min 40 s with Ubuntu's
+  packages, and the Secret Service's test passed in both. The Windows and macOS keychain steps
+  passed. Nine tests more than the run before: `LinkFrameTests`' seven and the two of `48f403c`. The
+  logs are in `D:/Projects/Personal/phase8-work/wave3/ci-45035307735/`.
 - [45019059991](https://github.com/RahimPasha/VisualCommit/actions/runs/45019059991), for `fcf8c1e`
   (the link frame's fix): **failed in two jobs, each on one test**; the four Linux jobs succeeded.
   `macos-latest`: 8,445 tests, 1 failed, 3 skipped, Test step 27 min 42 s of 70; the failure is
@@ -359,8 +369,9 @@ Phase 8a's runs on `phase/8a-release-readiness`, the newest first. CI has six jo
   step 39 min 15 s of 70; the failure is `AccessibleNameSweepTests.State_05_the_ops_tab`, `Timed out
   after 60 s waiting for Main work selected.` `ubuntu-latest` 8,445 tests with 4 skipped (Test step
   6 min 9 s); the floor's job and the two containers succeeded (Test steps 5 min 57 s, 4 min 55 s
-  with Microsoft's installer and 7 min 39 s with Ubuntu's packages). Both failures are with fixers
-  (Notes, "Wave 3's close"); the next run is the one of their merges with the bounds' commit.
+  with Microsoft's installer and 7 min 39 s with Ubuntu's packages). Both are fixed (Notes, "Wave
+  3's close"): the pixel test's rule was wrong on macOS, and the app lost a click on Windows; the
+  next run, 45035307735, is green.
 - [44982678813](https://github.com/RahimPasha/VisualCommit/actions/runs/44982678813), for `85e2884`
   (wave 3's last merges: §9, the fetch hold's fix, §8's fixes after its merge): all six jobs
   succeeded at the first attempt, none failed a test. `windows-latest` 8,436 tests with 5 skipped,
@@ -690,37 +701,45 @@ and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the t
 ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
 its merge.
 All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge
-`85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`), the wave's docs (`b593097`)
-and the link frame's fix (`fcf8c1e`). **Step 16 is under way**; what is done and what is left, as of
-2026-11-22 06:20 (the details in Notes, "Wave 3's close"). Done: the lagged list and the whole
-default run on `85e2884`'s code; the pictures compared with wave 2's references and inspected; the
-one fault they showed (`a1b-about-link-focus`) fixed and merged; the new references
-(`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures); wave 3's worktrees
-removed; three "before" series, two probes of the start with several tabs, two panels; **D457**: the
-bounds, the reload (M5, M6) and Pull's reads (M7) to the backlog, and **the restore order as ruling
-76, a change in wave 4**; plan.md's Backlog and risk 10 and CLAUDE.md's row and note for the series.
-Under way: **(a) CI's run 45019059991 on the link frame's merge failed in two jobs, each on one
-test** (the CI section): on macOS one case of the new `LinkFocusFrameTests`, on Windows
-`AccessibleNameSweepTests.State_05_the_ops_tab`, a timeout. A fixer with an independent verifier
-works on each, up to three rounds, in `D:/Projects/Personal/vc-wt/p8a-ci-underline`
-(`wip/p8a-ci-underline`) and `D:/Projects/Personal/vc-wt/p8a-ci-sweep05` (`wip/p8a-ci-sweep05`),
-both made from `1afb980` (run `wf_0f64d026-e39`; notes under
-`D:/Projects/Personal/phase8-work/wave3/ci-fixes/`). When a track is sound the lead merges it and
-runs its classes on the merged tree. Left for the lead, in this order: (b) the bounds in a commit of
-their own, six fields of `Phase8aPerformance` (M2 6,100 ms; M4 370 MB after the load and 440 MB at
-the peak; M5 4,600 ms; M6 8,800 ms; M7 630 ms; M3's stays unset, D457), made with the CI fixes'
-merges so that one push starts one CI run; that run read and recorded, above all its macOS and
-Windows jobs. (c) The report and the design by the lead's brief
-`D:/Projects/Personal/phase8-work/wave3/close-docs-brief.md` (an editor for each, an independent
-check, repairs; in a worktree, merged by the lead): "Wave 3's comparison with wave 2's references",
-the section of the performance series with its table, the row of the Delivers item, design 1.17's
-and 10.3.6's notes and ruling 76 in section 13. Then step 16 is ticked and **the owner is asked for
-the week's share before wave 4** ("Waiting on the owner"), which now holds the restore order's
-package (ruling 76: a design section, the build with its tests first, a review, the alternated
-series, about half an hour of the desktop, and the probe) beside §11, §12 and the review. The
-owner's Narrator listen can come at any time before the review of step 19; it is best not taken
-beside a test run. Two timeouts of older tests are open and are step 19's to look at unless one
-comes again sooner (Notes, "Two timeouts").
+`85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`), the wave's docs (`b593097`),
+the link frame's fix (`fcf8c1e`), the two fixes of what CI's run on that merge found (`70a8fc0`,
+`809b77f`) and the performance bounds (`0bfbe92`). **Step 16 is under way**; what is done and what
+is left, as of 2026-11-22 08:50 (the details in Notes, "Wave 3's close"). Done: the lagged list and
+the whole default run on `85e2884`'s code; the pictures compared with wave 2's references and
+inspected; the fault they showed (`a1b-about-link-focus`) fixed and merged; the new references
+(`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures); three "before"
+series, two probes, two panels and **D457** (the bounds, two backlog rows, **the restore order as
+ruling 76, a change in wave 4**); CI's two failures on the link frame's merge fixed, and **CI's run
+45035307735 on `cb31275` green in all six jobs**; the report's and the design's sections on wave 3's
+close merged (`c914fb7`, the lead's wording fixes `b6c9e7b`). Under way: **(a) the row list's scroll
+fix.** A read-only review of `809b77f`'s app change (`RowCollection`, which now replaces single
+rows) traced from Avalonia's source a fault that change brought and nobody has seen yet: a scrolled
+stage list whose top visible rows are replaced can end rows short or jump to its top. A fixer, tests
+first, and an independent verifier work on it, up to three rounds, in
+`D:/Projects/Personal/vc-wt/p8a-rows-scroll` (`wip/p8a-rows-scroll`, made from `b6c9e7b`; run
+`wf_6702b8e4-d46`; notes under `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-scroll/`, the
+review's under `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-review/`), with direct tests of
+`RowCollection` and a pull request row that compares its whole record. Left for the lead, in this
+order: when the fix is sound, its merge, its classes on the merged tree, the push, CI's run read and
+recorded. (b) **The whole default run** through `scripts/heavy-run.sh` on the merged code, no agent
+building beside it, and every scripted picture against wave 3's references (the list
+`D:/Projects/Personal/phase8-work/references/wave3-pictures.sha256`, its `/scripted/` lines checked
+with `sha256sum -c --quiet` at the repo root), because `RowCollection` serves the left panel and the
+stage lists of every walk-through. A first such run, on `cb31275`, was stopped after 49 minutes when
+the review's finding came, and counts for nothing. (c) The docs: in the report a subsection on CI's
+two failures, their fixes, the review and the scroll fix, part A's convention on the underline's
+rule (a piece's faint end beside a letter), and U2/U3's step 9, which now waits for the solo's graph
+reload, with its entry under "Changed in this report after its first commit"; in the design 1.17's
+note and what its checkers left for the lead (0.6 and 13.3 still say 12 to 18 minutes for a series;
+13.1's opening and 0.2 still say 75 rulings; ruling 65 does not say that D457 amends it; 8.6 still
+calls `VcLinkButton` "moved unchanged"; 13.3 has no row for the restore package's series). (d) The
+worktrees removed (`p8a-ci-underline`, `p8a-ci-sweep05`, `p8a-close-docs`, `p8a-rows-scroll`). Then
+step 16 is ticked and **the owner is asked for the week's share before wave 4** ("Waiting on the
+owner"), which holds the restore order's package (ruling 76: a design section, the build with its
+tests first, a review, the alternated series, about half an hour of the desktop, and the probe)
+beside §11, §12 and the review. The owner's Narrator listen can come at any time before the review
+of step 19; it is best not taken beside a test run. Two timeouts of older tests are open and are
+step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -939,9 +958,10 @@ every commit.
   without the keyboard's focus. Round 1's verifier found that the frame, then built round the
   content, took clicks up to 4 px outside the link; round 2's that no test held the frame to the
   keyboard's focus; round 3's found no fault. `LinkFocusFrameTests` (App.Tests, 12 cases; the helper
-  `LinkFrame` in `VisualCommit.Testing`) and A1's step 9 (`AssertFramedLink`) fail on each of four
-  mutations: the old theme, no air beside the text, a frame that is hit, `:focus` for
-  `:focus-visible`. The lead's checks on the merged tree (its code is the verified `5177cec`'s: the
+  `LinkFrame` in `VisualCommit.Testing`) and A1's step 9 (`AssertFramedLink`) hold it: each of four
+  mutations fails some of them (the old theme: seven cases and A1's step 9; no air beside the text:
+  seven cases; a frame that is hit: the pointer's case; `:focus` for `:focus-visible`: the five
+  cases of a click). The lead's checks on the merged tree (its code is the verified `5177cec`'s: the
   diff outside `docs` prints nothing): `LinkFocusFrameTests` 12 of 12, part A's three classes 13 of
   13, `Phase7aChecksA` 8 of 8, `Phase7bChecksA` 9 of 9; of their pictures only `a1b` differs from
   wave 3's references, in (477,372)-(714,394), and 7a's `a09b-git-refused` in 2 pixels by one level
@@ -1021,7 +1041,7 @@ every commit.
   after 2,105 (the warm-up), 2,557, 2,686 and 2,310 ms, then 1,771, 2,189 and 2,813 ms; beside nine
   more such tabs after 6,644, 5,044 and 5,219 ms; beside nine tabs of 2,000 commits after 4,287,
   6,145 and 7,763 ms. The delay lies before the active tab's refs are read (`refs read after` 3.2 to
-  6.2 s instead of 0.7 to 1.4 s; the log's first commits were ready at once after that): in the
+  6.2 s instead of 0.7 to 1.4 s; the log's first commits followed 0 to 1.8 s after that): in the
   storm of process starts, not in the nine large walks. With ten large tabs the window's thread
   answered after up to 435, 1,148 and 483 ms (13 to 19 answers of 50 ms or more), with nine small
   ones after up to 304, 420 and 581 ms, with one tab after up to 164 to 349 ms. All loads had ended
@@ -1043,6 +1063,78 @@ every commit.
   in this run's five other jobs. Neither is waved through: each has a fixer who must find the cause
   and a verifier who defaults to fault ("Next step", (a)); the failed log's lines are in
   `D:/Projects/Personal/phase8-work/wave3/ci-45019059991-failed.log`.
+  **The two CI fixes** (run `wf_0f64d026-e39`: 4 agents, 1.06M tokens; a fixer and an independent
+  verifier each, both sound at the first round;
+  `D:/Projects/Personal/phase8-work/wave3/ci-fixes-result.json`, notes under
+  `wave3/ci-fixes/underline/` and `wave3/ci-fixes/sweep05/`). **macOS**: the rule was wrong, not the
+  app. Avalonia 12.1.3 draws an underline in pieces that stop a line's thickness short of each
+  letter that crosses it (`TextDecoration.Draw`, read at the tag), between fractional positions, so
+  the column where a piece ends holds whatever part of a pixel the piece covers: in "Or create a
+  legacy token, filled in" the piece before the y of "legacy" ends at 472.332. On Windows and Linux
+  that column lies under the y's ink; on macOS the y's ink is one column narrower (its unfocused
+  picture, 7b's `a05a`, gives CI's 182 clear columns exactly), and the end shows. `LinkFrame` now
+  excuses one faint column directly beside a letter that crosses the underline's rows, when neither
+  neighbour is a faint clear column; two side by side, one away from the letters, or any colour that
+  is not the link's over the background still fail; its message names each failing column's share
+  per row and its neighbours. `LinkFrameTests` (App.Tests, 7 cases on synthetic pictures; 5 fail on
+  the helper as it was). Only test code changed (`8f50a34`, merged `70a8fc0`). The verifier rebuilt
+  CI's message character for character from a macOS-like pair of pictures on the old helper.
+  **Windows**: the app was at fault. A hide reloads the graph outside the operations queue; the
+  graph without the branch, when swapped in, marks the hidden branch's two rows in the left panel
+  (the tooltip "is hidden in the graph"), and `RowCollection.ReplaceAll(rows, showSame)` then
+  removed and inserted every row between the two, so a row pressed before the swap and released
+  after it had lost its control and its click (phase 1's partial replacement, `bc05e58`, met through
+  phase 5's marks). `RowCollection` now compares row with row when the changed part keeps its length
+  and replaces only the rows that show something new (`48f403c`, with two tests that failed first:
+  `LeftPanelViewModelTests.A_rebuild_that_marks_two_rows_replaces_those_two_alone_and_keeps_every_row_between_them`,
+  `HideAndSoloTests.A_click_on_a_branch_whose_release_comes_after_the_hides_reload_still_selects_its_commit`);
+  `State_05` and `Check_U2_U3`'s step 9 now wait for the hide's and the solo's graph reload
+  (`WaitForGraphReloadAsync`; `996b9fc`; no assertion changed); merged `809b77f`. It was reproduced
+  only by forcing the timing (30 plain runs, 15 lagged and 20 under load all passed); the verifier
+  got CI's message with `State_05`'s own steps and a held `git log`. The lead's checks on the merged
+  tree (`wave3/ci-fixes/merge/summary.txt`): the root build and the real-window project's Release
+  build without a warning; `LinkFocusFrameTests` with `LinkFrameTests` 19 of 19; eight App.Tests
+  classes round the rows 110 of 110; `Phase8aChecksA` 5 of 5; `AccessibleNameSweepTests` with
+  `Phase8aChecksU` 17 of 17. With them the bounds (`0bfbe92`) and architecture.md's paragraph
+  (`cb31275`), one push: **CI's run 45035307735 is green in all six jobs**, macOS's case for
+  `SignInLegacyTokenLink` and Windows' `State_05` among them (the CI section).
+  **The docs of wave 3's close** (run `wf_58c57037-f8d`: 11 agents, 2.74M tokens; an editor, a
+  checker and repairs for each document;
+  `D:/Projects/Personal/phase8-work/wave3/close-docs-result.json`): merged as `c914fb7`. The design
+  was sound at its second check; the report's third check found one sentence (how many inspectors
+  read each changed picture), which is corrected. The lead's `b6c9e7b` took the checkers' wording
+  notes for the report, named the bounds' commit there and corrected CLAUDE.md's note (it was the
+  second series that met Office's updater). What the checkers left for the lead in the design is in
+  "Next step", (c).
+  **The review of the row list's change** (run `wf_0fce5560-752`: 6 agents, 1.24M tokens, read only,
+  three lenses and a skeptic per finding;
+  `D:/Projects/Personal/phase8-work/wave3/rows-review-result.json`, readable in
+  `wave3/ci-fixes/rows-review/findings.txt`). Asked for by the lead because `809b77f` changed app
+  code that the left panel and the stage lists of every walk-through use. Held by its skeptic, each
+  from the code and Avalonia 12.1.3's source, nothing run: **(A), new with `48f403c`**: a `Replace`
+  on the first realized row of a virtualizing list leaves an empty slot whose height Avalonia's
+  anchor walk skips, so in a scrolled stage list whose top visible rows change in a status read that
+  keeps the count, the offset and extent end rows short, or, when the offset is smaller than the
+  shift, the list jumps to its top and every visible row's control is recycled, which loses the very
+  click the change set out to keep; the path before sent `Remove` and `Insert`, which do not do this
+  for rows of one height. **(C), older, small**: a pull request row compares what it shows, not its
+  whole record, so a kept row can hold an old record (a fork renamed on GitHub), and a double-click
+  plans its checkout from the row's record while the menu takes the hosting list's. **(D), older,
+  for step 19's list**: Enter or Space on a section header or a folder of the left panel, or on a
+  tree folder of a file list, toggles it and drops the keyboard focus, because the toggled row is
+  rebuilt and its focused button leaves the tree; nothing gives the focus back
+  (`WorkingChangesView.OnRowButtonClick` does so for a row's Stage, Unstage and Discard); the next
+  Tab starts at the window's first stop; no test presses Enter or Space there
+  (`wave3/ci-fixes/rows-review/verify-bindings-1/notes.txt` has a fix sketch and a test sketch).
+  Also noted: the same-length path is only partly pinned by tests, and `RowCollection` has no test
+  of its own. (A), the tests and (C) are the fix package of "Next step", (a); the whole default run
+  that the lead had started on `cb31275` at 07:54 for the pictures was stopped at 08:43 for it (962
+  of 1,235 pictures written by then, 27 of them not the references' files, all of names that differ
+  from run to run; the run counts for nothing). **More for step 19's list**, from the fixers and
+  reviewers: a rebuild that changes a list's length while rows change on both sides of a pressed row
+  still loses that press; the row that itself shows something new still loses its press, its focus
+  and its tooltip at a rebuild; other phases' walk-throughs were not searched for a hide or a solo
+  followed only by `WaitForIdleAsync`, which does not wait for the reload.
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
