@@ -678,37 +678,37 @@ and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the t
 ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
 its merge.
 All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge
-`85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`) and the wave's docs
-(`b593097`). **Step 16 is under way**; what is done and what is left, as of 2026-11-22 01:40 (the
-details in Notes, "Wave 3's close"). Done: the lagged list (seven commands, all passed) and the
-whole default run on `85e2884`'s code (8,436 tests, 8,431 passed, 5 skipped, none failed, 2 h 9 min
-24 s); the pictures compared with wave 2's references, the 53 changes outside §8's regions each read
-by its pixels and each a kind that differs from run to run; the 15 new pictures of parts A and U
-inspected, 14 as the report expects and **one fault, `a1b-about-link-focus`** (a focused link's
-frame lies over its text); the new references (`D:/Projects/Personal/phase8-work/references/wave3/`,
-1,235 scripted pictures); the "before" series (five runs each, 00:47), in which the triggers of M5,
-M6 and M7 fired; a probe that found no stall of the window during a reload. Under way, each in the
-background: (a) the link frame's fix in `D:/Projects/Personal/vc-wt/p8a-linkframe`
-(`wip/p8a-linkframe`; run `wf_939ded6a-40e`: a fixer with tests first, then an independent verifier,
-up to three rounds). When it is sound the lead merges it, runs part A's classes and the sign-in
-dialogs' checks of 7a and 7b on the merged tree, compares their pictures with wave 3's references
-(only `a1b` may change, around the link), pushes and reads CI. (b) The panel on the three triggers
-(run `wf_eb13d24d-e57`: four analysts and three judges, read only; its notes under
-`D:/Projects/Personal/phase8-work/wave3/perf-triggers/`), after which the lead rules on M5, M6 and
-M7 in a new decision (D457): a fix package in wave 4, or a backlog row with its reason (design
-10.3.6). Then, in this order: (1) a second "before" series at about 03:20, with the Release build
-made at least ten minutes before and no agent at work: the first ran M2 straight after a two-minute
-build, and its windows opened about 2 s later than M3's, which M3's trigger is read against (the
-owner let the series start when it is ready; about 8 minutes of the desktop; not between 02:00 and
-03:15, risk 10). (2) The bounds from the slowest run of both series, in a commit of their own
-(`Phase8aPerformance`'s seven fields; `PerformanceSeries.Bound` gives the rounding), pushed, CI
-read. (3) The report: "Wave 3's comparison with wave 2's references", the performance table, the
-link frame under "Found by the lead's inspection"; plan.md's risk 10 with the medians; CLAUDE.md's
-row for the series; design 1.17's note. (4) The worktrees of wave 3 removed as wave 2's were (the
-owner's word of 2026-11-20), the spike's with its branch (design 9.9). Then step 16 is ticked and
-the owner is asked for the week's share before wave 4. The owner's Narrator listen can come at any
-time before the review of step 19; it is best not taken beside a test run. Two timeouts of older
-tests are open and are step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
+`85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`), the wave's docs (`b593097`)
+and the link frame's fix (`fcf8c1e`). **Step 16 is under way**; what is done and what is left, as of
+2026-11-22 05:15 (the details in Notes, "Wave 3's close"). Done: the lagged list (seven commands,
+all passed) and the whole default run on `85e2884`'s code (8,436 tests, 8,431 passed, 5 skipped,
+none failed, 2 h 9 min 24 s); the pictures compared with wave 2's references and inspected; the one
+fault they showed (`a1b-about-link-focus`: a focused link's frame lay over its text) fixed with its
+tests first, checked in three rounds and merged (`fcf8c1e`, pushed); the new references
+(`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures, `a1b` the fix's);
+wave 3's seven worktrees removed and the spike's branch deleted; a probe that found no stall of the
+window during a reload; a panel's advice on the triggers of M5, M6 and M7 (the backlog for all
+three, M7 by two judges to one); two "before" series (00:47 and 04:59), **neither of them quiet
+throughout**: the first ran M2 straight after a build, and the second met Office's updater, an
+idle-triggered task, as M3 began. Read on its quiet take, M2 is 4,621 ms, and **M3's trigger fires
+as well** (6,759 ms against 1.25 times 4,621, which is 5,776). Under way: a read-only panel on M3
+(run `wf_23f00a94-3d2`: four analysts and three judges; its notes under
+`D:/Projects/Personal/phase8-work/wave3/perf-m3/`), and CI's run 45019059991 on `fcf8c1e` (its four
+Linux jobs had passed by 05:10, macOS and Windows were still running: read it and record it in the
+CI section). Left, in this order: (1) a third "before" series in a slot that Windows' Task Scheduler
+leaves free (the query is in Notes), with the Release build as it is (made 04:41), the tree clean
+and no agent at work; about 8 minutes of the desktop, which the owner let start when it is ready.
+(2) The lead's ruling on the four fired triggers as D457: M5, M6 and M7 to the backlog, M3 after its
+panel; plan.md's Backlog and risk 10 with the medians. (3) The bounds in a commit of their own
+(`Phase8aPerformance`'s seven fields; `PerformanceSeries.Bound` gives the rounding), from the runs
+that no named disturbance touched, pushed, CI read. (4) The report and the design by the lead's
+brief `D:/Projects/Personal/phase8-work/wave3/close-docs-brief.md` (an editor for each, an
+independent check, repairs; in a worktree, merged by the lead): "Wave 3's comparison with wave 2's
+references", a section for the performance series with its table, the row of the Delivers item,
+design 1.17's and 10.3.6's notes; CLAUDE.md's row for the series. Then step 16 is ticked and the
+owner is asked for the week's share before wave 4. The owner's Narrator listen can come at any time
+before the review of step 19; it is best not taken beside a test run. Two timeouts of older tests
+are open and are step 19's to look at unless one comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -917,6 +917,68 @@ every commit.
   log lines) was 36 ms, the 95th percentile at most 2.4 ms, none of 50 ms or more; idle, the longest
   was 25 ms. No stall was seen, which is what design 10.3.6 asks before the reload goes to the
   backlog.
+  **The link frame's fix** (merged `fcf8c1e`, 2026-11-22 04:40; run `wf_939ded6a-40e`: a fixer with
+  its tests first and an independent verifier, three rounds, 6 agents, 1.35M tokens; the account in
+  `D:/Projects/Personal/phase8-work/wave3/linkframe/result-rounds.txt`, as data in
+  `wave3/linkframe-result.json`). `VcLinkButton` (`Theme/Controls.axaml`) no longer uses the theme's
+  focus adorner: its template is a panel with the content and, over it, a frame that is never hit
+  (`IsHitTestVisible` false), 4 px outside the bounds left and right and 3 above and below, with
+  brushes only under `:focus-visible`; the button does not clip. Nothing moves and nothing is drawn
+  without the keyboard's focus. Round 1's verifier found that the frame, then built round the
+  content, took clicks up to 4 px outside the link; round 2's that no test held the frame to the
+  keyboard's focus; round 3's found no fault. `LinkFocusFrameTests` (App.Tests, 12 cases; the helper
+  `LinkFrame` in `VisualCommit.Testing`) and A1's step 9 (`AssertFramedLink`) fail on each of four
+  mutations: the old theme, no air beside the text, a frame that is hit, `:focus` for
+  `:focus-visible`. The lead's checks on the merged tree (its code is the verified `5177cec`'s: the
+  diff outside `docs` prints nothing): `LinkFocusFrameTests` 12 of 12, part A's three classes 13 of
+  13, `Phase7aChecksA` 8 of 8, `Phase7bChecksA` 9 of 9; of their pictures only `a1b` differs from
+  wave 3's references, in (477,372)-(714,394), and 7a's `a09b-git-refused` in 2 pixels by one level
+  at (350,206), the anti-aliasing it showed before. The reference `a1b` is now the fix's (SHA-256
+  `ad85f645…`, the list beside the references corrected). **For step 19's list**, from the
+  verifiers, none checked: `VcRadioButton` (`Theme/Dialogs.axaml`) builds its frame round its
+  content, so its frame probably takes clicks just outside the radio button while it has the
+  keyboard's focus; no check renders a link's frame at a scaling that is no whole number (at 150 %
+  the inner line could round into the line box); under GitLab's legacy token link the frame's top
+  lies 1 px from the token link's line box. Wave 3's worktrees are removed (seven, each clean and
+  merged, but for the spike's, whose branch `wip/p8a-uia-spike` is deleted as design 9.9 says; its
+  events are kept under `wave3/spike/`).
+  **The second series** (2026-11-22 04:59 on `fcf8c1e`, the Release build made at 04:41, the last
+  test run ended 04:47; 7 min 4 s, 433 s with the lock and the build's check;
+  `artifacts/perf/phase-8a/series-20261122-045928-fcf8c1e.txt`, a copy in
+  `D:/Projects/Personal/phase8-work/wave3/perf-before-2/`): M2 median 4,621 ms (4,570 to 4,872; the
+  windows opened after 2.7 to 3.0 s), so the first series' M2 was disturbed in all five runs; M3
+  9,367 ms (7,822 to 10,988; windows after 3.5 to 5.2 s; 787 to 811 MB); M4 286.5 MB after the load
+  (286.2 to 289.7) and 346.9 MB at the peak (346.3 to 348.3); M5 3,227.5 ms (3,057.6 to 3,573.9),
+  the reload line's median 2,928 ms; M6 5,932.8 ms (4,855.6 to 6,578.1), the reload line's median
+  3,004 ms; M7 464.6 ms (439.6 to 499.7). Windows' Task Scheduler shows why M3 is slower than in the
+  first series: the task `\Microsoft\Office\Office Automatic Updates 2.0` started at 05:00:45, as M2
+  ended and M3 began; it has an idle trigger, so a rested, untouched laptop invites it. Two small
+  `SoftLanding` tasks ran at 05:06:01, during M7. **So neither series is quiet throughout**, and
+  each measure has one take that no named disturbance touched: M2 in the second, M3 in the first, M4
+  to M6 in both; M7's two medians (326.7 and 464.6 ms) are both kept. On those, **M3's trigger
+  fires**: 6,759 ms against 1.25 times M2's 4,621 ms, 5,776 ms (with the updater running, 9,367 ms).
+  The first series had not shown it only because its own M2 was disturbed. A third series is taken
+  in a slot the scheduler leaves free. The query that lists what ran and what is due (PowerShell,
+  read only): `Get-ScheduledTask | Get-ScheduledTaskInfo` with `LastRunTime` since the series'
+  start, and `NextRunTime` within the next hour; on 2026-11-22 the tasks due between 05:17 and 06:00
+  were Zoom's updater (05:17), Visual Studio's VSIX update (05:24), Adobe's (05:28), Office's
+  Serviceability Manager (05:34), EasyDuplicateFinder (hourly at :42) and PowerENGAGE (05:46). **For
+  plan.md's risk 10 and CLAUDE.md's row**: look at the scheduler before a measured run, not only at
+  the clock.
+  **The panel on M5, M6 and M7** (run `wf_eb13d24d-e57`, 7 agents, 1.88M tokens, read only;
+  `D:/Projects/Personal/phase8-work/wave3/perf-triggers-result.json`): the reload (M5, M6) to the
+  backlog by all three judges: no stall was seen, about nine tenths of the reload is the one `git
+  log --date-order` of D47, and every change that would cut it amends D47 or D52; one cost for the
+  row: an operation that moves a ref keeps its running text until the reload ends, because the queue
+  awaits the refresh (`OperationQueue.cs:603-617`). Pull's settings reads (M7) to the backlog by two
+  judges to one: the batch saves 2 of a Pull's 23 git calls, about 0.2 s of a plain Pull on Windows,
+  nothing of Pull (rebase), and it rewrites the reader that decides how Pull integrates and about 19
+  earlier tests in 11 files; the third judge held that the threshold was set beforehand so that the
+  batch would follow. The lead's ruling goes into D457 with M3's. **For step 19's list**, two
+  readings of the code from that panel, neither verified by a test: `git config --type=bool --get`
+  on a key set in two scopes (a global `pull.ff=only` under a local `pull.ff=1`) may make the app
+  refuse a Pull that `git pull` would run (to be shown by a test on git 2.34.1 and 2.56); a scrolled
+  graph may shift by the rows a reload adds above.
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
