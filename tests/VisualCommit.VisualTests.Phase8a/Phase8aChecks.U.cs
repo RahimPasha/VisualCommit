@@ -178,16 +178,14 @@ public sealed class Phase8aChecksU : Phase8aChecks
 
         AutomationSweep.AssertNamed(app.Window, U.SweepResolver);
 
-        // Step 6: Esc, then the resolver closed. The double-click leaves the keyboard focus in the
-        // result, where the resolver takes Esc and does nothing (phase 4's 11.10), so a resolver
-        // still shown is closed by its close button, as phase 4's checks close it; its result is
+        // Step 6: Esc, then the close button. The double-click leaves the keyboard focus in the
+        // result, where the resolver takes Esc for itself and closes nothing (phase 4's 11.10), so
+        // the resolver stays; its close button closes it, as phase 4's checks do; its result is
         // unchanged, so nothing asks.
         app.PressKey(Key.Escape);
         await app.WaitForIdleAsync();
-        if (app.ShownResolver is not null)
-        {
-            app.ClickResolverButton("ResolverCloseButton");
-        }
+        Assert.True(app.ShownResolver is not null, "Esc in the resolver's result closed the resolver.");
+        app.ClickResolverButton("ResolverCloseButton");
 
         await app.WaitForResolverClosedAsync();
         Assert.Equal(exact, await repo.ExactStateAsync());
