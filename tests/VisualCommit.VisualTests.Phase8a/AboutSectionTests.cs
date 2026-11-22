@@ -18,8 +18,8 @@ namespace VisualCommit.VisualTests.Phase8a;
 /// <summary>
 /// The settings screen's About section in the headless app (D409, D431, D432), without pictures: its
 /// texts are the pinned identity's; Show license… by Enter puts the focus in the license's text and
-/// Esc gives it back; the notices' switch shows Avalonia's file; the links reach the fake launcher
-/// and nothing else is launched.
+/// Esc gives it back, as Enter in the text does, which is the dialog's Close; the notices' switch
+/// shows Avalonia's file; the links reach the fake launcher and nothing else is launched.
 /// </summary>
 public sealed class AboutSectionTests
 {
@@ -90,6 +90,37 @@ public sealed class AboutSectionTests
         Assert.False(await dialog.Result);
         Assert.True(app.FocusVisible, "Show license… has the focus back without the keyboard's frame.");
         Assert.True(app.SettingsDialog is { ShowsAbout: true }, "Esc closed more than the text dialog.");
+    }
+
+    [AvaloniaFact]
+    public async Task Enter_in_the_licenses_text_closes_the_dialog_as_Close_does_and_gives_the_focus_back()
+    {
+        using var data = new TempDirectory("data");
+        using var app = await StartOnAboutAsync(data);
+        app.PressKey(Key.Tab);
+        Assert.Equal(A.ShowLicenseId, app.FocusedAutomationId());
+
+        app.PressKey(Key.Enter);
+        var dialog = await app.WaitForDialogAsync<TextDocumentDialogViewModel>();
+        await app.WaitForAsync(() => app.FocusedAutomationId() == A.TextId, "the focus in the license's text");
+        var text = (DocumentTextView)app.FindByAutomationId(app.TopDialogView!, A.TextId);
+        Assert.True(text.TextArea.IsFocused);
+
+        // Enter with a modifier closes nothing: the dialog's Enter wants none, and its Mod+Enter is
+        // only a box's of several lines.
+        foreach (var modifiers in new[] { RawInputModifiers.Shift, RawInputModifiers.Control, RawInputModifiers.Alt, RawInputModifiers.Meta, RawInputModifiers.Control | RawInputModifiers.Shift })
+        {
+            app.PressKey(Key.Enter, modifiers);
+            Assert.False(dialog.IsClosed, $"Enter with {modifiers} closed the dialog.");
+            Assert.True(text.TextArea.IsFocused, $"Enter with {modifiers} moved the focus out of the text.");
+        }
+
+        // A plain Enter that the text does not take is the dialog's: its Close.
+        app.PressKey(Key.Enter);
+        await app.WaitForAsync(() => dialog.IsClosed && app.FocusedAutomationId() == A.ShowLicenseId, "the dialog closed by Enter, the focus back on Show license…");
+        Assert.True(await dialog.Result, "Enter in the text did not answer as Close does.");
+        Assert.True(app.FocusVisible, "Show license… has the focus back without the keyboard's frame.");
+        Assert.True(app.SettingsDialog is { ShowsAbout: true }, "Enter closed more than the text dialog.");
     }
 
     [AvaloniaFact]

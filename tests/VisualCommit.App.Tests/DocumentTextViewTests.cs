@@ -7,6 +7,7 @@ using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
 using Avalonia.Styling;
 using VisualCommit.App.Controls;
 using VisualCommit.App.Services;
@@ -18,9 +19,9 @@ namespace VisualCommit.App.Tests;
 /// The text dialog's text view (D432), in a window of its own with no session, showing the
 /// third-party notices as the app embeds them: read-only, wrapped, no tab kept; Down scrolls a
 /// line, PageDown the view less a line, End to the true last line of the wrapped text, Home to the
-/// top, and a wheel up after End stays up; Ctrl+C copies a selection and nothing without one (the
-/// headless platform's clipboard, in the test process); Tab leaves it; its peer is a document whose
-/// value is the text.
+/// top, and a wheel up after End stays up; Enter, with or without modifiers, neither scrolls nor is
+/// taken; Ctrl+C copies a selection and nothing without one (the headless platform's clipboard, in
+/// the test process); Tab leaves it; its peer is a document whose value is the text.
 /// </summary>
 public sealed class DocumentTextViewTests
 {
@@ -114,6 +115,84 @@ public sealed class DocumentTextViewTests
         Assert.Equal(view.ScrollExtent.Height - view.ScrollViewport.Height, view.ScrollOffset.Y, 1.0);
         host.PressKey(Key.Home, RawInputModifiers.Control);
         Assert.Equal(0, view.ScrollOffset.Y, 0.5);
+    }
+
+    [AvaloniaFact]
+    public void Enter_with_or_without_modifiers_leaves_the_view_where_it_is_and_plain_Enter_goes_on_unhandled()
+    {
+        var text = EmbeddedTexts.Read(EmbeddedTexts.ThirdPartyNotices);
+        var (host, view, _) = Show(text);
+        using var window = host;
+
+        // What reaches the view's parent: the dialog's own Enter (DialogView) is a handler there.
+        var handled = new List<bool>();
+        ((Control)view.Parent!).AddHandler(
+            InputElement.KeyDownEvent,
+            (_, e) =>
+            {
+                if (e.Key == Key.Enter)
+                {
+                    handled.Add(e.Handled);
+                }
+            },
+            RoutingStrategies.Bubble,
+            handledEventsToo: true);
+
+        // No modifier, then Shift, Ctrl, Alt and Meta, alone and mixed: none takes the key in the text.
+        RawInputModifiers[] keys = [RawInputModifiers.Shift, RawInputModifiers.Control, RawInputModifiers.Alt, RawInputModifiers.Meta];
+        var mixes = Enumerable.Range(0, 1 << keys.Length)
+            .Select(bits => keys.Where((_, index) => (bits & (1 << index)) != 0).Aggregate(RawInputModifiers.None, (all, one) => all | one))
+            .ToArray();
+
+        // The hidden caret at the top (at opening), the view three pages down; then the caret at
+        // the end (End), the view three pages up: Enter brought the caret into view, a jump back.
+        foreach (var (start, away) in new[] { (Key.Home, Key.PageDown), (Key.End, Key.PageUp) })
+        {
+            host.PressKey(start);
+            DiffHost.Settle();
+            for (var page = 0; page < 3; page++)
+            {
+                host.PressKey(away);
+            }
+
+            DiffHost.Settle();
+            var offset = view.ScrollOffset.Y;
+            var caret = view.TextArea.Caret.Offset;
+            Assert.True(view.TextArea.TextView.GetVisualLine(view.Document.GetLineByOffset(caret).LineNumber) is null, "The caret's line is still in view: the case is not made.");
+            foreach (var modifiers in mixes)
+            {
+                handled.Clear();
+                host.PressKey(Key.Enter, modifiers);
+                DiffHost.Settle();
+
+                Assert.True(Math.Abs(view.ScrollOffset.Y - offset) <= 0.5, $"Enter with {modifiers} after {start} and three {away}s moved the view from {offset} to {view.ScrollOffset.Y}.");
+                Assert.Equal(caret, view.TextArea.Caret.Offset);
+                Assert.Equal(text, view.Document.Text);
+                Assert.True(view.TextArea.IsFocused);
+                Assert.False(Assert.Single(handled), $"Enter with {modifiers} was taken in the text.");
+            }
+        }
+    }
+
+    [AvaloniaFact]
+    public void Another_editor_still_takes_Enter_and_Shift_Enter_as_line_breaks()
+    {
+        // The text's Enter goes from its own text area alone: the app's other editors (the diff, the
+        // blame, the conflict panes and result) are AvaloniaEdit's with its key bindings.
+        var (documentHost, _, _) = Show(EmbeddedTexts.Read(EmbeddedTexts.License));
+        documentHost.Dispose();
+
+        var editor = new AvaloniaEdit.TextEditor { Document = new AvaloniaEdit.Document.TextDocument("ab"), Height = 200 };
+        using var host = DiffHost.Show(editor, 400, 300, ThemeVariant.Dark);
+        Assert.True(editor.TextArea.Focus());
+        editor.TextArea.Caret.Offset = 1;
+        DiffHost.Settle();
+
+        host.PressKey(Key.Enter);
+        host.PressKey(Key.Enter, RawInputModifiers.Shift);
+
+        Assert.Equal(3, editor.Document.LineCount);
+        Assert.Equal(["a", string.Empty, "b"], editor.Document.Lines.Select(line => editor.Document.GetText(line)));
     }
 
     [AvaloniaFact]

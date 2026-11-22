@@ -20,8 +20,9 @@ namespace VisualCommit.App.Controls;
 /// the focus on (D426). The keys scroll it as a reader expects: Up and Down a line, PageUp and PageDown
 /// the view less a line, Home and End (also with Ctrl) to its start and its end, End showing the true
 /// last line once the wrapped lines below are measured. Ctrl+C copies a selection, and nothing without
-/// one. Its UI Automation peer is a document whose value is the text, named by
-/// <c>AutomationProperties.Name</c>.
+/// one. Enter, with or without modifiers, is not the text's: it neither scrolls nor is taken, so a
+/// plain Enter is the dialog's (its Close). Its UI Automation peer is a document whose value is the
+/// text, named by <c>AutomationProperties.Name</c>.
 /// </summary>
 public sealed class DocumentTextView : CodeTextEditor
 {
@@ -66,6 +67,7 @@ public sealed class DocumentTextView : CodeTextEditor
         area.SelectionForeground = null;
         area.SelectionCornerRadius = 0;
         area.CaretBrush = Brushes.Transparent;
+        RemoveEnterBindings(area.DefaultInputHandler);
         AddHandler(KeyDownEvent, OnKeyDownForScrolling, RoutingStrategies.Tunnel);
         ActualThemeVariantChanged += (_, _) => UseSelectionBrush();
     }
@@ -170,6 +172,26 @@ public sealed class DocumentTextView : CodeTextEditor
         }
 
         e.Handled = true;
+    }
+
+    /// <summary>
+    /// The editor takes no Enter, with or without modifiers. Read-only, it types nothing, but its
+    /// paragraph and line breaks (Enter, Shift+Enter) still bring the hidden caret into view, a jump
+    /// back to the top or the end, and they take the key: a plain Enter goes on to the dialog, whose
+    /// own Enter is its Close. The bindings are this text area's own copies; every other editor keeps
+    /// AvaloniaEdit's.
+    /// </summary>
+    private static void RemoveEnterBindings(TextAreaInputHandler handler)
+    {
+        foreach (var binding in handler.KeyBindings.Where(binding => binding.Gesture?.Key == Key.Enter).ToList())
+        {
+            handler.KeyBindings.Remove(binding);
+        }
+
+        foreach (var nested in handler.NestedInputHandlers.OfType<TextAreaInputHandler>())
+        {
+            RemoveEnterBindings(nested);
+        }
     }
 
     private void ScrollBy(double delta)
