@@ -43,8 +43,10 @@ namespace VisualCommit.App.Tests;
 /// branches), and assert that nothing moves in the window, that the rows outside the shifted run keep
 /// their objects and controls, and that the press on main is a click. Not asserted here, because the
 /// estimate does worse there, as it did before phase 8a: a rename far above the view deep in the
-/// list, after which the panel makes some controls in view again, and the press on one of them
-/// loses its click.
+/// list (b01 at the bottom of 60 branches: the offset 1226 for 1356), after which the panel makes
+/// five controls in view again, and the press on one of them loses its click, where a replace of
+/// the two rows it shifts touched nothing; and a fetch that drops the top remote branch in view and
+/// brings another, after which the rows in view are drawn 87 px lower than before.
 /// </para>
 /// </summary>
 public class LeftPanelScrollTests
