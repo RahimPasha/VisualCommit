@@ -136,6 +136,40 @@ public class HideAndSoloTests
     }
 
     [AvaloniaFact]
+    public async Task A_click_on_a_branch_whose_release_comes_after_the_hides_reload_still_selects_its_commit()
+    {
+        // The graph without feature/alpha is swapped in between the press on feature/beta's row and
+        // its release (the hide's git log held until the press): the swap marks both alpha rows as
+        // hidden in the graph (8.3), and beta's row, which lies between them and shows the same,
+        // keeps its control, so the release is the click a press and a release on one row make.
+        using var data = new TempDirectory("data");
+        using var repo = await Scenarios.FiltersAsync();
+        var held = new HeldGitRunner();
+        using var app = ShellDriver.StartWithTabs(data.Path, [repo.Path], width: 1100, height: 700, gitProbe: held.Probe);
+        var repository = await app.WaitForRepositoryAsync();
+        await app.WaitForWatchersQuietAsync();
+        await OpenFoldersAsync(app);
+        Assert.True(repository.Selection.IsEmpty);
+
+        app.RightClick(await app.RefRowAsync("Local branches", "feature", "alpha"));
+        held.HoldNext("log");
+        app.ClickMenuItem("Hide feature/alpha");
+        await app.WaitForAsync(() => held.Started.IsCompleted, "the hide's git log to be held");
+        var point = app.BoundsOf(await app.RefRowAsync("Local branches", "feature", "beta")).Center;
+        app.PressMouse(point);
+
+        held.Release();
+        await app.WaitForGraphReloadAsync();
+        Assert.Equal(-1, repository.Graph.IndexOf(AlphaOne));
+        Assert.Equal("feature/alpha is hidden in the graph", app.RefRowMarks("Local branches", "feature", "alpha").NameToolTip);
+        app.ReleaseMouse(point);
+
+        var beta = repository.Refs!.Refs.Single(gitRef => gitRef.FullName == "refs/heads/feature/beta").TargetSha;
+        Assert.Equal(beta, repository.Selection.Single);
+        Assert.True(app.RefRowModel("Local branches", "feature", "beta") is RefItemRow { IsSelected: true }, "feature/beta's row is not selected.");
+    }
+
+    [AvaloniaFact]
     public async Task Soloing_a_branch_solos_its_upstream_leaves_the_other_labels_out_and_the_sections_end_it()
     {
         using var data = new TempDirectory("data");

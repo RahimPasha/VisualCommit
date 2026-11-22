@@ -1,3 +1,4 @@
+using System.Collections.Specialized;
 using System.Globalization;
 using VisualCommit.App.ViewModels.Panels;
 using VisualCommit.Core.Git;
@@ -497,6 +498,42 @@ public class LeftPanelViewModelTests
         // Without the filter, the rows are as before.
         panel.UpdateFilters(null);
         Assert.All(panel.Rows.OfType<RefItemRow>(), row => Assert.Equal(RefRowMarks.None, row.Marks));
+    }
+
+    [Fact]
+    public void A_rebuild_that_marks_two_rows_replaces_those_two_alone_and_keeps_every_row_between_them()
+    {
+        // Two branches hidden while the graph that still has their commits is shown (8.3): no
+        // tooltip yet. Then the graph without them is swapped in, and the panel asks again.
+        var panel = Updated(GraphRefs());
+        panel.Activate(Item(panel, "feature", RefItemKind.Folder, depth: 1));
+        var oldGraph = true;
+        panel.IsInGraph = sha => oldGraph || (sha != Sha('f') && sha != Sha('r'));
+        panel.UpdateFilters(new RepositoryGraphFilter("C:/repo", ["refs/heads/feature/search", "refs/remotes/origin/main"], [], [], [], ["origin"], default));
+        var before = panel.Rows.ToList();
+        var search = before.IndexOf(Item(panel, "search", RefItemKind.LocalBranch));
+        var remoteMain = before.IndexOf(Item(panel, "main", RefItemKind.RemoteBranch));
+        Assert.True(remoteMain - search > 1, "No row lies between the two hidden branches' rows.");
+        var changes = new List<(NotifyCollectionChangedAction Action, int Index)>();
+        panel.Rows.CollectionChanged += (_, e) => changes.Add((e.Action, e.NewStartingIndex));
+
+        oldGraph = false;
+        panel.RefreshMarks();
+
+        Assert.Equal("feature/search is hidden in the graph", Item(panel, "search", RefItemKind.LocalBranch).NameToolTip);
+        Assert.Equal("origin/main is hidden in the graph", Item(panel, "main", RefItemKind.RemoteBranch).NameToolTip);
+
+        // Only the two rows that show something new are replaced: every other row is the one shown
+        // before, so the control of a row a press is on stays, and its release is still a click.
+        Assert.Equal([(NotifyCollectionChangedAction.Replace, search), (NotifyCollectionChangedAction.Replace, remoteMain)], changes);
+        Assert.Equal(before.Count, panel.Rows.Count);
+        for (var i = 0; i < before.Count; i++)
+        {
+            if (i != search && i != remoteMain)
+            {
+                Assert.Same(before[i], panel.Rows[i]);
+            }
+        }
     }
 
     [Fact]
