@@ -68,10 +68,11 @@ public static partial class AutomationSweep
     /// <summary>
     /// The one control exempt from <see cref="Duplicate"/>, by its automation id, under the list
     /// that holds it. A row of the branch list is told apart by its place under its section and its
-    /// folders alone (two <c>main</c> rows, under Local branches and under a remote): its full name
-    /// is the tooltip of its name's text (<c>RefName</c>), not of the row's button, so the row's peer
-    /// gives no help text; the left panel as a tree with levels is the backlog's. Naming the rows by
-    /// their full names instead would change every lookup that finds a row by its text.
+    /// folders (two <c>main</c> rows, under Local branches and under a remote), and by its help text:
+    /// the row's peer gives the ref's full name (<c>feature/alpha</c>, <c>origin/feature/alpha</c>),
+    /// which the row's button sets from <c>RefItemRow.ToolTip</c> (D456 (3)); the left panel as a
+    /// tree with levels is the backlog's. Naming the rows by their full names instead would change
+    /// every lookup that finds a row by its text.
     /// </summary>
     private static readonly (string AutomationId, string ListAutomationId) DuplicateExemption = ("RefItem", "RefList");
 

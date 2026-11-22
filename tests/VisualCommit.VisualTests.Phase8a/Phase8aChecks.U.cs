@@ -282,6 +282,17 @@ public sealed class Phase8aChecksU : Phase8aChecks
         AssertRowNamed(app, U.RowNames.Single(named => named.Row == "feature/alpha"));
         AssertRowNamed(app, U.RowNames.Single(named => named.Row == "origin/feature/alpha"));
 
+        // The two alpha rows through their own peers: the help text the ref's full name, from the
+        // row's ToolTip, and no tooltip on the row's button (D456 (3)).
+        foreach (var help in U.RefRowHelpTexts)
+        {
+            var refRow = RefItemButton(app, help.Path);
+            var what = string.Join(" › ", help.Path);
+            var helpText = ControlAutomationPeer.CreatePeerForElement(refRow).GetHelpText();
+            Assert.True(help.HelpText == helpText, $"{what}'s peer reads the help text \"{helpText}\", not \"{help.HelpText}\".");
+            Assert.True(ToolTip.GetTip(refRow) is null, $"{what}'s button has the tooltip \"{ToolTip.GetTip(refRow)}\".");
+        }
+
         // Step 9: feature/ff soloed.
         app.RightClick(await app.RefRowAsync(U.LocalBranches, U.Feature, U.Ff));
         app.ClickMenuItem(U.SoloFeatureFf);
@@ -518,6 +529,15 @@ public sealed class Phase8aChecksU : Phase8aChecks
             .FirstOrDefault(button => button.IsEffectivelyVisible && AutomationProperties.GetAutomationId(button) == expected.Id
                 && button.DataContext is RefItemRow { ToolTip: var full } && full == expected.Row)
             ?? throw new InvalidOperationException($"No {expected.Id} shows on the row of {expected.Row}.");
+    }
+
+    /// <summary>The left panel's branch row (<c>RefItem</c>) at <paramref name="path"/>, laid out; found without scrolling the list.</summary>
+    private static Button RefItemButton(ShellDriver app, IReadOnlyList<string> path)
+    {
+        var model = app.RefRowModel([.. path]);
+        return app.Find<ItemsControl>(U.RefListId).GetVisualDescendants().OfType<Button>()
+            .FirstOrDefault(button => ReferenceEquals(button.DataContext, model) && AutomationProperties.GetAutomationId(button) == U.RefItemId && button.IsEffectivelyVisible)
+            ?? throw new InvalidOperationException($"The left panel's row {string.Join(" › ", path)} is not laid out.");
     }
 
     /// <summary>

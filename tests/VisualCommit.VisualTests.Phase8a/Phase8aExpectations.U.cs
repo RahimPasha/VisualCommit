@@ -244,6 +244,16 @@ public static partial class Phase8aExpectations
             new(RefListId, "feature/ff", "RefSoloToggle", StopSoloingFeatureFf, "Soloed. Click to stop soloing it"),
         ];
 
+        /// <summary>
+        /// The two <c>alpha</c> rows of the left panel (method 3's step 8, feature/alpha hidden) by
+        /// their path, and the help text each row's peer gives: the ref's full name (D456 (3)).
+        /// </summary>
+        public static IReadOnlyList<RefHelpText> RefRowHelpTexts { get; } =
+        [
+            new([LocalBranches, Feature, Alpha], "feature/alpha"),
+            new([Remotes, Origin, Feature, Alpha], "origin/feature/alpha"),
+        ];
+
         // ---- The sweep's states ---------------------------------------------------------------
 
         public const string SweepOpsTab = "U2: the ops tab";
@@ -310,6 +320,9 @@ public static partial class Phase8aExpectations
 
         /// <summary>A control of a row (a file row's button or a branch row's toggle), found by its id within its row.</summary>
         public sealed record RowNamed(string List, string Row, string Id, string Name, string ToolTip);
+
+        /// <summary>A branch row of the left panel by its path (the section, then each level's text), and the help text its peer gives.</summary>
+        public sealed record RefHelpText(IReadOnlyList<string> Path, string HelpText);
 
         /// <summary>A real-window launch: its method, its scripted counterpart, the scenario, the session and the file written into the copy.</summary>
         public sealed record Launch(string Method, string Counterpart, string Scenario, bool Dark, (int Width, int Height) Size, string File, string FileContent);
