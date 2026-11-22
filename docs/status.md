@@ -291,9 +291,11 @@ Wave 3:
   part A. Built, reviewed and merged on 2026-11-21 (`f014b2b`), with the lead's rulings at the
   merge: the copyright lines word for word, the vendor files byte for byte, D433's lines in the docs
   (Notes, "Wave 3 is under way").
-- [ ] 14. §9, screen readers (D411, D435, D450), part U: the spike first (the owner told), the
-  graph's selected row, a name on every control with the sweep; merged after §8; a short listen
-  with Narrator by the owner at its merge.
+- [x] 14. §9, screen readers (D411, D435, D450, D455, D456), part U: the spike first (run on
+  2026-11-21), the graph's selected row, a name on every control with the sweep. Built, reviewed and
+  merged after §8 on 2026-11-21 (`769f459`), with the lead's rulings of D456 carried out before the
+  merge. The owner's short listen with Narrator is still open: asked again at the merge, the start
+  file ready ("Waiting on the owner").
 - [x] 15. §10, the performance pass (D436 to D438): the log lines and the opt-in class. Built, reviewed
   and merged on 2026-11-21 (`86ecb3a`); the first run on the desktop and the "before" series are
   step 16's (Notes, "Wave 3 is under way").
@@ -665,28 +667,34 @@ and 85 picture names; §10 has no part (Notes, "Wave 3 is under way"). For the t
 (the spike, §10's first run, the "before" series) the owner said on 2026-11-21: start each when it is
 ready, without asking again; §9's Narrator listen needs the owner in person and is asked for at
 its merge.
-§10 and §8 are merged (`86ecb3a`, `f014b2b`), and §10's first run on the desktop is done (Notes). §9
-is built and reviewed, and the lead's rulings on what it left are D456. Next, in this order. (1) Two
-fixes in the worktrees, by the wave's pattern (a fixer, then an independent check): in
-`D:/Projects/Personal/vc-wt/p8a-about`, Enter in the text dialog's text and the JetBrains Mono
-entry's second line; in `D:/Projects/Personal/vc-wt/p8a-uia`, on top of the phase branch, D456's
-rulings with About as the sweep's state 3
-(`D:/Projects/Personal/phase8-work/wave3/uia/lead-rulings.md`). A session that finds a workflow gone
-reads the worktree's `git log` and `git status` and carries the rulings out from its last commit.
-(2) Both merged into the phase branch (`git merge --no-ff`), the lead's class runs, the push and CI.
-(3) The owner asked again for the short Narrator listen (about 5 minutes; the start file
-`D:\Projects\Personal\phase8-work\wave3\spike arrator-listen.cmd`, pointed at the merged tree's
-Release build), which decides D455's open point; the merge does not wait for it. (4) Step 16: with
-no agent at work, the lagged list (design 0.4) and the whole default run, the pictures compared with
-wave 2's references (`D:/Projects/Personal/phase8-work/references/wave2/`; §8's regions in
-`D:/Projects/Personal/phase8-work/wave3/about/expected-about.json`), the lead's check of the new
-pictures of parts A and U, new references under `references/wave3`; then, the laptop rested 10
-minutes, the "before" series (`VISUALCOMMIT_PERF_RUNS=5`, 12 to 18 minutes of the desktop, which the
-owner let start when it is ready), the bounds in a commit of their own, each trigger decided and the
-report's table (design 10.3.6). (5) The wave's docs: design 1.17's as-built notes for §8 and §9, the
-report's corrections and open points, CLAUDE.md's row for the series. Then the owner is asked for
-the week's share before wave 4. Two timeouts of older tests are open and are step 19's to look at
-unless one comes again sooner (Notes, "Two timeouts").
+All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its fixes after the merge
+`85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`); §10's first run on the desktop
+is done (Notes). **Step 16 is under way**: wave 3's closing runs were started on 2026-11-21 at 20:57
+on `85e2884` with no agent that builds or tests at work (`wave3_close_runs.sh`, kept with the
+session; its summary and logs under `D:/Projects/Personal/phase8-work/wave3/close/`): the lagged
+list's seven commands, then the whole default run, then the list of the run's pictures
+(`wave3-pictures.sha256` there). A lagged command that fails stops the chain before the default run.
+A session that finds the runs gone reads `close-summary.txt` there and starts again from the command
+that did not end (CLAUDE.md's Commands say how to see who holds the heavy-run lock). After the runs,
+in this order: (1) CI's run 44982678813 on `85e2884` read and recorded, above all the macOS job (the
+copy test) and the Linux jobs (the fetch hold's new test, first run there). (2) The pictures
+compared with wave 2's references (`scripts/compare-pictures.py` with
+`D:/Projects/Personal/phase8-work/references/wave2` and `--expected
+D:/Projects/Personal/phase8-work/wave3/about/expected-about.json`), every change outside §8's
+regions explained, the lead's check of the new pictures of parts A and U (15 names) by inspectors,
+new references copied to `D:/Projects/Personal/phase8-work/references/wave3`. (3) The laptop rested
+10 minutes, then the "before" series (`VISUALCOMMIT_PERF_RUNS=5`, about 15 minutes of the desktop,
+which the owner let start when it is ready; not in the night's hours of other programs' tasks, risk
+10), the bounds in a commit of their own, each trigger decided and the report's table (design
+10.3.6), CLAUDE.md's row for the series. (4) The wave's docs: an editor and a checker per document
+are carrying the merges' rulings into the design and the report in
+`D:/Projects/Personal/vc-wt/p8a-docs` (`wip/p8a-docs`, run `wf_b439758c-9ac`, by the brief
+`D:/Projects/Personal/phase8-work/wave3/docs-brief.md`); the lead merges that branch when both are
+sound. (5) The worktrees of wave 3 removed as wave 2's were (the owner's word of 2026-11-20), the
+spike's with its branch (design 9.9). Then the owner is asked for the week's share before wave 4.
+The owner's Narrator listen can come at any time before the review of step 19; it is best not taken
+beside the closing runs. Two timeouts of older tests are open and are step 19's to look at unless
+one comes again sooner (Notes, "Two timeouts").
 The [phase 7b handoff](handoffs/phase-7b.md), "For the next phase", says what to reuse, what to do
 first and which risks to watch.
 
@@ -791,6 +799,36 @@ every commit.
   fixers are in `D:/Projects/Personal/phase8-work/wave3/about/` (`report.md`,
   `workflow-result.json`, `copyright-lines-result.json`) and
   `D:/Projects/Personal/phase8-work/wave3/uia/` (`built.md`, `majors.md`, `minors.md`, `fixed.md`).
+  **§9 is merged** (`769f459`, 2026-11-21). Before it a fixer carried out D456 in `p8a-uia` on top
+  of the phase branch and a verifier found no fault (`phase8a-wave3-merge-fixes`, run
+  `wf_009a8473-443`, 4 agents with §8's Enter fix, 0.87M tokens): the sweep leaves out scroll bars
+  and ends a container's search at a dialog's root, the branch rows' help text is the ref's full
+  name, and About is state 3 (the About section, the license's text dialog, the notices' dialog on
+  Avalonia's file). All 14 facts of `AccessibleNameSweepTests` report nothing, and part U's three
+  methods pass, the resolver's also alone. The lead made part U's step 6 assert that Esc leaves the
+  resolver open (`96d94bf`). On the merged tree: the three builds, 0 warnings; the package's classes
+  in App.Tests, 241 of 241; in 8a's project, 87 of 87. **§8's fixes after its merge** (`85e2884`): a
+  plain Enter in the text dialog's text is the dialog's Close (the editor took it and scrolled the
+  view back to its hidden caret); every other key that would move, use or change that caret is taken
+  and does nothing (a fixer measured every key with every mix of modifiers: 106 moved the view, the
+  caret or the selection before); copy and select-all run on the platform's own gestures, Home and
+  End on the platform's command key; the notices quote JetBrains Mono NL's own line and name the
+  addresses' guard. Each with its test first and an independent check without a fault (runs
+  `wf_009a8473-443` and `wf_bf228cd1-de9`, 2 agents, 0.62M). Left as they are, by the lead: PageUp
+  and PageDown with Ctrl, Alt or Meta, which the scroll viewer pages by a whole viewport; Home and
+  End clearing a mouse selection; a held Enter on "Show license…" opens and closes the dialog in
+  turn, as any dialog that a button opens by Enter. **The fetch hold** (`eba3717`; run
+  `wf_dc316640-968`, 2 agents, 0.37M): CI's failure of K3_K8 in one container was the race the lead
+  read from the code (the CI section, run 44969394972); a test holds the hold's script inside its
+  `rm`, arms the hold meanwhile and failed on the old script every time; the script now writes its
+  gave-up marker only inside its loop, when its rounds ran out. Left open, harmless within a hold's
+  150 s and written on `Arm()`: a lived-on script that missed a short release counts its rounds from
+  its own start. Older than the fix and for step 19: a check whose `using var hold` throws in
+  Dispose hides the first exception (CI's stack named the method's last line). **For step 19's
+  list** as well: the name a branch row gives for a moment while its folder opens (the spike's S4:
+  "Avalonia.Controls.DockPanel"), to be shown by a test there and listened for in the owner's
+  walk-through. The accounts: `D:/Projects/Personal/phase8-work/wave3/merge-fixes.md`,
+  `text-keys.md` and `hold-race-result.json`.
 - **Two timeouts of older tests on 2026-11-20, each seen once, neither explained.** (1) CI's first
   attempt on the merge (44851353430), macOS:
   `PaletteEntriesTests.An_empty_tab_lists_the_windows_commands_and_a_dashboard_its_own` waited 60 s
@@ -1142,16 +1180,20 @@ every commit.
     taken, the desktop unlocked); wave 2's three worktrees are removed (done: `git worktree
     remove` on the clean folders; the branches `wip/p8a-firstrun`, `wip/p8a-keyboard` and
     `wip/p8a-icon` stay, merged).
-    - **A short listen with Windows Narrator, as soon as the owner can** (D455; design 13.4 items 13
-    and 14; about 5 minutes, in person). The spike showed that the graph's selected row speaks to a
-    UI Automation client only once that client has read below the graph. Whether Narrator does
-    that by itself decides if the route stays. The lead gives the start file
-    (`D:/Projects/Personal/phase8-work/wave3/spike/narrator-listen.cmd`, outside the repository:
-    the spike's build on a throwaway repository, with the isolating variables) and the steps:
-    Narrator on (Ctrl+Win+Enter), click a commit in the graph, press Down three times, then
-    Shift+F6, F6 and Down twice more; is each commit's line spoken? Asked on 2026-11-21 after the
-    spike; the owner answered "not now", so it is asked again at §9's merge, as design 13.3 has it.
-    The start file and its throwaway repository stay ready until then.
+    - **A short listen with Windows Narrator, as soon as the owner can** (D455; design 13.4 items 13 and
+    14; about 5 minutes, in person). The spike showed that the graph's selected row speaks to a UI
+    Automation client only once that client has read below the graph. Whether Narrator does that by
+    itself decides if the route stays. The start file is
+    `D:\Projects\Personal\phase8-work\wave3\spike\narrator-listen.cmd` (outside the repository): it
+    starts the merged tree's Release build, as built on 2026-11-21 at 20:53 from `85e2884`, on a
+    throwaway repository with the isolating variables. The steps: Narrator on (Ctrl+Win+Enter),
+    start the file, click a commit in the graph, press Down three times, then Shift+F6, F6 and Down
+    twice more; is each commit's line spoken (its subject, author and date)? Then click a branch in
+    the left panel: is the commit's line spoken again? Narrator off with the same keys. Asked on
+    2026-11-21 after the spike; the owner answered "not now". Asked again at §9's merge that
+    evening, in the lead's message, without stopping the work for the answer: the listen can come at
+    any time before the review of step 19 and is best not taken beside a test run. If Narrator is
+    silent, a new decision names the route before that review (D455).
   - **To look over**: the lead's 75 rulings (design 13.1) and the design's decisions D416 to D452,
     above all those that amend a ruling (D420, D424, D425, D434) and those the review made (D447 to
     D452; design 13.5). None of them is the owner's own, so the owner can overturn any. (D453, on
