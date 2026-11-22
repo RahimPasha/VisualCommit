@@ -23,8 +23,9 @@ namespace VisualCommit.App.Tests;
 /// <c>VcLinkButton</c>'s keyboard frame (<c>Theme/Controls.axaml</c>; phase 8a's A1 step 9, design
 /// 8.3.1): a link focused by the keyboard shows its whole text, its underline and Fluent's frame
 /// around them, not over them, in About (dark and light) and in the sign-in dialog (GitLab's, with
-/// both its links, 4 apart); the frame moves nothing, and a link not focused draws nothing outside
-/// its bounds. The headless app, its pictures read with <see cref="LinkFrame"/>;
+/// both its links, 4 apart); the frame moves nothing, a link not focused draws nothing outside its
+/// bounds, and the frame takes no pointer: a hover or a click on it is none on the link. The
+/// headless app, its pictures read with <see cref="LinkFrame"/>;
 /// <see cref="TestPictures"/> saves them when asked.
 /// </summary>
 public class LinkFocusFrameTests
@@ -127,6 +128,49 @@ public class LinkFocusFrameTests
         }
     }
 
+    /// <summary>
+    /// The frame is drawn, never hit: while a link has the keyboard's frame, every pixel of the
+    /// frame's ring (its bounds grown by <see cref="FrameReach"/>, less its bounds) hits what it hits
+    /// without the focus, nothing of the link; and the pointer on the frame's outer or inner line
+    /// neither hovers the link nor presses it: a click there asks for no address. A click just outside
+    /// the text is no click on the link, focused or not (a frame that took the pointer opened the
+    /// repository's address on a click 3.5 left of the link's bounds).
+    /// </summary>
+    [AvaloniaFact]
+    public async Task A_pointer_on_the_frame_reaches_what_lies_under_it_not_the_link()
+    {
+        using var data = new TempDirectory("data");
+        using (var app = await StartOnAboutAsync(data, dark: true))
+        {
+            string[] ids = ["AboutRepositoryLink", "AboutGuideLink"];
+            var unfocused = ids.ToDictionary(id => id, id => HitsOnRing(app, Link(app, id)));
+            app.PressKey(Key.Tab);
+            app.PressKey(Key.Tab);
+            foreach (var id in ids)
+            {
+                app.PressKey(Key.Tab);
+                await WaitForFocusAsync(app, id);
+                AssertRingHitsAsWithoutFocus(app, Link(app, id), unfocused[id], id);
+            }
+
+            AssertPointerOnFramePressesNothing(app, Link(app, "AboutRepositoryLink"), "AboutRepositoryLink");
+        }
+
+        using (var app = await StartOnGitLabSignInAsync(data))
+        {
+            string[] ids = ["SignInLegacyTokenLink", "SignInTokenLink"];
+            var unfocused = ids.ToDictionary(id => id, id => HitsOnRing(app, Link(app, id)));
+            foreach (var id in ids)
+            {
+                app.PressKey(Key.Tab, RawInputModifiers.Shift);
+                await WaitForFocusAsync(app, id);
+                AssertRingHitsAsWithoutFocus(app, Link(app, id), unfocused[id], id);
+            }
+
+            AssertPointerOnFramePressesNothing(app, Link(app, "SignInLegacyTokenLink"), "SignInLegacyTokenLink");
+        }
+    }
+
     /// <summary>The app on the settings screen's About, its reads ended, the focus on its section button, the pointer at rest.</summary>
     private static async Task<ShellDriver> StartOnAboutAsync(TempDirectory data, bool dark)
     {
@@ -205,8 +249,7 @@ public class LinkFocusFrameTests
     /// </summary>
     private static void AssertDrawsInside(ShellDriver app, Button link, (int X, int Y) reach, string what)
     {
-        var bounds = app.BoundsOf(link);
-        var pixels = new Box((int)Math.Floor(bounds.Left), (int)Math.Floor(bounds.Top), (int)Math.Ceiling(bounds.Right), (int)Math.Ceiling(bounds.Bottom));
+        var pixels = PixelBox(app, link);
         var drawn = DrawnBy(app, link);
         Assert.False(drawn is null, $"{what} draws nothing.");
         if (reach == (0, 0))
@@ -268,6 +311,95 @@ public class LinkFocusFrameTests
         return left == int.MaxValue ? null : new Box(left, top, right, bottom);
     }
 
+    /// <summary>The whole pixels <paramref name="control"/>'s bounds cover in the window.</summary>
+    private static Box PixelBox(ShellDriver app, Visual control)
+    {
+        var bounds = app.BoundsOf(control);
+        return new Box((int)Math.Floor(bounds.Left), (int)Math.Floor(bounds.Top), (int)Math.Ceiling(bounds.Right), (int)Math.Ceiling(bounds.Bottom));
+    }
+
+    /// <summary>
+    /// What a hit test finds at the centre of every pixel of <paramref name="link"/>'s frame's ring, its
+    /// bounds grown by <see cref="FrameReach"/> less its bounds, after the window has drawn what it shows.
+    /// </summary>
+    private static Dictionary<(int X, int Y), IInputElement?> HitsOnRing(ShellDriver app, Button link)
+    {
+        app.Settle();
+        var bounds = PixelBox(app, link);
+        var ring = bounds.Grown(FrameReach);
+        var hits = new Dictionary<(int X, int Y), IInputElement?>();
+        for (var y = ring.Top; y < ring.Bottom; y++)
+        {
+            for (var x = ring.Left; x < ring.Right; x++)
+            {
+                if (!bounds.Contains(x, y))
+                {
+                    hits[(x, y)] = app.Window.InputHitTest(new Point(x + 0.5, y + 0.5));
+                }
+            }
+        }
+
+        return hits;
+    }
+
+    /// <summary>
+    /// <paramref name="link"/>, focused with the keyboard's frame, changes nothing a hit test finds on its
+    /// frame's ring against <paramref name="unfocused"/>, and nothing there is the link or inside it.
+    /// </summary>
+    private static void AssertRingHitsAsWithoutFocus(ShellDriver app, Button link, Dictionary<(int X, int Y), IInputElement?> unfocused, string id)
+    {
+        Assert.True(app.FocusVisible, $"{id} has the focus without the keyboard's frame.");
+        var focused = HitsOnRing(app, link);
+        Assert.Equal(unfocused.Keys.Order(), focused.Keys.Order());
+        var wrong = focused
+            .Where(hit => InLink(link, hit.Value) || !ReferenceEquals(hit.Value, unfocused[hit.Key]))
+            .Select(hit => Text($"({hit.Key.X + 0.5}, {hit.Key.Y + 0.5}): {Describe(hit.Value)}, without the focus {Describe(unfocused[hit.Key])}"))
+            .ToList();
+        Assert.True(
+            wrong.Count == 0,
+            Text($"While {id} has the keyboard's frame, {wrong.Count} of the {focused.Count} pixels of the frame's ring at {PixelBox(app, link).Grown(FrameReach)} hit something else than without the focus, or the link; the first: {string.Join("; ", wrong.Take(4))}."));
+    }
+
+    /// <summary>
+    /// The pointer resting on, then clicking, a point of <paramref name="link"/>'s frame's outer line (2
+    /// wide, the ring's outermost) or inner line (1 wide, inside it), each time with the link focused again
+    /// first as Tab focuses it (a click elsewhere can take the focus): the point shows the frame, the link
+    /// is not hovered and no address is asked for.
+    /// </summary>
+    private static void AssertPointerOnFramePressesNothing(ShellDriver app, Button link, string id)
+    {
+        var bounds = PixelBox(app, link);
+        var middleX = Math.Floor((bounds.Left + bounds.Right) / 2.0) + 0.5;
+        var middleY = Math.Floor((bounds.Top + bounds.Bottom) / 2.0) + 0.5;
+        var points = new (string Where, Point At)[]
+        {
+            ("the outer line's left", new Point(bounds.Left - FrameReach.X + 0.5, middleY)),
+            ("the inner line's top", new Point(middleX, bounds.Top - FrameReach.Y + 2 + 0.5)),
+            ("the inner line's right", new Point(bounds.Right + FrameReach.X - 3 + 0.5, middleY)),
+            ("the outer line's bottom", new Point(middleX, bounds.Bottom + FrameReach.Y - 1 + 0.5)),
+        };
+        var background = Colour(app, "VcPanelBackgroundBrush");
+        var requests = app.Launcher.Requests.Count;
+        foreach (var (where, at) in points)
+        {
+            app.MoveToNeutral();
+            Assert.True(link.Focus(NavigationMethod.Tab), $"{id} takes no focus.");
+            app.Settle();
+            Assert.True(app.FocusedAutomationId() == id && app.FocusVisible, Text($"{id} is not focused with the keyboard's frame before the pointer goes to {where} at ({at})."));
+            Assert.True(app.Capture().PixelAt(at) != background, Text($"{where} of {id}'s frame at ({at}) shows the background: the point is not on the frame."));
+            app.MoveMouse(at);
+            Assert.False(link.IsPointerOver, Text($"The pointer on {where} of {id}'s frame at ({at}) hovers the link."));
+            app.Click(at);
+            Assert.True(app.Launcher.Requests.Count == requests, Text($"A click on {where} of {id}'s frame at ({at}) pressed the link: {string.Join(", ", app.Launcher.Requests.Skip(requests).Select(request => request.FullPath))}."));
+        }
+
+        app.MoveToNeutral();
+    }
+
+    private static bool InLink(Button link, IInputElement? hit) => hit is Visual visual && visual.GetSelfAndVisualAncestors().Contains(link);
+
+    private static string Describe(IInputElement? hit) => hit is null ? "nothing" : Text($"{hit.GetType().Name} {(hit as Control)?.Name}").TrimEnd();
+
     /// <summary>The place of every shown control in <paramref name="scope"/>, in the window, in tree order.</summary>
     private static IReadOnlyList<string> Places(ShellDriver app, Visual scope) =>
         [.. scope.GetVisualDescendants().OfType<Control>().Where(control => control.IsEffectivelyVisible).Select(control => Text($"{control.GetType().Name} {control.Name} {app.BoundsOf(control)}"))];
@@ -283,6 +415,8 @@ public class LinkFocusFrameTests
     private sealed record Box(int Left, int Top, int Right, int Bottom)
     {
         public bool Contains(Box other) => other.Left >= Left && other.Top >= Top && other.Right <= Right && other.Bottom <= Bottom;
+
+        public bool Contains(int x, int y) => x >= Left && x < Right && y >= Top && y < Bottom;
 
         public Box Grown((int X, int Y) by) => new(Left - by.X, Top - by.Y, Right + by.X, Bottom + by.Y);
 
