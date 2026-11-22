@@ -182,31 +182,36 @@ The decisions are cited, not restated (D243); each line names the mechanism and 
 | uia: screen readers | 9 | 3 | §5, §6; merges after §8 | `CommitGraphControl.cs`, `CommitGraphControl.Automation.cs`, `GraphRowSpeech.cs`, `AutomationNames.cs`, the names in ten views (9.2), `AutomationSweep.cs`, `ShellDriver.Phase8a.Uia.cs`, `CommitGraphControlTests.cs`, `StatusBarTests.cs`; part U |
 | perf | 10 | 3 | WP0 | `StartupTimeline.cs`, `RepositoryViewModel.cs`'s lines, `RealApp.cs`'s helpers, `Phase8aPerformance.cs`, `PerformanceSeries*.cs`; 10.4's test files |
 | guide | 11 | 4 | waves 1 to 3 | `docs/guide/`, `guide.yml`, `scripts/check-guide-links.py`, `tests/VisualCommit.GuideShots`, `AppShortcuts.cs`, `AppCommands.cs`'s guide case, `.gitignore`, `ci.yml`'s build line; 11.4's test files; part G |
+| restore: the restore order (ruling 76, D457) | its own, written when wave 4 starts (D457 (5)) | 4 | §10 (M2 and M3 prove it) | what its section names; D457 (5) names `SettingsEntryTests`' test of the merge-tool lookup, rewritten |
 | realwindow | 12 | 4 | every part; the review's fixes | `Phase8aRealWindowPass*.cs`, `RealApp.Phase8a.cs`, `RealApp.cs`'s `StartInfoFor`, the csproj |
 
 **Waves and merges.** Wave 0: WP0 in the main checkout. Wave 1: §2, §3, §4, any order; §2 is the
 first package that changes an earlier picture (ruling 13). Wave 2: §5, §6, §7, any order. Wave 3: §8,
 §9 and §10, built together; §9 merges after §8 and sweeps About at its merge. Wave 4: §11; the
 review before the gate (status step 19) and its fixers; §12, built on the Windows machine at step
-18, reviewed at step 19, merges last, after the review's fixes. At most three packages are built at
-once; one owner per file and test class, and a file passes only at a merge. No two packages of one
-wave own a file. The files that pass between packages, in this order: `AppCommands.Palette.cs` (WP0,
-§6); `AppCommands.cs` (§8, §11); `App.axaml.cs` (WP0, §4, §8); `Program.cs`, `AppLaunch.cs` (WP0,
-§4); `GitIsolation.cs` (WP0, §4); `AskPassBroker.cs`, `AccountsSettingsViewModel.cs`,
-`MainWindowViewModelTests.cs` (§3, §5); `MainWindowViewModel.cs` and `.Settings.cs` (WP0, §5);
-`IGitRunner.cs`, `GitLocator.cs`, `GitSetupProbe.cs`, `GitAccess.cs`, `FileLauncher.cs` (WP0, §5);
-`GitAccessTests.cs` (WP0, whose code review added it with four tests of the fixed search and of a
-failing listener; §5 extends the class and does not create it);
-`SettingsDialogViewModel.cs` (WP0, §5, §8); `SettingsDialogView.axaml` (§5, §8);
-`SettingsDialogViewTests.cs` (§5, §8, §11); `WorkingChangesView.axaml` (§2, §6, §9);
-`LeftPanelView.axaml`, `CompareView.axaml` (§2, §9); `StatusBarView.axaml`, `CommitGraphView.axaml`
-(§5, §9); `StatusBarTests.cs` (§6, §9); `MainWindow.axaml.cs` (§4, §6); `MainWindow.axaml` (§7, §9);
-`ActivityLogView.axaml` (§6 if needed, §9); the notice window (§4, §7); `App.csproj` (§7, §8);
-`RepositoryViewModel.cs` (WP0, §10); `RealApp.cs` (§10, §12); `ci.yml` (§3, §8, §11);
-`Phase7aExpectations.A.cs` (§3, §8); `Phase7bExpectations.A.cs` (§2, §8); `Phase6Expectations.K.cs`,
-`Phase6ExpectationTests.K.cs`, `PaletteEntriesTests.cs`, `CommandPaletteViewTests.cs` (§8, §11);
-`AppShortcutsTests.cs` (WP0, §11). A package adds `ShellDriver` helpers only in a new partial
-`ShellDriver.Phase8a.<Key>.cs`. The lead's throughout: `AppSession.cs` with `AppSessionTests.cs`, `TabServices.cs` (but §8's
+18, reviewed at step 19, merges last, after the review's fixes; and `restore`, ruling 76's restore
+order (D457 (5); `wip/p8a-restore`): its design section first, written when wave 4 starts, its
+tests written first and failing on today's code, a review, and the proof by M2 and M3 with the two
+builds run alternately and by the lead's probe, subject to the week's share the owner is asked for
+before wave 4 (D241). At most three packages are built at once; one owner per file and test class,
+and a file passes only at a merge. No two packages of one wave own a file. The files that pass
+between packages, in this order: `AppCommands.Palette.cs` (WP0, §6); `AppCommands.cs` (§8, §11);
+`App.axaml.cs` (WP0, §4, §8); `Program.cs`, `AppLaunch.cs` (WP0, §4); `GitIsolation.cs` (WP0, §4);
+`AskPassBroker.cs`, `AccountsSettingsViewModel.cs`, `MainWindowViewModelTests.cs` (§3, §5);
+`MainWindowViewModel.cs` and `.Settings.cs` (WP0, §5); `IGitRunner.cs`, `GitLocator.cs`,
+`GitSetupProbe.cs`, `GitAccess.cs`, `FileLauncher.cs` (WP0, §5); `GitAccessTests.cs` (WP0, whose
+code review added it with four tests of the fixed search and of a failing listener; §5 extends the
+class and does not create it); `SettingsDialogViewModel.cs` (WP0, §5, §8);
+`SettingsDialogView.axaml` (§5, §8); `SettingsDialogViewTests.cs` (§5, §8, §11);
+`WorkingChangesView.axaml` (§2, §6, §9); `LeftPanelView.axaml`, `CompareView.axaml` (§2, §9);
+`StatusBarView.axaml`, `CommitGraphView.axaml` (§5, §9); `StatusBarTests.cs` (§6, §9);
+`MainWindow.axaml.cs` (§4, §6); `MainWindow.axaml` (§7, §9); `ActivityLogView.axaml` (§6 if needed,
+§9); the notice window (§4, §7); `App.csproj` (§7, §8); `RepositoryViewModel.cs` (WP0, §10);
+`RealApp.cs` (§10, §12); `ci.yml` (§3, §8, §11); `Phase7aExpectations.A.cs` (§3, §8);
+`Phase7bExpectations.A.cs` (§2, §8); `Phase6Expectations.K.cs`, `Phase6ExpectationTests.K.cs`,
+`PaletteEntriesTests.cs`, `CommandPaletteViewTests.cs` (§8, §11); `AppShortcutsTests.cs` (WP0, §11).
+A package adds `ShellDriver` helpers only in a new partial `ShellDriver.Phase8a.<Key>.cs`. The
+lead's throughout: `AppSession.cs` with `AppSessionTests.cs`, `TabServices.cs` (but §8's
 `SettingsSection.About`), `PromptDialogs.cs` after WP0, `VisualCommit.slnx` (each new project's line
 at its merge), `Directory.Build.props`, `CLAUDE.md`, `README.md`, `requirements.md`, `plan.md`,
 `status.md`, `architecture.md`, the icon's rounds in `docs/brand/icon/` (D447). Every other doc a
@@ -224,14 +229,15 @@ them. A mid-wave merge's lagged list runs only while no builder of the wave runs
 builders pause until it ends. A builder runs only the classes and methods its section names, never a
 whole project; whole projects are the lead's, through `scripts/heavy-run.sh` (D245). §2's merge is
 read against phase 7b's references first (0.7). After wave 3, the lead runs §10's "before" series on
-the rested laptop; a change it calls for is a fix package after a ruling
-(ruling 66), with no section. §3's fixes are read on CI's floor job after each push of the phase
-branch; the commit that makes the job green removes `continue-on-error` and moves `Minimum`
-(rulings 10, 71). After the gate commit, `docs/guide/**` stays docs: a change to it is checked by the
-guide workflow's run, whose step "App's links" runs `AppLinksTests` and `GuideShortcutsPageTests`, the
-two App.Tests classes that read the pages (D451, 11.3.4), and the lead reads that run and records it
-beside CI's in `status.md`. `guide.yml`, the shots and the links are code, so they come before the
-counted round; from §8's merge the notices and `LICENSE` count as code (D433).
+the rested laptop; a change it calls for is a fix package after a ruling (ruling 66), with no
+section, but for D457's `restore`, which has one (wave 4). §3's fixes are read on CI's floor job
+after each push of the phase branch; the commit that makes the job green removes `continue-on-error`
+and moves `Minimum` (rulings 10, 71). After the gate commit, `docs/guide/**` stays docs: a change to
+it is checked by the guide workflow's run, whose step "App's links" runs `AppLinksTests` and
+`GuideShortcutsPageTests`, the two App.Tests classes that read the pages (D451, 11.3.4), and the
+lead reads that run and records it beside CI's in `status.md`. `guide.yml`, the shots and the links
+are code, so they come before the counted round; from §8's merge the notices and `LICENSE` count as
+code (D433).
 
 **The lagged list** (D262), at each wave's last merge and at the merge of §5, §6, §9 and §10, in Git
 Bash, one command at a time, before the wave's whole run: phase 7b's list (its design 0.4: 7a's list
@@ -1281,6 +1287,56 @@ wave adds to it. What wave 2 tells §12's launches is in 12.3.5.
   19): the name a branch row gives for a moment while its folder opens (the spike's S4,
   "Avalonia.Controls.DockPanel"); a check whose `using var hold` throws in `Dispose` hides the first
   exception.
+- **At wave 3's close** (the lead, 2026-11-22). The one fault that the inspection of wave 3's new
+  pictures found (the report's "Wave 3's comparison with wave 2's references"),
+  `a1b-about-link-focus`, where Fluent's focus frame lay on a focused link's bounds, its text's line
+  box, over the first and last letters and the underline, is fixed in `VcLinkButton`
+  (`Theme/Controls.axaml`; `8ef7e86`, `77c1936` and `5177cec`, merged at `fcf8c1e`). Its
+  `FocusAdorner` is null, and its template is a `Panel` with the content and, laid over it, the
+  `Border` `FocusFrame` (2 px, margin -4,-3) holding `FocusFrameInner` (1 px), which take Fluent's
+  `SystemControlFocusVisualPrimaryBrush` and `SystemControlFocusVisualSecondaryBrush` under
+  `:focus-visible` alone. The frame reaches 4 px outside the bounds left and right, keeping 1 px of
+  background between its inner line and the ink, and 3 above and below, where the line box keeps
+  the letters 2 px and the underline 1 px clear of it; its negative margin gives back its borders,
+  so nothing moves; it is never hit (`IsHitTestVisible` false), so a pointer on it reaches what lies
+  under it; without the keyboard's focus it draws nothing, and a link focused by a click is
+  underlined without it. The rule for whoever uses the theme: the button does not clip
+  (`ClipToBounds` false), and neither may what holds it; 4 px left and right of a link and 3 above
+  and below stay free of other controls (GitLab's two token links lie 4 apart). `LinkFrame`
+  (`tests/VisualCommit.Testing`) reads a focused link against the same window unfocused: the text's
+  pixels unchanged but for the underline's rows, the underline shown, a whole frame in the theme's
+  frame colour on four sides outside the text, and background between frame and ink. A1's step 9
+  asserts it (`AssertFramedLink`), and `LinkFocusFrameTests` (App.Tests, 12 cases) holds it for
+  About's two links, dark and light, and for GitLab's two token links, with nothing moved, nothing
+  drawn outside the bounds without the focus, no other control under the frame, the frame never hit
+  and no frame after a click. `VcRadioButton` (`Theme/Dialogs.axaml`) builds its focus frame round
+  its content and was not changed: that its frame probably takes clicks just outside it while it has
+  the keyboard's focus is on the list of the review before the gate (status step 19). The
+  references of every later merge are wave 3's, `D:/Projects/Personal/phase8-work/references/wave3/`
+  (1,235 scripted pictures; `a1b-about-link-focus` there is the fix's). The "before" series (10.3.6,
+  as built) was taken three times, because none was quiet throughout (D457 (1)): the first (00:47,
+  `86ef5b0`) and the third (05:53, `1afb980`) ran M2 within two minutes of a Release build that the
+  command itself made, the third because a docs commit after the build changed the commit the build
+  is stamped with, and the second (04:59, `fcf8c1e`) met Office's updater, an idle-triggered task of
+  Windows' Task Scheduler, as M3 began. From now on a series is taken as D457 (2) and CLAUDE.md's
+  row for it say: the real-window project built in Release on the very commit at least ten minutes
+  before, nothing committed in between, the Task Scheduler read for what is due in the next ten
+  minutes and afterwards for what ran. The bounds are the ones D457 gives, in a commit of their own:
+  M2 6,100 ms, from the second series alone; M4 370 MB after the load and 440 MB at the peak; M5
+  4,600 ms; M6 8,800 ms; M7 630 ms; M3's stays unset until its change's "after" series. M4's trigger
+  did not fire. M5's and M6's fired in every series and go to plan.md's Backlog: no stall of the
+  window was seen, and every change that would cut the reload amends D47 or D52. M7's fired in every
+  series and goes to the Backlog, by two judges to one; a rested median of about 600 ms, or the
+  owner, reopens it. M3's fired wherever a quiet M3 is set against the quiet M2 (D457 (4)) and gets
+  a change in wave 4: ruling 76 (13.1), the restore order, by which the session's active restored
+  tab opens first and alone and the others after its first page, or after 5 s at the latest, at
+  most four at once, with `InitializeAsync`'s contract kept. Wave 4 builds and proves that package,
+  `restore`, subject to the week's share the owner is asked for before wave 4 (D241); it gets a
+  design section of its own when wave 4 starts, written from D457 (5). §11's page
+  `troubleshooting/large-repositories.md` takes from the report's table ("The performance series")
+  what 10.3.6's step 5 names, as indications on the laptop (ruling 19): 100,000 commits, ten
+  restored tabs of that size and the memory measured; its "first rows in about 2 s (Q1)" is one
+  restored tab's.
 
 ## 2. colours: the contrast round (D410)
 
@@ -4171,6 +4227,46 @@ asserts its value at or below the bound.
    size and the memory measured, as indications on the laptop (ruling 19), and may tell the user
    how to write a commit-graph; the app writes none.
 
+As built (the lead, 2026-11-22; D457). The series was taken three times, five runs each: at 00:47
+on `86ef5b0`, at 04:59 on `fcf8c1e` and at 05:53 on `1afb980`, between which only docs, the link
+button's theme and its tests changed (the files in `artifacts/perf/phase-8a/`, copies in
+`D:/Projects/Personal/phase8-work/wave3/perf-before/`, `perf-before-2/` and `perf-before-3/`). The
+class took 7 min 8 s, 7 min 4 s and 7 min 20 s, or 549, 433 and 520 s with the lock and, in the
+first and the third, the Release build that the command made first, against 10.7's 12 to 18
+minutes. None was quiet throughout (D457 (1)): the first and the third ran M2 within two minutes of
+that build, the third because a docs commit after the build changed the commit the build is
+stamped with, and the second met Office's updater, an idle-triggered task of Windows' Task
+Scheduler, as M3 began. So step 1 is taken as D457 (2) says from now on: the real-window project
+built in Release on the very commit at least ten minutes before, nothing committed in between, the
+Task Scheduler read for what is due in the next ten minutes and afterwards for what ran (CLAUDE.md's
+row and note). Step 2's bounds are D457 (3)'s, in a commit of their own: M2 6,100 ms, from the
+second series alone, because the other two ran M2 straight after a build; M4 370 MB after the load
+and 440 MB at the peak after the reload; M5 4,600 ms; M6 8,800 ms; M7 630 ms, each of these from the
+slowest of all fifteen runs; M3's stays unset until its change's "after" series and is written from
+that one (13.4 item 17). If the unchanged build's M2 passes 6,100 ms in a series taken as D457 (2)
+says, the bound was drawn too tight and is raised by a ruling with the numbers. Step 3's triggers
+(D457 (4)): M4's did not fire; M5's and M6's fired in every series (the reload line's medians
+against 2,000 ms), and so did M7's (against 250 ms), and those three go to plan.md's Backlog with
+their numbers, Pull's reads with what reopens the row (a rested median of about 600 ms, or the
+owner); M3's fired wherever a quiet M3 is set against the quiet M2 (the fastest of its fifteen
+runs, 6,523 ms, above 1.25 times 4,621 ms, 5,776 ms; the class's own trigger line compares within
+one series and read "not fired" in the first and the third only because their M2 was disturbed),
+and it gets a change in wave 4, ruling 76 (13.1). That is not step 3's candidate, which breaks
+the contract step 3 cites, now at `MainWindowViewModel.cs:171-176`, and goes to the Backlog.
+Step 3's "unless a stall is seen" was looked at by the lead's probe, by hand and outside any
+test (00:59; the script in `D:/Projects/Personal/phase8-work/wave3/reload-probe/`, its output
+`wave3/reload-probe-run1.txt`): an empty commit made outside the app three times on a 100,000-commit
+clone, and the window's thread asked an empty message every 15 ms; during the three reloads, of
+3.0 to 3.4 s, the longest answer took 36 ms, idle 25 ms, so no stall was seen. Step 4 proves ruling
+76's change: M2 and M3 with the two builds run alternately, five times each, taken as D457 (2)
+says, and beside them the lead's probe of the start with several tabs (by hand, outside any test;
+`D:/Projects/Personal/phase8-work/wave3/startup10-probe/`), the tab's own clock and the window's
+answers beside nine large and beside nine small tabs. It is proven when the fix's M3 median is at
+or under 1.25 times its M2 median while the base's is above, and the fix's M2 lies within the base's
+range; if the alternation does not show it, the change is reverted and the row goes to the Backlog
+with the numbers. Step 5's table is the report's section "The performance series", and plan.md's
+risk 10 holds the medians.
+
 ### 10.4 Tests
 
 The builder runs these classes only, with plain `dotnet test` (D245).
@@ -4229,6 +4325,9 @@ App.Tests, under a minute of its own (the timeline's in-process; four with real 
 pass: five skipped facts and four pure tests, well under a second, no launch. The series, outside
 the gate: 12 to 18 minutes per run of the class at five runs (clones about a minute, M3 about 5
 minutes), plus the rest; alternation after a change, ten runs at one run each, 40 to 60 minutes.
+As taken on 2026-11-22 (10.3.6, as built), a run of the class at five runs took 7 min 4 s to 7 min
+20 s, 433 s with the lock where the build was made beforehand and 549 and 520 s where the command
+built first: about 8 minutes of the desktop (CLAUDE.md's row), not 12 to 18.
 
 ### 10.8 Done when
 
@@ -4243,7 +4342,11 @@ minutes), plus the rest; alternation after a change, ten runs at one run each, 4
   passes its guards, the file holds each line of 10.3.5, and M6's reload line follows the fetch.
   Without the variable the pass's run of the class shows five skips and writes no file.
 - After wave 3: the "before" series recorded, the bounds committed, each trigger decided, the report's
-  table filled; a fix package only after a ruling, proven by the alternated series.
+  table filled; a fix package only after a ruling, proven by the alternated series. Done at wave 3's
+  close (D457): the series recorded, taken three times (10.3.6, as built), each trigger decided and
+  the report's table filled ("The performance series"); the bounds are the ones D457 gives, in a
+  commit of their own. Waiting for ruling 76's package in wave 4: its alternated series with the
+  lead's probe beside it, M3's bound from that series, and the table's "after" for M3.
 
 ### 10.9 Risks, what is unverified, open points
 
@@ -4251,12 +4354,30 @@ minutes), plus the rest; alternation after a change, ten runs at one run each, 4
   git 2.56's auto maintenance writes a commit-graph in a clone with git's defaults (the clones'
   settings rule it out, the guard would show it); that M6's reload line follows the fetch in the
   real app (read from the code, :145 and `FetchPull.cs:61`). The first run at the merge verifies them.
+  As run: at the first run (2026-11-21, on `4ca874a`) M6's reload line followed the fetch, its
+  4,718 ms inside the Fetch operation's 8,158 ms, and every fact of that run and of the three series
+  passed its guards, so no measured repository held a commit-graph; that `Process.StartTime` reads
+  on macOS and Linux stays unverified, since the series runs on the laptop alone.
 - M3 holds ten 100k histories at once; if the laptop pages, the time is the machine's, which the
   noted working set shows. Nine 100k clones are the worst case (ruling 65). M6 fetches from a local
-  folder: its fetch span is no network's; the reload after it is the measure.
+  folder: its fetch span is no network's; the reload after it is the measure. As run: the working
+  set after the ten loads was 780.6 to 811.1 MB in the three series, and the lead's probes of the
+  start with several tabs (by hand, outside any test, the cases alternately, three of each, so
+  indications; `D:/Projects/Personal/phase8-work/wave3/startup10-probe/`) put the delay before the
+  active tab's refs are read, in the about eighty git processes that ten openings start at once, not
+  in the nine large walks: it came beside nine tabs of 2,000 commits too (D457).
 - Risk 10: five rested runs, the slowest × 1.25 as bound; the gate's pass runs Q1 alone, rested.
+  Settled for the bounds by D457 (3): M2's from the take that D457 (2) describes, the second series,
+  the others from all fifteen runs, which no build touched, and M3's from its change's "after"
+  series. For the review before the gate (status step 19; D457's last paragraph): the series and
+  the real-window pass start the app from Git Bash, whose PATH finds git itself
+  (`ucrt64\bin\git.exe`), while the probes, like a user who starts the app from the desktop, found
+  `cmd\git.exe`, Git for Windows' launcher, which starts git as a child; Q1 by the tab's clock was
+  1,771 to 2,813 ms in the probes (1,970 ms in the probe of 00:59), against 1,400 to 1,827 ms in the
+  last gates' passes.
 - The first run at the merge takes the desktop for about 5 minutes: before the merge's lagged list,
-  never beside it (ruling 23). Open points: 13.4, items 17 and 18.
+  never beside it (ruling 23); it took 3 min 47 s, 295 s with the lock (2026-11-21). Open points:
+  13.4, items 17 and 18, both settled.
 
 ## 11. guide: the user guide, its site, pictures and links (D408)
 
@@ -4361,7 +4482,7 @@ American spelling (D434). A slug never changes once the app links to it. `SUMMAR
 | Troubleshooting: `troubleshooting/git.md` | "How VisualCommit finds Git" (ruling 4's order); `{ #git-missing }`, `{ #git-chosen-missing }`, `{ #git-too-old }`, `{ #git-not-working }` (a broken `~/.gitconfig` names its line), `{ #helper-missing }` | the first-run shots |
 | `troubleshooting/sign-in-and-ssh.md` | The dialogs; "An OpenSSH older than 8.4 ignores VisualCommit's sign-in dialog and asks in the terminal VisualCommit was started from. RHEL 8 ships 8.0, and the OpenSSH built into Windows can be older where you chose it." (ruling 7); the netrc paragraph, git-lfs on every version (ruling 8) | none |
 | `troubleshooting/data-and-logs.md` | Data and log folders per system (macOS's as §4 settles it); the activity log; reporting (8b's channel) | none |
-| `troubleshooting/large-repositories.md` | 100,000 commits tested, first rows in about 2 s (Q1), §10's numbers as indications; no writes for speed; `git commit-graph write`, `git maintenance start` (ruling 19) | none |
+| `troubleshooting/large-repositories.md` | 100,000 commits tested, first rows in about 2 s (Q1), §10's numbers as indications, from the report's section "The performance series" (10.3.6 step 5); no writes for speed; `git commit-graph write`, `git maintenance start` (ruling 19) | none |
 | Reference: `reference/shortcuts.md` | The generated tables between `<!-- shortcuts:start -->` and `<!-- shortcuts:end -->` | none |
 | `reference/about.md` | The About section and how to open it; MIT License; the notices; "This site is built with mdBook (Mozilla Public License 2.0)" and its fonts' licences as the first build shows them | `about-section` |
 
@@ -5152,6 +5273,17 @@ common-dir workaround (its premise only, D420); the 2.36-pinned gates stay. 74. 
 its limits; a container job timed out by a slow mirror is run again. 75. One decision for P1, the
 stash naming and the patch level; the mirror refspec a plan risk.
 
+**The restore order (D457, the lead, 2026-11-22).** 76. When the session's active restored tab is a
+repository's, it opens first and alone; the other restored tabs open at the earliest of its graph's
+first page, its opening or first load failing or ending without a page, its tab closed, or 5 s on
+the session's clock, and then at most four at once, as "Add repositories" opens and a dashboard
+reads (D207); the package measures the window's answers and may lower the four with its numbers. A
+waiting tab that the user shows opens at once; a waiting tab that is closed never opens. When the
+active tab is a dashboard or holds no repository, every restored tab opens at once, as today.
+`InitializeAsync` keeps its contract, so no harness wait changes; the start-up line still counts
+every restored tab; the merge tools' lookup still starts when the first restored load ends (D202).
+D457 also amends ruling 65: M3's bound comes from its change's "after" series (13.4 item 17).
+
 ### 13.2 What the integration settled
 
 Beyond moving the packages' contracts into section 1: the broker's `gitVersion` goes at §3's merge,
@@ -5272,9 +5404,15 @@ on the review, and item 22 is the review's question for the owner (13.5).
     closed, since one instance runs per data folder (D421). The owner hears the steps at the gate; a
     step whose words differ is written down as heard (9.3.9).
 17. Whether a measure that a fix changes takes its bound from the "after" series (ruling 65 says
-    "before"). The lead, in that fix's ruling.
+    "before"). The lead, in that fix's ruling. **Settled (the lead, 2026-11-22; D457):** M3's bound
+    comes from its change's "after" series (ruling 76's package) and stays unset until then, because
+    a bound from before would let the contention come back unseen; the others come from the
+    "before" series, M2's from the second series alone and the rest from all fifteen runs.
 18. The Pull budget is the highest count among CI's six jobs; if the floor job counts more than the
-    laptop, the lead raises it with the reason. At §10's merge.
+    laptop, the lead raises it with the reason. At §10's merge. **Settled (the lead, at §10's merge
+    on 2026-11-21):** the budget's theory passed in all six jobs of CI's run 44952559495 on
+    `86ecb3a`, the floor job's git 2.34.1 among them, so no job counted more than 23 git calls for a
+    fast-forward or a merge, and the budget stays 23 (`status.md`'s CI section).
 19. The region of `s14e-shortcuts-top`'s scroll bar: §11's builder measures it, the lead adds it to
     0.7. At §11's merge.
 20. mdBook publishes no checksum: the lead downloads the Linux archive once, pins its SHA-256 with the
