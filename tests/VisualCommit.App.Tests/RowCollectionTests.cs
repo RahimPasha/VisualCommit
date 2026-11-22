@@ -218,6 +218,141 @@ public class RowCollectionTests
         Assert.All(Enumerable.Range(0, rebuiltMore.Count), i => Assert.Same(rebuiltMore[i], longer[i]));
     }
 
+    [Fact]
+    public void A_run_of_rows_that_only_shift_is_removed_and_inserted_alone_and_the_rows_on_both_sides_stay()
+    {
+        // r05 is gone and n is new after r09: r06 to r09 each move up a row; r15, apart from them,
+        // shows a new version of itself.
+        var list = Rows(20);
+        var before = list.ToList();
+        List<Row> rebuilt = [.. before.Take(5).Select(Copy), .. before.Skip(6).Take(4).Select(Copy), new Row("n", 0), .. before.Skip(10).Select((row, i) => i == 5 ? row with { Version = 1 } : Copy(row))];
+        Assert.Equal(before.Count, rebuilt.Count);
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Row.ShowSame, Row.SameItem);
+
+        Assert.Equal([.. Removed(5, 9), .. Added(5, 9), (NotifyCollectionChangedAction.Replace, 15)], changes);
+        AssertKept(before, list, changed: [5, 6, 7, 8, 9, 15]);
+        Assert.All(Enumerable.Range(5, 5).Append(15), i => Assert.Same(rebuilt[i], list[i]));
+        Assert.Equal(rebuilt, list);
+    }
+
+    [Fact]
+    public void A_run_of_rows_that_show_new_versions_of_the_same_items_is_replaced_row_by_row()
+    {
+        var list = Rows(12);
+        var before = list.ToList();
+        var rebuilt = Rebuilt(before, 4, 5, 6);
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Row.ShowSame, Row.SameItem);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Replace, 4), (NotifyCollectionChangedAction.Replace, 5), (NotifyCollectionChangedAction.Replace, 6)], changes);
+        AssertKept(before, list, changed: [4, 5, 6]);
+        Assert.Equal(rebuilt, list);
+    }
+
+    [Fact]
+    public void A_run_that_holds_a_new_version_of_its_item_and_rows_that_only_shift_is_removed_and_inserted_whole()
+    {
+        // r04 shows a new version; right below it r05 is gone and n is new after r07.
+        var list = Rows(10);
+        var before = list.ToList();
+        List<Row> rebuilt = [.. before.Take(4).Select(Copy), before[4] with { Version = 1 }, Copy(before[6]), Copy(before[7]), new Row("n", 0), .. before.Skip(8).Select(Copy)];
+        Assert.Equal(before.Count, rebuilt.Count);
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Row.ShowSame, Row.SameItem);
+
+        Assert.Equal([.. Removed(4, 7), .. Added(4, 7)], changes);
+        AssertKept(before, list, changed: [4, 5, 6, 7]);
+        Assert.Equal(rebuilt, list);
+    }
+
+    [Fact]
+    public void Two_runs_with_kept_rows_and_a_row_that_changes_itself_between_them_are_each_told_of_by_their_own_kind()
+    {
+        // Rows 2 to 4 only shift (r02 gone, x new after r04); row 5 stays, row 6 shows a new version
+        // itself, row 7 stays; rows 8 and 9 show a new kind of their own item, which they cannot show
+        // themselves; rows 12 and 13 only shift again (r12 gone, y new after r13).
+        var list = Updatable(16);
+        var before = list.ToList();
+        var rebuilt = TwoRuns(before);
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Changing.ShowSame, Changing.SameItem);
+
+        Assert.Equal(
+            [
+                .. Removed(2, 4), .. Added(2, 4),
+                (NotifyCollectionChangedAction.Replace, 8), (NotifyCollectionChangedAction.Replace, 9),
+                .. Removed(12, 13), .. Added(12, 13),
+            ],
+            changes);
+        AssertKept(before, list, changed: [2, 3, 4, 8, 9, 12, 13]);
+        Assert.Equal(1, list[6].Version);
+        Assert.All(new[] { 2, 3, 4, 8, 9, 12, 13 }, i => Assert.Same(rebuilt[i], list[i]));
+        Assert.All(Enumerable.Range(0, rebuilt.Count), i => Assert.True(Changing.ShowSame(list[i], rebuilt[i]), $"Row {i} does not show what its rebuilt row shows."));
+    }
+
+    [Fact]
+    public void A_run_of_sixty_four_rows_that_only_shift_is_removed_and_inserted_and_one_of_sixty_five_resets_the_list()
+    {
+        // r01 is gone and n is new after r64: 64 rows told of, each counted once.
+        var list = Rows(70);
+        var before = list.ToList();
+        List<Row> rebuilt = [Copy(before[0]), .. before.Skip(2).Take(63).Select(Copy), new Row("n", 0), .. before.Skip(65).Select(Copy)];
+        Assert.Equal(before.Count, rebuilt.Count);
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Row.ShowSame, Row.SameItem);
+
+        Assert.Equal([.. Removed(1, 64), .. Added(1, 64)], changes);
+        AssertKept(before, list, changed: [.. Enumerable.Range(1, 64)]);
+        Assert.Equal(rebuilt, list);
+
+        // r01 gone and n new after r65: 65 rows, one reset.
+        var longer = Rows(70);
+        var shown = longer.ToList();
+        List<Row> more = [Copy(shown[0]), .. shown.Skip(2).Take(64).Select(Copy), new Row("n", 0), .. shown.Skip(66).Select(Copy)];
+        Assert.Equal(shown.Count, more.Count);
+        var resets = Record(longer);
+
+        longer.ReplaceAll(more, Row.ShowSame, Row.SameItem);
+
+        Assert.Equal([(NotifyCollectionChangedAction.Reset, -1)], resets);
+        Assert.All(Enumerable.Range(0, more.Count), i => Assert.Same(more[i], longer[i]));
+    }
+
+    [Fact]
+    public void The_form_for_rows_of_one_height_removes_and_inserts_each_row_it_tells_of_whatever_its_item()
+    {
+        // The rebuild of the two runs above, told of row by row.
+        var list = Updatable(16);
+        var before = list.ToList();
+        var rebuilt = TwoRuns(before);
+        var changes = Record(list);
+
+        list.ReplaceAll(rebuilt, Changing.ShowSame);
+
+        Assert.Equal(Told(rowsOfOneHeight: true, 2, 3, 4, 8, 9, 12, 13), changes);
+        AssertKept(before, list, changed: [2, 3, 4, 8, 9, 12, 13]);
+        Assert.Equal(1, list[6].Version);
+        Assert.All(new[] { 2, 3, 4, 8, 9, 12, 13 }, i => Assert.Same(rebuilt[i], list[i]));
+    }
+
+    /// <summary>
+    /// Sixteen rows rebuilt with two runs of rows that only shift (2 to 4, 12 and 13), a run of two
+    /// rows that show a new kind of their own item (8 and 9), and row 6 at a version it can show itself.
+    /// </summary>
+    private static List<Changing> TwoRuns(IReadOnlyList<Changing> before) =>
+    [
+        Same(before[0]), Same(before[1]), Same(before[3]), Same(before[4]), new Changing("x", 0, 0),
+        Same(before[5]), new Changing(before[6].Name, 0, 1), Same(before[7]),
+        new Changing(before[8].Name, 1, 0), new Changing(before[9].Name, 1, 0),
+        Same(before[10]), Same(before[11]), Same(before[13]), new Changing("y", 0, 0), Same(before[14]), Same(before[15]),
+    ];
+
     /// <summary>
     /// The stage lists' form for rows of one height (<paramref name="rowsOfOneHeight"/>), the left
     /// panel's otherwise, with <paramref name="sameItem"/> saying which rows stand for the same item.
@@ -255,6 +390,16 @@ public class RowCollectionTests
         [.. rows.Select((row, index) => changed.Contains(index) ? row with { Version = row.Version + 1 } : Copy(row))];
 
     private static Row Copy(Row row) => row with { };
+
+    private static Changing Same(Changing row) => new(row.Name, row.Kind, row.Version);
+
+    /// <summary>The Removes of the rows from <paramref name="first"/> to <paramref name="last"/>, the last first.</summary>
+    private static IEnumerable<(NotifyCollectionChangedAction Action, int Index)> Removed(int first, int last) =>
+        Enumerable.Range(first, last - first + 1).Reverse().Select(index => (NotifyCollectionChangedAction.Remove, index));
+
+    /// <summary>The Adds of the rows from <paramref name="first"/> to <paramref name="last"/>, the first first.</summary>
+    private static IEnumerable<(NotifyCollectionChangedAction Action, int Index)> Added(int first, int last) =>
+        Enumerable.Range(first, last - first + 1).Select(index => (NotifyCollectionChangedAction.Add, index));
 
     /// <summary>
     /// What the view is told of the rows at <paramref name="changed"/>, first to last: for rows of one
