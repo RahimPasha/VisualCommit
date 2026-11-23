@@ -27,7 +27,8 @@ Click a conflicted file to open it in VisualCommit's conflict resolver, in place
 - **Mark resolved** saves the result and stages the file. A file's menu also has
   **Mark as resolved**.
 
-Close the resolver with the **×** at its right or with Esc.
+Close the resolver with the **×** at its right, or with Esc while the focus is not in the result;
+it asks first when the result has changes you have not saved.
 
 ## Continue
 

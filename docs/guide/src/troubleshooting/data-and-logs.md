@@ -12,16 +12,18 @@ VisualCommit keeps its own data in one folder per user:
 
 It holds:
 
-- `settings.json`: the settings of the General and Tools sections, and the Git program you chose;
-- `session.json`: the tabs to restore, the recent repositories, the panels' sizes, and what each
-  repository's graph hides or solos;
+- `settings.json`: VisualCommit's own settings, such as those of the General and Tools sections and
+  the Git program you chose;
+- `session.json`: the tabs to restore, the recent repositories, the window's place and the
+  panels' sizes, and what each repository's graph hides or solos;
 - `workspaces.json`: your workspaces;
 - `accounts.json`: which hosting accounts you signed in to, without their tokens, which are in the
   keychain;
 - `avatars`: the authors' pictures from GitHub;
 - `merge-tools.json`: the merge tools git listed;
 - `logs`: VisualCommit's log files;
-- `instance.lock` and `instance.json`, while VisualCommit runs.
+- `instance.lock` and, while VisualCommit runs, `instance.json`, which keep a second VisualCommit
+  off this folder.
 
 Git's own settings (your name and email, the pull mode, the merge tool) are not here: they are in
 git's configuration ([Settings](../settings.md)).
