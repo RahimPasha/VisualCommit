@@ -24,8 +24,8 @@ a stash. A rebase needs a clean working tree: commit or stash your changes first
 
 Checking out an older commit of the branch you are on (or a tag on it) stashes your uncommitted
 changes first, without asking, in a stash named `Auto stash before checking out` and the commit's
-short SHA, or the tag's name, such as `Auto stash before checking out f39ea2d`. The status bar then reads
-`Your changes are in the stash "Auto stash before checking out f39ea2d".` The stash is drawn in the
+short SHA, or the tag's name, such as `Auto stash before checking out f39ea2d`. The status bar then
+reads `Your changes are in the stash "Auto stash before checking out f39ea2d".` The stash is drawn in the
 graph as a hollow circle joined to the commit it was taken on. Apply or pop it when you go back
 ([Stashes and tags](stash-and-tags.md)).
 

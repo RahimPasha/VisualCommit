@@ -43,7 +43,8 @@ VisualCommit, which Undo does not reach.
 Git keeps a log of where HEAD and each branch pointed, the reflog. **Show reflog**, in the menu of
 the **Working changes** row, of the graph's empty area or of the **Local branches** section, in the
 command palette, or Ctrl+Shift+R (Cmd+Shift+R on macOS), opens it in place of the graph; a local
-branch's menu has **Show reflog of** the branch. The box at the top left switches between **HEAD**, each local branch and **Backups**.
+branch's menu has **Show reflog of** the branch. The box at the top left switches between
+**HEAD**, each local branch and **Backups**.
 
 <img src="pictures/reflog-light.png" srcset="pictures/reflog-light.png 2x" alt="The reflog of HEAD: rows from HEAD@{0} down to HEAD@{20}, each with what moved HEAD, such as reset: moving to HEAD, commit: Show the battery level or checkout: moving from…, the commit's short SHA and its subject; the source box HEAD at the top left and a close button at the top right.">
 <img src="pictures/reflog-dark.png" srcset="pictures/reflog-dark.png 2x" alt="The reflog of HEAD: rows from HEAD@{0} down to HEAD@{20}, each with what moved HEAD, such as reset: moving to HEAD, commit: Show the battery level or checkout: moving from…, the commit's short SHA and its subject; the source box HEAD at the top left and a close button at the top right.">
