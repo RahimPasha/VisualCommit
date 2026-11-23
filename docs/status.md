@@ -716,7 +716,7 @@ All three packages of wave 3 are merged: §10 (`86ecb3a`), §8 (`f014b2b`, its f
 `85e2884`) and §9 (`769f459`), with the fetch hold's fix (`eba3717`), the wave's docs (`b593097`),
 the link frame's fix (`fcf8c1e`), the two fixes of what CI's run on that merge found (`70a8fc0`,
 `809b77f`) and the performance bounds (`0bfbe92`). **Step 16 is under way**; what is done and what
-is left, as of 2026-11-23 00:55 (the details in Notes, "Wave 3's close"). Done: the lagged list and
+is left, as of 2026-11-23 02:50 (the details in Notes, "Wave 3's close"). Done: the lagged list and
 the whole default run on `85e2884`'s code; the pictures compared with wave 2's references and
 inspected; the fault they showed (`a1b-about-link-focus`) fixed and merged; the new references
 (`D:/Projects/Personal/phase8-work/references/wave3/`, 1,235 scripted pictures); three "before"
@@ -749,18 +749,19 @@ tree passed (the root build and the real-window project's Release build without 
 rows; `D:/Projects/Personal/phase8-work/wave3/ci-fixes/rows-merge/summary.txt`);
 `docs/architecture.md`'s passage on `RowCollection` and the design's 1.17 are written (`c1bc69b`),
 and **CI's run 45133434382 on that push is green in all six jobs** (the CI section). (b) **The whole
-default run** through `scripts/heavy-run.sh` on `c1bc69b`, whose code is the merge's, **started at
-00:46** with no agent building beside it
-(`D:/Projects/Personal/phase8-work/wave3/ci-fixes/default-run-rows/`: `default-run.log`, then
-`summary.txt` with the result and every scripted picture that is not the file of wave 3's
-references, the list `D:/Projects/Personal/phase8-work/references/wave3-pictures.sha256`); each
-differing picture is to be explained (`u20c` and `u20e` will differ, Notes). If the session ended
-before it did, look whether the lock is still held (CLAUDE.md, Commands) and read `summary.txt`; run
-it again only if it did not end. (c) The docs: in the report the subsection on CI's two failures,
-their fixes, the review and the row list's fix, with the lead's checks, CI's run and the default
-run's comparison (the lead's draft is ready; the entries on the underline's rule and on U2/U3's step
-9 are in, `e402e58`), and an independent check of it, of the design's new bullet and of
-architecture.md's passage. (d) The last worktree removed
+default run** through `scripts/heavy-run.sh` on `c1bc69b`, whose code is the merge's, with no agent
+building beside it: **8,514 tests, 8,509 passed, 5 skipped, none failed, 1 h 44 min 41 s** (00:46 to
+02:32; `D:/Projects/Personal/phase8-work/wave3/ci-fixes/default-run-rows/`: `default-run.log`,
+`summary.txt`, the run's 1,235 scripted pictures under `visual/`, the comparison under `compare/`).
+Of the 1,235 scripted pictures 1,181 are the files of wave 3's references and 54 are not; no changed
+pixel lies in the left panel's list or in a stage list's rows, and 25 of the 54 are the files of
+wave 1's or wave 2's references. **Under way: the inspection of the 54** (run `wf_40a7d6a4-956`: six
+readers, a second reader for the eleven names no earlier comparison listed, a refuter for whatever
+is not plainly run-to-run; crops under `default-run-rows/inspect/`). (c) The docs: in the report the
+subsection on CI's two failures, their fixes, the review and the row list's fix, with the lead's
+checks, CI's run and the default run's comparison (the lead's draft is ready; the entries on the
+underline's rule and on U2/U3's step 9 are in, `e402e58`), and an independent check of it, of the
+design's new bullet and of architecture.md's passage. (d) The last worktree removed
 (`D:/Projects/Personal/vc-wt/p8a-rows-scroll`; its branch stays local, as the other `wip/` branches
 do). Then step 16 is ticked and **the owner is asked for the week's share before wave 4** ("Waiting
 on the owner"), which holds the restore order's package (ruling 76: a design section, the build with
