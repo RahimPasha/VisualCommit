@@ -47,6 +47,7 @@ public class AppShortcutsTests
         new("Conflict resolver", [new("Previous or next conflict", "Option+Up, Option+Down"), new("Previous or next file", "Option+Left, Option+Right"), new("Leave the result", "Ctrl+Tab")], null),
         new("Dashboard", [new("Open the repository", "Enter"), new("Remove from workspace", "Cmd+Delete, Forward Delete"), new("Move the repository", "Option+Up, Option+Down")], null),
         new("Dialogs and menus", [new("Confirm", "Enter"), new("Confirm from a box of several lines", "Cmd+Enter"), new("Cancel or close", "Esc")], null),
+        new("Help", [new("Open the user guide", "F1")], "On a Mac keyboard F1 needs Fn unless \"Use F1, F2, etc. keys as standard function keys\" is on."),
     ];
 
     /// <summary>
@@ -221,6 +222,29 @@ public class AppShortcutsTests
     }
 
     [Fact]
+    public void F1_routes_to_the_user_guide_on_both_platforms_and_Shift_F1_and_Ctrl_F1_nowhere()
+    {
+        // D417: F1 opens the user guide, the same key on every platform; Ctrl+F1 stays free (D213).
+        foreach (var platform in Platforms)
+        {
+            Assert.Equal(new RoutedCommand(AppCommand.OpenUserGuide), AppShortcuts.Route(new Shortcut(F1), platform));
+            Assert.Null(AppShortcuts.Route(new Shortcut(F1, Shift), platform));
+            Assert.Null(AppShortcuts.Route(new Shortcut(F1, Control), platform));
+            Assert.Null(AppShortcuts.Route(new Shortcut(F1, Command), platform));
+            Assert.Equal(new Shortcut(F1), AppShortcuts.Shown(AppCommand.OpenUserGuide, platform));
+            Assert.Equal("F1", new KeyTexts(platform).Of(AppCommand.OpenUserGuide));
+        }
+
+        // The shortcuts list's last group, Help, with its one row; on a Mac it notes Fn.
+        var windows = AppShortcuts.Groups(CommandKey.Ctrl)[^1];
+        var mac = AppShortcuts.Groups(CommandKey.Cmd)[^1];
+        Assert.Equal(("Help", "Open the user guide", "F1", null), (windows.Title, Assert.Single(windows.Rows).Action, windows.Rows[0].Keys, windows.Note));
+        Assert.Equal(
+            ("Help", "Open the user guide", "F1", "On a Mac keyboard F1 needs Fn unless \"Use F1, F2, etc. keys as standard function keys\" is on."),
+            (mac.Title, Assert.Single(mac.Rows).Action, mac.Rows[0].Keys, mac.Note));
+    }
+
+    [Fact]
     public void A_key_event_reads_in_the_apps_words_and_the_windows_key_is_no_word()
     {
         // 6.4: the command modifier is Command; Control on a Meta platform is Control; Meta on a Control platform has no word.
@@ -264,14 +288,13 @@ public class AppShortcutsTests
         // of no command of this enum (PaletteEntriesTests). D299 amends the list: Clone from GitHub…
         // is a palette command without a key (docs/phase-7a-design.md 9.5); D354 amends D299's as
         // D299 amended D199's: Clone from GitLab… and Clone from Azure DevOps… are two more
-        // (docs/phase-7b-design.md 11.5). D417: About VisualCommit… has no key; Open the user guide
-        // has none until F1 is bound to it.
+        // (docs/phase-7b-design.md 11.5). D417: About VisualCommit… has no key.
         AppCommand[] withoutKey =
         [
             AppCommand.ShowKeyboardShortcuts, AppCommand.NewWorkspace, AppCommand.ShowBackups, AppCommand.CreateTagAtHead, AppCommand.AddRemote,
             AppCommand.ManageRemotes, AppCommand.ShowAllHiddenBranches, AppCommand.StopSoloing, AppCommand.UseDarkTheme, AppCommand.UseLightTheme,
             AppCommand.FollowSystemTheme, AppCommand.CloneFromGitHub, AppCommand.CloneFromGitLab, AppCommand.CloneFromAzureDevOps,
-            AppCommand.About, AppCommand.OpenUserGuide,
+            AppCommand.About,
         ];
         var keyed = AppShortcuts.Bindings.Select(binding => binding.Command).ToHashSet();
         Assert.Equal(withoutKey.Order(), Enum.GetValues<AppCommand>().Where(command => !keyed.Contains(command)).Order());
@@ -319,6 +342,7 @@ public class AppShortcutsTests
             [AppCommand.FilterRefs] = ("Filter branches and tags", false),
             [AppCommand.NextRegion] = ("Next region", true),
             [AppCommand.PreviousRegion] = ("Previous region", true),
+            [AppCommand.OpenUserGuide] = ("Open the user guide", true),
         };
         Assert.Equal(table.Keys.Order(), AppShortcuts.Bindings.Where(binding => binding.Pass == KeyPass.Tunnel).Select(binding => binding.Command).Order());
 

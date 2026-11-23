@@ -356,17 +356,17 @@ public sealed class Phase6ExpectationTestsS
 
     // ---- The expectations against each other ----
 
-    /// <summary>The Keyboard shortcuts list: eleven groups, 50 rows, one row on two lines, each key text of the Windows form (no <c>Cmd</c>).</summary>
+    /// <summary>The Keyboard shortcuts list: twelve groups, 51 rows, one row on two lines, each key text of the Windows form (no <c>Cmd</c>).</summary>
     [Fact]
-    public void The_shortcut_list_has_eleven_groups_and_fifty_rows()
+    public void The_shortcut_list_has_twelve_groups_and_fifty_one_rows()
     {
-        Assert.Equal(11, PartS.ShortcutGroups.Count);
-        Assert.Equal(50, PartS.ShortcutGroups.Sum(group => group.Rows.Count));
+        Assert.Equal(12, PartS.ShortcutGroups.Count);
+        Assert.Equal(51, PartS.ShortcutGroups.Sum(group => group.Rows.Count));
         Assert.Equal(PartS.LastGroup, PartS.ShortcutGroups[^1].Group);
         Assert.Contains(PartS.ShortcutGroups, group => group.Group == PartS.NotedGroup);
         Assert.Single(PartS.ShortcutGroups.SelectMany(group => group.Rows), row => row.Action == PartS.ExtendSelection);
         Assert.DoesNotContain(PartS.ShortcutGroups.SelectMany(group => group.Rows), row => row.Keys.Contains("Cmd", StringComparison.Ordinal));
-        Assert.Equal(50, PartS.ShortcutGroups.SelectMany(group => group.Rows).Select(row => row.Action).Distinct().Count());
+        Assert.Equal(51, PartS.ShortcutGroups.SelectMany(group => group.Rows).Select(row => row.Action).Distinct().Count());
     }
 
     /// <summary>The numbers the checks rest on: the menus' heights (171 and 197), the click points, the card at both sizes, the pull reads' counts at an opening (seven, eight, nine processes).</summary>

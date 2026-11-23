@@ -59,6 +59,7 @@ public class SettingsDialogViewTests
         new("Conflict resolver", [new("Previous or next conflict", "Alt+Up, Alt+Down"), new("Previous or next file", "Alt+Left, Alt+Right"), new("Leave the result", "Ctrl+Tab")], null),
         new("Dashboard", [new("Open the repository", "Enter"), new("Remove from workspace", "Delete"), new("Move the repository", "Alt+Up, Alt+Down")], null),
         new("Dialogs and menus", [new("Confirm", "Enter"), new("Confirm from a box of several lines", "Ctrl+Enter"), new("Cancel or close", "Esc")], null),
+        new("Help", [new("Open the user guide", "F1")], null),
     ];
 
     [AvaloniaTheory]
@@ -305,7 +306,8 @@ public class SettingsDialogViewTests
             }
         }
 
-        // The end of the list: the last group's three rows wholly in view once scrolled down.
+        // The end of the list: its last three rows wholly in view once scrolled down (the last
+        // group's one row, Help's, and the two before it).
         scroller.Offset = new Vector(0, scroller.Extent.Height);
         app.Settle();
         var section = app.BoundsOf(scroller);
