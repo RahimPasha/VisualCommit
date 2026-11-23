@@ -24,8 +24,8 @@ to see its diff.
 Open a file's diff. Each hunk's bar has **Stage hunk** and **Discard hunk**; in a diff of a staged
 file, **Unstage hunk**.
 
-<img src="pictures/stage-hunk-light.png" srcset="pictures/stage-hunk-light.png 2x" alt="The inline diff of station/units.py with the pointer on the first hunk's Stage hunk button; the second hunk has its own Stage hunk and Discard hunk buttons.">
-<img src="pictures/stage-hunk-dark.png" srcset="pictures/stage-hunk-dark.png 2x" alt="The inline diff of station/units.py with the pointer on the first hunk's Stage hunk button; the second hunk has its own Stage hunk and Discard hunk buttons.">
+<img src="pictures/stage-hunk-light.png" srcset="pictures/stage-hunk-light.png 2x" alt="The inline diff of station/units.py with the first hunk's Stage hunk button highlighted, as under the pointer; the second hunk has its own Stage hunk and Discard hunk buttons.">
+<img src="pictures/stage-hunk-dark.png" srcset="pictures/stage-hunk-dark.png 2x" alt="The inline diff of station/units.py with the first hunk's Stage hunk button highlighted, as under the pointer; the second hunk has its own Stage hunk and Discard hunk buttons.">
 
 ## Stage chosen lines
 

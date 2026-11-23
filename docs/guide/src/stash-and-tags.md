@@ -16,8 +16,8 @@ The stash shows under **Stashes** in the left panel and in the graph, as a hollo
 a dotted line to the commit it was taken on, with a label such as `stash@{0}`. Select it to see
 its message, its date and its changed files.
 
-<img src="pictures/stash-in-graph-light.png" srcset="pictures/stash-in-graph-light.png 2x" alt="The graph's top rows with the stash stash@{0}, On main: Try a larger font, selected: a hollow circle joined by a dotted line to the commit on main below it, and its details on the right with its author, date, SHA and parent.">
-<img src="pictures/stash-in-graph-dark.png" srcset="pictures/stash-in-graph-dark.png 2x" alt="The graph's top rows with the stash stash@{0}, On main: Try a larger font, selected: a hollow circle joined by a dotted line to the commit on main below it, and its details on the right with its author, date, SHA and parent.">
+<img src="pictures/stash-in-graph-light.png" srcset="pictures/stash-in-graph-light.png 2x" alt="The graph's top rows with the stash stash@{0}, On main: Try a larger font, selected: a hollow circle joined by a dotted line to the commit on main below it, and its details on the right with its author, date, SHA and parent, and below them Changed files (1) with display.py.">
+<img src="pictures/stash-in-graph-dark.png" srcset="pictures/stash-in-graph-dark.png 2x" alt="The graph's top rows with the stash stash@{0}, On main: Try a larger font, selected: a hollow circle joined by a dotted line to the commit on main below it, and its details on the right with its author, date, SHA and parent, and below them Changed files (1) with display.py.">
 
 ## Bring a stash back
 
