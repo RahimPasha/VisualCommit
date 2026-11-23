@@ -19,7 +19,9 @@ namespace VisualCommit.App.ViewModels;
 /// task has ended the order lets go of the lifetime too. Its state is guarded by a lock, and
 /// <c>open</c> is always called outside it: in the app every call comes on the UI thread, and the
 /// order's awaits resume there; without a synchronization context (view-model tests on the thread
-/// pool) its continuations run on the pool beside the caller.
+/// pool) its continuations run on the pool beside the caller. The tabs let into slots are asked for
+/// in the order they were let in, also when an opening ends inside its own call, and a tab closed
+/// after it was let in and before it is asked for is never asked for.
 /// </para>
 /// </summary>
 public sealed class RestoreOrder
@@ -70,12 +72,18 @@ public sealed class RestoreOrder
     private readonly CancellationToken _lifetime;
     private readonly TaskCompletionSource _firstLoadEnded = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>The tabs let into slots and not asked for yet, in the order they were let in.</summary>
+    private readonly Queue<Opening> _letIn = new();
+
     /// <summary>Cancels the first tab's 5 s at the release or the stop; linked to the lifetime.</summary>
     private CancellationTokenSource? _watch;
     private CancellationTokenRegistration _stopping;
     private Stage _stage = Stage.First;
     private bool _started;
     private bool _openedAny;
+
+    /// <summary>A call is asking for the tabs let in; one reached from inside it leaves them to it.</summary>
+    private bool _asking;
     private int _slots;
     private int _unfinished;
     private long _startedAt;
@@ -225,7 +233,6 @@ public sealed class RestoreOrder
         ArgumentNullException.ThrowIfNull(tab);
         Entry? dropped = null;
         Release? release = null;
-        var next = new List<Opening>();
         EventHandler? handler;
         lock (_gate)
         {
@@ -246,7 +253,7 @@ public sealed class RestoreOrder
                 case EntryState.OpeningWithSlot:
                     entry.State = EntryState.Settled;
                     _slots--;
-                    next = TakeSlotsLocked();
+                    TakeSlotsLocked();
                     break;
             }
 
@@ -265,7 +272,7 @@ public sealed class RestoreOrder
         }
 
         Carry(release);
-        OpenAll(next);
+        AskLetIn();
     }
 
     /// <summary>
@@ -352,8 +359,9 @@ public sealed class RestoreOrder
     }
 
     /// <summary>
-    /// The release, once: the first tab is settled, the line is made and the slots are filled in tab
-    /// order. Null when the order was released or stopped already. Under the lock.
+    /// The release, once: the first tab is settled, the line is made and the waiting tabs are let
+    /// into the slots in tab order. Null when the order was released or stopped already. Under the
+    /// lock.
     /// </summary>
     private Release? ReleaseLocked(string reason)
     {
@@ -374,7 +382,8 @@ public sealed class RestoreOrder
         var waiting = _entries.Count(entry => entry.State == EntryState.Waiting);
         var milliseconds = (long)_clock.GetElapsedTime(_startedAt).TotalMilliseconds;
         var line = Format(ReleasedFormat, _first.Name, reason, milliseconds, waiting, OpensAtOnce);
-        return new Release(line, detached, TakeSlotsLocked());
+        TakeSlotsLocked();
+        return new Release(line, detached);
     }
 
     /// <summary>Carries out a release outside the lock: the line first, then the 5 s stopped, then the openings.</summary>
@@ -392,16 +401,18 @@ public sealed class RestoreOrder
 
         _log.Info(release.Line);
         CancelWatch();
-        OpenAll(release.Next);
+        AskLetIn();
     }
 
-    /// <summary>The waiting tabs that take the free slots now, in tab order, each marked as opening. Under the lock.</summary>
-    private List<Opening> TakeSlotsLocked()
+    /// <summary>
+    /// Lets waiting tabs into the free slots now, in tab order, each marked as opening and queued
+    /// to be asked for. Under the lock.
+    /// </summary>
+    private void TakeSlotsLocked()
     {
-        var next = new List<Opening>();
         if (_stage != Stage.Released)
         {
-            return next;
+            return;
         }
 
         foreach (var entry in _entries)
@@ -416,46 +427,75 @@ public sealed class RestoreOrder
                 entry.State = EntryState.OpeningWithSlot;
                 _slots++;
                 _openedAny = true;
-                next.Add(Watched(entry, tab));
+                _letIn.Enqueue(Watched(entry, tab));
             }
         }
-
-        return next;
     }
 
-    private void OpenAll(List<Opening> openings)
+    /// <summary>
+    /// Asks for the tabs let in, outside the lock, in the order they were let in. An opening that
+    /// ends inside its own call (a provider that fails at once) frees its slot there and lets the
+    /// next tab in; the call it makes so from inside this one returns at once, and this one asks
+    /// for that tab after those let in before it.
+    /// </summary>
+    private void AskLetIn()
     {
-        foreach (var opening in openings)
+        lock (_gate)
         {
-            Open(opening, null);
+            if (_asking)
+            {
+                return;
+            }
+
+            _asking = true;
+        }
+
+        while (true)
+        {
+            Opening next;
+            lock (_gate)
+            {
+                if (!_letIn.TryDequeue(out next))
+                {
+                    _asking = false;
+                    return;
+                }
+            }
+
+            Open(next, null);
         }
     }
 
     /// <summary>
     /// Asks for one tab's opening, outside the lock. A watched opening hears the tab's
     /// <c>RepositoryOpened</c> first, since a provider that has answered already reaches it inside
-    /// the call; its trigger is then waited for.
+    /// the call; its trigger is then waited for. A tab closed since the order chose it is not asked
+    /// for: its close has freed its slot or released the others already, and its task completes.
     /// </summary>
     private void Open(Opening opening, Task? delay)
     {
         var entry = opening.Entry;
-        if (opening.Opened is not null)
+        EventHandler? handler = null;
+        bool closed;
+        lock (_gate)
         {
-            EventHandler handler = (sender, _) => OnRepositoryOpened(entry, sender as RepoTabViewModel);
-            var subscribe = false;
-            lock (_gate)
+            closed = !ReferenceEquals(entry.Tab, opening.Tab);
+            if (!closed && opening.Opened is not null && ReferenceEquals(entry.Opened, opening.Opened))
             {
-                if (ReferenceEquals(entry.Opened, opening.Opened))
-                {
-                    entry.Handler = handler;
-                    subscribe = true;
-                }
+                handler = (sender, _) => OnRepositoryOpened(entry, sender as RepoTabViewModel);
+                entry.Handler = handler;
             }
+        }
 
-            if (subscribe)
-            {
-                opening.Tab.RepositoryOpened += handler;
-            }
+        if (closed)
+        {
+            Finish(entry, null);
+            return;
+        }
+
+        if (handler is not null)
+        {
+            opening.Tab.RepositoryOpened += handler;
         }
 
         Task<bool> task;
@@ -547,7 +587,6 @@ public sealed class RestoreOrder
             return;
         }
 
-        List<Opening> next;
         lock (_gate)
         {
             if (entry.State != EntryState.OpeningWithSlot)
@@ -557,10 +596,10 @@ public sealed class RestoreOrder
 
             entry.State = EntryState.Settled;
             _slots--;
-            next = TakeSlotsLocked();
+            TakeSlotsLocked();
         }
 
-        OpenAll(next);
+        AskLetIn();
 
         static Task[] Waits(Task first, Task second, Task? delay) => delay is null ? [first, second] : [first, second, delay];
     }
@@ -670,6 +709,6 @@ public sealed class RestoreOrder
     /// <summary>A tab to open outside the lock, and the source its view model is handed to when the order watches it.</summary>
     private readonly record struct Opening(Entry Entry, RepoTabViewModel Tab, TaskCompletionSource<RepositoryViewModel>? Opened);
 
-    /// <summary>A release decided under the lock: its line, the first tab's handler to remove, and the tabs to open.</summary>
-    private sealed record Release(string Line, (RepoTabViewModel Tab, EventHandler Handler)? Detached, List<Opening> Next);
+    /// <summary>A release decided under the lock: its line and the first tab's handler to remove; the tabs it let in are queued.</summary>
+    private sealed record Release(string Line, (RepoTabViewModel Tab, EventHandler Handler)? Detached);
 }
