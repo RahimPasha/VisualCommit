@@ -15,8 +15,8 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// <summary>
     /// The most rows a partial update tells the view of one by one; more reset the list. A rebuild
     /// that changes the number of rows counts the rows it removes and those it inserts; one with as
-    /// many rows counts the rows it tells of, a run removed and inserted each of its rows once, the
-    /// rows that show the same between two runs removed as one among them.
+    /// many rows counts the rows it tells of, each once, whether its run is replaced or removed and
+    /// inserted. A row that stays, or that changes itself, counts for nothing.
     /// </summary>
     private const int MaxPartialChange = 64;
 
@@ -40,9 +40,9 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// refresh's counts, the hidden branches' tooltips once the graph without them is shown) leave
     /// every row between them, and its control, as it was, so that a press on one of those rows is
     /// still a click when its release comes after the rebuild; rows that only shift are told of by
-    /// runs, which can take kept rows with them. This is the form for a list whose rows differ in
-    /// height (the left panel); <paramref name="sameItem"/> says whether a row and the row rebuilt at
-    /// its index stand for the same item (the left panel: the same key).
+    /// runs, and a row between two runs stays as it is. This is the form for a list whose rows differ
+    /// in height (the left panel); <paramref name="sameItem"/> says whether a row and the row rebuilt
+    /// at its index stand for the same item (the left panel: the same key).
     /// </summary>
     public void ReplaceAll(IReadOnlyList<T> rows, Func<T, T, bool> showSame, Func<T, T, bool> sameItem)
     {
@@ -95,19 +95,17 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// <see cref="MaxPartialChange"/> rows are, which resets the list. For rows of one height
     /// (<paramref name="sameItem"/> null) each is removed and its rebuilt row inserted at its index.
     /// For rows of mixed heights they go by runs, each run the most consecutive rows told of: a run
-    /// whose rows all stand for the same items as their rebuilt rows is replaced row by row; a run in
-    /// which a row stands for another item than its rebuilt row is removed, its last row first, and
-    /// its rebuilt rows inserted, the first first, as the whole changed part was before phase 8a.
-    /// Two runs of the second kind with only rows that show the same between them go as one: those
-    /// rows are removed and their rebuilt rows inserted with them, new objects with new controls, as
-    /// they were before phase 8a, and a press on one of them loses its click. A row that changes
-    /// itself, or a run replaced row by row, between them keeps them apart. In the left panel the
-    /// first kind are rows whose key stays but which cannot change themselves (a pull request row
-    /// that shows something new, or whose request changed; a message row of the pull requests'
-    /// section whose text changes; a ref row whose name, tooltip, level or opening changes under its
-    /// key); the second are rows that only shift, which a branch renamed in the app or outside it, its
-    /// undo, or a fetch that drops one remote branch and brings another give every row between the
-    /// old place and the new one, and a message row that gives way to another kind.
+    /// whose rows all stand for the same items as their rebuilt rows is replaced row by row; any other
+    /// run, in which a row stands for another item than its rebuilt row, is removed, its last row
+    /// first, and its rebuilt rows inserted, the first first, as the whole changed part was before
+    /// phase 8a. Runs are never joined: a row between two runs, one that shows the same or one that
+    /// changes itself, stays as it is, the object and, wherever Avalonia leaves it, its control. In
+    /// the left panel the first kind are rows whose key stays but which cannot change themselves (a
+    /// pull request row that shows something new, or whose request changed; a message row of the pull
+    /// requests' section whose text changes; a ref row whose name, tooltip, level or opening changes
+    /// under its key); the second are rows that only shift, which a branch renamed in the app or
+    /// outside it, its undo, or a fetch that drops one remote branch and brings another give every row
+    /// between the old place and the new one, and a message row that gives way to another kind.
     /// <para>
     /// What the view does with each, in Avalonia's virtualising stack panel (12.1.3), which keeps the
     /// place of the first row it has made and finds the row at the top of the view by adding the
@@ -122,10 +120,11 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// smaller than those heights, the list goes to its top at once and makes every row's control
     /// again, the click under a press lost with them. That is the cost the left panel's rows replaced
     /// row by row still carry, a known limit, met when such a row is the first row the panel has
-    /// made, the top row in view. A solo, which dims every branch row
-    /// but the soloed one and HEAD's, sent the list to its top so while those rows were replaced, and
-    /// so did a rename while the rows it shifts were (20 branches scrolled by 100 px, the top row
-    /// renamed to sort last: 18 rows replaced, 468 px).
+    /// made, the top row in view; and a press on a replaced row itself loses its click, wherever the
+    /// row is, as it did before phase 8a. A solo, which dims every branch row but the soloed one and
+    /// HEAD's, sent the list to its top so while those rows were replaced, and so did a rename while
+    /// the rows it shifts were (20 branches scrolled by 100 px, the top row renamed to sort last: 18
+    /// rows replaced, 468 px).
     /// </para>
     /// <para>
     /// A remove at or above the first row the panel has made, and an insert above it, make it forget
@@ -146,28 +145,31 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     /// of rows removes and inserts its changed part in the same way.
     /// </para>
     /// <para>
-    /// How far the estimate misses depends on which rows the panel has made are left for its mean: a
-    /// row in view that is neither removed nor inserted stays in it. Before phase 8a the whole changed
-    /// part was removed, from its first row that showed something new to its last. Two runs removed
-    /// apart, with the kept rows between them left in place, made the estimate miss by more than
-    /// that, which is why they go as one: at the bottom of 60 branches, b45 renamed b48x and b55
-    /// renamed b58x in one refresh leave the offset at 1295 for 1356 as before phase 8a, where the two
-    /// runs apart left 1248; a fetch at the bottom of 40 local and 31 remote branches that drops r10
-    /// and r16 and brings r13a and r19a leaves 1550 for 1716 as before, where apart it left 1544. A
-    /// row that changes itself is still left in place, between two runs or right beside one, and
-    /// there the estimate can miss by more than it did before phase 8a, nothing moving in the window
-    /// and a press keeping its click: with b50 moved to another commit by the refresh of those two
-    /// renames the offset ends at 1248, 108 px short where it was 61; at the bottom of 61 branches, a
-    /// rename of the top row in view b46 to b60x whose refresh also moves b61, right below its run,
-    /// leaves 1342 for 1386, 44 px short where it was 22. That is what keeping such a row, and its
-    /// control, in place costs.
+    /// How far the estimate misses depends on which of the rows the panel has made are left for its
+    /// mean: a row that is neither removed nor inserted stays in it. Before phase 8a the whole changed
+    /// part was removed and inserted, from its first row that showed something new to its last, the
+    /// rows between with it. Now a row left in place anywhere between the first and the last row a
+    /// rebuild tells the view of, one that shows the same or one that changes itself, stays in the
+    /// mean, and deep in a list of mixed heights the offset and the extent can then end further from
+    /// the true ones than they did before phase 8a, a known limit. So, at the bottom of 60 branches,
+    /// b45 renamed b48x and b55 renamed b58x in one refresh leave the offset at 1248 for 1356, where
+    /// it was 1295; a fetch at the bottom of 40 local and 31 remote branches that drops r10 and r16
+    /// and brings r13a and r19a leaves 1544 for 1716, where it was 1550; at the bottom of 60
+    /// branches, b45 renamed b50x by a refresh that also moves main, HEAD's branch, to another commit
+    /// ten rows below the run leaves 1241 for 1356, where it was 1368; and at the bottom of 61
+    /// branches, b46 renamed b60x by a refresh that also moves b61, right below the run, leaves 1342
+    /// for 1386, where it was 1364. No row moves in the window in these cases, and no press loses a
+    /// click that the code before phase 8a kept; deep in the list, kept rows in view may get new
+    /// controls, as they did before phase 8a. Runs are not joined because a row between two runs
+    /// keeps its object and, near the top of the list, its control and the click under a press,
+    /// which a join would give up, and a join could turn two changes far apart into a reset of the
+    /// whole list.
     /// </para>
     /// </summary>
     private void ReplaceChanged(IReadOnlyList<T> rows, int start, int count, Func<T, T, bool> showSame, Func<T, T, bool>? sameItem)
     {
         var updated = new List<(IUpdatableRow<T> Row, T Rebuilt)>();
         var changed = new List<int>();
-        var changeThemselves = new HashSet<int>();
         for (var i = start; i < start + count; i++)
         {
             if (showSame(this[i], rows[i]))
@@ -178,7 +180,6 @@ public sealed class RowCollection<T> : ObservableCollection<T>
             if (this[i] is IUpdatableRow<T> shown && shown.CanUpdateTo(rows[i]))
             {
                 updated.Add((shown, rows[i]));
-                changeThemselves.Add(i);
             }
             else
             {
@@ -186,13 +187,13 @@ public sealed class RowCollection<T> : ObservableCollection<T>
             }
         }
 
-        var runs = Runs(rows, changed, changeThemselves, sameItem);
-        if (runs.Sum(run => run.Count) > MaxPartialChange)
+        if (changed.Count > MaxPartialChange)
         {
             ReplaceAll(rows);
             return;
         }
 
+        var runs = Runs(rows, changed, sameItem);
         foreach (var (row, rebuilt) in updated)
         {
             row.UpdateTo(rebuilt);
@@ -216,15 +217,14 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     }
 
     /// <summary>
-    /// How the rows at <paramref name="changed"/> (ascending) are told of, read before any of them
-    /// changes. For rows of one height (<paramref name="sameItem"/> null) each is removed and
-    /// inserted on its own. Otherwise they go by runs of consecutive rows: a run whose rows all stand
-    /// for the same items as their rebuilt rows is replaced, the others are removed and inserted, and
-    /// a run of these with only rows that show the same between it and the one removed before it
-    /// (no row that changes itself, <paramref name="changeThemselves"/>, and no replaced run) joins
-    /// that one, the rows between them with it.
+    /// How the view is told of the rows at <paramref name="changed"/> (ascending), read before any row
+    /// changes. For rows of one height (<paramref name="sameItem"/> null) each is removed and inserted
+    /// on its own. Otherwise they go by runs, each run the most consecutive indexes of
+    /// <paramref name="changed"/>: a run whose rows all stand for the same items as their rebuilt rows
+    /// is replaced, any other run is removed and inserted. Runs are never joined: a row between two
+    /// runs is not told of and stays.
     /// </summary>
-    private List<Run> Runs(IReadOnlyList<T> rows, List<int> changed, HashSet<int> changeThemselves, Func<T, T, bool>? sameItem)
+    private List<Run> Runs(IReadOnlyList<T> rows, List<int> changed, Func<T, T, bool>? sameItem)
     {
         var runs = new List<Run>();
         if (sameItem is null)
@@ -243,19 +243,7 @@ public sealed class RowCollection<T> : ObservableCollection<T>
 
             var runStart = changed[first];
             var runCount = last - first + 1;
-            var replace = Enumerable.Range(runStart, runCount).All(index => sameItem(this[index], rows[index]));
-            if (!replace
-                && runs.Count > 0
-                && runs[^1] is { Replace: false } before
-                && !Enumerable.Range(before.Start + before.Count, runStart - before.Start - before.Count).Any(changeThemselves.Contains))
-            {
-                runs[^1] = before with { Count = runStart + runCount - before.Start };
-            }
-            else
-            {
-                runs.Add(new Run(runStart, runCount, replace));
-            }
-
+            runs.Add(new Run(runStart, runCount, Replace: Enumerable.Range(runStart, runCount).All(index => sameItem(this[index], rows[index]))));
             first = last + 1;
         }
 
@@ -263,8 +251,9 @@ public sealed class RowCollection<T> : ObservableCollection<T>
     }
 
     /// <summary>
-    /// The <see cref="Count"/> rows from <see cref="Start"/> on, which the view is told of by a replace
-    /// of each (<see cref="Replace"/>) or by removing them all and inserting their rebuilt rows.
+    /// The <see cref="Count"/> rows from <see cref="Start"/> on, all of them told of, which the view is
+    /// told of together: by a replace of each (<see cref="Replace"/>), or by removing them all, the
+    /// last first, and inserting their rebuilt rows, the first first.
     /// </summary>
     private readonly record struct Run(int Start, int Count, bool Replace);
 
