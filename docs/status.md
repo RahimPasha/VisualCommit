@@ -741,11 +741,15 @@ workflow and the links' check; the 33 pages with their two test classes and the 
 locally), then five reviewers (the design, safety, the tests, the pages in two halves), a verifier
 for each major and a fixer. GuideShots' local root is `C:\demo`, which the site's builder creates
 (it did not exist). While agents build, the lead starts no heavy run and no series (ruling 23).
-**Also under way, only reading the repository and writing outside it:** the restore order's section
-(run `wf_e8daca0e-d5c`: a drafter, three reviewers, verifiers, a fixer; into
-`D:/Projects/Personal/phase8-work/wave4/restore/section-14.md`). **Left for the lead when it ends:**
-read it; put it into the design as section 14, with 0.4's row and what the fixer lists for the
-design; confirm or change the choices the section makes for the package; commit and push; then start
+**The restore order's section is drafted, reviewed and corrected** (run `wf_e8daca0e-d5c`, ended
+about 09:40; `D:/Projects/Personal/phase8-work/wave4/restore/section-14.md`), and the lead ruled on
+its 18 choices (rulings 86 to 90; Notes, "Wave 4"). **Also under way, only reading the repository
+and writing that one file:** a run that writes those rulings into the section and rechecks it after
+its fixer's rewrite, against D457 and against the code (run `wf_d117ae19-e9c`: an applier, two
+checkers, a fixer). **Left for the lead when it ends:** read what it changed and what it leaves to
+the lead; put the section into the design as section 14, with rulings 86 to 90 in 13.1, 0.4's row
+and files, 13.3's row and 0.6's line at the section's times (about 50 minutes of the desktop for the
+proof, about 60 with a trial of two at once), and CLAUDE.md's docs map; commit and push; then start
 `restore`'s builder beside §11's (the wave 3 build script is the model:
 `C:/Users/rpkha/.claude/projects/d--Projects-Personal-Visual-Git/9b135677-ae78-44f9-8ed1-d3fff497a168/workflows/scripts/phase8a-wave-3-wf_ee9f40a9-6e3.js`;
 its worktree `D:/Projects/Personal/vc-wt/p8a-restore` on `wip/p8a-restore`, made from the commit
@@ -813,15 +817,41 @@ every commit.
   `ChosenMissing`; 11.5's "no git call" against the palette's and the settings screen's own reads):
   the lead ruled on each and on the part's fifteen open points, **rulings 77 to 85** (design 13.1),
   and put the part into the report by script with those rulings in its text: G2 also reads its
-  link's frame against a capture taken before the focus moved (ruling 80), a change to the part as its fixer left it, made before the part's first commit. The design's 11.4 names the rename of phase
-  6's fact and the comments that change, and gains the facts for what no check shows (ruling 82);
-  11.5 and 11.6 say what the part settled. **For step 19's list (ruling 81):** the first-run
+  link's frame against a capture taken before the focus moved (ruling 80), a change to the part as
+  its fixer left it, made before the part's first commit. The design's 11.4 names the rename of
+  phase 6's fact and the comments that change, and gains the facts for what no check shows (ruling
+  82); 11.5 and 11.6 say what the part settled. **For step 19's list (ruling 81):** the first-run
   screen's launching buttons and links (`Download Git for Windows`, the two links, `Show the file`,
   `Install the Command Line Tools`) have commands that allow no concurrent runs
   (`GitSetupViewModel`'s plain `[RelayCommand]`s over `OpenAsync` and `StartAsync`), so each button
   is disabled while its launch runs, which may drop the keyboard focus as About's links did before
   8.3.1: measure with a launcher that answers late, fix with a test where the focus is lost. At the
-  close: F1 on a Mac into 8b's Mac checklist (ruling 85).
+  close: F1 on a Mac into 8b's Mac checklist (ruling 85). **The restore order's design section**
+  (run `wf_e8daca0e-d5c`, `phase8a-restore-design`: a drafter, three reviewers (the decision and the
+  contracts, the code, the tests and the proof), a verifier for each of four majors, a fixer; 9
+  agents, 2.54M tokens, 88 minutes). Three majors confirmed and corrected: the draft gave every slot
+  its own 5 s, which D457 gives to the active tab alone, so more than four could open at once; it
+  kept the order, and with it every closed restored tab and its graph, for the session; and its
+  view-model tests ran window state on several threads at once (now on the headless dispatcher). A
+  fourth, confirmed as minor: the close of the active tab releases inside `CloseTab`, before the tab
+  is disposed. 25 minors, all applied. **The lead's rulings on its 18 choices, 86 to 90** (written
+  into the section by run `wf_d117ae19-e9c`, which also rechecks the fixer's rewrite; into the
+  design's 13.1 with the section): 86, fifteen choices stand; 87, the 5 s run on a clock of the
+  order's own, `TabServices.RestoreClock`, the session's clock unless the harness gives one, as
+  `ReadClock` is for a dashboard's 10 s rule, so that no test depends on the system clock under load
+  (the draft's shell test did), and the builder adds that one parameter to the lead's
+  `TabServices.cs`, `AppSession.cs` and `ShellDriver.cs`; 88, the probe keeps four at once when the
+  middle one of the fix's three ten-large launches' longest answers is at or under the highest of
+  the base's three one-tab launches', since one disturbed launch must not start a trial that costs
+  three builds; 89, "the fix's M2 lies within the base's range" is read of the fix's median; 90,
+  "Check again" keeps reopening failed tabs all at once in 8a and gets a Backlog row at the close.
+  **The proof's time on the desktop** is about 50 minutes by the section (the probe about 9, the
+  alternated series about 30, the rests after the builds), about 60 with a trial of two at once,
+  where the owner was told about 30 for the series alone on 2026-11-23: the lead says so when it
+  announces the takeover. **For step 19's list, from the section's risk 3:**
+  `NamesRepositoryInDialogs` stays false, and a dashboard's Add open tabs leaves the waiting tabs
+  out, until the first tab's trigger (5 s at most) and a free slot. Wave 4's runs so far: 4.5M
+  tokens.
 - **Wave 3 is under way (2026-11-21).** The owner's word that day: "Continue", all of wave 3 now, and
   the three takeovers of the desktop (the spike, §10's first run, the "before" series) each as soon
   as it is ready. **The checks** of parts A and U were written by a writer each, reviewed by two
